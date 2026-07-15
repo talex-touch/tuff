@@ -80,6 +80,7 @@ import { agentManager } from './agents'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
+import { isOuterGovernedInvocation } from './intelligence-invoke-governance'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
@@ -540,6 +541,7 @@ export class TuffIntelligenceSDK {
     payload: unknown,
     options: IntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<T>> {
+    const outerGoverned = isOuterGovernedInvocation(options)
     capabilityId = this.normalizeCapabilityId(capabilityId)
     const payloadRecord =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
@@ -566,7 +568,7 @@ export class TuffIntelligenceSDK {
       logInfo(`invoke -> ${capabilityId}`)
 
       const caller = options.metadata?.caller
-      if (this.config.enableQuota && caller) {
+      if (!outerGoverned && this.config.enableQuota && caller) {
         const quotaCheck = await this.checkQuota(caller)
         if (!quotaCheck.allowed) {
           throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
@@ -633,15 +635,17 @@ export class TuffIntelligenceSDK {
           this.setToCache(cacheKey, result)
         }
 
-        await this.writeSuccessAudit({
-          result,
-          startTime,
-          capabilityId,
-          caller: runtimeOptions.metadata?.caller,
-          userId: runtimeOptions.metadata?.userId,
-          promptTemplate,
-          promptVariables
-        })
+        if (!outerGoverned) {
+          await this.writeSuccessAudit({
+            result,
+            startTime,
+            capabilityId,
+            caller: runtimeOptions.metadata?.caller,
+            userId: runtimeOptions.metadata?.userId,
+            promptTemplate,
+            promptVariables
+          })
+        }
 
         logInfo(
           `${capabilityId} success via ${result.provider} (${result.model}) latency=${result.latency}ms`
@@ -663,17 +667,6 @@ export class TuffIntelligenceSDK {
           )
         }
 
-        await this.writeFailureAudit({
-          error,
-          startTime,
-          capabilityId,
-          providerId: strategyResult.selectedProvider.id,
-          caller: runtimeOptions.metadata?.caller,
-          userId: runtimeOptions.metadata?.userId,
-          promptTemplate,
-          promptVariables
-        })
-
         const fallbackResult = hasExplicitProviderSelection(runtimeOptions)
           ? null
           : await this.tryFallbackProviders<T>({
@@ -688,7 +681,35 @@ export class TuffIntelligenceSDK {
             })
 
         if (fallbackResult) {
+          if (this.config.enableCache) {
+            this.setToCache(cacheKey, fallbackResult)
+          }
+          if (!outerGoverned) {
+            await this.writeSuccessAudit({
+              result: fallbackResult,
+              startTime,
+              capabilityId,
+              caller: runtimeOptions.metadata?.caller,
+              userId: runtimeOptions.metadata?.userId,
+              promptTemplate,
+              promptVariables
+            })
+          }
+          this.invokeFailureCounts.delete(capabilityId)
           return fallbackResult
+        }
+
+        if (!outerGoverned) {
+          await this.writeFailureAudit({
+            error,
+            startTime,
+            capabilityId,
+            providerId: strategyResult.selectedProvider.id,
+            caller: runtimeOptions.metadata?.caller,
+            userId: runtimeOptions.metadata?.userId,
+            promptTemplate,
+            promptVariables
+          })
         }
 
         throw error
@@ -2140,6 +2161,10 @@ export class TuffIntelligenceSDK {
       result,
       timestamp: Date.now()
     })
+  }
+
+  async recordRuntimeAudit(log: IntelligenceAuditLogEntry): Promise<void> {
+    await this.logAudit(log)
   }
 
   private async logAudit(log: IntelligenceAuditLogEntry): Promise<void> {

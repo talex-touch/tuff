@@ -13,7 +13,11 @@ Tuff Intelligence Ask provides a lightweight AI entry in CoreBox. It lets users 
 - Prefer explicit command suffix text, then consume attached CoreBox text/HTML clipboard input when the suffix is empty.
 - Apply versioned first-class prompt templates while leaving provider selection, quota, audit, fallback, copy, and retry to the host runtime.
 - Render token streams into the existing CoreBox widget in place, cancel superseded streams, and ignore stale callbacks so provider work and visible answers follow the latest query.
+- Let users stop the exact active OCR/chat request from the widget. Matching stream controllers are cancelled once, stale request ids cannot affect newer work, late events are ignored, and any partial answer remains visible for copy or replacement without being committed as completed history.
 - Preserve canonical `IntelligenceErrorCode` values end to end, including distinct quota exhaustion versus quota-verification outages, so CoreBox can show the correct localized reason and recovery action instead of parsing provider strings.
+- Keep failures actionable inside the widget with a visible Retry control that reuses the current prompt, context mode, and provider/model selection. Provider authentication, availability, and network failures expose host-owned `检查 AI 渠道` navigation to `/intelligence/channels`; `PERMISSION_DENIED` instead exposes `检查插件权限` and deep-links to `/plugin/touch-intelligence?tab=Permissions`.
+- Preserve optional canonical failure `reason` and `recovery` fields through normalization, widget state, item metadata, and Retry payloads. Each field is bounded to 240 characters and rendered as escaped text under `原因` / `建议`; missing fields do not create placeholder rows.
+- Present the current terminal failure once in the actionable notice rather than duplicating it as an assistant message. Earlier and distinct conversation history remains visible, and an error-only widget does not fall back to empty-conversation copy.
 
 ## Custom AI Commands
 

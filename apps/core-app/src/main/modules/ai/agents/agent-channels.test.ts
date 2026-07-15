@@ -6,7 +6,16 @@ import {
   type TuffEvent
 } from '@talex-touch/utils/transport/main'
 
-const { agentManagerMock, agentStoreServiceMock } = vi.hoisted(() => ({
+interface PermissionOptions {
+  permissionId: string
+  failClosedForPlugin?: boolean
+  unavailableCode?: string
+  deniedCode?: string
+}
+
+type PermissionHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
+
+const { agentManagerMock, agentStoreServiceMock, permissionMocks } = vi.hoisted(() => ({
   agentManagerMock: {
     getAvailableAgents: vi.fn(() => []),
     getAllAgents: vi.fn(() => []),
@@ -31,6 +40,37 @@ const { agentManagerMock, agentStoreServiceMock } = vi.hoisted(() => ({
     installAgent: vi.fn(async () => ({ success: true, agentId: 'agent-1', version: '1.0.0' })),
     uninstallAgent: vi.fn(async () => ({ success: true, agentId: 'agent-1', version: '1.0.0' })),
     checkUpdates: vi.fn(async () => [])
+  },
+  permissionMocks: {
+    runtimeAvailable: false,
+    permissionGranted: false,
+    withPermission: vi.fn(
+      (options: PermissionOptions, callback: PermissionHandler): PermissionHandler => {
+        return async (payload, context) => {
+          if (
+            context.plugin &&
+            options.permissionId === 'intelligence.agents' &&
+            options.failClosedForPlugin
+          ) {
+            if (!permissionMocks.runtimeAvailable) {
+              const error = new Error(
+                `Permission runtime is unavailable for '${options.permissionId}'`
+              ) as Error & { code?: string }
+              error.code = options.unavailableCode
+              throw error
+            }
+            if (!permissionMocks.permissionGranted) {
+              const error = new Error(`Permission '${options.permissionId}' denied`) as Error & {
+                code?: string
+              }
+              error.code = options.deniedCode
+              throw error
+            }
+          }
+          return await callback(payload, context)
+        }
+      }
+    )
   }
 }))
 
@@ -40,6 +80,10 @@ vi.mock('./agent-manager', () => ({
 
 vi.mock('../../../service/agent-store.service', () => ({
   agentStoreService: agentStoreServiceMock
+}))
+
+vi.mock('../../permission/channel-guard', () => ({
+  withPermission: permissionMocks.withPermission
 }))
 
 import { registerAgentChannels } from './agent-channels'
@@ -53,15 +97,20 @@ function deferred() {
 }
 
 function createTransport() {
-  const handlers = new Map<string, (payload?: unknown) => Promise<unknown> | unknown>()
+  const handlers = new Map<
+    string,
+    (payload?: unknown, context?: HandlerContext) => Promise<unknown> | unknown
+  >()
   const transport = {
     on: vi.fn(
       <TReq, TRes>(
         event: TuffEvent<TReq, TRes> & { toEventName: () => string },
         handler: (payload: TReq, context: HandlerContext) => TRes | Promise<TRes>
       ) => {
-        handlers.set(event.toEventName(), (payload?: unknown) =>
-          handler(payload as TReq, {} as HandlerContext)
+        handlers.set(
+          event.toEventName(),
+          (payload?: unknown, context: HandlerContext = {} as HandlerContext) =>
+            handler(payload as TReq, context)
         )
         return () => {
           handlers.delete(event.toEventName())
@@ -77,6 +126,8 @@ function createTransport() {
 describe('registerAgentChannels', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permissionMocks.runtimeAvailable = false
+    permissionMocks.permissionGranted = false
   })
 
   it('waits for runtime readiness before agent execution handlers run', async () => {
@@ -97,8 +148,114 @@ describe('registerAgentChannels', () => {
     await expect(resultPromise).resolves.toEqual({ success: true, output: 'ok' })
     expect(agentManagerMock.executeTaskImmediate).toHaveBeenCalledWith({
       agentId: 'builtin.workflow-agent',
-      input: {}
+      input: {},
+      caller: 'intelligence.agent-executor'
     })
+  })
+
+  it.each([
+    {
+      name: 'permission runtime is unavailable for immediate execution',
+      event: AgentsEvents.api.executeImmediate,
+      errorCode: 'INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE',
+      permissionGranted: false,
+      runtimeAvailable: false
+    },
+    {
+      name: 'permission is denied for queued execution',
+      event: AgentsEvents.api.execute,
+      errorCode: 'INTELLIGENCE_AGENTS_PERMISSION_DENIED',
+      permissionGranted: false,
+      runtimeAvailable: true
+    }
+  ])(
+    'fails closed before runtime readiness or agent execution when $name',
+    async ({ event, errorCode, permissionGranted, runtimeAvailable }) => {
+      const waitForRuntime = vi.fn(async () => undefined)
+      const { transport, handlers } = createTransport()
+      const pluginContext = {
+        plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
+      } as HandlerContext
+      permissionMocks.runtimeAvailable = runtimeAvailable
+      permissionMocks.permissionGranted = permissionGranted
+
+      registerAgentChannels(transport, { waitForRuntime })
+
+      const handler = handlers.get(event.toEventName())
+      if (!handler) {
+        throw new Error('Agent execution handler was not registered')
+      }
+
+      await expect(
+        handler({ agentId: 'builtin.workflow-agent', input: {} }, pluginContext)
+      ).rejects.toMatchObject({
+        code: errorCode
+      })
+      expect(waitForRuntime).not.toHaveBeenCalled()
+      expect(agentManagerMock.executeTask).not.toHaveBeenCalled()
+      expect(agentManagerMock.executeTaskImmediate).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([
+    {
+      caller: undefined,
+      event: AgentsEvents.api.execute,
+      expectedResult: { taskId: 'task-1' },
+      manager: agentManagerMock.executeTask,
+      name: 'missing caller for queued execution'
+    },
+    {
+      caller: 'host:spoofed',
+      event: AgentsEvents.api.executeImmediate,
+      expectedResult: { success: true, output: 'ok' },
+      manager: agentManagerMock.executeTaskImmediate,
+      name: 'spoofed caller for immediate execution'
+    }
+  ])(
+    'binds a granted plugin to its canonical caller with $name',
+    async ({ caller, event, expectedResult, manager }) => {
+      const { transport, handlers } = createTransport()
+      const pluginContext = {
+        plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
+      } as HandlerContext
+      const task = {
+        agentId: 'builtin.workflow-agent',
+        input: { operation: 'summarize' },
+        ...(caller === undefined ? {} : { caller })
+      }
+      permissionMocks.runtimeAvailable = true
+      permissionMocks.permissionGranted = true
+
+      registerAgentChannels(transport)
+
+      const handler = handlers.get(event.toEventName())
+      if (!handler) {
+        throw new Error('Agent execution handler was not registered')
+      }
+
+      await expect(handler(task, pluginContext)).resolves.toEqual(expectedResult)
+      expect(manager).toHaveBeenCalledWith({ ...task, caller: 'plugin:third-party-plugin' })
+    }
+  )
+
+  it('preserves an explicit host caller for queued execution', async () => {
+    const { transport, handlers } = createTransport()
+    const task = {
+      agentId: 'builtin.workflow-agent',
+      input: { operation: 'summarize' },
+      caller: 'host:corebox'
+    }
+
+    registerAgentChannels(transport)
+
+    const execute = handlers.get(AgentsEvents.api.execute.toEventName())
+    if (!execute) {
+      throw new Error('Queued agent execution handler was not registered')
+    }
+
+    await expect(execute(task, {} as HandlerContext)).resolves.toEqual({ taskId: 'task-1' })
+    expect(agentManagerMock.executeTask).toHaveBeenCalledWith(task)
   })
 
   it('does not block agent store handlers on runtime readiness', async () => {

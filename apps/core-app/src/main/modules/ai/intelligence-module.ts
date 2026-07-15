@@ -694,7 +694,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           )
           return {
             success: true,
-            data: result.result
+            data: result.result,
+            usage: result.usage
           }
         } catch (error) {
           return {
@@ -1107,7 +1108,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     intelligenceLog.info('Registering IPC channels')
 
-    const { registerSafe, registerProtectedSafe, registerProtectedStream } =
+    const { registerSafe, registerHostOnlySafe, registerProtectedSafe, registerProtectedStream } =
       this.createChannelRegistrars(this.transport)
 
     this.registerInvokeChannels(registerProtectedSafe, registerProtectedStream)
@@ -1117,8 +1118,8 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerStatsChannels(registerSafe)
     this.registerEnvironmentChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
-    this.registerOrchestrationChannels(registerProtectedSafe, registerSafe)
-    this.registerWorkflowChannels(registerProtectedSafe)
+    this.registerOrchestrationChannels(registerHostOnlySafe)
+    this.registerWorkflowChannels(registerHostOnlySafe)
     this.registerOrchestrationStreamChannels()
 
     intelligenceLog.success('IPC channels registered')
@@ -1142,6 +1143,17 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           onError: (error) => createErrorLogger(action)(error)
         })
       )
+    }
+
+    const registerHostOnlySafe = <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => {
+      registerSafe(event, action, (payload, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return handler(payload, context)
+      })
     }
 
     const registerProtectedSafe = <TReq, TRes>(
@@ -1178,6 +1190,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     return {
       registerSafe,
+      registerHostOnlySafe,
       registerProtectedSafe,
       registerProtectedStream
     }
@@ -1388,14 +1401,20 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       intelligenceContextEvents.listCheckpoints,
       'List intelligence context checkpoints',
       'intelligence.basic',
-      async (data) => contextHygieneService.listCheckpoints(data)
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return contextHygieneService.listCheckpoints(data)
+      }
     )
 
     registerProtectedSafe(
       intelligenceContextEvents.listPackageLogs,
       'List intelligence context package logs',
       'intelligence.basic',
-      async (data) => contextHygieneService.listPackageLogs(data)
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return contextHygieneService.listPackageLogs(data)
+      }
     )
 
     registerProtectedSafe(
@@ -1697,31 +1716,22 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerOrchestrationChannels(
-    registerProtectedSafe: <TReq, TRes>(
+    registerHostOnlySafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      permissionId: string,
-      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
-    ) => void,
-    registerSafe: <TReq, TRes>(
-      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
-      action: string,
+
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionStartEvent,
       'Start intelligence session',
-      'intelligence.basic',
-      async (data, context) => {
+      async (data) => {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid session start payload')
         }
         const payload = (data ?? {}) as IntelligenceSessionStartPayload
         const shouldAutoRun = payload.autoRunGraph === true && typeof payload.objective === 'string'
-        if (shouldAutoRun) {
-          await assertAutonomousIntelligencePermission('agent.run', data, context)
-        }
         const session = await tuffIntelligenceRuntime.startSession(payload)
         if (!shouldAutoRun) {
           return session
@@ -1752,10 +1762,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionHeartbeatEvent,
       'Heartbeat intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
@@ -1764,10 +1773,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionPauseEvent,
       'Pause intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
@@ -1776,19 +1784,17 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionRecoverableEvent,
       'Get recoverable intelligence session',
-      'intelligence.basic',
       async () => {
         return tuffIntelligenceRuntime.getRecoverableSession()
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionResumeEvent,
       'Resume intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
@@ -1797,10 +1803,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionCancelEvent,
       'Cancel intelligence session',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
@@ -1809,10 +1814,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionGetStateEvent,
       'Get intelligence session state',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
@@ -1821,10 +1825,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceOrchestratorPlanEvent,
       'Plan intelligence turn',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId || !data?.objective) {
           throw new Error('sessionId and objective are required')
@@ -1833,10 +1836,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceOrchestratorExecuteEvent,
       'Execute intelligence turn',
-      'intelligence.agents',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
@@ -1845,10 +1847,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceOrchestratorReflectEvent,
       'Reflect intelligence turn',
-      'intelligence.basic',
       async (data) => {
         if (!data?.sessionId || !data?.turnId) {
           throw new Error('sessionId and turnId are required')
@@ -1857,22 +1858,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
-      intelligenceToolCallEvent,
-      'Call intelligence tool',
-      'intelligence.agents',
-      async (data) => {
-        if (!data?.sessionId || !data?.toolId) {
-          throw new Error('sessionId and toolId are required')
-        }
-        return tuffIntelligenceRuntime.callTool(data)
+    registerHostOnlySafe(intelligenceToolCallEvent, 'Call intelligence tool', async (data) => {
+      if (!data?.sessionId || !data?.toolId) {
+        throw new Error('sessionId and toolId are required')
       }
-    )
+      return tuffIntelligenceRuntime.callTool(data)
+    })
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceToolResultEvent,
       'Report intelligence tool result',
-      'intelligence.agents',
       async (data) => {
         if (!data?.sessionId || !data?.toolId || typeof data.success !== 'boolean') {
           throw new Error('sessionId, toolId and success are required')
@@ -1881,10 +1876,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceToolApproveEvent,
       'Approve intelligence tool call',
-      'intelligence.admin',
       async (data) => {
         if (!data?.ticketId || typeof data.approved !== 'boolean') {
           throw new Error('ticketId and approved are required')
@@ -1893,7 +1887,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(
+    registerHostOnlySafe(
       intelligenceSessionStreamEvent,
       'Stream intelligence session trace',
       async (data) => {
@@ -1904,7 +1898,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(
+    registerHostOnlySafe(
       intelligenceSessionHistoryEvent,
       'Query intelligence session history',
       async (data) => {
@@ -1912,7 +1906,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerSafe(
+    registerHostOnlySafe(
       intelligenceSessionTraceEvent,
       'Query intelligence session trace',
       async (data) => {
@@ -1923,10 +1917,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceSessionTraceExportEvent,
       'Export intelligence session trace',
-      'intelligence.admin',
       async (data) => {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
@@ -1937,17 +1930,16 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
   }
 
   private registerWorkflowChannels(
-    registerProtectedSafe: <TReq, TRes>(
+    registerHostOnlySafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
       action: string,
-      permissionId: string,
+
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowListEvent,
       'List intelligence workflows',
-      'intelligence.basic',
       async (data) => {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid workflow list payload')
@@ -1956,10 +1948,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowGetEvent,
       'Get intelligence workflow',
-      'intelligence.basic',
       async (data) => {
         if (!data?.workflowId) {
           throw new Error('workflowId is required')
@@ -1968,10 +1959,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowSaveEvent,
       'Save intelligence workflow',
-      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid workflow payload')
@@ -1980,10 +1970,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowDeleteEvent,
       'Delete intelligence workflow',
-      'intelligence.basic',
       async (data) => {
         if (!data?.workflowId) {
           throw new Error('workflowId is required')
@@ -1992,24 +1981,21 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowRunEvent,
       'Run intelligence workflow',
-      'intelligence.agents',
-      async (data, context) => {
+      async (data) => {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid workflow run payload')
         }
-        await assertAutonomousIntelligencePermission('workflow.execute', data, context)
         await this.waitForAgentRuntime()
         return intelligenceWorkflowService.runWorkflow(data)
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowHistoryEvent,
       'Query intelligence workflow history',
-      'intelligence.basic',
       async (data) => {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid workflow history payload')
@@ -2018,10 +2004,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       }
     )
 
-    registerProtectedSafe(
+    registerHostOnlySafe(
       intelligenceWorkflowReviewUpdateEvent,
       'Update intelligence workflow review queue',
-      'intelligence.basic',
       async (data) => {
         if (!data || typeof data !== 'object') {
           throw new Error('Invalid workflow review update payload')
@@ -2037,195 +2022,196 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     }
 
     this.transport.onStream(intelligenceSessionSubscribeEvent, async (data, streamContext) => {
-      const guardedHandler = withPermission<IntelligenceTraceQueryPayload, void>(
-        { permissionId: 'intelligence.basic' },
-        async (payload) => {
-          if (!payload?.sessionId) {
-            throw new Error('sessionId is required')
+      const handleStream = async (
+        payload: IntelligenceTraceQueryPayload,
+        context: HandlerContext
+      ) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        if (!payload?.sessionId) {
+          throw new Error('sessionId is required')
+        }
+
+        const sessionId = String(payload.sessionId).trim()
+        if (!sessionId) {
+          throw new Error('sessionId is required')
+        }
+
+        const fromSeq = normalizeFromSeq(payload.fromSeq)
+        const replayLimit = normalizeReplayLimit(payload.limit)
+        const filterLevel = payload.level
+        const filterType = payload.type
+
+        let closed = false
+        let doneSent = false
+        let keepaliveTimer: ReturnType<typeof setInterval> | null = null
+        let cancelWatcher: ReturnType<typeof setInterval> | null = null
+        let unsubscribe: () => void = () => {}
+
+        const sendStreamEvent = (event: IntelligenceAgentStreamEvent): boolean => {
+          if (closed || streamContext.isCancelled()) {
+            return false
           }
-
-          const sessionId = String(payload.sessionId).trim()
-          if (!sessionId) {
-            throw new Error('sessionId is required')
+          streamContext.emit(event)
+          if (event.type === 'done') {
+            doneSent = true
           }
+          return true
+        }
 
-          const fromSeq = normalizeFromSeq(payload.fromSeq)
-          const replayLimit = normalizeReplayLimit(payload.limit)
-          const filterLevel = payload.level
-          const filterType = payload.type
-
-          let closed = false
-          let doneSent = false
-          let keepaliveTimer: ReturnType<typeof setInterval> | null = null
-          let cancelWatcher: ReturnType<typeof setInterval> | null = null
-          let unsubscribe: () => void = () => {}
-
-          const sendStreamEvent = (event: IntelligenceAgentStreamEvent): boolean => {
-            if (closed || streamContext.isCancelled()) {
-              return false
-            }
-            streamContext.emit(event)
-            if (event.type === 'done') {
-              doneSent = true
-            }
-            return true
+        const closeStream = () => {
+          if (closed) {
+            return
           }
-
-          const closeStream = () => {
-            if (closed) {
-              return
-            }
-            closed = true
-            if (keepaliveTimer) {
-              clearInterval(keepaliveTimer)
-              keepaliveTimer = null
-            }
-            if (cancelWatcher) {
-              clearInterval(cancelWatcher)
-              cancelWatcher = null
-            }
-            unsubscribe()
-            try {
-              streamContext.end()
-            } catch {
-              // Ignore stream close failures on disconnected clients.
-            }
+          closed = true
+          if (keepaliveTimer) {
+            clearInterval(keepaliveTimer)
+            keepaliveTimer = null
           }
-
-          const replayTrace = async () => {
-            if (!fromSeq) {
-              return
-            }
-
-            sendStreamEvent({
-              type: 'replay.started',
-              sessionId,
-              timestamp: Date.now(),
-              payload: {
-                fromSeq,
-                limit: replayLimit
-              }
-            })
-
-            const replayEvents = await tuffIntelligenceRuntime.queryTrace({
-              sessionId,
-              fromSeq,
-              limit: replayLimit,
-              level: filterLevel,
-              type: filterType
-            })
-
-            let replayCount = 0
-            for (const traceEvent of replayEvents) {
-              if (streamContext.isCancelled()) {
-                return
-              }
-              if (
-                sendStreamEvent(
-                  mapTraceToStreamEvent(traceEvent, {
-                    replay: true
-                  })
-                )
-              ) {
-                replayCount += 1
-              }
-            }
-
-            sendStreamEvent({
-              type: 'replay.finished',
-              sessionId,
-              timestamp: Date.now(),
-              payload: {
-                fromSeq,
-                replayCount
-              }
-            })
+          if (cancelWatcher) {
+            clearInterval(cancelWatcher)
+            cancelWatcher = null
           }
-
-          const pauseOnDisconnect = async () => {
-            const snapshot = await tuffIntelligenceRuntime.getSessionState(sessionId)
-            if (!isRunningSessionStatus(snapshot?.status)) {
-              return
-            }
-            await tuffIntelligenceRuntime.pauseSession({
-              sessionId,
-              reason: 'client_disconnect'
-            })
-          }
-
+          unsubscribe()
           try {
-            sendStreamEvent({
-              type: 'stream.started',
-              sessionId,
-              timestamp: Date.now(),
-              payload: {
-                fromSeq: fromSeq ?? null,
-                keepaliveMs: INTELLIGENCE_STREAM_KEEPALIVE_MS,
-                limit: replayLimit
-              }
-            })
-
-            await replayTrace()
-            if (streamContext.isCancelled()) {
-              await pauseOnDisconnect()
-              return
-            }
-
-            unsubscribe = tuffIntelligenceRuntime.subscribeSessionTrace(sessionId, (traceEvent) => {
-              if (streamContext.isCancelled() || closed) {
-                return
-              }
-              if (filterLevel && traceEvent.level !== filterLevel) {
-                return
-              }
-              if (filterType && traceEvent.type !== filterType) {
-                return
-              }
-              sendStreamEvent(mapTraceToStreamEvent(traceEvent))
-            })
-
-            keepaliveTimer = setInterval(() => {
-              if (streamContext.isCancelled() || closed) {
-                return
-              }
-              sendStreamEvent({
-                type: 'stream.heartbeat',
-                sessionId,
-                timestamp: Date.now(),
-                payload: {
-                  ts: Date.now()
-                }
-              })
-            }, INTELLIGENCE_STREAM_KEEPALIVE_MS)
-
-            await new Promise<void>((resolve) => {
-              cancelWatcher = setInterval(() => {
-                if (!streamContext.isCancelled()) {
-                  return
-                }
-                resolve()
-              }, 250)
-            })
-
-            await pauseOnDisconnect()
-            if (!doneSent) {
-              sendStreamEvent({
-                type: 'done',
-                sessionId,
-                timestamp: Date.now(),
-                payload: {
-                  status: 'paused'
-                }
-              })
-            }
-          } finally {
-            closeStream()
+            streamContext.end()
+          } catch {
+            // Ignore stream close failures on disconnected clients.
           }
         }
-      )
+
+        const replayTrace = async () => {
+          if (!fromSeq) {
+            return
+          }
+
+          sendStreamEvent({
+            type: 'replay.started',
+            sessionId,
+            timestamp: Date.now(),
+            payload: {
+              fromSeq,
+              limit: replayLimit
+            }
+          })
+
+          const replayEvents = await tuffIntelligenceRuntime.queryTrace({
+            sessionId,
+            fromSeq,
+            limit: replayLimit,
+            level: filterLevel,
+            type: filterType
+          })
+
+          let replayCount = 0
+          for (const traceEvent of replayEvents) {
+            if (streamContext.isCancelled()) {
+              return
+            }
+            if (
+              sendStreamEvent(
+                mapTraceToStreamEvent(traceEvent, {
+                  replay: true
+                })
+              )
+            ) {
+              replayCount += 1
+            }
+          }
+
+          sendStreamEvent({
+            type: 'replay.finished',
+            sessionId,
+            timestamp: Date.now(),
+            payload: {
+              fromSeq,
+              replayCount
+            }
+          })
+        }
+
+        const pauseOnDisconnect = async () => {
+          const snapshot = await tuffIntelligenceRuntime.getSessionState(sessionId)
+          if (!isRunningSessionStatus(snapshot?.status)) {
+            return
+          }
+          await tuffIntelligenceRuntime.pauseSession({
+            sessionId,
+            reason: 'client_disconnect'
+          })
+        }
+
+        try {
+          sendStreamEvent({
+            type: 'stream.started',
+            sessionId,
+            timestamp: Date.now(),
+            payload: {
+              fromSeq: fromSeq ?? null,
+              keepaliveMs: INTELLIGENCE_STREAM_KEEPALIVE_MS,
+              limit: replayLimit
+            }
+          })
+
+          await replayTrace()
+          if (streamContext.isCancelled()) {
+            await pauseOnDisconnect()
+            return
+          }
+
+          unsubscribe = tuffIntelligenceRuntime.subscribeSessionTrace(sessionId, (traceEvent) => {
+            if (streamContext.isCancelled() || closed) {
+              return
+            }
+            if (filterLevel && traceEvent.level !== filterLevel) {
+              return
+            }
+            if (filterType && traceEvent.type !== filterType) {
+              return
+            }
+            sendStreamEvent(mapTraceToStreamEvent(traceEvent))
+          })
+
+          keepaliveTimer = setInterval(() => {
+            if (streamContext.isCancelled() || closed) {
+              return
+            }
+            sendStreamEvent({
+              type: 'stream.heartbeat',
+              sessionId,
+              timestamp: Date.now(),
+              payload: {
+                ts: Date.now()
+              }
+            })
+          }, INTELLIGENCE_STREAM_KEEPALIVE_MS)
+
+          await new Promise<void>((resolve) => {
+            cancelWatcher = setInterval(() => {
+              if (!streamContext.isCancelled()) {
+                return
+              }
+              resolve()
+            }, 250)
+          })
+
+          await pauseOnDisconnect()
+          if (!doneSent) {
+            sendStreamEvent({
+              type: 'done',
+              sessionId,
+              timestamp: Date.now(),
+              payload: {
+                status: 'paused'
+              }
+            })
+          }
+        } finally {
+          closeStream()
+        }
+      }
 
       try {
-        await guardedHandler(data, streamContext as unknown as HandlerContext)
+        await handleStream(data, streamContext as unknown as HandlerContext)
       } catch (error) {
         intelligenceLog.error('Subscribe intelligence session stream failed', { error })
         const err = error instanceof Error ? error : new Error(String(error))

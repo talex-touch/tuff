@@ -71,8 +71,14 @@ interface NetworkStreamResponse {
   statusText: string
   headers: Record<string, string>
   url: string
-  stream: NodeJS.ReadableStream
+  stream: Readable
 }
+interface NetworkPolicySettlement {
+  success: () => void
+  failure: () => void
+}
+
+type NetworkResultLifecycle<T> = (result: T, settlement: NetworkPolicySettlement) => T
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -545,28 +551,55 @@ export class NetworkService {
   }
 
   async requestStream(options: NetworkRequestOptions): Promise<NetworkStreamResponse> {
-    return await this.executeWithPolicies(options, async () => {
-      const response = await this.executeFetch(options)
-      const stream = response.body
-        ? Readable.fromWeb(response.body as unknown as NodeReadableStream)
-        : null
-      if (!stream) {
-        throw new Error('NETWORK_EMPTY_STREAM_BODY')
-      }
+    return await this.executeWithPolicies(
+      options,
+      async () => {
+        const response = await this.executeFetch(options)
+        const stream = response.body
+          ? Readable.fromWeb(response.body as unknown as NodeReadableStream)
+          : null
+        if (!stream) {
+          throw new Error('NETWORK_EMPTY_STREAM_BODY')
+        }
 
-      return {
-        status: response.status,
-        statusText: response.statusText,
-        headers: normalizeHeaders(response.headers),
-        url: response.url,
-        stream
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          headers: normalizeHeaders(response.headers),
+          url: response.url,
+          stream
+        }
+      },
+      (result, settlement) => {
+        const cleanup = () => {
+          result.stream.off('end', onEnd)
+          result.stream.off('error', onError)
+          result.stream.off('close', onClose)
+        }
+        const onEnd = () => {
+          cleanup()
+          settlement.success()
+        }
+        const onError = () => {
+          cleanup()
+          settlement.failure()
+        }
+        const onClose = () => {
+          cleanup()
+        }
+
+        result.stream.once('end', onEnd)
+        result.stream.once('error', onError)
+        result.stream.once('close', onClose)
+        return result
       }
-    })
+    )
   }
 
   private async executeWithPolicies<T>(
     options: NetworkRequestOptions,
-    executor: () => Promise<T>
+    executor: () => Promise<T>,
+    attachLifecycle?: NetworkResultLifecycle<T>
   ): Promise<T> {
     const method = (options.method ?? 'GET').toUpperCase()
     const url = appendQuery(options.url, options.query)
@@ -587,6 +620,22 @@ export class NetworkService {
       attempt += 1
       try {
         const result = await executor()
+        if (attachLifecycle) {
+          let settled = false
+          const settle = (outcome: 'success' | 'failure') => {
+            if (settled) return
+            settled = true
+            if (outcome === 'success') {
+              this.guard.recordSuccess(cooldownKey, cooldownPolicy)
+              return
+            }
+            this.guard.recordFailure(cooldownKey, cooldownPolicy)
+          }
+          return attachLifecycle(result, {
+            success: () => settle('success'),
+            failure: () => settle('failure')
+          })
+        }
         this.guard.recordSuccess(cooldownKey, cooldownPolicy)
         return result
       } catch (error) {

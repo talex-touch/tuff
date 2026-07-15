@@ -190,6 +190,12 @@ async function handleWidgetHostAction(
     }
   }
 
+  const declaredAction = actionItem.actions?.find((action) => action.id === payload.actionId)
+  if (declaredAction?.type === 'navigate') {
+    await actionPanel.executeAction(payload.actionId, actionItem)
+    return
+  }
+
   const activationState = await transport.send(CoreBoxEvents.item.execute, {
     item: JSON.parse(JSON.stringify(actionItem)),
     actionId: payload.actionId

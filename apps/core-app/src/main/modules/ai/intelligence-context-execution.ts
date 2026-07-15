@@ -12,8 +12,14 @@ import type {
   IntelligenceStreamEvent
 } from '@talex-touch/utils/types/intelligence'
 import { createLogger } from '../../utils/logger'
-import { ContextHygieneService, contextHygieneService } from './intelligence-context-hygiene'
+import {
+  ContextHygieneService,
+  contextHygieneService,
+  isContextInputProviderSafe
+} from './intelligence-context-hygiene'
 import { tuffIntelligence } from './intelligence-sdk'
+import { inheritOuterGovernance } from './intelligence-invoke-governance'
+import { normalizeContextTokenBudget } from './intelligence-token-estimate'
 
 const log = createLogger('IntelligenceContextExecution')
 const DEFAULT_CONTEXT_TOKEN_BUDGET = 1_600
@@ -151,9 +157,9 @@ function degradedContextSummary(
     mode: request.context.mode,
     scope: resolveScope(request),
     itemCount: 0,
-    tokenBudget: Math.max(
-      1,
-      Math.floor(request.context.tokenBudget ?? DEFAULT_CONTEXT_TOKEN_BUDGET)
+    tokenBudget: normalizeContextTokenBudget(
+      request.context.tokenBudget,
+      DEFAULT_CONTEXT_TOKEN_BUDGET
     ),
     tokenEstimate: 0,
     sourceTypes: [],
@@ -247,7 +253,7 @@ export class IntelligenceContextExecutionService {
     actor: IntelligenceContextActor,
     summary: IntelligenceContextExecutionSummary
   ): IntelligenceInvokeOptions {
-    return {
+    const options: IntelligenceInvokeOptions = {
       ...(request.options ?? {}),
       metadata: {
         ...(request.options?.metadata ?? {}),
@@ -255,6 +261,7 @@ export class IntelligenceContextExecutionService {
         contextExecution: summary
       }
     }
+    return inheritOuterGovernance(request.options, options)
   }
 
   private async prepare(
@@ -288,6 +295,16 @@ export class IntelligenceContextExecutionService {
       })
       contextPackage = await this.hygiene.revalidatePackageMemories(prepared.package)
     } catch (error) {
+      if (!isContextInputProviderSafe(request.input)) {
+        log.warn('Context prepare failed; blocked unsafe current-input fallback', {
+          meta: {
+            actorId: actor.id,
+            mode,
+            reason: 'secret-policy-blocked'
+          }
+        })
+        throw new Error('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+      }
       const summary = degradedContextSummary(request, 'context_prepare_failed')
       log.warn('Context prepare failed; using current-input fallback', {
         meta: {

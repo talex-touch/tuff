@@ -62,6 +62,7 @@ export interface WorkflowExecutionContext {
   triggerType: WorkflowTriggerType
   continueOnError: boolean
   metadata?: Record<string, unknown>
+  providerGovernance?: 'outer' | 'self'
   onUpdate: (run: WorkflowRunRecord) => Promise<void>
 }
 
@@ -786,6 +787,7 @@ export class IntelligenceWorkflowService {
         triggerType,
         continueOnError: request.continueOnError === true,
         metadata: request.metadata,
+        providerGovernance: 'self',
         onUpdate: async (run) => {
           await this.persistRun(run)
         }

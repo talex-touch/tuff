@@ -23,7 +23,7 @@ code: |
 | ---------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
 | [Plugin Context](./plugin-context.en.md)                   | `IPluginContext` / `context.utils`             | Canonical lifecycle capability facade                      |
 | [Box SDK](./box.en.md)                                     | `useBox()`                                     | Control CoreBox window                                     |
-| [Clipboard SDK](./clipboard.en.md)                         | `useClipboard()`                               | Clipboard read/write and history                           |
+| [Clipboard SDK](./clipboard.en.md)                         | `useClipboard()` / `system.captureSelection()` | Clipboard, selected text, and history                      |
 | [TempFile SDK](./temp-file.en.md)                          | `useTempPluginFiles()`                         | Create and clean temp files                                |
 | [Storage SDK](./storage.en.md)                             | `usePluginStorage()`                           | Plugin data persistence                                    |
 | [Download SDK](./download.en.md)                           | `useDownloadSdk()`                             | Download task management                                   |

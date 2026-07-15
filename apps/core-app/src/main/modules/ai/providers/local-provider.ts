@@ -1,5 +1,6 @@
 import { Buffer } from 'node:buffer'
 import { readFile } from 'node:fs/promises'
+import { StringDecoder } from 'node:string_decoder'
 import type {
   IntelligenceChatPayload,
   IntelligenceInvokeOptions,
@@ -14,6 +15,7 @@ import {
   recognizeImageText,
   type NativeOcrBlock
 } from '@talex-touch/tuff-native'
+import { NetworkHttpStatusError } from '@talex-touch/utils/network'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { getNetworkService } from '../../network'
 import { OpenAiCompatibleLangChainProvider } from './langchain-openai-compatible-provider'
@@ -32,6 +34,15 @@ interface OllamaChatStreamResponse extends OllamaChatResponse {
 }
 
 const LOCAL_DIRECT_PROXY = { mode: 'direct' as const }
+function isHttpNotFound(error: unknown): error is NetworkHttpStatusError {
+  return error instanceof NetworkHttpStatusError && error.status === 404
+}
+
+function toStreamBuffer(value: unknown): Buffer {
+  if (Buffer.isBuffer(value)) return value
+  if (value instanceof Uint8Array) return Buffer.from(value)
+  return Buffer.from(String(value))
+}
 
 export class LocalProvider extends OpenAiCompatibleLangChainProvider {
   readonly type = IntelligenceProviderType.LOCAL
@@ -130,8 +141,7 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
         provider: this.type
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : ''
-      if (!message.includes('404')) {
+      if (!isHttpNotFound(error)) {
         throw error
       }
       return await super.chat(payload, options)
@@ -142,13 +152,15 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
     payload: IntelligenceChatPayload,
     options: IntelligenceInvokeOptions
   ): AsyncGenerator<IntelligenceStreamChunk> {
+    let emittedDelta = false
     try {
       const response = await getNetworkService().requestStream(
         this.buildOllamaChatRequest(payload, options, true)
       )
+      const decoder = new StringDecoder('utf8')
       let buffer = ''
       for await (const chunk of response.stream) {
-        buffer += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+        buffer += decoder.write(toStreamBuffer(chunk))
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
         for (const line of lines) {
@@ -157,6 +169,7 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
           const parsed = JSON.parse(trimmed) as OllamaChatStreamResponse
           const delta = parsed.message?.content ?? ''
           if (delta) {
+            emittedDelta = true
             yield { delta, done: false }
           }
           if (parsed.done) {
@@ -174,18 +187,32 @@ export class LocalProvider extends OpenAiCompatibleLangChainProvider {
         }
       }
 
+      buffer += decoder.end()
+
       const trimmed = buffer.trim()
       if (trimmed) {
         const parsed = JSON.parse(trimmed) as OllamaChatStreamResponse
         const delta = parsed.message?.content ?? ''
         if (delta) {
+          emittedDelta = true
           yield { delta, done: false }
+        }
+        if (parsed.done) {
+          yield {
+            delta: '',
+            done: true,
+            usage: {
+              promptTokens: parsed.prompt_eval_count ?? 0,
+              completionTokens: parsed.eval_count ?? 0,
+              totalTokens: (parsed.prompt_eval_count ?? 0) + (parsed.eval_count ?? 0)
+            }
+          }
+          return
         }
       }
       yield { delta: '', done: true }
     } catch (error) {
-      const message = error instanceof Error ? error.message : ''
-      if (!message.includes('404')) {
+      if (emittedDelta || !isHttpNotFound(error)) {
         throw error
       }
       yield* super.chatStream(payload, options)

@@ -238,4 +238,170 @@ describe('networkService cooldown policy', () => {
     ).rejects.toBeInstanceOf(NetworkCooldownError)
     expect(electronMocks.fetch).toHaveBeenCalledTimes(1)
   })
+
+  it('does not reset a prior failure when a stream only opens', async () => {
+    const service = new NetworkService()
+    const options = {
+      method: 'GET' as const,
+      url: 'https://example.test/stream',
+      cooldownPolicy: {
+        key: 'provider:stream',
+        failureThreshold: 2,
+        cooldownMs: 30_000,
+        autoResetOnSuccess: true
+      },
+      retryPolicy: {
+        maxRetries: 0
+      }
+    }
+    electronMocks.fetch
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start() {}
+          })
+        )
+      )
+      .mockRejectedValueOnce(new Error('offline'))
+
+    await expect(service.request(options)).rejects.toThrow('offline')
+    const response = await service.requestStream(options)
+
+    try {
+      await expect(service.request(options)).rejects.toThrow('offline')
+      await expect(service.request(options)).rejects.toBeInstanceOf(NetworkCooldownError)
+      expect(electronMocks.fetch).toHaveBeenCalledTimes(3)
+    } finally {
+      const closed = new Promise<void>((resolve) => response.stream.once('close', resolve))
+      response.stream.destroy()
+      await closed
+    }
+  })
+
+  it('delivers stream data before an error records the threshold failure', async () => {
+    const service = new NetworkService()
+    const options = {
+      method: 'GET' as const,
+      url: 'https://example.test/stream',
+      cooldownPolicy: {
+        key: 'provider:stream',
+        failureThreshold: 2,
+        cooldownMs: 30_000,
+        autoResetOnSuccess: true
+      },
+      retryPolicy: {
+        maxRetries: 0
+      }
+    }
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    electronMocks.fetch.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(nextController) {
+            controller = nextController
+          }
+        })
+      )
+    )
+
+    await expect(service.request(options)).rejects.toThrow('offline')
+    const response = await service.requestStream(options)
+    const received = new Promise<Buffer>((resolve, reject) => {
+      response.stream.once('data', (chunk) => resolve(Buffer.from(chunk)))
+      response.stream.once('error', reject)
+    })
+
+    controller.enqueue(new TextEncoder().encode('partial'))
+    await expect(received).resolves.toEqual(Buffer.from('partial'))
+
+    const streamFailure = new Promise<never>((_resolve, reject) => {
+      response.stream.once('error', reject)
+    })
+    controller.error(new Error('upstream dropped'))
+
+    await expect(streamFailure).rejects.toThrow('upstream dropped')
+    await expect(service.request(options)).rejects.toBeInstanceOf(NetworkCooldownError)
+    expect(electronMocks.fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('resets prior failures after the stream body is fully consumed', async () => {
+    const service = new NetworkService()
+    const options = {
+      method: 'GET' as const,
+      url: 'https://example.test/stream',
+      cooldownPolicy: {
+        key: 'provider:stream',
+        failureThreshold: 2,
+        cooldownMs: 30_000,
+        autoResetOnSuccess: true
+      },
+      retryPolicy: {
+        maxRetries: 0
+      }
+    }
+    electronMocks.fetch
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('complete'))
+              controller.close()
+            }
+          })
+        )
+      )
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(new Response('{}'))
+
+    await expect(service.request(options)).rejects.toThrow('offline')
+    const response = await service.requestStream(options)
+    const chunks: Buffer[] = []
+    for await (const chunk of response.stream) {
+      chunks.push(Buffer.from(chunk))
+    }
+
+    expect(Buffer.concat(chunks).toString()).toBe('complete')
+    await expect(service.request(options)).rejects.toThrow('offline')
+    await expect(service.request(options)).resolves.toMatchObject({ ok: true })
+    expect(electronMocks.fetch).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not clear or add a failure when a consumer destroys a stream early', async () => {
+    const service = new NetworkService()
+    const options = {
+      method: 'GET' as const,
+      url: 'https://example.test/stream',
+      cooldownPolicy: {
+        key: 'provider:stream',
+        failureThreshold: 2,
+        cooldownMs: 30_000,
+        autoResetOnSuccess: true
+      },
+      retryPolicy: {
+        maxRetries: 0
+      }
+    }
+    electronMocks.fetch
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start() {}
+          })
+        )
+      )
+      .mockRejectedValueOnce(new Error('offline'))
+
+    await expect(service.request(options)).rejects.toThrow('offline')
+    const response = await service.requestStream(options)
+    const closed = new Promise<void>((resolve) => response.stream.once('close', resolve))
+    response.stream.destroy()
+    await closed
+
+    await expect(service.request(options)).rejects.toThrow('offline')
+    await expect(service.request(options)).rejects.toBeInstanceOf(NetworkCooldownError)
+    expect(electronMocks.fetch).toHaveBeenCalledTimes(3)
+  })
 })

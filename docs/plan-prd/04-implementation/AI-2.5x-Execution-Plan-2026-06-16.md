@@ -63,9 +63,9 @@ P0 收窄：
 ## 5. 2.5.5 / 2.5.8 非当前抢占范围
 
 `2.5.5` 本地模型 runtime 方向保持锁定：不强依赖 Ollama，优先内置 GGUF / llama.cpp，模型权重按需下载到用户数据目录。
-当前只保留文档方向，不抢 `2.5.0` 体验证据和 `2.5.3/2.5.4` 上下文基线。
+完整 runtime 仍不抢 `2.5.0` 体验证据和 `2.5.3/2.5.4` 上下文基线；已有 Local/Ollama 兼容与 VoicePanel provider-backed short ASR 仅按受治理小切片计，不升级 R9.3/R9.4 完成度。
 
-`2.5.8` ASR Provider Runtime 方向保持锁定：本地 `whisper.cpp` + 云端 ASR provider，支持 `local-only / cloud-only / auto`。
+`2.5.8` ASR Provider Runtime 方向保持锁定：本地 `whisper.cpp` + 云端 ASR provider，支持 `local-only / cloud-only / auto`。当前 VoicePanel 已通过 typed transport 接入受治理 `audio.stt` 短录音路径；本地 runtime、用户策略、artifact lifecycle、文件/长音频与 packaged provider evidence 仍开放。
 TTS、语音唤醒和 streaming 转写不进入该阶段 Stable。
 
 ## 6. 验证门禁

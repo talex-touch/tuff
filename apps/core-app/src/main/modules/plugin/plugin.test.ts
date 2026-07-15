@@ -4,6 +4,7 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import path from 'node:path'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
 import {
+  AppEvents,
   ClipboardEvents,
   FlowEvents,
   NativeEvents,
@@ -1549,6 +1550,83 @@ describe('touchPlugin.triggerFeature', () => {
       expect(context).toEqual(pluginContext)
     }
   })
+  it('exposes one verified System facade through typed active-app and selection events', async () => {
+    const activeApp = {
+      identifier: 'com.acme.editor',
+      displayName: 'Acme Editor',
+      bundleId: 'com.acme.editor',
+      processId: 4242,
+      executablePath: '/Applications/Acme Editor.app',
+      platform: 'macos' as const,
+      windowTitle: 'Draft',
+      url: null,
+      icon: 'data:image/png;base64,aWNvbg==',
+      lastUpdated: 1_721_024_800_000
+    }
+    const selection = {
+      text: 'Selected passage',
+      supportLevel: 'supported' as const,
+      limitations: ['Accessibility permission is required on macOS.'],
+      capturedAt: 1_721_024_800_123
+    }
+    const transport = {
+      invoke: vi.fn().mockResolvedValueOnce(activeApp).mockResolvedValueOnce(selection),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'system-plugin',
+      { type: 'class', value: 'i-ri-computer-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    const resolvedPluginSdkapi = SdkApi.V260713
+    plugin.sdkapi = resolvedPluginSdkapi
+    const pluginContext = {
+      plugin: {
+        name: 'system-plugin',
+        uniqueKey: 'verified-system-key',
+        verified: true,
+        sdkapi: resolvedPluginSdkapi
+      }
+    }
+    Reflect.set(plugin, '_uniqueChannelKey', pluginContext.plugin.uniqueKey)
+
+    const featureUtil = plugin.getFeatureUtil()
+
+    expect(featureUtil.plugin.system).toBe(featureUtil.system)
+    await expect(
+      featureUtil.system.getActiveAppSnapshot({ forceRefresh: true, includeIcon: true })
+    ).resolves.toEqual(activeApp)
+    await expect(featureUtil.system.captureSelection()).resolves.toEqual(selection)
+
+    const calls = vi.mocked(transport.invoke).mock.calls
+    expect(calls).toHaveLength(2)
+    const expectedCalls = [
+      {
+        event: AppEvents.system.getActiveApp,
+        payload: { forceRefresh: true, includeIcon: true }
+      },
+      { event: AppEvents.system.captureSelection, payload: {} }
+    ]
+    for (const [index, expected] of expectedCalls.entries()) {
+      const [event, payload, context] = calls[index]!
+      expect(event.toEventName()).toBe(expected.event.toEventName())
+      expect(payload).toEqual(expected.payload)
+      expect(context).toEqual(pluginContext)
+    }
+  })
   it('exposes one localization facade through the plugin-scoped typed transport', async () => {
     const transport = {
       invoke: vi.fn().mockResolvedValue('zh-CN'),
@@ -1646,6 +1724,76 @@ describe('touchPlugin.triggerFeature', () => {
         sdkapi: 260615
       }
     })
+  })
+
+  it('streams intelligence through the plugin transport and cancels through the protocol', async () => {
+    const transport = {
+      invoke: vi.fn().mockResolvedValue(undefined),
+      on: vi.fn(() => vi.fn()),
+      keyManager: {
+        requestKey: vi.fn(),
+        revokeKey: vi.fn()
+      }
+    } as unknown as ITuffTransportMain
+
+    TouchPlugin.setTransport(transport)
+
+    const plugin = new TouchPlugin(
+      'touch-intelligence',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.2',
+      'desc',
+      '',
+      { enable: true, address: 'http://localhost' },
+      '/tmp',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.sdkapi = 260615
+
+    const featureUtil = plugin.getFeatureUtil()
+    const payload = { messages: [{ role: 'user', content: 'hello' }] }
+    const invokeOptions = {
+      preferredProviderId: 'test-provider',
+      metadata: { caller: 'spoofed-caller' }
+    }
+
+    const controller = await featureUtil.intelligence.stream(
+      'text.chat',
+      payload,
+      { onDelta: vi.fn() },
+      invokeOptions
+    )
+
+    const [startEvent, startPayload, startContext] = vi.mocked(transport.invoke).mock.calls[0]
+    expect(startEvent.toEventName()).toBe(
+      `${intelligenceApiEvents.stream.toEventName()}:stream:start`
+    )
+    expect(startPayload).toEqual({
+      streamId: controller.streamId,
+      capabilityId: 'text.chat',
+      payload,
+      options: { ...invokeOptions, stream: true },
+      _sdkapi: 260615
+    })
+    expect(startContext).toEqual({
+      plugin: {
+        name: 'touch-intelligence',
+        uniqueKey: '',
+        verified: false,
+        sdkapi: 260615
+      }
+    })
+
+    controller.cancel()
+
+    const [cancelEvent, cancelPayload, cancelContext] = vi.mocked(transport.invoke).mock.calls[1]
+    expect(cancelEvent.toEventName()).toBe(
+      `${intelligenceApiEvents.stream.toEventName()}:stream:cancel`
+    )
+    expect(cancelPayload).toEqual({ streamId: controller.streamId })
+    expect(cancelContext).toEqual(startContext)
+    expect(controller.cancelled).toBe(true)
   })
 })
 

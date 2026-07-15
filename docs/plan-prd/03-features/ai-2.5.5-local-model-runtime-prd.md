@@ -1,7 +1,7 @@
 # PRD: Tuff 2.5.5 本地开源模型运行时
 
-> 更新时间：2026-06-21
-> 状态：Planned / Direction Locked
+> 更新时间：2026-07-13
+> 状态：Partial / Ollama-Compatible Runtime Implemented / Built-in GGUF Planned
 > 目标版本：2.5.5
 
 ## 1. 最终目标
@@ -53,7 +53,24 @@
 - Packaging：runtime binary 必须按平台拆分，安装包体积预算单独记录；模型权重按需下载，不进入 release artifact。
 - Transport：新增运行时管理接口必须使用 typed transport / domain SDK，不新增 raw channel。
 
-## 5. 验收清单
+## 5. 当前实现进度
+
+### 已落地的兼容层
+
+- CoreApp `LocalProvider` 已通过统一 NetworkService 接入现有 Ollama：`/api/chat` 支持非流式与 NDJSON 流式文本调用，`/api/tags` 支持模型发现；无需 API key，强制 local direct proxy，并保留 timeout、cooldown、轻量 probe 与 typed HTTP 404 时 OpenAI-compatible local endpoint fallback。
+- Local/Ollama 调用仍进入现有 Provider registry、capability routing、quota/audit 与 host-owned ContextHygiene，不是旁路 runtime。
+- 2026-07-13 流式兼容层使用 stateful UTF-8 decoder，能恢复跨 chunk 的 CJK/emoji bytes；EOF 无换行的 `done` frame 会保留 final delta 与 Ollama `prompt_eval_count/eval_count` usage，并只发送一个 terminal chunk。
+- Ollama-to-OpenAI-compatible fallback 只允许由 `NetworkHttpStatusError.status === 404` 触发且发生在首个可见 delta 之前；普通 parser/provider error 即使消息含 `404` 也原样传播，首个非空 delta 后的 typed 404 同样原样传播，避免两个 local backend 的文本/terminal 状态被拼接为伪成功。
+- NetworkService stream cooldown 以 body lifecycle 结算：open 不提前清除历史 failure，正常 `end` 记 success，body `error` 记一次 failure，主动 early close 保持原状态；消费期失败不会自动重放可能已输出的 Ollama 文本。
+
+### 仍未落地
+
+- 内置 llama.cpp/GGUF binary、模型下载/checksum、删除、加载、停止、资源诊断和本地模型管理 UI。
+- 未安装 Ollama 时运行内置模型、Windows/macOS 真实设备 smoke、Linux best-effort matrix 与独立 runtime packaging/size evidence。
+
+因此下方 Stable 验收项继续保持 open；现有 Ollama-compatible code/focused tests 不能替代 built-in runtime 或 packaged/device evidence。
+
+## 6. 验收清单
 
 - [ ] 未安装 Ollama 时，Tuff 仍可通过内置 runtime 管理并运行至少 1 个轻量 GGUF 文本模型。
 - [ ] 已安装 Ollama 时，Tuff 可检测并作为可选兼容后端展示，不强制切换。
@@ -63,7 +80,7 @@
 - [ ] Windows/macOS 至少完成真实设备 smoke；Linux 记录 best-effort 与限制 reason。
 - [ ] README/TODO/CHANGES/INDEX/Roadmap/Quality Baseline 按影响同步。
 
-## 6. 关联入口
+## 7. 关联入口
 
 - AI 2.5.0 主线：`./ai-2.5.0-plan-prd.md`
 - 本地知识检索：`./ai-2.5.3-local-knowledge-retrieval-prd.md`

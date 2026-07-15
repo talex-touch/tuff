@@ -1,7 +1,7 @@
 # PRD: Tuff 2.5.8 ASR Provider Runtime
 
-> 更新时间：2026-06-21
-> 状态：Planned / Direction Locked
+> 更新时间：2026-07-13
+> 状态：In Progress / Cloud Short Voice Slice Landed
 > 目标版本：2.5.8
 
 ## 1. 最终目标
@@ -17,6 +17,13 @@
 - 云端作为显式策略：支持 `cloud-only` 和 `auto`，但隐私内容必须允许用户强制 `local-only`。
 - 音频文件转写先于 streaming：第一版先稳定短音频 / 文件转写，再进入实时转写和 VAD。
 - 转写结果结构化：返回 transcript、segments、timestamps、language、confidence、provider/model 与 artifact metadata。
+
+### 当前已落地基线（2026-07-13）
+
+- VoicePanel 已用 `MediaRecorder` 采集最长 30 秒的内存短音频，通过 typed `assistant:voice-panel:transcribe-audio` 进入主进程；主进程在 provider 调用前校验 MIME、5 MiB 大小和时长。
+- 主进程只通过受治理 `tuffIntelligence.audio.stt` 调用现有 provider registry，并绑定 `core.assistant.voice-transcribe` caller；成功响应保留 transcript、language/confidence 以及 provider/model/latency/trace metadata。
+- 麦克风权限拒绝继续使用现有系统恢复入口；MediaRecorder 不可用或 provider 转写失败时可回退现有 Web Speech。原始音频仅在内存中短暂存在，不写日志、配置或同步载荷。
+- 该切片不等于完整 R9.4：本地 `whisper.cpp`、`local-only/cloud-only/auto` 用户策略、音频 artifact、文件导入、长音频、VAD、streaming 与 packaged 真 provider evidence 仍未完成。
 
 ## 3. 范围与非目标
 
@@ -45,7 +52,7 @@
 
 ## 4. 接口方向
 
-文档层面锁定后续实现接口，不在本 PR 直接改代码：
+以下接口仍是完整 R9.4 的目标合同；当前短语音切片复用既有 `audio.stt` / `audio.transcribe` facade，不提前新增第二套 provider registry：
 
 ```ts
 interface ASRProvider {

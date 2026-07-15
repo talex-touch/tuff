@@ -10,6 +10,7 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { computed, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import { useRoute } from 'vue-router'
 import DefaultIcon from '~/assets/svg/EmptyAppPlaceholder.svg?url'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginFab from '~/components/plugin/PluginFab.vue'
@@ -37,12 +38,31 @@ const transport = useTuffTransport()
 const { startupInfo } = useStartupInfo()
 const { t } = useI18n()
 const appSdk = useAppSdk()
+const route = useRoute()
 const pluginRef = toRef(props, 'plugin')
 const { nexusPublishUrl } = usePluginExternalLinks(pluginRef)
 const pluginInfoLog = createRendererLogger('PluginInfo')
 
 // Tabs state
-const tabsModel = ref('Overview')
+type PluginInfoTab =
+  | 'Overview'
+  | 'Features'
+  | 'Permissions'
+  | 'Storage'
+  | 'Structure'
+  | 'Logs'
+  | 'Details'
+
+const DEFAULT_PLUGIN_TAB: PluginInfoTab = 'Overview'
+const ALWAYS_AVAILABLE_PLUGIN_TABS = new Set<PluginInfoTab>([
+  'Overview',
+  'Features',
+  'Permissions',
+  'Storage',
+  'Logs',
+  'Details'
+])
+const tabsModel = ref<PluginInfoTab>(DEFAULT_PLUGIN_TAB)
 
 // Loading states
 const loadingStates = ref({
@@ -57,6 +77,25 @@ const hasIssues = computed(() => props.plugin.issues && props.plugin.issues.leng
 const hasErrors = computed(() => props.plugin.issues?.some((issue) => issue.type === 'error'))
 
 const isAppDev = computed(() => startupInfo.value?.isDev === true)
+
+function resolvePluginTab(value: unknown): PluginInfoTab {
+  if (typeof value !== 'string') return DEFAULT_PLUGIN_TAB
+  if (ALWAYS_AVAILABLE_PLUGIN_TABS.has(value as PluginInfoTab)) {
+    return value as PluginInfoTab
+  }
+  if (value === 'Structure' && (props.plugin.dev?.enable || isAppDev.value)) {
+    return 'Structure'
+  }
+  return DEFAULT_PLUGIN_TAB
+}
+
+watch(
+  [() => props.plugin.name, () => route.query.tab, isAppDev],
+  ([, tab]) => {
+    tabsModel.value = resolvePluginTab(tab)
+  },
+  { immediate: true }
+)
 
 type PluginIssueSeverity = 'none' | 'warning' | 'error'
 

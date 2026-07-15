@@ -17,14 +17,19 @@
 2. 再收 R9.1：SQLite / FTS5 / metadata / citation MVP；当前 foundation 已 landed，剩真实数据、permission/citation coverage 与 R9.2 实际消费证据。
 3. R9.2 ContextHygiene P0/P1 closure 已完成 `6/6` 子任务：Memory 治理、host context execution、Memory Review、CompressionSnapshot、多入口 contract 与 CoreBox AI dispatch idempotency 均闭合；packaged context evidence 已覆盖 CoreBox + Assistant + Workflow + OmniPanel，仅真实用户 profile 保持开放。
 4. R8 Phase 3/4 已完成：53-entry unit Domain Lexicon、共享 conversion source，以及 `sdkapi 260713` i18n/lexicon typed facade、verified identity、三项 permission、host namespace/provenance、跨插件隔离和 lifecycle cleanup 已闭合；下一主批次为 Phase 5 CatalogService，再进入质量门禁。
-5. 最后排 R9.3/R9.4：2.5.5 Local Model Runtime、2.5.8 ASR Provider Runtime；runtime binary、下载、设备 smoke、权限和性能暂不提前打开。
+5. 最后排完整 R9.3/R9.4：2.5.5 Local Model Runtime、2.5.8 ASR Provider Runtime；runtime binary、下载、设备 smoke、本地隐私策略和性能仍不提前打开。
+   - 已有边界：CoreApp LocalProvider 的 Ollama `/api/chat`、`/api/tags`、typed HTTP 404 OpenAI-compatible fallback 与 focused tests 已落地；2026-07-13 补齐 split UTF-8 CJK/emoji 与 EOF terminal usage。该兼容层不改变 R9.3 后置顺序，也不代表内置 GGUF binary、模型管理 UI、packaging 或设备 smoke 完成。
+   - Stream commit boundary：只有 `NetworkHttpStatusError.status === 404` 且尚未输出时才允许兼容回退；普通错误消息中的 `404` 不切 backend，Ollama 首个非空 delta 后也不再进入 OpenAI-compatible fallback。
+   - Stream health boundary：NetworkService 只在 body `end` 后清理 cooldown failure，body `error` 会累积失败，主动取消不改变 guard；消费期错误不 retry/replay，避免局部 AI 输出重复。
+   - ASR 已有边界：VoicePanel 短录音已通过 typed transport 接入受治理 `audio.stt`，主进程 fail-closed 校验 MIME/5 MiB/30 秒并返回 provider/model/latency/trace；原始音频仅驻留内存，失败可回退 Web Speech。该切片不代表本地 `whisper.cpp`、artifact lifecycle、`local-only/cloud-only/auto`、长音频/streaming 或 packaged 真 provider evidence 完成。
 
 ## 2026-07-12 Goal 进度
 
 - Goal：`R4-R6小切片并行QuickOps、Plugin Trust Boundary、UI/TuffEx，不抢当前稳定化窗口。`
 - 当前状态：`active / partial`；Goal scope 暂不修改，继续以 related-only 小切片推进，后续单独复盘是否需要拆分或收窄。
 - R4 QuickOps：safe Flow 已区分 `statefulRuntime` 与 stop/reset `cleanup`，clean-screen 已补 visual contract marker；Pomodoro advanced loop runtime、diagnostics 与 app quit cleanup 已有代码/测试；CoreBox Flow payload 现在保留真实插件 identity 与 `{ item, query }` envelope，`FlowSelector` 对 `quickops.start-pomodoro` 发放本次 confirmation token 后，主进程会从 `query` 进入 settings-driven parser，消费自定义模板/CJK alias/cycle/long-break 参数，显式结构化字段仍优先；仍缺真实确认 UI 截图/录屏、真实清洁屏幕 visual、packaged advanced-loop 与 app quit cleanup evidence。
-- R5 Plugin Trust Boundary：五个 clipboard 插件路径已补 fail-closed；window/browser/system shell 与 batch rename `fs.write` 边界已补 runtime/platform/permission failure matrix；`touch-translation` 已从真实 feature/debounce 路径证明 network permission failure 不进入 provider/http；`touch-dev-toolbox` 外链 payload 已在 permission 前 canonicalize 为 HTTP/HTTPS，非法 scheme、SDK 缺失/拒绝/check/request 异常与 `openUrl` 缺失/失败均返回稳定 blocked reason，副作用保持为零；仍需覆盖其他 shell / OS / network / fs 权限缺失路径和 Widget sandbox 长尾。
+- R5 Plugin Trust Boundary：五个 clipboard 插件路径已补 fail-closed；window/browser/system shell 与 batch rename `fs.write` 边界已补 runtime/platform/permission failure matrix；`touch-translation` 已从真实 feature/debounce 路径证明 network permission failure 不进入 provider/http；`touch-dev-toolbox` 外链 payload 已在 permission 前 canonicalize 为 HTTP/HTTPS，非法 scheme、SDK 缺失/拒绝/check/request 异常与 `openUrl` 缺失/失败均返回稳定 blocked reason，副作用保持为零；Plugin System selection capture 已复用 OmniPanel host service，并在 verified identity + `clipboard.read` 后开放 typed `system.captureSelection()`，权限失败不进入 accessibility/shortcut/clipboard，fallback 恢复全格式快照；仍需覆盖其他 shell / OS / network / fs 权限缺失路径和 Widget sandbox 长尾。
+  - Intelligence host-owned control plane 已 fail-closed：低层 Agent request/trace subscription、persisted workflow `List/Get/Save/Delete/Run/History/ReviewUpdate`，以及无 plugin owner 的 ContextHygiene checkpoint/package-log queries 均从 facade 隐藏，raw transport 在 storage/runtime/provider/tool 前拒绝。高层 `contextInvoke()` / `contextStream()` / `contextEvaluateMemory()` / `agent.run()` / `workflow.execute()` 保持可用。
 - R6 UI / TuffEx：`touch-music` 与多个 TuffEx 基础控件语义化小切片已验证，`TxCardItem` 默认非交互语义已清理；`TxDataTable` sortable header 已迁入原生按钮，并新增显式 `interactiveRows`，只让真实整行动作表格进入 Tab 序列、响应 Enter/Space，三个 Nexus row-click 消费面已 opt-in；`TxDrawer` 已补 modal focus trap；`TxContextMenu` / `TxDropdownMenu` 已补菜单焦点导航；`TxTree` / `TxTreeSelect` 已补 roving focus、完整树键盘导航与单一行焦点；`TxGroupBlock` 已把 clickable header 收为原生 sibling toggle button，补 `aria-expanded` / `aria-controls`，并让 `header-extra` 的真实按钮保持独立、不再误触折叠。
 - 待复盘：是否把剩余工作拆成 QuickOps runtime/evidence、Plugin permission matrix、TuffEx semantics/visual smoke 三条更短的 Goal，避免一个 Goal 长期承载异质长尾。
 
@@ -65,6 +70,13 @@
 
 > 口径：R9.2 P0/P1 与 2.5.3 retrieval/citation 消费已完成代码、focused test 与 isolated packaged evidence 收口；真实用户 profile 仍明确开放，不宣称 production completion。
 > 2026-07-11 进度：父任务与 6 个子任务均 completed；parent CoreApp 9 files / 128 tests、utils SDK mirror 2 files / 46 tests、plugin facade 1 file / 42 tests、typed event builder 1 file / 2 tests passed，CoreApp node/web typecheck passed。
+> 2026-07-13 token-estimate follow-up：ContextHygiene 与 LocalKnowledgeEngine 共享 Unicode-aware 保守估算，旧 turn/chunk 读取时只允许按当前内容上调旧值，避免 CJK/emoji 与历史 `length / 4` 低估绕过 hard budget；该值不宣称等于 Provider 实际 token。
+> 2026-07-13 optional-budget follow-up：ContextPackage 只有正常 `current_input` 可显式超预算保留；secret/private 当前输入被排除后，首个 summary/recent turn/Memory/retrieval 仍受严格聚合预算约束，并以 metadata-only `token-budget-pruned` 记录，不泄露正文。
+> 2026-07-13 runtime-budget follow-up：ContextHygiene/LocalKnowledgeEngine 共享 finite integer normalization；`NaN`、正负无穷与非 number 不再穿透比较逻辑，分别回退到 1,600/1，数字字符串不做 coercion，typed SDK 合同不变。
+> 2026-07-13 degraded-fallback privacy follow-up：ContextHygiene 存储/prepare 失败时，`contextInvoke/contextStream` 在 current-input-only fallback 前复用本地 secret policy；unsafe raw input 以 `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED` 阻断且不调用 Provider，safe input 的 `context_prepare_failed` 降级保持不变。
+> 2026-07-13 degraded-budget metadata follow-up：`context_prepare_failed` current-only summary 与 Provider options metadata 也复用 finite normalization，非法 runtime budget 回退 1,600，避免降级链路重新传播 `NaN`/无穷/数字字符串 coercion。
+> 2026-07-13 privacy-precedence follow-up：caller `privacyLevel` 只能提高安全内容的隐私，不能把 host 检出的 secret 降级为 normal/private；secret turn 在 SQLite 前即 redacted 并从 ContextPackage 排除，safe explicit-private 语义保持不变。
+> 2026-07-13 credential-classifier follow-up：共享 secret policy 已识别真实 Bearer credential 与 standalone JWT，并贯穿 MemoryPolicy、turn redaction/ContextPackage exclusion、degraded invoke/stream blocking；短占位符和 generic dotted text 保持 safe。
 
 | 子任务 | 状态 | 已完成 / 证据 |
 | --- | --- | --- |
@@ -82,7 +94,7 @@
 | 任务 | 预估 AI 时间 | 风险 / 备注 |
 | --- | ---: | --- |
 | Assistant screenshot translate 产品化 | 3-5h | historical MVP/evidence 已有；VoicePanel keyboard-first 文本流与 Escape dismissal、麦克风与录屏 permission recovery、cursor/display/region、route metadata、OCR fallback、pin host controls 与 AI 渠道设置一键恢复已落 code path；待 current-version recapture、灰度开关和多显示器/HiDPI 采证。 |
-| OmniPanel / Assistant 性能优化 | 2-4h | VoicePanel opened listener 同步注册、输入先聚焦与 config/display 并行刷新已落；继续聚焦窗口生命周期、悬浮球拖拽持久化、packaged asset 排除与首屏不阻塞。 |
+| OmniPanel / Assistant 性能优化 | 2-4h | VoicePanel 首开竞态、悬浮球位置/显示器生命周期已闭合 focused contract；共享 `AppEntrance` 将三个 Assistant SFC 按 window mode 拆为约 8.36 / 44.16 / 6.03 kB 的独立 production JS chunks。继续其余窗口生命周期、非 Assistant packaged asset 排除、首屏不阻塞与 current-version 启动/多显示器/HiDPI/hot-plug 采证；无 benchmark 前不宣称启动耗时改善。 |
 | 桌面烟花 MVP | 2-4h | feature flag 默认关闭；轻量 overlay/canvas，限制粒子数、帧率、自动退出与无障碍降级。 |
 | 截图功能渐进引入 | 3-6h | capture + preview + copy/save/translate、permission recovery、typed region overlay 与 provider 失败恢复已落；继续补多显示器/HiDPI 与 current-version packaged recapture。 |
 | R3 durable job history + Settings diagnostics | 1-2h evidence pass | 非 schema code/focused tests、diagnostics JSON verifier、packaged probe 入口、isolated `--seedRecentTaskEvidence` 受控 evidence、isolated `--runMaintenanceAction reset` runtime evidence、fixtureRoot guard、stale bundle preflight、重包后的 scan/reconcile controlled fixture evidence 与 2026-06-30 isolated packaged durable scan DB snapshot 已完成；2026-06-30 `source-index-row-parity` blocker 已补 runtime scan drain 代码侧修复，probe/verifier 已补 attach-only/read-only envelope policy、`--requireReadOnlyEnvelope` 与 `--requireNaturalRecentTaskEvidence` 真实 evidence gate，preflight 已能对 `indexed_source_task_state` 空表给 warning，但还需重包重采 evidence；isolated evidence 只证明 packaged UI/chip/verifier/typed maintenance/task-state persistence 链路，不替代自然真实 profile history；剩修复 npm/tsx packaged probe 冷启动稳定性（crash report 指向 AppKit/HIServices `_RegisterApplication`，早于 CoreApp JS 日志），并对已有真实 packaged profile 或受控真实 profile 运行 probe 收自然 recent task 的 Settings 截图/录屏 artifact。 |

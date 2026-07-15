@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getActiveAppSnapshot, getTypedActiveAppSnapshot } from '../plugin/sdk/system'
+import { captureSelectedText, getActiveAppSnapshot, getTypedActiveAppSnapshot, system } from '../plugin/sdk/system'
 import { AppEvents } from '../transport/events'
 
 const { useChannelMock, createPluginTuffTransportMock } = vi.hoisted(() => ({
@@ -119,5 +119,70 @@ describe('plugin sdk system.getActiveAppSnapshot', () => {
       forceRefresh: false,
       includeIcon: true,
     })
+  })
+})
+
+describe('plugin sdk system.captureSelection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('sends the typed selection event and preserves a valid capture result exactly', async () => {
+    const channel = { send: vi.fn() }
+    const captureResult = {
+      text: 'selected text',
+      supportLevel: 'best_effort' as const,
+      issueCode: 'empty' as const,
+      issueMessage: 'No selected text was captured from the active application.',
+      limitations: ['Focused application controls copy behavior.'],
+      capturedAt: 1_784_115_200_000
+    }
+    const transport = { send: vi.fn(async () => captureResult) }
+    useChannelMock.mockReturnValue(channel)
+    createPluginTuffTransportMock.mockReturnValue(transport)
+
+    await expect(captureSelectedText()).resolves.toEqual(captureResult)
+    expect(transport.send).toHaveBeenCalledWith(AppEvents.system.captureSelection, {})
+    expect(channel.send).not.toHaveBeenCalled()
+  })
+
+  it('exposes system.captureSelection as the typed SDK entry point', async () => {
+    const channel = { send: vi.fn() }
+    const transport = {
+      send: vi.fn(async () => ({
+        text: 'direct selection',
+        supportLevel: 'supported',
+        capturedAt: 1_784_115_200_001
+      }))
+    }
+    useChannelMock.mockReturnValue(channel)
+    createPluginTuffTransportMock.mockReturnValue(transport)
+
+    await expect(system.captureSelection()).resolves.toEqual({
+      text: 'direct selection',
+      supportLevel: 'supported',
+      issueCode: undefined,
+      issueMessage: undefined,
+      limitations: undefined,
+      capturedAt: 1_784_115_200_001
+    })
+    expect(transport.send).toHaveBeenCalledWith(AppEvents.system.captureSelection, {})
+  })
+
+  it.each([
+    ['a non-object response', null],
+    ['an array response', []],
+    ['an unsupported support level', { text: 'x', supportLevel: 'partial', capturedAt: 1 }],
+    ['a non-finite capture timestamp', { text: 'x', supportLevel: 'supported', capturedAt: Infinity }],
+    [
+      'a malformed limitations envelope',
+      { text: 'x', supportLevel: 'supported', limitations: ['safe', 1], capturedAt: 1 }
+    ]
+  ])('rejects $0 instead of exposing malformed selection metadata', async (_name, response) => {
+    const transport = { send: vi.fn(async () => response) }
+    useChannelMock.mockReturnValue({ send: vi.fn() })
+    createPluginTuffTransportMock.mockReturnValue(transport)
+
+    await expect(captureSelectedText()).rejects.toThrow('Selection capture returned an invalid result.')
   })
 })

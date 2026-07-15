@@ -41,6 +41,7 @@ import { withSqliteRetry } from '../../db/sqlite-retry'
 import { createLogger } from '../../utils/logger'
 import { databaseModule } from '../database'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
+import { estimateContextTokens, normalizeContextTokenBudget } from './intelligence-token-estimate'
 
 const log = createLogger('IntelligenceContext')
 const DEFAULT_TOKEN_BUDGET = 1_600
@@ -190,10 +191,6 @@ function id(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${crypto.randomBytes(6).toString('hex')}`
 }
 
-function estimateTokens(content: string): number {
-  return Math.max(1, Math.ceil(content.trim().length / 4))
-}
-
 function parseJsonRecord(value: string | null | undefined): Record<string, unknown> {
   if (!value) return {}
   try {
@@ -264,10 +261,16 @@ function containsSecret(content: string): boolean {
   return [
     /\bsk-[\w-]{12,}\b/,
     /\bghp_\w{20,}\b/,
+    /\bBearer\s+[A-Za-z0-9._~+\/-]{16,}=*(?![A-Za-z0-9._~+\/=-])/i,
+    /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
     /\b(?:api[_-]?key|token|secret|password|passwd)\s*[:=]\s*\S+/i,
     /(?:恢复码|口令)\s*[:=：]\s*\S+/,
     /-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----/
   ].some((pattern) => pattern.test(content))
+}
+
+export function isContextInputProviderSafe(content: string): boolean {
+  return !containsSecret(content)
 }
 
 function optsOutOfMemory(content: string): boolean {
@@ -556,7 +559,7 @@ function turnFromRow(row: TurnRow): ContextTurn {
     role: row.role,
     content: row.content,
     privacyLevel: row.privacy_level,
-    tokenEstimate: row.token_estimate,
+    tokenEstimate: Math.max(Number(row.token_estimate) || 0, estimateContextTokens(row.content)),
     metadata: parseJsonRecord(row.metadata),
     createdAt: row.created_at
   }
@@ -1064,7 +1067,7 @@ export class ContextHygieneService {
     role: ContextTurn['role'] = 'user'
   ): Promise<ContextTurn> {
     const client = this.requireClient()
-    const privacyLevel = input.privacyLevel ?? (containsSecret(input.input) ? 'secret' : 'normal')
+    const privacyLevel = containsSecret(input.input) ? 'secret' : (input.privacyLevel ?? 'normal')
     const persistedContent = contentForPersistence(input.input, privacyLevel)
     const turn: ContextTurn = {
       id: id('ctxt'),
@@ -1072,7 +1075,7 @@ export class ContextHygieneService {
       role,
       content: persistedContent,
       privacyLevel,
-      tokenEstimate: estimateTokens(persistedContent),
+      tokenEstimate: estimateContextTokens(persistedContent),
       metadata: input.metadata,
       createdAt: now
     }
@@ -1124,7 +1127,7 @@ export class ContextHygieneService {
       const snapshot = await this.getLatestCompressionSnapshot(sourceSession.id)
       if (snapshot) {
         const content = renderCompressionSnapshot(snapshot)
-        const tokenEstimate = estimateTokens(content)
+        const tokenEstimate = estimateContextTokens(content)
         const exclusionReason = await this.getCompressionSnapshotExclusionReason(snapshot)
         const summary: ContextContinuationSummary = {
           ...metadataBase,
@@ -1175,7 +1178,7 @@ export class ContextHygieneService {
         }
       }
 
-      const tokenEstimate = estimateTokens(legacySummary)
+      const tokenEstimate = estimateContextTokens(legacySummary)
       if (containsSecret(legacySummary)) {
         return {
           summary: {
@@ -1239,8 +1242,8 @@ export class ContextHygieneService {
     let compressionMetadata: Record<string, unknown> | undefined
     let tokenEstimate = 0
 
-    const addItem = (item: ContextPackage['items'][number]): void => {
-      if (tokenEstimate + item.tokenEstimate > input.tokenBudget && items.length > 0) {
+    const addItem = (item: ContextPackage['items'][number], allowBudgetOverflow = false): void => {
+      if (!allowBudgetOverflow && tokenEstimate + item.tokenEstimate > input.tokenBudget) {
         excluded.push({
           sourceType: item.sourceType,
           sourceId: item.sourceId,
@@ -1254,13 +1257,16 @@ export class ContextHygieneService {
     }
 
     if (input.turn.privacyLevel === 'normal') {
-      addItem({
-        sourceType: 'current_input',
-        sourceId: input.turn.id,
-        reason: 'current user input',
-        content: input.turn.content,
-        tokenEstimate: input.turn.tokenEstimate
-      })
+      addItem(
+        {
+          sourceType: 'current_input',
+          sourceId: input.turn.id,
+          reason: 'current user input',
+          content: input.turn.content,
+          tokenEstimate: input.turn.tokenEstimate
+        },
+        true
+      )
     } else {
       excluded.push({
         sourceType: 'current_input',
@@ -1305,7 +1311,7 @@ export class ContextHygieneService {
         const snapshot = await this.getLatestCompressionSnapshot(input.session.id)
         if (snapshot) {
           const summary = renderCompressionSnapshot(snapshot)
-          const summaryTokenEstimate = estimateTokens(summary)
+          const summaryTokenEstimate = estimateContextTokens(summary)
           const exclusionReason = await this.getCompressionSnapshotExclusionReason(snapshot)
           const snapshotMetadata = {
             snapshotId: snapshot.id,
@@ -1347,7 +1353,7 @@ export class ContextHygieneService {
             sourceId: input.session.id,
             reason: 'validated legacy session summary',
             content: input.session.summary,
-            tokenEstimate: estimateTokens(input.session.summary)
+            tokenEstimate: estimateContextTokens(input.session.summary)
           })
           compressionMetadata = { status: 'legacy' }
         }
@@ -1380,7 +1386,7 @@ export class ContextHygieneService {
           sourceId: memory.id,
           reason: `usable ${memory.scope} memory`,
           content: memory.summary || memory.content,
-          tokenEstimate: estimateTokens(memory.summary || memory.content)
+          tokenEstimate: estimateContextTokens(memory.summary || memory.content)
         })
       }
     }
@@ -1579,7 +1585,7 @@ export class ContextHygieneService {
       session,
       turn,
       scope,
-      tokenBudget: Math.max(1, Math.floor(input.tokenBudget ?? DEFAULT_TOKEN_BUDGET)),
+      tokenBudget: normalizeContextTokenBudget(input.tokenBudget, DEFAULT_TOKEN_BUDGET),
       traceId: input.traceId,
       metadata: input.metadata,
       continuation

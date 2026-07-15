@@ -5,7 +5,11 @@ import type {
   MemoryItem
 } from '@talex-touch/utils/types/intelligence'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ContextHygieneService, isMemoryUsableForContext } from './intelligence-context-hygiene'
+import {
+  ContextHygieneService,
+  isContextInputProviderSafe,
+  isMemoryUsableForContext
+} from './intelligence-context-hygiene'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 
 interface FakeRow extends Record<string, unknown> {}
@@ -129,6 +133,25 @@ describe('contextHygieneService', () => {
     vi.clearAllMocks()
     dbMock.client.execute.mockReset()
     delete process.env.TUFF_INTELLIGENCE_CONTEXT_COREBOX_ONLY
+  })
+
+  it.each([
+    {
+      name: 'a realistic Bearer credential',
+      content: 'Authorization: Bearer synthetic_bearer_token-Alpha.0123456789~+/',
+      safe: false
+    },
+    {
+      name: 'a standalone realistic JWT',
+      content:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJyb2xlIjoidXNlciJ9.synthetic-signature-0123456789',
+      safe: false
+    },
+    { name: 'a short Bearer placeholder', content: 'Bearer token', safe: true },
+    { name: 'an angle-bracket Bearer placeholder', content: 'Bearer <token>', safe: true },
+    { name: 'generic dotted text', content: 'foo.bar.baz', safe: true }
+  ])('classifies $name through the provider-safe boundary', ({ content, safe }) => {
+    expect(isContextInputProviderSafe(content)).toBe(safe)
   })
 
   it('fails closed for invalid, expired, and unscoped memories', () => {
@@ -390,6 +413,75 @@ describe('contextHygieneService', () => {
         })
       ])
     )
+  })
+
+  it('uses the current CJK estimate for a persisted normal turn without rewriting it', async () => {
+    const statements: Array<{ sql: string; args: unknown[] }> = []
+    const now = Date.now()
+    dbMock.client.execute.mockImplementation(
+      async (statement: string | { sql: string; args?: unknown[] }) => {
+        if (typeof statement === 'string') return rows([])
+
+        const args = statement.args ?? []
+        statements.push({ sql: statement.sql, args })
+        if (statement.sql.includes('SELECT * FROM intelligence_context_sessions')) {
+          return rows([
+            {
+              id: 'session-legacy-cjk',
+              owner: 'corebox',
+              status: 'active',
+              objective: null,
+              summary: null,
+              metadata: null,
+              created_at: now - 100,
+              updated_at: now,
+              archived_at: null
+            }
+          ])
+        }
+        if (statement.sql.includes('FROM intelligence_compression_snapshots')) return rows([])
+        if (statement.sql.includes('SELECT * FROM intelligence_context_turns')) {
+          return rows([
+            {
+              id: 'turn-legacy-cjk',
+              session_id: 'session-legacy-cjk',
+              role: 'assistant',
+              content: '中文中文中文',
+              privacy_level: 'normal',
+              token_estimate: 1,
+              metadata: null,
+              created_at: now - 50
+            }
+          ])
+        }
+        if (statement.sql.includes('FROM intelligence_memory_items')) return rows([])
+        return rows([])
+      }
+    )
+    const service = new ContextHygieneService()
+
+    const result = await service.prepareTurn({
+      owner: 'corebox',
+      sessionId: 'session-legacy-cjk',
+      continueSession: true,
+      explicitScope: 'session',
+      input: 'ask',
+      tokenBudget: 10
+    })
+
+    expect(result.package.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: 'recent_turn',
+          sourceId: 'turn-legacy-cjk',
+          tokenEstimate: 6
+        })
+      ])
+    )
+    expect(result.package.tokenEstimate).toBe(7)
+    expect(
+      statements.some((statement) => statement.sql.includes('UPDATE intelligence_context_turns'))
+    ).toBe(false)
   })
 
   it('continues an archived session in a fresh checkpointed session with only its safe snapshot', async () => {
@@ -1596,6 +1688,280 @@ describe('contextHygieneService', () => {
           sourceId: result.turn.id,
           reason: 'secret-policy-blocked'
         }
+      ]
+    })
+  })
+
+  it.each([
+    {
+      name: 'a Bearer credential',
+      credential: 'Authorization: Bearer synthetic_bearer_token-Alpha.0123456789~+/'
+    },
+    {
+      name: 'a standalone JWT',
+      credential:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0LXVzZXIiLCJyb2xlIjoidXNlciJ9.synthetic-signature-0123456789'
+    }
+  ])('redacts $name from storage, packages, and memory admission', async ({ credential }) => {
+    dbMock.client.execute.mockResolvedValue(rows([]))
+    const service = new ContextHygieneService()
+
+    expect(service.evaluateMemory({ content: credential })).toEqual({
+      status: 'rejected',
+      reason: 'secret_detected'
+    })
+
+    const result = await service.prepareTurn({
+      owner: 'corebox',
+      input: credential,
+      tokenBudget: 120
+    })
+
+    expect(result.turn).toMatchObject({
+      privacyLevel: 'secret',
+      content: '[redacted:private-context-turn]'
+    })
+    expect(result.package.items).not.toContainEqual(
+      expect.objectContaining({ sourceType: 'current_input' })
+    )
+    expect(result.package.metadata).toMatchObject({
+      excluded: [
+        expect.objectContaining({
+          sourceType: 'current_input',
+          sourceId: result.turn.id,
+          reason: 'secret-policy-blocked'
+        })
+      ]
+    })
+    expect(JSON.stringify(result.package.metadata)).not.toContain(credential)
+
+    const turnInsertCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+      return (
+        typeof statement !== 'string' &&
+        statement.sql.includes('INSERT INTO intelligence_context_turns')
+      )
+    })
+    expect(turnInsertCall?.[0].args).toEqual(
+      expect.arrayContaining(['[redacted:private-context-turn]', 'secret'])
+    )
+    expect(JSON.stringify(dbMock.client.execute.mock.calls)).not.toContain(credential)
+
+    const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+      return (
+        typeof statement !== 'string' &&
+        statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+      )
+    })
+    expect(packageLogCall).toBeDefined()
+    expect(JSON.stringify(packageLogCall?.[0].args)).not.toContain(credential)
+  })
+
+  it.each([
+    { name: 'normal', privacyLevel: 'normal' as const },
+    { name: 'private', privacyLevel: 'private' as never }
+  ])(
+    'forces secret policy over explicit $name privacy without leaking raw input',
+    async ({ privacyLevel }) => {
+      const rawSecret = 'api_key = sk-explicit-privacy-secret'
+      dbMock.client.execute.mockResolvedValue(rows([]))
+
+      const result = await new ContextHygieneService().prepareTurn({
+        owner: 'corebox',
+        input: rawSecret,
+        privacyLevel,
+        tokenBudget: 120
+      })
+
+      expect(result.turn).toMatchObject({
+        privacyLevel: 'secret',
+        content: '[redacted:private-context-turn]'
+      })
+      expect(result.package.items).not.toContainEqual(
+        expect.objectContaining({ sourceType: 'current_input' })
+      )
+      expect(result.package.metadata).toMatchObject({
+        excluded: [
+          expect.objectContaining({
+            sourceType: 'current_input',
+            sourceId: result.turn.id,
+            reason: 'secret-policy-blocked'
+          })
+        ]
+      })
+      expect(JSON.stringify(result.package.metadata)).not.toContain(rawSecret)
+
+      const turnInsertCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+        return (
+          typeof statement !== 'string' &&
+          statement.sql.includes('INSERT INTO intelligence_context_turns')
+        )
+      })
+      expect(turnInsertCall).toBeDefined()
+      expect(turnInsertCall?.[0].args).toEqual(
+        expect.arrayContaining(['[redacted:private-context-turn]', 'secret'])
+      )
+      expect(JSON.stringify(turnInsertCall?.[0].args)).not.toContain(rawSecret)
+
+      const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+        return (
+          typeof statement !== 'string' &&
+          statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+        )
+      })
+      expect(packageLogCall).toBeDefined()
+      expect(JSON.stringify(packageLogCall?.[0].args)).not.toContain(rawSecret)
+    }
+  )
+
+  it('keeps a safe explicitly private turn private', async () => {
+    dbMock.client.execute.mockResolvedValue(rows([]))
+
+    const result = await new ContextHygieneService().prepareTurn({
+      owner: 'corebox',
+      input: 'Keep this caller-designated private detail out of context.',
+      privacyLevel: 'private' as never,
+      tokenBudget: 120
+    })
+
+    expect(result.turn).toMatchObject({
+      privacyLevel: 'private',
+      content: '[redacted:private-context-turn]'
+    })
+    expect(result.package.items).not.toContainEqual(
+      expect.objectContaining({ sourceType: 'current_input' })
+    )
+    expect(result.package.metadata).toMatchObject({
+      excluded: [
+        expect.objectContaining({
+          sourceType: 'current_input',
+          sourceId: result.turn.id,
+          reason: 'private-policy-blocked'
+        })
+      ]
+    })
+  })
+
+  it.each([
+    { name: 'NaN', tokenBudget: Number.NaN },
+    { name: 'positive infinity', tokenBudget: Number.POSITIVE_INFINITY },
+    { name: 'negative infinity', tokenBudget: Number.NEGATIVE_INFINITY }
+  ])(
+    'normalizes $name before returning and persisting a mandatory context package',
+    async ({ tokenBudget }) => {
+      dbMock.client.execute.mockResolvedValue(rows([]))
+
+      const result = await new ContextHygieneService().prepareTurn({
+        owner: 'corebox',
+        input: 'Keep this mandatory current input.',
+        tokenBudget
+      })
+
+      expect(result.package.tokenBudget).toBe(1_600)
+      expect(Number.isFinite(result.package.tokenBudget)).toBe(true)
+      expect(result.package.items).toEqual([
+        expect.objectContaining({
+          sourceType: 'current_input',
+          content: 'Keep this mandatory current input.'
+        })
+      ])
+      const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+        return (
+          typeof statement !== 'string' &&
+          statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+        )
+      })
+      expect(packageLogCall).toBeDefined()
+      expect(packageLogCall?.[0].args?.[4]).toBe(1_600)
+    }
+  )
+
+  it('prunes a safe legacy summary when a secret current input leaves the package empty', async () => {
+    const legacySummary = 'Safe legacy summary plaintext must never reach context package logs.'
+    dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
+      const sql = typeof statement === 'string' ? statement : statement.sql
+      if (sql.includes('SELECT * FROM intelligence_context_sessions')) {
+        return rows([
+          compressionSessionRow({
+            summary: legacySummary,
+            updated_at: Date.now()
+          })
+        ])
+      }
+      return rows([])
+    })
+
+    const result = await new ContextHygieneService().prepareTurn({
+      owner: 'corebox',
+      sessionId: 'session-1',
+      continueSession: true,
+      explicitScope: 'session',
+      input: 'private current input',
+      privacyLevel: 'secret',
+      tokenBudget: 1
+    })
+
+    expect(result.package.items).toEqual([])
+    expect(result.package.tokenEstimate).toBe(0)
+    expect(result.package.metadata).toMatchObject({
+      excluded: expect.arrayContaining([
+        expect.objectContaining({
+          sourceType: 'current_input',
+          reason: 'secret-policy-blocked'
+        }),
+        expect.objectContaining({
+          sourceType: 'summary',
+          reason: 'token-budget-pruned'
+        })
+      ])
+    })
+    expect(JSON.stringify(result.package.metadata)).not.toContain(legacySummary)
+
+    const packageLogCall = dbMock.client.execute.mock.calls.find(([statement]) => {
+      return (
+        typeof statement !== 'string' &&
+        statement.sql.includes('INSERT INTO intelligence_context_package_logs')
+      )
+    })
+    expect(packageLogCall).toBeDefined()
+    const serializedPackageLog = JSON.stringify(packageLogCall?.[0].args?.slice(6, 8))
+    expect(serializedPackageLog).not.toContain(legacySummary)
+  })
+
+  it('retains an oversized normal current input while pruning an optional legacy summary', async () => {
+    const legacySummary = 'Safe optional legacy summary that exceeds the package budget.'
+    dbMock.client.execute.mockImplementation(async (statement: string | { sql: string }) => {
+      const sql = typeof statement === 'string' ? statement : statement.sql
+      if (sql.includes('SELECT * FROM intelligence_context_sessions')) {
+        return rows([
+          compressionSessionRow({
+            summary: legacySummary,
+            updated_at: Date.now()
+          })
+        ])
+      }
+      return rows([])
+    })
+
+    const result = await new ContextHygieneService().prepareTurn({
+      owner: 'corebox',
+      sessionId: 'session-1',
+      continueSession: true,
+      explicitScope: 'session',
+      input: 'Normal current input is mandatory even when it exceeds the package budget.',
+      tokenBudget: 1
+    })
+
+    const currentInput = result.package.items.find((item) => item.sourceType === 'current_input')
+    expect(currentInput).toBeDefined()
+    expect(currentInput?.tokenEstimate).toBeGreaterThan(result.package.tokenBudget)
+    expect(result.package.tokenEstimate).toBe(currentInput?.tokenEstimate)
+    expect(result.package.items.some((item) => item.sourceType === 'summary')).toBe(false)
+    expect(result.package.metadata).toMatchObject({
+      excluded: [
+        expect.objectContaining({
+          sourceType: 'summary',
+          reason: 'token-budget-pruned'
+        })
       ]
     })
   })

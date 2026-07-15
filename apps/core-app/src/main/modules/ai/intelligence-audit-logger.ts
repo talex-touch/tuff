@@ -37,6 +37,73 @@ export interface IntelligenceUsageSummary {
   avgLatency: number
 }
 
+export interface IntelligenceUsageStatsBucket {
+  callerId: string
+  callerType: 'plugin' | 'system'
+  period: string
+  periodType: 'day' | 'month'
+  summary: IntelligenceUsageSummary
+}
+
+export function aggregateUsageStatsByCallerAndPeriod(
+  logs: IntelligenceAuditLogEntry[]
+): IntelligenceUsageStatsBucket[] {
+  const buckets = new Map<string, IntelligenceUsageStatsBucket>()
+
+  const add = (
+    callerId: string,
+    periodType: IntelligenceUsageStatsBucket['periodType'],
+    periodValue: string,
+    log: IntelligenceAuditLogEntry
+  ): void => {
+    const key = JSON.stringify([callerId, periodType, periodValue])
+    let bucket = buckets.get(key)
+    if (!bucket) {
+      bucket = {
+        callerId,
+        callerType: callerId === 'system' ? 'system' : 'plugin',
+        period: `${periodType}:${periodValue}`,
+        periodType,
+        summary: {
+          period: periodValue,
+          periodType,
+          requestCount: 0,
+          successCount: 0,
+          failureCount: 0,
+          totalTokens: 0,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalCost: 0,
+          avgLatency: 0
+        }
+      }
+      buckets.set(key, bucket)
+    }
+
+    const stat = bucket.summary
+    stat.requestCount += 1
+    if (log.success) {
+      stat.successCount += 1
+    } else {
+      stat.failureCount += 1
+    }
+    stat.totalTokens += log.usage.totalTokens
+    stat.promptTokens += log.usage.promptTokens
+    stat.completionTokens += log.usage.completionTokens
+    stat.totalCost += log.estimatedCost || 0
+    stat.avgLatency = (stat.avgLatency * (stat.requestCount - 1) + log.latency) / stat.requestCount
+  }
+
+  for (const log of logs) {
+    const callerId = log.caller || 'system'
+    const isoTimestamp = new Date(log.timestamp).toISOString()
+    add(callerId, 'day', isoTimestamp.slice(0, 10), log)
+    add(callerId, 'month', isoTimestamp.slice(0, 7), log)
+  }
+
+  return Array.from(buckets.values())
+}
+
 /**
  * Query options for audit logs
  */
@@ -326,33 +393,13 @@ export class IntelligenceAuditLogger {
     db: Pick<LibSQLDatabase<typeof schema>, 'select' | 'insert' | 'update'>,
     logs: IntelligenceAuditLogEntry[]
   ): Promise<void> {
-    // Group logs by caller and period
-    const stats = new Map<string, IntelligenceUsageSummary>()
-
-    for (const log of logs) {
-      const caller = log.caller || 'system'
-      const date = new Date(log.timestamp)
-
-      // Update daily stats
-      const dayKey = `${caller}:day:${date.toISOString().split('T')[0]}`
-      this.aggregateStats(stats, dayKey, log, 'day')
-
-      // Update monthly stats
-      const monthKey = `${caller}:month:${date.toISOString().substring(0, 7)}`
-      this.aggregateStats(stats, monthKey, log, 'month')
-    }
-
-    // Upsert stats to database
+    const buckets = aggregateUsageStatsByCallerAndPeriod(logs)
     const now = new Date()
-    for (const [key, stat] of stats) {
-      const [caller, periodType, period] = key.split(':')
-      if (periodType !== 'day' && periodType !== 'month') {
-        continue
-      }
-      const fullPeriod = `${periodType}:${period}`
+
+    for (const bucket of buckets) {
+      const { callerId, callerType, period, periodType, summary: stat } = bucket
 
       try {
-        const callerTypeValue = caller === 'system' ? 'system' : 'plugin'
         const totalRequestCount = sql`${intelligenceUsageStats.requestCount} + ${stat.requestCount}`
         const totalLatency = sql`${intelligenceUsageStats.avgLatency} * ${intelligenceUsageStats.requestCount} + ${stat.avgLatency} * ${stat.requestCount}`
         const avgLatency = sql`CASE WHEN ${totalRequestCount} > 0 THEN (${totalLatency}) / ${totalRequestCount} ELSE ${stat.avgLatency} END`
@@ -360,9 +407,9 @@ export class IntelligenceAuditLogger {
         await db
           .insert(intelligenceUsageStats)
           .values({
-            callerId: caller,
-            callerType: callerTypeValue,
-            period: fullPeriod,
+            callerId,
+            callerType,
+            period,
             periodType,
             requestCount: stat.requestCount,
             successCount: stat.successCount,
@@ -393,45 +440,9 @@ export class IntelligenceAuditLogger {
             }
           })
       } catch (error) {
-        this.logUsageStatsError(key, error)
+        this.logUsageStatsError(`${callerId}:${period}`, error)
       }
     }
-  }
-
-  private aggregateStats(
-    stats: Map<string, IntelligenceUsageSummary>,
-    key: string,
-    log: IntelligenceAuditLogEntry,
-    periodType: 'minute' | 'day' | 'month'
-  ): void {
-    let stat = stats.get(key)
-    if (!stat) {
-      stat = {
-        period: key.split(':').slice(2).join(':'),
-        periodType,
-        requestCount: 0,
-        successCount: 0,
-        failureCount: 0,
-        totalTokens: 0,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalCost: 0,
-        avgLatency: 0
-      }
-      stats.set(key, stat)
-    }
-
-    stat.requestCount++
-    if (log.success) {
-      stat.successCount++
-    } else {
-      stat.failureCount++
-    }
-    stat.totalTokens += log.usage.totalTokens
-    stat.promptTokens += log.usage.promptTokens
-    stat.completionTokens += log.usage.completionTokens
-    stat.totalCost += log.estimatedCost || 0
-    stat.avgLatency = (stat.avgLatency * (stat.requestCount - 1) + log.latency) / stat.requestCount
   }
 
   /**

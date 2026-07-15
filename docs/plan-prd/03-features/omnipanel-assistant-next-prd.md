@@ -47,6 +47,7 @@ Tuff 的优势不是复制一个更大的悬浮聊天窗，而是把已有 typed
 - 内置动作：快速翻译、AI 翻译、AI 摘要、AI 改写、AI 解释、AI Review、网页搜索、CoreBox 搜索、复制。
 - AI 预览：running / done / error、retry、copy、replace clipboard 二次确认、provider/model/trace/latency chips。
 - 插件接入：feature registry、plugin feature auto-mount、declarative omniTransfer。
+- Plugin System SDK 复用同一 host-owned selection service：`system.captureSelection()` / `captureSelectedText()` 在 verified identity + `clipboard.read` 后返回 text/support/issue/limitations/capturedAt；权限拒绝在 AX/shortcut/clipboard 前 fail-closed，fallback 保持全格式剪贴板恢复。
 
 主要缺口：
 

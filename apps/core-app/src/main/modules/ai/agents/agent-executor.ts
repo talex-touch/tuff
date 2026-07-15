@@ -13,6 +13,7 @@ import type {
   AgentTraceStep,
   AgentUsage
 } from '@talex-touch/utils'
+import type { IntelligenceUsageInfo } from '@talex-touch/utils/types/intelligence'
 import type { AgentExecutionContext, AgentImpl } from './agent-registry'
 import type { AgentContextManager } from './memory'
 import type { ToolRegistry } from './tool-registry'
@@ -42,7 +43,12 @@ export interface IntelligenceSDKInterface {
     capability: string,
     params: unknown,
     options?: unknown
-  ) => Promise<{ success: boolean; data?: unknown; error?: string }>
+  ) => Promise<{
+    success: boolean
+    data?: unknown
+    error?: string
+    usage?: IntelligenceUsageInfo
+  }>
 }
 
 /**
@@ -91,6 +97,13 @@ export class AgentExecutor {
     const taskId = task.id || this.generateTaskId()
     const startTime = Date.now()
     const trace: AgentTraceStep[] = []
+    const usage: AgentUsage = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      toolCalls: 0,
+      duration: 0
+    }
 
     logInfo(`Executing task ${taskId} for agent ${task.agentId}`)
 
@@ -163,13 +176,13 @@ export class AgentExecutor {
       // Execute based on task type
       switch (task.type) {
         case 'execute':
-          output = await this.executeAction(agent.impl, resolvedTask, context, trace)
+          output = await this.executeAction(agent.impl, resolvedTask, context, trace, usage)
           break
         case 'plan':
-          output = await this.executePlan(agent.impl, resolvedTask, context, trace)
+          output = await this.executePlan(agent.impl, resolvedTask, context, trace, usage)
           break
         case 'chat':
-          output = await this.executeChat(agent.impl, resolvedTask, context, trace)
+          output = await this.executeChat(agent.impl, resolvedTask, context, trace, usage)
           break
         default:
           throw new Error(`Unknown task type: ${task.type}`)
@@ -198,7 +211,7 @@ export class AgentExecutor {
         agentId: resolvedTask.agentId,
         output,
         status: 'completed' as AgentStatus,
-        usage: this.calculateUsage(startTime, trace),
+        usage: this.calculateUsage(startTime, trace, usage),
         trace: this.options.enableTracing ? trace : undefined,
         timestamp: Date.now()
       }
@@ -230,7 +243,8 @@ export class AgentExecutor {
     impl: AgentImpl,
     task: AgentTask,
     context: AgentExecutionContext,
-    trace: AgentTraceStep[]
+    trace: AgentTraceStep[],
+    usage: AgentUsage
   ): Promise<unknown> {
     // If agent has custom execute, use it
     if (impl.execute) {
@@ -238,7 +252,7 @@ export class AgentExecutor {
     }
 
     // Otherwise, use LLM-based execution
-    return this.executeLLMAction(task, context, trace)
+    return this.executeLLMAction(task, context, trace, usage)
   }
 
   /**
@@ -246,8 +260,9 @@ export class AgentExecutor {
    */
   private async executeLLMAction(
     task: AgentTask,
-    _context: AgentExecutionContext,
-    trace: AgentTraceStep[]
+    context: AgentExecutionContext,
+    trace: AgentTraceStep[],
+    usage: AgentUsage
   ): Promise<unknown> {
     if (!this.intelligenceSDK) {
       throw new Error('IntelligenceSDK not configured')
@@ -285,13 +300,20 @@ export class AgentExecutor {
       },
       {
         strategy: 'adaptive-default',
-        modelPreference: ['gpt-4o-mini', 'deepseek-chat']
+        modelPreference: ['gpt-4o-mini', 'deepseek-chat'],
+        metadata: {
+          caller: task.caller || 'intelligence.agent-executor',
+          agentId: task.agentId,
+          taskId: context.taskId,
+          ...(context.sessionId ? { sessionId: context.sessionId } : {})
+        }
       }
     )
 
     if (!response.success) {
       throw new Error(response.error || 'LLM invocation failed')
     }
+    this.captureModelUsage(usage, response.usage)
 
     return response.data
   }
@@ -303,7 +325,8 @@ export class AgentExecutor {
     impl: AgentImpl,
     task: AgentTask,
     context: AgentExecutionContext,
-    _trace: AgentTraceStep[]
+    _trace: AgentTraceStep[],
+    usage: AgentUsage
   ): Promise<unknown> {
     if (impl.plan) {
       return impl.plan(task.input, context)
@@ -339,13 +362,20 @@ Respond with only valid JSON.`
         messages: [{ role: 'user', content: planPrompt }]
       },
       {
-        strategy: 'adaptive-default'
+        strategy: 'adaptive-default',
+        metadata: {
+          caller: task.caller || 'intelligence.agent-executor',
+          agentId: task.agentId,
+          taskId: context.taskId,
+          ...(context.sessionId ? { sessionId: context.sessionId } : {})
+        }
       }
     )
 
     if (!response.success) {
       throw new Error(response.error || 'Plan generation failed')
     }
+    this.captureModelUsage(usage, response.usage)
 
     return {
       taskId: task.id,
@@ -362,7 +392,8 @@ Respond with only valid JSON.`
     impl: AgentImpl,
     task: AgentTask,
     context: AgentExecutionContext,
-    trace: AgentTraceStep[]
+    trace: AgentTraceStep[],
+    usage: AgentUsage
   ): Promise<unknown> {
     // If agent has streaming chat, collect all chunks
     if (impl.chat) {
@@ -377,7 +408,7 @@ Respond with only valid JSON.`
     }
 
     // Otherwise use execute
-    return this.executeAction(impl, task, context, trace)
+    return this.executeAction(impl, task, context, trace, usage)
   }
 
   /**
@@ -450,15 +481,26 @@ Instructions:
   /**
    * Calculate usage statistics
    */
-  private calculateUsage(startTime: number, trace: AgentTraceStep[]): AgentUsage {
-    const toolCalls = trace.filter((t) => t.type === 'tool_call').length
-    return {
-      promptTokens: 0, // Would be filled by actual LLM response
-      completionTokens: 0,
-      totalTokens: 0,
-      toolCalls,
-      duration: Date.now() - startTime
+  private captureModelUsage(usage: AgentUsage, modelUsage?: IntelligenceUsageInfo): void {
+    if (!modelUsage) {
+      return
     }
+    usage.promptTokens += modelUsage.promptTokens
+    usage.completionTokens += modelUsage.completionTokens
+    usage.totalTokens += modelUsage.totalTokens
+    if (typeof modelUsage.cost === 'number') {
+      usage.cost = (usage.cost ?? 0) + modelUsage.cost
+    }
+  }
+
+  private calculateUsage(
+    startTime: number,
+    trace: AgentTraceStep[],
+    usage: AgentUsage
+  ): AgentUsage {
+    usage.toolCalls = trace.filter((t) => t.type === 'tool_call').length
+    usage.duration = Date.now() - startTime
+    return usage
   }
 
   /**

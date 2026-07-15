@@ -22,11 +22,10 @@ vi.mock('../sentry/sentry-service', () => {
 
 const intelligenceSdkMocks = vi.hoisted(() => ({
   invoke: vi.fn(
-    async (): Promise<{
-      provider: string
-      model: string
-      result?: { audio: string; format: string }
-    }> => ({ provider: 'test-provider', model: 'test-model' })
+    async (): Promise<{ provider: string; model: string; result?: unknown }> => ({
+      provider: 'test-provider',
+      model: 'test-model'
+    })
   ),
   stream: vi.fn(async function* () {
     yield { type: 'text-delta', text: 'streamed response' }

@@ -31,7 +31,7 @@
 - 2026-07-12 Workflow context lifecycle / packaged evidence follow-up：每个 run 必须拥有独立 `owner=workflow`、`scope=session` context session；首个 `text.chat` model step 使用 `mode=new` 建立确定的 per-run session，后续 model step 使用 `mode=continue` 复用它。禁止对未创建 session 直接 continue 后把 `continuation-session-missing` 当正常闭环，也禁止同一 run 的步骤漂移到多个 context session。focused orchestration 9 tests、node typecheck/lint、bundle/package、两次 visible controlled run 与 evidence manifest privacy scan passed；当前 packaged entrypoints 为 CoreBox/Assistant/Workflow，OmniPanel 与 real-profile 仍 open。
 - 2026-07-13 OmniPanel packaged context evidence follow-up：visible built-in AI action 必须通过 host-owned `contextInvoke` 建立 `owner=omni-panel`、`mode=new`、`scope=light` ContextPackage，并保持每次用户 action 单次 Provider dispatch。isolated macOS arm64 package 已取得 1 session / 1 package log / 2 turns / 1 `/api/chat` / Ready result；focused OmniPanel 3 files / 38 tests 与 evidence verifier passed。manifest 当前 7 cases / 6 passed，packaged entrypoints 覆盖 CoreBox/Assistant/Workflow/OmniPanel，privacy scan passed；real-profile 仍 open。
 - `2.5.5` 本地模型运行时方向已锁定：不强依赖 Ollama，优先内置 GGUF / `llama.cpp` runtime；Ollama 仅作为可选兼容后端，模型权重不得进入安装包、同步载荷或普通日志。
-- `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
+- `2.5.8` ASR Provider Runtime 方向已锁定：本地 `whisper.cpp` + 云端 ASR provider 抽象；当前仅落地 VoicePanel 内存短录音 -> typed transport -> 受治理 `audio.stt` 小切片，包含 MIME/5 MiB/30 秒 fail-closed 校验和 Web Speech fallback。`local-only/cloud-only/auto`、artifact lifecycle、本地 runtime 与 packaged 真 provider evidence 仍开放；隐私内容不得默认上传云端，TTS 不进入该版本 Stable。
 - `2.6.0` i18n / Domain Lexicon / Cloud Catalog 收敛方向已锁定：UI messages、transport messages、domain lexicon、plugin localized metadata 与 cloud catalog 必须分层；单位、币种、时区、能力标签和搜索别名必须支持多语言但走 Domain Lexicon；CatalogService 下载数据必须验签/hash/schema 校验后导入 SQLite。
 - App Data Plugins 与 Everything 收口已新增 Roadmap：新增 Browser Data、Obsidian、VSCode、macOS App Data、Epic 等数据源必须显式授权、只读优先、可清理索引、可见 degraded/unsupported reason；Windows Everything 必须明确 SDK/CLI 策略、路径授权过滤与运行证据。
 - Provider / Scene 必须解耦：新增供应商进入 Provider registry，新增使用场景进入 Scene，不新增孤立 provider model。
@@ -122,7 +122,7 @@
 - 未登录、provider 不可用、quota 不足、model/capability 不支持、网络失败必须返回明确错误和用户可见恢复建议，不得返回空结果或伪成功。
 - Provider metadata chips 至少展示 capability/provider/model/latency/trace 中的可用字段；缺失字段必须有 pending/unavailable fallback，不能渲染空 footer。
 - Provider secret、API key、prompt/response 明文不得进入普通配置、localStorage、日志或同步 JSON；审计默认只记录 trace/provider/model/latency/usage/success/errorCode。
-- `2.5.3` / `2.5.4` / `2.5.5` / `2.5.8` 在当前稳定窗口只允许文档、schema 或小型 SDK 探索，不得把本地知识库、自动长期记忆、本地大模型、语音或多模态生成提前作为 `2.4.11` 或 `2.5.0 Stable` blocker。
+- `2.5.3` / `2.5.4` / `2.5.5` / `2.5.8` 完整 runtime 在当前稳定窗口不得成为 `2.4.11` 或 `2.5.0 Stable` blocker；允许受治理、fail-closed 的小型 typed SDK/产品切片，但必须明确 code/focused/packaged evidence 层级，不能把局部能力写成完整本地知识库、长期记忆、本地大模型或 ASR Runtime 完成。
 - 已落地的 `2.5.3`/`2.5.4` CoreApp foundation 只计入 schema / typed SDK / focused service test 证据，不替代 `2.5.0` packaged Electron 文本/OCR成功与固定失败路径 evidence。
 - ContextHygiene 必须可解释 prompt 组装来源；MemoryPolicy 必须在写入前拦截 API key、token、恢复码、口令等敏感内容，ContextPackage 日志默认只记录 source id、reason、token estimate 与 trace，不保存完整 prompt/response。Sensitive / secret turns 不得进入 FTS、embedding、context log 或可同步 payload；删除 memory 必须通过 tombstone 与 prepareTurn 二次过滤防止回灌；LangChain adapter 默认禁止外部 tracing/cache/remote vectorstore，除非经 Tuff 托管 adapter 脱敏、授权和审计。
 
