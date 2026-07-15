@@ -27,8 +27,8 @@ export const tuffSdkItems: TuffSdkItem[] = [
   {
     id: "clipboard-sdk",
     title: "Clipboard SDK",
-    description: "Clipboard read/write & history.",
-    tag: "useClipboard()",
+    description: "Clipboard, selected text & history.",
+    tag: "useClipboard() / system.captureSelection()",
     color: "#fbbf24",
     icon: "i-carbon-copy",
   },
