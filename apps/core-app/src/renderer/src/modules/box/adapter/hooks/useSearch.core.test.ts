@@ -1,6 +1,11 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardItem, IClipboardOptions } from './types'
-import { TuffInputType, type TuffItem, type TuffSearchResult } from '@talex-touch/utils'
+import {
+  TuffInputType,
+  createCoreBoxContextActionsOpenRequest,
+  type TuffItem,
+  type TuffSearchResult
+} from '@talex-touch/utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, ref, type Ref } from 'vue'
 import { BoxMode } from '..'
@@ -227,6 +232,49 @@ describe('useSearch CoreBox reopen behavior', () => {
         configurable: true
       })
     }
+  })
+
+  it('runs a typed Context Actions query without re-reading clipboard state', async () => {
+    useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    state.send.mockClear()
+    state.latestClipboardRequests = []
+    const contextEventName = Array.from(state.listeners.keys()).find((name) =>
+      name.includes('context-actions')
+    )
+    expect(contextEventName).toBeTruthy()
+
+    const request = createCoreBoxContextActionsOpenRequest('context-session', {
+      type: 'image',
+      source: 'clipboard-image',
+      content: 'data:image/png;base64,aW1hZ2U=',
+      mimeType: 'image/png',
+      capturedAt: 1_752_486_400_000,
+      available: true,
+      diagnostic: { supportLevel: 'supported' }
+    })
+    await state.listeners.get(contextEventName!)?.(request)
+    await flushPromises()
+
+    const queryCall = state.send.mock.calls.find(([event]) => String(event) === 'core-box:query')
+    expect(queryCall?.[1]).toMatchObject({
+      query: {
+        text: '',
+        inputs: [{ type: TuffInputType.Image, content: 'data:image/png;base64,aW1hZ2U=' }],
+        context: {
+          session: 'context-session',
+          contextAction: {
+            mode: 'context-actions',
+            sessionId: 'context-session',
+            inputType: 'image',
+            source: 'clipboard-image',
+            available: true
+          }
+        }
+      }
+    })
+    expect(state.latestClipboardRequests).toEqual([])
   })
 
   it('refreshes results when CoreBox is shown with an existing query', async () => {

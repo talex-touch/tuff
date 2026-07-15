@@ -1,8 +1,8 @@
 import { BoxMode } from '../../modules/box/adapter'
 
-export type CoreBoxSearchStateKind = 'searching' | 'recommendation-loading' | 'no-results'
+export type CoreBoxSearchStateKind = 'searching' | 'recommendation-loading'
 
-export type CoreBoxSearchStateTone = 'progress' | 'empty'
+export type CoreBoxSearchStateTone = 'progress'
 
 export interface CoreBoxSearchState {
   kind: CoreBoxSearchStateKind
@@ -52,18 +52,6 @@ export function resolveCoreBoxSearchState(
       titleFallback: 'Searching',
       detailKey: 'coreBox.searchState.searchingDetail',
       detailFallback: 'Checking local providers and indexed content.'
-    }
-  }
-
-  if (query && !input.loading) {
-    return {
-      kind: 'no-results',
-      tone: 'empty',
-      icon: 'i-ri-search-eye-line',
-      titleKey: 'coreBox.searchState.noResultsTitle',
-      titleFallback: 'No results found',
-      detailKey: 'coreBox.searchState.noResultsDetail',
-      detailFallback: 'Check spelling, retry the search, or open File Index settings.'
     }
   }
 
