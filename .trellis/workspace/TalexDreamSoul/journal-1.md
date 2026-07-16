@@ -304,3 +304,36 @@ Removed transient CoreBox indexing/search hints and added post-commit App/File i
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Harden Dependabot and CI reliability
+
+**Date**: 2026-07-15
+**Task**: Harden Dependabot and CI reliability
+**Branch**: `master`
+
+### Summary
+
+Unified workflow Node and PNPM sources, repaired fresh-runner Intelligence setup, fixed lockfile policy, simplified weekly Dependabot updates, and enforced read-only package CI permissions; all focused gates passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4922b47984865e5f4b134c7ce36a82f3266b485a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

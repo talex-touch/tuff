@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-07-15
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~306 | Active |
+| `journal-1.md` | ~339 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-07-15 | Harden Dependabot and CI reliability | `4922b47984865e5f4b134c7ce36a82f3266b485a` | `master` |
 | 4 | 2026-07-15 | Progressive CoreBox index search | `d85bb7ea6` | `master` |
 | 3 | 2026-07-10 | Serialize async search gather updates | `f40d92698`, `efdcbecee` | `master` |
 | 2 | 2026-07-10 | Contain plugin window privilege boundary | `bd95a0009`, `7db0a9db9` | `master` |
