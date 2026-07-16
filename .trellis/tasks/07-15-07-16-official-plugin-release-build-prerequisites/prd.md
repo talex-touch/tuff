@@ -14,6 +14,7 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Electron packaging must use an explicit filesystem-safe executable name instead of deriving Linux targets from the scoped CoreApp package name.
 - Beta packaging must retain the exact `-beta.N` version in every installer filename and updater metadata file; Windows must not relabel it as `SNAPSHOT.N`.
 - Nexus release sync must select the platform-preferred artifact when GitHub publishes multiple files for one platform/architecture pair, including AppImage over Debian packages.
+- macOS archives must encode the canonical version and target architecture in their filename so the release manifest and Nexus cannot mislabel an Apple Silicon build as x64; release notes must list only produced formats.
 - CoreApp lint must exclude `resources/bundled-plugins/**`, which contains generated immutable package payloads rather than maintained source.
 - Preserve deterministic, fail-fast prerequisite/plugin ordering and all existing bundled-plugin projection behavior.
 - Do not weaken artifact validation or bypass failed package builds.
@@ -37,3 +38,4 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Beta.10 workflow `29475792730` reached Linux packaging, then `icon-tool.js` failed because the repository-local Builder cache inherited ESM semantics.
 - Beta.11 workflow `29476486542` passed macOS and Windows; Linux reached AppImage assembly, then rejected the derived `@talex-touchcore-app` executable name.
 - Beta.12 workflow `29477973821` completed every job and published ten GitHub assets, but verification exposed Windows `SNAPSHOT.12` updater metadata and a Nexus Linux pair overwritten from AppImage to Debian.
+- Beta.13 workflow `29479958042` preserved Windows beta metadata and selected Linux AppImage, but its unqualified macOS ZIP was inferred as x64 despite the arm64 build, while release notes advertised unproduced DMG/Windows ZIP formats.

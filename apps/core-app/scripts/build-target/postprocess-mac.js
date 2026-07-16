@@ -190,12 +190,13 @@ function adHocSignApps(appDirs) {
   })
 }
 
-function zipApps(appDirs, distDir) {
+function zipApps(appDirs, distDir, version, arch) {
   console.log('\n=== Creating zip file ===')
   appDirs.forEach((appPath) => {
     const appName = path.basename(appPath)
     const appParent = path.dirname(appPath)
-    const zipPath = path.join(distDir, `${appName}.zip`)
+    const appStem = appName.endsWith('.app') ? appName.slice(0, -4) : appName
+    const zipPath = path.join(distDir, `${appStem}-${version}-${arch}.app.zip`)
     try {
       if (fs.existsSync(zipPath)) {
         fs.unlinkSync(zipPath)
@@ -217,7 +218,7 @@ function zipApps(appDirs, distDir) {
   })
 }
 
-function postProcessMacArtifacts(distDir) {
+function postProcessMacArtifacts(distDir, version, arch) {
   console.log('\n=== Fixing macOS executable permissions ===')
   try {
     const appDirs = findAppDirs(distDir)
@@ -230,7 +231,7 @@ function postProcessMacArtifacts(distDir) {
       fixFrameworkExecutablePermissions(appDirs)
       removeQuarantine(appDirs)
       adHocSignApps(appDirs)
-      zipApps(appDirs, distDir)
+      zipApps(appDirs, distDir, version, arch)
     } else {
       console.log('  No .app bundles found to fix')
     }
