@@ -3,13 +3,21 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileSafeMock } = vi.hoisted(() => ({
-  execFileSafeMock: vi.fn()
+const { execFileSafeMock, getFileIconMock } = vi.hoisted(() => ({
+  execFileSafeMock: vi.fn(),
+  getFileIconMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
-    getPath: vi.fn(() => path.join(os.tmpdir(), 'darwin-app-icon-cache-test-user-data'))
+    getPath: vi.fn((name: string) =>
+      path.join(
+        os.tmpdir(),
+        'darwin-app-icon-cache-test-user-data',
+        name === 'cache' ? 'cache' : ''
+      )
+    ),
+    getFileIcon: getFileIconMock
   }
 }))
 
@@ -83,6 +91,10 @@ describe('darwin app info', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    getFileIconMock.mockResolvedValue({
+      isEmpty: () => false,
+      toPNG: () => Buffer.from('native-png')
+    })
     execFileSafeMock.mockImplementation(async (_command: string, args: string[]) => {
       const outputIndex = args.indexOf('--out')
       if (outputIndex >= 0 && args[outputIndex + 1]) {
@@ -189,7 +201,8 @@ describe('darwin app info', () => {
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('generates stable hashed png app icon cache from bundle icon resources', async () => {
+  it('falls back to bundle icon resources when native extraction fails', async () => {
+    getFileIconMock.mockRejectedValueOnce(new Error('native icon unavailable'))
     const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp', {
       iconFile: 'AppIcon'
     })
@@ -211,6 +224,19 @@ describe('darwin app info', () => {
     )
   })
 
+  it('uses Electron native app icons at display size', async () => {
+    const tempRoot = await createTempAppBundle('NativeIcon', 'NativeIcon')
+    tempRoots.push(tempRoot)
+    const appPath = path.join(tempRoot, 'NativeIcon.app')
+
+    const { getAppInfo } = await loadSubject()
+    const appInfo = await getAppInfo(appPath)
+
+    expect(getFileIconMock).toHaveBeenCalledWith(appPath, { size: 'normal' })
+    expect(await fs.readFile(appInfo?.icon ?? '', 'utf8')).toBe('native-png')
+    expect(execFileSafeMock).not.toHaveBeenCalled()
+  })
+
   it('reuses existing app icon cache without running sips again', async () => {
     const tempRoot = await createTempAppBundle('Preview', 'Preview', {
       iconFile: 'PreviewIcon'
@@ -228,6 +254,10 @@ describe('darwin app info', () => {
   })
 
   it('returns empty icon when app has no icon resources', async () => {
+    getFileIconMock.mockResolvedValueOnce({
+      isEmpty: () => true,
+      toPNG: () => Buffer.alloc(0)
+    })
     const tempRoot = await createTempAppBundle('NoIcon', 'NoIcon')
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'NoIcon.app')

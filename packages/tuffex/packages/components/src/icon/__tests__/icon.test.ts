@@ -75,6 +75,21 @@ describe('txIcon', () => {
     expect(wrapper.find('img').exists()).toBe(false)
   })
 
+  it('shows the empty fallback after a URL icon fails to load', async () => {
+    const wrapper = mount(TxIcon, {
+      props: {
+        icon: { type: 'url', value: 'tfile:///missing-app.png', colorful: true },
+        empty: '/fallback-logo.png',
+      },
+    })
+
+    expect(wrapper.find('.tuff-icon__loading').exists()).toBe(true)
+    await wrapper.get('img[src="tfile:///missing-app.png"]').trigger('error')
+
+    expect(wrapper.find('.tuff-icon__loading').exists()).toBe(false)
+    expect(wrapper.get('img[src="/fallback-logo.png"]').exists()).toBe(true)
+  })
+
   it('resolves file and local url values through injected config', () => {
     const wrapper = mount(TxIcon, {
       props: {

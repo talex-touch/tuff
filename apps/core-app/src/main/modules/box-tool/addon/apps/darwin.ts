@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { app } from 'electron'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
 import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
@@ -167,12 +168,31 @@ async function findAppIconSourcePath(
   }
 }
 
+const DARWIN_APP_ICON_CACHE_VERSION = 'native-v1'
+
+function isTruthyPlistFlag(value: unknown): boolean {
+  if (value === true || value === 1) return true
+  if (typeof value !== 'string') return false
+  return ['1', 'true', 'yes'].includes(value.trim().toLowerCase())
+}
+
+function isNonUserFacingCoreServiceApp(
+  appPath: string,
+  plistData: Record<string, unknown>
+): boolean {
+  const normalizedPath = appPath.replace(/\\/g, '/').toLowerCase()
+  if (!normalizedPath.startsWith('/system/library/coreservices/')) return false
+
+  return isTruthyPlistFlag(plistData.LSBackgroundOnly) || isTruthyPlistFlag(plistData.LSUIElement)
+}
+
 async function ensureCachedAppIcon(
   appPath: string,
   bundleId: string,
   plistData: Record<string, unknown>
 ): Promise<string> {
-  const cachedIconPath = getAppIconCachePath(bundleId || appPath, 'darwin')
+  const cacheKey = `${DARWIN_APP_ICON_CACHE_VERSION}:${bundleId || appPath}`
+  const cachedIconPath = getAppIconCachePath(cacheKey, 'darwin')
 
   try {
     await fs.access(cachedIconPath)
@@ -181,22 +201,54 @@ async function ensureCachedAppIcon(
     // Cache miss; generate it below.
   }
 
-  const sourceIconPath = await findAppIconSourcePath(appPath, plistData)
-  if (!sourceIconPath) {
-    return ''
-  }
-
+  let temporaryIconPath = ''
   try {
+    const nativeIcon = await app.getFileIcon(appPath, { size: 'normal' })
+    const png = nativeIcon.toPNG()
+    if (nativeIcon.isEmpty() || png.length === 0) {
+      throw new Error('Electron returned an empty app icon')
+    }
+
     await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
-    await execFileSafe('sips', ['-s', 'format', 'png', sourceIconPath, '--out', cachedIconPath])
-    await fs.access(cachedIconPath)
+    temporaryIconPath = `${cachedIconPath}.${process.pid}.${Date.now()}.tmp`
+    await fs.writeFile(temporaryIconPath, png)
+    await fs.rename(temporaryIconPath, cachedIconPath)
     return cachedIconPath
-  } catch (error) {
-    darwinAppLog.warn('Failed to generate app icon cache', {
-      error,
-      meta: { pathLength: appPath.length, iconPathLength: sourceIconPath.length }
-    })
-    return ''
+  } catch (nativeError) {
+    if (temporaryIconPath) {
+      await fs.rm(temporaryIconPath, { force: true }).catch(() => undefined)
+    }
+
+    const sourceIconPath = await findAppIconSourcePath(appPath, plistData)
+    if (!sourceIconPath) {
+      return ''
+    }
+
+    try {
+      await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
+      await execFileSafe('sips', [
+        '-Z',
+        '128',
+        '-s',
+        'format',
+        'png',
+        sourceIconPath,
+        '--out',
+        cachedIconPath
+      ])
+      await fs.access(cachedIconPath)
+      return cachedIconPath
+    } catch (fallbackError) {
+      darwinAppLog.warn('Failed to generate app icon cache', {
+        error: fallbackError,
+        meta: {
+          pathLength: appPath.length,
+          iconPathLength: sourceIconPath.length,
+          nativeError: nativeError instanceof Error ? nativeError.message : String(nativeError)
+        }
+      })
+      return ''
+    }
   }
 }
 
@@ -249,7 +301,7 @@ async function getLocalizedDisplayName(appPath: string): Promise<string | null> 
 }
 
 // The core logic for fetching app info, designed to throw errors on failure.
-async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
+async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo | null> {
   const plistPath = path.join(appPath, 'Contents', 'Info.plist')
 
   // Pre-check if Info.plist exists before proceeding
@@ -266,6 +318,10 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo> {
   const stats = await fs.stat(appPath)
   const plistContent = await fs.readFile(plistPath, 'utf-8')
   const plistData: Record<string, unknown> = await readPlistAsync(plistPath).catch(() => ({}))
+  if (isNonUserFacingCoreServiceApp(appPath, plistData)) {
+    return null
+  }
+
   const plistIconFile = getValueFromPlist(plistContent, 'CFBundleIconFile')
   const plistIconName = getValueFromPlist(plistContent, 'CFBundleIconName')
 

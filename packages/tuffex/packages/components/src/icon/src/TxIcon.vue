@@ -138,6 +138,8 @@ const isSvg = computed(() => {
 })
 
 const svgContent = ref<string>('')
+const imageLoaded = ref(false)
+const imageLoadFailed = ref(false)
 
 // colorful logic aligned with core-app:
 // colorful=true -> render as <img> (preserve original colors)
@@ -197,6 +199,25 @@ async function fetchSvg(url: string) {
   }
 }
 
+function handleImageLoad() {
+  imageLoaded.value = true
+  imageLoadFailed.value = false
+}
+
+function handleImageError() {
+  imageLoaded.value = false
+  imageLoadFailed.value = true
+}
+
+watch(
+  resolvedUrl,
+  () => {
+    imageLoaded.value = false
+    imageLoadFailed.value = false
+  },
+  { immediate: true },
+)
+
 watch(
   () => ({
     url: resolvedUrl.value,
@@ -224,7 +245,7 @@ watch(
     :data-icon-value="safeIcon.value"
     :style="{ fontSize: size ? `${size}px` : undefined, color: iconColor }"
   >
-    <span v-if="!safeIcon.value" class="tuff-icon__empty"><slot name="empty">
+    <span v-if="!safeIcon.value || (isAddressable && imageLoadFailed)" class="tuff-icon__empty"><slot name="empty">
       <img v-if="empty" :alt="alt" :src="empty">
     </slot>
     </span>
@@ -260,7 +281,18 @@ watch(
       </template>
       <!-- Colorful mode: render as img (colorful=true) -->
       <template v-else>
-        <img :alt="alt" :src="resolvedUrl">
+        <span v-if="!imageLoaded" class="tuff-icon__loading" aria-hidden="true">
+          <span class="tuff-icon__loading-skeleton">
+            <span class="tuff-icon__loading-shimmer" />
+          </span>
+        </span>
+        <img
+          v-show="imageLoaded"
+          :alt="alt"
+          :src="resolvedUrl"
+          @load="handleImageLoad"
+          @error="handleImageError"
+        >
       </template>
     </template>
 
@@ -343,6 +375,7 @@ watch(
 }
 
 .tuff-icon__loading-skeleton {
+  display: block;
   width: 1em;
   height: 1em;
   border-radius: 6px;

@@ -20,7 +20,10 @@ const CORESERVICES_NOISY_NAMES = new Set([
   'tmhelperagent',
   'dwell control',
   'profilehelper',
-  'corelocationagent'
+  'corelocationagent',
+  'image events',
+  'previewshell',
+  'system events'
 ])
 
 const SIMULATOR_TOKENS = ['simulator', 'coresimulator', 'iphonesimulator']
