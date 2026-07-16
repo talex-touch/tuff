@@ -125,7 +125,7 @@ const rendererRuntimeRestrictedSyntax = [
 ]
 
 export default tseslint.config(
-  { ignores: ['**/node_modules', '**/dist', '**/out', 'tuff/**'] },
+  { ignores: ['**/node_modules', '**/dist', '**/out', 'resources/bundled-plugins/**', 'tuff/**'] },
   tseslint.configs.recommended,
   eslintPluginVue.configs['flat/recommended'],
   {

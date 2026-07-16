@@ -9,6 +9,8 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Clean-checkout release builds must build `@talex-touch/unplugin-export-plugin` before `@talex-touch/tuff-cli` resolves its exported Vite entry.
 - Clean-checkout release builds must build `@talex-touch/tuffex` before `touch-translation` resolves `@talex-touch/tuffex/base.css` and component styles.
 - Windows release builds on Node 24 must invoke the pnpm command through a supported Windows command path and must not fail with `spawnSync pnpm.cmd EINVAL`.
+- CoreApp must own compatible `electron-builder` and Windows peer packages directly; clean installs must expose the package-local binary expected by `build-target.js`.
+- CoreApp lint must exclude `resources/bundled-plugins/**`, which contains generated immutable package payloads rather than maintained source.
 - Preserve deterministic, fail-fast prerequisite/plugin ordering and all existing bundled-plugin projection behavior.
 - Do not weaken artifact validation or bypass failed package builds.
 
@@ -16,7 +18,8 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 
 - [x] Focused tests prove the full prerequisite order and Windows pnpm invocation behavior.
 - [x] A clean-output official plugin toolchain build recreates exporter and TuffEx CSS outputs before building official plugins.
-- [x] CoreApp node type-check, focused tests, lint, and release quality gate pass.
+- [x] CoreApp node type-check, focused tests, lint, and release quality gate pass, including the Builder executable preflight.
+- [x] A local macOS beta packaging smoke reaches `electron-builder` and produces a package artifact.
 - [ ] A fresh beta workflow completes all three platform builds and publishes GitHub/Nexus release assets.
 
 ## Notes
@@ -25,3 +28,5 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - macOS/Linux could not resolve `@talex-touch/unplugin-export-plugin/vite`; Windows failed while spawning `pnpm.cmd` directly.
 - Node documentation requires Windows `.cmd` files to run through a shell or equivalent command host.
 - Beta.8 workflow `29473856584` passed the beta.7 failure points, then Linux exposed missing clean-checkout TuffEx CSS output.
+- Beta.9 workflow `29474318864` completed official plugin and Electron Vite builds, then failed because `electron-builder` was no longer declared or installed.
+- The local beta package smoke succeeded and produced `apps/core-app/dist/tuff.app.zip`; uncached lint then exposed missing generated-resource ignores.
