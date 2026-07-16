@@ -113,6 +113,8 @@ Reviewers should check:
 - Exporter staging must exclude top-level `out`, `build`, and case-insensitive `*.tpex` entries from source payload collection.
 - Release order is CLI core, unplugin exporter, CLI entrypoint, TuffEx, every `OFFICIAL_PLUGIN_BUILD_TARGETS` package, every seed projection, plugin prelude bundling, CoreApp build/package, then after-pack seed verification. A clean checkout cannot assume any workspace `dist` output exists.
 - `electron-vite build` or direct `electron-builder --dir` only packages the existing resource projection; it does not rebuild/synchronize canonical official plugin code. After any official plugin source/build change, release/evidence flow must run canonical plugin build + `syncOfficialPluginBundledRuntimes` before packaging.
+- `apps/core-app` directly owns compatible `electron-builder` and `electron-builder-squirrel-windows` dev dependencies because `build-target.js` executes its package-local binary; do not rely on undeclared/transitive workspace hoisting.
+- CoreApp lint ignores `resources/bundled-plugins/**`; these are synchronized immutable release payloads, and quality checks run against their canonical plugin sources instead of generated/minified projections.
 - A successful projection result contains `pluginName`, `packageName`, `canonicalBuildRoot`, `bundledPluginRoot`, `canonicalVersion`, `synced: true`, and `skipped: false`.
 - Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs` and never downgrades an identity-matching newer local runtime.
 
@@ -125,6 +127,7 @@ Reviewers should check:
 - Any prerequisite or plugin package build exits non-zero -> stop immediately; do not sync or package CoreApp.
 - Missing TuffEx `dist/es/base.css` or component CSS before `touch-translation` build -> Vite resolution failure; build `@talex-touch/tuffex` before official plugin targets.
 - Windows direct `execFileSync('pnpm.cmd', args)` under Node 24 -> fail with `spawnSync pnpm.cmd EINVAL`; resolve it through `ComSpec`/`cmd.exe /d /s /c pnpm.cmd` and preserve argument ordering.
+- Missing `apps/core-app/node_modules/.bin/electron-builder` after a frozen install -> release packaging must fail before artifact claims; restore the direct CoreApp dependencies and lockfile rather than bypassing the lookup.
 - Missing packaged seed, version mismatch, nested `dist`, or nested `.tpex` -> `afterPack` throws and packaging fails.
 - Missing/empty/invalid runtime seed set -> runtime installer throws before mutating any plugin.
 - Older, corrupt, wrong-identity, or same-version/different-signature local runtime -> staged clean replacement with rollback.
@@ -134,7 +137,7 @@ Reviewers should check:
 ### 5. Good / Base / Bad Cases
 
 - Good: repeated builds keep only the current archive outside `dist/build`; packaged Resources contain two clean official seeds; a fresh profile discovers both during initial plugin loading.
-- Base: a clean checkout builds CLI core, the unplugin exporter, the CLI entrypoint, TuffEx, and both official plugins; exporter `dist/vite.js` must precede the CLI build, and TuffEx CSS outputs must precede `touch-translation`.
+- Base: a clean checkout builds CLI core, the unplugin exporter, the CLI entrypoint, TuffEx, and both official plugins; exporter `dist/vite.js` must precede the CLI build, TuffEx CSS must precede `touch-translation`, and the CoreApp-local Builder binary must exist before packaging.
 - Bad: copying the whole canonical `dist` directory, seeding after plugin discovery starts, or overwriting newer local runtime/data is prohibited.
 
 ### 6. Tests Required
@@ -142,6 +145,8 @@ Reviewers should check:
 - Both exporter implementations: seed a stale top-level `.tpex`, build, then assert absence from `dist/out`, `dist/build`, and `manifest._files`.
 - Build orchestration: assert the exact CLI core -> exporter -> CLI entrypoint -> TuffEx -> official target order, and assert a failed build prevents later builds.
 - Package command resolution: assert POSIX invokes `pnpm` directly and Windows invokes the configured `ComSpec` with `/d /s /c pnpm.cmd --filter <package> run build`.
+- Release preflight: `pnpm -C apps/core-app exec electron-builder --version` must pass after a frozen install, then a package smoke must produce a real platform artifact.
+- Lint preflight: run CoreApp lint with a cold/no-cache path and assert bundled plugin payloads are ignored while maintained CoreApp source remains covered.
 - Seed projection and after-pack: assert clean stale-file removal, canonical version propagation, packaged resource presence, and fail-closed missing/mismatch/artifact behavior.
 - Runtime bootstrap: assert immediate synchronous return, pre-mutation validation, clean install/update, data/log preservation, wrong-identity repair, and newer-local no-downgrade.
 - Content freshness: compare canonical `dist/build` files with the bundled resource projection (excluding the resource-only package metadata where applicable), then verify a previously installed same-version/different-signature runtime is refreshed on startup.
