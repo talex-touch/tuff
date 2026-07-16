@@ -10,6 +10,7 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Clean-checkout release builds must build `@talex-touch/tuffex` before `touch-translation` resolves `@talex-touch/tuffex/base.css` and component styles.
 - Windows release builds on Node 24 must invoke the pnpm command through a supported Windows command path and must not fail with `spawnSync pnpm.cmd EINVAL`.
 - CoreApp must own compatible `electron-builder` and Windows peer packages directly; clean installs must expose the package-local binary expected by `build-target.js`.
+- CI must place `ELECTRON_BUILDER_CACHE` outside the repository so downloaded CommonJS helper scripts do not inherit the root `type: module` boundary.
 - CoreApp lint must exclude `resources/bundled-plugins/**`, which contains generated immutable package payloads rather than maintained source.
 - Preserve deterministic, fail-fast prerequisite/plugin ordering and all existing bundled-plugin projection behavior.
 - Do not weaken artifact validation or bypass failed package builds.
@@ -30,3 +31,4 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Beta.8 workflow `29473856584` passed the beta.7 failure points, then Linux exposed missing clean-checkout TuffEx CSS output.
 - Beta.9 workflow `29474318864` completed official plugin and Electron Vite builds, then failed because `electron-builder` was no longer declared or installed.
 - The local beta package smoke succeeded and produced `apps/core-app/dist/tuff.app.zip`; uncached lint then exposed missing generated-resource ignores.
+- Beta.10 workflow `29475792730` reached Linux packaging, then `icon-tool.js` failed because the repository-local Builder cache inherited ESM semantics.
