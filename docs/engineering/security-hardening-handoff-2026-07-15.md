@@ -33,6 +33,10 @@
 
 ## 4. 剩余 Backlog（都撞真机墙或需决策，任务系统 #9/#10/#12/#15/#16/#17）
 
+> **每项的详细实施 handoff**（现状 file:line / 步骤 / 验证 / 陷阱）见
+> [`security-hardening-remaining-backlog-2026-07-15.md`](./security-hardening-remaining-backlog-2026-07-15.md)。
+> 下面是概览。
+
 ### C1-B 插件隔离（根治 C1，设计+阶段1+阶段2 已落地）
 - **事件式回调 RPC（#15 剩余）**：`channelBridge.onMain(evt, cb)` 是反向 callback（main→plugin），实验核心只做了 invoke 式（plugin→main）。需 callbackId 双向 RPC。
 - **AbortSignal 跨进程代理**：`onFeatureTriggered(signal)` 的取消透传，实验核心未做。
@@ -55,5 +59,5 @@
 
 ## 6. 提交与并行工作状态
 
-- 本轮 12 个提交独立、干净、未 push。建议 review 后逐条 `git commit --amend -S`(GPG 签名，会话环境签不了) 或直接 push。
+- 两份 handoff 文档已 GPG 签名并 push。此前 12 个修复提交在会话签不了名时已由环境 push 到 `origin/master`（未签名）；**不逐条 re-sign**——那需要 force-push、会 rewrite 与并行进程共享的历史。要签名可由维护者本地对已 push 范围单独 `git rebase --exec 'git commit --amend --no-edit -S'` 后自行决定是否 force-push。
 - 工作区剩余的 core-app 改动（clipboard/download/storage/intelligence/assistant/dev-process-manager + `plugin-host-bridge`/`plugin-module` + `07-15-*` trellis 任务）**是并行进程的在途工作，不属于本轮**——其中 `dev-process-manager.ts` 有 2 个未使用常量(没写完)导致全量 typecheck 报红，那不是本轮引入的。让其作者收尾。
