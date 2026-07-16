@@ -7,6 +7,7 @@ import {
   normalizeTuffItemLocalAssets
 } from '../../../../utils/local-renderable-assets'
 import { createLogger } from '../../../../utils/logger'
+import { matchNoisySystemAppRule } from '../../addon/apps/app-noise-filter'
 
 const itemRebuilderLog = createLogger('RecommendationEngine').child('ItemRebuilder')
 
@@ -123,9 +124,17 @@ export class ItemRebuilder {
       if (apps.length === 0) return []
 
       const appsWithExtensions = await this.fetchExtensionsForApps(apps)
+      const recommendationApps = appsWithExtensions.filter(
+        (app) =>
+          !matchNoisySystemAppRule({
+            path: app.path,
+            bundleId: app.extensions.bundleId,
+            name: app.displayName || app.name
+          })
+      )
       const { mapAppsToRecommendationItems } =
         await import('../../addon/apps/search-processing-service')
-      return mapAppsToRecommendationItems(appsWithExtensions)
+      return mapAppsToRecommendationItems(recommendationApps)
     } catch (error) {
       itemRebuilderLog.error('Failed to rebuild app items', {
         error,

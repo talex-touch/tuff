@@ -11,7 +11,8 @@ const COREBOX_ACTION_ICONS = [
   'i-carbon-ibm-watsonx-code-assistant-for-z-validation-assistant',
   'i-carbon-package-node',
   'i-carbon-app',
-  'i-carbon-folders'
+  'i-carbon-folders',
+  'i-ri-apps-line'
 ]
 
 export default defineConfig({

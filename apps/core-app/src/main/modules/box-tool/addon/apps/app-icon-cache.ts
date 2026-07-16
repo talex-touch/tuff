@@ -12,8 +12,7 @@ function hashCacheKey(cacheKey: string): string {
 
 function getElectronPath(name: string): string | null {
   try {
-    const getPath = app?.getPath as ((pathName: string) => string) | undefined
-    return getPath?.(name) || null
+    return app.getPath(name as Parameters<typeof app.getPath>[0]) || null
   } catch {
     return null
   }

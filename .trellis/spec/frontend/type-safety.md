@@ -207,6 +207,10 @@ type RecommendationBadge = {
 - Empty, missing, or nonexistent app icon inputs fall back to `{ type: 'class', value: 'i-ri-apps-line' }`.
 - Plugin recommendation rebuilding must preserve supported icon metadata fields: `type`, `value`, `color`, `colorful`, `status`, and `error`.
 - Renderer badge components should only render class badge icons that start with `i-`; stale cached emoji badge values are ignored.
+- macOS app icon caches must resolve Electron paths through a bound `app.getPath(...)` call; detached Electron methods fail with `Illegal invocation` and must not silently route production data into test-temp fallbacks.
+- macOS app bundles use `app.getFileIcon(path, { size: 'normal' })` as the primary icon source and persist versioned, display-sized PNG caches; `.icns`/`sips` remains fallback-only.
+- `/System/Library/CoreServices` entries marked `LSBackgroundOnly` or `LSUIElement` are not user-facing applications and must be excluded before indexing; recommendation rebuilding also applies the shared CoreServices noise filter to stale rows.
+- Addressable `TxIcon` sources show a loading skeleton until `load`; an `error` event must switch to the caller-provided empty fallback instead of leaving a blank image.
 
 ### 4. Validation & Error Matrix
 
@@ -216,6 +220,10 @@ type RecommendationBadge = {
 - Valid `data:` / `file://` / `tfile://` / local path -> URL icon with source colors preserved.
 - Plugin icon with unsupported `type` or empty `value` -> recommendation fallback class icon.
 - Badge icon not starting with `i-` -> omit the visual badge icon and keep the label.
+- Electron cache path lookup throws or is called without its `app` receiver -> use the stable temporary fallback only in non-Electron/test contexts; production callers keep the Electron cache directory.
+- Native macOS icon extraction returns an empty image or throws -> try the bundle `.icns` fallback, then emit the normal app fallback icon.
+- URL/tfile image load error -> render the `empty` slot or empty-image source and clear the loading skeleton.
+- CoreServices background/UIElement bundle -> omit it from scan and recommendation results.
 
 ### 5. Good/Base/Bad Cases
 
@@ -229,6 +237,9 @@ type RecommendationBadge = {
 - Drift handling tests comparing local paths with equivalent `file://` values.
 - Plugin recommendation rebuild tests that assert optional icon metadata is preserved.
 - Renderer tests that assert list and grid badges use class icons and image icons keep color forwarding.
+- macOS extraction tests assert bound cache-path resolution, `app.getFileIcon(..., { size: 'normal' })`, versioned cache reuse, and `.icns` fallback behavior.
+- TuffEx icon tests dispatch image `error` and assert that loading state is removed and the empty fallback is rendered.
+- Recommendation/filter checks cover hidden CoreServices apps so stale indexed rows cannot return to the recommendation surface.
 
 ### 7. Wrong vs Correct
 
