@@ -4,82 +4,73 @@ on:
   workflow_call:
     inputs:
       package-name:
-        description: 'Package name (e.g., utils, tuffex, unplugin-export-plugin)'
+        description: "Package name (e.g., utils, tuffex, unplugin-export-plugin)"
         required: true
         type: string
       package-path:
-        description: 'Package path relative to repo root (e.g., packages/utils)'
+        description: "Package path relative to repo root (e.g., packages/utils)"
         required: true
         type: string
-      node-version:
-        description: 'Node.js version to use'
-        required: false
-        type: string
-        default: '24.0.0'
-      pnpm-version:
-        description: 'PNPM version to use'
-        required: false
-        type: string
-        default: '10.32.1'
       run-lint:
-        description: 'Run lint check'
+        description: "Run lint check"
         required: false
         type: boolean
         default: false
       run-test:
-        description: 'Run tests'
+        description: "Run tests"
         required: false
         type: boolean
         default: false
       run-build:
-        description: 'Run build'
+        description: "Run build"
         required: false
         type: boolean
         default: false
       run-typecheck:
-        description: 'Run typecheck'
+        description: "Run typecheck"
         required: false
         type: boolean
         default: false
       build-command:
-        description: 'Custom build command (default: pnpm build)'
+        description: "Custom build command (default: pnpm build)"
         required: false
         type: string
-        default: 'pnpm build'
+        default: "pnpm build"
       test-command:
-        description: 'Custom test command (default: pnpm test)'
+        description: "Custom test command (default: pnpm test)"
         required: false
         type: string
-        default: 'pnpm test'
+        default: "pnpm test"
       lint-command:
-        description: 'Custom lint command (default: pnpm lint)'
+        description: "Custom lint command (default: pnpm lint)"
         required: false
         type: string
-        default: 'pnpm lint'
+        default: "pnpm lint"
       typecheck-command:
-        description: 'Custom typecheck command (default: pnpm typecheck)'
+        description: "Custom typecheck command (default: pnpm typecheck)"
         required: false
         type: string
-        default: 'pnpm typecheck'
+        default: "pnpm typecheck"
+
+permissions:
+  contents: read
 
 jobs:
   ci:
     name: CI - ${{ inputs.package-name }}
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v6
-        with:
-          version: ${{ inputs.pnpm-version }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ inputs.node-version }}
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install Dependencies

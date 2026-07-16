@@ -40,10 +40,13 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup mise
-        uses: jdx/mise-action@v3
+        uses: jdx/mise-action@v4
         with:
           cache: true
           install: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Verify intelligence gates
         run: mise run intelligence:verify

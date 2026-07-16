@@ -47,7 +47,6 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 - OmniPanel Gate automation was retired on `2026-05-18`
   - The previous `omnipanel-gate.yml` workflow ran OmniPanel scoped typecheck/lint/unit/build/smoke as an independent GitHub Actions gate. It has been removed; OmniPanel regressions now rely on ordinary nearest-path validation or explicit local commands instead of an automatic standalone gate.
 
-
 ### Package CI Workflows
 
 #### Reusable Workflow
@@ -57,10 +56,9 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 This is a reusable workflow that can be called by other workflows to standardize package CI/CD processes.
 
 **Inputs:**
+
 - `package-name` (required) - Package name for identification
 - `package-path` (required) - Path to package relative to repo root
-- `node-version` (optional, default: `24.0.0`) - Node.js version
-- `pnpm-version` (optional, default: `10.32.1`) - PNPM version
 - `run-lint` (optional, default: `false`) - Enable linting
 - `run-test` (optional, default: `false`) - Enable tests
 - `run-build` (optional, default: `false`) - Enable build
@@ -71,6 +69,7 @@ This is a reusable workflow that can be called by other workflows to standardize
 - `typecheck-command` (optional, default: `pnpm typecheck`) - Custom typecheck command
 
 **Features:**
+
 - Automatic dependency caching
 - Conditional job execution based on inputs
 - Build artifact upload with 7-day retention
@@ -140,14 +139,17 @@ on:
     branches:
       - main
     paths:
-      - 'packages/your-package/**'
-      - '.github/workflows/package-your-package-ci.yml'
-      - '.github/workflows/package-ci.yml'
+      - "packages/your-package/**"
+      - ".github/workflows/package-your-package-ci.yml"
+      - ".github/workflows/package-ci.yml"
   push:
     branches:
       - main
     paths:
-      - 'packages/your-package/**'
+      - "packages/your-package/**"
+
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -170,12 +172,14 @@ jobs:
 2. **Reusable Workflow**: Include `package-ci.yml` in path filters so changes to the reusable workflow trigger all package CIs
 3. **Conditional Steps**: Only enable steps (lint, test, build) that your package actually supports
 4. **Custom Commands**: Override default commands if your package uses different script names
-5. **Node Version**: Keep Node.js version consistent with the main app (currently 24.0.0)
-6. **Action Runtime**: Keep JavaScript actions on Node 24-compatible major versions; this is separate from the project `node-version` and must not be handled by changing the app runtime away from 24.0.0
+5. **Runtime Versions**: Read Node from `.node-version` and PNPM from the root `package.json#packageManager`; do not add workflow-local overrides
+6. **Action Runtime**: Keep JavaScript actions on Node 24-compatible major versions; this is separate from the project runtime declared by `.node-version`
+7. **Permissions**: Keep package validation read-only with `permissions: contents: read`
 
 ## Workflow Execution Order
 
 For package workflows:
+
 1. Checkout code
 2. Setup PNPM and Node.js
 3. Install dependencies (with caching)
@@ -196,6 +200,7 @@ For package workflows:
 ## Maintenance
 
 When updating:
+
 - Keep Node.js version in sync with Volta configuration
 - Update PNPM version when upgrading in the project
 - Review all `uses:` action majors against the current GitHub Actions runtime baseline; avoid `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` and do not use `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` as a long-term fix

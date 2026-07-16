@@ -21,7 +21,6 @@ jobs:
       markdown_change: ${{ steps.filter_markdown.outputs.change }}
       markdown_files: ${{ steps.filter_markdown.outputs.change_files }}
     steps:
-
       - name: Check Not Allowed File Changes
         uses: dorny/paths-filter@v4
         id: filter_not_allowed
@@ -31,12 +30,11 @@ jobs:
             change:
               - 'package-lock.json'
               - 'yarn.lock'
-              - 'pnpm-lock.yaml'
 
-      - name: Fail on lockfile changes
+      - name: Fail on foreign lockfile changes
         if: ${{ steps.filter_not_allowed.outputs.change == 'true' }}
         run: |
-          echo "Lockfile changes are not accepted in this PR workflow:"
+          echo "Foreign lockfile changes are not accepted in this PR workflow:"
           echo '${{ steps.filter_not_allowed.outputs.change_files }}'
           exit 1
 
@@ -74,13 +72,11 @@ jobs:
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v6
-        with:
-          version: 10.32.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24.0.0
+          node-version-file: .node-version
           cache: pnpm
 
       - name: Install dependencies
