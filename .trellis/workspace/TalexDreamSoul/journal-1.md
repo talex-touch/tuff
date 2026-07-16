@@ -370,3 +370,50 @@ Live-tested app discovery, indexing, search, launch, AutoPaste, and AutoClear in
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 修复官方插件发布链并完成 Beta.14 验证
+
+**Date**: 2026-07-16
+**Task**: 修复官方插件发布链并完成 Beta.14 验证
+**Branch**: `master`
+
+### Summary
+
+修复 clean-checkout 官方插件前置构建、Windows Node 24 pnpm 调用、Builder 依赖与缓存、Linux AppImage 命名、Beta 版本一致性、Nexus 首选资产及 macOS arm64 资产身份；Beta.14 三平台构建、GitHub Release 与 Nexus 发布全部验证通过。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ef039c893` | (see git log) |
+| `282dd6fc7` | (see git log) |
+| `dc5cd7ce9` | (see git log) |
+| `40d3bc809` | (see git log) |
+| `20325f87f` | (see git log) |
+| `41410f9ee` | (see git log) |
+| `270e8f0c6` | (see git log) |
+| `a8a0bf335` | (see git log) |
+| `ec87f4f14` | (see git log) |
+| `5338970d4` | (see git log) |
+| `02243e353` | (see git log) |
+| `2eedfd58f` | (see git log) |
+| `07770e4a9` | (see git log) |
+| `7fb58530a` | (see git log) |
+| `4d32b8615` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

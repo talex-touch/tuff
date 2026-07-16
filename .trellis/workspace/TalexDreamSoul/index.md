@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-07-15
+- **Total Sessions**: 7
+- **Last Active**: 2026-07-16
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~372 | Active |
+| `journal-1.md` | ~419 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-07-16 | 修复官方插件发布链并完成 Beta.14 验证 | `ef039c893`, `282dd6fc7`, `dc5cd7ce9`, `40d3bc809`, `20325f87f`, `41410f9ee`, `270e8f0c6`, `a8a0bf335`, `ec87f4f14`, `5338970d4`, `02243e353`, `2eedfd58f`, `07770e4a9`, `7fb58530a`, `4d32b8615` | `master` |
 | 6 | 2026-07-15 | Verify CoreBox app indexing and clipboard lifecycle | `bfa18626b04fec62d4bceacfb076498217ff3f5b` | `master` |
 | 5 | 2026-07-15 | Harden Dependabot and CI reliability | `4922b47984865e5f4b134c7ce36a82f3266b485a` | `master` |
 | 4 | 2026-07-15 | Progressive CoreBox index search | `d85bb7ea6` | `master` |
