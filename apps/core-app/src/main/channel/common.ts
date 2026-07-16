@@ -272,6 +272,29 @@ const wallpaperCopyToLibraryEvent = defineRawEvent<
 >('wallpaper:copy-to-library')
 const batteryStatusEvent = AppEvents.power.batteryStatus
 
+const WALLPAPER_UNAVAILABLE_LOG_INTERVAL_MS = 60 * 60_000
+let lastWallpaperUnavailableLogAt = 0
+let lastWallpaperUnavailableMessage = ''
+
+function logWallpaperUnavailable(message: string, expected: boolean): void {
+  const now = Date.now()
+  if (
+    message === lastWallpaperUnavailableMessage &&
+    now - lastWallpaperUnavailableLogAt < WALLPAPER_UNAVAILABLE_LOG_INTERVAL_MS
+  ) {
+    return
+  }
+  lastWallpaperUnavailableLogAt = now
+  lastWallpaperUnavailableMessage = message
+  if (expected) {
+    log.info('Desktop wallpaper path is unavailable')
+  } else {
+    log.warn('Failed to read desktop wallpaper path', {
+      meta: { error: message }
+    })
+  }
+}
+
 function resolveTfilePath(urlOrPath: string): string {
   if (!urlOrPath) return ''
   if (!urlOrPath.startsWith(`${FILE_SCHEMA}:`)) {
@@ -344,7 +367,7 @@ async function listWallpaperImages(folderPath: string, recursive = false): Promi
     }
     return results
   } catch (error) {
-    log.warn('[CommonChannel] Failed to list wallpaper images', {
+    log.warn('Failed to list wallpaper images', {
       meta: { folderPath, recursive, error: toErrorMessage(error) }
     })
     return []
@@ -463,7 +486,7 @@ async function copyWallpaperFolderToLibrary(
       }
     } catch (error) {
       skippedCount += 1
-      log.warn('[CommonChannel] Failed to copy wallpaper file from folder source', {
+      log.warn('Failed to copy wallpaper file from folder source', {
         meta: { sourcePath, imagePath, error: toErrorMessage(error) }
       })
     }
@@ -895,7 +918,7 @@ export class CommonChannelModule extends BaseModule {
         void broadcastBatteryStatus()
       })
     } catch (error) {
-      log.warn('[CommonChannel] Failed to initialize battery status broadcaster:', { error })
+      log.warn('Failed to initialize battery status broadcaster:', { error })
     }
   }
 
@@ -937,16 +960,16 @@ export class CommonChannelModule extends BaseModule {
         try {
           const desktopPath = await wallpaperAdapter.getDesktopWallpaperPath()
           if (desktopPath) {
+            lastWallpaperUnavailableLogAt = 0
+            lastWallpaperUnavailableMessage = ''
             return { path: desktopPath }
           }
           const error = 'Desktop wallpaper path is unavailable on current system.'
-          log.warn('[CommonChannel] Desktop wallpaper path is unavailable')
+          logWallpaperUnavailable(error, true)
           return { path: null, error }
         } catch (error) {
           const message = toErrorMessage(error)
-          log.warn('[CommonChannel] Failed to read desktop wallpaper path', {
-            meta: { error: message }
-          })
+          logWallpaperUnavailable(message, false)
           return { path: null, error: message }
         }
       }),
@@ -978,7 +1001,7 @@ export class CommonChannelModule extends BaseModule {
           }
         } catch (error) {
           const message = toErrorMessage(error)
-          log.warn('[CommonChannel] Wallpaper source path validation failed', {
+          log.warn('Wallpaper source path validation failed', {
             meta: { sourcePath, type, error: message }
           })
           return { storedPath: null, skippedCount: 0, error: message }
@@ -1000,7 +1023,7 @@ export class CommonChannelModule extends BaseModule {
           return await copyWallpaperFileToLibrary(sourcePath, libraryRoot, dbUtils)
         } catch (error) {
           const message = toErrorMessage(error)
-          log.warn('[CommonChannel] Failed to copy wallpaper to library', {
+          log.warn('Failed to copy wallpaper to library', {
             meta: { sourcePath, type, error: message }
           })
           return { storedPath: null, skippedCount: 0, error: message }
@@ -1104,7 +1127,7 @@ export class CommonChannelModule extends BaseModule {
           }
         }
       } catch (error) {
-        log.warn('[CommonChannel] Failed to get build verification status:', { error })
+        log.warn('Failed to get build verification status:', { error })
       }
       return {
         isOfficialBuild: false,
@@ -1127,7 +1150,7 @@ export class CommonChannelModule extends BaseModule {
       this.dbUtils = createDbUtils(databaseModule.getDb())
       return this.dbUtils
     } catch (error) {
-      log.warn('[CommonChannel] Failed to initialize database utils for wallpaper', { error })
+      log.warn('Failed to initialize database utils for wallpaper', { error })
       return null
     }
   }
@@ -1197,7 +1220,7 @@ export class CommonChannelModule extends BaseModule {
         event,
         safeOpHandler(handler, {
           onError: (error) => {
-            log.warn(`[CommonChannel] Handler failed: ${event.toEventName()}`, {
+            log.warn(`Handler failed: ${event.toEventName()}`, {
               error: toErrorMessage(error)
             })
           }
@@ -1382,7 +1405,7 @@ export class CommonChannelModule extends BaseModule {
         try {
           return electronApp.getPath(name as AppPathName)
         } catch (error) {
-          log.warn(`[CommonChannel] Failed to resolve app path: ${name}`, { error })
+          log.warn(`Failed to resolve app path: ${name}`, { error })
           return null
         }
       }),
@@ -1772,7 +1795,7 @@ export class CommonChannelModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
-    log.info('[CommonChannel] CommonChannelModule destroyed')
+    log.info('CommonChannelModule destroyed')
 
     if (this.batteryPollTimer) {
       clearInterval(this.batteryPollTimer)

@@ -1,5 +1,6 @@
 import type { ClipboardCaptureSource } from '@talex-touch/utils/transport/events/types'
 import type { LogOptions } from '../../utils/logger'
+import { nativeImage, type NativeImage } from 'electron'
 
 export interface ClipboardWatcherHandle {
   stop: () => void
@@ -8,6 +9,18 @@ export interface ClipboardWatcherHandle {
 
 export interface ClipboardWatcherModule {
   startWatch?: (callback: () => void) => ClipboardWatcherHandle
+  getText?: () => Promise<string>
+  getHtml?: () => Promise<string>
+  getFiles?: () => Promise<string[]>
+  getImageBinary?: () => Promise<number[]>
+}
+
+export interface NativeClipboardSnapshot {
+  formats: string[]
+  text: string
+  html: string
+  files: string[]
+  image: NativeImage | null
 }
 
 export interface ClipboardNativeWatcherOptions {
@@ -82,13 +95,73 @@ export function resolveClipboardWatcherModule(value: unknown): ClipboardWatcherM
 
 export class ClipboardNativeWatcher {
   private watcher: ClipboardWatcherHandle | null = null
+  private reader: ClipboardWatcherModule | null = null
   private initTried = false
 
   constructor(private readonly options: ClipboardNativeWatcherOptions) {}
 
+  public isRunning(): boolean {
+    return Boolean(this.watcher && this.watcher.isRunning !== false)
+  }
+
+  public async readSnapshot(): Promise<NativeClipboardSnapshot | null> {
+    const reader = this.reader
+    if (!reader?.getText || !reader.getHtml || !reader.getFiles || !reader.getImageBinary) {
+      return null
+    }
+
+    try {
+      let text = ''
+      let html = ''
+      let files: string[] = []
+      let imageBytes: number[] = []
+
+      try {
+        text = await reader.getText()
+      } catch {
+        // The clipboard may not contain this format.
+      }
+      try {
+        html = await reader.getHtml()
+      } catch {
+        // The clipboard may not contain this format.
+      }
+      try {
+        files = await reader.getFiles()
+      } catch {
+        // The clipboard may not contain this format.
+      }
+      try {
+        imageBytes = await reader.getImageBinary()
+      } catch {
+        // The clipboard may not contain this format.
+      }
+
+      const image =
+        imageBytes.length > 0 ? nativeImage.createFromBuffer(Buffer.from(imageBytes)) : null
+      const formats: string[] = []
+      if (files.length > 0) formats.push('public.file-url')
+      if (image && !image.isEmpty()) formats.push('image/png')
+      if (html) formats.push('text/html')
+      if (text) formats.push('text/plain')
+
+      return {
+        formats,
+        text,
+        html,
+        files,
+        image: image && !image.isEmpty() ? image : null
+      }
+    } catch (error) {
+      this.options.logWarn('Failed to build native clipboard snapshot', { error })
+      return null
+    }
+  }
+
   public reset(): void {
+    this.stop()
     this.initTried = false
-    this.watcher = null
+    this.reader = null
   }
 
   public async start(): Promise<void> {
@@ -119,6 +192,7 @@ export class ClipboardNativeWatcher {
         return
       }
 
+      this.reader = watcherModule
       const watcher = watcherModule.startWatch(() => {
         if (this.options.isDestroyed()) return
         setImmediate(() => {

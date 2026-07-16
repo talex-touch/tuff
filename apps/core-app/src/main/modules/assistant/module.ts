@@ -56,6 +56,7 @@ import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { TouchWindow } from '../../core/touch-window'
 import { createLogger } from '../../utils/logger'
 import { getCoreBoxRendererPath, getCoreBoxRendererUrl, isDevMode } from '../../utils/renderer-url'
+import { resolveCapabilityStatus } from '../ai/intelligence-capability-status'
 import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { normalizeIntelligenceError } from '../ai/intelligence-error-normalizer'
 import { BaseModule } from '../abstract-base-module'
@@ -1630,6 +1631,15 @@ export class AssistantModule extends BaseModule {
         success: false,
         code: 'OCR_UNAVAILABLE',
         error: 'Screenshot OCR did not detect translatable text.'
+      }
+    }
+
+    const translationCapability = resolveCapabilityStatus('text.translate')
+    if (!translationCapability.available) {
+      return {
+        success: false,
+        code: 'TEXT_TRANSLATE_UNAVAILABLE',
+        error: 'Screenshot text translation fallback is unavailable.'
       }
     }
 

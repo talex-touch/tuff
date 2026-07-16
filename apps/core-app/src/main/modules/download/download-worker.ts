@@ -236,11 +236,6 @@ export class DownloadWorker {
           ? error
           : DownloadErrorClass.fromError(normalizedError, errorContext)
 
-      downloadWorkerLog.error('Download failed for task', {
-        error: downloadError,
-        meta: { taskId: task.id, errorType: downloadError.type }
-      })
-
       throw downloadError
     }
   }
@@ -580,34 +575,29 @@ export class DownloadWorker {
 
   // 获取文件大小
   private async getFileSize(url: string, headers?: Record<string, string>): Promise<number | null> {
-    try {
-      const response = await getNetworkService().request({
-        method: 'HEAD',
-        url,
-        headers,
-        timeoutMs: this.config.network.timeout,
-        responseType: 'text',
-        retryPolicy: { maxRetries: 0 }
-      })
-      const contentLengthHeader = response.headers['content-length']
-      const contentLengthValue = Array.isArray(contentLengthHeader)
-        ? contentLengthHeader[0]
-        : contentLengthHeader
+    const response = await getNetworkService().request({
+      method: 'HEAD',
+      url,
+      headers,
+      timeoutMs: this.config.network.timeout,
+      retryPolicy: { maxRetries: 0 },
+      responseType: 'text'
+    })
 
-      if (typeof contentLengthValue === 'number') {
-        return Math.floor(contentLengthValue)
-      }
-      return typeof contentLengthValue === 'string' ? Number.parseInt(contentLengthValue, 10) : null
-    } catch (error) {
-      const downloadError =
-        error instanceof DownloadErrorClass ? error : DownloadErrorClass.fromError(error as Error)
-
-      downloadWorkerLog.warn('Failed to get file size', {
-        error: downloadError,
-        meta: { urlLength: url.length }
+    if (response.status >= 400) {
+      throw Object.assign(new Error(`HTTP ${response.status} ${response.statusText}`), {
+        status: response.status
       })
+    }
+
+    const contentLength = response.headers['content-length']
+    const rawValue = Array.isArray(contentLength) ? contentLength[0] : contentLength
+    if (!rawValue) {
       return null
     }
+
+    const size = Number.parseInt(String(rawValue), 10)
+    return Number.isFinite(size) && size > 0 ? size : null
   }
 
   private resolveTotalSize(

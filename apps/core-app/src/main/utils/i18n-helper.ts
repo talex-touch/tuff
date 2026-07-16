@@ -51,12 +51,16 @@ function resolveLocale(locale: string): Locale {
  * Set current locale
  */
 export function setLocale(locale: Locale): void {
-  if (messages[locale]) {
-    currentLocale = locale
-    i18nLog.info(`Locale changed to: ${currentLocale}`)
-  } else {
+  if (!messages[locale]) {
     i18nLog.warn(`Unsupported locale: ${locale}, keeping current: ${currentLocale}`)
+    return
   }
+  if (locale === currentLocale) {
+    return
+  }
+
+  currentLocale = locale
+  i18nLog.info(`Locale changed to: ${currentLocale}`)
 }
 
 /**

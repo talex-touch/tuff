@@ -4,6 +4,7 @@ import type {
   IndexedSourceDescriptor,
   IndexedSourceEvidence,
   IndexedSourceHealth,
+  IndexedSourceOpenResult,
   IndexedSourceProfileDiagnostic,
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult,
@@ -16,6 +17,8 @@ import type {
   IndexedSourceProviderConfigEnablement,
   SearchProviderDescriptor
 } from '@talex-touch/utils/search'
+import { shell } from 'electron'
+import { openValidatedExternalUrl } from '../../../utils/external-url-policy'
 import type { BrowserBookmarkItem, BrowserBookmarkScanOptions } from './browser-bookmarks-scanner'
 import {
   createBrowserBookmarksIndexedSourceDescriptor,
@@ -422,6 +425,32 @@ export function buildBrowserBookmarksIndexedSource(
       )
     },
     shouldHandleWatchEvent: isBrowserBookmarksWatchEvent,
+    open: async (record): Promise<IndexedSourceOpenResult> => {
+      if (!(await resolveEnablement()).enabled) {
+        return {
+          status: 'blocked',
+          reason: BROWSER_BOOKMARKS_DISABLED_REASON
+        }
+      }
+      if (!record.uri) {
+        return {
+          status: 'blocked',
+          reason: 'browser-bookmark-uri-missing'
+        }
+      }
+
+      try {
+        const decision = await openValidatedExternalUrl(record.uri, { opener: shell.openExternal })
+        return decision.allowed
+          ? { status: 'started' }
+          : { status: 'blocked', reason: decision.reason }
+      } catch (error) {
+        return {
+          status: 'failed',
+          reason: error instanceof Error ? error.message : String(error)
+        }
+      }
+    },
     resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => {
       snapshotCache.clear()
       return buildBrowserBookmarksResetResult(request)

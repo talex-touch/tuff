@@ -94,14 +94,6 @@ export class RetryStrategy {
 
         lastError = downloadError
 
-        // 记录错误
-        if (this.errorLogger) {
-          await this.errorLogger.logError(downloadError.toErrorObject(), {
-            attempt,
-            maxRetries: this.config.maxRetries
-          })
-        }
-
         // 检查是否应该重试
         if (!this.shouldRetry(downloadError, attempt)) {
           break
@@ -109,6 +101,14 @@ export class RetryStrategy {
 
         // 计算延迟时间
         const delay = this.calculateDelay(attempt)
+        if (this.errorLogger) {
+          await this.errorLogger.logWarn('Retrying download operation', {
+            attempt: attempt + 1,
+            maxRetries: this.config.maxRetries,
+            delay,
+            error: downloadError.toErrorObject()
+          })
+        }
 
         // 通知重试
         if (onRetry) {

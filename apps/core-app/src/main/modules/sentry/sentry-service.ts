@@ -77,6 +77,7 @@ const NEXUS_TELEMETRY_OUTBOX_MAX_COUNT = 2000
 const NEXUS_TELEMETRY_OUTBOX_BACKOFF_BASE_MS = 30_000
 const NEXUS_TELEMETRY_OUTBOX_BACKOFF_MAX_MS = 10 * 60_000
 const NEXUS_TELEMETRY_STARTUP_GRACE_MS = 45_000
+const NEXUS_TELEMETRY_REQUEST_TIMEOUT_MS = 15_000
 const SENTRY_SHUTDOWN_GRACE_MS = 1_500
 
 interface NexusTelemetryEvent {
@@ -517,7 +518,17 @@ export class SentryServiceModule extends BaseModule {
    * Save configuration to storage
    */
   saveConfig(config: Partial<SentryConfig>): void {
-    this.config = { ...this.config, ...config }
+    const nextConfig: SentryConfig = {
+      enabled: config.enabled ?? this.config.enabled,
+      anonymous: config.anonymous ?? this.config.anonymous
+    }
+    const enabledChanged = nextConfig.enabled !== this.config.enabled
+    const anonymousChanged = nextConfig.anonymous !== this.config.anonymous
+    if (!enabledChanged && !anonymousChanged) {
+      return
+    }
+
+    this.config = nextConfig
     saveMainConfig(StorageList.SENTRY_CONFIG, this.config)
     sentryLog.info('Saved Sentry config', {
       meta: {
@@ -527,8 +538,7 @@ export class SentryServiceModule extends BaseModule {
       }
     })
 
-    // Reinitialize if enabled state changed
-    if (config.enabled !== undefined) {
+    if (enabledChanged) {
       if (this.config.enabled && !this.isInitialized) {
         this.initializeSentry()
       } else if (!this.config.enabled && this.isInitialized) {
@@ -538,8 +548,7 @@ export class SentryServiceModule extends BaseModule {
       this.syncPerformanceMonitors()
     }
 
-    // Update user context if anonymous state changed
-    if (config.anonymous !== undefined && this.isInitialized) {
+    if (anonymousChanged && this.isInitialized) {
       this.updateUserContext()
     }
   }
@@ -1131,7 +1140,6 @@ export class SentryServiceModule extends BaseModule {
         backpressure: 'latest_wins',
         dedupeKey: SENTRY_NEXUS_TASK_ID,
         maxInFlight: 1,
-        timeoutMs: 15_000,
         jitterMs: 1000
       }
     )
@@ -1239,6 +1247,7 @@ export class SentryServiceModule extends BaseModule {
             metadata
           }),
           responseType: 'text',
+          timeoutMs: NEXUS_TELEMETRY_REQUEST_TIMEOUT_MS,
           validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
         })
 

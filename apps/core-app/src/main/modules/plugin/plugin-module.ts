@@ -1303,7 +1303,7 @@ function createPluginModuleInternal(
 
       const initialPlugins = await localProvider.scan()
       if (initialPlugins.length === 0) {
-        logWarn('No plugins found in directory yet.')
+        logModuleInfo('No external plugins installed yet.')
       } else {
         logModuleInfo(
           `Discovered ${initialPlugins.length} plugin(s) on startup:`,
@@ -1594,6 +1594,7 @@ export class PluginModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    pluginHostBridge.stop()
     this.permissionGrantedDisposer?.()
     this.permissionGrantedDisposer = null
     this.networkStatusCleanup?.()

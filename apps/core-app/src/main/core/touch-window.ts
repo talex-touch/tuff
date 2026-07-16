@@ -174,6 +174,13 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
     this.window.webContents.addListener(
       'render-process-gone',
       (_event: ElectronEvent, details: RenderProcessGoneDetails) => {
+        if (!app.isPackaged && details.reason === 'killed') {
+          touchWindowLog.info('Development renderer process stopped during reload', {
+            meta: { reason: details.reason, exitCode: details.exitCode }
+          })
+          return
+        }
+
         if (degradedRenderProcessGoneWindows.has(this.window)) {
           touchWindowLog.warn('Renderer process gone for degraded window', {
             meta: {
@@ -184,26 +191,18 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
           return
         }
 
-        touchWindowLog.error('Render process gone', {
-          meta: {
-            reason: details.reason,
-            exitCode: details.exitCode
-          },
-          error: details
-        })
-
-        // In development mode, if the process is killed, it's likely due to a hot reload
-        if (!app.isPackaged && details.reason === 'killed') {
-          touchWindowLog.info(
-            'Development mode: Process killed during hot reload, this is expected.'
-          )
-          return
-        }
-
-        // Other cases of crashes
-        if (details.reason === 'crashed') {
-          touchWindowLog.error('Renderer process crashed unexpectedly')
-        }
+        touchWindowLog.error(
+          details.reason === 'crashed'
+            ? 'Renderer process crashed unexpectedly'
+            : 'Renderer process gone',
+          {
+            meta: {
+              reason: details.reason,
+              exitCode: details.exitCode
+            },
+            error: details
+          }
+        )
       }
     )
 

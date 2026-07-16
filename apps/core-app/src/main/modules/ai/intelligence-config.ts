@@ -127,15 +127,22 @@ function upsertPromptRecord(
   )
   if (idx >= 0) {
     const current = list[idx]!
-    const next = {
+    const preservedUpdatedAt = Number.isFinite(current.updatedAt)
+      ? current.updatedAt
+      : record.updatedAt
+    const comparableNext = {
       ...current,
-      ...record
+      ...record,
+      updatedAt: preservedUpdatedAt
     }
-    if (JSON.stringify(current) !== JSON.stringify(next)) {
-      list[idx] = next
-      return true
+    if (JSON.stringify(current) === JSON.stringify(comparableNext)) {
+      return false
     }
-    return false
+    list[idx] = {
+      ...comparableNext,
+      updatedAt: record.updatedAt
+    }
+    return true
   }
   list.push(record)
   return true

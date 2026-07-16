@@ -3,6 +3,16 @@ import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { createLogger } from '../../utils/logger'
 
 const storagePollingLog = createLogger('Storage').child('Polling')
+const PERSIST_RETRY_MAX_ATTEMPTS = 8
+const PERSIST_RETRY_MAX_DELAY_MS = 5 * 60_000
+const PERSIST_FAILURE_LOG_INTERVAL_MS = 60_000
+
+interface PersistFailureState {
+  attempts: number
+  nextRetryAt: number
+  lastLoggedAt: number
+  quarantined: boolean
+}
 
 /**
  * StoragePollingService - Periodic persistence service
@@ -17,6 +27,7 @@ export class StoragePollingService {
   private pollingInterval: number
   private readonly pollingTaskId = 'storage.polling'
   private pendingWidgetCalls = new Map<string, string>()
+  private persistFailures = new Map<string, PersistFailureState>()
 
   constructor(
     cache: StorageCache,
@@ -26,6 +37,10 @@ export class StoragePollingService {
     this.cache = cache
     this.saveFn = saveFn
     this.pollingInterval = pollingInterval
+  }
+
+  notifyConfigChanged(name: string): void {
+    this.persistFailures.delete(name)
   }
 
   /**
@@ -70,50 +85,78 @@ export class StoragePollingService {
   }
 
   private async performSave(): Promise<void> {
-    const dirtyConfigs = this.cache.getDirtyConfigs()
+    const now = Date.now()
+    const dirtyConfigs = this.cache.getDirtyConfigs().filter((name) => {
+      const failure = this.persistFailures.get(name)
+      return !failure?.quarantined && (!failure || failure.nextRetryAt <= now)
+    })
 
     if (dirtyConfigs.length === 0) {
       return
     }
 
     const t0 = performance.now()
-
-    // Use Promise.all for concurrent saves instead of sequential
     const results = await Promise.allSettled(
       dirtyConfigs.map(async (name) => {
         const saveStart = performance.now()
         await this.saveFn(name)
-        this.cache.clearDirty(name)
         return { name, durationMs: Math.round(performance.now() - saveStart) }
       })
     )
 
-    const totalMs = Math.round(performance.now() - t0)
-    const failCount = results.filter((r) => r.status === 'rejected').length
+    results.forEach((result, index) => {
+      const name = dirtyConfigs[index]!
+      if (result.status === 'fulfilled') {
+        this.cache.clearDirty(name)
+        this.persistFailures.delete(name)
+        return
+      }
 
-    if (failCount > 0) {
-      storagePollingLog.error('Failed to save dirty configs', {
-        meta: { failCount, totalCount: dirtyConfigs.length }
+      const previous = this.persistFailures.get(name)
+      const attempts = (previous?.attempts ?? 0) + 1
+      const quarantined = attempts >= PERSIST_RETRY_MAX_ATTEMPTS
+      const retryDelayMs = Math.min(
+        PERSIST_RETRY_MAX_DELAY_MS,
+        Math.max(1_000, this.pollingInterval) * 2 ** Math.min(attempts - 1, 10)
+      )
+      const shouldLog =
+        attempts === 1 ||
+        quarantined ||
+        !previous ||
+        now - previous.lastLoggedAt >= PERSIST_FAILURE_LOG_INTERVAL_MS
+      const lastLoggedAt = shouldLog ? now : (previous?.lastLoggedAt ?? 0)
+
+      this.persistFailures.set(name, {
+        attempts,
+        nextRetryAt: quarantined ? Number.POSITIVE_INFINITY : now + retryDelayMs,
+        lastLoggedAt,
+        quarantined
       })
 
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          storagePollingLog.error('Dirty config save failed', {
+      if (shouldLog) {
+        storagePollingLog.error(
+          quarantined ? 'Config persistence quarantined' : 'Config persistence deferred',
+          {
             error: result.reason,
-            meta: { configName: dirtyConfigs[index] }
-          })
-        }
-      })
-    }
+            meta: {
+              configName: name,
+              attempts,
+              retryDelayMs: quarantined ? 0 : retryDelayMs,
+              quarantined
+            }
+          }
+        )
+      }
+    })
 
-    // 诊断日志：当总耗时 > 500ms 时输出各 config 的保存耗时
+    const totalMs = Math.round(performance.now() - t0)
     if (totalMs > 500) {
       const details = results
         .filter(
-          (r): r is PromiseFulfilledResult<{ name: string; durationMs: number }> =>
-            r.status === 'fulfilled'
+          (result): result is PromiseFulfilledResult<{ name: string; durationMs: number }> =>
+            result.status === 'fulfilled'
         )
-        .map((r) => `${r.value.name}=${r.value.durationMs}ms`)
+        .map((result) => `${result.value.name}=${result.value.durationMs}ms`)
         .join(' ')
       storagePollingLog.warn('Slow dirty config save', {
         meta: { durationMs: totalMs, configCount: dirtyConfigs.length, details }
@@ -122,12 +165,9 @@ export class StoragePollingService {
   }
 
   private async saveConfig(name: string): Promise<void> {
-    try {
-      await this.saveFn(name)
-      this.cache.clearDirty(name)
-    } catch (error) {
-      throw error
-    }
+    await this.saveFn(name)
+    this.cache.clearDirty(name)
+    this.persistFailures.delete(name)
   }
 
   /**

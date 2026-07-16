@@ -1196,6 +1196,9 @@ export class DownloadCenterModule extends BaseModule {
 
   // 查找可用的工作器
   private findAvailableWorker(): DownloadWorker | null {
+    if (this.taskWorkerMap.size >= this.config.concurrency.maxConcurrent) {
+      return null
+    }
     return this.downloadWorkers.find((worker) => worker.canAcceptTask()) || null
   }
 
@@ -1224,12 +1227,6 @@ export class DownloadCenterModule extends BaseModule {
           module: task.module
         },
         (attempt, error, delay) => {
-          // 重试回调
-          this.errorLogger.logWarn(`Retrying download task ${task.id} (attempt ${attempt})`, {
-            error: error.toErrorObject(),
-            delay
-          })
-
           // 广播重试事件
           this.transport?.broadcast(DownloadEvents.push.taskRetrying, {
             taskId: task.id,
@@ -1274,7 +1271,11 @@ export class DownloadCenterModule extends BaseModule {
                 timestamp: Date.now()
               })
 
-        // 记录错误
+        // 记录单次终止错误；重试尝试由 RetryStrategy 记录。
+        downloadCenterLog.error('Download task failed', {
+          error: downloadError,
+          meta: { taskId: task.id, errorType: downloadError.type }
+        })
         await this.errorLogger.logError(downloadError.toErrorObject())
 
         // 更新任务状态
@@ -1411,10 +1412,7 @@ export class DownloadCenterModule extends BaseModule {
       issues.push('No download workers initialized')
     }
 
-    if (
-      this.taskWorkerMap.size >
-      this.downloadWorkers.length * this.config.concurrency.maxConcurrent
-    ) {
+    if (this.taskWorkerMap.size > this.config.concurrency.maxConcurrent) {
       issues.push('Task-worker mapping size exceeds expected limit')
     }
 

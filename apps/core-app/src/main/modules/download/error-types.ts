@@ -53,6 +53,28 @@ export interface ErrorContext {
 /**
  * 下载错误类
  */
+function resolveHttpStatusCode(error: Error): number | undefined {
+  const candidate = error as Error & {
+    status?: number
+    statusCode?: number
+    response?: { status?: number; statusCode?: number }
+    cause?: { status?: number; statusCode?: number }
+  }
+  const statusCode =
+    candidate.status ??
+    candidate.statusCode ??
+    candidate.response?.status ??
+    candidate.response?.statusCode ??
+    candidate.cause?.status ??
+    candidate.cause?.statusCode
+  if (typeof statusCode === 'number' && Number.isInteger(statusCode)) {
+    return statusCode
+  }
+
+  const match = error.message.match(/\b(?:HTTP\s*)?([45]\d{2})\b/i)
+  return match ? Number(match[1]) : undefined
+}
+
 export class DownloadErrorClass extends Error {
   public readonly type: DownloadErrorType
   public readonly userMessage: string
@@ -107,6 +129,11 @@ export class DownloadErrorClass extends Error {
     // 如果已经是 DownloadErrorClass，直接返回
     if (error instanceof DownloadErrorClass) {
       return error
+    }
+
+    const statusCode = resolveHttpStatusCode(error)
+    if (statusCode !== undefined) {
+      return DownloadErrorClass.httpError(statusCode, error.message, context, error)
     }
 
     // 根据错误信息判断错误类型
@@ -165,7 +192,12 @@ export class DownloadErrorClass extends Error {
       )
     }
 
-    if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+    if (
+      errorMessage.includes('404') ||
+      errorMessage.includes('410') ||
+      errorMessage.includes('not found') ||
+      errorMessage.includes('gone')
+    ) {
       return new DownloadErrorClass(
         DownloadErrorType.FILE_NOT_FOUND,
         error.message,
@@ -216,6 +248,81 @@ export class DownloadErrorClass extends Error {
   /**
    * 创建网络错误
    */
+  static httpError(
+    statusCode: number,
+    message: string,
+    context?: ErrorContext,
+    originalError?: Error
+  ): DownloadErrorClass {
+    const httpContext: ErrorContext | undefined = context
+      ? {
+          ...context,
+          additionalInfo: {
+            ...context.additionalInfo,
+            statusCode
+          }
+        }
+      : undefined
+
+    if (statusCode === 404 || statusCode === 410) {
+      return new DownloadErrorClass(
+        DownloadErrorType.FILE_NOT_FOUND,
+        message,
+        t('downloadErrors.file_not_found'),
+        ErrorSeverity.HIGH,
+        false,
+        httpContext,
+        originalError
+      )
+    }
+
+    if (statusCode === 401 || statusCode === 403) {
+      return new DownloadErrorClass(
+        DownloadErrorType.PERMISSION_ERROR,
+        message,
+        t('downloadErrors.permission_error'),
+        ErrorSeverity.HIGH,
+        false,
+        httpContext,
+        originalError
+      )
+    }
+
+    if (statusCode === 408) {
+      return new DownloadErrorClass(
+        DownloadErrorType.TIMEOUT_ERROR,
+        message,
+        t('downloadErrors.timeout_error'),
+        ErrorSeverity.MEDIUM,
+        true,
+        httpContext,
+        originalError
+      )
+    }
+
+    if (statusCode >= 400 && statusCode < 500 && statusCode !== 429) {
+      return new DownloadErrorClass(
+        DownloadErrorType.INVALID_URL,
+        message,
+        t('downloadErrors.invalid_url'),
+        ErrorSeverity.HIGH,
+        false,
+        httpContext,
+        originalError
+      )
+    }
+
+    return new DownloadErrorClass(
+      DownloadErrorType.NETWORK_ERROR,
+      message,
+      t('downloadErrors.network_error'),
+      ErrorSeverity.MEDIUM,
+      true,
+      httpContext,
+      originalError
+    )
+  }
+
   static networkError(message: string, context?: ErrorContext): DownloadErrorClass {
     return new DownloadErrorClass(
       DownloadErrorType.NETWORK_ERROR,

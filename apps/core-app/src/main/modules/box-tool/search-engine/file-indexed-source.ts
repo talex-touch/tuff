@@ -15,6 +15,7 @@ import {
   type IndexedSourceScanRequest
 } from '@talex-touch/utils/search'
 import { fileProvider } from '../addon/files/file-provider'
+import { openIndexedSourcePath } from './indexed-source-open'
 
 export const FILE_INDEXED_SOURCE_ID = 'file-provider'
 
@@ -31,6 +32,7 @@ export function buildFileIndexedSourceDescriptor(): IndexedSourceDescriptor {
       scan: true,
       watch: true,
       reconcile: true,
+      reset: true,
       clear: true,
       open: true
     },
@@ -160,6 +162,7 @@ export function buildFileIndexedSource(): IndexedSource {
       return await fileProvider.reconcileIndexedSource(request)
     },
     handleWatchEvent: async (event) => await fileProvider.handleIndexedSourceWatchEvent(event),
+    open: async (record) => await openIndexedSourcePath(record.path),
     resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => {
       return await fileProvider.resetIndexedSourceRuntimeState(request)
     },

@@ -877,6 +877,14 @@ export class ClipboardModule extends BaseModule {
   }
 
   private async runClipboardMonitor(options?: ClipboardMonitorOptions): Promise<void> {
+    const source = options?.source
+    if (
+      this.nativeWatcher.isRunning() &&
+      (source === 'visible-poll' || source === 'background-poll')
+    ) {
+      return
+    }
+
     if (this.clipboardCheckInFlight) {
       this.clipboardCheckPending = true
       this.clipboardCheckPendingOptions = this.mergePendingMonitorOptions(
@@ -960,7 +968,10 @@ export class ClipboardModule extends BaseModule {
       return
     }
 
-    await this.capturePipeline.process(source)
+    const nativeSnapshot = this.nativeWatcher.isRunning()
+      ? await this.nativeWatcher.readSnapshot()
+      : null
+    await this.capturePipeline.process(source, nativeSnapshot ?? undefined)
   }
 
   private extractPayloadSdkApi(payload: unknown): number | undefined {

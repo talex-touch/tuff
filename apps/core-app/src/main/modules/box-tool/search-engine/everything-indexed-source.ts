@@ -12,6 +12,7 @@ import type {
 import process from 'node:process'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { indexingRootPolicy } from './indexing-root-policy'
+import { openIndexedSourcePath } from './indexed-source-open'
 
 export const EVERYTHING_INDEXED_SOURCE_ID = 'everything-provider'
 
@@ -143,6 +144,7 @@ export function buildEverythingIndexedSource(): IndexedSource {
         completedAt: Date.now(),
         reason: 'external-fast-root-policy-refresh'
       }
-    }
+    },
+    open: async (record) => await openIndexedSourcePath(record.path)
   }
 }

@@ -7,6 +7,7 @@ import type { LogOptions } from '../../utils/logger'
 import type { ClipboardFreshnessState } from './clipboard-freshness'
 import type { ClipboardImagePersistence } from './clipboard-image-persistence'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
+import type { NativeClipboardSnapshot } from './clipboard-native-watcher'
 import type { IClipboardItem } from './clipboard-history-persistence'
 import { performance } from 'node:perf_hooks'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
@@ -68,7 +69,10 @@ type PendingClipboardItem = Omit<IClipboardItem, 'timestamp' | 'id' | 'metadata'
 export class ClipboardCapturePipeline {
   constructor(private readonly options: ClipboardCapturePipelineOptions) {}
 
-  public async process(source: ClipboardCaptureSource): Promise<void> {
+  public async process(
+    source: ClipboardCaptureSource,
+    snapshot?: NativeClipboardSnapshot
+  ): Promise<void> {
     const helper = this.options.getClipboardHelper()
     const db = this.options.getDatabase()
     if (!helper || !db) {
@@ -85,6 +89,7 @@ export class ClipboardCapturePipeline {
         db,
         helper,
         source,
+        snapshot,
         observedAt,
         previousScanAt,
         phaseDurations
@@ -103,6 +108,7 @@ export class ClipboardCapturePipeline {
     db,
     helper,
     source,
+    snapshot,
     observedAt,
     previousScanAt,
     phaseDurations
@@ -110,6 +116,7 @@ export class ClipboardCapturePipeline {
     db: LibSQLDatabase<typeof schema>
     helper: ClipboardHelper
     source: ClipboardCaptureSource
+    snapshot?: NativeClipboardSnapshot
     observedAt: number
     previousScanAt: number | null
     phaseDurations: ClipboardPhaseDurations
@@ -119,7 +126,7 @@ export class ClipboardCapturePipeline {
     })
 
     const formats = trackPhase(phaseDurations, 'clipboard.availableFormats', () => {
-      return clipboard.availableFormats()
+      return snapshot ? [...snapshot.formats] : clipboard.availableFormats()
     })
     if (formats.length === 0) {
       return
@@ -135,14 +142,21 @@ export class ClipboardCapturePipeline {
     const hasImageFormats = includesAnyClipboardFormat(formats, CLIPBOARD_IMAGE_FORMATS)
     const hasTextFormats = includesAnyClipboardFormat(formats, CLIPBOARD_TEXT_FORMATS)
     const hasHtmlFormats = includesAnyClipboardFormat(formats, CLIPBOARD_HTML_FORMATS)
-    let prefetchedText: string | undefined
-    let prefetchedFiles: string[] | undefined
-    let prefetchedImage: NativeImage | null | undefined
+    let prefetchedText: string | undefined = snapshot?.text
+    let prefetchedHtml: string | undefined = snapshot?.html
+    let prefetchedFiles: string[] | undefined = snapshot ? [...snapshot.files] : undefined
+    let prefetchedImage: NativeImage | null | undefined = snapshot ? snapshot.image : undefined
 
     const readPrefetchedText = (): string => {
       if (prefetchedText !== undefined) return prefetchedText
       prefetchedText = trackPhase(phaseDurations, 'clipboard.readText', () => clipboard.readText())
       return prefetchedText
+    }
+
+    const readPrefetchedHtml = (): string => {
+      if (prefetchedHtml !== undefined) return prefetchedHtml
+      prefetchedHtml = trackPhase(phaseDurations, 'clipboard.readHTML', () => clipboard.readHTML())
+      return prefetchedHtml
     }
 
     const readPrefetchedFiles = (): string[] => {
@@ -233,6 +247,7 @@ export class ClipboardCapturePipeline {
         helper,
         hasHtmlFormats,
         readPrefetchedText,
+        readPrefetchedHtml,
         phaseDurations,
         metaEntries
       })
@@ -416,12 +431,14 @@ export class ClipboardCapturePipeline {
     helper,
     hasHtmlFormats,
     readPrefetchedText,
+    readPrefetchedHtml,
     phaseDurations,
     metaEntries
   }: {
     helper: ClipboardHelper
     hasHtmlFormats: boolean
     readPrefetchedText: () => string
+    readPrefetchedHtml: () => string
     phaseDurations: ClipboardPhaseDurations
     metaEntries: ClipboardMetaEntry[]
   }): PendingClipboardItem | null {
@@ -430,9 +447,7 @@ export class ClipboardCapturePipeline {
       return null
     }
 
-    const html = hasHtmlFormats
-      ? trackPhase(phaseDurations, 'clipboard.readHTML', () => clipboard.readHTML())
-      : ''
+    const html = hasHtmlFormats ? readPrefetchedHtml() : ''
     metaEntries.push({ key: 'text_length', value: text.length })
     if (html) {
       metaEntries.push({ key: 'html_length', value: html.length })

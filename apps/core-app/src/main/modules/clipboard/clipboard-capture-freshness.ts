@@ -191,7 +191,7 @@ export class ClipboardHelper {
               .filter((p): p is string => p !== null)
 
             if (paths.length > 0) {
-              clipboardCaptureLog.info(`Read ${paths.length} file(s) from plist XML`)
+              clipboardCaptureLog.debug(`Read ${paths.length} file(s) from plist XML`)
               return paths
             }
           }
@@ -239,7 +239,7 @@ export class ClipboardHelper {
           .filter(Boolean)
 
         if (paths.length > 0) {
-          clipboardCaptureLog.info(`Read ${paths.length} file(s) from format: ${format}`)
+          clipboardCaptureLog.debug(`Read ${paths.length} file(s) from format: ${format}`)
           return paths
         } else if (hasFileIDPlaceholder) {
           clipboardCaptureLog.debug(
@@ -259,7 +259,7 @@ export class ClipboardHelper {
         const text = clipboard.readText().trim()
         if (text && text.length > 0 && text.length < 10000) {
           if (text.startsWith('/') && !text.includes('<')) {
-            clipboardCaptureLog.info('Found file path in fallback text')
+            clipboardCaptureLog.debug('Found file path in fallback text')
             return [text]
           }
 
@@ -278,7 +278,7 @@ export class ClipboardHelper {
                 .filter((p): p is string => p !== null)
 
               if (paths.length > 0) {
-                clipboardCaptureLog.info('Extracted file paths from fallback plist')
+                clipboardCaptureLog.debug('Extracted file paths from fallback plist')
                 return paths
               }
             }
@@ -287,7 +287,9 @@ export class ClipboardHelper {
       } catch (error) {
         clipboardCaptureLog.debug('Failed to read fallback text', { error })
       }
-      clipboardCaptureLog.info('Files contain ID placeholders - skipping to avoid treating as text')
+      clipboardCaptureLog.debug(
+        'Files contain ID placeholders - skipping to avoid treating as text'
+      )
     }
     return []
   }
