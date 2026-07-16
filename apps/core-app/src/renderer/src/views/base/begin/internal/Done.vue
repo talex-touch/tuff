@@ -90,9 +90,7 @@ async function enableHideDockDefault(): Promise<void> {
   }
 }
 
-async function completeBeginner(
-  options: { hideWindow?: boolean; openCoreBox?: boolean } = {}
-): Promise<void> {
+async function completeBeginner(options: { openCoreBox?: boolean } = {}): Promise<void> {
   if (isDoneClosing.value) return
 
   isDoneClosing.value = true
@@ -100,12 +98,10 @@ async function completeBeginner(
   disarmDoneShortcut()
   step({ comp: null })
 
-  if (options.hideWindow) {
-    try {
-      await appSdk.hide()
-    } catch {
-      // noop
-    }
+  try {
+    await appSdk.hide()
+  } catch {
+    // noop
   }
 
   if (options.openCoreBox) {
@@ -129,7 +125,7 @@ async function runShortcutFinishFlow(): Promise<void> {
   await sleep(420)
 
   await enableHideDockDefault()
-  await completeBeginner({ hideWindow: true, openCoreBox: true })
+  await completeBeginner({ openCoreBox: true })
 }
 
 function goon(): void {
