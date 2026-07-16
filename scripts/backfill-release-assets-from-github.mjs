@@ -68,10 +68,6 @@ function pickPreferredCandidate(existing, candidates) {
   if (candidates.length === 0)
     return null
 
-  const exact = candidates.find(item => item.filename === existing.filename)
-  if (exact)
-    return exact
-
   const scoreByPlatformExt = {
     win32: {
       '.exe': 20,
@@ -93,8 +89,8 @@ function pickPreferredCandidate(existing, candidates) {
     const extScore = scoreByPlatformExt[existing.platform]?.[itemExt] ?? 0
     let score = extScore
 
-    if (itemExt && itemExt === extname(existing.filename))
-      score += 30
+    if (item.filename === existing.filename)
+      score += 1
     if (lower.includes('setup'))
       score += 10
     if (lower.includes('tuff'))
