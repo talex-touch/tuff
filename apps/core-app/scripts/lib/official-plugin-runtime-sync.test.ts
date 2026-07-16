@@ -102,12 +102,13 @@ afterEach(async () => {
 })
 
 describe('official plugin build delivery', () => {
-  it('builds the exporter after CLI core, before Tuff CLI, and before every official plugin', () => {
+  it('builds the exporter after CLI core, TuffEx after Tuff CLI, and both before every official plugin', () => {
     const observed: string[] = []
     const expectedBuildOrder = [
       '@talex-touch/tuff-cli-core',
       '@talex-touch/unplugin-export-plugin',
       '@talex-touch/tuff-cli',
+      '@talex-touch/tuffex',
       '@talex-touch/touch-translation-plugin',
       '@talex-touch/touch-intelligence-plugin'
     ]
@@ -118,7 +119,7 @@ describe('official plugin build delivery', () => {
       runPackageBuild: (packageName) => observed.push(packageName)
     })
 
-    expect(OFFICIAL_PLUGIN_BUILD_PREREQUISITES).toEqual(expectedBuildOrder.slice(0, 3))
+    expect(OFFICIAL_PLUGIN_BUILD_PREREQUISITES).toEqual(expectedBuildOrder.slice(0, 4))
     expect(observed).toEqual(expectedBuildOrder)
     expect(buildOrder).toEqual(expectedBuildOrder)
   })
