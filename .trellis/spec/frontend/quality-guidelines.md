@@ -102,6 +102,7 @@ Reviewers should check:
 - Exporter internal classifier: `isGeneratedPackageOutputEntry(entryName: string): boolean`.
 - Official build registry: `OFFICIAL_PLUGIN_BUILD_TARGETS: ReadonlyArray<{ packageName: string; pluginName: string }>`.
 - Build orchestration: `buildOfficialPluginPackages(options?): string[]` returns the exact successful package build order.
+- Cross-platform package command resolver: `resolvePnpmBuildInvocation(packageName, { platform?, comSpec? }): { executable: string; args: string[] }`.
 - Single seed sync: `syncOfficialPluginBundledRuntime(pluginName, options?): SyncResult`.
 - All-seed sync: `syncOfficialPluginBundledRuntimes(options?): SyncResult[]`.
 - Packaged verifier: `verifyPackagedOfficialPluginSeeds(context): void`.
@@ -110,7 +111,7 @@ Reviewers should check:
 ### 3. Contracts
 
 - Exporter staging must exclude top-level `out`, `build`, and case-insensitive `*.tpex` entries from source payload collection.
-- Release order is CLI core, CLI entrypoint, every `OFFICIAL_PLUGIN_BUILD_TARGETS` package, every seed projection, plugin prelude bundling, CoreApp build/package, then after-pack seed verification.
+- Release order is CLI core, unplugin exporter, CLI entrypoint, every `OFFICIAL_PLUGIN_BUILD_TARGETS` package, every seed projection, plugin prelude bundling, CoreApp build/package, then after-pack seed verification. A clean checkout cannot assume any workspace `dist` output exists.
 - `electron-vite build` or direct `electron-builder --dir` only packages the existing resource projection; it does not rebuild/synchronize canonical official plugin code. After any official plugin source/build change, release/evidence flow must run canonical plugin build + `syncOfficialPluginBundledRuntimes` before packaging.
 - A successful projection result contains `pluginName`, `packageName`, `canonicalBuildRoot`, `bundledPluginRoot`, `canonicalVersion`, `synced: true`, and `skipped: false`.
 - Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs` and never downgrades an identity-matching newer local runtime.
@@ -122,6 +123,7 @@ Reviewers should check:
 - Built manifest name differs from registry plugin name -> throw canonical-build mismatch.
 - Built manifest version differs from canonical package version -> throw canonical-build mismatch.
 - Any prerequisite or plugin package build exits non-zero -> stop immediately; do not sync or package CoreApp.
+- Windows direct `execFileSync('pnpm.cmd', args)` under Node 24 -> fail with `spawnSync pnpm.cmd EINVAL`; resolve it through `ComSpec`/`cmd.exe /d /s /c pnpm.cmd` and preserve argument ordering.
 - Missing packaged seed, version mismatch, nested `dist`, or nested `.tpex` -> `afterPack` throws and packaging fails.
 - Missing/empty/invalid runtime seed set -> runtime installer throws before mutating any plugin.
 - Older, corrupt, wrong-identity, or same-version/different-signature local runtime -> staged clean replacement with rollback.
@@ -131,13 +133,14 @@ Reviewers should check:
 ### 5. Good / Base / Bad Cases
 
 - Good: repeated builds keep only the current archive outside `dist/build`; packaged Resources contain two clean official seeds; a fresh profile discovers both during initial plugin loading.
-- Base: a clean checkout builds CLI prerequisites and both official plugins, projects them, packages/verifies them, then installs them before module startup.
+- Base: a clean checkout builds CLI core, the unplugin exporter, the CLI entrypoint, and both official plugins; the exporter must create `dist/vite.js` before the CLI build resolves `@talex-touch/unplugin-export-plugin/vite`.
 - Bad: copying the whole canonical `dist` directory, seeding after plugin discovery starts, or overwriting newer local runtime/data is prohibited.
 
 ### 6. Tests Required
 
 - Both exporter implementations: seed a stale top-level `.tpex`, build, then assert absence from `dist/out`, `dist/build`, and `manifest._files`.
 - Build orchestration: assert prerequisite/plugin order and assert a failed build prevents later builds.
+- Package command resolution: assert POSIX invokes `pnpm` directly and Windows invokes the configured `ComSpec` with `/d /s /c pnpm.cmd --filter <package> run build`.
 - Seed projection and after-pack: assert clean stale-file removal, canonical version propagation, packaged resource presence, and fail-closed missing/mismatch/artifact behavior.
 - Runtime bootstrap: assert immediate synchronous return, pre-mutation validation, clean install/update, data/log preservation, wrong-identity repair, and newer-local no-downgrade.
 - Content freshness: compare canonical `dist/build` files with the bundled resource projection (excluding the resource-only package metadata where applicable), then verify a previously installed same-version/different-signature runtime is refreshed on startup.
@@ -149,6 +152,7 @@ Reviewers should check:
 
 ```js
 // Wrong: packages whichever generated seed happens to be in resources.
+execFileSync("pnpm.cmd", ["--filter", packageName, "run", "build"]);
 electronViteBuild();
 electronBuilderDir();
 startModuleManager();
@@ -158,7 +162,14 @@ startModuleManager();
 
 ```js
 // Correct: canonical build and projection precede Electron packaging.
-buildOfficialPluginPackages({ projectRoot, workspaceRoot });
+buildOfficialPluginPackages({
+  projectRoot,
+  workspaceRoot,
+  runPackageBuild(packageName) {
+    const { executable, args } = resolvePnpmBuildInvocation(packageName);
+    execFileSync(executable, args);
+  },
+});
 const results = syncOfficialPluginBundledRuntimes({
   projectRoot,
   workspaceRoot,
