@@ -116,6 +116,8 @@ Reviewers should check:
 - `apps/core-app` directly owns compatible `electron-builder` and `electron-builder-squirrel-windows` dev dependencies because `build-target.js` executes its package-local binary; do not rely on undeclared/transitive workspace hoisting.
 - Release CI sets `ELECTRON_BUILDER_CACHE` to a `${{ github.workspace }}/..` sibling, never inside `${{ github.workspace }}`: downloaded CommonJS helper `.js` files must remain outside the root `type: module` package boundary.
 - `electron-builder.yml` owns one top-level, filesystem-safe `executableName` for every platform; Linux must not derive it from the scoped CoreApp package name.
+- Beta runtime, installer filename, and updater metadata versions remain the exact package `-beta.N` version on every platform; the preview no-publish policy must not rewrite Windows to `SNAPSHOT.N`.
+- Nexus owns one asset per platform/architecture pair; GitHub backfill ranks platform defaults instead of preserving an arbitrary last-linked duplicate (`AppImage > deb > snap`, `dmg > zip`, versioned setup executable on Windows).
 - CoreApp lint ignores `resources/bundled-plugins/**`; these are synchronized immutable release payloads, and quality checks run against their canonical plugin sources instead of generated/minified projections.
 - A successful projection result contains `pluginName`, `packageName`, `canonicalBuildRoot`, `bundledPluginRoot`, `canonicalVersion`, `synced: true`, and `skipped: false`.
 - Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs` and never downgrades an identity-matching newer local runtime.
@@ -132,6 +134,8 @@ Reviewers should check:
 - Missing `apps/core-app/node_modules/.bin/electron-builder` after a frozen install -> release packaging must fail before artifact claims; restore the direct CoreApp dependencies and lockfile rather than bypassing the lookup.
 - Builder helper cache inside the repository -> Node 24 treats downloaded CommonJS `icon-tool.js` as ESM and rejects `require`; relocate the cache, do not patch downloaded files.
 - Missing explicit Linux executable name with scoped package metadata -> AppImage rejects the derived `@talex-touchcore-app`; set the shared Builder `executableName`, do not un-scope the workspace package.
+- Windows Builder `extraMetadata.version` rewritten from `beta.N` to `SNAPSHOT.N` -> published installer and `latest.yml` disagree with the release tag; package with the canonical beta version and fail the Windows artifact gate on any mismatch.
+- Multiple GitHub Linux formats linked to one Nexus platform/architecture pair -> last-write order can leave Debian selected; backfill must rank AppImage above Debian rather than short-circuiting on the current exact filename.
 - Missing packaged seed, version mismatch, nested `dist`, or nested `.tpex` -> `afterPack` throws and packaging fails.
 - Missing/empty/invalid runtime seed set -> runtime installer throws before mutating any plugin.
 - Older, corrupt, wrong-identity, or same-version/different-signature local runtime -> staged clean replacement with rollback.
@@ -141,7 +145,7 @@ Reviewers should check:
 ### 5. Good / Base / Bad Cases
 
 - Good: repeated builds keep only the current archive outside `dist/build`; packaged Resources contain two clean official seeds; a fresh profile discovers both during initial plugin loading.
-- Base: a clean checkout builds CLI core, the unplugin exporter, the CLI entrypoint, TuffEx, and both official plugins; exporter `dist/vite.js` must precede the CLI build, TuffEx CSS must precede `touch-translation`, the CoreApp-local Builder binary must exist, its helper cache must remain outside the repository package boundary, and every platform must package the explicit `tuff` executable name.
+- Base: a clean checkout builds CLI core, the unplugin exporter, the CLI entrypoint, TuffEx, and both official plugins; exporter `dist/vite.js` precedes the CLI build, TuffEx CSS precedes `touch-translation`, the CoreApp-local Builder binary exists, its helper cache stays outside the repository package boundary, every platform packages the explicit `tuff` executable with the canonical version, and Nexus selects the preferred format for each platform/architecture pair.
 - Bad: copying the whole canonical `dist` directory, seeding after plugin discovery starts, or overwriting newer local runtime/data is prohibited.
 
 ### 6. Tests Required
@@ -152,6 +156,8 @@ Reviewers should check:
 - Release preflight: `pnpm -C apps/core-app exec electron-builder --version` must pass after a frozen install, then a package smoke must produce a real platform artifact.
 - Workflow cache preflight: actionlint passes and `ELECTRON_BUILDER_CACHE` resolves to a sibling of `github.workspace`, not inside it.
 - Linux package-name preflight: the unpacked executable is `tuff`, and a prepackaged AppImage build passes Builder's critical-path name validation before invoking the host-specific AppImage tool.
+- Windows release artifact preflight: the setup filename and `latest.yml` version exactly equal `apps/core-app/package.json`.
+- Nexus backfill preflight: a dry run against a release containing both AppImage and Debian candidates plans AppImage for the Linux/x64 pair.
 - Lint preflight: run CoreApp lint with a cold/no-cache path and assert bundled plugin payloads are ignored while maintained CoreApp source remains covered.
 - Seed projection and after-pack: assert clean stale-file removal, canonical version propagation, packaged resource presence, and fail-closed missing/mismatch/artifact behavior.
 - Runtime bootstrap: assert immediate synchronous return, pre-mutation validation, clean install/update, data/log preservation, wrong-identity repair, and newer-local no-downgrade.

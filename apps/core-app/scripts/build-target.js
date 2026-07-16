@@ -72,41 +72,6 @@ function isBetaVersion(version) {
   return normalizedVersion.includes('-beta.') || normalizedVersion.includes('-beta')
 }
 
-/**
- * Convert beta version to snapshot version format
- * @param {string} version - Beta version string (e.g., "2.4.3-beta.9" or "v2.4.3-beta.9")
- * @returns {string} Snapshot version (e.g., "2.4.3-SNAPSHOT.9")
- * 
- * Note: Windows requires version numbers to start with a digit for FileVersion.
- * Format: X.Y.Z-SNAPSHOT.N (starts with digit, compatible with Windows)
- */
-function convertBetaToSnapshotVersion(version) {
-  if (!version) return version
-  // Remove 'v' prefix if present
-  let normalizedVersion = version.replace(/^v/i, '')
-
-  // Match pattern: X.Y.Z-beta.N
-  const betaMatch = normalizedVersion.match(/^(\d+\.\d+\.\d+)-beta\.(\d+)$/i)
-  if (betaMatch) {
-    const [, baseVersion, betaNumber] = betaMatch
-    // Windows-compatible format: starts with digit
-    return `${baseVersion}-SNAPSHOT.${betaNumber}`
-  }
-
-  // Fallback: try to extract base version and beta number
-  const parts = normalizedVersion.split('-beta.')
-  if (parts.length === 2) {
-    const baseVersion = parts[0]
-    const betaNumber = parts[1]
-    // Windows-compatible format: starts with digit
-    return `${baseVersion}-SNAPSHOT.${betaNumber}`
-  }
-
-  // If pattern doesn't match, return original
-  console.warn(`Warning: Could not parse beta version "${version}", using original`)
-  return version
-}
-
 function parseArgs(argv) {
   const result = {
     target: process.env.BUILD_TARGET,
@@ -444,15 +409,15 @@ function build() {
     console.warn(`Warning: Could not read package.json: ${err.message}`);
   }
 
-  // Auto-detect build type from version if beta.
-  // Beta releases keep BETA runtime metadata while reusing the snapshot packaging line.
+  // Auto-detect beta builds from the package version.
+  // Beta releases retain beta metadata while sharing the preview no-publish policy.
   let finalBuildType = (type || 'release').toLowerCase();
   const runtimeVersion = packageVersion;
 
   if (isBetaVersion(packageVersion)) {
     console.log(`\n✓ Beta version detected: ${packageVersion}`);
     finalBuildType = 'beta';
-    console.log(`  → Using beta build metadata with snapshot packaging policy`);
+    console.log(`  → Using beta metadata with no-publish preview policy`);
     if (type && !['beta', 'snapshot'].includes(type.toLowerCase())) {
       console.log(`  → Note: Explicit --type=${type} was overridden for beta version`);
     }
@@ -473,7 +438,6 @@ function build() {
   }
 
   const buildType = finalBuildType;
-  const builderType = buildType === 'beta' ? 'snapshot' : buildType;
   const normalizedTarget = target.toLowerCase();
 
   const supportedTargets = ['win', 'mac', 'linux'];
@@ -483,16 +447,8 @@ function build() {
   }
 
   console.log(`Preparing ${buildType} build for ${normalizedTarget}...`);
-  if (builderType !== buildType) {
-    console.log(`  → Builder packaging type: ${builderType}`);
-  }
-
-  let builderVersion = packageVersion;
-  if (isBetaVersion(packageVersion) && normalizedTarget === 'win') {
-    builderVersion = convertBetaToSnapshotVersion(packageVersion);
-    console.log(`  → Windows builder version override: ${packageVersion} → ${builderVersion}`);
-  } else if (isBetaVersion(packageVersion)) {
-    console.log(`  → Keeping runtime version for ${normalizedTarget}: ${runtimeVersion}`);
+  if (buildType === 'beta') {
+    console.log(`  → Keeping beta package metadata and disabling direct Builder publishing`);
   }
 
   const distDir = path.join(projectRoot, 'dist');
@@ -723,11 +679,6 @@ function build() {
     builderArgs.push('--dir');
   }
 
-  if (builderVersion !== packageVersion) {
-    builderArgs.push(`--config.extraMetadata.version=${builderVersion}`);
-    console.log(`Overriding package version for builder: ${builderVersion}`);
-  }
-
   const macLsuiElementFlag = process.env.TUFF_MAC_LSUIELEMENT || process.env.BUILD_MAC_LSUIELEMENT;
   const enableMacLsuiElement =
     normalizedTarget === 'mac' &&
@@ -738,7 +689,7 @@ function build() {
     console.log('[build-target] Enabled macOS LSUIElement via explicit build flag');
   }
 
-  const publishPolicy = publish || (builderType === 'snapshot' ? 'never' : undefined);
+  const publishPolicy = publish || (['beta', 'snapshot'].includes(buildType) ? 'never' : undefined);
   if (publishPolicy) {
     builderArgs.push(`--publish=${publishPolicy}`);
   }

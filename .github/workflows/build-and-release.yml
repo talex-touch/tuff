@@ -527,6 +527,12 @@ jobs:
         shell: powershell
         run: |
           $distPath = "apps/core-app/dist"
+          $packageJsonPath = "apps/core-app/package.json"
+          $expectedVersion = (Get-Content -Path $packageJsonPath -Raw | ConvertFrom-Json).version
+          if ([string]::IsNullOrWhiteSpace($expectedVersion)) {
+            Write-Error "CoreApp package version is missing: $packageJsonPath"
+            exit 1
+          }
           Write-Host "Checking for Windows installer in: $distPath"
           Write-Host "Directory exists: $(Test-Path $distPath)"
 
@@ -599,6 +605,34 @@ jobs:
               Write-Host "  - $($_.FullName) (Size: $fileSize MB)"
             }
           }
+          $expectedInstallerName = "tuff-$expectedVersion-setup.exe"
+          $versionedInstaller = $exists | Where-Object { $_.Name -eq $expectedInstallerName }
+          if ($null -eq $versionedInstaller -or $versionedInstaller.Count -eq 0) {
+            Write-Error "Expected versioned installer not found: $expectedInstallerName"
+            exit 1
+          }
+
+          $latestMetadata = Get-ChildItem -Path $distPath -Recurse -File -Filter "latest.yml" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if ($null -eq $latestMetadata) {
+            Write-Error "Windows updater metadata latest.yml was not generated."
+            exit 1
+          }
+
+          $versionMatch = Select-String -Path $latestMetadata.FullName -Pattern '^version:\s*(.+)\s*$' |
+            Select-Object -First 1
+          if ($null -eq $versionMatch) {
+            Write-Error "Windows updater metadata has no version field: $($latestMetadata.FullName)"
+            exit 1
+          }
+
+          $metadataVersion = $versionMatch.Matches[0].Groups[1].Value.Trim()
+          if ($metadataVersion -ne $expectedVersion) {
+            Write-Error "Windows updater version mismatch: expected $expectedVersion, got $metadataVersion"
+            exit 1
+          }
+
+          Write-Host "Windows installer and updater metadata match CoreApp version: $expectedVersion"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v7
