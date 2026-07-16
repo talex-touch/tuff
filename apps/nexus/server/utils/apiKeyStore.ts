@@ -217,7 +217,7 @@ async function lookupApiKeyRow(
   if (!results || results.length !== 1) {
     return null
   }
-  return results[0]
+  return results[0] ?? null
 }
 
 export async function validateApiKey(event: H3Event, key: string): Promise<{ userId: string, scopes: string[] } | null> {
