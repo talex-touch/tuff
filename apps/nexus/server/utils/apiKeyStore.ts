@@ -2,6 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { createError } from 'h3'
 import crypto from 'uncrypto'
+import { createHash } from 'node:crypto'
 import { readCloudflareBindings } from './cloudflare'
 
 const API_KEYS_TABLE = 'user_api_keys'
@@ -53,23 +54,29 @@ export interface ApiKeyWithSecret extends ApiKey {
   secretKey: string // Only returned on creation
 }
 
+function sha256Hex(value: string): string {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+// Legacy 32-bit hash retained ONLY to validate keys created before the SHA-256
+// migration; never used for new keys.
+function legacyHash(key: string): string {
+  const data = new TextEncoder().encode(key)
+  let hash = 0
+  for (const byte of data) {
+    hash = ((hash << 5) - hash) + byte
+    hash = hash & hash
+  }
+  return Math.abs(hash).toString(16)
+}
+
 function generateApiKey(): { key: string, prefix: string, hash: string } {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   const key = `tuff_${Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')}`
   const prefix = `${key.substring(0, 12)}...`
 
-  // Simple hash for storage (in production, use proper hashing)
-  const encoder = new TextEncoder()
-  const data = encoder.encode(key)
-  let hash = 0
-  for (const byte of data) {
-    hash = ((hash << 5) - hash) + byte
-    hash = hash & hash
-  }
-  const hashStr = Math.abs(hash).toString(16)
-
-  return { key, prefix, hash: hashStr }
+  return { key, prefix, hash: sha256Hex(key) }
 }
 
 /**
@@ -191,6 +198,28 @@ export async function deleteApiKeysForUser(event: H3Event, userId: string): Prom
 /**
  * Validate an API key and return the user ID if valid
  */
+async function lookupApiKeyRow(
+  db: D1Database,
+  prefix: string,
+  hash: string
+): Promise<{ id: string, user_id: string, scopes: string, expires_at: string | null } | null> {
+  const { results } = await db.prepare(`
+    SELECT id, user_id, scopes, expires_at
+    FROM ${API_KEYS_TABLE}
+    WHERE key_prefix = ?1 AND key_hash = ?2;
+  `).bind(prefix, hash).all<{
+    id: string
+    user_id: string
+    scopes: string
+    expires_at: string | null
+  }>()
+  // Reject ambiguous matches — never guess with results[0] on a collision.
+  if (!results || results.length !== 1) {
+    return null
+  }
+  return results[0]
+}
+
 export async function validateApiKey(event: H3Event, key: string): Promise<{ userId: string, scopes: string[] } | null> {
   if (!key.startsWith('tuff_')) {
     return null
@@ -205,34 +234,15 @@ export async function validateApiKey(event: H3Event, key: string): Promise<{ use
 
   const prefix = `${key.substring(0, 12)}...`
 
-  // Simple hash matching
-  const encoder = new TextEncoder()
-  const data = encoder.encode(key)
-  let hash = 0
-  for (const byte of data) {
-    hash = ((hash << 5) - hash) + byte
-    hash = hash & hash
-  }
-  const hashStr = Math.abs(hash).toString(16)
-
-  const { results } = await db.prepare(`
-    SELECT id, user_id, scopes, expires_at
-    FROM ${API_KEYS_TABLE}
-    WHERE key_prefix = ?1 AND key_hash = ?2;
-  `).bind(prefix, hashStr).all<{
-    id: string
-    user_id: string
-    scopes: string
-    expires_at: string | null
-  }>()
-
-  if (!results || results.length === 0) {
+  // Prefer the SHA-256 hash; fall back to the legacy 32-bit hash only for keys
+  // created before the migration. lookupApiKeyRow rejects ambiguous multi-row
+  // matches so a hash collision can never resolve to the wrong user.
+  const row
+    = (await lookupApiKeyRow(db, prefix, sha256Hex(key)))
+      ?? (await lookupApiKeyRow(db, prefix, legacyHash(key)))
+  if (!row) {
     return null
   }
-
-  const row = results[0]
-  if (!row)
-    return null
 
   // Check expiration
   if (row.expires_at && new Date(row.expires_at) < new Date()) {
