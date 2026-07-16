@@ -1,5 +1,6 @@
 appId: com.tagzxia.app.tuff
 productName: tuff
+executableName: tuff
 asar: true
 compression: maximum
 asarUnpack:
@@ -73,7 +74,6 @@ extraResources:
       - '**/*'
 
 win:
-  executableName: tuff
   target:
     - target: nsis
       arch:

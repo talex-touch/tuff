@@ -11,6 +11,7 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Windows release builds on Node 24 must invoke the pnpm command through a supported Windows command path and must not fail with `spawnSync pnpm.cmd EINVAL`.
 - CoreApp must own compatible `electron-builder` and Windows peer packages directly; clean installs must expose the package-local binary expected by `build-target.js`.
 - CI must place `ELECTRON_BUILDER_CACHE` outside the repository so downloaded CommonJS helper scripts do not inherit the root `type: module` boundary.
+- Electron packaging must use an explicit filesystem-safe executable name instead of deriving Linux targets from the scoped CoreApp package name.
 - CoreApp lint must exclude `resources/bundled-plugins/**`, which contains generated immutable package payloads rather than maintained source.
 - Preserve deterministic, fail-fast prerequisite/plugin ordering and all existing bundled-plugin projection behavior.
 - Do not weaken artifact validation or bypass failed package builds.
@@ -32,3 +33,4 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Beta.9 workflow `29474318864` completed official plugin and Electron Vite builds, then failed because `electron-builder` was no longer declared or installed.
 - The local beta package smoke succeeded and produced `apps/core-app/dist/tuff.app.zip`; uncached lint then exposed missing generated-resource ignores.
 - Beta.10 workflow `29475792730` reached Linux packaging, then `icon-tool.js` failed because the repository-local Builder cache inherited ESM semantics.
+- Beta.11 workflow `29476486542` passed macOS and Windows; Linux reached AppImage assembly, then rejected the derived `@talex-touchcore-app` executable name.
