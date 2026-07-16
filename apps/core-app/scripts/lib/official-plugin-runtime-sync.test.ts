@@ -30,6 +30,7 @@ const {
   OFFICIAL_PLUGIN_BUILD_PREREQUISITES,
   OFFICIAL_PLUGIN_BUILD_TARGETS,
   buildOfficialPluginPackages,
+  resolvePnpmBuildInvocation,
   syncOfficialPluginBundledRuntime,
   syncOfficialPluginBundledRuntimes
 } = require('./touch-translation-runtime-sync.js') as {
@@ -40,6 +41,10 @@ const {
     runPackageBuild: (packageName: string) => void
     workspaceRoot: string
   }) => string[]
+  resolvePnpmBuildInvocation: (
+    packageName: string,
+    options?: { comSpec?: string; platform?: string }
+  ) => { args: string[]; executable: string }
   syncOfficialPluginBundledRuntime: (
     pluginName: string,
     options: OfficialPluginSyncOptions
@@ -97,8 +102,15 @@ afterEach(async () => {
 })
 
 describe('official plugin build delivery', () => {
-  it('builds the CLI prerequisites before canonical official plugins', () => {
+  it('builds the exporter after CLI core, before Tuff CLI, and before every official plugin', () => {
     const observed: string[] = []
+    const expectedBuildOrder = [
+      '@talex-touch/tuff-cli-core',
+      '@talex-touch/unplugin-export-plugin',
+      '@talex-touch/tuff-cli',
+      '@talex-touch/touch-translation-plugin',
+      '@talex-touch/touch-intelligence-plugin'
+    ]
 
     const buildOrder = buildOfficialPluginPackages({
       projectRoot: '/project',
@@ -106,11 +118,39 @@ describe('official plugin build delivery', () => {
       runPackageBuild: (packageName) => observed.push(packageName)
     })
 
-    expect(observed).toEqual([
-      ...OFFICIAL_PLUGIN_BUILD_PREREQUISITES,
-      ...OFFICIAL_PLUGIN_BUILD_TARGETS.map(({ packageName }) => packageName)
-    ])
-    expect(buildOrder).toEqual(observed)
+    expect(OFFICIAL_PLUGIN_BUILD_PREREQUISITES).toEqual(expectedBuildOrder.slice(0, 3))
+    expect(observed).toEqual(expectedBuildOrder)
+    expect(buildOrder).toEqual(expectedBuildOrder)
+  })
+
+  it('uses direct pnpm with the scoped package build arguments on POSIX', () => {
+    expect(
+      resolvePnpmBuildInvocation('@talex-touch/touch-translation-plugin', { platform: 'darwin' })
+    ).toEqual({
+      executable: 'pnpm',
+      args: ['--filter', '@talex-touch/touch-translation-plugin', 'run', 'build']
+    })
+  })
+
+  it('uses ComSpec to run pnpm.cmd with Windows command-host arguments', () => {
+    expect(
+      resolvePnpmBuildInvocation('@talex-touch/touch-intelligence-plugin', {
+        comSpec: 'C:\\Windows\\System32\\cmd.exe',
+        platform: 'win32'
+      })
+    ).toEqual({
+      executable: 'C:\\Windows\\System32\\cmd.exe',
+      args: [
+        '/d',
+        '/s',
+        '/c',
+        'pnpm.cmd',
+        '--filter',
+        '@talex-touch/touch-intelligence-plugin',
+        'run',
+        'build'
+      ]
+    })
   })
 
   it('replaces both stale bundled seeds with canonical build contents', async () => {

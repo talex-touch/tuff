@@ -17,6 +17,7 @@ const OFFICIAL_PLUGIN_BUILD_TARGETS = Object.freeze([
 
 const OFFICIAL_PLUGIN_BUILD_PREREQUISITES = Object.freeze([
   '@talex-touch/tuff-cli-core',
+  '@talex-touch/unplugin-export-plugin',
   '@talex-touch/tuff-cli'
 ])
 
@@ -42,6 +43,20 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
 }
 
+function resolvePnpmBuildInvocation(packageName, options = {}) {
+  const buildArgs = ['--filter', packageName, 'run', 'build']
+  const platform = options.platform || process.platform
+
+  if (platform !== 'win32') {
+    return { executable: 'pnpm', args: buildArgs }
+  }
+
+  return {
+    executable: options.comSpec || process.env.ComSpec || 'cmd.exe',
+    args: ['/d', '/s', '/c', 'pnpm.cmd', ...buildArgs]
+  }
+}
+
 function buildOfficialPluginPackages(options = {}) {
   const projectRoot = options.projectRoot || path.join(__dirname, '..', '..')
   const workspaceRoot = options.workspaceRoot || path.resolve(projectRoot, '..', '..')
@@ -52,8 +67,8 @@ function buildOfficialPluginPackages(options = {}) {
   const runPackageBuild =
     options.runPackageBuild ||
     ((packageName) => {
-      const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-      execFileSync(pnpmExecutable, ['--filter', packageName, 'run', 'build'], {
+      const { executable, args } = resolvePnpmBuildInvocation(packageName)
+      execFileSync(executable, args, {
         cwd: workspaceRoot,
         env: process.env,
         stdio: 'inherit'
@@ -177,6 +192,7 @@ module.exports = {
   OFFICIAL_PLUGIN_BUILD_TARGETS,
   TOUCH_TRANSLATION_PLUGIN_NAME,
   buildOfficialPluginPackages,
+  resolvePnpmBuildInvocation,
   syncOfficialPluginBundledRuntime,
   syncOfficialPluginBundledRuntimes,
   syncTouchTranslationBundledRuntime
