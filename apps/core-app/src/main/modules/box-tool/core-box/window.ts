@@ -744,6 +744,22 @@ export class WindowManager {
       }
     }
 
+    // Native visibility can run renderer onShow before the canonical show event arrives.
+    // Publish shortcut intent before exposing the window so AutoPaste sees the correct trigger.
+    if (triggeredByShortcut) {
+      const transport = this.getTransport()
+      void transport
+        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
+        .catch(() => {})
+      void transport
+        .sendTo(
+          window.window.webContents,
+          CoreBoxRetainedEvents.legacy.shortcutTriggered,
+          undefined
+        )
+        .catch(() => {})
+    }
+
     if (shouldFocus) {
       window.window.show()
       if (triggeredByShortcut) {
@@ -759,20 +775,6 @@ export class WindowManager {
       show: true
     })
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_SHOWN, new CoreBoxWindowShownEvent())
-
-    if (triggeredByShortcut) {
-      const transport = this.getTransport()
-      void transport
-        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
-        .catch(() => {})
-      void transport
-        .sendTo(
-          window.window.webContents,
-          CoreBoxRetainedEvents.legacy.shortcutTriggered,
-          undefined
-        )
-        .catch(() => {})
-    }
 
     setTimeout(() => {
       if (window.window.isDestroyed()) return
