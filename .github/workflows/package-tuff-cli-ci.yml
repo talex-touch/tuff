@@ -6,23 +6,26 @@ on:
       - main
       - master
     paths:
-      - 'packages/tuff-cli/**'
-      - 'packages/tuff-cli-core/**'
-      - 'packages/unplugin-export-plugin/**'
-      - 'packages/utils/**'
-      - '.github/workflows/package-tuff-cli-ci.yml'
-      - '.github/workflows/package-ci.yml'
+      - "packages/tuff-cli/**"
+      - "packages/tuff-cli-core/**"
+      - "packages/unplugin-export-plugin/**"
+      - "packages/utils/**"
+      - ".github/workflows/package-tuff-cli-ci.yml"
+      - ".github/workflows/package-ci.yml"
   push:
     branches:
       - main
       - master
     paths:
-      - 'packages/tuff-cli/**'
-      - 'packages/tuff-cli-core/**'
-      - 'packages/unplugin-export-plugin/**'
-      - 'packages/utils/**'
-      - '.github/workflows/package-tuff-cli-ci.yml'
-      - '.github/workflows/package-ci.yml'
+      - "packages/tuff-cli/**"
+      - "packages/tuff-cli-core/**"
+      - "packages/unplugin-export-plugin/**"
+      - "packages/utils/**"
+      - ".github/workflows/package-tuff-cli-ci.yml"
+      - ".github/workflows/package-ci.yml"
+
+permissions:
+  contents: read
 
 jobs:
   core:

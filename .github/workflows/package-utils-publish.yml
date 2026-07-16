@@ -6,8 +6,8 @@ on:
       - main
       - master
     paths:
-      - 'packages/utils/package.json'
-      - '.github/workflows/package-utils-publish.yml'
+      - "packages/utils/package.json"
+      - ".github/workflows/package-utils-publish.yml"
 
 jobs:
   publish:
@@ -24,15 +24,13 @@ jobs:
 
       - name: Setup PNPM
         uses: pnpm/action-setup@v6
-        with:
-          version: 10.32.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24.0.0
+          node-version-file: .node-version
           cache: pnpm
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile

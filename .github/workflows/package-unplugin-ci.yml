@@ -6,15 +6,18 @@ on:
       - main
       - master
     paths:
-      - 'packages/unplugin-export-plugin/**'
-      - '.github/workflows/package-unplugin-ci.yml'
-      - '.github/workflows/package-ci.yml'
+      - "packages/unplugin-export-plugin/**"
+      - ".github/workflows/package-unplugin-ci.yml"
+      - ".github/workflows/package-ci.yml"
   push:
     branches:
       - main
       - master
     paths:
-      - 'packages/unplugin-export-plugin/**'
+      - "packages/unplugin-export-plugin/**"
+
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -22,7 +25,7 @@ jobs:
     with:
       package-name: unplugin-export-plugin
       package-path: packages/unplugin-export-plugin
-      run-typecheck: false  # Add if typecheck script exists
+      run-typecheck: false # Add if typecheck script exists
       run-lint: true
       lint-command: pnpm lint
       run-test: true

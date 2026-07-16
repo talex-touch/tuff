@@ -6,21 +6,24 @@ on:
       - master
       - main
     paths:
-      - 'packages/tuffex/**'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/package-tuffex-ci.yml'
-      - '.github/workflows/package-ci.yml'
+      - "packages/tuffex/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuffex-ci.yml"
+      - ".github/workflows/package-ci.yml"
   push:
     branches:
       - master
       - main
     paths:
-      - 'packages/tuffex/**'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/package-tuffex-ci.yml'
-      - '.github/workflows/package-ci.yml'
+      - "packages/tuffex/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/package-tuffex-ci.yml"
+      - ".github/workflows/package-ci.yml"
+
+permissions:
+  contents: read
 
 jobs:
   ci:
@@ -28,8 +31,8 @@ jobs:
     with:
       package-name: tuffex
       package-path: packages/tuffex
-      run-typecheck: false  # Add if typecheck script exists
-      run-lint: false       # Add if lint script exists
-      run-test: false       # Add if test script exists
+      run-typecheck: false # Add if typecheck script exists
+      run-lint: false # Add if lint script exists
+      run-test: false # Add if test script exists
       run-build: true
       build-command: pnpm build
