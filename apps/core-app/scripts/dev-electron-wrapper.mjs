@@ -312,6 +312,7 @@ function signDevApp(devApp) {
 
 const env = {
   ...process.env,
+  TUFF_DEV_PARENT_PID: String(process.pid),
   NODE_OPTIONS: process.env.NODE_OPTIONS || '--max-old-space-size=8192'
 }
 

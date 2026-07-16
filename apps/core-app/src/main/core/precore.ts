@@ -159,12 +159,6 @@ log4js.configure({
       alwaysIncludePattern: true,
       pattern: 'yyyy-MM-dd.log'
     },
-    out: {
-      type: 'stdout'
-    },
-    err: {
-      type: 'stderr'
-    },
     error: {
       type: 'dateFile',
       keepFileExt: true,
@@ -178,11 +172,11 @@ log4js.configure({
   },
   categories: {
     default: {
-      appenders: ['all', 'out'],
+      appenders: ['all'],
       level: 'INFO'
     },
     error: {
-      appenders: ['all', 'err', 'error'],
+      appenders: ['all', 'error'],
       level: 'ERROR'
     }
   }

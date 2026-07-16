@@ -363,12 +363,19 @@ export class StorageModule extends BaseModule {
       typeof name !== 'string' ||
       name.length === 0 ||
       name.includes('\0') ||
-      name.includes('/') ||
-      name.includes('\\')
+      name.includes('\\') ||
+      path.posix.isAbsolute(name) ||
+      path.win32.isAbsolute(name)
     ) {
       throw new Error(`Invalid config name: ${JSON.stringify(name)}`)
     }
-    const resolved = path.resolve(this.filePath, name)
+
+    const segments = name.split('/')
+    if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+      throw new Error(`Invalid config name: ${JSON.stringify(name)}`)
+    }
+
+    const resolved = path.resolve(this.filePath, ...segments)
     const rel = path.relative(this.filePath, resolved)
     if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error(`Config name escapes storage directory: ${JSON.stringify(name)}`)
@@ -378,6 +385,7 @@ export class StorageModule extends BaseModule {
 
   getConfig(name: string): object {
     if (!this.filePath) throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
+    const configPath = this.resolveConfigPath(name)
 
     // Hot configs skip invalidation check and always stay in cache
     const isHot = this.hotConfigs.has(name)
@@ -397,7 +405,7 @@ export class StorageModule extends BaseModule {
     }
 
     // Load from disk
-    const p = this.resolveConfigPath(name)
+    const p = configPath
     let file = {}
 
     let serialized: string | undefined
@@ -445,6 +453,7 @@ export class StorageModule extends BaseModule {
     }
     if (normalizedResult.changed) {
       this.cache.markDirty(name)
+      this.pollingService.notifyConfigChanged(name)
     }
 
     // Return through cache.get() to ensure deep copy protection
@@ -559,6 +568,7 @@ export class StorageModule extends BaseModule {
     clientVersion?: number
   ): { success: boolean; version: number; conflict?: boolean } {
     if (!this.filePath) throw new Error(`Config ${name} not found`)
+    this.resolveConfigPath(name)
 
     const disposeSave = enterPerfContext(`Storage.save:${name}`, {
       payloadType: typeof payload,
@@ -573,6 +583,7 @@ export class StorageModule extends BaseModule {
       if (clear) {
         this.cache.evict(name)
         this.persistedContent.delete(name)
+        this.pollingService.notifyConfigChanged(name)
         return { success: true, version: 0 }
       }
 
@@ -629,6 +640,7 @@ export class StorageModule extends BaseModule {
 
       // Set new data and get new version
       const newVersion = this.cache.set(name, parsed as object, true, serialized)
+      this.pollingService.notifyConfigChanged(name)
       // Broadcast update to other windows (exclude source)
       setImmediate(() => {
         broadcastUpdate(name, newVersion, sourceWebContentsId)

@@ -622,20 +622,19 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 设置全局 Provider Manager
     setIntelligenceProviderManager(this.manager)
-    intelligenceLog.info('Provider manager injected')
 
     // 注册 IPC 通道
     this.registerChannels()
     this.registerAgentRuntimeChannels()
 
-    // 设置配置更新监听器
-    setupConfigUpdateListener()
-
     // 打印配置文件内容（调试用）
     debugPrintConfig()
 
-    // 强制加载初始配置（force=true 确保即使 signature 相同也会重新加载）
+    // 新 manager 必须先强制应用一次配置；后续订阅的当前值回放会被 signature 去重
     ensureIntelligenceConfigLoaded(true)
+
+    // 设置配置更新监听器
+    setupConfigUpdateListener()
 
     this.startAgentRuntime()
 

@@ -474,6 +474,8 @@ export function useSearch(
   let indexCommitRefreshTimer: ReturnType<typeof setTimeout> | null = null
   let indexCommitRefreshPending = false
   let indexCommitStreamDisposed = false
+  let indexCommitStreamGeneration = 0
+  let indexCommitStreamStartPending = false
   let indexCommitStreamController: { cancel: () => void } | null = null
   let indexCommitStreamRetryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -1060,7 +1062,12 @@ export function useSearch(
   }
 
   function scheduleIndexCommitStreamRetry(): void {
-    if (indexCommitStreamDisposed || indexCommitStreamController || indexCommitStreamRetryTimer) {
+    if (
+      indexCommitStreamDisposed ||
+      indexCommitStreamStartPending ||
+      indexCommitStreamController ||
+      indexCommitStreamRetryTimer
+    ) {
       return
     }
     indexCommitStreamRetryTimer = setTimeout(() => {
@@ -1070,26 +1077,50 @@ export function useSearch(
   }
 
   function startIndexCommitStream(): void {
-    if (isDivisionBoxMode() || indexCommitStreamDisposed || indexCommitStreamController) return
+    if (
+      isDivisionBoxMode() ||
+      indexCommitStreamDisposed ||
+      indexCommitStreamStartPending ||
+      indexCommitStreamController
+    ) {
+      return
+    }
+
+    const generation = ++indexCommitStreamGeneration
+    indexCommitStreamStartPending = true
     void transport
       .stream(CoreBoxEvents.search.indexCommitted, undefined, {
         onData: () => {
-          scheduleIndexCommitRefresh()
+          if (generation === indexCommitStreamGeneration && !indexCommitStreamDisposed) {
+            scheduleIndexCommitRefresh()
+          }
         },
         onError: (error) => {
+          if (generation !== indexCommitStreamGeneration || indexCommitStreamDisposed) {
+            return
+          }
           devLog('Search index commit stream failed:', error)
+          indexCommitStreamGeneration++
+          indexCommitStreamStartPending = false
+          const controller = indexCommitStreamController
           indexCommitStreamController = null
+          controller?.cancel()
           scheduleIndexCommitStreamRetry()
         }
       })
       .then((controller) => {
-        if (indexCommitStreamDisposed) {
+        if (indexCommitStreamDisposed || generation !== indexCommitStreamGeneration) {
           controller.cancel()
           return
         }
+        indexCommitStreamStartPending = false
         indexCommitStreamController = controller
       })
       .catch((error) => {
+        if (indexCommitStreamDisposed || generation !== indexCommitStreamGeneration) {
+          return
+        }
+        indexCommitStreamStartPending = false
         devLog('Failed to start search index commit stream:', error)
         scheduleIndexCommitStreamRetry()
       })
@@ -1097,6 +1128,8 @@ export function useSearch(
 
   function stopIndexCommitStream(): void {
     indexCommitStreamDisposed = true
+    indexCommitStreamGeneration++
+    indexCommitStreamStartPending = false
     indexCommitStreamController?.cancel()
     indexCommitStreamController = null
     indexCommitRefreshPending = false

@@ -152,6 +152,7 @@ async function runScenario(intervalMs: number, durationMs: number): Promise<Scen
 
   const queueDepthPeak = createQueueDepthSnapshot()
   const clipboardDelaySamples: number[] = []
+  let lastSampledClipboardRunCount = 0
 
   service.register(
     clipboardTaskId,
@@ -248,7 +249,9 @@ async function runScenario(intervalMs: number, durationMs: number): Promise<Scen
     const diagnostics = service.getDiagnostics()
     mergeQueuePeaks(queueDepthPeak, diagnostics.queueDepthByLane)
     const snapshot = diagnostics.recentTasks.find((task) => task.id === clipboardTaskId)
-    if (snapshot) {
+    const runCount = numberOrZero(snapshot?.count)
+    if (snapshot && runCount > lastSampledClipboardRunCount) {
+      lastSampledClipboardRunCount = runCount
       clipboardDelaySamples.push(numberOrZero(snapshot.lastSchedulerDelayMs))
     }
   }, 20)
@@ -263,7 +266,8 @@ async function runScenario(intervalMs: number, durationMs: number): Promise<Scen
   mergeQueuePeaks(queueDepthPeak, diagnostics.queueDepthByLane)
 
   const clipboardStats = diagnostics.recentTasks.find((task) => task.id === clipboardTaskId)
-  if (clipboardStats) {
+  const finalRunCount = numberOrZero(clipboardStats?.count)
+  if (clipboardStats && finalRunCount > lastSampledClipboardRunCount) {
     clipboardDelaySamples.push(numberOrZero(clipboardStats.lastSchedulerDelayMs))
   }
 

@@ -120,6 +120,7 @@ const mocks = vi.hoisted(() => ({
   translateClipboardImage: vi.fn(),
   ocr: vi.fn(),
   textTranslate: vi.fn(),
+  resolveCapabilityStatus: vi.fn(),
   stt: vi.fn(),
   sendTo: vi.fn<
     (target: unknown, event: { toEventName: () => string }, payload: unknown) => Promise<void>
@@ -269,6 +270,10 @@ vi.mock('../box-tool/core-box/image-translate', () => {
   }
 })
 
+vi.mock('../ai/intelligence-capability-status', () => ({
+  resolveCapabilityStatus: mocks.resolveCapabilityStatus
+}))
+
 vi.mock('../ai/intelligence-sdk', () => ({
   tuffIntelligence: {
     vision: {
@@ -361,6 +366,11 @@ describe('AssistantModule screenshot translation', () => {
     })
     mocks.ocr.mockReset()
     mocks.textTranslate.mockReset()
+    mocks.resolveCapabilityStatus.mockReturnValue({
+      capabilityId: 'text.translate',
+      available: true,
+      providerIds: ['translation-provider']
+    })
     mocks.stt.mockReset()
     mocks.translateImageBase64.mockResolvedValue(mocks.createTranslateSuccess())
     mocks.sendTo.mockResolvedValue(undefined)

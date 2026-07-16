@@ -10,13 +10,15 @@
  */
 import type { MessagePortMain, UtilityProcess } from 'electron'
 import path from 'node:path'
-import { MessageChannelMain, utilityProcess } from 'electron'
+import { app, MessageChannelMain, utilityProcess } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import type { HostMessage, HostSdkCall } from './plugin-host-protocol'
 
 const pluginHostLog = createLogger('PluginHost')
 
 const MAX_RESTART_ATTEMPTS = 3
+const RESTART_STABILITY_WINDOW_MS = 30_000
+const HOST_RESTART_DELAY_MS = 1_200
 const DEFAULT_PING_TIMEOUT_MS = 2000
 
 type LifecycleProxy = Record<string, (...args: unknown[]) => Promise<unknown>>
@@ -57,7 +59,13 @@ class PluginHostBridge {
   private child: UtilityProcess | null = null
   private controlPort: MessagePortMain | null = null
   private ready = false
+  private plannedStop = false
   private restartAttempts = 0
+  private generation = 0
+  private stableReadyTimer: NodeJS.Timeout | null = null
+  private restartTimer: NodeJS.Timeout | null = null
+  private signalGuardsRegistered = false
+  private readonly handleDevelopmentProcessSignal = (): void => this.stop()
   private seq = 0
   private readonly pingPending = new Map<number, (ok: boolean) => void>()
   private readonly loadPending = new Map<number, Pending<string[]>>()
@@ -69,27 +77,57 @@ class PluginHostBridge {
     return this.ready
   }
 
+  private registerDevelopmentSignalGuards(): void {
+    if (app.isPackaged || this.signalGuardsRegistered) {
+      return
+    }
+    this.signalGuardsRegistered = true
+    process.prependListener('SIGTERM', this.handleDevelopmentProcessSignal)
+    process.prependListener('SIGINT', this.handleDevelopmentProcessSignal)
+    process.prependListener('SIGHUP', this.handleDevelopmentProcessSignal)
+  }
+
+  private unregisterDevelopmentSignalGuards(): void {
+    if (!this.signalGuardsRegistered) {
+      return
+    }
+    this.signalGuardsRegistered = false
+    process.removeListener('SIGTERM', this.handleDevelopmentProcessSignal)
+    process.removeListener('SIGINT', this.handleDevelopmentProcessSignal)
+    process.removeListener('SIGHUP', this.handleDevelopmentProcessSignal)
+  }
+
   start(): void {
     if (this.child) {
       return
     }
+
+    this.clearRestartTimer()
+    this.registerDevelopmentSignalGuards()
+    this.plannedStop = false
+    const generation = ++this.generation
     const hostPath = path.join(__dirname, 'plugin-host.js')
     const child = utilityProcess.fork(hostPath, [], { serviceName: 'tuff-plugin-host' })
     this.child = child
 
     const { port1, port2 } = new MessageChannelMain()
     this.controlPort = port1
-    port1.on('message', (event) => this.handleMessage(event.data as HostMessage))
+    port1.on('message', (event) => {
+      if (this.child === child && this.generation === generation) {
+        this.handleMessage(event.data as HostMessage)
+      }
+    })
     port1.start()
 
     child.on('spawn', () => {
+      if (this.child !== child || this.generation !== generation) {
+        return
+      }
       pluginHostLog.info('Plugin host process spawned')
-      this.restartAttempts = 0
       child.postMessage({ type: 'init' }, [port2])
     })
     child.on('exit', (code) => {
-      pluginHostLog.warn(`Plugin host exited (code=${code})`)
-      this.handleExit()
+      this.handleExit(child, generation, code)
     })
   }
 
@@ -97,6 +135,7 @@ class PluginHostBridge {
     switch (data?.type) {
       case 'ready':
         this.ready = true
+        this.scheduleRestartBudgetReset()
         pluginHostLog.info('Plugin host ready')
         break
       case 'pong':
@@ -235,28 +274,109 @@ class PluginHostBridge {
     this.lifecyclePending.clear()
   }
 
-  private handleExit(): void {
+  private scheduleRestartBudgetReset(): void {
+    this.clearStableReadyTimer()
+    const generation = this.generation
+    this.stableReadyTimer = setTimeout(() => {
+      this.stableReadyTimer = null
+      if (this.generation !== generation || !this.child || !this.ready) {
+        return
+      }
+      if (this.restartAttempts > 0) {
+        pluginHostLog.info('Plugin host remained stable; restart budget reset')
+      }
+      this.restartAttempts = 0
+    }, RESTART_STABILITY_WINDOW_MS)
+    this.stableReadyTimer.unref()
+  }
+
+  private clearStableReadyTimer(): void {
+    if (!this.stableReadyTimer) {
+      return
+    }
+    clearTimeout(this.stableReadyTimer)
+    this.stableReadyTimer = null
+  }
+
+  private clearRestartTimer(): void {
+    if (!this.restartTimer) {
+      return
+    }
+    clearTimeout(this.restartTimer)
+    this.restartTimer = null
+  }
+
+  private handleExit(child: UtilityProcess, generation: number, code: number | null): void {
+    if (this.child !== child || this.generation !== generation) {
+      return
+    }
+
+    const plannedStop = this.plannedStop
+    this.clearStableReadyTimer()
     this.child = null
+    try {
+      this.controlPort?.close()
+    } catch {
+      // The port may already be closed by process teardown.
+    }
     this.controlPort = null
     this.ready = false
     this.contexts.clear()
     this.rejectAllPending()
+
+    if (plannedStop) {
+      pluginHostLog.info('Plugin host stopped')
+      return
+    }
+
+    if (!app.isPackaged && code === 15) {
+      pluginHostLog.info('Plugin host received a termination signal')
+    } else {
+      pluginHostLog.warn(`Plugin host exited unexpectedly (code=${code})`)
+    }
     if (this.restartAttempts < MAX_RESTART_ATTEMPTS) {
       this.restartAttempts++
-      pluginHostLog.info(`Restarting plugin host (attempt ${this.restartAttempts})`)
-      this.start()
+      const restartGeneration = this.generation
+      this.restartTimer = setTimeout(() => {
+        this.restartTimer = null
+        if (this.plannedStop || this.generation !== restartGeneration || this.child) {
+          return
+        }
+        pluginHostLog.info(`Restarting plugin host (attempt ${this.restartAttempts})`)
+        this.start()
+      }, HOST_RESTART_DELAY_MS)
+      this.restartTimer.unref()
     } else {
       pluginHostLog.error('Plugin host restart limit reached; isolation disabled until next launch')
     }
   }
 
   stop(): void {
-    this.rejectAllPending()
-    this.contexts.clear()
-    this.child?.kill()
+    this.plannedStop = true
+    this.unregisterDevelopmentSignalGuards()
+    this.generation++
+    this.clearStableReadyTimer()
+    this.clearRestartTimer()
+
+    const child = this.child
+    const controlPort = this.controlPort
     this.child = null
     this.controlPort = null
     this.ready = false
+    this.restartAttempts = 0
+    this.rejectAllPending()
+    this.contexts.clear()
+
+    try {
+      controlPort?.close()
+    } catch {
+      // The port may already be closed by process teardown.
+    }
+    try {
+      child?.kill()
+    } catch (error) {
+      pluginHostLog.debug('Failed to stop plugin host process', { error })
+    }
   }
 }
 

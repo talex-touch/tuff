@@ -128,9 +128,7 @@ export class TrayManager extends BaseModule {
         iconPath: TrayIconProvider.getIconPath()
       }
       if (process.platform === 'darwin' && !this.isTrayBoundsVisible(initialBounds)) {
-        trayManagerLog.warn('Tray initialized with invalid bounds; scheduling layout validation', {
-          meta: logMeta
-        })
+        trayManagerLog.debug('Tray bounds pending initial macOS layout', { meta: logMeta })
       } else {
         trayManagerLog.info('Tray initialized', { meta: logMeta })
       }

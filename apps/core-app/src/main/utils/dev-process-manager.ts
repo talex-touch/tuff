@@ -4,6 +4,8 @@ import { createLogger } from './logger'
 
 const devProcessLog = createLogger('DevProcessManager')
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000
+const DEV_PARENT_LIVENESS_INTERVAL_MS = 1000
+const DEV_PARENT_PID_ENV = 'TUFF_DEV_PARENT_PID'
 
 /**
  * @file dev-process-manager.ts
@@ -16,6 +18,7 @@ export class DevProcessManager {
   private static instance: DevProcessManager | null = null
   private isShuttingDown = false
   private shutdownTimeout: NodeJS.Timeout | null = null
+  private parentLivenessTimer: NodeJS.Timeout | null = null
   private forceShutdownPromise: Promise<never> | null = null
 
   static getInstance(): DevProcessManager {
@@ -34,6 +37,8 @@ export class DevProcessManager {
     if (app.isPackaged) {
       return // Only enable in development mode
     }
+
+    this.startParentLivenessWatch()
 
     // Listen for various signals and exceptions
     process.on('SIGTERM', this.handleGracefulShutdown.bind(this))
@@ -54,6 +59,7 @@ export class DevProcessManager {
     })
 
     app.on('will-quit', () => {
+      this.clearParentLivenessWatch()
       this.clearShutdownTimeout()
       if (this.isShuttingDown) {
         devProcessLog.info('Graceful shutdown completed')
@@ -66,12 +72,66 @@ export class DevProcessManager {
    * This method ensures that all processes are properly cleaned up and
    * that the application exits gracefully.
    */
+  private startParentLivenessWatch(): void {
+    if (this.parentLivenessTimer) {
+      return
+    }
+    const rawParentPid = process.env[DEV_PARENT_PID_ENV]?.trim()
+    const parentPid = rawParentPid ? Number(rawParentPid) : Number.NaN
+    if (!Number.isSafeInteger(parentPid) || parentPid <= 1 || parentPid === process.pid) {
+      return
+    }
+
+    const checkParent = (): void => {
+      if (this.isShuttingDown) {
+        return
+      }
+      try {
+        process.kill(parentPid, 0)
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'EPERM') {
+          return
+        }
+        if (code !== 'ESRCH') {
+          devProcessLog.warn('Failed to check development wrapper liveness', {
+            error,
+            meta: { parentPid }
+          })
+          return
+        }
+
+        this.clearParentLivenessWatch()
+        devProcessLog.warn('Development wrapper exited; shutting down Electron', {
+          meta: { parentPid }
+        })
+        this.handleGracefulShutdown()
+      }
+    }
+
+    checkParent()
+    if (this.isShuttingDown) {
+      return
+    }
+    this.parentLivenessTimer = setInterval(checkParent, DEV_PARENT_LIVENESS_INTERVAL_MS)
+    this.parentLivenessTimer.unref()
+  }
+
+  private clearParentLivenessWatch(): void {
+    if (!this.parentLivenessTimer) {
+      return
+    }
+    clearInterval(this.parentLivenessTimer)
+    this.parentLivenessTimer = null
+  }
+
   private handleGracefulShutdown() {
     if (this.isShuttingDown) {
       return
     }
 
     this.isShuttingDown = true
+    this.clearParentLivenessWatch()
     devProcessLog.info('Graceful shutdown initiated')
 
     // Set a timeout to ensure that the process does not wait indefinitely

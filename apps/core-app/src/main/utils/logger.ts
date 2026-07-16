@@ -131,6 +131,10 @@ function serializeError(error: unknown): string {
   }
 }
 
+function summarizeError(error: unknown): string {
+  return serializeError(error).split(/\r?\n/, 1)[0] ?? 'Unknown error'
+}
+
 type ConsoleWithNative = Console & {
   _log?: Console['log']
   _info?: Console['info']
@@ -158,11 +162,9 @@ function writePersistentLog(level: LogLevel, line: string, error?: unknown): voi
           : level === 'debug'
             ? persistentLogger.debug.bind(persistentLogger)
             : persistentLogger.info.bind(persistentLogger)
+    const payload = error === undefined ? line : `${line} error=${serializeError(error)}`
 
-    method(line)
-    if (error) {
-      persistentLogger.error(serializeError(error))
-    }
+    method(payload)
   } catch {
     // Logging must never break the app startup path.
   }
@@ -248,12 +250,12 @@ function output(level: LogLevel, namespace: string, message: unknown, options?: 
     : `[${formatTimestamp()}] [${levelConfig.label}] [${namespace}] ${formattedMessage}`
 
   const consoleMethod = getNativeConsoleMethod(level)
-  consoleMethod(line)
+  const terminalLine =
+    options?.error === undefined
+      ? line
+      : `${line} ${chalk.red(`error=${summarizeError(options.error)}`)}`
+  consoleMethod(terminalLine)
   writePersistentLog(level, plainLine, options?.error)
-
-  if (level === 'error' && options?.error) {
-    getNativeConsoleMethod('error')(options.error)
-  }
 }
 
 export function createLogger(namespace: string): Logger {

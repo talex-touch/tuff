@@ -28,6 +28,7 @@ const getDesktopEvent = defineRawEvent<void, { path: string | null; error?: stri
 
 const FOLDER_ROTATION_TASK = 'wallpaper.folder.rotate'
 const DESKTOP_WALLPAPER_REFRESH_TASK = 'wallpaper.desktop.refresh'
+const WALLPAPER_UNAVAILABLE_LOG_INTERVAL_MS = 60 * 60_000
 
 function resolveWallpaperUrl(pathOrUrl: string): string {
   if (!pathOrUrl) return ''
@@ -54,6 +55,25 @@ export function useWallpaper() {
   const lastBingFetch = ref<number | null>(null)
   const lastDesktopErrorToast = ref('')
   const lastFolderEmptyToast = ref('')
+  let lastDesktopErrorLogAt = 0
+  let lastDesktopErrorLogMessage = ''
+
+  function logDesktopWallpaperFailure(message: string, expected: boolean): void {
+    const now = Date.now()
+    if (
+      message === lastDesktopErrorLogMessage &&
+      now - lastDesktopErrorLogAt < WALLPAPER_UNAVAILABLE_LOG_INTERVAL_MS
+    ) {
+      return
+    }
+    lastDesktopErrorLogAt = now
+    lastDesktopErrorLogMessage = message
+    if (expected) {
+      wallpaperLog.info(`Desktop wallpaper is unavailable: ${message}`)
+    } else {
+      wallpaperLog.warn(`Failed to refresh desktop wallpaper: ${message}`)
+    }
+  }
 
   const background = computed(() => {
     return normalizeWallpaperBackground(appSetting.background)
@@ -111,7 +131,7 @@ export function useWallpaper() {
     try {
       const result = await transport.send(getDesktopEvent)
       if (result?.error) {
-        wallpaperLog.warn('Failed to refresh desktop wallpaper:', result.error)
+        logDesktopWallpaperFailure(result.error, true)
         if (!options?.silentError && lastDesktopErrorToast.value !== result.error) {
           toast.error(result.error)
           lastDesktopErrorToast.value = result.error
@@ -124,11 +144,13 @@ export function useWallpaper() {
       }
       if (path) {
         lastDesktopErrorToast.value = ''
+        lastDesktopErrorLogAt = 0
+        lastDesktopErrorLogMessage = ''
       }
       return Boolean(path)
     } catch (error) {
       const message = toErrorMessage(error)
-      wallpaperLog.warn('Failed to refresh desktop wallpaper:', message)
+      logDesktopWallpaperFailure(message, false)
       if (!options?.silentError && lastDesktopErrorToast.value !== message) {
         toast.error(message)
         lastDesktopErrorToast.value = message

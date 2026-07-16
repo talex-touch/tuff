@@ -37,6 +37,7 @@ const REPORT_QUEUE_BACKOFF_MAX_MS = 10 * 60_000
 const STARTUP_OUTBOX_FLUSH_TASK_ID = 'startup-analytics.outbox.flush'
 const STARTUP_OUTBOX_FLUSH_INTERVAL_MS = 30_000
 const STARTUP_OUTBOX_FLUSH_STARTUP_GRACE_MS = 45_000
+const STARTUP_REPORT_REQUEST_TIMEOUT_MS = 12_000
 
 export interface FileReportQueueItem {
   payload: Record<string, unknown>
@@ -312,7 +313,6 @@ export class StartupAnalytics {
         backpressure: 'latest_wins',
         dedupeKey: STARTUP_OUTBOX_FLUSH_TASK_ID,
         maxInFlight: 1,
-        timeoutMs: 12_000,
         jitterMs: 600
       }
     )
@@ -360,7 +360,8 @@ export class StartupAnalytics {
           url: target,
           headers: { 'Content-Type': 'application/json' },
           body: item.payload,
-          responseType: 'text'
+          responseType: 'text',
+          timeoutMs: STARTUP_REPORT_REQUEST_TIMEOUT_MS
         })
         succeeded += 1
       } catch (error) {
@@ -433,7 +434,8 @@ export class StartupAnalytics {
           url: target,
           headers: { 'Content-Type': 'application/json' },
           body: item.payload,
-          responseType: 'text'
+          responseType: 'text',
+          timeoutMs: STARTUP_REPORT_REQUEST_TIMEOUT_MS
         })
         await store.remove(item.id)
         succeeded += 1

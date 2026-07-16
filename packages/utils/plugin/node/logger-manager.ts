@@ -40,7 +40,6 @@ export class PluginLoggerManager {
     this.pluginInfoPath = path.resolve(this.pluginLogDir, 'touch-plugin.info')
     this.flushTaskId = `plugin-logger.flush.${pluginInfo.name}.${Date.now()}`
 
-    void this.ensureLogEnvironment(true).catch(() => {})
     this.pollingService.register(
       this.flushTaskId,
       () =>

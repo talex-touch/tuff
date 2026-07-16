@@ -13,6 +13,7 @@ const activeAppLog = createLogger('ActiveApp')
 const MACOS_RESOLVE_RETRY_DELAY_MS = 80
 const MACOS_PERMISSION_BACKOFF_MS = 60_000
 const MACOS_EBADF_BACKOFF_MS = 10_000
+const MACOS_NO_FRONTMOST_LOG_INTERVAL_MS = 60_000
 const ACTIVE_APP_COMMAND_TIMEOUT_MS = 1500
 
 function isEbadfError(error: unknown): boolean {
@@ -45,6 +46,11 @@ function isMacOSAutomationPermissionError(error: unknown): boolean {
     text.includes('Not authorized to send Apple events') ||
     text.includes('未获得授权将Apple事件发送给System Events')
   )
+}
+
+function isMacOSNoFrontmostAppError(error: unknown): boolean {
+  const text = getErrorText(error)
+  return text.includes('(-1719)') || /\b-1719\b/.test(text)
 }
 
 function toOptionalString(value: unknown): string | null {
@@ -140,6 +146,7 @@ class ActiveAppService {
   private macosResolveInFlight: Promise<Partial<ActiveAppInfo> | null> | null = null
   private macosPermissionBackoffUntil = 0
   private macosEbadfBackoffUntil = 0
+  private lastMacOSNoFrontmostLogAt = 0
 
   constructor() {
     this.currentPlatform = this.detectPlatform()
@@ -152,6 +159,23 @@ class ActiveAppService {
     })
     this.macosPermissionBackoffUntil = Date.now() + MACOS_PERMISSION_BACKOFF_MS
     return null
+  }
+
+  private handleMacOSNoFrontmostApp(error: unknown): Partial<ActiveAppInfo> | null {
+    const now = Date.now()
+    if (now - this.lastMacOSNoFrontmostLogAt >= MACOS_NO_FRONTMOST_LOG_INTERVAL_MS) {
+      this.lastMacOSNoFrontmostLogAt = now
+      activeAppLog.debug('macOS has no frontmost application process', {
+        meta: { message: getCompactCommandErrorMessage(error) }
+      })
+    }
+
+    const cached = this.cacheWithoutIcon?.info ?? this.cacheWithIcon?.info
+    if (!cached) {
+      return null
+    }
+    const { icon: _icon, ...cachedWithoutIcon } = cached
+    return cachedWithoutIcon
   }
 
   private handleMacOSEbadf(error: unknown): null {
@@ -241,6 +265,9 @@ end tell`
         this.macosEbadfBackoffUntil = 0
         return result
       } catch (firstError) {
+        if (isMacOSNoFrontmostAppError(firstError)) {
+          return this.handleMacOSNoFrontmostApp(firstError)
+        }
         if (isMacOSAutomationPermissionError(firstError)) {
           return this.handleMacOSPermissionDenied(firstError)
         }
@@ -263,6 +290,9 @@ end tell`
           this.macosEbadfBackoffUntil = 0
           return result
         } catch (retryError) {
+          if (isMacOSNoFrontmostAppError(retryError)) {
+            return this.handleMacOSNoFrontmostApp(retryError)
+          }
           if (isMacOSAutomationPermissionError(retryError)) {
             return this.handleMacOSPermissionDenied(retryError)
           }
