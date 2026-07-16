@@ -32,6 +32,7 @@ Quality in this repo means matching the owning surface, preserving trust boundar
 - Preserve existing class/event contracts during semantic UI migrations.
 - Normalize untrusted or cross-layer payloads at the boundary.
 - Keep generated chunks, local profiles, raw logs, and exploratory evidence out of source changes unless an evidence README explicitly lists them as curated artifacts.
+- Completing onboarding must mark the beginner state, hide the primary window through the host app SDK, and only then optionally summon CoreBox. Main-window hiding is a completion invariant, not a caller option.
 
 ---
 
@@ -45,6 +46,7 @@ Choose the smallest meaningful verification for the slice:
 - Plugins: plugin-local tests/build/lint when scripts exist, plus manifest validation for manifest changes.
 - Nexus: focused route/component/build guard tests, `pnpm -C "apps/nexus" run typecheck`, and production preview evidence when the TODO requires it.
 - Always run `git diff --check` before reporting completion.
+- Onboarding window-lifecycle changes: use an isolated profile to finish onboarding, verify the primary window hides, then summon and hide CoreBox and verify the primary window does not reappear.
 
 Package-level recommended commands are listed in:
 
