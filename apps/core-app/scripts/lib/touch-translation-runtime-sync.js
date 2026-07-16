@@ -18,7 +18,8 @@ const OFFICIAL_PLUGIN_BUILD_TARGETS = Object.freeze([
 const OFFICIAL_PLUGIN_BUILD_PREREQUISITES = Object.freeze([
   '@talex-touch/tuff-cli-core',
   '@talex-touch/unplugin-export-plugin',
-  '@talex-touch/tuff-cli'
+  '@talex-touch/tuff-cli',
+  '@talex-touch/tuffex'
 ])
 
 function copyDirectoryContents(sourceDir, targetDir) {
