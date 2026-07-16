@@ -25,7 +25,7 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - [x] A clean-output official plugin toolchain build recreates exporter and TuffEx CSS outputs before building official plugins.
 - [x] CoreApp node type-check, focused tests, lint, and release quality gate pass, including the Builder executable preflight.
 - [x] A local macOS beta packaging smoke reaches `electron-builder` and produces a package artifact.
-- [ ] A fresh beta workflow completes all three platform builds, preserves beta artifact metadata, and publishes the platform-preferred GitHub/Nexus release assets.
+- [x] A fresh beta workflow completes all three platform builds, preserves beta artifact metadata, and publishes the platform-preferred GitHub/Nexus release assets.
 
 ## Notes
 
@@ -39,3 +39,4 @@ Make clean-checkout release builds compile every workspace prerequisite before o
 - Beta.11 workflow `29476486542` passed macOS and Windows; Linux reached AppImage assembly, then rejected the derived `@talex-touchcore-app` executable name.
 - Beta.12 workflow `29477973821` completed every job and published ten GitHub assets, but verification exposed Windows `SNAPSHOT.12` updater metadata and a Nexus Linux pair overwritten from AppImage to Debian.
 - Beta.13 workflow `29479958042` preserved Windows beta metadata and selected Linux AppImage, but its unqualified macOS ZIP was inferred as x64 despite the arm64 build, while release notes advertised unproduced DMG/Windows ZIP formats.
+- Beta.14 workflow `29481450856` completed all five jobs; GitHub published ten assets, Windows metadata stayed `2.4.13-beta.14`, the manifest/Nexus reported `darwin/arm64`, `linux/x64` AppImage, and `win32/x64`, and release notes matched the produced formats.
