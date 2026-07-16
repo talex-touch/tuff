@@ -20,15 +20,15 @@ Frontend code is TypeScript-first. Keep type ownership close to the contract:
 Use type-only imports for types:
 
 ```ts
-import type { FileUploaderEmits, FileUploaderProps } from './types'
+import type { FileUploaderEmits, FileUploaderProps } from "./types";
 ```
 
 Use local interfaces for component-local props:
 
 ```ts
 interface Props {
-  title?: string
-  disabled?: boolean
+  title?: string;
+  disabled?: boolean;
 }
 ```
 
@@ -48,10 +48,10 @@ Do not add raw event names or untyped payload casts where a typed event/domain S
 The event builder in `packages/utils/transport/event/builder.ts` is the current type-safe pattern:
 
 ```ts
-const queryEvent = defineEvent('core-box')
-  .module('search')
-  .event('query')
-  .define<{ text: string }, SearchResult[]>()
+const queryEvent = defineEvent("core-box")
+  .module("search")
+  .event("query")
+  .define<{ text: string }, SearchResult[]>();
 ```
 
 When adding a new event kind, SDK method, JSONL record, or RPC payload:
@@ -77,7 +77,7 @@ Prefer this pattern for untrusted or cross-layer inputs:
 
 ```ts
 function normalizeSource(value: unknown): DocEngagementSource {
-  return value === 'doc_comments_admin' ? 'doc_comments_admin' : 'docs_page'
+  return value === "doc_comments_admin" ? "doc_comments_admin" : "docs_page";
 }
 ```
 
@@ -93,12 +93,14 @@ function normalizeSource(value: unknown): DocEngagementSource {
 ### 2. Signatures
 
 ```ts
-export type TuffAggregatorCallback = (update: TuffUpdate) => void | Promise<void>
+export type TuffAggregatorCallback = (
+  update: TuffUpdate,
+) => void | Promise<void>;
 
 export interface IGatherController {
-  abort: () => void
-  promise: Promise<number>
-  signal: AbortSignal
+  abort: () => void;
+  promise: Promise<number>;
+  signal: AbortSignal;
 }
 ```
 
@@ -149,16 +151,16 @@ export interface IGatherController {
 #### Wrong
 
 ```ts
-onUpdate(update)
-resolve(totalCount)
+onUpdate(update);
+resolve(totalCount);
 ```
 
 #### Correct
 
 ```ts
-const outcome = await dispatcher.emit(update)
-if (update.isDone && outcome === 'delivered') {
-  resolve(totalCount)
+const outcome = await dispatcher.emit(update);
+if (update.isDone && outcome === "delivered") {
+  resolve(totalCount);
 }
 ```
 
@@ -178,22 +180,22 @@ Icon payloads use the existing Tuff icon shape:
 
 ```ts
 type CoreBoxIconPayload = {
-  type: 'class' | 'url' | 'file' | 'emoji' | 'svg'
-  value: string
-  color?: string
-  colorful?: boolean
-  status?: string
-  error?: string
-}
+  type: "class" | "url" | "file" | "emoji" | "svg";
+  value: string;
+  color?: string;
+  colorful?: boolean;
+  status?: string;
+  error?: string;
+};
 ```
 
 Recommendation badges use class icon names, not emoji text:
 
 ```ts
 type RecommendationBadge = {
-  label: string
-  icon: `i-${string}`
-}
+  label: string;
+  icon: `i-${string}`;
+};
 ```
 
 ### 3. Contracts
@@ -234,21 +236,21 @@ type RecommendationBadge = {
 
 ```ts
 if (existsSync(rawIconValue)) {
-  return { type: 'file', value: rawIconValue }
+  return { type: "file", value: rawIconValue };
 }
-return { type: 'file', value: '' }
+return { type: "file", value: "" };
 ```
 
 #### Correct
 
 ```ts
-const localPath = resolveLocalFilePath(rawIconValue)
+const localPath = resolveLocalFilePath(rawIconValue);
 
 if (localPath && existsSync(localPath)) {
-  return { type: 'url', value: toTfileUrl(localPath), colorful: true }
+  return { type: "url", value: toTfileUrl(localPath), colorful: true };
 }
 
-return { type: 'class', value: 'i-ri-apps-line' }
+return { type: "class", value: "i-ri-apps-line" };
 ```
 
 ## Scenario: Plugin Widget Metadata Serialization
@@ -261,15 +263,15 @@ return { type: 'class', value: 'i-ri-apps-line' }
 ### 2. Signatures
 
 ```ts
-export function structuredStrictStringify(value: unknown): string
+export function structuredStrictStringify(value: unknown): string;
 
 type ContextSummaryPlacement = {
-  render: { custom: { data: { contextPackage: Record<string, unknown> } } }
+  render: { custom: { data: { contextPackage: Record<string, unknown> } } };
   meta: {
-    payload?: { contextPackage?: Record<string, unknown> }
-    intelligence: { contextPackageId?: string; contextSessionId?: string }
-  }
-}
+    payload?: { contextPackage?: Record<string, unknown> };
+    intelligence: { contextPackageId?: string; contextSessionId?: string };
+  };
+};
 ```
 
 ### 3. Contracts
@@ -305,19 +307,19 @@ type ContextSummaryPlacement = {
 #### Wrong
 
 ```ts
-const contextPackage = summarizeContextPackage(result)
-item.render.custom.data.contextPackage = contextPackage
-item.meta.payload.contextPackage = contextPackage
-item.meta.intelligence.contextPackage = contextPackage
+const contextPackage = summarizeContextPackage(result);
+item.render.custom.data.contextPackage = contextPackage;
+item.meta.payload.contextPackage = contextPackage;
+item.meta.intelligence.contextPackage = contextPackage;
 ```
 
 #### Correct
 
 ```ts
-item.render.custom.data.contextPackage = cloneMetadataRecord(contextPackage)
-item.meta.payload.contextPackage = cloneMetadataRecord(contextPackage)
-item.meta.intelligence.contextPackageId = contextPackage.id
-item.meta.intelligence.contextSessionId = contextPackage.sessionId
+item.render.custom.data.contextPackage = cloneMetadataRecord(contextPackage);
+item.meta.payload.contextPackage = cloneMetadataRecord(contextPackage);
+item.meta.intelligence.contextPackageId = contextPackage.id;
+item.meta.intelligence.contextSessionId = contextPackage.sessionId;
 ```
 
 ## Scenario: Plugin Widget Host Action Dispatch
@@ -331,19 +333,19 @@ item.meta.intelligence.contextSessionId = contextPackage.sessionId
 
 ```ts
 type WidgetHostAction = {
-  actionId: string
-  payload?: Record<string, unknown>
-}
+  actionId: string;
+  payload?: Record<string, unknown>;
+};
 
 type CoreBoxExecuteRequest = {
-  item: TuffItem
-  searchResult?: TuffSearchResult
-  actionId?: string
-}
+  item: TuffItem;
+  searchResult?: TuffSearchResult;
+  actionId?: string;
+};
 
 type PluginItemActionContext = {
-  actionId?: string
-}
+  actionId?: string;
+};
 ```
 
 ### 3. Contracts
@@ -389,7 +391,7 @@ type PluginItemActionContext = {
 
 ```ts
 if (item.meta?.defaultAction) {
-  await plugin.onItemAction(item, context)
+  await plugin.onItemAction(item, context);
 }
 ```
 
@@ -404,10 +406,14 @@ if (item.meta?.defaultAction) {
 ```
 
 ```ts
-if (args.actionId || typeof item.meta?.actionId === 'string' || item.meta?.defaultAction) {
+if (
+  args.actionId ||
+  typeof item.meta?.actionId === "string" ||
+  item.meta?.defaultAction
+) {
   await plugin.onItemAction(normalizeActionItem(item, args.actionId), {
     actionId: args.actionId,
-  })
+  });
 }
 ```
 
@@ -452,18 +458,18 @@ if (args.actionId || typeof item.meta?.actionId === 'string' || item.meta?.defau
 
 ```ts
 type ContextContinuationReason =
-  | 'archived-session-continuation'
-  | 'expired-session-continuation'
-  | 'idle-session-continuation'
-  | 'continuation-session-missing'
+  | "archived-session-continuation"
+  | "expired-session-continuation"
+  | "idle-session-continuation"
+  | "continuation-session-missing";
 
 interface ContextContinuationSummary {
-  sourceSessionId?: string
-  reason: ContextContinuationReason
-  status: 'included' | 'excluded' | 'unavailable'
-  summarySourceType?: 'compression_snapshot' | 'session_summary'
-  summarySourceId?: string
-  degradedReason?: string
+  sourceSessionId?: string;
+  reason: ContextContinuationReason;
+  status: "included" | "excluded" | "unavailable";
+  summarySourceType?: "compression_snapshot" | "session_summary";
+  summarySourceId?: string;
+  degradedReason?: string;
 }
 ```
 
@@ -506,9 +512,9 @@ interface ContextContinuationSummary {
 #### Wrong
 
 ```ts
-const requested = await getSession(input.sessionId)
-if (requested.status !== 'active') {
-  return createSession(input) // reuses the archived primary key
+const requested = await getSession(input.sessionId);
+if (requested.status !== "active") {
+  return createSession(input); // reuses the archived primary key
 }
 ```
 
@@ -519,7 +525,7 @@ const fresh = await createSession({
   ...input,
   sessionId: undefined,
   metadata: { continuedFromSessionId: requested.id, continuationReason },
-})
+});
 // Resolve one governed summary; raw source turns stay behind the boundary.
 ```
 
@@ -534,15 +540,15 @@ const fresh = await createSession({
 
 ```ts
 interface ContextPackageLogSafeSummary {
-  excludedCount: number
-  policyBlockedCount: number
-  prunedCount: number
-  tombstoneCount: number
+  excludedCount: number;
+  policyBlockedCount: number;
+  prunedCount: number;
+  tombstoneCount: number;
 }
 
 function getContextExplainReasonI18nKey(
   reason: string,
-): 'intelligence.audit.contextReasonMemoryTombstoned' | undefined
+): "intelligence.audit.contextReasonMemoryTombstoned" | undefined;
 ```
 
 ### 3. Contracts
@@ -579,18 +585,20 @@ function getContextExplainReasonI18nKey(
 #### Wrong
 
 ```ts
-return metadata.excluded // may include deleted memory content
+return metadata.excluded; // may include deleted memory content
 ```
 
 #### Correct
 
 ```ts
-return metadata.excluded.map(({ sourceType, sourceId, reason, tokenEstimate }) => ({
-  sourceType: normalizeSourceType(sourceType),
-  sourceId: normalizeId(sourceId),
-  reason: normalizeReason(reason),
-  tokenEstimate: normalizeTokenEstimate(tokenEstimate),
-}))
+return metadata.excluded.map(
+  ({ sourceType, sourceId, reason, tokenEstimate }) => ({
+    sourceType: normalizeSourceType(sourceType),
+    sourceId: normalizeId(sourceId),
+    reason: normalizeReason(reason),
+    tokenEstimate: normalizeTokenEstimate(tokenEstimate),
+  }),
+);
 ```
 
 ## Scenario: Clone-Safe Workflow Editor Payloads
@@ -603,11 +611,11 @@ return metadata.excluded.map(({ sourceType, sourceId, reason, tokenEstimate }) =
 ### 2. Signatures
 
 ```ts
-function buildWorkflowDefinition(): WorkflowDefinition
+function buildWorkflowDefinition(): WorkflowDefinition;
 
 interface WorkflowModelInputSource {
-  type: string
-  stepId?: string
+  type: string;
+  stepId?: string;
 }
 ```
 
@@ -651,20 +659,95 @@ interface WorkflowModelInputSource {
 return {
   toolSources: draft.toolSources,
   steps: draft.steps.map((step) => ({ id: step.id })),
-}
+};
 ```
 
 #### Correct
 
 ```ts
 const inputSources = parsedInputSources.map((source) => {
-  if (source.type !== 'previousStep' || !source.stepId) return source
-  const remappedStepId = stepIdMap.get(source.stepId)
-  return remappedStepId ? { ...source, stepId: remappedStepId } : source
-})
+  if (source.type !== "previousStep" || !source.stepId) return source;
+  const remappedStepId = stepIdMap.get(source.stepId);
+  return remappedStepId ? { ...source, stepId: remappedStepId } : source;
+});
 
 return {
   toolSources: [...draft.toolSources],
   steps: [{ id: resolvedStepIds[index], inputSources }],
-}
+};
+```
+
+## Scenario: CoreBox Shortcut Visibility Ordering
+
+### 1. Scope / Trigger
+
+- Trigger: changing CoreBox shortcut handling, `WindowManager.show()`, renderer visibility hooks, or the typed CoreBox show/shortcut events.
+- The renderer may enter its show lifecycle from native window visibility before it receives the canonical `show: true` transport event.
+
+### 2. Signatures
+
+```ts
+WindowManager.show(triggeredByShortcut?: boolean): void
+CoreBoxEvents.ui.shortcutTriggered
+CoreBoxRetainedEvents.legacy.shortcutTriggered
+CoreBoxEvents.ui.trigger // { id: number; show: boolean }
+```
+
+### 3. Contracts
+
+- For `show(true)`, publish both shortcut-origin notifications before calling `BrowserWindow.show()` / `showInactive()` and before broadcasting `CoreBoxEvents.ui.trigger { show: true }`.
+- All three events target the same CoreBox `webContents`; their dispatch order is part of the AutoPaste contract.
+- Renderer shortcut intent is single-use: `onShow()` may consume it once and then resets it.
+- `show(false)` does not emit shortcut-origin notifications and must not enable implicit AutoPaste.
+- Clipboard freshness, capture-source eligibility, TTL, and duplicate-suppression guards remain authoritative after the ordering fix.
+
+### 4. Validation & Error Matrix
+
+- Shortcut notification before native show -> fresh eligible clipboard text auto-fills once.
+- Native/canonical show before shortcut notification -> `onShow()` observes false and skips AutoPaste.
+- Programmatic show -> no shortcut flag and no implicit AutoPaste.
+- Stale, ineligible, or already-consumed clipboard item -> no AutoPaste even for a shortcut show.
+
+### 5. Good / Base / Bad Cases
+
+- Good: hidden CoreBox receives shortcut intent, becomes visible, then auto-fills a fresh native-watcher item.
+- Base: tray/programmatic show keeps the existing query and clipboard behavior.
+- Bad: moving `shortcutTriggered` emission below `BrowserWindow.show()` or below the canonical show broadcast.
+
+### 6. Tests Required
+
+- Focused CoreBox main and renderer visibility tests remain green.
+- A live isolated Electron smoke hides CoreBox, writes a unique short clipboard value, opens through the global shortcut, and asserts the textbox value exactly once.
+- AutoClear smoke covers both sides of its hidden-time boundary so shortcut ordering does not regress session cleanup.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+window.show();
+transport.broadcastToWindow(window.id, CoreBoxEvents.ui.trigger, {
+  id,
+  show: true,
+});
+transport.sendTo(
+  window.webContents,
+  CoreBoxEvents.ui.shortcutTriggered,
+  undefined,
+);
+```
+
+#### Correct
+
+```ts
+transport.sendTo(
+  window.webContents,
+  CoreBoxEvents.ui.shortcutTriggered,
+  undefined,
+);
+window.show();
+transport.broadcastToWindow(window.id, CoreBoxEvents.ui.trigger, {
+  id,
+  show: true,
+});
 ```
