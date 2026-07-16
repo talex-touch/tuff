@@ -973,7 +973,7 @@ function build() {
   }
 
   if (normalizedTarget === 'mac') {
-    postProcessMacArtifacts(distDir);
+    postProcessMacArtifacts(distDir, runtimeVersion, effectiveArch);
   }
 
   if (runtimeModuleSyncSummary) {

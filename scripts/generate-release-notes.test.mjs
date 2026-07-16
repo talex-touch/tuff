@@ -63,7 +63,8 @@ describe('generate-release-notes', () => {
 
     assert.match(matrix, /## Download Based on Your Device/)
     assert.match(matrix, /\| Android \| APK ARMv8<br>APK ARMv7<br>APK x64 \(planned\) \|/)
-    assert.match(matrix, /\| macOS \| \[DMG Apple Silicon\]\(https:\/\/tuff\.tagzxia\.com\/updates\)<br>\[DMG Intel\]\(https:\/\/github\.com\/talex-touch\/tuff\/releases\) \|/)
+    assert.match(matrix, /\| macOS \| \[ZIP Apple Silicon\]\(https:\/\/tuff\.tagzxia\.com\/updates\) \|/)
+    assert.match(matrix, /\| Windows \| \[Setup x64\]\(https:\/\/tuff\.tagzxia\.com\/updates\) \|/)
   })
 
   it('builds bilingual notes and filters skip-changelog PRs', async () => {

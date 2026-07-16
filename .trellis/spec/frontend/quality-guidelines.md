@@ -118,6 +118,7 @@ Reviewers should check:
 - `electron-builder.yml` owns one top-level, filesystem-safe `executableName` for every platform; Linux must not derive it from the scoped CoreApp package name.
 - Beta runtime, installer filename, and updater metadata versions remain the exact package `-beta.N` version on every platform; the preview no-publish policy must not rewrite Windows to `SNAPSHOT.N`.
 - Nexus owns one asset per platform/architecture pair; GitHub backfill ranks platform defaults instead of preserving an arbitrary last-linked duplicate (`AppImage > deb > snap`, `dmg > zip`, versioned setup executable on Windows).
+- Postprocessed macOS archives include canonical version and architecture (`tuff-<version>-<arch>.app.zip`); release-manifest inference and Nexus metadata must therefore report the actual arm64 build, and release notes list ZIP Apple Silicon rather than absent DMG/Intel artifacts.
 - CoreApp lint ignores `resources/bundled-plugins/**`; these are synchronized immutable release payloads, and quality checks run against their canonical plugin sources instead of generated/minified projections.
 - A successful projection result contains `pluginName`, `packageName`, `canonicalBuildRoot`, `bundledPluginRoot`, `canonicalVersion`, `synced: true`, and `skipped: false`.
 - Packaged startup must finish seed validation/install into `<runtime-root>/modules/plugins` before `ModuleManager` construction; replacement preserves `data`/`logs` and never downgrades an identity-matching newer local runtime.
@@ -136,6 +137,8 @@ Reviewers should check:
 - Missing explicit Linux executable name with scoped package metadata -> AppImage rejects the derived `@talex-touchcore-app`; set the shared Builder `executableName`, do not un-scope the workspace package.
 - Windows Builder `extraMetadata.version` rewritten from `beta.N` to `SNAPSHOT.N` -> published installer and `latest.yml` disagree with the release tag; package with the canonical beta version and fail the Windows artifact gate on any mismatch.
 - Multiple GitHub Linux formats linked to one Nexus platform/architecture pair -> last-write order can leave Debian selected; backfill must rank AppImage above Debian rather than short-circuiting on the current exact filename.
+- Unqualified `tuff.app.zip` from an arm64 macOS build -> manifest filename inference falls back to x64 and Nexus serves the wrong architecture metadata; encode version/arch in the archive filename.
+- Static release notes advertise DMG/Intel macOS or ZIP Windows formats not present in the release -> update the download matrix to the actual packaging targets.
 - Missing packaged seed, version mismatch, nested `dist`, or nested `.tpex` -> `afterPack` throws and packaging fails.
 - Missing/empty/invalid runtime seed set -> runtime installer throws before mutating any plugin.
 - Older, corrupt, wrong-identity, or same-version/different-signature local runtime -> staged clean replacement with rollback.
@@ -158,6 +161,7 @@ Reviewers should check:
 - Linux package-name preflight: the unpacked executable is `tuff`, and a prepackaged AppImage build passes Builder's critical-path name validation before invoking the host-specific AppImage tool.
 - Windows release artifact preflight: the setup filename and `latest.yml` version exactly equal `apps/core-app/package.json`.
 - Nexus backfill preflight: a dry run against a release containing both AppImage and Debian candidates plans AppImage for the Linux/x64 pair.
+- macOS release artifact preflight: postprocessing produces `tuff-<version>-arm64.app.zip`, the manifest/Nexus pair is `darwin/arm64`, and generated notes advertise ZIP Apple Silicon only.
 - Lint preflight: run CoreApp lint with a cold/no-cache path and assert bundled plugin payloads are ignored while maintained CoreApp source remains covered.
 - Seed projection and after-pack: assert clean stale-file removal, canonical version propagation, packaged resource presence, and fail-closed missing/mismatch/artifact behavior.
 - Runtime bootstrap: assert immediate synchronous return, pre-mutation validation, clean install/update, data/log preservation, wrong-identity repair, and newer-local no-downgrade.

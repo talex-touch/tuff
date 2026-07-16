@@ -59,18 +59,12 @@ const DOWNLOAD_MATRIX_ROWS = [
   },
   {
     os: 'macOS',
-    downloads: [
-      '[DMG Apple Silicon](https://tuff.tagzxia.com/updates)',
-      '[DMG Intel](https://github.com/talex-touch/tuff/releases)',
-    ],
+    downloads: ['[ZIP Apple Silicon](https://tuff.tagzxia.com/updates)'],
     availability: 'available',
   },
   {
     os: 'Windows',
-    downloads: [
-      '[Setup x64](https://tuff.tagzxia.com/updates)',
-      '[ZIP x64](https://github.com/talex-touch/tuff/releases)',
-    ],
+    downloads: ['[Setup x64](https://tuff.tagzxia.com/updates)'],
     availability: 'available',
   },
   {
