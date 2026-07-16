@@ -337,3 +337,36 @@ Unified workflow Node and PNPM sources, repaired fresh-runner Intelligence setup
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Verify CoreBox app indexing and clipboard lifecycle
+
+**Date**: 2026-07-15
+**Task**: Verify CoreBox app indexing and clipboard lifecycle
+**Branch**: `master`
+
+### Summary
+
+Live-tested app discovery, indexing, search, launch, AutoPaste, and AutoClear in an isolated Electron profile; fixed shortcut/show event ordering so fresh clipboard text auto-fills before the CoreBox visibility lifecycle consumes the trigger.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bfa18626b04fec62d4bceacfb076498217ff3f5b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
