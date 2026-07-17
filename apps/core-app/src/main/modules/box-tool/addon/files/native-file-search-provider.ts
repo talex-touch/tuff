@@ -8,6 +8,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { execFile } from 'node:child_process'
 import { StorageList, TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { app, shell } from 'electron'
 import { normalizeTuffItemLocalAssets } from '../../../../utils/local-renderable-assets'
@@ -58,13 +59,6 @@ const MAC_SPOTLIGHT_DEFAULT_PATH_NAMES = [
 interface MacSpotlightSearchRoot {
   path: string
   key: string
-}
-
-function isMacApplicationBundlePath(filePath: string): boolean {
-  return filePath
-    .replace(/\\/g, '/')
-    .split('/')
-    .some((segment) => segment.toLowerCase().endsWith('.app'))
 }
 
 function normalizeMacSpotlightPathKey(filePath: string): string {
@@ -364,7 +358,7 @@ class MacSpotlightFileProvider extends BaseNativeFileSearchProvider {
           .map((entry) => entry.trim())
           .filter(Boolean)
           .filter((entry) => isWithinMacSpotlightSearchRoots(entry, searchRoots))
-          .filter((entry) => !isMacApplicationBundlePath(entry))
+          .filter((entry) => fileFilterService.getSearchExclusionReason({ path: entry }) === null)
       )
     ).slice(0, NATIVE_SEARCH_MAX_RESULTS)
     const results = await Promise.all(paths.map((filePath) => toNativeResult(filePath)))
@@ -420,7 +414,9 @@ class LinuxNativeFileProvider extends BaseNativeFileSearchProvider {
       maxBuffer: 1024 * 1024 * 5,
       signal
     })
-    const paths = this.parseOutput(stdout).slice(0, NATIVE_SEARCH_MAX_RESULTS)
+    const paths = this.parseOutput(stdout)
+      .filter((entry) => fileFilterService.getSearchExclusionReason({ path: entry }) === null)
+      .slice(0, NATIVE_SEARCH_MAX_RESULTS)
     const results = await Promise.all(paths.map((filePath) => toNativeResult(filePath)))
     return results.filter((result): result is NativeFileSearchResult => Boolean(result))
   }
@@ -456,6 +452,5 @@ export const linuxNativeFileProvider = new LinuxNativeFileProvider()
 
 export const __test__ = {
   createMacSpotlightSearchRoots,
-  isMacApplicationBundlePath,
   isWithinMacSpotlightSearchRoots
 }

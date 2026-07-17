@@ -10,6 +10,7 @@ import type {
 } from '@talex-touch/utils'
 import type { ProviderContext } from './types'
 import { performance } from 'node:perf_hooks'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 
 import chalk from 'chalk'
@@ -107,11 +108,13 @@ async function runProviderSearchWithTimeout(
   signal.addEventListener('abort', abortListener, { once: true })
 
   try {
-    return await Promise.race([
+    const result = await Promise.race([
       provider.onSearch(params, providerController.signal),
       timeoutState.promise,
       abortState.promise
     ])
+    result.items = fileFilterService.filterSearchItems(result.items)
+    return result
   } finally {
     clearTimeout(timeout)
     if (abortListener) {

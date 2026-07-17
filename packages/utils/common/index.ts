@@ -1,12 +1,27 @@
-export * from '../electron/file-parsers'
-export * from './battery-policy'
-export * from './file-scan-constants'
-export * from './file-scan-utils'
-export { getLogger, LoggerManager, loggerManager } from './logger/logger-manager'
-export { ModuleLogger } from './logger/module-logger'
-export { createTransportLogger, transportLoggers, TuffTransportLogger } from './logger/transport-logger'
-export type { LogEntry, LoggerInfo, LoggingConfig, ModuleConfig, ModuleLoggerOptions } from './logger/types'
-export * from './search'
-export * from './storage/index'
-export * from './utils'
-export * from './wallpaper'
+export * from "../electron/file-parsers";
+export * from "./battery-policy";
+export * from "./file-filter-service";
+export * from "./file-scan-constants";
+export * from "./file-scan-utils";
+export {
+  getLogger,
+  LoggerManager,
+  loggerManager,
+} from "./logger/logger-manager";
+export { ModuleLogger } from "./logger/module-logger";
+export {
+  createTransportLogger,
+  transportLoggers,
+  TuffTransportLogger,
+} from "./logger/transport-logger";
+export type {
+  LogEntry,
+  LoggerInfo,
+  LoggingConfig,
+  ModuleConfig,
+  ModuleLoggerOptions,
+} from "./logger/types";
+export * from "./search";
+export * from "./storage/index";
+export * from "./utils";
+export * from "./wallpaper";

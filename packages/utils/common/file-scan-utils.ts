@@ -7,55 +7,36 @@
  * @version 1.0.0
  */
 
-import pathBrowserify from 'path-browserify'
-import type { FileScanOptions } from './file-scan-constants'
-import { hasWindow } from '../env'
-import {
-  BASE_BLACKLISTED_DIRS,
-  BLACKLISTED_BUNDLE_SUFFIXES,
-  BLACKLISTED_EXTENSIONS,
-  BLACKLISTED_FILE_PREFIXES,
-  BLACKLISTED_FILE_SUFFIXES,
-  DEFAULT_SCAN_OPTIONS,
-
-  PATH_PATTERNS,
-  PHOTOS_LIBRARY_CONFIG,
-  PLATFORM,
-} from './file-scan-constants'
+import pathBrowserify from "path-browserify";
+import type { FileScanOptions } from "./file-scan-constants";
+import { hasWindow } from "../env";
+import { fileFilterService } from "./file-filter-service";
+import { DEFAULT_SCAN_OPTIONS } from "./file-scan-constants";
 
 const path = (() => {
   if (hasWindow()) {
-    return pathBrowserify
+    return pathBrowserify;
   }
 
-  const nodeRequire = typeof require === 'function' ? require : null
+  const nodeRequire = typeof require === "function" ? require : null;
   if (nodeRequire) {
     try {
-      return nodeRequire('node:path')
-    }
-    catch {
-      return pathBrowserify
+      return nodeRequire("node:path");
+    } catch {
+      return pathBrowserify;
     }
   }
 
-  return pathBrowserify
-})()
+  return pathBrowserify;
+})();
 
 // 重新导出类型
-export type { FileScanOptions }
+export type { FileScanOptions };
 
 /**
  * 判断某个路径段是否为应被整体跳过的媒体库 package（如 *.photoslibrary）。
  * 大小写不敏感 —— 这正是旧 Photos Library 放行逻辑被绕过、导致衍生图/缓存被错误索引的根因。
  */
-function hasBlacklistedBundleSuffix(segment: string): boolean {
-  const lower = segment.toLowerCase()
-  for (const suffix of BLACKLISTED_BUNDLE_SUFFIXES) {
-    if (lower.endsWith(suffix))
-      return true
-  }
-  return false
-}
 
 /**
  * 扫描文件信息接口
@@ -65,17 +46,17 @@ function hasBlacklistedBundleSuffix(segment: string): boolean {
  */
 export interface ScannedFileInfo {
   /** 文件的完整路径 */
-  path: string
+  path: string;
   /** 文件名（不包含路径） */
-  name: string
+  name: string;
   /** 文件扩展名（包含点号，如 '.txt'） */
-  extension: string
+  extension: string;
   /** 文件大小（字节） */
-  size: number
+  size: number;
   /** 文件创建时间 */
-  ctime: Date
+  ctime: Date;
   /** 文件修改时间 */
-  mtime: Date
+  mtime: Date;
 }
 
 /**
@@ -110,81 +91,16 @@ export function isIndexableFile(
   fileName: string,
   options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
 ): boolean {
-  // 合并选项
-  const opts = { ...DEFAULT_SCAN_OPTIONS, ...options }
-
-  // 基础检查
-  if (!extension)
-    return false
-
-  // 检查扩展名黑名单
-  const blacklistedExtensions = new Set([
-    ...BLACKLISTED_EXTENSIONS,
-    ...(opts.customBlacklistedExtensions || []),
-  ])
-
-  if (blacklistedExtensions.has(extension))
-    return false
-
-  // 检查文件名前缀和后缀
-  if (fileName) {
-    const firstChar = fileName.charAt(0)
-    const lastChar = fileName.charAt(fileName.length - 1)
-
-    if (BLACKLISTED_FILE_PREFIXES.has(firstChar))
-      return false
-    if (BLACKLISTED_FILE_SUFFIXES.has(lastChar))
-      return false
-  }
-
-  // Photos Library 智能过滤（仅 macOS）
-  if (opts.enablePhotosLibraryFilter && PLATFORM.IS_MACOS && fullPath.includes('Photos Library.photoslibrary')) {
-    if (!isPhotosLibraryPathAllowed(fullPath)) {
-      return false
-    }
-  }
-
-  // 系统路径过滤
-  if (opts.enableSystemPathFilter && isSystemPath(fullPath)) {
-    return false
-  }
-
-  // 开发路径过滤
-  if (opts.enableDevPathFilter && isDevPath(fullPath)) {
-    return false
-  }
-
-  // 缓存路径过滤
-  if (opts.enableCachePathFilter && isCachePath(fullPath)) {
-    return false
-  }
-
-  // 目录黑名单检查
-  const blacklistedDirs = new Set([
-    ...BASE_BLACKLISTED_DIRS,
-    ...(opts.customBlacklistedDirs || []),
-  ])
-
-  const segments = fullPath.split(path.sep)
-  for (let i = 0; i < segments.length - 1; i++) {
-    const segment = segments[i]
-    if (!segment)
-      continue
-    if (segment.startsWith('.'))
-      return false
-    if (blacklistedDirs.has(segment))
-      return false
-    // 跳过媒体库 package 内部（*.photoslibrary 等）：内部全是 UUID 衍生件，搜不到也没意义
-    if (hasBlacklistedBundleSuffix(segment))
-      return false
-  }
-
-  // 自定义排除路径检查
-  if (opts.customExcludePaths?.has(fullPath)) {
-    return false
-  }
-
-  return true
+  return (
+    fileFilterService.getIndexExclusionReason(
+      {
+        path: fullPath,
+        name: fileName,
+        extension,
+      },
+      options,
+    ) === null
+  );
 }
 
 /**
@@ -197,26 +113,6 @@ export function isIndexableFile(
  * @private
  * @since 1.0.0
  */
-function isPhotosLibraryPathAllowed(fullPath: string): boolean {
-  const config = PHOTOS_LIBRARY_CONFIG
-
-  // 检查允许的子目录
-  for (const allowedPath of config.PATH_PATTERNS.ALLOWED) {
-    if (fullPath.includes(allowedPath)) {
-      return true
-    }
-  }
-
-  // 检查禁止的子目录
-  for (const blockedPath of config.PATH_PATTERNS.BLOCKED) {
-    if (fullPath.includes(blockedPath)) {
-      return false
-    }
-  }
-
-  // 默认允许（可能是根目录或其他未明确禁止的目录）
-  return true
-}
 
 /**
  * 检查是否为系统路径
@@ -228,9 +124,6 @@ function isPhotosLibraryPathAllowed(fullPath: string): boolean {
  * @private
  * @since 1.0.0
  */
-function isSystemPath(fullPath: string): boolean {
-  return PATH_PATTERNS.SYSTEM_PATHS.some(pattern => pattern.test(fullPath))
-}
 
 /**
  * 检查是否为开发路径
@@ -242,9 +135,6 @@ function isSystemPath(fullPath: string): boolean {
  * @private
  * @since 1.0.0
  */
-function isDevPath(fullPath: string): boolean {
-  return PATH_PATTERNS.DEV_PATHS.some(pattern => pattern.test(fullPath))
-}
 
 /**
  * 检查是否为缓存路径
@@ -256,9 +146,6 @@ function isDevPath(fullPath: string): boolean {
  * @private
  * @since 1.0.0
  */
-function isCachePath(fullPath: string): boolean {
-  return PATH_PATTERNS.CACHE_PATHS.some(pattern => pattern.test(fullPath))
-}
 
 /**
  * 扫描目录获取文件列表
@@ -296,10 +183,10 @@ export async function scanDirectory(
   excludePaths?: Set<string>,
 ): Promise<ScannedFileInfo[]> {
   // 选项只在入口合并一次，避免每层递归重复展开生成垃圾对象
-  const opts = { ...DEFAULT_SCAN_OPTIONS, ...options }
-  const files: ScannedFileInfo[] = []
-  await scanDirectoryInto(dirPath, opts, excludePaths, 0, files)
-  return files
+  const opts = { ...DEFAULT_SCAN_OPTIONS, ...options };
+  const files: ScannedFileInfo[] = [];
+  await scanDirectoryInto(dirPath, opts, excludePaths, 0, files);
+  return files;
 }
 
 // ---- scanDirectory 内部实现与工具 ----
@@ -307,13 +194,13 @@ export async function scanDirectory(
 /**
  * 递归深度上限，防止异常深的目录树或软链环导致的栈/耗时失控
  */
-const MAX_SCAN_DEPTH = 24
+const MAX_SCAN_DEPTH = 24;
 
 /**
  * 单个目录内并发 stat 文件的上限。文件是叶子操作（不再递归），
  * 因此该并发不会与目录递归相互抢占而死锁
  */
-const FILE_STAT_CONCURRENCY = 32
+const FILE_STAT_CONCURRENCY = 32;
 
 /**
  * 惰性并缓存 node:fs/promises 模块引用。
@@ -321,12 +208,12 @@ const FILE_STAT_CONCURRENCY = 32
  * 仍保持动态 import（而非顶层静态 import），因为本模块也会被打包到浏览器/渲染端，
  * 那里没有 node:fs。
  */
-let fsPromisesPromise: Promise<typeof import('node:fs/promises')> | null = null
-function getFsPromises(): Promise<typeof import('node:fs/promises')> {
+let fsPromisesPromise: Promise<typeof import("node:fs/promises")> | null = null;
+function getFsPromises(): Promise<typeof import("node:fs/promises")> {
   if (!fsPromisesPromise) {
-    fsPromisesPromise = import('node:fs/promises')
+    fsPromisesPromise = import("node:fs/promises");
   }
-  return fsPromisesPromise
+  return fsPromisesPromise;
 }
 
 /**
@@ -338,20 +225,19 @@ async function mapWithConcurrency<T>(
   task: (item: T) => Promise<void>,
 ): Promise<void> {
   if (items.length === 0) {
-    return
+    return;
   }
-  const limit = Math.max(1, Math.min(concurrency, items.length))
-  let cursor = 0
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  let cursor = 0;
   const workers = Array.from({ length: limit }, async () => {
     while (cursor < items.length) {
-      const index = cursor++
-      const item = items[index]
-      if (item === undefined)
-        continue
-      await task(item)
+      const index = cursor++;
+      const item = items[index];
+      if (item === undefined) continue;
+      await task(item);
     }
-  })
-  await Promise.all(workers)
+  });
+  await Promise.all(workers);
 }
 
 /**
@@ -365,96 +251,67 @@ async function scanDirectoryInto(
   depth: number,
   out: ScannedFileInfo[],
 ): Promise<void> {
-  if (depth > MAX_SCAN_DEPTH) {
-    return
-  }
+  if (depth > MAX_SCAN_DEPTH) return;
+  if (excludePaths?.has(dirPath)) return;
+  if (fileFilterService.getTraversalExclusionReason(dirPath, opts)) return;
 
-  // 检查是否在排除路径中
-  if (excludePaths?.has(dirPath)) {
-    return
-  }
+  const fs = await getFsPromises();
 
-  // 检查目录名是否在黑名单中
-  const dirName = path.basename(dirPath)
-  const blacklistedDirs = new Set([
-    ...BASE_BLACKLISTED_DIRS,
-    ...(opts.customBlacklistedDirs || []),
-  ])
+  // Use a literal option at the call site so TypeScript retains the Dirent[] overload.
+  const entries = await fs
+    .readdir(dirPath, { withFileTypes: true })
+    .catch(() => null);
+  if (!entries) return;
 
-  if (blacklistedDirs.has(dirName) || dirName.startsWith('.') || hasBlacklistedBundleSuffix(dirName)) {
-    return
-  }
-
-  // 检查是否为系统/开发/缓存路径
-  if (opts.enableSystemPathFilter && isSystemPath(dirPath)) {
-    return
-  }
-
-  if (opts.enableDevPathFilter && isDevPath(dirPath)) {
-    return
-  }
-
-  if (opts.enableCachePathFilter && isCachePath(dirPath)) {
-    return
-  }
-
-  const fs = await getFsPromises()
-
-  // 读取目录（忽略权限错误等）。用字面量选项内联调用以命中 Dirent[] 重载，
-  // 避免 Awaited<ReturnType<...>> 丢失调用点重载解析而退化成 Dirent<Buffer>
-  const entries = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => null)
-  if (!entries) {
-    return
-  }
-
-  const subDirs: string[] = []
-  const fileEntries: Array<{ fullPath: string, fileName: string, extension: string }> = []
+  const subDirs: string[] = [];
+  const fileEntries: Array<{
+    fullPath: string;
+    fileName: string;
+    extension: string;
+  }> = [];
 
   for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name)
-
-    if (excludePaths?.has(fullPath)) {
-      continue
-    }
+    const fullPath = path.join(dirPath, entry.name);
+    if (excludePaths?.has(fullPath)) continue;
 
     if (entry.isDirectory()) {
-      subDirs.push(fullPath)
+      subDirs.push(fullPath);
+      continue;
     }
-    else if (entry.isFile()) {
-      const fileName = entry.name
-      const fileExtension = path.extname(fileName).toLowerCase()
+    if (!entry.isFile()) continue;
 
-      // 检查文件是否可索引
-      if (!isIndexableFile(fullPath, fileExtension, fileName, opts)) {
-        continue
-      }
-
-      fileEntries.push({ fullPath, fileName, extension: fileExtension })
-    }
+    const fileName = entry.name;
+    const extension = path.extname(fileName).toLowerCase();
+    if (!isIndexableFile(fullPath, extension, fileName, opts)) continue;
+    fileEntries.push({ fullPath, fileName, extension });
   }
 
-  // 同一目录内的可索引文件并发 stat（叶子操作，不会死锁）；
-  // 并发回调向 out push 在单线程下不会交错，安全
-  await mapWithConcurrency(fileEntries, FILE_STAT_CONCURRENCY, async ({ fullPath, fileName, extension }) => {
-    try {
-      const stats = await fs.stat(fullPath)
-      out.push({
-        path: fullPath,
-        name: fileName,
-        extension,
-        size: stats.size,
-        ctime: stats.birthtime ?? stats.ctime,
-        mtime: stats.mtime,
-      })
-    }
-    catch (error) {
-      console.error(`[FileScanUtils] Could not stat file ${fullPath}:`, error)
-    }
-  })
+  await mapWithConcurrency(
+    fileEntries,
+    FILE_STAT_CONCURRENCY,
+    async ({ fullPath, fileName, extension }) => {
+      try {
+        const stats = await fs.stat(fullPath);
+        out.push({
+          path: fullPath,
+          name: fileName,
+          extension,
+          size: stats.size,
+          ctime: stats.birthtime ?? stats.ctime,
+          mtime: stats.mtime,
+        });
+      } catch (error) {
+        console.error(
+          `[FileScanUtils] Could not stat file ${fullPath}:`,
+          error,
+        );
+      }
+    },
+  );
 
-  // 子目录串行递归：保持总并发有界，规避共享信号量在递归遍历中的死锁
+  // Traverse serially to keep aggregate filesystem concurrency bounded.
   for (const subDir of subDirs) {
-    await scanDirectoryInto(subDir, opts, excludePaths, depth + 1, out)
+    await scanDirectoryInto(subDir, opts, excludePaths, depth + 1, out);
   }
 }
 
@@ -489,19 +346,21 @@ export async function scanDirectories(
   options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
   excludePaths?: Set<string>,
 ): Promise<ScannedFileInfo[]> {
-  const allFiles: ScannedFileInfo[] = []
+  const allFiles: ScannedFileInfo[] = [];
 
   for (const dirPath of dirPaths) {
     try {
-      const files = await scanDirectory(dirPath, options, excludePaths)
-      allFiles.push(...files)
-    }
-    catch (error) {
-      console.error(`[FileScanUtils] Error scanning directory ${dirPath}:`, error)
+      const files = await scanDirectory(dirPath, options, excludePaths);
+      allFiles.push(...files);
+    } catch (error) {
+      console.error(
+        `[FileScanUtils] Error scanning directory ${dirPath}:`,
+        error,
+      );
     }
   }
 
-  return allFiles
+  return allFiles;
 }
 
 /**
@@ -527,8 +386,10 @@ export async function scanDirectories(
  *
  * @since 1.0.0
  */
-export function createScanOptions(customOptions: Partial<FileScanOptions> = {}): FileScanOptions {
-  return { ...DEFAULT_SCAN_OPTIONS, ...customOptions }
+export function createScanOptions(
+  customOptions: Partial<FileScanOptions> = {},
+): FileScanOptions {
+  return { ...DEFAULT_SCAN_OPTIONS, ...customOptions };
 }
 
 /**
@@ -552,6 +413,8 @@ export function createScanOptions(customOptions: Partial<FileScanOptions> = {}):
  *
  * @since 1.0.0
  */
-export function createStrictScanOptions(customOptions: Partial<FileScanOptions> = {}): FileScanOptions {
-  return { ...DEFAULT_SCAN_OPTIONS, strictMode: true, ...customOptions }
+export function createStrictScanOptions(
+  customOptions: Partial<FileScanOptions> = {},
+): FileScanOptions {
+  return { ...DEFAULT_SCAN_OPTIONS, strictMode: true, ...customOptions };
 }

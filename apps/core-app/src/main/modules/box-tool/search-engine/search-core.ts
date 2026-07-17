@@ -16,6 +16,7 @@ import type { CoreBoxSearchIndexCommitPayload } from '@talex-touch/utils/transpo
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { TuffSearchResultBuilder, type TuffItem } from '@talex-touch/utils'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -190,9 +191,10 @@ export class SearchEngineCore
   }
 
   private limitFrontendItems(items: TuffItem[]): TuffItem[] {
-    return items.length > SEARCH_FRONTEND_ITEM_LIMIT
-      ? items.slice(0, SEARCH_FRONTEND_ITEM_LIMIT)
-      : items
+    const visibleItems = fileFilterService.filterSearchItems(items)
+    return visibleItems.length > SEARCH_FRONTEND_ITEM_LIMIT
+      ? visibleItems.slice(0, SEARCH_FRONTEND_ITEM_LIMIT)
+      : visibleItems
   }
 
   private getSearchProviderConfigSignature(): string {
@@ -646,7 +648,8 @@ export class SearchEngineCore
     void (async () => {
       try {
         const excludeIds = new Set(baseItems.map((item) => item.id))
-        const recallItems = await fileProvider.semanticRecall(query, excludeIds, signal)
+        const recallCandidates = await fileProvider.semanticRecall(query, excludeIds, signal)
+        const recallItems = fileFilterService.filterSearchItems(recallCandidates)
         if (recallItems.length === 0) return
         if (signal.aborted || this.latestSessionId !== sessionId) return
         this._recordSearchResults(sessionId, [...baseItems, ...recallItems]).catch((error) => {
@@ -679,7 +682,8 @@ export class SearchEngineCore
     const cachedEntry = this.searchCache.get(cacheKey)
     if (cachedEntry && Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS) {
       const cacheSessionId = cachedEntry.result.sessionId || crypto.randomUUID()
-      const cachedItems = cachedEntry.result.items?.length ?? 0
+      cachedEntry.result.items = fileFilterService.filterSearchItems(cachedEntry.result.items ?? [])
+      const cachedItems = cachedEntry.result.items.length
       this.logSearchTrace({
         event: 'ipc.query.received',
         sessionId: cacheSessionId,
@@ -764,10 +768,13 @@ export class SearchEngineCore
       if (this.recommendationEngine) {
         try {
           const recommendationResult = await this.recommendationEngine.recommend({ limit: 10 })
+          const recommendationItems = fileFilterService.filterSearchItems(
+            recommendationResult.items
+          )
 
           searchLogger.logSearchPhase(
             'Recommendation',
-            `Generated ${recommendationResult.items.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`
+            `Generated ${recommendationItems.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`
           )
 
           if (this.latestSessionId !== sessionId) {
@@ -792,7 +799,7 @@ export class SearchEngineCore
           }
 
           const result = new TuffSearchResultBuilder(query)
-            .setItems(recommendationResult.items)
+            .setItems(recommendationItems)
             .setDuration(recommendationResult.duration)
             .setSources([])
             .build()
@@ -801,7 +808,7 @@ export class SearchEngineCore
           result.containerLayout = recommendationResult.containerLayout
 
           // If no recommendations, notify CoreBox to shrink
-          if (recommendationResult.items.length === 0) {
+          if (recommendationItems.length === 0) {
             const coreBoxWindow = windowManager.current?.window
             if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
               const transport = this.getTransport()
@@ -824,8 +831,8 @@ export class SearchEngineCore
               totalMs: totalDuration
             },
             result: {
-              firstCount: recommendationResult.items.length,
-              totalCount: recommendationResult.items.length
+              firstCount: recommendationItems.length,
+              totalCount: recommendationItems.length
             }
           })
           this.logSearchTrace({
@@ -837,8 +844,8 @@ export class SearchEngineCore
               totalMs: totalDuration
             },
             result: {
-              firstCount: recommendationResult.items.length,
-              totalCount: recommendationResult.items.length
+              firstCount: recommendationItems.length,
+              totalCount: recommendationItems.length
             },
             includeDetails: detail
           })

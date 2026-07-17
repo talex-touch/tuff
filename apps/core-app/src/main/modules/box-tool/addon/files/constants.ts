@@ -544,34 +544,6 @@ export function getContentSizeLimitMB(extension: string): number {
   return metadata.maxContentSizeMB ?? DEFAULT_CONTENT_SIZE_LIMIT_MB
 }
 
-export const BLACKLISTED_DIRS = new Set([
-  'node_modules',
-  '.git',
-  '.svn',
-  '.hg',
-  '.npm',
-  '.yarn',
-  '.m2',
-  'dist',
-  'build',
-  'target',
-  'out',
-  'bin',
-  'cache',
-  '.cache',
-  '.vscode',
-  '.idea',
-  // Mac specific
-  'Library',
-  'Application Support',
-  'Applications',
-  'System'
-])
-
-export const BLACKLISTED_FILES_PREFIX = new Set(['.'])
-export const BLACKLISTED_FILES_SUFFIX = new Set(['~'])
-export const BLACKLISTED_EXTENSIONS = new Set(['.tmp', '.temp', '.app', '.db', '.db-journal'])
-
 const typeTagExtensionMap: Record<FileTypeTag, string[]> = {
   text: [],
   document: [],
