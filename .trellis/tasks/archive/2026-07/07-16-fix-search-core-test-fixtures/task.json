@@ -1,0 +1,30 @@
+{
+  "id": "fix-search-core-test-fixtures",
+  "name": "fix-search-core-test-fixtures",
+  "title": "Fix search core test fixtures",
+  "description": "Completed test-only fixture refresh for three SearchEngineCore regression suites.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-16",
+  "completedAt": "2026-07-16",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "69ed465c3",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Commit 69ed465c3 pushed to origin/master.",
+  "meta": {
+    "nextAction": "Archived; no follow-up remains.",
+    "blocker": "none",
+    "evidence": "Three suites passed independently and together (9 tests); CoreApp typecheck:node, lint:changed, and git diff --check passed."
+  }
+}
