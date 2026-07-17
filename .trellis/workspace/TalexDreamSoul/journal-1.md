@@ -417,3 +417,40 @@ Live-tested app discovery, indexing, search, launch, AutoPaste, and AutoClear in
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Stabilization P0 closure and unified file filtering
+
+**Date**: 2026-07-16
+**Task**: Stabilization P0 closure and unified file filtering
+**Branch**: `master`
+
+### Summary
+
+Committed usage-stat single-writer repair, atomic Nexus batch ingest, stabilization documentation convergence, and a shared cross-platform file filtering policy enforced at scan, index-write, provider, aggregation, cache, recommendation, and semantic-recall boundaries; verified focused tests, lint, CoreApp Node typecheck, and representative path smoke, then archived the completed filtering task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7d2a24714` | (see git log) |
+| `1d26362dd` | (see git log) |
+| `c180cdc0d` | (see git log) |
+| `f03cc7c3f` | (see git log) |
+| `3fcd39163` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
