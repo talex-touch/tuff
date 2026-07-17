@@ -1,4 +1,5 @@
------BEGIN PUBLIC KEY-----
+// Bundled into the Cloudflare worker so the endpoint has an offline trust-root fallback.
+export const DEFAULT_RELEASE_SIGNATURE_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEApSEKfIKq584KqLOqEEDn
 mpv2BhbuZK54Z+aKpTcdS2zoKA8H5AiP7je2OPtHlPTMVv7YoutwIHmRwg4hnOMH
 G1s9qoCKyV2SsxFrsVQ7k1PxxNKvitzv0x3gXCHjklejLU11eiDN4g8TotqHDXcr
@@ -12,3 +13,4 @@ PnjSjHSlJxI+8jIncM7IYqmVC1hiK469Lgj9u2m5JXvcT1zmXlrUpTVR+opf6Qmb
 Ffo4soT9nwqhF65Fye1xgeLpjWG9J/dNneQF2UTkSfIWEz30OJiNKX7l+NueFyA3
 cU7STiptCcakgwZcDw6X2m8CAwEAAQ==
 -----END PUBLIC KEY-----
+`

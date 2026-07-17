@@ -8,6 +8,7 @@ const {
   syncPackagedResourceModules
 } = require('./runtime-modules')
 const { OFFICIAL_PLUGIN_BUILD_TARGETS } = require('../lib/touch-translation-runtime-sync')
+const { createPackagedBuildAttestation } = require('./build-attestation')
 
 function ensureMacMainAppLsuiElement(context) {
   if (context.electronPlatformName !== 'darwin') return
@@ -228,6 +229,25 @@ module.exports = async function afterPack(context) {
   })
   verifyPackagedOfficialPluginSeeds(context)
   pruneCrossPlatformFfprobeBinaries(context)
+
+  const resourcesDir = findPackagedResourcesDir(context.appOutDir, '[afterPack]')
+  if (!resourcesDir) {
+    throw new Error('[afterPack] Cannot locate packaged resources for build attestation')
+  }
+  const attestation = await createPackagedBuildAttestation({
+    resourcesDir,
+    projectDir: context.packager.projectDir,
+    appId: context.packager.config?.appId || 'com.tagzxia.app.tuff',
+    version: context.packager.appInfo.version,
+    platform: context.electronPlatformName,
+    arch: targetArch,
+    commit: process.env.GITHUB_SHA
+  })
+  if (attestation.created) {
+    console.log(`[afterPack] Created official build attestation (${attestation.keyFingerprint})`)
+  } else {
+    console.log(`[afterPack] Skipped build attestation: ${attestation.reason}`)
+  }
 }
 
 // Exposed for testing the prune logic in isolation.

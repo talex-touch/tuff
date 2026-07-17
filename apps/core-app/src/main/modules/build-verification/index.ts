@@ -1,362 +1,179 @@
 import type { MaybePromise, ModuleInitContext } from '@talex-touch/utils'
+import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { TalexEvents } from '../../core/eventbus/touch-event'
+import type { BuildAttestationPlatform, BuildAttestationRuntimeArch } from './attestation'
 import path from 'node:path'
-import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, BrowserWindow } from 'electron'
-import fse from 'fs-extra'
-import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
-import {
-  compareUpdateAssetTargets,
-  resolveUpdateAssetTarget
-} from '../../../shared/update/platform-target'
+import officialReleaseSigningPublicKey from '../../../../resources/keys/release-signing-public.pem?raw'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
-import { SignatureVerifier } from '../../utils/release-signature'
 import { BaseModule } from '../abstract-base-module'
-import { getNetworkService } from '../network'
-
-type BuildReleaseAsset = {
-  platform?: 'darwin' | 'win32' | 'linux'
-  arch?: 'x64' | 'arm64' | 'universal'
-  downloadUrl?: string
-  signatureUrl?: string
-}
-
-type BuildReleaseInfo = {
-  version?: string
-  assets?: BuildReleaseAsset[]
-}
+import { verifyBuildAttestation } from './attestation'
 
 const buildVerificationStatusEvent = AppEvents.build.statusUpdated
+const buildVerificationLog = createLogger('BuildVerificationModule')
+const BUILD_ATTESTATION_FILE = 'build-attestation.json'
+const BUILD_ATTESTATION_SIGNATURE_FILE = `${BUILD_ATTESTATION_FILE}.sig`
+const OFFICIAL_APP_ID = 'com.tagzxia.app.tuff'
 
-/**
- * 构建完整性验证模块
- * 在应用启动完成后异步验证构建签名
- */
+export interface BuildVerificationModuleStatus {
+  isVerified: boolean
+  isOfficialBuild: boolean
+  verificationFailed: boolean
+  hasOfficialKey: boolean
+  reason?: string
+}
+
 export class BuildVerificationModule extends BaseModule {
-  static key = Symbol.for('BuildVerification')
+  static key = Symbol.for('BuildVerificationModule')
+
   name = BuildVerificationModule.key
+  filePath = import.meta.url
+  constructorKey = BuildVerificationModule.key
+  order = 0
 
-  private isVerified = false
-  private isOfficialBuild = false
-  private verificationFailed = false
-  private readonly signatureVerifier = new SignatureVerifier()
-  private readonly log = createLogger('BuildVerification')
-  private transport: ReturnType<typeof getTuffTransportMain> | null = null
-
-  constructor() {
-    super(BuildVerificationModule.key)
+  private status: BuildVerificationModuleStatus = {
+    isVerified: false,
+    isOfficialBuild: false,
+    verificationFailed: false,
+    hasOfficialKey: false
   }
 
-  onInit(ctx: ModuleInitContext<TalexEvents>): MaybePromise<void> {
-    this.transport = resolveMainRuntime(ctx, 'BuildVerificationModule.onInit').transport
+  private transport: ITuffTransportMain | null = null
+
+  constructor() {
+    super(BuildVerificationModule.key, {
+      create: true,
+      dirName: 'build-verification'
+    })
+  }
+
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
+    const runtime = resolveMainRuntime(ctx, 'build-verification')
+    this.transport = runtime.transport
+
+    this.transport.on(AppEvents.build.getVerificationStatus, () => this.toTransportStatus())
+    this.transport.on(AppEvents.build.getVerificationStatusLegacy, () => this.toTransportStatus())
 
     if (!app.isPackaged) {
-      this.setVerificationStatus(true, false)
+      this.setVerificationStatus({
+        isVerified: true,
+        isOfficialBuild: false,
+        verificationFailed: false,
+        hasOfficialKey: false,
+        reason: 'development-build'
+      })
       return
     }
 
-    touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, () => {
-      setTimeout(() => {
-        void this.verifyBuildIntegrity()
-      }, 2000)
-    })
-
-    app.on('browser-window-created', (_event, window) => {
-      window.webContents.once('did-finish-load', () => {
-        setTimeout(() => {
-          if (this.isVerified) {
-            this.pushVerificationStatus(window)
-          }
-        }, 500)
-      })
-    })
+    await this.verifyPackagedBuild()
   }
 
   onDestroy(): MaybePromise<void> {
     this.transport = null
-    this.log.debug('Destroyed')
   }
 
-  private getBuildAssetPath(): string | null {
-    if (!app.isPackaged) {
-      return null
-    }
-
-    const appPath = app.getAppPath()
-    if (appPath.endsWith('.asar')) {
-      return appPath
-    }
-
-    const asarPath = path.join(process.resourcesPath, 'app.asar')
-    if (fse.existsSync(asarPath)) {
-      return asarPath
-    }
-
-    return process.execPath
-  }
-
-  private resolveChannel(version: string): 'RELEASE' | 'BETA' | 'SNAPSHOT' {
-    const lower = version.toLowerCase()
-    if (lower.includes('snapshot')) {
-      return 'SNAPSHOT'
-    }
-    if (lower.includes('beta')) {
-      return 'BETA'
-    }
-    return 'RELEASE'
-  }
-
-  private resolvePlatform(): 'darwin' | 'win32' | 'linux' {
-    if (process.platform === 'win32') return 'win32'
-    if (process.platform === 'linux') return 'linux'
-    return 'darwin'
-  }
-
-  private resolveArch(): 'x64' | 'arm64' | 'universal' {
-    if (process.arch === 'arm64') {
-      return 'arm64'
-    }
-    return 'x64'
-  }
-
-  private resolveApiBase(): string {
-    return process.env.TUFF_RELEASE_API_URL || 'https://tuff.tagzxia.com/api/releases'
-  }
-
-  private resolveApiOrigin(apiBase: string): string | null {
-    try {
-      return new URL(apiBase).origin
-    } catch {
-      return null
-    }
-  }
-
-  private resolveReleaseAssetUrl(url: string | undefined, apiBase: string): string | null {
-    if (!url) return null
-    if (/^https?:\/\//i.test(url)) return url
-
-    try {
-      if (url.startsWith('/')) {
-        const apiOrigin = this.resolveApiOrigin(apiBase)
-        return apiOrigin ? new URL(url, apiOrigin).toString() : null
-      }
-
-      return new URL(url, `${apiBase.replace(/\/$/, '')}/`).toString()
-    } catch {
-      return null
-    }
-  }
-
-  private async fetchReleaseByTag(apiBase: string, tag: string): Promise<BuildReleaseInfo | null> {
-    try {
-      const response = await getNetworkService().request<{ release?: BuildReleaseInfo }>({
-        method: 'GET',
-        url: `${apiBase}/${encodeURIComponent(tag)}`,
-        timeoutMs: 8000,
-        responseType: 'json',
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'TalexTouch-Client/2.0'
-        }
-      })
-      return response.data?.release || null
-    } catch {
-      return null
-    }
-  }
-
-  private async fetchLatestRelease(
-    apiBase: string,
-    channel: 'RELEASE' | 'BETA' | 'SNAPSHOT',
-    platform: 'darwin' | 'win32' | 'linux'
-  ): Promise<BuildReleaseInfo | null> {
-    try {
-      const response = await getNetworkService().request<{ release?: BuildReleaseInfo }>({
-        method: 'GET',
-        url: `${apiBase}/latest`,
-        timeoutMs: 8000,
-        responseType: 'json',
-        query: { channel, platform },
-        headers: {
-          Accept: 'application/json',
-          'User-Agent': 'TalexTouch-Client/2.0'
-        }
-      })
-      return response.data?.release || null
-    } catch {
-      return null
-    }
-  }
-
-  private pickReleaseAsset(
-    assets: BuildReleaseAsset[] | undefined,
-    platform: 'darwin' | 'win32' | 'linux',
-    arch: 'x64' | 'arm64' | 'universal'
-  ): BuildReleaseAsset | null {
-    if (!assets || !assets.length) {
-      return null
-    }
-
-    const runtimeArch = arch === 'universal' ? process.arch : arch
-    const candidates = assets
-      .flatMap((asset) => {
-        const target = resolveUpdateAssetTarget(
-          asset.downloadUrl || '',
-          {
-            platform: asset.platform,
-            arch: asset.arch
-          },
-          {
-            platform,
-            arch: runtimeArch
-          }
-        )
-        if (!target || target.platform !== platform) {
-          return []
-        }
-        return [{ asset, target }]
-      })
-      .sort((left, right) => compareUpdateAssetTargets(left.target, right.target))
-
-    return candidates[0]?.asset ?? null
-  }
-
-  private async resolveSignatureSource(): Promise<{
-    signatureUrl: string | null
-    signatureKeyUrl?: string
-  }> {
-    const forcedSignatureUrl = process.env.TUFF_BUILD_SIGNATURE_URL
-    if (forcedSignatureUrl) {
-      return {
-        signatureUrl: forcedSignatureUrl,
-        signatureKeyUrl: process.env.TUFF_BUILD_SIGNATURE_KEY_URL
-      }
-    }
-
-    const apiBase = this.resolveApiBase()
-    const version = app.getVersion()
+  private async verifyPackagedBuild(): Promise<void> {
     const platform = this.resolvePlatform()
     const arch = this.resolveArch()
-
-    const tagCandidates = version.startsWith('v') ? [version] : [`v${version}`, version]
-    let release: BuildReleaseInfo | null = null
-
-    for (const tag of tagCandidates) {
-      release = await this.fetchReleaseByTag(apiBase, tag)
-      if (release) {
-        break
-      }
-    }
-
-    if (!release) {
-      const channel = this.resolveChannel(version)
-      release = await this.fetchLatestRelease(apiBase, channel, platform)
-      if (release && release.version !== version) {
-        release = null
-      }
-    }
-
-    if (!release) {
-      return { signatureUrl: null }
-    }
-
-    const asset = this.pickReleaseAsset(release.assets, platform, arch)
-    const downloadUrl = this.resolveReleaseAssetUrl(asset?.downloadUrl, apiBase)
-    if (!asset || !downloadUrl) {
-      return { signatureUrl: null }
-    }
-
-    const signatureUrl =
-      this.resolveReleaseAssetUrl(asset.signatureUrl, apiBase) || `${downloadUrl}.sig`
-    return { signatureUrl }
-  }
-
-  private async verifyBuildIntegrity(): Promise<void> {
-    const targetPath = this.getBuildAssetPath()
-    if (!targetPath) {
+    if (!platform || !arch) {
+      this.setVerificationStatus({
+        isVerified: true,
+        isOfficialBuild: false,
+        verificationFailed: true,
+        hasOfficialKey: false,
+        reason: 'unsupported-runtime-target'
+      })
       return
     }
 
-    try {
-      const { signatureUrl, signatureKeyUrl } = await this.resolveSignatureSource()
-      if (!signatureUrl) {
-        this.setVerificationStatus(false, false)
-        this.log.warn('[BuildVerification] Signature URL not found for current build.')
-        return
+    const resourcesPath = process.resourcesPath
+    const result = await verifyBuildAttestation({
+      appAsarPath: path.join(resourcesPath, 'app.asar'),
+      attestationPath: path.join(resourcesPath, BUILD_ATTESTATION_FILE),
+      signaturePath: path.join(resourcesPath, BUILD_ATTESTATION_SIGNATURE_FILE),
+      publicKey: officialReleaseSigningPublicKey,
+      expected: {
+        appId: OFFICIAL_APP_ID,
+        version: app.getVersion(),
+        platform,
+        arch
       }
+    })
 
-      const result = await this.signatureVerifier.verifyFileSignature(
-        targetPath,
-        signatureUrl,
-        signatureKeyUrl
-      )
+    const verificationFailed = result.reason !== 'attestation-not-available' && !result.valid
+    this.setVerificationStatus({
+      isVerified: true,
+      isOfficialBuild: result.valid,
+      verificationFailed,
+      hasOfficialKey: result.hasOfficialKey,
+      reason: result.reason
+    })
 
-      if (result.valid) {
-        this.setVerificationStatus(true, false)
-        this.log.info('[BuildVerification] Official build verified.')
-      } else {
-        const nonFatalReasons = [
-          'Signature file not available',
-          'Signature public key not available'
-        ]
-        const shouldMarkFailed = !nonFatalReasons.includes(result.reason || '')
-        this.setVerificationStatus(false, shouldMarkFailed)
-        this.log.warn('[BuildVerification] Build verification failed.', {
-          meta: { reason: result.reason }
-        })
-      }
-    } catch (error: unknown) {
-      this.log.warn('[BuildVerification] Verification error.', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+    if (result.valid) {
+      buildVerificationLog.info('Official build attestation verified', {
+        meta: {
+          version: result.attestation?.version || app.getVersion(),
+          platform: result.attestation?.platform || process.platform,
+          arch: result.attestation?.arch || process.arch,
+          commit: result.attestation?.commit || 'unknown',
+          keyFingerprint: result.attestation?.keyFingerprint || 'unknown'
+        }
       })
-      this.setVerificationStatus(false, false)
+    } else if (verificationFailed) {
+      buildVerificationLog.error('Build attestation verification failed', {
+        meta: {
+          reason: result.reason || 'unknown',
+          detail: result.detail || 'none'
+        }
+      })
+    } else {
+      buildVerificationLog.info('Unsigned packaged build detected')
     }
   }
 
-  private pushVerificationStatus(window: BrowserWindow): void {
-    if (!this.transport) {
-      return
+  private resolvePlatform(): BuildAttestationPlatform | null {
+    if (
+      process.platform === 'darwin' ||
+      process.platform === 'win32' ||
+      process.platform === 'linux'
+    ) {
+      return process.platform
     }
-    const payload = {
-      isOfficialBuild: this.isOfficialBuild,
-      verificationFailed: this.verificationFailed,
-      hasOfficialKey: this.isVerified
-    }
+    return null
+  }
 
-    try {
-      this.transport.broadcastToWindow(window.id, buildVerificationStatusEvent, payload)
-    } catch (error) {
-      this.log.warn('[BuildVerification] Failed to push verification status.', {
-        error: error instanceof Error ? error.message : String(error)
-      })
+  private resolveArch(): BuildAttestationRuntimeArch | null {
+    if (process.arch === 'x64' || process.arch === 'arm64') {
+      return process.arch
+    }
+    return null
+  }
+
+  private toTransportStatus(): BuildVerificationStatus {
+    return {
+      isOfficialBuild: this.status.isOfficialBuild,
+      verificationFailed: this.status.verificationFailed,
+      hasOfficialKey: this.status.hasOfficialKey
     }
   }
 
-  private setVerificationStatus(isOfficial: boolean, verificationFailed: boolean): void {
-    this.isVerified = true
-    this.isOfficialBuild = isOfficial
-    this.verificationFailed = verificationFailed
+  private pushVerificationStatus(win: BrowserWindow): void {
+    if (!this.transport || win.isDestroyed()) return
+    this.transport.broadcastToWindow(win.id, buildVerificationStatusEvent, this.toTransportStatus())
+  }
 
-    const windows = BrowserWindow.getAllWindows()
-    for (const win of windows) {
+  private setVerificationStatus(status: BuildVerificationModuleStatus): void {
+    this.status = status
+    for (const win of BrowserWindow.getAllWindows()) {
       this.pushVerificationStatus(win)
     }
   }
 
-  /**
-   * 获取验证状态（供其他模块调用）
-   */
-  public getVerificationStatus(): {
-    isVerified: boolean
-    isOfficialBuild: boolean
-    verificationFailed: boolean
-  } {
-    return {
-      isVerified: this.isVerified,
-      isOfficialBuild: this.isOfficialBuild,
-      verificationFailed: this.verificationFailed
-    }
+  public getVerificationStatus(): BuildVerificationModuleStatus {
+    return { ...this.status }
   }
 }
 

@@ -1,6 +1,7 @@
 import process from 'node:process'
 import { setResponseHeader } from 'h3'
 import { readCloudflareBindings } from '../../utils/cloudflare'
+import { DEFAULT_RELEASE_SIGNATURE_PUBLIC_KEY } from '../../utils/releaseSigningPublicKey.mjs'
 
 export default defineEventHandler(async (event) => {
   const bindings = readCloudflareBindings(event)
@@ -9,13 +10,7 @@ export default defineEventHandler(async (event) => {
       || bindings?.UPDATE_SIGNATURE_PUBLIC_KEY
       || process.env.RELEASE_SIGNATURE_PUBLIC_KEY
       || process.env.UPDATE_SIGNATURE_PUBLIC_KEY
-
-  if (!publicKey) {
-    return {
-      publicKey: null,
-      message: 'Release signature key not configured.',
-    }
-  }
+      || DEFAULT_RELEASE_SIGNATURE_PUBLIC_KEY
 
   setResponseHeader(event, 'Cache-Control', 'public, max-age=3600')
   return { publicKey }

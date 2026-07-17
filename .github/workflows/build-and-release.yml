@@ -303,21 +303,61 @@ jobs:
           xcode-select --install || echo "Xcode Command Line Tools already installed"
           echo "macOS build environment ready"
 
+      - name: Resolve macOS Release Signing Mode
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          IFS=$'\t' read -r signing_mode notarization_method < <(
+            node scripts/resolve-macos-release-signing-mode.mjs --format shell
+          )
+          echo "TUFF_MAC_NATIVE_SIGNING_MODE=${signing_mode}" >> "${GITHUB_ENV}"
+
+          if [ "${signing_mode}" = "waived" ]; then
+            echo "TUFF_OFFICIAL_RELEASE_BUILD=false" >> "${GITHUB_ENV}"
+            echo "::warning title=macOS native signing waived::Apple Developer is not configured; publishing explicit ad-hoc risk evidence."
+          else
+            echo "TUFF_OFFICIAL_RELEASE_BUILD=true" >> "${GITHUB_ENV}"
+            if [ "${notarization_method}" = "api-key" ]; then
+              key_path="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY_ID}.p8"
+              umask 077
+              if [[ "${APPLE_API_KEY_CONTENT}" == -----BEGIN* ]]; then
+                printf '%s' "${APPLE_API_KEY_CONTENT}" > "${key_path}"
+              else
+                printf '%s' "${APPLE_API_KEY_CONTENT}" | openssl base64 -d -A > "${key_path}"
+              fi
+              echo "APPLE_API_KEY=${key_path}" >> "${GITHUB_ENV}"
+            fi
+            echo "Developer ID signing enabled with ${notarization_method} notarization."
+          fi
+
       - name: Build Tuff App
         shell: bash
         env:
           GITHUB_SHA: ${{ github.sha }}
           TUFF_ENCRYPTION_KEY: ${{ secrets.TUFF_ENCRYPTION_KEY }}
+          RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
+          TUFF_RELEASE_ATTESTATION_REQUIRED: "true"
           RELEASE_TYPE: ${{ steps.release-type.outputs.type }}
           RUNNER_OS: ${{ runner.os }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 完全禁用签名相关功能
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-          CSC_LINK: ""
-          CSC_KEY_PASSWORD: ""
-          APPLE_ID: ""
-          APPLE_ID_PASSWORD: ""
-          APPLE_TEAM_ID: ""
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_API_KEY_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_API_KEY_ID || '' }}
+          APPLE_API_ISSUER: ${{ matrix.os == 'macos-latest' && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
         run: |
           set -e  # Exit immediately if a command exits with a non-zero status
 
@@ -508,6 +548,34 @@ jobs:
           echo ""
           echo "✓ Build completed successfully"
 
+      - name: Verify macOS Release Signing
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_bundles=()
+          while IFS= read -r app_bundle; do
+            app_bundles+=("${app_bundle}")
+          done < <(find apps/core-app/dist -type d -name "*.app" -prune -print | sort)
+          if [ "${#app_bundles[@]}" -ne 1 ]; then
+            echo "Expected exactly one macOS app bundle, found ${#app_bundles[@]}."
+            printf '  %s\n' "${app_bundles[@]}"
+            exit 1
+          fi
+
+          node apps/core-app/scripts/verify-macos-release-signing.mjs \
+            --mode "${TUFF_MAC_NATIVE_SIGNING_MODE:-waived}" \
+            --app-bundle "${app_bundles[0]}" \
+            --output apps/core-app/dist/release-signing-evidence.json
+
+      - name: Cleanup macOS Notarization Credential File
+        if: always() && matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          if [ -n "${APPLE_API_KEY:-}" ]; then
+            rm -f "${APPLE_API_KEY}"
+          fi
+
       - name: Verify Build Artifacts
         shell: bash
         run: |
@@ -647,6 +715,7 @@ jobs:
             apps/core-app/dist/**/*.zip
             apps/core-app/dist/**/latest*.yml
             apps/core-app/dist/**/builder-debug.yml
+            apps/core-app/dist/release-signing-evidence.json
           retention-days: 30
           if-no-files-found: error
 
@@ -799,11 +868,15 @@ jobs:
           echo "Total .zip files:"
           find artifacts -type f -name "*.zip" | wc -l
 
+      - name: Validate Release Signing Trust Roots
+        run: node scripts/check-release-signing-trust-roots.mjs
+
       - name: Collect Release Assets
         id: release-files
         env:
           TAG: ${{ steps.release-info.outputs.tag }}
           RELEASE_TYPE: ${{ steps.release-info.outputs.type }}
+          RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
         run: |
           set -euo pipefail
 
@@ -852,7 +925,6 @@ jobs:
             OUTPUT_PATHS+=("$target")
           done
 
-          # Build release manifest for update pipeline
           VERSION="${TAG#v}"
           CHANNEL="RELEASE"
           LOWER_VERSION=$(echo "$VERSION" | tr '[:upper:]' '[:lower:]')
@@ -864,77 +936,40 @@ jobs:
             CHANNEL="SNAPSHOT"
           fi
 
-          TAG="${TAG}" VERSION="${VERSION}" CHANNEL="${CHANNEL}" node <<'NODE'
-          const fs = require('fs')
-          const path = require('path')
-          const crypto = require('crypto')
+          if [ -z "${RELEASE_SIGNING_PRIVATE_KEY}" ]; then
+            echo "RELEASE_SIGNING_PRIVATE_KEY is required for official release assets."
+            exit 1
+          fi
 
-          const releaseDir = path.resolve('release-assets')
-          const tag = process.env.TAG || ''
-          const version = process.env.VERSION || ''
-          const channel = process.env.CHANNEL || 'RELEASE'
+          signing_key_path="${RUNNER_TEMP}/tuff-release-signing-private.pem"
+          trap 'rm -f "${signing_key_path}"' EXIT
+          umask 077
+          if [[ "${RELEASE_SIGNING_PRIVATE_KEY}" == -----BEGIN* ]]; then
+            printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" > "${signing_key_path}"
+          else
+            printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" | base64 --decode > "${signing_key_path}"
+          fi
 
-          const files = fs.readdirSync(releaseDir)
-            .filter((name) => {
-              if (name === 'tuff-release-manifest.json') return false
-              return /\.(exe|dmg|zip|AppImage|deb|snap)$/i.test(name)
-            })
+          node scripts/prepare-release-assets.mjs \
+            --tag "${TAG}" \
+            --channel "${CHANNEL}" \
+            --release-dir release-assets \
+            --private-key "${signing_key_path}" \
+            --public-key apps/core-app/resources/keys/release-signing-public.pem \
+            --manifest release-assets/tuff-release-manifest.json
 
-          function inferArch(fileName) {
-            const lower = fileName.toLowerCase()
-            if (lower.includes('universal')) return 'universal'
-            if (lower.includes('arm64') || lower.includes('aarch64')) return 'arm64'
-            if (lower.includes('x64') || lower.includes('amd64')) return 'x64'
-            return 'x64'
-          }
+          node scripts/update-validate-release-manifest.mjs \
+            --manifest release-assets/tuff-release-manifest.json
 
-          const artifacts = []
-          for (const file of files) {
-            const lower = file.toLowerCase()
-
-            let platform = null
-            if (lower.includes('windows') || lower.endsWith('.exe')) {
-              platform = 'win32'
-            } else if (lower.includes('macos') || lower.endsWith('.dmg') || lower.endsWith('.zip')) {
-              platform = 'darwin'
-            } else if (lower.includes('ubuntu') || lower.endsWith('.appimage') || lower.endsWith('.deb') || lower.endsWith('.snap')) {
-              platform = 'linux'
-            }
-
-            if (!platform) continue
-
-            const arch = inferArch(file)
-
-            const fullPath = path.join(releaseDir, file)
-            const content = fs.readFileSync(fullPath)
-            const sha256 = crypto.createHash('sha256').update(content).digest('hex')
-
-            artifacts.push({
-              component: 'core',
-              name: file,
-              platform,
-              arch,
-              sha256
-            })
-          }
-
-          const manifest = {
-            schemaVersion: 1,
-            release: {
-              version,
-              channel,
-              tag
-            },
-            artifacts
-          }
-
-          fs.writeFileSync(
-            path.join(releaseDir, 'tuff-release-manifest.json'),
-            JSON.stringify(manifest, null, 2)
-          )
-          NODE
-
+          mapfile -t SIGNATURE_PATHS < <(find release-assets -maxdepth 1 -type f -name "*.sig" | sort)
+          if [ "${#SIGNATURE_PATHS[@]}" -eq 0 ]; then
+            echo "No detached signature sidecars were generated."
+            exit 1
+          fi
+          OUTPUT_PATHS+=("${SIGNATURE_PATHS[@]}")
           OUTPUT_PATHS+=("release-assets/tuff-release-manifest.json")
+          OUTPUT_PATHS+=("release-assets/release-test-summary.json")
+          OUTPUT_PATHS+=("release-assets/release-test-summary.md")
 
           {
             echo "files<<EOF"
@@ -954,6 +989,31 @@ jobs:
             --target-ref "${{ github.sha }}" \
             --output-dir "generated-release-notes"
 
+      - name: Generate Release Test Summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t mac_evidence_files < <(find artifacts -type f -name "release-signing-evidence.json" | sort)
+          if [ "${#mac_evidence_files[@]}" -ne 1 ]; then
+            echo "Expected exactly one macOS signing evidence file, found ${#mac_evidence_files[@]}."
+            exit 1
+          fi
+
+          set +e
+          node scripts/generate-release-test-summary.mjs \
+            --release-dir release-assets \
+            --manifest release-assets/tuff-release-manifest.json \
+            --public-key apps/core-app/resources/keys/release-signing-public.pem \
+            --mac-evidence "${mac_evidence_files[0]}" \
+            --output-dir release-assets
+          summary_status=$?
+          set -e
+
+          if [ -f release-assets/release-test-summary.md ]; then
+            cat release-assets/release-test-summary.md >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          exit "${summary_status}"
+
       - name: Create Release
         id: create-release
         uses: softprops/action-gh-release@v3
@@ -963,7 +1023,7 @@ jobs:
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           prerelease: ${{ steps.release-info.outputs.prerelease == 'true' }}
           files: ${{ steps.release-files.outputs.files }}
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
           body_path: generated-release-notes/release-notes.github.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1242,128 +1302,59 @@ jobs:
           nexus_headers=()
           create_nexus_headers nexus_headers
 
-          manifest_url=$(jq -r '.assets[] | select(.name=="tuff-release-manifest.json") | .browser_download_url' /tmp/github-release.json)
-          if [ -n "${manifest_url}" ] && [ "${manifest_url}" != "null" ]; then
-            curl -sSL -f \
-              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-              -H "Accept: application/octet-stream" \
-              "${manifest_url}" \
-              -o /tmp/tuff-release-manifest.json
-          else
-            echo '{"artifacts":[]}' >/tmp/tuff-release-manifest.json
-          fi
+          manifest_url=$(jq -er 'first(.assets[] | select(.name=="tuff-release-manifest.json")).browser_download_url' /tmp/github-release.json)
+          curl -sSL -f \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            "${manifest_url}" \
+            -o /tmp/tuff-release-manifest.json
+
+          node scripts/update-validate-release-manifest.mjs \
+            --manifest /tmp/tuff-release-manifest.json
+          jq -e --arg tag "${TAG}" '.release.tag == $tag' /tmp/tuff-release-manifest.json >/dev/null
 
           while IFS= read -r encoded; do
-            item=$(echo "${encoded}" | base64 -d)
-            name=$(echo "${item}" | jq -r '.name')
-            url=$(echo "${item}" | jq -r '.browser_download_url')
-            size=$(echo "${item}" | jq -r '.size')
+            manifest_item=$(printf '%s' "${encoded}" | base64 --decode)
+            name=$(printf '%s' "${manifest_item}" | jq -r '.name')
+            platform=$(printf '%s' "${manifest_item}" | jq -r '.platform')
+            arch=$(printf '%s' "${manifest_item}" | jq -r '.arch')
+            sha256=$(printf '%s' "${manifest_item}" | jq -r '.sha256')
+            signature_name=$(printf '%s' "${manifest_item}" | jq -r '.signature')
 
-            if [[ "${name}" == "tuff-release-manifest.json" ]] || [[ "${name}" == *.yml ]] || [[ "${name}" == *.yaml ]]; then
-              continue
-            fi
+            asset_item=$(jq -ce --arg name "${name}" 'first(.assets[] | select(.name==$name))' /tmp/github-release.json)
+            signature_item=$(jq -ce --arg name "${signature_name}" 'first(.assets[] | select(.name==$name))' /tmp/github-release.json)
+            url=$(printf '%s' "${asset_item}" | jq -r '.browser_download_url')
+            size=$(printf '%s' "${asset_item}" | jq -r '.size')
+            content_type=$(printf '%s' "${asset_item}" | jq -r '.content_type // "application/octet-stream"')
+            signature_url=$(printf '%s' "${signature_item}" | jq -r '.browser_download_url')
 
-            if [[ "${name}" == *.exe ]] && [[ "${name}" != *-setup.exe ]]; then
-              echo "Skip non-installer Windows executable: ${name}"
-              continue
-            fi
-
-            manifest_item=$(jq -c --arg file "${name}" '.artifacts[]? | select(.name==$file)' /tmp/tuff-release-manifest.json | head -n 1 || true)
-            platform=""
-            arch=""
-            sha256=""
-
-            if [ -n "${manifest_item}" ]; then
-              platform=$(echo "${manifest_item}" | jq -r '.platform // empty')
-              arch=$(echo "${manifest_item}" | jq -r '.arch // empty')
-              sha256=$(echo "${manifest_item}" | jq -r '.sha256 // empty')
-            fi
-
-            if [ -z "${platform}" ] || [ -z "${arch}" ]; then
-              lower_name=$(echo "${name}" | tr '[:upper:]' '[:lower:]')
-              if [[ "${lower_name}" == *"windows"* ]] || [[ "${lower_name}" == *.exe ]]; then
-                platform="win32"
-              elif [[ "${lower_name}" == *"macos"* ]] || [[ "${lower_name}" == *.dmg ]] || [[ "${lower_name}" == *.zip ]]; then
-                platform="darwin"
-              elif [[ "${lower_name}" == *"ubuntu"* ]] || [[ "${lower_name}" == *.appimage ]] || [[ "${lower_name}" == *.deb ]] || [[ "${lower_name}" == *.snap ]]; then
-                platform="linux"
-              fi
-
-              if [ -z "${platform}" ]; then
-                continue
-              fi
-
-              arch="x64"
-              if [[ "${lower_name}" == *"universal"* ]]; then
-                arch="universal"
-              elif [[ "${lower_name}" == *"arm64"* ]] || [[ "${lower_name}" == *"aarch64"* ]]; then
-                arch="arm64"
-              elif [[ "${lower_name}" == *"x64"* ]] || [[ "${lower_name}" == *"amd64"* ]]; then
-                arch="x64"
-              fi
-            fi
-
-            if [ -z "${sha256}" ] || [ "${sha256}" = "null" ]; then
-              payload=$(jq -n \
-                --arg platform "${platform}" \
-                --arg arch "${arch}" \
-                --arg filename "${name}" \
-                --arg downloadUrl "${url}" \
-                --argjson size "${size}" \
-                '{
-                  platform: $platform,
-                  arch: $arch,
-                  filename: $filename,
-                  downloadUrl: $downloadUrl,
-                  size: $size,
-                  sha256: null,
-                  contentType: "application/octet-stream"
-                }')
-            else
-              payload=$(jq -n \
-                --arg platform "${platform}" \
-                --arg arch "${arch}" \
-                --arg filename "${name}" \
-                --arg downloadUrl "${url}" \
-                --argjson size "${size}" \
-                --arg sha256 "${sha256}" \
-                '{
-                  platform: $platform,
-                  arch: $arch,
-                  filename: $filename,
-                  downloadUrl: $downloadUrl,
-                  size: $size,
-                  sha256: $sha256,
-                  contentType: "application/octet-stream"
-                }')
-            fi
+            payload=$(jq -n \
+              --arg platform "${platform}" \
+              --arg arch "${arch}" \
+              --arg filename "${name}" \
+              --arg downloadUrl "${url}" \
+              --arg signatureUrl "${signature_url}" \
+              --argjson size "${size}" \
+              --arg sha256 "${sha256}" \
+              --arg contentType "${content_type}" \
+              '{
+                platform: $platform,
+                arch: $arch,
+                filename: $filename,
+                downloadUrl: $downloadUrl,
+                signatureUrl: $signatureUrl,
+                size: $size,
+                sha256: $sha256,
+                contentType: $contentType
+              }')
 
             http_code=$(curl -sS -o /tmp/nexus-release-link.json -w "%{http_code}" \
               -X POST "${NEXUS_BASE_URL}/api/releases/${TAG}/link-github" \
               "${nexus_headers[@]}" \
               -H "Content-Type: application/json" \
               -d "${payload}")
-            assert_nexus_response_ok /tmp/nexus-release-link.json "${http_code}" '.asset.id? and .asset.platform? and .asset.arch?'
-          done < <(jq -r '.assets[] | @base64' /tmp/github-release.json)
-
-      - name: Backfill Nexus asset metadata from GitHub manifest
-        run: |
-          set -euo pipefail
-          source /tmp/nexus-sync-helpers.sh
-          nexus_headers=()
-          create_nexus_headers nexus_headers
-
-          backfill_probe_code=$(curl -sS -o /tmp/nexus-release-backfill-probe.json -w "%{http_code}" \
-            -X GET "${NEXUS_BASE_URL}/api/releases/${TAG}" \
-            "${nexus_headers[@]}")
-          assert_nexus_response_ok /tmp/nexus-release-backfill-probe.json "${backfill_probe_code}" '.release.id? and .release.tag?'
-
-          node scripts/backfill-release-assets-from-github.mjs \
-            --tag "${TAG}" \
-            --base-url "${NEXUS_BASE_URL}" \
-            --nexus-key "${NEXUS_API_KEY}" \
-            --github-token "${GITHUB_TOKEN}" \
-            --repo "${GITHUB_REPOSITORY}"
+            assert_nexus_response_ok /tmp/nexus-release-link.json "${http_code}" '.asset.id? and .asset.platform? and .asset.arch? and .asset.signatureUrl?'
+          done < <(jq -r '.artifacts[] | select(.component=="core") | @base64' /tmp/tuff-release-manifest.json)
 
       - name: Publish Nexus release
         run: |

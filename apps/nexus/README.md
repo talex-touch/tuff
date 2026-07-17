@@ -73,7 +73,7 @@ Cloudflare Pages runtime (optional unless you force Pages in non-prod):
 - `NITRO_PRESET=cloudflare-pages`
 - `NUXT_USE_CLOUDFLARE_DEV=true`
 - `CLOUDFLARE_DEV_ENVIRONMENT`
-- `RELEASE_SIGNATURE_PUBLIC_KEY` / `UPDATE_SIGNATURE_PUBLIC_KEY` (can also be Cloudflare bindings)
+- `RELEASE_SIGNATURE_PUBLIC_KEY` / `UPDATE_SIGNATURE_PUBLIC_KEY` (optional rotation override; absent values fall back to the public key pinned in the server bundle)
 
 Observability & feature toggles (optional):
 - `SENTRY_AUTH_TOKEN` (source maps upload; requires `NUXT_ENABLE_SENTRY_SOURCEMAPS=true`)
@@ -97,7 +97,7 @@ Observability & feature toggles (optional):
 Cloudflare bindings (wrangler / Pages settings):
 - `DB` (D1)
 - `R2`, `ASSETS`, `IMAGES`, `PACKAGES`, `PLUGIN_PACKAGES` (R2 buckets)
-- `RELEASE_SIGNATURE_PUBLIC_KEY`, `UPDATE_SIGNATURE_PUBLIC_KEY` (string bindings)
+- `RELEASE_SIGNATURE_PUBLIC_KEY`, `UPDATE_SIGNATURE_PUBLIC_KEY` (optional string-binding overrides for release-key rotation)
 
 ## Production Content payload boundary
 

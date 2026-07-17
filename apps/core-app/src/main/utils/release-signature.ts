@@ -12,6 +12,32 @@ export interface SignatureVerificationResult {
   reason?: string
 }
 
+export interface ReleaseSigningTrustRootEnvironment {
+  appPath: string
+  resourcesPath?: string
+  cwd: string
+}
+
+export function releaseSigningPublicKeyCandidates(
+  environment: ReleaseSigningTrustRootEnvironment = {
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath || undefined,
+    cwd: process.cwd()
+  }
+): string[] {
+  const relativePath = path.join('resources', 'keys', 'release-signing-public.pem')
+  return [
+    path.join(environment.appPath, relativePath),
+    ...(environment.resourcesPath
+      ? [
+          path.join(environment.resourcesPath, 'app', relativePath),
+          path.join(environment.resourcesPath, relativePath)
+        ]
+      : []),
+    path.join(environment.cwd, relativePath)
+  ]
+}
+
 export class SignatureVerifier {
   private readonly keyCache = new Map<string, { key: string; fetchedAt: number }>()
   private embeddedKeyCache: string | null = null
@@ -81,19 +107,7 @@ export class SignatureVerifier {
     if (this.embeddedKeyCache !== null) {
       return this.embeddedKeyCache || null
     }
-    // Same trust-root file the catalog verifier pins, resolved from the bundle
-    // without importing the catalog module (which pulls in Electron-heavy deps).
-    const relativePath = path.join('resources', 'keys', 'release-signing-public.pem')
-    const candidates = [
-      path.join(app.getAppPath(), relativePath),
-      ...(process.resourcesPath
-        ? [
-            path.join(process.resourcesPath, 'app', relativePath),
-            path.join(process.resourcesPath, relativePath)
-          ]
-        : []),
-      path.join(process.cwd(), relativePath)
-    ]
+    const candidates = releaseSigningPublicKeyCandidates()
     for (const candidate of candidates) {
       try {
         const key = (await fs.readFile(candidate, 'utf8')).trim()
