@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { inferCoreArtifactIdentity } from './lib/release-artifacts.mjs'
 
 const DEFAULT_MANIFEST
   = 'docs/plan-prd/03-features/download-update/fixtures/tuff-release-manifest.sample.json'
@@ -48,28 +49,6 @@ function inferReleaseChannel(versionText) {
   if (lower.includes('beta'))
     return 'BETA'
   return 'RELEASE'
-}
-
-function inferPlatform(filename) {
-  const lower = String(filename || '').toLowerCase()
-  if (lower.includes('windows') || lower.endsWith('.exe'))
-    return 'win32'
-  if (lower.includes('macos') || lower.endsWith('.dmg') || lower.endsWith('.zip'))
-    return 'darwin'
-  if (lower.includes('ubuntu') || lower.endsWith('.appimage') || lower.endsWith('.deb') || lower.endsWith('.snap'))
-    return 'linux'
-  return null
-}
-
-function inferArch(filename) {
-  const lower = String(filename || '').toLowerCase()
-  if (lower.includes('universal'))
-    return 'universal'
-  if (lower.includes('arm64') || lower.includes('aarch64'))
-    return 'arm64'
-  if (lower.includes('x64') || lower.includes('amd64'))
-    return 'x64'
-  return 'x64'
 }
 
 function isMetaAssetName(filename) {
@@ -162,11 +141,16 @@ for (const [index, artifact] of artifacts.entries()) {
     }
 
     if (typeof name === 'string' && name.length > 0) {
-      const inferredPlatform = inferPlatform(name)
-      const inferredArch = inferArch(name)
-      requireField(Boolean(inferredPlatform), `${label}.name must include a recognizable core platform`)
-      requireField(!inferredPlatform || platform === inferredPlatform, `${label}.platform does not match artifact name`)
-      requireField(arch === inferredArch, `${label}.arch does not match artifact name`)
+      const inferredIdentity = inferCoreArtifactIdentity(name)
+      requireField(Boolean(inferredIdentity), `${label}.name must include a recognizable core platform`)
+      requireField(
+        !inferredIdentity || platform === inferredIdentity.platform,
+        `${label}.platform does not match artifact name`,
+      )
+      requireField(
+        !inferredIdentity || arch === inferredIdentity.arch,
+        `${label}.arch does not match artifact name`,
+      )
       if (typeof signature === 'string' && signature.length > 0) {
         requireField(
           signature === `${name}.sig` || signature === `${name}.asc`,
@@ -185,8 +169,9 @@ for (const [index, artifact] of artifacts.entries()) {
         `^tuff-core-${escapedVersion}-(win32|darwin|linux)-(x64|arm64|universal)(-setup)?\\.(exe|dmg|AppImage|deb|zip)$`,
         'i',
       )
+      const workflowVersion = escapedVersion.replace(/-beta\\\./i, '-SNAPSHOT\\.')
       const releaseWorkflowCorePattern = new RegExp(
-        `^(windows|macos|ubuntu)-latest-(beta|snapshot|release)-tuff(?:-${escapedVersion}|-${escapedVersion.replace(/-beta\\\./i, '-SNAPSHOT\\.')})?(?:\\.app)?(?:-setup)?\\.(exe|dmg|AppImage|deb|zip)$`,
+        `^(windows-(?:latest|2022)|macos-latest|ubuntu-latest)-(beta|snapshot|release)-tuff-(?:${escapedVersion}|${workflowVersion})(?:-(?:x64|arm64|universal))?(?:\\.app)?(?:-setup)?\\.(exe|dmg|AppImage|deb|snap|zip)$`,
         'i',
       )
       requireField(

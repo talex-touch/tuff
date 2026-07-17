@@ -689,6 +689,20 @@ function build() {
     console.log('[build-target] Enabled macOS LSUIElement via explicit build flag');
   }
 
+  const officialReleaseBuildFlag = String(process.env.TUFF_OFFICIAL_RELEASE_BUILD || '')
+    .trim()
+    .toLowerCase();
+  const officialMacReleaseBuild =
+    normalizedTarget === 'mac' && ['1', 'true'].includes(officialReleaseBuildFlag);
+  if (officialMacReleaseBuild) {
+    builderArgs.push(
+      '--config.mac.forceCodeSigning=true',
+      '--config.mac.hardenedRuntime=true',
+      '--config.mac.notarize=true'
+    );
+    console.log('[build-target] Enforcing Developer ID signing and notarization');
+  }
+
   const publishPolicy = publish || (['beta', 'snapshot'].includes(buildType) ? 'never' : undefined);
   if (publishPolicy) {
     builderArgs.push(`--publish=${publishPolicy}`);

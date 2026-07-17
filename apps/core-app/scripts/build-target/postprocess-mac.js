@@ -1,4 +1,4 @@
-const { execSync } = require('child_process')
+const { execSync, spawnSync } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
@@ -190,7 +190,46 @@ function adHocSignApps(appDirs) {
   })
 }
 
-function zipApps(appDirs, distDir, version, arch) {
+function isOfficialReleaseBuild() {
+  const value = String(process.env.TUFF_OFFICIAL_RELEASE_BUILD || '')
+    .trim()
+    .toLowerCase()
+  return value === '1' || value === 'true'
+}
+
+function verifyOfficialSignedApps(appDirs) {
+  console.log('\n=== Verifying Developer ID signatures before archive ===')
+  appDirs.forEach((appPath) => {
+    const verification = spawnSync(
+      '/usr/bin/codesign',
+      ['--verify', '--deep', '--strict', '--verbose=4', appPath],
+      { encoding: 'utf8' }
+    )
+    if (verification.status !== 0) {
+      throw new Error(`Developer ID signature verification failed for ${appPath}`)
+    }
+
+    const details = spawnSync('/usr/bin/codesign', ['-dv', '--verbose=4', appPath], {
+      encoding: 'utf8'
+    })
+    const output = `${details.stdout || ''}\n${details.stderr || ''}`
+    const hasDeveloperId = /^Authority=Developer ID Application:/m.test(output)
+    const teamMatch = output.match(/^TeamIdentifier=(.+)$/m)
+    const teamIdentifier = teamMatch?.[1]?.trim()
+    if (
+      details.status !== 0 ||
+      !hasDeveloperId ||
+      !teamIdentifier ||
+      teamIdentifier === 'not set'
+    ) {
+      throw new Error(`Official build is not signed with a Developer ID identity: ${appPath}`)
+    }
+
+    console.log(`  ✓ Verified Developer ID signature (${teamIdentifier}): ${appPath}`)
+  })
+}
+
+function zipApps(appDirs, distDir, version, arch, officialReleaseBuild = false) {
   console.log('\n=== Creating zip file ===')
   appDirs.forEach((appPath) => {
     const appName = path.basename(appPath)
@@ -202,41 +241,63 @@ function zipApps(appDirs, distDir, version, arch) {
         fs.unlinkSync(zipPath)
       }
       const absZipPath = path.resolve(zipPath)
-      execSync(`cd "${appParent}" && zip -r "${absZipPath}" "${appName}"`, { stdio: 'inherit' })
+      if (officialReleaseBuild) {
+        execSync(`/usr/bin/ditto -c -k --sequesterRsrc --keepParent "${appPath}" "${absZipPath}"`, {
+          stdio: 'inherit'
+        })
+      } else {
+        execSync(`cd "${appParent}" && zip -r "${absZipPath}" "${appName}"`, {
+          stdio: 'inherit'
+        })
+      }
       console.log(`  ✓ Created zip: ${absZipPath}`)
 
-      if (fs.existsSync(zipPath)) {
-        const stats = fs.statSync(zipPath)
-        const sizeMB = (stats.size / (1024 * 1024)).toFixed(2)
-        console.log(`  ✓ Zip file verified: ${sizeMB} MB`)
-      } else {
-        console.warn(`  ⚠️  Warning: Zip file created but not found at expected path: ${zipPath}`)
+      if (!fs.existsSync(zipPath)) {
+        throw new Error(`Zip archive not found after creation: ${zipPath}`)
       }
+      const stats = fs.statSync(zipPath)
+      const sizeMB = (stats.size / (1024 * 1024)).toFixed(2)
+      console.log(`  ✓ Zip file verified: ${sizeMB} MB`)
     } catch (err) {
+      if (officialReleaseBuild) {
+        throw err
+      }
       console.warn(`  Warning: Failed to create zip ${zipPath}: ${err.message}`)
     }
   })
 }
 
 function postProcessMacArtifacts(distDir, version, arch) {
-  console.log('\n=== Fixing macOS executable permissions ===')
+  const officialReleaseBuild = isOfficialReleaseBuild()
+  console.log(`\n=== macOS postprocess (${officialReleaseBuild ? 'official' : 'local'}) ===`)
   try {
     const appDirs = findAppDirs(distDir)
-    if (appDirs.length > 0) {
+    if (appDirs.length === 0) {
+      if (officialReleaseBuild) {
+        throw new Error('Official macOS build produced no .app bundle')
+      }
+      console.log('  No .app bundles found to fix')
+      return
+    }
+
+    if (officialReleaseBuild) {
+      verifyOfficialSignedApps(appDirs)
+    } else {
       appDirs.forEach((appPath) => {
         fixAppPermissions(appPath)
       })
       console.log(`✓ Fixed permissions for ${appDirs.length} .app bundle(s)`)
-
       fixFrameworkExecutablePermissions(appDirs)
       removeQuarantine(appDirs)
       adHocSignApps(appDirs)
-      zipApps(appDirs, distDir, version, arch)
-    } else {
-      console.log('  No .app bundles found to fix')
     }
+
+    zipApps(appDirs, distDir, version, arch, officialReleaseBuild)
   } catch (err) {
-    console.warn(`  Warning: Failed to fix executable permissions: ${err.message}`)
+    if (officialReleaseBuild) {
+      throw err
+    }
+    console.warn(`  Warning: Failed to postprocess macOS artifacts: ${err.message}`)
   }
 }
 

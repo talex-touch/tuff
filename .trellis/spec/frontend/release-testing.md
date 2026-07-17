@@ -89,6 +89,17 @@ shasum -a 256 "$HOST_ASSET"
 - A test run may complete while the release result is `fail`; never turn a completed test execution into a successful release claim.
 - Stop the supervised process and remove `/tmp/tuff-release-acceptance/<tag>` after curated evidence is written.
 
+### Release creation
+
+- `create-release` must fail before publishing when `RELEASE_SIGNING_PRIVATE_KEY` is missing, malformed, or does not match the public key pinned in CoreApp/Nexus.
+- Every published CoreApp package gets an RSA-SHA256 base64 `.sig`; manifest `artifacts` contains only one preferred package per `platform/arch` and names its sidecar without listing the sidecar as a downloadable artifact.
+- Nexus sync consumes only validated manifest entries. Each linked asset carries the manifest SHA-256 and the matching GitHub sidecar `signatureUrl`; it must not infer or upsert `.sig` files as platform assets.
+- Official macOS jobs require Developer ID credentials plus one complete Apple notarization credential set. The postprocess must preserve the electron-builder signature, use a metadata-preserving archive, and emit passed codesign/TeamIdentifier/Gatekeeper/notarization evidence before upload.
+- Before GitHub Release creation, the workflow re-hashes every preferred asset, verifies every published package sidecar, merges macOS native-trust evidence, writes `release-test-summary.json` / `.md`, and appends Markdown to the Actions step summary. A failed summary blocks release creation.
+- Every CI release build must create `build-attestation.json` plus `build-attestation.json.sig` inside the packaged resources before native code signing. The signed payload binds `appId`, version/channel, platform/architecture, commit, pinned-key fingerprint, and the physical `app.asar` SHA-256. Missing/mismatched `RELEASE_SIGNING_PRIVATE_KEY` fails the build; local builds may remain explicitly unsigned.
+- Packaged runtime verification is offline and fail closed for malformed, mismatched, or tampered attestations: verify the detached signature with the embedded public key, validate build identity, and hash the physical `app.asar` through Electron `original-fs`. Only a valid result sets `isOfficialBuild=true`; a package with no attestation stays unsigned without being misreported as a verification failure.
+- `create-release` must run `scripts/check-release-signing-trust-roots.mjs` before collecting assets. CoreApp PEM, Nexus resource PEM, Nexus server PEM, and the Cloudflare worker fallback module must resolve to one SPKI SHA-256 fingerprint; any drift blocks publication.
+
 ## 4. Validation & Error Matrix
 
 | Condition | Classification |
@@ -100,6 +111,9 @@ shasum -a 256 "$HOST_ASSET"
 | Manifest lacks signatures or duplicates a platform pair | `fail`; independent hash checks may continue |
 | Nexus signed URL missing/invalid or does not download binary bytes | `fail` |
 | Signature endpoint 404 or signing public key absent | `fail` |
+| CoreApp/Nexus PEM or worker fallback fingerprints diverge | `fail`; stop before collecting release assets |
+| CI package lacks build attestation or its private key mismatches the pinned public key | `fail`; package creation stops |
+| Runtime attestation signature/identity/`app.asar` digest mismatch | `fail`; `isOfficialBuild=false`, security banner remains eligible |
 | Bundle version/architecture/executable mismatch | `fail`; runtime blocked |
 | Deep strict codesign failure or ad-hoc-only signature | `fail` |
 | `spctl` says security assessment disabled | `blocked`, never `pass` |
@@ -123,8 +137,10 @@ Each “发版测试” run must assert and record:
 - Manifest validator result and exact issue categories.
 - Real Nexus host download reaches binary bytes and matches manifest/GitHub SHA-256.
 - Signature endpoint results and signing-key configuration.
+- Repository trust-root gate passes and the built Nexus `/api/releases/signing-key` fallback returns the same SPKI fingerprint.
 - Host bundle version, architecture, executable mode, deep codesign, and Gatekeeper result.
 - Packaged probe `ok`, renderer target count, Settings/diagnostics/detail visibility, audit-field gate, profile removal, and process termination.
+- Packaged build-attestation result: official packages report `isOfficialBuild=true`; an attestation or `app.asar` mutation reports `verificationFailed=true`.
 - Sanitization: no signed query values, credentials, personal paths, raw profiles, or downloaded packages remain in committed evidence.
 
 ## 7. Wrong vs Correct
@@ -151,4 +167,88 @@ pnpm -C "apps/core-app" run visible:experience:indexing-diagnostics-probe -- \
   --appBundle "$WORK_ROOT/unpacked/tuff.app" \
   --userDataDir "$WORK_ROOT/profile" \
   --outputDir "<task-evidence-dir>" --seedRecentTaskEvidence
+```
+
+## Scenario: Deferred Apple Developer Signing
+
+### 1. Scope / Trigger
+
+- Trigger: every macOS release build until the repository owner explicitly states that Apple Developer signing and notarization credentials are configured.
+- This is a deliberate product-risk waiver, not evidence that ad-hoc signing passes Gatekeeper. Detached release signatures remain mandatory on every platform.
+
+### 2. Signatures
+
+```text
+TUFF_MAC_NATIVE_SIGNING_MODE := "waived" | "developer-id"
+verify-macos-release-signing.mjs --mode <mode> --app-bundle <path> --output <json>
+
+MacSigningEvidence := {
+  mode: "waived" | "developer-id",
+  status: "waived" | "pass" | "fail",
+  policyReason: "apple-developer-not-configured" | null,
+  signingKind: "developer-id" | "ad-hoc-or-missing",
+  teamIdentifier: string | null,
+  checks: { codesign: boolean, gatekeeper: boolean, notarization: boolean }
+}
+
+ReleaseTestSummary.checks.macosNativeTrust := true | "waived"
+```
+
+### 3. Contracts
+
+- No `CSC_*` and no Apple notarization secrets -> select `waived`, set `TUFF_OFFICIAL_RELEASE_BUILD=false`, retain ad-hoc postprocess, and publish explicit waived evidence.
+- Complete `CSC_LINK` / `CSC_KEY_PASSWORD` plus one complete notarization credential set -> select `developer-id`, set `TUFF_OFFICIAL_RELEASE_BUILD=true`, and enforce electron-builder signing/notarization.
+- Partial certificate or partial notarization configuration -> fail before build. Never hide misconfiguration behind the waiver.
+- `waived` evidence may let the release summary pass only when manifest, SHA-256, and every detached `.sig` pass. The summary and release asset must visibly retain `policyReason: apple-developer-not-configured` and `macosNativeTrust: waived`.
+- The waiver stays active until the owner explicitly announces Apple Developer setup; agents must not repeatedly request purchase/configuration before then.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|---|---|
+| All Apple/CSC secrets absent | `waived`; build and release may continue |
+| Only one of `CSC_LINK` / `CSC_KEY_PASSWORD` present | `fail`; partial certificate configuration |
+| Certificate complete, notarization absent | `fail`; incomplete `developer-id` configuration |
+| Notarization fields partially populated | `fail`; partial notarization configuration |
+| `developer-id` checks all pass | `pass`; `macosNativeTrust: true` |
+| Any `developer-id` check fails | `fail`; release blocked |
+| `waived` evidence has the wrong/missing policy reason | `fail`; malformed waiver evidence |
+| Detached signature fails in either mode | `fail`; Apple waiver does not apply |
+
+### 5. Good / Base / Bad Cases
+
+- **Good:** Apple credentials are complete, Developer ID/TeamIdentifier/Gatekeeper/notarization pass, and detached signatures pass.
+- **Base:** all Apple credentials are absent, evidence is explicitly `waived`, detached signatures pass, and the release summary preserves the accepted risk.
+- **Bad:** label ad-hoc signing as trusted, silently downgrade partially configured credentials, or waive detached signatures because Apple Developer is unavailable.
+
+### 6. Tests Required
+
+- Credential-mode resolver: all absent -> `waived`; complete certificate + either complete notarization set -> `developer-id`; every partial combination -> error.
+- macOS verifier: unsigned/ad-hoc fixture + `waived` -> status `waived`; same fixture + `developer-id` -> non-zero and status `fail`.
+- Release summary: valid waived evidence -> overall pass with `macosNativeTrust: "waived"`; wrong reason or failed detached signature -> non-zero fail summary.
+- Workflow YAML parse plus a focused assertion that only `developer-id` exports `TUFF_OFFICIAL_RELEASE_BUILD=true`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```bash
+# Missing Apple credentials block every beta forever, or are mislabeled as trusted.
+test -n "$CSC_LINK" || exit 1
+echo 'macosNativeTrust=true'
+```
+
+#### Correct
+
+```bash
+# Absence is an explicit accepted-risk mode; partial setup is still an error.
+if no_apple_credentials; then
+  export TUFF_MAC_NATIVE_SIGNING_MODE=waived
+  export TUFF_OFFICIAL_RELEASE_BUILD=false
+elif complete_developer_id_credentials; then
+  export TUFF_MAC_NATIVE_SIGNING_MODE=developer-id
+  export TUFF_OFFICIAL_RELEASE_BUILD=true
+else
+  exit 1
+fi
 ```

@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "sourceCompletedAt": "2026-07-17T05:29:50.622Z",
+  "sourceEvidence": ".trellis/tasks/archive/2026-07/07-16-downloaded-release-acceptance-flow/evidence/summary.json",
+  "release": {
+    "repository": "talex-touch/tuff",
+    "tag": "v2.4.13-beta.14",
+    "version": "2.4.13-beta.14",
+    "channel": "BETA",
+    "hostPlatform": "darwin",
+    "hostArch": "arm64"
+  },
+  "executionStatus": "completed",
+  "publishedReleaseStatus": "fail",
+  "gates": {
+    "releaseIdentity": "pass",
+    "githubAssetInventory": "pass",
+    "nexusPreferredMatrix": "pass",
+    "nexusSignedDownloads": "pass",
+    "hostDownloadDigest": "pass",
+    "manifestValidation": "fail",
+    "releaseSignatures": "fail",
+    "hostBundleVersionArchitectureExecutable": "pass",
+    "macCodesignDeepStrict": "fail",
+    "macGatekeeper": "blocked-security-disabled",
+    "isolatedPackagedRuntime": "pass"
+  },
+  "verified": [
+    "Root/Core, GitHub, Nexus release, and BETA latest resolve to v2.4.13-beta.14.",
+    "GitHub and Nexus expose the preferred darwin/arm64, linux/x64, and win32/x64 assets.",
+    "GitHub and Nexus host downloads are byte-identical to manifest/GitHub SHA-256.",
+    "All three Nexus signed download endpoints return valid redirects and the host download reaches binary bytes.",
+    "Downloaded app version, arm64 architecture, executable mode, and isolated packaged runtime match the target."
+  ],
+  "publishedReleaseFailures": [
+    {
+      "id": "manifest-invalid",
+      "detail": "Core signature fields are missing; linux/x64 is duplicated; macOS and Windows names fail the release validator."
+    },
+    {
+      "id": "release-signatures-missing",
+      "detail": "GitHub has no signature sidecars; Nexus assets have no signatureUrl; signature endpoints return 404; signing public key is not configured."
+    },
+    {
+      "id": "macos-native-signing",
+      "detail": "The bundle is ad-hoc signed with no TeamIdentifier and deep strict codesign verification fails."
+    },
+    {
+      "id": "gatekeeper-assessment-disabled",
+      "detail": "The host reports override=security disabled, so it cannot provide valid Gatekeeper acceptance evidence."
+    }
+  ],
+  "repositoryRemediation": {
+    "status": "implemented-unreleased",
+    "manifestPreferredPairsUnique": true,
+    "workflowDetachedSigningFailClosed": true,
+    "nexusManifestDrivenSignatureUrl": true,
+    "nexusPinnedPublicKeyFallback": true,
+    "macosNativeSigningModesImplemented": true,
+    "appleDeveloperPolicy": "waived-until-owner-explicitly-configures",
+    "bilingualReleaseNotesGenerated": true,
+    "releaseTestSummaryAutomationAdded": true,
+    "requiresNewBuildAndTag": true,
+    "publishedBeta14BinariesChanged": false,
+    "operationallyReady": false
+  },
+  "repositorySecretInventory": {
+    "checked": true,
+    "missingRequired": [
+      "RELEASE_SIGNING_PRIVATE_KEY"
+    ],
+    "appleDeveloperConfigured": false,
+    "appleDeveloperMode": "waived"
+  },
+  "requiredRepositorySecrets": [
+    "RELEASE_SIGNING_PRIVATE_KEY"
+  ],
+  "optionalAppleDeveloperSecrets": [
+    "CSC_LINK + CSC_KEY_PASSWORD",
+    "APPLE_API_KEY_CONTENT + APPLE_API_KEY_ID + APPLE_API_ISSUER, or APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID"
+  ],
+  "cleanup": {
+    "supervisedProcessStopped": true,
+    "isolatedProfileRemoved": true,
+    "temporaryReleaseRootRemoved": true,
+    "rawRuntimeEvidenceRemoved": true,
+    "installedApplicationTouched": false,
+    "realProfileTouched": false
+  }
+}

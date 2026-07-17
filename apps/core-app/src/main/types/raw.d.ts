@@ -8,6 +8,11 @@ declare module '*.svg?raw' {
   export default content
 }
 
+declare module '*.pem?raw' {
+  const content: string
+  export default content
+}
+
 declare module 'talex-mica-electron' {
   export function useMicaElectron(path?: string): void
 }

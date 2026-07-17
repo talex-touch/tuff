@@ -1123,7 +1123,7 @@ export class CommonChannelModule extends BaseModule {
           return {
             isOfficialBuild: status.isOfficialBuild,
             verificationFailed: status.verificationFailed,
-            hasOfficialKey: status.isVerified
+            hasOfficialKey: status.hasOfficialKey
           }
         }
       } catch (error) {

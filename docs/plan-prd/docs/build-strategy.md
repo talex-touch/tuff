@@ -45,16 +45,19 @@ pnpm -F @talex-touch/core-app run build:release:linux
 | `BUILD_ARCH` | `arm64/x64`（mac 默认为 arm64） |
 | `APP_VERSION` | （可选）覆盖打包版本号，`build-target` 会把 `SNAPSHOT-*` 注入给 `electron-builder` |
 | `SKIP_INSTALL_APP_DEPS` | `true` 时跳过 `electron-builder install-app-deps` |
+| `RELEASE_SIGNING_PRIVATE_KEY` | GitHub Actions secret；为发布包内构建证明及发布资产 `.sig` 签名，禁止写入仓库或日志 |
+| `TUFF_RELEASE_ATTESTATION_REQUIRED` | CI 发布构建固定为 `true`；缺少或错配签名私钥时在 `afterPack` 阶段 fail closed |
 
 ## 4. 流程细节
 
 1. `build-target.js` 会：
-   - 检测 beta 版本，自动转成 `SNAPSHOT-x.y.z-n` 并通过 `--config.extraMetadata.version` 注入 electron-builder，无需修改任何 package。
+   - 保留 package 中的完整版本（包括 `-beta.N` / `-snapshot.N`），不改写发布身份。
    - 清空 `dist/`，设置 `BUILD_*` 环境变量，执行 `npm run build`（包含 typecheck + electron-vite build）。
    - 校验 `out/` 是否存在 `main/preload/renderer`。
    - 调用 `scripts/ensure-platform-modules.js` 把 libsql 平台二进制同步到 `apps/core-app/node_modules`。
    - 运行 `electron-builder install-app-deps`（可通过 `SKIP_INSTALL_APP_DEPS` 跳过）。
-   - 调用 `electron-builder --{target}`，构建完成后检查产物是否齐全，并在 mac 上执行 `chmod -> xattr -> codesign - -> zip`。
+   - 调用 `electron-builder --{target}` 并检查产物；mac 本地构建保留 ad-hoc 兼容后处理，`TUFF_OFFICIAL_RELEASE_BUILD=true` 时强制 Developer ID、hardened runtime 与 notarization，禁止后处理覆盖官方签名。
+   - `afterPack` 在所有资源同步/裁剪完成后哈希物理 `app.asar`，生成签名的 `build-attestation.json` 与 `.sig`；本地无私钥构建显式跳过，CI 构建强制成功生成。
 
 2. `electron-builder.yml`
    - `directories.app` 指向 `apps/core-app`。
@@ -65,9 +68,14 @@ pnpm -F @talex-touch/core-app run build:release:linux
 
 ## 5. 发布注意事项
 
-- mac 正式发布前需要自行 `codesign --sign "Developer ID Application: xxx"` 并 `notarize`。
-- Windows 如果需要签名，向 `build-target` 加上 `CSC_LINK/CSC_KEY_PASSWORD` 环境变量即可走 electron-builder 默认流程。
-- Linux `AppImage` 需要 `chmod +x` 后才能运行；`deb` 直接用于 apt 安装。
+- GitHub Actions 官方发布仍必须配置 `RELEASE_SIGNING_PRIVATE_KEY`，用于三平台 detached signature；这与 Apple Developer 无关，不能豁免。
+- 当前 GitHub secret `RELEASE_SIGNING_PRIVATE_KEY` 已轮换为 RSA-4096；CoreApp/Nexus 固定公钥 SHA-256 指纹为 `a340b58cff2413f11c64b406fa745e76910759d19a211b72d176686b021fb2ed`。私钥只存在于 GitHub Actions secret，仓库只保留公钥。
+- Nexus Cloudflare fallback 从 `server/utils/releaseSigningPublicKey.mjs` 内嵌；`scripts/check-release-signing-trust-roots.mjs` 在收集发布资产前比较 CoreApp PEM、Nexus resource/server PEM 与 worker fallback 的 SPKI 指纹，任一漂移都会阻断 Release。
+- CoreApp 启动时离线验证包内签名、版本/平台/架构身份和物理 `app.asar` SHA-256；仅全部通过时上报 `isOfficialBuild=true`。Electron 的 ASAR 虚拟文件系统不能直接哈希归档本体，因此运行时必须经 `original-fs` 读取。
+- 在仓库 owner 明确说明 Apple Developer 已配置之前，macOS 默认进入 `waived`：允许 ad-hoc 包发布，但 summary 固定记录 `apple-developer-not-configured` 与 `macosNativeTrust: waived`，不得宣称 Gatekeeper 通过。
+- 未来若完整配置 `CSC_LINK` / `CSC_KEY_PASSWORD` 与一组 Apple notarization 凭据，workflow 自动切换到 `developer-id` 严格门禁；任何部分配置都会 fail closed。
+- create-release job 为全部 CoreApp 安装包生成 RSA-SHA256 `.sig`，验证私钥与仓库固定公钥一致，只把每个 `platform/arch` 的首选资产写入 manifest，并生成 `release-test-summary.json` / `.md`。
+- Windows Authenticode 与 Linux 包仓库级签名仍不在当前流水线内；三平台都由 detached signature 保护。
 
 ## 6. 故障排查
 
@@ -75,7 +83,12 @@ pnpm -F @talex-touch/core-app run build:release:linux
 |------|--------|
 | `electron-builder` 报 `node_modules` 缺失 | 确认 `apps/core-app/node_modules` 存在（`pnpm install`） |
 | 产物空目录 | 查看 `dist/` 日志，确认 `build-target` 是否提前报错 |
-| mac 打开提示损坏 | 正常，ad-hoc 仅绕过 Gatekeeper，需要右键 + Open 或自行正式签名 |
+| macOS summary 显示 `waived` | 这是当前 owner 明确接受的 Apple Developer 风险豁免；不要重复要求购买/配置，直到 owner 主动说明已配置 |
+| Apple secrets 配置后构建前失败 | 检查 `CSC_LINK` / `CSC_KEY_PASSWORD` 与所选 notarization 组是否全部完整；部分配置禁止回退到 `waived` |
+| 发布资产准备失败 | 检查 `RELEASE_SIGNING_PRIVATE_KEY` 对应公钥是否与 `resources/keys/release-signing-public.pem` 一致 |
+| 发布信任根检查失败 | 运行 `node scripts/check-release-signing-trust-roots.mjs`；四个来源必须同时解析为指纹 `a340b58cff2413f11c64b406fa745e76910759d19a211b72d176686b021fb2ed` |
+| 应用显示非官方/构建证明失败 | 检查包内 `build-attestation.json(.sig)`、嵌入公钥指纹及 `app.asar` 摘要；CI 缺证明应视为构建失败，不允许手工补签后发布 |
+| mac 包打开提示损坏 | `waived` 模式是 ad-hoc 包且不具备 Gatekeeper 原生信任；该限制必须保留在 release summary |
 | Linux 缺少 `AppImage` / `deb` | `dist` 下 `__appImage-x64` / `__deb-x64` 是否生成；若为空，大概率是 electron-builder 未成功执行 |
 
 ## 7. 未来扩展

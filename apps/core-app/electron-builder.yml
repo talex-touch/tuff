@@ -66,6 +66,8 @@ extraResources:
     to: resources/tray_icon_16x16.png
   - from: resources/tray_icon_22x22.png
     to: resources/tray_icon_22x22.png
+  - from: resources/keys/release-signing-public.pem
+    to: resources/keys/release-signing-public.pem
   - from: resources/scripts/macos-apply-update.sh
     to: resources/scripts/macos-apply-update.sh
   - from: resources/bundled-plugins
@@ -98,6 +100,7 @@ nsis:
   menuCategory: false
   differentialPackage: false
 mac:
+  entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     LSUIElement: true
@@ -106,7 +109,6 @@ mac:
     NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
-  sign: false
   gatekeeperAssess: false
   target:
     - target: dir
@@ -114,8 +116,7 @@ mac:
   icon: build/icon.icns
   category: public.app-category.productivity
   forceCodeSigning: false
-  identity: null
-  hardenedRuntime: false
+  hardenedRuntime: true
   artifactName: ${productName}-${version}.${ext}
 dmg:
 linux:
