@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-07-16
+- **Total Sessions**: 11
+- **Last Active**: 2026-07-17
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~522 | Active |
+| `journal-1.md` | ~555 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-07-17 | Harden release signing and official build verification | `723b1bdd4` | `master` |
 | 10 | 2026-07-16 | Downloaded release acceptance flow | `45462a71b` | `master` |
 | 9 | 2026-07-16 | Search core test fixture repair | `69ed465c3` | `master` |
 | 8 | 2026-07-16 | Stabilization P0 closure and unified file filtering | `7d2a24714`, `1d26362dd`, `c180cdc0d`, `f03cc7c3f`, `3fcd39163` | `master` |
