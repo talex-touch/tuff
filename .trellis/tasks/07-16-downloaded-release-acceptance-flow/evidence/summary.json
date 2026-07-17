@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "completedAt": "2026-07-17T05:29:50.622Z",
+  "target": {
+    "repository": "talex-touch/tuff",
+    "tag": "v2.4.13-beta.14",
+    "version": "2.4.13-beta.14",
+    "channel": "BETA",
+    "hostPlatform": "darwin",
+    "hostArch": "arm64"
+  },
+  "executionStatus": "completed",
+  "releaseStatus": "fail",
+  "gates": {
+    "releaseIdentity": "pass",
+    "githubAssetInventory": "pass",
+    "nexusPreferredMatrix": "pass",
+    "nexusSignedDownloads": "pass",
+    "hostDownloadDigest": "pass",
+    "manifestValidation": "fail",
+    "releaseSignatures": "fail",
+    "hostBundleVersionArchitectureExecutable": "pass",
+    "macCodesignDeepStrict": "fail",
+    "macGatekeeper": "blocked-security-disabled",
+    "isolatedPackagedRuntime": "pass"
+  },
+  "passes": [
+    "Root/Core, GitHub, Nexus release, and BETA latest all resolve to v2.4.13-beta.14.",
+    "GitHub exposes the published 10-asset inventory; Nexus exposes preferred darwin/arm64, linux/x64, and win32/x64 assets.",
+    "GitHub and Nexus host downloads are byte-identical to manifest/GitHub SHA-256.",
+    "All three Nexus signed download endpoints return valid redirects; the host download reaches binary bytes.",
+    "Downloaded app version, arm64 architecture, and executable mode match the target.",
+    "Isolated packaged probe passed: renderer/CDP, Settings, file-index diagnostics, detail dialog, and audit-field verification."
+  ],
+  "failures": [
+    {
+      "id": "manifest-invalid",
+      "detail": "Core signature fields are missing; linux/x64 is duplicated; macOS and Windows names fail the canonical-name validator."
+    },
+    {
+      "id": "release-signatures-missing",
+      "detail": "GitHub has no signature sidecars; Nexus assets have no signatureUrl; all three signature endpoints return 404; signing public key is not configured."
+    },
+    {
+      "id": "macos-native-signing",
+      "detail": "The bundle is ad-hoc signed with no TeamIdentifier and deep strict codesign verification fails on the embedded Electron framework bundle."
+    },
+    {
+      "id": "local-release-notes-missing",
+      "detail": "Repository-local zh/en update note files for 2.4.13-beta.14 are absent, although Nexus remote notes and notesHtml pass."
+    }
+  ],
+  "blocked": [
+    {
+      "id": "gatekeeper-assessment-disabled",
+      "detail": "spctl reports override=security disabled, so this machine cannot provide a valid Gatekeeper pass/fail assessment."
+    }
+  ],
+  "staticOnly": [
+    {
+      "platform": "linux",
+      "arch": "x64",
+      "coverage": "metadata, manifest, Nexus signed redirect"
+    },
+    {
+      "platform": "win32",
+      "arch": "x64",
+      "coverage": "metadata, manifest, Nexus signed redirect"
+    }
+  ],
+  "cleanup": {
+    "supervisedProcessStopped": true,
+    "isolatedProfileRemoved": true,
+    "temporaryReleaseRootRemoved": true,
+    "rawRuntimeEvidenceRemoved": true,
+    "installedApplicationTouched": false,
+    "realProfileTouched": false
+  },
+  "evidence": [
+    "github-release.json",
+    "download-integrity.json",
+    "nexus-host-download.json",
+    "remote-release-gate.json",
+    "signing-key.json",
+    "bundle-security.json",
+    "runtime-summary.json"
+  ],
+  "signingKeyConfigured": false
+}

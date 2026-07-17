@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-07-17T05:14:16.684Z",
+  "tag": "v2.4.13-beta.14",
+  "version": "2.4.13-beta.14",
+  "channel": "BETA",
+  "downloads": {
+    "manifest": {
+      "filename": "tuff-release-manifest.json",
+      "size": 1096,
+      "localSha256": "4e65f4bebab5f0052b5daa2f2c950c325d4415af1c0f2d63464cde37e564acf4",
+      "githubSha256": "4e65f4bebab5f0052b5daa2f2c950c325d4415af1c0f2d63464cde37e564acf4",
+      "digestMatchesGithub": true
+    },
+    "hostArtifact": {
+      "filename": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+      "platform": "darwin",
+      "arch": "arm64",
+      "size": 461431563,
+      "localSha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+      "manifestSha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+      "githubSha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+      "digestMatchesManifest": true,
+      "digestMatchesGithub": true
+    }
+  },
+  "manifestValidation": {
+    "status": "fail",
+    "exitCode": 1,
+    "stdout": "",
+    "stderr": "[update-manifest] Validation failed:\n- artifacts[0].signature is required for core artifacts\n- artifacts[0].name does not match core naming spec\n- artifacts[1].signature is required for core artifacts\n- artifacts[2].signature is required for core artifacts\n- artifacts[2].platform/arch must be unique for core artifacts\n- artifacts[3].signature is required for core artifacts\n- artifacts[3].name does not match core naming spec"
+  }
+}

@@ -1,0 +1,609 @@
+{
+  "capturedAt": "2026-07-17T05:21:33.360Z",
+  "commandExitCode": 0,
+  "commandStderr": "",
+  "tag": "v2.4.13-beta.14",
+  "version": "2.4.13-beta.14",
+  "stage": "gate-e",
+  "strict": false,
+  "baseUrl": "https://tuff.tagzxia.com",
+  "result": "fail",
+  "checks": [
+    {
+      "name": "notes",
+      "status": "fail",
+      "detail": "Release notes zh/en are missing or empty.",
+      "files": {
+        "shared": null,
+        "zh": null,
+        "en": null
+      },
+      "lengths": {
+        "zh": 0,
+        "en": 0
+      }
+    },
+    {
+      "name": "version-baseline",
+      "status": "pass",
+      "detail": "Root/Core version match target 2.4.13-beta.14.",
+      "rootVersion": "2.4.13-beta.14",
+      "coreVersion": "2.4.13-beta.14",
+      "targetVersion": "2.4.13-beta.14"
+    },
+    {
+      "name": "manifest",
+      "status": "fail",
+      "detail": "Manifest validation failed.",
+      "manifestPath": "<release-temp>/downloads/tuff-release-manifest.json",
+      "output": "[update-manifest] Validation failed:\n- artifacts[0].signature is required for core artifacts\n- artifacts[0].name does not match core naming spec\n- artifacts[1].signature is required for core artifacts\n- artifacts[2].signature is required for core artifacts\n- artifacts[2].platform/arch must be unique for core artifacts\n- artifacts[3].signature is required for core artifacts\n- artifacts[3].name does not match core naming spec"
+    },
+    {
+      "name": "publish-manifests",
+      "status": "pass",
+      "detail": "Publish package source manifests are npm-compatible.",
+      "output": "[publish-manifest] Validation passed (source): @talex-touch/tuffex, @talex-touch/utils, @talex-touch/tuff-core, @talex-touch/unplugin-export-plugin, @talex-touch/tuff-cli, @talex-touch/tuff-intelligence"
+    },
+    {
+      "name": "publish-manifests-pack",
+      "status": "pass",
+      "detail": "Publish package source and packed manifests are npm-compatible.",
+      "output": "[publish-manifest] Validation passed (source+pack): @talex-touch/tuffex, @talex-touch/utils, @talex-touch/tuff-core, @talex-touch/unplugin-export-plugin, @talex-touch/tuff-cli, @talex-touch/tuff-intelligence"
+    },
+    {
+      "name": "remote-release",
+      "status": "pass",
+      "detail": "Remote release metadata fetched.",
+      "url": "https://tuff.tagzxia.com/api/releases/v2.4.13-beta.14?assets=true",
+      "tag": "v2.4.13-beta.14",
+      "version": "2.4.13-beta.14",
+      "channel": "BETA",
+      "releaseStatus": "published"
+    },
+    {
+      "name": "remote-release-metadata",
+      "status": "pass",
+      "detail": "Remote release tag/version/channel/status match the checked release.",
+      "ok": true,
+      "issues": [],
+      "releaseTag": "v2.4.13-beta.14",
+      "releaseVersion": "2.4.13-beta.14",
+      "releaseChannel": "BETA",
+      "expectedTag": "v2.4.13-beta.14",
+      "expectedVersion": "2.4.13-beta.14",
+      "expectedChannel": "BETA",
+      "releaseStatus": "published"
+    },
+    {
+      "name": "remote-notes",
+      "status": "pass",
+      "detail": "Remote notes/notesHtml both satisfy {zh,en} non-empty.",
+      "notesKeys": [
+        "zh",
+        "en"
+      ],
+      "notesHtmlKeys": [
+        "zh",
+        "en"
+      ],
+      "notesZhLen": 731,
+      "notesEnLen": 1088,
+      "notesHtmlZhLen": 1325,
+      "notesHtmlEnLen": 1682
+    },
+    {
+      "name": "remote-assets-matrix",
+      "status": "pass",
+      "detail": "Remote assets list is non-empty.",
+      "count": 3,
+      "matrix": [
+        {
+          "platform": "darwin",
+          "arch": "arm64",
+          "filename": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip"
+        },
+        {
+          "platform": "linux",
+          "arch": "x64",
+          "filename": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage"
+        },
+        {
+          "platform": "win32",
+          "arch": "x64",
+          "filename": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe"
+        }
+      ]
+    },
+    {
+      "name": "remote-github-release-metadata",
+      "status": "pass",
+      "detail": "GitHub release tag/draft/prerelease match Nexus release metadata.",
+      "ok": true,
+      "issues": [],
+      "githubTag": "v2.4.13-beta.14",
+      "githubDraft": false,
+      "githubPrerelease": true,
+      "expectedTag": "v2.4.13-beta.14",
+      "expectedChannel": "BETA",
+      "expectedPrerelease": true,
+      "remoteTag": "v2.4.13-beta.14",
+      "remoteVersion": "2.4.13-beta.14",
+      "remoteChannel": "BETA"
+    },
+    {
+      "name": "remote-manifest-asset",
+      "status": "pass",
+      "detail": "GitHub release manifest asset exists and is downloadable.",
+      "hasManifest": true,
+      "githubReleaseUrl": "https://api.github.com/repos/talex-touch/tuff/releases/tags/v2.4.13-beta.14",
+      "githubManifestStatus": 200,
+      "manifestDownloadUrlInfo": {
+        "url": "https://github.com/talex-touch/tuff/releases/download/v2.4.13-beta.14/tuff-release-manifest.json",
+        "path": "/talex-touch/tuff/releases/download/v2.4.13-beta.14/tuff-release-manifest.json",
+        "hasExpectedTag": true,
+        "hasExpectedName": true,
+        "valid": true
+      },
+      "nexusAssetCount": 3,
+      "error": null
+    },
+    {
+      "name": "remote-manifest-integrity",
+      "status": "fail",
+      "detail": "GitHub release manifest core artifacts are incomplete or inconsistent.",
+      "issues": [
+        "artifacts[0].signature is missing",
+        "artifacts[1].signature is missing",
+        "artifacts[2].signature is missing",
+        "artifacts[2] duplicates platform/arch linux/x64",
+        "artifacts[3].signature is missing"
+      ],
+      "manifestIssueDetails": [
+        {
+          "scope": "artifact",
+          "index": 0,
+          "field": "signature",
+          "component": "core",
+          "name": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+          "platform": "darwin",
+          "arch": "arm64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 1,
+          "field": "signature",
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 2,
+          "field": "signature",
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.deb",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 2,
+          "field": null,
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.deb",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "duplicates platform/arch linux/x64"
+        },
+        {
+          "scope": "artifact",
+          "index": 3,
+          "field": "signature",
+          "component": "core",
+          "name": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe",
+          "platform": "win32",
+          "arch": "x64",
+          "reason": "signature is missing"
+        }
+      ],
+      "manifestMatrix": [
+        {
+          "platform": "darwin",
+          "arch": "arm64",
+          "name": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+          "sha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+          "signature": ""
+        },
+        {
+          "platform": "linux",
+          "arch": "x64",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage",
+          "sha256": "9f06e08b1bf1de8877729592324afe480d07f708d76127b23a1736a8089e6266",
+          "signature": ""
+        },
+        {
+          "platform": "win32",
+          "arch": "x64",
+          "name": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe",
+          "sha256": "66e523e310afe39d92595555e8abe0c7399f077cdbb7a6831377ee0557aaa0bf",
+          "signature": ""
+        }
+      ]
+    },
+    {
+      "name": "remote-manifest-nexus-matrix",
+      "status": "fail",
+      "detail": "Nexus release asset matrix does not match GitHub release manifest core artifacts.",
+      "mismatches": [
+        {
+          "key": "darwin/arm64",
+          "reason": "signature-url-mismatch",
+          "actual": null,
+          "expected": "/api/releases/v2.4.13-beta.14/signature/darwin/arm64"
+        },
+        {
+          "key": "linux/x64",
+          "reason": "signature-url-mismatch",
+          "actual": null,
+          "expected": "/api/releases/v2.4.13-beta.14/signature/linux/x64"
+        },
+        {
+          "key": "win32/x64",
+          "reason": "signature-url-mismatch",
+          "actual": null,
+          "expected": "/api/releases/v2.4.13-beta.14/signature/win32/x64"
+        }
+      ],
+      "manifestIssues": [
+        "artifacts[0].signature is missing",
+        "artifacts[1].signature is missing",
+        "artifacts[2].signature is missing",
+        "artifacts[2] duplicates platform/arch linux/x64",
+        "artifacts[3].signature is missing"
+      ],
+      "manifestIssueDetails": [
+        {
+          "scope": "artifact",
+          "index": 0,
+          "field": "signature",
+          "component": "core",
+          "name": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+          "platform": "darwin",
+          "arch": "arm64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 1,
+          "field": "signature",
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 2,
+          "field": "signature",
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.deb",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 2,
+          "field": null,
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.deb",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "duplicates platform/arch linux/x64"
+        },
+        {
+          "scope": "artifact",
+          "index": 3,
+          "field": "signature",
+          "component": "core",
+          "name": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe",
+          "platform": "win32",
+          "arch": "x64",
+          "reason": "signature is missing"
+        }
+      ],
+      "nexusMatrix": [
+        {
+          "key": "darwin/arm64",
+          "platform": "darwin",
+          "arch": "arm64",
+          "filename": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+          "sha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+          "hasDownloadUrl": true,
+          "downloadUrlPath": "/api/releases/v2.4.13-beta.14/download/darwin/arm64",
+          "hasSignatureUrl": false,
+          "signatureUrlPath": null,
+          "signatureUrlCanonical": false
+        },
+        {
+          "key": "linux/x64",
+          "platform": "linux",
+          "arch": "x64",
+          "filename": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage",
+          "sha256": "9f06e08b1bf1de8877729592324afe480d07f708d76127b23a1736a8089e6266",
+          "hasDownloadUrl": true,
+          "downloadUrlPath": "/api/releases/v2.4.13-beta.14/download/linux/x64",
+          "hasSignatureUrl": false,
+          "signatureUrlPath": null,
+          "signatureUrlCanonical": false
+        },
+        {
+          "key": "win32/x64",
+          "platform": "win32",
+          "arch": "x64",
+          "filename": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe",
+          "sha256": "66e523e310afe39d92595555e8abe0c7399f077cdbb7a6831377ee0557aaa0bf",
+          "hasDownloadUrl": true,
+          "downloadUrlPath": "/api/releases/v2.4.13-beta.14/download/win32/x64",
+          "hasSignatureUrl": false,
+          "signatureUrlPath": null,
+          "signatureUrlCanonical": false
+        }
+      ],
+      "manifestMatrix": [
+        {
+          "platform": "darwin",
+          "arch": "arm64",
+          "name": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+          "sha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+          "signature": ""
+        },
+        {
+          "platform": "linux",
+          "arch": "x64",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage",
+          "sha256": "9f06e08b1bf1de8877729592324afe480d07f708d76127b23a1736a8089e6266",
+          "signature": ""
+        },
+        {
+          "platform": "win32",
+          "arch": "x64",
+          "name": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe",
+          "sha256": "66e523e310afe39d92595555e8abe0c7399f077cdbb7a6831377ee0557aaa0bf",
+          "signature": ""
+        }
+      ]
+    },
+    {
+      "name": "remote-github-asset-inventory",
+      "status": "fail",
+      "detail": "GitHub release assets are missing core artifacts or signature sidecars declared by the release manifest.",
+      "issues": [
+        "artifacts[0].signature is missing",
+        "artifacts[1].signature is missing",
+        "artifacts[2].signature is missing",
+        "artifacts[2] duplicates platform/arch linux/x64",
+        "artifacts[3].signature is missing"
+      ],
+      "issueDetails": [
+        {
+          "scope": "artifact",
+          "index": 0,
+          "field": "signature",
+          "component": "core",
+          "name": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+          "platform": "darwin",
+          "arch": "arm64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 1,
+          "field": "signature",
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 2,
+          "field": "signature",
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.deb",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "signature is missing"
+        },
+        {
+          "scope": "artifact",
+          "index": 2,
+          "field": null,
+          "component": "core",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.deb",
+          "platform": "linux",
+          "arch": "x64",
+          "reason": "duplicates platform/arch linux/x64"
+        },
+        {
+          "scope": "artifact",
+          "index": 3,
+          "field": "signature",
+          "component": "core",
+          "name": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe",
+          "platform": "win32",
+          "arch": "x64",
+          "reason": "signature is missing"
+        }
+      ],
+      "missing": [],
+      "duplicateAssets": [],
+      "extraAssets": [],
+      "assetCount": 10,
+      "manifestMatrix": [
+        {
+          "platform": "darwin",
+          "arch": "arm64",
+          "name": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip"
+        },
+        {
+          "platform": "linux",
+          "arch": "x64",
+          "name": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage"
+        },
+        {
+          "platform": "win32",
+          "arch": "x64",
+          "name": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe"
+        }
+      ]
+    },
+    {
+      "name": "remote-asset-integrity",
+      "status": "fail",
+      "detail": "Remote assets missing valid sha256 or signatureUrl.",
+      "missing": [
+        {
+          "platform": "darwin",
+          "arch": "arm64",
+          "filename": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+          "hasSha256": true,
+          "hasValidSha256": true,
+          "hasSignatureUrl": false
+        },
+        {
+          "platform": "linux",
+          "arch": "x64",
+          "filename": "ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage",
+          "hasSha256": true,
+          "hasValidSha256": true,
+          "hasSignatureUrl": false
+        },
+        {
+          "platform": "win32",
+          "arch": "x64",
+          "filename": "windows-2022-beta-tuff-2.4.13-beta.14-setup.exe",
+          "hasSha256": true,
+          "hasValidSha256": true,
+          "hasSignatureUrl": false
+        }
+      ]
+    },
+    {
+      "name": "remote-signature-endpoint",
+      "status": "fail",
+      "detail": "Remote signature endpoint is not ready for all matrix entries.",
+      "results": [
+        {
+          "platform": "darwin",
+          "arch": "arm64",
+          "status": 404,
+          "validPayload": false
+        },
+        {
+          "platform": "linux",
+          "arch": "x64",
+          "status": 404,
+          "validPayload": false
+        },
+        {
+          "platform": "win32",
+          "arch": "x64",
+          "status": 404,
+          "validPayload": false
+        }
+      ]
+    },
+    {
+      "name": "remote-download-endpoint",
+      "status": "pass",
+      "detail": "Remote signed download URLs are available for all matrix entries.",
+      "results": [
+        {
+          "platform": "darwin",
+          "arch": "arm64",
+          "status": 302,
+          "url": "https://tuff.tagzxia.com/api/releases/v2.4.13-beta.14/download/darwin/arm64?exp=<redacted>&sig=<redacted>",
+          "sameOrigin": true,
+          "path": "/api/releases/v2.4.13-beta.14/download/darwin/arm64",
+          "hasHash": false,
+          "hasExp": true,
+          "hasValidExp": true,
+          "hasSig": true,
+          "hasValidSig": true,
+          "hasDuplicateSignedQuery": false,
+          "duplicateQueryKeys": [],
+          "hasUnexpectedQuery": false,
+          "unexpectedQueryKeys": [],
+          "exp": "1784266578",
+          "validResponse": true,
+          "responseKind": "redirect",
+          "location": "https://github.com/talex-touch/tuff/releases/download/v2.4.13-beta.14/macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip"
+        },
+        {
+          "platform": "linux",
+          "arch": "x64",
+          "status": 302,
+          "url": "https://tuff.tagzxia.com/api/releases/v2.4.13-beta.14/download/linux/x64?exp=<redacted>&sig=<redacted>",
+          "sameOrigin": true,
+          "path": "/api/releases/v2.4.13-beta.14/download/linux/x64",
+          "hasHash": false,
+          "hasExp": true,
+          "hasValidExp": true,
+          "hasSig": true,
+          "hasValidSig": true,
+          "hasDuplicateSignedQuery": false,
+          "duplicateQueryKeys": [],
+          "hasUnexpectedQuery": false,
+          "unexpectedQueryKeys": [],
+          "exp": "1784266578",
+          "validResponse": true,
+          "responseKind": "redirect",
+          "location": "https://github.com/talex-touch/tuff/releases/download/v2.4.13-beta.14/ubuntu-latest-beta-tuff-2.4.13-beta.14.AppImage"
+        },
+        {
+          "platform": "win32",
+          "arch": "x64",
+          "status": 302,
+          "url": "https://tuff.tagzxia.com/api/releases/v2.4.13-beta.14/download/win32/x64?exp=<redacted>&sig=<redacted>",
+          "sameOrigin": true,
+          "path": "/api/releases/v2.4.13-beta.14/download/win32/x64",
+          "hasHash": false,
+          "hasExp": true,
+          "hasValidExp": true,
+          "hasSig": true,
+          "hasValidSig": true,
+          "hasDuplicateSignedQuery": false,
+          "duplicateQueryKeys": [],
+          "hasUnexpectedQuery": false,
+          "unexpectedQueryKeys": [],
+          "exp": "1784266578",
+          "validResponse": true,
+          "responseKind": "redirect",
+          "location": "https://github.com/talex-touch/tuff/releases/download/v2.4.13-beta.14/windows-2022-beta-tuff-2.4.13-beta.14-setup.exe"
+        }
+      ]
+    },
+    {
+      "name": "remote-latest",
+      "status": "pass",
+      "detail": "Latest release for channel BETA matches v2.4.13-beta.14.",
+      "url": "https://tuff.tagzxia.com/api/releases/latest?channel=BETA",
+      "httpStatus": 200,
+      "latestTag": "v2.4.13-beta.14",
+      "latestVersion": "2.4.13-beta.14",
+      "latestChannel": "BETA",
+      "latestStatus": "published",
+      "expectedTag": "v2.4.13-beta.14",
+      "expectedVersion": "2.4.13-beta.14",
+      "expectedChannel": "BETA",
+      "issues": []
+    }
+  ]
+}

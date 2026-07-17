@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-07-17T05:25:48.446Z",
+  "tag": "v2.4.13-beta.14",
+  "source": "nexus-signed-download",
+  "endpoint": "/api/releases/v2.4.13-beta.14/download/darwin/arm64",
+  "signedRequest": {
+    "sameOrigin": true,
+    "hasExpiry": true,
+    "hasSignature": true
+  },
+  "response": {
+    "finalHttpStatus": 200,
+    "finalOrigin": "https://release-assets.githubusercontent.com",
+    "finalPath": "/github-production-release-asset/592818635/b87374cb-32d6-40c2-80d8-ffb84ac5914d"
+  },
+  "artifact": {
+    "filename": "macos-latest-beta-tuff-2.4.13-beta.14-arm64.app.zip",
+    "platform": "darwin",
+    "arch": "arm64",
+    "size": 461431563,
+    "localSha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+    "expectedSha256": "420a52b7938917a8a104f7219a22bf0cbd711eae57cc49eccbde8431b3774f0b",
+    "digestMatches": true
+  }
+}

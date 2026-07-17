@@ -33,6 +33,7 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns, verification | Filled |
 | [Type Safety](./type-safety.md) | TypeScript, runtime guards, typed transport | Filled |
 | [Plugin Runtime Security](./plugin-runtime-security.md) | Privileged plugin handlers, views, preload, and Electron policy | Filled |
+| [Release Acceptance Testing](./release-testing.md) | Downloaded release, integrity, trust, and isolated packaged-runtime gates | Filled |
 
 ---
 
@@ -48,6 +49,7 @@ Before editing frontend code:
 6. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
 7. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
 8. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
+9. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
 
 Also read shared thinking guides when the trigger applies:
 
