@@ -1,5 +1,6 @@
 import type { TuffItem, TuffQuery, TuffSearchResult } from '@talex-touch/utils'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { DbUtils } from '../../../../../db/utils'
 import { fileExtensions, files as filesSchema } from '../../../../../db/schema'
@@ -476,9 +477,21 @@ export class FileProviderSearchResultService {
   ): Map<string, FileSearchEntry> {
     const files = new Map<string, FileSearchEntry>()
     for (const row of rows) {
+      if (
+        fileFilterService.getSearchExclusionReason({
+          path: row.file.path,
+          name: row.file.name,
+          extension: row.file.extension,
+          isDirectory: row.file.isDir
+        })
+      ) {
+        continue
+      }
+
       const entry = files.get(row.file.path) ?? { file: row.file, extensions: {} }
-      if (row.extensionKey && row.extensionValue)
+      if (row.extensionKey && row.extensionValue) {
         entry.extensions[row.extensionKey] = row.extensionValue
+      }
       files.set(row.file.path, entry)
     }
     return files

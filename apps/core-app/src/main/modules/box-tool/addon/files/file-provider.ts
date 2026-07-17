@@ -43,6 +43,7 @@ import path from 'node:path'
 import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { StorageList, timingLogger, TuffInputType } from '@talex-touch/utils'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -86,7 +87,7 @@ import {
 import { formatDuration } from '../../../../utils/logger'
 import { enterPerfContext } from '../../../../utils/perf-context'
 import { getMainConfig, saveMainConfig } from '../../../storage'
-import { BLACKLISTED_EXTENSIONS, KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
+import { KEYWORD_MAP, WHITELISTED_EXTENSIONS } from './constants'
 import { isIndexableFile, mapFileToTuffItem, scanDirectory } from './utils'
 import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
@@ -1180,18 +1181,41 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     reason: string
   ): Promise<Array<typeof filesSchema.$inferSelect>> {
     if (records.length === 0) return []
+
+    const acceptedRecords = records.filter((record) => {
+      const extension = record.extension?.toLowerCase() || path.extname(record.name).toLowerCase()
+      return (
+        WHITELISTED_EXTENSIONS.has(extension) &&
+        fileFilterService.getIndexExclusionReason({
+          path: record.path,
+          name: record.name,
+          extension
+        }) === null
+      )
+    })
+    if (acceptedRecords.length !== records.length) {
+      this.logDebug('Filtered full-scan index records at commit boundary', {
+        reason,
+        requested: records.length,
+        accepted: acceptedRecords.length,
+        filtered: records.length - acceptedRecords.length
+      })
+    }
+    if (acceptedRecords.length === 0) return []
     if (!(await this.ensureSearchIndexWorkerReady(reason))) return []
+
     const startedAt = performance.now()
     try {
-      const persisted = (await this.searchIndexWorker.upsertFiles(records)) as unknown as Array<
-        typeof filesSchema.$inferSelect
-      >
+      const persisted = (await this.searchIndexWorker.upsertFiles(
+        acceptedRecords
+      )) as unknown as Array<typeof filesSchema.$inferSelect>
       this.recordRuntimeWriteSnapshot(this.ftsWriteSnapshotService, {
         entries: persisted.length,
         reason,
         durationMs: performance.now() - startedAt,
         metadata: {
           requestedRows: records.length,
+          acceptedRows: acceptedRecords.length,
           persistedRows: persisted.length,
           storeBoundary: 'fts-write'
         }
@@ -1201,9 +1225,10 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       this.recordRuntimeWriteFailureSnapshot(this.ftsWriteSnapshotService, {
         error,
         reason,
-        entries: records.length,
+        entries: acceptedRecords.length,
         metadata: {
           requestedRows: records.length,
+          acceptedRows: acceptedRecords.length,
           storeBoundary: 'fts-write'
         }
       })
@@ -2416,11 +2441,29 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     records: Array<typeof filesSchema.$inferInsert>
   ): Promise<Array<typeof filesSchema.$inferSelect>> {
     if (!this.dbUtils || records.length === 0) return []
+
+    const acceptedRecords = records.filter(
+      (record) =>
+        fileFilterService.getManualIndexExclusionReason({
+          path: record.path,
+          name: record.name,
+          extension: record.extension
+        }) === null
+    )
+    if (acceptedRecords.length !== records.length) {
+      this.logDebug('Filtered incremental index records at commit boundary', {
+        requested: records.length,
+        accepted: acceptedRecords.length,
+        filtered: records.length - acceptedRecords.length
+      })
+    }
+    if (acceptedRecords.length === 0) return []
+
     const db = this.dbUtils.getDb()
     return await this.withDbWrite('file-index.incremental.insert', () =>
       db
         .insert(filesSchema)
-        .values(records)
+        .values(acceptedRecords)
         .onConflictDoUpdate({
           target: filesSchema.path,
           set: {
@@ -2442,41 +2485,33 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   ): Promise<typeof filesSchema.$inferInsert | null> {
     try {
       const stats = await fs.stat(rawPath)
-      if (!stats.isFile()) {
-        return null
-      }
+      if (!stats.isFile()) return null
 
       const manualForce = options?.manualForce === true
       const name = path.basename(rawPath)
       const extension = path.extname(name).toLowerCase()
-
-      if (manualForce) {
-        if (extension && BLACKLISTED_EXTENSIONS.has(extension)) {
-          this.logDebug('buildFileRecord filtered(manual-blacklist)', {
+      const exclusionReason = manualForce
+        ? fileFilterService.getManualIndexExclusionReason({
             path: rawPath,
-            extension,
-            reason: 'blacklisted-extension'
-          })
-          this.logDebug('Skipped manual incremental file: blacklisted extension', {
-            path: rawPath,
+            name,
             extension
           })
-          return null
-        }
-      } else if (!isIndexableFile(rawPath, extension, name)) {
-        this.logDebug('Skipped incremental file: not indexable by whitelist', {
+        : isIndexableFile(rawPath, extension, name)
+          ? null
+          : 'unsupported-extension'
+
+      if (exclusionReason) {
+        this.logDebug('Skipped incremental file by unified filter', {
           path: rawPath,
-          extension
+          extension,
+          reason: exclusionReason,
+          manualForce
         })
         return null
       }
 
       if (manualForce && !WHITELISTED_EXTENSIONS.has(extension)) {
-        this.logDebug('buildFileRecord accepted(manual-force)', {
-          path: rawPath,
-          extension
-        })
-        this.logInfo('Manual incremental file accepted by manual-force fallback', {
+        this.logDebug('Accepted manual incremental file outside automatic whitelist', {
           path: rawPath,
           extension
         })
@@ -2496,9 +2531,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     } catch (error) {
       const err = error as NodeJS.ErrnoException
       if (err?.code !== 'ENOENT') {
-        this.logError('Failed to read file metadata', error, {
-          path: rawPath
-        })
+        this.logError('Failed to read file metadata', error, { path: rawPath })
       }
       return null
     }

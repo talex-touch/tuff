@@ -746,6 +746,33 @@ describe('everything-provider fallback chain', () => {
     )
   })
 
+  it('filters internal metadata before Everything item construction', async () => {
+    const provider = everythingProvider as unknown as MutableEverythingProvider
+    provider.backend = 'cli'
+    provider.isAvailable = true
+    provider.isEnabled = true
+
+    const searchSpy = vi
+      .spyOn(provider, 'searchEverything')
+      .mockResolvedValue([
+        buildResult('C:/Users/demo/Music/Library.tvdb'),
+        buildResult('C:/Users/demo/Music/Genius.itdb'),
+        buildResult('C:/Users/demo/Music/Media.localized'),
+        buildResult('C:/Users/demo/Downloads/WeTypeInstaller_3000.zip'),
+        buildResult('C:/Users/demo/Pictures/Screenshot.png')
+      ])
+
+    const result = await withPlatform('win32', () =>
+      provider.onSearch({ text: 'demo', inputs: [] }, new AbortController().signal)
+    )
+
+    expect(result.items?.map((item) => item.meta?.fileSearchContext?.path)).toEqual([
+      'C:/Users/demo/Downloads/WeTypeInstaller_3000.zip',
+      'C:/Users/demo/Pictures/Screenshot.png'
+    ])
+    expect(searchSpy).toHaveBeenCalledWith(expect.any(String), 100, expect.any(AbortSignal))
+  })
+
   it('returns slim Everything results and reuses warmed icons after initial placeholder', async () => {
     const provider = everythingProvider as unknown as MutableEverythingProvider
     provider.backend = 'cli'

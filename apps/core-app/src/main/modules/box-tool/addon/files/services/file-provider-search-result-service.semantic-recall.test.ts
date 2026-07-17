@@ -8,6 +8,7 @@ import {
 interface FakeRow {
   id: number
   path: string
+  extension?: string
 }
 
 function makeService(opts: {
@@ -18,8 +19,10 @@ function makeService(opts: {
     file: {
       id: row.id,
       path: row.path,
+      name: row.path.split('/').at(-1) ?? row.path,
       type: 'file',
-      extension: '.txt',
+      extension: row.extension ?? '.txt',
+      isDir: false,
       mtime: new Date(0)
     },
     extensionKey: null,
@@ -93,6 +96,23 @@ describe('FileProviderSearchResultService.semanticRecall', () => {
     expect(search?.semanticScore).toBe(0.9)
     expect(result[0].scoring?.match_details?.type).toBe('semantic')
     expect(result[0].scoring?.match).toBe(0)
+  })
+
+  it('过滤旧索引中的内部数据库召回项', async () => {
+    const { service } = makeService({
+      semanticMatches: [
+        { sourceId: '1', score: 0.9 },
+        { sourceId: '2', score: 0.8 }
+      ],
+      rows: [
+        { id: 1, path: '/Users/demo/Music/Genius.itdb', extension: '.itdb' },
+        { id: 2, path: '/Users/demo/Documents/report.txt' }
+      ]
+    })
+
+    const result = await service.semanticRecall({ text: 'report' } as TuffQuery, new Set(), signal)
+
+    expect(result.map((item) => item.id)).toEqual(['/Users/demo/Documents/report.txt'])
   })
 
   it('query 过短时不触发语义查询', async () => {

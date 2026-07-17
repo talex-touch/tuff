@@ -95,24 +95,16 @@ describe('native-file-search-provider', () => {
     })
   })
 
-  it('detects macOS application bundle paths by path segment', () => {
-    expect(__test__.isMacApplicationBundlePath('/Applications/QQ.app')).toBe(true)
-    expect(__test__.isMacApplicationBundlePath('/Applications/QQ.app/Contents/Info.plist')).toBe(
-      true
-    )
-    expect(__test__.isMacApplicationBundlePath('/Users/demo/Apps/ChatApp.APP')).toBe(true)
-    expect(__test__.isMacApplicationBundlePath('/Users/demo/qq-notes.txt')).toBe(false)
-    expect(__test__.isMacApplicationBundlePath('/Users/demo/My.app.backup/file.txt')).toBe(false)
-  })
-
-  it('filters application bundles from Spotlight file search results', async () => {
+  it('filters application metadata before Spotlight stat and preserves user files', async () => {
     execFileMock.mockImplementation((_command, _args, _options, callback) => {
       callback(null, {
         stdout:
-          '/Applications/QQ.app\0' +
-          '/Applications/QQ.app/Contents/Info.plist\0' +
-          '/System/Library/PrivateFrameworks/MapsUI.framework/safari.svg\0' +
-          '/Users/demo/Documents/qq-notes.txt\0'
+          '/Users/demo/Documents/QQ.app/Contents/Info.plist\0' +
+          '/Users/demo/Music/Music Library.musiclibrary/Genius.itdb\0' +
+          '/Users/demo/Music/Media.localized\0' +
+          '/Users/demo/Documents/qq-notes.txt\0' +
+          '/Users/demo/Downloads/WeTypeInstaller_3000.zip\0' +
+          '/Users/demo/Pictures/Screenshot.png\0'
       })
     })
     statMock.mockResolvedValue({
@@ -125,7 +117,11 @@ describe('native-file-search-provider', () => {
     const provider = macSpotlightFileProvider as unknown as SearchableSpotlightProvider
     const results = await provider.searchNative('qq', new AbortController().signal)
 
-    expect(results.map((result) => result.path)).toEqual(['/Users/demo/Documents/qq-notes.txt'])
+    expect(results.map((result) => result.path)).toEqual([
+      '/Users/demo/Documents/qq-notes.txt',
+      '/Users/demo/Downloads/WeTypeInstaller_3000.zip',
+      '/Users/demo/Pictures/Screenshot.png'
+    ])
     expect(execFileMock).toHaveBeenCalledWith(
       'mdfind',
       expect.arrayContaining([
@@ -137,8 +133,10 @@ describe('native-file-search-provider', () => {
       expect.objectContaining({ timeout: 1200 }),
       expect.any(Function)
     )
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith('/Users/demo/Documents/qq-notes.txt')
+    expect(statMock).toHaveBeenCalledTimes(3)
+    expect(statMock).not.toHaveBeenCalledWith(
+      '/Users/demo/Music/Music Library.musiclibrary/Genius.itdb'
+    )
   })
 
   it('includes deduped file index extra paths in Spotlight search roots', async () => {

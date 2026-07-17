@@ -26,6 +26,7 @@ import {
   TuffItemBuilder,
   TuffSearchResultBuilder
 } from '@talex-touch/utils'
+import { fileFilterService } from '@talex-touch/utils/common/file-filter-service'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { shell } from 'electron'
@@ -71,6 +72,8 @@ import { mapFileToTuffItem } from './utils'
 const execFileAsync = promisify(execFile)
 const fileProviderLog = getLogger('file-provider')
 const EVERYTHING_ICON_WARMUP_LIMIT = 12
+const EVERYTHING_SEARCH_MAX_RESULTS = 50
+const EVERYTHING_SEARCH_FETCH_LIMIT = EVERYTHING_SEARCH_MAX_RESULTS * 2
 const EVERYTHING_STARTUP_READY_WAIT_MS = 3_000
 const EVERYTHING_CLI_EMPTY_DB_THRESHOLD = 1
 const EVERYTHING_INSTALL_POLL_MS = 500
@@ -1695,7 +1698,22 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     const everythingQuery = buildEverythingQuery(searchText)
 
     try {
-      const results = await this.searchEverything(everythingQuery, 50, signal)
+      const backendResults = await this.searchEverything(
+        everythingQuery,
+        EVERYTHING_SEARCH_FETCH_LIMIT,
+        signal
+      )
+      const results = backendResults
+        .filter(
+          (result) =>
+            fileFilterService.getSearchExclusionReason({
+              path: result.path,
+              name: result.name,
+              extension: result.extension,
+              isDirectory: result.isDir
+            }) === null
+        )
+        .slice(0, EVERYTHING_SEARCH_MAX_RESULTS)
       if (signal.aborted) {
         return new TuffSearchResultBuilder(query).build()
       }

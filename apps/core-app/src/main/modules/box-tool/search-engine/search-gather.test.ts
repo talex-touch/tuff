@@ -230,6 +230,60 @@ describe('search gather fast layer timeout', () => {
   })
 })
 
+describe('search gather file publication gate', () => {
+  it('filters provider file items before counts and updates are published', async () => {
+    const query: TuffQuery = { text: 'library', inputs: [] }
+    const provider: ISearchProvider<ProviderContext> = {
+      id: 'provider-files',
+      name: 'Provider Files',
+      type: 'file',
+      priority: 'fast',
+      onSearch: async (inputQuery) =>
+        new TuffSearchResultBuilder(inputQuery)
+          .setItems([
+            {
+              id: 'internal-db',
+              source: { id: 'provider-files', type: 'file' },
+              render: { mode: 'default', basic: { title: 'Genius.itdb' } },
+              meta: { file: { path: '/Users/demo/Music/Genius.itdb' } }
+            },
+            {
+              id: 'screenshot',
+              source: { id: 'provider-files', type: 'file' },
+              render: { mode: 'default', basic: { title: 'Screenshot.png' } },
+              meta: { file: { path: '/Users/demo/Pictures/Screenshot.png' } }
+            }
+          ])
+          .build()
+    }
+    const visibleIds: string[] = []
+    let finalTotal = -1
+    let providerResultCount = -1
+    const gather = createGatherAggregator({
+      fastLayerTimeoutMs: 80,
+      deferredLayerDelayMs: 0,
+      fastLayerConcurrency: 1,
+      deferredLayerConcurrency: 1,
+      taskTimeoutMs: 500
+    })
+
+    const controller = gather([provider], query, (update) => {
+      for (const result of update.newResults) {
+        visibleIds.push(...result.items.map((item) => item.id))
+      }
+      if (update.isDone) {
+        finalTotal = update.totalCount
+        providerResultCount = update.sourceStats?.[0]?.resultCount ?? -1
+      }
+    })
+
+    await expect(controller.promise).resolves.toBe(1)
+    expect(visibleIds).toEqual(['screenshot'])
+    expect(finalTotal).toBe(1)
+    expect(providerResultCount).toBe(1)
+  })
+})
+
 describe('search gather async update ordering', () => {
   beforeEach(() => {
     analyticsModuleMock.recordSearchMetrics.mockClear()
