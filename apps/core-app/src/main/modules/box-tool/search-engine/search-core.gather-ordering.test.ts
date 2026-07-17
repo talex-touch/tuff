@@ -257,6 +257,7 @@ vi.mock('./usage-summary-service', () => ({
 vi.mock('electron', () => ({
   app: {
     getLocale: vi.fn(() => 'en-US'),
+    getPath: vi.fn(() => '/tmp'),
     commandLine: {
       appendSwitch: vi.fn()
     }
