@@ -1,70 +1,48 @@
-# Talex Touch - 项目文档中心
+# Talex Touch 项目文档中心
 
-> 更新时间：2026-07-06
-> 定位：PRD / 规划主入口。这里只保留当前 SoT、下一动作和高价值导航。
+> 更新时间：2026-07-16
+> 定位：规划入口。当前任务状态以 Trellis 为准；本目录只保留优先级、路线、专题和验收边界。
 
-## 快速入口
+## 先看这四个入口
 
-- [项目待办](./TODO.md)
-- [AI Stable 收口 TODO](./TODO-AI.md)
-- [R3 Search / Indexing Runtime 收口 TODO](./TODO-R3.md)
-- [Nexus Performance TODO](./TODO-nexus.md)
-- [Roadmap vNext](./04-implementation/Roadmap-vNext-2026-06-18.md)
-- [稳定性与架构优化总览](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)
-- [当前项目进程与执行计划](./04-implementation/Current-Execution-Plan-2026-06-17.md)
-- [R8 / R9 下一阶段分批执行计划](./04-implementation/R8-R9-Next-Stage-Execution-Plan-2026-06-24.md)
-- [Pricing SoT](./04-implementation/Pricing-SoT-2026-06-18.md)
-- [AI Stable Evidence Matrix](./04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md)
-- [Nexus Governance Evidence Matrix](./04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md)
-- [Platform Capability Smoke Matrix](./04-implementation/Evidence-Matrix-Platform-2026-06-18.md)
-- [文档质量基线](./docs/PRD-QUALITY-BASELINE.md)
-- [变更日志](./01-project/CHANGES.md)
-- [实施文档状态索引](./04-implementation/README.md)
-- [全局文档索引](../INDEX.md)
+1. [`TODO.md`](./TODO.md)：当前两周稳定化顺序与完成条件。
+2. [`.trellis/tasks/`](../../.trellis/tasks/)：实时任务、owner、PRD、设计和实施状态。
+3. [`04-implementation/Roadmap-vNext-2026-06-18.md`](./04-implementation/Roadmap-vNext-2026-06-18.md)：R0-R9 产品路线。
+4. [`01-project/CHANGES.md`](./01-project/CHANGES.md)：已完成事实与验证证据索引。
 
-## 当前单一口径
+代码版本不在文档中手工维护；以根目录和 `apps/core-app/package.json` 为准。分支与工作区状态同样只在执行时读取，不写入长期文档。
 
-- 当前代码版本为 root / CoreApp `2.4.13-beta.6`。
-- 当前主线按 Roadmap vNext 推进 R0-R9；优先级为 R1 Release Integrity 外部签名材料、R3 真实 profile / packaged evidence、Nexus deployed preview evidence，R2 已转产品化 follow-up。
-- R8 / R9 已进入下一阶段执行：R8 locale/localized value、plugin manifest localization、R8-D Domain Lexicon V1 与 R8-E permission-gated Plugin SDK facade 已落，下一批为 R8-F CatalogService MVP；R9 2.5.3 local knowledge SQLite/FTS5/citation foundation 已由 2.5.4 host assembler 实际消费；R9.2 ContextHygiene P0/P1 的 6 个 Trellis 子任务已完成，packaged Electron 覆盖 CoreBox + Assistant + Workflow + OmniPanel，剩余 follow-up 见 `TODO.md` 的 R9.2 专项表。
-- 公共包发布不再作为独立 Roadmap / blocker / evidence 项；版本变更后以 GitHub 自动发版 workflow 结果为准。
-- owner 已完成的平台人工验证不再作为 Roadmap 待办、平台后续或 release blocker。
-- Nexus 性能线独立跟踪到 `TODO-nexus.md`，不与 CoreApp / AI / R3 工作混批；当前约 `98%` guarded，local Wrangler runtime、PWA precache trim、worker/runtime evidence guard 与 deployed preview collector guard 已闭合，最终 done 仍以 deployed Cloudflare Pages preview evidence 与 `check-runtime-evidence --require-deployed-preview` 为准。
-- R3 Indexing Runtime：durable job history focused code/test、Settings diagnostics JSON verifier、packaged probe 入口、isolated controlled seeded evidence、isolated maintenance reset evidence、durable runtime-store resource migration、source-scoped `scan_progress` schema/resource migration 与生产迁移 readiness auditor 已完成；source-read-only readiness 已 ready，legacy `file_fts` 本批保留不改，仍需真实 SQLite/FTS/`scan_progress` migration/preflight evidence 和自然 recent task packaged Settings 截图/录屏 artifact。
+## 当前判断
 
-## 当前验收边界
+P0 稳定化三项均已关闭：
 
-- R1 Release Integrity：Nexus 资产 `sha256`、`signatureUrl`、signature endpoint 与真实自动发版 workflow evidence 仍未闭环。
-- R2 AI Stable：2026-06-24 historical manifest 的 CoreBox AI Ask、Search/App Index/Login、OmniPanel、Provider migration、Assistant、Workflow 与 Provider registry 13/13 surfaces 已 passed；当前 CoreApp `2.4.13-beta.6` 尚未 recapture，`--requireCurrentVersion` 以 baseline `2.4.12-beta.8` mismatch fail-closed。产品化 follow-up 不得把历史 artifact 写成当前版本闭环。
-- R3 Indexing Runtime：durable job history focused code/test、Settings diagnostics JSON verifier、packaged probe 入口、isolated controlled seeded evidence、isolated maintenance reset evidence、durable runtime-store resource migration、source-scoped `scan_progress` schema/resource migration 与生产迁移 readiness auditor 已完成；legacy `file_fts` 本批保留不改；仍需真实 SQLite/FTS/`scan_progress` migration/preflight evidence、自然 recent task packaged Settings 截图/录屏 artifact 与 durable scheduler 长尾。
-- R9.2 ContextHygiene：P0/P1 closure implemented；host-owned context execution、Memory governance/Review、CompressionSnapshot、四入口隔离、inactive 显式继续摘要与 metadata-only tombstone explain 已完成。isolated packaged context evidence 已覆盖 CoreBox、Assistant、Workflow 与 OmniPanel：Workflow 每 run 使用独立 `new / session`，OmniPanel built-in AI action 使用 `new / light`，受控路径均保持单次 Provider dispatch。后续只开放 real-profile 与 gated `scopeRef` migration。
-- R7 Nexus Governance：production / preview 完成只接受 live/D1/R2 等可复现 evidence；memory/local-only 只能标 partial。
-- Nexus Performance：local/static/Wrangler evidence 只能标 guarded；production 完成必须有 deployed Cloudflare Pages preview HAR、真实 provider callback smoke、authenticated dashboard runtime smoke 与真实 bfcache hit。
-- Platform Capability：平台 smoke 是非阻塞回归矩阵；要求 degraded/unsupported reason 与 fail-closed。
-- Pricing：当前公开站只承诺 Pioneer 阶段 `0 元 / $0`。
+- Usage 单写者和 `0027` 保守历史修复已验证。
+- Nexus push 已切换到有界预读与原子 D1 `batch()`，并完成本地与隔离 Preview D1 验证。
+- Trellis 已无提交归档 45 个完成项；保留任务拥有单一 assignee、下一动作、blocker 和 evidence。
 
-## 高价值专题入口
+本页不再重复全局优先级；实时顺序只看 [`TODO.md`](./TODO.md)。
 
-- [Tuff 2.5.0 AI 桌面入口收口 PRD](./03-features/ai-2.5.0-plan-prd.md)
-- [OmniPanel 与悬浮助手下一版本 PRD](./03-features/omnipanel-assistant-next-prd.md)
-- [本地知识检索 PRD](./03-features/ai-2.5.3-local-knowledge-retrieval-prd.md)
-- [ContextHygiene 与自动记忆治理 PRD](./03-features/ai-2.5.4-context-hygiene-memory-prd.md)
-- [本地开源模型运行时 PRD](./03-features/ai-2.5.5-local-model-runtime-prd.md)
-- [ASR Provider Runtime PRD](./03-features/ai-2.5.8-asr-provider-runtime-prd.md)
-- [Native Rust Runtime Migration PRD](./03-features/native-rust-runtime-migration-prd.md)
-- [i18n / Domain Lexicon / Cloud Catalog 收敛 PRD](./03-features/i18n-lexicon-catalog-2.6.0-prd.md)
-- [Tuff QuickOps PRD](./03-features/tuff-quickops-prd.md)
-- [Indexing Runtime V1](./03-features/search/INDEXING-RUNTIME-V1-PLAN.md)
-- [App Data Plugins 与 Everything Roadmap](./03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md)
-- [Raycast / uTools 能力差距矩阵](./03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md)
-- [Nexus Provider 聚合与 Scene 编排 PRD](./02-architecture/nexus-provider-scene-aggregation-prd.md)
-- [Windows 启动优化 PRD](./04-implementation/performance/WindowsStartupOptimization-2026-06-18.md)
-- [稳定性与架构优化总览](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)
+## 专题入口
+
+- [`TODO-AI.md`](./TODO-AI.md)：AI Stable 与后续产品化。
+- [`TODO-R3.md`](./TODO-R3.md)：Search / Indexing Runtime。
+- [`TODO-nexus.md`](./TODO-nexus.md)：Nexus 性能与 deployed evidence。
+- [`docs/TODO-BACKLOG-LONG-TERM.md`](./docs/TODO-BACKLOG-LONG-TERM.md)：长期债务池。
+- [`04-implementation/Stability-Architecture-Optimization-2026-07-04.md`](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)：稳定性代码落点与验证矩阵。
+- [`../engineering/security-hardening-handoff-2026-07-15.md`](../engineering/security-hardening-handoff-2026-07-15.md)：安全加固交接。
+- [Search & Cross-Platform Audit](../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索/跨平台 backlog。
+
+## Evidence 入口
+
+- [`04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`](./04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md)
+- [`04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md`](./04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md)
+- [`04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md`](./04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md)
+- [`../engineering/reports/`](../engineering/reports/)
 
 ## 文档治理规则
 
-- 入口文档只保留当前事实、下一动作与高价值导航。
-- 更早过程记录不再放入文档树，需要时从 Git 历史追溯。
-- 行为/接口/架构改动至少同步 `README / TODO / CHANGES / INDEX` 之一。
-- 目标或质量门禁变化必须同步 Roadmap 与 Quality Baseline。
-- `TODO.md` 只承载当前 2 周主清单；长期事项进入专题 TODO 或后续单独恢复。
+- `TODO.md` 只承载当前两周顺序，不复制专题完成流水。
+- Trellis 只承载任务执行状态；Roadmap 不记录临时 worktree 状态。
+- 专题状态冲突时，全局优先级服从 `TODO.md`，完成声明服从 evidence。
+- 行为、接口或架构变化至少同步对应专题文档与 `CHANGES.md`；只有全局优先级变化才更新本入口。
+- 旧执行计划保留兼容入口并标记 Historical，不继续维护第二套“当前事实”。

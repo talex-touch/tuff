@@ -70,7 +70,7 @@
 
 ## 7. 当前状态
 
-- CoreBox AI Ask 的 `AI-STABLE-01..08` 已绑定 historical packaged JSON/PNG；artifact/schema/tag/file verifier 为 13/13 passed。manifest baseline 为 `2.4.12-beta.8`，当前 CoreApp 为 `2.4.13-beta.6`，`--requireCurrentVersion` 当前 fail-closed；新版本 recapture 前不再称为“当前 strict visible gate passed”。
+- CoreBox AI Ask 的 `AI-STABLE-01..08` 已绑定 historical packaged JSON/PNG；artifact/schema/tag/file verifier 为 13/13 passed。manifest baseline 为 `2.4.12-beta.8`，当前 CoreApp 版本以 `apps/core-app/package.json` 为准，`--requireCurrentVersion` 当前 fail-closed；新版本 recapture 前不再称为“当前 strict visible gate passed”。
 - `text.chat`、`vision.ocr -> text.chat`、Local/Ollama routing、未登录、provider unavailable、quota exhausted、model/capability unsupported、permission denied 与 copy failure 均已关闭 Stable evidence；后续变更必须复验，不能回退。
 - OmniPanel Writing Tools、Assistant、Workflow Use Model / Review Queue 与 Provider registry observability 已有 packaged surface evidence，但仍按 Beta / Experimental 产品化，不反向扩大 CoreBox Stable 契约。
 - R9.2 ContextHygiene P0/P1 已闭合，并完成 inactive continuation、metadata-only tombstone explain、Workflow clone/context lifecycle 与 OmniPanel packaged context follow-up：Memory governance/Review、CompressionSnapshot、CoreBox `new/continue/stateless`、Workflow run isolation、OmniPanel/Assistant `new + light` 与 CoreBox 单次 dispatch 均有 contract evidence；isolated packaged context evidence 已覆盖 CoreBox + Assistant + Workflow + OmniPanel。下一批只跟踪 real-profile 与 gated `scopeRef` migration，不把这些 open level 写成 production 完成。

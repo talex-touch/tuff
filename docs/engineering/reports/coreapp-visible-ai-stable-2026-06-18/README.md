@@ -2,11 +2,11 @@
 
 > 日期：2026-06-18
 > 范围：Tuff 2.5.0 AI Stable 的 CoreBox 文本/OCR、provider routing 与固定失败路径 evidence 采集清单。
-> 状态：historical manifest 的 13/13 required surfaces 与 77 个 artifact 已通过 schema/tag/path/file gate；其 `baselineVersion=2.4.12-beta.8`，当前 CoreApp 为 `2.4.13-beta.6`。`--requireCurrentVersion` 当前 fail-closed，完成全量新版本 recapture 前不得称为当前全局 strict gate 已通过。
+> 状态：historical manifest 的 13/13 required surfaces 与 77 个 artifact 已通过 schema/tag/path/file gate；其 `baselineVersion=2.4.12-beta.8`，当前 CoreApp 版本以 `apps/core-app/package.json` 为准。`--requireCurrentVersion` 当前 fail-closed，完成全量新版本 recapture 前不得称为当前全局 strict gate 已通过。
 
 ## 当前结论
 
-- Historical packaged artifact 集覆盖 `2.4.12-beta.8`、`2.4.12-beta.10` 与 `2.4.13-beta.1`；当前 `2.4.13-beta.6` 尚未完成全量复采，不能把现有 `apps/core-app/dist` 或旧 notes 自动视为当前版本 evidence。2026-07-13 仅新增 AI Command editor/save/dynamic feature 的 current-version partial evidence。
+- Historical packaged artifact 集覆盖 `2.4.12-beta.8`、`2.4.12-beta.10` 与 `2.4.13-beta.1`；当前 `apps/core-app/package.json` 版本尚未完成全量复采，不能把现有 `apps/core-app/dist` 或旧 notes 自动视为当前版本 evidence。2026-07-13 仅新增 AI Command editor/save/dynamic feature 的 current-version partial evidence。
 - Packaged hot startup benchmark 已采到：`../startup-packaged-hot-runs-2026-06-21/汇总报告.md` 记录 10/10 PASS、Startup health P50 `552ms`、P95 `810ms`、0 WARN、0 ERROR。
 - Packaged cold startup benchmark 已采到：`../startup-packaged-cold-runs-2026-06-21/汇总报告.md` 记录 10/10 PASS、per-run isolated userData、Startup health P50 `572ms`、P95 `615ms`、0 WARN、0 ERROR；long-tail note 为 `startup-packaged-cold-long-tail-notes.md`。
 - Packaged startup first-screen 已采到：`startup-first-screen-settings.png` / `startup-first-screen-settings-dom.json` / `startup-health-summary.png` / `startup-health-summary-dom.json` 证明 2026-06-21 `2.4.12-beta.8` packaged app 首个主 CoreApp Settings/onboarding surface 可用、不是空白/阻塞加载，且 Settings/About 中版本、构建信息与 Startup health summary 可达。
@@ -214,7 +214,7 @@ This helper only attaches to an existing packaged CDP target, selects the CoreBo
 
 ## 边界
 
-- `corebox-ai-ask`、startup、search/app-index、login recovery、OmniPanel、Assistant、Workflow 与 Provider registry historical surfaces 已是 13/13 `passed`；当前 `2.4.13-beta.6` 必须完成 recapture/update baseline 并通过 `--requireCurrentVersion`，才能重新关闭 current gate。
+- `corebox-ai-ask`、startup、search/app-index、login recovery、OmniPanel、Assistant、Workflow 与 Provider registry historical surfaces 已是 13/13 `passed`；当前 `apps/core-app/package.json` 版本必须完成 recapture/update baseline 并通过 `--requireCurrentVersion`，才能重新关闭 current gate。
 - 2026-07-13 默认 Nexus authenticated token SSE、实际后端 metadata、terminal usage、治理计费与 pre-delta-only fallback 只有 focused code/test evidence；本目录未新增登录态 Nexus packaged success，也未用旧 `NEXUS_STREAM_UNSUPPORTED` 截图冒充当前 capability denial。
 - checklist 中的 `[x] AI-STABLE-*` 只表示 CoreBox AI Ask packaged evidence 已绑定并通过本报告验收；不能替代其它 visible surfaces 或 Beta/Experimental AI surface 的 evidence。
 - `evidenceTags` 必须显式对应 `AI-STABLE-xx`，且 tag 必须通过 `evidenceTagArtifacts` 指向已附加 artifact；没有 tag 或没有 artifact 绑定的截图/说明不能关闭固定证据矩阵项。每个 tag 至少需要一个截图或录屏 artifact，且同一张截图/录屏不能复用关闭多个 `AI-STABLE-*` 固定证据项；probe JSON / trace 只能作为补充证据。

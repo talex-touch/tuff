@@ -1,22 +1,19 @@
 # 2.4.11 收口清单
 
 > 更新时间：2026-06-18
-> 定位：`2.4.11` 稳定版发版前收口清单的历史记录；当前阶段化路线以 `Roadmap-vNext-2026-06-18.md` 为准。
+> 定位：`2.4.11` 稳定版发版前收口清单的历史记录；实时路线与顺序只看 [`../TODO.md`](../TODO.md)。
 
-## 当前事实
+## 历史事实边界
 
-- 当前稳定基线：`2.4.10`。
-- 当前代码版本：root / CoreApp `2.4.11-beta.8`。
-- 当前本地 HEAD：`47787615b fix(tuffex): make style entry build idempotent`。
-- 当前分支：`master`；本地相对 `origin/master` 领先 9 个提交。
-- 最近完整发布链路证据：`v2.4.11-beta.6` GitHub prerelease / Nexus BETA latest sync / Gate D strict。
-- 本轮不执行的高风险操作：`git push`、tag/release 创建、生产环境发布。
+- 本文记录 2026-06-13 至 2026-06-18 的 release closure 结果，不再保存当时的 package version、commit、branch、领先提交数或 worktree 状态；这些事实由 Git 历史保留。
+- 当时最近的完整发布证据包含 GitHub prerelease、Nexus BETA latest sync 与 Gate D strict 复核，但 release integrity 债务仍按下方清单继续跟踪。
+- 当轮未执行 push、tag/release 创建或生产环境发布。
 
 ## Done Criteria
 
 ### 必须完成
 
-- [x] 文档入口同步到 `2.4.11-beta.8` 与当前 `HEAD=47787615b`。
+- [x] 文档入口在当轮完成同步；历史 version/commit 值已从长期文档移除。
 - [x] `2.4.11` release checklist 明确本轮阻塞项与非阻塞项。
 - [x] `pnpm quality:pr` 与完整 `pnpm quality:release` 通过。
 - [x] `git diff --check` 通过。

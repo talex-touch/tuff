@@ -562,3 +562,113 @@ stream.once("end", settleSuccess);
 stream.once("error", settleFailure);
 stream.once("close", cleanupWithoutSettlement);
 ```
+
+## Scenario: Usage Statistics Single-Writer Integrity
+
+### 1. Scope / Trigger
+
+- Trigger: changing CoreBox usage logging, `UsageStatsQueue`, periodic usage maintenance, `item_usage_stats`, `usage_summary`, or a migration that repairs ranking/recommendation counters.
+- `item_usage_stats` is provider-keyed personalization state. Replaying a source-type-only log into it creates a second identity and can repeatedly amplify ranking signals.
+
+### 2. Signatures
+
+```ts
+UsageStatsQueue.enqueue(
+  sourceId: string,
+  itemId: string,
+  sourceType: string,
+  type: 'search' | 'execute' | 'cancel'
+): void
+
+DbUtils.incrementUsageStats(
+  sourceId: string,
+  itemId: string,
+  sourceType: string,
+  type: 'search' | 'execute' | 'cancel'
+): Promise<unknown>
+```
+
+- `item_usage_stats` identity: `(source_id, item_id)` where `source_id = TuffItem.source.id`.
+- `usage_logs.source` is legacy source type, not provider id.
+- `usage_summary(item_id, click_count)` is item-level execution evidence and has no source identity.
+
+### 3. Contracts
+
+- `UsageStatsQueue` is the normal incremental writer of `item_usage_stats`; `DbUtils.incrementUsageStats()` is the initialization fallback. One event reaches exactly one of them.
+- Periodic maintenance may overwrite derived `item_time_stats` and remove expired logs, but must never additively replay `usage_logs` into `item_usage_stats`.
+- Never infer `source_id` from `usage_logs.source` or copy source type into both source columns.
+- Conservative repair may delete `source_id = source_type` only when a different provider-keyed sibling exists for the same item/source type.
+- `usage_summary.click_count` may only lower a provable execute over-count. It must not raise an under-count or synthesize a provider id.
+- Repair preserves search/cancel counts and timestamps, runs through the journaled libSQL migration transaction, and is idempotent.
+
+### 4. Validation & Error Matrix
+
+- Provider-aware sibling exists for a source-type row -> delete only the source-type row.
+- Provider id legitimately equals source type and no sibling exists -> keep the row; cap execute count only when a matching summary proves over-count.
+- `execute_count > click_count` with matching summary -> lower to `click_count`.
+- `execute_count <= click_count` -> leave unchanged.
+- No matching summary -> leave unchanged.
+- Any migration statement fails -> libSQL migration transaction rolls back data and journal insert.
+
+### 5. Good / Base / Bad Cases
+
+- Good: one execute writes log + item summary + provider-aware queue increment; later maintenance changes no item counter.
+- Base: queue unavailable during initialization, so the direct fallback increments once.
+- Bad: scan every retained execution log on each startup and upsert `source_id = source_type` with additive counts.
+- Bad: clear all personalization or guess a provider id to make historical rows look canonical.
+
+### 6. Tests Required
+
+- Temporary-libSQL migration test covers phantom sibling deletion, id-equals-type capping, under-count/no-summary preservation, unrelated fields, and second-run idempotence.
+- Maintenance service test seeds an execution log plus provider-aware item stats, runs maintenance, asserts item stats are unchanged, and asserts time stats still rebuild.
+- Usage recording contract asserts queue and fallback are mutually exclusive for one event.
+- CoreApp node type-check and a direct temporary-database execute/flush/maintenance/reread smoke must pass.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const sourceId = usageLog.source // source type, not provider id
+executeCount = sql`${itemUsageStats.executeCount} + ${replayedCount}`
+```
+
+#### Correct
+
+```ts
+usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'execute')
+// Periodic maintenance does not write item_usage_stats.
+```
+
+## Scenario: Nexus Sync Batch Atomicity
+
+### 1. Scope / Trigger
+
+- Trigger: changing Nexus sync push validation, conflict resolution, oplog/materialized item writes, quota accounting, or session cursors.
+- The protected tables are `sync_oplog_v1`, `sync_items_v1`, `sync_quotas_v1`, and `sync_sessions_v1`.
+
+### 2. Contracts
+
+- Validate the complete request before issuing any sync write.
+- Preload item ids and operation sequences in bounded batches; per-item awaited D1 reads/writes are prohibited on the push path.
+- Last-writer-wins order is `updated_at`, then lexicographically greater `device_id`; an existing null device id yields on an equal timestamp.
+- `(user_id, device_id, op_seq)` remains the idempotency identity. Duplicate sequences apply at most the first accepted operation.
+- Oplog, materialized item, authoritative live quota, and push-session cursor updates execute in one D1 `batch()` transaction.
+- Every serialized JSON binding stays below the configured chunk limit, and the request reserves headroom below D1's invocation query limit before starting the write batch.
+- Tombstones retain stored payload size but contribute neither storage nor object count to live quota.
+- The push route must not apply a second quota delta after the transactional service returns.
+
+### 3. Validation & Error Matrix
+
+- Known oplog sequence -> no duplicate materialization or quota change.
+- Older timestamp, or equal timestamp with lower/equal device id -> conflict; no oplog/item write.
+- Equal timestamp with null existing device -> candidate wins and both oplog/item update.
+- Any statement fails -> oplog, item, quota, and session remain at their pre-batch values.
+- Planned statement count exceeds the guarded budget -> reject before write.
+- Quota reconciliation exceeds a NOT NULL limit guard -> the D1 transaction rolls back.
+
+### 4. Tests Required
+
+- Focused tests cover more than 1,000 items, duplicate sequences, timestamp/device ties, update/delete/tombstone accounting, handshake/pull, and failure after all mutation classes have run.
+- A local D1/Miniflare smoke proves the exact bulk SQL and transaction behavior.
+- A roadmap item that explicitly requires real D1 evidence must use isolated Preview D1 tables after explicit approval, verify success and rollback, and prove cleanup; local-only evidence cannot replace it.

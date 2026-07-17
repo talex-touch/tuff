@@ -120,6 +120,8 @@ After implementation:
       casting payload fields locally
 - [ ] Checked that derived state points back to the source event identifier
       (`seq`, `id`, `version`) instead of inventing a second cursor
+- [ ] When replaying an event log into composite-key state, verify that the log carries every identity component. Never substitute a category/type field for an opaque provider/source ID.
+- [ ] When one request projects state into oplog/materialized rows/quota/session, commit all projections in one database transaction; a retry key alone does not repair half-written derived state.
 - [ ] If source code has a generated/runtime projection (for example an official plugin seed), compare canonical build content with the packaged projection; matching versions alone do not prove freshness.
 - [ ] Verify both fresh install and same-version/different-signature upgrade paths before claiming packaged runtime behavior.
 

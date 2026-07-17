@@ -1,46 +1,29 @@
 <div align="center">
 
-![LogoBanner](./shots/LogoBanner.png)
+  <img width="160" src="https://files.catbox.moe/2el8uf.png" alt="Tuff logo">
 ---
 
   [![GitHub issues](https://img.shields.io/github/issues/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/issues)
   [![GitHub license](https://img.shields.io/github/license/talex-touch/tuff?style=flat-square)](https://github.com/talex-touch/tuff/blob/main/LICENSE)
-  [![GitHub release](https://img.shields.io/badge/release-2.4.5-42B883?style=flat-square)](https://github.com/talex-touch/tuff/releases)
+  [![GitHub release](https://img.shields.io/github/v/release/talex-touch/tuff?include_prereleases&style=flat-square)](https://github.com/talex-touch/tuff/releases)
   <br>
   English | [简体中文](./README.zh-CN.md)
 </div>
 
-## 📌 What is tuff?
+## What is Tuff?
 
-![MainBanner](./shots/MainBanner.png)
+Tuff (formerly TalexTouch) is a local-first, AI-native, extensible desktop command center. It helps you find applications and files, run commands, automate workflows, and connect governed AI providers from one keyboard-first surface.
 
-![AdaptiveBanner](./shots/AdaptiveBanner.png)
+## Platform status
 
-## 🔷 Introduction
+Preview artifacts are produced for macOS, Windows, and Linux. Capability maturity is not identical across platforms; unsupported or degraded paths must remain explicit and fail closed. See the [current stability plan](./docs/plan-prd/TODO.md) and [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
 
-Tuff (formerly TalexTouch) is a local-first, AI-native, and infinitely extensible desktop command center built with ai-native. It's designed to be a seamless extension of your workflow, helping you find anything and execute any command, faster.
+## Highlights
 
-> Due to developer schedule reasons, it will no longer be actively compatible with Linux, and the Windows version testing will be delayed by two months compared to macos. (Sorry!!!)
-
-### Search all apps on device.
-
-![SearchApplication](./shots/SearchApp.gif)
-
-### Search files immediately.
-
-![SearchFilesImmediately](./shots/SearchFileImmediately.gif)
-
-### Plugin translate.
-
-![TranslatePlugin](./shots/PluginTranslate.gif)
-
-### Manage plugins on your own.
-
-![ManagePlugins](./shots/ManagePlugin.gif)
-
-### Settings page
-
-![Settings](./shots/SettingsSo.png)
+- Search applications, files, plugin actions, calculations, units, currencies, and time directly from CoreBox.
+- Extend the host through permission-gated plugins and typed SDKs.
+- Connect private-cloud, hosted, or self-hosted language models.
+- Use clipboard, screenshot, workflow, download, and automation capabilities through host-owned boundaries.
 
 ## 🚀 Background
 
@@ -81,11 +64,11 @@ If you are looking for a cross-platform and beautifully designed desktop softwar
 
 ## 📚 Documentation
 
-- **Docs Index**: `./docs/INDEX.md`
-- **Project PRD / Plans**: `./docs/plan-prd/README.md`
-- **Repository Docs**: `./docs/`
-- **Contribution Guide**: `./.github/docs/contribution/CONTRIBUTING.md`
-- **Architecture / Agent Notes**: `./AGENTS.md`
+- [Docs index](./docs/INDEX.md)
+- [Current stabilization plan](./docs/plan-prd/TODO.md)
+- [Project PRDs and roadmap](./docs/plan-prd/README.md)
+- [Contribution guide](./.github/docs/contribution/CONTRIBUTING.md)
+- [Repository development instructions](./AGENTS.md)
 
 ## 🤝 License
 

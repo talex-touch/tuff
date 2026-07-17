@@ -1,7 +1,7 @@
 # Tuff AI Stable TODO
 
-> 更新时间：2026-07-13
-> 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准。
+> 更新时间：2026-07-16
+> 范围：Roadmap R2 / AI 2.5.0 Stable。主验收矩阵以 `04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)，本文件不单独抢占稳定化窗口。
 
 ## 当前口径
 
@@ -55,7 +55,7 @@
   - Local/Ollama routing
 - packaged startup hot/cold benchmark 已 passed。
 - startup first-screen evidence 已 passed。
-- historical artifact gate 仍为 `gate.passed=true`、13/13 required surfaces `passed`，且 72 个唯一 artifact 均存在/非空；但 manifest `baselineVersion=2.4.12-beta.8`，当前 CoreApp 为 `2.4.13-beta.6`。2026-07-13 新增 `--requireCurrentVersion` 后当前版本门禁明确失败，必须 recapture/update baseline 后才能重新称为“当前 strict gate passed”。
+- historical artifact gate 仍为 `gate.passed=true`、13/13 required surfaces `passed`，且 72 个唯一 artifact 均存在/非空；但 manifest `baselineVersion=2.4.12-beta.8`，当前 CoreApp 版本以 `apps/core-app/package.json` 为准。2026-07-13 新增 `--requireCurrentVersion` 后当前版本门禁明确失败，必须 recapture/update baseline 后才能重新称为“当前 strict gate passed”。
 
 ## 状态明细
 
@@ -70,8 +70,8 @@
 | `assistant-screenshot-translate`  | closed                 | 2026-06-24 packaged evidence 已覆盖 Settings、clipboard image translate start/result、empty clipboard 与 provider fallback；截图翻译后续进入产品化 polish。                                                                        |
 | `workflow-use-model-review-queue` | closed                 | 2026-06-24 packaged evidence 已覆盖 pending / failed queue、Use Model output、runtime cost/trace 与恢复文案。                                                                                                                      |
 | `provider-registry-observability` | closed                 | 2026-06-24 packaged evidence 已覆盖 provider health、scene latest run/recent failure、状态 filter 与 next-action hint。                                                                                                            |
-| Broader visible surfaces          | historical closed      | 2026-06-24 manifest 的 13/13 surfaces passed；不代表 `2.4.13-beta.6` 已复采。                                                                                                                                                      |
-| Global visible gate               | current recapture open | artifact/schema/tag/file gate 历史通过；`--requireCurrentVersion` 当前以 `2.4.12-beta.8 != 2.4.13-beta.6` fail-closed。                                                                                                            |
+| Broader visible surfaces          | historical closed      | 2026-06-24 manifest 的 13/13 surfaces passed；不代表 `apps/core-app/package.json` 版本已复采。 |
+| Global visible gate               | current recapture open | artifact/schema/tag/file gate 历史通过；`--requireCurrentVersion` 以 manifest baseline 与 `apps/core-app/package.json` 不一致时 fail-closed。 |
 | AI Beta surfaces                  | open                   | Workflow Use Model、Review Queue、Assistant、Agent 工具执行等不反向阻塞 CoreBox Stable。                                                                                                                                           |
 
 ## Strict gate 闭环分组
