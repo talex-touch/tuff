@@ -1,0 +1,30 @@
+{
+  "id": "unify-file-filtering-service",
+  "name": "unify-file-filtering-service",
+  "title": "Unify file filtering service",
+  "description": "Completed cross-platform FileFilterService implementation covering scan, index-write, provider, aggregation, and legacy-index visibility boundaries.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-16",
+  "completedAt": "2026-07-16",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "f03cc7c3f",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Implementation committed in f03cc7c3f; boundary contract documentation committed in 3fcd39163.",
+  "meta": {
+    "nextAction": "Archived; no follow-up remains in this task.",
+    "blocker": "none",
+    "evidence": "14 shared filter/scan tests and 69 focused CoreApp filtering tests passed; CoreApp typecheck:node and lint:changed passed; representative .itdb/.tvdb/.localized/metadata rejection plus zip/image preservation smoke passed."
+  }
+}
