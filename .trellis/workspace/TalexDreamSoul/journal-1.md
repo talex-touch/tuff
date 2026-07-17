@@ -454,3 +454,36 @@ Committed usage-stat single-writer repair, atomic Nexus batch ingest, stabilizat
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Search core test fixture repair
+
+**Date**: 2026-07-16
+**Task**: Search core test fixture repair
+**Branch**: `master`
+
+### Summary
+
+Updated three SearchEngineCore regression fixtures to use IndexedSourceEventRouter lifecycle and complete Electron, storage, event-bus, logger, polling, and Mica mocks; all three suites pass independently and together, with CoreApp Node typecheck, changed-file lint, and diff checks passing.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `69ed465c3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
