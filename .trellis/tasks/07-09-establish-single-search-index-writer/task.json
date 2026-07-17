@@ -30,5 +30,9 @@
     "apps/core-app/src/main/modules/database/index.ts"
   ],
   "notes": "Production enablement prerequisite: 07-09-gate-search-on-storage-hydration. Development/parity instrumentation may proceed earlier.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Implement the dedicated FTS writer and migrate mutation callers after the storage-hydration gate is complete.",
+    "blocker": "07-09-gate-search-on-storage-hydration must complete before production enablement.",
+    "evidence": "prd.md acceptance checklist and focused IndexingRuntime/FTS parity checks."
+  }
 }

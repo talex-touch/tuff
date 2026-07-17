@@ -1,0 +1,30 @@
+{
+  "id": "converge-trellis-task-doc-state",
+  "name": "converge-trellis-task-doc-state",
+  "title": "Converge Trellis task and documentation state",
+  "description": "P0-3 metadata and documentation convergence: archive truthful completions, normalize retained task contracts, and remove drifting live-state claims.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-16",
+  "completedAt": "2026-07-16",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Task-state and documentation only; archives use --no-commit and production source remains untouched.",
+  "meta": {
+    "nextAction": "Finish retained-task metadata and documentation verification, then archive this task with --no-commit.",
+    "blocker": "none",
+    "evidence": "prd.md acceptance checklist, task.py list output, documentation verifier, and local link/JSON checks."
+  }
+}

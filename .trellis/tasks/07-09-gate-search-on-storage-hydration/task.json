@@ -26,5 +26,9 @@
     "apps/core-app/src/main/modules/box-tool/core-box/index.ts"
   ],
   "notes": "No prerequisite. Must complete before production enablement of 07-09-establish-single-search-index-writer.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Add explicit storage readiness and fail-closed onboarding/CoreBox/indexing admission gates.",
+    "blocker": "Deferred by docs/plan-prd/TODO.md; there is no technical prerequisite.",
+    "evidence": "prd.md acceptance checklist and hydration/startup focused tests."
+  }
 }

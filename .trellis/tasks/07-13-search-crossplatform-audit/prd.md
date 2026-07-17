@@ -60,6 +60,12 @@
   - 现象：`scoring.match` 与 `meta.completion` 在搜索引擎/渲染端零消费者 → 补全学习对最终排序**零效果**。
   - 交付：sorter 新增 `getCompletionBoostFactor` 消费 `meta.completion`（有界 ≤+50% match 乘子）；移除死写入 `scoring.match`；+2 回归测试。
 
+- [x] **B3 — Usage 统计周期回放污染排序** ✅ 已修（`07-16-fix-usage-statistics-double-counting`）
+  - 位置：`search-engine/usage-summary-service.ts` 旧 `summarizeUsageLogs()`、`search-engine/usage-stats-queue.ts`、`db/schema.ts` 的 `usage_logs.source` / `item_usage_stats(source_id,item_id)`。
+  - 根因：日志只存 source type，旧周期汇总却把它当 provider id 并重复加计，形成 phantom rows；id=type 时直接放大原行。
+  - 交付：queue/fallback 单写者；`0027_usage_stats_single_writer_repair.sql` 保守删除明确 phantom row、下调可证明过计；不猜 provider id、不全量重置。
+  - 验证：3 files / 4 tests、scoped ESLint、CoreApp node typecheck、migration readiness 与临时数据库 execute→flush→maintenance smoke passed。
+
 ### 🟠 高危工程风险
 
 - [ ] **R1 — Rust 截图模块疑似未接入 CI/安装构建链**
@@ -110,6 +116,7 @@
 | 子任务 | 覆盖 | 状态 |
 |---|---|---|
 | `07-13-fix-ranking-dead-features` | B1 + B2 | ✅ done（typecheck 0 err，46 相关用例通过） |
+| `07-16-fix-usage-statistics-double-counting` | B3 | ✅ done（单写者 + 保守迁移，4 tests + smoke） |
 | (待建) | R1 打包验证 / R2 mac 签名 / R3 流式落库 … | backlog |
 
 ### 遗留 carve-out（B1 派生，未做）

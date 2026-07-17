@@ -28,5 +28,9 @@
     "apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts"
   ],
   "notes": "Prerequisites: 07-09-scope-search-sessions-and-streams, 07-09-gate-search-on-storage-hydration, and 07-09-establish-single-search-index-writer.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Implement typed provider lifecycle and health admission after the session, hydration, and single-writer tasks complete.",
+    "blocker": "Blocked by 07-09-scope-search-sessions-and-streams, 07-09-gate-search-on-storage-hydration, and 07-09-establish-single-search-index-writer.",
+    "evidence": "prd.md acceptance checklist and provider lifecycle/registry tests."
+  }
 }
