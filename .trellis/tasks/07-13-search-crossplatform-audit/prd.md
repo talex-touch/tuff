@@ -66,6 +66,12 @@
   - 交付：queue/fallback 单写者；`0027_usage_stats_single_writer_repair.sql` 保守删除明确 phantom row、下调可证明过计；不猜 provider id、不全量重置。
   - 验证：3 files / 4 tests、scoped ESLint、CoreApp node typecheck、migration readiness 与临时数据库 execute→flush→maintenance smoke passed。
 
+- [x] **B4 — 文件噪声过滤链路分裂** ✅ 已修（`07-16-unify-file-filtering-service`）
+  - 位置：`packages/utils/common/file-scan-utils.ts` 全量扫描、`addon/files/file-provider.ts` 增量/提交、`native-file-search-provider.ts`、`everything-provider.ts` 与 `search-gather.ts`。
+  - 根因：全量扫描、增量白名单和原生 Provider 各自维护过滤判断；Spotlight 仅过滤 `.app`，`.itdb` / `.tvdb` / `.localized` 可进入索引或首屏结果，且 Provider 自觉调用不是可靠边界。
+  - 交付：新增 Worker-safe `FileFilterService` 单一规则源；扫描/Provider 提前过滤节省 I/O，索引提交与搜索聚合提交强制复核；旧索引、语义召回、推荐和缓存出站统一过滤；保留 `.zip` 与常规图片。
+  - 验证：共享与 CoreApp 6 files / 83 tests、CoreApp node typecheck、两包 scoped ESLint、代表路径 smoke passed。
+
 ### 🟠 高危工程风险
 
 - [ ] **R1 — Rust 截图模块疑似未接入 CI/安装构建链**
@@ -117,6 +123,7 @@
 |---|---|---|
 | `07-13-fix-ranking-dead-features` | B1 + B2 | ✅ done（typecheck 0 err，46 相关用例通过） |
 | `07-16-fix-usage-statistics-double-counting` | B3 | ✅ done（单写者 + 保守迁移，4 tests + smoke） |
+| `07-16-unify-file-filtering-service` | B4 | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
 | (待建) | R1 打包验证 / R2 mac 签名 / R3 流式落库 … | backlog |
 
 ### 遗留 carve-out（B1 派生，未做）

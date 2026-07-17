@@ -672,3 +672,70 @@ usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'execute')
 - Focused tests cover more than 1,000 items, duplicate sequences, timestamp/device ties, update/delete/tombstone accounting, handshake/pull, and failure after all mutation classes have run.
 - A local D1/Miniflare smoke proves the exact bulk SQL and transaction behavior.
 - A roadmap item that explicitly requires real D1 evidence must use isolated Preview D1 tables after explicit approval, verify success and rollback, and prove cleanup; local-only evidence cannot replace it.
+
+## Scenario: File Filtering Boundary Integrity
+
+### 1. Scope / Trigger
+
+- Trigger: changing file scan traversal, file-index writes, native file Providers, semantic recall, recommendation/cache results, or `search.update` publication.
+- The policy owner is `packages/utils/common/file-filter-service.ts`; main-process and Worker callers must not define private blacklist copies.
+
+### 2. Signatures
+
+```ts
+fileFilterService.getTraversalExclusionReason(path, options)
+fileFilterService.getIndexExclusionReason(target, options)
+fileFilterService.getManualIndexExclusionReason(target)
+fileFilterService.getSearchExclusionReason(target)
+fileFilterService.filterSearchItems(items)
+```
+
+### 3. Contracts
+
+- Provider/scanner filtering before local limits, `stat`, icons, thumbnails, FTS, and embeddings is an optimization boundary.
+- File-index persistence and search-result publication are mandatory correctness boundaries and must evaluate the shared policy even when the producer filtered early.
+- Provider result counts, source stats, ranking, cache entries, and frontend limits use the filtered result set.
+- Filesystem path identity is canonical when backend `name` / `extension` metadata disagrees with the path.
+- Manual indexing may bypass unsupported extensions, but not hidden metadata, internal databases, temporary files, or bundle interiors.
+- Search visibility does not reuse the complete auto-index blacklist: ordinary `.zip` and image files, native directories, and explicit user artifacts remain visible.
+
+### 4. Validation & Error Matrix
+
+- `.itdb` / `.tvdb` / `.localized`, metadata names, or media-bundle interior -> reject before index and publication.
+- Provider forgets early filtering -> publication gate still rejects and decrements result/source counts.
+- Full scan or reconciliation submits a non-whitelisted/noise record -> index commit gate rejects before side effects.
+- Stale DB/embedding/cache/recommendation row -> read/outbound gate hides it; reconciliation may remove the persisted row later.
+- Missing `meta.file.path` or virtual Shell item -> preserve; do not classify it as filesystem noise.
+- `.zip`, `.png`, `.jpg`, `.jpeg`, `.webp` -> preserve.
+
+### 5. Good / Base / Bad Cases
+
+- Good: Spotlight filters `Music Library.musiclibrary/Genius.itdb` before `stat`; Gather filters again before `resultCount`.
+- Base: `WeTypeInstaller_3000.zip` and `Screenshot.png` pass scanner, Provider, ranking, cache, and UI publication.
+- Bad: a Provider-local `.filter(...)` is the only guard, or filtering occurs after `.slice(limit)` and lets noise starve valid results.
+
+### 6. Tests Required
+
+- Shared policy matrix covers internal databases, localization markers, bundle interiors, normal archives/images, manual indexing, and virtual items.
+- Full-scan regression proves noise is absent while user files remain.
+- Spotlight/Linux/Everything regressions assert filtering precedes local limits and expensive metadata work.
+- Gather regression asserts filtered items do not contribute to update totals or source `resultCount`.
+- Indexed keyword/type/extension and semantic-recall paths exercise the same stale-row filter.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const items = (await provider.onSearch(query, signal)).items
+publish(items.slice(0, 50)) // provider opt-in and late filtering
+```
+
+#### Correct
+
+```ts
+const backendItems = filterEarly(await provider.onSearch(query, signal))
+const visibleItems = fileFilterService.filterSearchItems(backendItems)
+recordProviderCount(visibleItems.length)
+publish(visibleItems.slice(0, 50))
+```
