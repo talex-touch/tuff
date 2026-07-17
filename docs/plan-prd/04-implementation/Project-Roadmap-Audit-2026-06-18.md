@@ -1,22 +1,19 @@
 # 项目进展严重问题审计与收口口径
 
 > 更新时间：2026-06-18
-> 定位：当前 roadmap / release / pricing / docs hygiene 的高风险问题收敛口径。本文只记录事实与下一步，不替代 `TODO.md` 的任务清单，也不把本地 preflight 误写为生产完成。
+> 定位：2026-06-18 的历史 roadmap / release / pricing / docs hygiene 审计。实时任务顺序只看 [`../TODO.md`](../TODO.md)；本文不得作为当前仓库状态或执行入口。
 
-## 1. 当前事实基线
+## 1. 历史事实边界
 
-- 当前稳定基线：`2.4.10`。
-- 当前代码版本：root / CoreApp `2.4.12-beta.8`。
-- 当前本地 `HEAD=6b156fa31 fix(nexus): hide team credit pool for personal accounts`。
-- 当前工作区存在大量未提交改动，覆盖 CoreApp、Nexus、packages、docs 与新增 QuickOps / i18n 文档；后续必须按 related-only 批次拆分验证。
-- 最近完整发布链路证据仍是 `v2.4.11-beta.6` GitHub prerelease、Nexus BETA latest sync 与 Gate D strict 复核。
-- `2.4.11` release checklist 已有本地/CI 通过记录；release integrity 仍未闭环。公共包发布已从当前 Roadmap blocker 降权，后续只跟踪版本变更 push 到 GitHub 后的自动发版 workflow 结果。
+- 本文捕获的是 2026-06-18 的审计结论；当时的 package version、commit、branch 与 worktree 数值由 Git 历史保留，不再复制到长期文档。
+- 当时确认 release integrity 尚未闭环，GitHub/Nexus 可用不等于资产、签名和 updater 契约完成。
+- 公共包发布已从独立 Roadmap blocker 降权；后续只以版本变更后的自动发版 workflow 结果为证据。
 
 ## 2. 严重问题分级
 
 | 严重度   | 问题                                 | 当前风险                                                                                              | 立即动作                                                                                                                                                                                       |
 | -------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P0       | 文档版本与 HEAD 口径漂移             | Roadmap、README、Quality Baseline 曾混用 `2.4.11-beta.8`、`2.4.12-beta.6` 与不同 HEAD，影响决策可信度 | 入口统一指向本文与 `Current-Execution-Plan`；不再把历史 HEAD 写成当前事实                                                                                                                      |
+| P0       | 文档 live-state 口径漂移             | Roadmap、README 与 Quality Baseline 曾复制不同版本/commit/worktree 快照，影响决策可信度 | 活跃入口只链接动态源码与 `TODO.md`；历史仓库状态由 Git 保留，不再写成当前事实                                                                                                                    |
 | P0       | release integrity 未闭环             | GitHub/Nexus release 可用不等于资产完整性、签名 URL 与 signature endpoint 完成                        | `sha256`、`signatureUrl`、signature endpoint、manifest/download matrix 必须有真实链路证据                                                                                                      |
 | Resolved | 公共包发布 blocker                   | 公共包发布不再作为独立 Roadmap / blocker / evidence 项                                                | 版本变更后只跟踪 GitHub 自动发版 workflow 结果；pack/preflight 仅保留为 CI hygiene                                                                                                             |
 | P0       | AI 体验闭环缺证                      | CoreApp AI 架构已存在，但 Stable 仍缺 packaged Electron 文本/OCR成功、固定失败路径与 routing evidence | 优先补 CoreBox `text.chat`、显式 `vision.ocr -> text.chat`、未登录、provider unavailable、quota exhausted、model/capability unsupported、permission denied、Local/Ollama routing 八项 evidence |
@@ -52,12 +49,10 @@
 - `apps/core-app/AGENTS.md` 承载 Electron / CoreBox / Storage / AI / QuickOps / Indexing 规则。
 - `apps/nexus/AGENTS.md` 承载 Nuxt / SEO / i18n / Data Governance / Provider Registry 规则。
 - `plugins/AGENTS.md` 承载 manifest、permission、SDK marker、plugin secret、TuffEx 样式入口规则。
-- 易漂移事实不写死：当前版本、SDK marker、模块加载顺序、发布状态统一引用 `package.json`、源码与本执行计划。
+- 易漂移事实不写死：version、SDK marker、模块加载顺序与发布状态统一引用 `package.json`、源码、evidence 和 `TODO.md`。
 
-## 7. 下一步顺序
+## 7. 历史结论与现行入口
 
-1. 同步入口文档到当前 `2.4.12-beta.8` / `HEAD=6b156fa31` 口径，并引用本文。
-2. 拆分当前 dirty worktree，按 related-only 验证与提交，不混合 QuickOps、Nexus、AI、docs、packages。
-3. 先补 R1 Release Integrity，再宣称发布链路完整闭环。
-4. 补 AI packaged Electron 八项固定 evidence（CoreBox `text.chat`、显式 `vision.ocr -> text.chat`、未登录、provider unavailable、quota exhausted、model/capability unsupported、permission denied、Local/Ollama routing），再宣称 `2.5.0` AI Stable 体验闭环。
-5. 入口文档瘦身与 AGENTS.md 分层已落地；后续保持 README/INDEX 只承载当前 SoT 与高价值导航。
+- 入口文档已改为动态读取版本并拒绝保存 branch/HEAD/worktree 快照。
+- Release Integrity、AI packaged evidence、R3 与 Nexus deployed evidence 的实时顺序只由 [`../TODO.md`](../TODO.md) 维护。
+- 本文保留问题分类与证据边界，不再发布“下一步”指令。

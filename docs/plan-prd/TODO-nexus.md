@@ -1,7 +1,7 @@
 # Nexus Performance TODO
 
-> 更新时间：2026-07-12
-> 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台性能收口。
+> 更新时间：2026-07-16
+> 范围：`apps/nexus` 文档站、生态站、Dashboard、Provider Registry、Data Governance 与公开控制台性能收口。全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## Goal
 
@@ -12,7 +12,7 @@
 
 ## 当前口径
 
-- Nexus 性能线与 CoreApp / AI / R3 分开推进，不混入其它 dirty files。
+- Nexus 性能线与 CoreApp / AI / R3 分开推进，不混入其它主题或验证批次。
 - `output/playwright/` 只作为 ignored evidence 目录，不纳入提交。
 - 每批保持小切片：Playwright screenshot/HAR/Markdown/JSON、focused 验证或等价静态检查、`git diff --check`。
 - production 结论必须用 production build / preview HAR，不用 dev-only HAR 替代。

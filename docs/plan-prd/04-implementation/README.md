@@ -1,31 +1,34 @@
 # Implementation Docs
 
-> 更新时间：2026-07-11
-> 定位：当前实施文档入口。更早实施记录已从文档树移除，需要时从 Git 历史追溯。
+> 更新时间：2026-07-16
+> 定位：路线、稳定化和 evidence 文档索引。实时任务状态不在本目录维护。
 
-## 当前 SoT
+## 活跃入口
 
-- `Roadmap-vNext-2026-06-18.md` - R0-R9 当前路线图。
-- `Stability-Architecture-Optimization-2026-07-04.md` - 稳定性与架构优化执行导航。
-- `Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
-- `R8-R9-Next-Stage-Execution-Plan-2026-06-24.md` - R8 i18n/Catalog 2.6.0 与 R9 AI 2.5.x 后续能力分批计划。
-- `Project-Roadmap-Audit-2026-06-18.md` - Roadmap / release / pricing / docs hygiene 审计记录。
-- `Launcher-TuffIntelligence-QuickReview-Roadmap-2026-07-07.md` - 启动器对标、TuffIntelligence 产品化与 QuickReview 分批路线。
-- `Pricing-SoT-2026-06-18.md` - Pricing 当前单一事实源。
+- [`../TODO.md`](../TODO.md)：当前两周稳定化顺序。
+- [`Roadmap-vNext-2026-06-18.md`](./Roadmap-vNext-2026-06-18.md)：R0-R9 产品路线。
+- [`Stability-Architecture-Optimization-2026-07-04.md`](./Stability-Architecture-Optimization-2026-07-04.md)：稳定性代码落点与验证矩阵。
+- [`R8-R9-Next-Stage-Execution-Plan-2026-06-24.md`](./R8-R9-Next-Stage-Execution-Plan-2026-06-24.md)：R8/R9 专题计划；不定义当前全局优先级。
+- [`Launcher-TuffIntelligence-QuickReview-Roadmap-2026-07-07.md`](./Launcher-TuffIntelligence-QuickReview-Roadmap-2026-07-07.md)：Launcher / Intelligence / QuickReview 专题路线。
+- [`Pricing-SoT-2026-06-18.md`](./Pricing-SoT-2026-06-18.md)：Pricing 单一事实源。
 
 ## Evidence Matrix
 
-- `Evidence-Matrix-AI-Stable-2026-06-18.md` - AI Stable 固定证据矩阵。
-- `Evidence-Matrix-Nexus-Governance-2026-06-18.md` - Nexus production governance 证据矩阵。
-- `Evidence-Matrix-Platform-2026-06-18.md` - 平台能力非阻塞 smoke 矩阵。
+- [`Evidence-Matrix-AI-Stable-2026-06-18.md`](./Evidence-Matrix-AI-Stable-2026-06-18.md)
+- [`Evidence-Matrix-Release-Integrity-2026-06-21.md`](./Evidence-Matrix-Release-Integrity-2026-06-21.md)
+- [`Evidence-Matrix-Nexus-Governance-2026-06-18.md`](./Evidence-Matrix-Nexus-Governance-2026-06-18.md)
+- [`Evidence-Matrix-Platform-2026-06-18.md`](./Evidence-Matrix-Platform-2026-06-18.md)
 
-## Performance
+## Historical / 兼容入口
 
-- `performance/WindowsStartupOptimization-2026-06-18.md` - Windows 启动优化 PRD。
-- `performance/PERFORMANCE_REFERENCE.md` - 性能参考资料。
+- [`Current-Execution-Plan-2026-06-17.md`](./Current-Execution-Plan-2026-06-17.md)：已退役为兼容跳转，不再维护当前事实。
+- [`Project-Roadmap-Audit-2026-06-18.md`](./Project-Roadmap-Audit-2026-06-18.md)：历史审计快照。
+- [`Release-2.4.11-Closure-2026-06-13.md`](./Release-2.4.11-Closure-2026-06-13.md)：历史发布收口记录。
+- [`AI-2.5x-Execution-Plan-2026-06-16.md`](./AI-2.5x-Execution-Plan-2026-06-16.md)：AI 专题历史/阶段计划。
 
 ## 维护规则
 
-- 新实施记录优先落到当前 Roadmap / TODO / Evidence Matrix，而不是新增流水账文档。
-- 更早 runbook、旧计划、pre-compression / full 快照不再进入文档树。
-- 行为或验收边界变化必须同步 `../README.md`、`../TODO.md`、`../01-project/CHANGES.md` 或 `../../INDEX.md`。
+- 不新增第二份“当前执行计划”；实时状态进入 Trellis，两周顺序进入 `TODO.md`。
+- 路线文档不写本地 HEAD、分支、dirty worktree 或手工维护的当前版本。
+- Evidence Matrix 只记录可复核证据，不把 focused/mock/local-only 提升为 packaged/production 完成。
+- 历史文档保留时必须标明 Historical 或由本索引归类；旧事实不反向覆盖活跃入口。

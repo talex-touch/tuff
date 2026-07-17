@@ -1,7 +1,7 @@
 # 安全加固交接 Backlog — 2026-07-15
 
 > 一轮全项目安全审计 + 修复的交接文档。目的：让下一轮（尤其能真机操作 app 的环境）无缝接手剩余项。
-> 本轮全部工作独立落库为 **12 个提交**（`2a69fa3b1..b862fb70f`），未 push。工作区里其余改动是**并行进程的在途工作，不属于本轮**。
+> 提交、push、worktree 与并行修改描述均为 2026-07-15 生成时快照；执行前必须读取当前仓库状态。技术结论与剩余 backlog 仍需按当前代码逐项复核。
 
 ## 1. 本轮范围
 
@@ -31,7 +31,7 @@
 - **`wrangler.toml` preview 的 `change-me*` 密钥** — 应移到 `wrangler secret put --env preview`（运维操作，非代码；未处理）。
 - **Feature flags（都默认关，零默认影响）**：`TUFF_UPDATE_REQUIRE_SIGNATURE=1`(强制更新必须签名)、`TUFF_PLUGIN_ISOLATION=1`(C1-B 子进程隔离实验核心)、`TUFF_PLUGIN_SECURE_VIEWS=1`(H2 强制安全视图)。
 
-## 4. 剩余 Backlog（都撞真机墙或需决策，任务系统 #9/#10/#12/#15/#16/#17）
+## 4. 剩余 Backlog（#9 / #10 已关闭；其余仍撞真机墙或需决策，任务系统 #12/#15/#16/#17）
 
 > **每项的详细实施 handoff**（现状 file:line / 步骤 / 验证 / 陷阱）见
 > [`security-hardening-remaining-backlog-2026-07-15.md`](./security-hardening-remaining-backlog-2026-07-15.md)。
@@ -47,9 +47,9 @@
 ### H2 视图安全（#16 默认化部分）
 - 默认化 trusted + compat 用户同意 UI，需 renderer + 安装流程 + legacy 插件真机回归。强制默认会破坏依赖 nodeIntegration 的 legacy 插件（同 C1-A 教训）。
 
-### 数据层（#9 / #10）
-- **#9 batch-ingest**：`pushSyncItemsV1`(syncStoreV1.ts:514) 循环 per-item 读写混合，>1000 项超 Workers 子请求上限致半写。需重构为批量 IN 预读→内存冲突检测→分块 db.batch，**须真实 D1 验证冲突语义不变**。
-- **#10 usage 双写**：`usage-summary-service` 与实时 `usage-stats-queue` 都对 item_usage_stats 加性写→双计+无 watermark 膨胀。需**架构决策**(禁用 summary 让 queue 独占 vs 加 watermark)+ 运行验证。**注意此文件在 core-app，正被并行进程改。**
+### 数据层（#9 / #10 均已关闭）
+- **#9 batch-ingest ✅ 2026-07-16 已修**：`pushSyncItemsV1` 使用有界批量预读与单次原子 D1 `batch()`，统一提交 oplog/item/quota/session。13 项回归、Miniflare 与隔离 Preview D1 覆盖 1001 项、冲突排序和失败回滚；远程临时表已清理。
+- **#10 usage 单写者 ✅ 2026-07-16 已修**：移除 periodic log replay；`0027` 迁移保守删除有 provider sibling 的 source-type phantom rows，并只下调可证明的 execute 过计。3 files / 4 tests、typecheck、migration readiness 与临时 DB smoke 通过。
 
 ## 5. 关键教训（下一轮避坑）
 
@@ -57,7 +57,8 @@
 2. **require 黑名单堵不住 RCE 又不破坏生态**——官方插件本身就用 child_process/fs。child_process 的 RCE 只能靠 C1-B 进程隔离根治，这是 C1-A 只能是"缓解"的根本原因。
 3. **收紧 legacy 兼容层(compat 视图 / require)几乎必然破坏某些插件**。任何"默认收紧"都要么做成 opt-in flag(本轮 H2/H4/C1-B 的做法)，要么有真机全插件回归兜底。
 
-## 6. 提交与并行工作状态
+## 6. 快照边界
 
-- 两份 handoff 文档已 GPG 签名并 push。此前 12 个修复提交在会话签不了名时已由环境 push 到 `origin/master`（未签名）；**不逐条 re-sign**——那需要 force-push、会 rewrite 与并行进程共享的历史。要签名可由维护者本地对已 push 范围单独 `git rebase --exec 'git commit --amend --no-edit -S'` 后自行决定是否 force-push。
-- 工作区剩余的 core-app 改动（clipboard/download/storage/intelligence/assistant/dev-process-manager + `plugin-host-bridge`/`plugin-module` + `07-15-*` trellis 任务）**是并行进程的在途工作，不属于本轮**——其中 `dev-process-manager.ts` 有 2 个未使用常量(没写完)导致全量 typecheck 报红，那不是本轮引入的。让其作者收尾。
+- 本文中的 commit 数量、push 状态和工作区归属只解释 2026-07-15 当时的交接背景，不再作为实时操作指令。
+- 当前状态必须从版本控制、Trellis 与对应代码重新读取；不得依据本文执行 rebase、force-push 或覆盖并行改动。
+- 2026-07-16 #9 / #10 均已关闭；当前全局首要项转为 Trellis 任务与文档收敛，顺序见 [`../plan-prd/TODO.md`](../plan-prd/TODO.md)。

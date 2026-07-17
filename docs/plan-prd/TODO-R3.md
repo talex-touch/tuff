@@ -1,7 +1,7 @@
 # Tuff R3 Search / Indexing Runtime TODO
 
-> 更新时间：2026-07-10
-> 范围：Roadmap R3 / Search Provider 与 Indexing Runtime。专题设计以 `03-features/search/INDEXING-RUNTIME-V1-PLAN.md` 为准。
+> 更新时间：2026-07-16
+> 范围：Roadmap R3 / Search Provider 与 Indexing Runtime。专题设计以 `03-features/search/INDEXING-RUNTIME-V1-PLAN.md` 为准；全局执行顺序服从 [`TODO.md`](./TODO.md)。
 
 ## 当前口径
 

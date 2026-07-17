@@ -1,8 +1,39 @@
 # 变更日志
 
-> 更新时间：2026-07-13
+> 更新时间：2026-07-16
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
 
+
+## 2026-07-16
+
+### chore: converge Trellis task and documentation state
+
+- Audited every active task against `task.json` status and PRD checkboxes. Archived 45 completed tasks with `task.py archive --no-commit`—44 prior completed/checklist-complete tasks plus this convergence task after verification—leaving only nine genuinely open tasks.
+- Retained only genuinely open work. Every retained task has one assignee plus `meta.nextAction`, `meta.blocker`, and `meta.evidence`; LP-03 returned from misleading `in_progress` to `planning`, while the concurrent file-filtering implementation remained untouched.
+- `TODO.md` is now the sole global execution order. INDEX/README navigate, Roadmap expresses stage relationships, task PRDs own local contracts, and CHANGES/reports own completed evidence; live task counts, branch, HEAD, worktree, and package-version snapshots are not copied into long-lived docs.
+- No git commit or push was created by the archive wave.
+
+### nexus: make large sync pushes bounded and atomic
+
+- `pushSyncItemsV1` validates the full payload, bulk-preloads item/oplog state through bounded `json_each(?)` chunks, preserves `updated_at + device_id` conflict precedence, and guards the D1 paid-plan query budget.
+- Oplog inserts, materialized item upserts, authoritative live quota reconciliation, and session cursor updates now commit in one D1 `batch()` transaction. The push route no longer applies a separate post-commit quota delta.
+- Focused regression is 13/13 and covers 1,001 items, duplicate `op_seq`, null/lower/higher device ties, tombstones, quota reconciliation, handshake/pull, and forced rollback. Scoped ESLint and Nexus typecheck pass.
+- Local Miniflare produced oplog/item/quota `1001/1001/1001` and all-zero rollback. After explicit approval, isolated Preview D1 tables reproduced 1,001-row consistency, full failure rollback, and tie-break semantics; cleanup left no prefixed tables and production D1 was never accessed.
+
+### search: make usage statistics single-writer and repair historical pollution
+
+- `UsageSummaryService` no longer replays retained `usage_logs` into `item_usage_stats`; periodic maintenance still rebuilds time distributions and performs retention cleanup. `UsageStatsQueue` and its initialization fallback are now the only incremental writers.
+- Root cause was identity loss, not universal same-PK duplication: `usage_logs.source` stores source type, so replay created `application:<item>` / `file:<item>` phantom rows; only id=type providers had direct count amplification.
+- Data migration `0027_usage_stats_single_writer_repair.sql` deletes a source-type row only when a provider-aware sibling exists, and only lowers execute counts above `usage_summary.click_count`. It preserves under-counts, rows without summary, search/cancel counters and timestamps; replay is idempotent.
+- Verification: 3 focused files / 4 tests passed, scoped ESLint and CoreApp node typecheck passed, source-read-only migration readiness reported `ready` with journal/SQL parity, and a temporary database smoke kept execute count `1` across execute→flush→maintenance.
+
+### docs: consolidate the stabilization source of truth
+
+- 文档入口收敛为四层：`docs/INDEX.md` 导航、`docs/plan-prd/TODO.md` 两周优先级、Trellis 实时任务状态、Evidence Matrix / reports 完成证据；退役 dated `Current-Execution-Plan` 的 live SoT 身份。
+- 文档盘点先锁定了 usage 数据污染风险；随后代码修复进一步纠正机制为 source-type phantom rows + 少数 id=type 直接放大，并由上方单写者/保守迁移切片关闭。
+- P0 subsequently closed Usage integrity, Nexus atomic sync, and Trellis task/document convergence; current ordering is no longer repeated in this historical section and is read only from `TODO.md`.
+- 根 README 移除缺失的 `shots/*` 图片引用，改用动态 release badge、可点击文档入口和真实的跨平台成熟度说明；活跃规划文档不再手工维护版本、HEAD、分支或 dirty worktree。
+- 验证：20 个改动文档的本地相对链接均可解析，AI docs contract verifier passed；未把 focused/local-only 证据升级为 packaged/production 完成。
 
 ## 2026-07-13
 

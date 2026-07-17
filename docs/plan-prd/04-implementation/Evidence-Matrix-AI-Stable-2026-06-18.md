@@ -21,8 +21,8 @@
 
 - `AI-STABLE-01/02/03/04/05/06/07/08` 均已绑定独立 packaged probe JSON + PNG artifact，CoreBox AI Ask packaged Stable evidence 已关闭。
 - 当前 passed packaged surfaces：`startup-packaged-hot`、`startup-packaged-cold`、`startup-first-screen`、`corebox-search-states`、`app-index-workbench`、`browser-login-recovery`、`corebox-ai-ask`、`omnipanel-writing-tools`、`provider-migration-evidence`、`assistant-floating-ball-entry`、`assistant-screenshot-translate`、`workflow-use-model-review-queue`、`provider-registry-observability`。
-- 2026-06-24 historical verifier 为 `gate.passed=true`，13/13 required surfaces 全部 passed，manifest artifact 总引用 72 次；2026-07-13 当前 CoreApp 已为 `2.4.13-beta.6`，新增 `--requireCurrentVersion` 后会因 manifest baseline `2.4.12-beta.8` mismatch fail-closed，待新版本 recapture。
-- `assistant-screenshot-translate` historical packaged surface 已 passed；2026-07-13 permission recovery、cursor/display/region 来源、image route metadata、OCR fallback、pin window host copy/close/work-area/zoom/opacity，以及 provider/login/quota/OCR/文本翻译失败后直达 Intelligence Channels 的一键恢复只有 focused code/test evidence，仍待 `2.4.13-beta.6` recapture。后续产品化缺口收窄为多显示器/HiDPI 与 current-version 可见采证。
+- 2026-06-24 historical verifier 为 `gate.passed=true`，13/13 required surfaces 全部 passed，manifest artifact 总引用 72 次；2026-07-13 当前 CoreApp 已为 `apps/core-app/package.json` 版本，新增 `--requireCurrentVersion` 后会因 manifest baseline `2.4.12-beta.8` mismatch fail-closed，待新版本 recapture。
+- `assistant-screenshot-translate` historical packaged surface 已 passed；2026-07-13 permission recovery、cursor/display/region 来源、image route metadata、OCR fallback、pin window host copy/close/work-area/zoom/opacity，以及 provider/login/quota/OCR/文本翻译失败后直达 Intelligence Channels 的一键恢复只有 focused code/test evidence，仍待 `apps/core-app/package.json` 版本 recapture。后续产品化缺口收窄为多显示器/HiDPI 与 current-version 可见采证。
 
 ## 3. 固定证据矩阵
 

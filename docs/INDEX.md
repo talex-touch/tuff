@@ -1,59 +1,65 @@
 # 文档索引
 
-> 更新时间：2026-06-25
-> 定位：仓库文档导航。当前执行状态以 `docs/plan-prd/TODO.md` 为准，历史事实以 `docs/plan-prd/01-project/CHANGES.md` 为准。
+> 更新时间：2026-07-16
+> 定位：仓库文档导航，不保存易漂移的本地 `HEAD`、分支、工作区或“当前版本”快照。
 
-## 主入口
+## 30 秒入口
 
-- `docs/plan-prd/README.md` - PRD / 规划主索引。
-- `docs/plan-prd/TODO.md` - 当前 2 周执行清单。
-- `docs/plan-prd/TODO-AI.md` - R2 AI Stable 收口清单。
-- `docs/plan-prd/TODO-R3.md` - R3 Search / Indexing Runtime 收口清单。
-- `docs/plan-prd/TODO-nexus.md` - Nexus 性能收口清单。
-- `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md` - R0-R9 当前 SoT。
-- `docs/plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md` - 稳定性与架构优化执行导航。
-- `docs/plan-prd/04-implementation/Current-Execution-Plan-2026-06-17.md` - 当前项目进程与短期执行计划。
-- `docs/plan-prd/04-implementation/R8-R9-Next-Stage-Execution-Plan-2026-06-24.md` - R8 i18n/Catalog 2.6.0 与 R9 AI 2.5.x 后续能力分批计划。
-- `docs/plan-prd/04-implementation/Pricing-SoT-2026-06-18.md` - Pioneer 免费阶段与未来定价待决策项 SoT。
-- `docs/plan-prd/01-project/CHANGES.md` - 当前阶段变更索引。
-- `docs/engineering/README.md` - 工程过程资料索引。
+| 需要回答的问题 | 单一事实源 |
+| --- | --- |
+| 当前代码版本是什么 | 根目录与 `apps/core-app/package.json` |
+| 当前任务由谁执行、状态如何 | [`.trellis/tasks/`](../.trellis/tasks/) 与 `.trellis/scripts/get_context.py` |
+| 接下来两周先做什么 | [`plan-prd/TODO.md`](./plan-prd/TODO.md) |
+| 产品阶段和能力边界是什么 | [`plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`](./plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md) |
+| 最近已经发生了什么 | [`plan-prd/01-project/CHANGES.md`](./plan-prd/01-project/CHANGES.md) |
+| 某项是否真的完成 | 对应 Evidence Matrix 或 [`engineering/reports/`](./engineering/reports/) |
 
-## 验收入口
+## 当前稳定化结论
 
-- `docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md` - AI Stable 固定证据矩阵。
-- `docs/plan-prd/04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md` - Nexus production governance 证据矩阵。
-- `docs/plan-prd/04-implementation/Evidence-Matrix-Platform-2026-06-18.md` - 平台能力非阻塞 smoke 矩阵。
-- `docs/engineering/reports/release-integrity-2026-06-22/` - R1 Release Integrity Gate E 真实链路复采证据。
-- `docs/engineering/reports/r3-indexing-runtime-2026-06-25/` - R3 Indexing Runtime readiness、isolated SQLite/FTS simulation 与 packaged Settings maintenance evidence。
-- `docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/` - CoreApp visible AI curated evidence。
-- `docs/engineering/reports/startup-packaged-hot-runs-2026-06-21/` - packaged hot startup benchmark 摘要。
-- `docs/engineering/reports/startup-packaged-cold-runs-2026-06-21/` - packaged cold startup benchmark 摘要。
-- `docs/engineering/reports/nexus-performance-2026-06-21/` - Nexus performance 当前工作表。
+Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三个 P0 项均已关闭。
 
-## 高价值专题
+- `UsageStatsQueue` / direct fallback 是 `item_usage_stats` 唯一增量 writer；`0027` 保守修复可证明的历史污染。
+- `pushSyncItemsV1` 以单个 D1 `batch()` 原子提交 oplog、item、quota 和 session cursor，并有本地/Preview D1 证据。
+- 45 个完成任务（44 个既有任务 + 本收敛任务）已无提交归档；保留任务的 assignee、next action、blocker 和 evidence 均回到 task metadata。
 
-- `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md` - Tuff 2.5.0 AI 桌面入口收口 PRD。
-- `docs/plan-prd/03-features/omnipanel-assistant-next-prd.md` - OmniPanel 与悬浮助手下一版本 PRD。
-- `docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md` - 本地知识检索与上下文构建 PRD。
-- `docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md` - ContextHygiene 与自动记忆治理 PRD。
-- `docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md` - 本地开源模型运行时 PRD。
-- `docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md` - ASR Provider Runtime PRD。
-- `docs/plan-prd/03-features/native-rust-runtime-migration-prd.md` - Native Rust runtime migration PRD。
-- `docs/plan-prd/03-features/tuff-quickops-prd.md` - Tuff QuickOps 本地系统快捷工具集 PRD。
-- `docs/plan-prd/03-features/i18n-lexicon-catalog-2.6.0-prd.md` - i18n / Domain Lexicon / Cloud Catalog 收敛 PRD。
-- `docs/plan-prd/03-features/search/INDEXING-RUNTIME-V1-PLAN.md` - Indexing Runtime V1 统一搜索源计划。
-- `docs/plan-prd/03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md` - App Data Plugins 与 Everything 收口 Roadmap。
-- `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md` - Raycast / uTools 常用能力差距矩阵。
-- `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md` - Nexus Provider 聚合与 Scene 编排 PRD。
-- `docs/plan-prd/04-implementation/performance/WindowsStartupOptimization-2026-06-18.md` - Windows 启动优化 PRD。
-- `docs/plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md` - 稳定性优先级、架构代码落点与最小验证矩阵。
-- `docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md` - Release assets 核对入口。
-- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md` - PRD 质量基线与门禁约束。
+本页只负责导航，不复制下一项全局优先级。实时顺序只看 [`plan-prd/TODO.md`](./plan-prd/TODO.md)。
 
-## 文档维护规则
+代码落点与验证边界见 [`plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md`](./plan-prd/04-implementation/Stability-Architecture-Optimization-2026-07-04.md)。
 
-- 入口文档只保留当前事实、下一动作与高价值导航。
-- 更早过程记录不再放入文档树，需要时从 Git 历史追溯。
-- 行为/接口/架构变更至少同步 `README / TODO / CHANGES / INDEX` 之一。
-- 目标或质量门禁变化必须同步 Roadmap 与 Quality Baseline。
-- reports 只提交 curated 摘要、manifest/checklist 与最终证据；raw/log/user-data 进入本地忽略目录。
+## 文档分层
+
+### 1. 活跃执行层
+
+- [`plan-prd/README.md`](./plan-prd/README.md)：规划入口与事实源边界。
+- [`plan-prd/TODO.md`](./plan-prd/TODO.md)：唯一的两周级优先级清单。
+- [`.trellis/tasks/`](../.trellis/tasks/)：任务 owner、状态、PRD、设计和实施记录。
+
+### 2. 路线与专题层
+
+- [`plan-prd/04-implementation/README.md`](./plan-prd/04-implementation/README.md)：实施文档状态索引。
+- [`plan-prd/TODO-AI.md`](./plan-prd/TODO-AI.md)：AI Stable / 产品化专题。
+- [`plan-prd/TODO-R3.md`](./plan-prd/TODO-R3.md)：Search / Indexing Runtime 专题。
+- [`plan-prd/TODO-nexus.md`](./plan-prd/TODO-nexus.md)：Nexus 性能专题。
+- [`plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`](./plan-prd/docs/TODO-BACKLOG-LONG-TERM.md)：非当前窗口的长期债务。
+
+### 3. 工程交接与审计层
+
+- [`engineering/README.md`](./engineering/README.md)：工程资料入口。
+- [`engineering/security-hardening-handoff-2026-07-15.md`](./engineering/security-hardening-handoff-2026-07-15.md)：安全加固交接摘要。
+- [`engineering/security-hardening-remaining-backlog-2026-07-15.md`](./engineering/security-hardening-remaining-backlog-2026-07-15.md)：剩余安全/数据一致性实施细节。
+- [Search & Cross-Platform Audit](../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索与跨平台风险清单。
+
+### 4. 验收与历史层
+
+- [`engineering/reports/`](./engineering/reports/)：curated evidence、manifest、checklist 与审计摘要。
+- [`plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`](./plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md)：AI Stable evidence。
+- [`plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md`](./plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md)：发布完整性 evidence。
+- [`plan-prd/04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md`](./plan-prd/04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md)：Nexus 治理 evidence。
+
+## 维护规则
+
+1. 任务状态只写 Trellis；两周优先级只写 `TODO.md`；路线只写 Roadmap；完成事实只写 `CHANGES.md` / evidence。
+2. 长期文档不得固化本地 `HEAD`、dirty worktree、当前分支或可从 `package.json` 读取的版本。
+3. 专题 TODO 只承载专题细节，不反向定义全局优先级。
+4. 探索日志、临时截图、HAR、用户数据和原始 probe 输出不得进入文档树；只提交可复核摘要与最终 evidence。
+5. 入口文档保持短小；过程记录进入 Git 历史，不再新增第二套“当前执行计划”。

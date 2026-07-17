@@ -2,7 +2,7 @@
 
 > 主 handoff（`security-hardening-handoff-2026-07-15.md`）的实施细节补充。
 > 每一项都在本轮审计中定位过，这里给接手者可直接照做的现状 / 步骤 / 验证 / 陷阱。
-> **两条共同硬约束**：① 多数项需要**能真机操作 app / 真实 D1** 的环境才能验证；② `core-app` 部分正被并行进程改动，接手前先合并它们的在途改动。
+> **两条共同硬约束**：① 多数项需要真机 app 或真实 D1 才能验收；② 开始前读取当前 worktree/Trellis 状态并协调文件 owner，不依赖本文的历史并行修改快照。
 
 ---
 
@@ -21,7 +21,7 @@
 
 **验证**：合成测试（一个注册 onMain 回调的测试 Prelude，主进程触发事件，断言子进程回调被调）+ **逐个用 onMain 的官方插件真机回归**。
 
-**陷阱**：`plugin-host-bridge.ts` 正被并行进程改（已加 generation 守卫 + 重启稳定窗口），先合并；callback registry 的清理时机；signal 的多次 abort 幂等。
+**陷阱**：先确认 `plugin-host-bridge.ts` 当前 owner 与 generation/restart 语义；重点守住 callback registry 清理和 signal 多次 abort 幂等。
 
 ---
 
@@ -54,35 +54,31 @@
 
 ---
 
-## [#9] nexus batch-ingest — pushSyncItemsV1 分块 db.batch
+## [#9] nexus batch-ingest ✅ 2026-07-16 已关闭
 
-**现状**：`syncStoreV1.ts` `pushSyncItemsV1`(:495-560+) 循环里每个 item：JS 验证 + `existing` 查询（读）+ 冲突检测 + 写，全是独立 awaited D1 语句。>1000 项超 Cloudflare Workers ~1000 子请求上限 → 中途抛错 + 已提交的部分半写（D1 无事务）。
+**交付**：`pushSyncItemsV1` 先验证完整请求，再通过 `json_each(?)` 有界批量预读 existing item/oplog。accepted candidates 按 512 KiB JSON chunks 生成 bulk oplog/item 语句；authoritative quota reconcile 与 session cursor update 一并进入单个 D1 `batch()` 事务。push route 不再在事务外二次累加 quota。
 
-**实施步骤**：
-1. 循环前**一次批量预读**所有 item 的 existing：`SELECT ... WHERE user_id=?1 AND (namespace, key) IN (...)`（或分块 IN），建 `Map<namespace:key, existingRow>`。
-2. 循环改为**纯内存**冲突检测（用预读 map，保持原 `updated_at >=` / `>` 语义**逐字不变**）。
-3. 收集写语句成数组，**分块 `db.batch()`**（每块 ~50-100，兼顾子请求上限）。参考 `authStore.ts` mergeUsers 的 `db.batch` 用法（commit `2a69fa3b1`）。
-4. telemetryStore 的批量入口同样处理。
+**协议保持**：`updated_at` 较新者胜；相同时间戳由字典序更大的 `device_id` 胜；existing device 为 null 时 candidate 正确让位。`(user_id, device_id, op_seq)` 仍是幂等键，重复 seq 只应用第一项；delete/tombstone 保留 stored payload size，但不计入 live quota。
 
-**验证**：**真实 D1** + >1000 项 payload，断言冲突结果与原逐条实现完全一致 + 无半写。
+**验证**：13/13 focused tests、scoped ESLint、Nexus typecheck 通过。Miniflare 1001 项写入与故障注入证明 oplog/item/quota/session 原子性。经明确批准的 `tuff-nexus-dev` 隔离表验证得到 `1001/1001/1001` 和失败后全 `0`，并验证 equal timestamp 下 null device 被替换、较高 existing device 拒绝较低 candidate；临时表清理后 prefix 查询为空，production D1 未访问。
 
-**陷阱**：冲突检测语义（`updated_at` 比较、tombstone/deleted_at）必须与原实现字节级一致——改错=数据同步损坏，比现状更糟。
+**边界**：telemetry batch ingestion 仍是独立事项，不因 #9 关闭而自动完成。
 
 ---
 
-## [#10] core-app usage 双写去重（数据损坏）
+## [#10] core-app usage 统计单写者 ✅ 2026-07-16 已关闭
 
-**现状**：`usage-summary-service.ts` `summarizeUsageLogs`(:158-281) 每 24h 从 `usage_logs` 全窗口重聚合并**加性写** `item_usage_stats`（`executeCount + ...`）；实时 `usage-stats-queue.ts` `persistAggregates`(:326) 也加性写**同一表同一 PK**。→ 同一次点击被计 ~31× + 无 watermark 随时间膨胀，污染 frecency/推荐。
+**纠正后的根因**：旧 `summarizeUsageLogs()` 每次回放 retained logs；但 `usage_logs.source` 是 source type，不是 provider id。它主要生成 `application:<item>` / `file:<item>` 等 phantom rows，并在少数 id=type 情况直接放大原行，不是所有 provider 都命中“同一 PK”。
 
-**需先做架构决策**（两个审计 agent 一致判断 queue 是权威 writer、summary 冗余）：
-- **选项 A（推荐）**：让 summary **不再写** `item_usage_stats`（queue 独占）。前置：确认 `recordExecute`(`search-usage-service.ts`) 所有路径都入 queue。
-- **选项 B**：summary 加 `last_summarized_at` watermark 只聚合增量 —— 但仍与 queue 双计，除非同时砍掉重复列，**不推荐单独用**。
+**交付**：
 
-**实施步骤（A）**：移除 `summarizeUsageLogs` 里 `updateFields.searchCount/executeCount` 的加性 `sql\`... + ...\`` 写；若 summary 还有别的产出则保留（本轮确认它**唯一产出**就是 item_usage_stats，故可能整个 summary 定时任务都可停）。
+- `UsageStatsQueue` / direct fallback 成为 `item_usage_stats` 唯一增量 writer；周期服务保留 `item_time_stats` overwrite 与 retention cleanup。
+- `0027_usage_stats_single_writer_repair.sql` 只删除存在 provider sibling 的明确 phantom row；只将超过 `usage_summary.click_count` 的 execute 计数向下修正。
+- 不猜历史 provider id，不提升 under-count，不修改无 summary 行、search/cancel 或其它时间戳，不全量重置个性化。
 
-**验证**：运行 + 观察 frecency 不再膨胀 + 排名正确；**需一次性重置/重算已被膨胀污染的既有 item_usage_stats**。
+**验证**：migration 重放幂等；3 个 focused files / 4 tests、scoped ESLint、CoreApp node typecheck、source-read-only migration readiness 与 execute→flush→maintenance 临时数据库 smoke 通过。
 
-**陷阱**：**此文件在 core-app，正被并行进程改**——先合并。清空/重算既有数据要谨慎（备份）。
+**遗留边界**：`item_time_stats` 的历史 source identity 同样受 source-type-only log 限制，需独立合同处理；本项不伪造 provider id。
 
 ---
 
@@ -94,7 +90,5 @@
 
 ## 建议接手顺序
 
-1. 先合并并行进程的 core-app 在途改动 + push 本轮 13 提交。
-2. **#10 → #9**（数据正确性/损坏，纯逻辑 + D1 验证，不依赖真机 UI）。
-3. **#15 → #17**（C1-B 事件式 → 全插件真机回归，默认开 C1-B）。
-4. **#16 默认化**（H2 同意 UI，最需 renderer + 真机）。
+1. **#15 → #17**：先补 callback/AbortSignal，再做全官方插件真机回归并决定隔离默认化。
+2. **#16 默认化**：最后处理 trusted view + compat 用户同意，避免在缺真机证据时破坏 legacy 插件。
