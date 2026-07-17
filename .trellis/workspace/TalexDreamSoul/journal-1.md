@@ -520,3 +520,36 @@ Ran the standardized v2.4.13-beta.14 release acceptance flow against GitHub and 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Harden release signing and official build verification
+
+**Date**: 2026-07-17
+**Task**: Harden release signing and official build verification
+**Branch**: `master`
+
+### Summary
+
+Rotated the RSA-4096 release key, added signed app build attestations, synchronized CoreApp and Nexus trust roots, blocked trust-root drift, and verified the packaged app plus Nexus Worker fallback.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `723b1bdd4` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
