@@ -1,0 +1,36 @@
+{
+  "id": "gate-search-on-storage-hydration",
+  "name": "gate-search-on-storage-hydration",
+  "title": "Gate Search on Storage Hydration",
+  "description": "Expose explicit storage readiness and fail closed for onboarding-sensitive CoreBox and indexing startup.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "Storage readiness state, onboarding gate, CoreBox shortcut behavior, and consent-sensitive search/indexing startup",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-09",
+  "completedAt": "2026-07-17",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-09-audit-search-system-architecture",
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/storage/index.ts",
+    "apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts",
+    "apps/core-app/src/main/modules/box-tool/search-engine/search-provider-registry.ts",
+    "apps/core-app/src/main/modules/box-tool/core-box/index.ts",
+    "apps/core-app/src/main/modules/box-tool/core-box/manager.ts"
+  ],
+  "notes": "Explicit storage readiness and shared onboarding admission are implemented. Search providers/indexing maintenance, SearchCore, and CoreBox now fail closed until allowed; no schema or real-profile data changed.",
+  "meta": {
+    "nextAction": "Archive after the recorded focused checks and state-machine smoke remain green.",
+    "blocker": "None.",
+    "evidence": "8 focused files / 37 tests passed; scoped ESLint and CoreApp node typecheck passed; direct state-machine smoke covered single-flight pending, blocked, allowed, recoverable degraded/retry, terminal degraded, and duplicate decision suppression."
+  }
+}
