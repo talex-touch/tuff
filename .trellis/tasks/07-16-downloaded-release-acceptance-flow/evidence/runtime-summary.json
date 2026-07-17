@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-07-17T05:18:04.672Z",
+  "tag": "v2.4.13-beta.14",
+  "status": "pass",
+  "mode": "isolated-launch",
+  "profileMutationPolicy": "isolated-controlled",
+  "packageVersion": "2.4.13-beta.14",
+  "appArtifact": {
+    "bundleName": "tuff.app",
+    "source": "downloaded-github-release",
+    "reusedWorkspaceDist": false
+  },
+  "renderer": {
+    "cdpAvailableDuringProbe": true,
+    "targetCount": 4,
+    "routes": [
+      "out/renderer/index.html#/setting",
+      "out/renderer/index.html#/meta-overlay"
+    ]
+  },
+  "indexedSource": {
+    "id": "file-provider",
+    "healthStatus": "ready",
+    "permissionState": "granted",
+    "watchState": "active",
+    "rootCount": 6,
+    "recentTaskCount": 1
+  },
+  "verification": {
+    "passed": true,
+    "failures": [],
+    "requiredAuditFields": [
+      "duration",
+      "trigger",
+      "reason",
+      "attempt",
+      "errorCode"
+    ]
+  },
+  "ui": {
+    "settingsShellVisible": true,
+    "sourceDiagnosticsVisible": true,
+    "sourceRowCount": 6,
+    "detailDialogVisible": true,
+    "detailSections": [
+      "Overview",
+      "Progress",
+      "Recovery",
+      "Evidence",
+      "Scheduler",
+      "Recent",
+      "Maintenance actions"
+    ],
+    "recentTaskVisible": true,
+    "screenshotsReviewed": true,
+    "screenshotsRetained": false,
+    "screenshotRetentionReason": "Raw captures exposed local root paths; only path-free summary is retained."
+  },
+  "cleanup": {
+    "profileRemoved": true,
+    "supervisedProcessStopped": true
+  },
+  "failures": []
+}

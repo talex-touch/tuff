@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-07-17T05:26:28.751Z",
+  "endpoint": "/api/releases/signing-key",
+  "httpStatus": 200,
+  "status": "fail",
+  "publicKeyConfigured": false,
+  "message": "Release signature key not configured."
+}

@@ -1,0 +1,30 @@
+{
+  "id": "downloaded-release-acceptance-flow",
+  "name": "downloaded-release-acceptance-flow",
+  "title": "Establish downloaded release acceptance flow",
+  "description": "Completed downloaded release acceptance for v2.4.13-beta.14 and established the reusable project release-testing contract.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-16",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "Test execution completed. Download, identity, SHA-256, Nexus signed redirects, and isolated packaged runtime passed; release acceptance failed on manifest/signature/native-signing gates, with Gatekeeper assessment blocked because host security assessment is disabled.",
+  "meta": {
+    "nextAction": "Review evidence/summary.json and open separate defect tasks only with user approval.",
+    "blocker": "Published release v2.4.13-beta.14 does not satisfy manifest/signature/macOS trust gates.",
+    "evidence": "evidence/summary.json plus seven bounded supporting JSON artifacts."
+  }
+}

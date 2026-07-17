@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-07-17T05:16:30.820Z",
+  "tag": "v2.4.13-beta.14",
+  "appBundle": "tuff.app",
+  "expectedVersion": "2.4.13-beta.14",
+  "expectedArch": "arm64",
+  "summary": {
+    "versionMatches": true,
+    "architectureMatches": true,
+    "executable": true,
+    "codesignDeepStrict": "fail",
+    "signatureKind": "adhoc",
+    "teamIdentifierPresent": false,
+    "gatekeeper": "blocked-security-disabled"
+  },
+  "checks": [
+    {
+      "name": "bundle-version",
+      "exitCode": 0,
+      "stdout": "2.4.13-beta.14",
+      "stderr": ""
+    },
+    {
+      "name": "bundle-build",
+      "exitCode": 0,
+      "stdout": "2.4.13-beta.14",
+      "stderr": ""
+    },
+    {
+      "name": "executable-file",
+      "exitCode": 0,
+      "stdout": "/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/MacOS/tuff: Mach-O 64-bit executable arm64",
+      "stderr": ""
+    },
+    {
+      "name": "executable-arch",
+      "exitCode": 0,
+      "stdout": "arm64",
+      "stderr": ""
+    },
+    {
+      "name": "executable-mode",
+      "exitCode": 0,
+      "stdout": "-rwxr-xr-x 51920",
+      "stderr": ""
+    },
+    {
+      "name": "codesign-deep-strict",
+      "exitCode": 1,
+      "stdout": "",
+      "stderr": "--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper.app\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/Mantle.framework/Versions/Current/.\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper (Plugin).app\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/Squirrel.framework/Versions/Current/.\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/ReactiveObjC.framework/Versions/Current/.\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper (GPU).app\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper (Renderer).app\n--validated:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper.app\n--validated:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper (Plugin).app\n--validated:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper (Renderer).app\n--validated:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/tuff Helper (GPU).app\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/.\n--prepared:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/Helpers/chrome_crashpad_handler\n--validated:/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/Electron Framework.framework/Versions/Current/Helpers/chrome_crashpad_handler\n/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app: bundle format is ambiguous (could be app or framework)\nIn subcomponent: /private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/Frameworks/Electron Framework.framework"
+    },
+    {
+      "name": "codesign-details",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "Executable=/private/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app/Contents/MacOS/tuff\nIdentifier=com.tagzxia.app.tuff\nFormat=app bundle with Mach-O thin (arm64)\nCodeDirectory v=20400 size=301 flags=0x2(adhoc) hashes=3+3 location=embedded\nVersionPlatform=1\nVersionMin=786432\nVersionSDK=1704448\nHash type=sha256 size=32\nCandidateCDHash sha256=9fb27d4f00c3cff0990bdd233856c841c90c6977\nCandidateCDHashFull sha256=9fb27d4f00c3cff0990bdd233856c841c90c69770f908dda9d822bc60da7c981\nHash choices=sha256\nCMSDigest=9fb27d4f00c3cff0990bdd233856c841c90c69770f908dda9d822bc60da7c981\nCMSDigestType=2\nExecutable Segment base=0\nExecutable Segment limit=16384\nExecutable Segment flags=0x1\nPage size=16384\nCDHash=9fb27d4f00c3cff0990bdd233856c841c90c6977\nSignature=adhoc\nInfo.plist entries=35\nTeamIdentifier=not set\nSealed Resources version=2 rules=13 files=2305\nInternal requirements count=0 size=12\nTotal signatures=1\nChosen signature=1"
+    },
+    {
+      "name": "gatekeeper-assessment",
+      "exitCode": 0,
+      "stdout": "",
+      "stderr": "/tmp/tuff-release-acceptance/v2.4.13-beta.14/unpacked/tuff.app: accepted\noverride=security disabled"
+    }
+  ]
+}
