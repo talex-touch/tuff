@@ -487,3 +487,36 @@ Updated three SearchEngineCore regression fixtures to use IndexedSourceEventRout
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Downloaded release acceptance flow
+
+**Date**: 2026-07-16
+**Task**: Downloaded release acceptance flow
+**Branch**: `master`
+
+### Summary
+
+Ran the standardized v2.4.13-beta.14 release acceptance flow against GitHub and Nexus, downloaded and hash-verified the real macOS arm64 asset through both sources, inspected bundle trust, and passed the isolated packaged Settings/indexing probe. Release status is fail because manifest signatures/canonical matrix, Nexus signature endpoints/key, and native macOS signing are not release-ready; Gatekeeper assessment was blocked by host security-assessment override. Added the durable 发版测试 contract and sanitized evidence.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `45462a71b` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
