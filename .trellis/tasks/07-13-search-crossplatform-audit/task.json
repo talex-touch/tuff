@@ -2,7 +2,7 @@
   "id": "search-crossplatform-audit",
   "name": "search-crossplatform-audit",
   "title": "Search & cross-platform audit backlog",
-  "description": "",
+  "description": "Living search and cross-platform risk backlog; implementation is delegated to independently verifiable child tasks.",
   "status": "planning",
   "dev_type": null,
   "scope": null,
@@ -13,7 +13,7 @@
   "createdAt": "2026-07-13",
   "completedAt": null,
   "branch": null,
-  "base_branch": "TalexDreamSoul/optimization-integration",
+  "base_branch": "master",
   "worktree_path": null,
   "commit": null,
   "pr_url": null,
@@ -23,6 +23,10 @@
   ],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
-  "meta": {}
+  "notes": "Backlog container only; current global ordering is owned by docs/plan-prd/TODO.md.",
+  "meta": {
+    "nextAction": "After the active file-filtering slice and earlier TODO.md priorities, create one child task for the highest unclosed audited risk and preserve its evidence boundary.",
+    "blocker": "Deferred by docs/plan-prd/TODO.md; the completed ranking child is archived and the remaining backlog is not an active implementation batch.",
+    "evidence": "prd.md severity checklist, child-task map, and task-specific focused evidence."
+  }
 }

@@ -2,8 +2,8 @@
   "id": "lp-03-context-actions",
   "name": "lp-03-context-actions",
   "title": "LP-03 Super Panel-lite Context Actions",
-  "description": "",
-  "status": "in_progress",
+  "description": "Planning slice for explicit user-triggered text/image Context Actions routed through existing CoreBox, plugin, intelligence, OCR, and browser contracts.",
+  "status": "planning",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -21,6 +21,10 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
-  "meta": {}
+  "notes": "No implementation acceptance item is complete; the task is intentionally returned to planning and does not declare global priority.",
+  "meta": {
+    "nextAction": "Resume requirements/design review only after TODO.md releases the product-feature pause.",
+    "blocker": "Paused by the stability-first order in docs/plan-prd/TODO.md.",
+    "evidence": "prd.md acceptance checklist; runtime/UI evidence is not yet produced."
+  }
 }

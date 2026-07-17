@@ -30,5 +30,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "Parent task only; implementation is split into reviewed child tasks with explicit dependencies.",
-  "meta": {}
+  "meta": {
+    "nextAction": "When TODO.md reaches the search-architecture tranche, resume the remaining children in dependency order, starting with storage hydration and session scope.",
+    "blocker": "Deferred by the sole global order in docs/plan-prd/TODO.md; no additional parent-level implementation runs before its child prerequisites.",
+    "evidence": "prd.md acceptance checklist plus the linked child task PRDs."
+  }
 }

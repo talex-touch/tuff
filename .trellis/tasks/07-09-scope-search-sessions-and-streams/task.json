@@ -30,5 +30,9 @@
     "packages/utils/transport/types.ts"
   ],
   "notes": "Explicit prerequisite: 07-09-serialize-search-gather-updates.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Revalidate the archived ordered-gather contract, then implement caller-owned search sessions, cancellation, and request-scoped streams.",
+    "blocker": "Deferred by docs/plan-prd/TODO.md; prerequisite 07-09-serialize-search-gather-updates is archived complete.",
+    "evidence": "prd.md acceptance checklist and cross-caller search session tests."
+  }
 }

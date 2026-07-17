@@ -21,6 +21,10 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
-  "meta": {}
+  "notes": "Planning-only R8-F slice; it does not declare global priority.",
+  "meta": {
+    "nextAction": "Resume signed pack import, activation, rollback, and diagnostics after TODO.md releases the R8-F pause.",
+    "blocker": "Paused until the P1 stability sequence in docs/plan-prd/TODO.md is complete.",
+    "evidence": "prd.md acceptance checklist and CatalogService signature/import/rollback tests."
+  }
 }
