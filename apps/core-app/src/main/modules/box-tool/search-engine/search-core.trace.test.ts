@@ -317,12 +317,12 @@ describe('search-core search-trace', () => {
         reconcileSource: typeof reconcileSource
         clear: () => void
       }
-      subscribeIndexedSourceFsBridge: () => void
+      indexedSourceEventRouter: { subscribe: () => void }
       destroy: () => void
     }
     core.indexingRuntime = { routeWatchEventWithResult, getSource, reconcileSource, clear: vi.fn() }
 
-    core.subscribeIndexedSourceFsBridge()
+    core.indexedSourceEventRouter.subscribe()
 
     expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
     expect(touchEventBus.on).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))

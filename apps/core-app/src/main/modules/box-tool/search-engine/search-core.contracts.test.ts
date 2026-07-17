@@ -42,7 +42,18 @@ const state = vi.hoisted(() => {
 })
 
 vi.mock('@talex-touch/utils/common/logger', () => ({
-  getLogger: vi.fn(() => ({ info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() }))
+  getLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    child: vi.fn(() => ({
+      info: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      error: vi.fn()
+    }))
+  }))
 }))
 
 vi.mock('../../../core/eventbus/touch-event', () => ({
@@ -57,7 +68,12 @@ vi.mock('../../../core/eventbus/touch-event', () => ({
     PROVIDER_DEACTIVATED: 'PROVIDER_DEACTIVATED'
   },
   ProviderDeactivatedEvent: class {},
-  touchEventBus: { emit: vi.fn(), off: state.touchEventOff, on: state.touchEventOn }
+  touchEventBus: {
+    emit: vi.fn(),
+    off: state.touchEventOff,
+    on: state.touchEventOn,
+    once: vi.fn()
+  }
 }))
 
 vi.mock('../../../db/utils', () => ({ createDbUtils: state.createDbUtils }))
@@ -91,6 +107,7 @@ vi.mock('../../sentry', () => ({
 vi.mock('../../storage', () => ({
   getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
   storageModule: {},
+  isMainStorageReady: vi.fn(() => false),
   subscribeMainConfig: vi.fn(() => () => {})
 }))
 vi.mock('../addon/apps/app-provider', () => ({
@@ -225,7 +242,12 @@ vi.mock('./usage-summary-service', () => ({
 }))
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
-    getInstance: vi.fn(() => ({ isRegistered: vi.fn(() => false), unregister: vi.fn() }))
+    getInstance: vi.fn(() => ({
+      isRegistered: vi.fn(() => false),
+      unregister: vi.fn(),
+      register: vi.fn(),
+      start: vi.fn()
+    }))
   }
 }))
 vi.mock('@talex-touch/utils/transport/main', () => ({
@@ -235,6 +257,38 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
     },
     sendToWindow: state.sendToWindow
   }))
+}))
+
+vi.mock('electron', () => ({
+  app: {
+    getLocale: vi.fn(() => 'en-US'),
+    getPath: vi.fn(() => '/tmp'),
+    commandLine: {
+      appendSwitch: vi.fn()
+    }
+  },
+  BrowserWindow: class BrowserWindow {},
+  nativeTheme: {},
+  powerSaveBlocker: {
+    start: vi.fn(() => 1),
+    stop: vi.fn(),
+    isStarted: vi.fn(() => false)
+  },
+  screen: {
+    getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
+    getDisplayNearestPoint: vi.fn(() => ({
+      id: 1,
+      bounds: { x: 0, y: 0, width: 100, height: 100 }
+    }))
+  },
+  WebContentsView: class WebContentsView {}
+}))
+
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  WIN10: false,
+  MicaBrowserWindow: class MicaBrowserWindow {},
+  useMicaElectron: vi.fn()
 }))
 
 import { SearchEngineCore } from './search-core'
