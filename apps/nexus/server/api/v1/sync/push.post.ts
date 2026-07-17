@@ -4,7 +4,6 @@ import { requireAppAuth } from '../../../utils/auth'
 import { countActiveDevices, readDeviceId } from '../../../utils/authStore'
 import { createSyncError } from '../../../utils/syncErrors'
 import {
-  applyQuotaDelta,
   ensureDeviceForSync,
   getOrInitQuota,
   getSyncSession,
@@ -46,12 +45,6 @@ export default defineEventHandler(async (event) => {
       throw createSyncError(result.errorCode, statusCode, statusMessage)
     }
 
-    if (result.appliedStorageDelta || result.appliedObjectsDelta) {
-      await applyQuotaDelta(event, userId, {
-        storageDelta: result.appliedStorageDelta,
-        objectsDelta: result.appliedObjectsDelta,
-      })
-    }
 
     const response: PushResponse = {
       ack_cursor: result.ackCursor,

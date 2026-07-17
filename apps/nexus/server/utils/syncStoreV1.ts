@@ -1,4 +1,4 @@
-import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
+import type { D1Database, D1PreparedStatement, R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { readCloudflareBindings } from './cloudflare'
@@ -492,77 +492,390 @@ export async function markSyncSessionError(
   await updateSyncSessionState(db, userId, deviceId, { lastErrorCode: errorCode || null })
 }
 
+// Keep every JSON binding well below D1's 2 MB value limit.
+// Paid D1 permits 1,000 queries per invocation; reserve 100 for schema/quota/session work.
+const SYNC_PUSH_JSON_CHUNK_BYTES = 512 * 1024
+const SYNC_PUSH_D1_QUERY_BUDGET = 900
+
+interface ExistingSyncItemRow {
+  item_id: string
+  updated_at: string
+  updated_by_device_id: string | null
+  payload_size: number | null
+  deleted_at: string | null
+}
+
+interface SyncUsageRow {
+  used_storage_bytes: number
+  used_objects: number
+}
+
+interface NormalizedSyncPushItem {
+  item: SyncItemInput
+  updatedAt: string
+  rawPayloadSize: number | null
+}
+
+interface SyncWriteCandidate {
+  item: SyncItemInput
+  updatedAt: string
+  payloadSize: number
+  existing: ExistingSyncItemRow | null
+}
+
+interface SyncWriteRow {
+  itemId: string
+  type: string
+  schemaVersion: number
+  payloadEnc: string | null
+  payloadRef: string | null
+  metaPlain: string | null
+  payloadSize: number
+  updatedAt: string
+  deletedAt: string | null
+  opSeq: number
+  opHash: string
+  opType: 'upsert' | 'delete'
+}
+
+function serializeJsonChunks<T>(values: T[]): string[] {
+  if (!values.length)
+    return []
+
+  const chunks: string[] = []
+  let rows: string[] = []
+  let chunkBytes = 2
+
+  const flush = () => {
+    if (!rows.length)
+      return
+    chunks.push(`[${rows.join(',')}]`)
+    rows = []
+    chunkBytes = 2
+  }
+
+  for (const value of values) {
+    const row = JSON.stringify(value)
+    const separatorBytes = rows.length ? 1 : 0
+    const rowBytes = Buffer.byteLength(row, 'utf8')
+    if (rows.length && chunkBytes + separatorBytes + rowBytes > SYNC_PUSH_JSON_CHUNK_BYTES)
+      flush()
+    rows.push(row)
+    chunkBytes += (rows.length > 1 ? 1 : 0) + rowBytes
+  }
+  flush()
+  return chunks
+}
+
+function readD1ResultRows<T>(result: unknown): T[] {
+  if (!result || typeof result !== 'object' || !('results' in result))
+    return []
+  const rows = (result as { results?: unknown }).results
+  return Array.isArray(rows) ? rows as T[] : []
+}
+
+async function preloadSyncPushState(
+  db: D1Database,
+  userId: string,
+  deviceId: string,
+  items: NormalizedSyncPushItem[]
+): Promise<{
+  existingItems: Map<string, ExistingSyncItemRow>
+  existingOpSeqs: Set<number>
+  usage: SyncUsageRow
+  queryCount: number
+}> {
+  const itemIdChunks = serializeJsonChunks(Array.from(new Set(items.map(({ item }) => item.item_id))))
+  const opSeqChunks = serializeJsonChunks(Array.from(new Set(items.map(({ item }) => item.op_seq))))
+  const itemStatements = itemIdChunks.map(chunk => db.prepare(`
+    SELECT item_id, updated_at, updated_by_device_id, payload_size, deleted_at
+    FROM ${SYNC_ITEMS_TABLE}
+    WHERE user_id = ?2
+      AND item_id IN (SELECT CAST(value AS TEXT) FROM json_each(?1))
+  `).bind(chunk, userId))
+  const oplogStatements = opSeqChunks.map(chunk => db.prepare(`
+    SELECT op_seq
+    FROM ${SYNC_OPLOG_TABLE}
+    WHERE user_id = ?2
+      AND device_id = ?3
+      AND op_seq IN (SELECT CAST(value AS INTEGER) FROM json_each(?1))
+  `).bind(chunk, userId, deviceId))
+  const usageStatement = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN deleted_at IS NULL THEN COALESCE(payload_size, 0) ELSE 0 END), 0) AS used_storage_bytes,
+      COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) AS used_objects
+    FROM ${SYNC_ITEMS_TABLE}
+    WHERE user_id = ?
+  `).bind(userId)
+  const statements = [...itemStatements, ...oplogStatements, usageStatement]
+
+  if (statements.length >= SYNC_PUSH_D1_QUERY_BUDGET) {
+    return {
+      existingItems: new Map(),
+      existingOpSeqs: new Set(),
+      usage: { used_storage_bytes: 0, used_objects: 0 },
+      queryCount: statements.length,
+    }
+  }
+
+  const results = await db.batch(statements)
+  const existingItems = new Map<string, ExistingSyncItemRow>()
+  const existingOpSeqs = new Set<number>()
+
+  for (const result of results.slice(0, itemStatements.length)) {
+    for (const row of readD1ResultRows<ExistingSyncItemRow>(result))
+      existingItems.set(String(row.item_id), row)
+  }
+
+  const oplogOffset = itemStatements.length
+  for (const result of results.slice(oplogOffset, oplogOffset + oplogStatements.length)) {
+    for (const row of readD1ResultRows<{ op_seq: number }>(result))
+      existingOpSeqs.add(Number(row.op_seq))
+  }
+
+  const usageRows = readD1ResultRows<SyncUsageRow>(results.at(-1))
+  const usage = usageRows[0] ?? { used_storage_bytes: 0, used_objects: 0 }
+  return {
+    existingItems,
+    existingOpSeqs,
+    usage: {
+      used_storage_bytes: Number(usage.used_storage_bytes ?? 0),
+      used_objects: Number(usage.used_objects ?? 0),
+    },
+    queryCount: statements.length,
+  }
+}
+
+function toSyncWriteRow(candidate: SyncWriteCandidate): SyncWriteRow {
+  const { item, updatedAt, payloadSize, existing } = candidate
+  const existingPayloadSize = Number(existing?.payload_size ?? 0)
+  return {
+    itemId: item.item_id,
+    type: item.type,
+    schemaVersion: item.schema_version,
+    payloadEnc: item.payload_enc ?? null,
+    payloadRef: item.payload_ref ?? null,
+    metaPlain: item.meta_plain ? JSON.stringify(item.meta_plain) : null,
+    payloadSize: item.op_type === 'delete' ? existingPayloadSize : payloadSize,
+    updatedAt,
+    deletedAt: item.op_type === 'delete' ? (item.deleted_at ?? updatedAt) : (item.deleted_at ?? null),
+    opSeq: item.op_seq,
+    opHash: item.op_hash,
+    opType: item.op_type,
+  }
+}
+
+function buildSyncOplogWriteStatement(
+  db: D1Database,
+  jsonRows: string,
+  userId: string,
+  deviceId: string
+): D1PreparedStatement {
+  return db.prepare(`
+    WITH input AS (
+      SELECT
+        CAST(key AS INTEGER) AS input_order,
+        CAST(json_extract(value, '$.opSeq') AS INTEGER) AS op_seq,
+        CAST(json_extract(value, '$.opHash') AS TEXT) AS op_hash,
+        CAST(json_extract(value, '$.itemId') AS TEXT) AS item_id,
+        CAST(json_extract(value, '$.opType') AS TEXT) AS op_type,
+        CAST(json_extract(value, '$.updatedAt') AS TEXT) AS updated_at,
+        CAST(json_extract(value, '$.payloadSize') AS INTEGER) AS payload_size
+      FROM json_each(?1)
+    )
+    INSERT OR IGNORE INTO ${SYNC_OPLOG_TABLE}
+      (user_id, device_id, op_seq, op_hash, item_id, op_type, updated_at, payload_size)
+    SELECT ?2, ?3, input.op_seq, input.op_hash, input.item_id, input.op_type, input.updated_at, input.payload_size
+    FROM input
+    LEFT JOIN ${SYNC_ITEMS_TABLE} AS existing
+      ON existing.user_id = ?2 AND existing.item_id = input.item_id
+    WHERE existing.item_id IS NULL
+       OR input.updated_at > existing.updated_at
+       OR (
+         input.updated_at = existing.updated_at
+         AND (existing.updated_by_device_id IS NULL OR ?3 > existing.updated_by_device_id)
+       )
+    ORDER BY input.input_order
+  `).bind(jsonRows, userId, deviceId)
+}
+
+function buildSyncItemWriteStatement(
+  db: D1Database,
+  jsonRows: string,
+  userId: string,
+  deviceId: string
+): D1PreparedStatement {
+  return db.prepare(`
+    WITH input AS (
+      SELECT
+        CAST(key AS INTEGER) AS input_order,
+        CAST(json_extract(value, '$.itemId') AS TEXT) AS item_id,
+        CAST(json_extract(value, '$.type') AS TEXT) AS type,
+        CAST(json_extract(value, '$.schemaVersion') AS INTEGER) AS schema_version,
+        CAST(json_extract(value, '$.payloadEnc') AS TEXT) AS payload_enc,
+        CAST(json_extract(value, '$.payloadRef') AS TEXT) AS payload_ref,
+        CAST(json_extract(value, '$.metaPlain') AS TEXT) AS meta_plain,
+        CAST(json_extract(value, '$.payloadSize') AS INTEGER) AS payload_size,
+        CAST(json_extract(value, '$.updatedAt') AS TEXT) AS updated_at,
+        CAST(json_extract(value, '$.deletedAt') AS TEXT) AS deleted_at,
+        CAST(json_extract(value, '$.opSeq') AS INTEGER) AS op_seq,
+        CAST(json_extract(value, '$.opHash') AS TEXT) AS op_hash,
+        CAST(json_extract(value, '$.opType') AS TEXT) AS op_type
+      FROM json_each(?1)
+    )
+    INSERT INTO ${SYNC_ITEMS_TABLE} (
+      user_id, item_id, type, schema_version, payload_enc, payload_ref, meta_plain, payload_size,
+      updated_at, deleted_at, updated_by_device_id
+    )
+    SELECT ?2, input.item_id, input.type, input.schema_version, input.payload_enc, input.payload_ref,
+           input.meta_plain, input.payload_size, input.updated_at, input.deleted_at, ?3
+    FROM input
+    JOIN ${SYNC_OPLOG_TABLE} AS oplog
+      ON oplog.user_id = ?2
+     AND oplog.device_id = ?3
+     AND oplog.op_seq = input.op_seq
+     AND oplog.op_hash = input.op_hash
+     AND oplog.item_id = input.item_id
+     AND oplog.op_type = input.op_type
+     AND oplog.updated_at = input.updated_at
+    ORDER BY input.input_order
+    ON CONFLICT(user_id, item_id) DO UPDATE SET
+      type = excluded.type,
+      schema_version = excluded.schema_version,
+      payload_enc = excluded.payload_enc,
+      payload_ref = excluded.payload_ref,
+      meta_plain = excluded.meta_plain,
+      payload_size = excluded.payload_size,
+      updated_at = excluded.updated_at,
+      deleted_at = excluded.deleted_at,
+      updated_by_device_id = excluded.updated_by_device_id
+    WHERE excluded.updated_at > ${SYNC_ITEMS_TABLE}.updated_at
+       OR (
+         excluded.updated_at = ${SYNC_ITEMS_TABLE}.updated_at
+         AND (
+           ${SYNC_ITEMS_TABLE}.updated_by_device_id IS NULL
+           OR excluded.updated_by_device_id > ${SYNC_ITEMS_TABLE}.updated_by_device_id
+         )
+       )
+  `).bind(jsonRows, userId, deviceId)
+}
+
+function buildSyncQuotaReconcileStatement(db: D1Database, userId: string, now: string): D1PreparedStatement {
+  return db.prepare(`
+    UPDATE ${SYNC_QUOTAS_TABLE}
+    SET used_storage_bytes = CASE
+          WHEN (
+            SELECT COALESCE(SUM(CASE WHEN deleted_at IS NULL THEN COALESCE(payload_size, 0) ELSE 0 END), 0)
+            FROM ${SYNC_ITEMS_TABLE}
+            WHERE user_id = ?1
+          ) <= storage_limit_bytes
+          THEN (
+            SELECT COALESCE(SUM(CASE WHEN deleted_at IS NULL THEN COALESCE(payload_size, 0) ELSE 0 END), 0)
+            FROM ${SYNC_ITEMS_TABLE}
+            WHERE user_id = ?1
+          )
+          ELSE NULL
+        END,
+        used_objects = CASE
+          WHEN (
+            SELECT COUNT(*) FROM ${SYNC_ITEMS_TABLE} WHERE user_id = ?1 AND deleted_at IS NULL
+          ) <= object_limit
+          THEN (
+            SELECT COUNT(*) FROM ${SYNC_ITEMS_TABLE} WHERE user_id = ?1 AND deleted_at IS NULL
+          )
+          ELSE NULL
+        END,
+        updated_at = ?2
+    WHERE user_id = ?1
+    RETURNING used_storage_bytes, used_objects
+  `).bind(userId, now)
+}
+
+function buildSyncSessionPushStatement(
+  db: D1Database,
+  userId: string,
+  deviceId: string,
+  now: string
+): D1PreparedStatement {
+  return db.prepare(`
+    UPDATE ${SYNC_SESSIONS_TABLE}
+    SET last_cursor = COALESCE((SELECT MAX(cursor) FROM ${SYNC_OPLOG_TABLE} WHERE user_id = ?1), 0),
+        last_push_at = ?3,
+        last_error_code = NULL
+    WHERE user_id = ?1 AND device_id = ?2
+  `).bind(userId, deviceId, now)
+}
+
+function buildSyncCursorStatement(db: D1Database, userId: string): D1PreparedStatement {
+  return db.prepare(`
+    SELECT COALESCE(MAX(cursor), 0) AS cursor
+    FROM ${SYNC_OPLOG_TABLE}
+    WHERE user_id = ?
+  `).bind(userId)
+}
+
 export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: string, items: SyncItemInput[]) {
   const db = requireDatabase(event)
   await ensureSyncSchemaV1(db)
   const conflicts: SyncConflictItem[] = []
-  const candidates: Array<{
-    item: SyncItemInput
-    updatedAt: string
-    payloadSize: number
-    existing: {
-      updated_at: string
-      updated_by_device_id: string | null
-      payload_size: number | null
-      deleted_at: string | null
-    } | null
-  }> = []
-  let plannedStorageDelta = 0
-  let plannedObjectsDelta = 0
+  const invalidResult = async (errorCode: SyncErrorCode) => ({
+    errorCode,
+    conflicts,
+    ackCursor: await getServerCursor(db, userId),
+    appliedStorageDelta: 0,
+    appliedObjectsDelta: 0,
+  })
+
+  if (!Array.isArray(items))
+    return invalidResult('SYNC_INVALID_PAYLOAD')
+
+  const normalizedItems: NormalizedSyncPushItem[] = []
+  for (const item of items) {
+    if (
+      !item
+      || typeof item.item_id !== 'string'
+      || !item.item_id
+      || typeof item.type !== 'string'
+      || !item.type
+      || typeof item.op_hash !== 'string'
+      || !item.op_hash
+      || typeof item.updated_at !== 'string'
+      || !item.updated_at
+      || !Number.isInteger(item.op_seq)
+      || !Number.isInteger(item.schema_version)
+      || (item.op_type !== 'upsert' && item.op_type !== 'delete')
+    ) {
+      return invalidResult('SYNC_INVALID_PAYLOAD')
+    }
+
+    const rawPayloadSize = item.payload_size == null ? null : Number(item.payload_size)
+    if (rawPayloadSize != null && !Number.isFinite(rawPayloadSize))
+      return invalidResult('SYNC_INVALID_PAYLOAD')
+
+    normalizedItems.push({
+      item,
+      updatedAt: normalizeUpdatedAt(item.updated_at),
+      rawPayloadSize,
+    })
+  }
+
+  const preloaded = await preloadSyncPushState(db, userId, deviceId, normalizedItems)
+  if (preloaded.queryCount >= SYNC_PUSH_D1_QUERY_BUDGET)
+    return invalidResult('SYNC_INVALID_PAYLOAD')
+
+  const candidates: SyncWriteCandidate[] = []
+  const projectedItems = new Map(preloaded.existingItems)
+  const projectedOpSeqs = new Set(preloaded.existingOpSeqs)
+  const affectedItemIds = new Set<string>()
   let maxItemSize: number | null = null
 
-  for (const item of items) {
-    if (!item?.item_id || !item?.op_hash || item?.op_seq == null || !item?.updated_at || !item?.type) {
-      return {
-        errorCode: 'SYNC_INVALID_PAYLOAD' as SyncErrorCode,
-        conflicts,
-        ackCursor: await getServerCursor(db, userId),
-        appliedStorageDelta: 0,
-        appliedObjectsDelta: 0,
-      }
-    }
-    if (item.op_type !== 'upsert' && item.op_type !== 'delete') {
-      return {
-        errorCode: 'SYNC_INVALID_PAYLOAD' as SyncErrorCode,
-        conflicts,
-        ackCursor: await getServerCursor(db, userId),
-        appliedStorageDelta: 0,
-        appliedObjectsDelta: 0,
-      }
-    }
-
-    const updatedAt = normalizeUpdatedAt(item.updated_at)
-    const rawPayloadSize = item.payload_size == null ? null : Number(item.payload_size)
-    if (rawPayloadSize != null && !Number.isFinite(rawPayloadSize)) {
-      return {
-        errorCode: 'SYNC_INVALID_PAYLOAD' as SyncErrorCode,
-        conflicts,
-        ackCursor: await getServerCursor(db, userId),
-        appliedStorageDelta: 0,
-        appliedObjectsDelta: 0,
-      }
-    }
-
-    const existingOplog = await db.prepare(`
-      SELECT cursor FROM ${SYNC_OPLOG_TABLE}
-      WHERE user_id = ? AND device_id = ? AND op_seq = ?
-    `).bind(userId, deviceId, item.op_seq).first<{ cursor: number }>()
-
-    if (existingOplog)
+  for (const normalized of normalizedItems) {
+    const { item, updatedAt, rawPayloadSize } = normalized
+    if (preloaded.existingOpSeqs.has(item.op_seq))
       continue
 
-    const existing = await db.prepare(`
-      SELECT updated_at, updated_by_device_id, payload_size, deleted_at FROM ${SYNC_ITEMS_TABLE}
-      WHERE user_id = ? AND item_id = ?
-    `).bind(userId, item.item_id).first<{
-      updated_at: string
-      updated_by_device_id: string | null
-      payload_size: number | null
-      deleted_at: string | null
-    }>()
-
-    const shouldApply = !existing || isNewerUpdate(updatedAt, existing.updated_at, deviceId, existing.updated_by_device_id)
-    if (!shouldApply) {
+    const existing = preloaded.existingItems.get(item.item_id) ?? null
+    if (existing && !isNewerUpdate(updatedAt, existing.updated_at, deviceId, existing.updated_by_device_id)) {
       conflicts.push({
         item_id: item.item_id,
         server_updated_at: existing.updated_at,
@@ -572,33 +885,44 @@ export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: 
     }
 
     const existingPayloadSize = Number(existing?.payload_size ?? 0)
-    const nextPayloadSize = rawPayloadSize ?? existingPayloadSize
-    const existedNotDeleted = Boolean(existing && !existing.deleted_at)
+    const payloadSize = rawPayloadSize ?? existingPayloadSize
+    candidates.push({ item, updatedAt, payloadSize, existing })
 
-    if (item.op_type === 'delete') {
-      if (existedNotDeleted) {
-        plannedStorageDelta -= existingPayloadSize
-        plannedObjectsDelta -= 1
-      }
-    }
-    else {
-      if (maxItemSize === null || nextPayloadSize > maxItemSize)
-        maxItemSize = nextPayloadSize
-      if (existedNotDeleted) {
-        plannedStorageDelta += nextPayloadSize - existingPayloadSize
-      }
-      else {
-        plannedStorageDelta += nextPayloadSize
-        plannedObjectsDelta += 1
-      }
-    }
+    if (projectedOpSeqs.has(item.op_seq))
+      continue
+    projectedOpSeqs.add(item.op_seq)
 
-    candidates.push({
-      item,
-      updatedAt,
-      payloadSize: nextPayloadSize,
-      existing: existing ?? null,
+    const projected = projectedItems.get(item.item_id) ?? null
+    if (projected && !isNewerUpdate(updatedAt, projected.updated_at, deviceId, projected.updated_by_device_id))
+      continue
+
+    const storedPayloadSize = item.op_type === 'delete' ? existingPayloadSize : payloadSize
+    const deletedAt = item.op_type === 'delete' ? (item.deleted_at ?? updatedAt) : (item.deleted_at ?? null)
+    projectedItems.set(item.item_id, {
+      item_id: item.item_id,
+      updated_at: updatedAt,
+      updated_by_device_id: deviceId,
+      payload_size: Number.isFinite(storedPayloadSize) ? storedPayloadSize : null,
+      deleted_at: deletedAt,
     })
+    affectedItemIds.add(item.item_id)
+
+    if (item.op_type === 'upsert' && (maxItemSize === null || payloadSize > maxItemSize))
+      maxItemSize = payloadSize
+  }
+
+  let plannedStorageDelta = 0
+  let plannedObjectsDelta = 0
+  for (const itemId of affectedItemIds) {
+    const before = preloaded.existingItems.get(itemId) ?? null
+    const after = projectedItems.get(itemId) ?? null
+    const beforeLive = Boolean(before && !before.deleted_at)
+    const afterLive = Boolean(after && !after.deleted_at)
+    if (beforeLive)
+      plannedStorageDelta -= Number(before?.payload_size ?? 0)
+    if (afterLive)
+      plannedStorageDelta += Number(after?.payload_size ?? 0)
+    plannedObjectsDelta += Number(afterLive) - Number(beforeLive)
   }
 
   const quotaCheck = await validateQuota(event, userId, {
@@ -606,90 +930,44 @@ export async function pushSyncItemsV1(event: H3Event, userId: string, deviceId: 
     objectsDelta: plannedObjectsDelta,
     itemSize: maxItemSize,
   })
-  if (!quotaCheck.ok) {
-    return {
-      errorCode: quotaCheck.code,
-      conflicts,
-      ackCursor: await getServerCursor(db, userId),
-      appliedStorageDelta: 0,
-      appliedObjectsDelta: 0,
-    }
-  }
+  if (!quotaCheck.ok)
+    return invalidResult(quotaCheck.code ?? 'SYNC_INVALID_PAYLOAD')
+
+  const writeChunks = serializeJsonChunks(candidates.map(toSyncWriteRow))
+  const plannedQueryCount = preloaded.queryCount + (writeChunks.length * 2) + (candidates.length ? 1 : 0) + 2
+  if (plannedQueryCount > SYNC_PUSH_D1_QUERY_BUDGET)
+    return invalidResult('SYNC_INVALID_PAYLOAD')
+
+  const now = new Date().toISOString()
+  const statements: D1PreparedStatement[] = []
+  for (const chunk of writeChunks)
+    statements.push(buildSyncOplogWriteStatement(db, chunk, userId, deviceId))
+  for (const chunk of writeChunks)
+    statements.push(buildSyncItemWriteStatement(db, chunk, userId, deviceId))
+
+  const quotaResultIndex = candidates.length ? statements.length : -1
+  if (candidates.length)
+    statements.push(buildSyncQuotaReconcileStatement(db, userId, now))
+  statements.push(
+    buildSyncSessionPushStatement(db, userId, deviceId, now),
+    buildSyncCursorStatement(db, userId),
+  )
+
+  const results = await db.batch(statements)
+  const cursorRows = readD1ResultRows<{ cursor: number }>(results.at(-1))
+  const ackCursor = Number(cursorRows[0]?.cursor ?? 0)
 
   let appliedStorageDelta = 0
   let appliedObjectsDelta = 0
-
-  for (const candidate of candidates) {
-    const { item, updatedAt, payloadSize, existing } = candidate
-    const oplogResult = await db.prepare(`
-      INSERT OR IGNORE INTO ${SYNC_OPLOG_TABLE} (user_id, device_id, op_seq, op_hash, item_id, op_type, updated_at, payload_size)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(userId, deviceId, item.op_seq, item.op_hash, item.item_id, item.op_type, updatedAt, payloadSize).run()
-
-    if (!oplogResult?.meta?.changes)
-      continue
-
-    const existingPayloadSize = Number(existing?.payload_size ?? 0)
-    const existedNotDeleted = Boolean(existing && !existing.deleted_at)
-    const storedPayloadSize = item.op_type === 'delete' ? existingPayloadSize : payloadSize
-
-    const deletedAt = item.op_type === 'delete' ? (item.deleted_at ?? updatedAt) : (item.deleted_at ?? null)
-    const metaPlain = item.meta_plain ? JSON.stringify(item.meta_plain) : null
-
-    await db.prepare(`
-      INSERT INTO ${SYNC_ITEMS_TABLE} (
-        user_id, item_id, type, schema_version, payload_enc, payload_ref, meta_plain, payload_size,
-        updated_at, deleted_at, updated_by_device_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(user_id, item_id) DO UPDATE SET
-        type = excluded.type,
-        schema_version = excluded.schema_version,
-        payload_enc = excluded.payload_enc,
-        payload_ref = excluded.payload_ref,
-        meta_plain = excluded.meta_plain,
-        payload_size = excluded.payload_size,
-        updated_at = excluded.updated_at,
-        deleted_at = excluded.deleted_at,
-        updated_by_device_id = excluded.updated_by_device_id
-      WHERE excluded.updated_at > ${SYNC_ITEMS_TABLE}.updated_at
-        OR (excluded.updated_at = ${SYNC_ITEMS_TABLE}.updated_at AND excluded.updated_by_device_id > ${SYNC_ITEMS_TABLE}.updated_by_device_id)
-    `).bind(
-      userId,
-      item.item_id,
-      item.type,
-      item.schema_version,
-      item.payload_enc ?? null,
-      item.payload_ref ?? null,
-      metaPlain,
-      Number.isFinite(storedPayloadSize) ? storedPayloadSize : null,
-      updatedAt,
-      deletedAt,
-      deviceId,
-    ).run()
-
-    if (item.op_type === 'delete') {
-      if (existedNotDeleted) {
-        appliedStorageDelta -= existingPayloadSize
-        appliedObjectsDelta -= 1
-      }
-      continue
-    }
-
-    if (existedNotDeleted) {
-      appliedStorageDelta += payloadSize - existingPayloadSize
-    }
-    else {
-      appliedStorageDelta += payloadSize
-      appliedObjectsDelta += 1
+  if (quotaResultIndex >= 0) {
+    const quotaRows = readD1ResultRows<SyncUsageRow>(results[quotaResultIndex])
+    const finalUsage = quotaRows[0]
+    if (finalUsage) {
+      appliedStorageDelta = Number(finalUsage.used_storage_bytes ?? 0) - preloaded.usage.used_storage_bytes
+      appliedObjectsDelta = Number(finalUsage.used_objects ?? 0) - preloaded.usage.used_objects
     }
   }
 
-  const ackCursor = await getServerCursor(db, userId)
-  await updateSyncSessionState(db, userId, deviceId, {
-    lastCursor: ackCursor,
-    lastPushAt: new Date().toISOString(),
-    lastErrorCode: null,
-  })
   return { conflicts, ackCursor, appliedStorageDelta, appliedObjectsDelta }
 }
 
