@@ -1,10 +1,37 @@
-import { ref } from 'vue'
+import type { GitHubRelease, UpdateLifecycleSnapshot } from '@talex-touch/utils'
+import { AppPreviewChannel } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 
-type LoadTargetOptions = {
+interface LoadTargetOptions {
   withTimeoutImpl?: (promise: Promise<unknown>, timeout: number) => Promise<unknown>
   installImpl?: ReturnType<typeof vi.fn>
   isMainWindow?: boolean
+}
+
+function buildSnapshot(overrides: Partial<UpdateLifecycleSnapshot> = {}): UpdateLifecycleSnapshot {
+  return {
+    attemptId: 'attempt-1',
+    revision: 1,
+    phase: 'idle',
+    currentVersion: '2.4.9',
+    targetVersion: 'v2.4.10',
+    source: 'github',
+    channel: AppPreviewChannel.RELEASE,
+    releaseTag: 'v2.4.10',
+    taskId: null,
+    installMode: null,
+    installOnNormalQuit: false,
+    rollbackCompatible: false,
+    rollbackFromVersion: '2.4.8',
+    previousVersion: '2.4.8',
+    recoveryAvailable: false,
+    lastCheckAt: 1_700_000_000_000,
+    error: null,
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_000,
+    ...overrides
+  }
 }
 
 async function loadTarget(options: LoadTargetOptions = {}) {
@@ -15,6 +42,13 @@ async function loadTarget(options: LoadTargetOptions = {}) {
     error: vi.fn(),
     info: vi.fn()
   }
+  let availableListener:
+    | ((data: {
+        hasUpdate: boolean
+        release?: GitHubRelease
+        snapshot: UpdateLifecycleSnapshot
+      }) => void)
+    | null = null
   const updateSdk = {
     install: options.installImpl ?? vi.fn(async () => ({ success: true })),
     download: vi.fn(),
@@ -25,10 +59,10 @@ async function loadTarget(options: LoadTargetOptions = {}) {
     recordAction: vi.fn(),
     clearCache: vi.fn(),
     check: vi.fn(),
-    onAvailable: vi.fn(() => () => {})
-  }
-  const downloadSdk = {
-    onTaskCompleted: vi.fn(() => () => {})
+    onAvailable: vi.fn((listener) => {
+      availableListener = listener
+      return () => {}
+    })
   }
   const logger = {
     error: vi.fn(),
@@ -38,25 +72,6 @@ async function loadTarget(options: LoadTargetOptions = {}) {
   }
 
   class MockTimeoutError extends Error {}
-
-  vi.doMock('@talex-touch/utils', () => ({
-    AppPreviewChannel: {
-      RELEASE: 'release',
-      BETA: 'beta'
-    },
-    DownloadModule: {
-      APP_UPDATE: 'app-update'
-    },
-    UpdateProviderType: {
-      GITHUB: 'github'
-    },
-    UPDATE_GITHUB_RELEASES_API: 'https://updates.example/releases',
-    resolveUpdateChannelLabel: () => 'beta',
-    splitUpdateTag: () => ({
-      version: '2.4.10',
-      channelLabel: 'beta'
-    })
-  }))
 
   vi.doMock('@talex-touch/utils/common/utils/time', () => ({
     TimeoutError: MockTimeoutError,
@@ -69,8 +84,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
 
   vi.doMock('@talex-touch/utils/renderer', () => ({
     isMainWindow: () => options.isMainWindow ?? true,
-    useUpdateSdk: () => updateSdk,
-    useDownloadSdk: () => downloadSdk
+    useUpdateSdk: () => updateSdk
   }))
 
   vi.doMock('vue-sonner', () => ({
@@ -89,13 +103,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
 
   vi.doMock('../update/channel', () => ({
     normalizeStoredUpdateChannel: (value: unknown) => value ?? null,
-    normalizeSupportedUpdateChannel: (value: unknown) => value ?? 'release'
-  }))
-
-  vi.doMock('../update/platform-target', () => ({
-    detectUpdateAssetArch: () => 'arm64',
-    detectUpdateAssetPlatform: () => 'darwin',
-    resolveRuntimeUpdateArch: () => 'arm64'
+    normalizeSupportedUpdateChannel: (value: unknown) => value ?? AppPreviewChannel.RELEASE
   }))
 
   vi.doMock('../update/update-dialog-session', () => ({
@@ -147,19 +155,48 @@ async function loadTarget(options: LoadTargetOptions = {}) {
     toast,
     updateSdk,
     logger,
-    MockTimeoutError
+    MockTimeoutError,
+    emitAvailable(data: {
+      hasUpdate: boolean
+      release?: GitHubRelease
+      snapshot: UpdateLifecycleSnapshot
+    }): void {
+      if (!availableListener) throw new Error('Update listener was not registered')
+      availableListener(data)
+    }
   }
 }
 
 describe('useUpdateRuntime', () => {
-  it('uses auto download by default when settings are unavailable', async () => {
-    const { useUpdateRuntime, updateSdk } = await loadTarget()
-    updateSdk.getSettings.mockResolvedValue({ success: false, error: 'offline' })
-
+  it('shares revision-gated lifecycle snapshots across runtime consumers and rejects terminal resurrection', async () => {
+    const { useUpdateRuntime, updateSdk, emitAvailable } = await loadTarget()
     const runtime = useUpdateRuntime()
-    const settings = await runtime.getUpdateSettings()
+    const anotherConsumer = useUpdateRuntime()
+    const available = buildSnapshot({ phase: 'available', revision: 2 })
+    const ready = buildSnapshot({ phase: 'ready', revision: 3, taskId: 'task-1' })
+    const failed = buildSnapshot({
+      phase: 'failed',
+      revision: 4,
+      error: { code: 'UPDATE_INSTALL_FAILED', message: 'handoff failed', retryable: true }
+    })
 
-    expect(settings.autoDownload).toBe(true)
+    updateSdk.getStatus.mockResolvedValue({ success: true, data: available })
+    await runtime.getUpdateStatus()
+    expect(anotherConsumer.lifecycleSnapshot.value).toEqual(available)
+
+    updateSdk.download.mockResolvedValue({ success: true, snapshot: ready })
+    await runtime.handleDownloadUpdate({ tag_name: 'v2.4.10' } as GitHubRelease)
+    expect(anotherConsumer.lifecycleSnapshot.value).toEqual(ready)
+
+    runtime.setupUpdateListener()
+    emitAvailable({ hasUpdate: false, snapshot: failed })
+    expect(anotherConsumer.lifecycleSnapshot.value).toEqual(failed)
+
+    emitAvailable({
+      hasUpdate: false,
+      snapshot: buildSnapshot({ phase: 'ready', revision: 5, taskId: 'task-1' })
+    })
+    expect(runtime.lifecycleSnapshot.value).toEqual(failed)
   })
 
   it('update install ack timeout 不再被视为已开始安装', async () => {

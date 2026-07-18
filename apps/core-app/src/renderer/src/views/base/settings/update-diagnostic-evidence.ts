@@ -1,29 +1,82 @@
-import type { CachedUpdateRecord, DownloadAsset, UpdateSettings } from '@talex-touch/utils'
+import type {
+  CachedUpdateRecord,
+  DownloadAsset,
+  UpdateLifecyclePhase,
+  UpdateLifecycleSnapshot,
+  UpdateSettings
+} from '@talex-touch/utils'
 
 export type UpdateDiagnosticInstallMode =
-  | 'mac-auto-updater'
+  | 'coordinated-handoff'
   | 'windows-installer-handoff'
   | 'windows-auto-installer-handoff'
   | 'manual-installer'
   | 'not-ready'
 
 export type UpdateDiagnosticBlocker =
-  | 'no-download-ready'
+  | 'lifecycle-not-ready'
+  | 'missing-task-id'
   | 'no-cached-release'
   | 'no-matching-asset'
+
+export type UpdateLifecycleDisplayTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
+
+export interface UpdateLifecycleDisplay {
+  phase: UpdateLifecyclePhase
+  tone: UpdateLifecycleDisplayTone
+  labelKey: string
+  descriptionKey: string
+  canCheck: boolean
+  canDownload: boolean
+  canInstall: boolean
+  canEnableNormalQuit: boolean
+}
+
+const UPDATE_LIFECYCLE_TONES: Record<UpdateLifecyclePhase, UpdateLifecycleDisplayTone> = {
+  idle: 'neutral',
+  checking: 'info',
+  available: 'info',
+  downloading: 'info',
+  verifying: 'info',
+  ready: 'success',
+  'install-scheduled': 'info',
+  'handoff-started': 'info',
+  'awaiting-health': 'warning',
+  healthy: 'success',
+  'recovery-required': 'warning',
+  recovering: 'warning',
+  recovered: 'success',
+  failed: 'danger'
+}
+
+const CHECKABLE_UPDATE_LIFECYCLE_PHASES: ReadonlySet<UpdateLifecyclePhase> = new Set([
+  'idle',
+  'healthy',
+  'recovered',
+  'failed'
+])
+
+export function resolveUpdateLifecycleDisplay(
+  snapshot: UpdateLifecycleSnapshot | null
+): UpdateLifecycleDisplay {
+  const phase = snapshot?.phase ?? 'idle'
+  return {
+    phase,
+    tone: UPDATE_LIFECYCLE_TONES[phase],
+    labelKey: `settings.settingUpdate.lifecycle.phases.${phase}.label`,
+    descriptionKey: `settings.settingUpdate.lifecycle.phases.${phase}.description`,
+    canCheck: CHECKABLE_UPDATE_LIFECYCLE_PHASES.has(phase),
+    canDownload: phase === 'available',
+    canInstall: phase === 'ready' && Boolean(snapshot?.taskId),
+    canEnableNormalQuit: snapshot?.rollbackCompatible === true
+  }
+}
 
 export const UPDATE_DIAGNOSTIC_REGRESSION_CASE_IDS = [
   'windows-update-download-ready',
   'windows-installer-handoff',
   'windows-tray-update-plugin-install-exit'
 ] as const
-
-export interface UpdateDiagnosticStatusInput {
-  lastCheck: number | null
-  downloadReady: boolean
-  downloadReadyVersion: string | null
-  downloadTaskId: string | null
-}
 
 export interface UpdateDiagnosticEvidenceAsset {
   name: string
@@ -45,10 +98,10 @@ export interface UpdateDiagnosticEvidencePayload {
     channel: UpdateSettings['updateChannel'] | null
     frequency: UpdateSettings['frequency'] | null
     autoDownload: boolean | null
-    autoInstallDownloadedUpdates: boolean | null
+    installOnNormalQuit: boolean | null
     rendererOverrideEnabled: boolean | null
   }
-  status: UpdateDiagnosticStatusInput
+  lifecycle: UpdateLifecycleSnapshot
   installedVersion?: {
     current: string | null
     expected: string | null
@@ -58,6 +111,9 @@ export interface UpdateDiagnosticEvidencePayload {
     platform: string
     arch: string | null
     isMacAutoInstallPlatform: boolean
+    nativeTrust:
+      | { status: 'waived'; reason: 'apple-developer-not-configured'; risk: true }
+      | { status: 'not-applicable'; reason: null; risk: false }
   }
   cachedRelease: {
     tag: string
@@ -71,11 +127,13 @@ export interface UpdateDiagnosticEvidencePayload {
     matchingAssets: UpdateDiagnosticEvidenceAsset[]
   } | null
   verdict: {
-    downloadReady: boolean
     readyToInstall: boolean
+    evidenceComplete: boolean
     installMode: UpdateDiagnosticInstallMode
     requiresUserConfirmation: boolean
-    autoInstallDownloadedUpdates: boolean
+    installOnNormalQuit: boolean
+    rollbackCompatible: boolean
+    recoveryAvailable: boolean
     unattendedAutoInstallEnabled: boolean
     blocker?: UpdateDiagnosticBlocker
   }
@@ -84,9 +142,17 @@ export interface UpdateDiagnosticEvidencePayload {
     suggestedEvidenceFields: {
       channel: UpdateSettings['updateChannel'] | null
       autoDownload: boolean | null
-      autoInstallDownloadedUpdates: boolean | null
-      downloadReadyVersion: string | null
-      downloadTaskId: string | null
+      installOnNormalQuit: boolean
+      attemptId: string | null
+      revision: number
+      phase: UpdateLifecyclePhase
+      targetVersion: string | null
+      taskId: string | null
+      rollbackFromVersion: string | null
+      rollbackCompatible: boolean
+      previousVersion: string | null
+      recoveryAvailable: boolean
+      error: UpdateLifecycleSnapshot['error']
       platform: string
       arch: string | null
       installMode: UpdateDiagnosticInstallMode
@@ -98,7 +164,7 @@ export interface UpdateDiagnosticEvidencePayload {
 
 export function buildUpdateDiagnosticEvidencePayload(options: {
   settings: UpdateSettings | null
-  status: UpdateDiagnosticStatusInput
+  snapshot: UpdateLifecycleSnapshot
   cachedRelease: CachedUpdateRecord | null
   cachedAssets: DownloadAsset[]
   platform: string
@@ -107,24 +173,31 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
   currentVersion?: string | null
   createdAt?: string
 }): UpdateDiagnosticEvidencePayload {
-  const blocker = resolveUpdateDiagnosticBlocker(options)
+  const display = resolveUpdateLifecycleDisplay(options.snapshot)
+  const blocker = resolveUpdateDiagnosticBlocker({
+    snapshot: options.snapshot,
+    cachedRelease: options.cachedRelease,
+    cachedAssets: options.cachedAssets
+  })
   const installMode = resolveInstallMode({
-    blocker,
+    readyToInstall: display.canInstall,
     platform: options.platform,
     isMacAutoInstallPlatform: options.isMacAutoInstallPlatform,
-    autoInstallDownloadedUpdates: options.settings?.autoInstallDownloadedUpdates === true
+    installOnNormalQuit: options.snapshot.rollbackCompatible && options.snapshot.installOnNormalQuit
   })
+  const installOnNormalQuit =
+    options.snapshot.rollbackCompatible && options.snapshot.installOnNormalQuit
 
   return {
     schemaVersion: 1,
     kind: 'update-diagnostic-evidence',
     createdAt: options.createdAt || new Date().toISOString(),
     settings: summarizeSettings(options.settings),
-    status: options.status,
+    lifecycle: options.snapshot,
     installedVersion: summarizeInstalledVersion({
       currentVersion: options.currentVersion ?? null,
       expectedVersion:
-        options.status.downloadReadyVersion ??
+        options.snapshot.targetVersion ??
         options.cachedRelease?.tag ??
         options.cachedRelease?.release.tag_name ??
         null
@@ -132,16 +205,21 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
     runtimeTarget: {
       platform: options.platform,
       arch: options.arch,
-      isMacAutoInstallPlatform: options.isMacAutoInstallPlatform
+      isMacAutoInstallPlatform: options.isMacAutoInstallPlatform,
+      nativeTrust: options.isMacAutoInstallPlatform
+        ? { status: 'waived', reason: 'apple-developer-not-configured', risk: true }
+        : { status: 'not-applicable', reason: null, risk: false }
     },
     cachedRelease: summarizeCachedRelease(options.cachedRelease, options.cachedAssets),
     verdict: {
-      downloadReady: options.status.downloadReady,
-      readyToInstall: options.status.downloadReady && !blocker,
+      readyToInstall: display.canInstall,
+      evidenceComplete: !blocker,
       installMode,
       requiresUserConfirmation:
         installMode === 'windows-installer-handoff' || installMode === 'manual-installer',
-      autoInstallDownloadedUpdates: options.settings?.autoInstallDownloadedUpdates === true,
+      installOnNormalQuit,
+      rollbackCompatible: options.snapshot.rollbackCompatible,
+      recoveryAvailable: options.snapshot.recoveryAvailable,
       unattendedAutoInstallEnabled: installMode === 'windows-auto-installer-handoff',
       blocker
     },
@@ -150,9 +228,17 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
       suggestedEvidenceFields: {
         channel: options.settings?.updateChannel ?? null,
         autoDownload: options.settings?.autoDownload ?? null,
-        autoInstallDownloadedUpdates: options.settings?.autoInstallDownloadedUpdates ?? null,
-        downloadReadyVersion: options.status.downloadReadyVersion,
-        downloadTaskId: options.status.downloadTaskId,
+        installOnNormalQuit,
+        attemptId: options.snapshot.attemptId,
+        revision: options.snapshot.revision,
+        phase: options.snapshot.phase,
+        targetVersion: options.snapshot.targetVersion,
+        taskId: options.snapshot.taskId,
+        rollbackFromVersion: options.snapshot.rollbackFromVersion,
+        rollbackCompatible: options.snapshot.rollbackCompatible,
+        previousVersion: options.snapshot.previousVersion,
+        recoveryAvailable: options.snapshot.recoveryAvailable,
+        error: options.snapshot.error,
         platform: options.platform,
         arch: options.arch,
         installMode,
@@ -174,7 +260,7 @@ export function buildUpdateDiagnosticEvidenceFilename(
   payload: UpdateDiagnosticEvidencePayload
 ): string {
   const version =
-    payload.status.downloadReadyVersion ||
+    payload.lifecycle.targetVersion ||
     payload.cachedRelease?.tag ||
     payload.cachedRelease?.name ||
     'unknown'
@@ -212,25 +298,26 @@ function normalizeVersionForEvidence(version: string): string {
 }
 
 function resolveUpdateDiagnosticBlocker(options: {
-  status: UpdateDiagnosticStatusInput
+  snapshot: UpdateLifecycleSnapshot
   cachedRelease: CachedUpdateRecord | null
   cachedAssets: DownloadAsset[]
 }): UpdateDiagnosticBlocker | undefined {
-  if (!options.status.downloadReady) return 'no-download-ready'
+  if (options.snapshot.phase !== 'ready') return 'lifecycle-not-ready'
+  if (!options.snapshot.taskId) return 'missing-task-id'
   if (!options.cachedRelease?.release) return 'no-cached-release'
   if (options.cachedAssets.length === 0) return 'no-matching-asset'
   return undefined
 }
 
 function resolveInstallMode(options: {
-  blocker: UpdateDiagnosticBlocker | undefined
+  readyToInstall: boolean
   platform: string
   isMacAutoInstallPlatform: boolean
-  autoInstallDownloadedUpdates: boolean
+  installOnNormalQuit: boolean
 }): UpdateDiagnosticInstallMode {
-  if (options.blocker) return 'not-ready'
-  if (options.isMacAutoInstallPlatform) return 'mac-auto-updater'
-  if (options.platform === 'win32' && options.autoInstallDownloadedUpdates) {
+  if (!options.readyToInstall) return 'not-ready'
+  if (options.isMacAutoInstallPlatform) return 'coordinated-handoff'
+  if (options.platform === 'win32' && options.installOnNormalQuit) {
     return 'windows-auto-installer-handoff'
   }
   if (options.platform === 'win32') return 'windows-installer-handoff'
@@ -248,7 +335,7 @@ function summarizeSettings(
     channel: settings?.updateChannel ?? null,
     frequency: settings?.frequency ?? null,
     autoDownload: settings?.autoDownload ?? null,
-    autoInstallDownloadedUpdates: settings?.autoInstallDownloadedUpdates ?? null,
+    installOnNormalQuit: settings?.installOnNormalQuit ?? null,
     rendererOverrideEnabled: settings?.rendererOverrideEnabled ?? null
   }
 }

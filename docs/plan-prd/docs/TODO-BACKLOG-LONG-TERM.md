@@ -1,12 +1,12 @@
 # TODO 长期债务池（Long-term Backlog）
 
-> 更新时间：2026-06-21
+> 更新时间：2026-07-17
 > 说明：本文承接 `docs/plan-prd/TODO.md` 的非 2 周执行项。主 TODO 只保留当前 release window；本页只保留长尾债务与后续专题。
 
 ## A. 架构与质量债务
 
-- [ ] Transport Wave A：MessagePort 高频通道迁移、`sendSync` 清理与 retained raw event 分批 typed builder 迁移。
-- [ ] Transport Wave A：legacy alias registry 进入 hard-cut 窗口前，补 legacy hit evidence 与双监听关闭条件。
+- [x] Transport Wave A：MessagePort 高频通道迁移、`sendSync` 清理与 retained raw event 分批 typed builder 迁移。（承接：[Transport Wave A](../../../.trellis/tasks/07-17-transport-wave-a/prd.md)）
+- [x] Transport Wave A：legacy alias registry、legacy hit evidence 与双监听关闭条件。（承接：[Transport Legacy Cutover Evidence](../../../.trellis/tasks/07-17-transport-legacy-cutover-evidence/prd.md)）
 - [ ] AI Wave B：`retired-ai-app` 存量 typecheck/lint 债务逐批清理。
 - [ ] AI Wave B：SSE 断线、鉴权与渠道矩阵集成回归补齐。
 - [ ] SRP Wave C：`plugin-module`、`search-core`、`file-provider` 大文件职责拆分。

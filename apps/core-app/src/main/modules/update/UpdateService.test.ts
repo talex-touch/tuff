@@ -11,7 +11,6 @@ const originalResourcesPathDescriptor = Object.getOwnPropertyDescriptor(process,
 
 const mocks = vi.hoisted(() => {
   const handlers = new Map<string, UpdateHandler>()
-  const macListeners = new Map<string, Set<(value: unknown) => void>>()
   const startupListeners = new Map<string, () => void>()
 
   const transport = {
@@ -30,35 +29,111 @@ const mocks = vi.hoisted(() => {
       mkdir: vi.fn(async () => {}),
       readFile: vi.fn(async () => ''),
       stat: vi.fn(async () => ({ isFile: () => true })),
-      writeFile: vi.fn(async () => {})
+      writeFile: vi.fn<(file: PathLike, contents: string) => Promise<void>>(async () => {})
     }
+  }
+  const lifecycleRows = { limit: vi.fn(async () => []) }
+  const lifecycleDb = {
+    select: vi.fn(() => ({
+      from: vi.fn(() => ({
+        where: vi.fn(() => ({
+          orderBy: vi.fn(() => lifecycleRows),
+          limit: lifecycleRows.limit
+        })),
+        orderBy: vi.fn(() => lifecycleRows)
+      }))
+    }))
+  }
+  let activeLifecycle: Record<string, unknown> | null = null
+  let latestLifecycle: Record<string, unknown> | null = null
+  const lifecycleRepository = {
+    reset: () => {
+      activeLifecycle = null
+      latestLifecycle = null
+    },
+    getActive: vi.fn(async () => activeLifecycle),
+    getLatest: vi.fn(async () => latestLifecycle),
+    getById: vi.fn(async (attemptId: string) =>
+      latestLifecycle?.attemptId === attemptId ? latestLifecycle : null
+    ),
+    getByDownloadTaskId: vi.fn(async (taskId: string) => {
+      const lifecycle = activeLifecycle ?? latestLifecycle
+      return lifecycle?.taskId === taskId ? lifecycle : null
+    }),
+    createChecking: vi.fn(
+      async (input: {
+        id: string
+        currentVersion: string
+        channel: unknown
+        installOnNormalQuit: boolean
+        now?: number
+      }) => {
+        const now = input.now ?? Date.now()
+        const lifecycle = {
+          attemptId: input.id,
+          revision: 0,
+          phase: 'checking',
+          currentVersion: input.currentVersion,
+          targetVersion: null,
+          source: null,
+          channel: input.channel,
+          releaseTag: null,
+          taskId: null,
+          installMode: null,
+          installOnNormalQuit: input.installOnNormalQuit,
+          previousVersion: null,
+          recoveryAvailable: false,
+          lastCheckAt: null,
+          error: null,
+          createdAt: now,
+          updatedAt: now
+        }
+        activeLifecycle = lifecycle
+        latestLifecycle = lifecycle
+        return lifecycle
+      }
+    ),
+    transition: vi.fn(
+      async (input: {
+        attemptId: string
+        to: string
+        patch?: Record<string, unknown>
+        now?: number
+      }) => {
+        if (!latestLifecycle || latestLifecycle.attemptId !== input.attemptId) {
+          throw new Error('Lifecycle attempt not found')
+        }
+        const now = input.now ?? Date.now()
+        const lifecycle = {
+          ...latestLifecycle,
+          ...input.patch,
+          revision: Number(latestLifecycle.revision) + 1,
+          phase: input.to,
+          error: input.to === 'failed' ? (input.patch?.error ?? latestLifecycle.error) : null,
+          updatedAt: now
+        }
+        latestLifecycle = lifecycle
+        activeLifecycle = ['idle', 'healthy', 'recovered', 'failed'].includes(input.to)
+          ? null
+          : lifecycle
+        return lifecycle
+      }
+    )
   }
 
   return {
+    lifecycleDb,
+    lifecycleRepository,
     handlers,
-    macListeners,
     startupListeners,
     transport,
     fs,
     app: {
       isPackaged: true,
-      getVersion: vi.fn(() => '1.0.0')
-    },
-    autoUpdater: {
-      autoDownload: false,
-      autoInstallOnAppQuit: false,
-      allowPrerelease: false,
-      on: vi.fn((event: string, listener: (value: unknown) => void) => {
-        const listeners = macListeners.get(event) ?? new Set()
-        listeners.add(listener)
-        macListeners.set(event, listeners)
-      }),
-      removeListener: vi.fn((event: string, listener: (value: unknown) => void) => {
-        macListeners.get(event)?.delete(listener)
-      }),
-      checkForUpdates: vi.fn(async () => {}),
-      downloadUpdate: vi.fn(async () => {}),
-      quitAndInstall: vi.fn()
+      getVersion: vi.fn(() => '1.0.0'),
+      getAppPath: vi.fn(() => '/tmp/update-service-contracts/app'),
+      getPath: vi.fn(() => '/tmp/update-service-contracts/tuff'),
+      quit: vi.fn()
     },
     polling: {
       unregister: vi.fn(),
@@ -86,6 +161,7 @@ const mocks = vi.hoisted(() => {
       disableRendererOverride: vi.fn(async () => {})
     },
     eventBus: {
+      on: vi.fn(),
       once: vi.fn((event: string, listener: () => void) => {
         startupListeners.set(event, listener)
       }),
@@ -118,10 +194,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('electron-updater', () => ({
-  autoUpdater: mocks.autoUpdater
-}))
-
 vi.mock('@talex-touch/utils/common/utils/polling', () => ({
   PollingService: {
     getInstance: vi.fn(() => mocks.polling)
@@ -131,6 +203,8 @@ vi.mock('@talex-touch/utils/common/utils/polling', () => ({
 vi.mock('../../core/eventbus/touch-event', () => ({
   TalexEvents: {
     ALL_MODULES_LOADED: 'all-modules-loaded',
+    BEFORE_MODULES_UNLOAD: 'before-modules-unload',
+    WILL_QUIT: 'will-quit',
     UPDATE_AVAILABLE: 'update-available'
   },
   touchEventBus: mocks.eventBus,
@@ -163,7 +237,7 @@ vi.mock('../sentry', () => ({
 }))
 
 vi.mock('../database', () => ({
-  databaseModule: { getDb: vi.fn(() => ({})) }
+  databaseModule: { getDb: vi.fn(() => mocks.lifecycleDb) }
 }))
 
 vi.mock('../network', () => ({
@@ -183,6 +257,17 @@ vi.mock('./update-repository', () => ({
     saveRelease = mocks.repository.saveRelease
     markStatus = mocks.repository.markStatus
     clearAllRecords = mocks.repository.clearAllRecords
+  }
+}))
+
+vi.mock('./update-attempt-repository', () => ({
+  UpdateAttemptRepository: class UpdateAttemptRepository {
+    getActive = mocks.lifecycleRepository.getActive
+    getLatest = mocks.lifecycleRepository.getLatest
+    getById = mocks.lifecycleRepository.getById
+    getByDownloadTaskId = mocks.lifecycleRepository.getByDownloadTaskId
+    createChecking = mocks.lifecycleRepository.createChecking
+    transition = mocks.lifecycleRepository.transition
   }
 }))
 
@@ -256,8 +341,8 @@ describe('UpdateServiceModule facade', () => {
       value: '/tmp/electron-resources'
     })
     vi.clearAllMocks()
+    mocks.lifecycleRepository.reset()
     mocks.handlers.clear()
-    mocks.macListeners.clear()
     mocks.startupListeners.clear()
     mocks.fs.existsSync.mockImplementation(() => false)
     mocks.request.mockReset()
@@ -384,24 +469,64 @@ describe('UpdateServiceModule facade', () => {
     }
   })
 
-  it('removes macOS updater callbacks and cancels the startup check when destroyed', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+  it.each([
+    [
+      'prefers the new true setting over a legacy false value',
+      {
+        installOnNormalQuit: true,
+        autoInstallDownloadedUpdates: false,
+        pendingInstallVersion: 'v2.5.0'
+      },
+      true
+    ],
+    [
+      'prefers the new false setting over a legacy true value',
+      {
+        installOnNormalQuit: false,
+        autoInstallDownloadedUpdates: true,
+        pendingInstallVersion: 'v2.5.0'
+      },
+      false
+    ],
+    [
+      'migrates a legacy true setting when the new key is absent',
+      { autoInstallDownloadedUpdates: true, pendingInstallVersion: 'v2.5.0' },
+      true
+    ],
+    [
+      'migrates a legacy false setting when the new key is absent',
+      { autoInstallDownloadedUpdates: false, pendingInstallVersion: 'v2.5.0' },
+      false
+    ]
+  ])('%s', async (_name, persisted, expectedInstallOnNormalQuit) => {
     vi.useFakeTimers()
-    mocks.fs.existsSync.mockImplementation((file) => String(file).endsWith('app-update.yml'))
+    mocks.fs.existsSync.mockReturnValue(true)
+    mocks.fs.readFileSync.mockReturnValue(JSON.stringify(persisted))
     const service = await createService()
 
-    await invoke(UpdateEvents.updateSettings, {
-      settings: { enabled: true, frequency: 'everyday' }
-    })
-    const startup = mocks.startupListeners.get('all-modules-loaded')
-    startup?.()
-    await vi.advanceTimersByTimeAsync(0)
+    try {
+      const response = (await invoke(UpdateEvents.getSettings)) as {
+        success: boolean
+        data: Record<string, unknown>
+      }
 
-    await service.onDestroy()
-    await vi.advanceTimersByTimeAsync(5000)
+      expect(response).toMatchObject({
+        success: true,
+        data: { installOnNormalQuit: expectedInstallOnNormalQuit }
+      })
+      expect(response.data).not.toHaveProperty('autoInstallDownloadedUpdates')
+      expect(response.data).not.toHaveProperty('pendingInstallVersion')
 
-    expect(mocks.macListeners.get('update-downloaded')?.size ?? 0).toBe(0)
-    expect(mocks.macListeners.get('error')?.size ?? 0).toBe(0)
-    expect(mocks.request).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(300)
+      const writtenSettings = JSON.parse(
+        String(mocks.fs.promises.writeFile.mock.calls.at(-1)?.[1])
+      ) as Record<string, unknown>
+
+      expect(writtenSettings).toMatchObject({ installOnNormalQuit: expectedInstallOnNormalQuit })
+      expect(writtenSettings).not.toHaveProperty('autoInstallDownloadedUpdates')
+      expect(writtenSettings).not.toHaveProperty('pendingInstallVersion')
+    } finally {
+      await service.onDestroy()
+    }
   })
 })

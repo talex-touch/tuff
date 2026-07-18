@@ -34,7 +34,7 @@ files:
   - '!examples/**'
   - '!shots/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
-  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}'
   - '!**/.eslintcache'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
@@ -70,6 +70,10 @@ extraResources:
     to: resources/keys/release-signing-public.pem
   - from: resources/scripts/macos-apply-update.sh
     to: resources/scripts/macos-apply-update.sh
+  - from: resources/scripts/macos-restore-update.sh
+    to: resources/scripts/macos-restore-update.sh
+  - from: resources/scripts/update-handoff-helper.cjs
+    to: resources/scripts/update-handoff-helper.cjs
   - from: resources/bundled-plugins
     to: bundled-plugins
     filter:

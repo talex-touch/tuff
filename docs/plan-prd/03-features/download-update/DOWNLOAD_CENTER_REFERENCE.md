@@ -212,8 +212,8 @@ on('download:task-progress', (task) => {
 ```typescript
 const result = await invoke('update:check')
 
-if (result.hasUpdate) {
-  const download = await invoke('update:download', result.release)
+if (result.hasUpdate && result.release) {
+  const download = await invoke('update:download', { tag: result.release.tag_name })
   console.log('Downloading update:', download.taskId)
 }
 ```

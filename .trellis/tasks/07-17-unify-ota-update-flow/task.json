@@ -1,0 +1,31 @@
+{
+  "id": "unify-ota-update-flow",
+  "name": "unify-ota-update-flow",
+  "title": "统一 OTA 更新链路",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-17",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-17-unify-ota-provider-security",
+    "07-17-persist-ota-lifecycle",
+    "07-17-unify-ota-install-recovery",
+    "07-17-ota-ui-release-acceptance"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

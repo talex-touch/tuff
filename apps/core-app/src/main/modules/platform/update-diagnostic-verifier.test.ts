@@ -21,7 +21,7 @@ function buildEvidence(
       channel: AppPreviewChannel.RELEASE,
       frequency: 'everyday',
       autoDownload: true,
-      autoInstallDownloadedUpdates: false,
+      installOnNormalQuit: false,
       rendererOverrideEnabled: false
     },
     status: {
@@ -64,7 +64,7 @@ function buildEvidence(
       readyToInstall: true,
       installMode: 'windows-installer-handoff',
       requiresUserConfirmation: true,
-      autoInstallDownloadedUpdates: false,
+      installOnNormalQuit: false,
       unattendedAutoInstallEnabled: false
     },
     manualRegression: {
@@ -76,7 +76,7 @@ function buildEvidence(
       suggestedEvidenceFields: {
         channel: AppPreviewChannel.RELEASE,
         autoDownload: true,
-        autoInstallDownloadedUpdates: false,
+        installOnNormalQuit: false,
         downloadReadyVersion: 'v2.4.10',
         downloadTaskId: 'task-update-1',
         platform: 'win32',
@@ -119,13 +119,67 @@ describe('update-diagnostic-verifier', () => {
     })
   })
 
+  it('accepts coordinated macOS handoff evidence', () => {
+    const gate = evaluateUpdateDiagnosticEvidence(
+      buildEvidence({
+        runtimeTarget: {
+          platform: 'darwin',
+          arch: 'arm64',
+          isMacAutoInstallPlatform: true
+        },
+        cachedRelease: {
+          ...buildEvidence().cachedRelease!,
+          matchingAssets: [
+            {
+              name: 'Tuff-2.4.10-arm64.zip',
+              platform: 'darwin',
+              arch: 'arm64',
+              size: 128_000_000,
+              hasChecksum: true
+            }
+          ]
+        },
+        verdict: {
+          downloadReady: true,
+          readyToInstall: true,
+          installMode: 'coordinated-handoff',
+          requiresUserConfirmation: false,
+          installOnNormalQuit: false,
+          unattendedAutoInstallEnabled: false
+        },
+        manualRegression: {
+          ...buildEvidence().manualRegression,
+          suggestedEvidenceFields: {
+            ...buildEvidence().manualRegression.suggestedEvidenceFields,
+            platform: 'darwin',
+            arch: 'arm64',
+            installMode: 'coordinated-handoff',
+            matchingAssetNames: ['Tuff-2.4.10-arm64.zip']
+          }
+        }
+      }),
+      {
+        requireDownloadReady: true,
+        requireReadyToInstall: true,
+        requirePlatform: ['darwin'],
+        requireArch: ['arm64'],
+        requireInstallMode: ['coordinated-handoff'],
+        requireCachedRelease: true,
+        requireMatchingAsset: true,
+        requireChecksums: true
+      }
+    )
+
+    expect(gate).toEqual({ passed: true, failures: [], warnings: [] })
+  })
+
   it('fails strict gates for incomplete update evidence', () => {
     const evidence = buildEvidence({
       settings: {
         ...buildEvidence().settings,
         enabled: false,
         autoDownload: false,
-        autoInstallDownloadedUpdates: false
+        installOnNormalQuit: false
       },
       status: {
         lastCheck: null,
@@ -144,7 +198,7 @@ describe('update-diagnostic-verifier', () => {
         readyToInstall: false,
         installMode: 'not-ready',
         requiresUserConfirmation: false,
-        autoInstallDownloadedUpdates: false,
+        installOnNormalQuit: false,
         unattendedAutoInstallEnabled: false,
         blocker: 'no-download-ready'
       },
@@ -153,7 +207,7 @@ describe('update-diagnostic-verifier', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.RELEASE,
           autoDownload: false,
-          autoInstallDownloadedUpdates: false,
+          installOnNormalQuit: false,
           downloadReadyVersion: null,
           downloadTaskId: null,
           platform: 'darwin',
@@ -211,7 +265,7 @@ describe('update-diagnostic-verifier', () => {
           readyToInstall: false,
           installMode: 'not-ready',
           requiresUserConfirmation: false,
-          autoInstallDownloadedUpdates: false,
+          installOnNormalQuit: false,
           unattendedAutoInstallEnabled: false,
           blocker: 'no-download-ready'
         },
@@ -224,7 +278,7 @@ describe('update-diagnostic-verifier', () => {
           suggestedEvidenceFields: {
             channel: AppPreviewChannel.RELEASE,
             autoDownload: true,
-            autoInstallDownloadedUpdates: false,
+            installOnNormalQuit: false,
             downloadReadyVersion: null,
             downloadTaskId: null,
             platform: 'win32',
@@ -255,7 +309,7 @@ describe('update-diagnostic-verifier', () => {
         readyToInstall: true,
         installMode: 'manual-installer',
         requiresUserConfirmation: true,
-        autoInstallDownloadedUpdates: false,
+        installOnNormalQuit: false,
         unattendedAutoInstallEnabled: false
       },
       manualRegression: {
@@ -263,7 +317,7 @@ describe('update-diagnostic-verifier', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.BETA,
           autoDownload: false,
-          autoInstallDownloadedUpdates: true,
+          installOnNormalQuit: true,
           downloadReadyVersion: 'v0.0.0',
           downloadTaskId: 'stale-task',
           platform: 'darwin',
@@ -281,7 +335,7 @@ describe('update-diagnostic-verifier', () => {
       'update cached release matchingAssetCount exceeds totalAssetCount',
       'update suggested channel field does not match settings',
       'update suggested autoDownload field does not match settings',
-      'update suggested autoInstallDownloadedUpdates field does not match settings',
+      'update suggested installOnNormalQuit field does not match settings',
       'update suggested downloadReadyVersion field does not match status',
       'update suggested downloadTaskId field does not match status',
       'update suggested platform field does not match runtime target',
@@ -311,21 +365,21 @@ describe('update-diagnostic-verifier', () => {
         },
         settings: {
           ...buildEvidence().settings,
-          autoInstallDownloadedUpdates: true
+          installOnNormalQuit: true
         },
         verdict: {
           downloadReady: true,
           readyToInstall: true,
           installMode: 'windows-auto-installer-handoff',
           requiresUserConfirmation: false,
-          autoInstallDownloadedUpdates: true,
+          installOnNormalQuit: true,
           unattendedAutoInstallEnabled: true
         },
         manualRegression: {
           ...buildEvidence().manualRegression,
           suggestedEvidenceFields: {
             ...buildEvidence().manualRegression.suggestedEvidenceFields,
-            autoInstallDownloadedUpdates: true,
+            installOnNormalQuit: true,
             installMode: 'windows-auto-installer-handoff'
           }
         }
@@ -403,7 +457,7 @@ describe('update-diagnostic-verifier', () => {
           },
           settings: {
             ...buildEvidence().settings,
-            autoInstallDownloadedUpdates: true
+            installOnNormalQuit: true
           },
           status: {
             ...buildEvidence().status,
@@ -414,14 +468,14 @@ describe('update-diagnostic-verifier', () => {
             readyToInstall: true,
             installMode: 'windows-auto-installer-handoff',
             requiresUserConfirmation: false,
-            autoInstallDownloadedUpdates: true,
+            installOnNormalQuit: true,
             unattendedAutoInstallEnabled: true
           },
           manualRegression: {
             ...buildEvidence().manualRegression,
             suggestedEvidenceFields: {
               ...buildEvidence().manualRegression.suggestedEvidenceFields,
-              autoInstallDownloadedUpdates: true,
+              installOnNormalQuit: true,
               downloadTaskId: null,
               installMode: 'windows-auto-installer-handoff'
             }
@@ -536,20 +590,20 @@ describe('update-diagnostic-verifier', () => {
       buildEvidence({
         settings: {
           ...buildEvidence().settings,
-          autoInstallDownloadedUpdates: true
+          installOnNormalQuit: true
         },
         verdict: {
           ...buildEvidence().verdict,
           installMode: 'windows-installer-handoff',
           requiresUserConfirmation: false,
-          autoInstallDownloadedUpdates: true,
+          installOnNormalQuit: true,
           unattendedAutoInstallEnabled: true
         },
         manualRegression: {
           ...buildEvidence().manualRegression,
           suggestedEvidenceFields: {
             ...buildEvidence().manualRegression.suggestedEvidenceFields,
-            autoInstallDownloadedUpdates: true,
+            installOnNormalQuit: true,
             installMode: 'windows-installer-handoff'
           }
         }
@@ -558,7 +612,7 @@ describe('update-diagnostic-verifier', () => {
 
     expect(manualConflict.failures).toEqual([
       'update manual installer handoff mode requires user confirmation',
-      'update manual installer handoff mode conflicts with autoInstallDownloadedUpdates',
+      'update manual installer handoff mode conflicts with installOnNormalQuit',
       'update manual installer handoff mode must not enable unattended auto install'
     ])
 
@@ -568,7 +622,7 @@ describe('update-diagnostic-verifier', () => {
           ...buildEvidence().verdict,
           installMode: 'windows-auto-installer-handoff',
           requiresUserConfirmation: true,
-          autoInstallDownloadedUpdates: false,
+          installOnNormalQuit: false,
           unattendedAutoInstallEnabled: false
         },
         manualRegression: {
@@ -582,7 +636,7 @@ describe('update-diagnostic-verifier', () => {
     )
 
     expect(autoConflict.failures).toEqual([
-      'update automatic installer handoff mode requires autoInstallDownloadedUpdates',
+      'update automatic installer handoff mode requires installOnNormalQuit',
       'update automatic installer handoff mode must not require user confirmation',
       'update automatic installer handoff mode requires unattended auto install'
     ])

@@ -18,6 +18,19 @@ on:
         required: false
         type: string
 
+      rollback_compatible:
+        description: Enable normal-quit recovery only with verified downgrade evidence
+        required: false
+        default: false
+        type: boolean
+      rollback_evidence:
+        description: Repository-relative canonical downgrade evidence JSON when rollback compatibility is enabled
+        required: false
+        type: string
+      rollback_evidence_signature:
+        description: Repository-relative detached signature for rollback_evidence
+        required: false
+        type: string
   # 标签触发（使用 bumpp 打好的标签自动触发）
   push:
     tags:
@@ -851,10 +864,23 @@ jobs:
               echo "prerelease=false" >> $GITHUB_OUTPUT
             fi
           fi
+
         env:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           RELEASE_TYPE: ${{ github.event.inputs.release_type }}
+      - name: Resolve same-channel rollback version
+        id: rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback=$(node scripts/resolve-update-rollback-version.mjs \
+            --tag "${{ steps.release-info.outputs.tag }}" \
+            --remote origin)
+          {
+            echo "from_version=$(jq -er '.rollbackFromVersion' <<<"${rollback}")"
+            echo "channel=$(jq -er '.channel' <<<"${rollback}")"
+          } >> "$GITHUB_OUTPUT"
 
       - name: List Available Artifacts
         run: |
@@ -925,16 +951,8 @@ jobs:
             OUTPUT_PATHS+=("$target")
           done
 
-          VERSION="${TAG#v}"
-          CHANNEL="RELEASE"
-          LOWER_VERSION=$(echo "$VERSION" | tr '[:upper:]' '[:lower:]')
-          if [[ "$LOWER_VERSION" == *"snapshot"* ]]; then
-            CHANNEL="SNAPSHOT"
-          elif [[ "$LOWER_VERSION" == *"beta"* ]]; then
-            CHANNEL="BETA"
-          elif [ "${RELEASE_TYPE}" = "snapshot" ]; then
-            CHANNEL="SNAPSHOT"
-          fi
+          CHANNEL="${{ steps.rollback.outputs.channel }}"
+          ROLLBACK_FROM_VERSION="${{ steps.rollback.outputs.from_version }}"
 
           if [ -z "${RELEASE_SIGNING_PRIVATE_KEY}" ]; then
             echo "RELEASE_SIGNING_PRIVATE_KEY is required for official release assets."
@@ -950,16 +968,46 @@ jobs:
             printf '%s' "${RELEASE_SIGNING_PRIVATE_KEY}" | base64 --decode > "${signing_key_path}"
           fi
 
+          ROLLBACK_COMPATIBLE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_compatible || 'false' }}"
+          ROLLBACK_EVIDENCE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence || '' }}"
+          ROLLBACK_EVIDENCE_SIGNATURE="${{ github.event_name == 'workflow_dispatch' && github.event.inputs.rollback_evidence_signature || '' }}"
+          case "${ROLLBACK_COMPATIBLE}" in
+            true)
+              if [ -z "${ROLLBACK_EVIDENCE}" ] || [ -z "${ROLLBACK_EVIDENCE_SIGNATURE}" ]; then
+                echo "rollbackCompatible=true requires rollback_evidence and rollback_evidence_signature."
+                exit 1
+              fi
+              if [ ! -f "${ROLLBACK_EVIDENCE}" ] || [ ! -f "${ROLLBACK_EVIDENCE_SIGNATURE}" ]; then
+                echo "Configured rollback evidence or detached signature file is missing."
+                exit 1
+              fi
+              rollback_evidence_args=(
+                --rollback-evidence "${ROLLBACK_EVIDENCE}"
+                --rollback-evidence-signature "${ROLLBACK_EVIDENCE_SIGNATURE}"
+              )
+              ;;
+            false) rollback_evidence_args=() ;;
+            *)
+              echo "rollback_compatible must be true or false."
+              exit 1
+              ;;
+          esac
+
           node scripts/prepare-release-assets.mjs \
             --tag "${TAG}" \
             --channel "${CHANNEL}" \
+            --rollback-from-version "${ROLLBACK_FROM_VERSION}" \
+            --expected-rollback-from-version "${ROLLBACK_FROM_VERSION}" \
+            --rollback-compatible "${ROLLBACK_COMPATIBLE}" \
+            "${rollback_evidence_args[@]}" \
             --release-dir release-assets \
             --private-key "${signing_key_path}" \
             --public-key apps/core-app/resources/keys/release-signing-public.pem \
             --manifest release-assets/tuff-release-manifest.json
 
           node scripts/update-validate-release-manifest.mjs \
-            --manifest release-assets/tuff-release-manifest.json
+            --manifest release-assets/tuff-release-manifest.json \
+            --expected-rollback-from-version "${ROLLBACK_FROM_VERSION}"
 
           mapfile -t SIGNATURE_PATHS < <(find release-assets -maxdepth 1 -type f -name "*.sig" | sort)
           if [ "${#SIGNATURE_PATHS[@]}" -eq 0 ]; then
@@ -1069,18 +1117,7 @@ jobs:
       - name: Resolve release metadata
         id: meta
         run: |
-          VERSION="${TAG#v}"
-          CHANNEL="RELEASE"
-          LOWER_VERSION=$(echo "$VERSION" | tr '[:upper:]' '[:lower:]')
-          if [[ "$LOWER_VERSION" == *"snapshot"* ]]; then
-            CHANNEL="SNAPSHOT"
-          elif [[ "$LOWER_VERSION" == *"beta"* ]]; then
-            CHANNEL="BETA"
-          fi
-          {
-            echo "version=$VERSION"
-            echo "channel=$CHANNEL"
-          } >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Check out repository
         uses: actions/checkout@v6
@@ -1092,6 +1129,17 @@ jobs:
         with:
           node-version-file: .node-version
 
+      - name: Resolve same-channel rollback version
+        id: sync-rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback=$(node scripts/resolve-update-rollback-version.mjs --tag "${TAG}" --remote origin)
+          {
+            echo "from_version=$(jq -er '.rollbackFromVersion' <<<"${rollback}")"
+            echo "channel=$(jq -er '.channel' <<<"${rollback}")"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Fetch GitHub release metadata
         run: |
           curl -sS \
@@ -1101,6 +1149,21 @@ jobs:
             -o /tmp/github-release.json
 
           jq -e '.id and (.assets | type == "array")' /tmp/github-release.json >/dev/null
+
+      - name: Download and validate release manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest_url=$(jq -er 'first(.assets[] | select(.name=="tuff-release-manifest.json")).browser_download_url' /tmp/github-release.json)
+          curl -sSL -f \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/octet-stream" \
+            "${manifest_url}" \
+            -o /tmp/tuff-release-manifest.json
+          node scripts/update-validate-release-manifest.mjs \
+            --manifest /tmp/tuff-release-manifest.json \
+            --expected-rollback-from-version "${{ steps.sync-rollback.outputs.from_version }}"
+          jq -e --arg tag "${TAG}" '.release.tag == $tag' /tmp/tuff-release-manifest.json >/dev/null
 
       - name: Generate Release Notes
         run: |
@@ -1247,12 +1310,17 @@ jobs:
           notes_html_json=$(cat /tmp/nexus-release-notes-html.json)
           nexus_headers=()
           create_nexus_headers nexus_headers
+          rollback_from_version=$(jq -er '.release.rollbackFromVersion' /tmp/tuff-release-manifest.json)
+          rollback_compatible=$(jq -er '.release.rollbackCompatible' /tmp/tuff-release-manifest.json)
+
 
           create_payload=$(jq -n \
             --arg tag "${TAG}" \
             --arg name "Release ${TAG}" \
-            --arg channel "${{ steps.meta.outputs.channel }}" \
+            --arg channel "${{ steps.sync-rollback.outputs.channel }}" \
             --arg version "${{ steps.meta.outputs.version }}" \
+            --arg rollbackFromVersion "${rollback_from_version}" \
+            --argjson rollbackCompatible "${rollback_compatible}" \
             --argjson notes "${notes_json}" \
             --argjson notesHtml "${notes_html_json}" \
             '{
@@ -1260,6 +1328,8 @@ jobs:
               name: $name,
               channel: $channel,
               version: $version,
+              rollbackFromVersion: $rollbackFromVersion,
+              rollbackCompatible: $rollbackCompatible,
               notes: $notes,
               notesHtml: $notesHtml,
               status: "draft"
@@ -1267,10 +1337,14 @@ jobs:
 
           update_payload=$(jq -n \
             --arg name "Release ${TAG}" \
+            --arg rollbackFromVersion "${rollback_from_version}" \
+            --argjson rollbackCompatible "${rollback_compatible}" \
             --argjson notes "${notes_json}" \
             --argjson notesHtml "${notes_html_json}" \
             '{
               name: $name,
+              rollbackFromVersion: $rollbackFromVersion,
+              rollbackCompatible: $rollbackCompatible,
               notes: $notes,
               notesHtml: $notesHtml
             }')
@@ -1302,16 +1376,6 @@ jobs:
           nexus_headers=()
           create_nexus_headers nexus_headers
 
-          manifest_url=$(jq -er 'first(.assets[] | select(.name=="tuff-release-manifest.json")).browser_download_url' /tmp/github-release.json)
-          curl -sSL -f \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -H "Accept: application/octet-stream" \
-            "${manifest_url}" \
-            -o /tmp/tuff-release-manifest.json
-
-          node scripts/update-validate-release-manifest.mjs \
-            --manifest /tmp/tuff-release-manifest.json
-          jq -e --arg tag "${TAG}" '.release.tag == $tag' /tmp/tuff-release-manifest.json >/dev/null
 
           while IFS= read -r encoded; do
             manifest_item=$(printf '%s' "${encoded}" | base64 --decode)

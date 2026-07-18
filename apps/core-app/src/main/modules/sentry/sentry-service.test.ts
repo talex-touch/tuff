@@ -182,34 +182,6 @@ describe('SentryServiceModule telemetry sanitizer', () => {
     })
   })
 
-  it('keeps legacy alias metadata while dropping payload-shaped fields', () => {
-    const event = sanitizeNexusTelemetryEvent({
-      eventType: 'feature_use',
-      metadata: {
-        action: 'legacy_alias_hit',
-        family: 'terminal',
-        legacyEvent: 'terminal:create',
-        canonicalEvent: 'terminal:session:create',
-        direction: 'renderer-to-main',
-        sourceModule: 'TerminalModule',
-        timestamp: 1779876908781,
-        payload: { command: 'echo secret' }
-      },
-      isAnonymous: true
-    })
-
-    expect(event?.metadata).toMatchObject({
-      action: 'legacy_alias_hit',
-      family: 'terminal',
-      legacyEvent: 'terminal:create',
-      canonicalEvent: 'terminal:session:create',
-      direction: 'renderer-to-main',
-      sourceModule: 'TerminalModule',
-      timestamp: 1779876908781
-    })
-    expect(event?.metadata).not.toHaveProperty('payload')
-  })
-
   it('removes Sentry request details, breadcrumbs and stack frame paths before upload', () => {
     const event = sanitizeSentryEvent({
       message: 'Failed to open /Users/me/private.txt with token=secret',

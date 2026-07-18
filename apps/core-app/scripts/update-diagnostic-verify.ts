@@ -60,7 +60,7 @@ function parseInstallModes(value: string | undefined): UpdateDiagnosticInstallMo
   if (!entries) return undefined
 
   const allowed = new Set([
-    'mac-auto-updater',
+    'coordinated-handoff',
     'windows-installer-handoff',
     'windows-auto-installer-handoff',
     'manual-installer',

@@ -11,6 +11,13 @@ import {
   normalizeSha256,
   REQUIRED_CORE_PAIRS,
 } from './lib/release-artifacts.mjs'
+import {
+  serializeCanonicalUpdateDowngradeEvidence,
+  UPDATE_DOWNGRADE_EVIDENCE_SCHEMA,
+  UPDATE_DOWNGRADE_EVIDENCE_SCHEMA_VERSION,
+  validateUpdateDowngradeEvidence,
+} from './lib/update-downgrade-evidence.mjs'
+import { validateRollbackContract } from './lib/update-rollback-contract.mjs'
 
 function requirePlainFileName(value, label) {
   if (typeof value !== 'string' || !value || basename(value) !== value)
@@ -32,7 +39,8 @@ function requireMacEvidence(evidence) {
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence))
     throw new Error('macOS signing evidence is missing or invalid')
 
-  const mode = evidence.mode ?? (evidence.status === 'waived' ? 'waived' : 'developer-id')
+  const mode
+    = evidence.mode ?? (evidence.status === 'waived' ? 'waived' : 'developer-id')
   const checks = {
     codesign: evidence.checks?.codesign === true,
     gatekeeper: evidence.checks?.gatekeeper === true,
@@ -42,14 +50,16 @@ function requireMacEvidence(evidence) {
     mode,
     signingKind: evidence.signingKind,
     teamIdentifier:
-      typeof evidence.teamIdentifier === 'string' && evidence.teamIdentifier.trim()
+      typeof evidence.teamIdentifier === 'string'
+      && evidence.teamIdentifier.trim()
         ? evidence.teamIdentifier
         : null,
     authorities: Array.isArray(evidence.authorities)
       ? evidence.authorities.filter(value => typeof value === 'string')
       : [],
     checks,
-    checkedAt: typeof evidence.checkedAt === 'string' ? evidence.checkedAt : null,
+    checkedAt:
+      typeof evidence.checkedAt === 'string' ? evidence.checkedAt : null,
   }
 
   if (mode === 'waived') {
@@ -119,8 +129,26 @@ function renderMarkdown(summary) {
     )
   }
 
+  lines.push(
+    '',
+    '## 降级验收证据 / Downgrade Acceptance Evidence',
+    '',
+    '| Platform | Arch | Execution mode | Result | Native trust | Waiver |',
+    '|---|---|---|---|---|---|',
+  )
+  for (const evidence of summary.downgradeEvidence.entries) {
+    const waiver
+      = evidence.nativeTrust === 'waived:apple-developer-not-configured'
+        ? 'apple-developer-not-configured'
+        : 'none'
+    lines.push(
+      `| ${evidence.platform} | ${evidence.arch} | ${evidence.executionMode} | ${evidence.result} | ${evidence.nativeTrust} | ${waiver} |`,
+    )
+  }
+
   const macosWaived = summary.macos.mode === 'waived'
-  const nativeCheckStatus = passed => (passed ? 'pass' : macosWaived ? 'waived' : 'fail')
+  const nativeCheckStatus = passed =>
+    passed ? 'pass' : macosWaived ? 'waived' : 'fail'
 
   lines.push(
     '',
@@ -161,15 +189,24 @@ export async function generateReleaseTestSummary({
   manifestPath,
   publicKeyPath,
   macEvidencePath,
+  downgradeEvidencePath,
   outputDir = releaseDir,
 }) {
-  const [manifestText, publicKeyPem, macEvidenceText, releaseEntries]
-    = await Promise.all([
-      readFile(manifestPath, 'utf8'),
-      readFile(publicKeyPath, 'utf8'),
-      readFile(macEvidencePath, 'utf8'),
-      readdir(releaseDir, { withFileTypes: true }),
-    ])
+  const [
+    manifestText,
+    publicKeyPem,
+    macEvidenceText,
+    releaseEntries,
+    downgradeEvidenceText,
+  ] = await Promise.all([
+    readFile(manifestPath, 'utf8'),
+    readFile(publicKeyPath, 'utf8'),
+    readFile(macEvidencePath, 'utf8'),
+    readdir(releaseDir, { withFileTypes: true }),
+    downgradeEvidencePath
+      ? readFile(downgradeEvidencePath, 'utf8')
+      : Promise.resolve(null),
+  ])
   const manifest = JSON.parse(manifestText)
   const macEvidence = requireMacEvidence(JSON.parse(macEvidenceText))
   const publicKey = createPublicKey(publicKeyPem)
@@ -178,10 +215,88 @@ export async function generateReleaseTestSummary({
     .map(entry => entry.name)
   const packageFileNames = listCorePackageFileNames(releaseFileNames)
 
+  if (manifest.schemaVersion !== 2)
+    throw new Error('Manifest schemaVersion must be 2')
   if (!manifest.release || typeof manifest.release !== 'object')
     throw new Error('Manifest release metadata is missing')
   if (!Array.isArray(manifest.artifacts) || manifest.artifacts.length === 0)
     throw new Error('Manifest artifacts are missing')
+
+  const rollbackIssues = validateRollbackContract({
+    version: manifest.release.version,
+    channel: manifest.release.channel,
+    rollbackFromVersion: manifest.release.rollbackFromVersion,
+    rollbackCompatible: manifest.release.rollbackCompatible,
+  })
+  if (rollbackIssues.length > 0) {
+    throw new Error(
+      `Manifest rollback contract is invalid: ${rollbackIssues.join('; ')}`,
+    )
+  }
+
+  const staticOnlyEvidence = REQUIRED_CORE_PAIRS.map((pair) => {
+    const [platform, arch] = pair.split('/')
+    return {
+      currentVersion: manifest.release.rollbackFromVersion,
+      targetVersion: manifest.release.version,
+      rollbackFromVersion: manifest.release.rollbackFromVersion,
+      platform,
+      arch,
+      result: 'static-only',
+      executionMode: 'static-only',
+      nativeTrust:
+        pair === 'darwin/arm64' && macEvidence.status === 'waived'
+          ? 'waived:apple-developer-not-configured'
+          : 'not-assessed',
+    }
+  })
+  let downgradeEvidence = staticOnlyEvidence
+  if (downgradeEvidenceText) {
+    const parsedDowngradeEvidence = JSON.parse(downgradeEvidenceText)
+    if (
+      downgradeEvidenceText
+      !== serializeCanonicalUpdateDowngradeEvidence(parsedDowngradeEvidence)
+    ) {
+      throw new Error(
+        'Update downgrade evidence must use canonical JSON bytes',
+      )
+    }
+    const validatedEvidence = validateUpdateDowngradeEvidence(
+      parsedDowngradeEvidence,
+      {
+        currentVersion: manifest.release.rollbackFromVersion,
+        targetVersion: manifest.release.version,
+        rollbackFromVersion: manifest.release.rollbackFromVersion,
+      },
+    )
+    if (!validatedEvidence.valid) {
+      throw new Error(
+        `Invalid update downgrade evidence: ${validatedEvidence.issues.join('; ')}`,
+      )
+    }
+    downgradeEvidence = validatedEvidence.evidence
+  }
+  if (manifest.release.rollbackCompatible === true) {
+    if (!downgradeEvidenceText) {
+      throw new Error(
+        'rollbackCompatible=true requires validated downgrade evidence',
+      )
+    }
+    const darwinRuntime = downgradeEvidence.find(
+      item => item.platform === 'darwin' && item.arch === 'arm64',
+    )
+    if (
+      !darwinRuntime
+      || darwinRuntime.executionMode !== 'runtime'
+      || darwinRuntime.result !== 'pass'
+      || darwinRuntime.nativeTrust !== 'pass'
+      || macEvidence.status !== 'pass'
+    ) {
+      throw new Error(
+        'rollbackCompatible=true requires passed darwin/arm64 packaged isolated runtime and native trust evidence',
+      )
+    }
+  }
 
   const pairs = new Set()
   const artifacts = []
@@ -261,13 +376,15 @@ export async function generateReleaseTestSummary({
   }
 
   const summary = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     status: 'pass',
     release: {
       tag: manifest.release.tag,
       version: manifest.release.version,
       channel: manifest.release.channel,
+      rollbackFromVersion: manifest.release.rollbackFromVersion,
+      rollbackCompatible: manifest.release.rollbackCompatible,
     },
     checks: {
       requiredPairsPresent: true,
@@ -275,10 +392,17 @@ export async function generateReleaseTestSummary({
       preferredDigestsMatch: true,
       preferredSignaturesValid: true,
       allPublishedPackagesSigned: true,
+      rollbackMetadataValid: true,
+      downgradeEvidenceValidated: Boolean(downgradeEvidenceText),
       macosNativeTrust: macEvidence.mode === 'waived' ? 'waived' : true,
     },
     artifacts,
     packageSignatures,
+    downgradeEvidence: {
+      schema: UPDATE_DOWNGRADE_EVIDENCE_SCHEMA,
+      schemaVersion: UPDATE_DOWNGRADE_EVIDENCE_SCHEMA_VERSION,
+      entries: downgradeEvidence,
+    },
     macos: macEvidence,
   }
 
@@ -306,11 +430,12 @@ async function main() {
     'apps/core-app/resources/keys/release-signing-public.pem',
   )
   const macEvidencePath = getArgValue(argv, '--mac-evidence')
+  const downgradeEvidencePath = getArgValue(argv, '--downgrade-evidence')
   const outputDir = resolve(getArgValue(argv, '--output-dir', releaseDir))
 
   if (!publicKeyPath || !macEvidencePath) {
     throw new Error(
-      'Usage: node scripts/generate-release-test-summary.mjs --release-dir <dir> --manifest <json> --public-key <pem> --mac-evidence <json> [--output-dir <dir>]',
+      'Usage: node scripts/generate-release-test-summary.mjs --release-dir <dir> --manifest <json> --public-key <pem> --mac-evidence <json> [--downgrade-evidence <json>] [--output-dir <dir>]',
     )
   }
 
@@ -320,6 +445,9 @@ async function main() {
       manifestPath,
       publicKeyPath: resolve(publicKeyPath),
       macEvidencePath: resolve(macEvidencePath),
+      downgradeEvidencePath: downgradeEvidencePath
+        ? resolve(downgradeEvidencePath)
+        : undefined,
       outputDir,
     })
     console.log(
@@ -350,7 +478,7 @@ async function main() {
       .replaceAll(releaseDir, '<release-assets>')
       .replaceAll(resolve('.'), '<workspace>')
     await writeSummaryFiles(outputDir, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       generatedAt: new Date().toISOString(),
       status: 'fail',
       release,

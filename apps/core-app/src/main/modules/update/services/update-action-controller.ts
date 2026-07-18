@@ -7,11 +7,8 @@ export interface UpdateActionControllerDeps {
   getQuickUpdateCheckResult: (channel: AppPreviewChannel) => Promise<UpdateCheckResult>
   queueBackgroundUpdateCheck: () => void
   checkForUpdates: (force: boolean) => Promise<UpdateCheckResult>
-  isMacAutoUpdaterEnabled: () => boolean
   withDownloadCenterDownload: (release: GitHubRelease) => Promise<{ taskId: string }>
-  withMacDownload: (release: GitHubRelease) => Promise<void>
   withDownloadCenterInstall: (taskId: string) => Promise<void>
-  withMacInstall: () => Promise<void>
   reportUpdateMessage: (
     level: 'info' | 'warn' | 'error',
     title: string,
@@ -56,21 +53,6 @@ export class UpdateActionController {
     release: GitHubRelease
   ): Promise<{ success: boolean; data?: { taskId: string }; error?: string }> {
     try {
-      if (this.deps.isMacAutoUpdaterEnabled()) {
-        await this.deps.withMacDownload(release)
-        this.deps.reportUpdateMessage('info', 'Update download started', release.tag_name, {
-          channel: this.deps.getEffectiveChannel(),
-          source: 'mac-auto-updater'
-        })
-        this.deps.reportUpdateTelemetry('download_started', {
-          channel: this.deps.getEffectiveChannel(),
-          source: 'mac-auto-updater',
-          tag: release.tag_name,
-          itemKind: 'manual'
-        })
-        return { success: true }
-      }
-
       const { taskId } = await this.deps.withDownloadCenterDownload(release)
       this.deps.reportUpdateMessage('info', 'Update download started', release.tag_name, {
         channel: this.deps.getEffectiveChannel(),
@@ -92,9 +74,7 @@ export class UpdateActionController {
       })
       this.deps.reportUpdateTelemetry('download_error', {
         channel: this.deps.getEffectiveChannel(),
-        source: this.deps.isMacAutoUpdaterEnabled()
-          ? 'mac-auto-updater'
-          : this.deps.getSourceName(),
+        source: this.deps.getSourceName(),
         tag: release?.tag_name,
         itemKind: 'manual'
       })
@@ -109,27 +89,14 @@ export class UpdateActionController {
     taskId?: string
   }): Promise<{ success: boolean; error?: string }> {
     try {
-      if (this.deps.isMacAutoUpdaterEnabled()) {
-        await this.deps.withMacInstall()
-        this.deps.reportUpdateMessage('info', 'Update install triggered', 'mac-auto-updater', {
-          channel: this.deps.getEffectiveChannel()
-        })
-        this.deps.reportUpdateTelemetry('install_started', {
-          channel: this.deps.getEffectiveChannel(),
-          source: 'mac-auto-updater',
-          itemKind: 'manual'
-        })
-        return { success: true }
-      }
-
       if (!payload?.taskId) {
         throw new Error('Missing update task id')
       }
       await this.deps.withDownloadCenterInstall(payload.taskId)
-      this.deps.reportUpdateMessage('info', 'Update install triggered', payload.taskId, {
+      this.deps.reportUpdateMessage('info', 'Update install scheduled', payload.taskId, {
         channel: this.deps.getEffectiveChannel()
       })
-      this.deps.reportUpdateTelemetry('install_started', {
+      this.deps.reportUpdateTelemetry('install_scheduled', {
         channel: this.deps.getEffectiveChannel(),
         source: this.deps.getSourceName(),
         taskId: payload.taskId,
@@ -144,9 +111,7 @@ export class UpdateActionController {
       })
       this.deps.reportUpdateTelemetry('install_error', {
         channel: this.deps.getEffectiveChannel(),
-        source: this.deps.isMacAutoUpdaterEnabled()
-          ? 'mac-auto-updater'
-          : this.deps.getSourceName(),
+        source: this.deps.getSourceName(),
         taskId: payload?.taskId,
         itemKind: 'manual'
       })
