@@ -14,6 +14,8 @@ import { mainLog } from '../utils/logger'
 import { getAppVersionSafe } from '../utils/version-util'
 import { genTouchChannel } from './channel-core'
 import { AppStartEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
+import type { QuitIntentKind } from './quit-intent'
+import { setQuitIntent } from './quit-intent'
 import {
   getDisplayLayoutSignature,
   normalizeBoundsToDisplays,
@@ -62,31 +64,6 @@ export class TouchApp implements TalexTouch.TouchApp {
   private mainWindowBoundsSaveTimer: NodeJS.Timeout | null = null
   private readonly initPromise: Promise<void>
   private initError: unknown | null = null
-
-  /**
-   * Read app-setting.ini directly from disk before StorageModule is initialized.
-   */
-  private readAppSettingsConfigFromDisk(): Record<string, unknown> {
-    const configPath = path.join(this.rootPath, 'modules', 'config', 'app-setting.ini')
-    let appSettings: Record<string, unknown> = {}
-
-    try {
-      if (fse.existsSync(configPath)) {
-        const content = fse.readFileSync(configPath, 'utf-8')
-        if (content.length > 0) {
-          const parsed: unknown = JSON.parse(content)
-          if (parsed && typeof parsed === 'object') {
-            appSettings = parsed as Record<string, unknown>
-          }
-        }
-      }
-    } catch (error) {
-      mainLog.warn('Failed to read app-setting.ini from disk', { error })
-      appSettings = {}
-    }
-
-    return appSettings
-  }
 
   private resolveRendererOverrideStatePath(): string {
     return path.join(this.rootPath, 'config', 'renderer-override.json')
@@ -345,21 +322,21 @@ export class TouchApp implements TalexTouch.TouchApp {
     })
   }
 
-  constructor(app: Electron.App) {
+  constructor(app: Electron.App, startupAppSettings: Record<string, unknown> = {}) {
     mainLog.info('Running under application root', {
       meta: { root: this.rootPath }
     })
     checkDirWithCreate(this.rootPath, true)
 
-    const appSettingsFromDisk = this.readAppSettingsConfigFromDisk()
+    const appSettingsFromStorage = startupAppSettings
     const silentLaunchIntent = resolveSilentLaunchIntent({
       app,
       argv: process.argv,
-      settings: appSettingsFromDisk
+      settings: appSettingsFromStorage
     })
 
     this._startSilent = silentLaunchIntent.silent
-    const initialBounds = this.resolveInitialMainWindowBounds(appSettingsFromDisk)
+    const initialBounds = this.resolveInitialMainWindowBounds(appSettingsFromStorage)
 
     const _windowOptions: TalexTouch.TouchWindowConstructorOptions = {
       ...MainWindowOption,
@@ -642,7 +619,8 @@ export class TouchApp implements TalexTouch.TouchApp {
   /**
    * 完全退出应用
    */
-  public quit(): void {
+  public quit(intent: QuitIntentKind = 'user-normal', reason = 'touch-app-quit'): void {
+    setQuitIntent(intent, reason)
     this.isQuitting = true
     this.app.quit()
   }

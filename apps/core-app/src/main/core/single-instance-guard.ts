@@ -1,5 +1,6 @@
 import type { Event } from 'electron'
 import type { AppSecondaryLaunch, TalexEvents } from './eventbus/touch-event'
+import type { LogOptions } from '../utils/logger'
 
 type SecondInstanceHandler = (
   event: Event,
@@ -15,14 +16,15 @@ export interface SingleInstanceAppLike {
 }
 
 export interface SingleInstanceGuardLogger {
-  info?: (message: unknown, options?: unknown) => void
-  warn?: (message: unknown, options?: unknown) => void
+  info?: (message: unknown, options?: LogOptions) => void
+  warn?: (message: unknown, options?: LogOptions) => void
 }
 
 export interface SetupSingleInstanceGuardOptions {
   app: SingleInstanceAppLike
   startupBenchmarkMode: boolean
   emitSecondaryLaunch: (eventName: TalexEvents, payload: AppSecondaryLaunch) => void
+  onDuplicateInstance: () => void
   createSecondaryLaunchEvent: (
     event: Event,
     argv: string[],
@@ -39,6 +41,7 @@ export function setupSingleInstanceGuard({
   emitSecondaryLaunch,
   createSecondaryLaunchEvent,
   secondaryLaunchEventName,
+  onDuplicateInstance,
   logger
 }: SetupSingleInstanceGuardOptions): boolean {
   if (startupBenchmarkMode) {
@@ -49,6 +52,7 @@ export function setupSingleInstanceGuard({
   const hasSingleInstanceLock = app.requestSingleInstanceLock()
   if (!hasSingleInstanceLock) {
     logger?.warn?.('Secondary launch detected in duplicate process, quitting duplicate instance')
+    onDuplicateInstance()
     app.quit()
     return false
   }

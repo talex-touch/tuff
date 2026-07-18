@@ -7,6 +7,7 @@ import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
 import { sleep } from '@talex-touch/utils/common/utils'
 import { app, dialog } from 'electron'
 import { mainLog } from '../utils/logger'
+import { setQuitIntent } from './quit-intent'
 
 const execFileAsync = promisify(execFile)
 
@@ -278,6 +279,7 @@ export async function enforceDevReleaseStartupConstraint(): Promise<boolean> {
 
   if (choice === 'keep-release') {
     mainLog.info('Startup guard: keeping release build, aborting dev startup')
+    setQuitIntent('other', 'startup-version-guard-kept-release')
     startupVersionGuardDeps.quit()
     return false
   }
@@ -292,6 +294,7 @@ export async function enforceDevReleaseStartupConstraint(): Promise<boolean> {
     'Unable to stop release build',
     'Failed to stop the running release build. Please close it manually and restart the development build.'
   )
+  setQuitIntent('startup-failure', 'startup-version-guard-termination-failed')
   startupVersionGuardDeps.quit()
   return false
 }

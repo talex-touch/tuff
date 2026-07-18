@@ -74,6 +74,7 @@ import packageJson from '../../../package.json'
 import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
 import { LanguageChangedEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
+import { setQuitIntent } from '../core/quit-intent'
 import { SILENT_LAUNCH_ARG } from '../core/silent-launch'
 import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
@@ -695,6 +696,7 @@ function isRendererPerfReport(value: unknown): value is RendererPerfReport {
 }
 
 function closeApp(app: TalexTouch.TouchApp): void {
+  setQuitIntent('user-normal', 'renderer-close-app')
   app.window.close()
 
   app.app.quit()
@@ -1444,7 +1446,8 @@ export class CommonChannelModule extends BaseModule {
           dbClient: databaseModule.getClient(),
           cacheStats: {
             'storage.lru': storageStats.cachedConfigs,
-            'storage.plugins': storageStats.pluginConfigs
+            'storage.plugins': storageStats.pluginConfigs,
+            'storage.dirty': storageStats.dirtyConfigs
           }
         })
       }),

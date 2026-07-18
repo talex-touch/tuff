@@ -17,12 +17,12 @@ interface PersistFailureState {
 /**
  * StoragePollingService - Periodic persistence service
  *
- * Periodically saves dirty configs to disk
+ * Periodically saves dirty configs to the active primary backend
  */
 export class StoragePollingService {
   private static readonly pollingService = PollingService.getInstance()
   private cache: StorageCache
-  private saveFn: (name: string) => Promise<void>
+  private saveFn: (name: string) => Promise<number>
   private isRunning = false
   private pollingInterval: number
   private readonly pollingTaskId = 'storage.polling'
@@ -31,7 +31,7 @@ export class StoragePollingService {
 
   constructor(
     cache: StorageCache,
-    saveFn: (name: string) => Promise<void>,
+    saveFn: (name: string) => Promise<number>,
     pollingInterval: number = 5000
   ) {
     this.cache = cache
@@ -99,15 +99,17 @@ export class StoragePollingService {
     const results = await Promise.allSettled(
       dirtyConfigs.map(async (name) => {
         const saveStart = performance.now()
-        await this.saveFn(name)
-        return { name, durationMs: Math.round(performance.now() - saveStart) }
+        const revision = await this.saveFn(name)
+        return { name, revision, durationMs: Math.round(performance.now() - saveStart) }
       })
     )
 
     results.forEach((result, index) => {
       const name = dirtyConfigs[index]!
       if (result.status === 'fulfilled') {
-        this.cache.clearDirty(name)
+        if (this.cache.getVersion(name) === result.value.revision) {
+          this.cache.clearDirty(name)
+        }
         this.persistFailures.delete(name)
         return
       }
@@ -153,8 +155,13 @@ export class StoragePollingService {
     if (totalMs > 500) {
       const details = results
         .filter(
-          (result): result is PromiseFulfilledResult<{ name: string; durationMs: number }> =>
-            result.status === 'fulfilled'
+          (
+            result
+          ): result is PromiseFulfilledResult<{
+            name: string
+            revision: number
+            durationMs: number
+          }> => result.status === 'fulfilled'
         )
         .map((result) => `${result.value.name}=${result.value.durationMs}ms`)
         .join(' ')
@@ -165,8 +172,10 @@ export class StoragePollingService {
   }
 
   private async saveConfig(name: string): Promise<void> {
-    await this.saveFn(name)
-    this.cache.clearDirty(name)
+    const revision = await this.saveFn(name)
+    if (this.cache.getVersion(name) === revision) {
+      this.cache.clearDirty(name)
+    }
     this.persistFailures.delete(name)
   }
 

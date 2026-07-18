@@ -114,7 +114,7 @@ export class StorageCache {
   }
 
   /**
-   * Set cache with specific version (for loading from disk)
+   * Set cache with specific version (for authoritative-store hydration)
    * @param name - Configuration name
    * @param data - Configuration data
    * @param version - Specific version to set

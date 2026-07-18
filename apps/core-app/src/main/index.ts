@@ -1,18 +1,20 @@
 import type { ModuleLoadMetric } from './modules/analytics'
 import type { LogLevel } from './utils/logger'
 
+import path from 'node:path'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { app, nativeTheme, protocol } from 'electron'
 import { commonChannelModule } from './channel/common'
 import { genTouchApp } from './core'
+import { innerRootPath } from './core/precore'
 import { loadStartupModules } from './core/startup-module-loader'
+import { setQuitIntent } from './core/quit-intent'
 import { enforceDevReleaseStartupConstraint } from './core/startup-version-guard'
 import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { addonOpenerModule } from './modules/addon-opener'
-
 import { intelligenceModule } from './modules/ai/intelligence-module'
 import { analyticsModule, getStartupAnalytics } from './modules/analytics'
 import { assistantModule } from './modules/assistant'
@@ -39,6 +41,7 @@ import { sentryModule } from './modules/sentry'
 import { syncModule } from './modules/sync'
 import { authModule } from './modules/auth'
 import { getMainConfig, storageModule, subscribeMainConfig } from './modules/storage'
+import { readStartupAppConfig } from './modules/storage/app-config-repository'
 import { permissionCheckerModule } from './modules/system/permission-checker'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
 import { systemUpdateModule } from './modules/system-update'
@@ -49,7 +52,6 @@ import { pluginLogModule } from './service/plugin-log.service'
 
 import { loggerManager, mainLog } from './utils/logger'
 import './polyfills'
-import './core/precore'
 
 // 设置环境变量禁用 ws 模块的可选依赖
 process.env.WS_NO_UTF_8_VALIDATE = 'true'
@@ -89,7 +91,6 @@ const startupBenchmarkExitDelayMs = parsePositiveIntegerEnv(
   process.env.TUFF_STARTUP_BENCHMARK_EXIT_DELAY_MS,
   1_200
 )
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
@@ -224,7 +225,19 @@ app.whenReady().then(async () => {
 
   try {
     const analytics = getStartupAnalytics()
-    const touchApp = genTouchApp()
+    const startupAppConfig = await readStartupAppConfig({
+      databasePath: path.join(innerRootPath, 'modules', 'database', 'database.db'),
+      legacyRoot: path.join(innerRootPath, 'modules', 'config'),
+      key: StorageList.APP_SETTING
+    })
+    mainLog.info('Startup app configuration resolved', {
+      meta: {
+        source: startupAppConfig.source,
+        fallbackReason: startupAppConfig.fallbackReason
+      }
+    })
+    const touchApp = genTouchApp(startupAppConfig.settings)
+
     const modulesStartTime = Date.now()
     const moduleLoadMetrics: ModuleLoadMetric[] = []
 
@@ -289,6 +302,7 @@ app.whenReady().then(async () => {
     if (touchApp.isSilentStart()) {
       void rendererInitPromise.catch((error) => {
         mainLog.error('Silent-start renderer initialization failed', { error })
+        setQuitIntent('startup-failure', 'silent-renderer-initialization-failed')
         app.quit()
       })
     } else {
@@ -318,6 +332,7 @@ app.whenReady().then(async () => {
           meta: { exitDelayMs: startupBenchmarkExitDelayMs }
         })
         setTimeout(() => {
+          setQuitIntent('other', 'startup-benchmark-complete')
           app.quit()
         }, startupBenchmarkExitDelayMs)
       }
@@ -372,6 +387,7 @@ app.whenReady().then(async () => {
       error
     })
     mainLog.error('Main process bootstrap failed', { error })
+    setQuitIntent('startup-failure', 'main-process-bootstrap-failed')
     app.quit()
   }
 })

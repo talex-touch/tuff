@@ -9,7 +9,8 @@ import type {
   ModuleKey,
   ModuleStopContext
 } from '@talex-touch/utils/types/modules'
-import type { TalexEvents } from './eventbus/touch-event'
+import type { EventHandler, ITouchEvent, ITouchEventBus } from '@talex-touch/utils/eventbus'
+import { TalexEvents } from './eventbus/touch-event'
 import { ModuleManager } from './module-manager'
 import { BaseModule } from '../modules/abstract-base-module'
 
@@ -320,5 +321,95 @@ describe('ModuleManager lifecycle isolation', () => {
       unloadedModules: 1,
       failedModules: 0
     })
+  })
+
+  it('awaits pre-unload hooks before stopping and destroying modules on configured before-quit', async () => {
+    const calls: string[] = []
+    const handlers = new Map<TalexEvents, EventHandler[]>()
+    let forwardedEvent: ITouchEvent<TalexEvents> | undefined
+    let resolveHook: (() => void) | undefined
+    let markHookStarted: (() => void) | undefined
+    const hookStarted = new Promise<void>((resolve) => {
+      markHookStarted = resolve
+    })
+    const hookFinished = new Promise<void>((resolve) => {
+      resolveHook = resolve
+    })
+    const eventBus = {
+      on(event: TalexEvents, handler: EventHandler): void {
+        const eventHandlers = handlers.get(event) ?? []
+        eventHandlers.push(handler)
+        handlers.set(event, eventHandlers)
+      },
+      async emitAsync(event: TalexEvents, eventData: ITouchEvent<TalexEvents>): Promise<void> {
+        for (const handler of handlers.get(event) ?? []) {
+          await handler(eventData)
+        }
+      }
+    } as unknown as ITouchEventBus<TalexEvents>
+    const modulesRoot = path.join(os.tmpdir(), `module-manager-before-quit-${Date.now()}`)
+    const app = { rootPath: modulesRoot } as TalexTouch.TouchApp
+    const manager = new ModuleManager(
+      app,
+      {},
+      {
+        eventBus,
+        beforeQuitEventName: TalexEvents.BEFORE_APP_QUIT,
+        modulesRoot
+      }
+    )
+    const key = Symbol.for('test-module-before-quit-order') as ModuleKey
+
+    eventBus.on(TalexEvents.BEFORE_MODULES_UNLOAD, async (event) => {
+      forwardedEvent = event
+      calls.push('pre-unload:start')
+      markHookStarted!()
+      await hookFinished
+      calls.push('pre-unload:finish')
+    })
+
+    class OrderedShutdownModule extends BaseModule<TalexEvents> {
+      static readonly key = key
+      constructor(ctx: ModuleCreateContext<TalexEvents>) {
+        super(ctx.moduleKey, { create: false })
+      }
+      onInit(): void {}
+      stop(): void {
+        calls.push('module:stop')
+      }
+      onDestroy(): void {
+        calls.push('module:destroy')
+      }
+    }
+
+    expect(await manager.loadModule(OrderedShutdownModule)).toBe(true)
+    const [beforeQuitHandler] = handlers.get(TalexEvents.BEFORE_APP_QUIT) ?? []
+    if (!beforeQuitHandler) {
+      throw new Error('ModuleManager did not register its configured before-quit handler')
+    }
+
+    const originalEvent: ITouchEvent<TalexEvents> = {
+      name: TalexEvents.BEFORE_APP_QUIT,
+      data: { source: 'test' }
+    }
+    const beforeQuitPromise = Promise.resolve(beforeQuitHandler(originalEvent))
+    const firstCompletion = await Promise.race([
+      hookStarted.then(() => 'hook'),
+      beforeQuitPromise.then(() => 'quit')
+    ])
+
+    expect(firstCompletion).toBe('hook')
+    expect(forwardedEvent).toBe(originalEvent)
+    expect(calls).toEqual(['pre-unload:start'])
+
+    resolveHook!()
+    await beforeQuitPromise
+
+    expect(calls).toEqual([
+      'pre-unload:start',
+      'pre-unload:finish',
+      'module:stop',
+      'module:destroy'
+    ])
   })
 })

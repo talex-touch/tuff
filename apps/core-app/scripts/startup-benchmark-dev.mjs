@@ -293,14 +293,6 @@ function collectBlockingIssues(parsed, rawOutput = '') {
   return issues
 }
 
-function isLocalPackagedArtifactWarning(line) {
-  const lower = line.toLowerCase()
-  return (
-    lower.includes('macos autoupdater disabled because app-update.yml is missing') &&
-    lower.includes('/apps/core-app/dist/')
-  )
-}
-
 function parseLogText(text) {
   const allLines = text
     .split(/\r?\n/)
@@ -377,9 +369,6 @@ function parseLogText(text) {
     }
 
     if (hasWarn || isDeprecation || line.includes('CGEventTap timeout')) {
-      if (isLocalPackagedArtifactWarning(line)) {
-        continue
-      }
       warnLines.push(line)
     }
     if (hasError) {

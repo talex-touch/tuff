@@ -8,6 +8,7 @@ import type {
 import type { LogItem } from '@talex-touch/utils/plugin/log/types'
 
 import type { Event, NotificationResponse } from 'electron'
+import type { QuitIntent } from '../quit-intent'
 import { EventType } from '@talex-touch/utils/eventbus'
 import { createLogger } from '../../utils/logger'
 
@@ -21,6 +22,7 @@ export enum TalexEvents {
 
   ALL_MODULES_LOADED = 'all-modules-loaded',
 
+  BEFORE_MODULES_UNLOAD = 'before-modules-unload',
   BEFORE_APP_QUIT = 'app-before-quit',
   WILL_QUIT = 'will-quit',
   WINDOW_ALL_CLOSED = 'window-all-closed',
@@ -292,12 +294,7 @@ export class AppSecondaryLaunch implements ITouchEvent<TalexEvents> {
 export class BeforeAppQuitEvent implements ITouchEvent<TalexEvents> {
   /**
    * Emitted before the application starts closing its windows. Calling
-   * `event.preventDefault()` will prevent the default behavior, which is terminating
-   * the application.
-   *
-   * **Note:** If application quit was initiated by `autoUpdater.quitAndInstall()`,
-   * then `before-quit` is emitted *after* emitting `close` event on all windows and
-   * closing them.
+   * `event.preventDefault()` prevents termination until asynchronous cleanup completes.
    *
    * **Note:** On Windows, this event will not be emitted if the app is closed due to
    * a shutdown/restart of the system or a user logout.
@@ -308,9 +305,11 @@ export class BeforeAppQuitEvent implements ITouchEvent<TalexEvents> {
    * Electron's `Event` object
    */
   event: Event
+  intent: QuitIntent
 
-  constructor(event: Event) {
+  constructor(event: Event, intent: QuitIntent) {
     this.event = event
+    this.intent = intent
   }
 }
 
@@ -332,9 +331,11 @@ export class AppQuitEvent implements ITouchEvent<TalexEvents> {
    * Electron's `Event` object
    */
   event: Event
+  intent: QuitIntent
 
-  constructor(event: Event) {
+  constructor(event: Event, intent: QuitIntent) {
     this.event = event
+    this.intent = intent
   }
 }
 

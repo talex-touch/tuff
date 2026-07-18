@@ -6,7 +6,7 @@ import process from 'node:process'
  * This file describes the pre-core of the touch app.
  * Running necessary settings or environment params before startup the touch app.
  */
-import { app, crashReporter } from 'electron'
+import { app, crashReporter, powerMonitor } from 'electron'
 import * as log4js from 'log4js'
 import { AppEvents, getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveRuntimeRootPath } from '../utils/app-root-path'
@@ -15,6 +15,7 @@ import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
 import {
   AppReadyEvent,
+  AppQuitEvent,
   AppSecondaryLaunch,
   BeforeAppQuitEvent,
   TalexEvents,
@@ -23,6 +24,7 @@ import {
 } from './eventbus/touch-event'
 import { getCurrentTouchApp } from './main-runtime-state'
 import { runWithBeforeQuitTimeout } from './before-quit-guard'
+import { ensureUserNormalQuitIntent, getQuitIntent, setQuitIntent } from './quit-intent'
 import { setupSingleInstanceGuard } from './single-instance-guard'
 
 const resolveKeyManager = (channel: unknown): unknown =>
@@ -198,17 +200,26 @@ setupSingleInstanceGuard({
   app,
   startupBenchmarkMode,
   emitSecondaryLaunch: (eventName, payload) => touchEventBus.emit(eventName, payload),
+  onDuplicateInstance: () => setQuitIntent('duplicate-instance', 'single-instance-lock-denied'),
   createSecondaryLaunchEvent: (event, argv, workingDirectory, additionalData) =>
     new AppSecondaryLaunch(event, argv, workingDirectory, additionalData),
   secondaryLaunchEventName: TalexEvents.APP_SECONDARY_LAUNCH,
   logger: {
-    info: (message, options) => mainLog.info(message, options as never),
-    warn: (message, options) => mainLog.warn(message, options as never)
+    info: (message, options) => mainLog.info(message, options),
+    warn: (message, options) => mainLog.warn(message, options)
   }
+})
+
+void app.whenReady().then(() => {
+  powerMonitor.on('shutdown', () => {
+    setQuitIntent('system-shutdown', 'power-monitor-shutdown')
+    markAppQuitting('power-monitor-shutdown')
+  })
 })
 
 app.on('window-all-closed', () => {
   mainLog.info('All windows closed, preparing shutdown')
+  ensureUserNormalQuitIntent('window-all-closed')
   markAppQuitting('window-all-closed')
   touchEventBus.emit(TalexEvents.WINDOW_ALL_CLOSED, new WindowAllClosedEvent())
 
@@ -265,9 +276,9 @@ function stringifyTimeoutHint(value: unknown): string | undefined {
 }
 
 app.on('before-quit', (event) => {
+  const intent = ensureUserNormalQuitIntent('electron-before-quit')
   markAppQuitting('before-quit')
   if (beforeQuitFlowDone) {
-    touchEventBus.emit(TalexEvents.WILL_QUIT, new BeforeAppQuitEvent(event))
     return
   }
 
@@ -278,7 +289,7 @@ app.on('before-quit', (event) => {
 
   beforeQuitFlowPromise = (async () => {
     try {
-      const quitEvent = new BeforeAppQuitEvent(event)
+      const quitEvent = new BeforeAppQuitEvent(event, intent)
       const beforeQuitResult = await runWithBeforeQuitTimeout(
         () => touchEventBus.emitAsync(TalexEvents.BEFORE_APP_QUIT, quitEvent),
         BEFORE_QUIT_TIMEOUT_MS,
@@ -318,6 +329,11 @@ app.on('before-quit', (event) => {
     .finally(() => {
       beforeQuitFlowPromise = null
     })
+})
+
+app.once('will-quit', (event) => {
+  const intent = getQuitIntent() ?? ensureUserNormalQuitIntent('electron-will-quit')
+  touchEventBus.emit(TalexEvents.WILL_QUIT, new AppQuitEvent(event, intent))
 })
 
 function getRootPath(): string {
