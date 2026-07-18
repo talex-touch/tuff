@@ -1,0 +1,148 @@
+name: Windows Everything Production Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-everything-production.yml"
+      - "apps/core-app/package.json"
+      - "apps/core-app/electron-builder.yml"
+      - "apps/core-app/scripts/build-target.js"
+      - "apps/core-app/scripts/build-target/**"
+      - "apps/core-app/scripts/everything-diagnostic-verify.ts"
+      - "apps/core-app/scripts/windows-acceptance-*.ts"
+      - "apps/core-app/src/main/modules/box-tool/addon/files/everything-*.ts"
+      - "apps/core-app/src/main/modules/platform/everything-*.ts"
+      - "apps/core-app/src/main/modules/platform/windows-acceptance-*.ts"
+      - "apps/core-app/src/renderer/src/components/settings/EverythingDiagnosticPanel.vue"
+      - "apps/core-app/src/renderer/src/views/base/settings/SettingEverything.vue"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "packages/tuff-native/**"
+      - "scripts/ci/*windows-everything.ps1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-everything-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-everything:
+    name: SDK, CLI, unavailable, and packaged native
+    runs-on: windows-2022
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install Python native-build dependencies
+        run: python -m pip install setuptools
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test native evidence and resource contracts
+        working-directory: packages/tuff-native
+        run: node --test scripts/everything-selfcheck.test.js everything-resources.test.js
+
+      - name: Rebuild native addon for Node.js
+        working-directory: packages/tuff-native
+        run: pnpm run rebuild
+
+      - name: Install verified Everything runtime
+        shell: pwsh
+        run: ./scripts/ci/setup-windows-everything.ps1
+
+      - name: Collect real SDK, CLI, and unavailable evidence
+        shell: pwsh
+        run: ./scripts/ci/collect-windows-everything-evidence.ps1 -SampleCount 200
+
+      - name: Run focused Everything production tests
+        working-directory: apps/core-app
+        run: >-
+          pnpm exec vitest run
+          scripts/build-target/after-pack.test.ts
+          scripts/build-target/runtime-modules.test.ts
+          src/main/modules/box-tool/addon/files/everything-provider.test.ts
+          src/main/modules/box-tool/search-engine/everything-indexed-source.test.ts
+          src/main/modules/platform/everything-diagnostic-verifier.test.ts
+          src/main/modules/platform/windows-acceptance-evidence-verifier.test.ts
+          src/main/modules/platform/windows-acceptance-manifest-verifier.test.ts
+          src/main/modules/platform/windows-acceptance-verify-script.test.ts
+          src/main/modules/platform/windows-capability-evidence.test.ts
+          src/renderer/src/views/base/settings/everything-diagnostic-evidence.test.ts
+          src/renderer/src/views/base/settings/setting-everything-state.test.ts
+
+      - name: Build unpacked Windows snapshot
+        env:
+          BUILD_PUBLISH: never
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: pnpm build:snapshot:win
+
+      - name: Record packaged native evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dist = Join-Path $PWD 'apps/core-app/dist'
+          $wrapper = Get-ChildItem -Path $dist -Filter 'everything.js' -Recurse |
+            Where-Object { $_.FullName -match 'node_modules[\\/]@talex-touch[\\/]tuff-native' } |
+            Select-Object -First 1
+          $resourceManifest = Get-ChildItem -Path $dist -Filter 'everything-resources.js' -Recurse |
+            Where-Object { $_.FullName -match 'node_modules[\\/]@talex-touch[\\/]tuff-native' } |
+            Select-Object -First 1
+          $native = Get-ChildItem -Path $dist -Filter 'tuff_native_everything.node' -Recurse |
+            Where-Object { $_.FullName -match 'node_modules[\\/]@talex-touch[\\/]tuff-native' } |
+            Select-Object -First 1
+          if (-not $wrapper) { throw 'Packaged Everything wrapper is missing.' }
+          if (-not $resourceManifest) { throw 'Packaged Everything resource manifest is missing.' }
+          if (-not $native) { throw 'Packaged Everything native addon is missing.' }
+          $evidenceDirectory = Join-Path $env:RUNNER_TEMP 'tuff-everything-evidence'
+          New-Item -ItemType Directory -Force -Path $evidenceDirectory | Out-Null
+          [ordered]@{
+            schema = 'windows-everything-packaged-native/v1'
+            ok = $true
+            wrapper = $wrapper.Name
+            resourceManifest = $resourceManifest.Name
+            native = $native.Name
+            nativeSize = $native.Length
+            nativeSha256 = (Get-FileHash -Path $native.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          } | ConvertTo-Json | Set-Content -Path (Join-Path $evidenceDirectory 'packaged-native.json') -Encoding UTF8
+
+      - name: Upload Windows Everything evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-everything-production-evidence
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+          path: |
+            ${{ runner.temp }}/tuff-everything-runtime/setup-evidence.json
+            ${{ runner.temp }}/tuff-everything-evidence/*.json
+
+      - name: Clean up Everything service
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          if ($env:TUFF_EVERYTHING_EXE -and (Test-Path $env:TUFF_EVERYTHING_EXE)) {
+            Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-exit' -Wait -ErrorAction SilentlyContinue
+            Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-uninstall-service' -Wait -ErrorAction SilentlyContinue
+          }
+          Write-Host 'Everything cleanup finished.'

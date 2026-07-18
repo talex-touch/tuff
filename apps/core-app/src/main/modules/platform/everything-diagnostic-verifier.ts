@@ -33,6 +33,7 @@ export interface EverythingDiagnosticEvidencePayload {
       configuredCliPath?: string | null
       installation?: EverythingStatusResponse['installation'] | null
       pathFiltering?: EverythingDiagnosticEvidenceStatus['pathFiltering']
+      performance?: EverythingStatusResponse['performance']
       errorCode: string | null
       lastBackendError: string | null
     }
@@ -44,11 +45,15 @@ export interface EverythingDiagnosticGateOptions {
   requireEnabled?: boolean
   requireAvailable?: boolean
   requireBackend?: EverythingStatusResponse['backend'][]
+  requireBackendAttemptErrors?: EverythingStatusResponse['backend'][]
   requireHealthy?: boolean
   requireVersion?: boolean
   requireEsPath?: boolean
   requireFallbackChain?: EverythingStatusResponse['backend'][]
   requireCaseIds?: string[]
+  requirePerformanceSamples?: number
+  maxP95Ms?: number
+  maxFallbackRatio?: number
 }
 
 export interface EverythingDiagnosticGate {
@@ -59,6 +64,18 @@ export interface EverythingDiagnosticGate {
 
 export interface EverythingDiagnosticVerifiedEvidence extends EverythingDiagnosticEvidencePayload {
   gate: EverythingDiagnosticGate
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0
+}
+
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function roundedRatio(numerator: number, denominator: number): number {
+  return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : 0
 }
 
 export function evaluateEverythingDiagnosticEvidence(
@@ -137,6 +154,65 @@ export function evaluateEverythingDiagnosticEvidence(
       rawCount - filteredCount !== droppedCount
     ) {
       failures.push('Everything path filtering result counts are inconsistent')
+    }
+  }
+
+  const performance = evidence.status.performance
+  if (performance) {
+    const countFields = [
+      ['sampleCount', performance.sampleCount],
+      ['durationSampleCount', performance.durationSampleCount],
+      ['successCount', performance.successCount],
+      ['timeoutCount', performance.timeoutCount],
+      ['errorCount', performance.errorCount],
+      ['abortedCount', performance.abortedCount],
+      ['sdkCount', performance.sdkCount],
+      ['cliCount', performance.cliCount],
+      ['fallbackCount', performance.fallbackCount]
+    ] as const
+    for (const [label, value] of countFields) {
+      if (!isNonNegativeInteger(value)) {
+        failures.push(`Everything performance ${label} is not a non-negative integer`)
+      }
+    }
+
+    if (
+      performance.successCount +
+        performance.timeoutCount +
+        performance.errorCount +
+        performance.abortedCount !==
+      performance.sampleCount
+    ) {
+      failures.push('Everything performance outcome counts do not match sampleCount')
+    }
+    if (performance.sdkCount + performance.cliCount !== performance.sampleCount) {
+      failures.push('Everything performance backend counts do not match sampleCount')
+    }
+    if (performance.durationSampleCount !== performance.sampleCount - performance.abortedCount) {
+      failures.push('Everything performance durationSampleCount excludes more than aborted samples')
+    }
+    if (performance.fallbackCount > performance.cliCount) {
+      failures.push('Everything performance fallbackCount exceeds cliCount')
+    }
+
+    const expectedFallbackRatio = roundedRatio(performance.fallbackCount, performance.sampleCount)
+    if (
+      !isNonNegativeFiniteNumber(performance.fallbackRatio) ||
+      performance.fallbackRatio > 1 ||
+      performance.fallbackRatio !== expectedFallbackRatio
+    ) {
+      failures.push('Everything performance fallbackRatio is inconsistent')
+    }
+
+    const durations = [performance.p50Ms, performance.p95Ms, performance.maxMs]
+    if (performance.durationSampleCount === 0) {
+      if (durations.some((value) => value !== null)) {
+        failures.push('Everything performance percentiles exist without duration samples')
+      }
+    } else if (durations.some((value) => !isNonNegativeFiniteNumber(value))) {
+      failures.push('Everything performance percentiles are missing or invalid')
+    } else if (performance.p50Ms! > performance.p95Ms! || performance.p95Ms! > performance.maxMs!) {
+      failures.push('Everything performance percentiles are not monotonic')
     }
   }
 
@@ -224,6 +300,13 @@ export function evaluateEverythingDiagnosticEvidence(
       )
     }
   }
+  if (
+    'performance' in suggested &&
+    JSON.stringify(suggested.performance ?? null) !==
+      JSON.stringify(evidence.status.performance ?? null)
+  ) {
+    failures.push('Everything suggested performance field does not match status')
+  }
   if ((suggested.errorCode ?? null) !== (evidence.status.errorCode ?? null)) {
     failures.push('Everything suggested errorCode field does not match status')
   }
@@ -268,6 +351,38 @@ export function evaluateEverythingDiagnosticEvidence(
     options.requireFallbackChain?.filter((backend) => !fallbackBackends.has(backend)) ?? []
   if (missingBackends.length > 0) {
     failures.push(`Everything fallback chain missing: ${missingBackends.join(', ')}`)
+  }
+
+  const missingBackendAttemptErrors =
+    options.requireBackendAttemptErrors?.filter(
+      (backend) => !evidence.status.backendAttemptErrors[backend]
+    ) ?? []
+  if (missingBackendAttemptErrors.length > 0) {
+    failures.push(
+      `Everything backend attempt errors missing: ${missingBackendAttemptErrors.join(', ')}`
+    )
+  }
+
+  if (isNonNegativeInteger(options.requirePerformanceSamples)) {
+    if (!performance || performance.sampleCount < options.requirePerformanceSamples) {
+      failures.push(
+        `Everything performance samples ${performance?.sampleCount ?? 0} < ${options.requirePerformanceSamples}`
+      )
+    }
+  }
+  if (isNonNegativeFiniteNumber(options.maxP95Ms)) {
+    if (!performance || performance.p95Ms === null || performance.p95Ms > options.maxP95Ms) {
+      failures.push(
+        `Everything performance p95 ${performance?.p95Ms ?? 'n/a'} > ${options.maxP95Ms}`
+      )
+    }
+  }
+  if (isNonNegativeFiniteNumber(options.maxFallbackRatio)) {
+    if (!performance || performance.fallbackRatio > options.maxFallbackRatio) {
+      failures.push(
+        `Everything fallback ratio ${performance?.fallbackRatio ?? 'n/a'} > ${options.maxFallbackRatio}`
+      )
+    }
   }
 
   const availableCaseIds = new Set(evidence.manualRegression.reusableCaseIds)

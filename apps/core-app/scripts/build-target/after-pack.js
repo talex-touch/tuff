@@ -215,6 +215,41 @@ function verifyPackagedOfficialPluginSeeds(context) {
   }
 }
 
+function verifyPackagedEverythingNative(context) {
+  if (context.electronPlatformName !== 'win32') {
+    return
+  }
+
+  const resourcesDir = findPackagedResourcesDir(context.appOutDir)
+  if (!resourcesDir) {
+    throw new Error('[afterPack] Unable to locate packaged Resources for Everything verification')
+  }
+
+  const nativePackageRoot = path.join(resourcesDir, 'node_modules', '@talex-touch', 'tuff-native')
+  const requiredPaths = [
+    path.join(nativePackageRoot, 'package.json'),
+    path.join(nativePackageRoot, 'everything.js'),
+    path.join(nativePackageRoot, 'everything-resources.js'),
+    path.join(nativePackageRoot, 'native-loader.js'),
+    path.join(nativePackageRoot, 'build', 'Release', 'tuff_native_everything.node')
+  ]
+  const missingPaths = requiredPaths.filter((entryPath) => !fs.existsSync(entryPath))
+  if (missingPaths.length > 0) {
+    throw new Error(
+      `[afterPack] Packaged Everything runtime is incomplete: ${missingPaths.join(', ')}`
+    )
+  }
+
+  console.log(
+    `[afterPack] Verified packaged Everything runtime: ${path.join(
+      nativePackageRoot,
+      'build',
+      'Release',
+      'tuff_native_everything.node'
+    )}`
+  )
+}
+
 module.exports = async function afterPack(context) {
   ensureMacMainAppLsuiElement(context)
   const targetArch = resolveTargetArchNames(context)[0]
@@ -227,6 +262,7 @@ module.exports = async function afterPack(context) {
     logPrefix: '[afterPack]',
     requiredModules
   })
+  verifyPackagedEverythingNative(context)
   verifyPackagedOfficialPluginSeeds(context)
   pruneCrossPlatformFfprobeBinaries(context)
 
@@ -253,3 +289,4 @@ module.exports = async function afterPack(context) {
 // Exposed for testing the prune logic in isolation.
 module.exports.pruneCrossPlatformFfprobeBinaries = pruneCrossPlatformFfprobeBinaries
 module.exports.verifyPackagedOfficialPluginSeeds = verifyPackagedOfficialPluginSeeds
+module.exports.verifyPackagedEverythingNative = verifyPackagedEverythingNative

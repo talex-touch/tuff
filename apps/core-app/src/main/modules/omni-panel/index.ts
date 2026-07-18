@@ -47,7 +47,7 @@ import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/to
 import { activeAppService } from '../system/active-app'
 import { selectionCaptureService } from '../system/selection-capture'
 import { TouchWindow } from '../../core/touch-window'
-import { getCoreBoxWindow } from '../box-tool/core-box/window'
+import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
 import { getCoreBoxRendererPath } from '../../utils/renderer-url'
 import { BaseModule } from '../abstract-base-module'
 import { shortcutModule } from '../global-shortcon'
@@ -846,6 +846,7 @@ export class OmniPanelModule extends BaseModule {
       return
     }
 
+    const clipboardImage = clipboard.readImage()
     const captureResult = normalizeSelectionCaptureResult(await this.captureSelectionText())
     const capturedAt = Date.now()
     const diagnostic = {
@@ -866,12 +867,11 @@ export class OmniPanelModule extends BaseModule {
         diagnostic
       }
     } else {
-      const image = clipboard.readImage()
-      if (!image.isEmpty()) {
+      if (!clipboardImage.isEmpty()) {
         input = {
           type: 'image',
           source: 'clipboard-image',
-          content: `data:image/png;base64,${image.toPNG().toString('base64')}`,
+          content: `data:image/png;base64,${clipboardImage.toPNG().toString('base64')}`,
           mimeType: 'image/png',
           capturedAt,
           available: true,
@@ -895,8 +895,8 @@ export class OmniPanelModule extends BaseModule {
 
     const request = createCoreBoxContextActionsOpenRequest(randomUUID(), input)
     this.hide()
-    await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.ui.show, undefined)
-    await this.transport.sendToWindow(
+    windowManager.show(true)
+    this.transport.broadcastToWindow(
       coreBoxWindow.window.id,
       CoreBoxEvents.contextActions.open,
       request
@@ -1311,9 +1311,9 @@ export class OmniPanelModule extends BaseModule {
     }
 
     try {
-      await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.ui.show, undefined)
+      windowManager.show(true)
       if (contextText.trim()) {
-        await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.input.setQuery, {
+        this.transport.broadcastToWindow(coreBoxWindow.window.id, CoreBoxEvents.input.setQuery, {
           value: contextText
         })
       }

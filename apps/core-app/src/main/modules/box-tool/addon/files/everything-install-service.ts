@@ -1,3 +1,4 @@
+import { resolveEverythingInstallArchitecture } from '@talex-touch/tuff-native/everything-resources'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
@@ -10,6 +11,8 @@ const PORTABLE_CONFIG_NAME = 'Everything.ini'
 export interface EverythingInstallPaths {
   downloadDir: string
   installDir: string
+  sdkDir: string
+  sdkDllPath: string
   cliDir: string
   cliPath: string
   everythingExe: string
@@ -57,10 +60,20 @@ export class EverythingInstallService {
       (this.env.USERPROFILE ? path.join(this.env.USERPROFILE, 'AppData', 'Local') : this.cwd())
     const root = path.join(localAppData, 'Tuff')
     const installDir = path.join(root, 'Everything')
+    const sdkDir = path.join(root, 'EverythingSDK')
     const cliDir = path.join(root, 'EverythingCLI')
+    const architecture = resolveEverythingInstallArchitecture(this.env)
+    const sdkDllName =
+      architecture === 'ARM64'
+        ? 'EverythingARM64.dll'
+        : architecture === 'x86'
+          ? 'Everything32.dll'
+          : 'Everything64.dll'
     return {
       downloadDir: path.join(root, 'Downloads', 'dependencies', 'everything'),
       installDir,
+      sdkDir,
+      sdkDllPath: path.join(sdkDir, 'dll', sdkDllName),
       cliDir,
       cliPath: path.join(cliDir, 'es.exe'),
       everythingExe: path.join(installDir, 'Everything.exe'),

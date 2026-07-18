@@ -9,6 +9,10 @@ import type {
   TuffSearchResult
 } from '@talex-touch/utils'
 import type { FileSearchContextCandidate } from '@talex-touch/utils/transport/events/types/core-box'
+import {
+  getEverythingInstallResources,
+  type EverythingInstallResource
+} from '@talex-touch/tuff-native/everything-resources'
 import type { ProviderContext } from '../../search-engine/types'
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -51,7 +55,11 @@ import { getMainConfig, saveMainConfig } from '../../../storage'
 import { downloadCenterModule } from '../../../download/download-center'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { searchLogger } from '../../search-engine/search-logger'
-import { EverythingDiagnosticsTracker, toEverythingResultSample } from './everything-diagnostics'
+import {
+  EverythingDiagnosticsTracker,
+  EverythingPerformanceTracker,
+  toEverythingResultSample
+} from './everything-diagnostics'
 import {
   EverythingSearchFallbackError,
   getErrorCode,
@@ -79,14 +87,8 @@ const EVERYTHING_CLI_EMPTY_DB_THRESHOLD = 1
 const EVERYTHING_INSTALL_POLL_MS = 500
 const EVERYTHING_INSTALL_SOURCE = 'everything-install'
 
-type EverythingInstallAssetType = 'everything' | 'cli'
-
-interface EverythingInstallAssetSpec {
-  type: EverythingInstallAssetType
-  filename: string
-  url: string
-  sha256: string
-}
+type EverythingInstallAssetType = EverythingInstallResource['type']
+type EverythingInstallAssetSpec = EverythingInstallResource
 
 interface EverythingInstallJobState extends EverythingInstallStatusResponse {
   promise?: Promise<void>
@@ -104,18 +106,6 @@ type DownloadCenterRuntime = {
     checksum?: string
   }) => Promise<string>
   getTaskStatus: (taskId: string) => DownloadTask | null
-}
-
-const EVERYTHING_INSTALL_HASHES: Record<string, string> = {
-  'Everything-1.4.1.1032.x64.zip':
-    '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c',
-  'Everything-1.4.1.1032.x86.zip':
-    '156db5beb747d69470518a7b9b55af11efc4d3285ddb7cc013c0cc13ced5f237',
-  'Everything-1.4.1.1032.ARM64.zip':
-    '23dca1a64574bf30c9988bbaf5f1d201a0ec7ee9a15e12270ae92a52183cccc8',
-  'ES-1.1.0.30.x64.zip': '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268',
-  'ES-1.1.0.30.x86.zip': '7e9f04cb92e9eb0440655a395537b204e98e3accd5335e610649d323b15f5117',
-  'ES-1.1.0.30.ARM64.zip': 'af5f02b29d6e91b7e70d3b6809bbfe931af671d981e060ecb4f015c30f9697b9'
 }
 
 const EVERYTHING_APP_CANDIDATES = [
@@ -144,42 +134,8 @@ function uniqueCandidates(candidates: Array<string | null | undefined>): string[
   return unique
 }
 
-function resolveWindowsNativeArch(): 'x64' | 'x86' | 'ARM64' {
-  const nativeArch = process.env.PROCESSOR_ARCHITEW6432 || process.env.PROCESSOR_ARCHITECTURE
-  if (nativeArch === 'ARM64') return 'ARM64'
-  if (nativeArch === 'x86') return 'x86'
-  return 'x64'
-}
-
 function buildEverythingInstallAssets(): EverythingInstallAssetSpec[] {
-  const arch = resolveWindowsNativeArch()
-  const everythingFilename =
-    arch === 'ARM64'
-      ? 'Everything-1.4.1.1032.ARM64.zip'
-      : arch === 'x86'
-        ? 'Everything-1.4.1.1032.x86.zip'
-        : 'Everything-1.4.1.1032.x64.zip'
-  const cliFilename =
-    arch === 'ARM64'
-      ? 'ES-1.1.0.30.ARM64.zip'
-      : arch === 'x86'
-        ? 'ES-1.1.0.30.x86.zip'
-        : 'ES-1.1.0.30.x64.zip'
-
-  return [
-    {
-      type: 'everything',
-      filename: everythingFilename,
-      url: `https://www.voidtools.com/${everythingFilename}`,
-      sha256: EVERYTHING_INSTALL_HASHES[everythingFilename]
-    },
-    {
-      type: 'cli',
-      filename: cliFilename,
-      url: `https://www.voidtools.com/${cliFilename}`,
-      sha256: EVERYTHING_INSTALL_HASHES[cliFilename]
-    }
-  ]
+  return getEverythingInstallResources()
 }
 
 const EVERYTHING_TEST_QUERY = '*.txt'
@@ -237,6 +193,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   private startupRefreshPromise: Promise<void> | null = null
   private portableIndexRepairAttempted = false
   private readonly diagnosticsTracker = new EverythingDiagnosticsTracker()
+  private readonly performanceTracker = new EverythingPerformanceTracker()
   private readonly iconCache = new EverythingIconCache()
   private installJob: EverythingInstallJobState | null = null
   private readonly backendService = new EverythingBackendService()
@@ -600,6 +557,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private configureManagedSdkDllPath(): void {
+    if (process.platform !== 'win32' || process.env.TALEX_EVERYTHING_DLL_PATH) return
+    process.env.TALEX_EVERYTHING_DLL_PATH = this.installService.resolvePaths().sdkDllPath
+  }
+
   async onLoad(context: ProviderContext): Promise<void> {
     if (process.platform !== 'win32') {
       this.registerChannels(context)
@@ -607,6 +569,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
+    this.configureManagedSdkDllPath()
     this.logInfo('Initializing Everything provider')
 
     await this.loadSettings(context)
@@ -699,6 +662,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       phase: 'queued',
       taskIds: {
         everything: null,
+        sdk: null,
         cli: null
       },
       progress: 0,
@@ -722,6 +686,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       phase: process.platform === 'win32' ? 'idle' : 'unsupported',
       taskIds: {
         everything: null,
+        sdk: null,
         cli: null
       },
       progress: null,
@@ -750,6 +715,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       phase: job.phase,
       taskIds: {
         everything: job.taskIds.everything ?? null,
+        sdk: job.taskIds.sdk ?? null,
         cli: job.taskIds.cli ?? null
       },
       progress: job.progress,
@@ -843,6 +809,7 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
 
     const taskIds: Record<EverythingInstallAssetType, string> = {
       everything: '',
+      sdk: '',
       cli: ''
     }
 
@@ -869,10 +836,11 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       phase: 'downloading',
       taskIds: {
         everything: taskIds.everything,
+        sdk: taskIds.sdk,
         cli: taskIds.cli
       },
       progress: 0,
-      message: 'Downloading Everything portable packages.'
+      message: 'Downloading Everything portable, SDK, and CLI packages.'
     })
 
     await this.waitForInstallDownloads(job, downloadCenter)
@@ -887,14 +855,22 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
     this.updateInstallJob(job, {
       phase: 'extracting',
       progress: 80,
-      message: 'Extracting Everything and es.exe.'
+      message: 'Extracting Everything, SDK DLL, and es.exe.'
     })
     await fs.mkdir(paths.installDir, { recursive: true })
     await fs.mkdir(paths.cliDir, { recursive: true })
+    await fs.mkdir(paths.sdkDir, { recursive: true })
     for (const asset of job.assets) {
-      const targetDir = asset.type === 'everything' ? paths.installDir : paths.cliDir
+      const targetDir =
+        asset.type === 'everything'
+          ? paths.installDir
+          : asset.type === 'sdk'
+            ? paths.sdkDir
+            : paths.cliDir
       await compressing.zip.uncompress(path.join(asset.destination, asset.filename), targetDir)
     }
+    await fs.access(paths.sdkDllPath)
+    process.env.TALEX_EVERYTHING_DLL_PATH = paths.sdkDllPath
 
     this.updateInstallJob(job, {
       phase: 'probing',
@@ -1123,7 +1099,8 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
       lastChecked: this.lastChecked,
       pathFiltering: this.pathFilteringStatus,
       installation: this.installationStatus,
-      diagnostics: this.diagnosticsTracker.snapshot()
+      diagnostics: this.diagnosticsTracker.snapshot(),
+      performance: this.performanceTracker.snapshot()
     }
   }
 
@@ -1480,22 +1457,59 @@ class EverythingProvider implements ISearchProvider<ProviderContext> {
   ): Promise<EverythingSearchResult[]> {
     throwIfAborted(signal)
 
+    const startedAt = performance.now()
+    const record = (
+      backend: 'sdk-napi' | 'cli',
+      outcome: 'success' | 'timeout' | 'error' | 'aborted',
+      fallback: boolean
+    ): void => {
+      this.performanceTracker.record({
+        backend,
+        outcome,
+        durationMs: performance.now() - startedAt,
+        fallback
+      })
+    }
+    const outcomeForError = (error: unknown): 'timeout' | 'error' =>
+      getErrorCode(error) === 'ETIMEDOUT' ? 'timeout' : 'error'
+
+    let fallbackFromSdk = false
     if (this.backend === 'sdk-napi') {
       try {
-        return await this.searchEverythingWithSdk(query, maxResults, signal)
+        const results = await this.searchEverythingWithSdk(query, maxResults, signal)
+        record('sdk-napi', 'success', false)
+        return results
       } catch (error) {
-        if (isAbortError(error) || isSearchFallbackError(error)) {
+        if (isAbortError(error)) {
+          record('sdk-napi', 'aborted', false)
+          throw error
+        }
+        if (isSearchFallbackError(error)) {
+          record('sdk-napi', outcomeForError(error), false)
           throw error
         }
         this.lastBackendError = getErrorMessage(error)
         this.lastBackendErrorCode = getErrorCode(error) ?? null
         this.logWarn('Everything SDK search failed, falling back to CLI', error)
-        await this.ensureCliFallback()
+        fallbackFromSdk = true
+        try {
+          await this.ensureCliFallback()
+        } catch (fallbackError) {
+          record('cli', outcomeForError(fallbackError), true)
+          throw fallbackError
+        }
       }
     }
 
     if (this.backend === 'cli') {
-      return await this.searchEverythingWithCli(query, maxResults, signal)
+      try {
+        const results = await this.searchEverythingWithCli(query, maxResults, signal)
+        record('cli', 'success', fallbackFromSdk)
+        return results
+      } catch (error) {
+        record('cli', isAbortError(error) ? 'aborted' : outcomeForError(error), fallbackFromSdk)
+        throw error
+      }
     }
 
     return []

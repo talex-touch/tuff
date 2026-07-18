@@ -43,7 +43,8 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
     // normalizeAsarUnpackedPath (asarUnpack already places working binaries there). A resources
     // copy just duplicated ~117MB. after-pack.js also prunes the unpacked copy to the build target.
     { name: 'langsmith', location: 'resources' },
-    { name: 'compressing', location: 'resources' }
+    { name: 'compressing', location: 'resources' },
+    { name: '@talex-touch/tuff-native', location: 'resources' }
   ],
   platform: {
     base: [

@@ -25,13 +25,13 @@
 
 ## Acceptance Criteria
 
-- [ ] 选中文本后显式触发 Context Actions，CoreBox 展示文本上下文及规定动作，执行后出现真实结果或明确失败原因。
-- [ ] 剪贴板含图片且无选中文本时显式触发，CoreBox 展示图片上下文以及 OCR、图片文字翻译、AI 解释动作。
-- [ ] Snippet、开发工具与翻译插件动作仍由现有插件适配器执行，不新增旁路。
-- [ ] AI/OCR/网页搜索动作分别通过 TuffIntelligence、系统 OCR 能力与外部 URL 策略执行。
-- [ ] 不可用 provider、缺失插件、选区捕获失败或空上下文均在 CoreBox 可见。
-- [ ] focused tests 覆盖输入归一化、动作匹配、显式读取边界、执行成功/失败与插件路由。
-- [ ] CoreApp node/web 类型检查、构建及可执行 UI smoke 通过。
+- [x] 选中文本后显式触发 Context Actions，CoreBox 展示文本上下文及规定动作，执行后出现真实结果或明确失败原因。
+- [x] 剪贴板含图片且无选中文本时显式触发，CoreBox 展示图片上下文以及 OCR、图片文字翻译、AI 解释动作。
+- [x] Snippet、开发工具与翻译插件动作仍由现有插件适配器执行，不新增旁路。
+- [x] AI/OCR/网页搜索动作分别通过 TuffIntelligence、系统 OCR 能力与外部 URL 策略执行。
+- [x] 不可用 provider、缺失插件、选区捕获失败或空上下文均在 CoreBox 可见。
+- [x] focused tests 覆盖输入归一化、动作匹配、显式读取边界、执行成功/失败与插件路由。
+- [x] CoreApp node/web 类型检查、构建及可执行 UI smoke 通过。
 
 ## Out of Scope
 

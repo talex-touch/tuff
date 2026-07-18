@@ -19,7 +19,8 @@
   "pr_url": null,
   "subtasks": [],
   "children": [
-    "07-13-fix-ranking-dead-features"
+    "07-13-fix-ranking-dead-features",
+    "07-17-windows-everything-productionization"
   ],
   "parent": null,
   "relatedFiles": [],

@@ -134,7 +134,7 @@ function resolveBuilderBin() {
   return binPath;
 }
 
-function verifyNativeOcrModule(strict) {
+function verifyNativeModules(strict, target) {
   const releaseDir = path.join(
     projectRoot,
     'node_modules',
@@ -143,30 +143,26 @@ function verifyNativeOcrModule(strict) {
     'build',
     'Release'
   );
-  const modulePath = path.join(releaseDir, 'tuff_native_ocr.node');
-  if (fs.existsSync(modulePath)) {
-    console.log(`✓ Native OCR module found: ${modulePath}`);
-    return;
+  const requiredModuleNames = ['tuff_native_ocr.node'];
+  if (target === 'win') {
+    requiredModuleNames.push('tuff_native_everything.node');
   }
 
-  let files = [];
-  if (fs.existsSync(releaseDir)) {
-    try {
-      files = fs.readdirSync(releaseDir).filter((name) => name.endsWith('.node'));
-    } catch (error) {
-      console.warn(`Warning: Failed to inspect native release directory: ${error.message}`);
+  const missingModuleNames = requiredModuleNames.filter(
+    (moduleName) => !fs.existsSync(path.join(releaseDir, moduleName))
+  );
+  if (missingModuleNames.length === 0) {
+    for (const moduleName of requiredModuleNames) {
+      console.log(`✓ Native module found: ${path.join(releaseDir, moduleName)}`);
     }
-  }
-
-  if (files.length > 0) {
-    console.log(`✓ Native OCR module found: ${path.join(releaseDir, files[0])}`);
     return;
   }
 
   const message =
-    `Native OCR module missing at ${releaseDir}. Please ensure @talex-touch/tuff-native was rebuilt for Electron target.`;
+    `Required native modules missing from ${releaseDir}: ${missingModuleNames.join(', ')}. ` +
+    'Please ensure @talex-touch/tuff-native was rebuilt for the Electron target.';
 
-  if (strict) {
+  if (strict || target === 'win') {
     throw new Error(message);
   }
 
@@ -612,7 +608,7 @@ function build() {
 
   if (skipInstallAppDeps) {
     console.log('Skipping electron-builder install-app-deps step (SKIP_INSTALL_APP_DEPS=true)\n');
-    verifyNativeOcrModule(process.env.CI === 'true');
+    verifyNativeModules(process.env.CI === 'true', normalizedTarget);
   } else {
     console.log('=== Rebuilding Electron native modules for packaged app ===');
     console.time('build-target:install-app-deps');
@@ -644,7 +640,7 @@ function build() {
       });
       console.log('✓ electron-builder install-app-deps completed\n');
       console.timeEnd('build-target:install-app-deps');
-      verifyNativeOcrModule(process.env.CI === 'true');
+      verifyNativeModules(process.env.CI === 'true', normalizedTarget);
     } catch (error) {
       console.timeEnd('build-target:install-app-deps');
       console.error('\n❌ electron-builder install-app-deps failed!');
