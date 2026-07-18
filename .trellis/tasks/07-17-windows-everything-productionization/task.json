@@ -12,19 +12,19 @@
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-17",
   "completedAt": null,
-  "branch": null,
-  "base_branch": "TalexDreamSoul/goaler",
+  "branch": "TalexDreamSoul/goaler",
+  "base_branch": "master",
   "worktree_path": null,
-  "commit": null,
-  "pr_url": null,
+  "commit": "9fd368ed36498220f877128e979958b2a9366ebd",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/287",
   "subtasks": [],
   "children": [],
   "parent": "07-13-search-crossplatform-audit",
   "relatedFiles": [],
-  "notes": "Implementation, integration, local production gates, diagnostics, canonical runtime resources, and hosted Windows CI/release gates are complete; first hosted run and packaged UI acceptance remain open.",
+  "notes": "Implementation, diagnostics, managed SDK resources, hosted Windows SDK/CLI/unavailable evidence, focused tests, and Windows package/native gates are complete; packaged CoreBox UI acceptance remains open.",
   "meta": {
-    "nextAction": "After review and commit/push, run Windows Everything Production Gate, inspect its SDK/CLI/unavailable/package artifacts, then capture normal/@file/structured-filter packaged UI evidence and run strict acceptance verification.",
-    "blocker": "GitHub Actions cannot execute the uncommitted workflow; a committed ref and successful windows-2022 run are required. The hosted backend collector does not replace packaged CoreBox UI evidence.",
-    "evidence": "9 native manifest/self-check tests and 161 focused Everything/Windows tests passed; CoreApp node/web typechecks and production build passed; lint:changed, PowerShell parser, actionlint, Trellis validation, and reviewer re-check passed. The configured hosted gate downloads the pinned SDK DLL, collects 200 SDK/CLI samples, enforces SDK P95/max, validates exact unavailable errors, packages Resources wrapper/manifest/native fail-closed, and uploads redacted artifacts; Windows artifacts are not yet produced."
+    "nextAction": "On an interactive Windows packaged app, capture normal/@file/structured-filter CoreBox result/empty/degraded evidence, attach it to the Windows acceptance manifest, and run strict manifest verification.",
+    "blocker": "The hosted backend/package gate does not exercise interactive packaged CoreBox search modes; no automated packaged UI probe currently produces the required screenshots and acceptance manifest fields.",
+    "evidence": "GitHub Actions run 29628880312 passed all steps. Artifact windows-everything-production-evidence contains SDK 1.4.1.1032 with 200/200 non-empty samples and P50/P95/max 2/3/4ms; CLI 1.1.0.30 with 200/200 non-empty samples and P50/P95/max 8/9/26ms; exact unavailable state SDK error 2 and CLI exit 8; packaged everything.js, everything-resources.js, and 185856-byte tuff_native_everything.node SHA-256 3fe24155107a74ed61521f4c943f23050ea17c9fc17873ea144fe0791a576d83. Local verification also passed 9 native tests, 161 focused tests, node/web typechecks, production build, lint, PowerShell parser, actionlint, Trellis validation, and reviewer re-check."
   }
 }
