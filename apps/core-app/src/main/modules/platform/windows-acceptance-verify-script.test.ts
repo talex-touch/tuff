@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -15,7 +16,7 @@ import {
 } from './windows-acceptance-manifest-verifier'
 
 const execFileAsync = promisify(execFile)
-const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const tsxCliPath = createRequire(import.meta.url).resolve('tsx/cli')
 
 async function writeAcceptanceFixture(manualEvidence: string): Promise<string> {
   const fixtureDir = await mkdtemp(path.join(tmpdir(), 'windows-acceptance-verify-'))
@@ -73,10 +74,9 @@ async function runAcceptanceVerify(manifestPath: string): Promise<{
 }> {
   try {
     const { stdout, stderr } = await execFileAsync(
-      pnpmExecutable,
+      process.execPath,
       [
-        'exec',
-        'tsx',
+        tsxCliPath,
         'scripts/windows-acceptance-verify.ts',
         '--input',
         manifestPath,
@@ -108,10 +108,9 @@ async function writeTemplateFixture(): Promise<string> {
   const manifestPath = path.join(fixtureDir, 'windows-acceptance.json')
 
   await execFileAsync(
-    'pnpm',
+    process.execPath,
     [
-      'exec',
-      'tsx',
+      tsxCliPath,
       'scripts/windows-acceptance-template.ts',
       '--output',
       manifestPath,
@@ -137,10 +136,9 @@ async function writeTemplateFixtureWithCollectionPlan(): Promise<{
   const manifestPath = path.join(fixtureDir, 'windows-acceptance.json')
 
   await execFileAsync(
-    'pnpm',
+    process.execPath,
     [
-      'exec',
-      'tsx',
+      tsxCliPath,
       'scripts/windows-acceptance-template.ts',
       '--output',
       manifestPath,
