@@ -15,6 +15,9 @@ async function withPluginFixture(fn: (root: string) => Promise<void>) {
       id: 'com.tuffex.demo',
       name: 'demo-plugin',
       version: '1.0.0',
+      sdkapi: 260428,
+      category: 'utilities',
+      permissions: { required: [], optional: [] },
       description: 'Demo plugin',
       icon: { type: 'emoji', value: 'D' },
       features: [

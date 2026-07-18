@@ -9,7 +9,8 @@ import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
 import { deleteImage, uploadImageFromBuffer } from './imageStorage'
 import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
-import { extractTpexMetadata } from './tpex'
+import type { TpexExtractedMetadata } from './tpex'
+import { extractTpexMetadata, getTpexAdmissionFailure } from './tpex'
 import {
   completeUploadGovernance,
   failUploadGovernance,
@@ -50,6 +51,8 @@ function classifyPluginPackageUploadFailure(error: unknown): string {
 
   if (statusCode === 429)
     return 'storage-policy-blocked'
+  if (normalized.includes('plugin_package_'))
+    return 'plugin-package-policy-rejected'
   if (normalized.includes('integrity'))
     return 'plugin-package-integrity-invalid'
   if (normalized.includes('icon'))
@@ -59,6 +62,15 @@ function classifyPluginPackageUploadFailure(error: unknown): string {
   if (normalized.includes('package type') || normalized.includes('.tpex'))
     return 'plugin-package-type-invalid'
   return 'plugin-package-upload-failed'
+}
+
+function assertTpexAdmission(metadata: TpexExtractedMetadata): void {
+  const failure = getTpexAdmissionFailure(metadata)
+  if (!failure) return
+  throw createError({
+    statusCode: 400,
+    statusMessage: `${failure.code}: ${failure.reason}`,
+  })
 }
 
 // region debug [DBG-nexus-coreapp-planprd-2026-01-12]
@@ -2168,13 +2180,11 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       const packageBuffer = Buffer.from(packageArrayBuffer)
       const signature = await sha256Hex(packageBuffer)
 
-      const metadata = await extractTpexMetadata(packageBuffer)
-      if (!metadata.integrity.valid) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
-        })
-      }
+      const metadata = await extractTpexMetadata(packageBuffer, {
+        pluginId: plugin.slug,
+        version: input.version,
+      })
+      assertTpexAdmission(metadata)
 
       let iconKey = plugin.iconKey ?? null
       let iconUrl = plugin.iconUrl ?? null
@@ -2480,13 +2490,11 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
       const packageArrayBuffer = await input.packageFile.arrayBuffer()
       const packageBuffer = Buffer.from(packageArrayBuffer)
       const signature = await sha256Hex(packageBuffer)
-      const metadata = await extractTpexMetadata(packageBuffer)
-      if (!metadata.integrity.valid) {
-        throw createError({
-          statusCode: 400,
-          statusMessage: `Plugin package integrity verification failed: ${metadata.integrity.reason ?? 'unknown error'}`,
-        })
-      }
+      const metadata = await extractTpexMetadata(packageBuffer, {
+        pluginId: plugin.slug,
+        version: targetVersion.version,
+      })
+      assertTpexAdmission(metadata)
 
       let iconKey = targetVersion.iconKey ?? plugin.iconKey ?? null
       let iconUrl = targetVersion.iconUrl ?? plugin.iconUrl ?? null

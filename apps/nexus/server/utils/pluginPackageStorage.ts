@@ -1,6 +1,7 @@
 import type { R2Bucket } from '@cloudflare/workers-types'
 import type { H3Event } from 'h3'
 import type { Buffer } from 'node:buffer'
+import { PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES } from '@talex-touch/utils/plugin'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import { readCloudflareBindings } from './cloudflare'
@@ -12,7 +13,6 @@ import {
   type StorageObjectMemory,
 } from './storageObjectStore'
 
-const MAX_PACKAGE_SIZE = 30 * 1024 * 1024 // 30MB
 const DEFAULT_CONTENT_TYPE = 'application/octet-stream'
 
 const memoryStorage: StorageObjectMemory = new Map()
@@ -56,7 +56,7 @@ function ensureTpexFile(file: File) {
     })
   }
 
-  if (file.size > MAX_PACKAGE_SIZE) {
+  if (file.size > PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Package size exceeds 30MB limit.',

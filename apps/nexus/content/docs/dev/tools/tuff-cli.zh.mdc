@@ -231,5 +231,6 @@ code: |
 
 CLI 将自动：
 - 扫描 `dist/build`（及 `dist`）中的 `.tpex`
-- 校验 manifest/package 版本一致
-- 上传最新 `.tpex` 到发布 API
+- 通过共享 Package Policy 校验源码 Manifest、最终 staging 清单、manifest/package 身份与最终归档大小
+- 在上传前拒绝危险路径/条目类型、过期文件清单、未关闭的打包态 dev mode 和 Nexus 身份/版本不一致
+- 上传最新且满足 admission 条件的 `.tpex` 到发布 API
