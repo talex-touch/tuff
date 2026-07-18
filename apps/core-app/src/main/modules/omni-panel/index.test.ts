@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const {
   getTuffTransportMainMock,
   getCoreBoxWindowMock,
+  coreBoxWindowManagerShowMock,
   loggerWarnMock,
   touchWindowInstances,
   accessibilityClientMock,
@@ -19,6 +20,7 @@ const {
     sendToWindow: vi.fn()
   })),
   getCoreBoxWindowMock: vi.fn(() => null),
+  coreBoxWindowManagerShowMock: vi.fn(),
   loggerWarnMock: vi.fn(),
   touchWindowInstances: [] as Array<{
     window: {
@@ -206,7 +208,8 @@ vi.mock('../storage', () => ({
 }))
 
 vi.mock('../box-tool/core-box/window', () => ({
-  getCoreBoxWindow: getCoreBoxWindowMock
+  getCoreBoxWindow: getCoreBoxWindowMock,
+  windowManager: { show: coreBoxWindowManagerShowMock }
 }))
 
 vi.mock('../../core/eventbus/touch-event', async (importOriginal) => {
@@ -894,10 +897,10 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     } as never)
 
     const transport = {
-      sendToWindow: vi.fn(
-        async (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) =>
-          undefined
-      )
+      broadcastToWindow:
+        vi.fn<
+          (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) => void
+        >()
     }
     const module = new OmniPanelModule() as unknown as {
       transport: typeof transport
@@ -916,8 +919,10 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     module.hide = vi.fn()
 
     await module.openCoreBoxContextActions('shortcut')
+    expect(coreBoxWindowManagerShowMock).toHaveBeenCalledWith(true)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
 
-    const contextCall = transport.sendToWindow.mock.calls.find(
+    const contextCall = transport.broadcastToWindow.mock.calls.find(
       ([, event]) =>
         typeof (event as { toEventName?: () => string }).toEventName === 'function' &&
         (event as { toEventName: () => string }).toEventName().includes('context-actions')
@@ -936,7 +941,7 @@ describe('OmniPanel shortcut and input-hook guards', () => {
         available: true
       }
     })
-    expect(clipboard.readImage).not.toHaveBeenCalled()
+    expect(clipboard.readImage).toHaveBeenCalledTimes(1)
   })
 
   it('forwards clipboard image context when no selected text is captured', async () => {
@@ -950,10 +955,10 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     } as never)
 
     const transport = {
-      sendToWindow: vi.fn(
-        async (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) =>
-          undefined
-      )
+      broadcastToWindow:
+        vi.fn<
+          (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) => void
+        >()
     }
     const module = new OmniPanelModule() as unknown as {
       transport: typeof transport
@@ -976,8 +981,10 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     module.hide = vi.fn()
 
     await module.openCoreBoxContextActions('shortcut')
+    expect(coreBoxWindowManagerShowMock).toHaveBeenCalledWith(true)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
 
-    const contextCall = transport.sendToWindow.mock.calls.find(
+    const contextCall = transport.broadcastToWindow.mock.calls.find(
       ([, event]) =>
         typeof (event as { toEventName?: () => string }).toEventName === 'function' &&
         (event as { toEventName: () => string }).toEventName().includes('context-actions')
@@ -995,6 +1002,65 @@ describe('OmniPanel shortcut and input-hook guards', () => {
         inputType: 'image',
         source: 'clipboard-image',
         available: true
+      }
+    })
+  })
+  it('preserves the image snapshot when selection capture clears the clipboard', async () => {
+    const { clipboard } = await import('electron')
+    vi.mocked(clipboard.readImage)
+      .mockReturnValueOnce({
+        isEmpty: () => false,
+        toPNG: () => Buffer.from('snapshot-image')
+      } as never)
+      .mockReturnValueOnce({
+        isEmpty: () => true,
+        toPNG: () => Buffer.from('')
+      } as never)
+    getCoreBoxWindowMock.mockReturnValueOnce({
+      window: { id: 77, isDestroyed: () => false }
+    } as never)
+
+    const transport = {
+      broadcastToWindow:
+        vi.fn<
+          (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) => void
+        >()
+    }
+    const module = new OmniPanelModule() as unknown as {
+      transport: typeof transport
+      captureSelectionText: () => Promise<{
+        text: string
+        supportLevel: 'best_effort'
+        issueCode: 'empty'
+        issueMessage: string
+      }>
+      hide: () => void
+      openCoreBoxContextActions: (source: 'shortcut') => Promise<void>
+    }
+    module.transport = transport
+    module.captureSelectionText = vi.fn(async () => {
+      expect(clipboard.readImage().isEmpty()).toBe(true)
+      return {
+        text: '',
+        supportLevel: 'best_effort' as const,
+        issueCode: 'empty' as const,
+        issueMessage: 'No selected text'
+      }
+    })
+    module.hide = vi.fn()
+
+    await module.openCoreBoxContextActions('shortcut')
+
+    const contextCall = transport.broadcastToWindow.mock.calls.find(
+      ([, event]) =>
+        typeof (event as { toEventName?: () => string }).toEventName === 'function' &&
+        (event as { toEventName: () => string }).toEventName().includes('context-actions')
+    )
+    expect(contextCall?.[2]).toMatchObject({
+      input: {
+        type: 'image',
+        source: 'clipboard-image',
+        content: 'data:image/png;base64,c25hcHNob3QtaW1hZ2U='
       }
     })
   })
