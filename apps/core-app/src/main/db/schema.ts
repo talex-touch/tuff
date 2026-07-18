@@ -1140,6 +1140,45 @@ export const appUpdateRecords = sqliteTable(
   })
 )
 
+export const appUpdateAttempts = sqliteTable(
+  'app_update_attempts',
+  {
+    id: text('id').primaryKey(),
+    revision: integer('revision').notNull().default(0),
+    phase: text('phase').notNull(),
+    currentVersion: text('current_version').notNull(),
+    targetVersion: text('target_version'),
+    source: text('source'),
+    channel: text('channel').notNull(),
+    releaseTag: text('release_tag'),
+    downloadTaskId: text('download_task_id'),
+    installMode: text('install_mode'),
+    installOnNormalQuit: integer('install_on_normal_quit', { mode: 'boolean' })
+      .notNull()
+      .default(true),
+    rollbackCompatible: integer('rollback_compatible', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    rollbackFromVersion: text('rollback_from_version'),
+    previousVersion: text('previous_version'),
+    recoveryAvailable: integer('recovery_available', { mode: 'boolean' }).notNull().default(false),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    errorRetryable: integer('error_retryable', { mode: 'boolean' }),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+    terminalAt: integer('terminal_at')
+  },
+  (table) => ({
+    phaseUpdatedIdx: index('idx_app_update_attempts_phase_updated').on(
+      table.phase,
+      table.updatedAt
+    ),
+    releaseTagIdx: index('idx_app_update_attempts_release_tag').on(table.releaseTag),
+    downloadTaskIdx: index('idx_app_update_attempts_download_task').on(table.downloadTaskId)
+  })
+)
+
 // =============================================================================
 // 14. System Updates & Hot Data
 // =============================================================================
@@ -1155,6 +1194,25 @@ export const systemUpdateState = sqliteTable('system_update_state', {
 export const systemConfig = sqliteTable('system_config', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
+  updatedAt: integer('updated_at').notNull().default(0)
+})
+
+export const appConfigEntries = sqliteTable('app_config_entries', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  revision: integer('revision').notNull().default(0),
+  deleted: integer('deleted', { mode: 'boolean' }).notNull().default(false),
+  updatedAt: integer('updated_at').notNull().default(0)
+})
+
+export const appConfigMigrationState = sqliteTable('app_config_migration_state', {
+  id: text('id').primaryKey(),
+  phase: text('phase', { enum: ['pending', 'completed', 'failed'] }).notNull(),
+  backupPath: text('backup_path'),
+  importedCount: integer('imported_count').notNull().default(0),
+  skippedCount: integer('skipped_count').notNull().default(0),
+  failedCount: integer('failed_count').notNull().default(0),
+  completedAt: integer('completed_at'),
   updatedAt: integer('updated_at').notNull().default(0)
 })
 
