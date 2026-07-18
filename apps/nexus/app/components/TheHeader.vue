@@ -188,7 +188,7 @@ onUnmounted(() => {
   overflow: hidden;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  animation: tuff-header-quick-reveal 350ms cubic-bezier(0.7, 0, 1, 1) backwards;
+  animation: tuff-header-quick-reveal 280ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 .TuffHeader-Main {
@@ -235,7 +235,7 @@ nav :deep(a) {
 @keyframes tuff-header-quick-reveal {
   from {
     opacity: 0;
-    filter: blur(8px);
+    filter: blur(4px);
     transform: translateY(-6px);
   }
 
