@@ -2,8 +2,8 @@
   "id": "lp-03-context-actions",
   "name": "lp-03-context-actions",
   "title": "LP-03 Super Panel-lite Context Actions",
-  "description": "Planning slice for explicit user-triggered text/image Context Actions routed through existing CoreBox, plugin, intelligence, OCR, and browser contracts.",
-  "status": "planning",
+  "description": "Explicit user-triggered text/image Context Actions routed through existing CoreBox, plugin, intelligence, OCR, and browser contracts.",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-14",
-  "completedAt": null,
+  "completedAt": "2026-07-17",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
@@ -21,10 +21,10 @@
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "No implementation acceptance item is complete; the task is intentionally returned to planning and does not declare global priority.",
+  "notes": "All PRD acceptance criteria are complete; no global priority is declared by this task.",
   "meta": {
-    "nextAction": "Resume requirements/design review only after TODO.md releases the product-feature pause.",
-    "blocker": "Paused by the stability-first order in docs/plan-prd/TODO.md.",
-    "evidence": "prd.md acceptance checklist; runtime/UI evidence is not yet produced."
+    "nextAction": "Archive after user review.",
+    "blocker": "None.",
+    "evidence": "Shared 3 tests and CoreApp 47 focused tests passed; node/web typecheck and build passed; macOS executable UI smoke verified selected-text, clipboard-image, and explicit unavailable states."
   }
 }
