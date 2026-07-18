@@ -561,6 +561,7 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  min-height: 2.25rem;
   border: 1px solid color-mix(in srgb, var(--tx-border-color, #dcdfe6) 72%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, #fff 84%, transparent);
@@ -570,8 +571,12 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1;
-  padding: 0.45rem 0.75rem;
-  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+  padding: 0.55rem 0.85rem;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.docs-mobile-action:active {
+  transform: translateY(1px);
 }
 
 .docs-mobile-action:hover {
