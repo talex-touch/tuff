@@ -66,7 +66,7 @@ function Get-PerformanceSummary {
 
 $sdkReady = $false
 for ($attempt = 1; $attempt -le 120; $attempt += 1) {
-  & node $selfCheckScript --query $env:TUFF_EVERYTHING_MARKER --max 20 --samples 1 --require-results --output $sdkReadyPath | Out-Host
+  & node $selfCheckScript --query $env:TUFF_EVERYTHING_MARKER --max 20 --samples 1 --require-results --output $sdkReadyPath | Out-Null
   if ($LASTEXITCODE -eq 0) {
     $readyEvidence = Get-Content -Path $sdkReadyPath -Raw | ConvertFrom-Json
     if ($readyEvidence.ok -eq $true -and $readyEvidence.resultCount -gt 0 -and $readyEvidence.version) {
@@ -144,18 +144,9 @@ if (Get-Process -Id $clientPid -ErrorAction SilentlyContinue) {
   throw "Everything client process $clientPid did not stop."
 }
 
-$serviceUninstall = Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-uninstall-service' -Wait -PassThru
-if ($serviceUninstall.ExitCode -ne 0) {
-  throw "Everything service removal failed with exit code $($serviceUninstall.ExitCode)."
-}
-$everythingService = $null
-for ($attempt = 1; $attempt -le 15; $attempt += 1) {
-  $everythingService = Get-Service -Name 'Everything' -ErrorAction SilentlyContinue
-  if (-not $everythingService -or $everythingService.Status -eq 'Stopped') { break }
-  Start-Sleep -Seconds 1
-}
+$everythingService = Get-Service -Name 'Everything' -ErrorAction SilentlyContinue
 if ($everythingService -and $everythingService.Status -ne 'Stopped') {
-  throw "Everything service remained $($everythingService.Status) after removal."
+  throw "Everything service unexpectedly remained $($everythingService.Status)."
 }
 
 & node $selfCheckScript --query $env:TUFF_EVERYTHING_MARKER --max 1 --samples 1 --require-results --output $unavailableSdkPath | Out-Host

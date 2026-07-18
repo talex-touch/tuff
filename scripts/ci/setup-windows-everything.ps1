@@ -59,18 +59,46 @@ Unblock-File -LiteralPath $everythingSdkDll
 $markerName = 'tuff-everything-ci-marker.txt'
 Set-Content -Path (Join-Path $FixtureDirectory $markerName) -Value 'Tuff Everything Windows production gate fixture.' -Encoding UTF8
 
-$serviceInstall = Start-Process -FilePath $everythingExe -ArgumentList '-install-service' -Wait -PassThru
-if ($serviceInstall.ExitCode -ne 0) {
-  throw "Everything service installation failed with exit code $($serviceInstall.ExitCode)."
-}
+$configPath = Join-Path (Split-Path -Parent $everythingExe) 'Everything.ini'
+@(
+  '[Everything]',
+  'app_data=0',
+  'run_as_admin=0',
+  'allow_multiple_instances=0',
+  'run_in_background=1',
+  'show_tray_icon=0',
+  'check_for_updates_on_startup=0',
+  'ipc=1',
+  'auto_include_fixed_volumes=0',
+  'auto_include_removable_volumes=0',
+  'auto_include_fixed_refs_volumes=0',
+  'auto_include_removable_refs_volumes=0',
+  "folders=$FixtureDirectory",
+  'folder_monitor_changes=1',
+  'folder_buffer_size_list=65536',
+  'folder_rescan_if_full_list=1',
+  'folder_update_types=0',
+  'folder_update_days=0',
+  'folder_update_ats=0',
+  'folder_update_intervals=0',
+  'folder_update_interval_types=0',
+  'index_size=1',
+  'index_date_modified=1',
+  'index_date_created=1',
+  'fast_path_sort=1',
+  ''
+) | Set-Content -Path $configPath -Encoding UTF8
 
 $everythingProcess = Start-Process -FilePath $everythingExe -ArgumentList @(
-  '-startup',
-  '-noapp-data',
-  '-disable-run-as-admin',
-  '-disable-update-notification',
-  '-nonewwindow'
+  '-config',
+  $configPath,
+  '-startup'
 ) -PassThru
+Start-Sleep -Seconds 2
+$everythingProcess.Refresh()
+if ($everythingProcess.HasExited) {
+  throw "Everything portable client exited during startup with code $($everythingProcess.ExitCode)."
+}
 
 @(
   "TUFF_EVERYTHING_EXE=$everythingExe",
