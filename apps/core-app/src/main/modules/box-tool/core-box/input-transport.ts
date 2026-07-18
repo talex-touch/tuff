@@ -1,7 +1,8 @@
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { createLogger } from '../../../utils/logger'
-import { coreBoxTransport } from './transport/core-box-transport'
 import { coreBoxInputForwarding } from './input-forwarding'
+import { coreBoxTransport } from './transport/core-box-transport'
 
 const coreBoxInputLog = createLogger('CoreBox').child('InputTransport')
 
@@ -18,7 +19,7 @@ class CoreBoxInputTransport {
   public register(): void {
     coreBoxTransport.register<CoreBoxInputChangeRequest>(
       'main',
-      'core-box:input-change',
+      CoreBoxEvents.input.change.toEventName(),
       (data) => {
         this.handleRendererInput(data)
       }

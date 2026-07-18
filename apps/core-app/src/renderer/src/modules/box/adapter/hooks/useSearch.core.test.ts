@@ -1,13 +1,11 @@
+import type { TuffItem, TuffSearchResult } from '@talex-touch/utils'
+import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IClipboardItem, IClipboardOptions } from './types'
-import {
-  TuffInputType,
-  createCoreBoxContextActionsOpenRequest,
-  type TuffItem,
-  type TuffSearchResult
-} from '@talex-touch/utils'
+import { createCoreBoxContextActionsOpenRequest, TuffInputType } from '@talex-touch/utils'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref, type Ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { BoxMode } from '..'
 import { useSearch } from './useSearch'
 
@@ -728,7 +726,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     await hook.handleExecute(featureItem)
     await flushPromises()
 
-    state.listeners.get('core-box:search:end')?.({
+    state.listeners.get(CoreBoxEvents.search.end.toEventName())?.({
       searchId: 'session-1',
       activate: [{ id: 'plugin-features', meta: { pluginName: 'touch-intelligence' } }],
       sources: []
