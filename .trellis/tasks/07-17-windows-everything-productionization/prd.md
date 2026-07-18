@@ -51,15 +51,19 @@ Close SDK/CLI strategy, packaged native availability, diagnostics, Windows accep
       behavior, explicit degraded reasons, path/noise filtering, and CLI recovery.
 - [x] Diagnostic evidence contains internally consistent performance samples,
       P50/P95, timeout/error counts, and fallback ratio without query/path content.
-- [ ] Windows SDK, CLI fallback, and unavailable evidence each pass the strict
-      verifier for their declared expected state.
-- [ ] A Windows package self-check queries through the SDK backend and records
-      the Everything version; normal, `@file`, and structured-filter searches have
-      real result/empty/degraded evidence rather than mock output.
-- [ ] P50/P95 and fallback-ratio evidence is collected from at least 200 Windows
-      search samples and is accepted by the Windows acceptance manifest.
-- [ ] CoreApp node/web typechecks, focused tests, Windows package build, and
-      strict Windows acceptance verification pass.
+- [x] Windows SDK, CLI fallback, and unavailable evidence each pass the strict
+      production collector for their declared expected state.
+- [x] A packaged Windows self-check queries through the SDK backend, returns a
+      real result, and records Everything `1.4.1.1032`.
+- [ ] Normal, `@file`, and structured-filter CoreBox searches have packaged UI
+      result/empty/degraded evidence rather than mock output.
+- [x] P50/P95 and fallback evidence is collected from 200 Windows SDK samples
+      and 200 Windows CLI samples without query/path content.
+- [ ] The real backend evidence is attached to a completed Windows acceptance
+      manifest and passes strict manifest verification.
+- [x] CoreApp node/web typechecks, focused tests, and Windows snapshot package
+      build pass.
+- [ ] Strict packaged CoreBox Windows acceptance verification passes.
 
 ## Out of Scope
 
@@ -77,6 +81,9 @@ Close SDK/CLI strategy, packaged native availability, diagnostics, Windows accep
 - The gate reads the canonical version/checksum manifest, requires 200 SDK and
   CLI samples, enforces SDK P95/max thresholds, builds the Windows snapshot,
   and uploads redacted evidence plus packaged-native proof.
-- The workflow has not run from this uncommitted workspace. Acceptance items
-  requiring Windows artifacts remain open until a committed ref completes the
-  hosted gate and its evidence is reviewed.
+- Hosted run `29628880312` passed all SDK/CLI/unavailable, focused-test,
+  Windows package, packaged-native, artifact-upload, and cleanup steps.
+- Artifact `windows-everything-production-evidence` records SDK P50/P95 `2/3ms`,
+  CLI P50/P95 `8/9ms`, exact unavailable errors (SDK backend `2`, CLI `8`),
+  and packaged wrapper/resource-manifest/native proof. Packaged CoreBox UI
+  evidence remains open.
