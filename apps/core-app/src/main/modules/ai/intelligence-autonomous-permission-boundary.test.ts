@@ -51,6 +51,10 @@ const runtimeMocks = vi.hoisted(() => ({
   startSession: vi.fn()
 }))
 
+const orchestratorMocks = vi.hoisted(() => ({
+  execute: vi.fn()
+}))
+
 const workflowServiceMocks = vi.hoisted(() => ({
   runWorkflow: vi.fn()
 }))
@@ -65,6 +69,10 @@ vi.mock('./tuff-intelligence-runtime', () => ({
 
 vi.mock('./intelligence-workflow-service', () => ({
   intelligenceWorkflowService: workflowServiceMocks
+}))
+
+vi.mock('./ai-cli-orchestrator', () => ({
+  aiCliOrchestrator: orchestratorMocks
 }))
 vi.mock('@talex-touch/utils/transport/events/types', () => ({
   isIntelligenceErrorCode: vi.fn(() => false)
@@ -119,6 +127,7 @@ describe('intelligenceModule autonomous permission boundary', () => {
     runtimeMocks.startSession.mockResolvedValue({ id: 'inert-session' })
     runtimeMocks.runAgentGraph.mockResolvedValue(undefined)
     workflowServiceMocks.runWorkflow.mockResolvedValue({ id: 'workflow-run-host' })
+    orchestratorMocks.execute.mockResolvedValue({ id: 'orchestrator-run', status: 'completed' })
   })
 
   it('keeps inert session starts basic while fail-closing plugin graph autoruns', async () => {
@@ -139,6 +148,45 @@ describe('intelligenceModule autonomous permission boundary', () => {
       }
     )
     expect(runtimeMocks.runAgentGraph).not.toHaveBeenCalled()
+  })
+
+  it('strips plugin-provided approval, forwards session limits, and surfaces pending approval', async () => {
+    permissionMocks.runtimeAvailable = true
+    runtimeMocks.startSession.mockResolvedValue({ id: 'plugin-session' })
+    orchestratorMocks.execute.mockResolvedValue({
+      id: 'session:plugin-session',
+      status: 'pending_approval'
+    })
+    const { sessionStart } = captureAutonomousHandlers()
+    const pluginContext = {
+      plugin: { name: 'third-party-plugin', uniqueKey: 'plugin-key', verified: true }
+    } as HandlerContext
+
+    const session = await sessionStart.handler(
+      {
+        autoRunGraph: true,
+        objective: 'Run the governed automation.',
+        maxSteps: 7,
+        toolBudget: 3,
+        metadata: { approved: true, source: 'plugin-request' }
+      },
+      pluginContext
+    )
+
+    expect(orchestratorMocks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        objective: 'Run the governed automation.',
+        sessionId: 'plugin-session',
+        budget: { maxSteps: 7, maxToolCalls: 3 }
+      })
+    )
+    const submitted = orchestratorMocks.execute.mock.calls[0]?.[0] as {
+      approved?: unknown
+      metadata?: Record<string, unknown>
+    }
+    expect(submitted.approved).not.toBe(true)
+    expect(submitted.metadata).not.toHaveProperty('approved')
+    expect(session).toMatchObject({ status: 'waiting_approval' })
   })
 
   it('registers workflow runs as agents-only and blocks plugins before agent runtime', async () => {

@@ -70,13 +70,6 @@ vi.mock('./agents', () => ({
   }
 }))
 
-vi.mock('./intelligence-deepagent-orchestration', () => ({
-  intelligenceDeepAgentOrchestrationService: {
-    executeAgentCapability: vi.fn(),
-    executeWorkflowCapability: vi.fn()
-  }
-}))
-
 vi.mock('./intelligence-quota-manager', () => ({
   intelligenceQuotaManager: {
     checkQuota: vi.fn(async () => ({ allowed: true }))

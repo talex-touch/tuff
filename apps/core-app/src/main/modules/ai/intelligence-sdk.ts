@@ -79,7 +79,6 @@ import { enterPerfContext } from '../../utils/perf-context'
 import { agentManager } from './agents'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
-import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
 import { strategyManager } from './intelligence-strategy-manager'
@@ -438,6 +437,33 @@ async function renderPromptTemplate(
   })
 
   return await prompt.format(variables ?? {})
+}
+
+export interface IntelligenceAutonomousRuntimeAdapter {
+  executeAgentCapability: (
+    payload: IntelligenceAgentPayload,
+    options: IntelligenceInvokeOptions
+  ) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>
+  executeWorkflowCapability: (
+    payload: unknown,
+    options: IntelligenceInvokeOptions
+  ) => Promise<IntelligenceInvokeResult<PromptWorkflowExecution>>
+}
+
+let autonomousRuntimeAdapter: IntelligenceAutonomousRuntimeAdapter | null = null
+
+export function setIntelligenceAutonomousRuntimeAdapter(
+  adapter: IntelligenceAutonomousRuntimeAdapter
+): void {
+  autonomousRuntimeAdapter = adapter
+  logInfo('Autonomous runtime adapter injected')
+}
+
+function ensureAutonomousRuntimeAdapter(): IntelligenceAutonomousRuntimeAdapter {
+  if (!autonomousRuntimeAdapter) {
+    throw new Error('[Intelligence] Autonomous runtime adapter not initialized')
+  }
+  return autonomousRuntimeAdapter
 }
 
 let providerManager: IntelligenceProviderManagerAdapter | null = null
@@ -906,89 +932,6 @@ export class TuffIntelligenceSDK {
       }
     } finally {
       disposeStream()
-    }
-  }
-
-  async resolveDeepAgentRuntimeConfig(
-    capabilityId: string,
-    options: IntelligenceInvokeOptions = {}
-  ): Promise<{
-    providerId: string
-    providerType: IntelligenceProviderType
-    baseUrl: string
-    apiKey: string
-    model: string
-    instructions?: string
-    runtimeOptions: IntelligenceInvokeOptions
-  }> {
-    capabilityId = this.normalizeCapabilityId(capabilityId)
-    const capability = intelligenceCapabilityRegistry.get(capabilityId)
-    if (!capability) {
-      throw new Error(`[Intelligence] Capability ${capabilityId} not found`)
-    }
-
-    const { runtimeOptions } = this.prepareRuntimeOptions(capabilityId, options)
-    const manager = ensureProviderManager()
-    const candidateProviders = this.resolveAvailableProviders(
-      manager,
-      capabilityId,
-      capability.type,
-      capability.supportedProviders,
-      runtimeOptions,
-      false
-    ).filter((provider) => provider.type !== IntelligenceProviderType.ANTHROPIC)
-
-    if (candidateProviders.length <= 0) {
-      throw new Error(`[Intelligence] No OpenAI-compatible providers available for ${capabilityId}`)
-    }
-
-    const strategyResult = await strategyManager.select({
-      capabilityId,
-      options: runtimeOptions,
-      availableProviders: candidateProviders
-    })
-    const selectedProvider = strategyResult.selectedProvider
-    this.applyModelPreference(runtimeOptions, selectedProvider, capabilityId)
-
-    const fallbackBaseUrlMap: Record<IntelligenceProviderType, string> = {
-      [IntelligenceProviderType.OPENAI]: 'https://api.openai.com/v1',
-      [IntelligenceProviderType.ANTHROPIC]: 'https://api.anthropic.com/v1',
-      [IntelligenceProviderType.DEEPSEEK]: 'https://api.deepseek.com/v1',
-      [IntelligenceProviderType.SILICONFLOW]: 'https://api.siliconflow.cn/v1',
-      [IntelligenceProviderType.LOCAL]: String(selectedProvider.baseUrl || ''),
-      [IntelligenceProviderType.CUSTOM]: String(selectedProvider.baseUrl || '')
-    }
-
-    const baseUrl = String(
-      selectedProvider.baseUrl || fallbackBaseUrlMap[selectedProvider.type] || ''
-    ).trim()
-    const apiKey = String(selectedProvider.apiKey || '').trim()
-
-    const model = String(
-      runtimeOptions.modelPreference?.[0] ||
-        selectedProvider.defaultModel ||
-        selectedProvider.models?.[0] ||
-        ''
-    ).trim()
-
-    if (!baseUrl) {
-      throw new Error(`[Intelligence] Provider ${selectedProvider.id} missing base URL`)
-    }
-    if (!apiKey) {
-      throw new Error(`[Intelligence] Provider ${selectedProvider.id} missing API key`)
-    }
-    if (!model) {
-      throw new Error(`[Intelligence] Provider ${selectedProvider.id} missing default model`)
-    }
-
-    return {
-      providerId: selectedProvider.id,
-      providerType: selectedProvider.type,
-      baseUrl,
-      apiKey,
-      model,
-      instructions: selectedProvider.instructions ?? undefined,
-      runtimeOptions
     }
   }
 
@@ -1641,7 +1584,7 @@ export class TuffIntelligenceSDK {
       throw new Error(result.error || `Agent ${agentId} execution failed`)
     }
 
-    return intelligenceDeepAgentOrchestrationService.executeAgentCapability(payload, runtimeOptions)
+    return ensureAutonomousRuntimeAdapter().executeAgentCapability(payload, runtimeOptions)
   }
 
   private async invokeWorkflowWithRuntime(
@@ -1650,10 +1593,7 @@ export class TuffIntelligenceSDK {
     runtimeOptions: IntelligenceInvokeOptions
   ): Promise<IntelligenceInvokeResult<PromptWorkflowExecution>> {
     void provider
-    return intelligenceDeepAgentOrchestrationService.executeWorkflowCapability(
-      payload,
-      runtimeOptions
-    )
+    return ensureAutonomousRuntimeAdapter().executeWorkflowCapability(payload, runtimeOptions)
   }
 
   private async invokeByCapabilityType<T>(

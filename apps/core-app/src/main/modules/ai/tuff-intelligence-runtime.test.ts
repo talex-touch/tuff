@@ -2,10 +2,21 @@ import type {
   TuffIntelligenceActionGraph,
   TuffIntelligenceAgentSession,
   TuffIntelligenceApprovalTicket,
+  TuffIntelligenceStateSnapshot,
   TuffIntelligenceTraceEvent,
   TuffIntelligenceTurn
 } from '@talex-touch/tuff-intelligence'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+type IntelligenceInvoke = (
+  capabilityId: string,
+  payload: unknown,
+  options?: unknown
+) => Promise<{ result: unknown }>
+
+const intelligenceMocks = vi.hoisted(() => ({
+  invoke: vi.fn<IntelligenceInvoke>()
+}))
 
 vi.mock('./agents', () => ({
   agentManager: {
@@ -19,7 +30,7 @@ vi.mock('./agents', () => ({
 
 vi.mock('./intelligence-sdk', () => ({
   tuffIntelligence: {
-    invoke: vi.fn()
+    invoke: intelligenceMocks.invoke
   }
 }))
 
@@ -67,6 +78,13 @@ type TuffIntelligenceRuntimeHarness = {
     sessionId: string,
     listener: (event: TuffIntelligenceTraceEvent) => void
   ) => () => void
+  plan: (payload: {
+    sessionId: string
+    objective: string
+    context?: Record<string, unknown>
+  }) => Promise<TuffIntelligenceTurn>
+  execute: (payload: { sessionId: string; turnId: string }) => Promise<TuffIntelligenceTurn>
+  getSessionState: (sessionId: string) => Promise<TuffIntelligenceStateSnapshot | null>
 }
 let TuffIntelligenceRuntimeCtor: new () => TuffIntelligenceRuntimeHarness
 
@@ -74,6 +92,10 @@ beforeAll(async () => {
   const runtimeModule = await import('./tuff-intelligence-runtime')
   TuffIntelligenceRuntimeCtor =
     runtimeModule.TuffIntelligenceRuntime as unknown as new () => TuffIntelligenceRuntimeHarness
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
 })
 
 function createStoredSession(sessionId: string): StoredRuntimeSessionLike {
@@ -199,5 +221,52 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
     })
 
     expect(onTrace).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('TuffIntelligenceRuntime Pi execution plan', () => {
+  it('plans and executes only the agent.run capability action', async () => {
+    intelligenceMocks.invoke.mockResolvedValue({
+      result: { result: 'Release checks completed.' }
+    })
+    const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
+    const objective = 'Verify release readiness.'
+    const context = { workspace: '/workspace/release' }
+
+    const plannedTurn = await runtime.plan({
+      sessionId: 'session_pi_execution',
+      objective,
+      context
+    })
+    const snapshot = await runtime.getSessionState('session_pi_execution')
+    const actions = snapshot?.actionGraph.nodes.filter((node) =>
+      plannedTurn.actionIds.includes(node.id)
+    )
+
+    expect(actions).toHaveLength(1)
+    expect(actions?.[0]).toMatchObject({
+      type: 'capability',
+      capabilityId: 'agent.run',
+      input: { task: objective, context }
+    })
+
+    await expect(
+      runtime.execute({
+        sessionId: 'session_pi_execution',
+        turnId: plannedTurn.id
+      })
+    ).resolves.toMatchObject({ status: 'completed' })
+    expect(intelligenceMocks.invoke).toHaveBeenCalledTimes(1)
+    expect(intelligenceMocks.invoke).toHaveBeenCalledWith(
+      'agent.run',
+      { task: objective, context },
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          caller: 'intelligence.orchestrator',
+          sessionId: 'session_pi_execution',
+          turnId: plannedTurn.id
+        })
+      })
+    )
   })
 })
