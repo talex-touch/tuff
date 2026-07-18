@@ -271,3 +271,39 @@ Closed the remaining P1 ContextHygiene explain gap by turning `memory-tombstoned
 - Capture Workflow owner/scope/run-isolation packaged metadata before upgrading R9-E context evidence.
 - Capture OmniPanel packaged context execution separately; do not reuse this generic Workflow runtime smoke.
 - Task remains completed but unarchived because this session did not create a work commit.
+
+
+## Session 4: Harden CoreBox transport and WindowManager
+
+**Date**: 2026-07-18
+**Task**: Harden CoreBox transport and WindowManager
+**Branch**: `TalexDreamSoul/master`
+
+### Summary
+
+Aligned CoreBox typed transport contracts, split WindowManager into focused controllers, fixed the Sentry singleton initialization cycle, and verified the Electron runtime path.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80ab3e68d` | (see git log) |
+| `2ec45efa2` | (see git log) |
+| `8e2bdc559` | (see git log) |
+| `3a7c15ef1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
