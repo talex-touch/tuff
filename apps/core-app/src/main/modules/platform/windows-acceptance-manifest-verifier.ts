@@ -193,6 +193,20 @@ export interface WindowsAcceptanceTimeAwareRecommendationManualCheck {
   notes?: string
 }
 
+export interface WindowsAcceptanceEverythingSearchManualCheck {
+  normalSearchPassed: boolean
+  normalSearchQuery?: string
+  explicitFileSearchPassed: boolean
+  explicitFileSearchQuery?: string
+  structuredFilterSearchPassed: boolean
+  structuredFilterSearchQuery?: string
+  sdkBackendEvidencePath?: string
+  cliBackendEvidencePath?: string
+  unavailableBackendEvidencePath?: string
+  evidencePath?: string
+  notes?: string
+}
+
 export interface WindowsAcceptanceManifest {
   schema: typeof WINDOWS_ACCEPTANCE_MANIFEST_SCHEMA
   generatedAt: string
@@ -215,6 +229,7 @@ export interface WindowsAcceptanceManifest {
       passedTargets: string[]
       checks?: WindowsAcceptanceCommonAppLaunchCheck[]
     }
+    everythingSearch?: WindowsAcceptanceEverythingSearchManualCheck
     copiedAppPath?: WindowsAcceptanceCopiedAppPathManualCheck
     updateInstall?: WindowsAcceptanceUpdateInstallManualCheck
     divisionBoxDetachedWidget?: WindowsAcceptanceDivisionBoxDetachedWidgetManualCheck
@@ -232,6 +247,7 @@ export interface WindowsAcceptanceGateOptions {
   requireClipboardStress?: boolean
   requireCommonAppTargets?: string[]
   requireCommonAppLaunchDetails?: boolean
+  requireEverythingSearchManualChecks?: boolean
   requireCopiedAppPathManualChecks?: boolean
   requireUpdateInstallManualChecks?: boolean
   requireDivisionBoxDetachedWidgetManualChecks?: boolean
@@ -369,15 +385,44 @@ const APP_INDEX_GATE_OPTIONS_BY_CASE_ID: Partial<
   }
 }
 
-const EVERYTHING_GATE_OPTIONS: EverythingDiagnosticGateOptions = {
-  requireReady: true,
-  requireEnabled: true,
-  requireAvailable: true,
-  requireHealthy: true,
-  requireVersion: true,
-  requireEsPath: true,
-  requireFallbackChain: ['sdk-napi', 'cli'],
-  requireCaseIds: ['windows-everything-file-search']
+function resolveEverythingGateOptions(
+  evidence: EverythingDiagnosticEvidencePayload
+): EverythingDiagnosticGateOptions {
+  const common: EverythingDiagnosticGateOptions = {
+    requireEnabled: true,
+    requireFallbackChain: ['sdk-napi', 'cli'],
+    requireCaseIds: ['windows-everything-file-search']
+  }
+
+  if (evidence.status.backend === 'sdk-napi') {
+    return {
+      ...common,
+      requireReady: true,
+      requireAvailable: true,
+      requireBackend: ['sdk-napi'],
+      requireHealthy: true,
+      requireVersion: true,
+      requirePerformanceSamples: 200
+    }
+  }
+
+  if (evidence.status.backend === 'cli') {
+    return {
+      ...common,
+      requireReady: true,
+      requireAvailable: true,
+      requireBackend: ['cli'],
+      requireBackendAttemptErrors: ['sdk-napi'],
+      requireHealthy: true,
+      requireVersion: true,
+      requireEsPath: true
+    }
+  }
+
+  return {
+    ...common,
+    requireBackend: ['unavailable']
+  }
 }
 
 const UPDATE_GATE_OPTIONS: UpdateDiagnosticGateOptions = {
@@ -523,6 +568,38 @@ function findCommonAppLaunchDetailFailures(
     if (!isFilledManualField(check.evidencePath)) {
       failures.push(`common app launch evidence path is missing: ${target}`)
     }
+  }
+
+  return failures
+}
+
+function findEverythingSearchManualCheckFailures(manifest: WindowsAcceptanceManifest): string[] {
+  const check = manifest.manualChecks?.everythingSearch
+  if (!check) {
+    return ['Everything search manual check is missing']
+  }
+
+  const failures: string[] = []
+  const requiredChecks: Array<[keyof WindowsAcceptanceEverythingSearchManualCheck, string]> = [
+    ['normalSearchPassed', 'Everything normal CoreBox search was not verified'],
+    ['explicitFileSearchPassed', 'Everything explicit @file search was not verified'],
+    ['structuredFilterSearchPassed', 'Everything structured file-filter search was not verified']
+  ]
+  for (const [field, message] of requiredChecks) {
+    if (check[field] !== true) failures.push(message)
+  }
+
+  const requiredEvidence: Array<[keyof WindowsAcceptanceEverythingSearchManualCheck, string]> = [
+    ['normalSearchQuery', 'Everything normal search query is missing'],
+    ['explicitFileSearchQuery', 'Everything explicit @file query is missing'],
+    ['structuredFilterSearchQuery', 'Everything structured filter query is missing'],
+    ['sdkBackendEvidencePath', 'Everything packaged SDK evidence path is missing'],
+    ['cliBackendEvidencePath', 'Everything CLI recovery evidence path is missing'],
+    ['unavailableBackendEvidencePath', 'Everything unavailable backend evidence path is missing'],
+    ['evidencePath', 'Everything search manual evidence path is missing']
+  ]
+  for (const [field, message] of requiredEvidence) {
+    if (!isFilledManualField(check[field])) failures.push(message)
   }
 
   return failures
@@ -911,7 +988,7 @@ function evaluateWindowsAcceptanceCaseEvidenceGate(
   if (schemaKey === 'everything-diagnostic') {
     return evaluateEverythingDiagnosticEvidence(
       evidence as EverythingDiagnosticEvidencePayload,
-      EVERYTHING_GATE_OPTIONS
+      resolveEverythingGateOptions(evidence as EverythingDiagnosticEvidencePayload)
     ).failures
   }
 
@@ -1104,6 +1181,10 @@ export function evaluateWindowsAcceptanceManifest(
 
   if (options.requireCommonAppLaunchDetails) {
     failures.push(...findCommonAppLaunchDetailFailures(manifest, options.requireCommonAppTargets))
+  }
+
+  if (options.requireEverythingSearchManualChecks) {
+    failures.push(...findEverythingSearchManualCheckFailures(manifest))
   }
 
   if (options.requireCopiedAppPathManualChecks) {

@@ -77,6 +77,22 @@ export interface EverythingStatusRequest {
   refresh?: boolean
 }
 
+export interface EverythingPerformanceSummary {
+  sampleCount: number
+  durationSampleCount: number
+  p50Ms: number | null
+  p95Ms: number | null
+  maxMs: number | null
+  successCount: number
+  timeoutCount: number
+  errorCount: number
+  abortedCount: number
+  sdkCount: number
+  cliCount: number
+  fallbackCount: number
+  fallbackRatio: number
+}
+
 export interface EverythingStatusResponse {
   enabled: boolean
   available: boolean
@@ -95,6 +111,7 @@ export interface EverythingStatusResponse {
   pathFiltering: EverythingPathFilteringStatus
   installation?: EverythingInstallationStatus
   diagnostics?: EverythingDiagnostics
+  performance?: EverythingPerformanceSummary
 }
 
 export interface EverythingToggleRequest {
@@ -149,11 +166,12 @@ export type EverythingInstallPhase =
 
 export interface EverythingInstallTaskIds {
   everything?: string | null
+  sdk?: string | null
   cli?: string | null
 }
 
 export interface EverythingInstallAssetDetail {
-  type: 'everything' | 'cli'
+  type: 'everything' | 'sdk' | 'cli'
   filename: string
   url: string
   sha256: string

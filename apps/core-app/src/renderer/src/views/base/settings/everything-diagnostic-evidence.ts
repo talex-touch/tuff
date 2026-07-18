@@ -26,6 +26,7 @@ export interface EverythingDiagnosticEvidencePayload {
       configuredCliPath: string | null
       installation: EverythingStatusResponse['installation'] | null
       pathFiltering: EverythingStatusResponse['pathFiltering']
+      performance: EverythingStatusResponse['performance']
       errorCode: string | null
       lastBackendError: string | null
     }
@@ -78,6 +79,7 @@ export function buildEverythingDiagnosticEvidencePayload(options: {
         configuredCliPath: status.configuredCliPath,
         installation: status.installation ?? null,
         pathFiltering: status.pathFiltering,
+        performance: status.performance,
         errorCode: status.errorCode ?? null,
         lastBackendError: status.lastBackendError
       }

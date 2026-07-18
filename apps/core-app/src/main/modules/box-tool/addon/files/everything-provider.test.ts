@@ -142,6 +142,8 @@ import {
   everythingToggleEvent
 } from '../../../../../shared/events/everything'
 
+const initialManagedSdkDllPath = process.env.TALEX_EVERYTHING_DLL_PATH
+
 interface MutableEverythingProvider {
   backend: string
   isAvailable: boolean
@@ -343,6 +345,11 @@ afterEach(() => {
   zipUncompressMock.mockReset()
   zipUncompressMock.mockResolvedValue(undefined)
   vi.restoreAllMocks()
+  if (initialManagedSdkDllPath === undefined) {
+    delete process.env.TALEX_EVERYTHING_DLL_PATH
+  } else {
+    process.env.TALEX_EVERYTHING_DLL_PATH = initialManagedSdkDllPath
+  }
 })
 
 describe('everything-provider fallback chain', () => {
@@ -385,6 +392,22 @@ describe('everything-provider fallback chain', () => {
     expect(provider.lastBackendError).toBe('sdk runtime failed')
     expect(provider.backend).toBe('cli')
     expect(results).toEqual(cliResults)
+  })
+
+  it('configures the managed SDK path without replacing an explicit path', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const managedSdkPath = provider.installService.resolvePaths().sdkDllPath
+      appTaskWaitForIdle.mockImplementation(() => new Promise(() => {}))
+
+      delete process.env.TALEX_EVERYTHING_DLL_PATH
+      await provider.onLoad({ touchApp: { channel: {} } })
+      expect(process.env.TALEX_EVERYTHING_DLL_PATH).toBe(managedSdkPath)
+
+      process.env.TALEX_EVERYTHING_DLL_PATH = 'D:\\Custom\\Everything.dll'
+      await provider.onLoad({ touchApp: { channel: {} } })
+      expect(process.env.TALEX_EVERYTHING_DLL_PATH).toBe('D:\\Custom\\Everything.dll')
+    })
   })
 
   it('starts Everything and retries CLI search when IPC window is missing', async () => {
@@ -452,6 +475,34 @@ describe('everything-provider fallback chain', () => {
       expect(provider.backend).toBe('cli')
       expect(provider.isAvailable).toBe(true)
     })
+  })
+
+  it.each([
+    { name: 'x64 hosts', environment: {}, sdkDllName: 'Everything64.dll' },
+    {
+      name: 'x86 hosts',
+      environment: { PROCESSOR_ARCHITECTURE: 'x86' },
+      sdkDllName: 'Everything32.dll'
+    },
+    {
+      name: 'ARM64 hosts detected through WoW64',
+      environment: {
+        PROCESSOR_ARCHITECTURE: 'x86',
+        PROCESSOR_ARCHITEW6432: 'ARM64'
+      },
+      sdkDllName: 'EverythingARM64.dll'
+    }
+  ])('resolves the managed SDK DLL for $name', ({ environment, sdkDllName }) => {
+    const service = new EverythingInstallService({
+      env: { ...environment, LOCALAPPDATA: '/fixtures/local-app-data' }
+    })
+
+    const paths = service.resolvePaths()
+
+    expect(paths.sdkDir).toContain('EverythingSDK')
+    expect(paths.sdkDllPath).toContain(paths.sdkDir)
+    expect(paths.sdkDllPath).toMatch(/[\\/]dll[\\/]/)
+    expect(paths.sdkDllPath.endsWith(sdkDllName)).toBe(true)
   })
 
   it('resolves the portable Everything executable case-insensitively', async () => {
@@ -886,14 +937,17 @@ describe('everything-provider fallback chain', () => {
     expect(result).toEqual({ success: true, enabled: true })
   })
 
-  it('queues Everything install downloads through Download Center on Windows', async () => {
+  it('queues and installs the SDK alongside Everything and CLI downloads on Windows', async () => {
     await withPlatform('win32', async () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
+      const expectedHashes: Record<string, string> = {
+        'Everything-1.4.1.1032.x64.zip':
+          '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c',
+        'Everything-SDK.zip': '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+        'ES-1.1.0.30.x64.zip': '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
+      }
       vi.spyOn(provider.installService, 'calculateSha256').mockImplementation(async (filePath) => {
-        if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
-          return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
-        }
-        return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
+        return expectedHashes[String(filePath).split(/[\\/]/).at(-1) || ''] || ''
       })
       vi.spyOn(provider.installService, 'ensureUserPathContains').mockResolvedValue(undefined)
       const startSpy = vi
@@ -906,10 +960,16 @@ describe('everything-provider fallback chain', () => {
       })
       downloadCenterAddTaskMock
         .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('sdk-task')
         .mockResolvedValueOnce('cli-task')
+      const taskFilenames: Record<string, string> = {
+        'everything-task': 'Everything-1.4.1.1032.x64.zip',
+        'sdk-task': 'Everything-SDK.zip',
+        'cli-task': 'ES-1.1.0.30.x64.zip'
+      }
       downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
         id: taskId,
-        filename: taskId === 'cli-task' ? 'ES-1.1.0.30.x64.zip' : 'Everything-1.4.1.1032.x64.zip',
+        filename: taskFilenames[taskId],
         status: DownloadStatus.COMPLETED,
         progress: { percentage: 100, downloadedSize: 1, speed: 0 },
         metadata: {}
@@ -926,7 +986,7 @@ describe('everything-provider fallback chain', () => {
 
       await (provider.installJob as { promise: Promise<void> }).promise
 
-      expect(downloadCenterAddTaskMock).toHaveBeenCalledTimes(2)
+      expect(downloadCenterAddTaskMock).toHaveBeenCalledTimes(3)
       expect(execFileMock).toHaveBeenCalledWith(
         expect.stringContaining('EverythingCLI'),
         ['-version'],
@@ -944,7 +1004,19 @@ describe('everything-provider fallback chain', () => {
           metadata: expect.objectContaining({
             source: 'everything-install',
             assetType: 'everything',
-            sha256: '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
+            sha256: expectedHashes['Everything-1.4.1.1032.x64.zip']
+          })
+        })
+      )
+      expect(downloadCenterAddTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'https://www.voidtools.com/Everything-SDK.zip',
+          filename: 'Everything-SDK.zip',
+          checksum: expectedHashes['Everything-SDK.zip'],
+          metadata: expect.objectContaining({
+            source: 'everything-install',
+            assetType: 'sdk',
+            sha256: expectedHashes['Everything-SDK.zip']
           })
         })
       )
@@ -956,11 +1028,14 @@ describe('everything-provider fallback chain', () => {
           metadata: expect.objectContaining({
             source: 'everything-install',
             assetType: 'cli',
-            sha256: '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
+            sha256: expectedHashes['ES-1.1.0.30.x64.zip']
           })
         })
       )
-      expect(zipUncompressMock).toHaveBeenCalledTimes(2)
+      expect(zipUncompressMock).toHaveBeenCalledWith(
+        expect.stringContaining('Everything-SDK.zip'),
+        expect.stringContaining('EverythingSDK')
+      )
       expect(writeFileMock).toHaveBeenCalledWith(
         expect.stringContaining('Everything.ini'),
         expect.stringContaining('folders='),
@@ -969,6 +1044,71 @@ describe('everything-provider fallback chain', () => {
       expect(startSpy).toHaveBeenCalledWith(expect.stringContaining('Everything.exe'))
       expect(provider.configuredCliPath).toContain('EverythingCLI')
       expect((provider.installJob as { phase: string }).phase).toBe('completed')
+
+      const installStatusHandler = getTransportHandler<
+        () => Promise<{
+          taskIds: { everything: string | null; sdk: string | null; cli: string | null }
+        }>
+      >(everythingInstallStatusEvent)
+      await expect(installStatusHandler()).resolves.toEqual(
+        expect.objectContaining({
+          taskIds: {
+            everything: 'everything-task',
+            sdk: 'sdk-task',
+            cli: 'cli-task'
+          }
+        })
+      )
+    })
+  })
+
+  it('fails closed when the extracted SDK is missing the target architecture DLL', async () => {
+    await withPlatform('win32', async () => {
+      const provider = everythingProvider as unknown as MutableEverythingProvider
+      const expectedHashes: Record<string, string> = {
+        'Everything-1.4.1.1032.x64.zip':
+          '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c',
+        'Everything-SDK.zip': '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343',
+        'ES-1.1.0.30.x64.zip': '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
+      }
+      vi.spyOn(provider.installService, 'calculateSha256').mockImplementation(async (filePath) => {
+        return expectedHashes[String(filePath).split(/[\\/]/).at(-1) || ''] || ''
+      })
+      const refreshSpy = vi.spyOn(provider, 'refreshBackendState').mockResolvedValue(true)
+      accessMock.mockImplementation(async (filePath) => {
+        if (String(filePath).includes('EverythingSDK')) {
+          throw new Error('Everything64.dll is missing')
+        }
+      })
+      downloadCenterAddTaskMock
+        .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('sdk-task')
+        .mockResolvedValueOnce('cli-task')
+      downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
+        id: taskId,
+        filename: `${taskId}.zip`,
+        status: DownloadStatus.COMPLETED,
+        progress: { percentage: 100, downloadedSize: 1, speed: 0 },
+        metadata: {}
+      }))
+
+      provider.registerChannels({ touchApp: { channel: {} } })
+      const installHandler = getTransportHandler<
+        () => Promise<{ status: { jobId: string | null } }>
+      >(everythingInstallStartEvent)
+
+      await installHandler()
+      await (provider.installJob as { promise: Promise<void> }).promise
+
+      expect(zipUncompressMock).toHaveBeenCalledWith(
+        expect.stringContaining('Everything-SDK.zip'),
+        expect.stringContaining('EverythingSDK')
+      )
+      expect((provider.installJob as { phase: string; error: string }).phase).toBe('failed')
+      expect((provider.installJob as { phase: string; error: string }).error).toContain(
+        'Everything64.dll is missing'
+      )
+      expect(refreshSpy).not.toHaveBeenCalled()
     })
   })
 
@@ -1066,7 +1206,12 @@ describe('everything-provider fallback chain', () => {
       const status = await statusHandler()
 
       expect(status.phase).toBe('idle')
-      expect(status.assets).toHaveLength(2)
+      expect(status.assets).toHaveLength(3)
+      expect(status.assets).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ filename: 'Everything-SDK.zip', type: 'sdk' })
+        ])
+      )
     })
   })
 
@@ -1076,6 +1221,7 @@ describe('everything-provider fallback chain', () => {
       vi.spyOn(provider.installService, 'calculateSha256').mockResolvedValue('bad-hash')
       downloadCenterAddTaskMock
         .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('sdk-task')
         .mockResolvedValueOnce('cli-task')
       downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
         id: taskId,
@@ -1107,6 +1253,7 @@ describe('everything-provider fallback chain', () => {
       const provider = everythingProvider as unknown as MutableEverythingProvider
       downloadCenterAddTaskMock
         .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('sdk-task')
         .mockResolvedValueOnce('cli-task')
       downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
         id: taskId,
@@ -1141,11 +1288,15 @@ describe('everything-provider fallback chain', () => {
         if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
           return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
         }
+        if (String(filePath).includes('Everything-SDK.zip')) {
+          return '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343'
+        }
         return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
       })
       zipUncompressMock.mockRejectedValueOnce(new Error('extract failed'))
       downloadCenterAddTaskMock
         .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('sdk-task')
         .mockResolvedValueOnce('cli-task')
       downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
         id: taskId,
@@ -1178,6 +1329,9 @@ describe('everything-provider fallback chain', () => {
         if (String(filePath).includes('ES-1.1.0.30.x64.zip')) {
           return '30147feadae528d4bbfb3bcb4597a4c7d9f52a0f9f708ea6577b6028bd8dd268'
         }
+        if (String(filePath).includes('Everything-SDK.zip')) {
+          return '00693a1561d86d29a24e4691877ece7fb23e9a5d8d8cbb2435e0b8576e96f343'
+        }
         return '698df475ec44e638f66f1b6a32d28fea613cec78d3b6310e6abe53431eeb940c'
       })
       const ensurePathSpy = vi
@@ -1186,6 +1340,7 @@ describe('everything-provider fallback chain', () => {
       vi.spyOn(provider.backendService, 'probeCli').mockRejectedValue(new Error('probe failed'))
       downloadCenterAddTaskMock
         .mockResolvedValueOnce('everything-task')
+        .mockResolvedValueOnce('sdk-task')
         .mockResolvedValueOnce('cli-task')
       downloadCenterGetTaskStatusMock.mockImplementation((taskId: string) => ({
         id: taskId,
