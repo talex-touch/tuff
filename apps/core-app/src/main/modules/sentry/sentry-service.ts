@@ -1327,3 +1327,5 @@ export function getSentryService(): SentryServiceModule {
 export function setSentryServiceInstance(instance: SentryServiceModule): void {
   sentryServiceInstance = instance
 }
+
+export const sentryModule = getSentryService()
