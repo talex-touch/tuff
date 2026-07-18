@@ -13,6 +13,14 @@ defineI18nRoute(false)
 
 const { t } = useI18n()
 const route = useRoute()
+
+const pageTitle = computed(() => t('auth.deviceAuthTitle', 'Authorize device'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('auth.deviceAuthDescription', 'Confirm a CLI or app device authorization request.')),
+  robots: 'noindex, nofollow',
+})
 const { status } = useNexusAuth()
 
 const state = ref<'loading' | 'ready' | 'approved' | 'expired' | 'cancelled' | 'error'>('loading')
