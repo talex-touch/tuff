@@ -1,0 +1,32 @@
+{
+  "id": "nexus-plugin-display-gate",
+  "name": "nexus-plugin-display-gate",
+  "title": "建立 Nexus 插件展示门禁",
+  "description": "用统一发布资格判定保护 Nexus Store 列表、搜索、详情、版本和下载入口。",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": "nexus-plugin-display-gate",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-18",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-18-plugin-tuffex-supply-chain",
+  "relatedFiles": [
+    "apps/nexus/server/utils/pluginsStore.ts",
+    "apps/nexus/server/api/store",
+    "apps/nexus/server/api/dashboard/plugins",
+    "apps/nexus/server/api/admin/plugins",
+    "apps/nexus/test/api/store"
+  ],
+  "notes": "",
+  "meta": {}
+}

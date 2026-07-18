@@ -1,0 +1,32 @@
+{
+  "id": "real-tpex-upload-acceptance",
+  "name": "real-tpex-upload-acceptance",
+  "title": "验证真实 TPEX 上传",
+  "description": "通过真实 CLI、部署 Nexus、D1/R2 下载和隔离 CoreApp 安装验证 TPEX 发布闭环。",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": "real-tpex-upload",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-18",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-18-plugin-tuffex-supply-chain",
+  "relatedFiles": [
+    "packages/tuff-cli-core/src/publish.ts",
+    "apps/nexus/server/api/dashboard/plugins",
+    "apps/nexus/server/utils/pluginsStore.ts",
+    "apps/nexus/server/utils/pluginPackageStorage.ts",
+    "apps/core-app/src/main/modules/plugin"
+  ],
+  "notes": "",
+  "meta": {}
+}

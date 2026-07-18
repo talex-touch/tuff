@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Canonical cross-package policy result and stable violation types."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Plugin Manifest, package and runtime fail-closed constraints."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"CLI and Nexus must consume identical package-policy semantics."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Prevents a second validator or copied policy constants."}

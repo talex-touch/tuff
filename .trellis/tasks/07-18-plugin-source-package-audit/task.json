@@ -1,0 +1,31 @@
+{
+  "id": "plugin-source-package-audit",
+  "name": "plugin-source-package-audit",
+  "title": "构建测试审计插件源码包",
+  "description": "从 canonical plugin source 完成 clean build、质量门禁、包审计和可复现报告。",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": "plugin-source-package-audit",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-18",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-18-plugin-tuffex-supply-chain",
+  "relatedFiles": [
+    "plugins",
+    "packages/tuff-cli-core/src/exporter.ts",
+    "apps/core-app/scripts/lib/touch-translation-runtime-sync.js",
+    "apps/core-app/scripts/build-target/after-pack.js"
+  ],
+  "notes": "",
+  "meta": {}
+}
