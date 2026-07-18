@@ -685,3 +685,37 @@ Added durable AI orchestration contracts and storage, governed automation and mu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: Integrate AI CLI Orchestrator
+
+**Date**: 2026-07-18
+**Task**: Integrate AI CLI Orchestrator
+**Branch**: `master`
+
+### Summary
+
+Resolved master conflicts, preserved Pi-only orchestration and CoreBox/plugin security boundaries, verified typechecks, focused and full regressions plus Electron build, then fast-forwarded master.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5c28b32bb` | (see git log) |
+| `0357f3a3f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
