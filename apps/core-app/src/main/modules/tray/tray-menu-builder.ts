@@ -8,6 +8,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
+import { setQuitIntent } from '../../core/quit-intent'
 import { coreBoxManager } from '../box-tool/core-box/manager'
 
 const resolveKeyManager = (channel: unknown): unknown =>
@@ -228,6 +229,7 @@ export class TrayMenuBuilder {
       {
         label: t('tray.restart'),
         click: () => {
+          setQuitIntent('user-normal', 'tray-restart')
           app.relaunch()
           app.quit()
         }
@@ -235,6 +237,7 @@ export class TrayMenuBuilder {
       {
         label: t('tray.quit'),
         click: () => {
+          setQuitIntent('user-normal', 'tray-quit')
           app.quit()
         }
       }

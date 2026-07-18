@@ -1,166 +1,56 @@
 import type {
   CachedUpdateRecord,
-  DownloadTask,
   GitHubRelease,
   UpdateCheckResult,
+  UpdateLifecycleSnapshot,
   UpdateSettings,
   UpdateUserAction
 } from '@talex-touch/utils'
 import {
   AppPreviewChannel,
-  DownloadModule,
-  UpdateProviderType,
-  UPDATE_GITHUB_RELEASES_API,
   resolveUpdateChannelLabel,
-  splitUpdateTag
+  shouldAcceptUpdateLifecycleSnapshot,
+  splitUpdateTag,
+  UPDATE_GITHUB_RELEASES_API,
+  UpdateProviderType
 } from '@talex-touch/utils'
 import { TimeoutError, withTimeout } from '@talex-touch/utils/common/utils/time'
-import { isMainWindow, useDownloadSdk, useUpdateSdk } from '@talex-touch/utils/renderer'
-import { h, ref } from 'vue'
+import { isMainWindow, useUpdateSdk } from '@talex-touch/utils/renderer'
+import { h, readonly, ref, shallowRef } from 'vue'
 import { toast } from 'vue-sonner'
 import AppUpdateView from '~/components/base/AppUpgradationView.vue'
 import { useI18nText } from '~/modules/lang'
-import { createRendererLogger } from '~/utils/renderer-log'
-import { normalizeStoredUpdateChannel, normalizeSupportedUpdateChannel } from '../update/channel'
-import {
-  detectUpdateAssetArch,
-  detectUpdateAssetPlatform,
-  resolveRuntimeUpdateArch
-} from '../update/platform-target'
-import { updateDialogSession } from '../update/update-dialog-session'
 import { devLog } from '~/utils/dev-log'
+import { createRendererLogger } from '~/utils/renderer-log'
 import { blowMention } from '../mention/dialog-mention'
+import { normalizeStoredUpdateChannel, normalizeSupportedUpdateChannel } from '../update/channel'
+import { updateDialogSession } from '../update/update-dialog-session'
 import { useAppState } from './useAppStates'
 import { useStartupInfo } from './useStartupInfo'
 
-type AppVersion = {
+interface AppVersion {
   channel: AppPreviewChannel
   major: number
   minor: number
   patch: number
 }
 
-type UpdateStatusInfo = {
-  enabled: boolean
-  frequency: UpdateSettings['frequency']
-  source: UpdateSettings['source']
-  channel: AppPreviewChannel
-  polling: boolean
-  lastCheck: number | null
-  downloadReady?: boolean
-  downloadReadyVersion?: string | null
-  downloadTaskId?: string | null
-  autoInstallDownloadedUpdates?: boolean
-}
-
-type UpdateAvailablePayload = {
-  hasUpdate: boolean
-  release?: GitHubRelease
-  source?: string
-  channel?: AppPreviewChannel
-}
-
-type NormalizedPlatform = 'win32' | 'darwin' | 'linux'
-type NormalizedArch = 'x64' | 'arm64'
-
 const CHANNEL_TIMEOUT = 4_000
 const INSTALL_TIMEOUT = 10 * 60 * 1000
 
 const updateListenerDisposers: Array<() => void> = []
-const completedUpdateTaskIds = new Set<string>()
 let updateListenerInitialized = false
 const updateRuntimeLog = createRendererLogger('useUpdateRuntime')
+const lifecycleSnapshotState = shallowRef<UpdateLifecycleSnapshot | null>(null)
+const lifecycleSnapshot = readonly(lifecycleSnapshotState)
 
-function normalizeAssetPlatform(
-  platformValue: unknown,
-  filename: string
-): NormalizedPlatform | null {
-  const platform = detectUpdateAssetPlatform(filename, platformValue)
-  return platform === 'unsupported' ? null : platform
-}
-
-function normalizeAssetArch(archValue: unknown, filename: string): NormalizedArch | null {
-  const arch = detectUpdateAssetArch(filename, archValue)
-  if (arch === 'x64' || arch === 'arm64') {
-    return arch
+function acceptUpdateLifecycleSnapshot(snapshot: UpdateLifecycleSnapshot): UpdateLifecycleSnapshot {
+  const current = lifecycleSnapshotState.value
+  if (!shouldAcceptUpdateLifecycleSnapshot(current, snapshot)) {
+    return current ?? snapshot
   }
-  if (arch === 'unsupported') {
-    return null
-  }
-
-  const runtimeArch = resolveRuntimeUpdateArch()
-  return runtimeArch === 'x64' || runtimeArch === 'arm64' ? runtimeArch : null
-}
-
-function normalizeReleaseForDownload(release: GitHubRelease): GitHubRelease {
-  const source = release as unknown as Record<string, unknown>
-  const rawAssets = Array.isArray(source.assets) ? source.assets : []
-
-  const normalizedAssets = rawAssets
-    .map((asset) => {
-      const raw = asset as Record<string, unknown>
-      const name = typeof raw.name === 'string' ? raw.name : ''
-      const browserDownloadUrl =
-        typeof raw.browser_download_url === 'string' ? raw.browser_download_url : ''
-      const fallbackUrl = typeof raw.url === 'string' ? raw.url : ''
-      const url = browserDownloadUrl || fallbackUrl
-
-      if (!name || !url) {
-        return null
-      }
-
-      const size = typeof raw.size === 'number' && Number.isFinite(raw.size) ? raw.size : 0
-      const checksum =
-        typeof raw.checksum === 'string'
-          ? raw.checksum
-          : typeof raw.sha256 === 'string'
-            ? raw.sha256
-            : undefined
-      const normalizedPlatform = normalizeAssetPlatform(raw.platform, name)
-      const normalizedArch = normalizeAssetArch(raw.arch, name)
-      if (!normalizedPlatform || !normalizedArch) {
-        devLog(`[useUpdateRuntime][warn] Skip unsupported asset target: ${name}`)
-        return null
-      }
-
-      const normalized: Record<string, unknown> = {
-        name,
-        url,
-        size,
-        platform: normalizedPlatform,
-        arch: normalizedArch
-      }
-
-      if (browserDownloadUrl) normalized.browser_download_url = browserDownloadUrl
-      if (checksum) normalized.checksum = checksum
-      if (typeof raw.sha256 === 'string') normalized.sha256 = raw.sha256
-      if (typeof raw.signatureUrl === 'string') normalized.signatureUrl = raw.signatureUrl
-      if (typeof raw.signatureKeyUrl === 'string') normalized.signatureKeyUrl = raw.signatureKeyUrl
-      if (typeof raw.component === 'string') normalized.component = raw.component
-      if (typeof raw.coreRange === 'string') normalized.coreRange = raw.coreRange
-
-      return normalized
-    })
-    .filter((asset): asset is Record<string, unknown> => asset !== null)
-
-  const tagName = typeof source.tag_name === 'string' ? source.tag_name : ''
-
-  return {
-    tag_name: tagName,
-    name: typeof source.name === 'string' ? source.name : tagName,
-    published_at:
-      typeof source.published_at === 'string' ? source.published_at : new Date().toISOString(),
-    body: typeof source.body === 'string' ? source.body : '',
-    assets: normalizedAssets as unknown as GitHubRelease['assets']
-  }
-}
-
-function resolveCompletedTaskVersion(task: DownloadTask): string | null {
-  const version = task.metadata?.version
-  if (typeof version === 'string' && version.trim().length > 0) {
-    return version
-  }
-  return null
+  lifecycleSnapshotState.value = snapshot
+  return snapshot
 }
 
 function resolveVersion(versionString: string): AppVersion {
@@ -213,7 +103,7 @@ function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
     ignoredVersions: [],
     customSources: [],
     autoDownload: true,
-    autoInstallDownloadedUpdates: false,
+    installOnNormalQuit: true,
     rendererOverrideEnabled: false,
     cacheEnabled: true,
     cacheTTL: 30,
@@ -226,7 +116,6 @@ function getDefaultSettings(channel: AppPreviewChannel): UpdateSettings {
 
 export function useUpdateRuntime() {
   const updateSdk = useUpdateSdk()
-  const downloadSdk = useDownloadSdk()
   const { appStates } = useAppState()
   const { t } = useI18nText()
   const { startupInfo, setAppUpdate } = useStartupInfo()
@@ -290,8 +179,8 @@ export function useUpdateRuntime() {
         if (typeof nextSettings.rendererOverrideEnabled !== 'boolean') {
           nextSettings.rendererOverrideEnabled = false
         }
-        if (typeof nextSettings.autoInstallDownloadedUpdates !== 'boolean') {
-          nextSettings.autoInstallDownloadedUpdates = false
+        if (typeof nextSettings.installOnNormalQuit !== 'boolean') {
+          nextSettings.installOnNormalQuit = true
         }
         settingsCache = nextSettings
       }
@@ -322,19 +211,22 @@ export function useUpdateRuntime() {
     const response = await sendRequest('update:update-settings', () =>
       updateSdk.updateSettings(payload)
     )
+    if (response.snapshot) {
+      acceptUpdateLifecycleSnapshot(response.snapshot)
+    }
     if (!response.success) {
       throw new Error(response.error || 'Failed to update settings')
     }
     settingsCache = { ...settingsCache, ...payload }
   }
 
-  async function getUpdateStatus(): Promise<UpdateStatusInfo> {
+  async function getUpdateStatus(): Promise<UpdateLifecycleSnapshot> {
     const response = await sendRequest('update:get-status', () => updateSdk.getStatus())
     if (response.success && response.data) {
-      return {
+      return acceptUpdateLifecycleSnapshot({
         ...response.data,
         channel: normalizeStoredUpdateChannel(response.data.channel) ?? AppPreviewChannel.RELEASE
-      }
+      })
     }
     throw new Error(response.error || 'Failed to get status')
   }
@@ -377,13 +269,16 @@ export function useUpdateRuntime() {
   ): Promise<boolean> {
     try {
       const status = await getUpdateStatus()
-      if (status.downloadReady) {
-        if (!status.downloadReadyVersion) {
-          return true
-        }
-        if (status.downloadReadyVersion === release.tag_name) {
-          return true
-        }
+      if (
+        status.targetVersion === release.tag_name &&
+        (status.phase === 'downloading' ||
+          status.phase === 'verifying' ||
+          status.phase === 'ready' ||
+          status.phase === 'install-scheduled' ||
+          status.phase === 'handoff-started' ||
+          status.phase === 'awaiting-health')
+      ) {
+        return true
       }
     } catch {
       // ignore
@@ -507,6 +402,9 @@ export function useUpdateRuntime() {
       error.value = null
 
       const response = await sendRequest('update:check', () => updateSdk.check({ force }))
+      if (response.snapshot) {
+        acceptUpdateLifecycleSnapshot(response.snapshot)
+      }
       const result: UpdateCheckResult =
         response.success && response.data
           ? response.data
@@ -554,8 +452,11 @@ export function useUpdateRuntime() {
   async function handleDownloadUpdate(release: GitHubRelease): Promise<boolean> {
     try {
       const response = await sendRequest('update:download', () =>
-        updateSdk.download(normalizeReleaseForDownload(release))
+        updateSdk.download({ tag: release.tag_name })
       )
+      if (response.snapshot) {
+        acceptUpdateLifecycleSnapshot(response.snapshot)
+      }
       if (!response.success) {
         throw new Error(response.error || 'Failed to start update download')
       }
@@ -579,6 +480,9 @@ export function useUpdateRuntime() {
         () => updateSdk.install(taskId ? { taskId } : {}),
         INSTALL_TIMEOUT
       )
+      if (response.snapshot) {
+        acceptUpdateLifecycleSnapshot(response.snapshot)
+      }
       if (!response.success) {
         throw new Error(response.error || 'Failed to install update')
       }
@@ -675,6 +579,9 @@ export function useUpdateRuntime() {
   async function clearUpdateCache(): Promise<void> {
     try {
       const response = await sendRequest('update:clear-cache', () => updateSdk.clearCache())
+      if (response.snapshot) {
+        acceptUpdateLifecycleSnapshot(response.snapshot)
+      }
       if (!response.success) {
         throw new Error(response.error || 'Failed to clear cache')
       }
@@ -696,8 +603,16 @@ export function useUpdateRuntime() {
 
     try {
       updateListenerDisposers.push(
-        updateSdk.onAvailable((data: UpdateAvailablePayload) => {
+        updateSdk.onAvailable((data) => {
           devLog('[useUpdateRuntime] Received update notification:', data)
+          const snapshot = acceptUpdateLifecycleSnapshot(data.snapshot)
+          if (
+            snapshot.attemptId !== data.snapshot.attemptId ||
+            snapshot.revision !== data.snapshot.revision ||
+            snapshot.releaseTag !== data.release?.tag_name
+          ) {
+            return
+          }
 
           if (!data.hasUpdate || !data.release) {
             return
@@ -712,26 +627,6 @@ export function useUpdateRuntime() {
 
             void presentUpdateDialog(data.release!)
           })
-        }),
-        downloadSdk.onTaskCompleted((task) => {
-          if (task.module !== DownloadModule.APP_UPDATE) {
-            return
-          }
-
-          if (completedUpdateTaskIds.has(task.id)) {
-            return
-          }
-          completedUpdateTaskIds.add(task.id)
-
-          const versionLabel =
-            resolveCompletedTaskVersion(task as DownloadTask) ||
-            t('settings.settingUpdate.status.unknownVersion')
-
-          toast.success(t('update.update_downloaded'))
-          void blowMention(
-            t('update.update_ready'),
-            t('settings.settingUpdate.status.downloadReady', { version: versionLabel })
-          )
         })
       )
       updateListenerInitialized = true
@@ -752,6 +647,7 @@ export function useUpdateRuntime() {
   return {
     loading,
     error,
+    lifecycleSnapshot,
     checkApplicationUpgrade,
     handleDownloadUpdate,
     installDownloadedUpdate,

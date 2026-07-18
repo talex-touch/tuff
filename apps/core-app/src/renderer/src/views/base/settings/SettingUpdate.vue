@@ -16,22 +16,22 @@ import { toast } from 'vue-sonner'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import { useAppState } from '~/modules/hooks/useAppStates'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { getPreloadProcessInfo } from '~/modules/preload/process-info'
 import { appSetting } from '~/modules/storage/app-storage'
-import { createRendererLogger } from '~/utils/renderer-log'
 import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
 } from '~/modules/update/channel'
 import { GithubUpdateProvider } from '~/modules/update/GithubUpdateProvider'
+import { createRendererLogger } from '~/utils/renderer-log'
 import {
   buildUpdateDiagnosticEvidenceFilename,
   buildUpdateDiagnosticEvidencePayload,
-  formatUpdateDiagnosticEvidenceJson
+  formatUpdateDiagnosticEvidenceJson,
+  resolveUpdateLifecycleDisplay
 } from './update-diagnostic-evidence'
 
 const { t } = useI18n()
@@ -42,8 +42,8 @@ const { platform, isMac } = useRendererPlatform()
 const settingUpdateLog = createRendererLogger('SettingUpdate')
 const { startupInfo } = useStartupInfo()
 
-const { appStates } = useAppState()
 const {
+  lifecycleSnapshot,
   checkApplicationUpgrade,
   handleDownloadUpdate,
   installDownloadedUpdate,
@@ -57,12 +57,8 @@ const settings = ref<UpdateSettings | null>(null)
 const selectedChannel = ref<AppPreviewChannel>(AppPreviewChannel.RELEASE)
 const selectedFrequency = ref<UpdateSettings['frequency']>('everyday')
 const autoDownloadEnabled = ref<boolean>(true)
-const autoInstallDownloadedUpdatesEnabled = ref(false)
+const installOnNormalQuitEnabled = ref(true)
 const rendererOverrideEnabled = ref(false)
-const lastCheck = ref<number | null>(null)
-const downloadReady = ref(false)
-const downloadReadyVersion = ref<string | null>(null)
-const downloadTaskId = ref<string | null>(null)
 const cachedRelease = ref<CachedUpdateRecord | null>(null)
 const assetsDialogVisible = ref(false)
 
@@ -70,12 +66,11 @@ const fetching = ref(false)
 const channelSaving = ref(false)
 const frequencySaving = ref(false)
 const autoDownloadSaving = ref(false)
-const autoInstallSaving = ref(false)
+const installOnQuitSaving = ref(false)
 const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
 const manualChecking = ref(false)
 const isMacAutoInstallPlatform = computed(() => isMac.value)
-const isWindowsPlatform = computed(() => platform.value === 'win32')
 
 const channelOptions = computed(() => {
   return [
@@ -97,13 +92,26 @@ const channelSelectDisabled = computed(() => fetching.value || channelSaving.val
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
-const statusDescription = computed(() => {
-  if (fetching.value || manualChecking.value) return t('settings.settingUpdate.status.loading')
-  if (!lastCheck.value) return t('settings.settingUpdate.status.never')
-
-  return t('settings.settingUpdate.status.lastChecked', {
-    time: formatTimestamp(lastCheck.value)
-  })
+const lifecycleDisplay = computed(() => resolveUpdateLifecycleDisplay(lifecycleSnapshot.value))
+const lifecycleStatusTitle = computed(() => {
+  if (fetching.value && !lifecycleSnapshot.value) {
+    return t('settings.settingUpdate.status.loading')
+  }
+  return t(lifecycleDisplay.value.labelKey)
+})
+const lifecycleStatusDescription = computed(() => {
+  if (fetching.value && !lifecycleSnapshot.value) {
+    return t('settings.settingUpdate.lifecycle.loadingDescription')
+  }
+  return t(lifecycleDisplay.value.descriptionKey)
+})
+const displayedInstallOnNormalQuit = computed({
+  get: () => lifecycleDisplay.value.canEnableNormalQuit && installOnNormalQuitEnabled.value,
+  set: (value: boolean) => {
+    if (lifecycleDisplay.value.canEnableNormalQuit) {
+      installOnNormalQuitEnabled.value = value
+    }
+  }
 })
 
 const runtimeArch = computed(() => getRuntimeArch())
@@ -132,38 +140,6 @@ const hasCachedReleaseAssetMismatch = computed(
   () => Boolean(cachedRelease.value?.release) && cachedAssets.value.length === 0
 )
 
-const statusMessage = computed(() => {
-  if (downloadReady.value) {
-    return {
-      text: isMacAutoInstallPlatform.value
-        ? t('settings.settingUpdate.status.downloadReady', {
-            version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
-          })
-        : t('settings.settingUpdate.status.downloadReadyManual', {
-            version: downloadReadyVersion.value || t('settings.settingUpdate.status.unknownVersion')
-          }),
-      warning: false
-    }
-  }
-  if (hasCachedReleaseAssetMismatch.value) {
-    return {
-      text: t('settings.settingUpdate.assetsNoMatchingCurrent', {
-        runtime: currentRuntimeLabel.value
-      }),
-      warning: true
-    }
-  }
-  if (appStates.updateErrorMessage) {
-    return { text: appStates.updateErrorMessage, warning: true }
-  }
-  if (appStates.hasUpdate) {
-    return { text: t('settings.settingUpdate.status.updateAvailable'), warning: false }
-  }
-  if (appStates.noUpdateAvailable) {
-    return { text: t('settings.settingUpdate.status.upToDate'), warning: false }
-  }
-  return null
-})
 const assetsSummary = computed(() => {
   if (!cachedRelease.value?.release) {
     return t('settings.settingUpdate.assetsEmpty')
@@ -174,31 +150,48 @@ const assetsSummary = computed(() => {
   })
   return `${cachedRelease.value.release.tag_name} · ${countText}`
 })
+const canStartDownload = computed(
+  () =>
+    lifecycleDisplay.value.canDownload &&
+    Boolean(cachedRelease.value?.release) &&
+    cachedAssets.value.length > 0
+)
 const autoDownloadDescription = computed(() => {
-  return isMacAutoInstallPlatform.value
-    ? t('settings.settingUpdate.autoDownloadDesc')
-    : t('settings.settingUpdate.autoDownloadDescManual')
+  if (platform.value === 'darwin') return t('settings.settingUpdate.autoDownloadDescMac')
+  if (platform.value === 'win32') return t('settings.settingUpdate.autoDownloadDescWindows')
+  return t('settings.settingUpdate.autoDownloadDescLinux')
 })
-const autoInstallDescription = computed(() => {
-  return autoDownloadEnabled.value
-    ? t('settings.settingUpdate.autoInstallDownloadedUpdatesDesc')
-    : t('settings.settingUpdate.autoInstallDownloadedUpdatesDescDisabled')
-})
+const installOnQuitDescription = computed(() =>
+  lifecycleDisplay.value.canEnableNormalQuit
+    ? t('settings.settingUpdate.installOnNormalQuitDesc')
+    : t('settings.settingUpdate.installOnNormalQuitLocked')
+)
 const installActionDescription = computed(() => {
-  return isMacAutoInstallPlatform.value
-    ? t('settings.settingUpdate.actionsDesc')
-    : t('settings.settingUpdate.actionsDescManual')
+  if (platform.value === 'darwin') return t('settings.settingUpdate.actions.restartMacDesc')
+  if (platform.value === 'win32')
+    return t('settings.settingUpdate.actions.startWindowsInstallerDesc')
+  return t('settings.settingUpdate.actions.openLinuxPackageDesc')
+})
+const primaryActionKind = computed<'install' | 'download' | 'check' | null>(() => {
+  if (lifecycleDisplay.value.phase === 'ready') return 'install'
+  if (lifecycleDisplay.value.canDownload) return 'download'
+  if (lifecycleDisplay.value.canCheck) return 'check'
+  return null
 })
 const primaryActionDescription = computed(() => {
-  if (downloadReady.value) {
-    return installActionDescription.value
+  if (primaryActionKind.value === 'install') return installActionDescription.value
+  if (primaryActionKind.value === 'download') {
+    return t('settings.settingUpdate.actions.downloadAvailableDesc')
   }
-  return t('settings.settingUpdate.actions.manualCheckDesc')
+  if (primaryActionKind.value === 'check') {
+    return t('settings.settingUpdate.actions.manualCheckDesc')
+  }
+  return t('settings.settingUpdate.actions.lifecycleInProgressDesc')
 })
 const installActionLabel = computed(() => {
-  return isMacAutoInstallPlatform.value
-    ? t('settings.settingUpdate.actions.installNow')
-    : t('settings.settingUpdate.actions.openInstaller')
+  if (platform.value === 'darwin') return t('settings.settingUpdate.actions.restartMac')
+  if (platform.value === 'win32') return t('settings.settingUpdate.actions.startWindowsInstaller')
+  return t('settings.settingUpdate.actions.openLinuxPackage')
 })
 
 onMounted(async () => {
@@ -241,9 +234,8 @@ async function loadSettings(): Promise<void> {
       normalizeStoredUpdateChannel(fetched.updateChannel) ?? AppPreviewChannel.RELEASE
     selectedFrequency.value = fetched.frequency
     autoDownloadEnabled.value = fetched.autoDownload ?? true
-    autoInstallDownloadedUpdatesEnabled.value = fetched.autoInstallDownloadedUpdates ?? false
+    installOnNormalQuitEnabled.value = fetched.installOnNormalQuit ?? true
     rendererOverrideEnabled.value = fetched.rendererOverrideEnabled ?? false
-    lastCheck.value = fetched.lastCheckedAt ?? null
     await refreshStatus()
     await refreshCachedRelease(selectedChannel.value)
   } catch (error) {
@@ -256,48 +248,9 @@ async function loadSettings(): Promise<void> {
 
 async function refreshStatus(): Promise<void> {
   try {
-    const status = (await getUpdateStatus()) as {
-      lastCheck?: string | number | null
-      downloadReady?: boolean
-      downloadReadyVersion?: string | null
-      downloadTaskId?: string | null
-      autoInstallDownloadedUpdates?: boolean
-    }
-
-    if (typeof status.lastCheck === 'number') {
-      lastCheck.value = status.lastCheck
-    } else if (typeof status.lastCheck === 'string') {
-      const parsed = Number.parseInt(status.lastCheck, 10)
-      lastCheck.value = Number.isNaN(parsed) ? null : parsed
-    } else {
-      lastCheck.value = null
-    }
-
-    downloadReady.value = status.downloadReady === true
-    downloadReadyVersion.value =
-      typeof status.downloadReadyVersion === 'string' && status.downloadReadyVersion.length > 0
-        ? status.downloadReadyVersion
-        : null
-    downloadTaskId.value =
-      typeof status.downloadTaskId === 'string' && status.downloadTaskId.length > 0
-        ? status.downloadTaskId
-        : null
-
-    if (!downloadReady.value) {
-      downloadReadyVersion.value = null
-      downloadTaskId.value = null
-    }
-    if (typeof status.autoInstallDownloadedUpdates === 'boolean') {
-      autoInstallDownloadedUpdatesEnabled.value = status.autoInstallDownloadedUpdates
-      if (settings.value) {
-        settings.value.autoInstallDownloadedUpdates = status.autoInstallDownloadedUpdates
-      }
-    }
+    await getUpdateStatus()
   } catch (error) {
-    settingUpdateLog.warn('Failed to refresh status', error)
-    downloadReady.value = false
-    downloadReadyVersion.value = null
-    downloadTaskId.value = null
+    settingUpdateLog.warn('Failed to refresh authoritative update lifecycle', error)
   }
 }
 
@@ -371,22 +324,24 @@ async function handleAutoDownloadChange(value: boolean): Promise<void> {
   }
 }
 
-async function handleAutoInstallChange(value: boolean): Promise<void> {
-  if (!settings.value || autoInstallSaving.value) return
+async function handleInstallOnQuitChange(value: boolean): Promise<void> {
+  if (!settings.value || installOnQuitSaving.value || !lifecycleDisplay.value.canEnableNormalQuit) {
+    return
+  }
 
-  const previous = autoInstallDownloadedUpdatesEnabled.value
-  autoInstallDownloadedUpdatesEnabled.value = value
-  autoInstallSaving.value = true
+  const previous = installOnNormalQuitEnabled.value
+  installOnNormalQuitEnabled.value = value
+  installOnQuitSaving.value = true
   try {
-    await updateSettings({ autoInstallDownloadedUpdates: value })
-    settings.value.autoInstallDownloadedUpdates = value
-    toast.success(t('settings.settingUpdate.messages.autoInstallDownloadedUpdatesSaved'))
+    await updateSettings({ installOnNormalQuit: value })
+    settings.value.installOnNormalQuit = value
+    toast.success(t('settings.settingUpdate.messages.installOnNormalQuitSaved'))
   } catch (error) {
     settingUpdateLog.error('Failed to update automatic installer handoff', error)
-    autoInstallDownloadedUpdatesEnabled.value = previous
+    installOnNormalQuitEnabled.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
   } finally {
-    autoInstallSaving.value = false
+    installOnQuitSaving.value = false
   }
 }
 
@@ -410,6 +365,10 @@ async function handleRendererOverrideChange(value: boolean): Promise<void> {
 }
 
 async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
+  if (!lifecycleDisplay.value.canDownload) {
+    toast.error(t('settings.settingUpdate.messages.actionUnavailableForPhase'))
+    return
+  }
   if (!asset.url) {
     toast.error(t('settings.settingUpdate.assets.messages.downloadFailed'))
     return
@@ -436,14 +395,26 @@ async function handleDownloadAsset(asset: DownloadAsset): Promise<void> {
   }
 }
 
+async function handleDownloadAvailableUpdate(): Promise<void> {
+  if (!canStartDownload.value || !cachedRelease.value?.release) {
+    return
+  }
+
+  await handleDownloadUpdate({
+    ...cachedRelease.value.release,
+    assets: cachedAssets.value
+  })
+}
+
 async function handleInstallUpdate(): Promise<void> {
-  if (installingUpdate.value || !downloadReady.value) {
+  const snapshot = lifecycleSnapshot.value
+  if (installingUpdate.value || !lifecycleDisplay.value.canInstall || !snapshot?.taskId) {
     return
   }
 
   installingUpdate.value = true
   try {
-    const ok = await installDownloadedUpdate(downloadTaskId.value ?? undefined)
+    const ok = await installDownloadedUpdate(snapshot.taskId)
     if (ok) {
       await refreshStatus()
     }
@@ -453,7 +424,7 @@ async function handleInstallUpdate(): Promise<void> {
 }
 
 async function handleManualCheck(): Promise<void> {
-  if (manualChecking.value || fetching.value || downloadReady.value) {
+  if (manualChecking.value || fetching.value || !lifecycleDisplay.value.canCheck) {
     return
   }
 
@@ -493,14 +464,14 @@ function buildCurrentUpdateEvidence() {
     return null
   }
 
+  const snapshot = lifecycleSnapshot.value
+  if (!snapshot) {
+    return null
+  }
+
   return buildUpdateDiagnosticEvidencePayload({
     settings: settings.value,
-    status: {
-      lastCheck: lastCheck.value,
-      downloadReady: downloadReady.value,
-      downloadReadyVersion: downloadReadyVersion.value,
-      downloadTaskId: downloadTaskId.value
-    },
+    snapshot,
     cachedRelease: cachedRelease.value,
     cachedAssets: cachedAssets.value,
     platform: platform.value,
@@ -545,8 +516,20 @@ function saveUpdateEvidence(): void {
   toast.success(t('settings.settingUpdate.evidenceSaved'))
 }
 
-function formatTimestamp(value: number): string {
-  return new Date(value).toLocaleString()
+function formatTimestamp(value: number | null | undefined): string {
+  return typeof value === 'number'
+    ? new Date(value).toLocaleString()
+    : t('settings.settingUpdate.lifecycle.unavailable')
+}
+
+function formatLifecycleValue(value: string | null | undefined): string {
+  return value || t('settings.settingUpdate.lifecycle.unavailable')
+}
+
+function formatLifecycleBoolean(value: boolean | null | undefined): string {
+  return value
+    ? t('settings.settingUpdate.lifecycle.boolean.yes')
+    : t('settings.settingUpdate.lifecycle.boolean.no')
 }
 
 function formatFileSize(bytes: number): string {
@@ -566,11 +549,11 @@ function formatFileSize(bytes: number): string {
   return `${size.toFixed(digits)} ${units[unitIndex]}`
 }
 
-function formatPlatform(platform: DownloadAsset['platform']): string {
+function formatPlatform(platform: DownloadAsset['platform'] | 'unknown'): string {
   if (platform === 'win32') return 'Windows'
   if (platform === 'darwin') return 'macOS'
   if (platform === 'linux') return 'Linux'
-  return platform
+  return 'Unknown'
 }
 
 function isAssetCompatibleWithCurrentRuntime(asset: DownloadAsset): boolean {
@@ -585,13 +568,13 @@ function getAssetCompatibilityLabels(asset: DownloadAsset): string[] {
   } else if (asset.platform !== platform.value) {
     labels.push(
       t('settings.settingUpdate.assetsCompatibilityPlatformMismatch', {
-        platform: formatPlatform(asset.platform)
+        platform: formatPlatform(asset.platform ?? 'unknown')
       })
     )
   } else if (asset.arch !== runtimeArch.value) {
     labels.push(
       t('settings.settingUpdate.assetsCompatibilityArchMismatch', {
-        arch: asset.arch
+        arch: asset.arch ?? 'unknown'
       })
     )
   } else {
@@ -672,14 +655,13 @@ function openAssetsDialog(): void {
     />
 
     <tuff-block-switch
-      v-if="showAdvancedSettings && isWindowsPlatform"
-      v-model="autoInstallDownloadedUpdatesEnabled"
-      :title="t('settings.settingUpdate.autoInstallDownloadedUpdatesTitle')"
-      :description="autoInstallDescription"
+      v-model="displayedInstallOnNormalQuit"
+      :title="t('settings.settingUpdate.installOnNormalQuitTitle')"
+      :description="installOnQuitDescription"
       default-icon="i-carbon-install"
       active-icon="i-carbon-install"
-      :disabled="fetching || autoInstallSaving || !autoDownloadEnabled"
-      @update:model-value="handleAutoInstallChange"
+      :disabled="fetching || installOnQuitSaving || !lifecycleDisplay.canEnableNormalQuit"
+      @update:model-value="handleInstallOnQuitChange"
     />
 
     <tuff-block-switch
@@ -694,13 +676,71 @@ function openAssetsDialog(): void {
     />
 
     <TuffBlockSlot
-      :title="t('settings.settingUpdate.statusTitle')"
-      :description="statusDescription"
+      class="lifecycle-status-slot"
+      :title="lifecycleStatusTitle"
+      :description="lifecycleStatusDescription"
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
-      <div v-if="statusMessage" class="status-message" :class="{ warning: statusMessage.warning }">
-        {{ statusMessage.text }}
+      <div class="lifecycle-panel">
+        <div class="lifecycle-phase" :class="`tone-${lifecycleDisplay.tone}`">
+          <span>{{ lifecycleStatusTitle }}</span>
+          <code>{{ lifecycleDisplay.phase }}</code>
+        </div>
+        <dl class="lifecycle-metadata">
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.targetVersion') }}</dt>
+            <dd>{{ formatLifecycleValue(lifecycleSnapshot?.targetVersion) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.revision') }}</dt>
+            <dd>{{ lifecycleSnapshot?.revision ?? 0 }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.rollbackFromVersion') }}</dt>
+            <dd>{{ formatLifecycleValue(lifecycleSnapshot?.rollbackFromVersion) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.rollbackCompatible') }}</dt>
+            <dd>{{ formatLifecycleBoolean(lifecycleSnapshot?.rollbackCompatible) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.previousVersion') }}</dt>
+            <dd>{{ formatLifecycleValue(lifecycleSnapshot?.previousVersion) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.recoveryAvailable') }}</dt>
+            <dd>{{ formatLifecycleBoolean(lifecycleSnapshot?.recoveryAvailable) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.lastCheck') }}</dt>
+            <dd>{{ formatTimestamp(lifecycleSnapshot?.lastCheckAt) }}</dd>
+          </div>
+          <div>
+            <dt>{{ t('settings.settingUpdate.lifecycle.fields.error') }}</dt>
+            <dd>
+              {{
+                lifecycleSnapshot?.error?.code || t('settings.settingUpdate.lifecycle.error.none')
+              }}
+            </dd>
+          </div>
+        </dl>
+        <div v-if="lifecycleSnapshot?.error" class="lifecycle-error">
+          <strong>{{ lifecycleSnapshot.error.code }}</strong>
+          <span>{{ lifecycleSnapshot.error.message }}</span>
+          <small>
+            {{
+              lifecycleSnapshot.error.retryable
+                ? t('settings.settingUpdate.lifecycle.error.retryable')
+                : t('settings.settingUpdate.lifecycle.error.notRetryable')
+            }}
+          </small>
+        </div>
+        <div v-if="isMacAutoInstallPlatform" class="native-trust-warning">
+          <strong>{{ t('settings.settingUpdate.nativeTrust.title') }}</strong>
+          <span>{{ t('settings.settingUpdate.nativeTrust.waivedRisk') }}</span>
+          <code>waived:apple-developer-not-configured</code>
+        </div>
       </div>
     </TuffBlockSlot>
 
@@ -711,25 +751,37 @@ function openAssetsDialog(): void {
       active-icon="i-carbon-settings-adjust"
     >
       <TxButton
-        v-if="downloadReady"
+        v-if="primaryActionKind === 'install'"
         variant="flat"
         type="primary"
-        :disabled="installingUpdate"
+        :disabled="installingUpdate || !lifecycleDisplay.canInstall"
         :loading="installingUpdate"
         @click="handleInstallUpdate"
       >
         {{ installActionLabel }}
       </TxButton>
       <TxButton
-        v-else
+        v-else-if="primaryActionKind === 'download'"
         variant="flat"
         type="primary"
-        :disabled="fetching || manualChecking"
+        :disabled="!canStartDownload"
+        @click="handleDownloadAvailableUpdate"
+      >
+        {{ t('settings.settingUpdate.actions.downloadAvailable') }}
+      </TxButton>
+      <TxButton
+        v-else-if="primaryActionKind === 'check'"
+        variant="flat"
+        type="primary"
+        :disabled="fetching || manualChecking || !lifecycleDisplay.canCheck"
         :loading="manualChecking"
         @click="handleManualCheck"
       >
         {{ t('settings.settingUpdate.actions.manualCheck') }}
       </TxButton>
+      <span v-else class="action-pending">
+        {{ t('settings.settingUpdate.actions.waitForLifecycle') }}
+      </span>
     </TuffBlockSlot>
 
     <TuffBlockSlot
@@ -808,7 +860,7 @@ function openAssetsDialog(): void {
               {{ asset.name }}
             </div>
             <div class="asset-meta">
-              {{ formatPlatform(asset.platform) }} · {{ asset.arch }} ·
+              {{ formatPlatform(asset.platform ?? 'unknown') }} · {{ asset.arch }} ·
               {{ formatFileSize(asset.size) }}
             </div>
             <div class="asset-compatibility">
@@ -829,7 +881,9 @@ function openAssetsDialog(): void {
               variant="flat"
               type="primary"
               size="sm"
-              :disabled="!isAssetCompatibleWithCurrentRuntime(asset)"
+              :disabled="
+                !lifecycleDisplay.canDownload || !isAssetCompatibleWithCurrentRuntime(asset)
+              "
               @click="handleDownloadAsset(asset)"
             >
               {{ t('settings.settingUpdate.assets.download') }}
@@ -849,6 +903,118 @@ function openAssetsDialog(): void {
 
 .status-message.warning {
   color: var(--tx-color-warning);
+}
+
+:deep(.lifecycle-status-slot.TBlockSlot-Container) {
+  min-height: 56px;
+  height: auto;
+  align-items: flex-start;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+:deep(.lifecycle-status-slot .TBlockSlot-Content) {
+  align-items: flex-start;
+  padding-top: 4px;
+}
+
+:deep(.lifecycle-status-slot .TBlockSlot-Slot) {
+  flex: 1 1 60%;
+  min-width: 0;
+  justify-content: stretch;
+}
+
+.lifecycle-panel {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lifecycle-phase {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--tx-text-color-regular);
+}
+
+.lifecycle-phase > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lifecycle-phase > code,
+.native-trust-warning > code {
+  font-size: 11px;
+  color: inherit;
+}
+
+.lifecycle-phase.tone-info {
+  color: var(--tx-color-info);
+}
+
+.lifecycle-phase.tone-success {
+  color: var(--tx-color-success);
+}
+
+.lifecycle-phase.tone-warning {
+  color: var(--tx-color-warning);
+}
+
+.lifecycle-phase.tone-danger {
+  color: var(--tx-color-danger);
+}
+
+.lifecycle-metadata {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.lifecycle-metadata > div {
+  min-width: 0;
+}
+
+.lifecycle-metadata dt {
+  font-size: 11px;
+  color: var(--tx-text-color-secondary);
+}
+
+.lifecycle-metadata dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: var(--tx-text-color-primary);
+}
+
+.lifecycle-error,
+.native-trust-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.lifecycle-error {
+  border: 1px solid color-mix(in srgb, var(--tx-color-danger) 24%, transparent);
+  background: color-mix(in srgb, var(--tx-color-danger) 10%, transparent);
+  color: var(--tx-color-danger);
+}
+
+.native-trust-warning {
+  border: 1px solid color-mix(in srgb, var(--tx-color-warning) 24%, transparent);
+  background: color-mix(in srgb, var(--tx-color-warning) 10%, transparent);
+  color: var(--tx-color-warning);
+}
+
+.action-pending {
+  font-size: 12px;
+  color: var(--tx-text-color-secondary);
 }
 
 .assets-summary {
@@ -969,5 +1135,20 @@ function openAssetsDialog(): void {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  :deep(.lifecycle-status-slot.TBlockSlot-Container) {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  :deep(.lifecycle-status-slot .TBlockSlot-Slot) {
+    width: 100%;
+  }
+
+  .lifecycle-metadata {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

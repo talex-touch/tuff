@@ -160,7 +160,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         channel: AppPreviewChannel.RELEASE,
         frequency: 'everyday',
         autoDownload: true,
-        autoInstallDownloadedUpdates: true,
+        installOnNormalQuit: true,
         rendererOverrideEnabled: false
       },
       status: {
@@ -203,7 +203,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         readyToInstall: true,
         installMode: 'windows-auto-installer-handoff',
         requiresUserConfirmation: false,
-        autoInstallDownloadedUpdates: true,
+        installOnNormalQuit: true,
         unattendedAutoInstallEnabled: true
       },
       manualRegression: {
@@ -211,7 +211,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.RELEASE,
           autoDownload: true,
-          autoInstallDownloadedUpdates: true,
+          installOnNormalQuit: true,
           downloadReadyVersion: 'v2.4.10',
           downloadTaskId: 'task-update-1',
           platform: 'win32',
@@ -253,7 +253,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         channel: AppPreviewChannel.RELEASE,
         frequency: 'everyday',
         autoDownload: true,
-        autoInstallDownloadedUpdates: true,
+        installOnNormalQuit: true,
         rendererOverrideEnabled: false
       },
       status: {
@@ -291,7 +291,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         readyToInstall: true,
         installMode: 'windows-auto-installer-handoff',
         requiresUserConfirmation: false,
-        autoInstallDownloadedUpdates: true,
+        installOnNormalQuit: true,
         unattendedAutoInstallEnabled: true
       },
       manualRegression: {
@@ -299,7 +299,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.RELEASE,
           autoDownload: true,
-          autoInstallDownloadedUpdates: true,
+          installOnNormalQuit: true,
           downloadReadyVersion: 'v2.4.10',
           downloadTaskId: 'task-update-1',
           platform: 'win32',
@@ -341,7 +341,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         channel: AppPreviewChannel.RELEASE,
         frequency: 'everyday',
         autoDownload: true,
-        autoInstallDownloadedUpdates: true,
+        installOnNormalQuit: true,
         rendererOverrideEnabled: false
       },
       status: {
@@ -384,7 +384,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         readyToInstall: true,
         installMode: 'windows-auto-installer-handoff',
         requiresUserConfirmation: false,
-        autoInstallDownloadedUpdates: true,
+        installOnNormalQuit: true,
         unattendedAutoInstallEnabled: true
       },
       manualRegression: {
@@ -392,7 +392,7 @@ describe('windows-acceptance-evidence-verifier', () => {
         suggestedEvidenceFields: {
           channel: AppPreviewChannel.RELEASE,
           autoDownload: true,
-          autoInstallDownloadedUpdates: true,
+          installOnNormalQuit: true,
           downloadReadyVersion: 'v2.4.10',
           downloadTaskId: null,
           platform: 'win32',

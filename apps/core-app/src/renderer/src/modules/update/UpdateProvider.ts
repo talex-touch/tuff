@@ -145,12 +145,12 @@ export abstract class UpdateProvider {
 
   // 获取当前平台
   protected getCurrentPlatform(): string {
-    return resolveRuntimeUpdatePlatform()
+    return resolveRuntimeUpdatePlatform() ?? 'unsupported'
   }
 
   // 获取当前架构
   protected getCurrentArch(): string {
-    return resolveRuntimeUpdateArch()
+    return resolveRuntimeUpdateArch() ?? 'unsupported'
   }
 
   // 根据平台和架构过滤资源

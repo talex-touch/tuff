@@ -1,9 +1,11 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "release": {
     "version": "2.4.7-beta.11",
     "channel": "BETA",
-    "tag": "v2.4.7-beta.11"
+    "tag": "v2.4.7-beta.11",
+    "rollbackFromVersion": "2.4.7-beta.10",
+    "rollbackCompatible": false
   },
   "artifacts": [
     {

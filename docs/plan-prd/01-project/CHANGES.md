@@ -3,6 +3,14 @@
 > 更新时间：2026-07-16
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
 
+## 2026-07-17
+
+### search: fail closed until storage hydration and onboarding admission
+
+- `StorageModule` now owns explicit `pending / ready / failed` readiness, a single-flight wait primitive, and low-sensitivity subscriptions. Readiness becomes `ready` only after startup migrations and app-setting warmup; initialization failure publishes terminal `storage-init-failed` before module rollback.
+- A shared `OnboardingGate` maps readiness and `beginner.init` to `allowed / blocked / degraded`. Search provider loading, automatic indexing/maintenance, direct SearchCore execution, and CoreBox shortcut/search entrypoints no longer infer consent from a storage read failure.
+- Blocked/degraded CoreBox activation reuses the existing main/onboarding surface. Recoverable app-setting reads can be retried; distinct decision delivery plus existing provider/runtime single-flight guards prevent duplicate service starts.
+- Verification: 8 focused files / 37 tests, changed-file ESLint, CoreApp Node typecheck, and a direct pending→blocked→allowed→recoverable-degraded→allowed→terminal-degraded state-machine smoke passed. No SQLite schema, FTS, `scan_progress`, or real-profile data changed.
 
 ## 2026-07-16
 
@@ -117,7 +125,6 @@
 - 当前代码已是 CoreApp `2.4.13-beta.6`；活跃 TODO、计划、PRD、质量基线、能力矩阵与 AI evidence report 不再把 `2.4.13-beta.4` 写成当前版本。
 - `2.4.13-beta.4` AI Command packaged capture 与 strict verifier JSON 继续保留为历史/partial evidence，不伪造 beta.6 recapture；current-version gate 仍因 `2.4.12-beta.8 != 2.4.13-beta.6` fail-closed。
 - Focused verification：`mise run ai-docs:dev` passed。
-
 
 ### plugin(ai): restore ContextHygiene token streaming
 

@@ -3348,9 +3348,12 @@
       "autoDownloadTitle": "自动下载更新",
       "autoDownloadDesc": "发现新版本时自动下载更新包",
       "autoDownloadDescManual": "发现新版本时自动下载安装包，后续仍需通过系统安装器完成更新",
-      "autoInstallDownloadedUpdatesTitle": "下载完成后自动接管安装",
-      "autoInstallDownloadedUpdatesDesc": "仅 Windows 高级选项：自动下载完成后启动受支持安装器并退出应用，仍由系统安装器处理权限确认与回滚。",
-      "autoInstallDownloadedUpdatesDescDisabled": "开启自动下载后可用；仅 Windows 高级选项。",
+      "autoDownloadDescMac": "自动下载 macOS 更新包；应用更新时会通过重启完成接管。",
+      "autoDownloadDescWindows": "自动下载 Windows 安装器；后续仍会明确启动 Windows 安装器。",
+      "autoDownloadDescLinux": "自动下载 Linux 安装包；打开并完成安装仍需手动操作。",
+      "installOnNormalQuitTitle": "正常退出时安装",
+      "installOnNormalQuitDesc": "更新包下载并验证完成后，在应用下次正常退出时安装。关闭后仍可手动触发安装。",
+      "installOnNormalQuitLocked": "该版本没有权威 N/N-1 降级兼容证据，已锁定正常退出安装；更新就绪后仍可手动立即安装。",
       "rendererOverrideTitle": "Renderer Override（实验性）",
       "rendererOverrideDesc": "手动开启实验性 Renderer Override（需设置 TUFF_ENABLE_RENDERER_OVERRIDE=1）。",
       "statusTitle": "状态",
@@ -3365,14 +3368,90 @@
         "unknownVersion": "该版本",
         "cachedRelease": "缓存更新：{version}"
       },
+      "lifecycle": {
+        "loadingDescription": "正在从更新服务加载权威生命周期快照。",
+        "unavailable": "不可用",
+        "boolean": {
+          "yes": "是",
+          "no": "否"
+        },
+        "fields": {
+          "targetVersion": "目标版本",
+          "revision": "修订号",
+          "rollbackFromVersion": "降级来源版本",
+          "rollbackCompatible": "降级兼容",
+          "previousVersion": "上一版本",
+          "recoveryAvailable": "可恢复",
+          "lastCheck": "上次检查",
+          "error": "错误"
+        },
+        "error": {
+          "none": "无",
+          "retryable": "该错误可以重试。",
+          "notRetryable": "重试前需要先进行人工诊断。"
+        },
+        "phases": {
+          "idle": { "label": "空闲", "description": "当前没有进行中的更新尝试。" },
+          "checking": { "label": "正在检查更新", "description": "更新服务正在检查所选渠道。" },
+          "available": { "label": "发现可用更新", "description": "已发现可下载的新版本。" },
+          "downloading": {
+            "label": "正在下载更新",
+            "description": "正在下载当前平台对应的安装包。"
+          },
+          "verifying": { "label": "正在验证更新", "description": "正在验证完整性和发布元数据。" },
+          "ready": {
+            "label": "可以安装",
+            "description": "安装包已通过验证，可以由用户明确触发安装。"
+          },
+          "install-scheduled": {
+            "label": "已计划安装",
+            "description": "兼容的更新已计划在下次正常退出时安装。"
+          },
+          "handoff-started": {
+            "label": "已开始安装接管",
+            "description": "正在把控制权交给平台安装程序。"
+          },
+          "awaiting-health": {
+            "label": "等待健康确认",
+            "description": "更新后的应用已启动，仍需报告健康状态。"
+          },
+          "healthy": { "label": "更新运行正常", "description": "已安装版本通过生命周期健康确认。" },
+          "recovery-required": {
+            "label": "需要恢复",
+            "description": "更新未能进入健康状态，请先检查恢复元数据。"
+          },
+          "recovering": {
+            "label": "正在恢复上一版本",
+            "description": "权威恢复流程正在还原上一兼容版本。"
+          },
+          "recovered": {
+            "label": "已恢复上一版本",
+            "description": "恢复完成，上一版本已重新启用。"
+          },
+          "failed": {
+            "label": "更新失败",
+            "description": "本次更新尝试失败，请查看下方稳定错误码和消息。"
+          }
+        }
+      },
       "actionsTitle": "操作",
       "actionsDesc": "更新包下载完成后，在这里立即重启完成更新。",
       "actionsDescManual": "安装包下载完成后，在这里打开安装包并交给系统完成安装。",
       "actions": {
         "installNow": "立即重启更新",
         "openInstaller": "打开安装包",
+        "restartMac": "重启并更新",
+        "restartMacDesc": "重启 macOS 版 Tuff，并把已验证更新包交给更新程序；当前 native trust 是 waived，不是通过。",
+        "startWindowsInstaller": "启动安装器",
+        "startWindowsInstallerDesc": "启动已下载的 Windows 安装器，并按照 Windows 安装提示继续。",
+        "openLinuxPackage": "打开安装包",
+        "openLinuxPackageDesc": "使用系统软件包处理程序打开已下载的 Linux 安装包。",
+        "downloadAvailable": "下载更新",
+        "downloadAvailableDesc": "为当前权威 available 尝试下载与本机匹配的安装包。",
         "manualCheck": "检查更新",
         "manualCheckDesc": "立即检查当前渠道是否有新版本。",
+        "lifecycleInProgressDesc": "更新服务正在处理本次尝试；到达可操作阶段之前，操作保持锁定。",
+        "waitForLifecycle": "等待更新生命周期推进",
         "clearCache": "清空缓存"
       },
       "assetsTitle": "GitHub 下载包",
@@ -3390,13 +3469,17 @@
       "assetsCompatibilityNoUrl": "缺少下载链接",
       "assetsCompatibilityMissingChecksum": "缺少校验信息",
       "evidenceTitle": "诊断证据",
-      "evidenceDesc": "导出当前更新设置、下载就绪状态、缓存版本、目标平台与安装接管模式，供 Windows 真机回归记录使用",
+      "evidenceDesc": "导出权威生命周期快照、降级/恢复元数据、缓存版本、平台接管模式，以及明确的 macOS native trust 豁免风险。",
       "copyEvidence": "复制证据",
       "saveEvidence": "保存证据",
       "evidenceMissing": "请先加载更新状态",
       "evidenceCopied": "更新诊断证据已复制",
       "evidenceCopyFailed": "复制更新诊断证据失败",
       "evidenceSaved": "更新诊断证据已保存",
+      "nativeTrust": {
+        "title": "macOS native trust 已豁免",
+        "waivedRisk": "尚未配置 Apple Developer 签名，Gatekeeper/公证信任并未通过，因此该安装包仍有原生执行风险。"
+      },
       "assets": {
         "download": "下载",
         "copyLink": "复制链接",
@@ -3413,9 +3496,10 @@
         "channelSaved": "更新渠道已保存",
         "frequencySaved": "检查频率已保存",
         "autoDownloadSaved": "自动下载设置已保存",
-        "autoInstallDownloadedUpdatesSaved": "自动安装接管设置已保存",
+        "installOnNormalQuitSaved": "正常退出安装设置已保存",
         "rendererOverrideSaved": "Renderer Override 设置已保存",
         "saveFailed": "保存更新设置失败",
+        "actionUnavailableForPhase": "当前更新生命周期阶段不允许执行此操作。",
         "manualCheckStarted": "已开始手动检测更新",
         "manualCheckFound": "发现新版本 {version}",
         "manualCheckNoUpdate": "最新版本：{version}",

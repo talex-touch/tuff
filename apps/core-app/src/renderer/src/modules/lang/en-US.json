@@ -3380,9 +3380,12 @@
       "autoDownloadTitle": "Auto Download Updates",
       "autoDownloadDesc": "Automatically download updates when available",
       "autoDownloadDescManual": "Automatically download the installer when available; system installation still remains manual",
-      "autoInstallDownloadedUpdatesTitle": "Auto Handoff After Download",
-      "autoInstallDownloadedUpdatesDesc": "Windows advanced option only: launch a supported installer and quit the app after auto download; the system installer still handles permission confirmation and rollback.",
-      "autoInstallDownloadedUpdatesDescDisabled": "Available after auto download is enabled; Windows advanced option only.",
+      "autoDownloadDescMac": "Download the macOS update package automatically; applying it uses a restart handoff.",
+      "autoDownloadDescWindows": "Download the Windows installer automatically; Windows still shows the installer handoff.",
+      "autoDownloadDescLinux": "Download the Linux package automatically; opening and installing the package remains manual.",
+      "installOnNormalQuitTitle": "Install on Normal Quit",
+      "installOnNormalQuitDesc": "Install a verified downloaded update the next time the app exits normally. Disable this to keep installation manual.",
+      "installOnNormalQuitLocked": "Normal-quit installation is locked because this release has no authoritative N/N-1 rollback compatibility evidence. Install Now remains available when ready.",
       "rendererOverrideTitle": "Renderer Override (Experimental)",
       "rendererOverrideDesc": "Manually enable the experimental renderer override (requires TUFF_ENABLE_RENDERER_OVERRIDE=1).",
       "statusTitle": "Status",
@@ -3397,14 +3400,102 @@
         "unknownVersion": "this version",
         "cachedRelease": "Cached release: {version}"
       },
+      "lifecycle": {
+        "loadingDescription": "Loading the authoritative lifecycle snapshot from the update service.",
+        "unavailable": "Not available",
+        "boolean": {
+          "yes": "Yes",
+          "no": "No"
+        },
+        "fields": {
+          "targetVersion": "Target version",
+          "revision": "Revision",
+          "rollbackFromVersion": "Rollback from",
+          "rollbackCompatible": "Rollback compatible",
+          "previousVersion": "Previous version",
+          "recoveryAvailable": "Recovery available",
+          "lastCheck": "Last check",
+          "error": "Error"
+        },
+        "error": {
+          "none": "None",
+          "retryable": "This error can be retried.",
+          "notRetryable": "This error requires manual diagnosis before retrying."
+        },
+        "phases": {
+          "idle": { "label": "Idle", "description": "No update attempt is active." },
+          "checking": {
+            "label": "Checking for updates",
+            "description": "The update service is checking the selected channel."
+          },
+          "available": {
+            "label": "Update available",
+            "description": "A release is available and can be downloaded."
+          },
+          "downloading": {
+            "label": "Downloading update",
+            "description": "The selected platform package is downloading."
+          },
+          "verifying": {
+            "label": "Verifying update",
+            "description": "Integrity and release metadata are being verified."
+          },
+          "ready": {
+            "label": "Ready to install",
+            "description": "The verified package is ready for an explicit install action."
+          },
+          "install-scheduled": {
+            "label": "Install scheduled",
+            "description": "A compatible install is scheduled for the next normal quit."
+          },
+          "handoff-started": {
+            "label": "Installer handoff started",
+            "description": "Control is being handed to the platform installer."
+          },
+          "awaiting-health": {
+            "label": "Awaiting health confirmation",
+            "description": "The updated app has started and must still report healthy."
+          },
+          "healthy": {
+            "label": "Update healthy",
+            "description": "The installed version passed lifecycle health confirmation."
+          },
+          "recovery-required": {
+            "label": "Recovery required",
+            "description": "The update did not become healthy; review recovery metadata before proceeding."
+          },
+          "recovering": {
+            "label": "Recovering previous version",
+            "description": "The authoritative recovery flow is restoring the previous compatible version."
+          },
+          "recovered": {
+            "label": "Previous version recovered",
+            "description": "Recovery completed; the previous version is active again."
+          },
+          "failed": {
+            "label": "Update failed",
+            "description": "The update attempt failed. Review the stable error code and message below."
+          }
+        }
+      },
       "actionsTitle": "Actions",
       "actionsDesc": "Restart here after the update package is downloaded.",
       "actionsDescManual": "Open the downloaded installer here and let the operating system finish installation.",
       "actions": {
         "installNow": "Restart to Update",
         "openInstaller": "Open Installer",
+        "restartMac": "Restart to Update",
+        "restartMacDesc": "Restart macOS Tuff and hand the verified package to the updater. Native trust is currently waived, not passed.",
+        "startWindowsInstaller": "Start Installer",
+        "startWindowsInstallerDesc": "Start the downloaded Windows installer and follow the Windows installation prompts.",
+        "openLinuxPackage": "Open Package",
+        "openLinuxPackageDesc": "Open the downloaded Linux package with the system package handler.",
+        "downloadAvailable": "Download Update",
+        "downloadAvailableDesc": "Download the matching package for this authoritative available attempt.",
         "manualCheck": "Check Now",
         "manualCheckDesc": "Check the current channel for a new version.",
+        "lifecycleInProgressDesc": "The update service is processing this attempt; actions remain locked until the lifecycle reaches an actionable phase.",
+        "waitForLifecycle": "Waiting for the update lifecycle",
         "clearCache": "Clear Cache"
       },
       "assetsTitle": "GitHub Packages",
@@ -3422,13 +3513,17 @@
       "assetsCompatibilityNoUrl": "Missing download URL",
       "assetsCompatibilityMissingChecksum": "Missing checksum",
       "evidenceTitle": "Diagnostic Evidence",
-      "evidenceDesc": "Export current update settings, download-ready status, cached release, target platform, and installer handoff mode for Windows regression records",
+      "evidenceDesc": "Export the authoritative lifecycle snapshot, rollback/recovery metadata, cached release, platform handoff mode, and explicit macOS native-trust waiver risk.",
       "copyEvidence": "Copy Evidence",
       "saveEvidence": "Save Evidence",
       "evidenceMissing": "Load update status first",
       "evidenceCopied": "Update diagnostic evidence copied",
       "evidenceCopyFailed": "Failed to copy update diagnostic evidence",
       "evidenceSaved": "Update diagnostic evidence saved",
+      "nativeTrust": {
+        "title": "macOS native trust is waived",
+        "waivedRisk": "Apple Developer signing is not configured. Gatekeeper/notarization trust has not passed, so this package still carries native execution risk."
+      },
       "assets": {
         "download": "Download",
         "copyLink": "Copy Link",
@@ -3445,9 +3540,10 @@
         "channelSaved": "Update channel saved",
         "frequencySaved": "Frequency saved",
         "autoDownloadSaved": "Auto download setting saved",
-        "autoInstallDownloadedUpdatesSaved": "Auto install handoff setting saved",
+        "installOnNormalQuitSaved": "Normal-quit installation setting saved",
         "rendererOverrideSaved": "Renderer override setting saved",
         "saveFailed": "Failed to save settings",
+        "actionUnavailableForPhase": "This action is unavailable in the current update lifecycle phase.",
         "manualCheckStarted": "Update check started",
         "manualCheckFound": "Found release {version}",
         "manualCheckNoUpdate": "Latest release: {version}",

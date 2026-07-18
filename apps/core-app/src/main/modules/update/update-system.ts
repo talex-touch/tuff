@@ -1,14 +1,13 @@
 import type {
   DownloadRequest,
   GitHubRelease,
-  UpdateCheckResult,
+  NormalizedUpdateCandidate,
   UpdateArtifactComponent
 } from '@talex-touch/utils'
 import type { DownloadCenterModule } from '../download/download-center'
 import type { NotificationService } from '../download/notification-service'
-import { spawn } from 'node:child_process'
 import * as crypto from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { createReadStream, promises as fs } from 'node:fs'
 import os from 'node:os'
 import * as path from 'node:path'
 import process from 'node:process'
@@ -17,43 +16,27 @@ import {
   DownloadModule,
   DownloadPriority,
   DownloadStatus,
-  UPDATE_GITHUB_RELEASES_API,
   UPDATE_RELEASE_MANIFEST_NAME,
   type UpdateReleaseArtifact,
   type UpdateReleaseManifest,
-  splitUpdateTag
+  splitUpdateTag,
+  validateUpdateReleaseManifest
 } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import compressing from 'compressing'
 import { and, eq } from 'drizzle-orm'
-import { app, shell } from 'electron'
+import { app } from 'electron'
 import fse from 'fs-extra'
 import { downloadTasks } from '../../db/schema'
 import { normalizeSupportedUpdateChannel } from '../../../shared/update/channel'
-import { resolveUpdateAssetTarget } from '../../../shared/update/platform-target'
-import {
-  compareUpdateVersions,
-  parseComparableUpdateVersion,
-  selectLatestUpdateRelease
-} from '../../../shared/update/version'
-import { getCurrentTouchApp } from '../../core/main-runtime-state'
+import { compareUpdateVersions, parseComparableUpdateVersion } from '../../../shared/update/version'
 import { createLogger } from '../../utils/logger'
 import { SignatureVerifier } from '../../utils/release-signature'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { databaseModule } from '../database'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getNetworkService } from '../network'
-import { launchWindowsInstaller } from './services/windows-installer-strategy'
-import {
-  calculateUpdateAssetScore,
-  isAuxiliaryUpdateComponentAsset,
-  isUpdateChecksumAsset,
-  isUpdateManifestAsset,
-  isUpdateMetadataAsset,
-  isUpdateSignatureAsset,
-  normalizeUpdateAssetKey,
-  stripUpdateSignatureSuffix
-} from './update-asset-utils'
+import { normalizeUpdateAssetKey } from './update-asset-utils'
 
 /**
  * Version information interface
@@ -71,7 +54,6 @@ interface VersionInfo {
  */
 interface UpdateSystemConfig {
   autoDownload: boolean
-  autoInstallDownloadedUpdates: boolean
   autoCheck: boolean
   checkFrequency: 'startup' | 'daily' | 'weekly' | 'never'
   ignoredVersions: string[]
@@ -96,10 +78,6 @@ interface RendererOverrideState {
   sha256?: string
 }
 
-interface UpdateDownloadOptions {
-  autoInstallOnComplete?: boolean
-}
-
 /**
  * Release asset with platform information
  */
@@ -107,15 +85,29 @@ interface ReleaseAsset {
   name: string
   url: string
   size: number
-  platform: string
-  arch: string
+  platform?: string
+  arch?: string
   checksum?: string
   browser_download_url?: string
   sha256?: string
   signatureUrl?: string
-  signatureKeyUrl?: string
   component?: UpdateArtifactComponent
   coreRange?: string
+}
+
+export interface VerifiedUpdatePackage {
+  taskId: string
+  filePath: string
+  destination: string
+  filename: string
+  sha256: string
+  signatureUrl: string
+}
+
+export interface UpdateDownloadStartResult {
+  taskId: string
+  rollbackFromVersion: string
+  rollbackCompatible: boolean
 }
 
 /**
@@ -152,15 +144,8 @@ export class UpdateSystem {
   private readonly signatureVerifier = new SignatureVerifier()
   private readonly storageRoot: string
   private readonly messageStore = getAnalyticsMessageStore()
-  private readonly autoInstallOnCompleteTaskIds = new Set<string>()
 
   /** Channel priority for version comparison (lower = more stable) */
-  private readonly channelPriority: Record<AppPreviewChannel, number> = {
-    [AppPreviewChannel.RELEASE]: 0,
-    [AppPreviewChannel.BETA]: 1,
-    [AppPreviewChannel.SNAPSHOT]: 1
-  }
-
   /**
    * Create UpdateSystem instance
    * @param downloadCenterModule - DownloadCenter module instance for download management
@@ -173,7 +158,6 @@ export class UpdateSystem {
     this.storageRoot = config?.storageRoot ?? app.getPath('userData')
     this.config = {
       autoDownload: true,
-      autoInstallDownloadedUpdates: false,
       autoCheck: true,
       checkFrequency: 'startup',
       ignoredVersions: [],
@@ -188,108 +172,37 @@ export class UpdateSystem {
    * Check for available updates
    * @returns Update check result with release information
    */
-  async checkForUpdates(): Promise<UpdateCheckResult> {
-    try {
-      const targetChannel = this.getEffectiveChannel()
-      const releases = await this.fetchGitHubReleases()
-
-      // Filter releases by channel
-      const channelReleases = releases.filter((release) => {
-        const version = this.parseVersion(release.tag_name)
-        return version.channel === targetChannel
-      })
-
-      if (channelReleases.length === 0) {
-        return {
-          hasUpdate: false,
-          error: `No releases found for channel: ${targetChannel}`,
-          source: 'GitHub'
-        }
-      }
-
-      // Pick the newest compatible release instead of trusting provider order.
-      const latestRelease = selectLatestUpdateRelease(channelReleases)
-      if (!latestRelease) {
-        return {
-          hasUpdate: false,
-          error: `No releases found for channel: ${targetChannel}`,
-          source: 'GitHub'
-        }
-      }
-      const latestVersion = this.parseVersion(latestRelease.tag_name)
-
-      // Check if update is needed
-      if (this.isUpdateNeeded(latestVersion)) {
-        // Check if version is ignored
-        if (this.config.ignoredVersions.includes(latestRelease.tag_name)) {
-          return {
-            hasUpdate: false,
-            error: 'Version ignored by user',
-            source: 'GitHub'
-          }
-        }
-
-        // Show update available notification
-        if (this.notificationService) {
-          this.notificationService.showUpdateAvailableNotification(
-            latestRelease.tag_name,
-            latestRelease.body
-          )
-        }
-
-        return {
-          hasUpdate: true,
-          release: latestRelease,
-          source: 'GitHub'
-        }
-      }
-
-      return {
-        hasUpdate: false,
-        source: 'GitHub'
-      }
-    } catch (error) {
-      updateSystemLog.error('Failed to check for updates', { error })
-      return {
-        hasUpdate: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        source: 'GitHub'
-      }
-    }
-  }
-
   /**
    * Download update package
    * @param release - GitHub release to download
    * @returns Task ID of the download
    */
-  async downloadUpdate(
-    release: GitHubRelease,
-    options: UpdateDownloadOptions = {}
-  ): Promise<string> {
+  async downloadUpdate(release: GitHubRelease): Promise<UpdateDownloadStartResult> {
     try {
-      const { release: resolvedRelease, manifest } = await this.attachReleaseManifest(release)
+      const candidate = await this.resolveUpdateCandidate(release)
+      const resolvedRelease = candidate.release
+      const rollbackCompatible =
+        candidate.manifest.release.rollbackCompatible &&
+        candidate.manifest.release.rollbackFromVersion ===
+          this.currentVersion.raw.trim().replace(/^v/i, '')
 
       const reusableTaskId = await this.findReusableUpdateTaskId(resolvedRelease.tag_name)
       if (reusableTaskId) {
-        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name, options)
+        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name)
         updateSystemLog.info('Reusing existing update task', {
           meta: {
             tag: resolvedRelease.tag_name,
             taskId: reusableTaskId
           }
         })
-        return reusableTaskId
+        return {
+          taskId: reusableTaskId,
+          rollbackFromVersion: candidate.manifest.release.rollbackFromVersion,
+          rollbackCompatible
+        }
       }
 
-      // Find appropriate asset for current platform
-      const asset = this.findAssetForPlatform(resolvedRelease.assets)
-
-      if (!asset) {
-        throw new Error('No compatible asset found for current platform')
-      }
-
-      // Create download request with high priority
+      const asset = candidate.asset
       const request: DownloadRequest = {
         url: asset.url,
         destination: await this.getUpdateDownloadPath(),
@@ -301,23 +214,23 @@ export class UpdateSystem {
           releaseDate: resolvedRelease.published_at,
           checksum: asset.checksum,
           signatureUrl: asset.signatureUrl,
-          signatureKeyUrl: asset.signatureKeyUrl
+          rollbackFromVersion: candidate.manifest.release.rollbackFromVersion,
+          rollbackCompatible
         },
         checksum: asset.checksum
       }
 
-      // Add download task to DownloadCenter
       const taskId = await this.downloadCenterModule.addTask(request)
+      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name)
 
-      // Set up listener for download completion
-      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name, options)
-
-      void this.maybeScheduleRendererOverrideDownload(resolvedRelease, manifest).catch((error) => {
-        updateSystemLog.warn('Renderer override background scheduling failed', {
-          error,
-          meta: { tag: resolvedRelease.tag_name }
-        })
-      })
+      void this.maybeScheduleRendererOverrideDownload(resolvedRelease, candidate.manifest).catch(
+        (error) => {
+          updateSystemLog.warn('Renderer override background scheduling failed', {
+            error,
+            meta: { tag: resolvedRelease.tag_name }
+          })
+        }
+      )
 
       updateSystemLog.info('Update download started', {
         meta: {
@@ -326,7 +239,11 @@ export class UpdateSystem {
           asset: asset.name
         }
       })
-      return taskId
+      return {
+        taskId,
+        rollbackFromVersion: candidate.manifest.release.rollbackFromVersion,
+        rollbackCompatible
+      }
     } catch (error) {
       updateSystemLog.error('Failed to download update', {
         error,
@@ -402,16 +319,9 @@ export class UpdateSystem {
    * Set up listener for download completion to show notification
    * @private
    */
-  private setupDownloadCompletionListener(
-    taskId: string,
-    version: string,
-    options: UpdateDownloadOptions = {}
-  ): void {
+  private setupDownloadCompletionListener(taskId: string, version: string): void {
     // Listen for download completion event
     const pollTaskId = `update-system.download.${taskId}`
-    if (this.shouldAutoInstallOnComplete(options)) {
-      this.autoInstallOnCompleteTaskIds.add(taskId)
-    }
     if (this.pollingService.isRegistered(pollTaskId)) {
       this.pollingService.unregister(pollTaskId)
     }
@@ -423,29 +333,11 @@ export class UpdateSystem {
 
         if (!task) {
           this.pollingService.unregister(pollTaskId)
-          this.autoInstallOnCompleteTaskIds.delete(taskId)
           return
         }
 
         if (task.status === 'completed') {
           this.pollingService.unregister(pollTaskId)
-
-          if (this.autoInstallOnCompleteTaskIds.delete(taskId)) {
-            void this.installUpdate(taskId).catch((error) => {
-              updateSystemLog.warn('Automatic Windows installer handoff failed', {
-                error,
-                meta: { taskId, version }
-              })
-              this.messageStore.add({
-                source: 'update',
-                severity: 'error',
-                title: 'Automatic update install failed',
-                message: error instanceof Error ? error.message : String(error),
-                meta: { taskId, version }
-              })
-            })
-            return
-          }
 
           // Show update download complete notification
           if (this.notificationService) {
@@ -453,20 +345,11 @@ export class UpdateSystem {
           }
         } else if (task.status === 'failed' || task.status === 'cancelled') {
           this.pollingService.unregister(pollTaskId)
-          this.autoInstallOnCompleteTaskIds.delete(taskId)
         }
       },
       { interval: 1, unit: 'seconds' }
     )
     this.pollingService.start()
-  }
-
-  private shouldAutoInstallOnComplete(options: UpdateDownloadOptions): boolean {
-    return (
-      options.autoInstallOnComplete === true &&
-      this.config.autoInstallDownloadedUpdates === true &&
-      process.platform === 'win32'
-    )
   }
 
   private async maybeScheduleRendererOverrideDownload(
@@ -594,8 +477,7 @@ export class UpdateSystem {
         releaseTag: release.tag_name,
         coreRange: artifact.coreRange,
         checksum: artifact.sha256,
-        signatureUrl: asset.signatureUrl,
-        signatureKeyUrl: asset.signatureKeyUrl
+        signatureUrl: asset.signatureUrl
       },
       checksum: artifact.sha256
     }
@@ -704,13 +586,7 @@ export class UpdateSystem {
 
     const signatureUrl = task.metadata?.signatureUrl
     if (typeof signatureUrl === 'string' && signatureUrl.length > 0) {
-      const verifyResult = await this.signatureVerifier.verifyFileSignature(
-        filePath,
-        signatureUrl,
-        typeof task.metadata?.signatureKeyUrl === 'string'
-          ? task.metadata?.signatureKeyUrl
-          : undefined
-      )
+      const verifyResult = await this.signatureVerifier.verifyFileSignature(filePath, signatureUrl)
       if (!verifyResult.valid) {
         updateSystemLog.warn('Renderer override signature verification failed', {
           meta: {
@@ -861,80 +737,63 @@ export class UpdateSystem {
    * Install update package
    * @param taskId - Download task ID
    */
-  async installUpdate(taskId: string): Promise<void> {
-    try {
-      const task = await this.resolveInstallTask(taskId)
+  async verifyDownloadedUpdate(taskId: string): Promise<void> {
+    await this.resolveVerifiedInstallTask(taskId)
+  }
 
-      if (!task) {
-        throw new Error(`Task ${taskId} not found`)
-      }
+  async prepareInstallHandoff(taskId: string): Promise<VerifiedUpdatePackage> {
+    return await this.resolveVerifiedInstallTask(taskId)
+  }
 
-      if (task.status !== DownloadStatus.COMPLETED) {
-        throw new Error(`Task ${taskId} is not completed`)
-      }
+  private async resolveVerifiedInstallTask(taskId: string): Promise<VerifiedUpdatePackage> {
+    const task = await this.resolveInstallTask(taskId)
 
-      const filePath = path.join(task.destination, task.filename)
-      if (!(await this.fileExists(filePath))) {
-        throw new Error(`Update package not found: ${filePath}`)
-      }
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`)
+    }
+    if (task.status !== DownloadStatus.COMPLETED) {
+      throw new Error(`Task ${taskId} is not completed`)
+    }
 
-      const checksum = typeof task.metadata?.checksum === 'string' ? task.metadata.checksum : null
-      if (checksum) {
-        const isValid = await this.verifyChecksum(filePath, checksum)
+    const filePath = path.join(task.destination, task.filename)
+    if (!(await this.fileExists(filePath))) {
+      throw new Error(`Update package not found: ${filePath}`)
+    }
 
-        if (!isValid) {
-          throw new Error('Checksum verification failed')
-        }
-      }
+    const checksum = typeof task.metadata?.checksum === 'string' ? task.metadata.checksum : null
+    if (!checksum) {
+      throw new Error('Update package checksum is required but missing')
+    }
+    if (!(await this.verifyChecksum(filePath, checksum))) {
+      throw new Error('Checksum verification failed')
+    }
 
-      const signatureUrl =
-        typeof task.metadata?.signatureUrl === 'string' ? task.metadata.signatureUrl : undefined
-      if (!signatureUrl) {
-        // Requiring a signature is opt-in: some historical release assets may
-        // lack a signature URL, so mandating it is gated behind an env flag
-        // until the release pipeline guarantees every asset is signed.
-        if (process.env.TUFF_UPDATE_REQUIRE_SIGNATURE === 'true') {
-          throw new Error('Update package signature is required but missing')
-        }
-        updateSystemLog.warn(
-          'Update package has no signature URL; skipping signature verification',
-          {
-            meta: { taskId }
-          }
-        )
-      }
-      if (signatureUrl) {
-        const verifyResult = await this.signatureVerifier.verifyFileSignature(
-          filePath,
-          signatureUrl,
-          typeof task.metadata?.signatureKeyUrl === 'string'
-            ? task.metadata.signatureKeyUrl
-            : undefined
-        )
-
-        if (!verifyResult.valid) {
-          updateSystemLog.error('Update package signature verification failed', {
-            meta: {
-              taskId,
-              reason: verifyResult.reason
-            }
-          })
-          // Fail closed: never install a package whose signature does not verify.
-          throw new Error(
-            `Update package signature verification failed: ${verifyResult.reason ?? 'unknown'}`
-          )
-        }
-      }
-
-      // Trigger installation (platform-specific)
-      await this.triggerInstallation(task.destination, task.filename)
-
-      updateSystemLog.info('Update installation triggered', {
-        meta: { taskId, filename: task.filename }
+    const signatureUrl =
+      typeof task.metadata?.signatureUrl === 'string' ? task.metadata.signatureUrl : undefined
+    if (!signatureUrl) {
+      throw new Error('Update package signature is required but missing')
+    }
+    const verifyResult = await this.signatureVerifier.verifyFileSignatureWithCache(
+      filePath,
+      signatureUrl,
+      `${filePath}.sig`
+    )
+    if (!verifyResult.valid) {
+      updateSystemLog.error('Update package signature verification failed', {
+        meta: { taskId, reason: verifyResult.reason }
       })
-    } catch (error) {
-      updateSystemLog.error('Failed to install update', { error, meta: { taskId } })
-      throw error
+      throw new Error(
+        `Update package signature verification failed: ${verifyResult.reason ?? 'unknown'}`
+      )
+    }
+
+    return {
+      taskId,
+      filePath,
+      destination: task.destination,
+      filename: task.filename,
+      sha256: checksum,
+      signatureUrl
     }
   }
 
@@ -1083,37 +942,16 @@ export class UpdateSystem {
   /**
    * Fetch releases from GitHub API
    */
-  private async fetchGitHubReleases(): Promise<GitHubRelease[]> {
-    try {
-      const response = await getNetworkService().request<GitHubRelease[]>({
-        method: 'GET',
-        url: UPDATE_GITHUB_RELEASES_API,
-        timeoutMs: 10000,
-        responseType: 'json',
-        headers: {
-          Accept: 'application/vnd.github.v3+json',
-          'User-Agent': 'TalexTouch-Updater/2.0'
-        }
-      })
-
-      if (!response.data || !Array.isArray(response.data)) {
-        throw new Error('Invalid response format from GitHub API')
-      }
-
-      return response.data
-    } catch (error) {
-      updateSystemLog.error('Failed to fetch GitHub releases', { error })
-      throw error
-    }
-  }
-
-  private async attachReleaseManifest(
+  private async attachReleaseManifest(release: GitHubRelease): Promise<{
     release: GitHubRelease
-  ): Promise<{ release: GitHubRelease; manifest: UpdateReleaseManifest | null }> {
-    const manifest = await this.fetchReleaseManifest(release.assets)
-    if (!manifest) {
-      return { release, manifest: null }
+    manifest: UpdateReleaseManifest | null
+    artifact: UpdateReleaseArtifact | null
+  }> {
+    const resolvedManifest = await this.fetchReleaseManifest(release)
+    if (!resolvedManifest) {
+      return { release, manifest: null, artifact: null }
     }
+    const { manifest, artifact } = resolvedManifest
 
     const assetMap = new Map<string, ReleaseAsset>()
     for (const asset of release.assets as ReleaseAsset[]) {
@@ -1124,50 +962,84 @@ export class UpdateSystem {
     }
 
     const manifestMap = new Map<string, UpdateReleaseArtifact>()
-    for (const artifact of manifest.artifacts) {
-      if (artifact?.name) {
-        manifestMap.set(normalizeUpdateAssetKey(artifact.name), artifact)
-      }
+    for (const entry of manifest.artifacts) {
+      manifestMap.set(normalizeUpdateAssetKey(entry.name), entry)
     }
 
     for (const asset of release.assets as ReleaseAsset[]) {
-      const name = String(asset?.name || '')
-      if (!name) {
-        continue
-      }
-      const manifestEntry = manifestMap.get(normalizeUpdateAssetKey(name))
+      const manifestEntry = manifestMap.get(normalizeUpdateAssetKey(String(asset?.name || '')))
       if (!manifestEntry) {
         continue
       }
-
       asset.sha256 = manifestEntry.sha256
       asset.checksum = manifestEntry.sha256
       asset.component = manifestEntry.component
       asset.coreRange = manifestEntry.coreRange
 
-      if (manifestEntry.signature) {
+      if (manifestEntry.signature && !asset.signatureUrl) {
         const signatureAsset = assetMap.get(normalizeUpdateAssetKey(manifestEntry.signature))
         const signatureUrl = signatureAsset?.browser_download_url || signatureAsset?.url
         if (signatureUrl) {
           asset.signatureUrl = signatureUrl
         }
       }
-
-      if (manifestEntry.signatureKey) {
-        const signatureKeyAsset = assetMap.get(normalizeUpdateAssetKey(manifestEntry.signatureKey))
-        const signatureKeyUrl = signatureKeyAsset?.browser_download_url || signatureKeyAsset?.url
-        if (signatureKeyUrl) {
-          asset.signatureKeyUrl = signatureKeyUrl
-        }
-      }
     }
 
-    return { release, manifest }
+    return { release, manifest, artifact }
+  }
+
+  private async resolveUpdateCandidate(release: GitHubRelease): Promise<NormalizedUpdateCandidate> {
+    if (release.source !== 'nexus' && release.source !== 'github') {
+      throw new Error('Update release source is missing')
+    }
+
+    const platform = process.platform
+    if (platform !== 'win32' && platform !== 'darwin' && platform !== 'linux') {
+      throw new Error(`Unsupported update platform: ${platform}`)
+    }
+    const arch: 'x64' | 'arm64' = process.arch === 'arm64' ? 'arm64' : 'x64'
+    const {
+      release: resolvedRelease,
+      manifest,
+      artifact
+    } = await this.attachReleaseManifest(release)
+    if (!manifest || !artifact) {
+      throw new Error('Update release manifest is required and must match this platform')
+    }
+
+    const releaseAsset = this.resolveAssetByName(
+      resolvedRelease.assets as ReleaseAsset[],
+      artifact.name
+    )
+    const url = releaseAsset?.browser_download_url || releaseAsset?.url
+    if (!releaseAsset || !url) {
+      throw new Error('Manifest update asset is missing from the release')
+    }
+    if (!releaseAsset.signatureUrl) {
+      throw new Error('Update package signature is required but missing')
+    }
+
+    return {
+      source: release.source,
+      channel: manifest.release.channel,
+      release: resolvedRelease,
+      manifest,
+      asset: {
+        name: releaseAsset.name,
+        url,
+        size: releaseAsset.size,
+        platform,
+        arch,
+        checksum: artifact.sha256,
+        signatureUrl: releaseAsset.signatureUrl
+      }
+    }
   }
 
   private async fetchReleaseManifest(
-    assets: ReleaseAsset[]
-  ): Promise<UpdateReleaseManifest | null> {
+    release: GitHubRelease
+  ): Promise<{ manifest: UpdateReleaseManifest; artifact: UpdateReleaseArtifact } | null> {
+    const assets = release.assets as ReleaseAsset[]
     const manifestAsset = assets.find(
       (asset) => normalizeUpdateAssetKey(String(asset?.name || '')) === UPDATE_RELEASE_MANIFEST_NAME
     )
@@ -1180,6 +1052,12 @@ export class UpdateSystem {
       return null
     }
 
+    const platform = process.platform
+    if (platform !== 'win32' && platform !== 'darwin' && platform !== 'linux') {
+      return null
+    }
+    const arch: 'x64' | 'arm64' = process.arch === 'arm64' ? 'arm64' : 'x64'
+
     try {
       const response = await getNetworkService().request<unknown>({
         method: 'GET',
@@ -1187,16 +1065,19 @@ export class UpdateSystem {
         timeoutMs: 8000,
         responseType: 'json'
       })
-      const manifest = response.data
-
-      if (!this.isReleaseManifest(manifest)) {
-        updateSystemLog.warn('Invalid release manifest format', {
-          meta: { asset: manifestAsset.name }
+      const validation = validateUpdateReleaseManifest(response.data, {
+        tag: release.tag_name,
+        channel: this.parseVersion(release.tag_name).channel,
+        platform,
+        arch
+      })
+      if (!validation.valid) {
+        updateSystemLog.warn('Invalid release manifest', {
+          meta: { asset: manifestAsset.name, reason: validation.reason }
         })
         return null
       }
-
-      return manifest
+      return { manifest: validation.manifest, artifact: validation.artifact }
     } catch (error) {
       updateSystemLog.warn('Failed to fetch release manifest', {
         error,
@@ -1204,19 +1085,6 @@ export class UpdateSystem {
       })
       return null
     }
-  }
-
-  private isReleaseManifest(payload: unknown): payload is UpdateReleaseManifest {
-    if (!payload || typeof payload !== 'object') {
-      return false
-    }
-
-    const candidate = payload as { schemaVersion?: unknown; artifacts?: unknown }
-    if (candidate.schemaVersion !== 1) {
-      return false
-    }
-
-    return Array.isArray(candidate.artifacts)
   }
 
   /**
@@ -1283,140 +1151,12 @@ export class UpdateSystem {
   /**
    * Check if update is needed
    */
-  private isUpdateNeeded(newVersion: VersionInfo): boolean {
-    // Compare channel priority
-    const currentChannelPriority = this.channelPriority[this.currentVersion.channel]
-    const newChannelPriority = this.channelPriority[newVersion.channel]
-
-    if (currentChannelPriority !== newChannelPriority) {
-      return newChannelPriority > currentChannelPriority
-    }
-
-    return this.compareSemverVersions(newVersion.raw, this.currentVersion.raw) === 1
-  }
-
   /**
    * Get effective update channel
    */
-  private getEffectiveChannel(): AppPreviewChannel {
-    if (this.config.updateChannel) {
-      return normalizeSupportedUpdateChannel(this.config.updateChannel)
-    }
-    return normalizeSupportedUpdateChannel(this.currentVersion.channel)
-  }
-
   /**
    * Find appropriate asset for current platform
    */
-  private findAssetForPlatform(assets: ReleaseAsset[]): ReleaseAsset | null {
-    const platform = process.platform
-    const arch: 'x64' | 'arm64' = process.arch === 'arm64' ? 'arm64' : 'x64'
-
-    const signatureMap = new Map<string, string>()
-
-    for (const asset of assets) {
-      const name = String(asset?.name || '')
-      if (!name) {
-        continue
-      }
-
-      if (isUpdateSignatureAsset(name)) {
-        const url = asset.browser_download_url || asset.url
-        if (url) {
-          signatureMap.set(normalizeUpdateAssetKey(stripUpdateSignatureSuffix(name)), url)
-        }
-      }
-    }
-
-    const candidates: Array<{ asset: ReleaseAsset; score: number }> = []
-
-    for (const asset of assets) {
-      const name = String(asset?.name || '')
-      if (!name) {
-        continue
-      }
-
-      if (
-        isUpdateSignatureAsset(name) ||
-        isUpdateChecksumAsset(name) ||
-        isUpdateManifestAsset(name) ||
-        isUpdateMetadataAsset(name)
-      ) {
-        continue
-      }
-
-      const normalizedName = name.toLowerCase()
-
-      if (asset.component && asset.component !== 'core') {
-        continue
-      }
-
-      if (!asset.component && isAuxiliaryUpdateComponentAsset(normalizedName)) {
-        continue
-      }
-
-      const target = resolveUpdateAssetTarget(
-        name,
-        {
-          platform: asset.platform,
-          arch: asset.arch
-        },
-        {
-          platform,
-          arch
-        }
-      )
-      if (!target || target.platform !== platform) {
-        continue
-      }
-
-      const downloadUrl = asset.browser_download_url || asset.url
-      if (!downloadUrl) {
-        continue
-      }
-
-      const signatureUrl = asset.signatureUrl || signatureMap.get(normalizeUpdateAssetKey(name))
-      const signatureKeyUrl = asset.signatureKeyUrl
-      const checksum =
-        typeof asset.sha256 === 'string'
-          ? asset.sha256
-          : typeof asset.checksum === 'string'
-            ? asset.checksum
-            : undefined
-
-      const candidate: ReleaseAsset = {
-        name: asset.name,
-        url: downloadUrl,
-        size: asset.size,
-        platform: target.platform,
-        arch: target.arch,
-        checksum,
-        signatureUrl,
-        signatureKeyUrl,
-        component: asset.component,
-        coreRange: asset.coreRange
-      }
-
-      candidates.push({
-        asset: candidate,
-        score: target.priority * 1000 + calculateUpdateAssetScore(normalizedName, asset, platform)
-      })
-    }
-
-    if (!candidates.length) {
-      return null
-    }
-
-    candidates.sort((left, right) => {
-      if (right.score !== left.score) {
-        return right.score - left.score
-      }
-      return (right.asset.size || 0) - (left.asset.size || 0)
-    })
-
-    return candidates[0].asset
-  }
-
   /**
    * Get update download path
    */
@@ -1440,9 +1180,10 @@ export class UpdateSystem {
    */
   private async verifyChecksum(filePath: string, expectedChecksum: string): Promise<boolean> {
     try {
-      const fileBuffer = await fs.readFile(filePath)
       const hash = crypto.createHash('sha256')
-      hash.update(fileBuffer)
+      for await (const chunk of createReadStream(filePath)) {
+        hash.update(chunk)
+      }
       const actualChecksum = hash.digest('hex')
 
       return actualChecksum.toLowerCase() === expectedChecksum.toLowerCase()
@@ -1453,147 +1194,5 @@ export class UpdateSystem {
       })
       return false
     }
-  }
-
-  /**
-   * Trigger installation (platform-specific)
-   */
-  private async triggerInstallation(destination: string, filename: string): Promise<void> {
-    const filePath = path.join(destination, filename)
-    if (process.platform === 'darwin' && (await this.tryInstallMacAppBundle(filePath))) {
-      return
-    }
-    if (process.platform === 'win32') {
-      const launchResult = launchWindowsInstaller(filePath, {
-        spawn,
-        requestAppQuit: (reason) => this.requestAppQuit(reason)
-      })
-      if (launchResult.launched) {
-        updateSystemLog.info('Started Windows installer', {
-          meta: {
-            path: filePath,
-            type: launchResult.command?.type,
-            command: launchResult.command?.command
-          }
-        })
-        return
-      }
-    }
-    await shell.openPath(filePath)
-    updateSystemLog.info('Opened installer', { meta: { path: filePath } })
-  }
-
-  private async tryInstallMacAppBundle(packagePath: string): Promise<boolean> {
-    const lower = packagePath.toLowerCase()
-    if (!app.isPackaged || !['.app', '.zip', '.dmg'].some((ext) => lower.endsWith(ext))) {
-      return false
-    }
-
-    const targetAppPath = this.resolveCurrentMacAppBundlePath()
-    if (!targetAppPath) {
-      return false
-    }
-
-    const scriptPath = this.resolveMacApplyUpdateScriptPath()
-    if (!scriptPath) {
-      updateSystemLog.warn('macOS apply update script is unavailable', {
-        meta: { path: packagePath }
-      })
-      return false
-    }
-
-    const stageRoot = path.join(
-      this.storageRoot,
-      'modules',
-      'update-packages',
-      '.mac-install-stage',
-      `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`
-    )
-    const logPath = path.join(stageRoot, 'apply-update.log')
-
-    try {
-      await fse.ensureDir(stageRoot)
-      await fs.chmod(scriptPath, 0o755).catch(() => undefined)
-
-      const installerProcess = spawn(
-        '/bin/bash',
-        [
-          scriptPath,
-          '--source',
-          packagePath,
-          '--dest',
-          targetAppPath,
-          '--stage',
-          stageRoot,
-          '--pid',
-          String(process.pid),
-          '--log',
-          logPath
-        ],
-        {
-          detached: true,
-          stdio: 'ignore'
-        }
-      )
-      installerProcess.unref()
-
-      this.requestAppQuit('mac-app-update')
-      updateSystemLog.info('Scheduled macOS app replacement install', {
-        meta: {
-          from: packagePath,
-          to: targetAppPath,
-          scriptPath,
-          logPath
-        }
-      })
-      return true
-    } catch (error) {
-      await fse.remove(stageRoot).catch(() => null)
-      updateSystemLog.warn('Failed to run macOS app replacement install', {
-        error,
-        meta: { path: packagePath, scriptPath }
-      })
-      return false
-    }
-  }
-
-  private resolveMacApplyUpdateScriptPath(): string | null {
-    const candidates = [
-      process.resourcesPath
-        ? path.join(process.resourcesPath, 'resources', 'scripts', 'macos-apply-update.sh')
-        : null,
-      path.join(app.getAppPath(), 'resources', 'scripts', 'macos-apply-update.sh'),
-      path.resolve(process.cwd(), 'resources', 'scripts', 'macos-apply-update.sh')
-    ].filter((candidate): candidate is string => Boolean(candidate))
-
-    return candidates.find((candidate) => fse.existsSync(candidate)) ?? null
-  }
-
-  private resolveCurrentMacAppBundlePath(): string | null {
-    if (process.platform !== 'darwin') {
-      return null
-    }
-    const exePath = app.getPath('exe')
-    const appBundlePath = path.resolve(exePath, '..', '..', '..')
-    if (!appBundlePath.toLowerCase().endsWith('.app')) {
-      return null
-    }
-    return appBundlePath
-  }
-
-  private requestAppQuit(reason: string): void {
-    const touchApp = getCurrentTouchApp()
-    if (touchApp) {
-      touchApp.quit()
-    } else {
-      app.quit()
-    }
-
-    setTimeout(() => {
-      updateSystemLog.warn('Force exiting app after quit timeout', {
-        meta: { reason }
-      })
-      app.exit(0)
-    }, 8000)
   }
 }

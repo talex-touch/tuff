@@ -8,7 +8,9 @@ const repoRoot = process.cwd()
 const argv = process.argv
 const tag = getArgValue(argv, '--tag', 'v2.4.7')
 const version = getArgValue(argv, '--version', tag.replace(/^v/, ''))
-const stage = String(getArgValue(argv, '--stage', 'gate-d')).trim().toLowerCase()
+const stage = String(getArgValue(argv, '--stage', 'gate-d'))
+  .trim()
+  .toLowerCase()
 const strict = toBool(getArgValue(argv, '--strict', hasFlag(argv, '--strict')))
 const manifestArg = getArgValue(argv, '--manifest')
 const baseUrlArg = getArgValue(argv, '--base-url')
@@ -40,7 +42,13 @@ async function main() {
   }
 
   const failedChecks = checks.filter(item => item.status === 'fail')
-  const result = failedChecks.length > 0 ? 'fail' : 'pass'
+  const blockedChecks = checks.filter(item => item.status === 'blocked')
+  const result
+    = failedChecks.length > 0
+      ? 'fail'
+      : blockedChecks.length > 0
+        ? 'blocked'
+        : 'pass'
 
   const summary = {
     tag,
@@ -54,7 +62,7 @@ async function main() {
 
   console.log(JSON.stringify(summary, null, 2))
 
-  if (strict && result === 'fail') {
+  if (strict && result !== 'pass') {
     process.exit(1)
   }
 }

@@ -38,6 +38,8 @@ export interface AppRelease {
   name: string
   channel: ReleaseChannel
   version: string
+  rollbackFromVersion: string
+  rollbackCompatible: boolean
   notes: ReleaseNotes
   notesHtml?: ReleaseNotes | null
   status: ReleaseStatus
@@ -108,7 +110,10 @@ export function resolveReleaseLocale(locale?: string): ReleaseNoteLocale {
   return 'en'
 }
 
-export function resolveReleaseNotes(notes: ReleaseNotes, locale?: string): string {
+export function resolveReleaseNotes(
+  notes: ReleaseNotes,
+  locale?: string,
+): string {
   const key = resolveReleaseLocale(locale)
   return notes[key] || notes.en || notes.zh
 }
@@ -130,12 +135,14 @@ export function useReleases() {
   const loading = ref(false)
   const error = ref<Error | null>(null)
 
-  async function fetchReleases(options: {
-    channel?: ReleaseChannel
-    status?: ReleaseStatus
-    includeAssets?: boolean
-    limit?: number
-  } = {}) {
+  async function fetchReleases(
+    options: {
+      channel?: ReleaseChannel
+      status?: ReleaseStatus
+      includeAssets?: boolean
+      limit?: number
+    } = {},
+  ) {
     loading.value = true
     error.value = null
 
@@ -181,7 +188,9 @@ export function useReleases() {
       if (platform)
         params.set('platform', platform)
 
-      const data = await requestJson<LatestReleaseResponse>(`/api/releases/latest?${params.toString()}`)
+      const data = await requestJson<LatestReleaseResponse>(
+        `/api/releases/latest?${params.toString()}`,
+      )
       return data.release ? normalizeRelease(data.release) : null
     }
     catch (err) {
@@ -199,7 +208,9 @@ export function useReleases() {
     error.value = null
 
     try {
-      const data = await requestJson<ReleaseResponse>(`/api/releases/${encodeURIComponent(tag)}`)
+      const data = await requestJson<ReleaseResponse>(
+        `/api/releases/${encodeURIComponent(tag)}`,
+      )
       return data.release ? normalizeRelease(data.release) : null
     }
     catch (err) {
@@ -245,7 +256,9 @@ export function detectArch(): AssetArch {
 
   // Modern approach using userAgentData (Chrome 90+)
   if ('userAgentData' in navigator) {
-    const uaData = (navigator as Navigator & { userAgentData?: { architecture?: string } }).userAgentData
+    const uaData = (
+      navigator as Navigator & { userAgentData?: { architecture?: string } }
+    ).userAgentData
     if (uaData?.architecture === 'arm')
       return 'arm64'
   }

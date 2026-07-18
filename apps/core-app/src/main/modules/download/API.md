@@ -192,76 +192,94 @@ Manages application updates and integrates with DownloadCenter.
 
 #### Methods
 
-```typescript
-/**
- * Check for available updates
- * @returns Update check result
- */
-async checkForUpdates(): Promise<UpdateCheckResult>
+/\*\*
 
-/**
- * Download update package
- * @param release - GitHub release object
- * @returns Download task ID
- */
-async downloadUpdate(release: GitHubRelease): Promise<string>
+- Download a release resolved by the main process.
+- Renderer callers send only `{ tag }`; the main process reloads trusted release metadata.
+- @returns Download task ID
+  \*/
+  async downloadUpdate(release: GitHubRelease): Promise<string>
 
-/**
- * Install downloaded update
- * @param taskId - Download task ID
- */
-async installUpdate(taskId: string): Promise<void>
+/\*\*
 
-/**
- * Get current application version
- * @returns Version string
- */
-getCurrentVersion(): string
+- Verify a completed update task without triggering installation.
+- Lifecycle moves to `ready` only after this succeeds.
+  \*/
+  async verifyDownloadedUpdate(taskId: string): Promise<void>
 
-/**
- * Compare two version strings
- * @param v1 - First version
- * @param v2 - Second version
- * @returns -1 if v1 < v2, 0 if equal, 1 if v1 > v2
- */
-compareVersions(v1: string, v2: string): number
+/\*\*
 
-/**
- * Ignore a specific version
- * @param version - Version to ignore
- */
-ignoreVersion(version: string): void
+- Re-verify a completed task and return immutable handoff package metadata.
+- This method never opens an installer or quits the app.
+  \*/
+  async prepareInstallHandoff(taskId: string): Promise<VerifiedUpdatePackage>
 
-/**
- * Set auto download preference
- * @param enabled - Enable/disable auto download
- */
-setAutoDownload(enabled: boolean): void
+/\*\*
 
-/**
- * Set auto check preference
- * @param enabled - Enable/disable auto check
- */
-setAutoCheck(enabled: boolean): void
+- Schedule the verified task through the sole UpdateInstallCoordinator owner.
+- Platform handoff starts only during the typed quit lifecycle.
+  \*/
+  UpdateInstallCoordinator.scheduleInstallNow(taskId: string): Promise<UpdateLifecycleSnapshot>
 
-/**
- * Set check frequency
- * @param frequency - Check frequency
- */
-setCheckFrequency(frequency: 'startup' | 'daily' | 'weekly' | 'never'): void
+/\*\*
 
-/**
- * Get configuration
- * @returns Update system configuration
- */
-getConfig(): UpdateSystemConfig
+- Get current application version
+- @returns Version string
+  \*/
+  getCurrentVersion(): string
 
-/**
- * Update configuration
- * @param config - Partial configuration
- */
-updateConfig(config: Partial<UpdateSystemConfig>): void
-```
+/\*\*
+
+- Compare two version strings
+- @param v1 - First version
+- @param v2 - Second version
+- @returns -1 if v1 < v2, 0 if equal, 1 if v1 > v2
+  \*/
+  compareVersions(v1: string, v2: string): number
+
+/\*\*
+
+- Ignore a specific version
+- @param version - Version to ignore
+  \*/
+  ignoreVersion(version: string): void
+
+/\*\*
+
+- Set auto download preference
+- @param enabled - Enable/disable auto download
+  \*/
+  setAutoDownload(enabled: boolean): void
+
+/\*\*
+
+- Set auto check preference
+- @param enabled - Enable/disable auto check
+  \*/
+  setAutoCheck(enabled: boolean): void
+
+/\*\*
+
+- Set check frequency
+- @param frequency - Check frequency
+  \*/
+  setCheckFrequency(frequency: 'startup' | 'daily' | 'weekly' | 'never'): void
+
+/\*\*
+
+- Get configuration
+- @returns Update system configuration
+  \*/
+  getConfig(): UpdateSystemConfig
+
+/\*\*
+
+- Update configuration
+- @param config - Partial configuration
+  \*/
+  updateConfig(config: Partial<UpdateSystemConfig>): void
+
+````
 
 ## IPC Channels
 
@@ -317,7 +335,7 @@ updateConfig(config: Partial<UpdateSystemConfig>): void
 'download:start-migration' → { success: boolean, result?: MigrationResult, error?: string }
 'download:retry-migration' → { success: boolean, result?: MigrationResult, error?: string }
 'download:get-migration-status' → { success: boolean, currentVersion?: number, appliedMigrations?: Migration[], error?: string }
-```
+````
 
 #### Events (Main → Renderer)
 
@@ -343,25 +361,25 @@ updateConfig(config: Partial<UpdateSystemConfig>): void
 #### Requests (Renderer → Main)
 
 ```typescript
-'update:check' → UpdateCheckResult
-'update:download' → { success: boolean, taskId?: string, error?: string }
-'update:install' → { success: boolean, error?: string }
-'update:ignore-version' → { success: boolean }
-'update:set-auto-download' → { success: boolean }
-'update:set-auto-check' → { success: boolean }
-'update:get-settings' → UpdateSystemConfig
-'update:update-settings' → { success: boolean }
-'update:get-status' → UpdateStatus
-'update:clear-cache' → { success: boolean }
+'update:check' → UpdateOpResponse<UpdateCheckResult> & { snapshot: UpdateLifecycleSnapshot }
+'update:download' → UpdateDownloadResponse & { snapshot: UpdateLifecycleSnapshot }
+'update:install' → UpdateOpResponse & { snapshot: UpdateLifecycleSnapshot }
+'update:ignore-version' → UpdateOpResponse
+'update:set-auto-download' → UpdateOpResponse
+'update:set-auto-check' → UpdateOpResponse
+'update:get-settings' → UpdateOpResponse<UpdateSettings>
+'update:update-settings' → UpdateOpResponse & { snapshot: UpdateLifecycleSnapshot }
+'update:get-status' → UpdateOpResponse<UpdateLifecycleSnapshot>
+'update:clear-cache' → UpdateOpResponse & { snapshot: UpdateLifecycleSnapshot }
 ```
+
+`UpdateLifecycleSnapshot` is revisioned main-process state backed by `app_update_attempts`.
+DownloadCenter task completion is a byte-transfer signal; it does not imply `phase === 'ready'`.
 
 #### Events (Main → Renderer)
 
 ```typescript
-'update:available' → { version: string, releaseNotes: string }
-'update:download-progress' → { percentage: number, speed: string }
-'update:download-complete' → { version: string, taskId: string }
-'update:error' → { message: string }
+'update:available' → UpdateAvailablePayload // includes the authoritative lifecycle snapshot
 ```
 
 ## Data Types
@@ -510,11 +528,10 @@ const result = await window.electron.ipcRenderer.invoke('update:check')
 if (result.hasUpdate && result.release) {
   console.log('New version available:', result.release.tag_name)
 
-  // Download update
-  const downloadResult = await window.electron.ipcRenderer.invoke(
-    'update:download',
-    result.release
-  )
+  // Renderer sends only the selected tag; URLs and integrity metadata stay main-owned.
+  const downloadResult = await window.electron.ipcRenderer.invoke('update:download', {
+    tag: result.release.tag_name
+  })
 
   if (downloadResult.success) {
     console.log('Update download started:', downloadResult.taskId)
@@ -689,6 +706,7 @@ For migrating from old download systems, see [MIGRATION_GUIDE.md](./MIGRATION_GU
 ## Support
 
 For issues or questions:
+
 1. Check error logs: `download:get-logs`
 2. Review error statistics: `download:get-error-stats`
 3. Check TypeScript diagnostics

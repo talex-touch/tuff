@@ -1,16 +1,29 @@
 import { fetchWithTimeout, normalizeBaseUrl } from '../lib/http-utils.mjs'
+import { REQUIRED_CORE_PAIRS } from '../lib/release-artifacts.mjs'
+import { validateRollbackContract } from '../lib/update-rollback-contract.mjs'
 
 const sha256Pattern = /^[a-f0-9]{64}$/i
-const releaseChannels = new Set(['RELEASE', 'BETA', 'SNAPSHOT'])
+const releaseChannels = new Set(['RELEASE', 'BETA'])
 
 function inferCoreArtifactPlatform(filename) {
   const lower = normalizeText(filename).toLowerCase()
   if (lower.includes('windows') || lower.endsWith('.exe'))
     return 'win32'
-  if (lower.includes('macos') || lower.endsWith('.dmg') || lower.endsWith('.zip'))
+  if (
+    lower.includes('macos')
+    || lower.endsWith('.dmg')
+    || lower.endsWith('.zip')
+  ) {
     return 'darwin'
-  if (lower.includes('ubuntu') || lower.endsWith('.appimage') || lower.endsWith('.deb') || lower.endsWith('.snap'))
+  }
+  if (
+    lower.includes('ubuntu')
+    || lower.endsWith('.appimage')
+    || lower.endsWith('.deb')
+    || lower.endsWith('.snap')
+  ) {
     return 'linux'
+  }
   return null
 }
 
@@ -30,7 +43,9 @@ function createHttpErrorPayload(error) {
 }
 
 function normalizeSha(value) {
-  const text = String(value || '').trim().toLowerCase()
+  const text = String(value || '')
+    .trim()
+    .toLowerCase()
   return sha256Pattern.test(text) ? text : ''
 }
 
@@ -39,9 +54,13 @@ function normalizeText(value) {
 }
 
 function classifySignaturePayload(response, bytes) {
-  const contentType = normalizeText(response.headers.get('content-type')).toLowerCase()
+  const contentType = normalizeText(
+    response.headers.get('content-type'),
+  ).toLowerCase()
   const byteLength = bytes.byteLength
-  const sample = new TextDecoder().decode(bytes.slice(0, Math.min(byteLength, 512))).trimStart()
+  const sample = new TextDecoder()
+    .decode(bytes.slice(0, Math.min(byteLength, 512)))
+    .trimStart()
   const lowerSample = sample.toLowerCase()
 
   if (byteLength === 0) {
@@ -54,7 +73,11 @@ function classifySignaturePayload(response, bytes) {
     }
   }
 
-  if (contentType.includes('json') || lowerSample.startsWith('{') || lowerSample.startsWith('[')) {
+  if (
+    contentType.includes('json')
+    || lowerSample.startsWith('{')
+    || lowerSample.startsWith('[')
+  ) {
     return {
       valid: false,
       reason: 'json-signature-body',
@@ -64,7 +87,11 @@ function classifySignaturePayload(response, bytes) {
     }
   }
 
-  if (contentType.includes('html') || lowerSample.startsWith('<!doctype') || lowerSample.startsWith('<html')) {
+  if (
+    contentType.includes('html')
+    || lowerSample.startsWith('<!doctype')
+    || lowerSample.startsWith('<html')
+  ) {
     return {
       valid: false,
       reason: 'html-signature-body',
@@ -94,7 +121,9 @@ function classifySignaturePayload(response, bytes) {
 function classifyDownloadResponse(response, bytes = new Uint8Array()) {
   const status = response.status
   const location = normalizeText(response.headers.get('location'))
-  const contentType = normalizeText(response.headers.get('content-type')).toLowerCase()
+  const contentType = normalizeText(
+    response.headers.get('content-type'),
+  ).toLowerCase()
 
   if ([302, 307, 308].includes(status)) {
     return {
@@ -114,7 +143,9 @@ function classifyDownloadResponse(response, bytes = new Uint8Array()) {
   }
 
   const byteLength = bytes.byteLength
-  const sample = new TextDecoder().decode(bytes.slice(0, Math.min(byteLength, 512))).trimStart()
+  const sample = new TextDecoder()
+    .decode(bytes.slice(0, Math.min(byteLength, 512)))
+    .trimStart()
   const lowerSample = sample.toLowerCase()
 
   if (byteLength === 0) {
@@ -127,7 +158,11 @@ function classifyDownloadResponse(response, bytes = new Uint8Array()) {
     }
   }
 
-  if (contentType.includes('json') || lowerSample.startsWith('{') || lowerSample.startsWith('[')) {
+  if (
+    contentType.includes('json')
+    || lowerSample.startsWith('{')
+    || lowerSample.startsWith('[')
+  ) {
     return {
       validResponse: false,
       responseKind: 'json',
@@ -137,7 +172,11 @@ function classifyDownloadResponse(response, bytes = new Uint8Array()) {
     }
   }
 
-  if (contentType.includes('html') || lowerSample.startsWith('<!doctype') || lowerSample.startsWith('<html')) {
+  if (
+    contentType.includes('html')
+    || lowerSample.startsWith('<!doctype')
+    || lowerSample.startsWith('<html')
+  ) {
     return {
       validResponse: false,
       responseKind: 'html',
@@ -161,11 +200,55 @@ function normalizePairKey(platform, arch) {
 
 function inferReleaseChannel(versionText) {
   const lower = normalizeText(versionText).toLowerCase()
-  if (lower.includes('snapshot'))
-    return 'SNAPSHOT'
-  if (lower.includes('beta'))
+  if (
+    lower.includes('snapshot')
+    || lower.includes('alpha')
+    || lower.includes('beta')
+  ) {
     return 'BETA'
+  }
   return 'RELEASE'
+}
+
+function compareReleaseVersions(left, right) {
+  const parse = (value) => {
+    const match = normalizeText(value).match(
+      /^(\d+)\.(\d+)\.(\d+)(?:-([a-z]+)(?:[.-](\d+))?)?$/i,
+    )
+    if (!match)
+      return null
+    const [, major, minor, patch, label = '', sequence = '0'] = match
+    return {
+      numbers: [Number(major), Number(minor), Number(patch)],
+      label: label.toLowerCase(),
+      sequence: Number(sequence),
+    }
+  }
+  const parsedLeft = parse(left)
+  const parsedRight = parse(right)
+  if (!parsedLeft || !parsedRight)
+    return null
+  for (let index = 0; index < parsedLeft.numbers.length; index += 1) {
+    if (parsedLeft.numbers[index] !== parsedRight.numbers[index])
+      return parsedLeft.numbers[index] - parsedRight.numbers[index]
+  }
+  if (parsedLeft.label !== parsedRight.label) {
+    if (!parsedLeft.label)
+      return 1
+    if (!parsedRight.label)
+      return -1
+    return parsedLeft.label.localeCompare(parsedRight.label)
+  }
+  return parsedLeft.sequence - parsedRight.sequence
+}
+
+function resolveExpectedRollbackFromVersion(releases, { version, channel }) {
+  const candidates = releases
+    .map(item => normalizeText(item?.version))
+    .filter(candidate => inferReleaseChannel(candidate) === channel)
+    .filter(candidate => compareReleaseVersions(candidate, version) < 0)
+    .sort((left, right) => compareReleaseVersions(right, left))
+  return candidates[0] ?? null
 }
 
 function validateRemoteReleaseMetadata(release, tag) {
@@ -175,7 +258,9 @@ function validateRemoteReleaseMetadata(release, tag) {
   const releaseChannel = normalizeText(release?.channel)
   const releaseStatus = normalizeText(release?.status).toLowerCase()
   const expectedVersion = normalizeText(tag).replace(/^v/, '')
-  const expectedChannel = inferReleaseChannel(releaseVersion || expectedVersion)
+  const expectedChannel = inferReleaseChannel(
+    releaseVersion || expectedVersion,
+  )
 
   if (!releaseTag) {
     issues.push('release.tag is required')
@@ -188,7 +273,9 @@ function validateRemoteReleaseMetadata(release, tag) {
     issues.push('release.version is required')
   }
   else if (expectedVersion && releaseVersion !== expectedVersion) {
-    issues.push(`release.version ${releaseVersion} does not match ${expectedVersion}`)
+    issues.push(
+      `release.version ${releaseVersion} does not match ${expectedVersion}`,
+    )
   }
 
   if (!releaseChannel) {
@@ -226,7 +313,9 @@ function validateGithubReleaseMetadata(githubRelease, { remoteRelease, tag }) {
   const remoteChannel = normalizeText(remoteRelease?.channel)
   const expectedChannel = releaseChannels.has(remoteChannel)
     ? remoteChannel
-    : inferReleaseChannel(remoteVersion || normalizeText(tag).replace(/^v/, ''))
+    : inferReleaseChannel(
+        remoteVersion || normalizeText(tag).replace(/^v/, ''),
+      )
   const expectedPrerelease = expectedChannel !== 'RELEASE'
 
   if (!githubTag) {
@@ -239,8 +328,11 @@ function validateGithubReleaseMetadata(githubRelease, { remoteRelease, tag }) {
   if (githubDraft)
     issues.push('github.draft must be false')
 
-  if (githubPrerelease !== expectedPrerelease)
-    issues.push(`github.prerelease must be ${expectedPrerelease} for ${expectedChannel}`)
+  if (githubPrerelease !== expectedPrerelease) {
+    issues.push(
+      `github.prerelease must be ${expectedPrerelease} for ${expectedChannel}`,
+    )
+  }
 
   return {
     ok: issues.length === 0,
@@ -340,9 +432,14 @@ function inspectSignedDownloadUrl(value, baseUrl) {
   const exp = normalizeText(parsed.searchParams.get('exp'))
   const hasHash = parsed.hash.length > 0
   const queryKeys = Array.from(parsed.searchParams.keys())
-  const duplicateQueryKeys = queryKeys.filter((key, index) => queryKeys.indexOf(key) !== index)
-  const hasDuplicateSignedQuery = duplicateQueryKeys.includes('exp') || duplicateQueryKeys.includes('sig')
-  const unexpectedQueryKeys = queryKeys.filter(key => key !== 'exp' && key !== 'sig')
+  const duplicateQueryKeys = queryKeys.filter(
+    (key, index) => queryKeys.indexOf(key) !== index,
+  )
+  const hasDuplicateSignedQuery
+    = duplicateQueryKeys.includes('exp') || duplicateQueryKeys.includes('sig')
+  const unexpectedQueryKeys = queryKeys.filter(
+    key => key !== 'exp' && key !== 'sig',
+  )
   const reason = hasHash
     ? 'download-url-has-fragment'
     : hasDuplicateSignedQuery
@@ -418,15 +515,17 @@ function createManifestIssueDetails(artifacts, issues) {
 
 function buildGithubCoreManifestMatrix(manifestPayload) {
   const release = manifestPayload?.release
-  const artifacts = Array.isArray(manifestPayload?.artifacts) ? manifestPayload.artifacts : []
+  const artifacts = Array.isArray(manifestPayload?.artifacts)
+    ? manifestPayload.artifacts
+    : []
   const matrix = new Map()
   const issues = []
   const artifactNames = new Set()
   const artifactSha256s = new Set()
   let coreArtifactCount = 0
 
-  if (manifestPayload?.schemaVersion !== 1)
-    issues.push('schemaVersion must be 1')
+  if (manifestPayload?.schemaVersion !== 2)
+    issues.push('schemaVersion must be 2')
 
   const manifestVersion = normalizeText(release?.version)
   const manifestTag = normalizeText(release?.tag)
@@ -444,8 +543,22 @@ function buildGithubCoreManifestMatrix(manifestPayload) {
   }
   if (manifestVersion && manifestTag && manifestTag !== `v${manifestVersion}`)
     issues.push('release.tag must match release.version')
-  if (manifestVersion && manifestChannel && releaseChannels.has(manifestChannel) && manifestChannel !== inferReleaseChannel(manifestVersion))
+  if (
+    manifestVersion
+    && manifestChannel
+    && releaseChannels.has(manifestChannel)
+    && manifestChannel !== inferReleaseChannel(manifestVersion)
+  ) {
     issues.push('release.channel must match release.version suffix')
+  }
+  issues.push(
+    ...validateRollbackContract({
+      version: manifestVersion,
+      channel: manifestChannel,
+      rollbackFromVersion: release?.rollbackFromVersion,
+      rollbackCompatible: release?.rollbackCompatible,
+    }),
+  )
   if (!Array.isArray(manifestPayload?.artifacts) || artifacts.length === 0)
     issues.push('artifacts must be a non-empty array')
 
@@ -489,10 +602,21 @@ function buildGithubCoreManifestMatrix(manifestPayload) {
       issues.push(`${label}.sha256 is missing or invalid`)
     if (!signature)
       issues.push(`${label}.signature is missing`)
-    if (name && signature && signature !== `${name}.sig` && signature !== `${name}.asc`)
-      issues.push(`${label}.signature must point to the artifact .sig/.asc sidecar`)
-    if (signature && artifactNames.has(signature))
-      issues.push(`${label}.signature sidecar must not be listed as a downloadable artifact`)
+    if (
+      name
+      && signature
+      && signature !== `${name}.sig`
+      && signature !== `${name}.asc`
+    ) {
+      issues.push(
+        `${label}.signature must point to the artifact .sig/.asc sidecar`,
+      )
+    }
+    if (signature && artifactNames.has(signature)) {
+      issues.push(
+        `${label}.signature sidecar must not be listed as a downloadable artifact`,
+      )
+    }
     if (name) {
       if (manifestVersion && !name.includes(manifestVersion))
         issues.push(`${label}.name must include release.version`)
@@ -527,6 +651,14 @@ function buildGithubCoreManifestMatrix(manifestPayload) {
 
   if (coreArtifactCount === 0)
     issues.push('artifacts must include at least one core artifact')
+  for (const pair of REQUIRED_CORE_PAIRS) {
+    if (!matrix.has(pair))
+      issues.push(`artifacts must include required platform/arch ${pair}`)
+  }
+  for (const pair of matrix.keys()) {
+    if (!REQUIRED_CORE_PAIRS.includes(pair))
+      issues.push(`artifacts contains unsupported core platform/arch ${pair}`)
+  }
 
   return {
     release,
@@ -537,7 +669,9 @@ function buildGithubCoreManifestMatrix(manifestPayload) {
 }
 
 async function fetchGithubManifestPayload(githubAssets, { tag, timeoutMs }) {
-  const manifestAsset = githubAssets.find(item => item?.name === 'tuff-release-manifest.json') ?? null
+  const manifestAsset
+    = githubAssets.find(item => item?.name === 'tuff-release-manifest.json')
+      ?? null
   const manifestAssetState = normalizeText(manifestAsset?.state)
   if (manifestAssetState && manifestAssetState !== 'uploaded') {
     return {
@@ -548,10 +682,13 @@ async function fetchGithubManifestPayload(githubAssets, { tag, timeoutMs }) {
     }
   }
 
-  const downloadUrlInfo = inspectGithubAssetDownloadUrl(manifestAsset?.browser_download_url, {
-    tag,
-    name: 'tuff-release-manifest.json',
-  })
+  const downloadUrlInfo = inspectGithubAssetDownloadUrl(
+    manifestAsset?.browser_download_url,
+    {
+      tag,
+      name: 'tuff-release-manifest.json',
+    },
+  )
   if (!downloadUrlInfo.url || !downloadUrlInfo.valid) {
     return {
       hasManifest: Boolean(manifestAsset),
@@ -594,7 +731,163 @@ async function fetchGithubManifestPayload(githubAssets, { tag, timeoutMs }) {
   }
 }
 
-function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease, tag, baseUrl }) {
+async function checkGithubFallbackManifest({ tag, timeoutMs, pushCheck }) {
+  const githubReleaseUrl = `https://api.github.com/repos/talex-touch/tuff/releases/tags/${encodeURIComponent(tag)}`
+  try {
+    const response = await fetchWithTimeout(githubReleaseUrl, {}, timeoutMs)
+    if (!response.ok) {
+      pushCheck(
+        'remote-github-fallback-contract',
+        response.status >= 500 ? 'blocked' : 'fail',
+        response.status >= 500
+          ? 'Nexus is transient and GitHub fallback release metadata is temporarily unavailable.'
+          : 'Nexus is transient and GitHub fallback release metadata could not be fetched.',
+        {
+          url: githubReleaseUrl,
+          httpStatus: response.status,
+          source: 'github-fallback',
+        },
+      )
+      return
+    }
+    const githubRelease = await response.json()
+    const githubAssets = Array.isArray(githubRelease?.assets)
+      ? githubRelease.assets
+      : []
+    const manifestResult = await fetchGithubManifestPayload(githubAssets, {
+      tag,
+      timeoutMs,
+    })
+    if (!manifestResult.manifestPayload) {
+      pushCheck(
+        'remote-github-fallback-contract',
+        'fail',
+        'Nexus is transient and GitHub fallback manifest is missing or unreadable.',
+        {
+          url: githubReleaseUrl,
+          source: 'github-fallback',
+          error: manifestResult.error ?? 'manifest-unavailable',
+        },
+      )
+      return
+    }
+
+    const manifest = manifestResult.manifestPayload
+    const matrix = buildGithubCoreManifestMatrix(manifest)
+    const assetComparison = compareGithubAssetsWithManifest({
+      githubAssets,
+      manifestPayload: manifest,
+      tag,
+    })
+    const historyUrl
+      = 'https://api.github.com/repos/talex-touch/tuff/releases?per_page=100'
+    let rollbackIssues = []
+    let expectedRollbackFromVersion = null
+    try {
+      const historyResponse = await fetchWithTimeout(historyUrl, {}, timeoutMs)
+      if (!historyResponse.ok) {
+        pushCheck(
+          'remote-github-fallback-rollback',
+          historyResponse.status >= 500 ? 'blocked' : 'fail',
+          'GitHub fallback cannot establish the exact same-channel N-1 rollback predecessor.',
+          {
+            url: historyUrl,
+            httpStatus: historyResponse.status,
+            source: 'github-fallback',
+          },
+        )
+      }
+      else {
+        const history = await historyResponse.json()
+        expectedRollbackFromVersion = resolveExpectedRollbackFromVersion(
+          Array.isArray(history)
+            ? history.map(item => ({
+                version: normalizeText(item?.tag_name).replace(/^v/, ''),
+              }))
+            : [],
+          {
+            version: manifest.release?.version,
+            channel: manifest.release?.channel,
+          },
+        )
+        rollbackIssues = !expectedRollbackFromVersion
+          ? ['No same-channel N-1 release is available for rollback validation']
+          : validateRollbackContract({
+              version: manifest.release?.version,
+              channel: manifest.release?.channel,
+              rollbackFromVersion: manifest.release?.rollbackFromVersion,
+              rollbackCompatible: manifest.release?.rollbackCompatible,
+              expectedRollbackFromVersion,
+            })
+        pushCheck(
+          'remote-github-fallback-rollback',
+          rollbackIssues.length === 0 ? 'pass' : 'fail',
+          rollbackIssues.length === 0
+            ? 'GitHub fallback manifest rollback metadata matches the exact same-channel N-1 release.'
+            : 'GitHub fallback manifest rollback metadata is missing, invalid, or not the exact same-channel N-1 release.',
+          {
+            url: historyUrl,
+            source: 'github-fallback',
+            expectedRollbackFromVersion,
+            issues: rollbackIssues,
+          },
+        )
+      }
+    }
+    catch (error) {
+      pushCheck(
+        'remote-github-fallback-rollback',
+        'blocked',
+        'GitHub fallback rollback history is unreachable.',
+        {
+          url: historyUrl,
+          source: 'github-fallback',
+          error: createHttpErrorPayload(error),
+        },
+      )
+    }
+
+    const issues = [
+      ...matrix.issues,
+      ...assetComparison.issues,
+      ...assetComparison.missing,
+    ]
+    pushCheck(
+      'remote-github-fallback-contract',
+      issues.length === 0 && rollbackIssues.length === 0 ? 'pass' : 'fail',
+      issues.length === 0 && rollbackIssues.length === 0
+        ? 'Nexus transient fallback preserves the schema v2 manifest, matrix, SHA-256, signature, download, and rollback contract through GitHub.'
+        : 'GitHub fallback does not satisfy the schema v2 manifest contract.',
+      {
+        url: githubReleaseUrl,
+        source: 'github-fallback',
+        issues,
+        rollbackIssues,
+        manifestMatrix: Array.from(matrix.matrix.values()),
+      },
+    )
+  }
+  catch (error) {
+    pushCheck(
+      'remote-github-fallback-contract',
+      'blocked',
+      'Nexus and GitHub fallback release metadata are unreachable.',
+      {
+        url: githubReleaseUrl,
+        source: 'github-fallback',
+        error: createHttpErrorPayload(error),
+      },
+    )
+  }
+}
+
+function compareNexusAssetsWithManifest({
+  assets,
+  manifestPayload,
+  remoteRelease,
+  tag,
+  baseUrl,
+}) {
   const {
     release: manifestRelease,
     matrix,
@@ -619,7 +912,9 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
   const manifestVersion = normalizeText(manifestRelease?.version)
   const remoteVersion = normalizeText(remoteRelease?.version)
   if (manifestVersion && remoteVersion && manifestVersion !== remoteVersion) {
-    issues.push(`manifest release.version ${manifestVersion} does not match remote ${remoteVersion}`)
+    issues.push(
+      `manifest release.version ${manifestVersion} does not match remote ${remoteVersion}`,
+    )
     issueDetails.push({
       scope: 'manifest',
       field: 'release.version',
@@ -631,7 +926,9 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
   const manifestChannel = normalizeText(manifestRelease?.channel)
   const remoteChannel = normalizeText(remoteRelease?.channel)
   if (manifestChannel && remoteChannel && manifestChannel !== remoteChannel) {
-    issues.push(`manifest release.channel ${manifestChannel} does not match remote ${remoteChannel}`)
+    issues.push(
+      `manifest release.channel ${manifestChannel} does not match remote ${remoteChannel}`,
+    )
     issueDetails.push({
       scope: 'manifest',
       field: 'release.channel',
@@ -639,6 +936,18 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
       expected: remoteChannel,
       reason: 'release.channel does not match remote release',
     })
+  }
+  for (const field of ['rollbackFromVersion', 'rollbackCompatible']) {
+    if (manifestRelease?.[field] !== remoteRelease?.[field]) {
+      issues.push(`manifest release.${field} does not match remote release`)
+      issueDetails.push({
+        scope: 'manifest',
+        field: `release.${field}`,
+        actual: manifestRelease?.[field] ?? null,
+        expected: remoteRelease?.[field] ?? null,
+        reason: `release.${field} does not match remote release`,
+      })
+    }
   }
 
   for (const [index, asset] of assets.entries()) {
@@ -662,12 +971,22 @@ function compareNexusAssetsWithManifest({ assets, manifestPayload, remoteRelease
     const expected = matrix.get(key)
     const actualSha256 = normalizeSha(asset?.sha256)
     const actualDownloadUrl = normalizeText(asset?.downloadUrl)
-    const actualDownloadPath = resolveSameOriginUrlPath(actualDownloadUrl, baseUrl)
+    const actualDownloadPath = resolveSameOriginUrlPath(
+      actualDownloadUrl,
+      baseUrl,
+    )
     const actualSignatureUrl = normalizeText(asset?.signatureUrl)
-    const actualSignatureInfo = inspectCanonicalSameOriginEndpoint(actualSignatureUrl, baseUrl)
+    const actualSignatureInfo = inspectCanonicalSameOriginEndpoint(
+      actualSignatureUrl,
+      baseUrl,
+    )
     const actualSignaturePath = actualSignatureInfo.path
     const expectedDownloadPath = buildExpectedDownloadPath(tag, platform, arch)
-    const expectedSignaturePath = buildExpectedSignaturePath(tag, platform, arch)
+    const expectedSignaturePath = buildExpectedSignaturePath(
+      tag,
+      platform,
+      arch,
+    )
 
     nexusMatrix.push({
       key,
@@ -799,7 +1118,9 @@ function inspectGithubAssetDownloadUrl(value, { tag, name }) {
       hasExpectedTag,
       hasExpectedName,
       valid: hasExpectedTag && hasExpectedName,
-      ...(hasExpectedTag && hasExpectedName ? {} : { reason: 'github-asset-download-url-mismatch' }),
+      ...(hasExpectedTag && hasExpectedName
+        ? {}
+        : { reason: 'github-asset-download-url-mismatch' }),
     }
   }
   catch {
@@ -814,12 +1135,13 @@ function inspectGithubAssetDownloadUrl(value, { tag, name }) {
   }
 }
 
-function compareGithubAssetsWithManifest({ githubAssets, manifestPayload, tag }) {
-  const {
-    matrix,
-    issues,
-    issueDetails,
-  } = buildGithubCoreManifestMatrix(manifestPayload)
+function compareGithubAssetsWithManifest({
+  githubAssets,
+  manifestPayload,
+  tag,
+}) {
+  const { matrix, issues, issueDetails }
+    = buildGithubCoreManifestMatrix(manifestPayload)
   const assetsByName = new Map()
   const assetNameIndexes = new Map()
   const duplicateAssets = []
@@ -861,7 +1183,10 @@ function compareGithubAssetsWithManifest({ githubAssets, manifestPayload, tag })
       return
     }
 
-    const downloadUrlInfo = inspectGithubAssetDownloadUrl(githubAsset?.browser_download_url, { tag, name })
+    const downloadUrlInfo = inspectGithubAssetDownloadUrl(
+      githubAsset?.browser_download_url,
+      { tag, name },
+    )
     if (!downloadUrlInfo.url) {
       missing.push({
         platform: artifact.platform,
@@ -889,6 +1214,25 @@ function compareGithubAssetsWithManifest({ githubAssets, manifestPayload, tag })
       })
     }
 
+    if (kind === 'artifact') {
+      const githubDigest = normalizeSha(
+        normalizeText(githubAsset?.digest).replace(/^sha256:/i, ''),
+      )
+      if (!githubDigest || githubDigest !== artifact.sha256) {
+        missing.push({
+          platform: artifact.platform,
+          arch: artifact.arch,
+          name,
+          kind,
+          digest: githubDigest || null,
+          expectedDigest: artifact.sha256,
+          reason: !githubDigest
+            ? 'missing-github-sha256-digest'
+            : 'github-sha256-digest-mismatch',
+        })
+      }
+    }
+
     const state = normalizeText(githubAsset?.state)
     if (state && state !== 'uploaded') {
       missing.push({
@@ -906,15 +1250,24 @@ function compareGithubAssetsWithManifest({ githubAssets, manifestPayload, tag })
   for (const artifact of matrix.values()) {
     addMissingAsset({ artifact, name: artifact.name, kind: 'artifact' })
     if (artifact.signature) {
-      addMissingAsset({ artifact, name: artifact.signature, kind: 'signature' })
+      addMissingAsset({
+        artifact,
+        name: artifact.signature,
+        kind: 'signature',
+      })
     }
   }
 
   const extraAssets = []
   for (const [index, asset] of githubAssets.entries()) {
     const name = normalizeText(asset?.name)
-    if (!name || name === 'tuff-release-manifest.json' || expectedNames.has(name))
+    if (
+      !name
+      || name === 'tuff-release-manifest.json'
+      || expectedNames.has(name)
+    ) {
       continue
+    }
     if (!isGateERelevantGithubAssetName(name))
       continue
 
@@ -923,7 +1276,9 @@ function compareGithubAssetsWithManifest({ githubAssets, manifestPayload, tag })
       index,
       reason: 'extra-github-release-asset',
     })
-    issues.push(`github release asset name ${name} is not declared by manifest`)
+    issues.push(
+      `github release asset name ${name} is not declared by manifest`,
+    )
   }
 
   return {
@@ -943,7 +1298,11 @@ function compareGithubAssetsWithManifest({ githubAssets, manifestPayload, tag })
 
 function isGateERelevantGithubAssetName(name) {
   const lower = name.toLowerCase()
-  return lower.startsWith('tuff-core-') || lower.endsWith('.sig') || lower.endsWith('.asc')
+  return (
+    lower.startsWith('tuff-core-')
+    || lower.endsWith('.sig')
+    || lower.endsWith('.asc')
+  )
 }
 
 export async function checkRemoteRelease({
@@ -963,27 +1322,44 @@ export async function checkRemoteRelease({
   try {
     const response = await fetchWithTimeout(releaseUrl, {}, timeoutMs)
     if (!response.ok) {
-      pushCheck('remote-release', 'fail', `Failed to fetch remote release metadata (${response.status}).`, {
-        url: releaseUrl,
-        httpStatus: response.status,
-      })
+      pushCheck(
+        'remote-release',
+        response.status >= 500 ? 'blocked' : 'fail',
+        response.status >= 500
+          ? `Remote release metadata is temporarily unavailable (${response.status}).`
+          : `Failed to fetch remote release metadata (${response.status}).`,
+        { url: releaseUrl, httpStatus: response.status },
+      )
+      if (response.status >= 500)
+        await checkGithubFallbackManifest({ tag, timeoutMs, pushCheck })
       return
     }
     releasePayload = await response.json()
   }
   catch (error) {
-    pushCheck('remote-release', 'fail', 'Failed to fetch remote release metadata.', {
-      url: releaseUrl,
-      error: createHttpErrorPayload(error),
-    })
+    pushCheck(
+      'remote-release',
+      'blocked',
+      'Remote release metadata is unreachable.',
+      {
+        url: releaseUrl,
+        error: createHttpErrorPayload(error),
+      },
+    )
+    await checkGithubFallbackManifest({ tag, timeoutMs, pushCheck })
     return
   }
 
   const release = releasePayload?.release
   if (!release || typeof release !== 'object') {
-    pushCheck('remote-release', 'fail', 'Remote release payload is missing `release` object.', {
-      url: releaseUrl,
-    })
+    pushCheck(
+      'remote-release',
+      'fail',
+      'Remote release payload is missing `release` object.',
+      {
+        url: releaseUrl,
+      },
+    )
     return
   }
 
@@ -1030,8 +1406,10 @@ export async function checkRemoteRelease({
       notesHtmlKeys: Object.keys(notesHtml || {}),
       notesZhLen: typeof notes.zh === 'string' ? notes.zh.length : 0,
       notesEnLen: typeof notes.en === 'string' ? notes.en.length : 0,
-      notesHtmlZhLen: typeof notesHtml.zh === 'string' ? notesHtml.zh.length : 0,
-      notesHtmlEnLen: typeof notesHtml.en === 'string' ? notesHtml.en.length : 0,
+      notesHtmlZhLen:
+        typeof notesHtml.zh === 'string' ? notesHtml.zh.length : 0,
+      notesHtmlEnLen:
+        typeof notesHtml.en === 'string' ? notesHtml.en.length : 0,
     },
   )
 
@@ -1039,7 +1417,9 @@ export async function checkRemoteRelease({
   pushCheck(
     'remote-assets-matrix',
     assets.length > 0 ? 'pass' : 'fail',
-    assets.length > 0 ? 'Remote assets list is non-empty.' : 'Remote assets list is empty.',
+    assets.length > 0
+      ? 'Remote assets list is non-empty.'
+      : 'Remote assets list is empty.',
     {
       count: assets.length,
       matrix: assets.map(item => ({
@@ -1059,13 +1439,24 @@ export async function checkRemoteRelease({
   let githubManifestError = null
   let githubManifestDownloadUrlInfo = null
   try {
-    const githubReleaseResp = await fetchWithTimeout(githubReleaseUrl, {}, timeoutMs)
+    const githubReleaseResp = await fetchWithTimeout(
+      githubReleaseUrl,
+      {},
+      timeoutMs,
+    )
     githubManifestStatus = githubReleaseResp.status
     if (githubReleaseResp.ok) {
       githubReleasePayload = await githubReleaseResp.json()
-      githubAssets = Array.isArray(githubReleasePayload?.assets) ? githubReleasePayload.assets : []
-      hasManifest = githubAssets.some(item => item?.name === 'tuff-release-manifest.json')
-      const manifestResult = await fetchGithubManifestPayload(githubAssets, { tag, timeoutMs })
+      githubAssets = Array.isArray(githubReleasePayload?.assets)
+        ? githubReleasePayload.assets
+        : []
+      hasManifest = githubAssets.some(
+        item => item?.name === 'tuff-release-manifest.json',
+      )
+      const manifestResult = await fetchGithubManifestPayload(githubAssets, {
+        tag,
+        timeoutMs,
+      })
       hasManifest = manifestResult.hasManifest
       githubManifestPayload = manifestResult.manifestPayload
       githubManifestError = manifestResult.error
@@ -1142,6 +1533,75 @@ export async function checkRemoteRelease({
     )
   }
   else if (githubManifestPayload) {
+    const manifestRelease = githubManifestPayload.release ?? {}
+    const rollbackHistoryUrl = `${baseUrl}/api/releases?channel=${encodeURIComponent(normalizeText(manifestRelease.channel))}&status=published&limit=100`
+    try {
+      const rollbackHistoryResponse = await fetchWithTimeout(
+        rollbackHistoryUrl,
+        {},
+        timeoutMs,
+      )
+      if (!rollbackHistoryResponse.ok) {
+        const blocked = rollbackHistoryResponse.status >= 500
+        pushCheck(
+          'remote-manifest-rollback',
+          blocked ? 'blocked' : 'fail',
+          blocked
+            ? 'Rollback predecessor history is temporarily unavailable; release cannot claim an exact N-1.'
+            : 'Rollback predecessor history request failed.',
+          {
+            url: rollbackHistoryUrl,
+            httpStatus: rollbackHistoryResponse.status,
+          },
+        )
+      }
+      else {
+        const rollbackHistoryPayload = await rollbackHistoryResponse.json()
+        const expectedRollbackFromVersion = resolveExpectedRollbackFromVersion(
+          Array.isArray(rollbackHistoryPayload?.releases)
+            ? rollbackHistoryPayload.releases
+            : [],
+          {
+            version: normalizeText(manifestRelease.version),
+            channel: normalizeText(manifestRelease.channel),
+          },
+        )
+        const rollbackIssues = !expectedRollbackFromVersion
+          ? ['No same-channel N-1 release is available for rollback validation']
+          : validateRollbackContract({
+              version: manifestRelease.version,
+              channel: manifestRelease.channel,
+              rollbackFromVersion: manifestRelease.rollbackFromVersion,
+              rollbackCompatible: manifestRelease.rollbackCompatible,
+              expectedRollbackFromVersion,
+            })
+        pushCheck(
+          'remote-manifest-rollback',
+          rollbackIssues.length === 0 ? 'pass' : 'fail',
+          rollbackIssues.length === 0
+            ? 'Manifest rollback metadata matches the exact same-channel N-1 release.'
+            : 'Manifest rollback metadata is missing, invalid, or not the exact same-channel N-1 release.',
+          {
+            url: rollbackHistoryUrl,
+            version: normalizeText(manifestRelease.version) || null,
+            channel: normalizeText(manifestRelease.channel) || null,
+            rollbackFromVersion: manifestRelease.rollbackFromVersion ?? null,
+            rollbackCompatible: manifestRelease.rollbackCompatible ?? null,
+            expectedRollbackFromVersion,
+            issues: rollbackIssues,
+          },
+        )
+      }
+    }
+    catch (error) {
+      pushCheck(
+        'remote-manifest-rollback',
+        'blocked',
+        'Rollback predecessor history is unreachable; release cannot claim an exact N-1.',
+        { url: rollbackHistoryUrl, error: createHttpErrorPayload(error) },
+      )
+    }
+
     const comparison = compareNexusAssetsWithManifest({
       assets,
       manifestPayload: githubManifestPayload,
@@ -1163,7 +1623,8 @@ export async function checkRemoteRelease({
       },
     )
 
-    const matrixOk = comparison.issues.length === 0 && comparison.mismatches.length === 0
+    const matrixOk
+      = comparison.issues.length === 0 && comparison.mismatches.length === 0
     pushCheck(
       'remote-manifest-nexus-matrix',
       matrixOk ? 'pass' : manifestIntegrityStatus,
@@ -1185,7 +1646,8 @@ export async function checkRemoteRelease({
       tag,
     })
     const githubAssetInventoryOk
-      = githubAssetComparison.issues.length === 0 && githubAssetComparison.missing.length === 0
+      = githubAssetComparison.issues.length === 0
+        && githubAssetComparison.missing.length === 0
     pushCheck(
       'remote-github-asset-inventory',
       githubAssetInventoryOk ? 'pass' : manifestIntegrityStatus,
@@ -1196,7 +1658,9 @@ export async function checkRemoteRelease({
     )
   }
 
-  const malformedIntegrity = assets.filter(item => !normalizeSha(item?.sha256) || !item?.signatureUrl)
+  const malformedIntegrity = assets.filter(
+    item => !normalizeSha(item?.sha256) || !item?.signatureUrl,
+  )
   const integrityMissingStatus = stage === 'gate-e' ? 'fail' : 'warn'
   pushCheck(
     'remote-asset-integrity',
@@ -1244,10 +1708,18 @@ export async function checkRemoteRelease({
     const probeDownloadUrl = downloadUrlInfo.url || downloadUrl
 
     try {
-      const signatureResp = await fetchWithTimeout(signatureUrl, { redirect: 'manual' }, timeoutMs)
-      const signaturePayload = signatureResp.status === 200
-        ? classifySignaturePayload(signatureResp, new Uint8Array(await signatureResp.arrayBuffer()))
-        : null
+      const signatureResp = await fetchWithTimeout(
+        signatureUrl,
+        { redirect: 'manual' },
+        timeoutMs,
+      )
+      const signaturePayload
+        = signatureResp.status === 200
+          ? classifySignaturePayload(
+              signatureResp,
+              new Uint8Array(await signatureResp.arrayBuffer()),
+            )
+          : null
       signatureResults.push({
         platform: pair.platform,
         arch: pair.arch,
@@ -1266,10 +1738,18 @@ export async function checkRemoteRelease({
     }
 
     try {
-      const downloadResp = await fetchWithTimeout(probeDownloadUrl, { redirect: 'manual' }, timeoutMs)
-      const downloadResponseInfo = downloadResp.status === 200
-        ? classifyDownloadResponse(downloadResp, new Uint8Array(await downloadResp.arrayBuffer()))
-        : classifyDownloadResponse(downloadResp)
+      const downloadResp = await fetchWithTimeout(
+        probeDownloadUrl,
+        { redirect: 'manual' },
+        timeoutMs,
+      )
+      const downloadResponseInfo
+        = downloadResp.status === 200
+          ? classifyDownloadResponse(
+              downloadResp,
+              new Uint8Array(await downloadResp.arrayBuffer()),
+            )
+          : classifyDownloadResponse(downloadResp)
       downloadResults.push({
         platform: pair.platform,
         arch: pair.arch,
@@ -1289,7 +1769,9 @@ export async function checkRemoteRelease({
     }
   }
 
-  const allSignatureOk = signatureResults.every(item => item.status === 200 && item.validPayload)
+  const allSignatureOk = signatureResults.every(
+    item => item.status === 200 && item.validPayload,
+  )
   const signatureStatus = stage === 'gate-e' ? 'fail' : 'warn'
   pushCheck(
     'remote-signature-endpoint',
@@ -1300,16 +1782,17 @@ export async function checkRemoteRelease({
     { results: signatureResults },
   )
 
-  const allDownloadOk = downloadResults.every(item =>
-    [200, 302, 307, 308].includes(item.status)
-    && item.sameOrigin
-    && !item.hasHash
-    && !item.hasDuplicateSignedQuery
-    && !item.hasUnexpectedQuery
-    && item.hasExp
-    && item.hasValidExp
-    && item.hasValidSig
-    && item.validResponse,
+  const allDownloadOk = downloadResults.every(
+    item =>
+      [200, 302, 307, 308].includes(item.status)
+      && item.sameOrigin
+      && !item.hasHash
+      && !item.hasDuplicateSignedQuery
+      && !item.hasUnexpectedQuery
+      && item.hasExp
+      && item.hasValidExp
+      && item.hasValidSig
+      && item.validResponse,
   )
   pushCheck(
     'remote-download-endpoint',
@@ -1320,7 +1803,10 @@ export async function checkRemoteRelease({
     { results: downloadResults },
   )
 
-  const channel = typeof release.channel === 'string' && release.channel ? release.channel : 'RELEASE'
+  const channel
+    = typeof release.channel === 'string' && release.channel
+      ? release.channel
+      : 'RELEASE'
   const latestUrl = `${baseUrl}/api/releases/latest?channel=${encodeURIComponent(channel)}`
   const latestStatus = stage === 'gate-e' ? 'fail' : 'warn'
   try {
@@ -1330,18 +1816,29 @@ export async function checkRemoteRelease({
     const latestTag = normalizeText(latestRelease?.tag)
     const latestVersion = normalizeText(latestRelease?.version)
     const latestChannel = normalizeText(latestRelease?.channel)
-    const latestReleaseStatus = normalizeText(latestRelease?.status).toLowerCase()
+    const latestReleaseStatus = normalizeText(
+      latestRelease?.status,
+    ).toLowerCase()
     const expectedVersion = normalizeText(release.version)
     const expectedChannel = normalizeText(release.channel || channel)
     const latestIssues = []
     if (!latestResp.ok)
       latestIssues.push(`latest endpoint returned HTTP ${latestResp.status}`)
-    if (latestTag !== tag)
-      latestIssues.push(`latest release.tag ${latestTag || '<missing>'} does not match ${tag}`)
-    if (expectedVersion && latestVersion !== expectedVersion)
-      latestIssues.push(`latest release.version ${latestVersion || '<missing>'} does not match ${expectedVersion}`)
-    if (expectedChannel && latestChannel !== expectedChannel)
-      latestIssues.push(`latest release.channel ${latestChannel || '<missing>'} does not match ${expectedChannel}`)
+    if (latestTag !== tag) {
+      latestIssues.push(
+        `latest release.tag ${latestTag || '<missing>'} does not match ${tag}`,
+      )
+    }
+    if (expectedVersion && latestVersion !== expectedVersion) {
+      latestIssues.push(
+        `latest release.version ${latestVersion || '<missing>'} does not match ${expectedVersion}`,
+      )
+    }
+    if (expectedChannel && latestChannel !== expectedChannel) {
+      latestIssues.push(
+        `latest release.channel ${latestChannel || '<missing>'} does not match ${expectedChannel}`,
+      )
+    }
     if (latestReleaseStatus !== 'published')
       latestIssues.push('latest release.status must be published')
     const latestOk = latestIssues.length === 0
@@ -1366,9 +1863,14 @@ export async function checkRemoteRelease({
     )
   }
   catch (error) {
-    pushCheck('remote-latest', latestStatus, 'Failed to query remote latest release.', {
-      url: latestUrl,
-      error: createHttpErrorPayload(error),
-    })
+    pushCheck(
+      'remote-latest',
+      latestStatus,
+      'Failed to query remote latest release.',
+      {
+        url: latestUrl,
+        error: createHttpErrorPayload(error),
+      },
+    )
   }
 }

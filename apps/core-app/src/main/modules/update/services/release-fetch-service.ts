@@ -1,6 +1,7 @@
 import type {
   GitHubRelease,
   UpdateCheckResult,
+  UpdateProviderOutcome,
   UpdateSettings as SharedUpdateSettings
 } from '@talex-touch/utils'
 import fs from 'node:fs'
@@ -9,7 +10,8 @@ import {
   AppPreviewChannel,
   UpdateProviderType,
   UPDATE_GITHUB_RELEASES_API,
-  UPDATE_GITHUB_REPO
+  UPDATE_GITHUB_REPO,
+  UPDATE_RELEASE_MANIFEST_NAME
 } from '@talex-touch/utils'
 import {
   compareUpdateVersions,
@@ -38,10 +40,8 @@ interface ReleaseCacheEntry {
 }
 
 interface ReleaseCacheStore {
-  version: 1
-  providerType?: UpdateProviderType
-  providerKey?: string
-  entries: Partial<Record<AppPreviewChannel, ReleaseCacheEntry>>
+  version: 2
+  entries: Record<string, ReleaseCacheEntry>
 }
 
 interface OfficialReleaseAsset {
@@ -79,6 +79,7 @@ export interface ReleaseFetchSettings {
 export interface UpdateFetchResult {
   result: UpdateCheckResult
   usedNetwork: boolean
+  outcome: UpdateProviderOutcome
 }
 
 export interface ReleaseFetchServiceDeps {
@@ -90,7 +91,7 @@ export interface ReleaseFetchServiceDeps {
 
 /** Fetches releases and owns persisted provider cache, validators, retry, and cooldown policy. */
 export class ReleaseFetchService {
-  private store: ReleaseCacheStore = { version: 1, entries: {} }
+  private store: ReleaseCacheStore = { version: 2, entries: {} }
 
   constructor(private readonly deps: ReleaseFetchServiceDeps) {
     this.store = this.buildStore()
@@ -105,17 +106,10 @@ export class ReleaseFetchService {
       const parsed = JSON.parse(
         await fs.promises.readFile(cacheFile, 'utf8')
       ) as Partial<ReleaseCacheStore>
-      if (parsed.entries && typeof parsed.entries === 'object') {
-        const restored: ReleaseCacheStore = {
-          version: 1,
-          entries: parsed.entries,
-          providerType: parsed.providerType,
-          providerKey: parsed.providerKey
-        }
-        this.store = this.isCompatible(restored)
-          ? this.buildStore(restored.entries)
+      this.store =
+        parsed.version === 2 && parsed.entries && typeof parsed.entries === 'object'
+          ? this.buildStore(parsed.entries)
           : this.buildStore()
-      }
     } catch (error) {
       this.deps.log.warn('Failed to load update cache', { error })
     }
@@ -136,25 +130,60 @@ export class ReleaseFetchService {
   }
 
   async fetch(channel: AppPreviewChannel, force = false): Promise<UpdateFetchResult> {
-    return this.deps.getSettings().source?.type === UpdateProviderType.OFFICIAL
-      ? this.fetchOfficial(channel, force)
-      : this.fetchGitHub(channel, force)
+    if (this.deps.getSettings().source?.type !== UpdateProviderType.OFFICIAL) {
+      return this.fetchGitHub(channel, force)
+    }
+
+    try {
+      return await this.fetchOfficial(channel, force)
+    } catch (nexusError) {
+      if (!this.isOfficialFallbackEligible(nexusError)) {
+        throw nexusError
+      }
+      this.deps.log.warn('Nexus update lookup failed transiently; falling back to GitHub', {
+        error: nexusError
+      })
+
+      try {
+        return await this.fetchGitHub(channel, force, false)
+      } catch (githubError) {
+        const stale =
+          this.staleResult('nexus', channel, 'Official Releases') ??
+          this.staleResult('github', channel, 'GitHub')
+        if (stale) {
+          return stale
+        }
+        throw githubError
+      }
+    }
   }
 
   private async fetchGitHub(
     channel: AppPreviewChannel,
-    force: boolean
+    force: boolean,
+    allowStale = true
   ): Promise<UpdateFetchResult> {
     const settings = this.deps.getSettings()
     const source =
       settings.source?.type === UpdateProviderType.GITHUB
         ? (settings.source.name ?? 'GitHub')
         : 'GitHub'
-    const cacheEntry = this.entry(channel)
+    const cacheEntry = this.entry('github', channel)
     const cached = (): GitHubRelease | null => selectLatestUpdateRelease(cacheEntry?.releases ?? [])
     const now = Date.now()
-    const cachedResult = this.getFreshOrCooledResult(cacheEntry, cached, source, force, now)
+    const cachedResult = this.getFreshOrCooledResult(
+      'github',
+      cacheEntry,
+      cached,
+      source,
+      force,
+      now,
+      allowStale
+    )
     if (cachedResult) {
+      if (!allowStale && cachedResult.result.error) {
+        throw new Error(cachedResult.result.error)
+      }
       return cachedResult
     }
 
@@ -188,8 +217,8 @@ export class ReleaseFetchService {
         const lastModified = this.header(response.headers, 'last-modified')
         if (response.status === 304) {
           const release = cached()
-          if (!release || !cacheEntry) return this.noCachedRelease(source, true)
-          this.setEntry(channel, {
+          if (!release || !cacheEntry) return this.noCachedRelease('github', source, true)
+          this.setEntry('github', channel, {
             ...cacheEntry,
             fetchedAt: now,
             ttlMinutes: settings.cacheTTL,
@@ -202,22 +231,23 @@ export class ReleaseFetchService {
           return this.releaseResult(release, source, true)
         }
         if (!Array.isArray(response.data)) {
-          return {
-            usedNetwork: true,
-            result: { hasUpdate: false, error: 'Invalid response format from GitHub API', source }
-          }
+          throw new Error('Invalid response format from GitHub API')
         }
         const releases = response.data
           .filter((release) => parseComparableUpdateVersion(release.tag_name).channel === channel)
+          .map((release) => ({ ...release, source: 'github' as const }))
           .sort((a, b) => compareUpdateVersions(b.tag_name, a.tag_name))
         if (releases.length === 0) {
-          return {
-            usedNetwork: true,
-            result: { hasUpdate: false, error: `No releases found for channel: ${channel}`, source }
-          }
+          return this.noneResult(
+            'github',
+            source,
+            `No releases found for channel: ${channel}`,
+            true,
+            false
+          )
         }
         const release = releases[0]
-        this.setEntry(channel, {
+        this.setEntry('github', channel, {
           releases,
           fetchedAt: now,
           ttlMinutes: settings.cacheTTL,
@@ -237,9 +267,11 @@ export class ReleaseFetchService {
       }
     }
 
-    if (lastError) this.recordFailure(channel, lastError)
-    const release = cached()
-    if (release) return this.releaseResult(release, source, false)
+    if (lastError) this.recordFailure('github', channel, lastError)
+    if (allowStale) {
+      const release = cached()
+      if (release) return this.releaseResult(release, source, false)
+    }
     throw lastError instanceof Error ? lastError : new Error('Failed to fetch latest release')
   }
 
@@ -249,10 +281,23 @@ export class ReleaseFetchService {
   ): Promise<UpdateFetchResult> {
     const settings = this.deps.getSettings()
     const source = settings.source?.name ?? 'Official Releases'
-    const cacheEntry = this.entry(channel)
+    const cacheEntry = this.entry('nexus', channel)
     const cached = (): GitHubRelease | null => selectLatestUpdateRelease(cacheEntry?.releases ?? [])
-    const cachedResult = this.getFreshOrCooledResult(cacheEntry, cached, source, force, Date.now())
-    if (cachedResult) return cachedResult
+    const cachedResult = this.getFreshOrCooledResult(
+      'nexus',
+      cacheEntry,
+      cached,
+      source,
+      force,
+      Date.now(),
+      false
+    )
+    if (cachedResult) {
+      if (cachedResult.result.error === 'Rate limit cooldown in effect') {
+        throw new Error('NETWORK_HTTP_STATUS_429')
+      }
+      return cachedResult
+    }
 
     try {
       const url = new URL('/api/releases/latest', this.officialBaseUrl())
@@ -267,17 +312,25 @@ export class ReleaseFetchService {
         responseType: 'json'
       })
       if (!response.data?.release) {
-        return {
-          usedNetwork: true,
-          result: {
-            hasUpdate: false,
-            error: response.data?.message ?? 'No official release available',
-            source
-          }
-        }
+        return this.noneResult(
+          'nexus',
+          source,
+          response.data?.message ?? 'No official release available',
+          true,
+          true
+        )
+      }
+      if (
+        response.data.release.status &&
+        response.data.release.status.toUpperCase() !== 'PUBLISHED'
+      ) {
+        return this.policyBlockResult(
+          source,
+          `Official release is not published: ${response.data.release.status}`
+        )
       }
       const release = this.mapOfficialRelease(response.data.release)
-      this.setEntry(channel, {
+      this.setEntry('nexus', channel, {
         releases: [release],
         fetchedAt: Date.now(),
         ttlMinutes: settings.cacheTTL,
@@ -285,19 +338,19 @@ export class ReleaseFetchService {
       })
       return this.releaseResult(release, source, true)
     } catch (error) {
-      this.recordFailure(channel, error)
-      const release = cached()
-      if (release) return this.releaseResult(release, source, false)
+      this.recordFailure('nexus', channel, error)
       throw error instanceof Error ? error : new Error('Failed to fetch official release')
     }
   }
 
   private getFreshOrCooledResult(
+    provider: 'nexus' | 'github',
     entry: ReleaseCacheEntry | null,
     cached: () => GitHubRelease | null,
     source: string,
     force: boolean,
-    now: number
+    now: number,
+    allowCooled: boolean
   ): UpdateFetchResult | null {
     const settings = this.deps.getSettings()
     if (
@@ -309,16 +362,19 @@ export class ReleaseFetchService {
       const release = cached()
       return release
         ? this.releaseResult(release, source, false)
-        : this.noCachedRelease(source, false)
+        : this.noCachedRelease(provider, source, false)
     }
     if (settings.rateLimitEnabled && entry?.cooldownUntil && now < entry.cooldownUntil) {
-      const release = cached()
-      return release
-        ? this.releaseResult(release, source, false)
-        : {
-            usedNetwork: false,
-            result: { hasUpdate: false, error: 'Rate limit cooldown in effect', source }
-          }
+      const release = allowCooled ? cached() : null
+      if (release) {
+        return this.releaseResult(release, source, false)
+      }
+      const message = 'Rate limit cooldown in effect'
+      return {
+        usedNetwork: false,
+        result: { hasUpdate: false, error: message, source },
+        outcome: { kind: 'transient-failure', source: provider, reason: message }
+      }
     }
     return null
   }
@@ -328,51 +384,101 @@ export class ReleaseFetchService {
     source: string,
     usedNetwork: boolean
   ): UpdateFetchResult {
-    return { usedNetwork, result: { hasUpdate: true, release, source } }
-  }
-
-  private noCachedRelease(source: string, usedNetwork: boolean): UpdateFetchResult {
+    if (release.source !== 'nexus' && release.source !== 'github') {
+      throw new Error('Update release source is missing')
+    }
     return {
       usedNetwork,
-      result: { hasUpdate: false, error: 'No cached release available', source }
+      result: { hasUpdate: true, release, source },
+      outcome: { kind: 'candidate', source: release.source, release, usedNetwork }
     }
   }
 
-  private entry(channel: AppPreviewChannel): ReleaseCacheEntry | null {
-    return this.store.entries[channel] ?? null
-  }
-
-  private setEntry(channel: AppPreviewChannel, entry: ReleaseCacheEntry): void {
-    if (!this.isCompatible(this.store)) this.store = this.buildStore()
-    this.store.entries[channel] = entry
-  }
-
-  private provider(): { type: UpdateProviderType; key: string } {
-    const source = this.deps.getSettings().source
-    const type = source?.type ?? UpdateProviderType.GITHUB
+  private noCachedRelease(
+    provider: 'nexus' | 'github',
+    source: string,
+    usedNetwork: boolean
+  ): UpdateFetchResult {
+    const message = 'No cached release available'
     return {
-      type,
-      key:
-        type === UpdateProviderType.OFFICIAL
-          ? this.officialBaseUrl()
-          : (source?.url ?? UPDATE_GITHUB_REPO)
+      usedNetwork,
+      result: { hasUpdate: false, error: message, source },
+      outcome: { kind: 'transient-failure', source: provider, reason: message }
     }
+  }
+
+  private noneResult(
+    provider: 'nexus' | 'github',
+    source: string,
+    message: string,
+    usedNetwork: boolean,
+    authoritative: boolean
+  ): UpdateFetchResult {
+    return {
+      usedNetwork,
+      result: { hasUpdate: false, error: message, source },
+      outcome: { kind: 'none', source: provider, authoritative, message }
+    }
+  }
+
+  private policyBlockResult(source: string, reason: string): UpdateFetchResult {
+    return {
+      usedNetwork: true,
+      result: { hasUpdate: false, error: reason, source },
+      outcome: { kind: 'policy-block', source: 'nexus', reason }
+    }
+  }
+
+  private entry(
+    provider: 'nexus' | 'github',
+    channel: AppPreviewChannel
+  ): ReleaseCacheEntry | null {
+    return this.store.entries[this.cacheKey(provider, channel)] ?? null
+  }
+
+  private setEntry(
+    provider: 'nexus' | 'github',
+    channel: AppPreviewChannel,
+    entry: ReleaseCacheEntry
+  ): void {
+    this.store.entries[this.cacheKey(provider, channel)] = entry
   }
 
   private buildStore(entries: ReleaseCacheStore['entries'] = {}): ReleaseCacheStore {
-    const provider = this.provider()
-    return { version: 1, entries, providerType: provider.type, providerKey: provider.key }
+    return { version: 2, entries }
   }
 
-  private isCompatible(store: ReleaseCacheStore): boolean {
-    const provider = this.provider()
-    if (!store.providerType && !store.providerKey) {
-      return (
-        provider.type === UpdateProviderType.GITHUB &&
-        provider.key === (this.deps.getSettings().source?.url ?? UPDATE_GITHUB_REPO)
-      )
+  private cacheKey(provider: 'nexus' | 'github', channel: AppPreviewChannel): string {
+    const source = this.deps.getSettings().source
+    const identity =
+      provider === 'nexus'
+        ? this.officialBaseUrl()
+        : source?.type === UpdateProviderType.GITHUB
+          ? (source.url ?? UPDATE_GITHUB_REPO)
+          : UPDATE_GITHUB_REPO
+    return `${provider}:${identity}:${channel}`
+  }
+
+  private staleResult(
+    provider: 'nexus' | 'github',
+    channel: AppPreviewChannel,
+    source: string
+  ): UpdateFetchResult | null {
+    const release = selectLatestUpdateRelease(this.entry(provider, channel)?.releases ?? [])
+    return release ? this.releaseResult(release, source, false) : null
+  }
+
+  private isOfficialFallbackEligible(error: unknown): boolean {
+    const status = this.status(error)
+    if (status !== undefined) {
+      return status === 429 || status >= 500
     }
-    return store.providerType === provider.type && store.providerKey === provider.key
+    return (
+      error instanceof Error &&
+      /NETWORK_TIMEOUT|timeout|etimedout|enotfound|econnreset|eai_again|fetch failed|socket hang up/i.test(
+        error.message
+      )
+    )
   }
 
   private officialBaseUrl(): string {
@@ -382,7 +488,7 @@ export class ReleaseFetchService {
   private mapOfficialRelease(release: OfficialRelease): GitHubRelease {
     const body =
       release.notesHtml?.en || release.notes?.en || release.notesHtml?.zh || release.notes?.zh || ''
-    const assets = (release.assets ?? []).flatMap((asset) => {
+    const assets: GitHubRelease['assets'] = (release.assets ?? []).flatMap((asset) => {
       const url = this.officialAssetUrl(asset.downloadUrl)
       if (!url) return []
       return [
@@ -393,16 +499,22 @@ export class ReleaseFetchService {
           platform: asset.platform,
           arch: asset.arch === 'arm64' ? 'arm64' : 'x64',
           checksum: asset.sha256 ?? undefined,
-          signatureUrl: this.officialAssetUrl(asset.signatureUrl ?? undefined)
-        } as GitHubRelease['assets'][number]
+          signatureUrl: this.officialAssetUrl(asset.signatureUrl ?? undefined) ?? undefined
+        }
       ]
+    })
+    assets.push({
+      name: UPDATE_RELEASE_MANIFEST_NAME,
+      url: `https://github.com/${UPDATE_GITHUB_REPO}/releases/download/${encodeURIComponent(release.tag)}/${UPDATE_RELEASE_MANIFEST_NAME}`,
+      size: 0
     })
     return {
       tag_name: release.tag,
       name: release.name || release.tag,
       published_at: release.publishedAt ?? release.createdAt,
       body,
-      assets
+      assets,
+      source: 'nexus'
     }
   }
 
@@ -420,9 +532,13 @@ export class ReleaseFetchService {
       : undefined
   }
 
-  private recordFailure(channel: AppPreviewChannel, error: unknown): void {
+  private recordFailure(
+    provider: 'nexus' | 'github',
+    channel: AppPreviewChannel,
+    error: unknown
+  ): void {
     const settings = this.deps.getSettings()
-    const entry = this.entry(channel) ?? {
+    const entry = this.entry(provider, channel) ?? {
       releases: [],
       fetchedAt: 0,
       ttlMinutes: settings.cacheTTL
@@ -431,7 +547,7 @@ export class ReleaseFetchService {
     const headers = this.headers(error)
     if (settings.rateLimitEnabled && (status === 403 || status === 429)) {
       const rateLimit = headers ? this.rateLimit(headers) : undefined
-      this.setEntry(channel, {
+      this.setEntry(provider, channel, {
         ...entry,
         rateLimit: rateLimit ?? entry.rateLimit,
         cooldownUntil: rateLimit?.resetAt ?? Date.now() + 3_600_000,
@@ -440,7 +556,7 @@ export class ReleaseFetchService {
       return
     }
     const nextCount = Math.min((entry.failureCount ?? 0) + 1, 4)
-    this.setEntry(channel, {
+    this.setEntry(provider, channel, {
       ...entry,
       failureCount: nextCount,
       cooldownUntil: Date.now() + [60_000, 300_000, 900_000, 3_600_000][nextCount - 1]
@@ -474,12 +590,14 @@ export class ReleaseFetchService {
 
   private isRetryable(error: unknown): boolean {
     const status = this.status(error)
+    if (status !== undefined) {
+      return status >= 500 || status === 403 || status === 429
+    }
     return (
-      Boolean(status && (status >= 500 || status === 403 || status === 429)) ||
-      (error instanceof Error &&
-        /NETWORK_TIMEOUT|timeout|etimedout|enotfound|econnreset|eai_again|network/i.test(
-          error.message
-        ))
+      error instanceof Error &&
+      /NETWORK_TIMEOUT|timeout|etimedout|enotfound|econnreset|eai_again|fetch failed|socket hang up/i.test(
+        error.message
+      )
     )
   }
 
@@ -489,6 +607,17 @@ export class ReleaseFetchService {
   }
 
   private status(error: unknown): number | undefined {
+    if (error && typeof error === 'object') {
+      const candidate = error as {
+        status?: unknown
+        statusCode?: unknown
+        response?: { status?: unknown }
+      }
+      const value = candidate.status ?? candidate.statusCode ?? candidate.response?.status
+      if (typeof value === 'number' && Number.isInteger(value)) {
+        return value
+      }
+    }
     const matched =
       error instanceof Error ? error.message.match(/NETWORK_HTTP_STATUS_(\d{3})/) : null
     return matched ? Number.parseInt(matched[1], 10) : undefined

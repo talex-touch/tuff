@@ -23,7 +23,6 @@ const RUNTIME_MODULE_MANIFEST = Object.freeze({
     'simple-plist',
     '@electron-toolkit/utils',
     '@modelcontextprotocol/sdk',
-    'electron-updater',
     'talex-mica-electron',
     '@sentry/electron',
     'require-in-the-middle',

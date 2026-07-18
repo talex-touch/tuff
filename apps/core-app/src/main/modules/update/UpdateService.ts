@@ -1,13 +1,16 @@
 import type {
   GitHubRelease,
-  UpdateSettings as SharedUpdateSettings,
   UpdateCheckResult,
   UpdateFrequency,
+  UpdateLifecycleSnapshot,
+  UpdateSettings as SharedUpdateSettings,
   UpdateUserAction
 } from '@talex-touch/utils'
 import type { ModuleInitContext } from '@talex-touch/utils/types/modules'
+import type { EventHandler } from '@talex-touch/utils/eventbus'
 import type { UpdateRecordRow } from './update-repository'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import {
@@ -21,7 +24,14 @@ import { NEXUS_BASE_URL } from '@talex-touch/utils/env'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { UpdateEvents } from '@talex-touch/utils/transport/events'
 import { app } from 'electron'
-import { TalexEvents, touchEventBus, UpdateAvailableEvent } from '../../core/eventbus/touch-event'
+import {
+  type AppQuitEvent,
+  type BeforeAppQuitEvent,
+  TalexEvents,
+  touchEventBus,
+  UpdateAvailableEvent
+} from '../../core/eventbus/touch-event'
+import { getQuitIntent } from '../../core/quit-intent'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
@@ -38,9 +48,12 @@ import {
 } from '../../../shared/update/channel'
 import { compareUpdateVersions, parseComparableUpdateVersion } from '../../../shared/update/version'
 import { UpdateRecordStatus, UpdateRepository } from './update-repository'
-import { MacAutoUpdaterAdapter } from './services/mac-auto-updater-adapter'
+import { UpdateAttemptRepository } from './update-attempt-repository'
+import { UpdateLifecycleConflictError } from './update-lifecycle'
+import { resolveUpdateInstallSettingsMigration } from './update-settings-migration'
 import { ReleaseFetchService } from './services/release-fetch-service'
 import { UpdateActionController } from './services/update-action-controller'
+import { UpdateInstallCoordinator } from './services/update-install-coordinator'
 import { UpdateDownloadAdapter } from './services/update-download-adapter'
 import { UpdateSystem } from './update-system'
 import type { DownloadCenterModule } from '../download/download-center'
@@ -57,14 +70,13 @@ const UPDATE_POLL_TASK_ID = 'update-service.check'
  */
 type UpdateSettings = SharedUpdateSettings & {
   autoDownload: boolean
-  autoInstallDownloadedUpdates: boolean
+  installOnNormalQuit: boolean
   cacheEnabled: boolean
   cacheTTL: number // Cache TTL in minutes
   rateLimitEnabled: boolean
   maxRetries: number
   retryDelay: number // Base retry delay in milliseconds
   lastCheckedAt: number | null
-  pendingInstallVersion: string | null
 }
 
 /**
@@ -83,6 +95,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private initContext?: ModuleInitContext<TalexEvents>
   private updateSystem?: UpdateSystem
   private updateRepository: UpdateRepository | null = null
+  private updateAttemptRepository: UpdateAttemptRepository | null = null
   private releaseFetchService: ReleaseFetchService
   private releaseCacheLoadPromise: Promise<void> | null = null
   private startupBackgroundTimer: NodeJS.Timeout | null = null
@@ -90,11 +103,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private startupBackgroundListener: (() => void) | null = null
   private updateSystemInitListener: (() => void) | null = null
   private autoDownloadTasks: Map<string, string> = new Map()
+  private readonly lifecycleMonitorTaskIds = new Set<string>()
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
-  private macAutoUpdater: MacAutoUpdaterAdapter
   private downloadAdapter: UpdateDownloadAdapter
+  private installCoordinator: UpdateInstallCoordinator | null = null
   private actionController: UpdateActionController | null = null
+  private installBeforeQuitListener: EventHandler | null = null
+  private installWillQuitListener: EventHandler | null = null
   private readonly messageStore = getAnalyticsMessageStore()
   private readonly channelPriority: Record<AppPreviewChannel, number> = {
     [AppPreviewChannel.RELEASE]: 0,
@@ -112,35 +128,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       getSettings: () => this.settings,
       log: { warn: (message, details) => updateLog.warn(message, details) }
     })
-    this.macAutoUpdater = new MacAutoUpdaterAdapter({
-      getChannel: () => this.getEffectiveChannel(),
-      isUpdateCandidate: (version) => this.isUpdateCandidate(version),
-      getPendingInstallVersion: () => this.settings.pendingInstallVersion,
-      setPendingInstallVersion: (version) => {
-        this.settings.pendingInstallVersion = version
-      },
-      saveSettings: () => this.saveSettings(),
-      flushSettings: () => this.flushSettingsToDisk(),
-      log: {
-        info: (message, details) => updateLog.info(message, details),
-        warn: (message, details) => updateLog.warn(message, details),
-        error: (message, details) => updateLog.error(message, details)
-      }
-    })
     this.downloadAdapter = new UpdateDownloadAdapter({
-      isPackaged: () => app.isPackaged,
-      isMacAutoUpdaterEnabled: () => this.macAutoUpdater.isEnabled(),
-      downloadMacUpdate: (release) => this.macAutoUpdater.download(release),
-      getUpdateSystem: () => this.updateSystem,
-      getEffectiveChannel: () => this.getEffectiveChannel(),
-      getSourceName: () => this.settings.source?.name ?? 'Unknown',
-      shouldAutoInstall: () => this.shouldAutoInstallDownloadedUpdate(),
-      isUpdateCandidate: (version) => this.isUpdateCandidate(version),
-      reportTelemetry: (action, meta) => this.reportUpdateTelemetry(action, meta),
-      log: {
-        info: (message, details) => updateLog.info(message, details),
-        warn: (message, details) => updateLog.warn(message, details)
-      }
+      getUpdateSystem: () => this.updateSystem
     })
   }
 
@@ -160,13 +149,33 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     this.updateSystem = new UpdateSystem(downloadCenterModule as DownloadCenterModule, {
       autoDownload: this.settings.autoDownload,
-      autoInstallDownloadedUpdates: this.settings.autoInstallDownloadedUpdates,
       autoCheck: this.settings.enabled,
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
       ignoredVersions: this.settings.ignoredVersions,
       updateChannel: this.settings.updateChannel,
       rendererOverrideEnabled: this.settings.rendererOverrideEnabled,
       storageRoot: ctx.app.rootPath
+    })
+    if (!this.updateAttemptRepository) {
+      updateLog.warn('Update install coordinator unavailable without lifecycle repository')
+      return true
+    }
+    this.installCoordinator = new UpdateInstallCoordinator({
+      repository: this.updateAttemptRepository,
+      storageRoot: ctx.app.rootPath,
+      currentVersion: this.currentVersion,
+      platform: process.platform,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+      executablePath: app.getPath('exe'),
+      getInstallOnNormalQuit: () => this.settings.installOnNormalQuit,
+      prepareInstallPackage: (taskId) => this.downloadAdapter.prepareInstallHandoff(taskId),
+      requestQuit: () => app.quit(),
+      log: {
+        info: (message, details) => updateLog.info(message, details),
+        warn: (message, details) => updateLog.warn(message, details),
+        error: (message, details) => updateLog.error(message, details)
+      }
     })
     updateLog.success('UpdateSystem initialized with DownloadCenter integration')
     return true
@@ -179,6 +188,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     this.startupBackgroundListener = () => {
       this.startupBackgroundListener = null
+      void this.installCoordinator?.confirmStartupHealth().catch((error) => {
+        updateLog.error('Failed to confirm update startup health', { error })
+      })
       this.startupBackgroundTimer = setTimeout(() => {
         this.startupBackgroundTimer = null
         this.runStartupBackgroundTasks()
@@ -189,8 +201,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
   private runStartupBackgroundTasks(): void {
     this.scheduleReleaseCacheLoad()
-    this.macAutoUpdater.setup()
-    this.macAutoUpdater.restorePendingInstallVersion()
 
     if (!app.isPackaged) {
       updateLog.info('Development mode detected, skipping automatic update checks')
@@ -234,20 +244,29 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     this.initContext = ctx
     updateLog.info('Initializing update service')
+    this.loadSettings()
 
     try {
-      this.updateRepository = new UpdateRepository(databaseModule.getDb())
-      updateLog.success('UpdateRepository initialized')
+      const db = databaseModule.getDb()
+      this.updateRepository = new UpdateRepository(db)
+      this.updateAttemptRepository = new UpdateAttemptRepository(db)
+      updateLog.success('Update repositories initialized')
     } catch (error) {
-      updateLog.warn('Failed to initialize UpdateRepository', { error })
+      updateLog.warn('Failed to initialize update repositories', { error })
     }
+
+    this.installBeforeQuitListener = async (event) => {
+      await this.installCoordinator?.handleBeforeQuit((event as BeforeAppQuitEvent).intent)
+    }
+    this.installWillQuitListener = (event) => {
+      this.installCoordinator?.handleWillQuit((event as AppQuitEvent).intent)
+    }
+    touchEventBus.on(TalexEvents.BEFORE_MODULES_UNLOAD, this.installBeforeQuitListener)
+    touchEventBus.on(TalexEvents.WILL_QUIT, this.installWillQuitListener)
 
     const runtime = resolveMainRuntime(ctx, 'UpdateService.onInit')
     this.transport = runtime.transport
     this.registerTransportHandlers()
-
-    // Load settings
-    this.loadSettings()
 
     if (!this.tryInitUpdateSystem(ctx)) {
       this.updateSystemInitListener = () => {
@@ -258,9 +277,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
         if (!this.tryInitUpdateSystem(this.initContext)) {
           updateLog.warn('DownloadCenter module not found, UpdateSystem not initialized')
+          return
         }
+        void this.restoreLifecycleState()
+          .then(() => this.installCoordinator?.confirmStartupHealth())
+          .catch((error) => updateLog.error('Failed to restore update lifecycle', { error }))
       }
       touchEventBus.once(TalexEvents.ALL_MODULES_LOADED, this.updateSystemInitListener)
+    } else {
+      await this.restoreLifecycleState()
     }
 
     this.scheduleStartupBackgroundTasks()
@@ -276,6 +301,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
     // Unregister polling task
     this.pollingService.unregister(UPDATE_POLL_TASK_ID)
+    for (const taskId of this.lifecycleMonitorTaskIds) {
+      this.pollingService.unregister(taskId)
+    }
+    this.lifecycleMonitorTaskIds.clear()
 
     // Clear scheduled save
     if (this.settingsSaveTimer) {
@@ -299,9 +328,19 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }
     }
     this.transportDisposers = []
+    if (!getQuitIntent()) {
+      if (this.installBeforeQuitListener) {
+        touchEventBus.off(TalexEvents.BEFORE_MODULES_UNLOAD, this.installBeforeQuitListener)
+        this.installBeforeQuitListener = null
+      }
+      if (this.installWillQuitListener) {
+        touchEventBus.off(TalexEvents.WILL_QUIT, this.installWillQuitListener)
+        this.installWillQuitListener = null
+      }
+      this.installCoordinator = null
+    }
     this.transport = null
     this.actionController = null
-    this.macAutoUpdater.dispose()
 
     // Clear cache if needed
     if (!this.settings.cacheEnabled) {
@@ -320,11 +359,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       getQuickUpdateCheckResult: (channel) => this.getQuickUpdateCheckResult(channel),
       queueBackgroundUpdateCheck: () => this.queueBackgroundUpdateCheck(),
       checkForUpdates: (force) => this.checkForUpdates(force),
-      isMacAutoUpdaterEnabled: () => this.macAutoUpdater.isEnabled(),
-      withDownloadCenterDownload: (release) => this.downloadAdapter.downloadWithCenter(release),
-      withMacDownload: (release) => this.downloadAdapter.downloadWithMacAutoUpdater(release),
-      withDownloadCenterInstall: (taskId) => this.downloadAdapter.installWithCenter(taskId),
-      withMacInstall: () => this.macAutoUpdater.install(),
+      withDownloadCenterDownload: (release) => this.downloadWithCenterLifecycle(release),
+      withDownloadCenterInstall: (taskId) => this.installWithCenterLifecycle(taskId),
       reportUpdateMessage: (level, title, message, meta) =>
         this.reportUpdateMessage(level, title, message, meta),
       reportUpdateTelemetry: (action, meta) => this.reportUpdateTelemetry(action, meta),
@@ -349,7 +385,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     this.transportDisposers.push(
       tx.on(UpdateEvents.check, async (payload) => {
         const force = payload?.force ?? false
-        return this.getActionController().handleCheck(force)
+        const response = await this.getActionController().handleCheck(force)
+        const snapshot = await this.getLifecycleSnapshot()
+        return response.success
+          ? { ...response, snapshot }
+          : { ...response, errorCode: 'UPDATE_CHECK_FAILED', retryable: true, snapshot }
       }),
 
       tx.on(UpdateEvents.getSettings, async () => {
@@ -380,16 +420,10 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
             this.settings = { ...this.settings, ...sanitizedSettings }
             this.saveSettings()
-            this.macAutoUpdater.setup()
 
             if (this.updateSystem) {
               if (typeof sanitizedSettings.autoDownload === 'boolean') {
                 this.updateSystem.setAutoDownload(sanitizedSettings.autoDownload)
-              }
-              if (typeof sanitizedSettings.autoInstallDownloadedUpdates === 'boolean') {
-                this.updateSystem.updateConfig({
-                  autoInstallDownloadedUpdates: sanitizedSettings.autoInstallDownloadedUpdates
-                })
               }
               if (typeof sanitizedSettings.enabled === 'boolean') {
                 this.updateSystem.setAutoCheck(sanitizedSettings.enabled)
@@ -401,7 +435,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               }
               if (sanitizedSettings.updateChannel) {
                 this.updateSystem.updateConfig({ updateChannel: sanitizedSettings.updateChannel })
-                this.macAutoUpdater.syncChannel()
               }
               if (typeof sanitizedSettings.rendererOverrideEnabled === 'boolean') {
                 const enabled = sanitizedSettings.rendererOverrideEnabled
@@ -435,52 +468,49 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               this.clearReleaseCache()
             }
 
-            return { success: true }
+            return { success: true, snapshot: await this.getLifecycleSnapshot() }
           } catch (error) {
             updateLog.error('Failed to update settings', { error })
             return {
               success: false,
-              error: error instanceof Error ? error.message : 'Unknown error'
+              error: error instanceof Error ? error.message : 'Unknown error',
+              errorCode: 'UPDATE_SETTINGS_FAILED',
+              retryable: false,
+              snapshot: await this.getLifecycleSnapshot()
             }
           }
         }
       ),
 
       tx.on(UpdateEvents.getStatus, async () => {
-        const readyStatus = await this.downloadAdapter.resolveReadyUpdateStatus(
-          this.macAutoUpdater.getReadyVersion()
-        )
-
-        return {
-          success: true,
-          data: {
-            enabled: this.settings.enabled,
-            frequency: this.settings.frequency,
-            source: this.settings.source,
-            channel: this.getEffectiveChannel(),
-            polling: this.pollingService.isRegistered(UPDATE_POLL_TASK_ID),
-            lastCheck: this.settings.lastCheckedAt ?? null,
-            downloadReady: readyStatus.downloadReady,
-            downloadReadyVersion: readyStatus.version,
-            downloadTaskId: readyStatus.taskId,
-            autoInstallDownloadedUpdates: this.settings.autoInstallDownloadedUpdates
-          }
-        }
+        const snapshot = await this.getLifecycleSnapshot()
+        return { success: true, data: snapshot, snapshot }
       }),
 
       tx.on(UpdateEvents.clearCache, async () => {
+        const active = await this.updateAttemptRepository?.getActive()
+        if (active) {
+          return {
+            success: false,
+            error: 'Cannot clear update cache while an update attempt is active',
+            errorCode: 'UPDATE_ACTIVE_ATTEMPT',
+            retryable: false,
+            snapshot: await this.getLifecycleSnapshot()
+          }
+        }
         try {
           this.cache.clear()
           this.clearReleaseCache()
           await this.updateRepository?.clearAllRecords()
-          this.macAutoUpdater.clearPendingInstallVersion()
-          this.saveSettings()
-          return { success: true }
+          return { success: true, snapshot: await this.getLifecycleSnapshot() }
         } catch (error) {
           updateLog.error('Failed to clear cache', { error })
           return {
             success: false,
-            error: error instanceof Error ? error.message : 'Unknown error'
+            error: error instanceof Error ? error.message : 'Unknown error',
+            errorCode: 'UPDATE_CACHE_CLEAR_FAILED',
+            retryable: true,
+            snapshot: await this.getLifecycleSnapshot()
           }
         }
       }),
@@ -540,12 +570,32 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         }
       }),
 
-      tx.on(UpdateEvents.download, async (release) => {
-        return this.getActionController().handleDownload(release)
+      tx.on(UpdateEvents.download, async (payload) => {
+        try {
+          const release = await this.resolveReleaseForDownload(payload.tag)
+          const response = await this.getActionController().handleDownload(release)
+          const snapshot = await this.getLifecycleSnapshot()
+          return response.success
+            ? { ...response, snapshot }
+            : { ...response, errorCode: 'UPDATE_DOWNLOAD_FAILED', retryable: true, snapshot }
+        } catch (error) {
+          updateLog.warn('Rejected untrusted update download request', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Invalid update release',
+            errorCode: 'UPDATE_DOWNLOAD_REJECTED',
+            retryable: false,
+            snapshot: await this.getLifecycleSnapshot()
+          }
+        }
       }),
 
       tx.on(UpdateEvents.install, async (payload) => {
-        return this.getActionController().handleInstall(payload)
+        const response = await this.getActionController().handleInstall(payload)
+        const snapshot = await this.getLifecycleSnapshot()
+        return response.success
+          ? { ...response, snapshot }
+          : { ...response, errorCode: 'UPDATE_INSTALL_FAILED', retryable: false, snapshot }
       }),
 
       tx.on(UpdateEvents.ignoreVersion, async (payload) => {
@@ -612,6 +662,396 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     )
   }
 
+  private async getLifecycleSnapshot(): Promise<UpdateLifecycleSnapshot> {
+    const persisted = await this.updateAttemptRepository?.getLatest()
+    if (persisted) {
+      return {
+        ...persisted,
+        installOnNormalQuit: this.settings.installOnNormalQuit && persisted.rollbackCompatible,
+        lastCheckAt: this.settings.lastCheckedAt
+      }
+    }
+
+    return {
+      attemptId: null,
+      revision: 0,
+      phase: 'idle',
+      currentVersion: this.currentVersion,
+      targetVersion: null,
+      source: null,
+      channel: this.getEffectiveChannel(),
+      releaseTag: null,
+      taskId: null,
+      installMode: null,
+      installOnNormalQuit: this.settings.installOnNormalQuit,
+      rollbackCompatible: false,
+      rollbackFromVersion: null,
+      previousVersion: null,
+      recoveryAvailable: false,
+      lastCheckAt: this.settings.lastCheckedAt,
+      error: null,
+      createdAt: 0,
+      updatedAt: 0
+    }
+  }
+
+  private async beginCheckLifecycle(
+    channel: AppPreviewChannel
+  ): Promise<UpdateLifecycleSnapshot | null> {
+    const repository = this.updateAttemptRepository
+    if (!repository) {
+      return null
+    }
+
+    const active = await repository.getActive()
+    if (active) {
+      return active.phase === 'checking' ? active : null
+    }
+
+    try {
+      return await repository.createChecking({
+        id: randomUUID(),
+        currentVersion: this.currentVersion,
+        channel,
+        installOnNormalQuit: this.settings.installOnNormalQuit
+      })
+    } catch (error) {
+      if (error instanceof UpdateLifecycleConflictError) {
+        return await repository.getActive()
+      }
+      throw error
+    }
+  }
+
+  private async markAvailableLifecycle(
+    release: GitHubRelease,
+    channel: AppPreviewChannel,
+    checking?: UpdateLifecycleSnapshot | null
+  ): Promise<UpdateLifecycleSnapshot> {
+    const repository = this.updateAttemptRepository
+    if (!repository) {
+      return await this.getLifecycleSnapshot()
+    }
+
+    let current = checking ?? (await repository.getActive())
+    if (!current) {
+      current = await this.beginCheckLifecycle(channel)
+    }
+    if (!current) {
+      throw new UpdateLifecycleConflictError('Unable to create an update lifecycle attempt')
+    }
+    if (current.phase === 'available' && current.releaseTag === release.tag_name) {
+      return current
+    }
+    if (current.phase !== 'checking') {
+      if (current.releaseTag === release.tag_name) {
+        return current
+      }
+      throw new UpdateLifecycleConflictError('Another update lifecycle attempt is already active')
+    }
+
+    return await repository.transition({
+      attemptId: current.attemptId!,
+      expectedRevision: current.revision,
+      expectedPhase: 'checking',
+      to: 'available',
+      patch: {
+        targetVersion: release.tag_name,
+        releaseTag: release.tag_name,
+        source: release.source ?? null
+      }
+    })
+  }
+
+  private async finishCheckWithoutUpdate(checking: UpdateLifecycleSnapshot | null): Promise<void> {
+    if (!checking?.attemptId || checking.phase !== 'checking' || !this.updateAttemptRepository) {
+      return
+    }
+    await this.updateAttemptRepository.transition({
+      attemptId: checking.attemptId,
+      expectedRevision: checking.revision,
+      expectedPhase: 'checking',
+      to: 'idle'
+    })
+  }
+
+  private async failLifecycle(
+    lifecycle: UpdateLifecycleSnapshot,
+    code: string,
+    error: unknown,
+    retryable: boolean
+  ): Promise<void> {
+    if (!lifecycle.attemptId || !this.updateAttemptRepository) {
+      return
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    try {
+      await this.updateAttemptRepository.transition({
+        attemptId: lifecycle.attemptId,
+        expectedRevision: lifecycle.revision,
+        expectedPhase: lifecycle.phase,
+        to: 'failed',
+        patch: { error: { code, message, retryable } }
+      })
+    } catch (transitionError) {
+      if (!(transitionError instanceof UpdateLifecycleConflictError)) {
+        throw transitionError
+      }
+      updateLog.debug('Skipped stale update lifecycle failure', {
+        meta: { attemptId: lifecycle.attemptId, code }
+      })
+    }
+  }
+
+  private async transitionToDownloading(
+    release: GitHubRelease,
+    taskId: string,
+    rollbackFromVersion: string,
+    rollbackCompatible: boolean
+  ): Promise<UpdateLifecycleSnapshot> {
+    const available = await this.markAvailableLifecycle(release, this.getEffectiveChannel())
+    if (available.phase === 'downloading') {
+      return available
+    }
+    if (!available.attemptId || available.phase !== 'available' || !this.updateAttemptRepository) {
+      throw new UpdateLifecycleConflictError('Update is not available for download')
+    }
+
+    return await this.updateAttemptRepository.transition({
+      attemptId: available.attemptId,
+      expectedRevision: available.revision,
+      expectedPhase: 'available',
+      to: 'downloading',
+      patch: {
+        taskId,
+        rollbackCompatible,
+        rollbackFromVersion,
+        installOnNormalQuit: this.settings.installOnNormalQuit && rollbackCompatible
+      }
+    })
+  }
+
+  private async downloadWithCenterLifecycle(release: GitHubRelease): Promise<{ taskId: string }> {
+    let lifecycle: UpdateLifecycleSnapshot | null = null
+    try {
+      const result = await this.downloadAdapter.downloadWithCenter(release)
+      lifecycle = await this.transitionToDownloading(
+        release,
+        result.taskId,
+        result.rollbackFromVersion,
+        result.rollbackCompatible
+      )
+      this.monitorDownloadLifecycle(result.taskId)
+      return result
+    } catch (error) {
+      const active = await this.updateAttemptRepository?.getActive()
+      if (active?.releaseTag === release.tag_name) {
+        lifecycle = active
+      }
+      if (lifecycle) {
+        await this.failLifecycle(lifecycle, 'UPDATE_DOWNLOAD_START_FAILED', error, true)
+      }
+      throw error
+    }
+  }
+
+  private async synchronizeCachedCheckResult(
+    result: UpdateCheckResult,
+    channel: AppPreviewChannel
+  ): Promise<void> {
+    if (!result.hasUpdate || !result.release) {
+      return
+    }
+    try {
+      await this.markAvailableLifecycle(result.release, channel)
+    } catch (error) {
+      if (!(error instanceof UpdateLifecycleConflictError)) {
+        throw error
+      }
+      updateLog.debug('Retained active lifecycle while serving cached update metadata', {
+        meta: { tag: result.release.tag_name }
+      })
+    }
+  }
+
+  private async maybeAutoDownloadLifecycle(release: GitHubRelease): Promise<void> {
+    if (
+      !app.isPackaged ||
+      this.settings.autoDownload !== true ||
+      this.autoDownloadTasks.has(release.tag_name)
+    ) {
+      return
+    }
+
+    this.autoDownloadTasks.set(release.tag_name, 'starting')
+    try {
+      const { taskId } = await this.downloadWithCenterLifecycle(release)
+      this.autoDownloadTasks.set(release.tag_name, taskId)
+      this.reportUpdateTelemetry('download_started', {
+        channel: this.getEffectiveChannel(),
+        source: this.settings.source?.name ?? 'Unknown',
+        tag: release.tag_name,
+        taskId: this.autoDownloadTasks.get(release.tag_name),
+        itemKind: 'auto'
+      })
+    } catch (error) {
+      this.autoDownloadTasks.delete(release.tag_name)
+      updateLog.warn('Automatic update download failed', {
+        error,
+        meta: { tag: release.tag_name }
+      })
+      this.reportUpdateTelemetry('download_error', {
+        channel: this.getEffectiveChannel(),
+        source: this.settings.source?.name ?? 'Unknown',
+        tag: release.tag_name,
+        itemKind: 'auto'
+      })
+    }
+  }
+
+  private monitorDownloadLifecycle(taskId: string): void {
+    const monitorId = `update-service.lifecycle.download.${taskId}`
+    if (this.lifecycleMonitorTaskIds.has(monitorId)) {
+      return
+    }
+    this.lifecycleMonitorTaskIds.add(monitorId)
+
+    const sync = async (): Promise<void> => {
+      const task = await this.downloadAdapter.getTaskStatus(taskId)
+      if (!task) {
+        return
+      }
+      if (task.status === 'completed') {
+        this.pollingService.unregister(monitorId)
+        this.lifecycleMonitorTaskIds.delete(monitorId)
+        await this.markCenterDownloadReady(taskId)
+        return
+      }
+      if (task.status === 'cancelled') {
+        this.pollingService.unregister(monitorId)
+        this.lifecycleMonitorTaskIds.delete(monitorId)
+        const lifecycle = await this.updateAttemptRepository?.getByDownloadTaskId(taskId)
+        if (lifecycle?.releaseTag) {
+          this.autoDownloadTasks.delete(lifecycle.releaseTag)
+        }
+        if (lifecycle?.attemptId && lifecycle.phase === 'downloading') {
+          await this.updateAttemptRepository!.transition({
+            attemptId: lifecycle.attemptId,
+            expectedRevision: lifecycle.revision,
+            expectedPhase: 'downloading',
+            to: 'available',
+            patch: { taskId: null }
+          })
+        }
+        return
+      }
+      if (task.status === 'failed') {
+        this.pollingService.unregister(monitorId)
+        this.lifecycleMonitorTaskIds.delete(monitorId)
+        const lifecycle = await this.updateAttemptRepository?.getByDownloadTaskId(taskId)
+        if (lifecycle?.releaseTag) {
+          this.autoDownloadTasks.delete(lifecycle.releaseTag)
+        }
+        if (lifecycle) {
+          await this.failLifecycle(
+            lifecycle,
+            'UPDATE_DOWNLOAD_FAILED',
+            task.error ?? 'Download failed',
+            true
+          )
+        }
+      }
+    }
+
+    this.pollingService.register(monitorId, sync, { interval: 1, unit: 'seconds' })
+    this.pollingService.start()
+    void sync().catch((error) => {
+      updateLog.warn('Failed to synchronize update download lifecycle', {
+        error,
+        meta: { taskId }
+      })
+    })
+  }
+
+  private async markCenterDownloadReady(taskId: string): Promise<void> {
+    const repository = this.updateAttemptRepository
+    if (!repository) {
+      return
+    }
+    let lifecycle = await repository.getByDownloadTaskId(taskId)
+    if (!lifecycle?.attemptId) {
+      return
+    }
+    if (lifecycle.phase === 'downloading') {
+      lifecycle = await repository.transition({
+        attemptId: lifecycle.attemptId,
+        expectedRevision: lifecycle.revision,
+        expectedPhase: 'downloading',
+        to: 'verifying'
+      })
+    }
+    if (lifecycle.phase !== 'verifying') {
+      return
+    }
+
+    try {
+      await this.downloadAdapter.verifyWithCenter(taskId)
+      await repository.transition({
+        attemptId: lifecycle.attemptId!,
+        expectedRevision: lifecycle.revision,
+        expectedPhase: 'verifying',
+        to: 'ready'
+      })
+    } catch (error) {
+      if (lifecycle.releaseTag) {
+        this.autoDownloadTasks.delete(lifecycle.releaseTag)
+      }
+      await this.failLifecycle(lifecycle, 'UPDATE_VERIFICATION_FAILED', error, false)
+    }
+  }
+
+  private async installWithCenterLifecycle(taskId: string): Promise<void> {
+    if (!this.installCoordinator) {
+      throw new Error('Update install coordinator is not initialized')
+    }
+    await this.installCoordinator.scheduleInstallNow(taskId)
+  }
+
+  private async restoreLifecycleState(): Promise<void> {
+    await this.installCoordinator?.initialize()
+    const active = await this.updateAttemptRepository?.getActive()
+    if (!active) {
+      return
+    }
+
+    if (active.phase === 'checking') {
+      await this.failLifecycle(
+        active,
+        'UPDATE_CHECK_INTERRUPTED',
+        'Application restarted during update check',
+        true
+      )
+      return
+    }
+    if (active.phase === 'downloading') {
+      if (active.taskId) {
+        this.monitorDownloadLifecycle(active.taskId)
+      } else {
+        await this.failLifecycle(
+          active,
+          'UPDATE_DOWNLOAD_INTERRUPTED',
+          'Application restarted before the update download completed',
+          true
+        )
+      }
+      return
+    }
+    if (active.phase === 'verifying' && active.taskId) {
+      await this.markCenterDownloadReady(active.taskId)
+      return
+    }
+  }
+
   /**
    * Start polling service based on frequency settings
    */
@@ -662,6 +1102,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           now - persistedRecord.fetchedAt <= ttlMs
         ) {
           updateLog.debug(`Using persisted update record for channel ${targetChannel}`)
+          await this.synchronizeCachedCheckResult(persistedResult, targetChannel)
           return persistedResult
         }
       }
@@ -671,11 +1112,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       const cachedResult = this.getCachedResult(targetChannel)
       if (cachedResult) {
         updateLog.debug('Using cached result due to frequency settings')
+        await this.synchronizeCachedCheckResult(cachedResult, targetChannel)
         return cachedResult
       }
 
       if (persistedResult) {
         updateLog.debug('Using persisted record due to frequency throttle')
+        await this.synchronizeCachedCheckResult(persistedResult, targetChannel)
         return persistedResult
       }
     }
@@ -683,13 +1126,17 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     if (!app.isPackaged && !force) {
       const cachedResult = this.getCachedResult(targetChannel)
       if (cachedResult) {
+        await this.synchronizeCachedCheckResult(cachedResult, targetChannel)
         return cachedResult
       }
       if (persistedResult) {
+        await this.synchronizeCachedCheckResult(persistedResult, targetChannel)
         return persistedResult
       }
       return { hasUpdate: false, source: this.settings.source?.name ?? 'Unknown' }
     }
+
+    const checkingLifecycle = await this.beginCheckLifecycle(targetChannel)
 
     try {
       await this.waitForReleaseCacheLoad()
@@ -735,6 +1182,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             if (this.settings.cacheEnabled) {
               this.setCachedResult(targetChannel, persistedDecision)
             }
+            await this.finishCheckWithoutUpdate(checkingLifecycle)
             return persistedDecision
           }
         }
@@ -752,6 +1200,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
               this.setCachedResult(targetChannel, ignoredResult)
             }
 
+            await this.finishCheckWithoutUpdate(checkingLifecycle)
             return ignoredResult
           }
 
@@ -759,8 +1208,13 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             this.setCachedResult(targetChannel, result)
           }
 
-          this.notifyRendererAboutUpdate(result, targetChannel)
-          void this.downloadAdapter.maybeAutoDownload(result.release, this.autoDownloadTasks)
+          const lifecycle = await this.markAvailableLifecycle(
+            result.release,
+            targetChannel,
+            checkingLifecycle
+          )
+          this.notifyRendererAboutUpdate(result, targetChannel, lifecycle)
+          void this.maybeAutoDownloadLifecycle(result.release)
 
           return result
         }
@@ -775,11 +1229,20 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         this.setCachedResult(targetChannel, noUpdateResult)
       }
 
+      await this.finishCheckWithoutUpdate(checkingLifecycle)
       return noUpdateResult
     } catch (error) {
       this.recordCheckTimestamp()
       this.scheduleReleaseCacheSave()
       const expectedFailure = this.releaseFetchService.describeExpectedFailure(error)
+      if (checkingLifecycle) {
+        await this.failLifecycle(
+          checkingLifecycle,
+          expectedFailure ? 'UPDATE_CHECK_DEFERRED' : 'UPDATE_CHECK_FAILED',
+          error,
+          true
+        )
+      }
       if (expectedFailure) {
         updateLog.warn(expectedFailure.message, { meta: expectedFailure.meta })
         this.reportUpdateTelemetry('check_deferred', {
@@ -813,20 +1276,15 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
   }
 
-  private shouldAutoInstallDownloadedUpdate(): boolean {
-    return (
-      app.isPackaged &&
-      process.platform === 'win32' &&
-      this.settings.autoDownload === true &&
-      this.settings.autoInstallDownloadedUpdates === true
-    )
-  }
-
   /**
    * Notify renderer process about available update
    * @param result - Update check result
    */
-  private notifyRendererAboutUpdate(result: UpdateCheckResult, channel: AppPreviewChannel): void {
+  private notifyRendererAboutUpdate(
+    result: UpdateCheckResult,
+    channel: AppPreviewChannel,
+    snapshot: UpdateLifecycleSnapshot
+  ): void {
     if (!this.initContext) {
       updateLog.warn('Context not initialized, cannot notify renderer')
       return
@@ -840,7 +1298,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       hasUpdate: true,
       release: result.release,
       source: result.source,
-      channel
+      channel,
+      snapshot
     })
 
     // Emit event for other modules
@@ -1078,6 +1537,24 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
   }
 
+  private async resolveReleaseForDownload(tag: string): Promise<GitHubRelease> {
+    const normalizedTag = tag.trim()
+    if (!normalizedTag || !this.updateRepository) {
+      throw new Error('Update release is not available')
+    }
+
+    const record = await this.updateRepository.getRecordByTag(normalizedTag)
+    const release = record ? this.deserializeRelease(record.payload) : null
+    if (
+      !release ||
+      release.tag_name !== normalizedTag ||
+      !this.isUpdateCandidate(release.tag_name)
+    ) {
+      throw new Error('Update release is stale or unavailable')
+    }
+    return release
+  }
+
   /**
    * Resolve the interval for a given frequency preset.
    */
@@ -1242,15 +1719,14 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       ignoredVersions: [],
       customSources: [],
       autoDownload: true,
-      autoInstallDownloadedUpdates: false,
+      installOnNormalQuit: true,
       rendererOverrideEnabled: false,
       cacheEnabled: true,
       cacheTTL: 30, // 30 minutes cache TTL
       rateLimitEnabled: true,
       maxRetries: 3,
       retryDelay: 2000, // 2 seconds base retry delay
-      lastCheckedAt: null,
-      pendingInstallVersion: null
+      lastCheckedAt: null
     }
   }
 
@@ -1406,12 +1882,20 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const settingsData = fs.readFileSync(settingsFile, 'utf8')
         const persisted = JSON.parse(settingsData) as Record<string, unknown>
         const normalizedChannel = this.enforceChannelPreference(persisted.updateChannel)
+        const installSettingsMigration = resolveUpdateInstallSettingsMigration(
+          persisted,
+          defaults.installOnNormalQuit
+        )
 
         this.settings = {
           ...defaults,
           ...(persisted as Partial<UpdateSettings>),
-          updateChannel: normalizedChannel
+          updateChannel: normalizedChannel,
+          installOnNormalQuit: installSettingsMigration.installOnNormalQuit
         }
+        const runtimeSettings = this.settings as unknown as Record<string, unknown>
+        delete runtimeSettings.autoInstallDownloadedUpdates
+        delete runtimeSettings.pendingInstallVersion
         this.settings.frequency = this.normalizeFrequency(this.settings.frequency)
 
         if (typeof this.settings.lastCheckedAt !== 'number') {
@@ -1420,25 +1904,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         if (typeof this.settings.autoDownload !== 'boolean') {
           this.settings.autoDownload = defaults.autoDownload
         }
-        if (typeof this.settings.autoInstallDownloadedUpdates !== 'boolean') {
-          this.settings.autoInstallDownloadedUpdates = defaults.autoInstallDownloadedUpdates
-        }
         if (typeof this.settings.rendererOverrideEnabled !== 'boolean') {
           this.settings.rendererOverrideEnabled = defaults.rendererOverrideEnabled
         }
-        if (typeof this.settings.pendingInstallVersion !== 'string') {
-          this.settings.pendingInstallVersion = defaults.pendingInstallVersion
-        }
 
-        let shouldSaveSettings = persisted.updateChannel !== normalizedChannel
-
-        const pendingVersion = (this.settings.pendingInstallVersion ?? '').trim()
-        if (pendingVersion.length > 0) {
-          if (!this.isUpdateCandidate(pendingVersion)) {
-            this.settings.pendingInstallVersion = null
-            shouldSaveSettings = true
-          }
-        }
+        const shouldSaveSettings =
+          persisted.updateChannel !== normalizedChannel || installSettingsMigration.shouldPersist
 
         if (shouldSaveSettings) {
           this.saveSettings()

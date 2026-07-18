@@ -739,3 +739,88 @@ const visibleItems = fileFilterService.filterSearchItems(backendItems)
 recordProviderCount(visibleItems.length)
 publish(visibleItems.slice(0, 50))
 ```
+
+## Scenario: App/File Search Index Single-Writer Atomicity
+
+### 1. Scope / Trigger
+
+- Trigger: changing AppProvider/FileProvider searchable mutations, `IndexingRuntime`, `SearchIndexStoreAdapter`, SearchIndex worker messages, source reset/rebuild, enrichment scheduling, or SearchCore teardown.
+- Producer databases are source-local state. Every mutation of shared `search_index`, `keyword_mappings`, and `search_index_meta` enters `IndexingRuntime` and the selected `SourceScopedIndexWriterRouter`; Providers never call the shared writer/client/service directly.
+
+### 2. Signatures
+
+```ts
+IndexingRuntime.applySourceBatch(batch: IndexedSourceRecordBatch)
+IndexingRuntime.applySourceDelta(delta: IndexedSourceDelta)
+IndexingRuntime.resetSourceRuntimeState(sourceId, request)
+IndexingRuntime.abortAndDrainSourceScans(sourceId)
+
+IndexStoreAdapter.beginSourceReplacement(sourceId)
+IndexStoreAdapter.stageSourceReplacement(session, records)
+IndexStoreAdapter.commitSourceReplacement(session, totals)
+IndexStoreAdapter.abortSourceReplacement(session)
+
+IndexedWorkerScheduleBatch.scopeId?: string
+IndexedSourceRecordBatch.mutationLeaseId?: string
+IndexedSourceDelta.mutationLeaseId?: string
+```
+
+- `search_index_replacement_stage(replacement_id, provider_id, sequence, document)` stores bounded candidate batches; readers never query it.
+- `SearchIndexService.applyProviderItems(providerId, items, legacyItemIds)` atomically retires provider-scoped legacy IDs and inserts their replacements.
+
+### 3. Contracts
+
+- Runtime assigns one mutation lease per source operation. Base store application and every accepted File enrichment continuation carry that lease; `source.drainMutations({ leaseId })` settles the same scope before lease release.
+- Different normal leases may run concurrently. A scoped drain consumes only its own timers, dispatches, and failures; it cannot make another scope succeed or fail.
+- Exact replacement scans are streamed into staging. The old provider snapshot remains visible until one SQLite commit deletes the old rows and inserts the complete candidate; scan/stage/commit failure aborts staging and preserves the old snapshot.
+- Incremental ID migration removes legacy IDs and inserts the new provider document in one transaction. Unscoped delete/index pairs and unscoped `removeItems` are prohibited.
+- Counts are observed results: removed rows come from SQLite/worker summaries, indexed rows come from the commit, and skipped delete misses report `applied: false` with zero removed rows.
+- A worker batch with `failed > 0`, dispatch rejection, flush timeout, or expired lease fails the initiating Runtime task and clears source scan progress for retry. Logging a warning is not success.
+- SearchCore aborts and drains active App source scans and prepares FileProvider shutdown before clearing Runtime delegates or stopping the SearchIndex writer.
+
+### 4. Validation & Error Matrix
+
+- Provider/source mismatch in a staged or incremental candidate -> reject before visibility changes.
+- Candidate scan/stage failure -> abort staging; old searchable rows remain.
+- Commit statement failure -> SQLite rollback restores old rows; caller receives failure.
+- Legacy removal succeeds but replacement insert fails -> the combined transaction rolls back both.
+- Worker returns `{ failed: n }`, `n > 0` -> scoped drain rejects; task history is failed, never succeeded.
+- Healthy scope drains beside a failed scope -> healthy resolves; failed scope retains its own `AggregateError`.
+- Reset hook fails -> no shared replacement commit; reset result contains `error`.
+- App scan is active during destroy -> abort iterator, await provider `return()`/finally, then shut down writer.
+
+### 5. Good / Base / Bad Cases
+
+- Good: File scan publishes base batches under lease `L`; writer acknowledges; enrichment jobs/results retain `L`; drain `L` completes; Runtime releases `L`.
+- Base: a provider-scoped delete finds no row and returns an observable skipped summary without mutating another provider that shares the item ID.
+- Good: rebuild stages 100 bounded batches while searches still see snapshot A, then one commit exposes snapshot B.
+- Bad: `removeByProvider()` followed by batch indexing, direct Provider calls to SearchIndexWorkerClient, a fire-and-forget enrichment Promise, or a global failure queue consumed by the first concurrent drain.
+
+### 6. Tests Required
+
+- Real temporary-libSQL tests prove staged visibility, abort preservation, commit rollback, provider-scoped clear counts, and atomic legacy-ID migration rollback.
+- Runtime tests prove staged reset/switch ordering, terminal snapshot enforcement, same-lease scan/watch/reconcile drain, and public scan abort/drain.
+- Scheduler tests prove scoped failure attribution and scoped deferred cancellation in both drain orders.
+- App tests cover UWP stable ID continuity, Runtime delta routing, local reset versus public Runtime rebuild, and early iterator return.
+- File tests cover bounded streaming, terminal batches, worker `failed` summaries, lease propagation through worker results, scoped drain, and scan-progress recovery.
+- SearchCore destroy tests prove App/File drain completes before writer shutdown. CoreApp node type-check and the focused App/File/search-engine suites must pass.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await searchIndex.removeByProvider(sourceId)
+void worker.indexFiles(files)
+await searchIndex.indexItems(nextItems)
+return { success: true }
+```
+
+#### Correct
+
+```ts
+return sourceMutationGate.run(sourceId, async (lease) => {
+  await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease.id })
+  await source.drainMutations?.({ leaseId: lease.id, reason: 'scan' })
+})
+```

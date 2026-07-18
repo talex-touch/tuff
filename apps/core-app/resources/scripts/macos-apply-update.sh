@@ -4,6 +4,7 @@ set -u
 SOURCE_PACKAGE=""
 DEST_APP=""
 STAGE_ROOT=""
+BACKUP_APP=""
 APP_PID=""
 LOG_FILE=""
 
@@ -14,7 +15,7 @@ log() {
 }
 
 usage() {
-  echo "Usage: macos-apply-update.sh --source <package> --dest <app> --stage <dir> --pid <pid> --log <file>" >&2
+  echo "Usage: macos-apply-update.sh --source <package> --dest <app> --stage <dir> --backup <app> --pid <pid> --log <file>" >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -29,6 +30,10 @@ while [ $# -gt 0 ]; do
       ;;
     --stage)
       STAGE_ROOT="$2"
+      shift 2
+      ;;
+    --backup)
+      BACKUP_APP="$2"
       shift 2
       ;;
     --pid)
@@ -46,18 +51,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$SOURCE_PACKAGE" ] || [ -z "$DEST_APP" ] || [ -z "$STAGE_ROOT" ] || [ -z "$APP_PID" ] || [ -z "$LOG_FILE" ]; then
+if [ -z "$SOURCE_PACKAGE" ] || [ -z "$DEST_APP" ] || [ -z "$STAGE_ROOT" ] || [ -z "$BACKUP_APP" ] || [ -z "$APP_PID" ] || [ -z "$LOG_FILE" ]; then
   usage
   exit 2
 fi
 
-mkdir -p "$(dirname "$LOG_FILE")" "$STAGE_ROOT" >/dev/null 2>&1 || exit 1
+mkdir -p "$(dirname "$LOG_FILE")" "$(dirname "$BACKUP_APP")" "$STAGE_ROOT" >/dev/null 2>&1 || exit 1
 : > "$LOG_FILE"
 
 WORK_APP="$STAGE_ROOT/new.app"
 EXTRACT_DIR="$STAGE_ROOT/extract"
 MOUNT_DIR="$STAGE_ROOT/mount"
-BACKUP_APP="$STAGE_ROOT/backup.app"
 
 cleanup_mount() {
   if mount | grep -F " on $MOUNT_DIR " >/dev/null 2>&1; then

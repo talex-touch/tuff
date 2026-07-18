@@ -4,7 +4,7 @@ export const UPDATE_DIAGNOSTIC_EVIDENCE_KIND = 'update-diagnostic-evidence'
 export const UPDATE_DIAGNOSTIC_EVIDENCE_SCHEMA_VERSION = 1
 
 export type UpdateDiagnosticInstallMode =
-  | 'mac-auto-updater'
+  | 'coordinated-handoff'
   | 'windows-installer-handoff'
   | 'windows-auto-installer-handoff'
   | 'manual-installer'
@@ -42,7 +42,7 @@ export interface UpdateDiagnosticEvidencePayload {
     channel: UpdateSettings['updateChannel'] | null
     frequency: UpdateSettings['frequency'] | null
     autoDownload: boolean | null
-    autoInstallDownloadedUpdates: boolean | null
+    installOnNormalQuit: boolean | null
     rendererOverrideEnabled: boolean | null
   }
   status: UpdateDiagnosticStatusInput
@@ -72,7 +72,7 @@ export interface UpdateDiagnosticEvidencePayload {
     readyToInstall: boolean
     installMode: UpdateDiagnosticInstallMode
     requiresUserConfirmation: boolean
-    autoInstallDownloadedUpdates: boolean
+    installOnNormalQuit: boolean
     unattendedAutoInstallEnabled: boolean
     blocker?: UpdateDiagnosticBlocker
   }
@@ -81,7 +81,7 @@ export interface UpdateDiagnosticEvidencePayload {
     suggestedEvidenceFields: {
       channel: UpdateSettings['updateChannel'] | null
       autoDownload: boolean | null
-      autoInstallDownloadedUpdates: boolean | null
+      installOnNormalQuit: boolean | null
       downloadReadyVersion: string | null
       downloadTaskId: string | null
       platform: string
@@ -143,9 +143,9 @@ export function evaluateUpdateDiagnosticEvidence(
   const expectedCachedReleaseTag = evidence.cachedRelease?.tag ?? null
   const targetVersion = evidence.status.downloadReadyVersion ?? expectedCachedReleaseTag
   const installedVersion = evidence.installedVersion ?? null
-  const autoInstallEnabled = evidence.settings.autoInstallDownloadedUpdates === true
-  const verdictAutoInstallEnabled = evidence.verdict.autoInstallDownloadedUpdates === true
-  const suggestedAutoInstallEnabled = suggested.autoInstallDownloadedUpdates === true
+  const autoInstallEnabled = evidence.settings.installOnNormalQuit === true
+  const verdictAutoInstallEnabled = evidence.verdict.installOnNormalQuit === true
+  const suggestedAutoInstallEnabled = suggested.installOnNormalQuit === true
   const unattendedAutoInstallEnabled = evidence.verdict.unattendedAutoInstallEnabled === true
   const isWindowsManualHandoff = evidence.verdict.installMode === 'windows-installer-handoff'
   const isWindowsAutoHandoff = evidence.verdict.installMode === 'windows-auto-installer-handoff'
@@ -239,7 +239,7 @@ export function evaluateUpdateDiagnosticEvidence(
     failures.push('update suggested autoDownload field does not match settings')
   }
   if (suggestedAutoInstallEnabled !== autoInstallEnabled) {
-    failures.push('update suggested autoInstallDownloadedUpdates field does not match settings')
+    failures.push('update suggested installOnNormalQuit field does not match settings')
   }
   if (suggested.downloadReadyVersion !== evidence.status.downloadReadyVersion) {
     failures.push('update suggested downloadReadyVersion field does not match status')
@@ -313,7 +313,7 @@ export function evaluateUpdateDiagnosticEvidence(
   }
 
   if (verdictAutoInstallEnabled !== autoInstallEnabled) {
-    failures.push('update verdict autoInstallDownloadedUpdates does not match settings')
+    failures.push('update verdict installOnNormalQuit does not match settings')
   }
 
   if (isWindowsManualHandoff) {
@@ -324,9 +324,7 @@ export function evaluateUpdateDiagnosticEvidence(
       failures.push('update manual installer handoff mode requires user confirmation')
     }
     if (autoInstallEnabled) {
-      failures.push(
-        'update manual installer handoff mode conflicts with autoInstallDownloadedUpdates'
-      )
+      failures.push('update manual installer handoff mode conflicts with installOnNormalQuit')
     }
     if (unattendedAutoInstallEnabled) {
       failures.push('update manual installer handoff mode must not enable unattended auto install')
@@ -341,7 +339,7 @@ export function evaluateUpdateDiagnosticEvidence(
       failures.push('update automatic installer handoff mode requires automatic download task id')
     }
     if (!autoInstallEnabled) {
-      failures.push('update automatic installer handoff mode requires autoInstallDownloadedUpdates')
+      failures.push('update automatic installer handoff mode requires installOnNormalQuit')
     }
     if (evidence.verdict.requiresUserConfirmation) {
       failures.push('update automatic installer handoff mode must not require user confirmation')
@@ -352,7 +350,7 @@ export function evaluateUpdateDiagnosticEvidence(
   }
 
   if (options.requireAutoInstallEnabled && !autoInstallEnabled) {
-    failures.push('update autoInstallDownloadedUpdates is not enabled')
+    failures.push('update installOnNormalQuit is not enabled')
   }
 
   if (options.requireUnattendedDisabled && unattendedAutoInstallEnabled) {

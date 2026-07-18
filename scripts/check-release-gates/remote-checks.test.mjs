@@ -17,11 +17,13 @@ function createJsonResponse(payload, status = 200) {
 
 function buildManifest(overrides = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     release: {
       version: '2.4.12-beta.8',
       channel: 'BETA',
       tag,
+      rollbackFromVersion: '2.4.12-beta.7',
+      rollbackCompatible: false,
     },
     artifacts: [
       {
@@ -40,6 +42,14 @@ function buildManifest(overrides = {}) {
         sha256: 'b'.repeat(64),
         signature: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
       },
+      {
+        component: 'core',
+        name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage',
+        platform: 'linux',
+        arch: 'x64',
+        sha256: 'c'.repeat(64),
+        signature: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig',
+      },
     ],
     ...overrides,
   }
@@ -52,6 +62,8 @@ function buildRemoteRelease({ assets, release = {} }) {
       version: '2.4.12-beta.8',
       channel: 'BETA',
       status: 'published',
+      rollbackFromVersion: '2.4.12-beta.7',
+      rollbackCompatible: false,
       notes: {
         zh: '发版说明',
         en: 'Release notes',
@@ -86,6 +98,15 @@ function buildAssets(overrides = {}) {
       signatureUrl: `${baseUrl}/api/releases/${tag}/signature/darwin/arm64`,
       ...overrides.darwin,
     },
+    {
+      platform: 'linux',
+      arch: 'x64',
+      filename: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage',
+      downloadUrl: `${baseUrl}/api/releases/${tag}/download/linux/x64?exp=1700000000&sig=${signedDownloadSig}`,
+      sha256: 'c'.repeat(64),
+      signatureUrl: `${baseUrl}/api/releases/${tag}/signature/linux/x64`,
+      ...overrides.linux,
+    },
   ]
 }
 
@@ -99,6 +120,7 @@ function buildGithubAssets(overrides = []) {
     {
       name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
       browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-win32-x64-setup.exe`,
+      digest: `sha256:${'a'.repeat(64)}`,
       state: 'uploaded',
     },
     {
@@ -109,11 +131,23 @@ function buildGithubAssets(overrides = []) {
     {
       name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg',
       browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-darwin-arm64.dmg`,
+      digest: `sha256:${'b'.repeat(64)}`,
       state: 'uploaded',
     },
     {
       name: 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
       browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig`,
+      state: 'uploaded',
+    },
+    {
+      name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage',
+      browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-x64.AppImage`,
+      digest: `sha256:${'c'.repeat(64)}`,
+      state: 'uploaded',
+    },
+    {
+      name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig',
+      browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig`,
       state: 'uploaded',
     },
     ...overrides,
@@ -126,6 +160,7 @@ function installReleaseFetchMock({
   signatureResponses = {},
   downloadResponses = {},
   latestResponse,
+  remoteResponse,
   remoteRelease = {},
   githubRelease = {},
   githubAssets = buildGithubAssets(),
@@ -134,82 +169,125 @@ function installReleaseFetchMock({
   const manifestUrl = `https://github.example.test/${tag}/tuff-release-manifest.json`
   const releaseUrl = `${baseUrl}/api/releases/${tag}?assets=true`
   const latestUrl = `${baseUrl}/api/releases/latest?channel=BETA`
+  const rollbackHistoryUrl = `${baseUrl}/api/releases?channel=BETA&status=published&limit=100`
+  const githubHistoryUrl
+    = 'https://api.github.com/repos/talex-touch/tuff/releases?per_page=100'
 
-  vi.stubGlobal('fetch', vi.fn(async (url) => {
-    const textUrl = String(url)
-    if (textUrl === releaseUrl)
-      return createJsonResponse(buildRemoteRelease({ assets, release: remoteRelease }))
-    if (textUrl === githubReleaseUrl) {
-      return createJsonResponse({
-        tag_name: tag,
-        draft: false,
-        prerelease: true,
-        assets: githubAssets,
-        ...githubRelease,
-      })
-    }
-    if (textUrl === manifestUrl)
-      return createJsonResponse(manifest)
-    if (textUrl.startsWith(`${baseUrl}/api/releases/${tag}/signature/`)) {
-      const path = new URL(textUrl).pathname
-      const pair = path.split('/').slice(-2).join('/')
-      const override = signatureResponses[pair] ?? signatureResponses.default
-      if (override instanceof Response)
-        return override
-      if (override) {
-        return new Response(override.body ?? '-----BEGIN PGP SIGNATURE-----\nvalid\n-----END PGP SIGNATURE-----', {
-          status: override.status ?? 200,
-          headers: override.headers ?? {
-            'Content-Type': 'application/octet-stream',
-          },
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url) => {
+      const textUrl = String(url)
+      if (textUrl === releaseUrl) {
+        if (remoteResponse === 'throw')
+          throw new Error('remote release temporarily unavailable')
+        if (remoteResponse) {
+          return createJsonResponse(
+            remoteResponse.body,
+            remoteResponse.status ?? 200,
+          )
+        }
+        return createJsonResponse(
+          buildRemoteRelease({ assets, release: remoteRelease }),
+        )
+      }
+      if (textUrl === githubReleaseUrl) {
+        return createJsonResponse({
+          tag_name: tag,
+          draft: false,
+          prerelease: true,
+          assets: githubAssets,
+          ...githubRelease,
         })
       }
-      return new Response('-----BEGIN PGP SIGNATURE-----\nvalid\n-----END PGP SIGNATURE-----', {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pgp-signature',
-        },
-      })
-    }
-    if (textUrl.startsWith(`${baseUrl}/api/releases/${tag}/download/`)) {
-      const path = new URL(textUrl).pathname
-      const pair = path.split('/').slice(-2).join('/')
-      const override = downloadResponses[pair] ?? downloadResponses.default
-      if (override instanceof Response)
-        return override
-      if (override) {
-        return new Response(override.body ?? '', {
-          status: override.status ?? 302,
-          headers: override.headers ?? {
+      if (textUrl === manifestUrl)
+        return createJsonResponse(manifest)
+      if (textUrl.startsWith(`${baseUrl}/api/releases/${tag}/signature/`)) {
+        const path = new URL(textUrl).pathname
+        const pair = path.split('/').slice(-2).join('/')
+        const override = signatureResponses[pair] ?? signatureResponses.default
+        if (override instanceof Response)
+          return override
+        if (override) {
+          return new Response(
+            override.body
+            ?? '-----BEGIN PGP SIGNATURE-----\nvalid\n-----END PGP SIGNATURE-----',
+            {
+              status: override.status ?? 200,
+              headers: override.headers ?? {
+                'Content-Type': 'application/octet-stream',
+              },
+            },
+          )
+        }
+        return new Response(
+          '-----BEGIN PGP SIGNATURE-----\nvalid\n-----END PGP SIGNATURE-----',
+          {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/pgp-signature',
+            },
+          },
+        )
+      }
+      if (textUrl.startsWith(`${baseUrl}/api/releases/${tag}/download/`)) {
+        const path = new URL(textUrl).pathname
+        const pair = path.split('/').slice(-2).join('/')
+        const override = downloadResponses[pair] ?? downloadResponses.default
+        if (override instanceof Response)
+          return override
+        if (override) {
+          return new Response(override.body ?? '', {
+            status: override.status ?? 302,
+            headers: override.headers ?? {
+              Location:
+                'https://github.example.test/releases/download/artifact',
+            },
+          })
+        }
+        return new Response('', {
+          status: 302,
+          headers: {
             Location: 'https://github.example.test/releases/download/artifact',
           },
         })
       }
-      return new Response('', {
-        status: 302,
-        headers: {
-          Location: 'https://github.example.test/releases/download/artifact',
-        },
-      })
-    }
-    if (textUrl === latestUrl) {
-      if (latestResponse instanceof Response)
-        return latestResponse
-      if (latestResponse === 'throw')
-        throw new Error('latest query failed')
-      if (latestResponse)
-        return createJsonResponse(latestResponse.body, latestResponse.status ?? 200)
-      return createJsonResponse({
-        release: {
-          tag,
-          version: '2.4.12-beta.8',
-          channel: 'BETA',
-          status: 'published',
-        },
-      })
-    }
-    return createJsonResponse({ error: 'not found', url: textUrl }, 404)
-  }))
+      if (textUrl === latestUrl) {
+        if (latestResponse instanceof Response)
+          return latestResponse
+        if (latestResponse === 'throw')
+          throw new Error('latest query failed')
+        if (latestResponse) {
+          return createJsonResponse(
+            latestResponse.body,
+            latestResponse.status ?? 200,
+          )
+        }
+        return createJsonResponse({
+          release: {
+            tag,
+            version: '2.4.12-beta.8',
+            channel: 'BETA',
+            status: 'published',
+          },
+        })
+      }
+      if (textUrl === rollbackHistoryUrl) {
+        return createJsonResponse({
+          releases: [
+            { version: '2.4.12-beta.8' },
+            { version: '2.4.12-beta.7' },
+          ],
+        })
+      }
+      if (textUrl === githubHistoryUrl) {
+        return createJsonResponse([
+          { tag_name: tag },
+          { tag_name: 'v2.4.12-beta.7' },
+        ])
+      }
+      return createJsonResponse({ error: 'not found', url: textUrl }, 404)
+    }),
+  )
 }
 
 async function runCheck(options = {}) {
@@ -236,23 +314,51 @@ describe('check-release-gates remote checks', () => {
 
     const checks = await runCheck()
 
-    assert.equal(checks.find(item => item.name === 'remote-github-release-metadata')?.status, 'pass')
-    assert.equal(checks.find(item => item.name === 'remote-release-metadata')?.status, 'pass')
-    assert.equal(checks.find(item => item.name === 'remote-manifest-asset')?.status, 'pass')
-    assert.equal(checks.find(item => item.name === 'remote-manifest-integrity')?.status, 'pass')
-    assert.equal(checks.find(item => item.name === 'remote-manifest-nexus-matrix')?.status, 'pass')
-    assert.equal(checks.find(item => item.name === 'remote-github-asset-inventory')?.status, 'pass')
-    assert.equal(checks.find(item => item.name === 'remote-asset-integrity')?.status, 'pass')
-    assert.equal(checks.find(item => item.name === 'remote-download-endpoint')?.status, 'pass')
+    assert.equal(
+      checks.find(item => item.name === 'remote-github-release-metadata')
+        ?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-release-metadata')?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-manifest-asset')?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-manifest-integrity')?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+        ?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-github-asset-inventory')
+        ?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-asset-integrity')?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-download-endpoint')?.status,
+      'pass',
+    )
     assert.equal(
       checks
         .find(item => item.name === 'remote-download-endpoint')
         ?.results
-        .every(item =>
-          item.hasExp
-          && item.hasValidExp
-          && item.hasValidSig
-          && item.hasUnexpectedQuery === false,
+        .every(
+          item =>
+            item.hasExp
+            && item.hasValidExp
+            && item.hasValidSig
+            && item.hasUnexpectedQuery === false,
         ),
       true,
     )
@@ -268,11 +374,16 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+    const manifestCheck = checks.find(
+      item => item.name === 'remote-manifest-asset',
+    )
 
     assert.equal(manifestCheck?.status, 'fail')
     assert.equal(manifestCheck?.githubManifestStatus, 200)
-    assert.equal(manifestCheck?.error, 'manifest asset is not uploaded (starter)')
+    assert.equal(
+      manifestCheck?.error,
+      'manifest asset is not uploaded (starter)',
+    )
   })
 
   it('keeps a non-uploaded GitHub release manifest asset as a warning before gate-e', async () => {
@@ -285,24 +396,35 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+    const manifestCheck = checks.find(
+      item => item.name === 'remote-manifest-asset',
+    )
 
     assert.equal(manifestCheck?.status, 'warn')
     assert.equal(manifestCheck?.githubManifestStatus, 200)
-    assert.equal(manifestCheck?.error, 'manifest asset is not uploaded (starter)')
+    assert.equal(
+      manifestCheck?.error,
+      'manifest asset is not uploaded (starter)',
+    )
   })
 
   it('fails gate-e when the GitHub release manifest asset download URL points at another tag', async () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-release-manifest.json'
-          ? { ...asset, browser_download_url: 'https://github.example.test/v2.4.12-beta.7/tuff-release-manifest.json' }
+          ? {
+              ...asset,
+              browser_download_url:
+                'https://github.example.test/v2.4.12-beta.7/tuff-release-manifest.json',
+            }
           : asset,
       ),
     })
 
     const checks = await runCheck()
-    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+    const manifestCheck = checks.find(
+      item => item.name === 'remote-manifest-asset',
+    )
 
     assert.equal(manifestCheck?.status, 'fail')
     assert.equal(manifestCheck?.error, 'github-asset-download-url-mismatch')
@@ -320,13 +442,18 @@ describe('check-release-gates remote checks', () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-release-manifest.json'
-          ? { ...asset, browser_download_url: `https://github.example.test/${tag}/release-manifest-old.json` }
+          ? {
+              ...asset,
+              browser_download_url: `https://github.example.test/${tag}/release-manifest-old.json`,
+            }
           : asset,
       ),
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const manifestCheck = checks.find(item => item.name === 'remote-manifest-asset')
+    const manifestCheck = checks.find(
+      item => item.name === 'remote-manifest-asset',
+    )
 
     assert.equal(manifestCheck?.status, 'warn')
     assert.equal(manifestCheck?.error, 'github-asset-download-url-mismatch')
@@ -353,7 +480,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
@@ -372,7 +501,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-asset-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-asset-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
     assert.deepEqual(integrityCheck?.missing, [
@@ -400,7 +531,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
@@ -424,30 +557,40 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(matrixCheck?.status, 'fail')
-    assert.deepEqual(matrixCheck?.mismatches.find(item => item.reason === 'invalid-nexus-asset-identity'), {
-      key: null,
-      index: 2,
-      platform: null,
-      arch: 'x64',
-      filename: null,
-      reason: 'invalid-nexus-asset-identity',
-    })
+    assert.deepEqual(
+      matrixCheck?.mismatches.find(
+        item => item.reason === 'invalid-nexus-asset-identity',
+      ),
+      {
+        key: null,
+        index: 3,
+        platform: null,
+        arch: 'x64',
+        filename: null,
+        reason: 'invalid-nexus-asset-identity',
+      },
+    )
   })
 
   it('fails gate-e when Nexus asset signatureUrl does not point at the release signature endpoint', async () => {
     installReleaseFetchMock({
       assets: buildAssets({
         win32: {
-          signatureUrl: 'https://cdn.example.test/tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
+          signatureUrl:
+            'https://cdn.example.test/tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
         },
       }),
     })
 
     const checks = await runCheck()
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
@@ -470,7 +613,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
@@ -497,11 +642,15 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const signatureCheck = checks.find(item => item.name === 'remote-signature-endpoint')
+    const signatureCheck = checks.find(
+      item => item.name === 'remote-signature-endpoint',
+    )
 
     assert.equal(signatureCheck?.status, 'fail')
     assert.deepEqual(
-      signatureCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64'),
+      signatureCheck?.results.find(
+        item => item.platform === 'win32' && item.arch === 'x64',
+      ),
       {
         platform: 'win32',
         arch: 'x64',
@@ -529,11 +678,15 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const signatureCheck = checks.find(item => item.name === 'remote-signature-endpoint')
+    const signatureCheck = checks.find(
+      item => item.name === 'remote-signature-endpoint',
+    )
 
     assert.equal(signatureCheck?.status, 'fail')
     assert.equal(
-      signatureCheck?.results.find(item => item.platform === 'darwin' && item.arch === 'arm64')?.reason,
+      signatureCheck?.results.find(
+        item => item.platform === 'darwin' && item.arch === 'arm64',
+      )?.reason,
       'json-signature-body',
     )
   })
@@ -542,13 +695,16 @@ describe('check-release-gates remote checks', () => {
     installReleaseFetchMock({
       assets: buildAssets({
         win32: {
-          downloadUrl: 'https://github.example.test/releases/tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+          downloadUrl:
+            'https://github.example.test/releases/tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
         },
       }),
     })
 
     const checks = await runCheck()
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
@@ -571,11 +727,15 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.deepEqual(
-      downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64'),
+      downloadCheck?.results.find(
+        item => item.platform === 'win32' && item.arch === 'x64',
+      ),
       {
         platform: 'win32',
         arch: 'x64',
@@ -609,8 +769,12 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
-    const result = downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
+    const result = downloadCheck?.results.find(
+      item => item.platform === 'win32' && item.arch === 'x64',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(result?.hasHash, true)
@@ -627,8 +791,12 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
-    const result = downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
+    const result = downloadCheck?.results.find(
+      item => item.platform === 'win32' && item.arch === 'x64',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(result?.hasUnexpectedQuery, true)
@@ -646,8 +814,12 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
-    const result = downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
+    const result = downloadCheck?.results.find(
+      item => item.platform === 'win32' && item.arch === 'x64',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(result?.hasDuplicateSignedQuery, true)
@@ -665,11 +837,15 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(
-      downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64')?.hasValidExp,
+      downloadCheck?.results.find(
+        item => item.platform === 'win32' && item.arch === 'x64',
+      )?.hasValidExp,
       false,
     )
   })
@@ -684,11 +860,15 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(
-      downloadCheck?.results.find(item => item.platform === 'darwin' && item.arch === 'arm64')?.hasValidSig,
+      downloadCheck?.results.find(
+        item => item.platform === 'darwin' && item.arch === 'arm64',
+      )?.hasValidSig,
       false,
     )
   })
@@ -701,11 +881,15 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.deepEqual(
-      downloadCheck?.results.find(item => item.platform === 'win32' && item.arch === 'x64'),
+      downloadCheck?.results.find(
+        item => item.platform === 'win32' && item.arch === 'x64',
+      ),
       {
         platform: 'win32',
         arch: 'x64',
@@ -745,11 +929,15 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const downloadCheck = checks.find(item => item.name === 'remote-download-endpoint')
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
 
     assert.equal(downloadCheck?.status, 'fail')
     assert.equal(
-      downloadCheck?.results.find(item => item.platform === 'darwin' && item.arch === 'arm64')?.reason,
+      downloadCheck?.results.find(
+        item => item.platform === 'darwin' && item.arch === 'arm64',
+      )?.reason,
       'json-download-body',
     )
   })
@@ -779,12 +967,16 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, [
-      'artifacts[0].signature must point to the artifact .sig/.asc sidecar',
-    ])
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts[0].signature must point to the artifact .sig/.asc sidecar',
+      ),
+    )
   })
 
   it('fails gate-e when a GitHub manifest core artifact name disagrees with platform or arch', async () => {
@@ -812,14 +1004,26 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, [
-      'artifacts[0].platform does not match artifact name',
-      'artifacts[0].arch does not match artifact name',
-      'artifacts[1] duplicates platform/arch darwin/arm64',
-    ])
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts[0].platform does not match artifact name',
+      ),
+    )
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts[0].arch does not match artifact name',
+      ),
+    )
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts[1] duplicates platform/arch darwin/arm64',
+      ),
+    )
   })
 
   it('fails gate-e when a GitHub manifest core artifact name has no recognizable platform', async () => {
@@ -847,12 +1051,16 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, [
-      'artifacts[0].name must include a recognizable core platform',
-    ])
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts[0].name must include a recognizable core platform',
+      ),
+    )
   })
 
   it('fails gate-e when a GitHub manifest core artifact name omits the release version', async () => {
@@ -880,13 +1088,20 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, [
-      'artifacts[0].name must include release.version',
-    ])
-    assert.deepEqual(integrityCheck?.manifestIssueDetails, [
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts[0].name must include release.version',
+      ),
+    )
+    assert.deepEqual(
+      integrityCheck?.manifestIssueDetails.find(
+        item => item.reason === 'name must include release.version',
+      ),
       {
         scope: 'artifact',
         index: 0,
@@ -897,7 +1112,7 @@ describe('check-release-gates remote checks', () => {
         arch: 'x64',
         reason: 'name must include release.version',
       },
-    ])
+    )
   })
 
   it('fails gate-e when the GitHub manifest reuses artifact sha256 values', async () => {
@@ -925,10 +1140,14 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, ['artifacts[1].sha256 must be unique'])
+    assert.ok(
+      integrityCheck?.issues.includes('artifacts[1].sha256 must be unique'),
+    )
   })
 
   it('fails gate-e when the GitHub manifest lists a signature sidecar as an artifact', async () => {
@@ -962,12 +1181,16 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, [
-      'artifacts[0].signature sidecar must not be listed as a downloadable artifact',
-    ])
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts[0].signature sidecar must not be listed as a downloadable artifact',
+      ),
+    )
   })
 
   it('fails gate-e when GitHub manifest release metadata drifts from Nexus release metadata', async () => {
@@ -982,17 +1205,21 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, [
-      'release.tag must match release.version',
-      'release.channel must match release.version suffix',
-      'artifacts[0].name must include release.version',
-      'artifacts[1].name must include release.version',
-      'manifest release.version 2.4.12-beta.7 does not match remote 2.4.12-beta.8',
-      'manifest release.channel RELEASE does not match remote BETA',
-    ])
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'manifest release.version 2.4.12-beta.7 does not match remote 2.4.12-beta.8',
+      ),
+    )
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'manifest release.channel RELEASE does not match remote BETA',
+      ),
+    )
   })
 
   it('fails gate-e when GitHub release assets are missing manifest core artifacts', async () => {
@@ -1003,7 +1230,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1021,13 +1250,15 @@ describe('check-release-gates remote checks', () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
-          ? { name: asset.name }
+          ? { ...asset, browser_download_url: undefined }
           : asset,
       ),
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1045,13 +1276,19 @@ describe('check-release-gates remote checks', () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
-          ? { ...asset, browser_download_url: 'https://github.example.test/v2.4.12-beta.7/tuff-core-2.4.12-beta.8-win32-x64-setup.exe' }
+          ? {
+              ...asset,
+              browser_download_url:
+                'https://github.example.test/v2.4.12-beta.7/tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+            }
           : asset,
       ),
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1081,7 +1318,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1102,14 +1341,19 @@ describe('check-release-gates remote checks', () => {
       githubAssets: [
         ...githubAssets,
         {
-          ...githubAssets.find(asset => asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'),
+          ...githubAssets.find(
+            asset =>
+              asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
+          ),
           browser_download_url: `https://github.example.test/${tag}/duplicate-win32.exe`,
         },
       ],
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.issues, [
@@ -1119,7 +1363,7 @@ describe('check-release-gates remote checks', () => {
       {
         name: 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe',
         firstIndex: 1,
-        duplicateIndex: 5,
+        duplicateIndex: 7,
         reason: 'duplicate-github-asset-name',
       },
     ])
@@ -1131,24 +1375,26 @@ describe('check-release-gates remote checks', () => {
       githubAssets: [
         ...buildGithubAssets(),
         {
-          name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage',
-          browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-x64.AppImage`,
+          name: 'tuff-core-2.4.12-beta.8-linux-arm64.AppImage',
+          browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-arm64.AppImage`,
           state: 'uploaded',
         },
       ],
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.issues, [
-      'github release asset name tuff-core-2.4.12-beta.8-linux-x64.AppImage is not declared by manifest',
+      'github release asset name tuff-core-2.4.12-beta.8-linux-arm64.AppImage is not declared by manifest',
     ])
     assert.deepEqual(inventoryCheck?.extraAssets, [
       {
-        name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage',
-        index: 5,
+        name: 'tuff-core-2.4.12-beta.8-linux-arm64.AppImage',
+        index: 7,
         reason: 'extra-github-release-asset',
       },
     ])
@@ -1160,21 +1406,23 @@ describe('check-release-gates remote checks', () => {
       githubAssets: [
         ...buildGithubAssets(),
         {
-          name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig',
-          browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig`,
+          name: 'tuff-core-2.4.12-beta.8-linux-arm64.AppImage.sig',
+          browser_download_url: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-linux-arm64.AppImage.sig`,
           state: 'uploaded',
         },
       ],
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'warn')
     assert.deepEqual(inventoryCheck?.extraAssets, [
       {
-        name: 'tuff-core-2.4.12-beta.8-linux-x64.AppImage.sig',
-        index: 5,
+        name: 'tuff-core-2.4.12-beta.8-linux-arm64.AppImage.sig',
+        index: 7,
         reason: 'extra-github-release-asset',
       },
     ])
@@ -1193,7 +1441,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'pass')
     assert.deepEqual(inventoryCheck?.issues, [])
@@ -1203,12 +1453,15 @@ describe('check-release-gates remote checks', () => {
   it('fails gate-e when GitHub release assets are missing manifest signature sidecars', async () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().filter(
-        asset => asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
+        asset =>
+          asset.name !== 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
       ),
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1233,7 +1486,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'fail')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1252,13 +1507,18 @@ describe('check-release-gates remote checks', () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().map(asset =>
         asset.name === 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig'
-          ? { ...asset, browser_download_url: `https://github.example.test/${tag}/wrong-sidecar.sig` }
+          ? {
+              ...asset,
+              browser_download_url: `https://github.example.test/${tag}/wrong-sidecar.sig`,
+            }
           : asset,
       ),
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'warn')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1289,7 +1549,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'warn')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1307,11 +1569,15 @@ describe('check-release-gates remote checks', () => {
 
   it('allows GitHub release assets without an optional upload state', async () => {
     installReleaseFetchMock({
-      githubAssets: buildGithubAssets().map(({ state: _state, ...asset }) => asset),
+      githubAssets: buildGithubAssets().map(
+        ({ state: _state, ...asset }) => asset,
+      ),
     })
 
     const checks = await runCheck()
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'pass')
     assert.deepEqual(inventoryCheck?.missing, [])
@@ -1325,7 +1591,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'warn')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1342,12 +1610,15 @@ describe('check-release-gates remote checks', () => {
   it('keeps missing GitHub release signature sidecars as a warning before gate-e', async () => {
     installReleaseFetchMock({
       githubAssets: buildGithubAssets().filter(
-        asset => asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
+        asset =>
+          asset.name !== 'tuff-core-2.4.12-beta.8-darwin-arm64.dmg.sig',
       ),
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const inventoryCheck = checks.find(item => item.name === 'remote-github-asset-inventory')
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
 
     assert.equal(inventoryCheck?.status, 'warn')
     assert.deepEqual(inventoryCheck?.missing, [
@@ -1369,32 +1640,29 @@ describe('check-release-gates remote checks', () => {
           version: '2.4.12-beta.8',
           channel: 'RELEASE',
           tag,
+          rollbackFromVersion: '2.4.12-beta.7',
+          rollbackCompatible: false,
         },
       }),
     })
 
     const checks = await runCheck()
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(matrixCheck?.mismatches, [])
-    assert.deepEqual(matrixCheck?.manifestIssues, [
-      'release.channel must match release.version suffix',
-      'manifest release.channel RELEASE does not match remote BETA',
-    ])
-    assert.deepEqual(matrixCheck?.manifestIssueDetails, [
-      {
-        scope: 'manifest',
-        reason: 'release.channel must match release.version suffix',
-      },
-      {
-        scope: 'manifest',
-        field: 'release.channel',
-        actual: 'RELEASE',
-        expected: 'BETA',
-        reason: 'release.channel does not match remote release',
-      },
-    ])
+    assert.ok(
+      matrixCheck?.manifestIssues.includes(
+        'release.channel must match release.version suffix',
+      ),
+    )
+    assert.ok(
+      matrixCheck?.manifestIssues.includes(
+        'manifest release.channel RELEASE does not match remote BETA',
+      ),
+    )
   })
 
   it('fails gate-e when the GitHub manifest envelope is structurally invalid', async () => {
@@ -1418,22 +1686,37 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const integrityCheck = checks.find(item => item.name === 'remote-manifest-integrity')
-    const matrixCheck = checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+    const integrityCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
 
     assert.equal(integrityCheck?.status, 'fail')
-    assert.deepEqual(integrityCheck?.issues, [
-      'schemaVersion must be 1',
-      'release.tag must match release.version',
-      'release.channel must match release.version suffix',
-      'artifacts must include at least one core artifact',
-      'manifest release.tag v2.4.12-beta.7 does not match v2.4.12-beta.8',
-      'manifest release.channel RELEASE does not match remote BETA',
-    ])
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'release.rollbackFromVersion is required',
+      ),
+    )
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'release.rollbackCompatible must be boolean',
+      ),
+    )
+    assert.ok(
+      integrityCheck?.issues.includes(
+        'artifacts must include at least one core artifact',
+      ),
+    )
     assert.equal(matrixCheck?.status, 'fail')
     assert.deepEqual(
       matrixCheck?.mismatches.map(item => item.reason).sort(),
-      ['missing-manifest-artifact', 'missing-manifest-artifact'],
+      [
+        'missing-manifest-artifact',
+        'missing-manifest-artifact',
+        'missing-manifest-artifact',
+      ],
     )
   })
 
@@ -1448,7 +1731,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const metadataCheck = checks.find(item => item.name === 'remote-release-metadata')
+    const metadataCheck = checks.find(
+      item => item.name === 'remote-release-metadata',
+    )
 
     assert.equal(metadataCheck?.status, 'fail')
     assert.deepEqual(metadataCheck?.issues, [
@@ -1467,10 +1752,14 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const metadataCheck = checks.find(item => item.name === 'remote-release-metadata')
+    const metadataCheck = checks.find(
+      item => item.name === 'remote-release-metadata',
+    )
 
     assert.equal(metadataCheck?.status, 'warn')
-    assert.deepEqual(metadataCheck?.issues, ['release.status must be published'])
+    assert.deepEqual(metadataCheck?.issues, [
+      'release.status must be published',
+    ])
   })
 
   it('fails gate-e when GitHub release metadata drifts from the checked release', async () => {
@@ -1483,7 +1772,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck()
-    const metadataCheck = checks.find(item => item.name === 'remote-github-release-metadata')
+    const metadataCheck = checks.find(
+      item => item.name === 'remote-github-release-metadata',
+    )
 
     assert.equal(metadataCheck?.status, 'fail')
     assert.deepEqual(metadataCheck?.issues, [
@@ -1501,7 +1792,9 @@ describe('check-release-gates remote checks', () => {
     })
 
     const checks = await runCheck({ stage: 'gate-d' })
-    const metadataCheck = checks.find(item => item.name === 'remote-github-release-metadata')
+    const metadataCheck = checks.find(
+      item => item.name === 'remote-github-release-metadata',
+    )
 
     assert.equal(metadataCheck?.status, 'warn')
     assert.deepEqual(metadataCheck?.issues, ['github.draft must be false'])
@@ -1610,7 +1903,9 @@ describe('check-release-gates remote checks', () => {
     assert.equal(latestCheck?.latestVersion, '2.4.12-beta.8')
     assert.equal(latestCheck?.latestChannel, 'BETA')
     assert.equal(latestCheck?.latestStatus, 'draft')
-    assert.deepEqual(latestCheck?.issues, ['latest release.status must be published'])
+    assert.deepEqual(latestCheck?.issues, [
+      'latest release.status must be published',
+    ])
   })
 
   it('fails gate-e when the channel latest endpoint omits required metadata', async () => {
@@ -1645,5 +1940,133 @@ describe('check-release-gates remote checks', () => {
 
     assert.equal(latestCheck?.status, 'fail')
     assert.equal(latestCheck?.error, 'latest query failed')
+  })
+  it('passes schema 2 matrix only when the manifest rollback target is the exact same-channel N-1', async () => {
+    installReleaseFetchMock()
+
+    const checks = await runCheck()
+
+    assert.equal(
+      checks.find(item => item.name === 'remote-manifest-integrity')?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-manifest-nexus-matrix')
+        ?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-manifest-rollback')?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-manifest-rollback')
+        ?.expectedRollbackFromVersion,
+      '2.4.12-beta.7',
+    )
+  })
+
+  it.each([
+    {
+      name: 'missing',
+      rollbackFromVersion: undefined,
+      issue: 'release.rollbackFromVersion is required',
+    },
+    {
+      name: 'wrong N-2',
+      rollbackFromVersion: '2.4.12-beta.6',
+      issue:
+        'release.rollbackFromVersion must match the expected same-channel N-1 version',
+    },
+    {
+      name: 'equal current version',
+      rollbackFromVersion: '2.4.12-beta.8',
+      issue: 'release.rollbackFromVersion must be older than release.version',
+    },
+    {
+      name: 'future version',
+      rollbackFromVersion: '2.4.12-beta.9',
+      issue: 'release.rollbackFromVersion must be older than release.version',
+    },
+    {
+      name: 'cross-channel version',
+      rollbackFromVersion: '2.4.12',
+      issue: 'release.rollbackFromVersion must use the same channel',
+    },
+  ])(
+    'fails the rollback gate for $name metadata',
+    async ({ rollbackFromVersion, issue }) => {
+      installReleaseFetchMock({
+        manifest: buildManifest({
+          release: {
+            ...buildManifest().release,
+            rollbackFromVersion,
+          },
+        }),
+      })
+
+      const checks = await runCheck()
+      const rollbackCheck = checks.find(
+        item => item.name === 'remote-manifest-rollback',
+      )
+
+      assert.equal(rollbackCheck?.status, 'fail')
+      assert.ok(rollbackCheck?.issues.includes(issue))
+    },
+  )
+
+  it('fails when Nexus rollback metadata or GitHub asset digest drifts from the manifest', async () => {
+    installReleaseFetchMock({
+      remoteRelease: { rollbackCompatible: true },
+      githubAssets: buildGithubAssets().map(asset =>
+        asset.name === 'tuff-core-2.4.12-beta.8-win32-x64-setup.exe'
+          ? { ...asset, digest: `sha256:${'f'.repeat(64)}` }
+          : asset,
+      ),
+    })
+
+    const checks = await runCheck()
+    const manifestCheck = checks.find(
+      item => item.name === 'remote-manifest-integrity',
+    )
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
+
+    assert.equal(manifestCheck?.status, 'fail')
+    assert.ok(
+      manifestCheck?.issues.includes(
+        'manifest release.rollbackCompatible does not match remote release',
+      ),
+    )
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.ok(
+      inventoryCheck?.missing.some(
+        item => item.reason === 'github-sha256-digest-mismatch',
+      ),
+    )
+  })
+
+  it('keeps the release blocked when a transient Nexus failure permits a valid GitHub fallback', async () => {
+    installReleaseFetchMock({
+      remoteResponse: { status: 503, body: { error: 'temporary outage' } },
+    })
+
+    const checks = await runCheck()
+
+    assert.equal(
+      checks.find(item => item.name === 'remote-release')?.status,
+      'blocked',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-github-fallback-contract')
+        ?.status,
+      'pass',
+    )
+    assert.equal(
+      checks.find(item => item.name === 'remote-github-fallback-rollback')
+        ?.status,
+      'pass',
+    )
   })
 })

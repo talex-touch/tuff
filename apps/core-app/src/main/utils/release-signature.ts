@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { promises as fs } from 'node:fs'
+import { createReadStream, promises as fs } from 'node:fs'
 import path from 'node:path'
 import { app } from 'electron'
 import { getNetworkService } from '../modules/network'
@@ -39,27 +39,54 @@ export function releaseSigningPublicKeyCandidates(
 }
 
 export class SignatureVerifier {
-  private readonly keyCache = new Map<string, { key: string; fetchedAt: number }>()
   private embeddedKeyCache: string | null = null
-  private readonly cacheTtlMs: number
-
-  constructor(cacheTtlMs = 60 * 60 * 1000) {
-    this.cacheTtlMs = cacheTtlMs
-  }
 
   async verifyFileSignature(
     filePath: string,
-    signatureUrl: string,
-    signatureKeyUrl?: string
+    signatureUrl: string
   ): Promise<SignatureVerificationResult> {
     const signaturePayload = await this.fetchSignaturePayload(signatureUrl)
     if (!signaturePayload) {
       return { valid: false, reason: 'Signature file not available' }
     }
+    return await this.verifySignaturePayload(filePath, signaturePayload)
+  }
 
-    const publicKey = await this.fetchSignaturePublicKey(signatureUrl, signatureKeyUrl)
+  async verifyFileSignatureWithCache(
+    filePath: string,
+    signatureUrl: string,
+    signatureCachePath: string
+  ): Promise<SignatureVerificationResult> {
+    let signaturePayload: Buffer | null = null
+    try {
+      signaturePayload = await fs.readFile(signatureCachePath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        return { valid: false, reason: 'Signature cache is unreadable' }
+      }
+    }
+
+    if (!signaturePayload) {
+      signaturePayload = await this.fetchSignaturePayload(signatureUrl)
+      if (!signaturePayload) {
+        return { valid: false, reason: 'Signature file not available' }
+      }
+      await fs.mkdir(path.dirname(signatureCachePath), { recursive: true })
+      const tempPath = `${signatureCachePath}.${process.pid}.tmp`
+      await fs.writeFile(tempPath, signaturePayload, { mode: 0o600 })
+      await fs.rename(tempPath, signatureCachePath)
+    }
+
+    return await this.verifySignaturePayload(filePath, signaturePayload)
+  }
+
+  private async verifySignaturePayload(
+    filePath: string,
+    signaturePayload: Buffer
+  ): Promise<SignatureVerificationResult> {
+    const publicKey = await this.fetchSignaturePublicKey()
     if (!publicKey) {
-      return { valid: false, reason: 'Signature public key not available' }
+      return { valid: false, reason: 'Embedded signature public key not available' }
     }
 
     const signature = this.decodeSignaturePayload(signaturePayload)
@@ -68,39 +95,17 @@ export class SignatureVerifier {
     }
 
     try {
-      const fileBuffer = await fs.readFile(filePath)
-      const isValid = crypto.verify('RSA-SHA256', fileBuffer, publicKey, signature)
+      const verifier = crypto.createVerify('RSA-SHA256')
+      for await (const chunk of createReadStream(filePath)) {
+        verifier.update(chunk)
+      }
+      verifier.end()
+      const isValid = verifier.verify(publicKey, signature)
       return { valid: isValid, reason: isValid ? undefined : 'Signature mismatch' }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : ''
       return { valid: false, reason: message || 'Signature verification failed' }
     }
-  }
-
-  private resolveSignatureKeyUrl(signatureUrl?: string, signatureKeyUrl?: string): string | null {
-    if (signatureKeyUrl) {
-      return signatureKeyUrl
-    }
-
-    const envUrl =
-      process.env.TUFF_UPDATE_SIGNATURE_KEY_URL || process.env.TUFF_UPDATE_SIGNATURE_PUBLIC_KEY_URL
-
-    if (envUrl) {
-      return envUrl
-    }
-
-    if (signatureUrl) {
-      try {
-        const parsed = new URL(signatureUrl)
-        if (parsed.pathname.includes('/api/releases/')) {
-          return `${parsed.origin}/api/releases/signing-key`
-        }
-      } catch {
-        return null
-      }
-    }
-
-    return null
   }
 
   private async loadEmbeddedPublicKey(): Promise<string | null> {
@@ -123,73 +128,8 @@ export class SignatureVerifier {
     return null
   }
 
-  private async fetchSignaturePublicKey(
-    signatureUrl?: string,
-    signatureKeyUrl?: string
-  ): Promise<string | null> {
-    // Prefer the public key embedded in the app bundle. A network-fetched key
-    // can be swapped by a MITM, so the embedded key is authoritative; the
-    // network path below is only a fallback for when the embedded key is absent.
-    const embedded = await this.loadEmbeddedPublicKey()
-    if (embedded) {
-      return embedded
-    }
-
-    const resolvedUrl = this.resolveSignatureKeyUrl(signatureUrl, signatureKeyUrl)
-    if (!resolvedUrl) {
-      return null
-    }
-
-    const cached = this.keyCache.get(resolvedUrl)
-    if (cached && Date.now() - cached.fetchedAt < this.cacheTtlMs) {
-      return cached.key
-    }
-
-    try {
-      const response = await getNetworkService().request<string>({
-        method: 'GET',
-        url: resolvedUrl,
-        timeoutMs: 8000,
-        responseType: 'text',
-        headers: {
-          Accept: 'application/json,text/plain',
-          'User-Agent': 'TalexTouch-Updater/2.0'
-        }
-      })
-
-      let key: string | null = null
-      const rawPayload = response.data
-      if (typeof rawPayload === 'string') {
-        const raw = rawPayload.trim()
-        if (raw.startsWith('{')) {
-          try {
-            const parsed = JSON.parse(raw) as { publicKey?: string; key?: string }
-            key = parsed.publicKey || parsed.key || null
-          } catch {
-            key = raw
-          }
-        } else {
-          key = raw
-        }
-      }
-
-      if (!key || !key.trim()) {
-        return null
-      }
-
-      const normalizedKey = key.trim()
-      this.keyCache.set(resolvedUrl, {
-        key: normalizedKey,
-        fetchedAt: Date.now()
-      })
-
-      return normalizedKey
-    } catch (error) {
-      signatureVerifierLog.warn('Failed to fetch signature public key', {
-        meta: { reason: error instanceof Error ? error.message : String(error) }
-      })
-      return null
-    }
+  private async fetchSignaturePublicKey(): Promise<string | null> {
+    return this.loadEmbeddedPublicKey()
   }
 
   private async fetchSignaturePayload(signatureUrl: string): Promise<Buffer | null> {

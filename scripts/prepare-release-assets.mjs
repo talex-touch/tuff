@@ -17,8 +17,15 @@ import {
   REQUIRED_CORE_PAIRS,
   selectPreferredCoreArtifacts,
 } from './lib/release-artifacts.mjs'
-
-const RELEASE_CHANNELS = new Set(['RELEASE', 'BETA', 'SNAPSHOT'])
+import {
+  serializeCanonicalUpdateDowngradeEvidence,
+  validateUpdateDowngradeEvidence,
+} from './lib/update-downgrade-evidence.mjs'
+import {
+  normalizeManifestChannel,
+  parseRollbackCompatible,
+  validateRollbackContract,
+} from './lib/update-rollback-contract.mjs'
 
 function keyFingerprint(key) {
   const publicKey = key.type === 'public' ? key : createPublicKey(key)
@@ -54,21 +61,97 @@ function assertRequiredPairs(selected) {
   }
 }
 
+async function validateRollbackEvidence({
+  evidencePath,
+  evidenceSignaturePath,
+  publicKey,
+  rollbackFromVersion,
+  version,
+}) {
+  if (!evidencePath || !evidenceSignaturePath) {
+    throw new Error(
+      'rollbackCompatible=true requires --rollback-evidence and a detached --rollback-evidence-signature',
+    )
+  }
+
+  const [evidence, encodedSignature] = await Promise.all([
+    readFile(evidencePath),
+    readFile(evidenceSignaturePath, 'utf8'),
+  ])
+  const signature = Buffer.from(encodedSignature.trim(), 'base64')
+  if (
+    !encodedSignature.trim()
+    || !verify('sha256', evidence, publicKey, signature)
+  ) {
+    throw new Error(
+      'Rollback evidence detached signature does not verify with the pinned release public key',
+    )
+  }
+
+  let payload
+  try {
+    payload = JSON.parse(evidence.toString('utf8'))
+  }
+  catch {
+    throw new Error('Rollback evidence must be valid UTF-8 JSON')
+  }
+  if (
+    !evidence.equals(
+      Buffer.from(serializeCanonicalUpdateDowngradeEvidence(payload), 'utf8'),
+    )
+  ) {
+    throw new Error('Rollback evidence must use canonical JSON bytes')
+  }
+
+  const evidenceResult = validateUpdateDowngradeEvidence(payload, {
+    currentVersion: rollbackFromVersion,
+    targetVersion: version,
+    rollbackFromVersion,
+  })
+  if (!evidenceResult.valid) {
+    throw new Error(
+      `Invalid rollback evidence: ${evidenceResult.issues.join('; ')}`,
+    )
+  }
+}
+
 export async function prepareReleaseAssets({
   releaseDir,
   tag,
   channel,
   privateKeyPath,
+  rollbackFromVersion,
+  expectedRollbackFromVersion,
+  rollbackEvidencePath,
+  rollbackEvidenceSignaturePath,
+  rollbackCompatible = false,
   publicKeyPath,
   manifestPath = join(releaseDir, 'tuff-release-manifest.json'),
 }) {
-  const normalizedChannel = String(channel ?? '')
-    .trim()
-    .toUpperCase()
-  if (!RELEASE_CHANNELS.has(normalizedChannel))
+  const normalizedChannel = normalizeManifestChannel(channel)
+  if (!normalizedChannel)
     throw new Error(`Unsupported release channel: ${channel}`)
+  if (
+    typeof expectedRollbackFromVersion !== 'string'
+    || !expectedRollbackFromVersion.trim()
+  ) {
+    throw new Error(
+      'expectedRollbackFromVersion is required for release asset preparation',
+    )
+  }
 
   const version = getReleaseVersion(tag)
+  const normalizedRollbackCompatible
+    = parseRollbackCompatible(rollbackCompatible)
+  const rollbackIssues = validateRollbackContract({
+    version,
+    channel: normalizedChannel,
+    rollbackFromVersion,
+    rollbackCompatible: normalizedRollbackCompatible,
+    expectedRollbackFromVersion,
+  })
+  if (rollbackIssues.length > 0)
+    throw new Error(`Invalid rollback contract: ${rollbackIssues.join('; ')}`)
   const [privateKeyPem, publicKeyPem, releaseFileNames] = await Promise.all([
     readFile(privateKeyPath, 'utf8'),
     readFile(publicKeyPath, 'utf8'),
@@ -84,6 +167,16 @@ export async function prepareReleaseAssets({
     throw new Error(
       `Release signing private key does not match the pinned public key (${privateKeyPublicFingerprint} != ${configuredPublicFingerprint})`,
     )
+  }
+
+  if (normalizedRollbackCompatible) {
+    await validateRollbackEvidence({
+      evidencePath: rollbackEvidencePath,
+      evidenceSignaturePath: rollbackEvidenceSignaturePath,
+      publicKey: configuredPublicKey,
+      rollbackFromVersion,
+      version,
+    })
   }
 
   const packageFileNames = listCorePackageFileNames(releaseFileNames)
@@ -132,11 +225,13 @@ export async function prepareReleaseAssets({
   })
 
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     release: {
       version,
       channel: normalizedChannel,
       tag,
+      rollbackFromVersion,
+      rollbackCompatible: normalizedRollbackCompatible,
     },
     artifacts,
   }
@@ -165,6 +260,20 @@ async function main() {
   const tag = getArgValue(argv, '--tag', process.env.GITHUB_REF_NAME)
   const channel = getArgValue(argv, '--channel', 'RELEASE')
   const privateKeyPath = getArgValue(argv, '--private-key')
+  const rollbackFromVersion = getArgValue(argv, '--rollback-from-version')
+  const rollbackCompatible = getArgValue(
+    argv,
+    '--rollback-compatible',
+    'false',
+  )
+  const expectedRollbackFromVersion = getArgValue(
+    argv,
+    '--expected-rollback-from-version',
+  )
+  const rollbackEvidencePath = getArgValue(argv, '--rollback-evidence')
+  const rollbackEvidenceSignaturePath
+    = getArgValue(argv, '--rollback-evidence-signature')
+      ?? (rollbackEvidencePath ? `${rollbackEvidencePath}.sig` : undefined)
   const publicKeyPath = getArgValue(
     argv,
     '--public-key',
@@ -178,9 +287,15 @@ async function main() {
     ),
   )
 
-  if (!tag || !privateKeyPath || !publicKeyPath) {
+  if (
+    !tag
+    || !privateKeyPath
+    || !publicKeyPath
+    || !rollbackFromVersion
+    || !expectedRollbackFromVersion
+  ) {
     throw new Error(
-      'Usage: node scripts/prepare-release-assets.mjs --tag <tag> --channel <channel> --release-dir <dir> --private-key <pem> [--public-key <pem>] [--manifest <json>]',
+      'Usage: node scripts/prepare-release-assets.mjs --tag <tag> --channel <channel> --rollback-from-version <version> --expected-rollback-from-version <version> --rollback-compatible <true|false> [--rollback-evidence <json> --rollback-evidence-signature <sig>] --release-dir <dir> --private-key <pem> [--public-key <pem>] [--manifest <json>]',
     )
   }
 
@@ -188,6 +303,12 @@ async function main() {
     releaseDir,
     tag,
     channel,
+    rollbackFromVersion,
+    expectedRollbackFromVersion,
+    rollbackEvidencePath: rollbackEvidencePath && resolve(rollbackEvidencePath),
+    rollbackEvidenceSignaturePath:
+      rollbackEvidenceSignaturePath && resolve(rollbackEvidenceSignaturePath),
+    rollbackCompatible,
     privateKeyPath: resolve(privateKeyPath),
     publicKeyPath: resolve(publicKeyPath),
     manifestPath,

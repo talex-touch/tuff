@@ -1,66 +1,44 @@
+import crypto from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DownloadModule, DownloadPriority, DownloadStatus } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { UpdateSystem } from './update-system'
 
-const { shellOpenPathMock, spawnMock, unrefMock, appQuitMock, appExitMock } = vi.hoisted(() => {
-  const unrefMock = vi.fn()
-  return {
-    shellOpenPathMock: vi.fn(),
-    spawnMock: vi.fn(() => ({ unref: unrefMock })),
-    appQuitMock: vi.fn(),
-    appExitMock: vi.fn(),
-    unrefMock
-  }
-})
-
-vi.mock('node:child_process', () => ({
-  spawn: spawnMock
+const { networkRequestMock, createReadStreamMock, readFileMock } = vi.hoisted(() => ({
+  networkRequestMock: vi.fn(),
+  createReadStreamMock: vi.fn(),
+  readFileMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp/tuff-test'),
     getVersion: vi.fn(() => '2.4.9'),
-    isPackaged: true,
-    quit: appQuitMock,
-    exit: appExitMock
-  },
-  shell: {
-    openPath: shellOpenPathMock
+    isPackaged: true
   }
 }))
 
 vi.mock('../../utils/release-signature', () => ({
   SignatureVerifier: class SignatureVerifier {
-    verifyFileSignature = vi.fn(async () => ({ valid: true }))
+    verifyFileSignatureWithCache = vi.fn(async () => ({ valid: true }))
   }
 }))
 
 vi.mock('../analytics/message-store', () => ({
-  getAnalyticsMessageStore: () => ({
-    add: vi.fn()
-  })
+  getAnalyticsMessageStore: () => ({ add: vi.fn() })
 }))
 
-vi.mock('../database', () => ({
-  databaseModule: {
-    getDb: vi.fn()
-  }
-}))
-
-vi.mock('../network', () => ({
-  getNetworkService: () => ({
-    request: vi.fn()
-  })
-}))
+vi.mock('../database', () => ({ databaseModule: { getDb: vi.fn() } }))
+vi.mock('../network', () => ({ getNetworkService: () => ({ request: networkRequestMock }) }))
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>()
   return {
     ...actual,
+    createReadStream: createReadStreamMock,
     promises: {
       ...actual.promises,
+      readFile: readFileMock,
       stat: vi.fn(async () => ({ isFile: () => true }))
     }
   }
@@ -77,7 +55,11 @@ function createDownloadCenterMock() {
     status: DownloadStatus.PENDING,
     progress: { downloadedSize: 0, speed: 0, percentage: 0 },
     chunks: [],
-    metadata: { version: 'v2.4.10' },
+    metadata: {
+      version: 'v2.4.10',
+      checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+      signatureUrl: 'https://example.test/Tuff-2.4.10-setup.exe.sig'
+    },
     createdAt: new Date(),
     updatedAt: new Date()
   }
@@ -95,208 +77,170 @@ function createDownloadCenterMock() {
   }
 }
 
-async function flushAsync(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
+const sha256 = 'a'.repeat(64)
+const signatureUrl = 'https://example.test/Tuff-2.4.10-setup.exe.sig'
+const manifestUrl = 'https://example.test/tuff-release-manifest.json'
+
+function trustedRelease() {
+  const arch: 'x64' | 'arm64' = process.arch === 'arm64' ? 'arm64' : 'x64'
+  return {
+    source: 'nexus' as const,
+    tag_name: 'v2.4.10',
+    name: 'Tuff 2.4.10',
+    published_at: '2026-05-10T08:00:00.000Z',
+    body: '',
+    assets: [
+      {
+        name: 'Tuff-2.4.10-setup.exe',
+        url: 'https://example.test/Tuff-2.4.10-setup.exe',
+        size: 100,
+        platform: 'win32' as const,
+        arch,
+        checksum: sha256,
+        signatureUrl
+      },
+      { name: 'Tuff-2.4.10-setup.exe.sig', url: signatureUrl, size: 32 },
+      {
+        name: 'tuff-release-manifest.json',
+        url: manifestUrl,
+        size: 512,
+        platform: 'win32' as const,
+        arch
+      }
+    ]
+  }
 }
 
-describe('UpdateSystem automatic installer handoff', () => {
+function trustedManifest() {
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64'
+  return {
+    schemaVersion: 2,
+    release: {
+      tag: 'v2.4.10',
+      version: '2.4.10',
+      channel: 'RELEASE',
+      rollbackFromVersion: '2.4.9',
+      rollbackCompatible: true
+    },
+    artifacts: [
+      {
+        name: 'Tuff-2.4.10-setup.exe',
+        component: 'core',
+        platform: 'win32',
+        arch,
+        sha256,
+        signature: 'Tuff-2.4.10-setup.exe.sig'
+      }
+    ]
+  }
+}
+
+describe('UpdateSystem install handoff preparation', () => {
+  let savedAppVersion: string | undefined
+
   beforeEach(() => {
     vi.useFakeTimers()
     PollingService.getInstance().stop('test setup')
+    createReadStreamMock.mockReset()
+    createReadStreamMock.mockReturnValue((async function* () {})())
+    readFileMock.mockReset()
+    savedAppVersion = process.env.APP_VERSION
+    process.env.APP_VERSION = '2.4.9'
+    networkRequestMock.mockReset()
+    networkRequestMock.mockImplementation(async ({ url }: { url: string }) => {
+      if (url === manifestUrl) return { data: trustedManifest() }
+      throw new Error(`Unexpected update request: ${url}`)
+    })
   })
 
   afterEach(() => {
     PollingService.getInstance().stop('test cleanup')
+    if (savedAppVersion === undefined) delete process.env.APP_VERSION
+    else process.env.APP_VERSION = savedAppVersion
     vi.useRealTimers()
     vi.restoreAllMocks()
-    shellOpenPathMock.mockReset()
-    spawnMock.mockReset()
-    spawnMock.mockReturnValue({ unref: unrefMock })
-    unrefMock.mockReset()
-    appQuitMock.mockReset()
-    appExitMock.mockReset()
   })
 
-  it('keeps manual download completion on notification path', async () => {
+  it('returns a verified package after streaming every chunk through SHA-256', async () => {
+    const chunks = [Buffer.from('trusted-'), Buffer.from('package')]
+    const checksum = crypto.createHash('sha256').update(Buffer.concat(chunks)).digest('hex')
+    const downloadCenter = createDownloadCenterMock()
+    downloadCenter.task.status = DownloadStatus.COMPLETED
+    downloadCenter.task.metadata.checksum = checksum
+    createReadStreamMock.mockReturnValue(
+      (async function* () {
+        yield* chunks
+      })()
+    )
+    const updateSystem = new UpdateSystem(downloadCenter as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await expect(updateSystem.prepareInstallHandoff('task-1')).resolves.toMatchObject({
+      taskId: 'task-1',
+      filePath: '/tmp/tuff-test/Tuff-2.4.10-setup.exe',
+      sha256: checksum
+    })
+  })
+
+  it('rejects a handoff package whose streamed checksum does not match', async () => {
+    const downloadCenter = createDownloadCenterMock()
+    downloadCenter.task.status = DownloadStatus.COMPLETED
+    downloadCenter.task.metadata.checksum = 'b'.repeat(64)
+    createReadStreamMock.mockReturnValue(
+      (async function* () {
+        yield Buffer.from('tampered-package')
+      })()
+    )
+    const updateSystem = new UpdateSystem(downloadCenter as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await expect(updateSystem.prepareInstallHandoff('task-1')).rejects.toThrow(
+      'Checksum verification failed'
+    )
+  })
+
+  it('returns rollback compatibility when the installed version exactly matches the manifest target', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const updateSystem = new UpdateSystem(createDownloadCenterMock() as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await expect(updateSystem.downloadUpdate(trustedRelease())).resolves.toMatchObject({
+      taskId: 'task-1',
+      rollbackFromVersion: '2.4.9',
+      rollbackCompatible: true
+    })
+  })
+
+  it('fails closed when the installed version is not the exact manifest rollback version', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    process.env.APP_VERSION = '2.4.8'
+    const updateSystem = new UpdateSystem(createDownloadCenterMock() as never, {
+      storageRoot: '/tmp/tuff-test'
+    })
+
+    await expect(updateSystem.downloadUpdate(trustedRelease())).resolves.toMatchObject({
+      taskId: 'task-1',
+      rollbackFromVersion: '2.4.9',
+      rollbackCompatible: false
+    })
+  })
+
+  it('keeps download completion notification separate from install handoff preparation', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const downloadCenter = createDownloadCenterMock()
     const updateSystem = new UpdateSystem(downloadCenter as never, {
       storageRoot: '/tmp/tuff-test'
     })
 
-    await updateSystem.downloadUpdate({
-      tag_name: 'v2.4.10',
-      name: 'Tuff 2.4.10',
-      published_at: '2026-05-10T08:00:00.000Z',
-      body: '',
-      assets: [
-        {
-          name: 'Tuff-2.4.10-setup.exe',
-          url: 'https://example.test/Tuff-2.4.10-setup.exe',
-          size: 100,
-          platform: 'win32',
-          arch: 'x64'
-        }
-      ]
-    })
-
+    await updateSystem.downloadUpdate(trustedRelease())
     downloadCenter.task.status = DownloadStatus.COMPLETED
     await vi.runOnlyPendingTimersAsync()
-    await flushAsync()
 
     expect(
       downloadCenter.notificationService.showUpdateDownloadCompleteNotification
     ).toHaveBeenCalledWith('v2.4.10', 'task-1')
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
-  })
-
-  it('does not auto hand off manual downloads even when auto install is enabled', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const downloadCenter = createDownloadCenterMock()
-    const updateSystem = new UpdateSystem(downloadCenter as never, {
-      storageRoot: '/tmp/tuff-test',
-      autoInstallDownloadedUpdates: true
-    })
-
-    await updateSystem.downloadUpdate({
-      tag_name: 'v2.4.10',
-      name: 'Tuff 2.4.10',
-      published_at: '2026-05-10T08:00:00.000Z',
-      body: '',
-      assets: [
-        {
-          name: 'Tuff-2.4.10-setup.exe',
-          url: 'https://example.test/Tuff-2.4.10-setup.exe',
-          size: 100,
-          platform: 'win32',
-          arch: 'x64'
-        }
-      ]
-    })
-
-    downloadCenter.task.status = DownloadStatus.COMPLETED
-    await vi.runOnlyPendingTimersAsync()
-    await flushAsync()
-
-    expect(
-      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
-    ).toHaveBeenCalledWith('v2.4.10', 'task-1')
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(appQuitMock).not.toHaveBeenCalled()
-  })
-
-  it('does not auto hand off auto-download tasks when auto install is disabled', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const downloadCenter = createDownloadCenterMock()
-    const updateSystem = new UpdateSystem(downloadCenter as never, {
-      storageRoot: '/tmp/tuff-test',
-      autoInstallDownloadedUpdates: false
-    })
-
-    await updateSystem.downloadUpdate(
-      {
-        tag_name: 'v2.4.10',
-        name: 'Tuff 2.4.10',
-        published_at: '2026-05-10T08:00:00.000Z',
-        body: '',
-        assets: [
-          {
-            name: 'Tuff-2.4.10-setup.exe',
-            url: 'https://example.test/Tuff-2.4.10-setup.exe',
-            size: 100,
-            platform: 'win32',
-            arch: 'x64'
-          }
-        ]
-      },
-      { autoInstallOnComplete: true }
-    )
-
-    downloadCenter.task.status = DownloadStatus.COMPLETED
-    await vi.runOnlyPendingTimersAsync()
-    await flushAsync()
-
-    expect(
-      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
-    ).toHaveBeenCalledWith('v2.4.10', 'task-1')
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(appQuitMock).not.toHaveBeenCalled()
-  })
-
-  it('automatically hands off only auto-download tasks marked for auto install', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const downloadCenter = createDownloadCenterMock()
-    const updateSystem = new UpdateSystem(downloadCenter as never, {
-      storageRoot: '/tmp/tuff-test',
-      autoInstallDownloadedUpdates: true
-    })
-
-    await updateSystem.downloadUpdate(
-      {
-        tag_name: 'v2.4.10',
-        name: 'Tuff 2.4.10',
-        published_at: '2026-05-10T08:00:00.000Z',
-        body: '',
-        assets: [
-          {
-            name: 'Tuff-2.4.10-setup.exe',
-            url: 'https://example.test/Tuff-2.4.10-setup.exe',
-            size: 100,
-            platform: 'win32',
-            arch: 'x64'
-          }
-        ]
-      },
-      { autoInstallOnComplete: true }
-    )
-
-    downloadCenter.task.status = DownloadStatus.COMPLETED
-    await vi.runOnlyPendingTimersAsync()
-    await flushAsync()
-
-    expect(spawnMock).toHaveBeenCalledWith('/tmp/tuff-test/Tuff-2.4.10-setup.exe', ['/S'], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false
-    })
-    expect(unrefMock).toHaveBeenCalledTimes(1)
-    expect(appQuitMock).toHaveBeenCalledTimes(1)
-    expect(shellOpenPathMock).not.toHaveBeenCalled()
-    expect(
-      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
-    ).not.toHaveBeenCalled()
-  })
-
-  it('removes the completion watcher when a download is cancelled', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    const downloadCenter = createDownloadCenterMock()
-    const updateSystem = new UpdateSystem(downloadCenter as never, {
-      storageRoot: '/tmp/tuff-test'
-    })
-
-    await updateSystem.downloadUpdate({
-      tag_name: 'v2.4.10',
-      name: 'Tuff 2.4.10',
-      published_at: '2026-05-10T08:00:00.000Z',
-      body: '',
-      assets: [
-        {
-          name: 'Tuff-2.4.10-setup.exe',
-          url: 'https://example.test/Tuff-2.4.10-setup.exe',
-          size: 100,
-          platform: 'win32',
-          arch: 'x64'
-        }
-      ]
-    })
-
-    downloadCenter.task.status = DownloadStatus.CANCELLED
-    await vi.runOnlyPendingTimersAsync()
-
-    expect(PollingService.getInstance().isRegistered('update-system.download.task-1')).toBe(false)
-    expect(
-      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
-    ).not.toHaveBeenCalled()
   })
 })
