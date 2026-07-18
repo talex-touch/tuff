@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"统一 Intelligence 设置页导入分组、状态、动作与组件边界"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"约束扫描、选择、审批与导入生命周期状态归属"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"约束跨 Electron main/renderer 的 discriminated union 与 typed SDK contract"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"约束 Plugin AI、Pi tool bridge、MCP 与权限边界"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"追踪 SQLite/secure store/service/transport/UI 的完整读写流"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"避免新增第二套 Agent loop、scheduler、tool registry 与 SDK facade"}
