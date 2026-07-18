@@ -24,6 +24,7 @@ import type {
   WorkerErrorMessage as SearchIndexWorkerErrorMessage,
   WorkerResultMessage
 } from './search-index-worker-types'
+import type { UpsertFileRecord } from '../file-index-persistence-repository'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -31,6 +32,7 @@ import {
   FILE_WORKER_IDLE_SHUTDOWN_MS,
   IdleWorkerShutdownController
 } from '../../addon/files/workers/idle-worker-shutdown'
+import { deserializeSearchIndexWorkerError } from './search-index-worker-error'
 import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
 
 const log = getLogger('search-index-worker')
@@ -45,6 +47,7 @@ function positiveInteger(value: number | undefined, fallback: number): number {
     : fallback
 }
 
+export type { UpsertFileRecord } from '../file-index-persistence-repository'
 export type { FilePersistenceEntry, PersistEntriesSummary } from './search-index-worker-types'
 
 export interface SearchIndexWorkerClientOptions {
@@ -105,20 +108,6 @@ interface DrainWaiter {
   resolve: () => void
   timeout: ReturnType<typeof setTimeout>
   reject: (error: Error) => void
-}
-
-// ---------- File persistence ----------
-
-export interface UpsertFileRecord {
-  path: string
-  name: string
-  extension?: string | null
-  size?: number | null
-  mtime: Date | number | string
-  ctime: Date | number | string
-  lastIndexedAt: Date | number | string
-  isDir: boolean
-  type: string
 }
 
 // ---------- Client ----------
@@ -685,7 +674,8 @@ export class SearchIndexWorkerClient {
       this.pending.delete(message.taskId)
       if (pending.timeout) clearTimeout(pending.timeout)
       this.resolveDrainWaitersIfIdle()
-      const errorMessage = typeof message.error === 'string' ? message.error : message.error.message
+      const remoteError = deserializeSearchIndexWorkerError(message.error)
+      const errorMessage = remoteError.message
       this.lastError = errorMessage
       this.lastTask = {
         id: message.taskId,
@@ -694,7 +684,7 @@ export class SearchIndexWorkerClient {
         durationMs: Date.now() - pending.startedAt,
         error: errorMessage
       }
-      pending.reject(new Error(errorMessage))
+      pending.reject(remoteError)
       this.scheduleIdleShutdown()
     }
   }

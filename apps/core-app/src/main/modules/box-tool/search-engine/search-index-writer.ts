@@ -9,17 +9,18 @@ import { dbWriteScheduler } from '../../../db/db-write-scheduler'
 import { createLogger } from '../../../utils/logger'
 import { searchIndexCommitHub, type SearchIndexCommitHub } from './search-index-commit-hub'
 import { SearchIndexService } from './search-index-service'
-import {
-  SearchIndexWorkerClient,
-  type FilePersistenceEntry,
-  type PersistEntriesSummary,
-  type UpsertFileRecord
-} from './workers/search-index-worker-client'
+import type {
+  FilePersistenceEntry,
+  PersistEntriesSummary,
+  UpsertFileRecord
+} from './file-index-persistence-repository'
+import { SearchIndexWorkerClient } from './workers/search-index-worker-client'
+
 export type {
   FilePersistenceEntry,
   PersistEntriesSummary,
   UpsertFileRecord
-} from './workers/search-index-worker-client'
+} from './file-index-persistence-repository'
 
 const searchIndexWriterLog = createLogger('SearchIndex').child('Writer')
 const VISIBILITY_RETRY_DELAYS_MS = [100, 500, 2_000] as const

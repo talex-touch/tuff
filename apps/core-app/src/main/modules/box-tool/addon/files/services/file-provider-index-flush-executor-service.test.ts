@@ -154,6 +154,34 @@ describe('file-provider-index-flush-executor-service', () => {
     expect(inflight.size).toBe(0)
   })
 
+  it('publishes only committed records when persistence marks a file stale', async () => {
+    const pending = new Map<number, IndexWorkerFileResult>([
+      [1, createResult(1)],
+      [2, createResult(2)]
+    ])
+    const { executor, publishRecords } = createExecutor({
+      pending,
+      persistEntries: async (entries) => ({
+        ...createPersistSummary(entries),
+        persistedRows: 1,
+        progressRows: 1,
+        staleFileIds: [2]
+      })
+    })
+
+    const result = await executor.execute()
+
+    expect(publishRecords).toHaveBeenCalledWith([
+      expect.objectContaining({ indexItem: expect.objectContaining({ itemId: '1' }) })
+    ])
+    expect(result.metadata).toMatchObject({
+      persistedRows: 1,
+      progressRows: 1,
+      indexedItems: 1,
+      staleEntries: 1
+    })
+  })
+
   it('rolls back the batch when the worker is not ready', async () => {
     const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
     const { executor, inflight, persistEntries } = createExecutor({

@@ -8,6 +8,13 @@ import type {
   SearchIndexProviderReplacementSummary
 } from '../search-index-service'
 import type { files } from '../../../../db/schema'
+import type { FilePersistenceEntry } from '../file-index-persistence-repository'
+import type { SerializedSearchIndexWorkerError } from './search-index-worker-error'
+
+export type {
+  FilePersistenceEntry,
+  PersistEntriesSummary
+} from '../file-index-persistence-repository'
 
 // ============================================================================
 // Existing message types (keep for reference, actual definitions in worker.ts)
@@ -84,38 +91,10 @@ export interface CountByProviderMessage {
   taskId: string
 }
 
-export interface FilePersistenceEntry {
-  fileId: number
-  fileUpdate: {
-    content: string | null
-    embeddingStatus: string
-    embeddings?: Array<{ vector: number[]; model: string }>
-    contentHash: string | null
-  } | null
-  progress: {
-    status: string
-    progress: number
-    processedBytes: number | null
-    totalBytes: number | null
-    lastError: string | null
-    startedAt: string | null
-    updatedAt: string | null
-  }
-}
-
 export interface PersistEntriesMessage {
   type: 'persistEntries'
   taskId: string
   entries: FilePersistenceEntry[]
-}
-
-export interface PersistEntriesSummary {
-  entries: number
-  chunks: number
-  persistedRows: number
-  fileUpdates: number
-  progressRows: number
-  embeddings: number
 }
 
 // ============================================================================
@@ -185,7 +164,7 @@ export interface WorkerResultMessage {
 export interface WorkerErrorMessage {
   type: 'error'
   taskId: string
-  error: { message: string; stack?: string; code?: string }
+  error: SerializedSearchIndexWorkerError
 }
 
 export type WorkerResponseMessage = WorkerResultMessage | WorkerErrorMessage

@@ -94,7 +94,17 @@ export class FileProviderIndexFlushExecutorService {
       onBatchTaken: (entries) => this.logBatchTaken(entries),
       resolveBatchMetadata: (entries) => this.resolveBatchMetadata(entries),
       resolvePersistMetadata: (result) => this.resolvePersistMetadata(result),
-      afterPersist: async ({ entries }) => ({ indexedItems: await this.publishRecords(entries) })
+      afterPersist: async ({ entries, result }) => {
+        const staleFileIds = result.staleFileIds ?? []
+        const committedEntries =
+          staleFileIds.length === 0
+            ? entries
+            : entries.filter((entry) => !staleFileIds.includes(entry.fileId))
+        return {
+          indexedItems: await this.publishRecords(committedEntries),
+          staleEntries: staleFileIds.length
+        }
+      }
     })
   }
 
@@ -138,13 +148,15 @@ export class FileProviderIndexFlushExecutorService {
     progressRows: number
     embeddings: number
     chunks: number
+    staleEntries: number
   } {
     return {
       persistedRows: summary.persistedRows,
       fileUpdates: summary.fileUpdates,
       progressRows: summary.progressRows,
       embeddings: summary.embeddings,
-      chunks: summary.chunks
+      chunks: summary.chunks,
+      staleEntries: summary.staleFileIds?.length ?? 0
     }
   }
 }

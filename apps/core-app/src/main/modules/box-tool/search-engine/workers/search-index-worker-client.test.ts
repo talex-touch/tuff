@@ -52,6 +52,7 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
   })
 }))
 
+import { isSqliteBusyError } from '../../../../db/sqlite-retry'
 import { SearchIndexWorkerClient } from './search-index-worker-client'
 
 function taskIdOf(message: unknown): string {
@@ -618,7 +619,7 @@ describe('SearchIndexWorkerClient init gate', () => {
     })
   })
 
-  it('unwraps structured worker error messages', async () => {
+  it('preserves nested SQLite busy metadata from structured worker errors and supports legacy strings', async () => {
     const client = new SearchIndexWorkerClient()
     const initPromise = client.init('/tmp/search-index.db')
     const worker = workerMock.workers.at(-1)!
@@ -626,16 +627,42 @@ describe('SearchIndexWorkerClient init gate', () => {
     worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
     await initPromise
 
-    const removePromise = client.removeProviderItems('file-provider', ['file:/tmp/demo.txt'])
+    const structuredFailure = client.removeProviderItems('file-provider', ['file:/tmp/demo.txt'])
     await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
-
     worker.emit('message', {
       type: 'error',
       taskId: taskIdOf(worker.messages[1]),
-      error: { message: 'structured failure' }
+      error: {
+        name: 'DrizzleQueryError',
+        message: 'Failed query: INSERT INTO file_index_progress',
+        code: 'DRIZZLE_ERROR',
+        cause: {
+          name: 'LibsqlError',
+          message: 'database is locked',
+          code: 'SQLITE_BUSY',
+          rawCode: 5
+        }
+      }
     })
 
-    await expect(removePromise).rejects.toThrow('structured failure')
+    const reconstructedError = await structuredFailure.catch((error: unknown) => error)
+    expect(reconstructedError).toMatchObject({
+      name: 'DrizzleQueryError',
+      message: 'Failed query: INSERT INTO file_index_progress',
+      code: 'DRIZZLE_ERROR',
+      cause: expect.objectContaining({ code: 'SQLITE_BUSY', rawCode: 5 })
+    })
+    expect(isSqliteBusyError(reconstructedError)).toBe(true)
+
+    const legacyFailure = client.removeProviderItems('file-provider', ['file:/tmp/legacy.txt'])
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(3))
+    worker.emit('message', {
+      type: 'error',
+      taskId: taskIdOf(worker.messages[2]),
+      error: 'legacy worker failure'
+    })
+
+    await expect(legacyFailure).rejects.toThrow('legacy worker failure')
   })
 
   it('recovers a committed replacement after the worker fails before its response arrives', async () => {
