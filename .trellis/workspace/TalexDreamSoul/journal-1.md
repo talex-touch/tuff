@@ -553,3 +553,36 @@ Rotated the RSA-4096 release key, added signed app build attestations, synchroni
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Merge PR #287 into master
+
+**Date**: 2026-07-18
+**Task**: Merge PR #287 into master
+**Branch**: `master`
+
+### Summary
+
+Merged LP-03 Context Actions and Windows Everything productionization into master; resolved OmniPanel/TODO-R3 conflicts, corrected main-to-renderer notification direction, and verified focused tests, lint, typecheck, build, and isolated CoreBox toast behavior.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `726c53d00011329e2ba0b724e979cbdc6a12e35e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
