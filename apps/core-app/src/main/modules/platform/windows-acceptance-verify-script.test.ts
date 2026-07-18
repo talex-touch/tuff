@@ -15,6 +15,7 @@ import {
 } from './windows-acceptance-manifest-verifier'
 
 const execFileAsync = promisify(execFile)
+const pnpmExecutable = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 async function writeAcceptanceFixture(manualEvidence: string): Promise<string> {
   const fixtureDir = await mkdtemp(path.join(tmpdir(), 'windows-acceptance-verify-'))
@@ -72,7 +73,7 @@ async function runAcceptanceVerify(manifestPath: string): Promise<{
 }> {
   try {
     const { stdout, stderr } = await execFileAsync(
-      'pnpm',
+      pnpmExecutable,
       [
         'exec',
         'tsx',
