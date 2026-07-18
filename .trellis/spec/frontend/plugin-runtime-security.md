@@ -666,3 +666,73 @@ localKnowledgeEngine.search(data);
 ```ts
 localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context));
 ```
+
+## Scenario: Host-Owned Pi Orchestration And CLI Import
+
+### 1. Scope / Trigger
+
+- Apply when adding an AI execution entrypoint, Pi runtime message, automation trigger, external CLI config adapter, imported Skill/Agent/Command/Rule, or MCP definition.
+- This boundary spans the shared typed SDK, Electron main, Pi Utility Process, SQLite migrations, managed content blobs, secure store, renderer import UI, Tool Registry, and MCP Registry.
+
+### 2. Signatures
+
+- Runtime: `AiCliOrchestrator.execute(request: AiOrchestratorExecuteRequest): Promise<AiOrchestratorRunRecord>`; `runtimeProvider` is always `pi-core`.
+- Approval: `orchestratorApprove({ runId })`; cancellation uses `orchestratorCancel({ runId })` and must also terminate queued/pending persisted runs.
+- Import: `orchestratorPreviewImport(request?)`, `orchestratorApplyImport({ scanId, candidateIds, confirmSecretMigration, overrides? })`, plus host-only set-active/clone/delete methods.
+- DB migration owners: `ai_import_*`, `ai_agent_profiles`, `ai_orchestrator_*`, `ai_automations`, and `ai_automation_runs`. Every schema addition requires the next numbered SQL migration and journal entry.
+
+### 3. Contracts
+
+- `pi-agent-core` runs only in the bundled Electron `utilityProcess`; model requests return to Tuff provider routing and every tool call returns to the host Tool/MCP registries. The child receives no provider or MCP secret.
+- Codex, Claude Code, Pi, Oh My Pi, and OpenCode are read-only configuration sources, never execution backends. Scanning does not execute a CLI, command, hook, script, MCP server, or remote instruction URL.
+- Import apply re-reads each canonical source file through the bounded regular-file reader, rejects symlink/root escape or fingerprint drift, writes credential-redacted content plus secure-store authRefs, commits SQLite, then activates registries. Any failure rolls back new blobs and secret writes; a failed rollback is surfaced, never swallowed.
+- Workspace items and imported Agent profiles are visible only when run `cwd` is canonically contained by that workspace; workspace projection wins over same-provider global projection. Skills expose metadata until `skill.read`; Commands inject only for explicit `/name` and expand `$ARGUMENTS`/`$1..$9`; glob Rules inject only when the objective names a matching path; Instructions are scope-always-on; MCP connects on first list/call and closes after idle.
+- A source-missing scan creates one new current `source-missing` revision while preserving content, authRefs, active preference, and prior revisions. Reapplying the same missing state is idempotent; runtime registries use only current `active` items.
+- Interactive child delegation persists a dependency-aware plan and creates no child run before one-time approval. Automation delegation/tools/MCP/paths/network targets and finite budgets cannot exceed the versioned policy.
+- Orchestrator/import SDK methods remain in `HOST_ONLY_INTELLIGENCE_METHODS`; plugins cannot inspect snapshots, mutate imported items, approve runs, or start automation through the plugin SDK.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Unknown runtime protocol/version or missing worker artifact | Fail closed; no fallback to an external CLI |
+| Tool, Skill, MCP, path, network, profile, or budget outside policy | Persist `pending_approval` with an explicit reason |
+| Import candidate missing/invalid, outside canonical source root, or changed after preview | Reject the whole selected transaction |
+| Secret plaintext without explicit confirmation or unavailable secure store | Reject and rollback; ordinary DB/blob/renderer data stays redacted |
+| Rule glob is invalid, absolute, or escapes with `..` | Mark candidate blocking; do not import or inject it |
+| Tool side effect succeeds but durable result persistence fails | Fail the run and retain started-call replay protection; never report completed |
+| External credential cannot be exported safely | Store descriptor as `reauth-required`; do not activate it |
+| Workspace Skill/MCP requested from another cwd | Reject before content read or MCP connection |
+| App restart finds queued/running automation with changed policy version | Cancel or return to approval; never inherit stale authorization |
+| Pi initialization fails after worker start | Stop scheduler and Utility Process before propagating the error |
+
+### 5. Good / Base / Bad Cases
+
+- Good: one scan returns candidates from all installed/configured sources; the user selects a Skill and MCP, confirms secret migration, then Pi reads the Skill on demand and lazily connects the MCP inside the matching workspace.
+- Base: a model-only Pi turn completes through Tuff provider routing with no tool approval and persists provider/model/usage/run history.
+- Bad: spawning `codex`/`claude`/`pi`, placing plaintext tokens in SQLite, injecting every Skill body, auto-running imported Commands, connecting MCP during scan, or letting a plugin call orchestrator control APIs.
+
+### 6. Tests Required
+
+- Protocol/host tests: versioned worker ready, model/tool round-trip, usage, cancellation, timeout, permission pause, and bounded restart/cleanup.
+- Import tests: stable identity states, damaged-source isolation, path/fingerprint guards, secret redaction/reauth, persistence-failure rollback, scope precedence, explicit Commands, Skill/MCP workspace isolation, clone/disable/delete lifecycle.
+- Import semantic tests: unknown frontmatter reporting, Command argument expansion, Rule glob/always-apply behavior, workspace Agent visibility, source-missing version/idempotency, and blocked unsafe globs.
+- Delegation/automation tests: malformed dependencies/cycles, missing profiles, tool/MCP escalation, child and concurrency budgets, policy version recovery, coalesced `missedCount`, and approval override.
+- Cross-layer gates: CoreApp node/web typechecks, focused AI tests, full migration-chain execution in SQLite, Electron Vite build containing `out/main/pi-agent-runtime-worker.js`, and a real Utility Process ready/exit smoke.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+spawn(importedProvider.command, importedProvider.args);
+await mcpClient.connect(candidate.url, candidate.headers);
+```
+
+#### Correct
+
+```ts
+const run = await aiCliOrchestrator.execute(request);
+const imported = await aiCliImportService.apply(confirmedSelection);
+// Pi decides; Electron main authorizes; Tool/MCP registries perform side effects.
+```

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"执行 lint、typecheck、构建、测试与真实 UI 质量门"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"复核共享 payload、runtime decoder 与 UI 类型一致性"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"复核 provider secret、MCP、tool approval 与 plugin caller 安全边界"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"复核 source→transaction→runtime→renderer 双向数据流与失败传播"}

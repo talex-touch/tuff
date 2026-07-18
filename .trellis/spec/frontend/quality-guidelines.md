@@ -171,42 +171,6 @@ installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot });
 startModuleManager();
 ```
 
-## Scenario: DeepAgent Usage Signal Integrity
-
-### Scope
-
-- Trigger: LangChain/DeepAgent returns a provider response used by `agent.run` or `workflow.execute`.
-- The runtime must not replace available token usage with hardcoded zeroes.
-
-### Contract
-
-- Normalize OpenAI Responses `usage.input_tokens/output_tokens/total_tokens` and LangChain `AIMessage.usage_metadata` into `IntelligenceUsageInfo`.
-- Prefer an explicit root aggregate; otherwise sum each assistant message once, including `kwargs` serialization shapes without double-counting mirrored fields.
-- Reject non-finite/negative values and preserve the invariant `totalTokens >= promptTokens + completionTokens`.
-- Adapter `run()` exposes usage with provider/model metadata.
-- `agent.run` returns adapter usage; prompt/agent workflow step outputs retain it; workflow top-level usage sums prompt, agent, and stable model step outputs.
-- Return explicit zero usage only when no step/provider reported usage.
-
-### Validation
-
-- Pure parser tests cover Responses, LangChain direct/kwargs, common response metadata aliases, mirrored fields, and malformed input.
-- CoreApp orchestration tests cover agent propagation, mixed workflow aggregation, and the no-usage zero fallback.
-- Package build must emit declarations successfully.
-
-### Wrong vs Correct
-
-#### Wrong
-
-```ts
-usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
-```
-
-#### Correct
-
-```ts
-usage: aggregateWorkflowUsage(run.outputs)
-```
-
 ## Scenario: Electron Main Singleton Cycle Safety
 
 ### 1. Scope / Trigger
