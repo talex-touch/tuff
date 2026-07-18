@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Security evidence hygiene, fail-closed expectations and focused verification."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Review false-negative boundaries and permission/capability findings."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Verify one rule registry and no duplicate scanners."}

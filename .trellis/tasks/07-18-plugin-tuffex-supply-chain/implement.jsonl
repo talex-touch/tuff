@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Plugin trust boundaries and package/runtime fail-closed contracts."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Shared cross-layer contract ownership and runtime normalization rules."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"End-to-end source, CLI, Nexus, CoreApp and evidence data-flow review."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"One policy, scanner and eligibility owner; no duplicate consumers."}

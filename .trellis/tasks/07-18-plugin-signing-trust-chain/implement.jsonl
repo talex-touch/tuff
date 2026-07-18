@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Plugin identity, verified transport and fail-closed installation contracts."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Distinct digest/signature/attestation types and canonical payload ownership."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"CLI signer, Nexus admission and CoreApp verifier consistency."}

@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Reject mock/dry-run substitution and protect credentials/evidence hygiene."}
+{"file":".trellis/spec/frontend/release-testing.md","reason":"Check deployed and real-profile evidence strength."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Review isolated install and fail-closed trust behavior."}

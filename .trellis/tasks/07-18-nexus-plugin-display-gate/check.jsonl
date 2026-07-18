@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Nexus route tests, production evidence boundaries and cache review."}
+{"file":".trellis/spec/frontend/release-testing.md","reason":"Artifact availability, trust and public release acceptance."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check stable reason codes and memory/D1 parity."}

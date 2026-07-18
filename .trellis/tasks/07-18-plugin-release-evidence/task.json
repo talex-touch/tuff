@@ -1,0 +1,32 @@
+{
+  "id": "plugin-release-evidence",
+  "name": "plugin-release-evidence",
+  "title": "产出插件发布证据",
+  "description": "用严格 verifier 将源码、包、扫描、签名、真实上传下载和安装绑定为发布证据。",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": "plugin-release-evidence",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-18",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-18-plugin-tuffex-supply-chain",
+  "relatedFiles": [
+    "docs/engineering/reports",
+    "scripts",
+    "packages/tuff-cli-core/src/publish.ts",
+    "apps/nexus/server/utils/pluginsStore.ts",
+    "apps/core-app/src/main/modules/plugin"
+  ],
+  "notes": "",
+  "meta": {}
+}

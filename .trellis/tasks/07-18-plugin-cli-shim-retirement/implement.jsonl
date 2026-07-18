@@ -1,0 +1,3 @@
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Eliminate duplicate exporter/security/compress implementations."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Canonical plugin build/runtime package boundary must remain enforced."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Final package ownership across CLI core, CLI entry and Vite plugin."}

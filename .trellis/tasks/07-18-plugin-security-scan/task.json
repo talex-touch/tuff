@@ -1,0 +1,31 @@
+{
+  "id": "plugin-security-scan",
+  "name": "plugin-security-scan",
+  "title": "实施插件 Security Scan",
+  "description": "对不可变 TPEX 执行共享、分级、可审计且不泄密的安全扫描。",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": "plugin-security-scan",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-18",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-18-plugin-tuffex-supply-chain",
+  "relatedFiles": [
+    "packages/utils/plugin",
+    "packages/tuff-cli-core/src",
+    "apps/nexus/server/utils",
+    "apps/nexus/server/api/dashboard/plugins"
+  ],
+  "notes": "",
+  "meta": {}
+}

@@ -1,0 +1,32 @@
+{
+  "id": "plugin-cli-shim-retirement",
+  "name": "plugin-cli-shim-retirement",
+  "title": "完成 CLI shim 退场",
+  "description": "迁移到 canonical tuff CLI core，移除 tuffcli、旧 CLI 转发和重复 exporter。",
+  "status": "planning",
+  "dev_type": "feature",
+  "scope": "plugin-cli-shim-retirement",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-18",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-18-plugin-tuffex-supply-chain",
+  "relatedFiles": [
+    "packages/tuff-cli",
+    "packages/tuff-cli-core",
+    "packages/unplugin-export-plugin",
+    "plugins",
+    "pnpm-lock.yaml"
+  ],
+  "notes": "",
+  "meta": {}
+}
