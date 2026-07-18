@@ -10,6 +10,20 @@ const route = useRoute()
 const { locale } = useI18n()
 const docsHomePath = computed(() => toLocalizedDocsPath('/docs', locale.value === 'zh' ? 'zh' : 'en'))
 
+const pageTitle = computed(() => 'Page not found · Tuff Nexus')
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => `The page ${route.path} does not exist or has been moved.`),
+  robots: 'noindex, nofollow',
+})
+
+if (import.meta.server) {
+  const event = useRequestEvent()
+  if (event)
+    setResponseStatus(event, 404)
+}
+
 function goBack() {
   if (window.history.length > 2) {
     router.back()
@@ -91,7 +105,7 @@ function goHome() {
         </NuxtLink>
         <span class="hidden h-1 w-1 rounded-full bg-black/20 dark:bg-white/20 sm:block" />
         <a
-          href="https://github.com/AkariNext/Tuff"
+          href="https://github.com/talex-touch/tuff"
           target="_blank"
           class="inline-flex items-center gap-1.5 transition-colors hover:text-black dark:hover:text-white"
         >
