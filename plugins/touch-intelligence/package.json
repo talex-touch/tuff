@@ -8,6 +8,9 @@
     "publish:nexus": "node ../../packages/tuff-cli/bin/tuff.js publish --channel RELEASE"
   },
   "dependencies": {
-    "@talex-touch/tuff-intelligence": "workspace:^"
+    "@talex-touch/tuff-intelligence": "workspace:^",
+    "@talex-touch/tuffex": "workspace:^",
+    "@talex-touch/utils": "workspace:^",
+    "vue": "^3.5.33"
   }
 }
