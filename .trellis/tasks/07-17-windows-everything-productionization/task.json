@@ -1,0 +1,30 @@
+{
+  "id": "windows-everything-productionization",
+  "name": "windows-everything-productionization",
+  "title": "Productionize Windows Everything Search",
+  "description": "Close SDK/CLI strategy, packaged native availability, diagnostics, Windows acceptance, and P50/P95 evidence for Everything search.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-17",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/goaler",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-13-search-crossplatform-audit",
+  "relatedFiles": [],
+  "notes": "Implementation, integration, local production gates, diagnostics, canonical runtime resources, and hosted Windows CI/release gates are complete; first hosted run and packaged UI acceptance remain open.",
+  "meta": {
+    "nextAction": "After review and commit/push, run Windows Everything Production Gate, inspect its SDK/CLI/unavailable/package artifacts, then capture normal/@file/structured-filter packaged UI evidence and run strict acceptance verification.",
+    "blocker": "GitHub Actions cannot execute the uncommitted workflow; a committed ref and successful windows-2022 run are required. The hosted backend collector does not replace packaged CoreBox UI evidence.",
+    "evidence": "9 native manifest/self-check tests and 161 focused Everything/Windows tests passed; CoreApp node/web typechecks and production build passed; lint:changed, PowerShell parser, actionlint, Trellis validation, and reviewer re-check passed. The configured hosted gate downloads the pinned SDK DLL, collects 200 SDK/CLI samples, enforces SDK P95/max, validates exact unavailable errors, packages Resources wrapper/manifest/native fail-closed, and uploads redacted artifacts; Windows artifacts are not yet produced."
+  }
+}

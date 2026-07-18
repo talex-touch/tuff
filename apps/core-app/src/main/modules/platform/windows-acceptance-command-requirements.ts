@@ -49,14 +49,43 @@ export const WINDOWS_ACCEPTANCE_CASE_VERIFIER_COMMAND_REQUIREMENTS = {
           fragments: [
             'everything:diagnostic:verify',
             '--input',
+            '--requireBackend sdk-napi',
             '--requireReady',
-            '--requireEnabled',
             '--requireAvailable',
-            '--requireHealthy',
             '--requireVersion',
+            '--requireFallbackChain sdk-napi,cli',
+            '--requirePerformanceSamples 200',
+            '--requireCaseIds windows-everything-file-search'
+          ]
+        }
+      ]
+    },
+    {
+      label: 'Everything CLI recovery verifier command',
+      alternatives: [
+        {
+          label: 'Everything CLI recovery verifier command',
+          fragments: [
+            'everything:diagnostic:verify',
+            '--input',
+            '--requireBackend cli',
+            '--requireBackendAttemptErrors sdk-napi',
             '--requireEsPath',
-            '--requireFallbackChain',
-            'sdk-napi,cli',
+            '--requireCaseIds windows-everything-file-search'
+          ]
+        }
+      ]
+    },
+    {
+      label: 'Everything unavailable verifier command',
+      alternatives: [
+        {
+          label: 'Everything unavailable verifier command',
+          fragments: [
+            'everything:diagnostic:verify',
+            '--input',
+            '--requireBackend unavailable',
+            '--requireFallbackChain sdk-napi,cli',
             '--requireCaseIds windows-everything-file-search'
           ]
         }

@@ -538,7 +538,7 @@ const installTaskIdText = computed(() => {
   const taskIds = everythingInstallStatus.value?.taskIds
   if (!taskIds) return '-'
 
-  return [taskIds.everything, taskIds.cli].filter(Boolean).join(' / ') || '-'
+  return [taskIds.everything, taskIds.sdk, taskIds.cli].filter(Boolean).join(' / ') || '-'
 })
 
 const installErrorText = computed(() => {
@@ -1046,6 +1046,43 @@ watch(
           >
             <div class="version-info">
               {{ fallbackChainText }}
+            </div>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            v-if="everythingStatus.performance"
+            :title="t('settings.settingEverything.performanceTitle')"
+            :description="t('settings.settingEverything.performanceDesc')"
+            default-icon="i-carbon-meter"
+            active-icon="i-carbon-meter"
+          >
+            <div class="diagnostic-grid">
+              <div class="diagnostic-card">
+                <span>{{ t('settings.settingEverything.performanceSamples') }}</span>
+                <strong>{{ everythingStatus.performance.sampleCount }}</strong>
+              </div>
+              <div class="diagnostic-card">
+                <span>{{ t('settings.settingEverything.performanceP50') }}</span>
+                <strong>{{ everythingStatus.performance.p50Ms ?? '-' }}ms</strong>
+              </div>
+              <div class="diagnostic-card">
+                <span>{{ t('settings.settingEverything.performanceP95') }}</span>
+                <strong>{{ everythingStatus.performance.p95Ms ?? '-' }}ms</strong>
+              </div>
+              <div class="diagnostic-card">
+                <span>{{ t('settings.settingEverything.performanceFallbackRatio') }}</span>
+                <strong
+                  >{{ (everythingStatus.performance.fallbackRatio * 100).toFixed(1) }}%</strong
+                >
+              </div>
+              <div class="diagnostic-card">
+                <span>{{ t('settings.settingEverything.performanceTimeouts') }}</span>
+                <strong>{{ everythingStatus.performance.timeoutCount }}</strong>
+              </div>
+              <div class="diagnostic-card">
+                <span>{{ t('settings.settingEverything.performanceErrors') }}</span>
+                <strong>{{ everythingStatus.performance.errorCount }}</strong>
+              </div>
             </div>
           </TuffBlockSlot>
 

@@ -21,6 +21,11 @@
       "require": "./everything.js",
       "default": "./everything.js"
     },
+    "./everything-resources": {
+      "types": "./everything-resources.d.ts",
+      "require": "./everything-resources.js",
+      "default": "./everything-resources.js"
+    },
     "./screenshot": {
       "types": "./screenshot.d.ts",
       "require": "./screenshot.js",
@@ -38,6 +43,8 @@
     "build/Release/*.node",
     "everything.js",
     "everything.d.ts",
+    "everything-resources.js",
+    "everything-resources.d.ts",
     "screenshot.js",
     "screenshot.d.ts",
     "native/src/everything/addon.cc"
