@@ -21,7 +21,7 @@ useHead({
     <ContentRenderer
       :value="protocolDoc ?? {}"
       :prose="false"
-      class="prose prose-neutral dark:prose-invert max-w-none"
+      class="prose prose-neutral dark:prose-invert max-w-none legal-prose"
     />
   </div>
 </template>
@@ -46,5 +46,10 @@ useHead({
 
 :deep(.prose p) {
   line-height: 1.75;
+}
+
+:deep(.legal-prose) {
+  content-visibility: auto;
+  contain-intrinsic-size: 900px;
 }
 </style>
