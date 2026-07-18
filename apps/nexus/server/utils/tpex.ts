@@ -1,4 +1,10 @@
+import type {
+  PluginPackageEntry,
+  PluginPackageExpectedIdentity,
+  PluginPackagePolicyResult,
+} from '@talex-touch/utils/plugin'
 import type { TpexMetadata } from '@talex-touch/utils/plugin/providers'
+import { validatePluginPackagePolicy } from '@talex-touch/utils/plugin'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 
@@ -14,6 +20,31 @@ export interface TpexExtractedMetadata extends TpexMetadata {
   iconFileName?: string | null
   iconMimeType?: string | null
   integrity: TpexIntegrityResult
+  packagePolicy: PluginPackagePolicyResult
+}
+
+export interface TpexAdmissionFailure {
+  code: string
+  reason: string
+}
+
+export function getTpexAdmissionFailure(
+  metadata: TpexExtractedMetadata,
+): TpexAdmissionFailure | null {
+  if (!metadata.integrity.valid) {
+    return {
+      code: 'PLUGIN_PACKAGE_INTEGRITY_INVALID',
+      reason: metadata.integrity.reason ?? 'Package integrity validation failed.',
+    }
+  }
+  if (!metadata.packagePolicy.ok) {
+    const first = metadata.packagePolicy.violations[0]
+    return {
+      code: first?.code ?? 'PLUGIN_PACKAGE_POLICY_REJECTED',
+      reason: first ? `${first.code} at ${first.location}` : 'Package policy rejected the archive.',
+    }
+  }
+  return null
 }
 
 const TAR_BLOCK_SIZE = 512
@@ -67,21 +98,21 @@ function isIconFile(name: string, manifestIconPath?: string): { isIcon: boolean,
 }
 
 function readHeaderString(block: Buffer, start: number, length: number) {
-  return block.subarray(start, start + length).toString('utf8').replace(/\0.*$/, '').trim()
+  return block.subarray(start, start + length).toString('utf8').replace(/\0.*$/, '')
 }
 
 function readHeaderOctal(block: Buffer, start: number, length: number): number {
-  const raw = readHeaderString(block, start, length)
-  if (!raw.length)
-    return 0
+  const raw = readHeaderString(block, start, length).trim()
+  if (!raw.length) return 0
+  if (!/^[0-7]+$/.test(raw)) return -1
   const value = Number.parseInt(raw, 8)
-  return Number.isFinite(value) ? value : 0
+  return Number.isSafeInteger(value) ? value : -1
 }
 
 function readTarEntryName(block: Buffer): string {
   const name = readHeaderString(block, 0, 100)
   const prefix = readHeaderString(block, 345, 155)
-  return normalizeTarEntryName(prefix ? `${prefix}/${name}` : name)
+  return prefix ? `${prefix}/${name}` : name
 }
 
 function isEmptyBlock(block: Buffer) {
@@ -94,6 +125,16 @@ function isEmptyBlock(block: Buffer) {
 
 function isRegularFileEntry(typeFlag: string) {
   return typeFlag === '' || typeFlag === '0'
+}
+
+function mapTarEntryType(typeFlag: string): PluginPackageEntry['type'] {
+  if (isRegularFileEntry(typeFlag)) return 'file'
+  if (typeFlag === '5') return 'directory'
+  if (typeFlag === '1') return 'hardlink'
+  if (typeFlag === '2') return 'symlink'
+  if (typeFlag === '3' || typeFlag === '4') return 'device'
+  if (typeFlag === '6') return 'fifo'
+  return 'other'
 }
 
 function generateSignature(filesObject: Record<string, string>): string {
@@ -174,42 +215,40 @@ function verifyManifestIntegrity(
   return { valid: true }
 }
 
-export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtractedMetadata> {
+export async function extractTpexMetadata(
+  buffer: Buffer,
+  expected?: PluginPackageExpectedIdentity,
+): Promise<TpexExtractedMetadata> {
   let readmeMarkdown: string | null = null
   let manifest: Record<string, unknown> | null = null
   const files: Record<string, Buffer> = {}
+  const entries: PluginPackageEntry[] = []
   let iconBuffer: Buffer | null = null
   let iconFileName: string | null = null
   let iconMimeType: string | null = null
   let manifestIconPath: string | undefined
 
-  // First pass: find manifest to get icon path
+  // First pass: find manifest to get icon path. Package policy runs against
+  // the complete raw entry inventory collected during the second pass.
   for (let offset = 0; offset + TAR_BLOCK_SIZE <= buffer.length;) {
     const header = buffer.subarray(offset, offset + TAR_BLOCK_SIZE)
     offset += TAR_BLOCK_SIZE
 
-    if (isEmptyBlock(header))
-      break
+    if (isEmptyBlock(header)) break
 
     const name = readTarEntryName(header)
     const size = readHeaderOctal(header, 124, 12)
     const typeFlag = readHeaderString(header, 156, 1)
-
-    if (!name || size < 0)
-      break
+    if (!name || size < 0) break
 
     const fileEnd = offset + size
-    if (fileEnd > buffer.length)
-      break
+    if (!Number.isSafeInteger(fileEnd) || fileEnd > buffer.length) break
 
     const fileBuffer = buffer.subarray(offset, fileEnd)
-
     if (isRegularFileEntry(typeFlag) && isManifestFile(name)) {
       try {
         manifest = JSON.parse(fileBuffer.toString('utf8')) as Record<string, unknown>
-        if (typeof manifest.icon === 'string') {
-          manifestIconPath = manifest.icon
-        }
+        if (typeof manifest.icon === 'string') manifestIconPath = manifest.icon
       }
       catch {
         manifest = null
@@ -218,34 +257,41 @@ export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtracted
 
     const padding = (TAR_BLOCK_SIZE - (size % TAR_BLOCK_SIZE)) % TAR_BLOCK_SIZE
     offset = fileEnd + padding
-
-    if (manifest)
-      break
+    if (manifest) break
   }
 
-  // Second pass: extract all files
+  // Second pass: collect all raw entries before interpreting package content.
   for (let offset = 0; offset + TAR_BLOCK_SIZE <= buffer.length;) {
     const header = buffer.subarray(offset, offset + TAR_BLOCK_SIZE)
     offset += TAR_BLOCK_SIZE
 
-    if (isEmptyBlock(header))
+    if (isEmptyBlock(header)) {
+      if (buffer.subarray(offset).some(byte => byte !== 0)) {
+        entries.push({ path: '', type: 'other', size: buffer.length - offset })
+      }
       break
+    }
 
     const name = readTarEntryName(header)
     const size = readHeaderOctal(header, 124, 12)
     const typeFlag = readHeaderString(header, 156, 1)
+    const entryType = mapTarEntryType(typeFlag)
 
-    if (!name || size < 0)
+    if (!name || size < 0) {
+      entries.push({ path: name, type: 'other', size })
       break
+    }
 
     const fileEnd = offset + size
-    if (fileEnd > buffer.length)
+    if (!Number.isSafeInteger(fileEnd) || fileEnd > buffer.length) {
+      entries.push({ path: name, type: 'other', size })
       break
+    }
 
+    entries.push({ path: name, type: entryType, size })
     const fileBuffer = buffer.subarray(offset, fileEnd)
-    const isRegularFile = isRegularFileEntry(typeFlag)
-    if (isRegularFile)
-      files[name] = Buffer.from(fileBuffer)
+    const isRegularFile = entryType === 'file'
+    if (isRegularFile) files[name] = Buffer.from(fileBuffer)
 
     if (isRegularFile && !readmeMarkdown && isReadmeFile(name)) {
       try {
@@ -265,12 +311,9 @@ export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtracted
       }
     }
 
-    // Extract icon file
     if (isRegularFile && !iconBuffer) {
       const { isIcon, extension } = isIconFile(name, manifestIconPath)
       if (isIcon && extension) {
-        // Create a proper copy of the buffer data to ensure it's independent
-        // and has byteOffset of 0 for R2 compatibility
         iconBuffer = Buffer.alloc(fileBuffer.length)
         fileBuffer.copy(iconBuffer)
         iconFileName = name.split('/').pop() ?? `icon${extension}`
@@ -280,7 +323,6 @@ export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtracted
 
     const padding = (TAR_BLOCK_SIZE - (size % TAR_BLOCK_SIZE)) % TAR_BLOCK_SIZE
     offset = fileEnd + padding
-
   }
 
   return {
@@ -290,5 +332,12 @@ export async function extractTpexMetadata(buffer: Buffer): Promise<TpexExtracted
     iconFileName,
     iconMimeType,
     integrity: verifyManifestIntegrity(manifest, files),
+    packagePolicy: validatePluginPackagePolicy({
+      profile: 'registry-admission',
+      manifest,
+      entries,
+      archiveSize: buffer.length,
+      expected,
+    }),
   }
 }

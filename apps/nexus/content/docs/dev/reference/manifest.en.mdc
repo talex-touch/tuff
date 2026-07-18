@@ -155,15 +155,18 @@ code: |
 :::
 
 ## Validation Checklist
-- `id` must be unique; reverse-domain IDs are recommended.
-- `version` follows `major.minor.patch` for update ordering.
-- New plugins use `main: "index.js"` and `module.exports = { onFeatureTriggered, onItemAction }`.
-- Declaring `network` requires whitelisting external domains.
+- `id` is required and uses a lowercase reverse-domain identifier with at least three safe segments.
+- `name` is a lowercase slug and `version` is strict SemVer.
+- `sdkapi` must be a supported marker; `category` is required at the documented SDK threshold.
+- Prelude plugins use `main: "index.js"`; UI-only plugins may omit `main`.
+- `permissions` uses `{ required: string[], optional: string[] }` and every id must exist in the permission registry.
+- Packaged builds disable `dev.enable`/`dev.source`, clear the dev address, and bind every regular file through `_files`.
+- Nexus rejects unsafe archive paths/types, duplicate or case-colliding entries, identity/version mismatches, and package limits before upload.
 
 ## Frequent Issues
 | Issue | Fix |
 | --- | --- |
-| Missing main | Set `main` to `index.js` and ensure the file exists. |
+| Missing main on a Prelude plugin | Set `main` to `index.js` and ensure the file exists; UI-only plugins do not need a Prelude entry. |
 | Still using `entry` / `init(ctx)` | Migrate to the Prelude model through [Plugin Development Workflow](../getting-started/plugin-workflow.en.md). |
 | Excessive permissions | Request only what you truly need, especially for v1. |
 | Keyword collisions | Namespace features like `todo.*` to avoid conflicts. |
