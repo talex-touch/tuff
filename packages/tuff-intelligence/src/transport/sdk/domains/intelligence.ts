@@ -104,385 +104,507 @@ import type {
   WorkflowReviewQueueItemStatus,
   WorkflowRunRecord,
   WorkflowTriggerType,
-} from '../../../types/intelligence'
-import type { ITuffTransport, StreamController, StreamOptions } from '../../types'
-import { defineEvent } from '../../event/builder'
+} from "../../../types/intelligence";
+import type {
+  AiAgentProfile,
+  AiAutomationApproveRequest,
+  AiAutomationDefinition,
+  AiAutomationRunNowRequest,
+  AiAutomationRunRecord,
+  AiCliProviderId,
+  AiImportApplyRequest,
+  AiImportApplyResult,
+  AiImportedConfigItem,
+  AiImportedItemCloneRequest,
+  AiImportedItemDeleteRequest,
+  AiImportedItemSetActiveRequest,
+  AiImportPreviewRequest,
+  AiImportScanResult,
+  AiOrchestratorApproveRequest,
+  AiOrchestratorExecuteRequest,
+  AiOrchestratorRunListRequest,
+  AiOrchestratorRunRecord,
+  AiOrchestratorSnapshot,
+} from "../../../types/ai-orchestrator";
+import type {
+  ITuffTransport,
+  StreamController,
+  StreamOptions,
+} from "../../types";
+import { defineEvent } from "../../event/builder";
 
 export interface IntelligenceAuditLogEntry {
-  traceId: string
-  timestamp: number
-  capabilityId: string
-  provider: string
-  model: string
-  promptHash?: string
-  caller?: string
-  userId?: string
+  traceId: string;
+  timestamp: number;
+  capabilityId: string;
+  provider: string;
+  model: string;
+  promptHash?: string;
+  caller?: string;
+  userId?: string;
   usage: {
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-  }
-  latency: number
-  success: boolean
-  error?: string
-  estimatedCost?: number
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  latency: number;
+  success: boolean;
+  error?: string;
+  estimatedCost?: number;
 }
 
 export interface IntelligenceUsageSummary {
-  period: string
-  periodType: 'minute' | 'day' | 'month'
-  requestCount: number
-  successCount: number
-  failureCount: number
-  totalTokens: number
-  promptTokens: number
-  completionTokens: number
-  totalCost: number
-  avgLatency: number
+  period: string;
+  periodType: "minute" | "day" | "month";
+  requestCount: number;
+  successCount: number;
+  failureCount: number;
+  totalTokens: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalCost: number;
+  avgLatency: number;
 }
 
 export interface IntelligenceCurrentUsage {
-  requestsThisMinute: number
-  requestsToday: number
-  requestsThisMonth: number
-  tokensThisMinute: number
-  tokensToday: number
-  tokensThisMonth: number
-  costToday: number
-  costThisMonth: number
+  requestsThisMinute: number;
+  requestsToday: number;
+  requestsThisMonth: number;
+  tokensThisMinute: number;
+  tokensToday: number;
+  tokensThisMonth: number;
+  costToday: number;
+  costThisMonth: number;
 }
 
 export interface IntelligenceCapabilityStatus {
-  capabilityId: string
-  available: boolean
-  providerIds: string[]
-  reason?: string
+  capabilityId: string;
+  available: boolean;
+  providerIds: string[];
+  reason?: string;
 }
 
 export interface IntelligenceProviderModelOption {
-  providerId: string
-  providerName: string
-  providerType: string
-  models: string[]
-  defaultModel: string | null
-  capabilities: string[]
-  available: boolean
+  providerId: string;
+  providerName: string;
+  providerType: string;
+  models: string[];
+  defaultModel: string | null;
+  capabilities: string[];
+  available: boolean;
 }
 
 export interface IntelligenceQuotaConfig {
-  callerId: string
-  callerType: 'plugin' | 'user' | 'system'
-  requestsPerMinute?: number
-  requestsPerDay?: number
-  requestsPerMonth?: number
-  tokensPerMinute?: number
-  tokensPerDay?: number
-  tokensPerMonth?: number
-  costLimitPerDay?: number
-  costLimitPerMonth?: number
-  enabled?: boolean
+  callerId: string;
+  callerType: "plugin" | "user" | "system";
+  requestsPerMinute?: number;
+  requestsPerDay?: number;
+  requestsPerMonth?: number;
+  tokensPerMinute?: number;
+  tokensPerDay?: number;
+  tokensPerMonth?: number;
+  costLimitPerDay?: number;
+  costLimitPerMonth?: number;
+  enabled?: boolean;
 }
 
 export interface IntelligenceQuotaCheckResult {
-  allowed: boolean
-  reason?: string
-  remainingRequests?: number
-  remainingTokens?: number
-  remainingCost?: number
+  allowed: boolean;
+  reason?: string;
+  remainingRequests?: number;
+  remainingTokens?: number;
+  remainingCost?: number;
 }
 
 export interface IntelligenceAuditLogQueryOptions {
-  caller?: string
-  capabilityId?: string
-  provider?: string
-  startTime?: number
-  endTime?: number
-  success?: boolean
-  limit?: number
-  offset?: number
+  caller?: string;
+  capabilityId?: string;
+  provider?: string;
+  startTime?: number;
+  endTime?: number;
+  success?: boolean;
+  limit?: number;
+  offset?: number;
 }
 
 export interface IntelligenceChatRequest {
-  messages: IntelligenceMessage[]
-  providerId?: string
-  model?: string
-  promptTemplate?: string
-  promptVariables?: Record<string, unknown>
-  metadata?: Record<string, unknown>
+  messages: IntelligenceMessage[];
+  providerId?: string;
+  model?: string;
+  promptTemplate?: string;
+  promptVariables?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceAgentSessionStartPayload {
-  sessionId?: string
-  objective?: string
-  context?: Record<string, unknown>
-  metadata?: Record<string, unknown>
-  autoRunGraph?: boolean
-  maxSteps?: number
-  toolBudget?: number
-  continueOnError?: boolean
-  reflectNotes?: string
+  sessionId?: string;
+  objective?: string;
+  context?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  autoRunGraph?: boolean;
+  maxSteps?: number;
+  toolBudget?: number;
+  continueOnError?: boolean;
+  reflectNotes?: string;
 }
 
 export interface IntelligenceAgentSessionResumePayload {
-  sessionId: string
+  sessionId: string;
 }
 
 export interface IntelligenceAgentSessionCancelPayload {
-  sessionId: string
-  reason?: string
+  sessionId: string;
+  reason?: string;
 }
 
 export interface IntelligenceAgentSessionStatePayload {
-  sessionId: string
+  sessionId: string;
 }
 
 export interface IntelligenceAgentSessionHeartbeatPayload {
-  sessionId: string
+  sessionId: string;
 }
 
 export interface IntelligenceAgentSessionPausePayload {
-  sessionId: string
-  reason?: 'client_disconnect' | 'heartbeat_timeout' | 'manual_pause' | 'system_preempted'
-  note?: string
+  sessionId: string;
+  reason?:
+    | "client_disconnect"
+    | "heartbeat_timeout"
+    | "manual_pause"
+    | "system_preempted";
+  note?: string;
 }
 
 export interface IntelligenceAgentPlanPayload {
-  sessionId: string
-  objective: string
-  context?: Record<string, unknown>
-  metadata?: Record<string, unknown>
+  sessionId: string;
+  objective: string;
+  context?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceAgentExecutePayload {
-  sessionId: string
-  turnId?: string
-  maxSteps?: number
-  toolBudget?: number
-  continueOnError?: boolean
-  metadata?: Record<string, unknown>
+  sessionId: string;
+  turnId?: string;
+  maxSteps?: number;
+  toolBudget?: number;
+  continueOnError?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceAgentReflectPayload {
-  sessionId: string
-  turnId: string
-  notes?: string
+  sessionId: string;
+  turnId: string;
+  notes?: string;
 }
 
 export interface IntelligenceAgentToolCallPayload {
-  sessionId: string
-  turnId?: string
-  actionId?: string
-  toolId: string
-  input?: unknown
-  riskLevel?: TuffIntelligenceApprovalTicket['riskLevel']
-  callId?: string
-  timeoutMs?: number
-  metadata?: Record<string, unknown>
+  sessionId: string;
+  turnId?: string;
+  actionId?: string;
+  toolId: string;
+  input?: unknown;
+  riskLevel?: TuffIntelligenceApprovalTicket["riskLevel"];
+  callId?: string;
+  timeoutMs?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceAgentToolResultPayload {
-  sessionId: string
-  turnId?: string
-  toolId: string
-  success: boolean
-  output?: unknown
-  error?: string
-  metadata?: Record<string, unknown>
+  sessionId: string;
+  turnId?: string;
+  toolId: string;
+  success: boolean;
+  output?: unknown;
+  error?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceAgentToolApprovePayload {
-  ticketId: string
-  approved: boolean
-  approvedBy?: string
-  reason?: string
+  ticketId: string;
+  approved: boolean;
+  approvedBy?: string;
+  reason?: string;
 }
 
 export interface IntelligenceAgentTraceQueryPayload {
-  sessionId: string
-  fromSeq?: number
-  limit?: number
-  level?: TuffIntelligenceAgentTraceEvent['level']
-  type?: TuffIntelligenceAgentTraceEvent['type']
+  sessionId: string;
+  fromSeq?: number;
+  limit?: number;
+  level?: TuffIntelligenceAgentTraceEvent["level"];
+  type?: TuffIntelligenceAgentTraceEvent["type"];
 }
 
 export interface IntelligenceAgentSessionHistoryPayload {
-  limit?: number
-  status?: TuffIntelligenceAgentSession['status']
+  limit?: number;
+  status?: TuffIntelligenceAgentSession["status"];
 }
 
 export interface IntelligenceAgentTraceExportPayload {
-  sessionId: string
-  format?: 'json' | 'jsonl'
+  sessionId: string;
+  format?: "json" | "jsonl";
 }
 
 export interface IntelligenceWorkflowListPayload {
-  includeDisabled?: boolean
-  includeTemplates?: boolean
+  includeDisabled?: boolean;
+  includeTemplates?: boolean;
 }
 
 export interface IntelligenceWorkflowGetPayload {
-  workflowId: string
+  workflowId: string;
 }
 
 export interface IntelligenceWorkflowDeletePayload {
-  workflowId: string
+  workflowId: string;
 }
 
 export interface IntelligenceWorkflowHistoryPayload {
-  workflowId?: string
-  limit?: number
-  status?: WorkflowRunRecord['status']
+  workflowId?: string;
+  limit?: number;
+  status?: WorkflowRunRecord["status"];
 }
 
 export interface IntelligenceWorkflowRunPayload {
-  workflowId?: string
-  workflow?: WorkflowDefinition
-  runId?: string
-  inputs?: Record<string, unknown>
-  sessionId?: string
-  triggerType?: WorkflowTriggerType
-  continueOnError?: boolean
-  metadata?: Record<string, unknown>
+  workflowId?: string;
+  workflow?: WorkflowDefinition;
+  runId?: string;
+  inputs?: Record<string, unknown>;
+  sessionId?: string;
+  triggerType?: WorkflowTriggerType;
+  continueOnError?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface IntelligenceWorkflowReviewUpdatePayload {
-  runId: string
-  itemId: string
-  status: WorkflowReviewQueueItemStatus
-  error?: string
+  runId: string;
+  itemId: string;
+  status: WorkflowReviewQueueItemStatus;
+  error?: string;
 }
 
 export interface IntelligenceLocalToolSummary {
-  id: 'codex' | 'claude'
-  name: string
-  installed: boolean
-  executablePath?: string
-  configRoots: string[]
+  id: AiCliProviderId;
+  name: string;
+  installed: boolean;
+  executablePath?: string;
+  configRoots: string[];
 }
 
 export interface IntelligenceLocalConfigFileSummary {
-  tool: 'codex' | 'claude'
-  path: string
-  exists: boolean
-  kind: 'config' | 'instructions' | 'codex-project' | 'claude-project'
-  keyPaths: string[]
-  sensitiveKeyPaths: string[]
-  updatedAt?: number
+  tool: AiCliProviderId;
+  path: string;
+  exists: boolean;
+  kind: "config" | "instructions" | "codex-project" | "claude-project";
+  keyPaths: string[];
+  sensitiveKeyPaths: string[];
+  updatedAt?: number;
 }
 
-export type IntelligenceLocalSkillGateStatus = 'ready' | 'approval_required' | 'unavailable'
+export type IntelligenceLocalSkillGateStatus =
+  | "ready"
+  | "approval_required"
+  | "unavailable";
 
-export type IntelligenceLocalSkillGateReason
-  = 'trusted_core'
-    | 'high_risk'
-    | 'external_unreviewed'
-    | 'not_installed'
+export type IntelligenceLocalSkillGateReason =
+  | "trusted_core"
+  | "high_risk"
+  | "external_unreviewed"
+  | "not_installed";
 
 export interface IntelligenceLocalSkillGateSummary {
-  status: IntelligenceLocalSkillGateStatus
-  reason: IntelligenceLocalSkillGateReason
-  approvalRequired: boolean
-  sceneIds: string[]
+  status: IntelligenceLocalSkillGateStatus;
+  reason: IntelligenceLocalSkillGateReason;
+  approvalRequired: boolean;
+  sceneIds: string[];
 }
 
 export interface IntelligenceLocalSkillProviderSummary {
-  id: string
-  name: string
-  description: string
-  source: 'codex-local' | 'tuff-internal'
-  installed: boolean
-  enabled: boolean
-  mode: 'core' | 'gated' | 'external'
-  riskLevel: 'low' | 'medium' | 'high' | 'critical'
-  capabilities: string[]
-  gate: IntelligenceLocalSkillGateSummary
-  path?: string
-  manifestPath?: string
-  updatedAt?: number
+  id: string;
+  name: string;
+  description: string;
+  source: "codex-local" | "tuff-internal";
+  installed: boolean;
+  enabled: boolean;
+  mode: "core" | "gated" | "external";
+  riskLevel: "low" | "medium" | "high" | "critical";
+  capabilities: string[];
+  gate: IntelligenceLocalSkillGateSummary;
+  path?: string;
+  manifestPath?: string;
+  updatedAt?: number;
 }
 
 export interface IntelligenceLocalEnvironmentSummary {
-  scannedAt: number
-  cwd: string
-  tools: IntelligenceLocalToolSummary[]
-  configFiles: IntelligenceLocalConfigFileSummary[]
-  skillProviders: IntelligenceLocalSkillProviderSummary[]
+  scannedAt: number;
+  cwd: string;
+  tools: IntelligenceLocalToolSummary[];
+  configFiles: IntelligenceLocalConfigFileSummary[];
+  skillProviders: IntelligenceLocalSkillProviderSummary[];
 }
 
-export type IntelligenceApiResponse<T = undefined>
-  = { ok: true, result?: T }
-    | { ok: false, error: string }
+export type IntelligenceApiResponse<T = undefined> =
+  | { ok: true; result?: T }
+  | { ok: false; error: string };
 
 export interface IntelligenceTextCapabilitySdk {
-  chat: (payload: IntelligenceChatPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  translate: (payload: IntelligenceTranslatePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  summarize: (payload: IntelligenceSummarizePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  rewrite: (payload: IntelligenceRewritePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<string>>
-  grammar: (payload: IntelligenceGrammarCheckPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceGrammarCheckResult>>
-  classify: (payload: IntelligenceClassificationPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceClassificationResult>>
+  chat: (
+    payload: IntelligenceChatPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  translate: (
+    payload: IntelligenceTranslatePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  summarize: (
+    payload: IntelligenceSummarizePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  rewrite: (
+    payload: IntelligenceRewritePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  grammar: (
+    payload: IntelligenceGrammarCheckPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceGrammarCheckResult>>;
+  classify: (
+    payload: IntelligenceClassificationPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceClassificationResult>>;
 }
 
 export interface IntelligenceEmbeddingCapabilitySdk {
-  generate: (payload: IntelligenceEmbeddingPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<number[]>>
+  generate: (
+    payload: IntelligenceEmbeddingPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<number[]>>;
 }
 
 export interface IntelligenceCodeCapabilitySdk {
-  generate: (payload: IntelligenceCodeGeneratePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeGenerateResult>>
-  explain: (payload: IntelligenceCodeExplainPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeExplainResult>>
-  review: (payload: IntelligenceCodeReviewPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeReviewResult>>
-  refactor: (payload: IntelligenceCodeRefactorPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeRefactorResult>>
-  debug: (payload: IntelligenceCodeDebugPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceCodeDebugResult>>
+  generate: (
+    payload: IntelligenceCodeGeneratePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeGenerateResult>>;
+  explain: (
+    payload: IntelligenceCodeExplainPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeExplainResult>>;
+  review: (
+    payload: IntelligenceCodeReviewPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeReviewResult>>;
+  refactor: (
+    payload: IntelligenceCodeRefactorPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeRefactorResult>>;
+  debug: (
+    payload: IntelligenceCodeDebugPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceCodeDebugResult>>;
 }
 
 export interface IntelligenceIntentCapabilitySdk {
-  detect: (payload: IntelligenceIntentDetectPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceIntentDetectResult>>
+  detect: (
+    payload: IntelligenceIntentDetectPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceIntentDetectResult>>;
 }
 
 export interface IntelligenceSentimentCapabilitySdk {
-  analyze: (payload: IntelligenceSentimentAnalyzePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSentimentAnalyzeResult>>
+  analyze: (
+    payload: IntelligenceSentimentAnalyzePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceSentimentAnalyzeResult>>;
 }
 
 export interface IntelligenceContentCapabilitySdk {
-  extract: (payload: IntelligenceContentExtractPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceContentExtractResult>>
+  extract: (
+    payload: IntelligenceContentExtractPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceContentExtractResult>>;
 }
 
 export interface IntelligenceKeywordsCapabilitySdk {
-  extract: (payload: IntelligenceKeywordsExtractPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>>
+  extract: (
+    payload: IntelligenceKeywordsExtractPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceKeywordsExtractResult>>;
 }
 
 export interface IntelligenceVisionCapabilitySdk {
-  ocr: (payload: IntelligenceVisionOcrPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>>
+  ocr: (
+    payload: IntelligenceVisionOcrPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceVisionOcrResult>>;
 }
 
 export interface IntelligenceImageCapabilitySdk {
-  caption: (payload: IntelligenceImageCaptionPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>
-  analyze: (payload: IntelligenceImageAnalyzePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>
-  generate: (payload: IntelligenceImageGeneratePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>
-  translateE2e: (payload: IntelligenceImageTranslateE2ePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>>
-  edit: (payload: IntelligenceImageEditPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>
+  caption: (
+    payload: IntelligenceImageCaptionPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageCaptionResult>>;
+  analyze: (
+    payload: IntelligenceImageAnalyzePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageAnalyzeResult>>;
+  generate: (
+    payload: IntelligenceImageGeneratePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageGenerateResult>>;
+  translateE2e: (
+    payload: IntelligenceImageTranslateE2ePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageTranslateE2eResult>>;
+  edit: (
+    payload: IntelligenceImageEditPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceImageEditResult>>;
 }
 
 export interface IntelligenceAudioCapabilitySdk {
-  tts: (payload: IntelligenceTTSPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceTTSResult>>
-  stt: (payload: IntelligenceSTTPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSTTResult>>
-  transcribe: (payload: IntelligenceAudioTranscribePayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>>
+  tts: (
+    payload: IntelligenceTTSPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceTTSResult>>;
+  stt: (
+    payload: IntelligenceSTTPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceSTTResult>>;
+  transcribe: (
+    payload: IntelligenceAudioTranscribePayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceAudioTranscribeResult>>;
 }
 
 export interface IntelligenceRagCapabilitySdk {
-  query: (payload: IntelligenceRAGQueryPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceRAGQueryResult>>
+  query: (
+    payload: IntelligenceRAGQueryPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceRAGQueryResult>>;
 }
 
 export interface IntelligenceSearchCapabilitySdk {
-  semantic: (payload: IntelligenceSemanticSearchPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>>
-  rerank: (payload: IntelligenceRerankPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceRerankResult>>
+  semantic: (
+    payload: IntelligenceSemanticSearchPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceSemanticSearchResult>>;
+  rerank: (
+    payload: IntelligenceRerankPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceRerankResult>>;
 }
 
 export interface IntelligenceWorkflowCapabilitySdk {
-  execute: (payload: unknown, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<PromptWorkflowExecution>>
+  execute: (
+    payload: unknown,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<PromptWorkflowExecution>>;
 }
 
 export interface IntelligenceAgentCapabilitySdk {
-  run: (payload: IntelligenceAgentPayload, options?: IntelligenceInvokeOptions) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>
+  run: (
+    payload: IntelligenceAgentPayload,
+    options?: IntelligenceInvokeOptions,
+  ) => Promise<IntelligenceInvokeResult<IntelligenceAgentResult>>;
 }
 
 export interface IntelligenceSdk {
@@ -490,505 +612,863 @@ export interface IntelligenceSdk {
     capabilityId: string,
     payload: unknown,
     options?: IntelligenceInvokeOptions,
-  ) => Promise<IntelligenceInvokeResult<T>>
+  ) => Promise<IntelligenceInvokeResult<T>>;
   stream: <T = unknown>(
     capabilityId: string,
     payload: unknown,
     options: IntelligenceStreamOptions<T>,
     invokeOptions?: IntelligenceInvokeOptions,
-  ) => Promise<StreamController>
+  ) => Promise<StreamController>;
   contextInvoke: <T = unknown>(
     payload: IntelligenceContextExecutionRequest,
-  ) => Promise<IntelligenceContextExecutionResult<T>>
+  ) => Promise<IntelligenceContextExecutionResult<T>>;
   contextStream: <T = unknown>(
     payload: IntelligenceContextExecutionRequest,
     options: IntelligenceStreamOptions<T>,
-  ) => Promise<StreamController>
-  text: IntelligenceTextCapabilitySdk
-  embedding: IntelligenceEmbeddingCapabilitySdk
-  code: IntelligenceCodeCapabilitySdk
-  intent: IntelligenceIntentCapabilitySdk
-  sentiment: IntelligenceSentimentCapabilitySdk
-  content: IntelligenceContentCapabilitySdk
-  keywords: IntelligenceKeywordsCapabilitySdk
-  vision: IntelligenceVisionCapabilitySdk
-  image: IntelligenceImageCapabilitySdk
-  audio: IntelligenceAudioCapabilitySdk
-  rag: IntelligenceRagCapabilitySdk
-  search: IntelligenceSearchCapabilitySdk
-  workflow: IntelligenceWorkflowCapabilitySdk
-  agent: IntelligenceAgentCapabilitySdk
-  ttsSpeak: (payload: IntelligenceTtsSpeakPayload) => Promise<IntelligenceTtsSpeakResult>
-  chatLangChain: (payload: IntelligenceChatRequest) => Promise<IntelligenceInvokeResult<string>>
-  testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>
-  testCapability: (params: Record<string, unknown>) => Promise<unknown>
-  getCapabilityTestMeta: (payload: { capabilityId: string }) => Promise<{ requiresUserInput: boolean, inputHint: string }>
-  getCapabilityStatus: (payload: { capabilityId: string }) => Promise<IntelligenceCapabilityStatus>
-  getProviderModelOptions: (payload?: { capabilityId?: string }) => Promise<IntelligenceProviderModelOption[]>
-  fetchModels: (config: IntelligenceProviderConfig) => Promise<{ success: boolean, models?: string[], message?: string }>
+  ) => Promise<StreamController>;
+  text: IntelligenceTextCapabilitySdk;
+  embedding: IntelligenceEmbeddingCapabilitySdk;
+  code: IntelligenceCodeCapabilitySdk;
+  intent: IntelligenceIntentCapabilitySdk;
+  sentiment: IntelligenceSentimentCapabilitySdk;
+  content: IntelligenceContentCapabilitySdk;
+  keywords: IntelligenceKeywordsCapabilitySdk;
+  vision: IntelligenceVisionCapabilitySdk;
+  image: IntelligenceImageCapabilitySdk;
+  audio: IntelligenceAudioCapabilitySdk;
+  rag: IntelligenceRagCapabilitySdk;
+  search: IntelligenceSearchCapabilitySdk;
+  workflow: IntelligenceWorkflowCapabilitySdk;
+  agent: IntelligenceAgentCapabilitySdk;
+  ttsSpeak: (
+    payload: IntelligenceTtsSpeakPayload,
+  ) => Promise<IntelligenceTtsSpeakResult>;
+  chatLangChain: (
+    payload: IntelligenceChatRequest,
+  ) => Promise<IntelligenceInvokeResult<string>>;
+  testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>;
+  testCapability: (params: Record<string, unknown>) => Promise<unknown>;
+  getCapabilityTestMeta: (payload: {
+    capabilityId: string;
+  }) => Promise<{ requiresUserInput: boolean; inputHint: string }>;
+  getCapabilityStatus: (payload: {
+    capabilityId: string;
+  }) => Promise<IntelligenceCapabilityStatus>;
+  getProviderModelOptions: (payload?: {
+    capabilityId?: string;
+  }) => Promise<IntelligenceProviderModelOption[]>;
+  fetchModels: (
+    config: IntelligenceProviderConfig,
+  ) => Promise<{ success: boolean; models?: string[]; message?: string }>;
 
-  getAuditLogs: (options?: IntelligenceAuditLogQueryOptions) => Promise<IntelligenceAuditLogEntry[]>
-  getTodayStats: (callerId?: string) => Promise<IntelligenceUsageSummary | null>
-  getMonthStats: (callerId?: string) => Promise<IntelligenceUsageSummary | null>
+  getAuditLogs: (
+    options?: IntelligenceAuditLogQueryOptions,
+  ) => Promise<IntelligenceAuditLogEntry[]>;
+  getTodayStats: (
+    callerId?: string,
+  ) => Promise<IntelligenceUsageSummary | null>;
+  getMonthStats: (
+    callerId?: string,
+  ) => Promise<IntelligenceUsageSummary | null>;
   getUsageStats: (payload: {
-    callerId: string
-    periodType: 'day' | 'month'
-    startPeriod?: string
-    endPeriod?: string
-  }) => Promise<IntelligenceUsageSummary[]>
+    callerId: string;
+    periodType: "day" | "month";
+    startPeriod?: string;
+    endPeriod?: string;
+  }) => Promise<IntelligenceUsageSummary[]>;
 
-  getQuota: (payload: { callerId: string, callerType?: IntelligenceQuotaConfig['callerType'] }) => Promise<IntelligenceQuotaConfig | null>
-  setQuota: (config: IntelligenceQuotaConfig) => Promise<void>
-  deleteQuota: (payload: { callerId: string, callerType?: IntelligenceQuotaConfig['callerType'] }) => Promise<void>
-  getAllQuotas: () => Promise<IntelligenceQuotaConfig[]>
+  getQuota: (payload: {
+    callerId: string;
+    callerType?: IntelligenceQuotaConfig["callerType"];
+  }) => Promise<IntelligenceQuotaConfig | null>;
+  setQuota: (config: IntelligenceQuotaConfig) => Promise<void>;
+  deleteQuota: (payload: {
+    callerId: string;
+    callerType?: IntelligenceQuotaConfig["callerType"];
+  }) => Promise<void>;
+  getAllQuotas: () => Promise<IntelligenceQuotaConfig[]>;
   checkQuota: (payload: {
-    callerId: string
-    callerType?: IntelligenceQuotaConfig['callerType']
-    estimatedTokens?: number
-  }) => Promise<IntelligenceQuotaCheckResult>
+    callerId: string;
+    callerType?: IntelligenceQuotaConfig["callerType"];
+    estimatedTokens?: number;
+  }) => Promise<IntelligenceQuotaCheckResult>;
   getCurrentUsage: (payload: {
-    callerId: string
-    callerType?: IntelligenceQuotaConfig['callerType']
-  }) => Promise<IntelligenceCurrentUsage>
-  knowledgeIndexDocument: (payload: IndexDocumentInput) => Promise<IndexDocumentResult>
-  knowledgeIndexChunk: (payload: IndexChunkInput) => Promise<IndexChunkResult>
-  knowledgeSearch: (payload: KnowledgeSearchInput) => Promise<KnowledgeSearchResult>
-  knowledgeBuildContext: (payload: BuildContextInput) => Promise<BuildContextResult>
-  contextPrepareTurn: (payload: PrepareContextTurnInput) => Promise<PrepareContextTurnResult>
-  contextListCheckpoints: (payload: ListContextCheckpointsInput) => Promise<ListContextCheckpointsResult>
-  contextListPackageLogs: (payload: ListContextPackageLogsInput) => Promise<ListContextPackageLogsResult>
-  contextCreateCompressionSnapshot: (payload: CreateCompressionSnapshotInput) => Promise<CreateCompressionSnapshotResult>
-  contextListCompressionSnapshots: (payload: ListCompressionSnapshotsInput) => Promise<ListCompressionSnapshotsResult>
-  contextGetLatestCompressionSnapshot: (payload: { sessionId: string }) => Promise<CompressionSnapshot | null>
-  contextListMemories: (payload?: ListMemoriesInput) => Promise<ListMemoriesResult>
-  contextEvaluateMemory: (payload: EvaluateMemoryInput) => Promise<EvaluateMemoryResult>
-  contextSaveMemory: (payload: MemoryUpsertInput) => Promise<MemoryItem>
-  contextReplaceMemory: (payload: ReplaceMemoryInput) => Promise<ReplaceMemoryResult>
-  contextSetMemoryEnabled: (payload: SetMemoryEnabledInput) => Promise<SetMemoryEnabledResult>
-  contextDeleteMemory: (payload: { memoryId: string, reason?: string }) => Promise<MemoryTombstone>
+    callerId: string;
+    callerType?: IntelligenceQuotaConfig["callerType"];
+  }) => Promise<IntelligenceCurrentUsage>;
+  knowledgeIndexDocument: (
+    payload: IndexDocumentInput,
+  ) => Promise<IndexDocumentResult>;
+  knowledgeIndexChunk: (payload: IndexChunkInput) => Promise<IndexChunkResult>;
+  knowledgeSearch: (
+    payload: KnowledgeSearchInput,
+  ) => Promise<KnowledgeSearchResult>;
+  knowledgeBuildContext: (
+    payload: BuildContextInput,
+  ) => Promise<BuildContextResult>;
+  contextPrepareTurn: (
+    payload: PrepareContextTurnInput,
+  ) => Promise<PrepareContextTurnResult>;
+  contextListCheckpoints: (
+    payload: ListContextCheckpointsInput,
+  ) => Promise<ListContextCheckpointsResult>;
+  contextListPackageLogs: (
+    payload: ListContextPackageLogsInput,
+  ) => Promise<ListContextPackageLogsResult>;
+  contextCreateCompressionSnapshot: (
+    payload: CreateCompressionSnapshotInput,
+  ) => Promise<CreateCompressionSnapshotResult>;
+  contextListCompressionSnapshots: (
+    payload: ListCompressionSnapshotsInput,
+  ) => Promise<ListCompressionSnapshotsResult>;
+  contextGetLatestCompressionSnapshot: (payload: {
+    sessionId: string;
+  }) => Promise<CompressionSnapshot | null>;
+  contextListMemories: (
+    payload?: ListMemoriesInput,
+  ) => Promise<ListMemoriesResult>;
+  contextEvaluateMemory: (
+    payload: EvaluateMemoryInput,
+  ) => Promise<EvaluateMemoryResult>;
+  contextSaveMemory: (payload: MemoryUpsertInput) => Promise<MemoryItem>;
+  contextReplaceMemory: (
+    payload: ReplaceMemoryInput,
+  ) => Promise<ReplaceMemoryResult>;
+  contextSetMemoryEnabled: (
+    payload: SetMemoryEnabledInput,
+  ) => Promise<SetMemoryEnabledResult>;
+  contextDeleteMemory: (payload: {
+    memoryId: string;
+    reason?: string;
+  }) => Promise<MemoryTombstone>;
 
-  agentSessionStart: (payload?: IntelligenceAgentSessionStartPayload) => Promise<TuffIntelligenceAgentSession>
-  agentSessionHeartbeat: (payload: IntelligenceAgentSessionHeartbeatPayload) => Promise<{ sessionId: string, heartbeatAt: string }>
-  agentSessionPause: (payload: IntelligenceAgentSessionPausePayload) => Promise<TuffIntelligenceAgentSession | null>
-  agentSessionRecoverable: () => Promise<TuffIntelligenceAgentSession | null>
-  agentSessionResume: (payload: IntelligenceAgentSessionResumePayload) => Promise<TuffIntelligenceAgentSession | null>
-  agentSessionCancel: (payload: IntelligenceAgentSessionCancelPayload) => Promise<TuffIntelligenceStateSnapshot | null>
-  agentSessionGetState: (payload: IntelligenceAgentSessionStatePayload) => Promise<TuffIntelligenceStateSnapshot | null>
+  agentSessionStart: (
+    payload?: IntelligenceAgentSessionStartPayload,
+  ) => Promise<TuffIntelligenceAgentSession>;
+  agentSessionHeartbeat: (
+    payload: IntelligenceAgentSessionHeartbeatPayload,
+  ) => Promise<{ sessionId: string; heartbeatAt: string }>;
+  agentSessionPause: (
+    payload: IntelligenceAgentSessionPausePayload,
+  ) => Promise<TuffIntelligenceAgentSession | null>;
+  agentSessionRecoverable: () => Promise<TuffIntelligenceAgentSession | null>;
+  agentSessionResume: (
+    payload: IntelligenceAgentSessionResumePayload,
+  ) => Promise<TuffIntelligenceAgentSession | null>;
+  agentSessionCancel: (
+    payload: IntelligenceAgentSessionCancelPayload,
+  ) => Promise<TuffIntelligenceStateSnapshot | null>;
+  agentSessionGetState: (
+    payload: IntelligenceAgentSessionStatePayload,
+  ) => Promise<TuffIntelligenceStateSnapshot | null>;
 
-  agentPlan: (payload: IntelligenceAgentPlanPayload) => Promise<TuffIntelligenceTurn>
-  agentExecute: (payload: IntelligenceAgentExecutePayload) => Promise<TuffIntelligenceTurn>
-  agentReflect: (payload: IntelligenceAgentReflectPayload) => Promise<TuffIntelligenceTurn>
+  agentPlan: (
+    payload: IntelligenceAgentPlanPayload,
+  ) => Promise<TuffIntelligenceTurn>;
+  agentExecute: (
+    payload: IntelligenceAgentExecutePayload,
+  ) => Promise<TuffIntelligenceTurn>;
+  agentReflect: (
+    payload: IntelligenceAgentReflectPayload,
+  ) => Promise<TuffIntelligenceTurn>;
 
   agentToolCall: (payload: IntelligenceAgentToolCallPayload) => Promise<{
-    success: boolean
-    output?: unknown
-    error?: string
-    approvalTicket?: TuffIntelligenceApprovalTicket
-    traceEvent: TuffIntelligenceAgentTraceEvent
-  }>
-  agentToolResult: (payload: IntelligenceAgentToolResultPayload) => Promise<{ accepted: boolean }>
-  agentToolApprove: (payload: IntelligenceAgentToolApprovePayload) => Promise<TuffIntelligenceApprovalTicket | null>
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    approvalTicket?: TuffIntelligenceApprovalTicket;
+    traceEvent: TuffIntelligenceAgentTraceEvent;
+  }>;
+  agentToolResult: (
+    payload: IntelligenceAgentToolResultPayload,
+  ) => Promise<{ accepted: boolean }>;
+  agentToolApprove: (
+    payload: IntelligenceAgentToolApprovePayload,
+  ) => Promise<TuffIntelligenceApprovalTicket | null>;
 
-  agentSessionStream: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
+  agentSessionStream: (
+    payload: IntelligenceAgentTraceQueryPayload,
+  ) => Promise<TuffIntelligenceAgentTraceEvent[]>;
   agentSessionSubscribe: (
     payload: IntelligenceAgentTraceQueryPayload,
     options: StreamOptions<IntelligenceAgentStreamEvent>,
-  ) => Promise<StreamController>
-  agentSessionHistory: (payload?: IntelligenceAgentSessionHistoryPayload) => Promise<TuffIntelligenceAgentSession[]>
-  agentSessionTrace: (payload: IntelligenceAgentTraceQueryPayload) => Promise<TuffIntelligenceAgentTraceEvent[]>
-  agentSessionTraceExport: (payload: IntelligenceAgentTraceExportPayload) => Promise<{ format: 'json' | 'jsonl', content: string }>
-  workflowList: (payload?: IntelligenceWorkflowListPayload) => Promise<WorkflowDefinition[]>
-  workflowGet: (payload: IntelligenceWorkflowGetPayload) => Promise<WorkflowDefinition | null>
-  workflowSave: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition>
-  workflowDelete: (payload: IntelligenceWorkflowDeletePayload) => Promise<{ deleted: boolean }>
-  workflowRun: (payload: IntelligenceWorkflowRunPayload) => Promise<WorkflowRunRecord>
-  workflowHistory: (payload?: IntelligenceWorkflowHistoryPayload) => Promise<WorkflowRunRecord[]>
-  workflowReviewUpdate: (payload: IntelligenceWorkflowReviewUpdatePayload) => Promise<WorkflowRunRecord>
-  getLocalEnvironment: () => Promise<IntelligenceLocalEnvironmentSummary>
+  ) => Promise<StreamController>;
+  agentSessionHistory: (
+    payload?: IntelligenceAgentSessionHistoryPayload,
+  ) => Promise<TuffIntelligenceAgentSession[]>;
+  agentSessionTrace: (
+    payload: IntelligenceAgentTraceQueryPayload,
+  ) => Promise<TuffIntelligenceAgentTraceEvent[]>;
+  agentSessionTraceExport: (
+    payload: IntelligenceAgentTraceExportPayload,
+  ) => Promise<{ format: "json" | "jsonl"; content: string }>;
+  workflowList: (
+    payload?: IntelligenceWorkflowListPayload,
+  ) => Promise<WorkflowDefinition[]>;
+  workflowGet: (
+    payload: IntelligenceWorkflowGetPayload,
+  ) => Promise<WorkflowDefinition | null>;
+  workflowSave: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition>;
+  workflowDelete: (
+    payload: IntelligenceWorkflowDeletePayload,
+  ) => Promise<{ deleted: boolean }>;
+  workflowRun: (
+    payload: IntelligenceWorkflowRunPayload,
+  ) => Promise<WorkflowRunRecord>;
+  workflowHistory: (
+    payload?: IntelligenceWorkflowHistoryPayload,
+  ) => Promise<WorkflowRunRecord[]>;
+  workflowReviewUpdate: (
+    payload: IntelligenceWorkflowReviewUpdatePayload,
+  ) => Promise<WorkflowRunRecord>;
+  getLocalEnvironment: () => Promise<IntelligenceLocalEnvironmentSummary>;
+  orchestratorGetSnapshot: () => Promise<AiOrchestratorSnapshot>;
+  orchestratorPreviewImport: (
+    payload?: AiImportPreviewRequest,
+  ) => Promise<AiImportScanResult>;
+  orchestratorApplyImport: (
+    payload: AiImportApplyRequest,
+  ) => Promise<AiImportApplyResult>;
+  orchestratorSetImportedItemActive: (
+    payload: AiImportedItemSetActiveRequest,
+  ) => Promise<AiImportedConfigItem>;
+  orchestratorCloneImportedItem: (
+    payload: AiImportedItemCloneRequest,
+  ) => Promise<AiImportedConfigItem>;
+  orchestratorDeleteImportedItem: (
+    payload: AiImportedItemDeleteRequest,
+  ) => Promise<{ deleted: boolean }>;
+  orchestratorListProfiles: () => Promise<AiAgentProfile[]>;
+  orchestratorSaveProfile: (payload: AiAgentProfile) => Promise<AiAgentProfile>;
+  orchestratorExecute: (
+    payload: AiOrchestratorExecuteRequest,
+  ) => Promise<AiOrchestratorRunRecord>;
+  orchestratorApprove: (
+    payload: AiOrchestratorApproveRequest,
+  ) => Promise<AiOrchestratorRunRecord>;
+  orchestratorCancel: (payload: {
+    runId: string;
+  }) => Promise<{ cancelled: boolean }>;
+  orchestratorListRuns: (
+    payload?: AiOrchestratorRunListRequest,
+  ) => Promise<AiOrchestratorRunRecord[]>;
+  orchestratorListAutomations: () => Promise<AiAutomationDefinition[]>;
+  orchestratorSaveAutomation: (
+    payload: AiAutomationDefinition,
+  ) => Promise<AiAutomationDefinition>;
+  orchestratorDeleteAutomation: (payload: {
+    automationId: string;
+  }) => Promise<{ deleted: boolean }>;
+  orchestratorRunAutomation: (
+    payload: AiAutomationRunNowRequest,
+  ) => Promise<AiAutomationRunRecord>;
+  orchestratorApproveAutomation: (
+    payload: AiAutomationApproveRequest,
+  ) => Promise<AiAutomationRunRecord>;
 }
 
-export type IntelligenceSdkTransport = Pick<ITuffTransport, 'send'> & Partial<Pick<ITuffTransport, 'stream'>>
+export type IntelligenceSdkTransport = Pick<ITuffTransport, "send"> &
+  Partial<Pick<ITuffTransport, "stream">>;
 
 export const intelligenceApiEvents = {
-  invoke: defineEvent('intelligence')
-    .module('api')
-    .event('invoke')
-    .define<{
-    capabilityId: string
-    payload: unknown
-    options?: IntelligenceInvokeOptions
-  }, IntelligenceApiResponse<IntelligenceInvokeResult<unknown>>>(),
-  stream: defineEvent('intelligence')
-    .module('api')
-    .event('stream')
-    .define<{
-    capabilityId: string
-    payload: unknown
-    options?: IntelligenceInvokeOptions
-  }, AsyncIterable<IntelligenceStreamEvent<unknown>>>(),
-  ttsSpeak: defineEvent('intelligence')
-    .module('api')
-    .event('tts-speak')
-    .define<IntelligenceTtsSpeakPayload, IntelligenceApiResponse<IntelligenceTtsSpeakResult>>(),
-  chatLangChain: defineEvent('intelligence')
-    .module('api')
-    .event('chat-langchain')
-    .define<IntelligenceChatRequest, IntelligenceApiResponse<IntelligenceInvokeResult<string>>>(),
-  testProvider: defineEvent('intelligence')
-    .module('api')
-    .event('test-provider')
-    .define<{ provider: IntelligenceProviderConfig }, IntelligenceApiResponse<unknown>>(),
-  testCapability: defineEvent('intelligence')
-    .module('api')
-    .event('test-capability')
+  invoke: defineEvent("intelligence").module("api").event("invoke").define<
+    {
+      capabilityId: string;
+      payload: unknown;
+      options?: IntelligenceInvokeOptions;
+    },
+    IntelligenceApiResponse<IntelligenceInvokeResult<unknown>>
+  >(),
+  stream: defineEvent("intelligence").module("api").event("stream").define<
+    {
+      capabilityId: string;
+      payload: unknown;
+      options?: IntelligenceInvokeOptions;
+    },
+    AsyncIterable<IntelligenceStreamEvent<unknown>>
+  >(),
+  ttsSpeak: defineEvent("intelligence")
+    .module("api")
+    .event("tts-speak")
+    .define<
+      IntelligenceTtsSpeakPayload,
+      IntelligenceApiResponse<IntelligenceTtsSpeakResult>
+    >(),
+  chatLangChain: defineEvent("intelligence")
+    .module("api")
+    .event("chat-langchain")
+    .define<
+      IntelligenceChatRequest,
+      IntelligenceApiResponse<IntelligenceInvokeResult<string>>
+    >(),
+  testProvider: defineEvent("intelligence")
+    .module("api")
+    .event("test-provider")
+    .define<
+      { provider: IntelligenceProviderConfig },
+      IntelligenceApiResponse<unknown>
+    >(),
+  testCapability: defineEvent("intelligence")
+    .module("api")
+    .event("test-capability")
     .define<Record<string, unknown>, IntelligenceApiResponse<unknown>>(),
-  getCapabilityTestMeta: defineEvent('intelligence')
-    .module('api')
-    .event('get-capability-test-meta')
+  getCapabilityTestMeta: defineEvent("intelligence")
+    .module("api")
+    .event("get-capability-test-meta")
     .define<
-    { capabilityId: string },
-    IntelligenceApiResponse<{ requiresUserInput: boolean, inputHint: string }>
-  >(),
-  getCapabilityStatus: defineEvent('intelligence')
-    .module('api')
-    .event('get-capability-status')
+      { capabilityId: string },
+      IntelligenceApiResponse<{ requiresUserInput: boolean; inputHint: string }>
+    >(),
+  getCapabilityStatus: defineEvent("intelligence")
+    .module("api")
+    .event("get-capability-status")
     .define<
-    { capabilityId: string },
-    IntelligenceApiResponse<IntelligenceCapabilityStatus>
-  >(),
-  getProviderModelOptions: defineEvent('intelligence')
-    .module('api')
-    .event('get-provider-model-options')
+      { capabilityId: string },
+      IntelligenceApiResponse<IntelligenceCapabilityStatus>
+    >(),
+  getProviderModelOptions: defineEvent("intelligence")
+    .module("api")
+    .event("get-provider-model-options")
     .define<
       { capabilityId?: string } | undefined,
       IntelligenceApiResponse<IntelligenceProviderModelOption[]>
-  >(),
-  fetchModels: defineEvent('intelligence')
-    .module('api')
-    .event('fetch-models')
+    >(),
+  fetchModels: defineEvent("intelligence")
+    .module("api")
+    .event("fetch-models")
     .define<
-    { provider: IntelligenceProviderConfig },
-    IntelligenceApiResponse<{ success: boolean, models?: string[], message?: string }>
-  >(),
-  getAuditLogs: defineEvent('intelligence')
-    .module('api')
-    .event('get-audit-logs')
-    .define<IntelligenceAuditLogQueryOptions, IntelligenceApiResponse<IntelligenceAuditLogEntry[]>>(),
-  getTodayStats: defineEvent('intelligence')
-    .module('api')
-    .event('get-today-stats')
-    .define<{ callerId?: string }, IntelligenceApiResponse<IntelligenceUsageSummary | null>>(),
-  getMonthStats: defineEvent('intelligence')
-    .module('api')
-    .event('get-month-stats')
-    .define<{ callerId?: string }, IntelligenceApiResponse<IntelligenceUsageSummary | null>>(),
-  getUsageStats: defineEvent('intelligence')
-    .module('api')
-    .event('get-usage-stats')
-    .define<{
-    callerId: string
-    periodType: 'day' | 'month'
-    startPeriod?: string
-    endPeriod?: string
-  }, IntelligenceApiResponse<IntelligenceUsageSummary[]>>(),
-  getQuota: defineEvent('intelligence')
-    .module('api')
-    .event('get-quota')
+      { provider: IntelligenceProviderConfig },
+      IntelligenceApiResponse<{
+        success: boolean;
+        models?: string[];
+        message?: string;
+      }>
+    >(),
+  getAuditLogs: defineEvent("intelligence")
+    .module("api")
+    .event("get-audit-logs")
     .define<
-    { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
-    IntelligenceApiResponse<IntelligenceQuotaConfig | null>
-  >(),
-  setQuota: defineEvent('intelligence')
-    .module('api')
-    .event('set-quota')
+      IntelligenceAuditLogQueryOptions,
+      IntelligenceApiResponse<IntelligenceAuditLogEntry[]>
+    >(),
+  getTodayStats: defineEvent("intelligence")
+    .module("api")
+    .event("get-today-stats")
+    .define<
+      { callerId?: string },
+      IntelligenceApiResponse<IntelligenceUsageSummary | null>
+    >(),
+  getMonthStats: defineEvent("intelligence")
+    .module("api")
+    .event("get-month-stats")
+    .define<
+      { callerId?: string },
+      IntelligenceApiResponse<IntelligenceUsageSummary | null>
+    >(),
+  getUsageStats: defineEvent("intelligence")
+    .module("api")
+    .event("get-usage-stats")
+    .define<
+      {
+        callerId: string;
+        periodType: "day" | "month";
+        startPeriod?: string;
+        endPeriod?: string;
+      },
+      IntelligenceApiResponse<IntelligenceUsageSummary[]>
+    >(),
+  getQuota: defineEvent("intelligence")
+    .module("api")
+    .event("get-quota")
+    .define<
+      { callerId?: string; callerType?: IntelligenceQuotaConfig["callerType"] },
+      IntelligenceApiResponse<IntelligenceQuotaConfig | null>
+    >(),
+  setQuota: defineEvent("intelligence")
+    .module("api")
+    .event("set-quota")
     .define<IntelligenceQuotaConfig, IntelligenceApiResponse<void>>(),
-  deleteQuota: defineEvent('intelligence')
-    .module('api')
-    .event('delete-quota')
+  deleteQuota: defineEvent("intelligence")
+    .module("api")
+    .event("delete-quota")
     .define<
-    { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
-    IntelligenceApiResponse<void>
-  >(),
-  getAllQuotas: defineEvent('intelligence')
-    .module('api')
-    .event('get-all-quotas')
+      { callerId?: string; callerType?: IntelligenceQuotaConfig["callerType"] },
+      IntelligenceApiResponse<void>
+    >(),
+  getAllQuotas: defineEvent("intelligence")
+    .module("api")
+    .event("get-all-quotas")
     .define<void, IntelligenceApiResponse<IntelligenceQuotaConfig[]>>(),
-  checkQuota: defineEvent('intelligence')
-    .module('api')
-    .event('check-quota')
-    .define<{
-    callerId?: string
-    callerType?: IntelligenceQuotaConfig['callerType']
-    estimatedTokens?: number
-  }, IntelligenceApiResponse<IntelligenceQuotaCheckResult>>(),
-  getCurrentUsage: defineEvent('intelligence')
-    .module('api')
-    .event('get-current-usage')
+  checkQuota: defineEvent("intelligence")
+    .module("api")
+    .event("check-quota")
     .define<
-    { callerId?: string, callerType?: IntelligenceQuotaConfig['callerType'] },
-    IntelligenceApiResponse<IntelligenceCurrentUsage>
-  >(),
-  reloadConfig: defineEvent('intelligence')
-    .module('api')
-    .event('reload-config')
-    .define<void, { ok: boolean, error?: string }>(),
-  getLocalEnvironment: defineEvent('intelligence')
-    .module('api')
-    .event('local-environment')
-    .define<void, IntelligenceApiResponse<IntelligenceLocalEnvironmentSummary>>(),
-} as const
+      {
+        callerId?: string;
+        callerType?: IntelligenceQuotaConfig["callerType"];
+        estimatedTokens?: number;
+      },
+      IntelligenceApiResponse<IntelligenceQuotaCheckResult>
+    >(),
+  getCurrentUsage: defineEvent("intelligence")
+    .module("api")
+    .event("get-current-usage")
+    .define<
+      { callerId?: string; callerType?: IntelligenceQuotaConfig["callerType"] },
+      IntelligenceApiResponse<IntelligenceCurrentUsage>
+    >(),
+  reloadConfig: defineEvent("intelligence")
+    .module("api")
+    .event("reload-config")
+    .define<void, { ok: boolean; error?: string }>(),
+  getLocalEnvironment: defineEvent("intelligence")
+    .module("api")
+    .event("local-environment")
+    .define<
+      void,
+      IntelligenceApiResponse<IntelligenceLocalEnvironmentSummary>
+    >(),
+} as const;
+
+export const intelligenceOrchestratorEvents = {
+  getSnapshot: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("snapshot")
+    .define<void, IntelligenceApiResponse<AiOrchestratorSnapshot>>(),
+  previewImport: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("import:preview")
+    .define<
+      AiImportPreviewRequest | undefined,
+      IntelligenceApiResponse<AiImportScanResult>
+    >(),
+  applyImport: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("import:apply")
+    .define<
+      AiImportApplyRequest,
+      IntelligenceApiResponse<AiImportApplyResult>
+    >(),
+  setImportedItemActive: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("import:item:set-active")
+    .define<
+      AiImportedItemSetActiveRequest,
+      IntelligenceApiResponse<AiImportedConfigItem>
+    >(),
+  cloneImportedItem: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("import:item:clone")
+    .define<
+      AiImportedItemCloneRequest,
+      IntelligenceApiResponse<AiImportedConfigItem>
+    >(),
+  deleteImportedItem: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("import:item:delete")
+    .define<
+      AiImportedItemDeleteRequest,
+      IntelligenceApiResponse<{ deleted: boolean }>
+    >(),
+  listProfiles: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("profiles:list")
+    .define<void, IntelligenceApiResponse<AiAgentProfile[]>>(),
+  saveProfile: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("profiles:save")
+    .define<AiAgentProfile, IntelligenceApiResponse<AiAgentProfile>>(),
+  execute: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("execute")
+    .define<
+      AiOrchestratorExecuteRequest,
+      IntelligenceApiResponse<AiOrchestratorRunRecord>
+    >(),
+  approve: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("approve")
+    .define<
+      AiOrchestratorApproveRequest,
+      IntelligenceApiResponse<AiOrchestratorRunRecord>
+    >(),
+  cancel: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("cancel")
+    .define<
+      { runId: string },
+      IntelligenceApiResponse<{ cancelled: boolean }>
+    >(),
+  listRuns: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("runs:list")
+    .define<
+      AiOrchestratorRunListRequest | undefined,
+      IntelligenceApiResponse<AiOrchestratorRunRecord[]>
+    >(),
+  listAutomations: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("automations:list")
+    .define<void, IntelligenceApiResponse<AiAutomationDefinition[]>>(),
+  saveAutomation: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("automations:save")
+    .define<
+      AiAutomationDefinition,
+      IntelligenceApiResponse<AiAutomationDefinition>
+    >(),
+  deleteAutomation: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("automations:delete")
+    .define<
+      { automationId: string },
+      IntelligenceApiResponse<{ deleted: boolean }>
+    >(),
+  runAutomation: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("automations:run")
+    .define<
+      AiAutomationRunNowRequest,
+      IntelligenceApiResponse<AiAutomationRunRecord>
+    >(),
+  approveAutomation: defineEvent("intelligence")
+    .module("orchestrator")
+    .event("automations:approve")
+    .define<
+      AiAutomationApproveRequest,
+      IntelligenceApiResponse<AiAutomationRunRecord>
+    >(),
+} as const;
 
 export const intelligenceKnowledgeEvents = {
-  indexDocument: defineEvent('intelligence')
-    .module('knowledge')
-    .event('index-document')
+  indexDocument: defineEvent("intelligence")
+    .module("knowledge")
+    .event("index-document")
     .define<IndexDocumentInput, IntelligenceApiResponse<IndexDocumentResult>>(),
-  indexChunk: defineEvent('intelligence')
-    .module('knowledge')
-    .event('index-chunk')
+  indexChunk: defineEvent("intelligence")
+    .module("knowledge")
+    .event("index-chunk")
     .define<IndexChunkInput, IntelligenceApiResponse<IndexChunkResult>>(),
-  search: defineEvent('intelligence')
-    .module('knowledge')
-    .event('search')
-    .define<KnowledgeSearchInput, IntelligenceApiResponse<KnowledgeSearchResult>>(),
-  buildContext: defineEvent('intelligence')
-    .module('knowledge')
-    .event('build-context')
+  search: defineEvent("intelligence")
+    .module("knowledge")
+    .event("search")
+    .define<
+      KnowledgeSearchInput,
+      IntelligenceApiResponse<KnowledgeSearchResult>
+    >(),
+  buildContext: defineEvent("intelligence")
+    .module("knowledge")
+    .event("build-context")
     .define<BuildContextInput, IntelligenceApiResponse<BuildContextResult>>(),
-} as const
+} as const;
 
 export const intelligenceContextEvents = {
-  execute: defineEvent('intelligence')
-    .module('context')
-    .event('execute')
+  execute: defineEvent("intelligence")
+    .module("context")
+    .event("execute")
     .define<
-    IntelligenceContextExecutionRequest,
-    IntelligenceApiResponse<IntelligenceContextExecutionResult<unknown>>
-  >(),
-  stream: defineEvent('intelligence')
-    .module('context')
-    .event('stream')
+      IntelligenceContextExecutionRequest,
+      IntelligenceApiResponse<IntelligenceContextExecutionResult<unknown>>
+    >(),
+  stream: defineEvent("intelligence")
+    .module("context")
+    .event("stream")
     .define<
-    IntelligenceContextExecutionRequest,
-    AsyncIterable<IntelligenceContextStreamEvent<unknown>>
-  >(),
-  prepareTurn: defineEvent('intelligence')
-    .module('context')
-    .event('prepare-turn')
-    .define<PrepareContextTurnInput, IntelligenceApiResponse<PrepareContextTurnResult>>(),
-  listCheckpoints: defineEvent('intelligence')
-    .module('context')
-    .event('checkpoints:list')
-    .define<ListContextCheckpointsInput, IntelligenceApiResponse<ListContextCheckpointsResult>>(),
-  listPackageLogs: defineEvent('intelligence')
-    .module('context')
-    .event('package-logs:list')
-    .define<ListContextPackageLogsInput, IntelligenceApiResponse<ListContextPackageLogsResult>>(),
-  createCompressionSnapshot: defineEvent('intelligence')
-    .module('context')
-    .event('compression:create')
-    .define<CreateCompressionSnapshotInput, IntelligenceApiResponse<CreateCompressionSnapshotResult>>(),
-  listCompressionSnapshots: defineEvent('intelligence')
-    .module('context')
-    .event('compression:list')
-    .define<ListCompressionSnapshotsInput, IntelligenceApiResponse<ListCompressionSnapshotsResult>>(),
-  getLatestCompressionSnapshot: defineEvent('intelligence')
-    .module('context')
-    .event('compression:latest')
-    .define<{ sessionId: string }, IntelligenceApiResponse<CompressionSnapshot | null>>(),
-  listMemories: defineEvent('intelligence')
-    .module('context')
-    .event('memory:list')
-    .define<ListMemoriesInput | undefined, IntelligenceApiResponse<ListMemoriesResult>>(),
-  evaluateMemory: defineEvent('intelligence')
-    .module('context')
-    .event('memory:evaluate')
-    .define<EvaluateMemoryInput, IntelligenceApiResponse<EvaluateMemoryResult>>(),
-  saveMemory: defineEvent('intelligence')
-    .module('context')
-    .event('memory:save')
+      IntelligenceContextExecutionRequest,
+      AsyncIterable<IntelligenceContextStreamEvent<unknown>>
+    >(),
+  prepareTurn: defineEvent("intelligence")
+    .module("context")
+    .event("prepare-turn")
+    .define<
+      PrepareContextTurnInput,
+      IntelligenceApiResponse<PrepareContextTurnResult>
+    >(),
+  listCheckpoints: defineEvent("intelligence")
+    .module("context")
+    .event("checkpoints:list")
+    .define<
+      ListContextCheckpointsInput,
+      IntelligenceApiResponse<ListContextCheckpointsResult>
+    >(),
+  listPackageLogs: defineEvent("intelligence")
+    .module("context")
+    .event("package-logs:list")
+    .define<
+      ListContextPackageLogsInput,
+      IntelligenceApiResponse<ListContextPackageLogsResult>
+    >(),
+  createCompressionSnapshot: defineEvent("intelligence")
+    .module("context")
+    .event("compression:create")
+    .define<
+      CreateCompressionSnapshotInput,
+      IntelligenceApiResponse<CreateCompressionSnapshotResult>
+    >(),
+  listCompressionSnapshots: defineEvent("intelligence")
+    .module("context")
+    .event("compression:list")
+    .define<
+      ListCompressionSnapshotsInput,
+      IntelligenceApiResponse<ListCompressionSnapshotsResult>
+    >(),
+  getLatestCompressionSnapshot: defineEvent("intelligence")
+    .module("context")
+    .event("compression:latest")
+    .define<
+      { sessionId: string },
+      IntelligenceApiResponse<CompressionSnapshot | null>
+    >(),
+  listMemories: defineEvent("intelligence")
+    .module("context")
+    .event("memory:list")
+    .define<
+      ListMemoriesInput | undefined,
+      IntelligenceApiResponse<ListMemoriesResult>
+    >(),
+  evaluateMemory: defineEvent("intelligence")
+    .module("context")
+    .event("memory:evaluate")
+    .define<
+      EvaluateMemoryInput,
+      IntelligenceApiResponse<EvaluateMemoryResult>
+    >(),
+  saveMemory: defineEvent("intelligence")
+    .module("context")
+    .event("memory:save")
     .define<MemoryUpsertInput, IntelligenceApiResponse<MemoryItem>>(),
-  replaceMemory: defineEvent('intelligence')
-    .module('context')
-    .event('memory:replace')
+  replaceMemory: defineEvent("intelligence")
+    .module("context")
+    .event("memory:replace")
     .define<ReplaceMemoryInput, IntelligenceApiResponse<ReplaceMemoryResult>>(),
-  setMemoryEnabled: defineEvent('intelligence')
-    .module('context')
-    .event('memory:set-enabled')
-    .define<SetMemoryEnabledInput, IntelligenceApiResponse<SetMemoryEnabledResult>>(),
-  deleteMemory: defineEvent('intelligence')
-    .module('context')
-    .event('memory:delete')
-    .define<{ memoryId: string, reason?: string }, IntelligenceApiResponse<MemoryTombstone>>(),
-} as const
+  setMemoryEnabled: defineEvent("intelligence")
+    .module("context")
+    .event("memory:set-enabled")
+    .define<
+      SetMemoryEnabledInput,
+      IntelligenceApiResponse<SetMemoryEnabledResult>
+    >(),
+  deleteMemory: defineEvent("intelligence")
+    .module("context")
+    .event("memory:delete")
+    .define<
+      { memoryId: string; reason?: string },
+      IntelligenceApiResponse<MemoryTombstone>
+    >(),
+} as const;
 
 export const intelligenceAgentEvents = {
-  sessionStart: defineEvent('intelligence')
-    .module('agent')
-    .event('session:start')
-    .define<IntelligenceAgentSessionStartPayload, IntelligenceApiResponse<TuffIntelligenceAgentSession>>(),
-  sessionHeartbeat: defineEvent('intelligence')
-    .module('agent')
-    .event('session:heartbeat')
+  sessionStart: defineEvent("intelligence")
+    .module("agent")
+    .event("session:start")
     .define<
-    IntelligenceAgentSessionHeartbeatPayload,
-    IntelligenceApiResponse<{ sessionId: string, heartbeatAt: string }>
-  >(),
-  sessionPause: defineEvent('intelligence')
-    .module('agent')
-    .event('session:pause')
+      IntelligenceAgentSessionStartPayload,
+      IntelligenceApiResponse<TuffIntelligenceAgentSession>
+    >(),
+  sessionHeartbeat: defineEvent("intelligence")
+    .module("agent")
+    .event("session:heartbeat")
     .define<
-    IntelligenceAgentSessionPausePayload,
-    IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
-  >(),
-  sessionRecoverable: defineEvent('intelligence')
-    .module('agent')
-    .event('session:recoverable')
-    .define<void, IntelligenceApiResponse<TuffIntelligenceAgentSession | null>>(),
-  sessionResume: defineEvent('intelligence')
-    .module('agent')
-    .event('session:resume')
+      IntelligenceAgentSessionHeartbeatPayload,
+      IntelligenceApiResponse<{ sessionId: string; heartbeatAt: string }>
+    >(),
+  sessionPause: defineEvent("intelligence")
+    .module("agent")
+    .event("session:pause")
     .define<
-    IntelligenceAgentSessionResumePayload,
-    IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
-  >(),
-  sessionCancel: defineEvent('intelligence')
-    .module('agent')
-    .event('session:cancel')
+      IntelligenceAgentSessionPausePayload,
+      IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+    >(),
+  sessionRecoverable: defineEvent("intelligence")
+    .module("agent")
+    .event("session:recoverable")
     .define<
-    IntelligenceAgentSessionCancelPayload,
-    IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
-  >(),
-  sessionGetState: defineEvent('intelligence')
-    .module('agent')
-    .event('session:get-state')
+      void,
+      IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+    >(),
+  sessionResume: defineEvent("intelligence")
+    .module("agent")
+    .event("session:resume")
     .define<
-    IntelligenceAgentSessionStatePayload,
-    IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
-  >(),
-  plan: defineEvent('intelligence')
-    .module('agent')
-    .event('plan')
-    .define<IntelligenceAgentPlanPayload, IntelligenceApiResponse<TuffIntelligenceTurn>>(),
-  execute: defineEvent('intelligence')
-    .module('agent')
-    .event('execute')
-    .define<IntelligenceAgentExecutePayload, IntelligenceApiResponse<TuffIntelligenceTurn>>(),
-  reflect: defineEvent('intelligence')
-    .module('agent')
-    .event('reflect')
-    .define<IntelligenceAgentReflectPayload, IntelligenceApiResponse<TuffIntelligenceTurn>>(),
-  toolCall: defineEvent('intelligence')
-    .module('agent')
-    .event('tool:call')
+      IntelligenceAgentSessionResumePayload,
+      IntelligenceApiResponse<TuffIntelligenceAgentSession | null>
+    >(),
+  sessionCancel: defineEvent("intelligence")
+    .module("agent")
+    .event("session:cancel")
     .define<
-    IntelligenceAgentToolCallPayload,
-    IntelligenceApiResponse<{
-      success: boolean
-      output?: unknown
-      error?: string
-      approvalTicket?: TuffIntelligenceApprovalTicket
-      traceEvent: TuffIntelligenceAgentTraceEvent
-    }>
-  >(),
-  toolResult: defineEvent('intelligence')
-    .module('agent')
-    .event('tool:result')
-    .define<IntelligenceAgentToolResultPayload, IntelligenceApiResponse<{ accepted: boolean }>>(),
-  toolApprove: defineEvent('intelligence')
-    .module('agent')
-    .event('tool:approve')
+      IntelligenceAgentSessionCancelPayload,
+      IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
+    >(),
+  sessionGetState: defineEvent("intelligence")
+    .module("agent")
+    .event("session:get-state")
     .define<
-    IntelligenceAgentToolApprovePayload,
-    IntelligenceApiResponse<TuffIntelligenceApprovalTicket | null>
-  >(),
-  sessionStream: defineEvent('intelligence')
-    .module('agent')
-    .event('session:stream')
+      IntelligenceAgentSessionStatePayload,
+      IntelligenceApiResponse<TuffIntelligenceStateSnapshot | null>
+    >(),
+  plan: defineEvent("intelligence")
+    .module("agent")
+    .event("plan")
     .define<
-    IntelligenceAgentTraceQueryPayload,
-    IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
-  >(),
-  sessionSubscribe: defineEvent('intelligence')
-    .module('agent')
-    .event('session:subscribe')
-    .define<IntelligenceAgentTraceQueryPayload, AsyncIterable<IntelligenceAgentStreamEvent>>(),
-  sessionHistory: defineEvent('intelligence')
-    .module('agent')
-    .event('session:history')
+      IntelligenceAgentPlanPayload,
+      IntelligenceApiResponse<TuffIntelligenceTurn>
+    >(),
+  execute: defineEvent("intelligence")
+    .module("agent")
+    .event("execute")
+    .define<
+      IntelligenceAgentExecutePayload,
+      IntelligenceApiResponse<TuffIntelligenceTurn>
+    >(),
+  reflect: defineEvent("intelligence")
+    .module("agent")
+    .event("reflect")
+    .define<
+      IntelligenceAgentReflectPayload,
+      IntelligenceApiResponse<TuffIntelligenceTurn>
+    >(),
+  toolCall: defineEvent("intelligence")
+    .module("agent")
+    .event("tool:call")
+    .define<
+      IntelligenceAgentToolCallPayload,
+      IntelligenceApiResponse<{
+        success: boolean;
+        output?: unknown;
+        error?: string;
+        approvalTicket?: TuffIntelligenceApprovalTicket;
+        traceEvent: TuffIntelligenceAgentTraceEvent;
+      }>
+    >(),
+  toolResult: defineEvent("intelligence")
+    .module("agent")
+    .event("tool:result")
+    .define<
+      IntelligenceAgentToolResultPayload,
+      IntelligenceApiResponse<{ accepted: boolean }>
+    >(),
+  toolApprove: defineEvent("intelligence")
+    .module("agent")
+    .event("tool:approve")
+    .define<
+      IntelligenceAgentToolApprovePayload,
+      IntelligenceApiResponse<TuffIntelligenceApprovalTicket | null>
+    >(),
+  sessionStream: defineEvent("intelligence")
+    .module("agent")
+    .event("session:stream")
+    .define<
+      IntelligenceAgentTraceQueryPayload,
+      IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
+    >(),
+  sessionSubscribe: defineEvent("intelligence")
+    .module("agent")
+    .event("session:subscribe")
+    .define<
+      IntelligenceAgentTraceQueryPayload,
+      AsyncIterable<IntelligenceAgentStreamEvent>
+    >(),
+  sessionHistory: defineEvent("intelligence")
+    .module("agent")
+    .event("session:history")
     .define<
       IntelligenceAgentSessionHistoryPayload | undefined,
       IntelligenceApiResponse<TuffIntelligenceAgentSession[]>
-  >(),
-  sessionTrace: defineEvent('intelligence')
-    .module('agent')
-    .event('session:trace')
+    >(),
+  sessionTrace: defineEvent("intelligence")
+    .module("agent")
+    .event("session:trace")
     .define<
-    IntelligenceAgentTraceQueryPayload,
-    IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
-  >(),
-  sessionTraceExport: defineEvent('intelligence')
-    .module('agent')
-    .event('session:trace:export')
+      IntelligenceAgentTraceQueryPayload,
+      IntelligenceApiResponse<TuffIntelligenceAgentTraceEvent[]>
+    >(),
+  sessionTraceExport: defineEvent("intelligence")
+    .module("agent")
+    .event("session:trace:export")
     .define<
-    IntelligenceAgentTraceExportPayload,
-    IntelligenceApiResponse<{ format: 'json' | 'jsonl', content: string }>
-  >(),
-} as const
+      IntelligenceAgentTraceExportPayload,
+      IntelligenceApiResponse<{ format: "json" | "jsonl"; content: string }>
+    >(),
+} as const;
 
 const intelligenceWorkflowEvents = {
-  list: defineEvent('intelligence')
-    .module('workflow')
-    .event('list')
+  list: defineEvent("intelligence")
+    .module("workflow")
+    .event("list")
     .define<
       IntelligenceWorkflowListPayload | undefined,
       IntelligenceApiResponse<WorkflowDefinition[]>
-  >(),
-  get: defineEvent('intelligence')
-    .module('workflow')
-    .event('get')
-    .define<IntelligenceWorkflowGetPayload, IntelligenceApiResponse<WorkflowDefinition | null>>(),
-  save: defineEvent('intelligence')
-    .module('workflow')
-    .event('save')
+    >(),
+  get: defineEvent("intelligence")
+    .module("workflow")
+    .event("get")
+    .define<
+      IntelligenceWorkflowGetPayload,
+      IntelligenceApiResponse<WorkflowDefinition | null>
+    >(),
+  save: defineEvent("intelligence")
+    .module("workflow")
+    .event("save")
     .define<WorkflowDefinition, IntelligenceApiResponse<WorkflowDefinition>>(),
-  delete: defineEvent('intelligence')
-    .module('workflow')
-    .event('delete')
-    .define<IntelligenceWorkflowDeletePayload, IntelligenceApiResponse<{ deleted: boolean }>>(),
-  run: defineEvent('intelligence')
-    .module('workflow')
-    .event('run')
-    .define<IntelligenceWorkflowRunPayload, IntelligenceApiResponse<WorkflowRunRecord>>(),
-  history: defineEvent('intelligence')
-    .module('workflow')
-    .event('history')
+  delete: defineEvent("intelligence")
+    .module("workflow")
+    .event("delete")
+    .define<
+      IntelligenceWorkflowDeletePayload,
+      IntelligenceApiResponse<{ deleted: boolean }>
+    >(),
+  run: defineEvent("intelligence")
+    .module("workflow")
+    .event("run")
+    .define<
+      IntelligenceWorkflowRunPayload,
+      IntelligenceApiResponse<WorkflowRunRecord>
+    >(),
+  history: defineEvent("intelligence")
+    .module("workflow")
+    .event("history")
     .define<
       IntelligenceWorkflowHistoryPayload | undefined,
       IntelligenceApiResponse<WorkflowRunRecord[]>
-  >(),
-  reviewUpdate: defineEvent('intelligence')
-    .module('workflow')
-    .event('review:update')
-    .define<IntelligenceWorkflowReviewUpdatePayload, IntelligenceApiResponse<WorkflowRunRecord>>(),
-} as const
+    >(),
+  reviewUpdate: defineEvent("intelligence")
+    .module("workflow")
+    .event("review:update")
+    .define<
+      IntelligenceWorkflowReviewUpdatePayload,
+      IntelligenceApiResponse<WorkflowRunRecord>
+    >(),
+} as const;
 
-function assertApiResponse<T>(response: IntelligenceApiResponse<T>, fallbackMessage: string): T {
+function assertApiResponse<T>(
+  response: IntelligenceApiResponse<T>,
+  fallbackMessage: string,
+): T {
   if (!response?.ok) {
-    throw new Error(response?.error || fallbackMessage)
+    throw new Error(response?.error || fallbackMessage);
   }
-  return response.result as T
+  return response.result as T;
 }
 
-export function createIntelligenceSdk(transport: IntelligenceSdkTransport): IntelligenceSdk {
+export function createIntelligenceSdk(
+  transport: IntelligenceSdkTransport,
+): IntelligenceSdk {
   const invokeCapability = async <T = unknown>(
     capabilityId: string,
     payload: unknown,
     options?: IntelligenceInvokeOptions,
   ) => {
-    const response = await transport.send(intelligenceApiEvents.invoke, { capabilityId, payload, options })
-    return assertApiResponse(response, 'Intelligence invoke failed') as IntelligenceInvokeResult<T>
-  }
+    const response = await transport.send(intelligenceApiEvents.invoke, {
+      capabilityId,
+      payload,
+      options,
+    });
+    return assertApiResponse(
+      response,
+      "Intelligence invoke failed",
+    ) as IntelligenceInvokeResult<T>;
+  };
 
   return {
     invoke: invokeCapability,
@@ -999,472 +1479,996 @@ export function createIntelligenceSdk(transport: IntelligenceSdkTransport): Inte
       options: IntelligenceStreamOptions<T>,
       invokeOptions?: IntelligenceInvokeOptions,
     ) {
-      if (typeof transport.stream !== 'function') {
-        throw new TypeError('Intelligence streaming requires a stream-capable transport')
+      if (typeof transport.stream !== "function") {
+        throw new TypeError(
+          "Intelligence streaming requires a stream-capable transport",
+        );
       }
-      let streamEnded = false
+      let streamEnded = false;
       const emitEnd = (event?: IntelligenceStreamEvent<T>) => {
         if (streamEnded) {
-          return
+          return;
         }
-        streamEnded = true
-        options.onEnd?.(event ?? { type: 'end', capabilityId })
-      }
+        streamEnded = true;
+        options.onEnd?.(event ?? { type: "end", capabilityId });
+      };
       return transport.stream(
         intelligenceApiEvents.stream,
         { capabilityId, payload, options: { ...invokeOptions, stream: true } },
         {
           onData: (event) => {
-            const typedEvent = event as IntelligenceStreamEvent<T>
-            if (typedEvent.type === 'start') {
-              options.onStart?.(typedEvent)
-            }
-            else if (typedEvent.type === 'delta') {
-              options.onDelta?.(typedEvent.delta || '', typedEvent)
-            }
-            else if (typedEvent.type === 'message' && typedEvent.message) {
-              options.onMessage?.(typedEvent.message, typedEvent)
-            }
-            else if (typedEvent.type === 'usage' && typedEvent.usage) {
-              options.onUsage?.(typedEvent.usage, typedEvent)
-            }
-            else if (typedEvent.type === 'metadata' && typedEvent.metadata) {
-              options.onMetadata?.(typedEvent.metadata, typedEvent)
-            }
-            else if (typedEvent.type === 'end') {
-              emitEnd(typedEvent)
+            const typedEvent = event as IntelligenceStreamEvent<T>;
+            if (typedEvent.type === "start") {
+              options.onStart?.(typedEvent);
+            } else if (typedEvent.type === "delta") {
+              options.onDelta?.(typedEvent.delta || "", typedEvent);
+            } else if (typedEvent.type === "message" && typedEvent.message) {
+              options.onMessage?.(typedEvent.message, typedEvent);
+            } else if (typedEvent.type === "usage" && typedEvent.usage) {
+              options.onUsage?.(typedEvent.usage, typedEvent);
+            } else if (typedEvent.type === "metadata" && typedEvent.metadata) {
+              options.onMetadata?.(typedEvent.metadata, typedEvent);
+            } else if (typedEvent.type === "end") {
+              emitEnd(typedEvent);
             }
           },
           onError: options.onError,
           onEnd: () => emitEnd(),
         },
-      )
+      );
     },
 
     async ttsSpeak(payload) {
-      const response = await transport.send(intelligenceApiEvents.ttsSpeak, payload)
-      return assertApiResponse(response, 'Intelligence TTS speak failed')
+      const response = await transport.send(
+        intelligenceApiEvents.ttsSpeak,
+        payload,
+      );
+      return assertApiResponse(response, "Intelligence TTS speak failed");
     },
 
     async chatLangChain(payload) {
-      const response = await transport.send(intelligenceApiEvents.chatLangChain, payload)
-      return assertApiResponse(response, 'Intelligence chat failed')
+      const response = await transport.send(
+        intelligenceApiEvents.chatLangChain,
+        payload,
+      );
+      return assertApiResponse(response, "Intelligence chat failed");
     },
 
     async testProvider(config) {
-      const response = await transport.send(intelligenceApiEvents.testProvider, { provider: config })
-      return assertApiResponse(response, 'Intelligence provider test failed')
+      const response = await transport.send(
+        intelligenceApiEvents.testProvider,
+        { provider: config },
+      );
+      return assertApiResponse(response, "Intelligence provider test failed");
     },
 
     async testCapability(params) {
-      const response = await transport.send(intelligenceApiEvents.testCapability, params)
-      return assertApiResponse(response, 'Intelligence capability test failed')
+      const response = await transport.send(
+        intelligenceApiEvents.testCapability,
+        params,
+      );
+      return assertApiResponse(response, "Intelligence capability test failed");
     },
 
     async getCapabilityTestMeta(payload) {
-      const response = await transport.send(intelligenceApiEvents.getCapabilityTestMeta, payload)
-      return assertApiResponse(response, 'Failed to get capability test metadata')
+      const response = await transport.send(
+        intelligenceApiEvents.getCapabilityTestMeta,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to get capability test metadata",
+      );
     },
 
     async getCapabilityStatus(payload) {
-      const response = await transport.send(intelligenceApiEvents.getCapabilityStatus, payload)
-      return assertApiResponse(response, 'Failed to get capability status')
+      const response = await transport.send(
+        intelligenceApiEvents.getCapabilityStatus,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to get capability status");
     },
 
     async getProviderModelOptions(payload = {}) {
-      const response = await transport.send(intelligenceApiEvents.getProviderModelOptions, payload)
-      return assertApiResponse(response, 'Failed to get provider model options')
+      const response = await transport.send(
+        intelligenceApiEvents.getProviderModelOptions,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to get provider model options",
+      );
     },
 
     async fetchModels(config) {
-      const response = await transport.send(intelligenceApiEvents.fetchModels, { provider: config })
-      return assertApiResponse(response, 'Failed to fetch models')
+      const response = await transport.send(intelligenceApiEvents.fetchModels, {
+        provider: config,
+      });
+      return assertApiResponse(response, "Failed to fetch models");
     },
 
     async getAuditLogs(options = {}) {
-      const response = await transport.send(intelligenceApiEvents.getAuditLogs, options)
-      return assertApiResponse(response, 'Failed to get audit logs')
+      const response = await transport.send(
+        intelligenceApiEvents.getAuditLogs,
+        options,
+      );
+      return assertApiResponse(response, "Failed to get audit logs");
     },
 
     async getTodayStats(callerId) {
-      const response = await transport.send(intelligenceApiEvents.getTodayStats, { callerId })
-      return assertApiResponse(response, 'Failed to get today stats')
+      const response = await transport.send(
+        intelligenceApiEvents.getTodayStats,
+        { callerId },
+      );
+      return assertApiResponse(response, "Failed to get today stats");
     },
 
     async getMonthStats(callerId) {
-      const response = await transport.send(intelligenceApiEvents.getMonthStats, { callerId })
-      return assertApiResponse(response, 'Failed to get month stats')
+      const response = await transport.send(
+        intelligenceApiEvents.getMonthStats,
+        { callerId },
+      );
+      return assertApiResponse(response, "Failed to get month stats");
     },
 
     async getUsageStats(payload) {
-      const response = await transport.send(intelligenceApiEvents.getUsageStats, payload)
-      return assertApiResponse(response, 'Failed to get usage stats')
+      const response = await transport.send(
+        intelligenceApiEvents.getUsageStats,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to get usage stats");
     },
 
     async getQuota(payload) {
-      const response = await transport.send(intelligenceApiEvents.getQuota, payload)
-      return assertApiResponse(response, 'Failed to get quota')
+      const response = await transport.send(
+        intelligenceApiEvents.getQuota,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to get quota");
     },
 
     async setQuota(config) {
-      const response = await transport.send(intelligenceApiEvents.setQuota, config)
-      assertApiResponse(response, 'Failed to set quota')
+      const response = await transport.send(
+        intelligenceApiEvents.setQuota,
+        config,
+      );
+      assertApiResponse(response, "Failed to set quota");
     },
 
     async deleteQuota(payload) {
-      const response = await transport.send(intelligenceApiEvents.deleteQuota, payload)
-      assertApiResponse(response, 'Failed to delete quota')
+      const response = await transport.send(
+        intelligenceApiEvents.deleteQuota,
+        payload,
+      );
+      assertApiResponse(response, "Failed to delete quota");
     },
 
     async getAllQuotas() {
-      const response = await transport.send(intelligenceApiEvents.getAllQuotas)
-      return assertApiResponse(response, 'Failed to get all quotas')
+      const response = await transport.send(intelligenceApiEvents.getAllQuotas);
+      return assertApiResponse(response, "Failed to get all quotas");
     },
 
     async checkQuota(payload) {
-      const response = await transport.send(intelligenceApiEvents.checkQuota, payload)
-      return assertApiResponse(response, 'Failed to check quota')
+      const response = await transport.send(
+        intelligenceApiEvents.checkQuota,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to check quota");
     },
 
     async getCurrentUsage(payload) {
-      const response = await transport.send(intelligenceApiEvents.getCurrentUsage, payload)
-      return assertApiResponse(response, 'Failed to get current usage')
+      const response = await transport.send(
+        intelligenceApiEvents.getCurrentUsage,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to get current usage");
     },
 
     async knowledgeIndexDocument(payload) {
-      const response = await transport.send(intelligenceKnowledgeEvents.indexDocument, payload)
-      return assertApiResponse(response, 'Failed to index knowledge document')
+      const response = await transport.send(
+        intelligenceKnowledgeEvents.indexDocument,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to index knowledge document");
     },
 
     async knowledgeIndexChunk(payload) {
-      const response = await transport.send(intelligenceKnowledgeEvents.indexChunk, payload)
-      return assertApiResponse(response, 'Failed to index knowledge chunk')
+      const response = await transport.send(
+        intelligenceKnowledgeEvents.indexChunk,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to index knowledge chunk");
     },
 
     async knowledgeSearch(payload) {
-      const response = await transport.send(intelligenceKnowledgeEvents.search, payload)
-      return assertApiResponse(response, 'Failed to search local knowledge')
+      const response = await transport.send(
+        intelligenceKnowledgeEvents.search,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to search local knowledge");
     },
 
     async knowledgeBuildContext(payload) {
-      const response = await transport.send(intelligenceKnowledgeEvents.buildContext, payload)
-      return assertApiResponse(response, 'Failed to build local knowledge context')
-    },
-
-    async contextInvoke<T = unknown>(payload: IntelligenceContextExecutionRequest) {
-      const response = await transport.send(intelligenceContextEvents.execute, payload)
+      const response = await transport.send(
+        intelligenceKnowledgeEvents.buildContext,
+        payload,
+      );
       return assertApiResponse(
         response,
-        'Failed to execute intelligence context',
-      ) as IntelligenceContextExecutionResult<T>
+        "Failed to build local knowledge context",
+      );
+    },
+
+    async contextInvoke<T = unknown>(
+      payload: IntelligenceContextExecutionRequest,
+    ) {
+      const response = await transport.send(
+        intelligenceContextEvents.execute,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to execute intelligence context",
+      ) as IntelligenceContextExecutionResult<T>;
     },
 
     async contextStream<T = unknown>(
       payload: IntelligenceContextExecutionRequest,
       options: IntelligenceStreamOptions<T>,
     ) {
-      if (typeof transport.stream !== 'function') {
-        throw new TypeError('Intelligence context streaming requires a stream-capable transport')
+      if (typeof transport.stream !== "function") {
+        throw new TypeError(
+          "Intelligence context streaming requires a stream-capable transport",
+        );
       }
-      let streamEnded = false
+      let streamEnded = false;
       const emitEnd = (event?: IntelligenceContextStreamEvent<T>) => {
-        if (streamEnded)
-          return
-        streamEnded = true
-        options.onEnd?.(event ?? { type: 'end', capabilityId: payload.capabilityId })
-      }
-      return transport.stream(
-        intelligenceContextEvents.stream,
-        payload,
-        {
-          onData: (event) => {
-            const typedEvent = event as IntelligenceContextStreamEvent<T>
-            if (typedEvent.type === 'start') {
-              options.onStart?.(typedEvent)
-            }
-            else if (typedEvent.type === 'delta') {
-              options.onDelta?.(typedEvent.delta || '', typedEvent)
-            }
-            else if (typedEvent.type === 'message' && typedEvent.message) {
-              options.onMessage?.(typedEvent.message, typedEvent)
-            }
-            else if (typedEvent.type === 'usage' && typedEvent.usage) {
-              options.onUsage?.(typedEvent.usage, typedEvent)
-            }
-            else if (typedEvent.type === 'metadata' && typedEvent.metadata) {
-              options.onMetadata?.(typedEvent.metadata, typedEvent)
-            }
-            else if (typedEvent.type === 'end') {
-              emitEnd(typedEvent)
-            }
-          },
-          onError: options.onError,
-          onEnd: () => emitEnd(),
+        if (streamEnded) return;
+        streamEnded = true;
+        options.onEnd?.(
+          event ?? { type: "end", capabilityId: payload.capabilityId },
+        );
+      };
+      return transport.stream(intelligenceContextEvents.stream, payload, {
+        onData: (event) => {
+          const typedEvent = event as IntelligenceContextStreamEvent<T>;
+          if (typedEvent.type === "start") {
+            options.onStart?.(typedEvent);
+          } else if (typedEvent.type === "delta") {
+            options.onDelta?.(typedEvent.delta || "", typedEvent);
+          } else if (typedEvent.type === "message" && typedEvent.message) {
+            options.onMessage?.(typedEvent.message, typedEvent);
+          } else if (typedEvent.type === "usage" && typedEvent.usage) {
+            options.onUsage?.(typedEvent.usage, typedEvent);
+          } else if (typedEvent.type === "metadata" && typedEvent.metadata) {
+            options.onMetadata?.(typedEvent.metadata, typedEvent);
+          } else if (typedEvent.type === "end") {
+            emitEnd(typedEvent);
+          }
         },
-      )
+        onError: options.onError,
+        onEnd: () => emitEnd(),
+      });
     },
 
     async contextPrepareTurn(payload) {
-      const response = await transport.send(intelligenceContextEvents.prepareTurn, payload)
-      return assertApiResponse(response, 'Failed to prepare intelligence context')
+      const response = await transport.send(
+        intelligenceContextEvents.prepareTurn,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to prepare intelligence context",
+      );
     },
 
     async contextListCheckpoints(payload) {
-      const response = await transport.send(intelligenceContextEvents.listCheckpoints, payload)
-      return assertApiResponse(response, 'Failed to list intelligence context checkpoints')
+      const response = await transport.send(
+        intelligenceContextEvents.listCheckpoints,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to list intelligence context checkpoints",
+      );
     },
 
     async contextListPackageLogs(payload) {
-      const response = await transport.send(intelligenceContextEvents.listPackageLogs, payload)
-      return assertApiResponse(response, 'Failed to list intelligence context package logs')
+      const response = await transport.send(
+        intelligenceContextEvents.listPackageLogs,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to list intelligence context package logs",
+      );
     },
 
     async contextCreateCompressionSnapshot(payload) {
-      const response = await transport.send(intelligenceContextEvents.createCompressionSnapshot, payload)
-      return assertApiResponse(response, 'Failed to create intelligence compression snapshot')
+      const response = await transport.send(
+        intelligenceContextEvents.createCompressionSnapshot,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to create intelligence compression snapshot",
+      );
     },
 
     async contextListCompressionSnapshots(payload) {
-      const response = await transport.send(intelligenceContextEvents.listCompressionSnapshots, payload)
-      return assertApiResponse(response, 'Failed to list intelligence compression snapshots')
+      const response = await transport.send(
+        intelligenceContextEvents.listCompressionSnapshots,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to list intelligence compression snapshots",
+      );
     },
 
     async contextGetLatestCompressionSnapshot(payload) {
-      const response = await transport.send(intelligenceContextEvents.getLatestCompressionSnapshot, payload)
-      return assertApiResponse(response, 'Failed to get latest intelligence compression snapshot')
+      const response = await transport.send(
+        intelligenceContextEvents.getLatestCompressionSnapshot,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to get latest intelligence compression snapshot",
+      );
     },
 
     async contextListMemories(payload = {}) {
-      const response = await transport.send(intelligenceContextEvents.listMemories, payload)
-      return assertApiResponse(response, 'Failed to list intelligence memories')
+      const response = await transport.send(
+        intelligenceContextEvents.listMemories,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to list intelligence memories",
+      );
     },
 
     async contextEvaluateMemory(payload) {
-      const response = await transport.send(intelligenceContextEvents.evaluateMemory, payload)
-      return assertApiResponse(response, 'Failed to evaluate intelligence memory')
+      const response = await transport.send(
+        intelligenceContextEvents.evaluateMemory,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to evaluate intelligence memory",
+      );
     },
 
     async contextSaveMemory(payload) {
-      const response = await transport.send(intelligenceContextEvents.saveMemory, payload)
-      return assertApiResponse(response, 'Failed to save intelligence memory')
+      const response = await transport.send(
+        intelligenceContextEvents.saveMemory,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to save intelligence memory");
     },
 
     async contextReplaceMemory(payload) {
-      const response = await transport.send(intelligenceContextEvents.replaceMemory, payload)
-      return assertApiResponse(response, 'Failed to replace intelligence memory')
+      const response = await transport.send(
+        intelligenceContextEvents.replaceMemory,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to replace intelligence memory",
+      );
     },
 
     async contextSetMemoryEnabled(payload) {
-      const response = await transport.send(intelligenceContextEvents.setMemoryEnabled, payload)
-      return assertApiResponse(response, 'Failed to update intelligence memory state')
+      const response = await transport.send(
+        intelligenceContextEvents.setMemoryEnabled,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to update intelligence memory state",
+      );
     },
 
     async contextDeleteMemory(payload) {
-      const response = await transport.send(intelligenceContextEvents.deleteMemory, payload)
-      return assertApiResponse(response, 'Failed to delete intelligence memory')
+      const response = await transport.send(
+        intelligenceContextEvents.deleteMemory,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to delete intelligence memory",
+      );
     },
 
     async getLocalEnvironment() {
-      const response = await transport.send(intelligenceApiEvents.getLocalEnvironment)
-      return assertApiResponse(response, 'Failed to get local intelligence environment')
+      const response = await transport.send(
+        intelligenceApiEvents.getLocalEnvironment,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to get local intelligence environment",
+      );
+    },
+
+    async orchestratorGetSnapshot() {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.getSnapshot,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to get AI orchestrator snapshot",
+      );
+    },
+
+    async orchestratorPreviewImport(payload = {}) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.previewImport,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to preview AI configuration import",
+      );
+    },
+
+    async orchestratorApplyImport(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.applyImport,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to apply AI configuration import",
+      );
+    },
+
+    async orchestratorSetImportedItemActive(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.setImportedItemActive,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to update imported AI item");
+    },
+
+    async orchestratorCloneImportedItem(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.cloneImportedItem,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to clone imported AI item");
+    },
+
+    async orchestratorDeleteImportedItem(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.deleteImportedItem,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to delete imported AI item");
+    },
+
+    async orchestratorListProfiles() {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.listProfiles,
+      );
+      return assertApiResponse(response, "Failed to list AI agent profiles");
+    },
+
+    async orchestratorSaveProfile(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.saveProfile,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to save AI agent profile");
+    },
+
+    async orchestratorExecute(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.execute,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to execute AI orchestrator task",
+      );
+    },
+
+    async orchestratorApprove(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.approve,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to approve AI orchestrator task",
+      );
+    },
+
+    async orchestratorCancel(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.cancel,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to cancel AI orchestrator task",
+      );
+    },
+
+    async orchestratorListRuns(payload = {}) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.listRuns,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to list AI orchestrator runs");
+    },
+
+    async orchestratorListAutomations() {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.listAutomations,
+      );
+      return assertApiResponse(response, "Failed to list AI automations");
+    },
+
+    async orchestratorSaveAutomation(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.saveAutomation,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to save AI automation");
+    },
+
+    async orchestratorDeleteAutomation(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.deleteAutomation,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to delete AI automation");
+    },
+
+    async orchestratorRunAutomation(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.runAutomation,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to run AI automation");
+    },
+
+    async orchestratorApproveAutomation(payload) {
+      const response = await transport.send(
+        intelligenceOrchestratorEvents.approveAutomation,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to approve AI automation");
     },
 
     async agentSessionStart(payload = {}) {
-      const response = await transport.send(intelligenceAgentEvents.sessionStart, payload)
-      return assertApiResponse(response, 'Failed to start intelligence session')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionStart,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to start intelligence session",
+      );
     },
 
     async agentSessionHeartbeat(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionHeartbeat, payload)
-      return assertApiResponse(response, 'Failed to send intelligence heartbeat')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionHeartbeat,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to send intelligence heartbeat",
+      );
     },
 
     async agentSessionPause(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionPause, payload)
-      return assertApiResponse(response, 'Failed to pause intelligence session')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionPause,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to pause intelligence session",
+      );
     },
 
     async agentSessionRecoverable() {
-      const response = await transport.send(intelligenceAgentEvents.sessionRecoverable)
-      return assertApiResponse(response, 'Failed to fetch recoverable intelligence session')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionRecoverable,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to fetch recoverable intelligence session",
+      );
     },
 
     async agentSessionResume(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionResume, payload)
-      return assertApiResponse(response, 'Failed to resume intelligence session')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionResume,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to resume intelligence session",
+      );
     },
 
     async agentSessionCancel(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionCancel, payload)
-      return assertApiResponse(response, 'Failed to cancel intelligence session')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionCancel,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to cancel intelligence session",
+      );
     },
 
     async agentSessionGetState(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionGetState, payload)
-      return assertApiResponse(response, 'Failed to get intelligence session state')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionGetState,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to get intelligence session state",
+      );
     },
 
     async agentPlan(payload) {
-      const response = await transport.send(intelligenceAgentEvents.plan, payload)
-      return assertApiResponse(response, 'Failed to create intelligence plan')
+      const response = await transport.send(
+        intelligenceAgentEvents.plan,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to create intelligence plan");
     },
 
     async agentExecute(payload) {
-      const response = await transport.send(intelligenceAgentEvents.execute, payload)
-      return assertApiResponse(response, 'Failed to execute intelligence plan')
+      const response = await transport.send(
+        intelligenceAgentEvents.execute,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to execute intelligence plan");
     },
 
     async agentReflect(payload) {
-      const response = await transport.send(intelligenceAgentEvents.reflect, payload)
-      return assertApiResponse(response, 'Failed to reflect intelligence result')
+      const response = await transport.send(
+        intelligenceAgentEvents.reflect,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to reflect intelligence result",
+      );
     },
 
     async agentToolCall(payload) {
-      const response = await transport.send(intelligenceAgentEvents.toolCall, payload)
-      return assertApiResponse(response, 'Failed to call intelligence tool')
+      const response = await transport.send(
+        intelligenceAgentEvents.toolCall,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to call intelligence tool");
     },
 
     async agentToolResult(payload) {
-      const response = await transport.send(intelligenceAgentEvents.toolResult, payload)
-      return assertApiResponse(response, 'Failed to report intelligence tool result')
+      const response = await transport.send(
+        intelligenceAgentEvents.toolResult,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to report intelligence tool result",
+      );
     },
 
     async agentToolApprove(payload) {
-      const response = await transport.send(intelligenceAgentEvents.toolApprove, payload)
-      return assertApiResponse(response, 'Failed to approve intelligence tool')
+      const response = await transport.send(
+        intelligenceAgentEvents.toolApprove,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to approve intelligence tool");
     },
 
     async agentSessionStream(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionStream, payload)
-      return assertApiResponse(response, 'Failed to stream intelligence trace')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionStream,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to stream intelligence trace");
     },
 
     async agentSessionSubscribe(payload, options) {
-      if (typeof transport.stream !== 'function') {
-        throw new TypeError('Failed to subscribe intelligence trace stream: transport.stream is unavailable')
+      if (typeof transport.stream !== "function") {
+        throw new TypeError(
+          "Failed to subscribe intelligence trace stream: transport.stream is unavailable",
+        );
       }
-      return transport.stream(intelligenceAgentEvents.sessionSubscribe, payload, options)
+      return transport.stream(
+        intelligenceAgentEvents.sessionSubscribe,
+        payload,
+        options,
+      );
     },
 
     async agentSessionHistory(payload = {}) {
-      const response = await transport.send(intelligenceAgentEvents.sessionHistory, payload)
-      return assertApiResponse(response, 'Failed to query intelligence session history')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionHistory,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to query intelligence session history",
+      );
     },
 
     async agentSessionTrace(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionTrace, payload)
-      return assertApiResponse(response, 'Failed to query intelligence trace')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionTrace,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to query intelligence trace");
     },
 
     async agentSessionTraceExport(payload) {
-      const response = await transport.send(intelligenceAgentEvents.sessionTraceExport, payload)
-      return assertApiResponse(response, 'Failed to export intelligence trace')
+      const response = await transport.send(
+        intelligenceAgentEvents.sessionTraceExport,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to export intelligence trace");
     },
 
     async workflowList(payload = {}) {
-      const response = await transport.send(intelligenceWorkflowEvents.list, payload)
-      return assertApiResponse(response, 'Failed to list workflows')
+      const response = await transport.send(
+        intelligenceWorkflowEvents.list,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to list workflows");
     },
 
     async workflowGet(payload) {
-      const response = await transport.send(intelligenceWorkflowEvents.get, payload)
-      return assertApiResponse(response, 'Failed to get workflow')
+      const response = await transport.send(
+        intelligenceWorkflowEvents.get,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to get workflow");
     },
 
     async workflowSave(workflow) {
-      const response = await transport.send(intelligenceWorkflowEvents.save, workflow)
-      return assertApiResponse(response, 'Failed to save workflow')
+      const response = await transport.send(
+        intelligenceWorkflowEvents.save,
+        workflow,
+      );
+      return assertApiResponse(response, "Failed to save workflow");
     },
 
     async workflowDelete(payload) {
-      const response = await transport.send(intelligenceWorkflowEvents.delete, payload)
-      return assertApiResponse(response, 'Failed to delete workflow')
+      const response = await transport.send(
+        intelligenceWorkflowEvents.delete,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to delete workflow");
     },
 
     async workflowRun(payload) {
-      const response = await transport.send(intelligenceWorkflowEvents.run, payload)
-      return assertApiResponse(response, 'Failed to run workflow')
+      const response = await transport.send(
+        intelligenceWorkflowEvents.run,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to run workflow");
     },
 
     async workflowHistory(payload = {}) {
-      const response = await transport.send(intelligenceWorkflowEvents.history, payload)
-      return assertApiResponse(response, 'Failed to query workflow history')
+      const response = await transport.send(
+        intelligenceWorkflowEvents.history,
+        payload,
+      );
+      return assertApiResponse(response, "Failed to query workflow history");
     },
 
     async workflowReviewUpdate(payload) {
-      const response = await transport.send(intelligenceWorkflowEvents.reviewUpdate, payload)
-      return assertApiResponse(response, 'Failed to update workflow review queue')
+      const response = await transport.send(
+        intelligenceWorkflowEvents.reviewUpdate,
+        payload,
+      );
+      return assertApiResponse(
+        response,
+        "Failed to update workflow review queue",
+      );
     },
     text: {
-      chat: (payload, options) => invokeCapability<string>('text.chat', payload, options),
-      translate: (payload, options) => invokeCapability<string>('text.translate', payload, options),
-      summarize: (payload, options) => invokeCapability<string>('text.summarize', payload, options),
-      rewrite: (payload, options) => invokeCapability<string>('text.rewrite', payload, options),
-      grammar: (payload, options) => invokeCapability<IntelligenceGrammarCheckResult>('text.grammar', payload, options),
-      classify: (payload, options) => invokeCapability<IntelligenceClassificationResult>('text.classify', payload, options),
+      chat: (payload, options) =>
+        invokeCapability<string>("text.chat", payload, options),
+      translate: (payload, options) =>
+        invokeCapability<string>("text.translate", payload, options),
+      summarize: (payload, options) =>
+        invokeCapability<string>("text.summarize", payload, options),
+      rewrite: (payload, options) =>
+        invokeCapability<string>("text.rewrite", payload, options),
+      grammar: (payload, options) =>
+        invokeCapability<IntelligenceGrammarCheckResult>(
+          "text.grammar",
+          payload,
+          options,
+        ),
+      classify: (payload, options) =>
+        invokeCapability<IntelligenceClassificationResult>(
+          "text.classify",
+          payload,
+          options,
+        ),
     },
 
     embedding: {
-      generate: (payload, options) => invokeCapability<number[]>('embedding.generate', payload, options),
+      generate: (payload, options) =>
+        invokeCapability<number[]>("embedding.generate", payload, options),
     },
 
     code: {
-      generate: (payload, options) => invokeCapability<IntelligenceCodeGenerateResult>('code.generate', payload, options),
-      explain: (payload, options) => invokeCapability<IntelligenceCodeExplainResult>('code.explain', payload, options),
-      review: (payload, options) => invokeCapability<IntelligenceCodeReviewResult>('code.review', payload, options),
-      refactor: (payload, options) => invokeCapability<IntelligenceCodeRefactorResult>('code.refactor', payload, options),
-      debug: (payload, options) => invokeCapability<IntelligenceCodeDebugResult>('code.debug', payload, options),
+      generate: (payload, options) =>
+        invokeCapability<IntelligenceCodeGenerateResult>(
+          "code.generate",
+          payload,
+          options,
+        ),
+      explain: (payload, options) =>
+        invokeCapability<IntelligenceCodeExplainResult>(
+          "code.explain",
+          payload,
+          options,
+        ),
+      review: (payload, options) =>
+        invokeCapability<IntelligenceCodeReviewResult>(
+          "code.review",
+          payload,
+          options,
+        ),
+      refactor: (payload, options) =>
+        invokeCapability<IntelligenceCodeRefactorResult>(
+          "code.refactor",
+          payload,
+          options,
+        ),
+      debug: (payload, options) =>
+        invokeCapability<IntelligenceCodeDebugResult>(
+          "code.debug",
+          payload,
+          options,
+        ),
     },
 
     intent: {
-      detect: (payload, options) => invokeCapability<IntelligenceIntentDetectResult>('intent.detect', payload, options),
+      detect: (payload, options) =>
+        invokeCapability<IntelligenceIntentDetectResult>(
+          "intent.detect",
+          payload,
+          options,
+        ),
     },
 
     sentiment: {
-      analyze: (payload, options) => invokeCapability<IntelligenceSentimentAnalyzeResult>('sentiment.analyze', payload, options),
+      analyze: (payload, options) =>
+        invokeCapability<IntelligenceSentimentAnalyzeResult>(
+          "sentiment.analyze",
+          payload,
+          options,
+        ),
     },
 
     content: {
-      extract: (payload, options) => invokeCapability<IntelligenceContentExtractResult>('content.extract', payload, options),
+      extract: (payload, options) =>
+        invokeCapability<IntelligenceContentExtractResult>(
+          "content.extract",
+          payload,
+          options,
+        ),
     },
 
     keywords: {
-      extract: (payload, options) => invokeCapability<IntelligenceKeywordsExtractResult>('keywords.extract', payload, options),
+      extract: (payload, options) =>
+        invokeCapability<IntelligenceKeywordsExtractResult>(
+          "keywords.extract",
+          payload,
+          options,
+        ),
     },
 
     vision: {
-      ocr: (payload, options) => invokeCapability<IntelligenceVisionOcrResult>('vision.ocr', payload, options),
+      ocr: (payload, options) =>
+        invokeCapability<IntelligenceVisionOcrResult>(
+          "vision.ocr",
+          payload,
+          options,
+        ),
     },
 
     image: {
-      caption: (payload, options) => invokeCapability<IntelligenceImageCaptionResult>('image.caption', payload, options),
-      analyze: (payload, options) => invokeCapability<IntelligenceImageAnalyzeResult>('image.analyze', payload, options),
-      generate: (payload, options) => invokeCapability<IntelligenceImageGenerateResult>('image.generate', payload, options),
-      translateE2e: (payload, options) => invokeCapability<IntelligenceImageTranslateE2eResult>('image.translate.e2e', payload, options),
-      edit: (payload, options) => invokeCapability<IntelligenceImageEditResult>('image.edit', payload, options),
+      caption: (payload, options) =>
+        invokeCapability<IntelligenceImageCaptionResult>(
+          "image.caption",
+          payload,
+          options,
+        ),
+      analyze: (payload, options) =>
+        invokeCapability<IntelligenceImageAnalyzeResult>(
+          "image.analyze",
+          payload,
+          options,
+        ),
+      generate: (payload, options) =>
+        invokeCapability<IntelligenceImageGenerateResult>(
+          "image.generate",
+          payload,
+          options,
+        ),
+      translateE2e: (payload, options) =>
+        invokeCapability<IntelligenceImageTranslateE2eResult>(
+          "image.translate.e2e",
+          payload,
+          options,
+        ),
+      edit: (payload, options) =>
+        invokeCapability<IntelligenceImageEditResult>(
+          "image.edit",
+          payload,
+          options,
+        ),
     },
 
     audio: {
-      tts: (payload, options) => invokeCapability<IntelligenceTTSResult>('audio.tts', payload, options),
-      stt: (payload, options) => invokeCapability<IntelligenceSTTResult>('audio.stt', payload, options),
-      transcribe: (payload, options) => invokeCapability<IntelligenceAudioTranscribeResult>('audio.transcribe', payload, options),
+      tts: (payload, options) =>
+        invokeCapability<IntelligenceTTSResult>("audio.tts", payload, options),
+      stt: (payload, options) =>
+        invokeCapability<IntelligenceSTTResult>("audio.stt", payload, options),
+      transcribe: (payload, options) =>
+        invokeCapability<IntelligenceAudioTranscribeResult>(
+          "audio.transcribe",
+          payload,
+          options,
+        ),
     },
 
     rag: {
-      query: (payload, options) => invokeCapability<IntelligenceRAGQueryResult>('rag.query', payload, options),
+      query: (payload, options) =>
+        invokeCapability<IntelligenceRAGQueryResult>(
+          "rag.query",
+          payload,
+          options,
+        ),
     },
 
     search: {
-      semantic: (payload, options) => invokeCapability<IntelligenceSemanticSearchResult>('search.semantic', payload, options),
-      rerank: (payload, options) => invokeCapability<IntelligenceRerankResult>('search.rerank', payload, options),
+      semantic: (payload, options) =>
+        invokeCapability<IntelligenceSemanticSearchResult>(
+          "search.semantic",
+          payload,
+          options,
+        ),
+      rerank: (payload, options) =>
+        invokeCapability<IntelligenceRerankResult>(
+          "search.rerank",
+          payload,
+          options,
+        ),
     },
 
     workflow: {
-      execute: (payload, options) => invokeCapability<PromptWorkflowExecution>('workflow.execute', payload, options),
+      execute: (payload, options) =>
+        invokeCapability<PromptWorkflowExecution>(
+          "workflow.execute",
+          payload,
+          options,
+        ),
     },
 
     agent: {
-      run: (payload, options) => invokeCapability<IntelligenceAgentResult>('agent.run', payload, options),
+      run: (payload, options) =>
+        invokeCapability<IntelligenceAgentResult>(
+          "agent.run",
+          payload,
+          options,
+        ),
     },
-  }
+  };
 }

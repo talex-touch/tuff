@@ -1355,3 +1355,230 @@ export const catalogState = sqliteTable('catalog_state', {
   rollbackReason: text('rollback_reason'),
   updatedAt: integer('updated_at').notNull()
 })
+// 15. AI CLI Orchestration Runtime
+// =============================================================================
+
+export const aiImportScans = sqliteTable(
+  'ai_import_scans',
+  {
+    id: text('id').primaryKey(),
+    cwd: text('cwd').notNull(),
+    sources: text('sources').notNull().default('[]'),
+    candidates: text('candidates').notNull().default('[]'),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    createdIdx: index('idx_ai_import_scans_created').on(table.createdAt)
+  })
+)
+
+export const aiImportSources = sqliteTable(
+  'ai_import_sources',
+  {
+    id: text('id').primaryKey(),
+    scanId: text('scan_id')
+      .notNull()
+      .references(() => aiImportScans.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    label: text('label').notNull(),
+    scope: text('scope').notNull(),
+    rootPath: text('root_path').notNull(),
+    executablePath: text('executable_path'),
+    installed: integer('installed', { mode: 'boolean' }).notNull().default(false),
+    fingerprint: text('fingerprint').notNull(),
+    warnings: text('warnings').notNull().default('[]'),
+    scannedAt: integer('scanned_at').notNull()
+  },
+  (table) => ({
+    scanIdx: index('idx_ai_import_sources_scan').on(table.scanId),
+    providerIdx: index('idx_ai_import_sources_provider').on(table.provider, table.scope)
+  })
+)
+
+export const aiImportRevisions = sqliteTable(
+  'ai_import_revisions',
+  {
+    id: text('id').primaryKey(),
+    scanId: text('scan_id')
+      .notNull()
+      .references(() => aiImportScans.id, { onDelete: 'cascade' }),
+    importedCount: integer('imported_count').notNull().default(0),
+    unchangedCount: integer('unchanged_count').notNull().default(0),
+    removedCount: integer('removed_count').notNull().default(0),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    scanIdx: index('idx_ai_import_revisions_scan').on(table.scanId),
+    createdIdx: index('idx_ai_import_revisions_created').on(table.createdAt)
+  })
+)
+
+export const aiImportItems = sqliteTable(
+  'ai_import_items',
+  {
+    id: text('id').primaryKey(),
+    candidateId: text('candidate_id').notNull(),
+    sourceId: text('source_id').notNull(),
+    provider: text('provider').notNull(),
+    scope: text('scope').notNull(),
+    targetScope: text('target_scope').notNull().default('global'),
+    workspaceRoot: text('workspace_root'),
+    kind: text('kind').notNull(),
+    name: text('name').notNull(),
+    alias: text('alias'),
+    sourceKey: text('source_key').notNull(),
+    path: text('path').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    snapshot: text('snapshot').notNull(),
+    contentRef: text('content_ref'),
+    projection: text('projection'),
+    secrets: text('secrets').notNull().default('[]'),
+    state: text('state').notNull().default('active'),
+    revisionId: text('revision_id')
+      .notNull()
+      .references(() => aiImportRevisions.id, { onDelete: 'cascade' }),
+    current: integer('current', { mode: 'boolean' }).notNull().default(true),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    sourceIdx: index('idx_ai_import_items_source').on(table.sourceId, table.active),
+    providerKindIdx: index('idx_ai_import_items_provider_kind').on(
+      table.provider,
+      table.kind,
+      table.active
+    ),
+    revisionIdx: index('idx_ai_import_items_revision').on(table.revisionId)
+  })
+)
+
+export const aiAgentProfiles = sqliteTable(
+  'ai_agent_profiles',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    runtimeProvider: text('runtime_provider').notNull(),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    systemPrompt: text('system_prompt'),
+    modelPreference: text('model_preference').notNull().default('[]'),
+    allowedToolIds: text('allowed_tool_ids').notNull().default('[]'),
+    enabledSkillIds: text('enabled_skill_ids').notNull().default('[]'),
+    permissionPolicy: text('permission_policy').notNull(),
+    timeoutMs: integer('timeout_ms').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    enabledIdx: index('idx_ai_agent_profiles_enabled').on(table.enabled, table.updatedAt)
+  })
+)
+
+export const aiOrchestratorRuns = sqliteTable(
+  'ai_orchestrator_runs',
+  {
+    id: text('id').primaryKey(),
+    automationId: text('automation_id'),
+    sessionId: text('session_id').notNull(),
+    objective: text('objective').notNull(),
+    profileId: text('profile_id').notNull(),
+    runtimeProvider: text('runtime_provider').notNull(),
+    cwd: text('cwd').notNull(),
+    status: text('status').notNull(),
+    output: text('output'),
+    error: text('error'),
+    usage: text('usage'),
+    metadata: text('metadata'),
+    parentRunId: text('parent_run_id'),
+    delegationPlan: text('delegation_plan'),
+    approvalReason: text('approval_reason'),
+    createdAt: integer('created_at').notNull(),
+    startedAt: integer('started_at'),
+    completedAt: integer('completed_at'),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    statusIdx: index('idx_ai_orchestrator_runs_status').on(table.status, table.updatedAt),
+    automationIdx: index('idx_ai_orchestrator_runs_automation').on(
+      table.automationId,
+      table.createdAt
+    ),
+    sessionIdx: index('idx_ai_orchestrator_runs_session').on(table.sessionId)
+  })
+)
+
+export const aiOrchestratorEvents = sqliteTable(
+  'ai_orchestrator_events',
+  {
+    id: text('id').primaryKey(),
+    runId: text('run_id')
+      .notNull()
+      .references(() => aiOrchestratorRuns.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    type: text('type').notNull(),
+    level: text('level').notNull(),
+    payload: text('payload'),
+    createdAt: integer('created_at').notNull()
+  },
+  (table) => ({
+    runSeqIdx: index('idx_ai_orchestrator_events_run_seq').on(table.runId, table.seq),
+    createdIdx: index('idx_ai_orchestrator_events_created').on(table.createdAt)
+  })
+)
+
+export const aiAutomations = sqliteTable(
+  'ai_automations',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    objective: text('objective').notNull(),
+    input: text('input'),
+    profileId: text('profile_id').notNull(),
+    trigger: text('trigger').notNull(),
+    approvalMode: text('approval_mode').notNull(),
+    cwd: text('cwd'),
+    timeoutMs: integer('timeout_ms'),
+    metadata: text('metadata'),
+    policy: text('policy').notNull().default('{}'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    enabledIdx: index('idx_ai_automations_enabled').on(table.enabled, table.updatedAt),
+    profileIdx: index('idx_ai_automations_profile').on(table.profileId)
+  })
+)
+
+export const aiAutomationRuns = sqliteTable(
+  'ai_automation_runs',
+  {
+    id: text('id').primaryKey(),
+    automationId: text('automation_id')
+      .notNull()
+      .references(() => aiAutomations.id, { onDelete: 'cascade' }),
+    orchestratorRunId: text('orchestrator_run_id'),
+    triggerType: text('trigger_type').notNull(),
+    status: text('status').notNull(),
+    approved: integer('approved', { mode: 'boolean' }).notNull().default(false),
+    missedCount: integer('missed_count').notNull().default(0),
+    payload: text('payload'),
+    error: text('error'),
+    policyVersion: integer('policy_version').notNull().default(1),
+    approvalReason: text('approval_reason'),
+    createdAt: integer('created_at').notNull(),
+    startedAt: integer('started_at'),
+    completedAt: integer('completed_at'),
+    updatedAt: integer('updated_at').notNull()
+  },
+  (table) => ({
+    automationStatusIdx: index('idx_ai_automation_runs_automation_status').on(
+      table.automationId,
+      table.status,
+      table.createdAt
+    ),
+    orchestratorIdx: index('idx_ai_automation_runs_orchestrator').on(table.orchestratorRunId)
+  })
+)

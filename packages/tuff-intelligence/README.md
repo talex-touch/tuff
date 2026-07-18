@@ -60,7 +60,7 @@ async function run() {
 
 ## Tool Kit
 
-`ToolKit` 提供 Tuff-native 工具定义、Zod 运行时校验和可插拔审批门禁。它不绑定 LangChain / DeepAgents，后续 adapter 可以消费同一套工具定义。
+`ToolKit` 提供 Tuff-native 工具定义、Zod 运行时校验和可插拔审批门禁。它不绑定任何 Agent loop；Tuff Pi 与 MCP adapter 消费同一套工具定义。
 
 ```ts
 import { z } from "zod";

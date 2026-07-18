@@ -1,55 +1,39 @@
 import type { AppSetting, TuffQuery } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
+import type { WebContentsView } from 'electron'
 import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
-import * as fs from 'node:fs'
-import os from 'node:os'
+import type { CoreBoxKeyEvent } from './key-event'
 import path from 'node:path'
 import process from 'node:process'
 import { sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
-import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { PluginStatus } from '@talex-touch/utils/plugin'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
-import chalk from 'chalk'
-import { app, nativeTheme, screen, WebContentsView } from 'electron'
-import fse from 'fs-extra'
+import { app, screen } from 'electron'
 import { BoxWindowOption } from '../../../config/default'
-import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
-import { buildWindowWebPreferences } from '../../../core/window-security-profile'
-import { resolveThemeStateFromStyle } from '../../../../shared/theme/theme-mode'
 import {
   CoreBoxWindowHiddenEvent,
   CoreBoxWindowShownEvent,
   TalexEvents,
   touchEventBus
 } from '../../../core/eventbus/touch-event'
+import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
-import { useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
-import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
-import { pluginModule } from '../../plugin/plugin-module'
-import { usePluginInjections } from '../../plugin/runtime/plugin-injections'
-import { resolvePluginViewSecurityProfile } from '../../plugin/runtime/plugin-view-security-profile'
-import { buildPluginViewWebPreferences } from '../../plugin/runtime/plugin-view-host'
-import {
-  registerPluginWebContents,
-  unregisterPluginWebContents
-} from '../../plugin/runtime/plugin-view-registry'
-import {
-  createPluginViewNavigationPolicy,
-  installPluginViewNavigationPolicy
-} from '../../plugin/runtime/plugin-window-policy'
+
 import { getMainConfig, subscribeMainConfig } from '../../storage'
-import { getBoxItemManager } from '../item-sdk'
+import { WindowBoundsController } from './bounds-controller'
+import { CoreBoxFocusPolicy } from './focus-policy'
+import { isBlockedCoreBoxFunctionKey } from './key-event'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
-import defaultCoreBoxThemeCss from './theme/tuff-element.css?raw'
-import { viewCacheManager } from './view-cache'
-import { getLiveViewWebContents } from './web-contents-view-guard'
+import { PluginViewController } from './plugin-view-controller'
+import { CoreBoxThemeController } from './theme-controller'
+
+export type { ThemeStyleConfig } from './theme-controller'
 
 const coreBoxWindowLog = createLogger('CoreBox').child('Window')
 export const COREBOX_WIDTH = 720
@@ -60,37 +44,8 @@ const COREBOX_ANIMATION_RETARGET_TOLERANCE = 12
 const COREBOX_BLUR_HIDE_CONFIRM_MS = 120
 const COREBOX_SHORTCUT_FOCUS_GRACE_MS = 1500
 const COREBOX_DEFAULT_FOCUS_GRACE_MS = 500
-const BLOCKED_COREBOX_FUNCTION_KEYS = new Set(
-  Array.from({ length: 24 }, (_, index) => `F${index + 1}`)
-)
 
 const windowAnimation = useWindowAnimation()
-
-const CORE_BOX_THEME_FILE_NAME = 'tuff-element.css'
-const CORE_BOX_THEME_SUBDIR = ['core-box', 'theme'] as const
-
-export interface ThemeStyleConfig {
-  theme?: {
-    style?: {
-      dark?: boolean
-      auto?: boolean
-    }
-    palette?: {
-      primary?: string
-    }
-    colors?: {
-      primary?: string
-    }
-    primaryColor?: string
-  }
-  palette?: {
-    primary?: string
-  }
-  colors?: {
-    primary?: string
-  }
-  primaryColor?: string
-}
 
 /**
  * @class WindowManager
@@ -101,38 +56,26 @@ export class WindowManager {
   private static instance: WindowManager
   public windows: TouchWindow[] = []
   private _touchApp: TouchApp | null = null
-  private uiView: WebContentsView | null = null
-  private uiViewFocused = false
-  private uiViewThemeCssKey = new WeakMap<WebContentsView, string>()
-  private attachedPlugin: TouchPlugin | null = null
-  private attachedFeature: IPluginFeature | null = null
-  private detachingUIView = false
-  private nativeThemeHandler: (() => void) | null = null
-  private currentThemeIsDark = false
-  private bundledThemeCss: string | null = null
-  private inputAllowed = false
-  private clipboardAllowedTypes = 0
-  private boundsAnimationTaskId: string | null = null
-  private boundsAnimationToken = 0
-  private currentAnimationTarget: Electron.Rectangle | null = null
-  private boundsAnimationState: {
-    browserWindow: Electron.BrowserWindow
-    startBounds: Electron.Rectangle
-    target: Electron.Rectangle
-    startTime: number
-    durationMs: number
-    token: number
-    restoreResizable: () => void
-    minHeight?: number
-  } | null = null
-  private animationResizeRestore: (() => void) | null = null
-  // Track last set bounds to avoid getBounds() latency issues
-  private lastSetBounds: { height: number; y: number } | null = null
-  private customTopPercent: number | null = null // Custom position offset (0-1)
-  private readonly pollingService = PollingService.getInstance()
-  private suppressBlurHideUntil = 0
-  private blurHideTimer: ReturnType<typeof setTimeout> | null = null
-  private pinned = false
+  private readonly themeController = new CoreBoxThemeController()
+  private readonly pluginViewController = new PluginViewController({
+    headerHeight: COREBOX_HEADER_HEIGHT,
+    getCurrentWindow: () => this.current,
+    getTransport: () => this.getTransport(),
+    getAppSettingConfig: () => this.getAppSettingConfig(),
+    applyThemeToView: (view) => this.themeController.applyToView(view),
+    stopFollowingSystemTheme: () => this.themeController.stopFollowingSystem(),
+    isCurrentThemeDark: () => this.themeController.isDark,
+    isAppDev: () => this.touchApp.version === TalexTouch.AppVersion.DEV
+  })
+
+  private readonly boundsController = new WindowBoundsController({
+    defaultWidth: COREBOX_WIDTH,
+    minHeight: COREBOX_MIN_HEIGHT,
+    animationRetargetTolerance: COREBOX_ANIMATION_RETARGET_TOLERANCE,
+    syncOverlayBounds: () => metaOverlayManager.updateBounds()
+  })
+
+  private readonly focusPolicy = new CoreBoxFocusPolicy()
   private appSettingUnsubscribe: (() => void) | null = null
 
   private get touchApp(): TouchApp {
@@ -149,23 +92,10 @@ export class WindowManager {
     return getTuffTransportMain(channel, keyManager)
   }
 
-  private syncMetaOverlayBounds(): void {
-    metaOverlayManager.updateBounds()
-  }
-
-  private clearPendingBlurHide(): void {
-    if (!this.blurHideTimer) return
-    clearTimeout(this.blurHideTimer)
-    this.blurHideTimer = null
-  }
-
   private scheduleBlurHide(window: TouchWindow): void {
-    this.clearPendingBlurHide()
-    this.blurHideTimer = setTimeout(async () => {
-      this.blurHideTimer = null
-
+    this.focusPolicy.scheduleBlurHide(async () => {
       if (this.isPinned()) return
-      if (Date.now() < this.suppressBlurHideUntil) return
+      if (this.focusPolicy.isBlurHideSuppressed()) return
       if (this.current !== window || window.window.isDestroyed() || !window.window.isVisible()) {
         return
       }
@@ -174,8 +104,8 @@ export class WindowManager {
       if (coreBoxManager.isUIMode) {
         await sleep(17)
         if (
-          this.uiViewFocused ||
-          Date.now() < this.suppressBlurHideUntil ||
+          this.pluginViewController.isUIViewFocused() ||
+          this.focusPolicy.isBlurHideSuppressed() ||
           window.window.isDestroyed() ||
           window.window.isFocused()
         ) {
@@ -199,28 +129,21 @@ export class WindowManager {
   }
 
   public getAttachedPlugin(): TouchPlugin | null {
-    return this.attachedPlugin
+    return this.pluginViewController.getAttachedPlugin()
   }
 
   /**
    * Enable input monitoring for attached UI view
    */
   public enableInputMonitoring(): void {
-    this.inputAllowed = true
-    coreBoxWindowLog.debug('Input monitoring enabled for UI view')
+    this.pluginViewController.enableInputMonitoring()
   }
 
   /**
    * Enable clipboard monitoring for specified types
    */
   public enableClipboardMonitoring(types: number): void {
-    if (this.clipboardAllowedTypes === types) {
-      coreBoxWindowLog.debug('Clipboard monitoring already configured, skipping update')
-      return
-    }
-
-    this.clipboardAllowedTypes = types
-    coreBoxWindowLog.debug(`Clipboard monitoring enabled for types: ${types.toString(2)}`)
+    this.pluginViewController.enableClipboardMonitoring(types)
   }
 
   /**
@@ -229,39 +152,21 @@ export class WindowManager {
    * @returns true if the plugin should receive this clipboard change
    */
   public shouldForwardClipboardChange(itemType: 'text' | 'image' | 'files'): boolean {
-    if (!this.attachedPlugin || this.clipboardAllowedTypes === 0) {
-      return false
-    }
-
-    // ClipboardType enum values: TEXT = 0b0001, IMAGE = 0b0010, FILE = 0b0100
-    const typeMap: Record<string, number> = {
-      text: 0b0001,
-      image: 0b0010,
-      files: 0b0100
-    }
-
-    const typeBit = typeMap[itemType] ?? 0
-    return (this.clipboardAllowedTypes & typeBit) !== 0
+    return this.pluginViewController.shouldForwardClipboardChange(itemType)
   }
 
   /**
    * Get current clipboard allowed types
    */
   public getClipboardAllowedTypes(): number {
-    return this.clipboardAllowedTypes
+    return this.pluginViewController.getClipboardAllowedTypes()
   }
 
   /**
    * Send input change to UI view if allowed
    */
   public forwardInputChange(payload: CoreBoxInputChangeRequest): void {
-    if (!this.inputAllowed || !this.attachedPlugin) return
-
-    this.sendChannelMessageToUIView(CoreBoxEvents.input.change.toEventName(), {
-      input: payload.input,
-      query: payload.query,
-      source: payload.source
-    })
+    this.pluginViewController.forwardInputChange(payload)
   }
 
   /**
@@ -271,8 +176,9 @@ export class WindowManager {
     const window = new TouchWindow({ ...BoxWindowOption })
 
     this.ensureAppSettingSubscription()
-    this.pinned = this.resolvePinnedFromSettings()
-    this.applyPinnedStateToWindow(window, this.pinned)
+    const pinned = this.resolvePinnedFromSettings()
+    this.focusPolicy.setPinned(pinned)
+    this.applyPinnedStateToWindow(window, pinned)
 
     windowAnimation.changeWindow(window)
 
@@ -316,7 +222,7 @@ export class WindowManager {
     window.window.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown') return
 
-      if (BLOCKED_COREBOX_FUNCTION_KEYS.has(input.key)) {
+      if (isBlockedCoreBoxFunctionKey(input.key)) {
         event.preventDefault()
         return
       }
@@ -327,10 +233,7 @@ export class WindowManager {
           return
         }
         wasVisibleBeforeReload = window.window.isVisible()
-        const uiWebContents = this.getAliveUIViewWebContents()
-        if (uiWebContents) {
-          uiWebContents.reload()
-        }
+        this.pluginViewController.reloadView()
       }
     })
 
@@ -355,12 +258,12 @@ export class WindowManager {
     })
 
     window.window.on('hide', () => {
-      this.clearPendingBlurHide()
+      this.focusPolicy.clearPendingBlurHide()
       coreBoxManager.syncVisibility(false)
     })
 
     window.window.on('focus', () => {
-      this.clearPendingBlurHide()
+      this.focusPolicy.clearPendingBlurHide()
     })
 
     window.window.on('blur', async () => {
@@ -368,7 +271,7 @@ export class WindowManager {
         return
       }
 
-      if (Date.now() < this.suppressBlurHideUntil) {
+      if (this.focusPolicy.isBlurHideSuppressed()) {
         return
       }
 
@@ -381,29 +284,30 @@ export class WindowManager {
 
       await sleep(17)
 
-      if (!this.uiViewFocused && Date.now() >= this.suppressBlurHideUntil) {
+      if (
+        !this.pluginViewController.isUIViewFocused() &&
+        !this.focusPolicy.isBlurHideSuppressed()
+      ) {
         this.scheduleBlurHide(window)
       }
     })
 
     window.window.on('resize', () => {
-      if (!this.uiView || this.current !== window || window.window.isDestroyed()) {
+      if (
+        !this.pluginViewController.hasView() ||
+        this.current !== window ||
+        window.window.isDestroyed()
+      ) {
         return
       }
 
       try {
-        const bounds = window.window.getBounds()
-        this.uiView.setBounds({
-          x: 0,
-          y: COREBOX_HEADER_HEIGHT,
-          width: bounds.width,
-          height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
-        })
+        this.pluginViewController.resizeToWindow(window.window)
       } catch (error) {
         coreBoxWindowLog.warn('Failed to update UI view bounds on resize', { error })
       }
 
-      this.syncMetaOverlayBounds()
+      metaOverlayManager.updateBounds()
     })
 
     // Initialize MetaOverlay (persistent mode)
@@ -416,304 +320,8 @@ export class WindowManager {
     return window
   }
 
-  /**
-   * Stop current bounds animation
-   */
-  private stopBoundsAnimation(): void {
-    if (this.boundsAnimationTaskId) {
-      this.pollingService.unregister(this.boundsAnimationTaskId)
-      this.boundsAnimationTaskId = null
-    }
-    this.currentAnimationTarget = null
-    this.boundsAnimationState = null
-    this.boundsAnimationToken += 1
-    if (this.animationResizeRestore) {
-      this.animationResizeRestore()
-      this.animationResizeRestore = null
-    }
-  }
-
-  // Some macOS panel windows ignore setBounds when resizable is false.
-  private prepareTemporaryResize(browserWindow: Electron.BrowserWindow): () => void {
-    if (browserWindow.isDestroyed()) return () => {}
-    const wasResizable = browserWindow.isResizable()
-    if (!wasResizable) {
-      try {
-        browserWindow.setResizable(true)
-      } catch (error) {
-        coreBoxWindowLog.warn('Failed to enable resizable state for bounds update', { error })
-      }
-    }
-    return () => {
-      if (browserWindow.isDestroyed()) return
-      if (!wasResizable) {
-        try {
-          browserWindow.setResizable(false)
-        } catch (error) {
-          coreBoxWindowLog.warn('Failed to restore resizable state after bounds update', { error })
-        }
-      }
-    }
-  }
-
-  /**
-   * Animate window bounds. New target retargets the active animation instead of restarting it.
-   */
-  private animateWindowBounds(
-    window: TouchWindow,
-    target: Electron.Rectangle,
-    options: { minHeight?: number } = {}
-  ): void {
-    if (window.window.isDestroyed()) return
-
-    const browserWindow = window.window
-    const rawBounds = browserWindow.getBounds()
-    const isClose = (a: number, b: number, tolerance = 3): boolean => Math.abs(a - b) < tolerance
-    const currentBounds: Electron.Rectangle = {
-      ...rawBounds,
-      height: this.lastSetBounds?.height ?? rawBounds.height,
-      y: this.lastSetBounds?.y ?? rawBounds.y
-    }
-
-    if (this.currentAnimationTarget) {
-      const targetDelta = Math.abs(this.currentAnimationTarget.height - target.height)
-      if (
-        isClose(this.currentAnimationTarget.x, target.x) &&
-        isClose(this.currentAnimationTarget.y, target.y) &&
-        isClose(this.currentAnimationTarget.width, target.width) &&
-        targetDelta < COREBOX_ANIMATION_RETARGET_TOLERANCE
-      ) {
-        return
-      }
-    }
-
-    if (
-      !this.boundsAnimationTaskId &&
-      isClose(currentBounds.x, target.x) &&
-      isClose(currentBounds.y, target.y) &&
-      isClose(currentBounds.width, target.width) &&
-      isClose(currentBounds.height, target.height)
-    ) {
-      return
-    }
-
-    const createState = (
-      startBounds: Electron.Rectangle,
-      restoreResizable: () => void,
-      token: number
-    ) => {
-      const heightDelta = Math.abs(target.height - startBounds.height)
-      return {
-        browserWindow,
-        startBounds,
-        target: { ...target },
-        startTime: performance.now(),
-        durationMs: Math.min(220, Math.max(120, 120 + heightDelta * 0.16)),
-        token,
-        restoreResizable,
-        minHeight: options.minHeight
-      }
-    }
-
-    this.currentAnimationTarget = { ...target }
-
-    if (this.boundsAnimationState && this.boundsAnimationTaskId) {
-      this.boundsAnimationState = createState(
-        currentBounds,
-        this.boundsAnimationState.restoreResizable,
-        this.boundsAnimationState.token
-      )
-      return
-    }
-
-    const restoreResizable = this.prepareTemporaryResize(browserWindow)
-    this.animationResizeRestore = restoreResizable
-    const token = this.boundsAnimationToken
-    this.boundsAnimationState = createState(currentBounds, restoreResizable, token)
-
-    try {
-      browserWindow.setMinimumSize(COREBOX_WIDTH, COREBOX_MIN_HEIGHT)
-    } catch (error) {
-      coreBoxWindowLog.warn('Failed to relax minimum size before bounds animation', { error })
-    }
-
-    const taskId = 'core-box.window.bounds-animation'
-    const finishAnimation = (restore: boolean): void => {
-      const state = this.boundsAnimationState
-      this.pollingService.unregister(taskId)
-      if (this.boundsAnimationTaskId === taskId) {
-        this.boundsAnimationTaskId = null
-      }
-      this.boundsAnimationState = null
-      if (restore && state && this.animationResizeRestore === state.restoreResizable) {
-        this.animationResizeRestore = null
-        state.restoreResizable()
-      }
-    }
-
-    const lerp = (from: number, to: number, t: number): number => from + (to - from) * t
-    const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3
-
-    this.boundsAnimationTaskId = taskId
-    this.pollingService.register(
-      taskId,
-      () => {
-        const state = this.boundsAnimationState
-        if (
-          !state ||
-          state.token !== this.boundsAnimationToken ||
-          state.browserWindow.isDestroyed()
-        ) {
-          finishAnimation(true)
-          this.currentAnimationTarget = null
-          return
-        }
-
-        const elapsed = performance.now() - state.startTime
-        const progress = Math.min(elapsed / state.durationMs, 1)
-        const eased = easeOutCubic(progress)
-        const nextBounds: Electron.Rectangle = {
-          x: Math.round(lerp(state.startBounds.x, state.target.x, eased)),
-          y: Math.round(lerp(state.startBounds.y, state.target.y, eased)),
-          width: Math.round(lerp(state.startBounds.width, state.target.width, eased)),
-          height: Math.round(lerp(state.startBounds.height, state.target.height, eased))
-        }
-
-        try {
-          state.browserWindow.setBounds(nextBounds, false)
-          this.lastSetBounds = { height: nextBounds.height, y: nextBounds.y }
-          this.syncMetaOverlayBounds()
-        } catch (error) {
-          coreBoxWindowLog.warn('Failed to animate window bounds', { error })
-          finishAnimation(true)
-          this.currentAnimationTarget = null
-          return
-        }
-
-        if (progress >= 1) {
-          finishAnimation(false)
-          this.currentAnimationTarget = null
-          try {
-            state.browserWindow.setBounds(state.target, false)
-            this.lastSetBounds = { height: state.target.height, y: state.target.y }
-            this.syncMetaOverlayBounds()
-            if (typeof state.minHeight === 'number') {
-              state.browserWindow.setMinimumSize(COREBOX_WIDTH, state.minHeight)
-            }
-          } catch (error) {
-            coreBoxWindowLog.warn('Failed to finalize window bounds animation', { error })
-          } finally {
-            if (this.animationResizeRestore === state.restoreResizable) {
-              this.animationResizeRestore = null
-              state.restoreResizable()
-            }
-          }
-        }
-      },
-      { interval: 16, unit: 'milliseconds', lane: 'critical', backpressure: 'latest_wins' }
-    )
-    this.pollingService.start()
-  }
-
-  private calculateCoreBoxBounds(
-    curScreen: Electron.Display,
-    size: { width: number; height: number }
-  ): Electron.Rectangle | null {
-    if (!curScreen?.bounds) {
-      coreBoxWindowLog.error('Invalid screen object', { meta: { screenId: curScreen?.id } })
-      return null
-    }
-
-    const rect = curScreen.workArea ?? curScreen.bounds
-    if (
-      typeof rect.x !== 'number' ||
-      typeof rect.y !== 'number' ||
-      typeof rect.width !== 'number' ||
-      typeof rect.height !== 'number'
-    ) {
-      coreBoxWindowLog.error('Invalid screen rect received', {
-        meta: {
-          width: rect.width,
-          height: rect.height,
-          x: rect.x,
-          y: rect.y
-        }
-      })
-      return null
-    }
-
-    const rawWidth = size.width
-    const rawHeight = size.height
-    const windowWidth = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : COREBOX_WIDTH
-    let windowHeight = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : COREBOX_MIN_HEIGHT
-
-    const margin = 12
-    const maxAllowedHeight = rect.height - margin * 2
-    if (Number.isFinite(maxAllowedHeight) && maxAllowedHeight > 0) {
-      windowHeight = Math.min(windowHeight, Math.max(COREBOX_MIN_HEIGHT, maxAllowedHeight))
-    }
-
-    const baseLeft = rect.x + (rect.width - windowWidth) / 2
-
-    let top: number
-
-    if (this.customTopPercent !== null) {
-      // Use custom position if set
-      top = rect.y + Math.round(rect.height * this.customTopPercent) - Math.round(windowHeight / 2)
-    } else {
-      // Fixed position at 30% from top, window expands downward (no vertical movement)
-      top = rect.y + Math.round(rect.height * 0.25)
-    }
-
-    let left = Math.round(baseLeft)
-
-    if (!Number.isFinite(left) || !Number.isFinite(top)) {
-      left = Math.round(baseLeft)
-      top = Math.round(rect.y + (rect.height - windowHeight) / 2)
-    }
-
-    const minLeft = rect.x + margin
-    const maxLeft = rect.x + rect.width - windowWidth - margin
-    if (Number.isFinite(minLeft) && Number.isFinite(maxLeft) && maxLeft >= minLeft) {
-      left = Math.min(Math.max(left, minLeft), maxLeft)
-    } else if (Number.isFinite(minLeft)) {
-      left = minLeft
-    }
-
-    const minTop = rect.y + margin
-    const maxTop = rect.y + rect.height - windowHeight - margin
-    if (Number.isFinite(minTop) && Number.isFinite(maxTop) && maxTop >= minTop) {
-      top = Math.min(Math.max(top, minTop), maxTop)
-    } else if (Number.isFinite(minTop)) {
-      top = minTop
-    }
-
-    return {
-      x: left,
-      y: top,
-      width: windowWidth,
-      height: windowHeight
-    }
-  }
-
   public updatePosition(window: TouchWindow, curScreen?: Electron.Display): void {
-    if (!curScreen) {
-      curScreen = this.getCurScreen()
-    }
-
-    const [rawWindowWidth, rawWindowHeight] = window.window.getSize()
-    const bounds = this.calculateCoreBoxBounds(curScreen, {
-      width: rawWindowWidth,
-      height: rawWindowHeight
-    })
-    if (!bounds) return
-
-    try {
-      this.stopBoundsAnimation()
-      window.window.setPosition(bounds.x, bounds.y)
-    } catch (error) {
-      coreBoxWindowLog.error('Failed to set window position', { error })
-    }
+    this.boundsController.updatePosition(window.window, curScreen ?? this.getCurScreen())
   }
 
   /**
@@ -724,14 +332,15 @@ export class WindowManager {
     const window = this.current
     if (!window) return
 
-    this.clearPendingBlurHide()
-    this.stopBoundsAnimation()
+    this.focusPolicy.clearPendingBlurHide()
+    this.boundsController.stopAnimation()
     this.updatePosition(window)
 
-    const shouldFocus = triggeredByShortcut || coreBoxManager.isUIMode || !!this.uiView
-    this.suppressBlurHideUntil =
-      Date.now() +
-      (triggeredByShortcut ? COREBOX_SHORTCUT_FOCUS_GRACE_MS : COREBOX_DEFAULT_FOCUS_GRACE_MS)
+    const shouldFocus =
+      triggeredByShortcut || coreBoxManager.isUIMode || this.pluginViewController.hasView()
+    this.focusPolicy.beginFocusGrace(
+      triggeredByShortcut ? COREBOX_SHORTCUT_FOCUS_GRACE_MS : COREBOX_DEFAULT_FOCUS_GRACE_MS
+    )
     if (triggeredByShortcut) {
       try {
         app.focus({ steal: true })
@@ -765,13 +374,17 @@ export class WindowManager {
     })
     touchEventBus.emit(TalexEvents.COREBOX_WINDOW_SHOWN, new CoreBoxWindowShownEvent())
 
+    if (triggeredByShortcut) {
+      const transport = this.getTransport()
+      void transport
+        .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
+        .catch(() => {})
+    }
     setTimeout(() => {
       if (window.window.isDestroyed()) return
       window.window.focus()
-      const uiWebContents = this.getAliveUIViewWebContents()
-      if (coreBoxManager.isUIMode && uiWebContents) {
-        uiWebContents.focus()
-        this.uiViewFocused = true
+      if (coreBoxManager.isUIMode) {
+        this.pluginViewController.focusView()
       }
     }, 100)
   }
@@ -781,7 +394,7 @@ export class WindowManager {
     if (!window) return
     if (window.window.isDestroyed()) return
 
-    this.stopBoundsAnimation()
+    this.boundsController.stopAnimation()
     this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
       id: window.window.webContents.id,
       show: false
@@ -831,20 +444,21 @@ export class WindowManager {
       const display = currentWindow.window.isVisible()
         ? this.getDisplayForWindow(currentWindow)
         : this.getCurScreen()
-      const bounds = this.calculateCoreBoxBounds(display, { width: COREBOX_WIDTH, height })
+      const bounds = this.boundsController.calculateBounds(display, {
+        width: COREBOX_WIDTH,
+        height
+      })
       if (!bounds) return
 
       const settings = this.getAppSettingConfig()
       const animationEnabled = settings.animation?.coreBoxResize === true
 
       if (currentWindow.window.isVisible() && animationEnabled) {
-        this.animateWindowBounds(currentWindow, bounds, { minHeight: height })
+        this.boundsController.animate(currentWindow.window, bounds, { minHeight: height })
       } else {
-        this.stopBoundsAnimation()
+        this.boundsController.stopAnimation()
         try {
-          currentWindow.window.setBounds(bounds, false)
-          this.lastSetBounds = { height: bounds.height, y: bounds.y }
-          this.syncMetaOverlayBounds()
+          this.boundsController.setBounds(currentWindow.window, bounds)
           currentWindow.window.setMinimumSize(COREBOX_WIDTH, height)
         } catch (error) {
           coreBoxWindowLog.error('Failed to update window bounds', { error })
@@ -858,7 +472,7 @@ export class WindowManager {
   }
 
   public shrink(): void {
-    if (this.uiView) {
+    if (this.pluginViewController.hasView()) {
       coreBoxWindowLog.debug('UI view is attached during shrink, detaching before shrinking')
       this.detachUIView()
     }
@@ -868,18 +482,13 @@ export class WindowManager {
       const display = currentWindow.window.isVisible()
         ? this.getDisplayForWindow(currentWindow)
         : this.getCurScreen()
-      const bounds = this.calculateCoreBoxBounds(display, {
+      const bounds = this.boundsController.calculateBounds(display, {
         width: COREBOX_WIDTH,
         height: COREBOX_MIN_HEIGHT
       })
       if (!bounds) return
 
-      const rawBounds = currentWindow.window.getBounds()
-      const currentBounds = {
-        ...rawBounds,
-        height: this.lastSetBounds?.height ?? rawBounds.height,
-        y: this.lastSetBounds?.y ?? rawBounds.y
-      }
+      const currentBounds = this.boundsController.getCurrentBounds(currentWindow.window)
       if (
         Math.abs(currentBounds.x - bounds.x) < 3 &&
         Math.abs(currentBounds.y - bounds.y) < 3 &&
@@ -895,15 +504,15 @@ export class WindowManager {
       const animationEnabled = settings.animation?.coreBoxResize === true
 
       if (currentWindow.window.isVisible() && animationEnabled) {
-        this.animateWindowBounds(currentWindow, bounds, { minHeight: COREBOX_MIN_HEIGHT })
+        this.boundsController.animate(currentWindow.window, bounds, {
+          minHeight: COREBOX_MIN_HEIGHT
+        })
       } else {
-        this.stopBoundsAnimation()
-        const restoreResizable = this.prepareTemporaryResize(currentWindow.window)
+        this.boundsController.stopAnimation()
+        const restoreResizable = this.boundsController.prepareTemporaryResize(currentWindow.window)
         try {
           currentWindow.window.setMinimumSize(COREBOX_WIDTH, COREBOX_MIN_HEIGHT)
-          currentWindow.window.setBounds(bounds, false)
-          this.lastSetBounds = { height: bounds.height, y: bounds.y }
-          this.syncMetaOverlayBounds()
+          this.boundsController.setBounds(currentWindow.window, bounds)
           const [, minHeightAfter] = currentWindow.window.getMinimumSize()
           const finalBounds = currentWindow.window.getBounds()
           const shrinkMeta = {
@@ -948,13 +557,13 @@ export class WindowManager {
     }
 
     // Skip if already at target height (within tolerance)
-    const currentHeight = this.lastSetBounds?.height ?? currentWindow.window.getBounds().height
+    const currentHeight = this.boundsController.getCurrentHeight(currentWindow.window)
     if (Math.abs(currentHeight - safeHeight) < COREBOX_HEIGHT_TARGET_TOLERANCE) {
       return
     }
 
     const display = this.getDisplayForWindow(currentWindow)
-    const bounds = this.calculateCoreBoxBounds(display, {
+    const bounds = this.boundsController.calculateBounds(display, {
       width: COREBOX_WIDTH,
       height: safeHeight
     })
@@ -966,15 +575,13 @@ export class WindowManager {
     const animationEnabled = settings.animation?.coreBoxResize === true
 
     if (isVisible && animationEnabled) {
-      this.animateWindowBounds(currentWindow, bounds, { minHeight: safeHeight })
+      this.boundsController.animate(currentWindow.window, bounds, { minHeight: safeHeight })
     } else {
-      this.stopBoundsAnimation()
-      const restoreResizable = this.prepareTemporaryResize(currentWindow.window)
+      this.boundsController.stopAnimation()
+      const restoreResizable = this.boundsController.prepareTemporaryResize(currentWindow.window)
       try {
         currentWindow.window.setMinimumSize(COREBOX_WIDTH, safeHeight)
-        currentWindow.window.setBounds(bounds, false)
-        this.lastSetBounds = { height: bounds.height, y: bounds.y }
-        this.syncMetaOverlayBounds()
+        this.boundsController.setBounds(currentWindow.window, bounds)
         const [, minHeightAfter] = currentWindow.window.getMinimumSize()
         const finalBounds = currentWindow.window.getBounds()
         const setHeightMeta = {
@@ -1002,10 +609,8 @@ export class WindowManager {
    * Set custom vertical position offset for CoreBox (0-1 = 0%-100% from top)
    */
   public setPositionOffset(topPercent: number): void {
-    const safePercent = Math.max(0.1, Math.min(0.9, topPercent))
-    this.customTopPercent = safePercent
+    const safePercent = this.boundsController.setPositionOffset(topPercent)
 
-    // Apply immediately if window is visible
     const currentWindow = this.current
     if (currentWindow && currentWindow.window.isVisible()) {
       this.updatePosition(currentWindow)
@@ -1018,7 +623,7 @@ export class WindowManager {
    * Reset position offset to default (35% for collapsed)
    */
   public resetPositionOffset(): void {
-    this.customTopPercent = null
+    this.boundsController.resetPositionOffset()
     coreBoxWindowLog.debug('Position offset reset to default')
   }
 
@@ -1102,7 +707,7 @@ export class WindowManager {
   }
 
   public setPinned(pinned: boolean): void {
-    this.pinned = pinned
+    this.focusPolicy.setPinned(pinned)
 
     for (const window of this.windows) {
       this.applyPinnedStateToWindow(window, pinned)
@@ -1110,163 +715,7 @@ export class WindowManager {
   }
 
   public isPinned(): boolean {
-    return this.pinned
-  }
-
-  private syncViewCacheConfig(): void {
-    type AppSettingWithViewCache = AppSetting & {
-      viewCache?: {
-        maxCachedViews?: number
-        hotCacheDurationMs?: number
-      }
-    }
-    const settings = this.getAppSettingConfig() as AppSettingWithViewCache
-    const cfg = settings.viewCache
-    if (cfg && typeof cfg === 'object') {
-      const patch: { maxCachedViews?: number; hotCacheDurationMs?: number } = {}
-      if (typeof cfg.maxCachedViews === 'number') patch.maxCachedViews = cfg.maxCachedViews
-      if (typeof cfg.hotCacheDurationMs === 'number')
-        patch.hotCacheDurationMs = cfg.hotCacheDurationMs
-      viewCacheManager.updateConfig(patch)
-      viewCacheManager.cleanupStale()
-    }
-  }
-
-  private loadThemeStyleConfig(): ThemeStyleConfig {
-    const config = getMainConfig(StorageList.THEME_STYLE) as ThemeStyleConfig | undefined
-    if (config && typeof config === 'object') {
-      return config
-    }
-    return {}
-  }
-
-  private resolveDarkPreference(themeStyle: ThemeStyleConfig): {
-    followSystem: boolean
-    dark: boolean
-  } {
-    const themeState = resolveThemeStateFromStyle(
-      themeStyle.theme?.style,
-      nativeTheme.shouldUseDarkColors
-    )
-    return { followSystem: themeState.auto, dark: themeState.isDark }
-  }
-
-  private resolveThemeStoragePath(): { directory: string; file: string } {
-    const userDataDir = app.getPath('userData')
-    const directory = path.join(userDataDir, ...CORE_BOX_THEME_SUBDIR)
-    const file = path.join(directory, CORE_BOX_THEME_FILE_NAME)
-    return { directory, file }
-  }
-
-  private getBundledThemeCss(): string {
-    if (!this.bundledThemeCss) {
-      this.bundledThemeCss = defaultCoreBoxThemeCss
-    }
-    return this.bundledThemeCss
-  }
-
-  private loadInternalThemeCss(): string {
-    const defaultCss = this.getBundledThemeCss()
-    const { directory, file } = this.resolveThemeStoragePath()
-
-    try {
-      fs.mkdirSync(directory, { recursive: true })
-
-      if (!fs.existsSync(file)) {
-        fs.writeFileSync(file, defaultCss, 'utf-8')
-        return defaultCss
-      }
-
-      const content = fs.readFileSync(file, 'utf-8')
-      return content.trim().length > 0 ? content : defaultCss
-    } catch (error) {
-      coreBoxWindowLog.error('Failed to prepare theme stylesheet, falling back to default', {
-        error
-      })
-      return defaultCss
-    }
-  }
-
-  private applyThemeToUIView(view: WebContentsView): void {
-    const themeStyle = this.loadThemeStyleConfig()
-    const css = this.loadInternalThemeCss()
-    const webContents = getLiveViewWebContents(view)
-
-    if (webContents) {
-      const previousKey = this.uiViewThemeCssKey.get(view)
-      if (previousKey) {
-        void webContents.removeInsertedCSS(previousKey).catch(() => {})
-        this.uiViewThemeCssKey.delete(view)
-      }
-
-      void webContents
-        .insertCSS(css)
-        .then((key) => {
-          this.uiViewThemeCssKey.set(view, key)
-        })
-        .catch((error) => {
-          coreBoxWindowLog.error('Failed to inject theme variables into UI view', { error })
-        })
-    }
-
-    const { followSystem, dark } = this.resolveDarkPreference(themeStyle)
-    this.updateUIViewDarkClass(view, dark)
-    this.notifyThemeChange(dark)
-
-    if (this.nativeThemeHandler) {
-      nativeTheme.removeListener('updated', this.nativeThemeHandler)
-      this.nativeThemeHandler = null
-    }
-
-    if (followSystem) {
-      const handler = () => {
-        if (!this.uiView || this.uiView !== view || !getLiveViewWebContents(view)) {
-          return
-        }
-        this.updateUIViewDarkClass(view, nativeTheme.shouldUseDarkColors)
-        this.notifyThemeChange(nativeTheme.shouldUseDarkColors)
-      }
-      nativeTheme.on('updated', handler)
-      this.nativeThemeHandler = handler
-    }
-  }
-
-  private updateUIViewDarkClass(view: WebContentsView, isDark: boolean): void {
-    const webContents = getLiveViewWebContents(view)
-    if (!webContents) {
-      return
-    }
-
-    const themeLabel = isDark
-      ? chalk.bgHex('#0f172a').white.bold(' DARK ')
-      : chalk.bgHex('#f8fafc').black.bold(' LIGHT ')
-    coreBoxWindowLog.info(`${chalk.magenta('Apply UI theme')} ${themeLabel}`)
-
-    const script = `
-      (() => {
-        const root = document.documentElement;
-        if (!root) { return; }
-        const theme = '${isDark ? 'dark' : 'light'}';
-        root.classList.toggle('dark', theme === 'dark');
-        root.dataset.theme = theme;
-        root.style.colorScheme = theme;
-      })();
-    `
-
-    void webContents.executeJavaScript(script).catch((error) => {
-      coreBoxWindowLog.error('Failed to update UI view theme class', { error })
-    })
-  }
-
-  private notifyThemeChange(isDark: boolean): void {
-    this.currentThemeIsDark = isDark
-    const themeLabel = isDark
-      ? chalk.bgHex('#1f2937').white.bold(' DARK ')
-      : chalk.bgHex('#e5e7eb').black.bold(' LIGHT ')
-    coreBoxWindowLog.info(`${chalk.cyan('Theme ready')} ${themeLabel}`)
-
-    // Theme change events removed - theme is now passed once during attachUIView
-    // No real-time broadcasting to prevent channel timeout issues
+    return this.focusPolicy.isPinned()
   }
 
   public async attachUIView(
@@ -1275,452 +724,15 @@ export class WindowManager {
     query?: TuffQuery,
     feature?: IPluginFeature
   ): Promise<void> {
-    const startTime = performance.now()
-    const metrics = { preload: 0, viewCreate: 0, total: 0 }
-
-    const currentWindow = this.current
-    if (!currentWindow) {
-      coreBoxWindowLog.error('Cannot attach UI view: no window available')
-      return
-    }
-
-    const transport = this.getTransport()
-
-    coreBoxWindowLog.debug(`AttachUIView - loading ${url}`)
-
-    if (this.uiView) {
-      coreBoxWindowLog.warn('UI view already attached, skipping re-attachment')
-      return
-    }
-
-    this.syncViewCacheConfig()
-
-    if (plugin) {
-      const cached = viewCacheManager.get(plugin, feature)
-      if (cached) {
-        if (feature?.interaction?.type === 'webcontent') {
-          this.inputAllowed = feature.interaction.allowInput !== false
-        }
-        this.uiView = cached.view
-        this.attachedPlugin = cached.plugin
-        this.attachedFeature = cached.feature ?? null
-        this.uiViewFocused = true
-
-        currentWindow.window.contentView.addChildView(this.uiView)
-        const bounds = currentWindow.window.getBounds()
-        this.uiView.setBounds({
-          x: 0,
-          y: COREBOX_HEADER_HEIGHT,
-          width: bounds.width,
-          height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
-        })
-
-        const uiWebContents = this.getAliveUIViewWebContents()
-        if (uiWebContents) {
-          this.applyThemeToUIView(this.uiView)
-          uiWebContents.focus()
-
-          if (query) {
-            const normalizedQuery: TuffQuery = { ...query }
-            void transport
-              .sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
-                input: normalizedQuery.text ?? '',
-                query: normalizedQuery,
-                source: 'initial'
-              })
-              .catch(() => {})
-          }
-
-          this.broadcastCoreBoxUiResume(plugin.name, {
-            source: 'cache',
-            featureId: feature?.id,
-            url: cached.url
-          })
-        }
-
-        coreBoxWindowLog.info(`AttachUIView cache hit: ${plugin.name}`)
-        return
-      }
-    }
-
-    // Auto-enable input monitoring for webcontent features
-    // If feature has interaction.allowInput explicitly set, use that value
-    // Otherwise, default to true for webcontent features
-    if (feature?.interaction?.type === 'webcontent') {
-      const shouldAllowInput = feature.interaction.allowInput !== false
-      if (shouldAllowInput) {
-        this.inputAllowed = true
-        coreBoxWindowLog.debug('Auto-enabled input monitoring for webcontent feature')
-      }
-    }
-
-    const injections = usePluginInjections(plugin, 'core-box:attachUIView')
-    const securityProfile = resolvePluginViewSecurityProfile(plugin, {
-      source: 'core-box:attachUIView',
-      injections
-    })
-    coreBoxWindowLog.info('Resolved plugin UI view security profile', {
-      meta: {
-        plugin: plugin?.name,
-        candidateProfile: securityProfile.candidateProfile,
-        effectiveProfile: securityProfile.effectiveProfile,
-        reason: securityProfile.reason
-      }
-    })
-
-    // Compatibility views retain the legacy composed preload until the plugin migrates.
-    let preloadPath = injections?._.preload
-    if (securityProfile.effectiveProfile === 'compat-plugin-view' && plugin && injections?.js) {
-      const tempPreloadPath = path.resolve(
-        os.tmpdir(),
-        `talex-plugin-preload-${plugin.name}-${Date.now()}.js`
-      )
-
-      let originalPreloadContent = ''
-      if (injections._.preload && fse.existsSync(injections._.preload)) {
-        try {
-          originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
-        } catch (error) {
-          coreBoxWindowLog.warn(`Failed to read original preload: ${injections._.preload}`, {
-            error
-          })
-        }
-      }
-
-      // Pre-compute initial data to inject synchronously
-      const initialThemeData = { dark: this.currentThemeIsDark }
-
-      const channelScript = getPluginChannelPreludeCode({
-        uniqueKey: plugin._uniqueChannelKey,
-        initialData: { theme: initialThemeData }
-      })
-
-      const hasOriginalPreload = originalPreloadContent && originalPreloadContent.trim().length > 0
-      const pluginInjectionCode = injections.js.trim()
-
-      const combinedPreload = `
-// Auto-generated preload script for plugin initialization
-(function() {
-  try {
-    ${pluginInjectionCode};
-  } catch (error) {
-    console.error('[CoreBox] Failed to inject window.$plugin:', error);
-  }
-
-  try {
-    ${channelScript}
-  } catch (error) {
-    console.error('[CoreBox] Failed to inject touch channel bridge:', error);
-  }
-
-  ${
-    hasOriginalPreload
-      ? `try {
-    ${originalPreloadContent};
-  } catch (error) {
-    console.error('[CoreBox] Failed to execute original preload:', error);
-  }`
-      : '// No original preload script'
-  }
-})();
-`
-      try {
-        fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
-        preloadPath = path.resolve(tempPreloadPath)
-        coreBoxWindowLog.debug(`Created dynamic preload script: ${preloadPath}`)
-      } catch (error) {
-        coreBoxWindowLog.error(`Failed to create preload script: ${tempPreloadPath}`, {
-          error
-        })
-        preloadPath = injections._.preload
-      }
-    }
-
-    metrics.preload = performance.now() - startTime
-
-    const webPreferenceOverrides: Electron.WebPreferences = {
-      scrollBounce: true,
-      transparent: true
-    }
-    const webPreferences = plugin
-      ? buildPluginViewWebPreferences(securityProfile.effectiveProfile, {
-          plugin,
-          themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
-          source: `core-box:${url}`,
-          legacyPreload: preloadPath,
-          overrides: webPreferenceOverrides
-        })
-      : buildWindowWebPreferences('app', webPreferenceOverrides)
-    const navigationPolicy = plugin
-      ? await createPluginViewNavigationPolicy({
-          pluginRoot: plugin.pluginPath,
-          targetUrl: url,
-          securityProfile: securityProfile.effectiveProfile,
-          devAddress: plugin.dev.address,
-          appIsPackaged: app.isPackaged,
-          pluginDevEnabled: plugin.dev.enable,
-          pluginDevSource: Boolean(plugin.dev.source),
-          allowLegacyWebview: securityProfile.reason === 'legacy-webview'
-        })
-      : null
-
-    const viewCreateStart = performance.now()
-    const view = (this.uiView = new WebContentsView({ webPreferences }))
-    if (navigationPolicy) {
-      installPluginViewNavigationPolicy(view.webContents, navigationPolicy)
-    }
-    if (plugin) {
-      // Register this plugin surface so the channel layer can verify its origin
-      // and stop it from masquerading as a first-party (MAIN) caller.
-      const pluginViewWebContentsId = view.webContents.id
-      registerPluginWebContents(pluginViewWebContentsId, plugin.name)
-      view.webContents.once('destroyed', () => {
-        unregisterPluginWebContents(pluginViewWebContentsId)
-      })
-    }
-    metrics.viewCreate = performance.now() - viewCreateStart
-    this.attachedPlugin = plugin ?? null
-    this.attachedFeature = feature ?? null
-
-    this.uiViewFocused = true
-    currentWindow.window.contentView.addChildView(this.uiView)
-
-    metaOverlayManager.ensureOnTop()
-
-    this.uiView.webContents.addListener('blur', () => {
-      this.uiViewFocused = false
-    })
-
-    this.uiView.webContents.addListener('focus', () => {
-      this.uiViewFocused = true
-    })
-
-    // Listen for special keys in UI view
-    this.uiView.webContents.on('before-input-event', (event, input) => {
-      if (input.type !== 'keyDown') return
-
-      if (BLOCKED_COREBOX_FUNCTION_KEYS.has(input.key)) {
-        event.preventDefault()
-        return
-      }
-
-      // ESC: exit UI mode
-      if (input.key === 'Escape') {
-        coreBoxWindowLog.debug('ESC pressed in UI view, exiting UI mode')
-        coreBoxManager.exitUIMode()
-        event.preventDefault()
-        return
-      }
-
-      // Ctrl+R / Cmd+R: disable in production
-      if (input.key === 'r' && (input.control || input.meta)) {
-        if (app.isPackaged) {
-          event.preventDefault()
-        }
-      }
-    })
-
-    // Plugin bridge is available before page scripts; styles are injected on dom-ready.
-
-    this.uiView.webContents.addListener('dom-ready', () => {
-      this.applyThemeToUIView(view)
-
-      if (plugin) {
-        const liveWebContents = getLiveViewWebContents(view)
-
-        // Only auto-open DevTools for plugins in dev mode (not based on app.isPackaged)
-        if (plugin.dev?.enable && liveWebContents) {
-          liveWebContents.openDevTools({ mode: 'detach' })
-          this.uiViewFocused = true
-        }
-
-        if (injections?.styles) {
-          void getLiveViewWebContents(this.uiView)?.insertCSS(injections.styles)
-        }
-        if (pluginModule.pluginManager) {
-          pluginModule.pluginManager.setActivePlugin(plugin.name)
-        } else {
-          coreBoxWindowLog.warn('Plugin manager not available, cannot set plugin active')
-        }
-
-        getLiveViewWebContents(this.uiView)?.focus()
-      }
-    })
-
-    const bounds = currentWindow.window.getBounds()
-    this.uiView.setBounds({
-      x: 0,
-      y: COREBOX_HEADER_HEIGHT,
-      width: bounds.width,
-      height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
-    })
-
-    coreBoxWindowLog.debug(`AttachUIView - resolved URL ${url}`)
-    this.uiView.webContents.loadURL(url)
-
-    if (plugin) {
-      viewCacheManager.set(plugin, view, url, feature)
-    }
-
-    metrics.total = performance.now() - startTime
-    coreBoxWindowLog.info(
-      `AttachUIView metrics: preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`
-    )
-
-    // Initial theme is exposed synchronously through the trusted bridge.
-
-    // Send initial query directly to plugin after dom-ready (bypasses inputAllowed check)
-    if (query && plugin) {
-      const normalizedQuery: TuffQuery = { ...query }
-
-      // Dedupe inputs and extract text content if text is empty
-      if (normalizedQuery.inputs && normalizedQuery.inputs.length > 0) {
-        const seen = new Set<string>()
-        normalizedQuery.inputs = normalizedQuery.inputs.filter((input) => {
-          const key = `${input.type}:${input.content?.slice(0, 100)}`
-          if (seen.has(key)) return false
-          seen.add(key)
-          return true
-        })
-
-        // If text is empty and first input is text-like, move content to text
-        if (!normalizedQuery.text && normalizedQuery.inputs.length > 0) {
-          const firstInput = normalizedQuery.inputs[0]
-          if (firstInput.type === 'text' || firstInput.type === 'html') {
-            normalizedQuery.text = firstInput.content
-            normalizedQuery.inputs = normalizedQuery.inputs.slice(1)
-          }
-        }
-      }
-
-      this.uiView.webContents.once('dom-ready', () => {
-        void transport.sendToPlugin(plugin.name, CoreBoxEvents.input.change, {
-          input: normalizedQuery.text ?? '',
-          query: normalizedQuery,
-          source: 'initial'
-        })
-
-        this.broadcastCoreBoxUiResume(plugin.name, {
-          source: 'attach',
-          featureId: feature?.id,
-          url
-        })
-      })
-    }
-
-    if (!query && plugin) {
-      this.uiView.webContents.once('dom-ready', () => {
-        this.broadcastCoreBoxUiResume(plugin.name, {
-          source: 'attach',
-          featureId: feature?.id,
-          url
-        })
-      })
-    }
+    await this.pluginViewController.attach(url, plugin, query, feature)
   }
 
   public detachUIView(): void {
-    if (this.detachingUIView) {
-      coreBoxWindowLog.debug('detachUIView skipped because detachment is already in progress')
-      return
-    }
-    this.detachingUIView = true
-
-    // Reset permissions
-    this.inputAllowed = false
-    this.clipboardAllowedTypes = 0
-
-    try {
-      if (this.nativeThemeHandler) {
-        nativeTheme.removeListener('updated', this.nativeThemeHandler)
-        this.nativeThemeHandler = null
-      }
-
-      const view = this.uiView
-      if (!view) {
-        return
-      }
-
-      // Handle plugin state transition before detaching
-      if (this.attachedPlugin && pluginModule.pluginManager) {
-        const plugin = this.attachedPlugin
-
-        // Clear items pushed by this plugin from BoxItemManager
-        const boxItemManager = getBoxItemManager()
-        boxItemManager.clear(plugin.name)
-        coreBoxWindowLog.debug(`Cleared BoxItemManager items for plugin: ${plugin.name}`)
-
-        // Deactivate the plugin: set to ENABLED if still enabled, send INACTIVE event
-        if (plugin.status === PluginStatus.ACTIVE) {
-          plugin.status = PluginStatus.ENABLED
-          this.broadcastPluginMessage(
-            plugin.name,
-            PluginEvents.lifecycleSignal.inactive.toEventName(),
-            undefined
-          )
-        }
-      }
-
-      const webContents = getLiveViewWebContents(view)
-      const currentWindow = this.current
-      if (currentWindow && !currentWindow.window.isDestroyed()) {
-        if (webContents) {
-          try {
-            if (webContents.isDevToolsOpened()) {
-              webContents.closeDevTools()
-            }
-          } catch (error) {
-            coreBoxWindowLog.warn('Failed to close UI view DevTools', { error })
-          }
-        }
-        try {
-          currentWindow.window.contentView.removeChildView(view)
-        } catch (err) {
-          coreBoxWindowLog.warn('Failed to remove child view', { error: err })
-        }
-        currentWindow.window.webContents.focus()
-      } else {
-        coreBoxWindowLog.warn('Cannot remove child view: current window is null or destroyed')
-      }
-
-      type AppSettingWithViewCache = AppSetting & {
-        viewCache?: {
-          maxCachedViews?: number
-        }
-      }
-      const settings = this.getAppSettingConfig() as AppSettingWithViewCache
-      const cacheEnabled = (settings.viewCache?.maxCachedViews ?? 0) > 0
-
-      if (!cacheEnabled || !this.attachedPlugin) {
-        try {
-          if (webContents) {
-            webContents.close()
-          }
-        } catch (err) {
-          coreBoxWindowLog.warn('Failed to close UI view', { error: err })
-        }
-        if (this.attachedPlugin) {
-          viewCacheManager.release(this.attachedPlugin, this.attachedFeature ?? undefined)
-        }
-      }
-
-      this.uiView = null
-      this.attachedPlugin = null
-      this.attachedFeature = null
-    } finally {
-      this.detachingUIView = false
-    }
+    this.pluginViewController.detach()
   }
 
   public sendToUIView(channel: string, ...args: unknown[]): void {
-    const webContents = this.getAliveUIViewWebContents()
-    if (webContents) {
-      webContents.postMessage(channel, args)
-    }
-  }
-
-  private getAliveUIViewWebContents() {
-    return useAliveWebContents(this.uiView)
+    this.pluginViewController.sendToUIView(channel, ...args)
   }
 
   /**
@@ -1730,40 +742,11 @@ export class WindowManager {
    * @param data - Optional data payload
    */
   public sendChannelMessageToUIView(eventName: string, data?: unknown): void {
-    if (!this.attachedPlugin || !this.uiView || this.detachingUIView) {
-      return
-    }
-
-    const webContents = this.getAliveUIViewWebContents()
-    if (!webContents) {
-      return
-    }
-
-    this.broadcastPluginMessage(this.attachedPlugin.name, eventName, data)
-  }
-
-  private broadcastPluginMessage(pluginName: string, eventName: string, data?: unknown): void {
-    const transport = this.getTransport()
-    transport.broadcastPlugin(pluginName, eventName, data)
-  }
-
-  private broadcastCoreBoxUiResume(
-    pluginName: string,
-    payload: {
-      source: string
-      featureId?: string | number
-      url: string
-    }
-  ): void {
-    this.broadcastPluginMessage(pluginName, CoreBoxEvents.ui.resume.toEventName(), payload)
+    this.pluginViewController.sendChannelMessageToUIView(eventName, data)
   }
 
   public getUIView(): WebContentsView | undefined {
-    if (!this.uiView) {
-      return void 0
-    }
-
-    return this.uiView
+    return this.pluginViewController.getUIView()
   }
 
   /**
@@ -1772,40 +755,7 @@ export class WindowManager {
    * @returns The extracted UI view and plugin, or null if no view is attached
    */
   public extractUIView(): { view: WebContentsView; plugin: TouchPlugin } | null {
-    if (!this.uiView || !this.attachedPlugin) {
-      return null
-    }
-
-    const currentWindow = this.current
-    if (!currentWindow || currentWindow.window.isDestroyed()) {
-      return null
-    }
-
-    if (!currentWindow.window.isVisible()) {
-      coreBoxWindowLog.warn('Cannot extract UI view: CoreBox window is not visible')
-      return null
-    }
-
-    // Remove from CoreBox window (but don't destroy)
-    try {
-      currentWindow.window.contentView.removeChildView(this.uiView)
-    } catch (err) {
-      coreBoxWindowLog.error('Failed to remove UI view from CoreBox', { error: err })
-      return null
-    }
-
-    const result = {
-      view: this.uiView,
-      plugin: this.attachedPlugin
-    }
-
-    // Clear references without destroying
-    this.uiView = null
-    this.attachedPlugin = null
-    this.uiViewFocused = false
-
-    coreBoxWindowLog.info('UI view extracted for transfer')
-    return result
+    return this.pluginViewController.extractUIView()
   }
 
   /**
@@ -1813,64 +763,21 @@ export class WindowManager {
    * This is used as a rollback path when transferring the view fails.
    */
   public restoreExtractedUIView(view: WebContentsView, plugin: TouchPlugin): boolean {
-    const currentWindow = this.current
-    if (!currentWindow || currentWindow.window.isDestroyed()) {
-      coreBoxWindowLog.warn('Cannot restore UI view: CoreBox window is not available')
-      return false
-    }
-
-    if (this.uiView) {
-      coreBoxWindowLog.warn('Cannot restore UI view: another UI view is already attached')
-      return false
-    }
-
-    this.uiView = view
-    this.attachedPlugin = plugin
-    this.attachedFeature = null
-    this.uiViewFocused = true
-
-    try {
-      currentWindow.window.contentView.addChildView(view)
-      const bounds = currentWindow.window.getBounds()
-      view.setBounds({
-        x: 0,
-        y: COREBOX_HEADER_HEIGHT,
-        width: bounds.width,
-        height: Math.max(0, bounds.height - COREBOX_HEADER_HEIGHT)
-      })
-    } catch (error) {
-      coreBoxWindowLog.error('Failed to restore extracted UI view', { error })
-      this.uiView = null
-      this.attachedPlugin = null
-      this.attachedFeature = null
-      this.uiViewFocused = false
-      return false
-    }
-
-    const webContents = getLiveViewWebContents(view)
-    if (webContents) {
-      this.applyThemeToUIView(view)
-      webContents.focus()
-    }
-
-    coreBoxWindowLog.info('UI view restored after failed transfer', {
-      meta: { plugin: plugin.name }
-    })
-    return true
+    return this.pluginViewController.restoreExtractedUIView(view, plugin)
   }
 
   /**
    * Check if UI view is currently active and focused
    */
   public isUIViewActive(): boolean {
-    return !!(this.uiView && this.attachedPlugin)
+    return this.pluginViewController.isUIViewActive()
   }
 
   /**
    * Check if UI view has focus (vs main CoreBox input)
    */
   public isUIViewFocused(): boolean {
-    return this.uiViewFocused
+    return this.pluginViewController.isUIViewFocused()
   }
 
   /**
@@ -1888,107 +795,8 @@ export class WindowManager {
    * @param event.shiftKey - Whether the Shift key is pressed
    * @param event.repeat - Whether this is a repeat event from holding the key
    */
-  public forwardKeyEvent(event: {
-    key: string
-    code: string
-    metaKey: boolean
-    ctrlKey: boolean
-    altKey: boolean
-    shiftKey: boolean
-    repeat: boolean
-  }): void {
-    if (!this.uiView) {
-      coreBoxWindowLog.debug('Cannot forward key event: no UI view attached')
-      return
-    }
-
-    const webContents = this.getAliveUIViewWebContents()
-    if (!webContents) {
-      coreBoxWindowLog.debug('Cannot forward key event: UI view webContents is unavailable')
-      return
-    }
-
-    if (BLOCKED_COREBOX_FUNCTION_KEYS.has(event.key)) {
-      coreBoxWindowLog.debug(`Blocked function key forwarding: ${event.key}`)
-      return
-    }
-
-    const modifiers = this.buildKeyModifiers(event)
-    const keyCode = this.mapKeyToElectronKeyCode(event.key)
-
-    coreBoxWindowLog.debug(`Simulating key input: ${event.key}`, {
-      meta: { keyCode, modifiers: modifiers.join(',') }
-    })
-
-    webContents.sendInputEvent({
-      type: 'keyDown',
-      keyCode,
-      modifiers
-    })
-
-    if (event.key.length === 1) {
-      webContents.sendInputEvent({
-        type: 'char',
-        keyCode: event.key,
-        modifiers
-      })
-    }
-
-    webContents.sendInputEvent({
-      type: 'keyUp',
-      keyCode,
-      modifiers
-    })
-  }
-
-  /**
-   * Builds the modifiers array for Electron's sendInputEvent API.
-   *
-   * @param event - The keyboard event containing modifier key states
-   * @returns Array of modifier strings compatible with Electron's input event API
-   */
-  private buildKeyModifiers(event: {
-    shiftKey: boolean
-    ctrlKey: boolean
-    altKey: boolean
-    metaKey: boolean
-    repeat: boolean
-  }): Array<'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'> {
-    const modifiers: Array<
-      'shift' | 'control' | 'alt' | 'meta' | 'cmd' | 'iskeypad' | 'isautorepeat'
-    > = []
-    if (event.shiftKey) modifiers.push('shift')
-    if (event.ctrlKey) modifiers.push('control')
-    if (event.altKey) modifiers.push('alt')
-    if (event.metaKey) modifiers.push('meta')
-    if (event.repeat) modifiers.push('isautorepeat')
-    return modifiers
-  }
-
-  /**
-   * Maps a DOM key value to Electron's keyCode format for sendInputEvent.
-   *
-   * @param key - The DOM key value (e.g., 'ArrowUp', 'Enter')
-   * @returns The corresponding Electron keyCode (e.g., 'Up', 'Return')
-   */
-  private mapKeyToElectronKeyCode(key: string): string {
-    const keyMap: Record<string, string> = {
-      ArrowUp: 'Up',
-      ArrowDown: 'Down',
-      ArrowLeft: 'Left',
-      ArrowRight: 'Right',
-      Enter: 'Return',
-      Escape: 'Escape',
-      Backspace: 'Backspace',
-      Tab: 'Tab',
-      Delete: 'Delete',
-      Home: 'Home',
-      End: 'End',
-      PageUp: 'PageUp',
-      PageDown: 'PageDown',
-      ' ': 'Space'
-    }
-    return keyMap[key] || key
+  public forwardKeyEvent(event: CoreBoxKeyEvent): void {
+    this.pluginViewController.forwardKeyEvent(event)
   }
 
   /**
@@ -1998,24 +806,7 @@ export class WindowManager {
    * @returns true if DevTools was opened, false otherwise
    */
   public openPluginDevTools(pluginName: string): boolean {
-    if (!this.attachedPlugin || this.attachedPlugin.name !== pluginName) {
-      return false
-    }
-
-    const devtoolsAllowed =
-      this.attachedPlugin.dev?.enable || this.touchApp.version === TalexTouch.AppVersion.DEV
-    if (!devtoolsAllowed) {
-      coreBoxWindowLog.warn(`DevTools blocked for non-dev plugin: ${pluginName}`)
-      return false
-    }
-
-    const uiWebContents = this.getAliveUIViewWebContents()
-    if (uiWebContents) {
-      uiWebContents.openDevTools({ mode: 'detach' })
-      return true
-    }
-
-    return false
+    return this.pluginViewController.openPluginDevTools(pluginName)
   }
 }
 

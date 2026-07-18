@@ -34,6 +34,7 @@ import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   intelligenceApiEvents,
   intelligenceContextEvents,
+  intelligenceOrchestratorEvents,
   intelligenceKnowledgeEvents
 } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { createHash } from 'node:crypto'
@@ -59,13 +60,17 @@ import {
 } from './intelligence-config'
 import { intelligenceContextExecutionService } from './intelligence-context-execution'
 import { contextHygieneService } from './intelligence-context-hygiene'
-import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
 import { toNormalizedIntelligenceError } from './intelligence-error-normalizer'
 import { getIntelligenceLocalEnvironment } from './intelligence-local-environment'
+import { aiCliOrchestrator } from './ai-cli-orchestrator'
 import { localKnowledgeEngine } from './intelligence-local-knowledge-engine'
 import { intelligenceMcpRegistry } from './intelligence-mcp-registry'
 import { getProviderModelOptions } from './intelligence-provider-model-options'
-import { setIntelligenceProviderManager, tuffIntelligence } from './intelligence-sdk'
+import {
+  setIntelligenceAutonomousRuntimeAdapter,
+  setIntelligenceProviderManager,
+  tuffIntelligence
+} from './intelligence-sdk'
 import { intelligenceTtsService } from './intelligence-tts-service'
 import { intelligenceWorkflowService } from './intelligence-workflow-service'
 import { createCustomProvider } from './provider-factory'
@@ -407,7 +412,12 @@ function bindPluginInvokeCaller(
   if (!context.plugin) {
     return options
   }
-  return bindPluginMetadataCaller(options ?? {}, context)
+  const scoped = bindPluginMetadataCaller(options ?? {}, context)
+  const metadata = { ...(scoped.metadata ?? {}) }
+  delete metadata.approved
+  delete metadata.approvalGranted
+  delete metadata.approvedAt
+  return { ...scoped, metadata }
 }
 
 const AUTONOMOUS_INTELLIGENCE_CAPABILITIES: Record<string, true> = {
@@ -622,6 +632,13 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     // 设置全局 Provider Manager
     setIntelligenceProviderManager(this.manager)
+    setIntelligenceAutonomousRuntimeAdapter({
+      executeAgentCapability: (payload, options) =>
+        aiCliOrchestrator.executeAgentCapability(payload, options),
+      executeWorkflowCapability: (payload, options) =>
+        aiCliOrchestrator.executeWorkflowCapability(payload, options)
+    })
+    intelligenceLog.info('Provider manager injected')
 
     // 注册 IPC 通道
     this.registerChannels()
@@ -652,6 +669,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       this.agentChannelsCleanup()
       this.agentChannelsCleanup = null
     }
+    await aiCliOrchestrator.shutdown()
     await intelligenceMcpRegistry.closeAll()
     await agentManager.shutdown()
     intelligenceTtsService.clear()
@@ -679,31 +697,15 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     intelligenceLog.info('Initializing intelligence agent runtime')
     registerBuiltinTools()
     registerBuiltinAgents()
-    intelligenceWorkflowService.setExecutor((ctx) =>
-      intelligenceDeepAgentOrchestrationService.executeWorkflowRun(ctx)
+    intelligenceWorkflowService.setExecutor((ctx) => aiCliOrchestrator.executeWorkflowRun(ctx))
+
+    agentManager.setTaskRuntime(
+      (task) => aiCliOrchestrator.executeAgentTask(task),
+      (taskId) => aiCliOrchestrator.cancel(taskId)
     )
 
-    await agentManager.init({
-      invoke: async (capability, params, options) => {
-        try {
-          const result = await tuffIntelligence.invoke(
-            capability,
-            params,
-            options as IntelligenceInvokeOptions
-          )
-          return {
-            success: true,
-            data: result.result,
-            usage: result.usage
-          }
-        } catch (error) {
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : String(error)
-          }
-        }
-      }
-    })
+    await aiCliOrchestrator.initialize()
+    await agentManager.init()
 
     await intelligenceWorkflowService.initialize()
     this.verifyAgentRuntimeReady()
@@ -1116,6 +1118,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     this.registerCapabilityChannels(registerSafe)
     this.registerStatsChannels(registerSafe)
     this.registerEnvironmentChannels(registerSafe)
+    this.registerAiCliOrchestratorChannels(registerSafe)
     this.registerQuotaChannels(registerSafe)
     this.registerOrchestrationChannels(registerHostOnlySafe)
     this.registerWorkflowChannels(registerHostOnlySafe)
@@ -1714,6 +1717,111 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     )
   }
 
+  private registerAiCliOrchestratorChannels(
+    registerSafe: <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
+    ) => void
+  ): void {
+    const registerHostOwned = <TReq, TRes>(
+      event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
+      action: string,
+      operation: (payload: TReq) => Promise<TRes> | TRes
+    ) => {
+      registerSafe(event, action, async (payload, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        return await operation(payload)
+      })
+    }
+
+    registerHostOwned(
+      intelligenceOrchestratorEvents.getSnapshot,
+      'Get AI orchestrator snapshot',
+      () => aiCliOrchestrator.getSnapshot()
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.previewImport,
+      'Preview AI configuration import',
+      (payload) => aiCliOrchestrator.previewImport(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.applyImport,
+      'Apply AI configuration import',
+      (payload) => aiCliOrchestrator.applyImport(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.setImportedItemActive,
+      'Update imported AI item',
+      (payload) => aiCliOrchestrator.setImportedItemActive(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.cloneImportedItem,
+      'Clone imported AI item',
+      (payload) => aiCliOrchestrator.cloneImportedItem(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.deleteImportedItem,
+      'Delete imported AI item',
+      async (payload) => ({
+        deleted: await aiCliOrchestrator.deleteImportedItem(payload.itemId)
+      })
+    )
+    registerHostOwned(intelligenceOrchestratorEvents.listProfiles, 'List AI agent profiles', () =>
+      aiCliOrchestrator.listProfiles()
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.saveProfile,
+      'Save AI agent profile',
+      (payload) => aiCliOrchestrator.saveProfile(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.execute,
+      'Execute AI orchestrator task',
+      (payload) => aiCliOrchestrator.execute(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.approve,
+      'Approve AI orchestrator task',
+      (payload) => aiCliOrchestrator.approveRun(payload.runId)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.cancel,
+      'Cancel AI orchestrator task',
+      async (payload) => ({ cancelled: await aiCliOrchestrator.cancelPersistedRun(payload.runId) })
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.listRuns,
+      'List AI orchestrator runs',
+      (payload) => aiCliOrchestrator.listRuns(payload)
+    )
+    registerHostOwned(intelligenceOrchestratorEvents.listAutomations, 'List AI automations', () =>
+      aiCliOrchestrator.listAutomations()
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.saveAutomation,
+      'Save AI automation',
+      (payload) => aiCliOrchestrator.saveAutomation(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.deleteAutomation,
+      'Delete AI automation',
+      async (payload) => ({
+        deleted: await aiCliOrchestrator.deleteAutomation(payload.automationId)
+      })
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.runAutomation,
+      'Run AI automation',
+      (payload) => aiCliOrchestrator.runAutomation(payload)
+    )
+    registerHostOwned(
+      intelligenceOrchestratorEvents.approveAutomation,
+      'Approve AI automation',
+      (payload) => aiCliOrchestrator.approveAutomation(payload)
+    )
+  }
+
   private registerOrchestrationChannels(
     registerHostOnlySafe: <TReq, TRes>(
       event: TuffEvent<TReq, ApiResponse<TRes>> & { toEventName: () => string },
@@ -1725,38 +1833,66 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     registerHostOnlySafe(
       intelligenceSessionStartEvent,
       'Start intelligence session',
-      async (data) => {
+      async (data, context) => {
         if (data && typeof data !== 'object') {
           throw new Error('Invalid session start payload')
         }
         const payload = (data ?? {}) as IntelligenceSessionStartPayload
         const shouldAutoRun = payload.autoRunGraph === true && typeof payload.objective === 'string'
+        if (shouldAutoRun) {
+          await assertAutonomousIntelligencePermission('agent.run', data, context)
+        }
+        if (shouldAutoRun && payload.continueOnError === true) {
+          throw new Error(
+            'Pi auto-run does not support continueOnError; split the task into explicit workflows'
+          )
+        }
         const session = await tuffIntelligenceRuntime.startSession(payload)
         if (!shouldAutoRun) {
           return session
         }
+        const scopedAutoRunMetadata = bindPluginInvokeCaller(
+          { metadata: payload.metadata },
+          context
+        )?.metadata
 
-        await tuffIntelligenceRuntime.runAgentGraph({
+        const run = await aiCliOrchestrator.execute({
+          objective: [
+            payload.objective!.trim(),
+            payload.reflectNotes?.trim() ? `Reflection notes:\n${payload.reflectNotes.trim()}` : ''
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+          input: payload.context,
           sessionId: session.id,
-          objective: payload.objective!.trim(),
-          context: payload.context,
-          metadata: payload.metadata,
-          maxSteps: payload.maxSteps,
-          toolBudget: payload.toolBudget,
-          continueOnError: payload.continueOnError,
-          reflectNotes: payload.reflectNotes
+          approved: false,
+          budget: {
+            maxSteps: payload.maxSteps,
+            maxToolCalls: payload.toolBudget
+          },
+          metadata: {
+            ...(scopedAutoRunMetadata ?? {}),
+            orchestratorRunId: `session:${session.id}`,
+            legacySessionId: session.id
+          }
         })
-
-        const snapshot = await tuffIntelligenceRuntime.getSessionState(session.id)
-        if (!snapshot) {
-          return session
-        }
 
         return {
           ...session,
-          status: snapshot.status,
-          currentTurnId: snapshot.currentTurn?.id ?? session.currentTurnId,
-          updatedAt: snapshot.updatedAt
+          status:
+            run.status === 'completed'
+              ? 'completed'
+              : run.status === 'cancelled'
+                ? 'cancelled'
+                : run.status === 'pending_approval'
+                  ? 'waiting_approval'
+                  : 'failed',
+          metadata: {
+            ...(session.metadata ?? {}),
+            orchestratorRunId: run.id,
+            ...(run.error ? { error: run.error } : {})
+          },
+          updatedAt: run.completedAt ?? Date.now()
         }
       }
     )
@@ -1809,7 +1945,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
         if (!data?.sessionId) {
           throw new Error('sessionId is required')
         }
-        return tuffIntelligenceRuntime.cancelSession(data)
+        const session = await tuffIntelligenceRuntime.cancelSession(data)
+        await aiCliOrchestrator.cancelSessionRuns(data.sessionId)
+        return session
       }
     )
 

@@ -293,28 +293,6 @@ export class TuffIntelligenceRuntime {
     return stored.session
   }
 
-  async runAgentGraph(payload: {
-    sessionId?: string
-    objective: string
-    context?: Record<string, unknown>
-    metadata?: Record<string, unknown>
-    maxSteps?: number
-    toolBudget?: number
-    continueOnError?: boolean
-    reflectNotes?: string
-  }): Promise<TuffIntelligenceStateSnapshot | null> {
-    const objective = String(payload.objective || '').trim()
-    if (!objective) {
-      throw new Error('objective is required')
-    }
-
-    const { runCoreIntelligenceAgentGraph } = await import('./intelligence-agent-graph-runner')
-    return await runCoreIntelligenceAgentGraph(this, {
-      ...payload,
-      objective
-    })
-  }
-
   async heartbeatSession(sessionId: string): Promise<{ sessionId: string; heartbeatAt: string }> {
     const stored = await this.requireSession(sessionId)
     const heartbeatAt = new Date().toISOString()
@@ -978,6 +956,16 @@ export class TuffIntelligenceRuntime {
         typeof options.metadata?.caller === 'string' && options.metadata.caller.trim()
           ? options.metadata.caller.trim()
           : 'intelligence.orchestrator'
+      const capabilityInput =
+        capabilityId === 'agent.run'
+          ? (node.input ?? { task: turn.objective || stored.session.objective || 'Continue task' })
+          : {
+              task: turn.objective || stored.session.objective || 'Continue task',
+              context: {
+                legacyCapabilityId: capabilityId,
+                input: node.input
+              }
+            }
       const invokeOptions: IntelligenceInvokeOptions = {
         metadata: {
           ...options.metadata,
@@ -986,7 +974,7 @@ export class TuffIntelligenceRuntime {
           turnId: turn.id
         }
       }
-      const result = await tuffIntelligence.invoke(capabilityId, node.input ?? {}, invokeOptions)
+      const result = await tuffIntelligence.invoke('agent.run', capabilityInput, invokeOptions)
       node.status = 'completed'
       node.output = result.result
       node.updatedAt = now()
@@ -1204,100 +1192,18 @@ export class TuffIntelligenceRuntime {
     objective: string,
     context?: Record<string, unknown>
   ): Promise<PlannedAction[]> {
-    const availableTools = toolRegistry.getAllTools().map((tool) => tool.id)
-    const availableAgents = agentManager.getAvailableAgents().map((agent) => agent.id)
-
-    try {
-      const plannerResponse = await tuffIntelligence.invoke<string>(
-        'text.chat',
-        {
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are TuffIntelligence planner. Return JSON array only. Each item: {"title":"...","type":"tool|agent|capability","toolId":"...","agentId":"...","capabilityId":"...","input":{},"riskLevel":"low|medium|high|critical"}.'
-            },
-            {
-              role: 'user',
-              content: JSON.stringify({
-                objective,
-                context: context ?? {},
-                availableTools,
-                availableAgents
-              })
-            }
-          ]
-        },
-        {
-          metadata: {
-            caller: 'intelligence.orchestrator',
-            objective
-          }
-        }
-      )
-
-      const parsed = safeParseJson<PlannedAction[]>(plannerResponse.result, [])
-      const normalized = parsed
-        .filter((item) => Boolean(item?.title && item?.type))
-        .map((item, index) => {
-          const type = item.type === 'tool' || item.type === 'agent' ? item.type : 'capability'
-          return {
-            title: item.title || `Step ${index + 1}`,
-            type,
-            toolId: type === 'tool' ? item.toolId : undefined,
-            agentId: type === 'agent' ? item.agentId : undefined,
-            capabilityId: type === 'capability' ? item.capabilityId || 'text.chat' : undefined,
-            input: item.input ?? {},
-            riskLevel:
-              item.riskLevel && ['low', 'medium', 'high', 'critical'].includes(item.riskLevel)
-                ? item.riskLevel
-                : undefined
-          } satisfies PlannedAction
-        })
-
-      if (normalized.length > 0) {
-        return normalized
-      }
-    } catch (error) {
-      runtimeLog.warn('Planner invoke failed, using deterministic fallback', { error })
-    }
-
-    const fallbackActions: PlannedAction[] = []
-    if (availableTools.length > 0) {
-      fallbackActions.push({
-        title: 'Collect context files',
-        type: 'tool',
-        toolId: 'file.list',
-        input: { path: '.', recursive: false },
-        riskLevel: 'low'
-      })
-    }
-    if (availableAgents.includes('builtin.search-agent')) {
-      fallbackActions.push({
-        title: 'Search relevant resources',
-        type: 'agent',
-        agentId: 'builtin.search-agent',
+    return [
+      {
+        title: 'Execute with Tuff Pi coordinator',
+        type: 'capability',
+        capabilityId: 'agent.run',
         input: {
-          capability: 'search.semantic',
-          query: objective,
-          context: context?.summary
-        }
-      })
-    }
-    fallbackActions.push({
-      title: 'Produce final response',
-      type: 'capability',
-      capabilityId: 'text.chat',
-      input: {
-        messages: [
-          {
-            role: 'user',
-            content: objective
-          }
-        ]
+          task: objective,
+          ...(context ? { context } : {})
+        },
+        riskLevel: 'low'
       }
-    })
-    return fallbackActions
+    ]
   }
 
   private async generateReflectionSummary(params: {
@@ -1305,34 +1211,10 @@ export class TuffIntelligenceRuntime {
     notes?: string
     actions: Array<{ id: string; type: string; status: string; output?: unknown; error?: string }>
   }): Promise<string> {
-    try {
-      const response = await tuffIntelligence.invoke<string>(
-        'text.chat',
-        {
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are TuffIntelligence reviewer. Provide concise reflection summary with wins, risks, next actions.'
-            },
-            {
-              role: 'user',
-              content: JSON.stringify(params)
-            }
-          ]
-        },
-        {
-          metadata: {
-            caller: 'intelligence.orchestrator',
-            phase: 'reflect'
-          }
-        }
-      )
-      return response.result
-    } catch (_error) {
-      const suffix = params.notes ? `; notes: ${params.notes}` : ''
-      return `Objective "${params.objective}" completed with ${params.actions.length} actions${suffix}`
-    }
+    const completed = params.actions.filter((action) => action.status === 'completed').length
+    const failed = params.actions.filter((action) => action.status === 'failed').length
+    const notes = params.notes ? `; notes: ${params.notes}` : ''
+    return `Objective "${params.objective}" completed ${completed}/${params.actions.length} actions; failed ${failed}${notes}`
   }
 
   private appendActionNode(

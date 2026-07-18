@@ -13,7 +13,9 @@ export const INTELLIGENCE_ERROR_CODES = [
 
 export type IntelligenceErrorCode = (typeof INTELLIGENCE_ERROR_CODES)[number];
 
-export function isIntelligenceErrorCode(value: unknown): value is IntelligenceErrorCode {
+export function isIntelligenceErrorCode(
+  value: unknown,
+): value is IntelligenceErrorCode {
   return (
     typeof value === "string" &&
     (INTELLIGENCE_ERROR_CODES as readonly string[]).includes(value)

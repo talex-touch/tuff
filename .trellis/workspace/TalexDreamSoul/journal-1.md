@@ -621,3 +621,67 @@ Committed verified CoreBox toast gating, completed and validated nine plugin Tuf
 ### Next Steps
 
 - None - task complete
+
+## Session 14: Harden CoreBox transport and WindowManager
+
+**Date**: 2026-07-18
+**Task**: Harden CoreBox transport and WindowManager
+**Branch**: `TalexDreamSoul/master`
+
+### Summary
+
+Aligned CoreBox typed transport contracts, split WindowManager into focused controllers, fixed the Sentry singleton initialization cycle, and verified the Electron runtime path.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `80ab3e68d` | (see git log) |
+| `2ec45efa2` | (see git log) |
+| `8e2bdc559` | (see git log) |
+| `3a7c15ef1` | (see git log) |
+
+### Testing
+
+- [OK] Focused CoreBox tests, typecheck, lint, and Electron runtime verification.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+## Session 15: Integrate Pi AI orchestrator and CLI imports
+
+**Date**: 2026-07-18
+**Task**: Integrate Pi AI orchestrator and CLI imports
+**Branch**: `TalexDreamSoul/master`
+
+### Summary
+
+Added durable AI orchestration contracts and storage, governed automation and multi-CLI imports, completed the Pi runtime cutover, exposed the renderer/plugin experience, and verified Ollama 3B, tests, typechecks, lint, package builds, and Electron production bundling.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3ae037fe6` | (see git log) |
+| `66b22612a` | (see git log) |
+| `c5e137930` | (see git log) |
+| `5427d65fa` | (see git log) |
+| `0fae854ef` | (see git log) |
+| `508da272d` | (see git log) |
+
+### Testing
+
+- [OK] 128 focused AI tests, node/web typecheck, lint, package builds, utility-process smoke, and isolated Electron UI verification.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

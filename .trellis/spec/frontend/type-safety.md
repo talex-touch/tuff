@@ -60,6 +60,7 @@ When adding a new event kind, SDK method, JSONL record, or RPC payload:
 2. Add the typed event/domain SDK mapping.
 3. Normalize runtime input at the boundary.
 4. Update focused tests in both producer and consumer packages when the payload crosses packages.
+5. Register, send, relay, and mock the event through the same exported `TuffEvent`. If an adapter needs a string, derive it with `toEventName()`; never duplicate the raw event name in main, renderer, plugin relay, or test fixtures. Separate Electron bundles can otherwise compile different names and fail at runtime with `No handler registered` despite passing isolated tests.
 
 ---
 

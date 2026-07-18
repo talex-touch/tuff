@@ -23,10 +23,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentManager } from './agents'
 import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
-import { intelligenceDeepAgentOrchestrationService } from './intelligence-deepagent-orchestration'
 import { markOuterGovernedInvocation } from './intelligence-invoke-governance'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
-import { setIntelligenceProviderManager, TuffIntelligenceSDK } from './intelligence-sdk'
+import {
+  setIntelligenceAutonomousRuntimeAdapter,
+  setIntelligenceProviderManager,
+  TuffIntelligenceSDK
+} from './intelligence-sdk'
 
 const { appMock } = vi.hoisted(() => ({
   appMock: {
@@ -124,12 +127,11 @@ vi.mock('./agents', () => ({
   }
 }))
 
-vi.mock('./intelligence-deepagent-orchestration', () => ({
-  intelligenceDeepAgentOrchestrationService: {
-    executeAgentCapability: vi.fn(),
-    executeWorkflowCapability: vi.fn()
-  }
-}))
+const autonomousRuntimeMocks = {
+  executeAgentCapability: vi.fn(),
+  executeWorkflowCapability: vi.fn()
+}
+setIntelligenceAutonomousRuntimeAdapter(autonomousRuntimeMocks)
 
 interface TestProvider extends IntelligenceProviderAdapter {
   visionOcr: (
@@ -219,8 +221,9 @@ afterEach(() => {
   intelligenceCapabilityRegistry.clear()
   vi.mocked(agentManager.isInitialized).mockReset()
   vi.mocked(agentManager.isInitialized).mockReturnValue(false)
-  vi.mocked(intelligenceDeepAgentOrchestrationService.executeAgentCapability).mockReset()
-  vi.mocked(intelligenceDeepAgentOrchestrationService.executeWorkflowCapability).mockReset()
+  autonomousRuntimeMocks.executeAgentCapability.mockReset()
+  autonomousRuntimeMocks.executeWorkflowCapability.mockReset()
+  setIntelligenceAutonomousRuntimeAdapter(autonomousRuntimeMocks)
 })
 
 describe('tuffIntelligenceSDK quota verification', () => {
@@ -2964,9 +2967,7 @@ describe('tuffIntelligenceSDK invoke', () => {
       supportedProviders: [IntelligenceProviderType.CUSTOM]
     })
 
-    const workflowInvoke = vi.mocked(
-      intelligenceDeepAgentOrchestrationService.executeWorkflowCapability
-    )
+    const workflowInvoke = autonomousRuntimeMocks.executeWorkflowCapability
     workflowInvoke.mockResolvedValue({
       result: {
         id: 'execution-1',
@@ -3041,9 +3042,7 @@ describe('tuffIntelligenceSDK invoke', () => {
       supportedProviders: [IntelligenceProviderType.CUSTOM]
     })
 
-    const workflowInvoke = vi.mocked(
-      intelligenceDeepAgentOrchestrationService.executeWorkflowCapability
-    )
+    const workflowInvoke = autonomousRuntimeMocks.executeWorkflowCapability
     workflowInvoke.mockResolvedValue({
       result: {
         id: 'chat-backed-execution',
@@ -3140,7 +3139,7 @@ describe('tuffIntelligenceSDK invoke', () => {
     })
     vi.mocked(agentManager.isInitialized).mockReturnValue(false)
 
-    const agentInvoke = vi.mocked(intelligenceDeepAgentOrchestrationService.executeAgentCapability)
+    const agentInvoke = autonomousRuntimeMocks.executeAgentCapability
     agentInvoke.mockResolvedValue({
       result: {
         result: 'Prioritize the release validation checklist.',
@@ -3226,61 +3225,5 @@ describe('tuffIntelligenceSDK invoke', () => {
         }
       })
     )
-  })
-
-  it('resolves DeepAgent runtime config from non-Anthropic provider selection', async () => {
-    intelligenceCapabilityRegistry.register({
-      id: 'text.chat',
-      type: IntelligenceCapabilityType.CHAT,
-      name: 'Chat',
-      description: 'test chat capability',
-      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.ANTHROPIC]
-    })
-
-    const anthropicProvider = createProvider(
-      {
-        id: 'anthropic-primary',
-        type: IntelligenceProviderType.ANTHROPIC,
-        name: 'Anthropic Primary',
-        enabled: true,
-        priority: 1,
-        models: ['claude-3-7-sonnet'],
-        capabilities: ['text.chat'],
-        apiKey: 'anthropic-key',
-        baseUrl: 'https://api.anthropic.com/v1'
-      },
-      vi.fn()
-    )
-
-    const openaiProvider = createProvider(
-      {
-        id: 'openai-fallback',
-        type: IntelligenceProviderType.OPENAI,
-        name: 'OpenAI Fallback',
-        enabled: true,
-        priority: 2,
-        models: ['gpt-4.1-mini'],
-        defaultModel: 'gpt-4.1-mini',
-        capabilities: ['text.chat'],
-        apiKey: 'openai-key'
-      },
-      vi.fn()
-    )
-
-    setIntelligenceProviderManager(new FakeProviderManager([anthropicProvider, openaiProvider]))
-
-    const sdk = new TuffIntelligenceSDK({
-      enableAudit: false,
-      enableQuota: false,
-      enableCache: false
-    })
-
-    const config = await sdk.resolveDeepAgentRuntimeConfig('text.chat')
-
-    expect(config.providerId).toBe('openai-fallback')
-    expect(config.providerType).toBe(IntelligenceProviderType.OPENAI)
-    expect(config.baseUrl).toBe('https://api.openai.com/v1')
-    expect(config.apiKey).toBe('openai-key')
-    expect(config.model).toBe('gpt-4.1-mini')
   })
 })

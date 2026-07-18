@@ -54,9 +54,7 @@
   "dependencies": {
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "^0.4.9",
-    "@langchain/openai": "^0.4.9",
-    "@talex-touch/utils": "workspace:*",
-    "deepagents": "0.0.2"
+    "@talex-touch/utils": "workspace:*"
   },
   "peerDependencies": {
     "zod": "^3.25.32"

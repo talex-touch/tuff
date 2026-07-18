@@ -71,6 +71,7 @@ Use `plugins/<plugin>/` for official plugin manifests, prelude/runtime code, and
 - Put reusable visual primitives in TuffEx, not in CoreApp feature folders.
 - Keep tests next to the owning feature when the repo already does so.
 - Do not mix CoreApp, Nexus, packages, plugins, and docs in one implementation slice unless the feature explicitly crosses those boundaries and the task documents the data flow.
+- Keep Electron main-process public facades stable while extracting independent state into sibling `*-controller.ts` modules and pure calculations into focused utility modules. Controllers receive callbacks for facade-owned state and must not import the facade that composes them; this keeps call sites stable and prevents circular initialization.
 
 ---
 

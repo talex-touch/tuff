@@ -35,6 +35,11 @@ export interface ToolExecutionContext {
  */
 export type ToolExecutorFn = (input: unknown, ctx: ToolExecutionContext) => Promise<unknown>
 
+export interface ToolRegistryStats {
+  total: number
+  byCategory: Record<string, number>
+}
+
 /**
  * Registered tool entry
  */
@@ -225,7 +230,7 @@ export class ToolRegistry {
   /**
    * Get registry statistics
    */
-  getStats(): { total: number; byCategory: Record<string, number> } {
+  getStats(): ToolRegistryStats {
     const all = this.getAllTools()
     const byCategory: Record<string, number> = {}
 

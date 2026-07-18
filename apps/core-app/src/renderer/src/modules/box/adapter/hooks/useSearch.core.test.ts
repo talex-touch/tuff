@@ -1,13 +1,10 @@
+import type { TuffItem, TuffSearchResult } from '@talex-touch/utils'
+import type { Ref } from 'vue'
 import type { IBoxOptions } from '..'
 import type { IClipboardItem, IClipboardOptions } from './types'
-import {
-  TuffInputType,
-  createCoreBoxContextActionsOpenRequest,
-  type TuffItem,
-  type TuffSearchResult
-} from '@talex-touch/utils'
+import { createCoreBoxContextActionsOpenRequest, TuffInputType } from '@talex-touch/utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, ref, type Ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { BoxMode } from '..'
 import { useSearch } from './useSearch'
 

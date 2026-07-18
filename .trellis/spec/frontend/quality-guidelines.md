@@ -206,40 +206,61 @@ installBundledOfficialPluginSeeds({ seedRoot, runtimePluginRoot });
 startModuleManager();
 ```
 
-## Scenario: DeepAgent Usage Signal Integrity
+## Scenario: Electron Main Singleton Cycle Safety
 
-### Scope
+### 1. Scope / Trigger
 
-- Trigger: LangChain/DeepAgent returns a provider response used by `agent.run` or `workflow.execute`.
-- The runtime must not replace available token usage with hardcoded zeroes.
+- Apply when an Electron main-process barrel exports both a service class/accessor and an eagerly constructed module singleton, and any dependency can reach that barrel again during module evaluation.
 
-### Contract
+### 2. Signatures
 
-- Normalize OpenAI Responses `usage.input_tokens/output_tokens/total_tokens` and LangChain `AIMessage.usage_metadata` into `IntelligenceUsageInfo`.
-- Prefer an explicit root aggregate; otherwise sum each assistant message once, including `kwargs` serialization shapes without double-counting mirrored fields.
-- Reject non-finite/negative values and preserve the invariant `totalTokens >= promptTokens + completionTokens`.
-- Adapter `run()` exposes usage with provider/model metadata.
-- `agent.run` returns adapter usage; prompt/agent workflow step outputs retain it; workflow top-level usage sums prompt, agent, and stable model step outputs.
-- Return explicit zero usage only when no step/provider reported usage.
+- `getSentryService(): SentryServiceModule` returns the process singleton.
+- `sentryModule: SentryServiceModule` is initialized only after the class and accessor declarations in `sentry-service.ts` have evaluated.
+- `modules/sentry/module.ts` re-exports the initialized singleton; it does not construct a second instance.
 
-### Validation
+### 3. Contracts
 
-- Pure parser tests cover Responses, LangChain direct/kwargs, common response metadata aliases, mirrored fields, and malformed input.
-- CoreApp orchestration tests cover agent propagation, mixed workflow aggregation, and the no-usage zero fallback.
-- Package build must emit declarations successfully.
+- Internal consumers continue importing `getSentryService` from the public `modules/sentry` barrel so Vitest mocks and the package boundary remain stable.
+- The service implementation owns singleton creation after its class declaration. The barrel and compatibility module only re-export that binding.
+- Controller extraction must not add a controller-to-facade import edge; inject facade-owned callbacks instead.
 
-### Wrong vs Correct
+### 4. Validation & Error Matrix
+
+- Singleton constructor runs before the class binding initializes -> production Electron throws `ReferenceError: Cannot access '<Service>' before initialization` during app load.
+- Consumer bypasses the public barrel -> existing barrel mocks no longer isolate Electron-only dependencies in unit tests.
+- Two files construct the singleton -> lifecycle registration, telemetry queues, and shutdown can diverge between instances.
+
+### 5. Good / Base / Bad Cases
+
+- Good: an isolated Electron profile reaches `TouchApp runtime initialized` and the owning module's initialized log without a TDZ error.
+- Base: production build, focused module tests, and an Electron startup smoke all pass with one singleton instance.
+- Bad: `module.ts` imports the class and executes `new Service()` while the service dependency graph can re-enter the barrel.
+
+### 6. Tests Required
+
+- Focused lifecycle tests keep mocking the public barrel and must pass without importing Electron runtime APIs.
+- `typecheck:node` and the CoreApp main/preload/renderer production build must pass.
+- Launch the built main process with an isolated `--user-data-dir`; assert the owning module initializes and logs contain no TDZ or `App threw an error during load` failure.
+
+### 7. Wrong vs Correct
 
 #### Wrong
 
 ```ts
-usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+// module.ts can execute during a cycle before Service is initialized.
+import { Service, setService } from './service'
+export const serviceModule = new Service()
+setService(serviceModule)
 ```
 
 #### Correct
 
 ```ts
-usage: aggregateWorkflowUsage(run.outputs)
+// service.ts, after the class and accessor declarations.
+export const serviceModule = getService()
+
+// module.ts
+export { serviceModule } from './service'
 ```
 
 ## Scenario: Opaque Intelligence Caller Aggregation

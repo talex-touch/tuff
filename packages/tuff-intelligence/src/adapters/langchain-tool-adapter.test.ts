@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { defineTuffTool } from '../tools/tool-kit'
-import { createDeepAgentToolsFromTuff, LangChainToolAdapter } from './index'
+import { LangChainToolAdapter } from './index'
 
 describe('langChainToolAdapter Tuff tool bridge', () => {
   it('adapts a Tuff tool and keeps metadata', async () => {
@@ -65,8 +65,8 @@ describe('langChainToolAdapter Tuff tool bridge', () => {
     })
   })
 
-  it('creates DeepAgent structured tools from Tuff tools', () => {
-    const tool = defineTuffTool({
+  it('adapts a batch while forwarding approval context', async () => {
+    const lowercase = defineTuffTool({
       id: 'text.lower',
       name: 'Lowercase',
       description: 'Lowercase text.',
@@ -75,10 +75,43 @@ describe('langChainToolAdapter Tuff tool bridge', () => {
       }),
       execute: input => input.text.toLowerCase(),
     })
+    const deleteFile = defineTuffTool({
+      id: 'file.delete',
+      name: 'Delete file',
+      description: 'Delete a file.',
+      riskLevel: 'critical',
+      inputSchema: z.object({
+        path: z.string(),
+      }),
+      execute: input => ({ deleted: input.path }),
+    })
+    const approvalGate = vi.fn(async () => ({ approved: true }))
 
-    const tools = createDeepAgentToolsFromTuff([tool])
+    const tools = LangChainToolAdapter.fromTuffTools([lowercase, deleteFile], {
+      approvalGate,
+      context: { sessionId: 'batch-session', caller: 'agent-runtime' },
+    })
 
-    expect(tools).toHaveLength(1)
-    expect(tools[0]?.name).toBe('text.lower')
+    await expect(tools[0]?.invoke({ text: 'HELLO' })).resolves.toEqual({
+      ok: true,
+      toolId: 'text.lower',
+      output: 'hello',
+    })
+    await expect(tools[1]?.invoke({ path: '/tmp/demo' })).resolves.toEqual({
+      ok: true,
+      toolId: 'file.delete',
+      output: { deleted: '/tmp/demo' },
+    })
+    expect(tools.map(tool => tool.name)).toEqual(['text.lower', 'file.delete'])
+    expect(tools[1]?.tuffMetadata).toMatchObject({
+      toolId: 'file.delete',
+      approvalRequired: true,
+    })
+    expect(approvalGate).toHaveBeenCalledWith(expect.objectContaining({
+      toolId: 'file.delete',
+      input: { path: '/tmp/demo' },
+      context: { sessionId: 'batch-session', caller: 'agent-runtime' },
+      requiresApproval: true,
+    }))
   })
 })
