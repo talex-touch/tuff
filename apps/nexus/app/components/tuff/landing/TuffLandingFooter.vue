@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const year = new Date().getFullYear()
+const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 
 const footerSections = computed(() => [
   {
     title: t('landing.footer.sections.product'),
     links: [
       { to: '/store', label: t('nav.store') },
-      { to: '/#developer', label: t('nav.developer') },
+      { to: docsLink('/docs/dev'), label: t('nav.developer') },
       { to: '/updates', label: t('nav.download') },
       { to: '/pricing', label: t('nav.pricing') },
     ],
@@ -18,8 +20,9 @@ const footerSections = computed(() => [
   {
     title: t('landing.footer.sections.resources'),
     links: [
-      { to: '/docs', label: t('nav.doc') },
-      { to: '/#blog', label: t('nav.blog') },
+      { to: docsLink('/docs'), label: t('nav.doc') },
+      { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
+      { to: '/privacy', label: t('nav.privacy', 'Privacy') },
     ],
   },
 ])

@@ -70,9 +70,11 @@ const publishedLabel = computed(() => {
   return new Intl.DateTimeFormat(locale.value, { dateStyle: 'medium' }).format(parsed)
 })
 
-useHead(() => ({
-  title: note.value?.title ? `${note.value.title} | Notes` : 'Release Notes',
-}))
+useSeoMeta({
+  title: computed(() => note.value?.title ? `${note.value.title} | Notes` : 'Release Notes'),
+  ogTitle: computed(() => note.value?.title ? `${note.value.title} | Notes` : 'Release Notes'),
+  description: computed(() => noteText.value || (isZh.value ? '发布日志' : 'Release notes')),
+})
 </script>
 
 <template>

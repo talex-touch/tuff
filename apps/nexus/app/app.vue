@@ -9,6 +9,7 @@ const LazyToastContainer = defineAsyncComponent(() => import('~/components/Toast
 
 useHead({
   title: appName,
+  titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff Nexus`),
 })
 
 const route = useRoute()
