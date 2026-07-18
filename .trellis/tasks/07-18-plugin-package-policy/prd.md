@@ -22,13 +22,13 @@
 
 ## Acceptance Criteria
 
-- [ ] 共享 policy 对 valid official Manifest/package 返回规范化 identity、limits 与 `policyVersion`。
-- [ ] 缺 id/name/version/sdkapi/category、非法 SemVer、dev source 未关闭、身份/版本不一致分别返回稳定违规代码。
-- [ ] traversal、绝对/反斜杠路径、重复/大小写冲突、链接/设备条目、重复 Manifest、过量条目或展开体积超限被拒绝。
-- [ ] CLI validate/build 与 Nexus preview/publish 对同一 fixture 的 pass/fail 和首要 code 一致。
-- [ ] Nexus preview 不再把 integrity 或 policy 失败的包当作可发布预览；publish 失败不写 package object 或 version row。
-- [ ] 现有 canonical official plugins 全部通过 strict Manifest policy；UI-only plugin 不因缺少 `main` 被误拒。
-- [ ] focused policy、CLI 和 Nexus tests 及各自 typecheck/lint 通过。
+- [x] 共享 policy 对 valid official Manifest/package 返回规范化 identity、limits 与 `policyVersion`。
+- [x] 缺 id/name/version/sdkapi/category、非法 SemVer、dev source 未关闭、身份/版本不一致分别返回稳定违规代码。
+- [x] traversal、绝对/反斜杠路径、重复/大小写冲突、链接/设备条目、重复 Manifest、过量条目或展开体积超限被拒绝。
+- [x] CLI validate/build 与 Nexus preview/publish 对同一 fixture 的 pass/fail 和首要 code 一致。
+- [x] Nexus preview 不再把 integrity 或 policy 失败的包当作可发布预览；publish/re-edit 在上传 package object 或写 version row 前执行 admission 断言。
+- [x] 现有 canonical official plugins 全部通过 strict Manifest policy；UI-only plugin 不因缺少 `main` 被误拒。
+- [x] focused policy、CLI 和 Nexus tests、consumer typecheck/build 与 scoped lint 通过。
 
 ## Out of Scope
 

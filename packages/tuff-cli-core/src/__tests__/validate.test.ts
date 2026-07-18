@@ -20,8 +20,10 @@ async function writeManifest(root: string, manifest: Record<string, unknown>): P
   await fs.writeJson(
     manifestPath,
     {
+      id: 'com.tuffex.validate-demo',
       name: 'validate-demo',
       version: '1.0.0',
+      sdkapi: CURRENT_SDK_VERSION,
       category: 'utilities',
       permissions: {
         required: ['clipboard.read'],
@@ -58,7 +60,7 @@ describe('manifest validate', () => {
       )
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('sdkapi 260421 is not a supported SDK marker'),
+        '✖ PLUGIN_PACKAGE_MANIFEST_SDKAPI_INCOMPATIBLE at manifest.sdkapi',
       )
     })
   })
@@ -72,7 +74,7 @@ describe('manifest validate', () => {
       )
 
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('sdkapi 260701 is not a supported SDK marker'),
+        '✖ PLUGIN_PACKAGE_MANIFEST_SDKAPI_INCOMPATIBLE at manifest.sdkapi',
       )
     })
   })

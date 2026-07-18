@@ -1224,3 +1224,78 @@ await intelligence.text.chat({
   messages: [{ role: 'user', content: selection.text }]
 })
 ```
+
+## Scenario: TPEX Package Policy Admission
+
+### 1. Scope / Trigger
+
+- Trigger: validating a plugin Manifest, staging a `.tpex`, previewing a package in Nexus, or admitting a Nexus plugin version.
+- The boundary spans `packages/utils/plugin`, Tuff CLI validation/builder, Nexus tar parsing, package preview and version publish/re-edit.
+
+### 2. Signatures
+
+```ts
+validatePluginPackagePolicy({
+  profile: 'source-manifest' | 'staged-package' | 'registry-admission',
+  manifest,
+  entries,
+  archiveSize,
+  expected: { pluginId, pluginName, version },
+}): PluginPackagePolicyResult
+```
+
+`PluginPackagePolicyResult` is a discriminated union. Success carries `policyVersion`, normalized identity and optional inventory; failure carries ordered `{ code, location, meta? }` violations. Human text is not a cross-layer contract.
+
+### 3. Contracts
+
+- `packages/utils/plugin/package-policy.ts` is the only owner of Manifest identity, SDK/category, permission shape, archive path/type, entry count/size, file-map and expected identity/version rules.
+- `source-manifest` validates source metadata without requiring archive fields. `staged-package` additionally requires safe entries, packaged dev mode, `_files` and `_signature`. `registry-admission` also enforces the shared 30 MB archive ceiling and expected Nexus identity/version.
+- Entry paths are raw archive paths. Reject NUL, backslash, drive/UNC/absolute paths, `./`, empty segments, traversal, duplicates and case-fold collisions before extraction.
+- Only regular files and directories are admissible. Symlink, hardlink, device, FIFO and unknown tar entry types fail closed.
+- Nexus preview, publish and rejected-version re-edit require both manifest integrity and package policy. A policy failure occurs before package object or version-row persistence.
+- UI-only plugins may omit `main`; they must still declare reverse-domain `id`, slug `name`, SemVer `version`, supported `sdkapi` and SDK-required `category`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Missing/invalid id, name, version or sdkapi | Stable `PLUGIN_PACKAGE_MANIFEST_*` violation |
+| SDK requires category but category is absent | `PLUGIN_PACKAGE_MANIFEST_CATEGORY_REQUIRED` |
+| Unknown/malformed/duplicate permission | Permission violation before build/upload |
+| Packaged dev source/address remains enabled | `PLUGIN_PACKAGE_DEV_MODE_ENABLED` |
+| Traversal, absolute/backslash path or duplicate/case collision | Entry path/collision violation before extraction |
+| Link/device/FIFO/unknown entry | `PLUGIN_PACKAGE_ENTRY_TYPE_DENIED` |
+| Missing/duplicate root Manifest or mismatched `_files` | Manifest/file-map violation |
+| Entry/file/expanded/archive limit exceeded | Stable size/count violation |
+| Nexus target id/name/version differs from Manifest | Expected identity/version mismatch; no package/version write |
+
+### 5. Good / Base / Bad Cases
+
+- Good: an official-style Manifest and safe root inventory pass CLI and Nexus with the same policy version and identity.
+- Base: a UI-only plugin omits `main` but otherwise satisfies source and packaged profiles.
+- Bad: Nexus normalizes `../`, backslashes or duplicate tar entries before policy, or preview returns a manifest from a package that publish would reject.
+
+### 6. Tests Required
+
+- Pure policy tests cover identity, SemVer, SDK/category, permissions, dev mode, every path/type collision, inventory limits, file-map parity and expected identity/version.
+- CLI tests prove validate and builder emit stable policy codes and preserve intended widget/build failures after valid baseline fixtures.
+- Nexus tests prove raw tar paths/types reach policy, preview/publish parity, and no object/version persistence on rejection.
+- `pnpm plugins:validate` must run the shared source profile over every canonical repository Manifest.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (file.name.endsWith('.tpex') && file.size < 30 * 1024 * 1024)
+  await upload(file)
+```
+
+#### Correct
+
+```ts
+const metadata = await extractTpexMetadata(bytes, expectedIdentity)
+const failure = getTpexAdmissionFailure(metadata)
+if (failure) throw createSafeAdmissionError(failure)
+await uploadPluginPackage(file, bytes)
+```

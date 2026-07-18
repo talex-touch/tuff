@@ -3,7 +3,7 @@
   "name": "plugin-package-policy",
   "title": "落实插件 Package Policy",
   "description": "定义并统一执行 CLI 与 Nexus 的 TPEX Manifest、归档、清单、版本和限制策略。",
-  "status": "planning",
+  "status": "completed",
   "dev_type": "feature",
   "scope": "plugin-package-policy",
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-18",
-  "completedAt": null,
+  "completedAt": "2026-07-18",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
@@ -28,6 +28,6 @@
     "apps/nexus/server/utils/pluginsStore.ts",
     "scripts/validate-plugins.mjs"
   ],
-  "notes": "",
+  "notes": "Shared Package Policy is enforced by CLI validate/builder and Nexus preview/publish/re-edit. 59 focused assertions, CLI Core build, Nexus typecheck, scoped lint, 21 canonical Manifest policy checks, 23-directory legacy validation and a real touch-quickops builder smoke passed.",
   "meta": {}
 }

@@ -157,15 +157,18 @@ code: |
 :::
 
 ## 校验
-- `id` 必须唯一，建议使用反向域名。
-- `version` 需遵循 `major.minor.patch`，自动比较以确定更新顺序。
-- 新插件使用 `main: "index.js"` 和 `module.exports = { onFeatureTriggered, onItemAction }`。
-- 当 `permissions` 包含 `network` 时需声明允许的域名。
+- `id` 为必填，使用至少三段的全小写反向域名标识。
+- `name` 使用全小写 slug，`version` 使用严格 SemVer。
+- `sdkapi` 必须是受支持 marker；达到文档门槛后必须声明 `category`。
+- Prelude 插件使用 `main: "index.js"`；纯 UI 插件可以省略 `main`。
+- `permissions` 使用 `{ required: string[], optional: string[] }`，每个 id 必须存在于权限注册表。
+- 打包态必须关闭 `dev.enable`/`dev.source`、清空 dev address，并用 `_files` 绑定所有普通文件。
+- Nexus 在上传前拒绝危险归档路径/类型、重复或大小写冲突条目、身份/版本不一致和超限包。
 
 ## 常见错误
 | 情况 | 解决办法 |
 | --- | --- |
-| 未填写 main | 指定 `index.js` 并确保文件存在 |
+| Prelude 插件未填写 main | 指定 `index.js` 并确保文件存在；纯 UI 插件无需 Prelude 入口 |
 | 继续使用 `entry` / `init(ctx)` | 按 [插件开发任务流](../getting-started/plugin-workflow.zh.md) 迁移到先导脚本模型 |
 | 权限过多被拒 | 仅声明实际需要的权限，首版尽量最小化 |
 | features 关键词冲突 | 使用命名空间（如 `todo.` 前缀）避免重复 |

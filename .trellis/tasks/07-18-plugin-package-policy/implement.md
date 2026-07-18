@@ -2,14 +2,14 @@
 
 ## Ordered Checklist
 
-1. [ ] Inventory current Manifest/archive checks in CLI core, Nexus TPEX parser/storage and official plugin validation; record duplicates and compatibility fixtures.
-2. [ ] Add shared policy types, limits, normalization and deterministic violation ordering under `packages/utils/plugin/`.
-3. [ ] Implement `source-manifest`, `staged-package` and `registry-admission` profiles using existing SDK/permission registries.
-4. [ ] Extend Nexus tar metadata parsing to preserve entry type, raw/normalized path, duplicates and bounded size totals before object extraction.
-5. [ ] Wire CLI `validate --strict` and builder pre-compression staging to shared policy; fail with stable codes.
-6. [ ] Wire Nexus preview and publish to integrity + registry-admission; validate expected plugin/version before upload/version persistence.
-7. [ ] Migrate all canonical official plugin Manifests that fail the new source profile; do not add compatibility aliases.
-8. [ ] Update Manifest/package documentation and frontend type-safety/plugin-security spec with the executable contract.
+1. [x] Inventory current Manifest/archive checks in CLI core, Nexus TPEX parser/storage and official plugin validation; record duplicates and compatibility fixtures.
+2. [x] Add shared policy types, limits, normalization and deterministic violation ordering under `packages/utils/plugin/`.
+3. [x] Implement `source-manifest`, `staged-package` and `registry-admission` profiles using existing SDK/permission registries.
+4. [x] Extend Nexus tar metadata parsing to preserve entry type, raw/normalized path, duplicates and bounded size totals before object extraction.
+5. [x] Wire CLI `validate --strict` and builder pre-compression staging to shared policy; fail with stable codes.
+6. [x] Wire Nexus preview, publish and re-edit to integrity + registry-admission; validate expected plugin/version before upload/version persistence.
+7. [x] Run every canonical official plugin Manifest through the source profile; all 21 runtime Manifests pass without compatibility aliases.
+8. [x] Update Manifest/CLI documentation and `plugin-runtime-security.md` with the executable contract.
 
 ## Contract Tests
 
@@ -30,17 +30,22 @@ A test is required for each plausible policy bypass:
 
 ```bash
 corepack pnpm -C packages/utils exec vitest run __tests__/plugin/package-policy.test.ts
-corepack pnpm -C packages/tuff-cli-core exec vitest run src/__tests__/validate.test.ts src/__tests__/builder-package-policy.test.ts
+corepack pnpm -C packages/tuff-cli-core exec vitest run src/__tests__/validate.test.ts src/__tests__/builder-widgets.test.ts
 corepack pnpm -C apps/nexus exec vitest run server/utils/__tests__/tpex-integrity.test.ts server/utils/__tests__/tpex-policy.test.ts
 corepack pnpm plugins:validate
-corepack pnpm -C packages/utils run typecheck
 corepack pnpm -C packages/tuff-cli-core run build
 corepack pnpm -C apps/nexus run typecheck
 corepack pnpm lint:changed
 git diff --check
 ```
 
-Use exact test paths after implementation; placeholders must be replaced before task completion.
+## Verification Result
+
+- 59 focused assertions passed: 33 shared policy, 3 CLI validate, 12 builder, 3 integrity, 8 Nexus admission.
+- All 21 canonical runtime Manifests and the existing 23-directory plugin validator passed.
+- Canonical CLI Core DTS build, Nexus typecheck, changed-file ESLint and `git diff --check` passed.
+- A real `touch-quickops` `tuff builder` smoke produced an admitted `touch-quickops-0.1.0.tpex`.
+- `packages/utils` has no package-level typecheck script; both typed consumers compile the shared module, and its scoped ESLint/tests pass.
 
 ## Risky Files
 

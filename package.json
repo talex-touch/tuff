@@ -42,7 +42,7 @@
     "version:patch": "node scripts/version-sync.mjs --patch",
     "version:minor": "node scripts/version-sync.mjs --minor",
     "version:major": "node scripts/version-sync.mjs --major",
-    "plugins:validate": "node scripts/validate-plugins.mjs",
+    "plugins:validate": "tsx scripts/validate-plugin-package-policy.ts && node scripts/validate-plugins.mjs",
     "publish:check": "node scripts/validate-publish-manifests.mjs",
     "publish:check:pack": "node scripts/validate-publish-manifests.mjs --pack",
     "publish:package": "node scripts/publish-package.mjs",

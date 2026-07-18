@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { createError, readFormData } from 'h3'
 import { requireAuthOrApiKey } from '../../../../utils/auth'
-import { extractTpexMetadata } from '../../../../utils/tpex'
+import { extractTpexMetadata, getTpexAdmissionFailure } from '../../../../utils/tpex'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
 
@@ -16,6 +16,13 @@ export default defineEventHandler(async (event) => {
 
   const buffer = Buffer.from(await packageFile.arrayBuffer())
   const metadata = await extractTpexMetadata(buffer)
+  const admissionFailure = getTpexAdmissionFailure(metadata)
+  if (admissionFailure) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `${admissionFailure.code}: ${admissionFailure.reason}`,
+    })
+  }
 
   // Generate icon preview data URL if icon was extracted
   let iconDataUrl: string | null = null

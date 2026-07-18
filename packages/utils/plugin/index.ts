@@ -741,6 +741,7 @@ export interface IManifest {
 }
 
 export * from './install'
+export * from './package-policy'
 export type { IPluginLogger, LogDataType, LogItem } from './log/types'
 export * from './risk'
 export * from './sdk-version'
