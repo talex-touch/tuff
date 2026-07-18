@@ -149,10 +149,25 @@ if ($everythingService -and $everythingService.Status -ne 'Stopped') {
   throw "Everything service unexpectedly remained $($everythingService.Status)."
 }
 
-& node $selfCheckScript --query $env:TUFF_EVERYTHING_MARKER --max 1 --samples 1 --require-results --output $unavailableSdkPath | Out-Host
-$sdkUnavailableExitCode = $LASTEXITCODE
-$cliUnavailableOutput = @(& $env:TUFF_EVERYTHING_CLI -n 1 $env:TUFF_EVERYTHING_MARKER 2>&1)
-$cliUnavailableExitCode = $LASTEXITCODE
+$sdkUnavailableProcess = Start-Process -FilePath 'node' -ArgumentList @(
+  $selfCheckScript,
+  '--query',
+  $env:TUFF_EVERYTHING_MARKER,
+  '--max',
+  '1',
+  '--samples',
+  '1',
+  '--require-results',
+  '--output',
+  $unavailableSdkPath
+) -Wait -PassThru -NoNewWindow
+$sdkUnavailableExitCode = $sdkUnavailableProcess.ExitCode
+$cliUnavailableProcess = Start-Process -FilePath $env:TUFF_EVERYTHING_CLI -ArgumentList @(
+  '-n',
+  '1',
+  $env:TUFF_EVERYTHING_MARKER
+) -Wait -PassThru -NoNewWindow
+$cliUnavailableExitCode = $cliUnavailableProcess.ExitCode
 
 if ($sdkUnavailableExitCode -eq 0) {
   throw 'Everything SDK unexpectedly remained available after the client and service were stopped.'
