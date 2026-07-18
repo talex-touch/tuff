@@ -18,7 +18,9 @@ import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { appTaskGate } from '../../service/app-task-gate'
 import { enterPerfContext } from '../../utils/perf-context'
 import { BaseModule } from '../abstract-base-module'
+import { databaseModule } from '../database'
 import { mainStorageRegistry, resolveMainStorageValue } from './main-storage-registry'
+import { ApplicationConfigRepository, type AppConfigRecord } from './app-config-repository'
 import { buildSearchEngineLogsSettingMigrationPlan } from './search-engine-logs-setting-transfer'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
@@ -44,6 +46,10 @@ function safeJsonStringify(value: unknown): string {
   } catch {
     return '[unserializable]'
   }
+}
+
+function persistenceFingerprint(serialized: string, deleted: boolean): string {
+  return `${deleted ? 'deleted' : 'active'}:${serialized}`
 }
 
 /**
@@ -73,11 +79,96 @@ function broadcastUpdate(name: string, version: number, sourceWebContentsId?: nu
  * StorageModule - Main storage module with caching and auto-save
  *
  * Features:
- * - In-memory caching to avoid direct file I/O
- * - Periodic persistence via polling service
+ * - In-memory caching to keep synchronous application-config reads
+ * - Periodic persistence through the selected SQLite/legacy backend
  * - LRU-based automatic eviction
  * - Frequency monitoring with warnings
  */
+export type StorageReadiness =
+  | { state: 'pending' }
+  | { state: 'ready' }
+  | { state: 'failed'; reason: 'storage-init-failed'; recoverable: false }
+
+export type StorageReadinessListener = (readiness: StorageReadiness) => void
+
+class StorageReadinessController {
+  private state: StorageReadiness = { state: 'pending' }
+  private waitPromise!: Promise<StorageReadiness>
+  private resolveWait!: (readiness: StorageReadiness) => void
+  private readonly listeners = new Set<StorageReadinessListener>()
+
+  constructor() {
+    this.resetWaiter()
+  }
+
+  begin(): void {
+    if (this.state.state !== 'pending') {
+      this.resetWaiter()
+    }
+    this.setState({ state: 'pending' })
+  }
+
+  markReady(): void {
+    this.setTerminalState({ state: 'ready' })
+  }
+
+  markFailed(): void {
+    this.setTerminalState({
+      state: 'failed',
+      reason: 'storage-init-failed',
+      recoverable: false
+    })
+  }
+
+  getSnapshot(): StorageReadiness {
+    return this.state
+  }
+
+  waitUntilReady(): Promise<StorageReadiness> {
+    return this.waitPromise
+  }
+
+  subscribe(listener: StorageReadinessListener): () => void {
+    this.listeners.add(listener)
+    listener(this.state)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  private resetWaiter(): void {
+    this.waitPromise = new Promise<StorageReadiness>((resolve) => {
+      this.resolveWait = resolve
+    })
+  }
+
+  private setTerminalState(readiness: Exclude<StorageReadiness, { state: 'pending' }>): void {
+    this.setState(readiness)
+    this.resolveWait(readiness)
+  }
+
+  private setState(readiness: StorageReadiness): void {
+    if (
+      this.state.state === readiness.state &&
+      (this.state.state !== 'failed' ||
+        (readiness.state === 'failed' &&
+          this.state.reason === readiness.reason &&
+          this.state.recoverable === readiness.recoverable))
+    ) {
+      return
+    }
+
+    this.state = readiness
+    for (const listener of this.listeners) {
+      try {
+        listener(readiness)
+      } catch (error) {
+        storageLog.warn('Storage readiness listener failed', { error })
+      }
+    }
+  }
+}
+
 export class StorageModule extends BaseModule {
   static key: symbol = Symbol.for('Storage')
   name: ModuleKey = StorageModule.key
@@ -93,10 +184,13 @@ export class StorageModule extends BaseModule {
     StorageList.OPENERS
   ])
   private persistedContent = new Map<string, string>()
+  private configRepository: ApplicationConfigRepository | null = null
+  private deletedConfigs = new Set<string>()
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private updateStreams = new Set<StreamContext<StorageUpdateNotification>>()
   private isDestroying = false
+  private readonly readiness = new StorageReadinessController()
 
   pluginConfigs = new Map<string, object>()
   PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
@@ -121,6 +215,18 @@ export class StorageModule extends BaseModule {
     )
   }
 
+  getReadiness(): StorageReadiness {
+    return this.readiness.getSnapshot()
+  }
+
+  waitUntilReady(): Promise<StorageReadiness> {
+    return this.readiness.waitUntilReady()
+  }
+
+  subscribeReadiness(listener: StorageReadinessListener): () => void {
+    return this.readiness.subscribe(listener)
+  }
+
   private normalizeAppSettingPayload(
     name: string,
     value: unknown
@@ -138,32 +244,52 @@ export class StorageModule extends BaseModule {
   }
 
   async onInit({ file, app }: ModuleInitContext<TalexEvents>): Promise<void> {
+    this.readiness.begin()
     this.isDestroying = false
-    pluginConfigPath = path.join(file.dirPath!, 'plugins')
-    fse.ensureDirSync(pluginConfigPath)
-    storageLog.info(`Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`)
 
-    this.pollingService.start()
-    this.lruManager.startCleanup()
+    try {
+      pluginConfigPath = path.join(file.dirPath!, 'plugins')
+      fse.ensureDirSync(pluginConfigPath)
+      storageLog.info(`Config path: ${file.dirPath}, plugin path: ${pluginConfigPath}`)
 
-    const channel = resolveMainRuntime({ app }, 'StorageModule.onInit').channel
-    this.transport = getTuffTransportMain(channel, resolveKeyManager(channel))
-    this.registerTransportHandlers()
+      this.configRepository = new ApplicationConfigRepository({
+        client: databaseModule.getClient(),
+        legacyRoot: file.dirPath!
+      })
+      const initialization = await this.configRepository.initialize()
+      this.hydrateConfigRecords(initialization.records)
 
-    storageUpdateEmitter = (name, version) => {
-      this.emitStorageUpdate(name, version)
+      this.pollingService.start()
+      this.lruManager.startCleanup()
+
+      const channel = resolveMainRuntime({ app }, 'StorageModule.onInit').channel
+      this.transport = getTuffTransportMain(channel, resolveKeyManager(channel))
+      this.registerTransportHandlers()
+
+      storageUpdateEmitter = (name, version) => {
+        this.emitStorageUpdate(name, version)
+      }
+
+      await this.runStartupMigrations(file.dirPath!)
+      this.getConfig(StorageList.APP_SETTING)
+      this.warmupConfig(StorageList.ACCOUNT)
+      this.readiness.markReady()
+    } catch (error) {
+      this.readiness.markFailed()
+      throw error
     }
-
-    await this.runStartupMigrations(file.dirPath!)
-    this.warmupConfig(StorageList.ACCOUNT)
   }
 
   async onDestroy(): Promise<void> {
+    this.readiness.begin()
     this.isDestroying = true
     await this.pollingService.stop()
+    await this.configRepository?.flush()
     this.lruManager.stopCleanup()
     this.cache.clear()
     this.persistedContent.clear()
+    this.deletedConfigs.clear()
+    this.configRepository = null
     this.pluginConfigs.clear()
     for (const stream of Array.from(this.updateStreams)) {
       if (!stream.isCancelled()) {
@@ -205,16 +331,40 @@ export class StorageModule extends BaseModule {
     }
   }
 
+  private hydrateConfigRecords(records: AppConfigRecord[]): void {
+    for (const record of records) {
+      const normalizedResult = this.normalizeAppSettingPayload(record.key, record.data)
+      const serialized = normalizedResult.changed ? undefined : record.serialized
+      this.cache.setWithVersion(
+        record.key,
+        normalizedResult.normalized,
+        record.revision,
+        serialized
+      )
+      this.persistedContent.set(
+        record.key,
+        persistenceFingerprint(record.serialized, record.deleted)
+      )
+      if (record.deleted) {
+        this.deletedConfigs.add(record.key)
+        continue
+      }
+      this.deletedConfigs.delete(record.key)
+      if (normalizedResult.changed) {
+        this.cache.markDirty(record.key)
+        this.pollingService.notifyConfigChanged(record.key)
+      }
+    }
+  }
+
   private async runStartupMigrations(markerDir: string): Promise<void> {
     await runStartupMigration({
       id: 'search-engine-logs-app-setting',
       version: 1,
       markerDir,
       run: async () => {
-        const appSettingPath = path.join(markerDir, StorageList.APP_SETTING)
-        const historicalSettingPath = path.join(markerDir, StorageList.SEARCH_ENGINE_LOGS_ENABLED)
-        const rawAppSetting = await this.readJsonConfig(appSettingPath)
-        const rawHistoricalSetting = await this.readJsonConfig(historicalSettingPath)
+        const rawAppSetting = this.getConfig(StorageList.APP_SETTING)
+        const rawHistoricalSetting = this.getConfig(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
         const migration = buildSearchEngineLogsSettingMigrationPlan(
           rawAppSetting,
           rawHistoricalSetting
@@ -226,10 +376,10 @@ export class StorageModule extends BaseModule {
           this.cache.clearDirty(StorageList.APP_SETTING)
         }
 
-        if (migration.removeHistoricalSetting && (await fse.pathExists(historicalSettingPath))) {
-          await fse.remove(historicalSettingPath)
-          this.cache.evict(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
-          this.persistedContent.delete(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
+        if (migration.removeHistoricalSetting) {
+          this.saveConfig(StorageList.SEARCH_ENGINE_LOGS_ENABLED, {}, true, true)
+          await this.persistConfig(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
+          this.cache.clearDirty(StorageList.SEARCH_ENGINE_LOGS_ENABLED)
         }
 
         return {
@@ -239,26 +389,17 @@ export class StorageModule extends BaseModule {
     })
   }
 
-  public getCacheStats(): { cachedConfigs: number; pluginConfigs: number } {
+  public getCacheStats(): {
+    cachedConfigs: number
+    pluginConfigs: number
+    dirtyConfigs: number
+    backend: 'sqlite' | 'legacy' | 'uninitialized'
+  } {
     return {
       cachedConfigs: this.cache.size(),
-      pluginConfigs: this.pluginConfigs.size
-    }
-  }
-
-  private async readJsonConfig(filePath: string): Promise<unknown> {
-    if (!(await fse.pathExists(filePath))) {
-      return undefined
-    }
-
-    try {
-      return await fse.readJson(filePath)
-    } catch (error) {
-      storageLog.warn('Failed to read config during startup migration', {
-        error,
-        meta: { filePath }
-      })
-      return undefined
+      pluginConfigs: this.pluginConfigs.size,
+      dirtyConfigs: this.cache.getDirtyConfigs().length,
+      backend: this.configRepository?.getBackend() ?? 'uninitialized'
     }
   }
 
@@ -353,9 +494,9 @@ export class StorageModule extends BaseModule {
    * @returns Configuration data (deep copy)
    */
   /**
-   * Resolve a config key to an absolute on-disk path, rejecting path traversal.
-   * Config keys arrive from IPC callers (including plugins via the storage
-   * channel), so a key like `../../x` must not escape the storage directory.
+   * Resolve a config key to a legacy mirror path while rejecting traversal.
+   * The same validation protects SQLite keys arriving from IPC callers, so a
+   * key like `../../x` cannot escape the application-config namespace.
    */
   private resolveConfigPath(name: string): string {
     if (!this.filePath) throw new Error(`Config path not set (name=${name})`)
@@ -385,78 +526,47 @@ export class StorageModule extends BaseModule {
 
   getConfig(name: string): object {
     if (!this.filePath) throw new Error(`Config ${name} not found! Path not set: ${this.filePath}`)
-    const configPath = this.resolveConfigPath(name)
+    this.resolveConfigPath(name)
+    if (!this.configRepository) throw new Error('Configuration repository is not initialized')
 
-    // Hot configs skip invalidation check and always stay in cache
     const isHot = this.hotConfigs.has(name)
     if (!isHot) {
       this.frequencyMonitor.trackGet(name)
     }
-
-    // Check if cache is invalidated, force reload if so (skip for hot configs)
-    if (!isHot && this.cache.isInvalidated(name)) {
+    const reloadRequested = !isHot && this.cache.isInvalidated(name)
+    if (reloadRequested) {
       this.cache.evict(name)
       this.cache.clearInvalidated(name)
     }
 
-    // Return cached data if available (deep copy handled by StorageCache.get)
     if (this.cache.has(name)) {
       return this.cache.get(name)!
     }
-
-    // Load from disk
-    const p = configPath
-    let file = {}
-
-    let serialized: string | undefined
-    const disposeLoad = enterPerfContext(`Storage.load:${name}`, { source: 'disk' })
-    const loadStart = performance.now()
-    try {
-      if (fse.existsSync(p)) {
-        try {
-          const content = fse.readFileSync(p, 'utf-8')
-          // 只有当内容不是空字符串时才解析
-          if (content.length > 0) {
-            file = JSON.parse(content)
-            serialized = content
-          }
-        } catch (error) {
-          storageLog.error(`Failed to parse config ${name}`, { error })
-        }
-      }
-    } finally {
-      const duration = performance.now() - loadStart
-      if (duration > 200) {
-        storageLog.warn(`Slow config load for ${name}`, {
-          meta: { durationMs: Math.round(duration) }
-        })
-      }
-      disposeLoad()
-    }
-
+    const record = reloadRequested
+      ? this.configRepository.reloadRecord(name)
+      : this.configRepository.getRecord(name)
+    let file = record?.deleted ? {} : (record?.data ?? {})
+    let serialized = record?.serialized
+    const revision = record?.revision ?? 1
     const normalizedResult = this.normalizeAppSettingPayload(name, file)
     file = normalizedResult.normalized
     if (normalizedResult.changed) {
       serialized = undefined
     }
 
-    // Use setWithVersion for initial load (version 1, not dirty)
-    this.cache.setWithVersion(name, file, 1, serialized)
-    if (serialized !== undefined) {
-      this.persistedContent.set(name, serialized)
+    this.cache.setWithVersion(name, file, revision, serialized)
+    if (record) {
+      this.persistedContent.set(name, persistenceFingerprint(record.serialized, record.deleted))
+      if (record.deleted) this.deletedConfigs.add(name)
+      else this.deletedConfigs.delete(name)
     } else {
-      try {
-        this.persistedContent.set(name, JSON.stringify(file))
-      } catch {
-        this.persistedContent.delete(name)
-      }
+      this.deletedConfigs.delete(name)
     }
-    if (normalizedResult.changed) {
+    if (normalizedResult.changed && !record?.deleted) {
       this.cache.markDirty(name)
       this.pollingService.notifyConfigChanged(name)
     }
 
-    // Return through cache.get() to ensure deep copy protection
     return this.cache.get(name)!
   }
 
@@ -483,58 +593,19 @@ export class StorageModule extends BaseModule {
 
   reloadConfig(name: string): object {
     if (!this.filePath) throw new Error(`Config ${name} not found`)
+    this.resolveConfigPath(name)
+    if (!this.configRepository) throw new Error('Configuration repository is not initialized')
 
-    const filePath = this.resolveConfigPath(name)
-    let file = {}
+    this.cache.evict(name)
 
-    let serialized: string | undefined
-    const disposeReload = enterPerfContext(`Storage.reload:${name}`, { source: 'disk' })
-    const reloadStart = performance.now()
-    try {
-      const content = fse.readFileSync(filePath, 'utf-8')
-      if (content.length > 0) {
-        file = JSON.parse(content)
-        serialized = content
-      }
-    } catch (error) {
-      storageLog.error(`Failed to reload config ${name}`, { error })
-    } finally {
-      const duration = performance.now() - reloadStart
-      if (duration > 200) {
-        storageLog.warn(`Slow config reload for ${name}`, {
-          meta: { durationMs: Math.round(duration) }
-        })
-      }
-      disposeReload()
-    }
-
-    const normalizedResult = this.normalizeAppSettingPayload(name, file)
-    file = normalizedResult.normalized
-    if (normalizedResult.changed) {
-      serialized = undefined
-    }
-
-    this.cache.set(name, file, true, serialized)
-    if (serialized !== undefined) {
-      this.persistedContent.set(name, serialized)
-    } else {
-      try {
-        this.persistedContent.set(name, JSON.stringify(file))
-      } catch {
-        this.persistedContent.delete(name)
-      }
-    }
-    if (!normalizedResult.changed) {
-      this.cache.clearDirty(name)
-    }
+    this.configRepository.reloadRecord(name)
     this.cache.clearInvalidated(name)
-
-    return file
+    return this.getConfig(name)
   }
 
   /**
    * Invalidate cache for a specific config
-   * Next getConfig call will reload from disk
+   * Next getConfig call reloads from the active repository snapshot
    * Broadcasts update to all renderer processes
    */
   invalidateCache(name: string): void {
@@ -581,10 +652,14 @@ export class StorageModule extends BaseModule {
       this.frequencyMonitor.trackSave(name)
 
       if (clear) {
-        this.cache.evict(name)
-        this.persistedContent.delete(name)
+        const newVersion = this.cache.set(name, {}, true, '{}')
+        this.deletedConfigs.add(name)
         this.pollingService.notifyConfigChanged(name)
-        return { success: true, version: 0 }
+        setImmediate(() => {
+          broadcastUpdate(name, newVersion, sourceWebContentsId)
+        })
+        this.notifySubscribers(name)
+        return { success: true, version: newVersion }
       }
 
       const currentVersion = this.cache.getVersion(name)
@@ -626,7 +701,7 @@ export class StorageModule extends BaseModule {
       }
 
       // Smart deduplication: check if content actually changed (unless force=true)
-      if (!force) {
+      if (!force && !this.deletedConfigs.has(name)) {
         const cachedData = this.cache.getRaw(name)
         const cachedSerialized = serialized ? this.cache.getSerialized(name) : undefined
         if (serialized && cachedSerialized && cachedSerialized === serialized) {
@@ -640,6 +715,7 @@ export class StorageModule extends BaseModule {
 
       // Set new data and get new version
       const newVersion = this.cache.set(name, parsed as object, true, serialized)
+      this.deletedConfigs.delete(name)
       this.pollingService.notifyConfigChanged(name)
       // Broadcast update to other windows (exclude source)
       setImmediate(() => {
@@ -656,11 +732,11 @@ export class StorageModule extends BaseModule {
   }
 
   /**
-   * Persist config to disk (called by polling service)
+   * Persist config to the active primary backend (called by polling service)
    */
-  private async persistConfig(name: string): Promise<void> {
-    if (!this.filePath) {
-      throw new Error(`Config path not found!`)
+  private async persistConfig(name: string): Promise<number> {
+    if (!this.configRepository) {
+      throw new Error('Configuration repository is not initialized')
     }
 
     const gateStart = performance.now()
@@ -682,7 +758,7 @@ export class StorageModule extends BaseModule {
     const data = this.cache.getRaw(name)
     if (data === undefined) {
       storageLog.warn(`Attempted to save non-existent config: ${name}`)
-      return
+      return this.cache.getVersion(name)
     }
 
     const cachedSerialized = this.cache.getSerialized(name)
@@ -690,20 +766,28 @@ export class StorageModule extends BaseModule {
     if (!cachedSerialized) {
       this.cache.setSerialized(name, configData)
     }
-    const lastPersisted = this.persistedContent.get(name)
-    if (lastPersisted === configData) {
-      return
+    const revision = this.cache.getVersion(name)
+    const deleted = this.deletedConfigs.has(name)
+    const fingerprint = persistenceFingerprint(configData, deleted)
+    if (this.persistedContent.get(name) === fingerprint) {
+      return revision
     }
-    const p = this.resolveConfigPath(name)
 
     const disposePersist = enterPerfContext(`Storage.persist:${name}`, {
-      bytes: configData.length
+      bytes: configData.length,
+      backend: this.configRepository.getBackend(),
+      deleted
     })
     const persistStart = performance.now()
     try {
-      await fse.ensureFile(p)
-      await fse.writeFile(p, configData, 'utf-8')
-      this.persistedContent.set(name, configData)
+      await this.configRepository.persist({
+        key: name,
+        serialized: configData,
+        revision,
+        deleted
+      })
+      this.persistedContent.set(name, fingerprint)
+      return revision
     } finally {
       const duration = performance.now() - persistStart
       if (duration > 200) {
@@ -719,8 +803,10 @@ export class StorageModule extends BaseModule {
     if (!this.cache.has(name)) {
       this.getConfig(name)
     }
-    await this.persistConfig(name)
-    this.cache.clearDirty(name)
+    const revision = await this.persistConfig(name)
+    if (this.cache.getVersion(name) === revision) {
+      this.cache.clearDirty(name)
+    }
   }
 
   /**
@@ -729,8 +815,10 @@ export class StorageModule extends BaseModule {
    */
   private async evictConfig(name: string): Promise<void> {
     if (this.cache.isDirty(name)) {
-      await this.persistConfig(name)
-      this.cache.clearDirty(name)
+      const revision = await this.persistConfig(name)
+      if (this.cache.getVersion(name) === revision) {
+        this.cache.clearDirty(name)
+      }
     }
   }
 
@@ -813,17 +901,183 @@ export class StorageModule extends BaseModule {
   }
 }
 
-const storageModule = new StorageModule()
+export type OnboardingGateDecision =
+  | { state: 'allowed' }
+  | { state: 'blocked'; reason: 'onboarding-incomplete'; recoverable: true }
+  | {
+      state: 'degraded'
+      reason: 'storage-pending' | 'storage-init-failed' | 'onboarding-read-failed'
+      recoverable: boolean
+    }
 
-export { storageModule }
+export type OnboardingGateListener = (decision: OnboardingGateDecision) => void
+
+function isSameOnboardingDecision(
+  left: OnboardingGateDecision | null,
+  right: OnboardingGateDecision
+): boolean {
+  if (!left || left.state !== right.state) return false
+  if (left.state === 'allowed' && right.state === 'allowed') return true
+  if (left.state === 'blocked' && right.state === 'blocked') {
+    return left.reason === right.reason && left.recoverable === right.recoverable
+  }
+  return (
+    left.state === 'degraded' &&
+    right.state === 'degraded' &&
+    left.reason === right.reason &&
+    left.recoverable === right.recoverable
+  )
+}
+
+export class OnboardingGateError extends Error {
+  readonly code = 'SEARCH_ONBOARDING_GATE_BLOCKED'
+
+  constructor(readonly decision: Exclude<OnboardingGateDecision, { state: 'allowed' }>) {
+    super(`Search admission blocked: ${decision.reason}`)
+    this.name = 'OnboardingGateError'
+  }
+}
+
+export class OnboardingGate {
+  private readonly listeners = new Set<OnboardingGateListener>()
+  private readinessUnsubscribe: (() => void) | null = null
+  private settingUnsubscribe: (() => void) | null = null
+  private lastDecision: OnboardingGateDecision | null = null
+
+  constructor(private readonly storage: StorageModule) {}
+
+  evaluate(): OnboardingGateDecision {
+    const readiness = this.storage.getReadiness()
+    if (readiness.state === 'pending') {
+      return { state: 'degraded', reason: 'storage-pending', recoverable: true }
+    }
+    if (readiness.state === 'failed') {
+      return {
+        state: 'degraded',
+        reason: readiness.reason,
+        recoverable: readiness.recoverable
+      }
+    }
+
+    try {
+      const setting = this.storage.getConfig(StorageList.APP_SETTING)
+      const beginner =
+        setting && typeof setting === 'object' && 'beginner' in setting
+          ? (setting as { beginner?: unknown }).beginner
+          : undefined
+      if (
+        beginner &&
+        typeof beginner === 'object' &&
+        'init' in beginner &&
+        beginner.init === true
+      ) {
+        return { state: 'allowed' }
+      }
+      return { state: 'blocked', reason: 'onboarding-incomplete', recoverable: true }
+    } catch {
+      return { state: 'degraded', reason: 'onboarding-read-failed', recoverable: true }
+    }
+  }
+
+  async waitForDecision(): Promise<OnboardingGateDecision> {
+    await this.storage.waitUntilReady()
+    return this.evaluate()
+  }
+
+  async retry(): Promise<OnboardingGateDecision> {
+    const readiness = this.storage.getReadiness()
+    if (readiness.state === 'pending') {
+      await this.storage.waitUntilReady()
+    }
+    const decision = this.evaluate()
+    this.publish(decision)
+    return decision
+  }
+
+  subscribe(listener: OnboardingGateListener): () => void {
+    this.listeners.add(listener)
+    if (this.listeners.size === 1) {
+      this.startObserving()
+    } else {
+      listener(this.evaluate())
+    }
+
+    return () => {
+      this.listeners.delete(listener)
+      if (this.listeners.size === 0) {
+        this.stopObserving()
+      }
+    }
+  }
+
+  private startObserving(): void {
+    this.readinessUnsubscribe = this.storage.subscribeReadiness((readiness) => {
+      if (readiness.state === 'ready') {
+        this.ensureSettingSubscription()
+      } else {
+        this.clearSettingSubscription()
+      }
+      this.publish(this.evaluate())
+    })
+  }
+
+  private stopObserving(): void {
+    this.readinessUnsubscribe?.()
+    this.readinessUnsubscribe = null
+    this.clearSettingSubscription()
+    this.lastDecision = null
+  }
+
+  private ensureSettingSubscription(): void {
+    if (this.settingUnsubscribe) return
+    this.settingUnsubscribe = this.storage.subscribe(StorageList.APP_SETTING, () => {
+      this.publish(this.evaluate())
+    })
+  }
+
+  private clearSettingSubscription(): void {
+    this.settingUnsubscribe?.()
+    this.settingUnsubscribe = null
+  }
+
+  private publish(decision: OnboardingGateDecision): void {
+    if (isSameOnboardingDecision(this.lastDecision, decision)) return
+    this.lastDecision = decision
+    for (const listener of this.listeners) {
+      try {
+        listener(decision)
+      } catch (error) {
+        storageLog.warn('Onboarding gate listener failed', { error })
+      }
+    }
+  }
+}
+
+const storageModule = new StorageModule()
+const onboardingGate = new OnboardingGate(storageModule)
+
+export { onboardingGate, storageModule }
+
+export function getMainStorageReadiness(): StorageReadiness {
+  return storageModule.getReadiness()
+}
+
+export function waitForMainStorageReady(): Promise<StorageReadiness> {
+  return storageModule.waitUntilReady()
+}
+
+export function subscribeMainStorageReadiness(listener: StorageReadinessListener): () => void {
+  return storageModule.subscribeReadiness(listener)
+}
 
 export function isMainStorageReady(): boolean {
-  return Boolean(storageModule.filePath)
+  return storageModule.getReadiness().state === 'ready'
 }
 
 export function useMainStorage(): StorageModule {
-  if (!storageModule.filePath) {
-    const error = new Error('StorageModule not ready: filePath not set')
+  const readiness = storageModule.getReadiness()
+  if (readiness.state !== 'ready') {
+    const error = new Error(`StorageModule not ready: ${readiness.state}`)
     if (Error.captureStackTrace) {
       Error.captureStackTrace(error, useMainStorage)
     }

@@ -10,10 +10,10 @@ import { TouchApp } from './touch-app'
 
 let touchApp: TouchApp | null = null
 
-export function genTouchApp(): TouchApp {
+export function genTouchApp(startupAppSettings: Record<string, unknown> = {}): TouchApp {
   if (!touchApp) {
     touchEventBus.emit(TalexEvents.BEFORE_APP_START, new BeforeAppStartEvent())
-    touchApp = new TouchApp(app)
+    touchApp = new TouchApp(app, startupAppSettings)
     setCurrentTouchApp(touchApp)
     touchEventBus.emit(TalexEvents.AFTER_APP_START, new AfterAppStartEvent())
   }

@@ -31,22 +31,22 @@ Use Pinia when multiple CoreApp renderer views or subscriptions need the same st
 Example: `apps/core-app/src/renderer/src/stores/plugin.ts`
 
 ```ts
-export const usePluginStore = defineStore('plugin', () => {
-  const plugins = reactive(new Map<string, ITouchPlugin>())
+export const usePluginStore = defineStore("plugin", () => {
+  const plugins = reactive(new Map<string, ITouchPlugin>());
 
   function handleStateEvent(event: PluginStateEvent): void {
     switch (event.type) {
-      case 'added':
-        setPlugin(event.plugin)
-        break
-      case 'removed':
-        deletePlugin(event.name)
-        break
+      case "added":
+        setPlugin(event.plugin);
+        break;
+      case "removed":
+        deletePlugin(event.name);
+        break;
     }
   }
 
-  return { plugins, handleStateEvent, initialize }
-})
+  return { plugins, handleStateEvent, initialize };
+});
 ```
 
 This is a good pattern for host-subscribed renderer state: typed event in, normalized store state out.
@@ -71,15 +71,17 @@ Do not make renderer state the source of truth for host data.
 
 ```ts
 type AuthSettings = {
-  useSecureStorage: boolean
-  secureStorageUserOverridden: boolean
-  secureStorageUnavailable: boolean
-}
+  useSecureStorage: boolean;
+  secureStorageUserOverridden: boolean;
+  secureStorageUnavailable: boolean;
+};
 
-async function loadAuthToken(): Promise<void>
-async function setAuthToken(nextToken: string): Promise<void>
-async function clearAuthToken(): Promise<void>
-async function handleAuthStoragePreferenceChanged(nextAppSetting: AppSetting): Promise<void>
+async function loadAuthToken(): Promise<void>;
+async function setAuthToken(nextToken: string): Promise<void>;
+async function clearAuthToken(): Promise<void>;
+async function handleAuthStoragePreferenceChanged(
+  nextAppSetting: AppSetting,
+): Promise<void>;
 ```
 
 #### 3. Contracts
@@ -116,16 +118,16 @@ async function handleAuthStoragePreferenceChanged(nextAppSetting: AppSetting): P
 
 ```ts
 if (!authUseSecureStorage) {
-  authToken = null
-  return
+  authToken = null;
+  return;
 }
 ```
 
 ##### Correct
 
 ```ts
-authUseSecureStorage = isAuthTokenSecureStorageEnabled()
-authToken = await getSecureValue(AUTH_TOKEN_KEY)
+authUseSecureStorage = isAuthTokenSecureStorageEnabled();
+authToken = await getSecureValue(AUTH_TOKEN_KEY);
 ```
 
 ### Nexus SSR And Client State
@@ -222,21 +224,234 @@ CoreBoxEvents.item.execute: { item: TuffItem; searchResult?: TuffSearchResult } 
 #### Wrong
 
 ```ts
-pendingQueryContext = context
-searchVal.value = value
-void handleSearchImmediate({ force: true })
+pendingQueryContext = context;
+searchVal.value = value;
+void handleSearchImmediate({ force: true });
 // watcher dispatches another contextless search; execute trusts whichever result wins
 ```
 
 #### Correct
 
 ```ts
-programmaticQueryValue = value
-oneShotQueryContext = context
-searchVal.value = value
-void handleSearchImmediate({ force: true })
+programmaticQueryValue = value;
+oneShotQueryContext = context;
+searchVal.value = value;
+void handleSearchImmediate({ force: true });
 
 // Immediately before item.execute:
-serializedSearchResult.query.context = oneShotQueryContext
-oneShotQueryContext = undefined
+serializedSearchResult.query.context = oneShotQueryContext;
+oneShotQueryContext = undefined;
+```
+
+## Scenario: CoreApp Storage Hydration and Onboarding Admission
+
+### 1. Scope / Trigger
+
+- Trigger: changing `StorageModule` initialization, onboarding completion reads,
+  CoreBox activation, search-provider startup, or indexing maintenance startup.
+- `BaseModule.init()` assigns `filePath` before `StorageModule.onInit()` settles;
+  therefore path presence is never a readiness signal.
+
+### 2. Signatures
+
+```ts
+type StorageReadiness =
+  | { state: 'pending' }
+  | { state: 'ready' }
+  | { state: 'failed'; reason: 'storage-init-failed'; recoverable: false }
+
+type OnboardingGateDecision =
+  | { state: 'allowed' }
+  | { state: 'blocked'; reason: 'onboarding-incomplete'; recoverable: true }
+  | {
+      state: 'degraded'
+      reason: 'storage-pending' | 'storage-init-failed' | 'onboarding-read-failed'
+      recoverable: boolean
+    }
+
+StorageModule.getReadiness(): StorageReadiness
+StorageModule.waitUntilReady(): Promise<StorageReadiness>
+OnboardingGate.evaluate(): OnboardingGateDecision
+OnboardingGate.waitForDecision(): Promise<OnboardingGateDecision>
+OnboardingGate.retry(): Promise<OnboardingGateDecision>
+```
+
+### 3. Contracts
+
+- Storage starts `pending`; it becomes `ready` only after startup migrations and
+  app-setting warmup complete.
+- Initialization failure publishes terminal `storage-init-failed` before the
+  exception returns to `ModuleManager`; consumers receive a decision, not a
+  fabricated configuration object.
+- `waitUntilReady()` is single-flight for one initialization attempt and resolves
+  to `ready` or `failed` without requiring a catch.
+- `OnboardingGate` reads `beginner.init` only after storage is ready. Unknown,
+  pending, failed, and read-error states are never equivalent to consent.
+- Provider `onLoad`, consent-sensitive scans, indexing maintenance, CoreBox
+  visibility, and direct CoreBox search require `allowed`.
+- Gate subscriptions and the existing provider/runtime start guards enforce
+  exactly-once recovery. No retry timer or unbounded startup loop is allowed.
+- Diagnostics expose only state, stable reason, and recoverability; never raw
+  settings, paths, or secret-bearing values.
+
+### 4. Validation & Error Matrix
+
+- Storage pending -> `degraded/storage-pending`, recoverable, no provider/search start.
+- Storage initialization failed -> `degraded/storage-init-failed`, terminal and fail closed.
+- Storage ready + `beginner.init !== true` -> `blocked/onboarding-incomplete`.
+- App-setting read throws -> `degraded/onboarding-read-failed`; explicit retry or
+  a settings update may re-evaluate.
+- App-setting read succeeds with `beginner.init === true` -> `allowed`; provider
+  and maintenance startup occur once.
+- Repeated `allowed` notifications -> no duplicate provider load, scan, or maintenance start.
+
+### 5. Good / Base / Bad Cases
+
+- Good: storage settles, onboarding completes, one gate transition starts providers
+  and maintenance once.
+- Base: onboarding is incomplete, so CoreBox stays closed and the existing main
+  onboarding surface is focused.
+- Bad: catching `getMainConfig()` and returning `true`, or checking `filePath` and
+  treating a failed/pending storage module as ready.
+
+### 6. Tests Required
+
+- Storage readiness: pending state, single-flight wait identity, ready transition,
+  terminal failure, and destroy/reload reset.
+- Gate matrix: pending, incomplete, complete, recoverable read failure + retry,
+  terminal failure, and distinct decision subscriptions.
+- Search/CoreBox: provider startup and maintenance remain zero before allowance;
+  repeated allowance starts once; direct search and shortcut activation fail closed.
+- CoreApp Node typecheck and the nearest storage, SearchEngineCore,
+  SearchProviderRegistry, CoreBox manager, and CoreBox module focused tests.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+try {
+  return getMainConfig(StorageList.APP_SETTING).beginner.init;
+} catch {
+  return true;
+}
+```
+
+#### Correct
+
+```ts
+const decision = onboardingGate.evaluate();
+if (decision.state !== "allowed") {
+  routeToExistingOnboardingOrRecoverySurface(decision.reason);
+  return;
+}
+
+await providerRegistry.loadWhenOnboardingAllows("all-modules-loaded");
+```
+
+## Scenario: CoreApp Application Configuration SQLite Source of Truth
+
+### 1. Scope / Trigger
+
+- Trigger: changing `StorageModule`, `StorageEvents.app`, application Settings persistence, startup app-setting reads, legacy config migration, or configuration rollback.
+- This contract applies to application configuration under `modules/config`; plugin storage, secure storage, renderer override state, and business-domain tables remain separate owners.
+
+### 2. Signatures
+
+```ts
+type AppConfigBackend = 'sqlite' | 'legacy'
+
+interface AppConfigRecord {
+  key: string
+  data: object
+  serialized: string
+  revision: number
+  deleted: boolean
+  updatedAt: number
+}
+
+ApplicationConfigRepository.initialize(): Promise<{
+  backend: AppConfigBackend
+  records: AppConfigRecord[]
+  fallbackReason?: 'sqlite-initialization-failed'
+}>
+
+ApplicationConfigRepository.persist(input: {
+  key: string
+  serialized: string
+  revision: number
+  deleted: boolean
+}): Promise<void>
+```
+
+SQLite tables:
+
+- `app_config_entries(key, value, revision, deleted, updated_at)`
+- `app_config_migration_state(id, phase, backup_path, imported_count, skipped_count, failed_count, completed_at, updated_at)`
+
+Environment controls:
+
+- `TALEX_CONFIG_STORAGE_BACKEND=sqlite|legacy`; invalid or absent values select SQLite.
+- `TALEX_CONFIG_LEGACY_MIRROR=0|1`; SQLite mode defaults to mirror enabled during the rollback window.
+
+### 3. Contracts
+
+- Main-process `StorageModule` is the only application-config writer. Renderer callers keep using typed `StorageEvents.app`; plugin storage never writes these tables.
+- SQLite mode hydrates all rows before Storage readiness becomes `ready`. `getConfig()` remains synchronous and cache versions start from persisted `revision`.
+- First migration creates an immutable `legacy-backups/app-config-v1` copy, excludes `plugins`, `startup-migrations`, backup directories, hidden files, and mirror `.tmp` files, then imports missing keys transactionally. Existing SQLite rows and tombstones always win.
+- Saves retain the existing synchronous cache-mutation contract. Polling and `persistMainConfig()` serialize repository writes; a completed old revision must not clear a newer dirty cache revision.
+- Delete persists a tombstone before removing the legacy mirror. A tombstone returns `{}` and must never fall back to an old file.
+- SQLite commit precedes the best-effort legacy mirror. Mirror failure is observable but never rolls back SQLite.
+- Explicit legacy mode reads and writes files only and must not mutate SQLite. Returning to SQLite mode keeps SQLite authoritative; legacy changes are not silently promoted.
+- Startup silent-launch/window-bounds preflight reads SQLite through a short-lived client and closes it in `finally`. Missing database/table/row may fall back to legacy; a deleted row resolves to an empty SQLite value, not legacy resurrection.
+- Logs expose stable backend/migration/fallback state and counts, never configuration values or raw error/path content.
+
+### 4. Validation & Error Matrix
+
+- SQLite schema/table missing during preflight -> close client, use legacy bootstrap snapshot, let DatabaseModule run migrations.
+- SQLite migration or hydration failure -> select legacy for that process with reason `sqlite-initialization-failed`; never mix SQLite and file reads.
+- Malformed/unreadable legacy file -> preserve source and immutable backup, mark migration failed, enter legacy fallback, retry migration on a later startup.
+- Existing SQLite key or tombstone + stale legacy file -> skip import; SQLite wins.
+- Persisted revision lower than current row -> reject the stale upsert and do not update memory or mirror.
+- Cache revision advances while an older persist is in flight -> keep the key dirty until the current revision persists.
+- SQLite write failure -> leave cache dirty for polling retry/quarantine; do not claim file fallback as SQLite success.
+- Mirror write failure -> SQLite remains committed; emit stable mirror-failure diagnostics.
+- Explicit legacy mode -> no import, upsert, tombstone, or migration-state write in SQLite.
+
+### 5. Good / Base / Bad Cases
+
+- Good: first upgraded launch reads legacy bootstrap settings, migrates two valid config files transactionally, creates backup, and the next launch restores silent mode and versions from SQLite.
+- Base: a Settings save updates the synchronous cache, persists revision $n+1$, mirrors the file, broadcasts one typed update, and survives restart.
+- Bad: reading `app-setting.ini` directly inside `TouchApp`, allowing file fallback after a SQLite tombstone, clearing dirty state after only revision $n$ persisted while cache is at $n+1$, or writing SQLite from renderer/plugin code.
+
+### 6. Tests Required
+
+- Full Drizzle migration plus schema constraints for non-negative revisions/counts, boolean tombstones, and migration phases.
+- Legacy migration: nested valid files, exclusions, immutable backup, idempotent restart, existing-row precedence, malformed-file fallback, and no partial transaction.
+- Runtime persistence: revision restart, stale-write rejection, mirror on/off, tombstone restart/no resurrection, and explicit legacy mode leaving SQLite byte-for-byte unchanged.
+- Polling race: an in-flight old revision cannot clear a newer dirty revision; the matching revision can.
+- Startup preflight: database missing, table/row missing, SQLite value, tombstone, explicit rollback, query failure, and post-preflight database reopen/write.
+- Focused Storage transport/conflict, Settings state, startup/tray, onboarding admission, scoped lint/type diagnostics, Electron build, normal startup, and silent startup checks.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// File and SQLite compete as runtime sources; delete can resurrect on restart.
+const value = sqliteRow ?? readJsonSync(legacyPath)
+await sqlite.upsert(value)
+cache.clearDirty(key)
+```
+
+#### Correct
+
+```ts
+const initialized = await repository.initialize()
+hydrateCache(initialized.records)
+
+const persistedRevision = await persistCacheSnapshot(key)
+if (cache.getVersion(key) === persistedRevision) {
+  cache.clearDirty(key)
+}
 ```

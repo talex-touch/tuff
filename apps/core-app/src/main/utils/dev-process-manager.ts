@@ -1,6 +1,7 @@
 import process from 'node:process'
 import { app, BrowserWindow } from 'electron'
 import { createLogger } from './logger'
+import { setQuitIntent } from '../core/quit-intent'
 
 const devProcessLog = createLogger('DevProcessManager')
 const GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000
@@ -141,6 +142,7 @@ export class DevProcessManager {
     }, GRACEFUL_SHUTDOWN_TIMEOUT_MS)
 
     try {
+      setQuitIntent('other', 'development-graceful-shutdown')
       app.quit()
     } catch (error) {
       devProcessLog.error('Failed to trigger app.quit, fallback to forced shutdown', { error })

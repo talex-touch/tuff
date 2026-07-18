@@ -8,10 +8,12 @@ describe('setupSingleInstanceGuard', () => {
     const requestSingleInstanceLock = vi.fn()
     const on = vi.fn()
     const quit = vi.fn()
+    const onDuplicateInstance = vi.fn()
 
     const result = setupSingleInstanceGuard({
       app: { requestSingleInstanceLock, on, quit },
       startupBenchmarkMode: true,
+      onDuplicateInstance,
       emitSecondaryLaunch: vi.fn(),
       createSecondaryLaunchEvent: vi.fn(),
       secondaryLaunchEventName: 'app-secondary-launch' as never,
@@ -22,12 +24,14 @@ describe('setupSingleInstanceGuard', () => {
     expect(requestSingleInstanceLock).not.toHaveBeenCalled()
     expect(on).not.toHaveBeenCalled()
     expect(quit).not.toHaveBeenCalled()
+    expect(onDuplicateInstance).not.toHaveBeenCalled()
   })
 
   it('registers second-instance listener on the primary process', () => {
     const requestSingleInstanceLock = vi.fn(() => true)
     const on = vi.fn()
     const emitSecondaryLaunch = vi.fn()
+    const onDuplicateInstance = vi.fn()
     const createSecondaryLaunchEvent = vi.fn(
       (_event, argv, cwd, data) =>
         ({
@@ -44,10 +48,12 @@ describe('setupSingleInstanceGuard', () => {
       startupBenchmarkMode: false,
       emitSecondaryLaunch,
       createSecondaryLaunchEvent,
-      secondaryLaunchEventName: 'app-secondary-launch' as never
+      secondaryLaunchEventName: 'app-secondary-launch' as never,
+      onDuplicateInstance
     })
 
     expect(result).toBe(true)
+    expect(onDuplicateInstance).not.toHaveBeenCalled()
     expect(on).toHaveBeenCalledTimes(1)
     expect(on).toHaveBeenCalledWith('second-instance', expect.any(Function))
 
@@ -76,8 +82,10 @@ describe('setupSingleInstanceGuard', () => {
   })
 
   it('quits the duplicate process when single-instance lock is unavailable', () => {
-    const quit = vi.fn()
+    const lifecycle: string[] = []
+    const quit = vi.fn(() => lifecycle.push('quit'))
     const on = vi.fn()
+    const onDuplicateInstance = vi.fn(() => lifecycle.push('duplicate'))
 
     const result = setupSingleInstanceGuard({
       app: { requestSingleInstanceLock: vi.fn(() => false), on, quit },
@@ -85,11 +93,11 @@ describe('setupSingleInstanceGuard', () => {
       emitSecondaryLaunch: vi.fn(),
       createSecondaryLaunchEvent: vi.fn(),
       secondaryLaunchEventName: 'app-secondary-launch' as never,
-      logger: { warn: vi.fn() }
+      onDuplicateInstance
     })
 
     expect(result).toBe(false)
     expect(on).not.toHaveBeenCalled()
-    expect(quit).toHaveBeenCalledTimes(1)
+    expect(lifecycle).toEqual(['duplicate', 'quit'])
   })
 })

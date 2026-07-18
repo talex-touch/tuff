@@ -15,7 +15,7 @@ import type {
 } from '@talex-touch/utils/types/modules'
 import type { Buffer } from 'node:buffer'
 import type { ITouchEventBus } from 'packages/utils/eventbus'
-import type { TalexEvents } from './eventbus/touch-event'
+import { TalexEvents } from './eventbus/touch-event'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import process from 'node:process'
@@ -235,7 +235,8 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
     void this.ensureDir(this.modulesRoot)
 
     if (this.eventBus && this.beforeQuitEventName) {
-      this.eventBus.on(this.beforeQuitEventName, async () => {
+      this.eventBus.on(this.beforeQuitEventName, async (event) => {
+        await this.eventBus!.emitAsync(TalexEvents.BEFORE_MODULES_UNLOAD, event)
         await this.unloadAll('app-quit')
       })
     }
