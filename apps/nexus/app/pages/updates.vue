@@ -102,6 +102,7 @@ const platformRequirementLabel = computed(() => {
 })
 const latestVersionText = computed(() => latestRelease.value?.version || latestRelease.value?.tag || '')
 const primaryDownloadVersionText = computed(() => latestRelease.value?.name || latestRelease.value?.tag || latestVersionText.value)
+const isZh = computed(() => locale.value.startsWith('zh'))
 const heroSubtitle = computed(() => isZh.value ? '获取最新版本，体验更强大的创作能力。' : 'Get the latest version and unlock a stronger creative workflow.')
 
 const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
@@ -109,7 +110,14 @@ const isAllUpdatesView = computed(() => route.path === '/updates/all' || route.q
 const featuredUpdateLimit = 3
 const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, featuredUpdateLimit))
 const hasUpdateList = computed(() => releaseUpdates.value.length > 0)
-const isZh = computed(() => locale.value.startsWith('zh'))
+
+const pageTitle = computed(() => t('updates.title', 'Updates & downloads'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: heroSubtitle,
+  ogDescription: heroSubtitle,
+})
 
 useHead(() => ({
   bodyAttrs: {

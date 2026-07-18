@@ -153,6 +153,9 @@ const {
     query: storeSearchQuery.value,
   }),
 {
+  // Keep first paint unblocked; empty store data is a valid local/dev state.
+  lazy: true,
+  server: false,
   watch: [storeSearchQuery],
 })
 
