@@ -15,8 +15,23 @@ const state = vi.hoisted(() => ({
   listeners: new Map<string, (payload?: unknown) => void>(),
   streams: new Map<
     string,
-    { onData: (payload: unknown) => void; onError?: (error: unknown) => void }
+    {
+      onData: (payload: unknown) => void
+      onError?: (error: unknown) => void
+      onEnd?: () => void
+    }
   >(),
+  searchRequests: [] as Array<{
+    payload: unknown
+    options: {
+      onData: (payload: unknown) => void
+      onError?: (error: unknown) => void
+      onEnd?: () => void
+    }
+  }>,
+  searchResultForRequest: null as
+    | null
+    | ((payload: unknown, requestIndex: number) => TuffSearchResult | Promise<TuffSearchResult>),
   streamCancel: vi.fn(),
   beforeUnmountCallbacks: [] as Array<() => void>,
   send: vi.fn(),
@@ -52,12 +67,40 @@ vi.mock('@talex-touch/utils/transport', () => ({
     },
     stream: async (
       event: { toEventName?: () => string } | string,
-      _payload: unknown,
-      options: { onData: (payload: unknown) => void; onError?: (error: unknown) => void }
+      payload: unknown,
+      options: {
+        onData: (payload: unknown) => void
+        onError?: (error: unknown) => void
+        onEnd?: () => void
+      }
     ) => {
       const key = typeof event === 'string' ? event : event.toEventName?.() || String(event)
+      const controller = {
+        cancel: vi.fn(() => {
+          state.streamCancel()
+          options.onEnd?.()
+        })
+      }
       state.streams.set(key, options)
-      return { cancel: state.streamCancel }
+      if (key !== 'core-box:search:session') return controller
+
+      const requestIndex = state.searchRequests.length + 1
+      const sessionId = `stream-session-${requestIndex}`
+      state.searchRequests.push({ payload, options })
+      options.onData({ type: 'session', sessionId })
+      const result =
+        state.searchResultForRequest?.(payload, requestIndex) ??
+        createSearchResult(getSearchQueryText(payload), requestIndex)
+      void Promise.resolve(result).then((snapshot) => {
+        options.onData({
+          type: 'snapshot',
+          sessionId,
+          result: { ...snapshot, sessionId }
+        })
+        options.onData({ type: 'complete', sessionId, sources: snapshot.sources })
+        options.onEnd?.()
+      })
+      return controller
     },
     send: state.send
   })
@@ -202,6 +245,8 @@ describe('useSearch CoreBox reopen behavior', () => {
     vi.clearAllMocks()
     state.listeners.clear()
     state.streams.clear()
+    state.searchRequests.length = 0
+    state.searchResultForRequest = null
     state.streamCancel.mockClear()
     state.beforeUnmountCallbacks.length = 0
     state.boxItems = []
@@ -213,13 +258,9 @@ describe('useSearch CoreBox reopen behavior', () => {
     state.latestClipboardRequests = []
     state.appSetting.recommendation.enabled = true
     state.send.mockReset()
-    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+    state.send.mockImplementation(async (event: unknown, _payload?: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
       if (eventName.includes('provider')) return []
-      if (eventName === 'core-box:query') {
-        const query = getSearchQueryText(payload)
-        return createSearchResult(query, state.send.mock.calls.length)
-      }
       return undefined
     })
 
@@ -277,8 +318,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     await state.listeners.get(contextEventName!)?.(request)
     await flushPromises()
 
-    const queryCall = state.send.mock.calls.find(([event]) => String(event) === 'core-box:query')
-    expect(queryCall?.[1]).toMatchObject({
+    expect(state.searchRequests.at(-1)?.payload).toMatchObject({
       query: {
         text: '',
         inputs: [{ type: TuffInputType.Image, content: 'data:image/png;base64,aW1hZ2U=' }],
@@ -297,6 +337,40 @@ describe('useSearch CoreBox reopen behavior', () => {
     expect(state.latestClipboardRequests).toEqual([])
   })
 
+  it('collapses on a matching no-results stream chunk while ignoring a stale session', async () => {
+    let resolveSnapshot!: (result: TuffSearchResult) => void
+    state.searchResultForRequest = () =>
+      new Promise<TuffSearchResult>((resolve) => {
+        resolveSnapshot = resolve
+      })
+
+    useSearch(createBoxOptions(), createClipboardOptions())
+    await flushPromises()
+
+    const searchStream = state.searchRequests.at(-1)
+    const sessionId = `stream-session-${state.searchRequests.length}`
+    expect(searchStream).toBeDefined()
+
+    state.send.mockClear()
+    searchStream?.options.onData({
+      type: 'no-results',
+      sessionId: 'stale-session',
+      shouldShrink: true
+    })
+    await flushPromises()
+    expect(state.send).not.toHaveBeenCalled()
+
+    searchStream?.options.onData({ type: 'no-results', sessionId, shouldShrink: true })
+    await flushPromises()
+
+    expect(state.send).toHaveBeenCalledTimes(1)
+    expect(String(state.send.mock.calls[0][0])).toBe('core-box:ui:expand')
+    expect(state.send.mock.calls[0][1]).toEqual({ mode: 'collapse' })
+
+    resolveSnapshot?.({ ...createSearchResult('', 1), items: [] })
+    await flushPromises()
+  })
+
   it('refreshes results when CoreBox is shown with an existing query', async () => {
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()
@@ -306,35 +380,25 @@ describe('useSearch CoreBox reopen behavior', () => {
     await nextTick()
     await flushPromises()
 
-    expect(state.send).toHaveBeenCalledWith(
-      expect.objectContaining({ toEventName: expect.any(Function) }),
-      {
-        query: { text: 'aaa', inputs: [] }
-      }
-    )
+    expect(state.searchRequests.at(-1)?.payload).toMatchObject({
+      query: { text: 'aaa', inputs: [] }
+    })
     expect(hook.res.value).toHaveLength(1)
 
     state.send.mockClear()
     window.dispatchEvent(new CustomEvent('corebox:shown'))
     await flushPromises()
 
-    expect(state.send).toHaveBeenCalledWith(
-      expect.objectContaining({ toEventName: expect.any(Function) }),
-      {
-        query: { text: 'aaa', inputs: [] }
-      }
-    )
+    expect(state.searchRequests.at(-1)?.payload).toMatchObject({
+      query: { text: 'aaa', inputs: [] }
+    })
   })
 
   it('coalesces committed index refreshes and preserves the selected item', async () => {
     vi.useFakeTimers()
     const boxOptions = createBoxOptions()
     let progressiveQueryCount = 0
-    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
-      const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName.includes('provider')) return []
-      if (eventName !== 'core-box:query') return undefined
-
+    state.searchResultForRequest = (payload) => {
       const query = getSearchQueryText(payload)
       if (query !== 'keep-selected') return createSearchResult(query)
       progressiveQueryCount += 1
@@ -349,10 +413,9 @@ describe('useSearch CoreBox reopen behavior', () => {
               source: { id: 'test-source', type: 'system' },
               render: { mode: 'default', basic: { title: id } }
             }) as TuffItem
-        ),
-        sessionId: `progressive-${progressiveQueryCount}`
+        )
       }
-    })
+    }
 
     const hook = useSearch(boxOptions, createClipboardOptions())
     await flushPromises()
@@ -360,13 +423,9 @@ describe('useSearch CoreBox reopen behavior', () => {
     await nextTick()
     await flushPromises()
 
-    const endListener = Array.from(state.listeners.entries()).find(([name]) =>
-      name.includes('search-end')
-    )?.[1]
-    endListener?.({ searchId: 'progressive-1' })
     boxOptions.focus = 1
     const clipboardRequestsBeforeRefresh = state.latestClipboardRequests.length
-    state.send.mockClear()
+    const requestsBeforeRefresh = state.searchRequests.length
 
     const commitStream = Array.from(state.streams.entries()).find(([name]) =>
       name.includes('index-committed')
@@ -376,13 +435,12 @@ describe('useSearch CoreBox reopen behavior', () => {
     commitStream?.onData({ revision: 2, providerIds: ['file-provider'], committedAt: 2 })
 
     await vi.advanceTimersByTimeAsync(499)
-    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+    expect(state.searchRequests).toHaveLength(requestsBeforeRefresh)
 
     await vi.advanceTimersByTimeAsync(1)
     await flushPromises()
 
-    const queryCalls = state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
-    expect(queryCalls).toHaveLength(1)
+    expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 1)
     expect(hook.res.value.map((item) => item.id)).toEqual(['selected', 'new'])
     expect(boxOptions.focus).toBe(0)
     expect(state.latestClipboardRequests).toHaveLength(clipboardRequestsBeforeRefresh)
@@ -401,11 +459,7 @@ describe('useSearch CoreBox reopen behavior', () => {
       resolve: null as ((value: TuffSearchResult) => void) | null
     }
     let firstRefreshResolved = false
-    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
-      const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName.includes('provider')) return []
-      if (eventName !== 'core-box:query') return undefined
-
+    state.searchResultForRequest = (payload) => {
       const query = getSearchQueryText(payload)
       if (query !== queryText) return createSearchResult(query)
 
@@ -417,7 +471,7 @@ describe('useSearch CoreBox reopen behavior', () => {
         })
       }
       return createSearchResult(query, progressiveResponseCount)
-    })
+    }
 
     try {
       const hook = useSearch(createBoxOptions(), createClipboardOptions())
@@ -426,12 +480,7 @@ describe('useSearch CoreBox reopen behavior', () => {
       await nextTick()
       await flushPromises()
 
-      const endListener = Array.from(state.listeners.entries()).find(([name]) =>
-        name.includes('search-end')
-      )?.[1]
-      expect(endListener).toBeDefined()
-      endListener?.({ searchId: 'session-1' })
-      state.send.mockClear()
+      const requestsBeforeRefresh = state.searchRequests.length
       holdNextQuery = true
 
       const commitStream = Array.from(state.streams.entries()).find(([name]) =>
@@ -441,35 +490,23 @@ describe('useSearch CoreBox reopen behavior', () => {
       commitStream?.onData({ revision: 1, providerIds: ['app-provider'], committedAt: 1 })
 
       await vi.advanceTimersByTimeAsync(500)
-      expect(
-        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
-      ).toHaveLength(1)
+      expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 1)
       expect(firstRefresh.resolve).not.toBeNull()
 
       commitStream?.onData({ revision: 2, providerIds: ['file-provider'], committedAt: 2 })
       await vi.advanceTimersByTimeAsync(499)
-      expect(
-        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
-      ).toHaveLength(1)
+      expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 1)
 
       firstRefresh.resolve?.(createSearchResult(queryText, 2))
       firstRefreshResolved = true
       await flushPromises()
-      endListener?.({ searchId: 'session-2' })
-      await flushPromises()
 
       await vi.advanceTimersByTimeAsync(1)
       await flushPromises()
-      expect(
-        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
-      ).toHaveLength(2)
+      expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 2)
 
-      endListener?.({ searchId: 'session-3' })
-      await flushPromises()
       await vi.advanceTimersByTimeAsync(500)
-      expect(
-        state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
-      ).toHaveLength(2)
+      expect(state.searchRequests).toHaveLength(requestsBeforeRefresh + 2)
     } finally {
       if (!firstRefreshResolved && firstRefresh.resolve) {
         firstRefresh.resolve(createSearchResult(queryText, 2))
@@ -499,8 +536,9 @@ describe('useSearch CoreBox reopen behavior', () => {
     await nextTick()
     await flushPromises()
 
-    const queryCall = state.send.mock.calls.find(([event]) => String(event) === 'core-box:query')
-    const queryPayload = queryCall?.[1] as { query?: { text?: string; inputs?: unknown[] } }
+    const queryPayload = state.searchRequests.at(-1)?.payload as {
+      query?: { text?: string; inputs?: unknown[] }
+    }
 
     expect(queryPayload?.query?.text).toBe('calculator')
     expect(queryPayload?.query?.inputs).toEqual([])
@@ -547,6 +585,7 @@ describe('useSearch CoreBox reopen behavior', () => {
   it('runs a forced search when the main process sets the query', async () => {
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()
+    const requestsBeforeSetQuery = state.searchRequests.length
 
     state.send.mockClear()
     state.listeners.get('core-box:input:set-query')?.({
@@ -567,38 +606,28 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     expect(hook.searchVal.value).toBe('screenshot')
-    expect(state.send).toHaveBeenCalledWith(
-      expect.objectContaining({ toEventName: expect.any(Function) }),
-      {
-        query: {
-          text: 'screenshot',
-          inputs: [],
-          context: {
-            entrypoint: {
-              id: 'assistant.voice',
-              source: 'voice',
-              execution: {
-                mode: 'new',
-                owner: 'assistant',
-                scope: 'light',
-                isolated: true
-              }
-            }
+    expect(state.searchRequests.at(-1)?.payload).toMatchObject({
+      query: {
+        text: 'screenshot',
+        inputs: [],
+        context: {
+          entrypoint: {
+            id: 'assistant.voice',
+            source: 'voice',
+            execution: { mode: 'new', owner: 'assistant', scope: 'light', isolated: true }
           }
         }
       }
-    )
-    expect(
-      state.send.mock.calls.filter(([event]) => String(event) === 'core-box:query')
-    ).toHaveLength(1)
+    })
+    expect(state.searchRequests).toHaveLength(requestsBeforeSetQuery + 1)
     state.send.mockClear()
+    state.searchResultForRequest = (payload) => createSearchResult(getSearchQueryText(payload), 1)
     hook.searchVal.value = 'next query'
     await hook.handleSearchImmediate({ force: true })
     await flushPromises()
-    expect(state.send).toHaveBeenCalledWith(
-      expect.objectContaining({ toEventName: expect.any(Function) }),
-      { query: { text: 'next query', inputs: [] } }
-    )
+    expect(state.searchRequests.at(-1)?.payload).toMatchObject({
+      query: { text: 'next query', inputs: [] }
+    })
 
     expect(hook.res.value).toHaveLength(1)
     expect(hook.res.value[0].render.basic?.title).toBe('next query-1')
@@ -638,7 +667,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     } as TuffItem)
 
     const executeCall = state.send.mock.calls.find(
-      ([event]) => String(event) === 'core-box:execute'
+      ([event]) => String(event) === 'core-box:item:execute'
     )
     const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
     expect(executePayload?.searchResult?.query.context).toMatchObject({
@@ -672,7 +701,7 @@ describe('useSearch CoreBox reopen behavior', () => {
       { immediate: true, reason: 'execute' }
     )
     expect(String(state.send.mock.calls[0][0])).toBe('core-box:ui:hide')
-    expect(String(state.send.mock.calls[1][0])).toBe('core-box:execute')
+    expect(String(state.send.mock.calls[1][0])).toBe('core-box:item:execute')
   })
 
   it('keeps the query visible when entering a plugin feature input session', async () => {
@@ -684,16 +713,12 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     state.send.mockClear()
-    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+    state.send.mockImplementation(async (event: unknown, _payload?: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName === 'core-box:execute') {
+      if (eventName === 'core-box:item:execute') {
         return { activeProviders: ['plugin-features:touch-translation'] }
       }
       if (eventName.includes('provider')) return []
-      if (eventName === 'core-box:query') {
-        const query = getSearchQueryText(payload)
-        return createSearchResult(query)
-      }
       return undefined
     })
 
@@ -716,13 +741,13 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     const executeCall = state.send.mock.calls.find(
-      ([event]) => String(event) === 'core-box:execute'
+      ([event]) => String(event) === 'core-box:item:execute'
     )
     const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
 
     expect(executePayload?.searchResult?.query.text).toBe('translate hello')
     expect(hook.searchVal.value).toBe('translate hello')
-    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+
     expect(hook.activeActivations.value?.[0]?.meta).toMatchObject({
       pluginName: 'touch-translation',
       featureId: 'translate',
@@ -745,8 +770,6 @@ describe('useSearch CoreBox reopen behavior', () => {
 
     window.dispatchEvent(new CustomEvent('corebox:shown'))
     await flushPromises()
-
-    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
   })
 
   it('refreshes latest clipboard before executing a plugin feature with image input', async () => {
@@ -770,7 +793,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     state.send.mockClear()
     state.send.mockImplementation(async (event: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName === 'core-box:execute') {
+      if (eventName === 'core-box:item:execute') {
         return { activeProviders: ['plugin-features:touch-intelligence'] }
       }
       if (eventName.includes('provider')) return []
@@ -794,7 +817,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     const executeCall = state.send.mock.calls.find(
-      ([event]) => String(event) === 'core-box:execute'
+      ([event]) => String(event) === 'core-box:item:execute'
     )
     const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
     const input = executePayload?.searchResult?.query.inputs?.[0]
@@ -835,7 +858,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     state.send.mockClear()
     state.send.mockImplementation(async (event: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName === 'core-box:execute') {
+      if (eventName === 'core-box:item:execute') {
         return { activeProviders: ['plugin-features:touch-intelligence'] }
       }
       if (eventName.includes('provider')) return []
@@ -859,7 +882,7 @@ describe('useSearch CoreBox reopen behavior', () => {
     await flushPromises()
 
     const executeCall = state.send.mock.calls.find(
-      ([event]) => String(event) === 'core-box:execute'
+      ([event]) => String(event) === 'core-box:item:execute'
     )
     const executePayload = executeCall?.[1] as { searchResult?: TuffSearchResult } | undefined
 
@@ -891,7 +914,7 @@ describe('useSearch CoreBox reopen behavior', () => {
 
     state.send.mockImplementation(async (event: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName === 'core-box:execute') {
+      if (eventName === 'core-box:item:execute') {
         return { activeProviders: ['plugin-features:touch-intelligence'] }
       }
       if (eventName.includes('provider')) return []
@@ -901,8 +924,10 @@ describe('useSearch CoreBox reopen behavior', () => {
     await hook.handleExecute(featureItem)
     await flushPromises()
 
-    state.listeners.get('core-box:search:end')?.({
-      searchId: 'session-1',
+    const searchStream = state.searchRequests.at(-1)
+    searchStream?.options.onData({
+      type: 'complete',
+      sessionId: `stream-session-${state.searchRequests.length}`,
       activate: [{ id: 'plugin-features', meta: { pluginName: 'touch-intelligence' } }],
       sources: []
     })
@@ -933,19 +958,12 @@ describe('useSearch CoreBox reopen behavior', () => {
   })
 
   it('refreshes active widget feature from search updates with custom render data', async () => {
-    const searchId = 'widget-session'
-    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+    state.send.mockImplementation(async (event: unknown, _payload?: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName === 'core-box:execute') {
+      if (eventName === 'core-box:item:execute') {
         return { activeProviders: ['plugin-features:touch-intelligence'] }
       }
       if (eventName.includes('provider')) return []
-      if (eventName === 'core-box:query') {
-        return {
-          ...createSearchResult(getSearchQueryText(payload)),
-          sessionId: searchId
-        }
-      }
       return undefined
     })
 
@@ -1001,8 +1019,9 @@ describe('useSearch CoreBox reopen behavior', () => {
       }
     } as TuffItem
 
-    state.listeners.get('core-box:search-update')?.({
-      searchId,
+    state.searchRequests.at(-1)?.options.onData({
+      type: 'update',
+      sessionId: `stream-session-${state.searchRequests.length}`,
       items: [updatedWidgetItem]
     })
     await flushPromises()
@@ -1030,22 +1049,21 @@ describe('useSearch CoreBox reopen behavior', () => {
       }
     })
 
+    const requestsBeforeFollowUp = state.searchRequests.length
     state.send.mockClear()
     hook.searchVal.value = 'follow-up draft'
     await nextTick()
     await flushPromises()
 
-    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+    expect(state.searchRequests).toHaveLength(requestsBeforeFollowUp)
   })
-
-  it('refreshes active widget feature when BoxItem SDK pushes updated custom render data', async () => {
+  it('renders custom widget data pushed by the BoxItem SDK', async () => {
     state.send.mockImplementation(async (event: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName === 'core-box:execute') {
+      if (eventName === 'core-box:item:execute') {
         return { activeProviders: ['plugin-features:touch-intelligence'] }
       }
       if (eventName.includes('provider')) return []
-      if (eventName === 'core-box:query') return createSearchResult('ai hello')
       return undefined
     })
 
@@ -1098,25 +1116,26 @@ describe('useSearch CoreBox reopen behavior', () => {
     } as TuffItem
 
     state.boxItemsRef!.value = [pushedWidgetItem]
+    await nextTick()
     await flushPromises()
 
-    expect(hook.activeActivations.value?.[0]?.meta).toMatchObject({
-      pluginName: 'touch-intelligence',
-      featureId: 'intelligence-ask',
-      feature: expect.objectContaining({
-        id: 'intelligence-widget',
-        render: {
-          mode: 'custom',
-          custom: expect.objectContaining({
-            data: expect.objectContaining({
-              copyStatus: 'failed',
-              copyError: '复制失败：缺少 clipboard.write 权限',
-              copyRecovery: '请在插件权限中允许 clipboard.write 后重试。'
+    expect(hook.res.value).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'intelligence-widget',
+          render: {
+            mode: 'custom',
+            custom: expect.objectContaining({
+              data: expect.objectContaining({
+                copyStatus: 'failed',
+                copyError: '复制失败：缺少 clipboard.write 权限',
+                copyRecovery: '请在插件权限中允许 clipboard.write 后重试。'
+              })
             })
-          })
-        }
-      })
-    })
+          }
+        })
+      ])
+    )
   })
 
   it('suppresses regular search while a send-mode feature is active', async () => {
@@ -1139,9 +1158,9 @@ describe('useSearch CoreBox reopen behavior', () => {
       }
     } as TuffItem
 
-    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
+    state.send.mockImplementation(async (event: unknown, _payload?: unknown) => {
       const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName === 'core-box:execute') {
+      if (eventName === 'core-box:item:execute') {
         return [
           {
             id: 'plugin-features',
@@ -1156,10 +1175,10 @@ describe('useSearch CoreBox reopen behavior', () => {
         ]
       }
       if (eventName.includes('provider')) return []
-      if (eventName === 'core-box:query') return createSearchResult(getSearchQueryText(payload))
       return undefined
     })
 
+    const requestsBeforeFeature = state.searchRequests.length
     await hook.handleExecute(featureItem)
     await flushPromises()
     state.send.mockClear()
@@ -1167,26 +1186,22 @@ describe('useSearch CoreBox reopen behavior', () => {
     hook.searchVal.value = 'ask something'
     await nextTick()
     await flushPromises()
-
-    expect(state.send.mock.calls.some(([event]) => String(event) === 'core-box:query')).toBe(false)
+    expect(state.searchRequests).toHaveLength(requestsBeforeFeature)
   })
 
   it('does not invalidate an in-flight search when duplicate query is skipped', async () => {
     const firstSearch = {
       resolve: null as ((result: TuffSearchResult) => void) | null
     }
-    state.send.mockImplementation(async (event: unknown, payload?: unknown) => {
-      const eventName = typeof event === 'string' ? event : String(event)
-      if (eventName.includes('provider')) return []
-      if (eventName !== 'core-box:query') return undefined
+    state.searchResultForRequest = (payload) => {
       const query = getSearchQueryText(payload)
       if (query === 'aaa') {
-        return await new Promise<TuffSearchResult>((resolve) => {
+        return new Promise<TuffSearchResult>((resolve) => {
           firstSearch.resolve = resolve
         })
       }
       return createSearchResult(query)
-    })
+    }
 
     const hook = useSearch(createBoxOptions(), createClipboardOptions())
     await flushPromises()

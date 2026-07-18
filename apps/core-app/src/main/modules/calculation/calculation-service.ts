@@ -75,7 +75,7 @@ function buildExpressionPreviewCard(result: ExpressionResult): PreviewCardPayloa
     title: result.expression,
     chips: [],
     sections: [],
-    badges: ['mathjs']
+    badges: ['safe-parser']
   }
 }
 

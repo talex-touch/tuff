@@ -203,6 +203,11 @@ export interface StreamContext<TChunk> {
   isCancelled: () => boolean;
 
   /**
+   * Aborts when the client cancels this stream.
+   */
+  readonly signal: AbortSignal;
+
+  /**
    * Unique identifier for this stream.
    */
   readonly streamId: string;

@@ -164,6 +164,106 @@ if (update.isDone && outcome === "delivered") {
 }
 ```
 
+## Scenario: Request-Scoped Search Sessions And Typed Streams
+
+### 1. Scope / Trigger
+
+- Trigger: changing CoreBox/ApplicationIndex/DivisionBox search transport, AI or
+  background search callers, search cancellation, result caching, or transport
+  stream lifecycle.
+- This contract prevents one window or AI request from cancelling, activating,
+  caching, or receiving another caller's search state.
+
+### 2. Signatures
+
+```ts
+interface SearchExecution {
+  sessionId: string;
+  result: Promise<TuffSearchResult>;
+  completed: Promise<void>;
+  cancel: () => boolean;
+}
+
+interface StreamContext<TChunk> {
+  emit: (chunk: TChunk) => void;
+  end: () => void;
+  error: (error: Error) => void;
+  readonly signal: AbortSignal;
+  readonly sender?: Electron.WebContents;
+}
+
+type CoreBoxSearchSessionChunk =
+  | { type: "session"; sessionId: string }
+  | { type: "snapshot"; sessionId: string; result: TuffSearchResult }
+  | { type: "update"; sessionId: string; items: TuffItem[] }
+  | { type: "no-results"; sessionId: string; shouldShrink: boolean }
+  | { type: "complete"; sessionId: string; cancelled?: boolean };
+```
+
+### 3. Contracts
+
+- Every request creates a fresh session id, including cache hits. Cached values
+  are detached result snapshots without session, controller, caller, or sink.
+- Caller identity and provider activations are cloned when the session starts;
+  the pipeline must not read mutable current-window activation state afterward.
+- The first stream chunk is `session`; `snapshot` precedes buffered updates, and
+  `complete` or `error` is terminal. Sink callbacks are serialized.
+- Renderer callers own one `StreamController` per request and cancel only that
+  controller on replacement or unmount. Server handlers link
+  `StreamContext.signal` to that exact `SearchExecution.cancel()`.
+- UI caller identity comes from `context.sender`. AI/background callers use a
+  collecting or callback sink and never emit renderer traffic.
+- Port-capable stream events must be added to the transport port allowlist and
+  retain channel fallback behavior.
+
+### 4. Validation & Error Matrix
+
+- Stale, unknown, completed, or wrong-owner cancel -> no-op; never fall back to a
+  process-global controller.
+- Update before initial result -> buffer until after the `snapshot` chunk.
+- Client cancels before or during gather -> abort only that session, publish at
+  most one cancelled terminal, and suppress later chunks.
+- Sink callback rejects -> fail only its owning session; do not cancel another
+  caller.
+- Registry destroy -> abort all live sessions and await every terminal promise
+  before provider/transport teardown.
+
+### 5. Good / Base / Bad Cases
+
+- Good: CoreBox and AI searches run concurrently with distinct ids, activations,
+  sinks, and terminals.
+- Base: a single renderer request receives `session -> snapshot -> complete`.
+- Bad: `windowManager.current`, one global gather controller, cached session ids,
+  or global renderer `search.update` / `search.end` listeners.
+
+### 6. Tests Required
+
+- Registry tests: fresh cache-hit ids, detached snapshots, owner-checked cancel,
+  pre-snapshot buffering, terminal idempotence, and awaited destroy.
+- Transport tests: two senders observe disjoint chunks; cancellation aborts only
+  the matching server signal on both MessagePort and channel fallback paths.
+- Renderer tests: replacement/unmount cancel only the owned controller and stale
+  streams cannot mutate the current result.
+- Integration test: concurrent UI-sink and collecting AI searches both complete
+  without cross-cancellation or renderer leakage.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+currentGatherController?.abort();
+transport.on(CoreBoxEvents.search.update, applyAnyWindowUpdate);
+```
+
+#### Correct
+
+```ts
+const execution = searchEngine.startSearch(query, callerContext);
+context.signal.addEventListener("abort", execution.cancel, { once: true });
+await execution.completed;
+```
+
 ## CoreBox Icon Payload Contracts
 
 Recommendation and search-result icons cross main-process providers, rebuilders, and Vue renderers. Normalize icon inputs at the producer boundary instead of making renderer components infer filesystem semantics.

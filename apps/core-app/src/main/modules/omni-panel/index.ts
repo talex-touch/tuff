@@ -40,7 +40,7 @@ import {
 import { ShortcutTriggerKind } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { OMNI_TRANSFER_DECLARATIVE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { app, clipboard, screen, shell, systemPreferences } from 'electron'
 import { OmniPanelWindowOption } from '../../config/default'
 import { TalexEvents as MainEvents, touchEventBus } from '../../core/eventbus/touch-event'
@@ -896,9 +896,6 @@ export class OmniPanelModule extends BaseModule {
     const request = createCoreBoxContextActionsOpenRequest(randomUUID(), input)
     this.hide()
     await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.ui.show, undefined)
-    void this.transport
-      .sendToWindow(coreBoxWindow.window.id, CoreBoxRetainedEvents.legacy.show, undefined)
-      .catch(() => {})
     await this.transport.sendToWindow(
       coreBoxWindow.window.id,
       CoreBoxEvents.contextActions.open,
@@ -1315,9 +1312,6 @@ export class OmniPanelModule extends BaseModule {
 
     try {
       await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.ui.show, undefined)
-      void this.transport
-        .sendToWindow(coreBoxWindow.window.id, CoreBoxRetainedEvents.legacy.show, undefined)
-        .catch(() => {})
       if (contextText.trim()) {
         await this.transport.sendToWindow(coreBoxWindow.window.id, CoreBoxEvents.input.setQuery, {
           value: contextText

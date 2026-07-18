@@ -71,6 +71,11 @@ function isIntelligenceSection(section: TuffSection): boolean {
 function isPinnedSection(section: TuffSection): boolean {
   return section.meta?.pinned === true
 }
+
+function getSectionColumnCount(sectionData: SectionData): number {
+  if (!isIntelligenceSection(sectionData.section)) return gridConfig.value.columns
+  return Math.max(1, Math.ceil(sectionData.items.length / 2))
+}
 </script>
 
 <template>
@@ -92,7 +97,7 @@ function isPinnedSection(section: TuffSection): boolean {
         <div
           class="BoxGrid p-4"
           :style="{
-            '--grid-cols': gridConfig.columns,
+            '--grid-cols': getSectionColumnCount(sectionData),
             '--grid-gap': `${gridConfig.gap}px`
           }"
           :class="`size-${gridConfig.itemSize}`"

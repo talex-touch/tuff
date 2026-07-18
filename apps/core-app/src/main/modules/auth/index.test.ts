@@ -121,10 +121,6 @@ vi.mock('../../utils/secure-store', () => ({
   setSecureStoreValue: setSecureStoreValueMock
 }))
 
-vi.mock('../../utils/legacy-alias-telemetry', () => ({
-  withLegacyAliasTelemetry: vi.fn((handler) => handler)
-}))
-
 vi.mock('../abstract-base-module', () => ({
   BaseModule: class BaseModule {
     constructor(..._args: unknown[]) {}

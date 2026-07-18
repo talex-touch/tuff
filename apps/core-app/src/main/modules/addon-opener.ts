@@ -228,7 +228,6 @@ export class AddonOpenerModule extends BaseModule {
       win.previewFile(filePath)
 
       void transport.sendTo(win.webContents, OpenerEvents.plugin.open, { path: filePath })
-      void transport.sendTo(win.webContents, OpenerEvents.legacy.openPlugin, filePath)
     }
     app.on('open-file', onOpenFile)
     this.appDisposers.push(() => {
@@ -265,10 +264,7 @@ export class AddonOpenerModule extends BaseModule {
       }
     }
 
-    this.transportDisposers.push(
-      transport.on(OpenerEvents.install.request, installPluginHandler),
-      transport.on(OpenerEvents.legacy.installPlugin, installPluginHandler)
-    )
+    this.transportDisposers.push(transport.on(OpenerEvents.install.request, installPluginHandler))
 
     const installDevPluginHandler = async (payload: PluginDevInstallRequest) => {
       const sourcePath = payload?.path
@@ -280,10 +276,7 @@ export class AddonOpenerModule extends BaseModule {
       })
     }
 
-    this.transportDisposers.push(
-      transport.on(OpenerEvents.install.dev, installDevPluginHandler),
-      transport.on(OpenerEvents.legacy.installDevPlugin, installDevPluginHandler)
-    )
+    this.transportDisposers.push(transport.on(OpenerEvents.install.dev, installDevPluginHandler))
 
     const dropPluginHandler = async (
       payload: PluginDropInstallRequest
@@ -343,10 +336,7 @@ export class AddonOpenerModule extends BaseModule {
       }
     }
 
-    this.transportDisposers.push(
-      transport.on(OpenerEvents.drop.install, dropPluginHandler),
-      transport.on(OpenerEvents.legacy.dropPlugin, dropPluginHandler)
-    )
+    this.transportDisposers.push(transport.on(OpenerEvents.drop.install, dropPluginHandler))
   }
 
   onDestroy(): MaybePromise<void> {

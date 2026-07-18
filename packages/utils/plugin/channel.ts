@@ -1,17 +1,21 @@
-import type { IpcRenderer, IpcRendererEvent } from 'electron'
-import { getLogger } from '../common/logger'
-import { findCloneIssue, isCloneError, summarizeClonePayload } from '../common/utils/clone-diagnostics'
-import { formatPayloadPreview } from '../common/utils/payload-preview'
-import { hasWindow } from '../env'
+import type { IpcRenderer, IpcRendererEvent } from "electron";
+import { getLogger } from "../common/logger";
+import {
+  findCloneIssue,
+  isCloneError,
+  summarizeClonePayload,
+} from "../common/utils/clone-diagnostics";
+import { formatPayloadPreview } from "../common/utils/payload-preview";
+import { hasWindow } from "../env";
 
-const CHANNEL_DEFAULT_TIMEOUT = 60_000
+const CHANNEL_DEFAULT_TIMEOUT = 60_000;
 
-let cachedIpcRenderer: IpcRenderer | null = null
-const channelLog = getLogger('plugin-channel')
+let cachedIpcRenderer: IpcRenderer | null = null;
+const channelLog = getLogger("plugin-channel");
 
 enum ChannelType {
-  MAIN = 'main',
-  PLUGIN = 'plugin',
+  MAIN = "main",
+  PLUGIN = "plugin",
 }
 
 enum DataCode {
@@ -21,126 +25,130 @@ enum DataCode {
 }
 
 interface RawChannelSyncData {
-  timeStamp: number
-  timeout: number
-  id: string
+  timeStamp: number;
+  timeout: number;
+  id: string;
 }
 
 interface RawChannelHeaderData {
-  status: 'reply' | 'request'
-  type: ChannelType
-  _originData?: unknown
-  event?: IpcRendererEvent
-  plugin?: string
+  status: "reply" | "request";
+  type: ChannelType;
+  _originData?: unknown;
+  event?: IpcRendererEvent;
+  plugin?: string;
 }
 
 interface RawStandardChannelData {
-  name: string
-  header: RawChannelHeaderData
-  code: DataCode
-  data?: unknown
-  plugin?: string
-  sync?: RawChannelSyncData
+  name: string;
+  header: RawChannelHeaderData;
+  code: DataCode;
+  data?: unknown;
+  plugin?: string;
+  sync?: RawChannelSyncData;
 }
 
 interface StandardChannelData extends RawStandardChannelData {
-  reply: (code: DataCode, data: unknown) => void
+  reply: (code: DataCode, data: unknown) => void;
 }
 
 interface ITouchClientChannel {
-  regChannel: (eventName: string, callback: (data: StandardChannelData) => unknown) => () => void
-  unRegChannel: (eventName: string, callback: (data: StandardChannelData) => unknown) => boolean
-  send: (eventName: string, arg?: unknown) => Promise<unknown>
-  sendSync: (eventName: string, arg?: unknown) => unknown
+  regChannel: (
+    eventName: string,
+    callback: (data: StandardChannelData) => unknown,
+  ) => () => void;
+  unRegChannel: (
+    eventName: string,
+    callback: (data: StandardChannelData) => unknown,
+  ) => boolean;
+  send: (eventName: string, arg?: unknown) => Promise<unknown>;
 }
 
 type PluginWindow = Window & {
-  $plugin?: { name?: string }
-  $channel?: ITouchClientChannel
-  electron?: { ipcRenderer?: IpcRenderer }
-}
+  $plugin?: { name?: string };
+  $channel?: ITouchClientChannel;
+  electron?: { ipcRenderer?: IpcRenderer };
+};
 
 function getPluginWindow(): PluginWindow | undefined {
-  return hasWindow() ? (window as unknown as PluginWindow) : undefined
+  return hasWindow() ? (window as unknown as PluginWindow) : undefined;
 }
 
 // 使用惰性解析避免在打包阶段静态引入 electron
 function resolveIpcRenderer(): IpcRenderer | null {
-  const globalWindow = getPluginWindow()
+  const globalWindow = getPluginWindow();
   if (globalWindow?.electron?.ipcRenderer)
-    return globalWindow.electron.ipcRenderer as IpcRenderer
+    return globalWindow.electron.ipcRenderer as IpcRenderer;
 
   try {
-    const electronFromGlobal = (globalThis as any)?.electron
+    const electronFromGlobal = (globalThis as any)?.electron;
     if (electronFromGlobal?.ipcRenderer)
-      return electronFromGlobal.ipcRenderer as IpcRenderer
+      return electronFromGlobal.ipcRenderer as IpcRenderer;
 
-    const requireFromGlobal = (globalThis as any)?.require
-    if (typeof requireFromGlobal === 'function') {
-      const electron = requireFromGlobal('electron')
-      if (electron?.ipcRenderer)
-        return electron.ipcRenderer as IpcRenderer
+    const requireFromGlobal = (globalThis as any)?.require;
+    if (typeof requireFromGlobal === "function") {
+      const electron = requireFromGlobal("electron");
+      if (electron?.ipcRenderer) return electron.ipcRenderer as IpcRenderer;
     }
-  }
-  catch {
+  } catch {
     // ignore – will throw below if no ipcRenderer is resolved
   }
 
-  return null
+  return null;
 }
 
 function ensureIpcRenderer(): IpcRenderer {
   if (!cachedIpcRenderer) {
-    cachedIpcRenderer = resolveIpcRenderer()
+    cachedIpcRenderer = resolveIpcRenderer();
   }
 
   if (!cachedIpcRenderer) {
-    throw new Error('ipcRenderer is not available in the current runtime environment')
+    throw new Error(
+      "ipcRenderer is not available in the current runtime environment",
+    );
   }
 
-  return cachedIpcRenderer
+  return cachedIpcRenderer;
 }
 
-function createRemovedSendSyncError(eventName: string): Error {
-  return Object.assign(
-    new Error(
-      `Plugin channel sendSync was removed by the hard-cut. Migrate "${eventName}" to typed transport send/on APIs.`
-    ),
-    { code: 'plugin_channel_send_sync_removed' },
-  )
-}
-
-type ChannelListener = (data: StandardChannelData) => unknown
-type PendingCallback = (data: RawStandardChannelData) => void
+type ChannelListener = (data: StandardChannelData) => unknown;
+type PendingCallback = (data: RawStandardChannelData) => void;
 
 /**
  * @deprecated This class is deprecated and will be removed in the future.
  * Due to the new secret system, ipc message transmission should unique Key, and will inject when ui view attached.
  */
 class TouchChannel implements ITouchClientChannel {
-  channelMap: Map<string, ChannelListener[]> = new Map()
+  channelMap: Map<string, ChannelListener[]> = new Map();
 
-  pendingMap: Map<string, PendingCallback> = new Map()
+  pendingMap: Map<string, PendingCallback> = new Map();
 
-  plugin: string
+  plugin: string;
 
-  private ipcRenderer: IpcRenderer
+  private ipcRenderer: IpcRenderer;
 
   constructor(pluginName: string) {
-    this.plugin = pluginName
-    this.ipcRenderer = ensureIpcRenderer()
-    this.ipcRenderer.on('@plugin-process-message', this.__handle_main.bind(this))
+    this.plugin = pluginName;
+    this.ipcRenderer = ensureIpcRenderer();
+    this.ipcRenderer.on(
+      "@plugin-process-message",
+      this.__handle_main.bind(this),
+    );
   }
 
-  __parse_raw_data(e: IpcRendererEvent | undefined, arg: any): RawStandardChannelData | null {
-    channelLog.debug('Raw data', { meta: { payload: formatPayloadPreview(arg) } })
+  __parse_raw_data(
+    e: IpcRendererEvent | undefined,
+    arg: any,
+  ): RawStandardChannelData | null {
+    channelLog.debug("Raw data", {
+      meta: { payload: formatPayloadPreview(arg) },
+    });
     if (arg) {
-      const { name, header, code, data, sync } = arg
+      const { name, header, code, data, sync } = arg;
 
       if (header) {
         return {
           header: {
-            status: header.status || 'request',
+            status: header.status || "request",
             type: ChannelType.PLUGIN,
             _originData: arg,
             event: e,
@@ -149,25 +157,26 @@ class TouchChannel implements ITouchClientChannel {
           code,
           data,
           name: name as string,
-        }
+        };
       }
     }
 
-    channelLog.error('Invalid message payload', { error: { event: e, payload: arg } })
-    return null
+    channelLog.error("Invalid message payload", {
+      error: { event: e, payload: arg },
+    });
+    return null;
     // throw new Error("Invalid message!");
   }
 
   __handle_main(e: IpcRendererEvent, _arg: any): any {
-    const arg = JSON.parse(_arg)
-    const rawData = this.__parse_raw_data(e, arg)
-    if (!rawData)
-      return
+    const arg = JSON.parse(_arg);
+    const rawData = this.__parse_raw_data(e, arg);
+    if (!rawData) return;
 
-    if (rawData.header.status === 'reply' && rawData.sync) {
-      const { id } = rawData.sync
+    if (rawData.header.status === "reply" && rawData.sync) {
+      const { id } = rawData.sync;
 
-      return this.pendingMap.get(id)?.(rawData)
+      return this.pendingMap.get(id)?.(rawData);
     }
 
     // if ( rawData.plugin !== this.plugin ) return
@@ -176,20 +185,19 @@ class TouchChannel implements ITouchClientChannel {
       const handInData: StandardChannelData = {
         reply: (code: DataCode, data: any) => {
           this.ipcRenderer.send(
-            '@plugin-process-message',
+            "@plugin-process-message",
             this.__parse_sender(code, rawData, data, rawData.sync),
-          )
+          );
         },
         ...rawData,
-      }
+      };
 
-      const res = func(handInData)
+      const res = func(handInData);
 
-      if (res && res instanceof Promise)
-        return
+      if (res && res instanceof Promise) return;
 
-      handInData.reply(DataCode.SUCCESS, res)
-    })
+      handInData.reply(DataCode.SUCCESS, res);
+    });
   }
 
   __parse_sender(
@@ -212,68 +220,64 @@ class TouchChannel implements ITouchClientChannel {
       name: rawData.name,
       header: {
         event: rawData.header.event,
-        status: 'reply',
+        status: "reply",
         type: rawData.header.type,
         _originData: rawData.header._originData,
       },
-    }
+    };
   }
 
-  regChannel(
-    eventName: string,
-    callback: ChannelListener,
-  ): () => void {
-    const listeners = this.channelMap.get(eventName) || []
+  regChannel(eventName: string, callback: ChannelListener): () => void {
+    const listeners = this.channelMap.get(eventName) || [];
 
     if (!listeners.includes(callback)) {
-      listeners.push(callback)
-    }
-    else {
-      return () => void 0
+      listeners.push(callback);
+    } else {
+      return () => void 0;
     }
 
-    this.channelMap.set(eventName, listeners)
+    this.channelMap.set(eventName, listeners);
 
     return () => {
-      const index = listeners.indexOf(callback)
+      const index = listeners.indexOf(callback);
 
       if (index !== -1) {
-        listeners.splice(index, 1)
+        listeners.splice(index, 1);
       }
-    }
+    };
   }
 
   unRegChannel(eventName: string, callback: ChannelListener): boolean {
-    const listeners = this.channelMap.get(eventName)
+    const listeners = this.channelMap.get(eventName);
 
     if (!listeners) {
-      return false
+      return false;
     }
 
-    const index = listeners.indexOf(callback)
+    const index = listeners.indexOf(callback);
 
     if (index === -1) {
-      return false
+      return false;
     }
 
-    listeners.splice(index, 1)
+    listeners.splice(index, 1);
 
     // If no listeners remain for this event, remove the event from the map
     if (listeners.length === 0) {
-      this.channelMap.delete(eventName)
+      this.channelMap.delete(eventName);
     }
 
-    return true
+    return true;
   }
 
   private formatPayloadPreview(payload: unknown): string {
-    return formatPayloadPreview(payload)
+    return formatPayloadPreview(payload);
   }
 
   send(eventName: string, arg: any): Promise<any> {
     const uniqueId = `${new Date().getTime()}#${eventName}@${Math.random().toString(
       12,
-    )}`
+    )}`;
 
     const data = {
       code: DataCode.SUCCESS,
@@ -286,83 +290,78 @@ class TouchChannel implements ITouchClientChannel {
       name: eventName,
       plugin: this.plugin,
       header: {
-        status: 'request',
+        status: "request",
         type: ChannelType.PLUGIN,
       },
-    } as RawStandardChannelData
+    } as RawStandardChannelData;
 
     return new Promise((resolve, reject) => {
       try {
-        this.ipcRenderer.send('@plugin-process-message', data)
-      }
-      catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
+        this.ipcRenderer.send("@plugin-process-message", data);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         const meta: Record<string, unknown> = {
-          payloadPreview: this.formatPayloadPreview(arg)
-        }
+          payloadPreview: this.formatPayloadPreview(arg),
+        };
         if (isCloneError(error)) {
-          meta.cloneIssue = findCloneIssue(arg)
-          meta.payloadSummary = summarizeClonePayload(arg)
+          meta.cloneIssue = findCloneIssue(arg);
+          meta.payloadSummary = summarizeClonePayload(arg);
         }
         channelLog.error(`Failed to send \"${eventName}\": ${errorMessage}`, {
           meta,
           error,
-        })
+        });
         reject(
           Object.assign(
-            new Error(`Failed to send plugin channel message \"${eventName}\": ${errorMessage}`),
-            { code: 'plugin_channel_send_failed' },
+            new Error(
+              `Failed to send plugin channel message \"${eventName}\": ${errorMessage}`,
+            ),
+            { code: "plugin_channel_send_failed" },
           ),
-        )
-        return
+        );
+        return;
       }
 
-      const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT
+      const timeoutMs = data.sync?.timeout ?? CHANNEL_DEFAULT_TIMEOUT;
       const timeoutHandle = setTimeout(() => {
-        if (!this.pendingMap.has(uniqueId))
-          return
-        this.pendingMap.delete(uniqueId)
+        if (!this.pendingMap.has(uniqueId)) return;
+        this.pendingMap.delete(uniqueId);
         const timeoutError = Object.assign(
-          new Error(`Plugin channel request \"${eventName}\" timed out after ${timeoutMs}ms`),
-          { code: 'plugin_channel_timeout' },
-        )
-        channelLog.warn(timeoutError.message)
-        reject(timeoutError)
-      }, timeoutMs)
+          new Error(
+            `Plugin channel request \"${eventName}\" timed out after ${timeoutMs}ms`,
+          ),
+          { code: "plugin_channel_timeout" },
+        );
+        channelLog.warn(timeoutError.message);
+        reject(timeoutError);
+      }, timeoutMs);
 
       this.pendingMap.set(uniqueId, (res: any) => {
-        clearTimeout(timeoutHandle)
-        this.pendingMap.delete(uniqueId)
+        clearTimeout(timeoutHandle);
+        this.pendingMap.delete(uniqueId);
 
-        resolve(res.data)
-      })
-    })
-  }
-
-  sendSync(eventName: string, arg?: any): any {
-    channelLog.error('Blocked removed sendSync plugin channel call', {
-      meta: {
-        eventName,
-        payloadPreview: this.formatPayloadPreview(arg),
-      },
-    })
-    throw createRemovedSendSyncError(eventName)
+        resolve(res.data);
+      });
+    });
   }
 }
 
-let touchChannel: ITouchClientChannel | null = null
+let touchChannel: ITouchClientChannel | null = null;
 
 export function genChannel(): ITouchClientChannel {
   if (!touchChannel) {
-    const globalWindow = getPluginWindow()
-    const pluginName = globalWindow?.$plugin?.name
+    const globalWindow = getPluginWindow();
+    const pluginName = globalWindow?.$plugin?.name;
     if (!globalWindow || !pluginName) {
-      throw new Error('TouchChannel cannot be initialized outside plugin renderer context')
+      throw new Error(
+        "TouchChannel cannot be initialized outside plugin renderer context",
+      );
     }
 
-    touchChannel = new TouchChannel(pluginName)
-    globalWindow.$channel = touchChannel
+    touchChannel = new TouchChannel(pluginName);
+    globalWindow.$channel = touchChannel;
   }
 
-  return touchChannel
+  return touchChannel;
 }

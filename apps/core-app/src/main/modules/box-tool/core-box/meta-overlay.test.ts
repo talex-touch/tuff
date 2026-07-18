@@ -2,7 +2,7 @@ import type { TuffItem } from '@talex-touch/utils/core-box'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  sendTo: vi.fn(async () => undefined),
+  sendTo: vi.fn(async (_target: unknown, _event: unknown, _payload: unknown) => undefined),
   sendToPlugin: vi.fn(async () => undefined),
   focus: vi.fn(),
   logger: {
@@ -112,7 +112,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { metaOverlayManager } from './meta-overlay'
 
 const item = {
@@ -140,15 +140,12 @@ describe('MetaOverlayManager action execution', () => {
       CoreBoxEvents.metaOverlay.itemAction,
       { actionId: 'reveal-in-finder', item }
     )
-    expect(mocks.sendTo).toHaveBeenCalledWith(
-      mocks.coreBoxWindow.window.webContents,
-      CoreBoxRetainedEvents.legacy.metaOverlayItemAction,
-      { actionId: 'reveal-in-finder', item }
-    )
+    expect(mocks.sendTo).toHaveBeenCalledTimes(1)
   })
 
   it('routes renderer item actions back to the MetaOverlay parent window', async () => {
     metaOverlayManager.init(mocks.parentWindow as never)
+    mocks.sendTo.mockClear()
 
     const result = await metaOverlayManager.executeAction('copy-answer', item)
 
@@ -158,11 +155,9 @@ describe('MetaOverlayManager action execution', () => {
       CoreBoxEvents.metaOverlay.itemAction,
       { actionId: 'copy-answer', item }
     )
-    expect(mocks.sendTo).toHaveBeenCalledWith(
-      mocks.parentWindow.webContents,
-      CoreBoxRetainedEvents.legacy.metaOverlayItemAction,
-      { actionId: 'copy-answer', item }
-    )
+    expect(
+      mocks.sendTo.mock.calls.filter(([, event]) => event === CoreBoxEvents.metaOverlay.itemAction)
+    ).toHaveLength(1)
     expect(mocks.sendTo).not.toHaveBeenCalledWith(
       mocks.coreBoxWindow.window.webContents,
       CoreBoxEvents.metaOverlay.itemAction,
@@ -215,11 +210,7 @@ describe('MetaOverlayManager action execution', () => {
       CoreBoxEvents.metaOverlay.actionExecuted,
       { actionId: 'plugin-action', item, pluginId: 'plugin-a' }
     )
-    expect(mocks.sendToPlugin).toHaveBeenCalledWith(
-      'plugin-a',
-      CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted,
-      { actionId: 'plugin-action', item, pluginId: 'plugin-a' }
-    )
+    expect(mocks.sendToPlugin).toHaveBeenCalledTimes(1)
   })
 
   it('prefers current item actions over registered plugin actions with the same id', async () => {

@@ -6,22 +6,15 @@ import type {
 } from '@talex-touch/utils/plugin/widget'
 import type { Component, ComponentPublicInstance, SetupContext } from 'vue'
 import {
-  WIDGET_ALLOWED_PACKAGE_SCOPE,
   WIDGET_ALLOWED_PACKAGES,
   WIDGET_RUNTIMES,
   isAllowedWidgetModule
 } from '@talex-touch/utils/plugin/widget'
 import * as ArrowCore from '@arrow-js/core'
-import * as TalexUtils from '@talex-touch/utils'
-import * as TalexUtilsCommon from '@talex-touch/utils/common'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
-import * as TalexUtilsPlugin from '@talex-touch/utils/plugin'
-import * as TalexUtilsPluginSdk from '@talex-touch/utils/plugin/sdk'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import * as TalexUtilsTransport from '@talex-touch/utils/transport'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
-import * as TalexUtilsTypes from '@talex-touch/utils/types'
 import * as Tuffex from '@talex-touch/tuffex'
 import * as TuffexAiElements from '@talex-touch/tuffex/ai-elements'
 import * as Vue from 'vue'
@@ -40,12 +33,23 @@ import {
   recordWidgetFailure,
   recordWidgetSandboxEvidence
 } from './widget-diagnostics'
+import {
+  WIDGET_SANDBOX_AUDIT_MAX_ENTRIES,
+  WIDGET_SANDBOX_QUOTA_MAX_CALLS,
+  WIDGET_SANDBOX_QUOTA_WINDOW_MS,
+  assertWidgetDynamicSource,
+  createWidgetSandboxPolicy,
+  disposeWidgetSandboxPolicy,
+  setWidgetSandboxWindow,
+  type WidgetSandboxPolicyContext
+} from './widget-sandbox-policy'
 
 export {
   getWidgetFailure,
   getWidgetRuntimeSnippet,
   getWidgetSandboxEvidence
 } from './widget-diagnostics'
+export { getWidgetSandboxAuditLog } from './widget-sandbox-policy'
 
 const widgetRegistryLog = createRendererLogger('WidgetRegistry')
 const injectedStyles = new Map<string, HTMLStyleElement>()
@@ -76,13 +80,117 @@ const WIDGET_SANDBOX_INJECTED_GLOBALS = [
   'exports',
   'window',
   'globalThis',
+  'self',
+  'top',
+  'parent',
+  'opener',
+  'frames',
+  'frameElement',
+  'origin',
   'localStorage',
   'sessionStorage',
   'document',
   'indexedDB',
   'BroadcastChannel',
   'caches',
-  'self'
+  'navigator',
+  'history',
+  'location',
+  'postMessage',
+  'addEventListener',
+  'removeEventListener',
+  'dispatchEvent',
+  'onmessage',
+  'Worker',
+  'SharedWorker',
+  'fetch',
+  'XMLHttpRequest',
+  'WebSocket',
+  'EventSource',
+  'Function',
+  'eval',
+  'WebAssembly',
+  'importScripts',
+  'open',
+  'close'
+] as const
+
+const WIDGET_SANDBOX_SAFE_GLOBALS = [
+  'undefined',
+  'NaN',
+  'Infinity',
+  'Object',
+  'Array',
+  'Boolean',
+  'Number',
+  'String',
+  'BigInt',
+  'Symbol',
+  'Date',
+  'RegExp',
+  'Error',
+  'TypeError',
+  'RangeError',
+  'Map',
+  'Set',
+  'WeakMap',
+  'WeakSet',
+  'Promise',
+  'Proxy',
+  'Reflect',
+  'JSON',
+  'Math',
+  'Intl',
+  'ArrayBuffer',
+  'DataView',
+  'Uint8Array',
+  'Uint16Array',
+  'Uint32Array',
+  'Int8Array',
+  'Int16Array',
+  'Int32Array',
+  'Float32Array',
+  'Float64Array',
+  'TextEncoder',
+  'TextDecoder',
+  'URL',
+  'URLSearchParams',
+  'Blob',
+  'File',
+  'FormData',
+  'Headers',
+  'Request',
+  'Response',
+  'AbortController',
+  'AbortSignal',
+  'DOMException',
+  'Event',
+  'CustomEvent',
+  'EventTarget',
+  'MessageEvent',
+  'HTMLElement',
+  'Element',
+  'Node',
+  'DocumentFragment',
+  'customElements',
+  'console',
+  'performance',
+  'crypto',
+  'setTimeout',
+  'clearTimeout',
+  'setInterval',
+  'clearInterval',
+  'queueMicrotask',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+  'getComputedStyle',
+  'matchMedia',
+  'structuredClone'
+] as const
+
+const WIDGET_SANDBOX_SCOPE_GLOBALS = [
+  ...WIDGET_SANDBOX_INJECTED_GLOBALS,
+  ...WIDGET_SANDBOX_SAFE_GLOBALS
 ] as const
 
 type WidgetStorageState = {
@@ -377,35 +485,53 @@ function stringifyCookies(store: Map<string, string>): string {
 }
 
 function createSandboxDocument(
-  pluginName?: string,
-  widgetId?: string,
+  pluginName: string,
+  widgetId: string,
+  policy: WidgetSandboxPolicyContext,
   getSandboxWindow?: () => Window | undefined
 ): Document {
   const key = resolveStorageKey(pluginName)
   const state = getStorageState(key)
-  const cookieStore = getWidgetStore(state.cookies, widgetId || 'unknown')
+  const cookieStore = getWidgetStore(state.cookies, widgetId)
+  const target = document.implementation.createHTMLDocument(`widget:${widgetId}`)
   const boundMethodCache = new Map<PropertyKey, Function>()
-  return new Proxy(document, {
-    get(target, prop) {
-      if (prop === 'cookie') {
-        return stringifyCookies(cookieStore)
-      }
+
+  return new Proxy(target, {
+    get(documentTarget, prop) {
+      if (prop === 'cookie') return stringifyCookies(cookieStore)
       if (prop === 'defaultView' || prop === 'parentWindow' || prop === 'window') {
         return getSandboxWindow?.() ?? null
       }
-      const value = Reflect.get(target, prop, target)
+      if (prop === 'location') return policy.location
+      if (prop === 'constructor' || prop === '__proto__') return undefined
+      if (prop === 'execCommand') {
+        return (command: string) => {
+          if (/^(?:copy|cut|paste)$/i.test(command)) {
+            throw policy.deny(
+              'document.clipboard',
+              `${command.toLowerCase()} must use a typed host action`
+            )
+          }
+          return false
+        }
+      }
+      if (prop === 'open' || prop === 'close' || prop === 'write' || prop === 'writeln') {
+        return () => {
+          throw policy.deny('dom.navigation', `document.${String(prop)} is unavailable`)
+        }
+      }
+      const value = Reflect.get(documentTarget, prop, documentTarget)
       if (typeof value === 'function') {
         const cached = boundMethodCache.get(prop)
-        if (cached) {
-          return cached
-        }
-        const bound = value.bind(target)
+        if (cached) return cached
+        const bound = value.bind(documentTarget)
         boundMethodCache.set(prop, bound)
         return bound
       }
       return value
     },
-    set(target, prop, value, receiver) {
+    getPrototypeOf: () => null,
+    set(documentTarget, prop, value, receiver) {
       if (prop === 'cookie') {
         const parsed = parseCookieValue(String(value ?? ''))
         if (parsed) {
@@ -418,11 +544,8 @@ function createSandboxDocument(
           cookieStore.set(parsed.key, nextValue)
           const nextSize = estimatePluginLocalSize(state)
           if (!withinLocalStorageQuota(nextSize)) {
-            if (previousValue === undefined) {
-              cookieStore.delete(parsed.key)
-            } else {
-              cookieStore.set(parsed.key, previousValue)
-            }
+            if (previousValue === undefined) cookieStore.delete(parsed.key)
+            else cookieStore.set(parsed.key, previousValue)
             widgetRegistryLog.warn('Storage quota exceeded, ignoring cookie set')
             return true
           }
@@ -430,7 +553,11 @@ function createSandboxDocument(
         }
         return true
       }
-      return Reflect.set(target, prop, value, receiver)
+      if (prop === 'location') {
+        throw policy.deny('location.write', 'document.location is read-only')
+      }
+      if (prop === 'defaultView' || prop === 'parentWindow' || prop === 'window') return false
+      return Reflect.set(documentTarget, prop, value, receiver)
     }
   })
 }
@@ -451,20 +578,45 @@ function createNamespacedIndexedDB(pluginName?: string): IDBFactory {
       if (prop === 'deleteDatabase') {
         return (name: string) => target.deleteDatabase(`${prefix}${name}`)
       }
-      return Reflect.get(target, prop, receiver)
+      if (prop === 'databases') {
+        return async () => {
+          const databases = await target.databases()
+          return databases
+            .filter((entry) => entry.name?.startsWith(prefix))
+            .map((entry) => ({ ...entry, name: entry.name?.slice(prefix.length) }))
+        }
+      }
+      const value = Reflect.get(target, prop, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
     }
   })
 }
 
-function createNamespacedCacheStorage(pluginName?: string): CacheStorage {
+function createNamespacedCacheStorage(
+  pluginName: string | undefined,
+  policy: WidgetSandboxPolicyContext
+): CacheStorage {
   if (typeof caches === 'undefined') {
     return {} as CacheStorage
   }
   const prefix = `${resolveStorageKey(pluginName)}::`
+  const wrapCache = (cache: Cache): Cache =>
+    new Proxy(cache, {
+      get(target, prop) {
+        if (prop === 'add' || prop === 'addAll') {
+          return async () => {
+            throw policy.deny('network.access', `Cache.${String(prop)} must use a host action`)
+          }
+        }
+        const value = Reflect.get(target, prop, target)
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    })
+
   return new Proxy(caches, {
     get(target, prop, receiver) {
       if (prop === 'open') {
-        return (name: string) => target.open(`${prefix}${name}`)
+        return async (name: string) => wrapCache(await target.open(`${prefix}${name}`))
       }
       if (prop === 'delete') {
         return (name: string) => target.delete(`${prefix}${name}`)
@@ -472,12 +624,38 @@ function createNamespacedCacheStorage(pluginName?: string): CacheStorage {
       if (prop === 'has') {
         return (name: string) => target.has(`${prefix}${name}`)
       }
-      return Reflect.get(target, prop, receiver)
+      if (prop === 'keys') {
+        return async () =>
+          (await target.keys())
+            .filter((name) => name.startsWith(prefix))
+            .map((name) => name.slice(prefix.length))
+      }
+      if (prop === 'match') {
+        return async (request: RequestInfo | URL, options?: MultiCacheQueryOptions) => {
+          if (options?.cacheName) {
+            return target.match(request, {
+              ...options,
+              cacheName: `${prefix}${options.cacheName}`
+            })
+          }
+          const ownNames = (await target.keys()).filter((name) => name.startsWith(prefix))
+          for (const cacheName of ownNames) {
+            const response = await target.match(request, { ...options, cacheName })
+            if (response) return response
+          }
+          return undefined
+        }
+      }
+      const value = Reflect.get(target, prop, receiver)
+      return typeof value === 'function' ? value.bind(target) : value
     }
   })
 }
 
-function createNamespacedBroadcastChannel(pluginName?: string): typeof BroadcastChannel {
+function createNamespacedBroadcastChannel(
+  pluginName: string | undefined,
+  policy: WidgetSandboxPolicyContext
+): typeof BroadcastChannel {
   if (typeof BroadcastChannel === 'undefined') {
     return class WidgetBroadcastChannel {
       constructor() {
@@ -490,12 +668,18 @@ function createNamespacedBroadcastChannel(pluginName?: string): typeof Broadcast
     constructor(name: string) {
       super(`${prefix}${name}`)
     }
+
+    override postMessage(message: unknown): void {
+      policy.allow('postMessage', 'plugin-namespaced-broadcast')
+      super.postMessage(message)
+    }
   }
 }
 
 function createSandboxWindow(
-  pluginName?: string,
-  widgetId?: string,
+  pluginName: string,
+  widgetId: string,
+  policy: WidgetSandboxPolicyContext,
   sandboxDocument?: Document,
   sandboxIndexedDB?: IDBFactory,
   sandboxBroadcastChannel?: typeof BroadcastChannel,
@@ -505,93 +689,133 @@ function createSandboxWindow(
 ): Window {
   const local = localStorage ?? createStorageFacade('local', pluginName, widgetId)
   const session = sessionStorage ?? createStorageFacade('session', pluginName, widgetId)
-  const doc = sandboxDocument ?? createSandboxDocument(pluginName, widgetId)
+  const doc = sandboxDocument ?? createSandboxDocument(pluginName, widgetId, policy)
   const indexed = sandboxIndexedDB ?? createNamespacedIndexedDB(pluginName)
-  const bc = sandboxBroadcastChannel ?? createNamespacedBroadcastChannel(pluginName)
-  const cacheStorage = sandboxCaches ?? createNamespacedCacheStorage(pluginName)
+  const bc = sandboxBroadcastChannel ?? createNamespacedBroadcastChannel(pluginName, policy)
+  const cacheStorage = sandboxCaches ?? createNamespacedCacheStorage(pluginName, policy)
+  const localTarget = Object.create(null) as Record<PropertyKey, unknown>
   const boundMethodCache = new Map<PropertyKey, Function>()
+  const safeProperties = new Set<PropertyKey>(WIDGET_SANDBOX_SAFE_GLOBALS)
 
-  return new Proxy(window, {
+  return new Proxy(localTarget, {
     get(target, prop, receiver) {
+      if (prop === Symbol.toStringTag) return 'Window'
+      if (prop === Symbol.unscopables) return undefined
       if (
         prop === 'window' ||
         prop === 'self' ||
         prop === 'top' ||
         prop === 'parent' ||
+        prop === 'frames' ||
         prop === 'globalThis'
       ) {
         return receiver
       }
-      if (prop === 'opener') {
-        return null
-      }
+      if (prop === 'opener' || prop === 'frameElement') return null
+      if (prop === 'origin') return 'null'
+      if (prop === 'length') return 0
       if (prop === 'localStorage') return local
       if (prop === 'sessionStorage') return session
       if (prop === 'document') return doc
       if (prop === 'indexedDB') return indexed
       if (prop === 'BroadcastChannel') return bc
       if (prop === 'caches') return cacheStorage
-      const value = Reflect.get(target, prop, target)
-      if (typeof value === 'function') {
-        const cached = boundMethodCache.get(prop)
-        if (cached) {
-          return cached
+      if (prop === 'navigator') return policy.navigator
+      if (prop === 'history') return policy.history
+      if (prop === 'location') return policy.location
+      if (prop === 'postMessage') return policy.postMessage
+      if (prop === 'Worker') return policy.Worker
+      if (prop === 'SharedWorker') return policy.SharedWorker
+      if (prop === 'fetch') return policy.fetch
+      if (prop === 'XMLHttpRequest') return policy.XMLHttpRequest
+      if (prop === 'WebSocket') return policy.WebSocket
+      if (prop === 'EventSource') return policy.EventSource
+      if (prop === 'Function') return policy.Function
+      if (prop === 'eval') return policy.eval
+      if (prop === 'WebAssembly') return policy.WebAssembly
+      if (prop === 'importScripts') return policy.importScripts
+      if (prop === 'open') return policy.open
+      if (prop === 'close') {
+        return () => {
+          throw policy.deny('window.open', 'host window close is blocked')
         }
-        const bound = value.bind(target)
-        boundMethodCache.set(prop, bound)
-        return bound
       }
-      return value
+      if (prop === 'addEventListener') return policy.addEventListener
+      if (prop === 'removeEventListener') return policy.removeEventListener
+      if (prop === 'dispatchEvent') return policy.dispatchEvent
+      if (prop === 'onmessage') return policy.getOnMessage()
+      if (prop === 'constructor' || prop === '__proto__') return undefined
+      if (Reflect.has(target, prop)) return Reflect.get(target, prop, receiver)
+      if (!safeProperties.has(prop)) return undefined
+
+      const value = Reflect.get(window, prop, window)
+      if (typeof value !== 'function' || Object.prototype.hasOwnProperty.call(value, 'prototype')) {
+        return value
+      }
+      const cached = boundMethodCache.get(prop)
+      if (cached) return cached
+      const bound = value.bind(window)
+      boundMethodCache.set(prop, bound)
+      return bound
     },
+    getPrototypeOf: () => null,
+    has: (target, prop) => Reflect.has(target, prop) || safeProperties.has(prop),
     set(target, prop, value, receiver) {
-      if (
-        prop === 'window' ||
-        prop === 'self' ||
-        prop === 'top' ||
-        prop === 'parent' ||
-        prop === 'globalThis' ||
-        prop === 'opener' ||
-        prop === 'localStorage' ||
-        prop === 'sessionStorage' ||
-        prop === 'document' ||
-        prop === 'indexedDB' ||
-        prop === 'BroadcastChannel' ||
-        prop === 'caches'
-      ) {
+      if (prop === 'location') {
+        throw policy.deny('location.write', 'window.location is read-only')
+      }
+      if (prop === 'onmessage') {
+        policy.setOnMessage(typeof value === 'function' ? value : null)
         return true
       }
+      if (WIDGET_SANDBOX_INJECTED_GLOBALS.includes(prop as never)) return false
       return Reflect.set(target, prop, value, receiver)
-    }
-  })
+    },
+    defineProperty(target, prop, descriptor) {
+      if (WIDGET_SANDBOX_INJECTED_GLOBALS.includes(prop as never)) return false
+      return Reflect.defineProperty(target, prop, descriptor)
+    },
+    deleteProperty: (target, prop) => Reflect.deleteProperty(target, prop)
+  }) as unknown as Window
 }
 
 type WidgetSandboxContext = {
   window: Window
   globalThis: Window
+  self: Window
+  top: Window
+  parent: Window
+  opener: null
+  frames: Window
+  frameElement: null
+  origin: 'null'
   localStorage: Storage
   sessionStorage: Storage
   document: Document
   indexedDB: IDBFactory
   BroadcastChannel: typeof BroadcastChannel
   caches: CacheStorage
-  self: Window
+  policy: WidgetSandboxPolicyContext
 }
 
 async function createWidgetSandbox(
-  pluginName?: string,
-  widgetId?: string
+  pluginName: string,
+  widgetId: string,
+  evidence: WidgetSandboxEvidence
 ): Promise<WidgetSandboxContext> {
   await ensureLocalStorageLoaded(pluginName)
+  const policy = createWidgetSandboxPolicy(pluginName, widgetId, evidence)
   const localStorage = createStorageFacade('local', pluginName, widgetId)
   const sessionStorage = createStorageFacade('session', pluginName, widgetId)
   let sandboxWindow: Window | undefined
-  const document = createSandboxDocument(pluginName, widgetId, () => sandboxWindow)
+  const document = createSandboxDocument(pluginName, widgetId, policy, () => sandboxWindow)
   const indexedDB = createNamespacedIndexedDB(pluginName)
-  const BroadcastChannel = createNamespacedBroadcastChannel(pluginName)
-  const caches = createNamespacedCacheStorage(pluginName)
+  const BroadcastChannel = createNamespacedBroadcastChannel(pluginName, policy)
+  const caches = createNamespacedCacheStorage(pluginName, policy)
   sandboxWindow = createSandboxWindow(
     pluginName,
     widgetId,
+    policy,
     document,
     indexedDB,
     BroadcastChannel,
@@ -599,16 +823,24 @@ async function createWidgetSandbox(
     localStorage,
     sessionStorage
   )
+  setWidgetSandboxWindow(widgetId, sandboxWindow)
   return {
     window: sandboxWindow,
     globalThis: sandboxWindow,
+    self: sandboxWindow,
+    top: sandboxWindow,
+    parent: sandboxWindow,
+    opener: null,
+    frames: sandboxWindow,
+    frameElement: null,
+    origin: 'null',
     localStorage,
     sessionStorage,
     document,
     indexedDB,
     BroadcastChannel,
     caches,
-    self: sandboxWindow
+    policy
   }
 }
 
@@ -626,13 +858,7 @@ const ALLOWED_PACKAGES: readonly string[] = WIDGET_ALLOWED_PACKAGES
 const preloadedModuleCache: Record<string, unknown> = {
   '@arrow-js/core': ArrowCore,
   vue: Vue,
-  '@talex-touch/utils': TalexUtils,
-  '@talex-touch/utils/plugin': TalexUtilsPlugin,
-  '@talex-touch/utils/plugin/sdk': TalexUtilsPluginSdk,
   '@talex-touch/utils/core-box': TalexUtilsCoreBox,
-  '@talex-touch/utils/transport': TalexUtilsTransport,
-  '@talex-touch/utils/common': TalexUtilsCommon,
-  '@talex-touch/utils/types': TalexUtilsTypes,
   '@talex-touch/tuffex': Tuffex,
   '@talex-touch/tuffex/ai-elements': TuffexAiElements
 }
@@ -641,39 +867,8 @@ function resolveTalexTouchModule(moduleName: string): unknown {
   if (moduleName in preloadedModuleCache) {
     return preloadedModuleCache[moduleName]
   }
-
-  if (moduleName.startsWith('@talex-touch/tuffex/')) {
-    return Tuffex
-  }
-
-  if (moduleName.startsWith('@talex-touch/utils/plugin/sdk')) {
-    return TalexUtilsPluginSdk
-  }
-
-  if (moduleName.startsWith('@talex-touch/utils/plugin')) {
-    return TalexUtilsPlugin
-  }
-
-  if (moduleName.startsWith('@talex-touch/utils/core-box')) {
-    return TalexUtilsCoreBox
-  }
-
-  if (moduleName.startsWith('@talex-touch/utils/transport')) {
-    return TalexUtilsTransport
-  }
-
-  if (moduleName.startsWith('@talex-touch/utils/common')) {
-    return TalexUtilsCommon
-  }
-
-  if (moduleName.startsWith('@talex-touch/utils/types')) {
-    return TalexUtilsTypes
-  }
-
-  if (moduleName.startsWith('@talex-touch/utils')) {
-    return TalexUtils
-  }
-
+  if (moduleName.startsWith('@talex-touch/tuffex/')) return Tuffex
+  if (moduleName.startsWith('@talex-touch/utils/core-box/')) return TalexUtilsCoreBox
   return undefined
 }
 
@@ -688,15 +883,7 @@ function normalizeWidgetDependencies(dependencies?: string[]): string[] {
 }
 
 function isWidgetDependencyAvailable(dependency: string): boolean {
-  if (!isAllowedWidgetModule(dependency)) {
-    return false
-  }
-
-  if (dependency.startsWith(WIDGET_ALLOWED_PACKAGE_SCOPE)) {
-    return true
-  }
-
-  return ALLOWED_PACKAGES.includes(dependency) && dependency in preloadedModuleCache
+  return isAllowedWidgetModule(dependency) && resolveTalexTouchModule(dependency) !== undefined
 }
 
 function addUniqueDependency(target: string[], dependency: string): void {
@@ -735,17 +922,47 @@ export function buildWidgetSandboxEvidence(
       caches: 'plugin-namespaced',
       broadcastChannel: 'plugin-namespaced'
     },
+    browserFacade: {
+      clipboard: 'blocked-use-host-action',
+      history: 'memory-isolated',
+      location: 'read-only-snapshot',
+      postMessage: 'widget-local',
+      worker: 'blocked',
+      serviceWorker: 'blocked',
+      network: 'blocked-use-host-action',
+      domNavigation: 'blocked'
+    },
     windowBoundary: {
       opener: 'null',
       top: 'sandbox-proxy',
       parent: 'sandbox-proxy',
       self: 'sandbox-proxy',
       globalThis: 'sandbox-proxy',
-      documentDefaultView: 'sandbox-proxy'
+      documentDefaultView: 'sandbox-proxy',
+      documentRealm: 'detached-document'
+    },
+    quota: {
+      windowMs: WIDGET_SANDBOX_QUOTA_WINDOW_MS,
+      maxCalls: WIDGET_SANDBOX_QUOTA_MAX_CALLS,
+      usedCalls: 0,
+      blockedCalls: 0,
+      resetsAt: Date.now() + WIDGET_SANDBOX_QUOTA_WINDOW_MS
+    },
+    audit: {
+      mode: 'bounded-memory',
+      maxEntries: WIDGET_SANDBOX_AUDIT_MAX_ENTRIES,
+      payloads: 'excluded'
     },
     dynamicExecution: {
-      mode: 'new-function',
-      injectedGlobals: [...WIDGET_SANDBOX_INJECTED_GLOBALS]
+      mode: 'guarded-new-function',
+      realm: 'same-realm',
+      boundary: 'host-api-containment',
+      sourcePreflight: 'lexical-denylist',
+      injectedGlobals: [...WIDGET_SANDBOX_SCOPE_GLOBALS],
+      limitations: [
+        'Shares JavaScript intrinsics with the host renderer',
+        'Not a process, origin, or realm isolation boundary'
+      ]
     }
   }
 }
@@ -761,12 +978,31 @@ type WidgetComponent = {
 } & Record<string, unknown>
 
 type WidgetFunctionalComponent = (props: Record<string, unknown>, ctx: SetupContext) => unknown
+const WIDGET_HOST_PROP_NAMES = [
+  'item',
+  'payload',
+  'preview',
+  'widgetId',
+  'hostKeyEvent',
+  'onShowHistory',
+  'onCopyPrimary',
+  'onHostAction'
+] as const
+
+type WidgetHostActionPayload = {
+  actionId: string
+  payload?: Record<string, unknown>
+}
+
 type WidgetHostProps = {
   item?: unknown
   payload?: unknown
   preview?: boolean
   widgetId?: string
   hostKeyEvent?: unknown
+  onShowHistory?: () => void
+  onCopyPrimary?: () => void
+  onHostAction?: (payload: WidgetHostActionPayload) => void
 }
 type ArrowHostState = WidgetHostProps & {
   mounted: boolean
@@ -1043,13 +1279,10 @@ function attachPluginInfoToComponent(
 }
 
 function syncHostElementProps(element: HTMLElement, props: WidgetHostProps): void {
-  Object.assign(element, {
-    item: props.item,
-    payload: props.payload,
-    preview: props.preview,
-    widgetId: props.widgetId,
-    hostKeyEvent: props.hostKeyEvent
-  })
+  Object.assign(
+    element,
+    Object.fromEntries(WIDGET_HOST_PROP_NAMES.map((name) => [name, props[name]]))
+  )
 }
 
 function isHTMLElementConstructor(value: unknown): value is typeof HTMLElement {
@@ -1134,7 +1367,7 @@ function createWebComponentHost(exported: unknown): Component {
 
   return Vue.defineComponent({
     name: 'TouchWidgetWebComponentHost',
-    props: ['item', 'payload', 'preview', 'widgetId', 'hostKeyEvent'],
+    props: [...WIDGET_HOST_PROP_NAMES],
     setup(props) {
       const host = Vue.ref<HTMLElement | null>(null)
       let element: HTMLElement | null = null
@@ -1152,11 +1385,7 @@ function createWebComponentHost(exported: unknown): Component {
         host.value.replaceChildren(element)
       })
 
-      Vue.watch(
-        () => [props.item, props.payload, props.preview, props.widgetId, props.hostKeyEvent],
-        sync,
-        { deep: true }
-      )
+      Vue.watch(() => WIDGET_HOST_PROP_NAMES.map((name) => props[name]), sync, { deep: true })
 
       Vue.onBeforeUnmount(() => {
         element?.remove()
@@ -1213,29 +1442,23 @@ function createArrowHost(exported: unknown): Component {
 
   return Vue.defineComponent({
     name: 'TouchWidgetArrowHost',
-    props: ['item', 'payload', 'preview', 'widgetId', 'hostKeyEvent'],
+    props: [...WIDGET_HOST_PROP_NAMES],
     setup(props) {
       const host = Vue.ref<HTMLElement | null>(null)
       let state: ArrowHostState | null = null
 
       const syncState = () => {
         if (!state) return
-        state.item = props.item
-        state.payload = props.payload
-        state.preview = props.preview
-        state.widgetId = props.widgetId
-        state.hostKeyEvent = props.hostKeyEvent
+        for (const name of WIDGET_HOST_PROP_NAMES) {
+          state[name] = props[name] as never
+        }
       }
 
       const mountArrow = () => {
         if (!host.value) return
         state = ArrowCore.reactive({
           mounted: true,
-          item: props.item,
-          payload: props.payload,
-          preview: props.preview,
-          widgetId: props.widgetId,
-          hostKeyEvent: props.hostKeyEvent
+          ...Object.fromEntries(WIDGET_HOST_PROP_NAMES.map((name) => [name, props[name]]))
         }) as ArrowHostState
 
         const root = ArrowCore.html`${() => {
@@ -1269,11 +1492,7 @@ function createArrowHost(exported: unknown): Component {
       }
 
       Vue.onMounted(mountArrow)
-      Vue.watch(
-        () => [props.item, props.payload, props.preview, props.widgetId, props.hostKeyEvent],
-        syncState,
-        { deep: true }
-      )
+      Vue.watch(() => WIDGET_HOST_PROP_NAMES.map((name) => props[name]), syncState, { deep: true })
       Vue.onBeforeUnmount(unmountArrow)
 
       return () => Vue.h('div', { ref: host, class: 'TouchWidgetArrowHost' })
@@ -1315,10 +1534,7 @@ function createSandboxRequire(evidence: WidgetSandboxEvidence): (id: string) => 
       )
     }
 
-    const resolved = moduleName.startsWith(WIDGET_ALLOWED_PACKAGE_SCOPE)
-      ? resolveTalexTouchModule(moduleName)
-      : preloadedModuleCache[moduleName]
-
+    const resolved = resolveTalexTouchModule(moduleName)
     if (resolved === undefined) {
       throw new Error(
         `[WidgetSandbox] Module "${moduleName}" is allowed but not available in renderer sandbox.`
@@ -1347,33 +1563,75 @@ function evaluateWidgetComponent(
   }
   const module: { exports: unknown } = { exports: {} }
   const customRequire = createSandboxRequire(evidence)
-  const sandboxWindow = sandbox.window
-  const sandboxGlobal = sandbox.globalThis
-  const sandboxLocalStorage = sandbox.localStorage
-  const sandboxSessionStorage = sandbox.sessionStorage
-  const sandboxDocument = sandbox.document
-  const sandboxIndexedDB = sandbox.indexedDB
-  const sandboxBroadcastChannel = sandbox.BroadcastChannel
-  const sandboxCaches = sandbox.caches
-  const sandboxSelf = sandbox.self
+  const scopeTarget = Object.assign(Object.create(null) as Record<PropertyKey, unknown>, {
+    require: customRequire,
+    module,
+    exports: module.exports,
+    window: sandbox.window,
+    globalThis: sandbox.globalThis,
+    self: sandbox.self,
+    top: sandbox.top,
+    parent: sandbox.parent,
+    opener: sandbox.opener,
+    frames: sandbox.frames,
+    frameElement: sandbox.frameElement,
+    origin: sandbox.origin,
+    localStorage: sandbox.localStorage,
+    sessionStorage: sandbox.sessionStorage,
+    document: sandbox.document,
+    indexedDB: sandbox.indexedDB,
+    BroadcastChannel: sandbox.BroadcastChannel,
+    caches: sandbox.caches,
+    navigator: sandbox.policy.navigator,
+    history: sandbox.policy.history,
+    location: sandbox.policy.location,
+    postMessage: sandbox.policy.postMessage,
+    addEventListener: sandbox.policy.addEventListener,
+    removeEventListener: sandbox.policy.removeEventListener,
+    dispatchEvent: sandbox.policy.dispatchEvent,
+    Worker: sandbox.policy.Worker,
+    SharedWorker: sandbox.policy.SharedWorker,
+    fetch: sandbox.policy.fetch,
+    XMLHttpRequest: sandbox.policy.XMLHttpRequest,
+    WebSocket: sandbox.policy.WebSocket,
+    EventSource: sandbox.policy.EventSource,
+    Function: sandbox.policy.Function,
+    eval: sandbox.policy.eval,
+    WebAssembly: sandbox.policy.WebAssembly,
+    importScripts: sandbox.policy.importScripts,
+    open: sandbox.policy.open,
+    close: () => {
+      throw sandbox.policy.deny('window.open', 'host window close is blocked')
+    }
+  })
+  for (const name of WIDGET_SANDBOX_SAFE_GLOBALS) {
+    if (!Reflect.has(scopeTarget, name)) {
+      scopeTarget[name] = Reflect.get(sandbox.window, name)
+    }
+  }
+  Object.defineProperty(scopeTarget, 'onmessage', {
+    configurable: false,
+    enumerable: true,
+    get: () => sandbox.policy.getOnMessage(),
+    set: (value) => sandbox.policy.setOnMessage(typeof value === 'function' ? value : null)
+  })
+  const sandboxScope = new Proxy(scopeTarget, {
+    get: (target, prop, receiver) =>
+      prop === Symbol.unscopables ? undefined : Reflect.get(target, prop, receiver),
+    getPrototypeOf: () => null,
+    has: () => true,
+    set: (target, prop, value, receiver) => Reflect.set(target, prop, value, receiver)
+  })
 
   try {
     cacheWidgetRuntimeSource(debugLabel, code)
-    const executor = new Function(...WIDGET_SANDBOX_INJECTED_GLOBALS, code)
-    executor(
-      customRequire,
-      module,
-      module.exports,
-      sandboxWindow,
-      sandboxGlobal,
-      sandboxLocalStorage,
-      sandboxSessionStorage,
-      sandboxDocument,
-      sandboxIndexedDB,
-      sandboxBroadcastChannel,
-      sandboxCaches,
-      sandboxSelf
-    )
+    assertWidgetDynamicSource(evidence.widgetId, code)
+    const createExecutor = new Function(
+      'sandboxScope',
+      `with (sandboxScope) { return function widgetModule() {\n${code}\n} }`
+    ) as (scope: Record<PropertyKey, unknown>) => () => void
+    const executor = createExecutor(sandboxScope)
+    executor.call(sandbox.window)
   } catch (error) {
     widgetRegistryLog.error('Widget execution failed:', error)
     throw error
@@ -1426,6 +1684,7 @@ function clearRegisteredWidgetRuntime(widgetId: string): void {
   registeredWidgetHashes.delete(widgetId)
   unregisterCustomRenderer(widgetId)
   removeInjectedStyles(widgetId)
+  disposeWidgetSandboxPolicy(widgetId)
 }
 
 function resolveErrorMessage(error: unknown): string {
@@ -1493,7 +1752,7 @@ export async function handleWidgetRegister(payload: WidgetRegistrationPayload): 
         widgetRegistryLog.warn(`widget ${payload.widgetId} has empty styles`)
       }
     }
-    const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
+    const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId, sandboxEvidence)
     const exported = evaluateWidgetComponent(
       payload.code,
       sandboxEvidence,
@@ -1550,7 +1809,7 @@ export async function handleWidgetUpdate(payload: WidgetRegistrationPayload): Pr
         widgetRegistryLog.warn(`widget ${payload.widgetId} has empty styles`)
       }
     }
-    const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId)
+    const sandbox = await createWidgetSandbox(payload.pluginName, payload.widgetId, sandboxEvidence)
     const exported = evaluateWidgetComponent(
       payload.code,
       sandboxEvidence,

@@ -11,7 +11,6 @@ import { withPermission } from '../permission/channel-guard'
 import { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
-import { withLegacyAliasTelemetry } from '../../utils/legacy-alias-telemetry'
 
 type TerminalEventPayload = { id: string; data: string } | { id: string; exitCode: number | null }
 const terminalLog = createLogger('TerminalManager')
@@ -45,38 +44,8 @@ class TerminalModule extends BaseModule {
     const killHandler = (payload: Parameters<TerminalModule['kill']>[0]) => this.kill(payload)
 
     this.transport.on(TerminalEvents.session.create, createHandler)
-    this.transport.on(
-      TerminalEvents.legacy.create,
-      withLegacyAliasTelemetry(createHandler, {
-        family: 'terminal',
-        legacyEvent: TerminalEvents.legacy.create,
-        canonicalEvent: TerminalEvents.session.create,
-        direction: 'renderer-to-main',
-        sourceModule: 'TerminalModule'
-      })
-    )
     this.transport.on(TerminalEvents.session.write, writeHandler)
-    this.transport.on(
-      TerminalEvents.legacy.write,
-      withLegacyAliasTelemetry(writeHandler, {
-        family: 'terminal',
-        legacyEvent: TerminalEvents.legacy.write,
-        canonicalEvent: TerminalEvents.session.write,
-        direction: 'renderer-to-main',
-        sourceModule: 'TerminalModule'
-      })
-    )
     this.transport.on(TerminalEvents.session.kill, killHandler)
-    this.transport.on(
-      TerminalEvents.legacy.kill,
-      withLegacyAliasTelemetry(killHandler, {
-        family: 'terminal',
-        legacyEvent: TerminalEvents.legacy.kill,
-        canonicalEvent: TerminalEvents.session.kill,
-        direction: 'renderer-to-main',
-        sourceModule: 'TerminalModule'
-      })
-    )
   }
 
   private sendToSender(sender: WebContents | undefined, data: TerminalEventPayload): void {
@@ -95,15 +64,6 @@ class TerminalModule extends BaseModule {
           error
         })
       })
-      transport.sendTo(sender, TerminalEvents.legacy.data, data).catch((error) => {
-        terminalLog.debug('Failed to forward terminal event', {
-          meta: {
-            id: data.id,
-            eventName: TerminalEvents.legacy.data.toEventName()
-          },
-          error
-        })
-      })
       return
     }
 
@@ -112,15 +72,6 @@ class TerminalModule extends BaseModule {
         meta: {
           id: data.id,
           eventName: TerminalEvents.session.exit.toEventName()
-        },
-        error
-      })
-    })
-    transport.sendTo(sender, TerminalEvents.legacy.exit, data).catch((error) => {
-      terminalLog.debug('Failed to forward terminal event', {
-        meta: {
-          id: data.id,
-          eventName: TerminalEvents.legacy.exit.toEventName()
         },
         error
       })
@@ -140,7 +91,7 @@ class TerminalModule extends BaseModule {
     const sender = context.sender as WebContents | undefined
 
     if (!command) {
-      terminalLog.warn('No command provided for terminal:create')
+      terminalLog.warn('No command provided for terminal:session:create')
       throw new Error('No command provided')
     }
 

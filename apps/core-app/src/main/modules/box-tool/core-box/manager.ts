@@ -1,20 +1,20 @@
 import type { TuffQuery as TuffQueryBase } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
-import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { ProviderDeactivatedEvent } from '../../../core/eventbus/touch-event'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { TuffQuery, TuffSearchResult } from '../search-engine/types'
 import { TuffSearchResultBuilder } from '@talex-touch/utils'
-import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { maybeGetRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
-import { getMainConfig } from '../../storage'
+import type { OnboardingGateDecision } from '../../storage'
+import { OnboardingGateError, onboardingGate } from '../../storage'
 import { createLogger } from '../../../utils/logger'
 import { SearchEngineCore } from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
+import type { SearchRequestContext } from '../search-engine/search-session'
 import { ipcManager } from './ipc'
 import { windowManager } from './window'
 
@@ -133,29 +133,39 @@ export class CoreBoxManager {
     }
   }
 
+  private routeAdmissionFailure(
+    decision: Exclude<OnboardingGateDecision, { state: 'allowed' }>
+  ): void {
+    coreBoxManagerLog.warn('CoreBox activation blocked by onboarding gate', {
+      meta: {
+        state: decision.state,
+        reason: decision.reason,
+        recoverable: decision.recoverable
+      }
+    })
+
+    const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  }
+
+  private buildBlockedSearchResult(query: TuffQuery): TuffSearchResult {
+    return new TuffSearchResultBuilder(query).setItems([]).setDuration(0).setSources([]).build()
+  }
+
   /**
    * Toggle CoreBox visibility
    * @param show - Whether to show or hide CoreBox
    * @param options - Trigger options including shortcut flag
    */
-  public trigger(show: boolean, options?: TriggerOptions): void {
-    // If trying to show, check if initialization is complete
+  public trigger(show: boolean, options?: TriggerOptions): boolean {
     if (show) {
-      try {
-        const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting
-        if (!appSetting?.beginner?.init) {
-          coreBoxManagerLog.warn('Initialization not complete, cannot open CoreBox')
-          // Show main window to guide user to complete initialization
-          const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.show()
-            mainWindow.focus()
-          }
-          return
-        }
-      } catch (error) {
-        coreBoxManagerLog.error('Failed to check initialization status', { error })
-        // If we can't check, allow CoreBox to open (fail-open approach)
+      const decision = onboardingGate.evaluate()
+      if (decision.state !== 'allowed') {
+        this.routeAdmissionFailure(decision)
+        return false
       }
     }
 
@@ -164,7 +174,7 @@ export class CoreBoxManager {
     const realVisible =
       currentWindow && !currentWindow.isDestroyed() ? currentWindow.isVisible() : false
     if (now - this.lastTrigger < 200 && this._show === show && realVisible === show) {
-      return
+      return true
     }
     this.lastTrigger = now
 
@@ -182,6 +192,8 @@ export class CoreBoxManager {
       windowManager.hide({ immediate: options?.immediate === true })
       this.pollingService.clearGlobalPressure(COREBOX_PRESSURE_REASON)
     }
+
+    return true
   }
 
   private applyActivePressure(): void {
@@ -257,11 +269,6 @@ export class CoreBoxManager {
         void transport.sendTo(coreBoxWindow.webContents, CoreBoxEvents.ui.uiModeExited, {
           resetInput: true
         })
-        void transport
-          .sendTo(coreBoxWindow.webContents, CoreBoxRetainedEvents.legacy.uiModeExited, {
-            resetInput: true
-          })
-          .catch(() => {})
 
         setTimeout(() => {
           if (!coreBoxWindow.isDestroyed()) {
@@ -285,12 +292,22 @@ export class CoreBoxManager {
     windowManager.expand(this._expandState, this.isUIMode)
   }
 
-  public async search(query: TuffQuery): Promise<TuffSearchResult> {
+  public async search(query: TuffQuery, context?: SearchRequestContext): Promise<TuffSearchResult> {
+    const decision = onboardingGate.evaluate()
+    if (decision.state !== 'allowed') {
+      this.routeAdmissionFailure(decision)
+      return this.buildBlockedSearchResult(query)
+    }
+
     try {
-      return await this.searchEngine.search(query)
+      return await this.searchEngine.search(query, context)
     } catch (error) {
+      if (error instanceof OnboardingGateError) {
+        this.routeAdmissionFailure(error.decision)
+        return this.buildBlockedSearchResult(query)
+      }
       coreBoxManagerLog.error('Search failed', { error })
-      return new TuffSearchResultBuilder(query).setItems([]).setDuration(0).setSources([]).build()
+      return this.buildBlockedSearchResult(query)
     }
   }
 }

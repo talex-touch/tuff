@@ -1,11 +1,7 @@
 import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import {
-  ClipboardEvents,
-  CoreBoxEvents,
-  CoreBoxRetainedEvents
-} from '@talex-touch/utils/transport/events'
+import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -243,28 +239,13 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
   const openActionPanelHandler = (data: { item?: TuffItem }) => {
     if (data?.item) open(data.item)
   }
-  let lastMetaOverlayActionKey = ''
   const metaOverlayActionHandler = (data: { actionId?: string; item?: TuffItem }) => {
     if (!data?.item || !data.actionId) return
-    const actionKey = `${data.actionId}:${data.item.id ?? ''}:${data.item.source?.id ?? ''}`
-    if (actionKey === lastMetaOverlayActionKey) return
-    lastMetaOverlayActionKey = actionKey
-    queueMicrotask(() => {
-      if (lastMetaOverlayActionKey === actionKey) lastMetaOverlayActionKey = ''
-    })
     void executeAction(data.actionId, data.item)
   }
   const unregOpen = transport.on(CoreBoxEvents.actionPanel.open, openActionPanelHandler)
-  const unregLegacyOpen = transport.on(
-    CoreBoxRetainedEvents.legacy.openActionPanel,
-    openActionPanelHandler
-  )
   const unregMetaOverlayAction = transport.on(
     CoreBoxEvents.metaOverlay.itemAction,
-    metaOverlayActionHandler
-  )
-  const unregLegacyMetaOverlayAction = transport.on(
-    CoreBoxRetainedEvents.legacy.metaOverlayItemAction,
     metaOverlayActionHandler
   )
 
@@ -284,9 +265,7 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
 
   onBeforeUnmount(() => {
     unregOpen()
-    unregLegacyOpen()
     unregMetaOverlayAction()
-    unregLegacyMetaOverlayAction()
     window.removeEventListener('corebox:toggle-pin', handleTogglePinEvent)
   })
 

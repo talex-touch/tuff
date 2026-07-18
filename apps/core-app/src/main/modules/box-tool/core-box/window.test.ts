@@ -97,11 +97,6 @@ vi.mock('@talex-touch/utils/transport/events', () => ({
       change: 'core-box:input:change'
     }
   },
-  CoreBoxRetainedEvents: {
-    legacy: {
-      shortcutTriggered: 'core-box:legacy:shortcut-triggered'
-    }
-  },
   PluginEvents: {}
 }))
 

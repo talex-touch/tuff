@@ -135,14 +135,16 @@ describe('builder widget precompile', () => {
     })
   })
 
-  it('allows widget imports from @talex-touch scoped packages', async () => {
+  it('allows exact packages and declared subpaths in the widget external contract', async () => {
     await withPluginFixture(async (root) => {
       await fs.writeFile(
         path.join(root, 'widgets', 'panel.vue'),
         [
           '<script setup>',
-          'import { WIDGET_COMPILED_DIR } from "@talex-touch/utils/plugin/widget"',
-          'void WIDGET_COMPILED_DIR',
+          'import { evaluateSafeMathExpression } from "@talex-touch/utils/core-box"',
+          'import { TxButton } from "@talex-touch/tuffex/button"',
+          'void evaluateSafeMathExpression',
+          'void TxButton',
           '</script>',
           '<template><div /></template>',
         ].join('\n'),
@@ -155,7 +157,32 @@ describe('builder widget precompile', () => {
       })
 
       const manifest = await fs.readJson(path.join(root, 'dist', 'build', 'manifest.json'))
-      expect(manifest.build.widgets[0].dependencies).toContain('@talex-touch/utils/plugin/widget')
+      expect(manifest.build.widgets[0].dependencies).toEqual(
+        expect.arrayContaining(['@talex-touch/utils/core-box', '@talex-touch/tuffex/button']),
+      )
+    })
+  })
+
+  it('rejects unlisted @talex-touch transport imports before packaging a widget', async () => {
+    await withPluginFixture(async (root) => {
+      await fs.writeFile(
+        path.join(root, 'widgets', 'panel.vue'),
+        [
+          '<script setup>',
+          'import { useTuffTransport } from "@talex-touch/utils/transport"',
+          'void useTuffTransport',
+          '</script>',
+          '<template><div /></template>',
+        ].join('\n'),
+      )
+
+      await expect(
+        build({
+          root,
+          outDir: 'dist',
+          versionSync: { enabled: false },
+        }),
+      ).rejects.toThrow(/WIDGET_INVALID_DEPENDENCY.*@talex-touch\/utils\/transport/)
     })
   })
 

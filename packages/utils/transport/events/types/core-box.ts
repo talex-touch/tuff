@@ -8,6 +8,7 @@ import type {
   TuffContext,
   TuffItem,
   TuffQuery,
+  TuffSearchResult,
   TuffQueryInput,
 } from "../../../core-box/tuff/tuff-dsl";
 import type { IndexedSourceDiagnosticsSnapshot } from "../../../search";
@@ -221,23 +222,51 @@ export { TuffInputType } from "../../../core-box/tuff/tuff-dsl";
 
 export type { IProviderActivate, TuffQueryInput as TuffInput, TuffQuery };
 
+export type CoreBoxSearchSurface =
+  | "core-box"
+  | "application-index"
+  | "division-box";
+
+export interface CoreBoxSearchRequest {
+  query: TuffQuery;
+  activations?: IProviderActivate[] | null;
+  surface?: CoreBoxSearchSurface;
+}
+
+export interface CoreBoxSearchSessionRequest extends CoreBoxSearchRequest {
+  surface: CoreBoxSearchSurface;
+}
+
+export type CoreBoxSearchSessionChunk =
+  | { type: "session"; sessionId: string }
+  | { type: "snapshot"; sessionId: string; result: TuffSearchResult }
+  | { type: "update"; sessionId: string; items: TuffItem[] }
+  | { type: "no-results"; sessionId: string; shouldShrink: boolean }
+  | {
+      type: "complete";
+      sessionId: string;
+      cancelled?: boolean;
+      activate?: IProviderActivate[];
+      sources?: TuffSearchResult["sources"];
+    };
+
 export interface CoreBoxSearchUpdatePayload {
   searchId: string;
   items: TuffItem[];
 }
 
-
 export interface CoreBoxSearchIndexCommitPayload {
   revision: number;
   providerIds: string[];
+  sourceGenerations: Record<string, number>;
   committedAt: number;
 }
 
 export interface CoreBoxSearchEndPayload {
   searchId: string;
   cancelled?: boolean;
-  activate?: unknown;
-  sources?: unknown[];
+  activate?: IProviderActivate[];
+  sources?: TuffSearchResult["sources"];
 }
 
 export interface CoreBoxNoResultsPayload {
@@ -662,4 +691,65 @@ export interface AllowInputMonitoringResponse {
    * Whether input monitoring is enabled.
    */
   enabled: boolean;
+}
+
+// ============================================================================
+// CoreBox SDK and compatibility payloads
+// ============================================================================
+
+export interface CoreBoxActionPanelOpenRequest {
+  item?: TuffItem;
+}
+
+export interface CoreBoxPreviewCopyRequest {
+  value?: string;
+  item?: TuffItem;
+}
+
+export interface CoreBoxMetaOverlayActionExecutedPayload {
+  actionId: string;
+  item: TuffItem;
+  pluginId: string;
+}
+
+export interface CoreBoxMetaOverlayItemActionPayload {
+  actionId: string;
+  item: TuffItem;
+}
+
+export interface CoreBoxMetaOverlayFlowTransferPayload {
+  item: TuffItem;
+}
+
+export interface CoreBoxUiResumePayload {
+  source: string;
+  featureId?: string | number;
+  url: string;
+}
+
+export interface CoreBoxRecommendationRequest {
+  limit?: number;
+  forceRefresh?: boolean;
+}
+
+export interface CoreBoxRecommendationResponse {
+  items: TuffItem[];
+  duration: number;
+  fromCache: boolean;
+  error?: string;
+}
+
+export interface CoreBoxAggregateTimeStatsResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface CoreBoxIsPinnedRequest {
+  sourceId: string;
+  itemId: string;
+}
+
+export interface CoreBoxIsPinnedResponse {
+  success: boolean;
+  isPinned: boolean;
 }

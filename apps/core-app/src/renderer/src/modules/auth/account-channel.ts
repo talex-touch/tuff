@@ -13,4 +13,3 @@ const handleFingerprintHashRequest = async () => {
 }
 
 transport.on(AuthEvents.device.getFingerprintHash, handleFingerprintHashRequest)
-transport.on(AuthEvents.legacy.getFingerprintHash, handleFingerprintHashRequest)

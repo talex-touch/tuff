@@ -3,154 +3,189 @@
  * @module @talex-touch/utils/transport/sdk/main-transport
  */
 
-import type { IpcMainInvokeEvent, MessagePortMain, WebContents } from 'electron'
-import type { TuffEvent } from '../event/types'
-import type { TransportPortConfirmPayload, TransportPortEnvelope, TransportPortScope, TransportPortUpgradeResponse } from '../events'
+import type {
+  IpcMainInvokeEvent,
+  MessagePortMain,
+  WebContents,
+} from "electron";
+import type { TuffEvent } from "../event/types";
+import type {
+  TransportPortConfirmPayload,
+  TransportPortEnvelope,
+  TransportPortScope,
+  TransportPortUpgradeResponse,
+} from "../events";
 import type {
   HandlerContext,
   ITuffTransportMain,
   MainInvokeContext,
   PluginKeyManager,
   StreamContext,
-} from '../types'
-import { randomUUID } from 'node:crypto'
-import * as electron from 'electron'
-import { assertTuffEvent } from '../event/builder'
-import { TransportEvents } from '../events'
-import { isPortChannelEnabled } from './port-policy'
-import { createServerStreamRuntime } from './stream/server-runtime'
+} from "../types";
+import { randomUUID } from "node:crypto";
+import * as electron from "electron";
+import { assertTuffEvent } from "../event/builder";
+import { TransportEvents } from "../events";
+import { isPortChannelEnabled } from "./port-policy";
+import { createServerStreamRuntime } from "./stream/server-runtime";
 
-const { ipcMain, MessageChannelMain } = electron
+const { ipcMain, MessageChannelMain } = electron;
 const BRIDGE_CHANNEL = {
-  MAIN: 'main',
-  PLUGIN: 'plugin',
-} as const
-const BRIDGE_SUCCESS_CODE = 200
-type BridgeChannelType = (typeof BRIDGE_CHANNEL)[keyof typeof BRIDGE_CHANNEL]
-type BridgeChannelCallback = (data: any) => unknown
+  MAIN: "main",
+  PLUGIN: "plugin",
+} as const;
+const BRIDGE_SUCCESS_CODE = 200;
+type BridgeChannelType = (typeof BRIDGE_CHANNEL)[keyof typeof BRIDGE_CHANNEL];
+type BridgeChannelCallback = (data: any) => unknown;
 type MainChannelBridge = {
-  regChannel: (type: BridgeChannelType, eventName: string, callback: BridgeChannelCallback) => () => void
+  regChannel: (
+    type: BridgeChannelType,
+    eventName: string,
+    callback: BridgeChannelCallback,
+  ) => () => void;
   sendTo: (
     win: Electron.BrowserWindow,
     type: BridgeChannelType,
     eventName: string,
     arg: unknown,
-  ) => Promise<any>
-  sendPlugin: (pluginName: string, eventName: string, arg?: unknown) => Promise<any>
-  broadcast: (type: BridgeChannelType, eventName: string, arg?: unknown) => void
+  ) => Promise<any>;
+  sendPlugin: (
+    pluginName: string,
+    eventName: string,
+    arg?: unknown,
+  ) => Promise<any>;
+  broadcast: (
+    type: BridgeChannelType,
+    eventName: string,
+    arg?: unknown,
+  ) => void;
   broadcastTo: (
     win: Electron.BrowserWindow,
     type: BridgeChannelType,
     eventName: string,
     arg?: unknown,
-  ) => void
-  broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
-}
+  ) => void;
+  broadcastPlugin: (
+    pluginName: string,
+    eventName: string,
+    arg?: unknown,
+  ) => void;
+};
 
 type InvokeHandler<TReq, TRes> = (
   payload: TReq,
   event: IpcMainInvokeEvent,
-) => TRes | Promise<TRes>
+) => TRes | Promise<TRes>;
 
-const NORMAL_PORT_CLOSE_REASONS = new Set(['closed', 'port_closed', 'sender_destroyed'])
-const invokeHandlers = new Map<string, Set<InvokeHandler<any, any>>>()
-type LocalHandler = (payload: unknown, context: HandlerContext) => unknown | Promise<unknown>
-const localHandlers = new Map<string, Set<LocalHandler>>()
+const NORMAL_PORT_CLOSE_REASONS = new Set([
+  "closed",
+  "port_closed",
+  "sender_destroyed",
+]);
+const invokeHandlers = new Map<string, Set<InvokeHandler<any, any>>>();
+type LocalHandler = (
+  payload: unknown,
+  context: HandlerContext,
+) => unknown | Promise<unknown>;
+const localHandlers = new Map<string, Set<LocalHandler>>();
 
 function registerInvokeHandler<TReq, TRes>(
   eventName: string,
   handler: InvokeHandler<TReq, TRes>,
 ): () => void {
-  let handlers = invokeHandlers.get(eventName)
+  let handlers = invokeHandlers.get(eventName);
   if (!handlers) {
-    handlers = new Set()
-    invokeHandlers.set(eventName, handlers)
+    handlers = new Set();
+    invokeHandlers.set(eventName, handlers);
 
     ipcMain.handle(eventName, async (event, payload) => {
-      const active = invokeHandlers.get(eventName)
+      const active = invokeHandlers.get(eventName);
       if (!active || active.size === 0) {
-        return undefined
+        return undefined;
       }
 
-      let result: unknown
+      let result: unknown;
       for (const fn of active) {
-        result = await fn(payload as TReq, event)
+        result = await fn(payload as TReq, event);
       }
-      return result as TRes
-    })
+      return result as TRes;
+    });
   }
 
-  handlers.add(handler)
+  handlers.add(handler);
 
   return () => {
-    const current = invokeHandlers.get(eventName)
+    const current = invokeHandlers.get(eventName);
     if (!current) {
-      return
+      return;
     }
-    current.delete(handler)
-  }
+    current.delete(handler);
+  };
 }
 
-function registerLocalHandler(eventName: string, handler: LocalHandler): () => void {
-  let handlers = localHandlers.get(eventName)
+function registerLocalHandler(
+  eventName: string,
+  handler: LocalHandler,
+): () => void {
+  let handlers = localHandlers.get(eventName);
   if (!handlers) {
-    handlers = new Set()
-    localHandlers.set(eventName, handlers)
+    handlers = new Set();
+    localHandlers.set(eventName, handlers);
   }
-  handlers.add(handler)
+  handlers.add(handler);
 
   return () => {
-    const current = localHandlers.get(eventName)
+    const current = localHandlers.get(eventName);
     if (!current) {
-      return
+      return;
     }
-    current.delete(handler)
+    current.delete(handler);
     if (current.size === 0) {
-      localHandlers.delete(eventName)
+      localHandlers.delete(eventName);
     }
-  }
+  };
 }
 
 function resolveDefaultSender(): WebContents | undefined {
-  const focused = electron.BrowserWindow.getFocusedWindow()?.webContents
+  const focused = electron.BrowserWindow.getFocusedWindow()?.webContents;
   if (focused && !focused.isDestroyed()) {
-    return focused
+    return focused;
   }
 
   for (const win of electron.BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      const wc = win.webContents
+      const wc = win.webContents;
       if (wc && !wc.isDestroyed()) {
-        return wc
+        return wc;
       }
     }
   }
 
-  return undefined
+  return undefined;
 }
 
 interface PortRecord {
-  port: MessagePortMain
-  sender: WebContents
-  channel: string
-  scope: TransportPortScope
-  windowId?: number
-  plugin?: string
-  permissions?: string[]
-  confirmed: boolean
-  createdAt: number
-  confirmTimeout?: NodeJS.Timeout
+  port: MessagePortMain;
+  sender: WebContents;
+  channel: string;
+  scope: TransportPortScope;
+  windowId?: number;
+  plugin?: string;
+  permissions?: string[];
+  confirmed: boolean;
+  createdAt: number;
+  confirmTimeout?: NodeJS.Timeout;
 }
 
-const PORT_CONFIRM_TIMEOUT_MS = 10000
-const portRegistry = new Map<string, PortRecord>()
-const portsBySenderId = new Map<number, Set<string>>()
-const senderCleanupRegistered = new WeakSet<WebContents>()
-let portHandlersRegistered = false
+const PORT_CONFIRM_TIMEOUT_MS = 10000;
+const portRegistry = new Map<string, PortRecord>();
+const portsBySenderId = new Map<number, Set<string>>();
+const senderCleanupRegistered = new WeakSet<WebContents>();
+let portHandlersRegistered = false;
 
 interface PortLookup {
-  portId: string
-  record: PortRecord
+  portId: string;
+  record: PortRecord;
 }
 
 function resolvePortRecord(
@@ -158,154 +193,179 @@ function resolvePortRecord(
   sender: WebContents,
   scope?: TransportPortScope,
   plugin?: string,
+  requestedPortId?: string,
 ): PortLookup | null {
-  const portIds = portsBySenderId.get(sender.id)
-  if (!portIds)
-    return null
+  const portIds = portsBySenderId.get(sender.id);
+  if (!portIds) return null;
+
+  const resolveCandidate = (portId: string): PortLookup | null => {
+    const record = portRegistry.get(portId);
+    if (!record || !record.confirmed) return null;
+    if (record.channel !== channel) return null;
+    if (scope && record.scope !== scope) return null;
+    if (
+      record.scope === "window" &&
+      record.windowId !== undefined &&
+      record.windowId !== sender.id
+    )
+      return null;
+    if (
+      scope === "plugin" &&
+      plugin &&
+      record.plugin &&
+      record.plugin !== plugin
+    )
+      return null;
+    return { portId, record };
+  };
+
+  if (requestedPortId) {
+    return portIds.has(requestedPortId)
+      ? resolveCandidate(requestedPortId)
+      : null;
+  }
 
   for (const portId of portIds) {
-    const record = portRegistry.get(portId)
-    if (!record || !record.confirmed)
-      continue
-    if (record.channel !== channel)
-      continue
-    if (scope && record.scope !== scope)
-      continue
-    if (record.scope === 'window' && record.windowId !== undefined && record.windowId !== sender.id) {
-      continue
-    }
-    if (scope === 'plugin' && plugin && record.plugin && record.plugin !== plugin) {
-      continue
-    }
-    return { portId, record }
+    const lookup = resolveCandidate(portId);
+    if (lookup) return lookup;
   }
-  return null
+  return null;
 }
 
-function postPortMessage(lookup: PortLookup, message: TransportPortEnvelope): boolean {
+function postPortMessage(
+  lookup: PortLookup,
+  message: TransportPortEnvelope,
+): boolean {
   try {
-    lookup.record.port.postMessage(message)
-    return true
-  }
-  catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    console.warn(`[TuffTransport] Port send failed for \"${message.channel}\": ${errorMessage}`)
-    return false
+    lookup.record.port.postMessage(message);
+    return true;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[TuffTransport] Port send failed for \"${message.channel}\": ${errorMessage}`,
+    );
+    return false;
   }
 }
 
 function registerPortHandlers(transport: TuffMainTransport): void {
   if (portHandlersRegistered) {
-    return
+    return;
   }
-  portHandlersRegistered = true
+  portHandlersRegistered = true;
 
-  const buildError = (code: string, message: string) => ({ code, message })
+  const buildError = (code: string, message: string) => ({ code, message });
 
   const removePort = (portId: string, reason?: string) => {
-    const record = portRegistry.get(portId)
-    if (!record)
-      return
+    const record = portRegistry.get(portId);
+    if (!record) return;
 
     if (record.confirmTimeout) {
-      clearTimeout(record.confirmTimeout)
+      clearTimeout(record.confirmTimeout);
     }
     try {
-      record.port.close()
-    }
-    catch {}
+      record.port.close();
+    } catch {}
 
-    portRegistry.delete(portId)
-    const senderPorts = portsBySenderId.get(record.sender.id)
+    portRegistry.delete(portId);
+    const senderPorts = portsBySenderId.get(record.sender.id);
     if (senderPorts) {
-      senderPorts.delete(portId)
+      senderPorts.delete(portId);
       if (senderPorts.size === 0) {
-        portsBySenderId.delete(record.sender.id)
+        portsBySenderId.delete(record.sender.id);
       }
     }
 
     if (reason && !NORMAL_PORT_CLOSE_REASONS.has(reason)) {
-      console.warn(`[TuffTransport] Port ${portId} closed: ${reason}`)
+      console.warn(`[TuffTransport] Port ${portId} closed: ${reason}`);
     }
-  }
+  };
 
   const ensureSenderCleanup = (sender: WebContents) => {
-    if (senderCleanupRegistered.has(sender))
-      return
-    senderCleanupRegistered.add(sender)
-    sender.once('destroyed', () => {
-      const portIds = portsBySenderId.get(sender.id)
-      if (!portIds)
-        return
+    if (senderCleanupRegistered.has(sender)) return;
+    senderCleanupRegistered.add(sender);
+    sender.once("destroyed", () => {
+      const portIds = portsBySenderId.get(sender.id);
+      if (!portIds) return;
       for (const portId of portIds) {
-        removePort(portId, 'sender_destroyed')
+        removePort(portId, "sender_destroyed");
       }
-      portsBySenderId.delete(sender.id)
-    })
-  }
+      portsBySenderId.delete(sender.id);
+    });
+  };
 
-  const resolveScope = (scope?: TransportPortScope): TransportPortScope | null => {
-    if (!scope)
-      return 'window'
-    if (scope === 'app' || scope === 'window' || scope === 'plugin')
-      return scope
-    return null
-  }
+  const resolveScope = (
+    scope?: TransportPortScope,
+  ): TransportPortScope | null => {
+    if (!scope) return "window";
+    if (scope === "app" || scope === "window" || scope === "plugin")
+      return scope;
+    return null;
+  };
 
   transport.on(TransportEvents.port.upgrade, async (payload, context) => {
-    const sender = context.sender as WebContents | undefined
-    if (!sender || typeof sender.postMessage !== 'function') {
+    const sender = context.sender as WebContents | undefined;
+    if (!sender || typeof sender.postMessage !== "function") {
       return {
         accepted: false,
-        channel: payload?.channel ?? '',
-        error: buildError('sender_unavailable', 'Sender webContents is unavailable'),
-      } satisfies TransportPortUpgradeResponse
+        channel: payload?.channel ?? "",
+        error: buildError(
+          "sender_unavailable",
+          "Sender webContents is unavailable",
+        ),
+      } satisfies TransportPortUpgradeResponse;
     }
 
     if (!MessageChannelMain) {
       return {
         accepted: false,
-        channel: payload?.channel ?? '',
-        error: buildError('not_supported', 'MessageChannelMain is not available'),
-      } satisfies TransportPortUpgradeResponse
+        channel: payload?.channel ?? "",
+        error: buildError(
+          "not_supported",
+          "MessageChannelMain is not available",
+        ),
+      } satisfies TransportPortUpgradeResponse;
     }
 
-    const channel = payload?.channel?.trim()
+    const channel = payload?.channel?.trim();
     if (!channel) {
       return {
         accepted: false,
-        channel: '',
-        error: buildError('invalid_request', 'Channel is required'),
-      } satisfies TransportPortUpgradeResponse
+        channel: "",
+        error: buildError("invalid_request", "Channel is required"),
+      } satisfies TransportPortUpgradeResponse;
     }
 
-    const scope = resolveScope(payload?.scope)
+    const scope = resolveScope(payload?.scope);
     if (!scope) {
       return {
         accepted: false,
         channel,
-        error: buildError('invalid_scope', 'Scope is invalid'),
-      } satisfies TransportPortUpgradeResponse
+        error: buildError("invalid_scope", "Scope is invalid"),
+      } satisfies TransportPortUpgradeResponse;
     }
 
-    const windowId = payload?.windowId ?? sender.id
-    if (scope === 'window' && windowId !== sender.id) {
+    const windowId = payload?.windowId ?? sender.id;
+    if (scope === "window" && windowId !== sender.id) {
       return {
         accepted: false,
         channel,
         scope,
-        error: buildError('window_mismatch', 'Window id does not match sender'),
-      } satisfies TransportPortUpgradeResponse
+        error: buildError("window_mismatch", "Window id does not match sender"),
+      } satisfies TransportPortUpgradeResponse;
     }
 
-    const plugin = payload?.plugin ?? context.plugin?.name
-    if (scope === 'plugin' && !plugin) {
+    const plugin = payload?.plugin ?? context.plugin?.name;
+    if (scope === "plugin" && !plugin) {
       return {
         accepted: false,
         channel,
         scope,
-        error: buildError('plugin_required', 'Plugin name is required for plugin scope'),
-      } satisfies TransportPortUpgradeResponse
+        error: buildError(
+          "plugin_required",
+          "Plugin name is required for plugin scope",
+        ),
+      } satisfies TransportPortUpgradeResponse;
     }
 
     if (context.plugin?.name && plugin && plugin !== context.plugin.name) {
@@ -313,12 +373,15 @@ function registerPortHandlers(transport: TuffMainTransport): void {
         accepted: false,
         channel,
         scope,
-        error: buildError('plugin_mismatch', 'Plugin name does not match sender'),
-      } satisfies TransportPortUpgradeResponse
+        error: buildError(
+          "plugin_mismatch",
+          "Plugin name does not match sender",
+        ),
+      } satisfies TransportPortUpgradeResponse;
     }
 
-    const { port1, port2 } = new MessageChannelMain()
-    const portId = randomUUID()
+    const { port1, port2 } = new MessageChannelMain();
+    const portId = randomUUID();
     const record: PortRecord = {
       port: port2,
       sender,
@@ -329,45 +392,48 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       permissions: payload?.permissions,
       confirmed: false,
       createdAt: Date.now(),
-    }
+    };
 
-    portRegistry.set(portId, record)
-    const senderPorts = portsBySenderId.get(sender.id) ?? new Set<string>()
-    senderPorts.add(portId)
-    portsBySenderId.set(sender.id, senderPorts)
-    ensureSenderCleanup(sender)
+    portRegistry.set(portId, record);
+    const senderPorts = portsBySenderId.get(sender.id) ?? new Set<string>();
+    senderPorts.add(portId);
+    portsBySenderId.set(sender.id, senderPorts);
+    ensureSenderCleanup(sender);
 
-    port2.on('close', () => {
-      removePort(portId, 'port_closed')
-    })
-    port2.start()
+    port2.on("close", () => {
+      removePort(portId, "port_closed");
+    });
+    port2.start();
 
     const confirmPayload: TransportPortConfirmPayload = {
       channel,
       portId,
       scope,
       permissions: payload?.permissions,
-    }
+    };
 
     try {
-      sender.postMessage(TransportEvents.port.confirm.toEventName(), confirmPayload, [port1])
-    }
-    catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      removePort(portId, `postMessage_failed:${message}`)
+      sender.postMessage(
+        TransportEvents.port.confirm.toEventName(),
+        confirmPayload,
+        [port1],
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      removePort(portId, `postMessage_failed:${message}`);
       return {
         accepted: false,
         channel,
         scope,
-        error: buildError('post_message_failed', message),
-      } satisfies TransportPortUpgradeResponse
+        error: buildError("post_message_failed", message),
+      } satisfies TransportPortUpgradeResponse;
     }
 
     record.confirmTimeout = setTimeout(() => {
       if (!record.confirmed) {
-        removePort(portId, 'confirm_timeout')
+        removePort(portId, "confirm_timeout");
       }
-    }, PORT_CONFIRM_TIMEOUT_MS)
+    }, PORT_CONFIRM_TIMEOUT_MS);
 
     return {
       accepted: true,
@@ -375,63 +441,59 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       scope,
       permissions: payload?.permissions,
       portId,
-    } satisfies TransportPortUpgradeResponse
-  })
+    } satisfies TransportPortUpgradeResponse;
+  });
 
   transport.on(TransportEvents.port.confirm, (payload, context) => {
-    const portId = payload?.portId
-    if (!portId)
-      return
-    const record = portRegistry.get(portId)
-    if (!record)
-      return
-    if (context.sender && record.sender.id !== (context.sender as WebContents).id) {
-      return
+    const portId = payload?.portId;
+    if (!portId) return;
+    const record = portRegistry.get(portId);
+    if (!record) return;
+    if (
+      context.sender &&
+      record.sender.id !== (context.sender as WebContents).id
+    ) {
+      return;
     }
-    record.confirmed = true
+    record.confirmed = true;
     if (record.confirmTimeout) {
-      clearTimeout(record.confirmTimeout)
-      record.confirmTimeout = undefined
+      clearTimeout(record.confirmTimeout);
+      record.confirmTimeout = undefined;
     }
-  })
+  });
 
   transport.on(TransportEvents.port.close, (payload, context) => {
-    const sender = context.sender as WebContents | undefined
-    const portId = payload?.portId
+    const sender = context.sender as WebContents | undefined;
+    const portId = payload?.portId;
     if (portId) {
       if (!sender || portRegistry.get(portId)?.sender.id === sender.id) {
-        removePort(portId, payload?.reason ?? 'closed')
+        removePort(portId, payload?.reason ?? "closed");
       }
-      return
+      return;
     }
 
-    if (!sender)
-      return
-    const portIds = portsBySenderId.get(sender.id)
-    if (!portIds)
-      return
+    if (!sender) return;
+    const portIds = portsBySenderId.get(sender.id);
+    if (!portIds) return;
     for (const id of portIds) {
-      const record = portRegistry.get(id)
-      if (!record)
-        continue
-      if (payload?.channel && record.channel !== payload.channel)
-        continue
-      removePort(id, payload?.reason ?? 'closed')
+      const record = portRegistry.get(id);
+      if (!record) continue;
+      if (payload?.channel && record.channel !== payload.channel) continue;
+      removePort(id, payload?.reason ?? "closed");
     }
-  })
+  });
 
   transport.on(TransportEvents.port.error, (payload, context) => {
-    const portId = payload?.portId
+    const portId = payload?.portId;
     if (payload?.error) {
-      console.warn('[TuffTransport] Port error:', payload.error)
+      console.warn("[TuffTransport] Port error:", payload.error);
     }
-    if (!portId)
-      return
-    const sender = context.sender as WebContents | undefined
+    if (!portId) return;
+    const sender = context.sender as WebContents | undefined;
     if (!sender || portRegistry.get(portId)?.sender.id === sender.id) {
-      removePort(portId, 'error')
+      removePort(portId, "error");
     }
-  })
+  });
 }
 
 /**
@@ -443,7 +505,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     private channel: MainChannelBridge,
     public readonly keyManager: PluginKeyManager,
   ) {
-    registerPortHandlers(this)
+    registerPortHandlers(this);
   }
 
   /**
@@ -453,23 +515,26 @@ export class TuffMainTransport implements ITuffTransportMain {
     event: TuffEvent<TReq, TRes>,
     handler: (payload: TReq, context: HandlerContext) => TRes | Promise<TRes>,
   ): () => void {
-    assertTuffEvent(event, 'TuffMainTransport.on')
+    assertTuffEvent(event, "TuffMainTransport.on");
 
-    const eventName = event.toEventName()
+    const eventName = event.toEventName();
 
     const baseHandler = async (payload: TReq, context: HandlerContext) => {
       try {
-        return await handler(payload, context)
+        return await handler(payload, context);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error(
+          `[TuffTransport] Handler error for \"${eventName}\":`,
+          errorMessage,
+        );
+        throw error;
       }
-      catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(`[TuffTransport] Handler error for \"${eventName}\":`, errorMessage)
-        throw error
-      }
-    }
+    };
 
     const localHandler: LocalHandler = (payload, context) =>
-      baseHandler(payload as TReq, context)
+      baseHandler(payload as TReq, context);
 
     const channelHandler = async (data: any) => {
       const context: HandlerContext = {
@@ -478,38 +543,42 @@ export class TuffMainTransport implements ITuffTransportMain {
         plugin: data.plugin
           ? {
               name: data.plugin,
-              uniqueKey: data.header?.uniqueKey || '',
+              uniqueKey: data.header?.uniqueKey || "",
               verified: Boolean(data.header?.uniqueKey),
             }
           : undefined,
-      }
+      };
 
-      return baseHandler(data.data as TReq, context)
-    }
+      return baseHandler(data.data as TReq, context);
+    };
 
     const invokeHandler: InvokeHandler<TReq, TRes> = (payload, event) => {
       const context: HandlerContext = {
         sender: event.sender as any,
         eventName,
-      }
-      return baseHandler(payload, context)
-    }
+      };
+      return baseHandler(payload, context);
+    };
 
-    const unregisterMain = this.channel.regChannel(BRIDGE_CHANNEL.MAIN, eventName, channelHandler)
+    const unregisterMain = this.channel.regChannel(
+      BRIDGE_CHANNEL.MAIN,
+      eventName,
+      channelHandler,
+    );
     const unregisterPlugin = this.channel.regChannel(
       BRIDGE_CHANNEL.PLUGIN,
       eventName,
       channelHandler,
-    )
-    const unregisterInvoke = registerInvokeHandler(eventName, invokeHandler)
-    const unregisterLocal = registerLocalHandler(eventName, localHandler)
+    );
+    const unregisterInvoke = registerInvokeHandler(eventName, invokeHandler);
+    const unregisterLocal = registerLocalHandler(eventName, localHandler);
 
     return () => {
-      unregisterMain()
-      unregisterPlugin()
-      unregisterInvoke()
-      unregisterLocal()
-    }
+      unregisterMain();
+      unregisterPlugin();
+      unregisterInvoke();
+      unregisterLocal();
+    };
   }
 
   /**
@@ -520,16 +589,24 @@ export class TuffMainTransport implements ITuffTransportMain {
    */
   onStream<TReq, TChunk>(
     event: TuffEvent<TReq, AsyncIterable<TChunk>>,
-    handler: (payload: TReq, context: StreamContext<TChunk>) => void | Promise<void>,
+    handler: (
+      payload: TReq,
+      context: StreamContext<TChunk>,
+    ) => void | Promise<void>,
   ): () => void {
-    assertTuffEvent(event, 'TuffMainTransport.onStream')
+    assertTuffEvent(event, "TuffMainTransport.onStream");
 
-    const eventName = event.toEventName()
-    const portEnabled = isPortChannelEnabled(eventName)
-    const startEventName = `${eventName}:stream:start`
-    const cancelEventName = `${eventName}:stream:cancel`
+    const eventName = event.toEventName();
+    const portEnabled = isPortChannelEnabled(eventName);
+    const startEventName = `${eventName}:stream:start`;
+    const cancelEventName = `${eventName}:stream:cancel`;
 
-    const runtime = createServerStreamRuntime<TReq, TChunk, WebContents, StreamContext<TChunk>['plugin']>({
+    const runtime = createServerStreamRuntime<
+      TReq,
+      TChunk,
+      WebContents,
+      StreamContext<TChunk>["plugin"]
+    >({
       eventName,
       portEnabled,
       handler,
@@ -540,106 +617,124 @@ export class TuffMainTransport implements ITuffTransportMain {
         plugin: request.plugin,
       }),
       resolvePort: (request) => {
-        const scope: TransportPortScope = request.plugin ? 'plugin' : 'window'
+        const scope: TransportPortScope = request.plugin ? "plugin" : "window";
         const portLookup = resolvePortRecord(
           eventName,
           request.sender,
           scope,
           request.plugin?.name,
-        )
+          request.portId,
+        );
 
         if (!portLookup) {
-          return null
+          return null;
         }
 
         return {
           portId: portLookup.portId,
           send: (message: TransportPortEnvelope) => {
-            const record = portRegistry.get(portLookup.portId)
+            const record = portRegistry.get(portLookup.portId);
             if (!record || !record.confirmed) {
-              return false
+              return false;
             }
-            return postPortMessage({ portId: portLookup.portId, record }, message)
+            return postPortMessage(
+              { portId: portLookup.portId, record },
+              message,
+            );
           },
-        }
+        };
       },
       sendFallback: (request, name, payload) => {
         try {
-          request.sender.send('@main-process-message', {
+          request.sender.send("@main-process-message", {
             code: BRIDGE_SUCCESS_CODE,
             data: payload,
             name,
-            header: { status: 'request', type: BRIDGE_CHANNEL.MAIN },
-          })
-        }
-        catch {
+            header: { status: "request", type: BRIDGE_CHANNEL.MAIN },
+          });
+        } catch {
           // Ignore send failures (renderer may have been destroyed)
         }
       },
       onHandlerError: (error) => {
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        console.error(`[TuffTransport] Stream handler error for "${eventName}":`, errorMessage)
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error(
+          `[TuffTransport] Stream handler error for \"${eventName}\":`,
+          errorMessage,
+        );
       },
-    })
+    });
 
     const startHandler = (data: any) => {
-      const rawPayload = data?.data as { streamId?: string, [key: string]: any } | undefined
-      const streamId = rawPayload?.streamId
-      const sender = data?.header?.event?.sender as WebContents | undefined
+      const rawPayload = data?.data as
+        | {
+            streamId?: string;
+            __transportPortId?: string;
+            [key: string]: any;
+          }
+        | undefined;
+      const streamId = rawPayload?.streamId;
+      const portId = rawPayload?.__transportPortId;
+      const sender = data?.header?.event?.sender as WebContents | undefined;
 
       if (!streamId || !sender) {
-        throw new Error(`[TuffTransport] Invalid stream start for "${eventName}"`)
+        throw new Error(
+          `[TuffTransport] Invalid stream start for \"${eventName}\"`,
+        );
       }
 
-      const payload = rawPayload ? { ...rawPayload } : {}
-      delete (payload as any).streamId
+      const payload = rawPayload ? { ...rawPayload } : {};
+      delete (payload as any).streamId;
+      delete (payload as any).__transportPortId;
 
       runtime.handleStart({
         streamId,
+        portId,
         payload: payload as TReq,
         sender,
         plugin: data.plugin
           ? {
               name: data.plugin,
-              uniqueKey: data.header?.uniqueKey || '',
+              uniqueKey: data.header?.uniqueKey || "",
               verified: Boolean(data.header?.uniqueKey),
             }
           : undefined,
-      })
-    }
+      });
+    };
 
     const cancelHandler = (data: any) => {
-      const rawPayload = data?.data as { streamId?: string } | undefined
-      runtime.handleCancel(rawPayload?.streamId)
-    }
+      const rawPayload = data?.data as { streamId?: string } | undefined;
+      runtime.handleCancel(rawPayload?.streamId);
+    };
 
     const startCleanupMain = this.channel.regChannel(
       BRIDGE_CHANNEL.MAIN,
       startEventName,
       startHandler,
-    )
+    );
     const cancelCleanupMain = this.channel.regChannel(
       BRIDGE_CHANNEL.MAIN,
       cancelEventName,
       cancelHandler,
-    )
+    );
     const startCleanupPlugin = this.channel.regChannel(
       BRIDGE_CHANNEL.PLUGIN,
       startEventName,
       startHandler,
-    )
+    );
     const cancelCleanupPlugin = this.channel.regChannel(
       BRIDGE_CHANNEL.PLUGIN,
       cancelEventName,
       cancelHandler,
-    )
+    );
 
     return () => {
-      startCleanupMain()
-      cancelCleanupMain()
-      startCleanupPlugin()
-      cancelCleanupPlugin()
-    }
+      startCleanupMain();
+      cancelCleanupMain();
+      startCleanupPlugin();
+      cancelCleanupPlugin();
+    };
   }
 
   async invoke<TReq, TRes>(
@@ -647,30 +742,34 @@ export class TuffMainTransport implements ITuffTransportMain {
     payload: TReq,
     context: MainInvokeContext = {},
   ): Promise<TRes> {
-    assertTuffEvent(event, 'TuffMainTransport.invoke')
+    assertTuffEvent(event, "TuffMainTransport.invoke");
 
-    const eventName = event.toEventName()
-    const handlers = localHandlers.get(eventName)
+    const eventName = event.toEventName();
+    const handlers = localHandlers.get(eventName);
     if (!handlers || handlers.size === 0) {
-      throw new Error(`[TuffTransport] No handler registered for "${eventName}"`)
+      throw new Error(
+        `[TuffTransport] No handler registered for "${eventName}"`,
+      );
     }
 
-    const sender = context.sender ?? resolveDefaultSender()
+    const sender = context.sender ?? resolveDefaultSender();
     if (!sender) {
-      throw new Error(`[TuffTransport] Cannot resolve sender for "${eventName}"`)
+      throw new Error(
+        `[TuffTransport] Cannot resolve sender for "${eventName}"`,
+      );
     }
 
     const handlerContext: HandlerContext = {
       sender,
       eventName,
       plugin: context.plugin,
-    }
+    };
 
-    let result: unknown
+    let result: unknown;
     for (const handler of handlers) {
-      result = await handler(payload as unknown, handlerContext)
+      result = await handler(payload as unknown, handlerContext);
     }
-    return result as TRes
+    return result as TRes;
   }
 
   /**
@@ -681,29 +780,35 @@ export class TuffMainTransport implements ITuffTransportMain {
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
   ): Promise<TRes> {
-    assertTuffEvent(event, 'TuffMainTransport.sendToWindow')
+    assertTuffEvent(event, "TuffMainTransport.sendToWindow");
 
-    const eventName = event.toEventName()
-    const { BrowserWindow } = await import('electron')
-    const win = BrowserWindow.fromId(windowId)
+    const eventName = event.toEventName();
+    const { BrowserWindow } = await import("electron");
+    const win = BrowserWindow.fromId(windowId);
     if (!win) {
-      throw new Error(`[TuffTransport] Cannot find BrowserWindow for id=${windowId}`)
+      throw new Error(
+        `[TuffTransport] Cannot find BrowserWindow for id=${windowId}`,
+      );
     }
     if (isPortChannelEnabled(eventName)) {
-      const portLookup = resolvePortRecord(eventName, win.webContents, 'window')
+      const portLookup = resolvePortRecord(
+        eventName,
+        win.webContents,
+        "window",
+      );
       if (portLookup) {
         const portSent = postPortMessage(portLookup, {
           channel: eventName,
           portId: portLookup.portId,
-          type: 'data',
+          type: "data",
           payload,
-        })
+        });
         if (portSent) {
-          return undefined as TRes
+          return undefined as TRes;
         }
       }
     }
-    return this.channel.sendTo(win, BRIDGE_CHANNEL.MAIN, eventName, payload)
+    return this.channel.sendTo(win, BRIDGE_CHANNEL.MAIN, eventName, payload);
   }
 
   /**
@@ -714,59 +819,71 @@ export class TuffMainTransport implements ITuffTransportMain {
     event: TuffEvent<TReq, void>,
     payload: TReq,
   ): void {
-    assertTuffEvent(event, 'TuffMainTransport.broadcastToWindow')
+    assertTuffEvent(event, "TuffMainTransport.broadcastToWindow");
 
-    const eventName = event.toEventName()
-    const win = electron.BrowserWindow.fromId(windowId)
+    const eventName = event.toEventName();
+    const win = electron.BrowserWindow.fromId(windowId);
     if (!win) {
-      throw new Error(`[TuffTransport] Cannot find BrowserWindow for id=${windowId}`)
+      throw new Error(
+        `[TuffTransport] Cannot find BrowserWindow for id=${windowId}`,
+      );
     }
-    this.channel.broadcastTo(win, BRIDGE_CHANNEL.MAIN, eventName, payload)
+    this.channel.broadcastTo(win, BRIDGE_CHANNEL.MAIN, eventName, payload);
   }
 
   /**
    * Sends a message to a specific WebContents.
    */
   async sendTo<TReq, TRes>(
-    webContents: WebContents | { webContents?: WebContents | null } | null | undefined,
+    webContents:
+      | WebContents
+      | { webContents?: WebContents | null }
+      | null
+      | undefined,
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
   ): Promise<TRes> {
-    assertTuffEvent(event, 'TuffMainTransport.sendTo')
+    assertTuffEvent(event, "TuffMainTransport.sendTo");
 
-    const eventName = event.toEventName()
-    const hostWebContents = (webContents as { webContents?: WebContents | null } | null | undefined)
-      ?.webContents
-    const directWebContents
-      = hostWebContents
-        ?? (typeof (webContents as WebContents | null | undefined)?.send === 'function'
-          ? (webContents as WebContents)
-          : null)
-    const targetWebContents = directWebContents
+    const eventName = event.toEventName();
+    const hostWebContents = (
+      webContents as { webContents?: WebContents | null } | null | undefined
+    )?.webContents;
+    const directWebContents =
+      hostWebContents ??
+      (typeof (webContents as WebContents | null | undefined)?.send ===
+      "function"
+        ? (webContents as WebContents)
+        : null);
+    const targetWebContents = directWebContents;
 
     if (
-      !targetWebContents
-      || typeof targetWebContents.send !== 'function'
-      || typeof targetWebContents.isDestroyed !== 'function'
+      !targetWebContents ||
+      typeof targetWebContents.send !== "function" ||
+      typeof targetWebContents.isDestroyed !== "function"
     ) {
-      throw new Error('[TuffTransport] Invalid target WebContents.')
+      throw new Error("[TuffTransport] Invalid target WebContents.");
     }
 
     if (targetWebContents.isDestroyed()) {
-      throw new Error('[TuffTransport] Target WebContents has been destroyed.')
+      throw new Error("[TuffTransport] Target WebContents has been destroyed.");
     }
 
     if (isPortChannelEnabled(eventName)) {
-      const portLookup = resolvePortRecord(eventName, targetWebContents, 'window')
+      const portLookup = resolvePortRecord(
+        eventName,
+        targetWebContents,
+        "window",
+      );
       if (portLookup) {
         const portSent = postPortMessage(portLookup, {
           channel: eventName,
           portId: portLookup.portId,
-          type: 'data',
+          type: "data",
           payload,
-        })
+        });
         if (portSent) {
-          return undefined as TRes
+          return undefined as TRes;
         }
       }
     }
@@ -776,7 +893,7 @@ export class TuffMainTransport implements ITuffTransportMain {
       BRIDGE_CHANNEL.MAIN,
       eventName,
       payload,
-    )
+    );
   }
 
   /**
@@ -787,23 +904,20 @@ export class TuffMainTransport implements ITuffTransportMain {
     event: TuffEvent<TReq, TRes>,
     payload: TReq,
   ): Promise<TRes> {
-    assertTuffEvent(event, 'TuffMainTransport.sendToPlugin')
+    assertTuffEvent(event, "TuffMainTransport.sendToPlugin");
 
-    const eventName = event.toEventName()
-    return this.channel.sendPlugin(pluginName, eventName, payload)
+    const eventName = event.toEventName();
+    return this.channel.sendPlugin(pluginName, eventName, payload);
   }
 
   /**
    * Broadcasts a message to all windows.
    */
-  broadcast<TReq>(
-    event: TuffEvent<TReq, void>,
-    payload: TReq,
-  ): void {
-    assertTuffEvent(event, 'TuffMainTransport.broadcast')
+  broadcast<TReq>(event: TuffEvent<TReq, void>, payload: TReq): void {
+    assertTuffEvent(event, "TuffMainTransport.broadcast");
 
-    const eventName = event.toEventName()
-    this.channel.broadcast(BRIDGE_CHANNEL.MAIN, eventName, payload)
+    const eventName = event.toEventName();
+    this.channel.broadcast(BRIDGE_CHANNEL.MAIN, eventName, payload);
   }
 
   /**
@@ -832,16 +946,15 @@ export class TuffMainTransport implements ITuffTransportMain {
     event: TuffEvent<TReq, void> | string,
     payload: TReq,
   ): void {
-    let eventName: string
+    let eventName: string;
 
-    if (typeof event === 'string') {
-      eventName = event
-    }
-    else {
-      assertTuffEvent(event, 'TuffMainTransport.broadcastPlugin')
-      eventName = event.toEventName()
+    if (typeof event === "string") {
+      eventName = event;
+    } else {
+      assertTuffEvent(event, "TuffMainTransport.broadcastPlugin");
+      eventName = event.toEventName();
     }
 
-    this.channel.broadcastPlugin(pluginName, eventName, payload)
+    this.channel.broadcastPlugin(pluginName, eventName, payload);
   }
 }

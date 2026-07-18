@@ -15,6 +15,10 @@ import {
 } from 'vue'
 import { getCustomRenderer, getCustomRendererVersion } from '~/modules/box/custom-render'
 import { useWidgetHostKeyEvent } from '~/modules/plugin/widget-host-key-bridge'
+import {
+  guardWidgetDomNavigation,
+  runWidgetHostAction
+} from '~/modules/plugin/widget-sandbox-policy'
 import { getWidgetFailure, getWidgetRuntimeSnippet } from '~/modules/plugin/widget-registry'
 import { devLog } from '~/utils/dev-log'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -56,13 +60,24 @@ const shadowProps = reactive({
   preview: props.preview,
   widgetId: props.rendererId,
   hostKeyEvent: null as unknown,
-  onShowHistory: () => emits('show-history'),
-  onCopyPrimary: () => emits('copy-primary'),
-  onHostAction: (payload: { actionId: string; payload?: Record<string, unknown> }) =>
-    emits('host-action', payload)
+  onShowHistory: handleShowHistory,
+  onCopyPrimary: handleCopyPrimary,
+  onHostAction: handleHostAction
 })
 
 const isDev = import.meta.env?.DEV ?? false
+
+function handleShowHistory(): void {
+  runWidgetHostAction(props.rendererId, 'history.hostAction', () => emits('show-history'))
+}
+
+function handleCopyPrimary(): void {
+  runWidgetHostAction(props.rendererId, 'clipboard.hostAction', () => emits('copy-primary'))
+}
+
+function handleHostAction(payload: { actionId: string; payload?: Record<string, unknown> }): void {
+  runWidgetHostAction(props.rendererId, 'hostAction.invoke', () => emits('host-action', payload))
+}
 
 function resolveRendererName(value: unknown): string {
   if (!value || typeof value !== 'object') return 'anonymous'
@@ -269,11 +284,18 @@ watch(
   { immediate: true }
 )
 
+function handleWidgetNavigationEvent(event: Event): void {
+  if (!props.rendererId) return
+  guardWidgetDomNavigation(props.rendererId, event)
+}
+
 function ensureShadowRoot(): ShadowRoot | null {
   const host = shadowHost.value
   if (!host) return null
   if (!shadowRoot.value) {
     shadowRoot.value = host.attachShadow({ mode: 'open' })
+    shadowRoot.value.addEventListener('click', handleWidgetNavigationEvent, true)
+    shadowRoot.value.addEventListener('submit', handleWidgetNavigationEvent, true)
     if (isDev) {
       devLog('[WidgetFrame] shadow root created', { rendererId: props.rendererId })
     }
@@ -384,6 +406,8 @@ onBeforeUnmount(() => {
   <div
     class="WidgetFrame"
     :class="{ 'is-preview': preview, 'is-empty': !renderer, 'has-error': !!renderError }"
+    @click.capture="handleWidgetNavigationEvent"
+    @submit.capture="handleWidgetNavigationEvent"
   >
     <div v-if="renderError" class="WidgetFrame-Error text-xs text-[var(--tx-color-danger)]">
       <div class="WidgetFrame-ErrorTitle">Widget 渲染失败</div>
@@ -402,9 +426,9 @@ onBeforeUnmount(() => {
       :on-vnode-mounted="handleVnodeMounted"
       :on-vnode-updated="handleVnodeUpdated"
       :on-vnode-unmounted="handleVnodeUnmounted"
-      @show-history="emits('show-history')"
-      @copy-primary="emits('copy-primary')"
-      @host-action="emits('host-action', $event)"
+      @show-history="handleShowHistory"
+      @copy-primary="handleCopyPrimary"
+      @host-action="handleHostAction"
     />
     <div
       v-else

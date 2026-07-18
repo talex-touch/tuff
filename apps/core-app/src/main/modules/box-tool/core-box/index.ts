@@ -5,7 +5,7 @@ import type { CoreBoxLayoutUpdateRequest } from '@talex-touch/utils/transport/ev
 import type { TalexEvents } from '../../../core/eventbus/touch-event'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { StorageList } from '@talex-touch/utils/common/storage/constants'
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import {
   clearRegisteredMainRuntime,
   maybeGetRegisteredMainRuntime,
@@ -17,7 +17,7 @@ import { devProcessManager } from '../../../utils/dev-process-manager'
 import { perfMonitor } from '../../../utils/perf-monitor'
 import { BaseModule } from '../../abstract-base-module'
 import { shortcutModule } from '../../global-shortcon'
-import { getMainConfig } from '../../storage'
+import { getMainConfig, onboardingGate } from '../../storage'
 import SearchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
 import { coreBoxManager } from './manager'
@@ -81,41 +81,23 @@ export class CoreBoxModule extends BaseModule {
       'core.box.toggle',
       'CommandOrControl+E',
       () => {
-        // Check if initialization is complete
-        try {
-          const appSetting = getMainConfig(StorageList.APP_SETTING) as AppSetting
-          const beginnerState = appSetting?.beginner as
-            | { init: boolean; shortcutArmed?: boolean }
-            | undefined
-          if (!beginnerState?.init) {
-            coreBoxLog.warn('Initialization not complete, CoreBox is disabled')
-            // Optionally show a notification or dialog to user
-            const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.show()
-              mainWindow.focus()
-              if (beginnerState?.shortcutArmed === true && this.transport) {
-                void this.transport
-                  .sendToWindow(mainWindow.id, CoreBoxEvents.beginner.shortcutTriggered, undefined)
-                  .catch((error) => {
-                    coreBoxLog.warn('Failed to notify beginner shortcut event', { error })
-                  })
-                void this.transport
-                  .sendToWindow(
-                    mainWindow.id,
-                    CoreBoxRetainedEvents.legacy.beginnerShortcutTriggered,
-                    undefined
-                  )
-                  .catch((error) => {
-                    coreBoxLog.warn('Failed to notify beginner shortcut event', { error })
-                  })
-              }
-            }
-            return
+        const admission = onboardingGate.evaluate()
+        if (admission.state !== 'allowed') {
+          coreBoxManager.trigger(true, { triggeredByShortcut: true })
+          const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
+          if (
+            admission.state === 'blocked' &&
+            mainWindow &&
+            !mainWindow.isDestroyed() &&
+            this.transport
+          ) {
+            void this.transport
+              .sendToWindow(mainWindow.id, CoreBoxEvents.beginner.shortcutTriggered, undefined)
+              .catch((error) => {
+                coreBoxLog.warn('Failed to notify beginner shortcut event', { error })
+              })
           }
-        } catch (error) {
-          coreBoxLog.error('Failed to check initialization status', { error })
-          // If we can't check, allow CoreBox to open (fail-open approach)
+          return
         }
 
         const curScreen = windowManager.getCurScreen()
@@ -159,7 +141,9 @@ export class CoreBoxModule extends BaseModule {
         }
 
         // Also pass triggeredByShortcut for AI quick call
-        coreBoxManager.trigger(true, { triggeredByShortcut: true })
+        if (!coreBoxManager.trigger(true, { triggeredByShortcut: true })) {
+          return
+        }
         lastScreenId = curScreen.id
 
         const targetWindow = windowManager.current?.window

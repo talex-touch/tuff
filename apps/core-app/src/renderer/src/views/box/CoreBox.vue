@@ -5,7 +5,7 @@ import type { ComponentPublicInstance } from 'vue'
 import type { IBoxOptions } from '../../modules/box/adapter'
 import type { IClipboardOptions } from '../../modules/box/adapter/hooks/types'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { TxScroll } from '@talex-touch/tuffex/scroll'
@@ -629,10 +629,6 @@ const handleUIModeExited = (payload?: { resetInput?: boolean }) => {
   }, 150)
 }
 const unregUIModeExited = transport.on(CoreBoxEvents.ui.uiModeExited, handleUIModeExited)
-const unregLegacyUIModeExited = transport.on(
-  CoreBoxRetainedEvents.legacy.uiModeExited,
-  handleUIModeExited
-)
 
 async function deactivateProviderVoid(id?: string): Promise<void> {
   await deactivateProvider(id)
@@ -661,9 +657,6 @@ const actionPanel = useActionPanel({
 
 // Channel: focus input
 const unregFocusInput = transport.on(CoreBoxEvents.input.focus, () => focusInput())
-const unregLegacyFocusInput = transport.on(CoreBoxRetainedEvents.legacy.focusInput, () =>
-  focusInput()
-)
 
 onMounted(() => {
   resetAutoPasteState()
@@ -673,9 +666,7 @@ onBeforeUnmount(() => {
   cleanupClipboard()
   cleanupVisibility()
   unregUIModeExited()
-  unregLegacyUIModeExited()
   unregFocusInput()
-  unregLegacyFocusInput()
   if (resWatchTimerId !== null) {
     clearTimeout(resWatchTimerId)
     resWatchTimerId = null

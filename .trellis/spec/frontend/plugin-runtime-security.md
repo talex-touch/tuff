@@ -201,6 +201,117 @@ registerProtectedWindowChannel(
 - Atomic bounds: malformed entry, unsafe metadata, duplicate/collision, oversized batch, per-plugin limit, replace semantics, and previous-state preservation after every failure.
 - Lifecycle: disable/unload clear only the owning plugin overlay while official entries and other plugin overlays remain intact.
 
+## Scenario: Same-Realm Widget Host-API Containment
+
+### 1. Scope / Trigger
+
+- Trigger: compiled `vue`, `webcomponent`, or `arrow` widget code is registered inside the CoreApp renderer.
+- This boundary spans package-time dependency validation, renderer module resolution, dynamic component evaluation, browser API facades, `WidgetFrame` host actions, quota/audit evidence, and widget disposal.
+- The current implementation is same-realm host-API containment. It is not a process, origin, or intrinsic realm boundary; evidence must state this limitation instead of calling it secure code isolation.
+
+### 2. Signatures
+
+```ts
+type WidgetSandboxDecision = "allowed" | "denied" | "quota-exceeded";
+
+interface WidgetSandboxAuditEntry {
+  sequence: number;
+  timestamp: number;
+  widgetId: string;
+  pluginName: string;
+  operation: WidgetSandboxOperation;
+  decision: WidgetSandboxDecision;
+  reason?: string;
+}
+
+interface WidgetSandboxQuotaEvidence {
+  windowMs: 10_000;
+  maxCalls: 120;
+  usedCalls: number;
+  blockedCalls: number;
+  resetsAt: number;
+}
+
+runWidgetHostAction(
+  widgetId: string,
+  operation: "clipboard.hostAction" | "history.hostAction" | "hostAction.invoke",
+  callback: () => void,
+): boolean;
+```
+
+### 3. Contracts
+
+- Build one policy per registered widget and dispose it on failure, replacement, or unregister. A retained facade from a disposed policy must reject every later operation.
+- Inject `window`, `globalThis`, browser capabilities, CommonJS bindings, and allow-listed safe globals through one `with` scope whose `has` trap prevents unresolved identifiers from falling through to the host global object.
+- Run lexical preflight before the widget factory. Reject direct `eval`, `Function`, dynamic import, `importScripts`, WebAssembly, escaped identifiers, and constructor/prototype escape markers.
+- `navigator.clipboard`, document clipboard commands, `location` mutation, workers, service workers, direct network constructors, `window.open`, and `window.close` fail closed. Widgets request user-visible work only through typed host actions.
+- `history` is widget-local memory. `postMessage` targets a widget-local `EventTarget`; `BroadcastChannel` names are plugin-prefixed. Neither path dispatches onto the host window.
+- Local/session storage and cookies are widget-namespaced. IndexedDB database enumeration and CacheStorage keys/matches expose only the owning plugin namespace. `Cache.add` and `Cache.addAll` are network operations and must reject.
+- Charge dynamic evaluation, sensitive browser operations, widget messages, and typed host actions to the 120-call/10-second budget. Quota exhaustion fails closed before the host callback or browser operation.
+- Keep at most 2,048 audit entries globally. Entries contain identity, operation, decision, and a static/sanitized reason only; never record clipboard data, message data, host-action payloads, URLs with query strings, or cache content.
+- Package and runtime module allow-lists must agree: only exact `WIDGET_ALLOWED_PACKAGES` and declared `WIDGET_ALLOWED_PACKAGE_PREFIXES` subpaths may remain external. A generic `@talex-touch/*` wildcard is forbidden because it exposes transport and plugin SDK internals.
+- Forward the same host callback props through Vue, WebComponent, and Arrow adapters. Runtime choice must not bypass host-action quota or cleanup semantics.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Undeclared or unavailable module | Reject before module resolution; record registration failure evidence |
+| Raw `@talex-touch/utils/transport` import | Reject during package/runtime dependency validation |
+| Dynamic source violation | `WIDGET_SANDBOX_DYNAMIC_CODE_BLOCKED`; source body is not executed |
+| Clipboard/location/worker/network attempt | `WIDGET_SANDBOX_CAPABILITY_DENIED`; host spy remains untouched |
+| Call 121 inside the fixed window | `WIDGET_SANDBOX_QUOTA_EXCEEDED`; audit `quota-exceeded` |
+| `postMessage` with cloneable data | Deliver only to the widget-local message target; audit without data |
+| Cross-plugin IndexedDB/cache enumeration | Filter the foreign namespace and strip the internal prefix from owned names |
+| Cache network loader | Reject `add` / `addAll`; do not call the host Cache method |
+| Host action after widget disposal | Return `false`; do not invoke the host callback |
+| Retained browser facade after disposal | Reject with disposed-policy evidence |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a widget sends a cloneable local message, updates its isolated history, then emits a declared host action. Each operation is charged and audited without payload content.
+- Base: a widget renders with Vue/TuffEx only and never calls a privileged browser surface. Registration records guarded dynamic execution evidence and the runtime remains compatible.
+- Bad: expose the preloaded transport/plugin SDK, delegate unknown `window` properties to the host, call `new Worker`, persist raw message data in audit, let CacheStorage match foreign namespaces, or describe same-realm evaluation as a secure realm.
+
+### 6. Tests Required
+
+- Registration/mount tests for Vue, WebComponent, and Arrow, including identical host-action forwarding and cleanup behavior.
+- Host-spy tests proving clipboard, history/location, network, workers, raw transport modules, and DOM anchor/form navigation do not reach host capabilities.
+- Local messaging/history tests proving useful widget-local behavior and no cross-widget/host delivery.
+- Quota/audit tests for exact exhaustion, allowed/denied decisions, 2,048-entry retention, payload exclusion, and disposed-policy rejection.
+- Storage tests for cookie/local isolation, IndexedDB database filtering, CacheStorage key/match filtering, cache network denial, and BroadcastChannel namespace/quota.
+- Dynamic preflight tests for every denied form and an assertion that source-side effects never execute.
+- Package builder tests proving exact packages and declared prefixes remain external while arbitrary `@talex-touch/*` imports fail before packaging.
+- Renderer web type-check plus focused registration/mount tests are required proof for cross-runtime callback contracts.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const executor = new Function("require", "module", "window", code);
+const module = moduleName.startsWith("@talex-touch/")
+  ? preloadedModules[moduleName]
+  : undefined;
+```
+
+Free identifiers and generic scoped packages can recover host capabilities outside the declared widget contract.
+
+#### Correct
+
+```ts
+assertWidgetDynamicSource(widgetId, code);
+const scope = new Proxy(scopedGlobals, {
+  has: () => true,
+  get: (target, key) => Reflect.get(target, key),
+});
+const module = isAllowedWidgetModule(moduleName)
+  ? resolveAllowlistedWidgetModule(moduleName)
+  : undefined;
+```
+
+The factory sees only explicit globals and modules; privileged behavior remains behind quota-governed typed host actions.
+
 ## Scenario: Dynamic Feature Identity
 
 ### 1. Contracts

@@ -117,7 +117,10 @@ vi.mock('../../global-shortcon', () => ({
 }))
 
 vi.mock('../../storage', () => ({
-  getMainConfig: mocks.getMainConfig
+  getMainConfig: mocks.getMainConfig,
+  onboardingGate: {
+    evaluate: vi.fn(() => ({ state: 'allowed' }))
+  }
 }))
 
 vi.mock('../search-engine/search-core', () => ({

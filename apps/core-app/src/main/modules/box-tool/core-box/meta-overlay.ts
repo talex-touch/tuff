@@ -16,7 +16,7 @@ import type { BrowserWindow } from 'electron'
 import path from 'node:path'
 import process from 'node:process'
 import { buildWindowArgs } from '@talex-touch/utils/renderer/window-role'
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { app, WebContentsView } from 'electron'
@@ -499,15 +499,6 @@ export class MetaOverlayManager {
         .catch((error) => {
           metaOverlayLog.error(`Failed to notify plugin ${pluginId} of action execution`, { error })
         })
-      void transport
-        .sendToPlugin(pluginId, CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted, {
-          actionId,
-          item: targetItem,
-          pluginId
-        })
-        .catch((error) => {
-          metaOverlayLog.error(`Failed to notify plugin ${pluginId} of action execution`, { error })
-        })
     } else {
       // Built-in and item actions are handled by the CoreBox renderer action pipeline.
       const coreBoxWebContents = this.resolveCoreBoxRendererWebContents(sender)
@@ -516,12 +507,6 @@ export class MetaOverlayManager {
         const transport = getTuffTransportMain(channel, resolveKeyManager(channel))
         void transport
           .sendTo(coreBoxWebContents, CoreBoxEvents.metaOverlay.itemAction, {
-            actionId,
-            item: targetItem
-          })
-          .catch(() => {})
-        void transport
-          .sendTo(coreBoxWebContents, CoreBoxRetainedEvents.legacy.metaOverlayItemAction, {
             actionId,
             item: targetItem
           })

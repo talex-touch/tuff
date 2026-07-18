@@ -1,108 +1,137 @@
-import type { TransportPortEnvelope } from '../../events'
-import type { StreamContext } from '../../types'
+import type { TransportPortEnvelope } from "../../events";
+import type { StreamContext } from "../../types";
 import {
   buildStreamDataEnvelope,
   buildStreamEndEnvelope,
   buildStreamErrorEnvelope,
   getStreamEventNames,
   toStreamError,
-} from './protocol'
+} from "./protocol";
 
 export interface ServerStreamRequest<TReq, TSender, TPlugin = unknown> {
-  streamId: string
-  payload: TReq
-  sender: TSender
-  plugin?: TPlugin
+  streamId: string;
+  portId?: string;
+  payload: TReq;
+  sender: TSender;
+  plugin?: TPlugin;
 }
 
 export interface ServerStreamPortAdapter {
-  portId?: string
-  send: (message: TransportPortEnvelope) => boolean
+  portId?: string;
+  send: (message: TransportPortEnvelope) => boolean;
 }
 
-export interface ServerStreamRuntimeConfig<TReq, TChunk, TSender, TPlugin = unknown> {
-  eventName: string
-  portEnabled?: boolean
+export interface ServerStreamRuntimeConfig<
+  TReq,
+  TChunk,
+  TSender,
+  TPlugin = unknown,
+> {
+  eventName: string;
+  portEnabled?: boolean;
   handler: (
     payload: TReq,
     context: StreamContext<TChunk>,
-  ) => void | Promise<void>
+  ) => void | Promise<void>;
   buildContext: (
     request: ServerStreamRequest<TReq, TSender, TPlugin>,
-    base: Omit<StreamContext<TChunk>, 'sender' | 'eventName' | 'plugin'>,
-  ) => StreamContext<TChunk>
+    base: Omit<StreamContext<TChunk>, "sender" | "eventName" | "plugin">,
+  ) => StreamContext<TChunk>;
   resolvePort?: (
     request: ServerStreamRequest<TReq, TSender, TPlugin>,
-  ) => ServerStreamPortAdapter | null
+  ) => ServerStreamPortAdapter | null;
   sendFallback: (
     request: ServerStreamRequest<TReq, TSender, TPlugin>,
     channelName: string,
     payload: unknown,
-  ) => void
-  onHandlerError?: (error: unknown) => void
+  ) => void;
+  onHandlerError?: (error: unknown) => void;
 }
 
 export interface ServerStreamRuntime<TReq, TSender, TPlugin = unknown> {
-  handleStart: (
-    request: ServerStreamRequest<TReq, TSender, TPlugin>,
-  ) => void
-  handleCancel: (streamId?: string | null) => void
+  handleStart: (request: ServerStreamRequest<TReq, TSender, TPlugin>) => void;
+  handleCancel: (streamId?: string | null) => void;
 }
 
-export function createServerStreamRuntime<TReq, TChunk, TSender, TPlugin = unknown>(
+export function createServerStreamRuntime<
+  TReq,
+  TChunk,
+  TSender,
+  TPlugin = unknown,
+>(
   config: ServerStreamRuntimeConfig<TReq, TChunk, TSender, TPlugin>,
 ): ServerStreamRuntime<TReq, TSender, TPlugin> {
-  const states = new Map<string, { cancelled: boolean }>()
-  const streamEvents = getStreamEventNames(config.eventName)
+  const states = new Map<
+    string,
+    { cancelled: boolean; closed: boolean; abortController: AbortController }
+  >();
+  const streamEvents = getStreamEventNames(config.eventName);
 
   const handleCancel = (streamId?: string | null) => {
     if (!streamId) {
-      return
+      return;
     }
-    const state = states.get(streamId)
-    if (state) {
-      state.cancelled = true
-    }
-  }
+    const state = states.get(streamId);
+    if (!state || state.closed || state.cancelled) return;
+    state.cancelled = true;
+    state.abortController.abort();
+    states.delete(streamId);
+  };
 
-  const handleStart = (request: ServerStreamRequest<TReq, TSender, TPlugin>) => {
-    const { streamId } = request
-    states.set(streamId, { cancelled: false })
+  const handleStart = (
+    request: ServerStreamRequest<TReq, TSender, TPlugin>,
+  ) => {
+    const { streamId } = request;
+    const state = {
+      cancelled: false,
+      closed: false,
+      abortController: new AbortController(),
+    };
+    states.set(streamId, state);
 
     const cleanup = () => {
-      states.delete(streamId)
-    }
+      if (states.get(streamId) === state) states.delete(streamId);
+    };
 
     const portAdapter = config.portEnabled
-      ? config.resolvePort?.(request) ?? null
-      : null
+      ? (config.resolvePort?.(request) ?? null)
+      : null;
 
     const sendPortMessage = (message: TransportPortEnvelope): boolean => {
       if (!portAdapter) {
-        return false
+        return false;
       }
-      return portAdapter.send(message)
-    }
+      return portAdapter.send(message);
+    };
 
-    const baseContext: Omit<StreamContext<TChunk>, 'sender' | 'eventName' | 'plugin'> = {
+    const baseContext: Omit<
+      StreamContext<TChunk>,
+      "sender" | "eventName" | "plugin"
+    > = {
       emit: (chunk: TChunk) => {
-        if (states.get(streamId)?.cancelled) {
-          return
+        if (state.cancelled || state.closed) {
+          return;
         }
 
         const portSent = sendPortMessage(
-          buildStreamDataEnvelope(config.eventName, streamId, chunk, portAdapter?.portId),
-        )
+          buildStreamDataEnvelope(
+            config.eventName,
+            streamId,
+            chunk,
+            portAdapter?.portId,
+          ),
+        );
         if (!portSent) {
-          config.sendFallback(request, streamEvents.data(streamId), { chunk })
+          config.sendFallback(request, streamEvents.data(streamId), { chunk });
         }
       },
       error: (error: Error) => {
-        if (states.get(streamId)?.cancelled) {
-          return
+        if (state.cancelled || state.closed) {
+          return;
         }
 
-        const streamError = toStreamError(error)
+        state.closed = true;
+        const streamError = toStreamError(error);
         const portSent = sendPortMessage(
           buildStreamErrorEnvelope(
             config.eventName,
@@ -110,40 +139,50 @@ export function createServerStreamRuntime<TReq, TChunk, TSender, TPlugin = unkno
             streamError.message,
             portAdapter?.portId,
           ),
-        )
+        );
         if (!portSent) {
           config.sendFallback(request, streamEvents.error(streamId), {
             error: streamError.message,
-          })
+          });
         }
-        cleanup()
+        cleanup();
       },
       end: () => {
-        if (states.get(streamId)?.cancelled) {
-          return
+        if (state.cancelled || state.closed) {
+          cleanup();
+          return;
         }
+
+        state.closed = true;
 
         const portSent = sendPortMessage(
-          buildStreamEndEnvelope(config.eventName, streamId, portAdapter?.portId),
-        )
+          buildStreamEndEnvelope(
+            config.eventName,
+            streamId,
+            portAdapter?.portId,
+          ),
+        );
         if (!portSent) {
-          config.sendFallback(request, streamEvents.end(streamId), {})
+          config.sendFallback(request, streamEvents.end(streamId), {});
         }
-        cleanup()
+        cleanup();
       },
-      isCancelled: () => states.get(streamId)?.cancelled === true,
+      isCancelled: () => state.cancelled,
+      signal: state.abortController.signal,
       streamId,
-    }
+    };
 
-    const streamContext = config.buildContext(request, baseContext)
-    Promise.resolve(config.handler(request.payload, streamContext)).catch((error) => {
-      config.onHandlerError?.(error)
-      streamContext.error(toStreamError(error))
-    })
-  }
+    const streamContext = config.buildContext(request, baseContext);
+    Promise.resolve(config.handler(request.payload, streamContext)).catch(
+      (error) => {
+        config.onHandlerError?.(error);
+        streamContext.error(toStreamError(error));
+      },
+    );
+  };
 
   return {
     handleStart,
     handleCancel,
-  }
+  };
 }

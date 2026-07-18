@@ -33,7 +33,6 @@ import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl, getRuntimeServerMode } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
-import { withLegacyAliasTelemetry } from '../../utils/legacy-alias-telemetry'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 
 const authLog = getLogger('auth')
@@ -84,26 +83,10 @@ type AuthEventDefinition<TPayload, TResult> = Parameters<ITuffTransportMain['on'
 }
 
 function registerAuthHandler<TPayload, TResult>(
-  primaryEvent: AuthEventDefinition<TPayload, TResult>,
-  legacyEvent: AuthEventDefinition<TPayload, TResult>,
+  event: AuthEventDefinition<TPayload, TResult>,
   handler: (payload: TPayload) => TResult | Promise<TResult>
 ): Array<() => void> {
-  if (!transport) {
-    return []
-  }
-  return [
-    transport.on(primaryEvent, handler),
-    transport.on(
-      legacyEvent,
-      withLegacyAliasTelemetry(handler, {
-        family: 'auth',
-        legacyEvent,
-        canonicalEvent: primaryEvent,
-        direction: 'renderer-to-main',
-        sourceModule: 'AuthModule'
-      })
-    )
-  ]
+  return transport ? [transport.on(event, handler)] : []
 }
 
 function cloneAuthState(): AuthState {
@@ -166,7 +149,6 @@ function notifyAuthStateChanged(): void {
   }
   if (transport) {
     transport.broadcast(AuthEvents.session.stateChanged, snapshot)
-    transport.broadcast(AuthEvents.legacy.stateChanged, snapshot)
   }
 }
 
@@ -1548,19 +1530,13 @@ export class AuthModule extends BaseModule<TalexEvents> {
     }
 
     this.transportDisposers.push(
-      ...registerAuthHandler(AuthEvents.session.getState, AuthEvents.legacy.getState, async () =>
-        cloneAuthState()
-      ),
-      ...registerAuthHandler(
-        AuthEvents.session.login,
-        AuthEvents.legacy.login,
-        async (payload: AuthLoginRequest) => {
-          const mode = payload?.mode === 'sign-up' ? 'sign-up' : 'sign-in'
-          const loginStart = await openLoginPage(mode)
-          return { initiated: true, ...loginStart }
-        }
-      ),
-      ...registerAuthHandler(AuthEvents.session.logout, AuthEvents.legacy.logout, async () => {
+      ...registerAuthHandler(AuthEvents.session.getState, async () => cloneAuthState()),
+      ...registerAuthHandler(AuthEvents.session.login, async (payload: AuthLoginRequest) => {
+        const mode = payload?.mode === 'sign-up' ? 'sign-up' : 'sign-in'
+        const loginStart = await openLoginPage(mode)
+        return { initiated: true, ...loginStart }
+      }),
+      ...registerAuthHandler(AuthEvents.session.logout, async () => {
         await cancelActiveDeviceAuth()
         await clearAuthToken()
         updateAuthState(null)
@@ -1568,7 +1544,6 @@ export class AuthModule extends BaseModule<TalexEvents> {
       }),
       ...registerAuthHandler(
         AuthEvents.profile.update,
-        AuthEvents.legacy.updateProfile,
         async (payload: AuthProfileUpdateRequest) => {
           const token = authToken
           if (!token) {
@@ -1584,7 +1559,6 @@ export class AuthModule extends BaseModule<TalexEvents> {
       ),
       ...registerAuthHandler(
         AuthEvents.profile.updateAvatar,
-        AuthEvents.legacy.updateAvatar,
         async (payload: AuthAvatarUpdateRequest) => {
           const token = authToken
           if (!token) {
@@ -1599,74 +1573,41 @@ export class AuthModule extends BaseModule<TalexEvents> {
           return nextUser
         }
       ),
-      ...registerAuthHandler(AuthEvents.device.attest, AuthEvents.legacy.attestDevice, async () => {
+      ...registerAuthHandler(AuthEvents.device.attest, async () => {
         const success = await attestCurrentDevice()
         return { success }
       }),
-      ...registerAuthHandler(
-        AuthEvents.nexus.request,
-        AuthEvents.legacy.nexusRequest,
-        async (payload) => performNexusRequest(payload)
+      ...registerAuthHandler(AuthEvents.nexus.request, async (payload) =>
+        performNexusRequest(payload)
       ),
-      ...registerAuthHandler(
-        AuthEvents.nexus.upload,
-        AuthEvents.legacy.nexusUpload,
-        async (payload) => performNexusUpload(payload)
+      ...registerAuthHandler(AuthEvents.nexus.upload, async (payload) =>
+        performNexusUpload(payload)
       ),
-      ...registerAuthHandler(
-        AuthEvents.token.manual,
-        AuthEvents.legacy.manualToken,
-        async (payload: AuthManualTokenRequest) => {
-          const token =
-            typeof payload?.appToken === 'string' && payload.appToken.trim()
-              ? payload.appToken
-              : payload?.token
-          if (!token) {
-            return { success: false }
-          }
-          await handleExternalAuthCallback(token, payload?.appToken)
-          return { success: true }
+      ...registerAuthHandler(AuthEvents.token.manual, async (payload: AuthManualTokenRequest) => {
+        const token =
+          typeof payload?.appToken === 'string' && payload.appToken.trim()
+            ? payload.appToken
+            : payload?.token
+        if (!token) {
+          return { success: false }
         }
-      ),
-      ...registerAuthHandler(
-        AuthEvents.stepUp.request,
-        AuthEvents.legacy.requestStepUp,
-        async () => {
-          await requestStepUp()
-          return { initiated: true }
-        }
-      ),
-      ...registerAuthHandler(
-        AuthEvents.stepUp.getToken,
-        AuthEvents.legacy.getStepUpToken,
-        async () => getStepUpToken()
-      ),
-      ...registerAuthHandler(
-        AuthEvents.stepUp.clearToken,
-        AuthEvents.legacy.clearStepUpToken,
-        async () => {
-          clearStepUpToken()
-          return { success: true }
-        }
-      ),
-      ...registerAuthHandler(
-        AccountEvents.auth.getToken,
-        AccountEvents.legacy.getAuthToken,
-        async () => authToken
-      ),
-      ...registerAuthHandler(
-        AccountEvents.device.getId,
-        AccountEvents.legacy.getDeviceId,
-        async () => getDeviceId()
-      ),
-      ...registerAuthHandler(
-        AccountEvents.sync.getEnabled,
-        AccountEvents.legacy.getSyncEnabled,
-        async () => getSyncEnabled()
-      ),
+        await handleExternalAuthCallback(token, payload?.appToken)
+        return { success: true }
+      }),
+      ...registerAuthHandler(AuthEvents.stepUp.request, async () => {
+        await requestStepUp()
+        return { initiated: true }
+      }),
+      ...registerAuthHandler(AuthEvents.stepUp.getToken, async () => getStepUpToken()),
+      ...registerAuthHandler(AuthEvents.stepUp.clearToken, async () => {
+        clearStepUpToken()
+        return { success: true }
+      }),
+      ...registerAuthHandler(AccountEvents.auth.getToken, async () => authToken),
+      ...registerAuthHandler(AccountEvents.device.getId, async () => getDeviceId()),
+      ...registerAuthHandler(AccountEvents.sync.getEnabled, async () => getSyncEnabled()),
       ...registerAuthHandler(
         AccountEvents.sync.recordActivity,
-        AccountEvents.legacy.recordSyncActivity,
         async (payload: AccountRecordSyncActivityRequest) => {
           const kind = payload?.kind === 'pull' ? 'pull' : payload?.kind === 'push' ? 'push' : ''
           if (!kind) {
