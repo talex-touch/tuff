@@ -8,49 +8,38 @@ import {
   TxAiResultCard,
   TxAiSuggestion,
   TxAiToolCall,
-} from '../index'
-import { usePlaygroundState } from './usePlaygroundState'
+} from "../index";
+import { usePlaygroundState } from "./usePlaygroundState";
 
 const {
   activeSession,
   activeSessionConfig,
   activeStep,
   branch,
-  canSendLive,
   composerAttachments,
   completeTimeline,
   currentStepLabel,
   draft,
   generating,
-  isLiveMode,
   isPlaying,
-  liveAuditRecords,
-  liveGenerating,
-  liveMessages,
-  liveSessionId,
-  liveStatusText,
   messages,
   modeLabel,
   nextTimelineStep,
   phase,
   phaseOptions,
   playFromStart,
-  resetLiveConversation,
   resetTimeline,
-  runMode,
   selectBranch,
   selectPhase,
   selectSession,
   sendDraft,
   sessionConfigs,
-  setRunMode,
-  settings,
   stopPlayback,
   timelineIndex,
   timelineSteps,
   toolStatus,
   workspacePhase,
-} = usePlaygroundState()
+} = usePlaygroundState();
 </script>
 
 <template>
@@ -63,51 +52,6 @@ const {
           <span>mock workspace</span>
         </div>
       </div>
-
-      <div class="uikit-mockup__mode" role="group" aria-label="Run mode">
-        <button
-          type="button"
-          :class="{ 'is-active': runMode === 'mock' }"
-          @click="setRunMode('mock')"
-        >
-          Mock
-        </button>
-        <button
-          type="button"
-          :class="{ 'is-active': runMode === 'live' }"
-          @click="setRunMode('live')"
-        >
-          Live
-        </button>
-      </div>
-
-      <section class="uikit-mockup__settings">
-        <h2>DeepAgent</h2>
-        <label>
-          <span>Base URL</span>
-          <input v-model="settings.baseUrl" type="url" spellcheck="false" placeholder="https://api.openai.com/v1">
-        </label>
-        <label>
-          <span>API Key</span>
-          <input v-model="settings.apiKey" type="password" spellcheck="false" autocomplete="off" placeholder="sk-...">
-        </label>
-        <label>
-          <span>Model</span>
-          <input v-model="settings.model" type="text" spellcheck="false" placeholder="gpt-5.4">
-        </label>
-        <label>
-          <span>Transport</span>
-          <select v-model="settings.transport">
-            <option value="auto">auto</option>
-            <option value="responses">responses</option>
-            <option value="chat.completions">chat.completions</option>
-          </select>
-        </label>
-        <label>
-          <span>System Prompt</span>
-          <textarea v-model="settings.systemPrompt" spellcheck="false" rows="4" />
-        </label>
-      </section>
 
       <nav class="uikit-mockup__sessions" aria-label="Mock sessions">
         <button
@@ -122,8 +66,8 @@ const {
       </nav>
 
       <TxAiAgentBadge
-        :name="isLiveMode ? 'DeepAgent Adapter' : activeSessionConfig.adapterName"
-        :description="isLiveMode ? (canSendLive ? 'live ready' : 'missing config') : activeSessionConfig.adapterDescription"
+        :name="activeSessionConfig.adapterName"
+        :description="activeSessionConfig.adapterDescription"
         tone="primary"
       />
     </aside>
@@ -140,7 +84,11 @@ const {
           </p>
         </div>
 
-        <div v-if="!isLiveMode" class="uikit-mockup__segmented" role="group" aria-label="Mock phase">
+        <div
+          class="uikit-mockup__segmented"
+          role="group"
+          aria-label="Mock phase"
+        >
           <button
             v-for="item in phaseOptions"
             :key="item.value"
@@ -157,20 +105,20 @@ const {
         class="uikit-mockup__conversation"
         :messages="messages"
         :generating="generating"
-        @stop="isLiveMode ? resetLiveConversation() : completeTimeline()"
+        @stop="completeTimeline"
       >
         <template #before>
           <div class="uikit-mockup__timeline-note">
             <TxAiLoadingHint
-              :label="isLiveMode ? 'DeepAgent runtime' : 'Runtime trace'"
-              :description="isLiveMode ? liveStatusText : 'session restored, stream cursor attached'"
+              label="Runtime trace"
+              description="session restored, stream cursor attached"
               :status="toolStatus"
             />
           </div>
         </template>
       </TxAiConversation>
 
-      <div v-if="!isLiveMode" class="uikit-mockup__suggestions">
+      <div class="uikit-mockup__suggestions">
         <TxAiSuggestion
           v-for="suggestion in activeSessionConfig.suggestions"
           :key="suggestion"
@@ -185,18 +133,17 @@ const {
         placeholder="输入消息..."
         show-attachment-button
         :submitting="generating"
-        :disabled="isLiveMode && !canSendLive"
         :attachments="composerAttachments"
         @send="sendDraft"
       />
     </section>
 
     <aside class="uikit-mockup__inspector">
-      <section v-if="!isLiveMode">
+      <section>
         <h2>Timeline</h2>
         <div class="uikit-mockup__timeline-controls">
           <button type="button" class="is-primary" @click="playFromStart">
-            {{ isPlaying ? 'Restart' : 'Play from start' }}
+            {{ isPlaying ? "Restart" : "Play from start" }}
           </button>
           <button type="button" @click="nextTimelineStep">
             Next
@@ -206,7 +153,11 @@ const {
           </button>
         </div>
 
-        <div class="uikit-mockup__branch" role="group" aria-label="Timeline branch">
+        <div
+          class="uikit-mockup__branch"
+          role="group"
+          aria-label="Timeline branch"
+        >
           <button
             type="button"
             :class="{ 'is-active': branch === 'success' }"
@@ -232,7 +183,13 @@ const {
               'is-done': index < timelineIndex,
             }"
           >
-            <button type="button" @click="timelineIndex = index; stopPlayback()">
+            <button
+              type="button"
+              @click="
+                timelineIndex = index;
+                stopPlayback();
+              "
+            >
               <span>{{ index + 1 }}</span>
               <strong>{{ step.label }}</strong>
             </button>
@@ -240,32 +197,12 @@ const {
         </ol>
       </section>
 
-      <section v-else>
-        <h2>Live session</h2>
-        <div class="uikit-mockup__timeline-controls">
-          <button type="button" class="is-primary" :disabled="liveGenerating" @click="resetLiveConversation">
-            New chat
-          </button>
-          <button type="button" @click="setRunMode('mock')">
-            Back to mock
-          </button>
-        </div>
-        <div class="uikit-mockup__live-meta">
-          <span>Session</span>
-          <strong>{{ liveSessionId }}</strong>
-        </div>
-        <div class="uikit-mockup__live-meta">
-          <span>Messages</span>
-          <strong>{{ liveMessages.length }}</strong>
-        </div>
-      </section>
-
       <section>
         <h2>Run state</h2>
         <TxAiToolCall
-          :name="isLiveMode ? 'DeepAgent request' : 'Conversation timeline'"
+          name="Conversation timeline"
           :status="toolStatus"
-          :description="isLiveMode ? liveStatusText : activeStep.description"
+          :description="activeStep.description"
         />
       </section>
 
@@ -278,26 +215,13 @@ const {
         >
           <div class="uikit-mockup__metric-row">
             <span>Blocks</span>
-            <strong>{{ isLiveMode ? liveMessages.length : 4 }}</strong>
+            <strong>4</strong>
           </div>
           <div class="uikit-mockup__metric-row">
-            <span>{{ isLiveMode ? 'Audit events' : 'Motion hooks' }}</span>
-            <strong>{{ isLiveMode ? liveAuditRecords.length : 6 }}</strong>
+            <span>Motion hooks</span>
+            <strong>6</strong>
           </div>
         </TxAiResultCard>
-      </section>
-
-      <section v-if="isLiveMode">
-        <h2>Audit</h2>
-        <div class="uikit-mockup__audit-list">
-          <p v-if="liveAuditRecords.length <= 0">
-            No audit events yet.
-          </p>
-          <article v-for="record in liveAuditRecords" :key="record.id">
-            <strong>{{ record.type }}</strong>
-            <span>{{ record.summary }}</span>
-          </article>
-        </div>
       </section>
 
       <section>
@@ -323,12 +247,21 @@ const {
 
 :global(body) {
   margin: 0;
-  background:
-    linear-gradient(135deg, rgb(245 247 248) 0%, rgb(238 243 241) 48%, rgb(247 246 242) 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(245 247 248) 0%,
+    rgb(238 243 241) 48%,
+    rgb(247 246 242) 100%
+  );
   color: #171a1d;
   font-size: 14px;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
     sans-serif;
 }
 
@@ -426,89 +359,6 @@ button {
       background: rgb(47 138 111 / 11%);
       color: #173d33;
     }
-  }
-}
-
-.uikit-mockup__mode {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  border: 1px solid var(--mock-border);
-  border-radius: 12px;
-  background: rgb(255 255 255 / 54%);
-  padding: 4px;
-
-  button {
-    border: 0;
-    border-radius: 9px;
-    background: transparent;
-    padding: 7px 8px;
-    color: var(--mock-muted);
-    font-size: 13px;
-    cursor: pointer;
-
-    &.is-active {
-      background: #1d2527;
-      color: #fff;
-    }
-  }
-}
-
-.uikit-mockup__settings {
-  display: grid;
-  gap: 9px;
-  border: 1px solid var(--mock-border);
-  border-radius: 14px;
-  background: rgb(255 255 255 / 52%);
-  padding: 12px;
-
-  h2 {
-    margin: 0 0 2px;
-    color: #2c3337;
-    font-size: 13px;
-    line-height: 1.2;
-  }
-
-  label {
-    display: grid;
-    gap: 5px;
-  }
-
-  label span {
-    color: var(--mock-muted);
-    font-size: 11px;
-    line-height: 1.2;
-  }
-
-  input,
-  select,
-  textarea {
-    width: 100%;
-    min-width: 0;
-    border: 1px solid color-mix(in srgb, var(--mock-border) 78%, transparent);
-    border-radius: 10px;
-    background: rgb(255 255 255 / 72%);
-    padding: 7px 9px;
-    color: #1d2527;
-    font: inherit;
-    font-size: 12px;
-    outline: none;
-    transition:
-      border-color 160ms ease,
-      box-shadow 160ms ease,
-      background 160ms ease;
-
-    &:focus {
-      border-color: rgb(47 138 111 / 38%);
-      background: #fff;
-      box-shadow: 0 0 0 3px rgb(47 138 111 / 9%);
-    }
-  }
-
-  textarea {
-    min-height: 86px;
-    resize: vertical;
-    line-height: 1.45;
   }
 }
 
@@ -801,65 +651,6 @@ button {
 .uikit-mockup__citations {
   display: grid;
   gap: 8px;
-}
-
-.uikit-mockup__live-meta {
-  display: grid;
-  gap: 3px;
-  margin-top: 10px;
-  border-top: 1px solid var(--mock-border);
-  padding-top: 9px;
-
-  span {
-    color: var(--mock-muted);
-    font-size: 11px;
-  }
-
-  strong {
-    overflow: hidden;
-    color: #1d2527;
-    font-size: 12px;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.uikit-mockup__audit-list {
-  display: grid;
-  gap: 8px;
-
-  p {
-    margin: 0;
-    color: var(--mock-muted);
-    font-size: 12px;
-  }
-
-  article {
-    display: grid;
-    gap: 3px;
-    border: 1px solid var(--mock-border);
-    border-radius: 10px;
-    background: rgb(255 255 255 / 56%);
-    padding: 8px 9px;
-  }
-
-  strong,
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  strong {
-    color: #1d2527;
-    font-size: 12px;
-  }
-
-  span {
-    color: var(--mock-muted);
-    font-size: 11px;
-  }
 }
 
 [data-phase="streaming"] {

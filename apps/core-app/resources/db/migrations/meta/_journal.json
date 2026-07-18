@@ -218,6 +218,20 @@
       "when": 1784419200000,
       "tag": "0030_app_update_rollback_compatibility",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1784505600000,
+      "tag": "0031_ai_cli_orchestrator",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1784592000000,
+      "tag": "0032_ai_orchestrator_policy",
+      "breakpoints": true
     }
   ]
 }

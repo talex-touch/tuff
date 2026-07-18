@@ -2,10 +2,11 @@ import type {
   TuffIntelligenceActionGraph,
   TuffIntelligenceAgentSession,
   TuffIntelligenceApprovalTicket,
+  TuffIntelligenceStateSnapshot,
   TuffIntelligenceTraceEvent,
   TuffIntelligenceTurn
 } from '@talex-touch/tuff-intelligence'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./agents', () => ({
   agentManager: {
@@ -71,14 +72,18 @@ type TuffIntelligenceRuntimeHarness = {
     sessionId: string,
     listener: (event: TuffIntelligenceTraceEvent) => void
   ) => () => void
-  runAgentGraph: (payload: {
-    sessionId?: string
+  plan: (payload: {
+    sessionId: string
     objective: string
     context?: Record<string, unknown>
     metadata?: Record<string, unknown>
-  }) => Promise<{
-    currentTurn?: TuffIntelligenceTurn
-  } | null>
+  }) => Promise<TuffIntelligenceTurn>
+  execute: (payload: {
+    sessionId: string
+    turnId?: string
+    metadata?: Record<string, unknown>
+  }) => Promise<TuffIntelligenceTurn>
+  getSessionState: (sessionId: string) => Promise<TuffIntelligenceStateSnapshot | null>
 }
 let TuffIntelligenceRuntimeCtor: new () => TuffIntelligenceRuntimeHarness
 
@@ -86,6 +91,10 @@ beforeAll(async () => {
   const runtimeModule = await import('./tuff-intelligence-runtime')
   TuffIntelligenceRuntimeCtor =
     runtimeModule.TuffIntelligenceRuntime as unknown as new () => TuffIntelligenceRuntimeHarness
+})
+
+beforeEach(() => {
+  vi.clearAllMocks()
 })
 
 function createStoredSession(sessionId: string): StoredRuntimeSessionLike {
@@ -109,25 +118,6 @@ function createStoredSession(sessionId: string): StoredRuntimeSessionLike {
     approvals: [],
     toolCallCache: {}
   }
-}
-
-function planCapabilityAction(capabilityId: string, input: Record<string, unknown>): void {
-  intelligenceSdkMocks.invoke.mockImplementation(async (capability: string) => {
-    if (capability === 'text.chat') {
-      return {
-        result: JSON.stringify([
-          {
-            title: 'Invoke capability',
-            type: 'capability',
-            capabilityId,
-            input
-          }
-        ])
-      }
-    }
-
-    return { result: { completed: true } }
-  })
 }
 
 describe('TuffIntelligenceRuntime trace sequence', () => {
@@ -234,66 +224,93 @@ describe('TuffIntelligenceRuntime trace sequence', () => {
 })
 
 describe('TuffIntelligenceRuntime capability caller binding', () => {
-  it('binds a plugin caller and preserves metadata while replacing session and turn identifiers', async () => {
+  it('binds execute metadata from a plugin caller while protecting session and turn identifiers', async () => {
+    intelligenceSdkMocks.invoke.mockResolvedValue({
+      result: { result: 'Plugin capability completed.' }
+    })
     const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
-    const capabilityId = 'runtime.plugin-capability'
-    const input = { messages: [{ role: 'user', content: 'Summarize this plugin task.' }] }
-    planCapabilityAction(capabilityId, input)
+    const sessionId = 'host-plugin-session'
+    const objective = 'Run the plugin capability.'
 
-    const snapshot = await runtime.runAgentGraph({
-      sessionId: 'host-plugin-session',
-      objective: 'Run the plugin capability.',
-      metadata: {
-        caller: 'plugin:third-party-plugin',
-        traceId: 'plugin-capability-trace',
-        operation: 'plugin-capability-action',
-        sessionId: 'payload-session',
-        turnId: 'payload-turn'
-      }
+    const plannedTurn = await runtime.plan({
+      sessionId,
+      objective,
+      metadata: { caller: 'intelligence.planner' }
     })
-    const turnId = snapshot?.currentTurn?.id
-    if (!turnId) {
-      throw new Error('Capability graph did not produce a turn')
-    }
 
-    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith(capabilityId, input, {
-      metadata: {
-        caller: 'plugin:third-party-plugin',
-        traceId: 'plugin-capability-trace',
-        operation: 'plugin-capability-action',
-        sessionId: 'host-plugin-session',
-        turnId
+    await expect(
+      runtime.execute({
+        sessionId,
+        turnId: plannedTurn.id,
+        metadata: {
+          caller: 'plugin:third-party-plugin',
+          traceId: 'plugin-capability-trace',
+          operation: 'plugin-capability-action',
+          sessionId: 'payload-session',
+          turnId: 'payload-turn'
+        }
+      })
+    ).resolves.toMatchObject({ status: 'completed' })
+
+    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith(
+      'agent.run',
+      { task: objective },
+      {
+        metadata: {
+          caller: 'plugin:third-party-plugin',
+          traceId: 'plugin-capability-trace',
+          operation: 'plugin-capability-action',
+          sessionId,
+          turnId: plannedTurn.id
+        }
       }
-    })
+    )
   })
+})
 
-  it('falls back to the host caller for capability actions without caller metadata', async () => {
+describe('TuffIntelligenceRuntime Pi execution plan', () => {
+  it('plans and executes only the agent.run capability action', async () => {
+    intelligenceSdkMocks.invoke.mockResolvedValue({
+      result: { result: 'Release checks completed.' }
+    })
     const runtime = new TuffIntelligenceRuntimeCtor() as TuffIntelligenceRuntimeHarness
-    const capabilityId = 'runtime.host-capability'
-    const input = { messages: [{ role: 'user', content: 'Summarize this host task.' }] }
-    planCapabilityAction(capabilityId, input)
+    const objective = 'Verify release readiness.'
+    const context = { workspace: '/workspace/release' }
 
-    const snapshot = await runtime.runAgentGraph({
-      sessionId: 'host-fallback-session',
-      objective: 'Run the host capability.',
-      metadata: {
-        traceId: 'host-capability-trace',
-        sessionId: 'payload-session',
-        turnId: 'payload-turn'
-      }
+    const plannedTurn = await runtime.plan({
+      sessionId: 'session_pi_execution',
+      objective,
+      context
     })
-    const turnId = snapshot?.currentTurn?.id
-    if (!turnId) {
-      throw new Error('Capability graph did not produce a turn')
-    }
+    const snapshot = await runtime.getSessionState('session_pi_execution')
+    const actions = snapshot?.actionGraph.nodes.filter((node) =>
+      plannedTurn.actionIds.includes(node.id)
+    )
 
-    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith(capabilityId, input, {
-      metadata: {
-        caller: 'intelligence.orchestrator',
-        traceId: 'host-capability-trace',
-        sessionId: 'host-fallback-session',
-        turnId
-      }
+    expect(actions).toHaveLength(1)
+    expect(actions?.[0]).toMatchObject({
+      type: 'capability',
+      capabilityId: 'agent.run',
+      input: { task: objective, context }
     })
+
+    await expect(
+      runtime.execute({
+        sessionId: 'session_pi_execution',
+        turnId: plannedTurn.id
+      })
+    ).resolves.toMatchObject({ status: 'completed' })
+    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledTimes(1)
+    expect(intelligenceSdkMocks.invoke).toHaveBeenCalledWith(
+      'agent.run',
+      { task: objective, context },
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          caller: 'intelligence.orchestrator',
+          sessionId: 'session_pi_execution',
+          turnId: plannedTurn.id
+        })
+      })
+    )
   })
 })

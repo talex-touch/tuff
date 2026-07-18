@@ -17,9 +17,12 @@ interface AutonomousChannelRegistrar {
 }
 
 const runtimeMocks = vi.hoisted(() => ({
-  runAgentGraph: vi.fn(),
   startSession: vi.fn(),
   getSessionState: vi.fn()
+}))
+
+const orchestratorMocks = vi.hoisted(() => ({
+  execute: vi.fn()
 }))
 
 const workflowServiceMocks = vi.hoisted(() => ({
@@ -32,6 +35,10 @@ vi.mock('./tuff-intelligence-runtime', () => ({
 
 vi.mock('./intelligence-workflow-service', () => ({
   intelligenceWorkflowService: workflowServiceMocks
+}))
+
+vi.mock('./ai-cli-orchestrator', () => ({
+  aiCliOrchestrator: orchestratorMocks
 }))
 vi.mock('@talex-touch/utils/transport/events/types', () => ({
   isIntelligenceErrorCode: vi.fn(() => false)
@@ -89,9 +96,9 @@ describe('intelligenceModule autonomous permission boundary', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     runtimeMocks.startSession.mockResolvedValue({ id: 'inert-session' })
-    runtimeMocks.runAgentGraph.mockResolvedValue(undefined)
     runtimeMocks.getSessionState.mockResolvedValue(null)
     workflowServiceMocks.runWorkflow.mockResolvedValue({ id: 'workflow-run-host' })
+    orchestratorMocks.execute.mockResolvedValue({ id: 'orchestrator-run', status: 'completed' })
   })
 
   it('rejects plugin session starts as host-only before agent runtime access', async () => {
@@ -104,7 +111,7 @@ describe('intelligenceModule autonomous permission boundary', () => {
       sessionStart.handler({ autoRunGraph: true, objective: 'run tools' }, pluginContext)
     ).rejects.toThrow('INTELLIGENCE_HOST_ONLY_CAPABILITY')
     expect(runtimeMocks.startSession).not.toHaveBeenCalled()
-    expect(runtimeMocks.runAgentGraph).not.toHaveBeenCalled()
+    expect(orchestratorMocks.execute).not.toHaveBeenCalled()
     expect(runtimeMocks.getSessionState).not.toHaveBeenCalled()
   })
 
@@ -121,7 +128,7 @@ describe('intelligenceModule autonomous permission boundary', () => {
     expect(workflowServiceMocks.runWorkflow).not.toHaveBeenCalled()
   })
 
-  it('preserves the supplied host session metadata object and caller', async () => {
+  it('preserves supplied host caller metadata through Pi auto-run', async () => {
     const { sessionStart } = captureAutonomousHandlers()
     const metadata = Object.freeze({ caller: 'host:corebox', traceId: 'host-session-trace' })
     const session = Object.freeze({
@@ -132,25 +139,27 @@ describe('intelligenceModule autonomous permission boundary', () => {
       autoRunGraph: true,
       maxSteps: 3,
       toolBudget: 6,
-      continueOnError: true,
       reflectNotes: 'retain host session metadata'
     })
 
-    await expect(sessionStart.handler(session, {} as HandlerContext)).resolves.toEqual({
+    await expect(sessionStart.handler(session, {} as HandlerContext)).resolves.toMatchObject({
       id: 'inert-session'
     })
 
     const [receivedSession] = runtimeMocks.startSession.mock.calls[0] ?? []
     expect(receivedSession).toBe(session)
-    const [agentGraphRequest] = runtimeMocks.runAgentGraph.mock.calls[0] ?? []
+    const [orchestratorRequest] = orchestratorMocks.execute.mock.calls[0] ?? []
     if (
-      !agentGraphRequest ||
-      typeof agentGraphRequest !== 'object' ||
-      !('metadata' in agentGraphRequest)
+      !orchestratorRequest ||
+      typeof orchestratorRequest !== 'object' ||
+      !('metadata' in orchestratorRequest)
     ) {
-      throw new Error('Agent graph request must include metadata')
+      throw new Error('Pi auto-run request must include metadata')
     }
-    expect(agentGraphRequest.metadata).toBe(metadata)
+    expect(orchestratorRequest.metadata).toMatchObject({
+      caller: 'host:corebox',
+      traceId: 'host-session-trace'
+    })
   })
 
   it('preserves the supplied host workflow metadata object and caller', async () => {

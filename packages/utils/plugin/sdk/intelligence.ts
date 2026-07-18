@@ -1,14 +1,17 @@
-import type { IntelligenceSdk } from '../../transport/sdk/domains/intelligence'
-import type { PluginChannelClient } from './channel-client'
-import { createPluginTuffTransport } from '../../transport'
-import { createIntelligenceSdk } from '../../transport/sdk/domains/intelligence'
-import { ensureRendererChannel } from './channel'
-import { tryGetPluginSdkApi } from './plugin-info'
+import type { IntelligenceSdk } from "../../transport/sdk/domains/intelligence";
+import type { PluginChannelClient } from "./channel-client";
+import { createPluginTuffTransport } from "../../transport";
+import { createIntelligenceSdk } from "../../transport/sdk/domains/intelligence";
+import { ensureRendererChannel } from "./channel";
+import { tryGetPluginSdkApi } from "./plugin-info";
 
 type PluginChannelWithMain = PluginChannelClient & {
-  sendToMain?: (eventName: string, payload?: unknown) => Promise<unknown>
-  onMain?: (eventName: string, handler: (event: unknown) => unknown) => () => void
-}
+  sendToMain?: (eventName: string, payload?: unknown) => Promise<unknown>;
+  onMain?: (
+    eventName: string,
+    handler: (event: unknown) => unknown,
+  ) => () => void;
+};
 
 type HostOnlyIntelligenceMethod
   = | 'contextPrepareTurn'
@@ -36,6 +39,23 @@ type HostOnlyIntelligenceMethod
     | 'getMonthStats'
     | 'getUsageStats'
     | 'getLocalEnvironment'
+    | 'orchestratorGetSnapshot'
+    | 'orchestratorPreviewImport'
+    | 'orchestratorApplyImport'
+    | 'orchestratorSetImportedItemActive'
+    | 'orchestratorCloneImportedItem'
+    | 'orchestratorDeleteImportedItem'
+    | 'orchestratorListProfiles'
+    | 'orchestratorSaveProfile'
+    | 'orchestratorExecute'
+    | 'orchestratorApprove'
+    | 'orchestratorCancel'
+    | 'orchestratorListRuns'
+    | 'orchestratorListAutomations'
+    | 'orchestratorSaveAutomation'
+    | 'orchestratorDeleteAutomation'
+    | 'orchestratorRunAutomation'
+    | 'orchestratorApproveAutomation'
     | 'agentSessionStart'
     | 'agentSessionHeartbeat'
     | 'agentSessionPause'
@@ -88,6 +108,23 @@ const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> =
   getMonthStats: true,
   getUsageStats: true,
   getLocalEnvironment: true,
+  orchestratorGetSnapshot: true,
+  orchestratorPreviewImport: true,
+  orchestratorApplyImport: true,
+  orchestratorSetImportedItemActive: true,
+  orchestratorCloneImportedItem: true,
+  orchestratorDeleteImportedItem: true,
+  orchestratorListProfiles: true,
+  orchestratorSaveProfile: true,
+  orchestratorExecute: true,
+  orchestratorApprove: true,
+  orchestratorCancel: true,
+  orchestratorListRuns: true,
+  orchestratorListAutomations: true,
+  orchestratorSaveAutomation: true,
+  orchestratorDeleteAutomation: true,
+  orchestratorRunAutomation: true,
+  orchestratorApproveAutomation: true,
   agentSessionStart: true,
   agentSessionHeartbeat: true,
   agentSessionPause: true,
@@ -116,56 +153,65 @@ const HOST_ONLY_INTELLIGENCE_METHODS: Record<HostOnlyIntelligenceMethod, true> =
 }
 
 function isHostOnlyMethod(property: PropertyKey): boolean {
-  return Object.prototype.hasOwnProperty.call(HOST_ONLY_INTELLIGENCE_METHODS, property)
+  return Object.prototype.hasOwnProperty.call(
+    HOST_ONLY_INTELLIGENCE_METHODS,
+    property,
+  );
 }
 
-export type IntelligenceSDK = Omit<IntelligenceSdk, HostOnlyIntelligenceMethod>
+export type IntelligenceSDK = Omit<IntelligenceSdk, HostOnlyIntelligenceMethod>;
 
 function withSdkApiPayload(payload: unknown): unknown {
-  const sdkapi = tryGetPluginSdkApi()
-  if (typeof sdkapi !== 'number' || !payload || typeof payload !== 'object') {
-    return payload
+  const sdkapi = tryGetPluginSdkApi();
+  if (typeof sdkapi !== "number" || !payload || typeof payload !== "object") {
+    return payload;
   }
 
   return {
     ...(payload as Record<string, unknown>),
     _sdkapi: sdkapi,
-  }
+  };
 }
 
-function createSdkApiChannel(channel: PluginChannelClient): PluginChannelWithMain {
-  const channelWithMain = channel as PluginChannelWithMain
+function createSdkApiChannel(
+  channel: PluginChannelClient,
+): PluginChannelWithMain {
+  const channelWithMain = channel as PluginChannelWithMain;
   const sdkApiChannel: PluginChannelWithMain = {
-    regChannel: (eventName, callback) => channel.regChannel(eventName, callback),
-    unRegChannel: (eventName, callback) => channel.unRegChannel(eventName, callback),
-    send: (eventName, payload) => channel.send(eventName, withSdkApiPayload(payload)),
-  }
-  if (typeof channelWithMain.sendToMain === 'function') {
-    const sendToMain = channelWithMain.sendToMain.bind(channelWithMain)
-    sdkApiChannel.sendToMain = (eventName, payload) => sendToMain(eventName, withSdkApiPayload(payload))
+    regChannel: (eventName, callback) =>
+      channel.regChannel(eventName, callback),
+    unRegChannel: (eventName, callback) =>
+      channel.unRegChannel(eventName, callback),
+    send: (eventName, payload) =>
+      channel.send(eventName, withSdkApiPayload(payload)),
+  };
+  if (typeof channelWithMain.sendToMain === "function") {
+    const sendToMain = channelWithMain.sendToMain.bind(channelWithMain);
+    sdkApiChannel.sendToMain = (eventName, payload) =>
+      sendToMain(eventName, withSdkApiPayload(payload));
   }
 
-  if (typeof channelWithMain.onMain === 'function') {
-    const onMain = channelWithMain.onMain.bind(channelWithMain)
-    sdkApiChannel.onMain = (eventName, handler) => onMain(eventName, handler)
+  if (typeof channelWithMain.onMain === "function") {
+    const onMain = channelWithMain.onMain.bind(channelWithMain);
+    sdkApiChannel.onMain = (eventName, handler) => onMain(eventName, handler);
   }
 
-  return sdkApiChannel
+  return sdkApiChannel;
 }
 
 function createPluginIntelligenceClient(): IntelligenceSdk {
-  const channel = createSdkApiChannel(ensureRendererChannel())
-  const transport = createPluginTuffTransport(channel)
-  return createIntelligenceSdk(transport)
+  const channel = createSdkApiChannel(ensureRendererChannel());
+  const transport = createPluginTuffTransport(channel);
+  return createIntelligenceSdk(transport);
 }
 
-let cachedClient: IntelligenceSdk | null = null
+let cachedClient: IntelligenceSdk | null = null;
 
 function getClient(): IntelligenceSdk {
   if (!cachedClient) {
-    cachedClient = createPluginIntelligenceClient()
+    cachedClient = createPluginIntelligenceClient();
   }
-  return cachedClient
+  return cachedClient;
 }
 
 export function createPluginIntelligenceFacade(
@@ -174,30 +220,36 @@ export function createPluginIntelligenceFacade(
   return new Proxy({} as IntelligenceSDK, {
     get(_target, property, receiver) {
       if (isHostOnlyMethod(property)) {
-        return undefined
+        return undefined;
       }
-      return Reflect.get(resolveClient(), property, receiver)
+      return Reflect.get(resolveClient(), property, receiver);
     },
     has(_target, property) {
-      return !isHostOnlyMethod(property) && property in resolveClient()
+      return !isHostOnlyMethod(property) && property in resolveClient();
     },
     ownKeys() {
-      return Reflect.ownKeys(resolveClient()).filter(property => !isHostOnlyMethod(property))
+      return Reflect.ownKeys(resolveClient()).filter(
+        (property) => !isHostOnlyMethod(property),
+      );
     },
     getOwnPropertyDescriptor(_target, property) {
       if (isHostOnlyMethod(property)) {
-        return undefined
+        return undefined;
       }
-      const descriptor = Reflect.getOwnPropertyDescriptor(resolveClient(), property)
+      const descriptor = Reflect.getOwnPropertyDescriptor(
+        resolveClient(),
+        property,
+      );
       if (!descriptor) {
-        return undefined
+        return undefined;
       }
       return {
         ...descriptor,
         configurable: true,
-      }
+      };
     },
-  })
+  });
 }
 
-export const intelligence: IntelligenceSDK = createPluginIntelligenceFacade(getClient)
+export const intelligence: IntelligenceSDK =
+  createPluginIntelligenceFacade(getClient);

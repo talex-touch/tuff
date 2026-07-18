@@ -229,7 +229,7 @@ OpenAI-compatible provider 已实现 `audio.tts`、`audio.stt`、`audio.transcri
 
 `getCapabilityStatus` 与 `getProviderModelOptions` 共享运行时方法检查；后者仅返回具备模型且真正实现该能力的候选供应商，并在 capability binding 声明模型时仅展示该 binding 的模型。未声明 binding 时，内置 OpenAI-compatible provider 使用能力专属默认模型，而不是把全局聊天模型暴露给图片、语音或 embedding 入口：OpenAI 图像使用 `gpt-image-1`，STT/转录使用 `whisper-1` / `gpt-4o-transcribe`，TTS 使用 `tts-1` / `tts-1-hd`；SiliconFlow 图像生成使用 `Kwai-Kolors/Kolors`，STT/转录使用 `FunAudioLLM/SenseVoiceSmall`，TTS 使用 `fnlp/MOSS-TTSD-v0.5`，embedding/search fallback 使用 `netease-youdao/bce-embedding-base_v1` / `BAAI/bge-m3`。自定义 OpenAI-compatible provider 如果在全局 `models` 混放多类模型，必须通过 capability binding 明确每个能力可选模型。任何可执行入口都必须仅展示和选择 `available: true` 的选项。`workflow.execute` 和 `agent.run` 由内部编排运行：声明 `text.chat` 的 provider 即可作为其运行时供应商，无需重复声明这两个内部能力；未配置已启用的专用 binding 时，两者继承 `text.chat` 的 provider 与模型 binding。
 
-DeepAgent/Workflow 的 token signal 必须来自 provider：OpenAI Responses `usage` 与 LangChain `AIMessage.usage_metadata` 会归一为 `promptTokens/completionTokens/totalTokens`；Agent 结果、prompt/agent step output 与 workflow 顶层 aggregate 逐层保留，model step usage 同样纳入总计。Legacy `AgentExecutor` 的 execute/chat/plan LLM fallback 也必须把 provider usage 回传到 `AgentResult`，并以 channel 绑定的 caller 进入 SDK quota/audit。只有 provider/step 均未返回 usage 时才显式回退为全零，不得把“采集缺失”误写成真实零成本。
+Tuff Pi 的 token signal 必须来自 host-owned provider：Utility Process 只回传 `promptTokens/completionTokens/totalTokens/cost`，Orchestrator run、Agent 结果与 Workflow 顶层 aggregate 逐层保留。只有 provider/step 均未返回 usage 时才显式回退为全零，不得把“采集缺失”误写成真实零成本。
 
 ## 配额管理
 

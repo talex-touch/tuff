@@ -16,6 +16,12 @@ const logDebug = (...args: unknown[]) => agentRegistryLog.debug(formatLogArgs(ar
 /**
  * Agent implementation interface
  */
+export interface AgentRegistryStats {
+  total: number
+  enabled: number
+  byCategory: Record<string, number>
+}
+
 export interface AgentImpl {
   /**
    * Execute an agent task
@@ -204,7 +210,7 @@ export class AgentRegistry {
   /**
    * Get registry statistics
    */
-  getStats(): { total: number; enabled: number; byCategory: Record<string, number> } {
+  getStats(): AgentRegistryStats {
     const all = this.getAllDescriptors()
     const byCategory: Record<string, number> = {}
 
