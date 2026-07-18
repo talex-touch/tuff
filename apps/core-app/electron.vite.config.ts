@@ -134,7 +134,9 @@ export default defineConfig({
         exclude: [
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败
-          'mathjs' // 打包进 bundle 以启用 tree-shaking (mathjs/number 剔除 matrix/calculus)
+          'mathjs', // 打包进 bundle 以启用 tree-shaking (mathjs/number 剔除 matrix/calculus)
+          '@earendil-works/pi-agent-core', // Pi 是 ESM-only，Utility Process worker 必须内联
+          '@earendil-works/pi-ai' // Pi provider bridge 与 agent-core 一并内联
         ]
       })
     ],
@@ -167,7 +169,8 @@ export default defineConfig({
           'icon-worker': 'src/main/modules/box-tool/addon/files/workers/icon-worker.ts',
           'thumbnail-worker': 'src/main/modules/box-tool/addon/files/workers/thumbnail-worker.ts',
           'search-index-worker':
-            'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts'
+            'src/main/modules/box-tool/search-engine/workers/search-index-worker.ts',
+          'pi-agent-runtime-worker': 'src/main/modules/ai/pi-agent-runtime-worker.ts'
         },
         output: {
           entryFileNames: (chunkInfo) => {
@@ -185,6 +188,8 @@ export default defineConfig({
               return 'thumbnail-worker.js'
             } else if (chunkInfo.name === 'search-index-worker') {
               return 'search-index-worker.js'
+            } else if (chunkInfo.name === 'pi-agent-runtime-worker') {
+              return 'pi-agent-runtime-worker.js'
             } else if (chunkInfo.name === 'index') {
               return 'index.js'
             }

@@ -1,8 +1,7 @@
 /**
  * Agent Manager
  *
- * Central manager for the Intelligence Agents system.
- * Coordinates registry, scheduler, executor, and tool management.
+ * Central facade for Agent profiles, tools, and the Pi-backed task runtime.
  */
 
 import type {
@@ -15,16 +14,12 @@ import type {
   AgentTool,
   TaskProgress
 } from '@talex-touch/utils'
-import type { AgentExecutor, IntelligenceSDKInterface } from './agent-executor'
-import type { AgentImpl, AgentRegistry } from './agent-registry'
-import type { AgentScheduler } from './agent-scheduler'
-import type { ToolExecutorFn, ToolRegistry } from './tool-registry'
+import type { AgentImpl, AgentRegistry, AgentRegistryStats } from './agent-registry'
+import type { ToolExecutorFn, ToolRegistry, ToolRegistryStats } from './tool-registry'
+import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { createLogger } from '../../../utils/logger'
-import { agentExecutor } from './agent-executor'
 import { agentRegistry } from './agent-registry'
-import { agentScheduler } from './agent-scheduler'
-import { agentContextManager } from './memory'
 import { toolRegistry } from './tool-registry'
 
 const agentManagerLog = createLogger('Intelligence').child('AgentManager')
@@ -48,13 +43,19 @@ function isAgentMessage(value: unknown): value is AgentMessage {
   )
 }
 
-/**
- * Agent Manager configuration
- */
-export interface AgentManagerConfig {
-  maxConcurrentTasks?: number
-  defaultTimeout?: number
-  enableTracing?: boolean
+export interface AgentRuntimeStats {
+  queueLength: 0
+  activeTasks: number
+  completedTasks: number
+  failedTasks: number
+  averageWaitTime: 0
+  averageExecutionTime: number
+}
+
+export interface AgentManagerStats {
+  agents: AgentRegistryStats
+  runtime: AgentRuntimeStats
+  tools: ToolRegistryStats
 }
 
 /**
@@ -62,75 +63,47 @@ export interface AgentManagerConfig {
  */
 export class AgentManager extends EventEmitter {
   private registry: AgentRegistry
-  private scheduler: AgentScheduler
-  private executor: AgentExecutor
   private tools: ToolRegistry
   private initialized = false
+  private taskExecutor: ((task: AgentTask) => Promise<AgentResult>) | null = null
+  private taskCanceller: ((taskId: string) => boolean) | null = null
+  private readonly activeTaskIds = new Set<string>()
+  private completedTaskCount = 0
+  private failedTaskCount = 0
+  private totalExecutionTime = 0
 
-  constructor(config: AgentManagerConfig = {}) {
-    super()
+  setTaskRuntime(
+    executor: (task: AgentTask) => Promise<AgentResult>,
+    cancel: (taskId: string) => boolean
+  ): void {
+    this.taskExecutor = executor
+    this.taskCanceller = cancel
+  }
 
-    // Use singleton instances
-    this.registry = agentRegistry
-    this.scheduler = agentScheduler
-    this.executor = agentExecutor
-    this.tools = toolRegistry
-
-    // Configure scheduler
-    if (config.maxConcurrentTasks) {
-      this.scheduler.adjustConcurrency(config.maxConcurrentTasks)
+  private executeWithRuntime(task: AgentTask): Promise<AgentResult> {
+    if (!this.taskExecutor) {
+      throw new Error('Agent task runtime is not configured')
     }
+    return this.taskExecutor(task)
+  }
 
-    // Set executor dependencies
-    this.executor.setToolRegistry(this.tools)
-    this.executor.setContextManager(agentContextManager)
-
-    // Forward scheduler events
-    this.setupEventForwarding()
+  constructor() {
+    super()
+    this.registry = agentRegistry
+    this.tools = toolRegistry
   }
 
   /**
    * Initialize the agent manager
    */
-  async init(intelligenceSDK: IntelligenceSDKInterface): Promise<void> {
+  async init(_legacyIntelligenceSdk?: unknown): Promise<void> {
     if (this.initialized) {
       logWarn('AgentManager already initialized')
       return
     }
 
-    // Set IntelligenceSDK
-    this.executor.setIntelligenceSDK(intelligenceSDK)
-
-    // Set scheduler executor
-    this.scheduler.setExecutor((task) => this.executor.executeTask(task))
-
     this.initialized = true
     logInfo('AgentManager initialized')
-  }
-
-  /**
-   * Setup event forwarding from scheduler
-   */
-  private setupEventForwarding(): void {
-    this.scheduler.on('task:started', (data) => {
-      this.emit('task:started', data)
-    })
-
-    this.scheduler.on('task:progress', (data) => {
-      this.emit('task:progress', data)
-    })
-
-    this.scheduler.on('task:completed', (data) => {
-      this.emit('task:completed', data)
-    })
-
-    this.scheduler.on('task:failed', (data) => {
-      this.emit('task:failed', data)
-    })
-
-    this.scheduler.on('task:cancelled', (data) => {
-      this.emit('task:cancelled', data)
-    })
   }
 
   // ============================================================================
@@ -182,20 +155,39 @@ export class AgentManager extends EventEmitter {
   // ============================================================================
 
   /**
-   * Execute a task (queued execution)
+   * Submit a task directly to the Pi-backed runtime.
    */
   async executeTask(task: AgentTask): Promise<string> {
-    if (!this.initialized) {
-      throw new Error('AgentManager not initialized')
-    }
+    if (!this.initialized) throw new Error('AgentManager not initialized')
+    if (!this.registry.hasAgent(task.agentId)) throw new Error(`Agent ${task.agentId} not found`)
 
-    // Validate agent exists
-    if (!this.registry.hasAgent(task.agentId)) {
-      throw new Error(`Agent ${task.agentId} not found`)
-    }
-
-    // Enqueue task
-    const taskId = this.scheduler.enqueue(task)
+    const taskId = task.id || `task_${randomUUID()}`
+    const runtimeTask: AgentTask = { ...task, id: taskId }
+    const startedAt = Date.now()
+    this.activeTaskIds.add(taskId)
+    this.emit('task:started', { taskId, agentId: task.agentId })
+    void Promise.resolve()
+      .then(() => this.executeWithRuntime(runtimeTask))
+      .then((result) => {
+        if (result.success) {
+          this.completedTaskCount += 1
+          this.emit('task:completed', { taskId, result })
+        } else {
+          this.failedTaskCount += 1
+          this.emit('task:failed', { taskId, error: result.error })
+        }
+      })
+      .catch((error) => {
+        this.failedTaskCount += 1
+        this.emit('task:failed', {
+          taskId,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      })
+      .finally(() => {
+        this.totalExecutionTime += Date.now() - startedAt
+        this.activeTaskIds.delete(taskId)
+      })
     return taskId
   }
 
@@ -207,7 +199,7 @@ export class AgentManager extends EventEmitter {
       throw new Error('AgentManager not initialized')
     }
 
-    return this.executor.executeTask(task)
+    return this.executeWithRuntime(task)
   }
 
   /**
@@ -223,7 +215,7 @@ export class AgentManager extends EventEmitter {
       type: 'plan'
     }
 
-    const result = await this.executor.executeTask(planTask)
+    const result = await this.executeWithRuntime(planTask)
 
     if (!result.success) {
       throw new Error(result.error || 'Plan generation failed')
@@ -240,30 +232,20 @@ export class AgentManager extends EventEmitter {
       throw new Error('AgentManager not initialized')
     }
 
-    const agent = this.registry.getAgent(agentId)
-    if (!agent) {
+    if (!this.registry.getAgent(agentId)) {
       throw new Error(`Agent ${agentId} not found`)
     }
 
-    if (agent.impl.chat) {
-      const context = {
-        taskId: `chat_${Date.now()}`,
-        sessionId: undefined
-      }
-      yield* agent.impl.chat(messages, context)
-    } else {
-      // Fallback to execute
-      const agentMessages = messages.filter(isAgentMessage)
-      const result = await this.executeTaskImmediate({
-        agentId,
-        type: 'chat',
-        input: messages,
-        context: agentMessages.length > 0 ? { messages: agentMessages } : undefined
-      })
+    const agentMessages = messages.filter(isAgentMessage)
+    const result = await this.executeTaskImmediate({
+      agentId,
+      type: 'chat',
+      input: messages,
+      context: agentMessages.length > 0 ? { messages: agentMessages } : undefined
+    })
 
-      if (result.success && result.output) {
-        yield String(result.output)
-      }
+    if (result.success && result.output) {
+      yield String(result.output)
     }
   }
 
@@ -275,27 +257,26 @@ export class AgentManager extends EventEmitter {
    * Get task status
    */
   getTaskStatus(taskId: string): AgentStatus {
-    return this.scheduler.getTaskStatus(taskId)
+    return (this.activeTaskIds.has(taskId) ? 'running' : 'completed') as AgentStatus
   }
 
   /**
    * Cancel a task
    */
   async cancelTask(taskId: string): Promise<boolean> {
-    // Try to cancel from queue first
-    if (this.scheduler.cancelQueued(taskId)) {
-      return true
+    const cancelled = this.taskCanceller?.(taskId) ?? false
+    if (cancelled) {
+      this.activeTaskIds.delete(taskId)
+      this.emit('task:cancelled', { taskId })
     }
-
-    // Otherwise try to abort running task
-    return this.executor.cancelTask(taskId)
+    return cancelled
   }
 
   /**
    * Update task priority
    */
-  updateTaskPriority(taskId: string, priority: number): boolean {
-    return this.scheduler.updatePriority(taskId, priority)
+  updateTaskPriority(_taskId: string, _priority: number): boolean {
+    return false
   }
 
   // ============================================================================
@@ -342,14 +323,18 @@ export class AgentManager extends EventEmitter {
   /**
    * Get manager statistics
    */
-  getStats(): {
-    agents: ReturnType<AgentRegistry['getStats']>
-    scheduler: ReturnType<AgentScheduler['getStats']>
-    tools: ReturnType<ToolRegistry['getStats']>
-  } {
+  getStats(): AgentManagerStats {
+    const completed = this.completedTaskCount + this.failedTaskCount
     return {
       agents: this.registry.getStats(),
-      scheduler: this.scheduler.getStats(),
+      runtime: {
+        queueLength: 0,
+        activeTasks: this.activeTaskIds.size,
+        completedTasks: this.completedTaskCount,
+        failedTasks: this.failedTaskCount,
+        averageWaitTime: 0,
+        averageExecutionTime: completed > 0 ? this.totalExecutionTime / completed : 0
+      },
       tools: this.tools.getStats()
     }
   }
@@ -358,7 +343,7 @@ export class AgentManager extends EventEmitter {
    * Report progress for a task
    */
   reportProgress(progress: TaskProgress): void {
-    this.scheduler.reportProgress(progress)
+    this.emit('task:progress', progress)
   }
 
   /**
@@ -374,12 +359,13 @@ export class AgentManager extends EventEmitter {
   async shutdown(): Promise<void> {
     logInfo('Shutting down AgentManager')
 
-    // Clear scheduler queue
-    this.scheduler.clearQueue()
-
+    for (const taskId of this.activeTaskIds) this.taskCanceller?.(taskId)
+    this.activeTaskIds.clear()
     // Clear registries
     this.registry.clear()
     this.tools.clear()
+    this.taskExecutor = null
+    this.taskCanceller = null
 
     this.initialized = false
     logInfo('AgentManager shutdown complete')
