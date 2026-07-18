@@ -94,6 +94,8 @@ Options:
                                  Require verification.recommendedCommand --input to match the current manifest path.
   --requireSearchTrace           Require search trace stats path and verifier command.
   --requireClipboardStress       Require clipboard stress summary path and verifier command.
+  --requireEverythingSearchManualChecks
+                                 Require normal, @file, structured-filter, and SDK/CLI/unavailable Everything evidence.
   --requireCommonAppLaunchDetails
                                  Require each common app target to verify search/name/icon/launch/CoreBox hide.
   --requireCopiedAppPathManualChecks
@@ -200,6 +202,10 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireClipboardStress') {
       options.requireClipboardStress = true
+      continue
+    }
+    if (arg === '--requireEverythingSearchManualChecks') {
+      options.requireEverythingSearchManualChecks = true
       continue
     }
     if (arg === '--requireCommonAppLaunchDetails') {
@@ -360,6 +366,9 @@ function collectEvidencePaths(manifest: WindowsAcceptanceManifest): string[] {
     if (check.evidencePath) {
       paths.push(check.evidencePath)
     }
+  }
+  if (manifest.manualChecks?.everythingSearch?.evidencePath) {
+    paths.push(manifest.manualChecks.everythingSearch.evidencePath)
   }
   if (manifest.manualChecks?.copiedAppPath?.evidencePath) {
     paths.push(manifest.manualChecks.copiedAppPath.evidencePath)
@@ -596,6 +605,7 @@ async function findFailedEvidenceGates(
   const schemaMismatches: EvidenceSchemaMismatch[] = []
   const coverage = new Map<string, Set<WindowsAcceptanceEvidenceSchemaKey>>()
   const scanned = new Set<string>()
+  const everythingBackends = new Set<string>()
 
   for (const entry of evidenceEntries) {
     const scanKey = `${entry.caseId}:${entry.path}`
@@ -605,6 +615,18 @@ async function findFailedEvidenceGates(
 
     try {
       const evidence = await readEvidenceJson(entry.path, baseDir)
+      if (
+        entry.caseId === 'windows-everything-file-search' &&
+        typeof evidence === 'object' &&
+        evidence !== null &&
+        'status' in evidence &&
+        typeof evidence.status === 'object' &&
+        evidence.status !== null &&
+        'backend' in evidence.status &&
+        typeof evidence.status.backend === 'string'
+      ) {
+        everythingBackends.add(evidence.status.backend)
+      }
       const result = validateWindowsAcceptanceCaseEvidence(entry.caseId, evidence)
       if (result.gateFailures.length > 0) {
         appendGateFailure(failedGates, entry.path, result.gateFailures)
@@ -623,6 +645,19 @@ async function findFailedEvidenceGates(
       ])
       schemaMismatches.push({ caseId: entry.caseId, path: entry.path })
     }
+  }
+
+  const requiredEverythingBackends = ['sdk-napi', 'cli', 'unavailable']
+  const missingEverythingBackends = requiredEverythingBackends.filter(
+    (backend) => !everythingBackends.has(backend)
+  )
+  if (
+    manifest.cases.some((testCase) => testCase.caseId === 'windows-everything-file-search') &&
+    missingEverythingBackends.length > 0
+  ) {
+    appendGateFailure(failedGates, 'windows-everything-backend-matrix', [
+      `Everything backend evidence missing: ${missingEverythingBackends.join(', ')}`
+    ])
   }
 
   return {

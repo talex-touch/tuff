@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const {
   getTuffTransportMainMock,
   getCoreBoxWindowMock,
+  coreBoxWindowManagerShowMock,
   loggerWarnMock,
   touchWindowInstances,
   accessibilityClientMock,
@@ -19,6 +20,7 @@ const {
     sendToWindow: vi.fn()
   })),
   getCoreBoxWindowMock: vi.fn(() => null),
+  coreBoxWindowManagerShowMock: vi.fn(),
   loggerWarnMock: vi.fn(),
   touchWindowInstances: [] as Array<{
     window: {
@@ -206,7 +208,8 @@ vi.mock('../storage', () => ({
 }))
 
 vi.mock('../box-tool/core-box/window', () => ({
-  getCoreBoxWindow: getCoreBoxWindowMock
+  getCoreBoxWindow: getCoreBoxWindowMock,
+  windowManager: { show: coreBoxWindowManagerShowMock }
 }))
 
 vi.mock('../../core/eventbus/touch-event', async (importOriginal) => {
@@ -237,6 +240,7 @@ vi.mock('../../utils/logger', () => ({
 }))
 
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { OmniPanelModule } from './index'
 import { getMainConfig } from '../storage'
 
@@ -864,6 +868,37 @@ describe('OmniPanel execute failure paths', () => {
   })
 })
 
+describe('OmniPanel CoreBox transfer', () => {
+  it('shows CoreBox and broadcasts only a non-empty typed query', async () => {
+    getCoreBoxWindowMock.mockReturnValue({
+      window: { id: 77, isDestroyed: () => false }
+    } as never)
+    const transport = {
+      broadcastToWindow:
+        vi.fn<
+          (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) => void
+        >()
+    }
+    const module = new OmniPanelModule() as unknown as {
+      transport: typeof transport
+      executeCoreBoxTransfer: (contextText: string) => Promise<{ success: boolean; code?: string }>
+    }
+    module.transport = transport
+
+    const textResult = await module.executeCoreBoxTransfer('search query')
+    const blankResult = await module.executeCoreBoxTransfer('   ')
+
+    expect(textResult).toEqual({ success: true })
+    expect(blankResult).toEqual({ success: true })
+    expect(coreBoxWindowManagerShowMock).toHaveBeenCalledTimes(2)
+    expect(coreBoxWindowManagerShowMock).toHaveBeenCalledWith(true)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
+    expect(transport.broadcastToWindow).toHaveBeenCalledWith(77, CoreBoxEvents.input.setQuery, {
+      value: 'search query'
+    })
+  })
+})
+
 describe('OmniPanel shortcut and input-hook guards', () => {
   it('opens CoreBox Context Actions immediately when shortcut key map is unavailable', () => {
     const module = new OmniPanelModule() as unknown as {
@@ -887,17 +922,17 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     expect(openContextActions).toHaveBeenCalledWith('shortcut')
   })
 
-  it('forwards selected text to CoreBox without reading a clipboard image', async () => {
+  it('forwards selected text to CoreBox after snapshotting the clipboard image', async () => {
     const { clipboard } = await import('electron')
     getCoreBoxWindowMock.mockReturnValueOnce({
       window: { id: 77, isDestroyed: () => false }
     } as never)
 
     const transport = {
-      sendToWindow: vi.fn(
-        async (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) =>
-          undefined
-      )
+      broadcastToWindow:
+        vi.fn<
+          (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) => void
+        >()
     }
     const module = new OmniPanelModule() as unknown as {
       transport: typeof transport
@@ -917,11 +952,11 @@ describe('OmniPanel shortcut and input-hook guards', () => {
 
     await module.openCoreBoxContextActions('shortcut')
 
-    const contextCall = transport.sendToWindow.mock.calls.find(
-      ([, event]) =>
-        typeof (event as { toEventName?: () => string }).toEventName === 'function' &&
-        (event as { toEventName: () => string }).toEventName().includes('context-actions')
-    )
+    expect(coreBoxWindowManagerShowMock).toHaveBeenCalledWith(true)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
+    const contextCall = transport.broadcastToWindow.mock.calls[0]
+    expect(contextCall?.[0]).toBe(77)
+    expect(contextCall?.[1]).toBe(CoreBoxEvents.contextActions.open)
     expect(contextCall?.[2]).toMatchObject({
       input: {
         type: 'text',
@@ -936,7 +971,7 @@ describe('OmniPanel shortcut and input-hook guards', () => {
         available: true
       }
     })
-    expect(clipboard.readImage).not.toHaveBeenCalled()
+    expect(clipboard.readImage).toHaveBeenCalledTimes(1)
   })
 
   it('forwards clipboard image context when no selected text is captured', async () => {
@@ -950,10 +985,10 @@ describe('OmniPanel shortcut and input-hook guards', () => {
     } as never)
 
     const transport = {
-      sendToWindow: vi.fn(
-        async (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) =>
-          undefined
-      )
+      broadcastToWindow:
+        vi.fn<
+          (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) => void
+        >()
     }
     const module = new OmniPanelModule() as unknown as {
       transport: typeof transport
@@ -977,11 +1012,11 @@ describe('OmniPanel shortcut and input-hook guards', () => {
 
     await module.openCoreBoxContextActions('shortcut')
 
-    const contextCall = transport.sendToWindow.mock.calls.find(
-      ([, event]) =>
-        typeof (event as { toEventName?: () => string }).toEventName === 'function' &&
-        (event as { toEventName: () => string }).toEventName().includes('context-actions')
-    )
+    expect(coreBoxWindowManagerShowMock).toHaveBeenCalledWith(true)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
+    const contextCall = transport.broadcastToWindow.mock.calls[0]
+    expect(contextCall?.[0]).toBe(77)
+    expect(contextCall?.[1]).toBe(CoreBoxEvents.contextActions.open)
     expect(contextCall?.[2]).toMatchObject({
       input: {
         type: 'image',
@@ -995,6 +1030,69 @@ describe('OmniPanel shortcut and input-hook guards', () => {
         inputType: 'image',
         source: 'clipboard-image',
         available: true
+      }
+    })
+  })
+  it('forwards unavailable selected-text context when no selection or image is captured', async () => {
+    const { clipboard } = await import('electron')
+    vi.mocked(clipboard.readImage).mockReturnValueOnce({
+      isEmpty: () => true,
+      toPNG: () => Buffer.from('')
+    } as never)
+    getCoreBoxWindowMock.mockReturnValueOnce({
+      window: { id: 77, isDestroyed: () => false }
+    } as never)
+
+    const transport = {
+      broadcastToWindow:
+        vi.fn<
+          (_windowId: number, _event: { toEventName: () => string }, _payload?: unknown) => void
+        >()
+    }
+    const module = new OmniPanelModule() as unknown as {
+      transport: typeof transport
+      captureSelectionText: () => Promise<{
+        text: string
+        supportLevel: 'best_effort'
+        issueCode: 'empty'
+        issueMessage: string
+      }>
+      hide: () => void
+      openCoreBoxContextActions: (source: 'shortcut') => Promise<void>
+    }
+    module.transport = transport
+    module.captureSelectionText = vi.fn(async () => ({
+      text: '',
+      supportLevel: 'best_effort' as const,
+      issueCode: 'empty' as const,
+      issueMessage: 'No selected text'
+    }))
+    module.hide = vi.fn()
+
+    await module.openCoreBoxContextActions('shortcut')
+
+    expect(coreBoxWindowManagerShowMock).toHaveBeenCalledWith(true)
+    expect(transport.broadcastToWindow).toHaveBeenCalledTimes(1)
+    const contextCall = transport.broadcastToWindow.mock.calls[0]
+    expect(contextCall?.[0]).toBe(77)
+    expect(contextCall?.[1]).toBe(CoreBoxEvents.contextActions.open)
+    expect(contextCall?.[2]).toMatchObject({
+      input: {
+        type: 'text',
+        source: 'selected-text',
+        content: '',
+        available: false,
+        diagnostic: {
+          supportLevel: 'best_effort',
+          issueCode: 'empty',
+          issueMessage: 'No selected text'
+        }
+      },
+      context: {
+        mode: 'context-actions',
+        inputType: 'text',
+        source: 'selected-text',
+        available: false
       }
     })
   })

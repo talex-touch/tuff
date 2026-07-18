@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { EverythingDiagnosticEvidencePayload } from './everything-diagnostic-verifier'
-import type { EverythingStatusResponse } from '../../../shared/events/everything'
+import type {
+  EverythingPerformanceSummary,
+  EverythingStatusResponse
+} from '../../../shared/events/everything'
 import {
   evaluateEverythingDiagnosticEvidence,
   verifyEverythingDiagnosticEvidence
@@ -65,6 +68,43 @@ function buildEvidence(
     },
     ...overrides
   }
+}
+
+function buildPerformanceSummary(
+  overrides: Partial<EverythingPerformanceSummary> = {}
+): EverythingPerformanceSummary {
+  return {
+    sampleCount: 200,
+    durationSampleCount: 200,
+    p50Ms: 80,
+    p95Ms: 250,
+    maxMs: 350,
+    successCount: 200,
+    timeoutCount: 0,
+    errorCount: 0,
+    abortedCount: 0,
+    sdkCount: 195,
+    cliCount: 5,
+    fallbackCount: 5,
+    fallbackRatio: 0.025,
+    ...overrides
+  }
+}
+
+function buildEvidenceWithPerformance(
+  performance: EverythingPerformanceSummary
+): EverythingDiagnosticEvidencePayload {
+  const evidence = buildEvidence()
+  return buildEvidence({
+    status: { ...evidence.status, performance },
+    manualRegression: {
+      ...evidence.manualRegression,
+      suggestedEvidenceFields: {
+        ...evidence.manualRegression.suggestedEvidenceFields,
+        performance
+      }
+    }
+  })
 }
 
 describe('everything-diagnostic-verifier', () => {
@@ -483,5 +523,76 @@ describe('everything-diagnostic-verifier', () => {
 
     expect(verified.gate.passed).toBe(true)
     expect(verified.kind).toBe('everything-diagnostic-evidence')
+  })
+})
+
+describe('Everything performance evidence gates', () => {
+  const performanceGate = {
+    requirePerformanceSamples: 200,
+    maxP95Ms: 400,
+    maxFallbackRatio: 0.1
+  }
+
+  it('accepts performance evidence within the required sample, latency, and fallback budgets', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidenceWithPerformance(buildPerformanceSummary()),
+        performanceGate
+      )
+    ).toEqual({ passed: true, failures: [], warnings: [] })
+  })
+
+  it('rejects missing performance evidence when thresholds are required', () => {
+    expect(evaluateEverythingDiagnosticEvidence(buildEvidence(), performanceGate).failures).toEqual(
+      [
+        'Everything performance samples 0 < 200',
+        'Everything performance p95 n/a > 400',
+        'Everything fallback ratio n/a > 0.1'
+      ]
+    )
+  })
+
+  it('rejects performance evidence with fewer than the required samples', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidenceWithPerformance(
+          buildPerformanceSummary({
+            sampleCount: 199,
+            durationSampleCount: 199,
+            successCount: 199,
+            sdkCount: 199,
+            cliCount: 0,
+            fallbackCount: 0,
+            fallbackRatio: 0
+          })
+        ),
+        performanceGate
+      ).failures
+    ).toEqual(['Everything performance samples 199 < 200'])
+  })
+
+  it('rejects performance evidence whose P95 exceeds the budget', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidenceWithPerformance(buildPerformanceSummary({ p95Ms: 401, maxMs: 450 })),
+        performanceGate
+      ).failures
+    ).toEqual(['Everything performance p95 401 > 400'])
+  })
+
+  it('rejects performance evidence whose SDK-to-CLI fallback ratio exceeds the budget', () => {
+    expect(
+      evaluateEverythingDiagnosticEvidence(
+        buildEvidenceWithPerformance(
+          buildPerformanceSummary({
+            sdkCount: 178,
+            cliCount: 22,
+            fallbackCount: 22,
+            fallbackRatio: 0.11
+          })
+        ),
+        performanceGate
+      ).failures
+    ).toEqual(['Everything fallback ratio 0.11 > 0.1'])
   })
 })

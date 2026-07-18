@@ -30,6 +30,11 @@ interface CaseTemplate {
   diagnosticEvidencePath: string
   capabilityVerifierCommand: string
   diagnosticVerifierCommand: string
+  additionalDiagnosticEvidence?: Array<{
+    path: string
+    verifierCommand: string
+    notes: string
+  }>
 }
 
 const DEFAULT_EVIDENCE_DIR = 'evidence/windows'
@@ -137,14 +142,35 @@ function buildCaseTemplate(
   const capabilityEvidencePath = joinEvidencePath(evidenceDir, `${caseId}-capability.json`)
 
   if (caseId === 'windows-everything-file-search') {
-    const diagnosticEvidencePath = joinEvidencePath(evidenceDir, `${caseId}-everything.json`)
+    const sdkEvidencePath = joinEvidencePath(evidenceDir, `${caseId}-everything-sdk.json`)
+    const cliEvidencePath = joinEvidencePath(evidenceDir, `${caseId}-everything-cli.json`)
+    const unavailableEvidencePath = joinEvidencePath(
+      evidenceDir,
+      `${caseId}-everything-unavailable.json`
+    )
     return {
       capabilityEvidencePath,
-      diagnosticEvidencePath,
+      diagnosticEvidencePath: sdkEvidencePath,
       capabilityVerifierCommand:
         'pnpm -C "apps/core-app" run windows:capability:verify -- --input "<capability-evidence.json>" --requireEverything --requireEverythingTargets --strict',
       diagnosticVerifierCommand:
-        'pnpm -C "apps/core-app" run everything:diagnostic:verify -- --input "<everything-evidence.json>" --requireReady --requireEnabled --requireAvailable --requireHealthy --requireVersion --requireEsPath --requireFallbackChain sdk-napi,cli --requireCaseIds windows-everything-file-search'
+        'pnpm -C "apps/core-app" run everything:diagnostic:verify -- --input "<everything-sdk-evidence.json>" --requireReady --requireEnabled --requireAvailable --requireBackend sdk-napi --requireHealthy --requireVersion --requireFallbackChain sdk-napi,cli --requireCaseIds windows-everything-file-search --requirePerformanceSamples 200',
+      additionalDiagnosticEvidence: [
+        {
+          path: cliEvidencePath,
+          verifierCommand:
+            'pnpm -C "apps/core-app" run everything:diagnostic:verify -- --input "<everything-cli-evidence.json>" --requireReady --requireEnabled --requireAvailable --requireBackend cli --requireBackendAttemptErrors sdk-napi --requireHealthy --requireVersion --requireEsPath --requireFallbackChain sdk-napi,cli --requireCaseIds windows-everything-file-search',
+          notes:
+            'Collect after making the packaged SDK unavailable and proving that validated es.exe recovers the same Windows search flow.'
+        },
+        {
+          path: unavailableEvidencePath,
+          verifierCommand:
+            'pnpm -C "apps/core-app" run everything:diagnostic:verify -- --input "<everything-unavailable-evidence.json>" --requireEnabled --requireBackend unavailable --requireFallbackChain sdk-napi,cli --requireCaseIds windows-everything-file-search',
+          notes:
+            'Collect with both packaged SDK and CLI unavailable; the UI must expose an explicit degraded reason.'
+        }
+      ]
     }
   }
 
@@ -236,7 +262,7 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
     generatedAt: new Date().toISOString(),
     platform: 'win32',
     verification: {
-      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"`
+      recommendedCommand: `pnpm -C "apps/core-app" run windows:acceptance:verify -- --input "${manifestPath}" --strict --requireEvidencePath --requireExistingEvidenceFiles --requireNonEmptyEvidenceFiles --requireCompletedManualEvidence --requireEvidenceGatePassed --requireCaseEvidenceSchemas --requireVerifierCommand --requireVerifierCommandGateFlags --requireRecommendedCommandGateFlags --requireRecommendedCommandInputMatch --requireSearchTrace --requireClipboardStress --requireEverythingSearchManualChecks --requireCommonAppLaunchDetails --requireCopiedAppPathManualChecks --requireUpdateInstallManualChecks --requireDivisionBoxDetachedWidgetManualChecks --requireTimeAwareRecommendationManualChecks --requireCommonAppTargets ChatApp,Codex,"Apple Music"`
     },
     cases: WINDOWS_REQUIRED_CASE_IDS.map((caseId) => {
       const template = buildCaseTemplate(caseId, evidenceDir, {
@@ -258,7 +284,8 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
             verifierCommand: template.diagnosticVerifierCommand,
             notes:
               'Replace the placeholder input path after exporting the matching Settings diagnostic evidence on a Windows device.'
-          }
+          },
+          ...(template.additionalDiagnosticEvidence ?? [])
         ]
       }
     }),
@@ -271,6 +298,29 @@ function buildManifest(options: CliOptions): WindowsAcceptanceManifest {
       clipboardStressVerifierCommand: buildClipboardStressVerifierCommand()
     },
     manualChecks: {
+      everythingSearch: {
+        normalSearchPassed: false,
+        normalSearchQuery: '<normal-search-query>',
+        explicitFileSearchPassed: false,
+        explicitFileSearchQuery: '<explicit-file-query>',
+        structuredFilterSearchPassed: false,
+        structuredFilterSearchQuery: '<structured-filter-query>',
+        sdkBackendEvidencePath: joinEvidencePath(
+          evidenceDir,
+          'windows-everything-file-search-everything-sdk.json'
+        ),
+        cliBackendEvidencePath: joinEvidencePath(
+          evidenceDir,
+          'windows-everything-file-search-everything-cli.json'
+        ),
+        unavailableBackendEvidencePath: joinEvidencePath(
+          evidenceDir,
+          'windows-everything-file-search-everything-unavailable.json'
+        ),
+        evidencePath: '<everything-search-screenshot-or-recording>',
+        notes:
+          'Replace placeholders with real Windows CoreBox searches and packaged backend evidence.'
+      },
       commonAppLaunch: {
         targets: ['ChatApp', 'Codex', 'Apple Music'],
         passedTargets: [],

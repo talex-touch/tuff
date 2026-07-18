@@ -1,0 +1,30 @@
+{
+  "id": "windows-everything-productionization",
+  "name": "windows-everything-productionization",
+  "title": "Productionize Windows Everything Search",
+  "description": "Close SDK/CLI strategy, packaged native availability, diagnostics, Windows acceptance, and P50/P95 evidence for Everything search.",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-17",
+  "completedAt": null,
+  "branch": "TalexDreamSoul/goaler",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "9fd368ed36498220f877128e979958b2a9366ebd",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/287",
+  "subtasks": [],
+  "children": [],
+  "parent": "07-13-search-crossplatform-audit",
+  "relatedFiles": [],
+  "notes": "Implementation, diagnostics, managed SDK resources, hosted Windows SDK/CLI/unavailable evidence, focused tests, and Windows package/native gates are complete; packaged CoreBox UI acceptance remains open.",
+  "meta": {
+    "nextAction": "On an interactive Windows packaged app, capture normal/@file/structured-filter CoreBox result/empty/degraded evidence, attach it to the Windows acceptance manifest, and run strict manifest verification.",
+    "blocker": "The hosted backend/package gate does not exercise interactive packaged CoreBox search modes; no automated packaged UI probe currently produces the required screenshots and acceptance manifest fields.",
+    "evidence": "GitHub Actions run 29628880312 passed all steps. Artifact windows-everything-production-evidence contains SDK 1.4.1.1032 with 200/200 non-empty samples and P50/P95/max 2/3/4ms; CLI 1.1.0.30 with 200/200 non-empty samples and P50/P95/max 8/9/26ms; exact unavailable state SDK error 2 and CLI exit 8; packaged everything.js, everything-resources.js, and 185856-byte tuff_native_everything.node SHA-256 3fe24155107a74ed61521f4c943f23050ea17c9fc17873ea144fe0791a576d83. Local verification also passed 9 native tests, 161 focused tests, node/web typechecks, production build, lint, PowerShell parser, actionlint, Trellis validation, and reviewer re-check."
+  }
+}

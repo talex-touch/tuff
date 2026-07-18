@@ -87,6 +87,48 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Test Everything evidence and resource contracts
+        if: matrix.os == 'windows-2022'
+        working-directory: packages/tuff-native
+        run: node --test scripts/everything-selfcheck.test.js everything-resources.test.js
+
+      - name: Rebuild Everything native addon for Node.js
+        if: matrix.os == 'windows-2022'
+        working-directory: packages/tuff-native
+        run: pnpm run rebuild
+
+      - name: Install verified Everything runtime
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: ./scripts/ci/setup-windows-everything.ps1
+
+      - name: Collect real Everything SDK, CLI, and unavailable evidence
+        if: matrix.os == 'windows-2022'
+        shell: pwsh
+        run: ./scripts/ci/collect-windows-everything-evidence.ps1 -SampleCount 200
+
+      - name: Upload Windows Everything runtime evidence
+        if: ${{ always() && matrix.os == 'windows-2022' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-everything-release-evidence
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+          path: |
+            ${{ runner.temp }}/tuff-everything-runtime/setup-evidence.json
+            ${{ runner.temp }}/tuff-everything-evidence/*.json
+
+      - name: Clean up Everything service
+        if: ${{ always() && matrix.os == 'windows-2022' }}
+        shell: pwsh
+        run: |
+          if ($env:TUFF_EVERYTHING_EXE -and (Test-Path $env:TUFF_EVERYTHING_EXE)) {
+            Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-exit' -Wait -ErrorAction SilentlyContinue
+            Start-Process -FilePath $env:TUFF_EVERYTHING_EXE -ArgumentList '-uninstall-service' -Wait -ErrorAction SilentlyContinue
+          }
+          Write-Host 'Everything cleanup finished.'
+
       - name: Fix Binary Permissions
         if: matrix.os == 'ubuntu-latest'
         shell: bash

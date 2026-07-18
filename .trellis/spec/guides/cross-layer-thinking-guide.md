@@ -100,6 +100,28 @@ create one owner for:
 
 Rendering code may format fields, but it must not redefine the payload contract.
 
+### Mistake 5: Treating Renderer Notifications As RPC
+
+**Bad**: Awaiting a main-to-renderer event whose response type is `void`. If the renderer
+does not acknowledge request/response delivery, the caller can stall until transport
+timeout even though the message is only a notification.
+
+**Good**: Use the transport's fire-and-forget broadcast API for `void` notifications.
+For desktop windows, invoke the canonical window manager's show/focus path before
+broadcasting view state; changing renderer state alone does not prove the native window
+is visible or correctly sized.
+
+### Mistake 6: Reading Alternate Clipboard Input After A Selection Probe
+
+**Bad**: Probe selected text by mutating the clipboard, then read a clipboard image as
+fallback. Clipboard format restoration may not preserve native image readability on every
+platform even when the restore call reports success.
+
+**Good**: On an explicit user-triggered path, snapshot alternate clipboard input before
+the selection probe, keep it in memory, and use it only if selected text is empty. Add a
+regression where the clipboard becomes empty during the probe but the pre-captured image
+still reaches the typed boundary.
+
 ---
 
 ## Checklist for Cross-Layer Features
@@ -249,13 +271,13 @@ against both fresh init and upgrade paths.
 ### Checklist: After Modifying A Runtime-Parsed Template
 
 - [ ] Identify every runtime parser that reads the template, not just the file
-  writer that installs it
+      writer that installs it
 - [ ] Check whether relevant syntax lives outside obvious managed regions
-  such as tag blocks
+      such as tag blocks
 - [ ] Verify fresh `init` output and a versioned `update` scenario that writes
-  the older `.trellis/.version`
+      the older `.trellis/.version`
 - [ ] Add an upgrade regression using an older pristine template fixture, then
-  assert the installed file reaches the current packaged shape
+      assert the installed file reaches the current packaged shape
 - [ ] Update the backend spec that owns the runtime contract
 
 **Real-world example**: Codex inline mode changed workflow platform markers from
@@ -273,6 +295,7 @@ could return empty Phase 2.1 detail.
 When a CLI auto-detects a mode by probing a remote resource (e.g., checking if `index.json` exists to decide marketplace vs direct download):
 
 ### Before implementing:
+
 - [ ] Probe runs in **ALL** code paths that use the result (interactive, `-y`, `--flag` combos)
 - [ ] 404 vs transient error are distinguished — don't treat both as "not found"
 - [ ] Transient errors **abort or retry**, never silently switch modes
@@ -280,6 +303,7 @@ When a CLI auto-detects a mode by probing a remote resource (e.g., checking if `
 - [ ] **Shortcut paths** (e.g., `--template` skipping picker) must have the same error-handling quality as the probed path — check that downstream functions don't call catch-all wrappers
 
 ### After implementing:
+
 - [ ] Trace every path from probe result to the mode-decision branch — no fallthrough
 - [ ] External format contracts (giget URI, raw URLs) are tested or at least documented as comments
 - [ ] Metadata reads consume a complete response or use a streaming parser — never parse a fixed-size prefix as full JSON

@@ -5,12 +5,17 @@ import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { verifyPackagedOfficialPluginSeeds } = require('./after-pack.js') as {
-  verifyPackagedOfficialPluginSeeds: (context: {
-    appOutDir: string
-    packager: { projectDir: string }
-  }) => void
-}
+const { verifyPackagedEverythingNative, verifyPackagedOfficialPluginSeeds } =
+  require('./after-pack.js') as {
+    verifyPackagedEverythingNative: (context: {
+      appOutDir: string
+      electronPlatformName: string
+    }) => void
+    verifyPackagedOfficialPluginSeeds: (context: {
+      appOutDir: string
+      packager: { projectDir: string }
+    }) => void
+  }
 
 const officialPlugins = [
   { pluginName: 'touch-translation', version: '1.0.11' },
@@ -60,6 +65,37 @@ async function createPackagedSeedFixture(): Promise<PackagedSeedFixture> {
     resourcesDir,
     workspaceRoot
   }
+}
+
+type PackagedEverythingFixture = {
+  appOutDir: string
+  resourcesDir: string
+}
+
+async function createPackagedEverythingFixture(): Promise<PackagedEverythingFixture> {
+  const workspaceRoot = await fs.mkdtemp(path.join(tmpdir(), 'after-pack-everything-native-'))
+  fixtureRoots.push(workspaceRoot)
+
+  const appOutDir = path.join(workspaceRoot, 'packaged-app')
+  const resourcesDir = path.join(appOutDir, 'Tuff.app', 'Contents', 'Resources')
+  const nativePackageRoot = path.join(resourcesDir, 'node_modules', '@talex-touch', 'tuff-native')
+  await fs.mkdir(path.join(nativePackageRoot, 'build', 'Release'), { recursive: true })
+  await Promise.all([
+    fs.writeFile(path.join(resourcesDir, 'app.asar'), 'fixture'),
+    fs.writeFile(
+      path.join(nativePackageRoot, 'package.json'),
+      '{"name":"@talex-touch/tuff-native"}'
+    ),
+    fs.writeFile(path.join(nativePackageRoot, 'everything.js'), 'module.exports = {}\n'),
+    fs.writeFile(path.join(nativePackageRoot, 'everything-resources.js'), 'module.exports = {}\n'),
+    fs.writeFile(path.join(nativePackageRoot, 'native-loader.js'), 'module.exports = {}\n'),
+    fs.writeFile(
+      path.join(nativePackageRoot, 'build', 'Release', 'tuff_native_everything.node'),
+      'fixture'
+    )
+  ])
+
+  return { appOutDir, resourcesDir }
 }
 
 afterEach(async () => {
@@ -133,5 +169,62 @@ describe('verifyPackagedOfficialPluginSeeds', () => {
     expect(() => verifyPackagedOfficialPluginSeeds(context)).toThrow(
       /Official plugin seed contains generated package artifacts for touch-translation: stale\.tpex/
     )
+  })
+})
+
+describe('verifyPackagedEverythingNative', () => {
+  it('accepts Win32 packaged Resources containing the Everything wrapper and native binary', async () => {
+    const { appOutDir } = await createPackagedEverythingFixture()
+
+    expect(() =>
+      verifyPackagedEverythingNative({ appOutDir, electronPlatformName: 'win32' })
+    ).not.toThrow()
+  })
+
+  it('rejects a Win32 package whose Everything wrapper is missing', async () => {
+    const { appOutDir, resourcesDir } = await createPackagedEverythingFixture()
+    await fs.rm(
+      path.join(resourcesDir, 'node_modules', '@talex-touch', 'tuff-native', 'everything.js')
+    )
+
+    expect(() =>
+      verifyPackagedEverythingNative({ appOutDir, electronPlatformName: 'win32' })
+    ).toThrow(/Packaged Everything runtime is incomplete: .*everything\.js/)
+  })
+
+  it('rejects a Win32 package whose Everything resource module is missing', async () => {
+    const { appOutDir, resourcesDir } = await createPackagedEverythingFixture()
+    await fs.rm(
+      path.join(
+        resourcesDir,
+        'node_modules',
+        '@talex-touch',
+        'tuff-native',
+        'everything-resources.js'
+      )
+    )
+
+    expect(() =>
+      verifyPackagedEverythingNative({ appOutDir, electronPlatformName: 'win32' })
+    ).toThrow(/Packaged Everything runtime is incomplete: .*everything-resources\.js/)
+  })
+
+  it('rejects a Win32 package whose Everything native binary is missing', async () => {
+    const { appOutDir, resourcesDir } = await createPackagedEverythingFixture()
+    await fs.rm(
+      path.join(
+        resourcesDir,
+        'node_modules',
+        '@talex-touch',
+        'tuff-native',
+        'build',
+        'Release',
+        'tuff_native_everything.node'
+      )
+    )
+
+    expect(() =>
+      verifyPackagedEverythingNative({ appOutDir, electronPlatformName: 'win32' })
+    ).toThrow(/Packaged Everything runtime is incomplete: .*tuff_native_everything\.node/)
   })
 })

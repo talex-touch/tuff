@@ -22,18 +22,22 @@ function printUsage(): void {
   pnpm -C "apps/core-app" run everything:diagnostic:verify -- --input <evidence.json> [options]
 
 Options:
-  --input <path>               Read Everything diagnostic evidence JSON. Defaults to stdin.
-  --requireReady               Require verdict.ready.
-  --requireEnabled             Require Everything integration enabled.
-  --requireAvailable           Require available Everything backend.
-  --requireBackend <csv>       Require backend values, e.g. cli,sdk-napi.
-  --requireHealthy             Require health=healthy.
-  --requireVersion             Require detected Everything version.
-  --requireEsPath              Require detected es.exe path.
-  --requireFallbackChain <csv> Require fallback chain entries, e.g. sdk-napi,cli.
-  --requireCaseIds <csv>       Require reusable manual regression case ids.
-  --compact                    Print single-line JSON.
-  --help                       Show this help.
+  --input <path>                         Read Everything diagnostic evidence JSON. Defaults to stdin.
+  --requireReady                         Require verdict.ready.
+  --requireEnabled                       Require Everything integration enabled.
+  --requireAvailable                     Require available Everything backend.
+  --requireBackend <csv>                 Require backend values, e.g. cli,sdk-napi.
+  --requireBackendAttemptErrors <csv>    Require failed attempts for the listed backends.
+  --requireHealthy                       Require health=healthy.
+  --requireVersion                       Require detected Everything version.
+  --requireEsPath                        Require detected es.exe path.
+  --requireFallbackChain <csv>           Require fallback chain entries, e.g. sdk-napi,cli.
+  --requireCaseIds <csv>                 Require reusable manual regression case ids.
+  --requirePerformanceSamples <count>    Require at least this many bounded runtime samples.
+  --maxP95Ms <ms>                        Reject a runtime P95 above this duration.
+  --maxFallbackRatio <ratio>             Reject an SDK-to-CLI fallback ratio above 0..1.
+  --compact                              Print single-line JSON.
+  --help                                 Show this help.
 `)
 }
 
@@ -56,6 +60,14 @@ function parseBackends(value: string | undefined): EverythingBackendType[] | und
     throw new Error(`Invalid Everything backend: ${invalid.join(', ')}`)
   }
   return entries as EverythingBackendType[]
+}
+
+function parseNonNegativeNumber(value: string, label: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`${label} must be a non-negative number`)
+  }
+  return parsed
 }
 
 function parseArgs(argv: string[]): CliOptions | null {
@@ -91,6 +103,10 @@ function parseArgs(argv: string[]): CliOptions | null {
       options.requireBackend = parseBackends(argv[++i])
       continue
     }
+    if (arg === '--requireBackendAttemptErrors' && argv[i + 1]) {
+      options.requireBackendAttemptErrors = parseBackends(argv[++i])
+      continue
+    }
     if (arg === '--requireHealthy') {
       options.requireHealthy = true
       continue
@@ -109,6 +125,23 @@ function parseArgs(argv: string[]): CliOptions | null {
     }
     if (arg === '--requireCaseIds' && argv[i + 1]) {
       options.requireCaseIds = parseCsv(argv[++i])
+      continue
+    }
+    if (arg === '--requirePerformanceSamples' && argv[i + 1]) {
+      options.requirePerformanceSamples = Math.floor(
+        parseNonNegativeNumber(argv[++i], '--requirePerformanceSamples')
+      )
+      continue
+    }
+    if (arg === '--maxP95Ms' && argv[i + 1]) {
+      options.maxP95Ms = parseNonNegativeNumber(argv[++i], '--maxP95Ms')
+      continue
+    }
+    if (arg === '--maxFallbackRatio' && argv[i + 1]) {
+      options.maxFallbackRatio = parseNonNegativeNumber(argv[++i], '--maxFallbackRatio')
+      if (options.maxFallbackRatio > 1) {
+        throw new Error('--maxFallbackRatio must be between 0 and 1')
+      }
       continue
     }
     if (arg === '--compact') {
