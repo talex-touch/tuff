@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
           :scanline-frequency="4.8"
           :speed="1.4"
           :warp-amount="1"
-          :resolution-scale="0.82"
+           :resolution-scale="0.7"
         />
       </ClientOnly>
     </div>
@@ -163,7 +163,10 @@ onBeforeUnmount(() => {
 .NexusHero-Veil {
   z-index: 0;
   background:
-    #050608;
+    radial-gradient(120% 80% at 50% -10%, rgba(110, 114, 255, 0.28), transparent 55%),
+    radial-gradient(70% 50% at 85% 20%, rgba(154, 208, 188, 0.18), transparent 50%),
+    radial-gradient(60% 40% at 10% 70%, rgba(215, 247, 233, 0.12), transparent 55%),
+    linear-gradient(180deg, #07090f 0%, #050608 48%, #040507 100%);
 }
 
 .NexusHero-Veil :deep(canvas) {
