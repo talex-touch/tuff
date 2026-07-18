@@ -231,5 +231,6 @@ Precedence: CLI flags > tuff.config > manifest > defaults.
 
 The CLI will:
 - Scan `dist/build` (and `dist`) for `.tpex` packages
-- Validate manifest/package versions
-- Upload the latest `.tpex` to the publish API
+- Validate the source Manifest, staged inventory, manifest/package identity and final archive size through the shared Package Policy
+- Reject unsafe paths/types, stale file maps, enabled packaged dev mode and Nexus identity/version mismatches before upload
+- Upload the latest admissible `.tpex` to the publish API

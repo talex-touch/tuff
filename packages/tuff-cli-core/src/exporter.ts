@@ -1,5 +1,9 @@
 /* eslint-disable no-console */
 import type {
+  PluginPackageEntry,
+  PluginPackagePolicyResult,
+} from '@talex-touch/utils/plugin'
+import type {
   WidgetPrecompiledManifestEntry,
   WidgetPrecompiledMeta,
   WidgetRuntime,
@@ -10,6 +14,10 @@ import crypto from 'node:crypto'
 import { posix as posixPath } from 'node:path'
 import process from 'node:process'
 import * as readline from 'node:readline'
+import {
+  formatPluginPackageViolation,
+  validatePluginPackagePolicy,
+} from '@talex-touch/utils/plugin'
 import {
   isAllowedWidgetModule,
   makeSafeWidgetFileId,
@@ -978,9 +986,59 @@ async function bundleIndexFolder(
   }
 }
 
+function collectStagedPackageEntries(buildDir: string): PluginPackageEntry[] {
+  return globSync('**/*', {
+    cwd: buildDir,
+    dot: true,
+    follow: false,
+  }).map((relativePath) => {
+    const normalizedPath = relativePath.replace(/\\/g, '/')
+    const stats = fs.lstatSync(path.join(buildDir, relativePath))
+    const type: PluginPackageEntry['type'] = stats.isSymbolicLink()
+      ? 'symlink'
+      : stats.isDirectory()
+        ? 'directory'
+        : stats.isFile()
+          ? 'file'
+          : 'other'
+    return {
+      path: normalizedPath,
+      type,
+      size: stats.size,
+    }
+  })
+}
+
+function assertPluginPackagePolicy(
+  result: PluginPackagePolicyResult,
+  phase: string,
+): asserts result is Extract<PluginPackagePolicyResult, { ok: true }> {
+  if (result.ok)
+    return
+  throw new Error(
+    `Plugin package policy failed during ${phase}: ${result.violations
+      .map(formatPluginPackageViolation)
+      .join('; ')}`,
+  )
+}
+
 export async function build(userOptions?: Options) {
   const opts = resolveOptions(userOptions)
   const { default: chalk } = await import('chalk')
+  const sourceManifestPath = path.resolve(opts.root, opts.manifest)
+  if (!fs.existsSync(sourceManifestPath)) {
+    throw new Error(`Manifest not found: ${sourceManifestPath}`)
+  }
+  const sourceManifest = JSON.parse(
+    fs.readFileSync(sourceManifestPath, 'utf-8'),
+  ) as IManifest
+  assertPluginPackagePolicy(
+    validatePluginPackagePolicy({
+      profile: 'source-manifest',
+      manifest: sourceManifest,
+    }),
+    'source validation',
+  )
 
   const distPath = path.resolve(opts.root, opts.outDir)
   const outDir = path.resolve(opts.root, opts.outDir, 'out')
@@ -1084,10 +1142,7 @@ export async function build(userOptions?: Options) {
   }
 
   // 2.2.2 Handle index.js: deterministic precedence with optional manifest override
-  const manifestPath = path.resolve(opts.root, opts.manifest)
-  const manifestData: IManifest | null = fs.existsSync(manifestPath)
-    ? JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-    : null
+  const manifestData = sourceManifest
   const manifestIndexConfig = normalizeIndexConfig(
     manifestData?.build?.index,
     'manifest.build.index',
@@ -1095,9 +1150,6 @@ export async function build(userOptions?: Options) {
   const indexConfig = resolveIndexBundleConfig(opts, manifestIndexConfig)
 
   if (indexConfig) {
-    if (!manifestData)
-      throw new Error('manifest.json not found for index/ bundling')
-
     const bundleSuccess = await bundleIndexFolder(
       indexConfig,
       buildDir,
@@ -1129,7 +1181,7 @@ export async function build(userOptions?: Options) {
     + chalk.blueBright(' Generating manifest.json ...'),
   )
 
-  const manifest = genInit(buildDir, opts)
+  const manifest = structuredClone(sourceManifest)
   const compiledWidgets = await compilePackageWidgets(
     manifest,
     buildDir,
@@ -1158,6 +1210,15 @@ export async function build(userOptions?: Options) {
 
   // 步骤3：压缩生成 .tpex
   const tpexPath = await compressPlugin(manifest, buildDir, opts, chalk)
+  assertPluginPackagePolicy(
+    validatePluginPackagePolicy({
+      profile: 'staged-package',
+      manifest,
+      entries: collectStagedPackageEntries(buildDir),
+      archiveSize: fs.statSync(tpexPath).size,
+    }),
+    'archive size validation',
+  )
 
   // Check plugin size
   checkPluginSize(tpexPath, opts.maxSizeMB, chalk)
@@ -1356,24 +1417,6 @@ async function mergeAssets(
   )
 }
 
-function genInit(
-  _buildDir: string,
-  opts: ReturnType<typeof resolveOptions>,
-): IManifest {
-  const manifestPath = path.resolve(opts.root, opts.manifest)
-
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
-
-  if (!manifest.id)
-    throw new Error('`id` field is required in manifest.json')
-
-  if (!/^[a-z0-9-]+\.[a-z0-9-]+\.[a-z0-9-]+$/i.test(manifest.id))
-    throw new Error('`id` field must be in the format of `com.xxx.xxx`')
-
-  // manifest.json 会在后续添加签名后再写入，这里只返回解析后的对象
-  return manifest as IManifest
-}
-
 async function compressPlugin(
   manifest: IManifest,
   buildDir: string,
@@ -1419,6 +1462,15 @@ async function compressPlugin(
   fs.writeFileSync(
     path.join(buildDir, 'manifest.json'),
     JSON.stringify(manifest, null, 2),
+  )
+
+  assertPluginPackagePolicy(
+    validatePluginPackagePolicy({
+      profile: 'staged-package',
+      manifest,
+      entries: collectStagedPackageEntries(buildDir),
+    }),
+    'staged package validation',
   )
 
   buildConfig.files = [buildDir]
