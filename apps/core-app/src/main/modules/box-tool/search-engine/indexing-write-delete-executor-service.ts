@@ -10,7 +10,7 @@ export interface IndexedWriteDeleteExecutorDeps<TRecord extends IndexedWriteDele
   normalizePath: (rawPath: string) => string
   findExisting: (paths: string[]) => Promise<TRecord[]>
   deleteRecords: (records: TRecord[]) => Promise<void>
-  removeSearchIndexItems: (paths: string[]) => Promise<void>
+  removeSearchIndexItems?: (paths: string[]) => Promise<void>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   successMessage?: string
 }

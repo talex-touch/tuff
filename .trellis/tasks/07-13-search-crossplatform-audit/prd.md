@@ -88,8 +88,8 @@
 
 ### 🟡 中危架构债
 
-- [ ] **R4 — `search-core.ts` 的 `search()` ~670 行巨型方法**
-  - 位置：`search-engine/search-core.ts:595`+；`session.end` 的 builder+trace 重复 4+ 处；竞态靠手工 `latestSessionId !== sessionId` 比对散在 6+ 处，易漏检导致陈旧结果污染。
+- [x] **R4 — `search-core.ts` 的全局巨型搜索会话状态** ✅ 已修（`07-09-scope-search-sessions-and-streams`）
+  - 交付：新增 `SearchSessionRegistry` 与请求级 caller/activation/cache/sink/controller/trace 所有权；`SearchEngineCore.startSearch()` 政策化为每请求 fresh session，移除 `currentGatherController`、`latestSessionId`、current-window delivery 与渲染端全局 update/end 监听；CoreBox/ApplicationIndex/AI 改用 typed stream 或 collecting sink。并发 UI/AI、双 sender、真实 cache hit、stale/foreign cancel、early update、destroy 与 no-results session 隔离均有 focused 回归。
 
 - [ ] **R5 — 过度分层反噬**
   - 位置：`addon/files/file-provider.ts:523-870`（347 行 DI 接线板）；30+ service 中大量薄适配层；`search-engine/indexing-write-*.ts`（3-9 行 re-export）vs `packages/utils/search/indexing-write-*.ts`（500+ 行实现）并存，grep 极易读错文件。

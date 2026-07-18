@@ -41,12 +41,13 @@ describe('file-provider-write-side-effect-service', () => {
 
     service.dispatch(files, {
       extensionContext: 'file-update',
-      indexReason: 'file-update'
+      indexReason: 'file-update',
+      mutationLeaseId: 'lease-1'
     })
     await settlePromises()
 
     expect(processFileExtensions).toHaveBeenCalledWith(files)
-    expect(scheduleIndexing).toHaveBeenCalledWith(files, 'file-update')
+    expect(scheduleIndexing).toHaveBeenCalledWith(files, 'file-update', 'lease-1')
     expect(logWarn).not.toHaveBeenCalled()
   })
 
@@ -70,7 +71,7 @@ describe('file-provider-write-side-effect-service', () => {
     })
     await settlePromises()
 
-    expect(scheduleIndexing).toHaveBeenCalledWith(files, 'reconciliation-insert')
+    expect(scheduleIndexing).toHaveBeenCalledWith(files, 'reconciliation-insert', undefined)
     expect(logWarn).toHaveBeenCalledWith('processFileExtensions failed (reconciliation)', error)
   })
 })

@@ -37,20 +37,32 @@ function createMockDb(input?: { tableInfoError?: Error; masterReadable?: boolean
 }
 
 describe('SearchIndexService schema repair', () => {
-  it('recreates the derived FTS table when search_index metadata is unreadable', async () => {
-    const db = createMockDb({ tableInfoError: new Error('disk I/O error'), masterReadable: true })
-    const service = new SearchIndexService(db as never)
+  it('uses the readiness gate to verify reader schema without issuing DDL', async () => {
+    const readiness = { waitUntilReady: vi.fn(async () => undefined) }
+    const db = {
+      all: vi.fn(async () => [{ name: 'item_id' }, { name: 'provider' }, { name: 'content' }]),
+      run: vi.fn(async () => undefined)
+    }
+    const service = new SearchIndexService(db as never, {
+      initializationMode: 'reader',
+      readiness
+    })
 
     await service.warmup()
 
-    expect(service.didMigrate).toBe(true)
-    expect(db.all).toHaveBeenCalledTimes(2)
-    expect(db.runQueries).toContain('DROP TABLE IF EXISTS search_index')
-    expect(
-      db.runQueries.some((query) =>
-        query.includes('CREATE VIRTUAL TABLE IF NOT EXISTS search_index')
-      )
-    ).toBe(true)
+    expect(readiness.waitUntilReady).toHaveBeenCalledTimes(1)
+    expect(db.run).not.toHaveBeenCalled()
+  })
+
+  it('rejects search_index xinfo disk I/O failures without issuing repair DDL', async () => {
+    const db = createMockDb({ tableInfoError: new Error('disk I/O error'), masterReadable: true })
+    const service = new SearchIndexService(db as never)
+
+    await expect(service.warmup()).rejects.toThrow('disk I/O error')
+
+    expect(service.didMigrate).toBe(false)
+    expect(db.all).toHaveBeenCalledTimes(1)
+    expect(db.run).not.toHaveBeenCalled()
   })
 
   it('does not auto-repair when primary database metadata is unreadable', async () => {

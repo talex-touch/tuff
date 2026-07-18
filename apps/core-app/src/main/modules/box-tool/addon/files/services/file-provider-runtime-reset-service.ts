@@ -23,10 +23,6 @@ export interface FileProviderRuntimeResetServiceDeps {
   sourceId: string
   getDbUtils: () => DbUtils | null
   normalizePath?: (path: string) => string
-  removeSearchIndexByProvider: (
-    providerId: string,
-    reason: string
-  ) => Promise<{ removedIndexedItems: number }>
   getScanProgressPaths: () => string[]
   withDbWrite: <T>(label: string, operation: () => Promise<T>) => Promise<T>
   logInfo: (message: string, meta?: Record<string, unknown>) => void
@@ -36,7 +32,6 @@ export class FileProviderRuntimeResetService {
   private readonly sourceId: string
   private readonly getDbUtils: FileProviderRuntimeResetServiceDeps['getDbUtils']
   private readonly normalizePath: NonNullable<FileProviderRuntimeResetServiceDeps['normalizePath']>
-  private readonly removeSearchIndexByProvider: FileProviderRuntimeResetServiceDeps['removeSearchIndexByProvider']
   private readonly getScanProgressPaths: FileProviderRuntimeResetServiceDeps['getScanProgressPaths']
   private readonly withDbWrite: FileProviderRuntimeResetServiceDeps['withDbWrite']
   private readonly logInfo: FileProviderRuntimeResetServiceDeps['logInfo']
@@ -46,19 +41,14 @@ export class FileProviderRuntimeResetService {
     this.sourceId = deps.sourceId
     this.getDbUtils = deps.getDbUtils
     this.normalizePath = deps.normalizePath ?? ((path) => path)
-    this.removeSearchIndexByProvider = deps.removeSearchIndexByProvider
     this.getScanProgressPaths = deps.getScanProgressPaths
     this.withDbWrite = deps.withDbWrite
     this.logInfo = deps.logInfo
     this.executor = new IndexedSourceResetExecutorService({
       sourceId: this.sourceId,
       operationReasonNamespace: 'file-index',
-      clearSearchIndex: async (reason) => {
-        const result = await this.removeSearchIndexByProvider(this.sourceId, reason)
-        return {
-          cleared: true,
-          rows: result.removedIndexedItems
-        }
+      clearSearchIndex: async () => {
+        throw new Error('FILE_PROVIDER_SHARED_SEARCH_RESET_UNAVAILABLE')
       },
       clearScanProgress: (reason) => this.clearScanProgress(reason)
     })

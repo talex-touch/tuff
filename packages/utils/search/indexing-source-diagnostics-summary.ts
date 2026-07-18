@@ -2,18 +2,19 @@ import type {
   IndexedSourceDiagnostics,
   IndexedSourceDiagnosticsSnapshot,
   IndexedSourceHealth,
-  IndexedSourceHealthStatus
-} from './indexing-source'
+  IndexedSourceHealthStatus,
+} from "./indexing-source";
 
-export type IndexedSourceDiagnosticsSummary = IndexedSourceDiagnosticsSnapshot['summary']
+export type IndexedSourceDiagnosticsSummary =
+  IndexedSourceDiagnosticsSnapshot["summary"];
 
 export function summarizeIndexedSourceHealth(
-  healthItems: readonly IndexedSourceHealth[]
+  healthItems: readonly IndexedSourceHealth[],
 ): IndexedSourceDiagnosticsSummary {
-  const byStatus: Partial<Record<IndexedSourceHealthStatus, number>> = {}
+  const byStatus: Partial<Record<IndexedSourceHealthStatus, number>> = {};
 
   for (const health of healthItems) {
-    byStatus[health.status] = (byStatus[health.status] ?? 0) + 1
+    byStatus[health.status] = (byStatus[health.status] ?? 0) + 1;
   }
 
   return {
@@ -24,13 +25,13 @@ export function summarizeIndexedSourceHealth(
     unavailable:
       (byStatus.disabled ?? 0) +
       (byStatus.unsupported ?? 0) +
-      (byStatus['permission-required'] ?? 0) +
-      (byStatus.error ?? 0)
-  }
+      (byStatus["permission-required"] ?? 0) +
+      (byStatus.error ?? 0),
+  };
 }
 
 export function buildIndexedSourceDiagnosticsSummary(
-  sources: readonly Pick<IndexedSourceDiagnostics, 'health'>[]
+  sources: readonly Pick<IndexedSourceDiagnostics, "health">[],
 ): IndexedSourceDiagnosticsSummary {
-  return summarizeIndexedSourceHealth(sources.map((source) => source.health))
+  return summarizeIndexedSourceHealth(sources.map((source) => source.health));
 }

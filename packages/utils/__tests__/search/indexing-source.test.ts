@@ -259,7 +259,7 @@ describe("indexedSource admission", () => {
         reconcileState: "idle" as const,
       }),
       getRoots: async () => [],
-      async *scan () {
+      async *scan() {
         yield { sourceId: "quicklink", records: [], done: true };
       },
       reconcile: async () => ({
@@ -317,7 +317,7 @@ describe("indexedSource admission", () => {
         reconcileState: "idle" as const,
       }),
       getRoots: async () => [],
-      async *scan () {
+      async *scan() {
         yield { sourceId: "quicklink", records: [], done: true };
       },
       reconcile: async () => ({
@@ -374,7 +374,7 @@ describe("indexedSource admission", () => {
         reconcileState: "idle" as const,
       }),
       getRoots: async () => [],
-      async *scan () {
+      async *scan() {
         yield { sourceId: "quicklink", records: [], done: true };
       },
     };
@@ -707,7 +707,10 @@ describe("indexedSource admission", () => {
       2,
     );
 
-    expect(next.map((task) => task.jobId)).toEqual(["scan:newer", "watch:middle"]);
+    expect(next.map((task) => task.jobId)).toEqual([
+      "scan:newer",
+      "watch:middle",
+    ]);
   });
 
   it("normalizes invalid indexed source task history limits to empty history", () => {
@@ -1437,7 +1440,11 @@ describe("search provider sdk contracts", () => {
         ["touch-dev-toolbox.dev-toolbox"],
         [
           { providerId: "quicklinks", enabled: false, order: 1 },
-          { providerId: "touch-dev-toolbox.dev-toolbox", enabled: false, order: 2 },
+          {
+            providerId: "touch-dev-toolbox.dev-toolbox",
+            enabled: false,
+            order: 2,
+          },
         ],
         { defaultEnabled: true },
       ),
@@ -1447,7 +1454,13 @@ describe("search provider sdk contracts", () => {
       isIndexedSourceEnabledByProviderConfig(
         "quicklinks",
         ["touch-dev-toolbox.dev-toolbox"],
-        [{ providerId: "touch-dev-toolbox.dev-toolbox", enabled: true, order: 2 }],
+        [
+          {
+            providerId: "touch-dev-toolbox.dev-toolbox",
+            enabled: true,
+            order: 2,
+          },
+        ],
         { defaultEnabled: true },
       ),
     ).toBe(true);
@@ -1468,7 +1481,10 @@ describe("search provider sdk contracts", () => {
       ),
     ).toEqual({
       sourceId: "browser-bookmarks",
-      providerIds: ["browser-bookmarks", "touch-browser-data.browser-bookmarks"],
+      providerIds: [
+        "browser-bookmarks",
+        "touch-browser-data.browser-bookmarks",
+      ],
       configuredProviderIds: ["touch-browser-data.browser-bookmarks"],
       enabledProviderIds: ["touch-browser-data.browser-bookmarks"],
       disabledProviderIds: [],
@@ -1513,7 +1529,11 @@ describe("search provider sdk contracts", () => {
         ["touch-dev-toolbox.dev-toolbox"],
         [
           { providerId: "quicklinks", enabled: false, order: 1 },
-          { providerId: "touch-dev-toolbox.dev-toolbox", enabled: false, order: 2 },
+          {
+            providerId: "touch-dev-toolbox.dev-toolbox",
+            enabled: false,
+            order: 2,
+          },
         ],
         { defaultEnabled: true },
       ),

@@ -1,12 +1,11 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
-import type { PersistEntry } from '../../../search-engine/workers/search-index-worker-client'
+import type { FilePersistenceEntry } from '../../../search-engine/search-index-writer'
 import { IndexedWorkerPersistEntryMapperService } from '@talex-touch/utils/search'
-import type { SearchIndexItem } from '../../../search-engine/search-index-service'
 
 export class FileProviderIndexPersistEntryMapperService {
-  private readonly mapper = new IndexedWorkerPersistEntryMapperService<SearchIndexItem>()
+  private readonly mapper = new IndexedWorkerPersistEntryMapperService()
 
-  map(entries: IndexWorkerFileResult[]): PersistEntry[] {
+  map(entries: IndexWorkerFileResult[]): FilePersistenceEntry[] {
     return this.mapper.map(entries)
   }
 }

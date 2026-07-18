@@ -1,4 +1,4 @@
-import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
+import type { UpsertFileRecord } from '../../../search-engine/search-index-writer'
 import type { ScannedFileInfo } from '../types'
 import { mapIndexedWriteFullScanUpsertRecords } from '@talex-touch/utils/search'
 
@@ -9,7 +9,11 @@ export interface FileProviderFullScanRunResult {
 
 export interface FileProviderFullScanRunDeps<TContext> {
   enterPerfContext: (label: string, metadata: Record<string, unknown>) => () => void
-  scanDirectory: (rootPath: string, excludePathsSet?: Set<string>) => Promise<ScannedFileInfo[]>
+  scanDirectory: (
+    rootPath: string,
+    excludePathsSet: Set<string> | undefined,
+    context: TContext
+  ) => AsyncIterable<ScannedFileInfo[]>
   insertRecords: (
     rootPath: string,
     records: UpsertFileRecord[],
@@ -68,24 +72,30 @@ export class FileProviderFullScanRunService<TContext> {
       for (const rootPath of paths) {
         const pathScanStart = this.now()
         this.logDebug('Scanning new path', { path: rootPath })
-        const diskFiles = await this.scanDirectory(rootPath, options?.excludePathsSet)
+        let fileCount = 0
+        for await (const diskFiles of this.scanDirectory(
+          rootPath,
+          options?.excludePathsSet,
+          context
+        )) {
+          fileCount += diskFiles.length
+          const records = mapIndexedWriteFullScanUpsertRecords(diskFiles, {
+            lastIndexedAt: new Date()
+          })
+          if (records.length > 0) {
+            const insertResult = await this.insertRecords(rootPath, records, context)
+            added += insertResult.insertedCount
+          }
+          await this.yieldAfterScan()
+        }
         this.logDebug('Directory scan completed', {
           path: rootPath,
-          files: diskFiles.length,
+          files: fileCount,
           duration: this.formatDuration(this.now() - pathScanStart)
         })
 
         scannedPaths += 1
         this.emitProgress(scannedPaths, paths.length)
-        await this.yieldAfterScan()
-
-        const records = mapIndexedWriteFullScanUpsertRecords(diskFiles, {
-          lastIndexedAt: new Date()
-        })
-        if (records.length > 0) {
-          const insertResult = await this.insertRecords(rootPath, records, context)
-          added += insertResult.insertedCount
-        }
         completedPaths.push(rootPath)
       }
 

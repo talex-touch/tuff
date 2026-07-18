@@ -8,7 +8,7 @@ import type {
   IndexedSourceRecord,
   IndexedSourceRecordBatch
 } from '@talex-touch/utils/search'
-import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
+import type { UpsertFileRecord } from '../../../search-engine/search-index-writer'
 
 export interface FileProviderReconciliationDiskFile {
   path: string
@@ -36,9 +36,9 @@ export interface FileProviderReconciliationInsertDeps<
     options: { estimatedTaskTimeMs: number; label: string }
   ) => Promise<void>
   upsertFiles: (records: UpsertFileRecord[], reason: string) => Promise<TInserted[]>
-  dispatchSideEffects: (records: TInserted[]) => void
   emitRecordBatch: (batch: IndexedSourceRecordBatch, context: TContext) => Promise<void>
   emitDelta: (delta: IndexedSourceDelta, context: TContext) => Promise<void>
+  shouldEmitRecordBatch: (context: TContext) => boolean
   mapRecord: (record: TInserted) => IndexedSourceRecord
   emitProgress: (current: number, total: number) => void
   now: () => number
@@ -56,14 +56,14 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
     TInserted,
     TContext
   >['upsertFiles']
-  private readonly dispatchSideEffects: FileProviderReconciliationInsertDeps<
-    TInserted,
-    TContext
-  >['dispatchSideEffects']
   private readonly emitProgress: FileProviderReconciliationInsertDeps<
     TInserted,
     TContext
   >['emitProgress']
+  private readonly shouldEmitRecordBatch: FileProviderReconciliationInsertDeps<
+    TInserted,
+    TContext
+  >['shouldEmitRecordBatch']
   private readonly now: FileProviderReconciliationInsertDeps<TInserted, TContext>['now']
   private readonly formatDuration: FileProviderReconciliationInsertDeps<
     TInserted,
@@ -76,8 +76,8 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
     this.waitForIdle = deps.waitForIdle
     this.runQueue = deps.runQueue
     this.upsertFiles = deps.upsertFiles
-    this.dispatchSideEffects = deps.dispatchSideEffects
     this.emitProgress = deps.emitProgress
+    this.shouldEmitRecordBatch = deps.shouldEmitRecordBatch
     this.now = deps.now
     this.formatDuration = deps.formatDuration
     this.logDebug = deps.logDebug
@@ -119,11 +119,11 @@ export class FileProviderReconciliationInsertService<TInserted extends { path: s
           size: chunk.length,
           duration: this.formatDuration(this.now() - chunkStart)
         })
-        this.dispatchSideEffects(inserted)
-        await this.runtimeEmitter.emitBatch(inserted, context)
-        await this.runtimeEmitter.emitDeltas(inserted, context, {
-          action: 'add'
-        })
+        if (this.shouldEmitRecordBatch(context)) {
+          await this.runtimeEmitter.emitBatch(inserted, context)
+        } else {
+          await this.runtimeEmitter.emitDeltas(inserted, context, { action: 'add' })
+        }
         reconciledFiles += chunk.length
         this.runtimeEmitter.emitProgressSnapshot({
           current: reconciledFiles,

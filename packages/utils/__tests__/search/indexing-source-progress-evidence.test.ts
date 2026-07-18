@@ -1,28 +1,28 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { IndexedSourceProgressEvidenceService } from '../../search'
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { IndexedSourceProgressEvidenceService } from "../../search";
 
-const service = new IndexedSourceProgressEvidenceService()
+const service = new IndexedSourceProgressEvidenceService();
 
-describe('IndexedSourceProgressEvidenceService', () => {
+describe("IndexedSourceProgressEvidenceService", () => {
   afterEach(() => {
-    vi.restoreAllMocks()
-  })
+    vi.restoreAllMocks();
+  });
 
-  it('builds ready evidence when all roots are complete', () => {
+  it("builds ready evidence when all roots are complete", () => {
     expect(
       service.build({
-        id: 'source:progress',
-        label: 'Source progress',
-        roots: ['/a'],
+        id: "source:progress",
+        label: "Source progress",
+        roots: ["/a"],
         itemCount: 3,
         pendingRoots: 0,
         failedItems: 0,
         isActive: false,
-        checkedAt: 123
-      })
+        checkedAt: 123,
+      }),
     ).toMatchObject({
-      status: 'ready',
-      reason: 'indexed-source-progress-ready',
+      status: "ready",
+      reason: "indexed-source-progress-ready",
       itemCount: 3,
       rootCount: 1,
       lastCheckedAt: 123,
@@ -30,206 +30,206 @@ describe('IndexedSourceProgressEvidenceService', () => {
         totalRoots: 1,
         pendingRoots: 0,
         pendingPermissionRoots: 0,
-        pendingPermissionPaths: []
-      }
-    })
-  })
+        pendingPermissionPaths: [],
+      },
+    });
+  });
 
-  it('prioritizes permission-required over failed and pending states', () => {
+  it("prioritizes permission-required over failed and pending states", () => {
     expect(
       service.build({
-        id: 'source:progress',
-        label: 'Source progress',
-        roots: ['/a', '/b'],
+        id: "source:progress",
+        label: "Source progress",
+        roots: ["/a", "/b"],
         itemCount: 1,
         pendingRoots: 1,
         failedItems: 2,
         isActive: true,
-        pendingPermissionPaths: ['/b']
-      })
+        pendingPermissionPaths: ["/b"],
+      }),
     ).toMatchObject({
-      status: 'permission-required',
-      reason: 'indexed-source-progress-pending-permission',
+      status: "permission-required",
+      reason: "indexed-source-progress-pending-permission",
       metadata: {
         pendingRoots: 1,
         pendingPermissionRoots: 1,
-        pendingPermissionPaths: ['/b']
-      }
-    })
-  })
+        pendingPermissionPaths: ["/b"],
+      },
+    });
+  });
 
-  it('deduplicates empty roots and pending permission paths before building evidence', () => {
+  it("deduplicates empty roots and pending permission paths before building evidence", () => {
     expect(
       service.build({
-        id: 'source:progress',
-        label: 'Source progress',
-        roots: ['/a', '', '  ', '/b', '/a'],
+        id: "source:progress",
+        label: "Source progress",
+        roots: ["/a", "", "  ", "/b", "/a"],
         itemCount: 1,
         pendingRoots: 0,
         failedItems: 0,
         isActive: false,
-        pendingPermissionPaths: ['/b', '', '/b', '  ', '/c']
-      })
+        pendingPermissionPaths: ["/b", "", "/b", "  ", "/c"],
+      }),
     ).toMatchObject({
-      status: 'permission-required',
-      reason: 'indexed-source-progress-pending-permission',
+      status: "permission-required",
+      reason: "indexed-source-progress-pending-permission",
       rootCount: 2,
-      roots: ['/a', '/b'],
+      roots: ["/a", "/b"],
       metadata: {
         totalRoots: 2,
         pendingPermissionRoots: 2,
-        pendingPermissionPaths: ['/b', '/c']
-      }
-    })
-  })
+        pendingPermissionPaths: ["/b", "/c"],
+      },
+    });
+  });
 
-  it('builds degraded evidence when failed items exist', () => {
+  it("builds degraded evidence when failed items exist", () => {
     expect(
       service.build({
-        id: 'source:progress',
-        label: 'Source progress',
-        roots: ['/a'],
+        id: "source:progress",
+        label: "Source progress",
+        roots: ["/a"],
         itemCount: 3,
         pendingRoots: 0,
         failedItems: 1,
-        isActive: false
-      })
+        isActive: false,
+      }),
     ).toMatchObject({
-      status: 'degraded',
-      reason: 'indexed-source-progress-has-failed-items'
-    })
-  })
+      status: "degraded",
+      reason: "indexed-source-progress-has-failed-items",
+    });
+  });
 
-  it('builds warming evidence for pending roots or active indexing', () => {
+  it("builds warming evidence for pending roots or active indexing", () => {
     expect(
       service.build({
-        id: 'source:progress',
-        label: 'Source progress',
-        roots: ['/a', '/b'],
+        id: "source:progress",
+        label: "Source progress",
+        roots: ["/a", "/b"],
         itemCount: 1,
         pendingRoots: 1,
         failedItems: 0,
-        isActive: false
-      })
+        isActive: false,
+      }),
     ).toMatchObject({
-      status: 'warming',
-      reason: 'indexed-source-progress-has-pending-roots'
-    })
+      status: "warming",
+      reason: "indexed-source-progress-has-pending-roots",
+    });
 
     expect(
       service.build({
-        id: 'source:progress',
-        label: 'Source progress',
-        roots: ['/a'],
+        id: "source:progress",
+        label: "Source progress",
+        roots: ["/a"],
         itemCount: 1,
         pendingRoots: 0,
         failedItems: 0,
-        isActive: true
-      })
+        isActive: true,
+      }),
     ).toMatchObject({
-      status: 'warming',
-      reason: 'indexed-source-progress-running'
-    })
-  })
+      status: "warming",
+      reason: "indexed-source-progress-running",
+    });
+  });
 
-  it('supports source-specific reasons and metadata', () => {
+  it("supports source-specific reasons and metadata", () => {
     expect(
       service.build({
-        id: 'file-provider:scan-progress',
-        label: 'File scan progress',
-        roots: ['/a'],
+        id: "file-provider:scan-progress",
+        label: "File scan progress",
+        roots: ["/a"],
         itemCount: 3,
         totalRoots: 2,
         pendingRoots: 1,
         failedItems: 0,
         isActive: false,
         metadata: {
-          completedFiles: 3
+          completedFiles: 3,
         },
         reasons: {
-          pendingRoots: 'file-index-progress-has-pending-roots'
-        }
-      })
+          pendingRoots: "file-index-progress-has-pending-roots",
+        },
+      }),
     ).toMatchObject({
-      reason: 'file-index-progress-has-pending-roots',
+      reason: "file-index-progress-has-pending-roots",
       metadata: {
         completedFiles: 3,
         totalRoots: 2,
-        pendingRoots: 1
-      }
-    })
-  })
+        pendingRoots: 1,
+      },
+    });
+  });
 
-  it('isolates nested metadata from returned evidence mutations', () => {
+  it("isolates nested metadata from returned evidence mutations", () => {
     const metadata = {
       nested: {
-        completedFiles: 3
-      }
-    }
+        completedFiles: 3,
+      },
+    };
     const evidence = service.build({
-      id: 'file-provider:scan-progress',
-      label: 'File scan progress',
-      roots: ['/a'],
+      id: "file-provider:scan-progress",
+      label: "File scan progress",
+      roots: ["/a"],
       itemCount: 3,
       pendingRoots: 0,
       failedItems: 0,
       isActive: false,
-      metadata
-    })
+      metadata,
+    });
 
-    const evidenceMetadata = evidence.metadata
+    const evidenceMetadata = evidence.metadata;
     if (!evidenceMetadata) {
-      throw new Error('Expected progress evidence metadata')
+      throw new Error("Expected progress evidence metadata");
     }
 
-    ;(evidenceMetadata.nested as { completedFiles: number }).completedFiles = 99
+    (evidenceMetadata.nested as { completedFiles: number }).completedFiles = 99;
 
-    expect(metadata.nested.completedFiles).toBe(3)
-  })
+    expect(metadata.nested.completedFiles).toBe(3);
+  });
 
-  it('ignores empty source-specific reason overrides', () => {
+  it("ignores empty source-specific reason overrides", () => {
     expect(
       service.build({
-        id: 'file-provider:scan-progress',
-        label: 'File scan progress',
-        roots: ['/a'],
+        id: "file-provider:scan-progress",
+        label: "File scan progress",
+        roots: ["/a"],
         itemCount: 3,
         pendingRoots: 1,
         failedItems: 0,
         isActive: false,
         reasons: {
-          pendingRoots: '   '
-        }
-      })
+          pendingRoots: "   ",
+        },
+      }),
     ).toMatchObject({
-      status: 'warming',
-      reason: 'indexed-source-progress-has-pending-roots'
-    })
-  })
+      status: "warming",
+      reason: "indexed-source-progress-has-pending-roots",
+    });
+  });
 
-  it('normalizes malformed checkedAt and progress counters', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+  it("normalizes malformed checkedAt and progress counters", () => {
+    vi.spyOn(Date, "now").mockReturnValue(1700000000000);
 
     expect(
       service.build({
-        id: 'source:progress',
-        label: 'Source progress',
-        roots: ['/a'],
+        id: "source:progress",
+        label: "Source progress",
+        roots: ["/a"],
         itemCount: Number.NaN,
         totalRoots: Number.POSITIVE_INFINITY,
         pendingRoots: -1,
         failedItems: Number.NaN,
         isActive: false,
-        checkedAt: -10
-      })
+        checkedAt: -10,
+      }),
     ).toMatchObject({
-      status: 'ready',
+      status: "ready",
       itemCount: 0,
       lastCheckedAt: 1700000000000,
       metadata: {
         totalRoots: 0,
-        pendingRoots: 0
-      }
-    })
-  })
-})
+        pendingRoots: 0,
+      },
+    });
+  });
+});

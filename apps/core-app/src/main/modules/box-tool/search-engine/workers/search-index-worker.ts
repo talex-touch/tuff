@@ -5,25 +5,30 @@
  * SearchIndexService instance in directMode (bypasses DbWriteScheduler
  * and pacing delays since there is no event loop contention here).
  *
- * Handles: indexItems, removeItems, removeProviderItems, removeByProvider
+ * Handles: atomic provider apply, staged replacement, provider-scoped remove/clear
  * Read operations (search, lookupByKeywords, etc.) stay on the main thread.
  */
-import type { SearchIndexItem } from '../search-index-service'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsRequest,
   WorkerMetricsResponse
 } from '../../addon/files/workers/worker-status'
 import type {
+  AbortProviderReplacementMessage,
+  ApplyProviderItemsMessage,
+  BeginProviderReplacementMessage,
   CleanupOrphanKeywordsMessage,
   CountByProviderMessage,
-  IndexItemsMessage,
+  FilePersistenceEntry,
+  GetProviderReplacementOutcomeMessage,
   InitMessage,
-  PersistAndIndexSummary,
+  PersistEntriesMessage,
+  PersistEntriesSummary,
+  CommitProviderReplacementMessage,
+  StageProviderReplacementItemsMessage,
   RemoveByProviderMessage,
   RemoveFileExtensionsMessage,
   RemoveFileMessage,
-  RemoveItemsMessage,
   RemoveProviderItemsMessage,
   WorkerErrorMessage,
   WorkerResultMessage
@@ -59,32 +64,6 @@ export function withWorkerWriteRetry<T>(operation: () => Promise<T>, label: stri
 
 // ---------- Internal Message Types (not in shared types) ----------
 
-interface PersistAndIndexEntry {
-  fileId: number
-  fileUpdate: {
-    content: string | null
-    embeddingStatus: string
-    embeddings?: Array<{ vector: number[]; model: string }>
-    contentHash: string | null
-  } | null
-  progress: {
-    status: string
-    progress: number
-    processedBytes: number | null
-    totalBytes: number | null
-    lastError: string | null
-    startedAt: string | null
-    updatedAt: string | null
-  }
-  indexItem: SearchIndexItem
-}
-
-interface PersistAndIndexMessage {
-  type: 'persistAndIndex'
-  taskId: string
-  entries: PersistAndIndexEntry[]
-}
-
 interface UpsertFileRecord {
   path: string
   name: string
@@ -113,12 +92,16 @@ interface UpsertScanProgressMessage {
 
 type WorkerRequest =
   | InitMessage
-  | IndexItemsMessage
-  | RemoveItemsMessage
+  | ApplyProviderItemsMessage
+  | BeginProviderReplacementMessage
+  | StageProviderReplacementItemsMessage
+  | CommitProviderReplacementMessage
+  | AbortProviderReplacementMessage
+  | GetProviderReplacementOutcomeMessage
   | RemoveProviderItemsMessage
   | RemoveByProviderMessage
   | CountByProviderMessage
-  | PersistAndIndexMessage
+  | PersistEntriesMessage
   | UpsertFilesMessage
   | UpsertScanProgressMessage
   | RemoveFileMessage
@@ -165,16 +148,66 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         respond({ type: 'result', taskId })
         break
 
-      case 'indexItems':
+      case 'applyProviderItems':
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
-        await searchIndex.indexItems(message.items)
+        respond({
+          type: 'result',
+          taskId,
+          result: await searchIndex.applyProviderItems(
+            message.providerId,
+            message.items,
+            message.legacyItemIds
+          )
+        })
+        break
+
+      case 'beginProviderReplacement':
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        await searchIndex.beginProviderReplacement(message.providerId, message.replacementId)
         respond({ type: 'result', taskId })
         break
 
-      case 'removeItems':
+      case 'stageProviderReplacementItems':
         if (!searchIndex) throw new Error('Worker not initialized — send init first')
-        await searchIndex.removeItems(message.itemIds)
+        respond({
+          type: 'result',
+          taskId,
+          result: await searchIndex.stageProviderReplacementItems(
+            message.providerId,
+            message.replacementId,
+            message.items
+          )
+        })
+        break
+
+      case 'commitProviderReplacement':
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        respond({
+          type: 'result',
+          taskId,
+          result: await searchIndex.commitProviderReplacement(
+            message.providerId,
+            message.replacementId
+          )
+        })
+        break
+
+      case 'abortProviderReplacement':
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        await searchIndex.abortProviderReplacement(message.providerId, message.replacementId)
         respond({ type: 'result', taskId })
+        break
+
+      case 'getProviderReplacementOutcome':
+        if (!searchIndex) throw new Error('Worker not initialized — send init first')
+        respond({
+          type: 'result',
+          taskId,
+          result: await searchIndex.getProviderReplacementOutcome(
+            message.providerId,
+            message.replacementId
+          )
+        })
         break
 
       case 'removeProviderItems': {
@@ -203,34 +236,25 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         break
       }
 
-      case 'persistAndIndex': {
-        if (!searchIndex || !db) throw new Error('Worker not initialized — send init first')
-        // Interleave persist + index in small chunks to avoid holding the
-        // SQLite write lock for extended periods.  Each chunk:
-        //   persist transaction → FTS5 index batches → yield
-        // The yield between chunks releases the write lock briefly so
-        // main-thread services can acquire it (prevents SQLITE_BUSY).
+      case 'persistEntries': {
+        if (!db) throw new Error('Worker not initialized — send init first')
         const PERSIST_CHUNK = 3
-        const summary: PersistAndIndexSummary = {
+        const summary: PersistEntriesSummary = {
           entries: message.entries.length,
           chunks: 0,
           persistedRows: 0,
-          indexedItems: 0,
           fileUpdates: 0,
           progressRows: 0,
           embeddings: 0
         }
         for (let ci = 0; ci < message.entries.length; ci += PERSIST_CHUNK) {
           const chunk = message.entries.slice(ci, ci + PERSIST_CHUNK)
-          const chunkSummary = await handlePersistAndIndex(chunk)
-          await searchIndex.indexItems(chunk.map((e) => e.indexItem))
+          const chunkSummary = await handlePersistEntries(chunk)
           summary.chunks += 1
           summary.persistedRows += chunkSummary.persistedRows
-          summary.indexedItems += chunk.length
           summary.fileUpdates += chunkSummary.fileUpdates
           summary.progressRows += chunkSummary.progressRows
           summary.embeddings += chunkSummary.embeddings
-          // Yield between chunks to release the write lock
           if (ci + PERSIST_CHUNK < message.entries.length) {
             await new Promise<void>((resolve) => setTimeout(resolve, 30))
           }
@@ -314,6 +338,7 @@ async function handleInit(message: InitMessage): Promise<void> {
     directMode: true,
     logger: noopSearchIndexRuntimeLogger
   })
+  await searchIndex.warmup()
   initialized = true
 
   searchIndexWorkerLog.info('Initialized', {
@@ -321,27 +346,25 @@ async function handleInit(message: InitMessage): Promise<void> {
   })
 }
 
-/**
- * Persist file content/embeddings/progress rows in a single transaction,
- * then hand off to SearchIndexService.indexItems() for FTS5 writes.
- * All operations run on the same LibSQL connection — zero contention.
- */
-async function handlePersistAndIndex(
-  entries: PersistAndIndexEntry[]
-): Promise<Omit<PersistAndIndexSummary, 'entries' | 'chunks' | 'indexedItems'>> {
+/** Persist file content, embeddings, and progress rows in one transaction. */
+async function handlePersistEntries(
+  entries: FilePersistenceEntry[]
+): Promise<Omit<PersistEntriesSummary, 'entries' | 'chunks'>> {
   if (!db) throw new Error('Worker not initialized')
-  const summary = {
-    persistedRows: 0,
-    fileUpdates: 0,
-    progressRows: 0,
-    embeddings: 0
+  if (entries.length === 0) {
+    return { persistedRows: 0, fileUpdates: 0, progressRows: 0, embeddings: 0 }
   }
-  if (entries.length === 0) return summary
   const workerDb = db
 
-  await withWorkerWriteRetry(
+  return await withWorkerWriteRetry(
     async () =>
       workerDb.transaction(async (tx) => {
+        const summary = {
+          persistedRows: 0,
+          fileUpdates: 0,
+          progressRows: 0,
+          embeddings: 0
+        }
         for (const entry of entries) {
           const { fileId, fileUpdate, progress } = entry
 
@@ -423,10 +446,10 @@ async function handlePersistAndIndex(
           summary.progressRows += 1
           summary.persistedRows += 1
         }
+        return summary
       }),
     WORKER_RETRY_LABELS.persistChunk
   )
-  return summary
 }
 
 function toDate(value: Date | number | string): Date {

@@ -3,7 +3,10 @@
  * Main thread + worker both import from here to ensure type safety.
  */
 
-import type { SearchIndexItem } from '../search-index-service'
+import type {
+  SearchIndexItem,
+  SearchIndexProviderReplacementSummary
+} from '../search-index-service'
 import type { files } from '../../../../db/schema'
 
 // ============================================================================
@@ -16,17 +19,51 @@ export interface InitMessage {
   taskId: string
 }
 
-export interface IndexItemsMessage {
-  type: 'indexItems'
+export interface ApplyProviderItemsMessage {
+  type: 'applyProviderItems'
+  providerId: string
+  items: SearchIndexItem[]
+  legacyItemIds: string[]
+  taskId: string
+}
+
+export interface BeginProviderReplacementMessage {
+  type: 'beginProviderReplacement'
+  providerId: string
+  replacementId: string
+  taskId: string
+}
+
+export interface StageProviderReplacementItemsMessage {
+  type: 'stageProviderReplacementItems'
+  providerId: string
+  replacementId: string
   items: SearchIndexItem[]
   taskId: string
 }
 
-export interface RemoveItemsMessage {
-  type: 'removeItems'
-  itemIds: string[]
+export interface CommitProviderReplacementMessage {
+  type: 'commitProviderReplacement'
+  providerId: string
+  replacementId: string
   taskId: string
 }
+
+export interface AbortProviderReplacementMessage {
+  type: 'abortProviderReplacement'
+  providerId: string
+  replacementId: string
+  taskId: string
+}
+
+export interface GetProviderReplacementOutcomeMessage {
+  type: 'getProviderReplacementOutcome'
+  providerId: string
+  replacementId: string
+  taskId: string
+}
+
+export type ProviderReplacementOutcome = SearchIndexProviderReplacementSummary | null
 
 export interface RemoveProviderItemsMessage {
   type: 'removeProviderItems'
@@ -47,11 +84,35 @@ export interface CountByProviderMessage {
   taskId: string
 }
 
-export interface PersistAndIndexSummary {
+export interface FilePersistenceEntry {
+  fileId: number
+  fileUpdate: {
+    content: string | null
+    embeddingStatus: string
+    embeddings?: Array<{ vector: number[]; model: string }>
+    contentHash: string | null
+  } | null
+  progress: {
+    status: string
+    progress: number
+    processedBytes: number | null
+    totalBytes: number | null
+    lastError: string | null
+    startedAt: string | null
+    updatedAt: string | null
+  }
+}
+
+export interface PersistEntriesMessage {
+  type: 'persistEntries'
+  taskId: string
+  entries: FilePersistenceEntry[]
+}
+
+export interface PersistEntriesSummary {
   entries: number
   chunks: number
   persistedRows: number
-  indexedItems: number
   fileUpdates: number
   progressRows: number
   embeddings: number
@@ -97,11 +158,16 @@ export interface CleanupOrphanKeywordsMessage {
  */
 export type SearchIndexWorkerMessage =
   | InitMessage
-  | IndexItemsMessage
-  | RemoveItemsMessage
+  | ApplyProviderItemsMessage
   | RemoveProviderItemsMessage
+  | BeginProviderReplacementMessage
+  | StageProviderReplacementItemsMessage
+  | CommitProviderReplacementMessage
+  | AbortProviderReplacementMessage
+  | GetProviderReplacementOutcomeMessage
   | RemoveByProviderMessage
   | CountByProviderMessage
+  | PersistEntriesMessage
   | RemoveFileMessage
   | RemoveFileExtensionsMessage
   | CleanupOrphanKeywordsMessage

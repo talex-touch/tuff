@@ -1,237 +1,245 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { IndexedWriteFlushRuntimeService, resolveIndexedWriteFlushRuntimeConfig } from '../../search'
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  IndexedWriteFlushRuntimeService,
+  resolveIndexedWriteFlushRuntimeConfig,
+} from "../../search";
 
 function createRuntime(options: {
-  pendingSize?: () => number
-  inflightSize?: () => number
-  isAvailable?: () => boolean
-  executeFlush?: () => Promise<{ status: string }>
+  pendingSize?: () => number;
+  inflightSize?: () => number;
+  isAvailable?: () => boolean;
+  executeFlush?: () => Promise<{ status: string }>;
   resolveFailure?: () => {
-    delayMs: number
-    nextRetryCount: number
-    reason: string
-  }
+    delayMs: number;
+    nextRetryCount: number;
+    reason: string;
+  };
 }) {
-  const recordIdle = vi.fn()
-  const resolveFailure = vi.fn(options.resolveFailure ?? (() => ({
-    delayMs: 25,
-    nextRetryCount: 1,
-    reason: 'retry'
-  })))
-  const handleFailure = vi.fn()
+  const recordIdle = vi.fn();
+  const resolveFailure = vi.fn(
+    options.resolveFailure ??
+      (() => ({
+        delayMs: 25,
+        nextRetryCount: 1,
+        reason: "retry",
+      })),
+  );
+  const handleFailure = vi.fn();
   const service = new IndexedWriteFlushRuntimeService({
     getPendingSize: options.pendingSize ?? (() => 1),
     getInflightSize: options.inflightSize ?? (() => 0),
     isAvailable: options.isAvailable ?? (() => true),
-    executeFlush: options.executeFlush ?? (async () => ({ status: 'flushed' })),
+    executeFlush: options.executeFlush ?? (async () => ({ status: "flushed" })),
     recordIdle,
     getFlushDelay: () => 15,
     resolveFailure,
     handleFailure,
     config: {
-      flushDeferMs: 10
-    }
-  })
+      flushDeferMs: 10,
+    },
+  });
 
   return {
     handleFailure,
     recordIdle,
     resolveFailure,
-    service
-  }
+    service,
+  };
 }
 
-describe('IndexedWriteFlushRuntimeService', () => {
+describe("IndexedWriteFlushRuntimeService", () => {
   afterEach(() => {
-    vi.clearAllTimers()
-    vi.useRealTimers()
-    vi.restoreAllMocks()
-  })
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
-  it('records idle when dependencies are unavailable', async () => {
+  it("records idle when dependencies are unavailable", async () => {
     const { recordIdle, service } = createRuntime({
       isAvailable: () => false,
       pendingSize: () => 2,
-      inflightSize: () => 1
-    })
+      inflightSize: () => 1,
+    });
 
-    await service.flush()
+    await service.flush();
 
     expect(recordIdle).toHaveBeenCalledWith({
-      reason: 'unavailable',
+      reason: "unavailable",
       pending: 2,
-      inflight: 1
-    })
-  })
+      inflight: 1,
+    });
+  });
 
-  it('records idle when there are no pending entries', async () => {
+  it("records idle when there are no pending entries", async () => {
     const { recordIdle, service } = createRuntime({
-      pendingSize: () => 0
-    })
+      pendingSize: () => 0,
+    });
 
-    await service.flush()
+    await service.flush();
 
     expect(recordIdle).toHaveBeenCalledWith({
-      reason: 'no-pending',
+      reason: "no-pending",
       pending: 0,
-      inflight: 0
-    })
-  })
+      inflight: 0,
+    });
+  });
 
-  it('normalizes malformed pending and inflight sizes before recording idle', async () => {
-    const executeFlush = vi.fn()
+  it("normalizes malformed pending and inflight sizes before recording idle", async () => {
+    const executeFlush = vi.fn();
     const { recordIdle, service } = createRuntime({
       pendingSize: () => Number.NaN,
       inflightSize: () => Number.NEGATIVE_INFINITY,
-      executeFlush
-    })
+      executeFlush,
+    });
 
-    await service.flush()
+    await service.flush();
 
-    expect(executeFlush).not.toHaveBeenCalled()
+    expect(executeFlush).not.toHaveBeenCalled();
     expect(recordIdle).toHaveBeenCalledWith({
-      reason: 'no-pending',
+      reason: "no-pending",
       pending: 0,
-      inflight: 0
-    })
-  })
+      inflight: 0,
+    });
+  });
 
-  it('serializes concurrent flush calls and schedules a deferred flush', async () => {
-    vi.useFakeTimers()
-    let releaseFlush!: () => void
+  it("serializes concurrent flush calls and schedules a deferred flush", async () => {
+    vi.useFakeTimers();
+    let releaseFlush!: () => void;
     const firstFlush = new Promise<{ status: string }>((resolve) => {
-      releaseFlush = () => resolve({ status: 'flushed' })
-    })
-    const executeFlush = vi.fn().mockImplementationOnce(() => firstFlush)
+      releaseFlush = () => resolve({ status: "flushed" });
+    });
+    const executeFlush = vi.fn().mockImplementationOnce(() => firstFlush);
     const { recordIdle, service } = createRuntime({
-      executeFlush
-    })
+      executeFlush,
+    });
 
-    const flush = service.flush()
-    await Promise.resolve()
-    await service.flush()
+    const flush = service.flush();
+    await Promise.resolve();
+    await service.flush();
 
     expect(recordIdle).toHaveBeenCalledWith({
-      reason: 'flush-in-progress',
+      reason: "flush-in-progress",
       pending: 1,
-      inflight: 0
-    })
-    expect(vi.getTimerCount()).toBe(1)
+      inflight: 0,
+    });
+    expect(vi.getTimerCount()).toBe(1);
 
-    releaseFlush()
-    await flush
-  })
+    releaseFlush();
+    await flush;
+  });
 
-  it('schedules retry after failed flush', async () => {
-    vi.useFakeTimers()
-    const error = new Error('persist failed')
+  it("schedules retry after failed flush", async () => {
+    vi.useFakeTimers();
+    const error = new Error("persist failed");
     const { handleFailure, resolveFailure, service } = createRuntime({
       executeFlush: async () => {
-        throw error
+        throw error;
       },
-      pendingSize: () => 3
-    })
+      pendingSize: () => 3,
+    });
 
-    await service.flush()
+    await service.flush();
 
     expect(resolveFailure).toHaveBeenCalledWith({
       error,
       pendingSize: 3,
-      retryCount: 0
-    })
+      retryCount: 0,
+    });
     expect(handleFailure).toHaveBeenCalledWith({
       error,
       decision: {
         delayMs: 25,
         nextRetryCount: 1,
-        reason: 'retry'
-      }
-    })
-    expect(vi.getTimerCount()).toBe(1)
-  })
+        reason: "retry",
+      },
+    });
+    expect(vi.getTimerCount()).toBe(1);
+  });
 
-  it('normalizes malformed retry decisions before scheduling failure retry', async () => {
-    vi.useFakeTimers()
-    const error = new Error('persist failed')
+  it("normalizes malformed retry decisions before scheduling failure retry", async () => {
+    vi.useFakeTimers();
+    const error = new Error("persist failed");
     const { handleFailure, service } = createRuntime({
       executeFlush: async () => {
-        throw error
+        throw error;
       },
       pendingSize: () => 3,
       resolveFailure: () => ({
         delayMs: Number.POSITIVE_INFINITY,
         nextRetryCount: -1,
-        reason: 'retry'
-      })
-    })
+        reason: "retry",
+      }),
+    });
 
-    await service.flush()
+    await service.flush();
 
     expect(handleFailure).toHaveBeenCalledWith({
       error,
       decision: {
         delayMs: 0,
         nextRetryCount: 0,
-        reason: 'retry'
-      }
-    })
-    expect(vi.getTimerCount()).toBe(1)
-  })
+        reason: "retry",
+      },
+    });
+    expect(vi.getTimerCount()).toBe(1);
+  });
 
-  it('drains remaining pending entries after a successful flush', async () => {
-    vi.useFakeTimers()
-    let pending = 2
+  it("drains remaining pending entries after a successful flush", async () => {
+    vi.useFakeTimers();
+    let pending = 2;
     const { service } = createRuntime({
       pendingSize: () => pending,
       executeFlush: async () => {
-        pending = 1
-        return { status: 'flushed' }
-      }
-    })
+        pending = 1;
+        return { status: "flushed" };
+      },
+    });
 
-    await service.flush()
+    await service.flush();
 
-    expect(vi.getTimerCount()).toBe(1)
-  })
+    expect(vi.getTimerCount()).toBe(1);
+  });
 
-  it('supports result-specific rescheduling', async () => {
-    vi.useFakeTimers()
-    let pending = 1
+  it("supports result-specific rescheduling", async () => {
+    vi.useFakeTimers();
+    let pending = 1;
     const service = new IndexedWriteFlushRuntimeService({
       getPendingSize: () => pending,
       getInflightSize: () => 0,
       isAvailable: () => true,
       executeFlush: async () => {
-        pending = 0
-        return { status: 'not-ready' }
+        pending = 0;
+        return { status: "not-ready" };
       },
       recordIdle: vi.fn(),
       getFlushDelay: () => 15,
       resolveFailure: vi.fn(),
       handleFailure: vi.fn(),
       shouldRescheduleAfterResult: (result) =>
-        result.status === 'not-ready' ? { delayMs: 100, reason: 'not-ready' } : null
-    })
+        result.status === "not-ready"
+          ? { delayMs: 100, reason: "not-ready" }
+          : null,
+    });
 
-    await service.flush()
+    await service.flush();
 
-    expect(vi.getTimerCount()).toBe(1)
-  })
-})
+    expect(vi.getTimerCount()).toBe(1);
+  });
+});
 
-describe('resolveIndexedWriteFlushRuntimeConfig', () => {
-  it('keeps shared defaults for write flush runtime adapters', () => {
+describe("resolveIndexedWriteFlushRuntimeConfig", () => {
+  it("keeps shared defaults for write flush runtime adapters", () => {
     expect(resolveIndexedWriteFlushRuntimeConfig()).toEqual({
       baseDelayMs: 250,
       backlogDelayMs: 500,
       flushDeferMs: 300,
       backpressureMaxQueued: 10,
       retryBaseMs: 250,
-      retryMaxMs: 5000
-    })
-  })
+      retryMaxMs: 5000,
+    });
+  });
 
-  it('preserves explicit zero values for tests and adapter overrides', () => {
+  it("preserves explicit zero values for tests and adapter overrides", () => {
     expect(
       resolveIndexedWriteFlushRuntimeConfig({
         baseDelayMs: 0,
@@ -239,19 +247,19 @@ describe('resolveIndexedWriteFlushRuntimeConfig', () => {
         flushDeferMs: 0,
         backpressureMaxQueued: 0,
         retryBaseMs: 0,
-        retryMaxMs: 0
-      })
+        retryMaxMs: 0,
+      }),
     ).toEqual({
       baseDelayMs: 0,
       backlogDelayMs: 0,
       flushDeferMs: 0,
       backpressureMaxQueued: 0,
       retryBaseMs: 0,
-      retryMaxMs: 0
-    })
-  })
+      retryMaxMs: 0,
+    });
+  });
 
-  it('falls back for malformed shared runtime config values', () => {
+  it("falls back for malformed shared runtime config values", () => {
     expect(
       resolveIndexedWriteFlushRuntimeConfig({
         baseDelayMs: Number.NaN,
@@ -259,15 +267,15 @@ describe('resolveIndexedWriteFlushRuntimeConfig', () => {
         flushDeferMs: -1,
         backpressureMaxQueued: Number.NEGATIVE_INFINITY,
         retryBaseMs: Number.NaN,
-        retryMaxMs: -10
-      })
+        retryMaxMs: -10,
+      }),
     ).toEqual({
       baseDelayMs: 250,
       backlogDelayMs: 500,
       flushDeferMs: 300,
       backpressureMaxQueued: 10,
       retryBaseMs: 250,
-      retryMaxMs: 5000
-    })
-  })
-})
+      retryMaxMs: 5000,
+    });
+  });
+});

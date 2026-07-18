@@ -1,1 +1,6 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/index.md","reason":"Project pre-development checklist and shared CoreApp rules."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Cross-layer typed contracts, async ownership, and executable validation requirements."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Host-owned durable SQLite state and cache ownership rules."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Focused verification and forbidden-pattern guidance."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace provider transaction through runtime, writer, reader, cache, and diagnostics."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing worker, runtime adapter, commit hub, and evidence primitives."}

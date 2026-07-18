@@ -1,16 +1,16 @@
 /**
  * Main-thread proxy for SearchIndexService write operations.
  *
- * Delegates indexItems / removeItems / removeProviderItems / removeByProvider / persistAndIndex
- * to a dedicated Worker thread so FTS5 + keyword_mappings writes AND
- * file/embeddings/progress persists never block the Electron main-thread
- * event loop.
+ * Delegates FTS mutations and file-domain persistence to a dedicated Worker
+ * thread so SQLite writes never block the Electron main-thread event loop.
  *
  * Read operations (search, lookupByKeywords, etc.) are NOT proxied —
  * they remain on the main-thread SearchIndexService for low latency.
  */
-import type { SearchIndexItem } from '../search-index-service'
-import { searchIndexCommitHub } from '../search-index-commit-hub'
+import type {
+  SearchIndexItem,
+  SearchIndexProviderReplacementSummary
+} from '../search-index-service'
 import type {
   WorkerMetricsPayload,
   WorkerMetricsResponse,
@@ -18,7 +18,9 @@ import type {
   WorkerTaskSnapshot
 } from '../../addon/files/workers/worker-status'
 import type {
-  PersistAndIndexSummary,
+  FilePersistenceEntry,
+  PersistEntriesSummary,
+  ProviderReplacementOutcome,
   WorkerErrorMessage as SearchIndexWorkerErrorMessage,
   WorkerResultMessage
 } from './search-index-worker-types'
@@ -32,8 +34,25 @@ import {
 import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
 
 const log = getLogger('search-index-worker')
+const DEFAULT_COMMIT_RESPONSE_TIMEOUT_MS = 60_000
+const DEFAULT_OUTCOME_LOOKUP_TIMEOUT_MS = 5_000
+const DEFAULT_OUTCOME_LOOKUP_ATTEMPTS = 2
+const DEFAULT_TERMINATION_TIMEOUT_MS = 1_000
 
-export type { PersistAndIndexSummary } from './search-index-worker-types'
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : fallback
+}
+
+export type { FilePersistenceEntry, PersistEntriesSummary } from './search-index-worker-types'
+
+export interface SearchIndexWorkerClientOptions {
+  commitResponseTimeoutMs?: number
+  outcomeLookupTimeoutMs?: number
+  outcomeLookupAttempts?: number
+  terminationTimeoutMs?: number
+}
 
 // ---------- Message Types (mirrors worker) ----------
 
@@ -60,6 +79,21 @@ interface PendingTask {
   resolve: (value: unknown) => void
   reject: (error: Error) => void
   startedAt: number
+  timeout?: ReturnType<typeof setTimeout>
+}
+
+class SearchIndexWorkerTaskTimeoutError extends Error {
+  constructor(taskId: string, timeoutMs: number) {
+    super(`SEARCH_INDEX_WORKER_TASK_TIMEOUT:${taskId}:${String(timeoutMs)}`)
+    this.name = 'SearchIndexWorkerTaskTimeoutError'
+  }
+}
+
+class SearchIndexWorkerTerminationUnconfirmedError extends Error {
+  constructor(detail: string) {
+    super(`SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED:${detail}`)
+    this.name = 'SearchIndexWorkerTerminationUnconfirmedError'
+  }
 }
 
 interface PendingMetrics {
@@ -67,27 +101,13 @@ interface PendingMetrics {
   timeout: ReturnType<typeof setTimeout>
 }
 
-// ---------- Persist + Index (single-writer) ----------
-
-export interface PersistEntry {
-  fileId: number
-  fileUpdate: {
-    content: string | null
-    embeddingStatus: string
-    embeddings?: Array<{ vector: number[]; model: string }>
-    contentHash: string | null
-  } | null
-  progress: {
-    status: string
-    progress: number
-    processedBytes: number | null
-    totalBytes: number | null
-    lastError: string | null
-    startedAt: string | null
-    updatedAt: string | null
-  }
-  indexItem: SearchIndexItem
+interface DrainWaiter {
+  resolve: () => void
+  timeout: ReturnType<typeof setTimeout>
+  reject: (error: Error) => void
 }
+
+// ---------- File persistence ----------
 
 export interface UpsertFileRecord {
   path: string
@@ -107,6 +127,10 @@ export class SearchIndexWorkerClient {
   private worker: Worker | null = null
   private pending = new Map<string, PendingTask>()
   private metricsPending = new Map<string, PendingMetrics>()
+  private readonly drainWaiters = new Set<DrainWaiter>()
+  private readonly replacementSessions = new Set<string>()
+  private shuttingDown = false
+  private activeCommitOperations = 0
   private lastError: string | null = null
   private lastTask: WorkerTaskSnapshot | null = null
   private workerStartedAt: number | null = null
@@ -114,11 +138,42 @@ export class SearchIndexWorkerClient {
     null
   private initPromise: Promise<void> | null = null
   private dbPath: string | null = null
+  private readonly commitResponseTimeoutMs: number
+  private readonly outcomeLookupTimeoutMs: number
+  private readonly outcomeLookupAttempts: number
+  private readonly terminationTimeoutMs: number
+  private terminationBarrier: Promise<void> | null = null
+  private terminationFailure: Error | null = null
   private readonly idleShutdown = new IdleWorkerShutdownController({
     timeoutMs: FILE_WORKER_IDLE_SHUTDOWN_MS,
-    shouldShutdown: () => this.pending.size === 0 && this.metricsPending.size === 0,
-    shutdown: () => this.terminateWorker({ keepInitState: true })
+    shouldShutdown: () =>
+      this.pending.size === 0 &&
+      this.metricsPending.size === 0 &&
+      this.replacementSessions.size === 0 &&
+      this.activeCommitOperations === 0,
+    shutdown: () => {
+      void this.beginWorkerTermination({ keepInitState: true }).catch(() => undefined)
+    }
   })
+
+  constructor(options: SearchIndexWorkerClientOptions = {}) {
+    this.commitResponseTimeoutMs = positiveInteger(
+      options.commitResponseTimeoutMs,
+      DEFAULT_COMMIT_RESPONSE_TIMEOUT_MS
+    )
+    this.outcomeLookupTimeoutMs = positiveInteger(
+      options.outcomeLookupTimeoutMs,
+      DEFAULT_OUTCOME_LOOKUP_TIMEOUT_MS
+    )
+    this.outcomeLookupAttempts = positiveInteger(
+      options.outcomeLookupAttempts,
+      DEFAULT_OUTCOME_LOOKUP_ATTEMPTS
+    )
+    this.terminationTimeoutMs = positiveInteger(
+      options.terminationTimeoutMs,
+      DEFAULT_TERMINATION_TIMEOUT_MS
+    )
+  }
 
   /**
    * Initialize the worker with a database path.
@@ -126,6 +181,7 @@ export class SearchIndexWorkerClient {
    * Safe to call multiple times — subsequent calls are no-ops.
    */
   async init(dbPath: string): Promise<void> {
+    this.assertTerminationConfirmed()
     this.dbPath = dbPath
     if (this.initPromise) {
       return this.initPromise
@@ -151,26 +207,130 @@ export class SearchIndexWorkerClient {
     })
   }
 
-  /**
-   * Index items into FTS5 + keyword_mappings (runs in worker thread).
-   */
-  async indexItems(items: SearchIndexItem[]): Promise<void> {
-    if (items.length === 0) return
+  /** Atomically retire legacy IDs and upsert provider items in the worker. */
+
+  async applyProviderItems(
+    providerId: string,
+    items: SearchIndexItem[],
+    legacyItemIds: readonly string[]
+  ): Promise<SearchIndexProviderReplacementSummary> {
     await this.ensureInitialized()
-    const taskId = this.generateTaskId('indexItems')
-    await this.sendAndWait(taskId, { type: 'indexItems', taskId, items })
-    searchIndexCommitHub.markCommitted(items.map((item) => item.providerId))
+    const taskId = this.generateTaskId('applyProviderItems')
+    const result = await this.sendAndWaitWithResult<SearchIndexProviderReplacementSummary>(taskId, {
+      type: 'applyProviderItems',
+      taskId,
+      providerId,
+      items,
+      legacyItemIds: [...legacyItemIds]
+    })
+    return result ?? { removedItems: 0, indexedItems: items.length }
   }
 
-  /**
-   * Remove items from FTS5 + keyword_mappings (runs in worker thread).
-   */
-  async removeItems(itemIds: string[]): Promise<void> {
-    if (itemIds.length === 0) return
+  async beginProviderReplacement(providerId: string, replacementId: string): Promise<void> {
     await this.ensureInitialized()
-    const taskId = this.generateTaskId('removeItems')
-    await this.sendAndWait(taskId, { type: 'removeItems', taskId, itemIds })
-    searchIndexCommitHub.markCommitted()
+    const taskId = this.generateTaskId('beginProviderReplacement')
+    await this.sendAndWait(taskId, {
+      type: 'beginProviderReplacement',
+      taskId,
+      providerId,
+      replacementId
+    })
+    this.replacementSessions.add(this.replacementSessionKey(providerId, replacementId))
+  }
+
+  async stageProviderReplacementItems(
+    providerId: string,
+    replacementId: string,
+    items: SearchIndexItem[]
+  ): Promise<number> {
+    if (items.length === 0) return 0
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('stageProviderReplacementItems')
+    return (
+      (await this.sendAndWaitWithResult<number>(taskId, {
+        type: 'stageProviderReplacementItems',
+        taskId,
+        providerId,
+        replacementId,
+        items
+      })) ?? 0
+    )
+  }
+
+  async commitProviderReplacement(
+    providerId: string,
+    replacementId: string
+  ): Promise<SearchIndexProviderReplacementSummary> {
+    this.activeCommitOperations += 1
+    try {
+      await this.ensureInitialized()
+      const taskId = this.generateTaskId('commitProviderReplacement')
+      try {
+        const result = await this.sendAndWaitWithResult<SearchIndexProviderReplacementSummary>(
+          taskId,
+          { type: 'commitProviderReplacement', taskId, providerId, replacementId },
+          this.commitResponseTimeoutMs
+        )
+        return result ?? { removedItems: 0, indexedItems: 0 }
+      } catch (error) {
+        if (error instanceof SearchIndexWorkerTaskTimeoutError) {
+          await this.teardownAmbiguousWorker(error)
+        }
+        const recovered = await this.getProviderReplacementOutcome(providerId, replacementId)
+        if (recovered) return recovered
+        throw error
+      }
+    } finally {
+      this.replacementSessions.delete(this.replacementSessionKey(providerId, replacementId))
+      this.activeCommitOperations -= 1
+      this.resolveDrainWaitersIfIdle()
+      this.scheduleIdleShutdown()
+    }
+  }
+
+  private async getProviderReplacementOutcome(
+    providerId: string,
+    replacementId: string
+  ): Promise<ProviderReplacementOutcome> {
+    await this.awaitTerminationConfirmation()
+    for (let attempt = 0; attempt < this.outcomeLookupAttempts; attempt += 1) {
+      try {
+        await this.awaitWithDeadline(
+          this.ensureInitialized(),
+          this.outcomeLookupTimeoutMs,
+          `getProviderReplacementOutcome.init.${String(attempt)}`
+        )
+        const taskId = this.generateTaskId('getProviderReplacementOutcome')
+        return (
+          (await this.sendAndWaitWithResult<ProviderReplacementOutcome>(
+            taskId,
+            { type: 'getProviderReplacementOutcome', taskId, providerId, replacementId },
+            this.outcomeLookupTimeoutMs
+          )) ?? null
+        )
+      } catch (error) {
+        await this.teardownAmbiguousWorker(
+          error instanceof Error ? error : new Error('SEARCH_INDEX_OUTCOME_LOOKUP_FAILED')
+        )
+      }
+    }
+    return null
+  }
+
+  async abortProviderReplacement(providerId: string, replacementId: string): Promise<void> {
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('abortProviderReplacement')
+    try {
+      await this.sendAndWait(taskId, {
+        type: 'abortProviderReplacement',
+        taskId,
+        providerId,
+        replacementId
+      })
+    } finally {
+      this.replacementSessions.delete(this.replacementSessionKey(providerId, replacementId))
+      this.scheduleIdleShutdown()
+    }
   }
 
   async removeProviderItems(providerId: string, itemIds: string[]): Promise<number> {
@@ -184,9 +344,6 @@ export class SearchIndexWorkerClient {
         providerId,
         itemIds
       })) ?? 0
-    if (result > 0) {
-      searchIndexCommitHub.markCommitted([providerId])
-    }
     return result
   }
 
@@ -202,9 +359,6 @@ export class SearchIndexWorkerClient {
         taskId,
         providerId
       })) ?? 0
-    if (result > 0) {
-      searchIndexCommitHub.markCommitted([providerId])
-    }
     return result
   }
 
@@ -222,41 +376,31 @@ export class SearchIndexWorkerClient {
     return result ?? 0
   }
 
-  /**
-   * Persist file/embeddings/progress rows AND index into FTS5 in a single
-   * worker call.  This is the single-writer path that eliminates
-   * SQLITE_BUSY_SNAPSHOT errors caused by concurrent main-thread +
-   * worker-thread writes.
-   */
-  async persistAndIndex(entries: PersistEntry[]): Promise<PersistAndIndexSummary> {
+  /** Persist file, embedding, and progress rows without mutating the search index. */
+  async persistEntries(entries: FilePersistenceEntry[]): Promise<PersistEntriesSummary> {
     if (entries.length === 0) {
       return {
         entries: 0,
         chunks: 0,
         persistedRows: 0,
-        indexedItems: 0,
         fileUpdates: 0,
         progressRows: 0,
         embeddings: 0
       }
     }
     await this.ensureInitialized()
-    const taskId = this.generateTaskId('persistAndIndex')
-    const summary = (await this.sendAndWaitWithResult<PersistAndIndexSummary>(taskId, {
-      type: 'persistAndIndex',
+    const taskId = this.generateTaskId('persistEntries')
+    const summary = (await this.sendAndWaitWithResult<PersistEntriesSummary>(taskId, {
+      type: 'persistEntries',
       taskId,
       entries
     })) ?? {
       entries: entries.length,
       chunks: 0,
       persistedRows: 0,
-      indexedItems: 0,
       fileUpdates: 0,
       progressRows: 0,
       embeddings: 0
-    }
-    if (summary.indexedItems > 0) {
-      searchIndexCommitHub.markCommitted(entries.map((entry) => entry.indexItem.providerId))
     }
     return summary
   }
@@ -358,16 +502,63 @@ export class SearchIndexWorkerClient {
   }
 
   hasPendingWork(): boolean {
-    return this.pending.size > 0
+    return (
+      this.pending.size > 0 || this.activeCommitOperations > 0 || this.terminationBarrier !== null
+    )
   }
 
-  shutdown(): void {
-    this.terminateWorker({ keepInitState: false })
+  async drain(timeoutMs = 5_000): Promise<void> {
+    if (this.terminationFailure) throw this.terminationFailure
+    if (!this.hasPendingWork()) return
+
+    await new Promise<void>((resolve, reject) => {
+      const waiter: DrainWaiter = {
+        resolve: () => {
+          clearTimeout(waiter.timeout)
+          this.drainWaiters.delete(waiter)
+          resolve()
+        },
+        reject: (error) => {
+          clearTimeout(waiter.timeout)
+          this.drainWaiters.delete(waiter)
+          reject(error)
+        },
+        timeout: setTimeout(() => {
+          this.drainWaiters.delete(waiter)
+          reject(new Error('SEARCH_INDEX_WRITER_DRAIN_TIMEOUT'))
+        }, timeoutMs)
+      }
+      waiter.timeout.unref?.()
+      this.drainWaiters.add(waiter)
+      this.resolveDrainWaitersIfIdle()
+    })
+  }
+
+  getPendingCount(): number {
+    return this.pending.size
+  }
+
+  async shutdown(): Promise<void> {
+    this.shuttingDown = true
+    const termination = this.beginWorkerTermination({ keepInitState: false })
+    this.rejectPendingTasks(new Error('SEARCH_INDEX_WRITER_CLOSED'))
+    this.resolvePendingMetrics()
+    this.replacementSessions.clear()
+    await this.awaitWorkerTermination(termination)
   }
 
   // ---------- Internal ----------
 
+  private assertTerminationConfirmed(): void {
+    if (this.terminationFailure) throw this.terminationFailure
+    if (this.shuttingDown) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
+    if (this.terminationBarrier) {
+      throw new SearchIndexWorkerTerminationUnconfirmedError('pending')
+    }
+  }
+
   private async ensureInitialized(): Promise<void> {
+    this.assertTerminationConfirmed()
     if (!this.initPromise && this.dbPath) {
       await this.init(this.dbPath)
     }
@@ -378,6 +569,7 @@ export class SearchIndexWorkerClient {
   }
 
   private ensureWorker(): Worker {
+    this.assertTerminationConfirmed()
     this.idleShutdown.cancel()
     if (this.worker) return this.worker
 
@@ -385,7 +577,9 @@ export class SearchIndexWorkerClient {
     const worker = new Worker(workerPath)
 
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))
-    worker.on('error', (error) => this.handleWorkerError(error))
+    worker.on('error', (error) => {
+      if (this.worker === worker) this.handleWorkerError(error)
+    })
     worker.on('exit', (code) => {
       if (this.worker === worker && code !== 0) {
         this.handleWorkerError(new Error(`SearchIndexWorker exited with code ${code}`))
@@ -396,6 +590,29 @@ export class SearchIndexWorkerClient {
     this.workerStartedAt = Date.now()
     log.info('[SearchIndexWorkerClient] Worker spawned')
     return worker
+  }
+
+  private async awaitWithDeadline<T>(
+    operation: Promise<T>,
+    timeoutMs: number,
+    label: string
+  ): Promise<T> {
+    return await new Promise<T>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new SearchIndexWorkerTaskTimeoutError(label, timeoutMs))
+      }, timeoutMs)
+      timeout.unref?.()
+      void operation.then(
+        (value) => {
+          clearTimeout(timeout)
+          resolve(value)
+        },
+        (error) => {
+          clearTimeout(timeout)
+          reject(error)
+        }
+      )
+    })
   }
 
   private sendAndWait(taskId: string, message: unknown): Promise<void> {
@@ -409,13 +626,27 @@ export class SearchIndexWorkerClient {
     })
   }
 
-  private sendAndWaitWithResult<T>(taskId: string, message: unknown): Promise<T | undefined> {
+  private sendAndWaitWithResult<T>(
+    taskId: string,
+    message: unknown,
+    timeoutMs?: number
+  ): Promise<T | undefined> {
     return new Promise<T | undefined>((resolve, reject) => {
-      this.pending.set(taskId, {
+      const pending: PendingTask = {
         resolve: (value) => resolve(value as T | undefined),
         reject,
         startedAt: Date.now()
-      })
+      }
+      if (timeoutMs !== undefined) {
+        pending.timeout = setTimeout(() => {
+          if (this.pending.get(taskId) !== pending) return
+          this.pending.delete(taskId)
+          this.resolveDrainWaitersIfIdle()
+          pending.reject(new SearchIndexWorkerTaskTimeoutError(taskId, timeoutMs))
+        }, timeoutMs)
+        pending.timeout.unref?.()
+      }
+      this.pending.set(taskId, pending)
       this.ensureWorker().postMessage(message)
     })
   }
@@ -436,6 +667,8 @@ export class SearchIndexWorkerClient {
 
     if (message.type === 'done' || message.type === 'result') {
       this.pending.delete(message.taskId)
+      if (pending.timeout) clearTimeout(pending.timeout)
+      this.resolveDrainWaitersIfIdle()
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),
@@ -450,6 +683,8 @@ export class SearchIndexWorkerClient {
 
     if (message.type === 'error') {
       this.pending.delete(message.taskId)
+      if (pending.timeout) clearTimeout(pending.timeout)
+      this.resolveDrainWaitersIfIdle()
       const errorMessage = typeof message.error === 'string' ? message.error : message.error.message
       this.lastError = errorMessage
       this.lastTask = {
@@ -464,22 +699,70 @@ export class SearchIndexWorkerClient {
     }
   }
 
+  private async teardownAmbiguousWorker(error: Error): Promise<void> {
+    this.rejectPendingTasks(error)
+    this.resolvePendingMetrics()
+    this.replacementSessions.clear()
+    this.lastError = error.message
+    log.warn('[SearchIndexWorkerClient] Worker response timed out, restarting for recovery', {
+      error
+    })
+
+    const termination = this.beginWorkerTermination({ keepInitState: true })
+    await this.awaitWorkerTermination(termination)
+  }
+
+  private async awaitTerminationConfirmation(): Promise<void> {
+    if (this.terminationFailure) throw this.terminationFailure
+    const termination = this.terminationBarrier
+    if (!termination) return
+    await this.awaitWorkerTermination(termination)
+  }
+
+  private async awaitWorkerTermination(termination: Promise<void>): Promise<void> {
+    try {
+      await this.awaitWithDeadline(termination, this.terminationTimeoutMs, 'worker.terminate')
+    } catch (error) {
+      if (error instanceof SearchIndexWorkerTerminationUnconfirmedError) throw error
+      throw new SearchIndexWorkerTerminationUnconfirmedError(
+        error instanceof SearchIndexWorkerTaskTimeoutError ? 'timeout' : 'rejected'
+      )
+    }
+  }
+
   private handleWorkerError(error: Error): void {
-    // Reject all pending tasks
-    for (const [, pending] of this.pending) {
+    void this.beginWorkerTermination({ keepInitState: true }).catch(() => undefined)
+    this.rejectPendingTasks(error)
+    this.resolvePendingMetrics()
+    this.replacementSessions.clear()
+    this.lastError = error.message
+    log.warn('[SearchIndexWorkerClient] Worker failed, will restart on demand', { error })
+  }
+
+  private rejectPendingTasks(error: Error): void {
+    for (const pending of this.pending.values()) {
+      if (pending.timeout) clearTimeout(pending.timeout)
       pending.reject(error)
     }
     this.pending.clear()
+    this.resolveDrainWaitersIfIdle()
+  }
 
-    for (const [, pending] of this.metricsPending) {
+  private resolvePendingMetrics(): void {
+    for (const pending of this.metricsPending.values()) {
       clearTimeout(pending.timeout)
       pending.resolve(null)
     }
     this.metricsPending.clear()
+  }
 
-    this.terminateWorker({ keepInitState: true })
-    this.lastError = error.message
-    log.warn('[SearchIndexWorkerClient] Worker failed, will restart on demand', { error })
+  private resolveDrainWaitersIfIdle(): void {
+    if (this.terminationFailure) {
+      for (const waiter of [...this.drainWaiters]) waiter.reject(this.terminationFailure)
+      return
+    }
+    if (this.hasPendingWork()) return
+    for (const waiter of [...this.drainWaiters]) waiter.resolve()
   }
 
   private generateTaskId(prefix: string): string {
@@ -532,23 +815,53 @@ export class SearchIndexWorkerClient {
     return Number.isFinite(percent) ? Math.max(0, percent) : null
   }
 
+  private replacementSessionKey(providerId: string, replacementId: string): string {
+    return `${providerId}\u0000${replacementId}`
+  }
+
   private scheduleIdleShutdown(): void {
-    if (!this.worker || this.pending.size > 0 || this.metricsPending.size > 0) {
+    if (
+      !this.worker ||
+      this.pending.size > 0 ||
+      this.metricsPending.size > 0 ||
+      this.replacementSessions.size > 0 ||
+      this.activeCommitOperations > 0
+    ) {
       return
     }
 
     this.idleShutdown.schedule()
   }
 
-  private terminateWorker(options: { keepInitState: boolean }): void {
+  private beginWorkerTermination(options: { keepInitState: boolean }): Promise<void> {
     this.idleShutdown.cancel()
-    this.worker?.terminate()
+    if (!options.keepInitState) this.dbPath = null
+    if (this.terminationFailure) return Promise.reject(this.terminationFailure)
+    if (this.terminationBarrier) return this.terminationBarrier
+
+    const worker = this.worker
     this.worker = null
     this.workerStartedAt = null
     this.lastMetricsSample = null
     this.initPromise = null
-    if (!options.keepInitState) {
-      this.dbPath = null
-    }
+    if (!worker) return Promise.resolve()
+
+    const termination = Promise.resolve()
+      .then(() => worker.terminate())
+      .then(() => undefined)
+    this.terminationBarrier = termination
+    void termination.then(
+      () => {
+        if (this.terminationBarrier !== termination) return
+        this.terminationBarrier = null
+        this.resolveDrainWaitersIfIdle()
+      },
+      () => {
+        if (this.terminationBarrier !== termination) return
+        this.terminationFailure = new SearchIndexWorkerTerminationUnconfirmedError('rejected')
+        this.resolveDrainWaitersIfIdle()
+      }
+    )
+    return termination
   }
 }

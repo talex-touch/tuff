@@ -1,67 +1,64 @@
 export interface IndexedWorkerProgressLike {
-  status: string
-  progress: number
-  processedBytes?: number | null
-  totalBytes?: number | null
-  lastError?: string | null
-  startedAt?: string | null
-  updatedAt?: string | null
+  status: string;
+  progress: number;
+  processedBytes?: number | null;
+  totalBytes?: number | null;
+  lastError?: string | null;
+  startedAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface IndexedWorkerEmbeddingLike {
-  model: string
-  vector: number[]
+  model: string;
+  vector: number[];
 }
 
 export interface IndexedWorkerFileUpdateLike {
-  content: string | null
-  embeddingStatus: string
-  embeddings?: IndexedWorkerEmbeddingLike[] | null
-  contentHash?: string | null
+  content: string | null;
+  embeddingStatus: string;
+  embeddings?: IndexedWorkerEmbeddingLike[] | null;
+  contentHash?: string | null;
 }
 
-export interface IndexedWorkerPersistEntryLike<TIndexItem> {
-  fileId: number
+export interface IndexedWorkerPersistEntryLike {
+  fileId: number;
   fileUpdate: {
-    content: string | null
-    embeddingStatus: string
-    embeddings?: IndexedWorkerEmbeddingLike[]
-    contentHash: string | null
-  } | null
+    content: string | null;
+    embeddingStatus: string;
+    embeddings?: IndexedWorkerEmbeddingLike[];
+    contentHash: string | null;
+  } | null;
   progress: {
-    status: string
-    progress: number
-    processedBytes: number | null
-    totalBytes: number | null
-    lastError: string | null
-    startedAt: string | null
-    updatedAt: string | null
-  }
-  indexItem: TIndexItem
+    status: string;
+    progress: number;
+    processedBytes: number | null;
+    totalBytes: number | null;
+    lastError: string | null;
+    startedAt: string | null;
+    updatedAt: string | null;
+  };
 }
 
-export interface IndexedWorkerPersistRecordLike<TIndexItem> {
-  fileId: number
-  fileUpdate: IndexedWorkerFileUpdateLike | null
-  progress: IndexedWorkerProgressLike
-  indexItem: TIndexItem
+export interface IndexedWorkerPersistRecordLike {
+  fileId: number;
+  fileUpdate: IndexedWorkerFileUpdateLike | null;
+  progress: IndexedWorkerProgressLike;
 }
 
-export class IndexedWorkerPersistEntryMapperService<TIndexItem> {
-  map<TRecord extends IndexedWorkerPersistRecordLike<TIndexItem>>(
+export class IndexedWorkerPersistEntryMapperService {
+  map<TRecord extends IndexedWorkerPersistRecordLike>(
     records: TRecord[],
-  ): Array<IndexedWorkerPersistEntryLike<TIndexItem>> {
+  ): IndexedWorkerPersistEntryLike[] {
     return records.map((record) => ({
       fileId: record.fileId,
       fileUpdate: this.mapFileUpdate(record.fileUpdate),
       progress: this.mapProgress(record.progress),
-      indexItem: record.indexItem,
     }));
   }
 
   private mapFileUpdate(
     fileUpdate: IndexedWorkerFileUpdateLike | null,
-  ): IndexedWorkerPersistEntryLike<TIndexItem>["fileUpdate"] {
+  ): IndexedWorkerPersistEntryLike["fileUpdate"] {
     if (!fileUpdate) {
       return null;
     }
@@ -79,7 +76,7 @@ export class IndexedWorkerPersistEntryMapperService<TIndexItem> {
 
   private mapProgress(
     progress: IndexedWorkerProgressLike,
-  ): IndexedWorkerPersistEntryLike<TIndexItem>["progress"] {
+  ): IndexedWorkerPersistEntryLike["progress"] {
     return {
       status: progress.status,
       progress: progress.progress,

@@ -1,3 +1,8 @@
+import type {
+  IndexedSourceDelta,
+  IndexedSourceResetRequest,
+  IndexedSourceResetResult
+} from '@talex-touch/utils/search'
 import { vi } from 'vitest'
 
 const appProviderMocks = vi.hoisted(() => ({
@@ -14,7 +19,6 @@ const appProviderMocks = vi.hoisted(() => ({
   getMainConfigMock: vi.fn(),
   getWatchPathsMock: vi.fn((): string[] => []),
   registerPollingMock: vi.fn(),
-  removeByProviderMock: vi.fn(),
   runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
     for (let index = 0; index < items.length; index += 1) {
       await handler(items[index], index)
@@ -30,7 +34,22 @@ const appProviderMocks = vi.hoisted(() => ({
   pinyinMock: vi.fn(),
   spawnSafeMock: vi.fn(),
   unregisterPollingMock: vi.fn(),
-  withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task())
+  withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task()),
+  runtimeDelegate: {
+    scan: vi.fn(async () => undefined),
+    reconcile: vi.fn(async () => undefined),
+    applyDelta: vi.fn(async (_delta: IndexedSourceDelta) => undefined),
+    reset: vi.fn(
+      async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => ({
+        sourceId: request.sourceId,
+        reason: request.reason,
+        clearedSearchIndex: true,
+        clearedScanProgress: false,
+        startedAt: 0,
+        completedAt: 0
+      })
+    )
+  }
 }))
 
 export const addWatchPathMock = appProviderMocks.addWatchPathMock
@@ -41,7 +60,6 @@ export const getLoggerMock = appProviderMocks.getLoggerMock
 export const getMainConfigMock = appProviderMocks.getMainConfigMock
 export const getWatchPathsMock = appProviderMocks.getWatchPathsMock
 export const registerPollingMock = appProviderMocks.registerPollingMock
-export const removeByProviderMock = appProviderMocks.removeByProviderMock
 export const runAdaptiveTaskQueueMock = appProviderMocks.runAdaptiveTaskQueueMock
 export const runAppTaskMock = appProviderMocks.runAppTaskMock
 export const runMdlsUpdateScanMock = appProviderMocks.runMdlsUpdateScanMock
@@ -55,6 +73,30 @@ export const pinyinMock = appProviderMocks.pinyinMock
 export const spawnSafeMock = appProviderMocks.spawnSafeMock
 export const unregisterPollingMock = appProviderMocks.unregisterPollingMock
 export const withSqliteRetryMock = appProviderMocks.withSqliteRetryMock
+export const appRuntimeScanMock = appProviderMocks.runtimeDelegate.scan
+export const appRuntimeReconcileMock = appProviderMocks.runtimeDelegate.reconcile
+export const appRuntimeApplyDeltaMock = appProviderMocks.runtimeDelegate.applyDelta
+export const appRuntimeResetMock = appProviderMocks.runtimeDelegate.reset
+
+export function resetAppRuntimeDelegateMocks(): void {
+  appRuntimeScanMock.mockReset()
+  appRuntimeReconcileMock.mockReset()
+  appRuntimeApplyDeltaMock.mockReset()
+  appRuntimeResetMock.mockReset()
+  appRuntimeScanMock.mockResolvedValue(undefined)
+  appRuntimeReconcileMock.mockResolvedValue(undefined)
+  appRuntimeApplyDeltaMock.mockResolvedValue(undefined)
+  appRuntimeResetMock.mockImplementation(
+    async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => ({
+      sourceId: request.sourceId,
+      reason: request.reason,
+      clearedSearchIndex: true,
+      clearedScanProgress: false,
+      startedAt: 0,
+      completedAt: 0
+    })
+  )
+}
 
 vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: false }
@@ -322,7 +364,14 @@ export async function flushPromises(): Promise<void> {
 }
 
 export async function loadSubject() {
-  return await import('./app-provider')
+  const subject = await import('./app-provider')
+  subject.appProvider.setIndexedSourceRuntimeDelegate({
+    scan: appRuntimeScanMock,
+    reconcile: appRuntimeReconcileMock,
+    applyDelta: appRuntimeApplyDeltaMock,
+    reset: appRuntimeResetMock
+  })
+  return subject
 }
 
 export async function withPlatform<T>(
@@ -420,20 +469,26 @@ export type AppProviderPrivate = {
       stableId?: string
       uniqueId?: string
     }
-  ) => {
+  ) => Promise<{
     sourceId: string
     recordId: string
     stableKey: string
     kind: string
     title: string
     keywords?: string[]
+    search?: {
+      aliases?: Array<{ value: string; priority?: number }>
+      keywords?: Array<{ value: string; priority?: number }>
+      legacyItemIds?: string[]
+    }
     tags?: string[]
     metadata?: Record<string, unknown>
-  }
+  }>
   _clearPendingDeletions: () => Promise<void>
   _initialize: (options?: { forceRefresh?: boolean }) => Promise<unknown>
   _syncSemanticAliasCatalogIfNeeded: () => Promise<void>
   _waitForItemStable: (path: string) => Promise<boolean>
+  publishAppRuntimeUpsert: (appInfo: { path: string }, reason: string) => Promise<void>
   processAppPath: (path: string) => Promise<{
     success: boolean
     status: string
@@ -452,8 +507,19 @@ export type AppProviderPrivate = {
     }
   }>
   handleItemUnlinked: (event: { filePath: string }) => Promise<void> | Promise<Promise<void>>
-  scanIndexedSource: (request: { sourceId: string; reason: string }) => Promise<void>
+  buildIndexedSourceRecordBatches: (
+    sourceId: string,
+    signal?: AbortSignal,
+    includeManaged?: boolean
+  ) => AsyncIterable<unknown>
+  scanIndexedSource: (request: {
+    sourceId: string
+    reason: string
+    signal?: AbortSignal
+  }) => AsyncIterable<unknown>
   reconcileIndexedSource: (request: { sourceId: string }) => Promise<unknown>
+  _runScheduledMdlsReconcile: () => Promise<void>
+  collectIndexedSourceRecords: (sourceId: string, signal?: AbortSignal) => Promise<unknown[]>
   handleIndexedSourceWatchEvent: (event: {
     sourceId?: string
     action: 'add' | 'change' | 'delete'
@@ -493,21 +559,6 @@ export type AppProviderPrivate = {
     stableId?: string
     uniqueId?: string
   }) => Promise<Set<string>>
-  _syncKeywordsForApp: (app: {
-    alternateNames?: string[]
-    bundleId?: string
-    displayName?: string
-    displayNameQuality?: string
-    fileName?: string
-    icon?: string
-    lastModified?: Date
-    launchKind: string
-    launchTarget: string
-    name: string
-    path: string
-    stableId?: string
-    uniqueId?: string
-  }) => Promise<void>
   diagnoseAppSearch: (request: { target: string; query?: string }) => Promise<unknown>
   reindexAppSearchTarget: (request: {
     target: string
@@ -517,11 +568,50 @@ export type AppProviderPrivate = {
   _performMdlsUpdateScan: () => Promise<unknown>
   _performRebuild: () => Promise<void>
   _performStartupBackfill: () => Promise<void>
-  reindexManagedEntries: () => Promise<void>
   _recordMissingIconApps: (apps: unknown[]) => Promise<void>
+  resetIndexedSourceLocalState: (request: {
+    sourceId: string
+    reason: string
+    clearSearchIndex: boolean
+    clearScanProgress: boolean
+  }) => Promise<unknown>
   _runFullSync: (forced: boolean) => Promise<unknown>
   _runMdlsUpdateScan: () => Promise<unknown>
   _runStartupBackfill: () => Promise<void>
+  _runStartupBackfillWithRetry: () => Promise<void>
+  _scheduleStartupBackfill: () => void
+  _scheduleStartupIndexHealthCheck: () => void
+  _runFullSyncIfDue: () => Promise<void>
+  _shouldRunStartupBackfill: () => Promise<{ allowed: boolean; reason?: string }>
+  getAppSearchIndexHealth: () => Promise<{
+    healthy: boolean
+    appCount: number
+    indexedItemCount: number
+  }>
+  waitForStartupProducerDelay: (delayMs: number) => Promise<void>
+  waitForMainRendererReady: () => Promise<void>
+  startupBackfillTask: Promise<void> | null
+  appIndexSettings: Partial<{
+    startupBackfillEnabled: boolean
+    startupBackfillRetryMax: number
+    startupBackfillRetryBaseMs: number
+    startupBackfillRetryMaxMs: number
+  }> &
+    Record<string, unknown>
+  _getLastFullSyncTime: () => Promise<number | null>
+  setIndexedSourceRuntimeDelegate: (
+    delegate: {
+      scan: (reason: string) => Promise<unknown>
+      reconcile: (reason: string) => Promise<unknown>
+      applyDelta: (delta: unknown) => Promise<unknown>
+      reset: (request: {
+        sourceId: string
+        reason: string
+        clearSearchIndex: boolean
+        clearScanProgress: boolean
+      }) => Promise<unknown>
+    } | null
+  ) => void
   _setLastFullSyncTime: (timestamp: number) => Promise<void>
   _mapDbAppToScannedInfo: (app: {
     name: string

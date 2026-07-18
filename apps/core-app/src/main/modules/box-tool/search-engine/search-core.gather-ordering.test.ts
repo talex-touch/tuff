@@ -7,7 +7,6 @@ import type {
   TuffSearchResult
 } from '@talex-touch/utils'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils'
-import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderContext } from './types'
 
@@ -124,7 +123,23 @@ vi.mock('../../storage', () => ({
   storageModule: {},
   getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
   isMainStorageReady: vi.fn(() => false),
-  subscribeMainConfig: vi.fn(() => () => {})
+  subscribeMainConfig: vi.fn(() => () => {}),
+  OnboardingGateError: class OnboardingGateError extends Error {
+    constructor(
+      readonly decision: {
+        state: 'blocked' | 'degraded'
+        reason: string
+        recoverable: boolean
+      }
+    ) {
+      super(decision.reason)
+    }
+  },
+  onboardingGate: {
+    evaluate: vi.fn(() => ({ state: 'allowed' })),
+    waitForDecision: vi.fn(async () => ({ state: 'allowed' })),
+    subscribe: vi.fn(() => () => {})
+  }
 }))
 
 vi.mock('../addon/apps/app-provider', () => ({
@@ -132,7 +147,9 @@ vi.mock('../addon/apps/app-provider', () => ({
     id: 'app-provider',
     type: 'app',
     supportedInputTypes: [TuffInputType.Text],
-    onSearch: vi.fn()
+    onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: vi.fn(async () => undefined),
+    setIndexedSourceRuntimeDelegate: vi.fn()
   }
 }))
 
@@ -151,6 +168,9 @@ vi.mock('../addon/files/file-provider', () => ({
     type: 'file',
     supportedInputTypes: [TuffInputType.Text],
     onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: vi.fn(async () => undefined),
+    setFilePersistencePort: vi.fn(),
+    setIndexedSourceRuntimeMutationDelegate: vi.fn(),
     setIndexedSourceRuntimeResetDelegate: vi.fn()
   }
 }))
@@ -226,6 +246,15 @@ vi.mock('./search-index-service', () => ({
   SearchIndexService: class {}
 }))
 
+vi.mock('./search-index-writer', () => ({
+  LegacySearchIndexWriter: class {},
+  SourceScopedIndexWriterRouter: class {},
+  searchIndexWriter: {
+    getFilePersistencePort: vi.fn(() => null),
+    shutdown: vi.fn(async () => undefined)
+  }
+}))
+
 vi.mock('./search-logger', () => ({
   searchLogger: {
     isEnabled: () => false,
@@ -289,24 +318,36 @@ vi.mock('talex-mica-electron', () => ({
 import { SearchEngineCore } from './search-core'
 
 interface SearchCoreOrderingHarness {
-  currentGatherController: IGatherController | null
-  latestSessionId: string | null
   searchCache: Map<string, unknown>
   searchFirstResultMetrics: Map<string, unknown>
-  search: (query: TuffQuery) => Promise<TuffSearchResult>
-  cancelSearch: (searchId: string) => void
-  orchestrateSearchQuery: (query: TuffQuery) => Promise<{
+  startSearch: (
+    query: TuffQuery,
+    context: {
+      caller: { kind: 'core-box' | 'ai-agent'; id: string }
+      sink: {
+        start: (sessionId: string) => void
+        snapshot: (result: TuffSearchResult) => void
+        complete: (payload: { searchId: string; cancelled?: boolean }) => void
+      }
+    }
+  ) => {
+    sessionId: string
+    result: Promise<TuffSearchResult>
+    completed: Promise<void>
+  }
+  cancelSearch: (searchId: string, caller: { kind: 'core-box'; id: string }) => boolean
+  destroy: () => Promise<void>
+  orchestrateSearchQuery: () => Promise<{
     providerFilter?: string
     cacheKey: string
     durationMs: number
     providerConfigSignature: string
   }>
   getActiveProviders: () => ISearchProvider<ProviderContext>[]
-  aggregateProvidersForQuery: (
-    providers: ISearchProvider<ProviderContext>[],
-    query: TuffQuery,
-    options: { providerFilter?: string }
-  ) => { providers: ISearchProvider<ProviderContext>[]; durationMs: number }
+  aggregateProvidersForQuery: () => {
+    providers: ISearchProvider<ProviderContext>[]
+    durationMs: number
+  }
   mergeAndRankItems: (args: { items: TuffItem[] }) => Promise<{
     sortedItems: TuffItem[]
     sortingDuration: number
@@ -320,7 +361,6 @@ interface SearchCoreOrderingHarness {
   _recordSearchResults: () => Promise<void>
   logSearchTrace: () => void
   _recordSearchMetrics: () => void
-  getTransport: () => { sendToWindow: typeof sendToWindowMock }
 }
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
@@ -332,52 +372,14 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve: resolvePromise }
 }
 
-function eventNameOf(event: unknown): string {
-  if (
-    event &&
-    typeof event === 'object' &&
-    'toEventName' in event &&
-    typeof event.toEventName === 'function'
-  ) {
-    return event.toEventName()
-  }
-  return String(event)
-}
-
 describe('search-core gather completion ordering', () => {
-  beforeEach(() => {
+  const core = SearchEngineCore.getInstance() as unknown as SearchCoreOrderingHarness
+
+  beforeEach(async () => {
+    await core.destroy()
     gatherAggregatorMock.mockReset()
-    sendToWindowMock.mockReset().mockImplementation(async (_windowId, event, payload) => {
-      sentEvents.push({
-        eventName: eventNameOf(event),
-        payload: payload as Record<string, unknown>,
-        mergeSettled
-      })
-    })
     sentEvents.length = 0
     mergeSettled = false
-  })
-
-  it('publishes one cancelled end only after the running update callback settles', async () => {
-    const query: TuffQuery = { text: 'cancel ordered search', inputs: [] }
-    const updateMergeStarted = createDeferred()
-    const updateMergeRelease = createDeferred()
-    const abortController = new AbortController()
-    let capturedCallback: TuffAggregatorCallback | null = null
-
-    const gatherController: IGatherController = {
-      abort: vi.fn(() => abortController.abort()),
-      promise: Promise.resolve(0),
-      signal: abortController.signal
-    }
-    gatherAggregatorMock.mockImplementation((_providers, _params, onUpdate) => {
-      capturedCallback = onUpdate
-      return gatherController
-    })
-
-    const core = SearchEngineCore.getInstance() as unknown as SearchCoreOrderingHarness
-    core.currentGatherController = null
-    core.latestSessionId = null
     core.searchCache.clear()
     core.searchFirstResultMetrics.clear()
     core.orchestrateSearchQuery = vi.fn(async () => ({
@@ -393,14 +395,36 @@ describe('search-core gather completion ordering', () => {
     core._recordSearchResults = vi.fn(async () => {})
     core.logSearchTrace = vi.fn()
     core._recordSearchMetrics = vi.fn()
-    core.getTransport = vi.fn(() => ({ sendToWindow: sendToWindowMock }))
+  })
+
+  it('aborts only the named session and publishes its one cancelled completion after an in-flight merge', async () => {
+    const query: TuffQuery = { text: 'cancel ordered search', inputs: [] }
+    const updateMergeStarted = createDeferred()
+    const updateMergeRelease = createDeferred()
+    const callbacks: TuffAggregatorCallback[] = []
+    const controllers = [
+      {
+        abort: vi.fn(),
+        promise: Promise.resolve(0),
+        signal: new AbortController().signal
+      },
+      {
+        abort: vi.fn(),
+        promise: Promise.resolve(0),
+        signal: new AbortController().signal
+      }
+    ] satisfies IGatherController[]
+
+    gatherAggregatorMock.mockImplementation((_providers, _params, onUpdate) => {
+      callbacks.push(onUpdate)
+      return controllers[callbacks.length - 1]
+    })
     core.mergeAndRankItems = vi.fn(async ({ items }) => {
       if (items.length > 0) {
         updateMergeStarted.resolve()
         await updateMergeRelease.promise
         mergeSettled = true
       }
-
       return {
         sortedItems: items,
         sortingDuration: 0,
@@ -410,20 +434,62 @@ describe('search-core gather completion ordering', () => {
       }
     })
 
-    const searchPromise = core.search(query)
-    await vi.waitFor(() => expect(capturedCallback).toBeTypeOf('function'))
-
-    await capturedCallback!({
+    const delivered: Array<{
+      sessionId: string
+      type: string
+      cancelled?: boolean
+      mergeSettled?: boolean
+    }> = []
+    const caller = { kind: 'core-box' as const, id: 'core-box:ordering' }
+    const first = core.startSearch(query, {
+      caller,
+      sink: {
+        start: (sessionId) => {
+          delivered.push({ sessionId, type: 'session' })
+        },
+        snapshot: (result) => {
+          delivered.push({ sessionId: result.sessionId!, type: 'snapshot' })
+        },
+        complete: ({ searchId, cancelled }) => {
+          delivered.push({ sessionId: searchId, type: 'complete', cancelled, mergeSettled })
+        }
+      }
+    })
+    await vi.waitFor(() => expect(callbacks).toHaveLength(1))
+    await callbacks[0]({
       newResults: [],
       totalCount: 0,
       isDone: false,
       sourceStats: [],
       layer: 'fast'
     })
-    const initialResult = await searchPromise
-    const searchId = initialResult.sessionId!
+    await first.result
 
-    const subsequentResult = new TuffSearchResultBuilder(query)
+    const second = core.startSearch(query, {
+      caller: { kind: 'ai-agent', id: 'agent:ordering' },
+      sink: {
+        start: (sessionId) => {
+          delivered.push({ sessionId, type: 'session' })
+        },
+        snapshot: (result) => {
+          delivered.push({ sessionId: result.sessionId!, type: 'snapshot' })
+        },
+        complete: ({ searchId, cancelled }) => {
+          delivered.push({ sessionId: searchId, type: 'complete', cancelled, mergeSettled })
+        }
+      }
+    })
+    await vi.waitFor(() => expect(callbacks).toHaveLength(2))
+    await callbacks[1]({
+      newResults: [],
+      totalCount: 0,
+      isDone: false,
+      sourceStats: [],
+      layer: 'fast'
+    })
+    await second.result
+
+    const lateResult = new TuffSearchResultBuilder(query)
       .setItems([
         {
           id: 'late-result',
@@ -432,49 +498,41 @@ describe('search-core gather completion ordering', () => {
         }
       ])
       .build()
-    const runningUpdate = Promise.resolve(
-      capturedCallback!({
-        newResults: [subsequentResult],
-        totalCount: 1,
-        isDone: false,
-        sourceStats: [],
-        layer: 'deferred'
-      })
-    )
+    const runningUpdate = callbacks[0]({
+      newResults: [lateResult],
+      totalCount: 1,
+      isDone: false,
+      sourceStats: [],
+      layer: 'deferred'
+    })
 
     await updateMergeStarted.promise
-    core.cancelSearch(searchId)
-    const endCountBeforeMergeSettled = sentEvents.filter(
-      (event) => event.eventName === CoreBoxEvents.search.end.toEventName()
-    ).length
+    expect(core.cancelSearch(first.sessionId, caller)).toBe(true)
+    expect(controllers[0].abort).toHaveBeenCalledTimes(1)
+    expect(controllers[1].abort).not.toHaveBeenCalled()
+    expect(
+      delivered.filter((entry) => entry.sessionId === first.sessionId && entry.type === 'complete')
+    ).toHaveLength(0)
 
     updateMergeRelease.resolve()
     await runningUpdate
-    await capturedCallback!({
+    await callbacks[0]({
       newResults: [],
       totalCount: 1,
       isDone: true,
       cancelled: true,
       sourceStats: []
     })
+    await first.completed
 
-    const endEvents = sentEvents.filter(
-      (event) => event.eventName === CoreBoxEvents.search.end.toEventName()
-    )
+    await callbacks[1]({ newResults: [], totalCount: 0, isDone: true, sourceStats: [] })
+    await second.completed
 
-    expect(endCountBeforeMergeSettled).toBe(0)
-    expect(gatherController.abort).toHaveBeenCalledTimes(1)
-    expect(sentEvents.map((event) => event.eventName)).toEqual([
-      CoreBoxEvents.search.end.toEventName()
-    ])
-    expect(endEvents).toHaveLength(1)
-    expect(endEvents[0]).toMatchObject({
-      mergeSettled: true,
-      payload: {
-        searchId,
-        cancelled: true,
-        sources: []
-      }
-    })
+    expect(
+      delivered.filter((entry) => entry.sessionId === first.sessionId && entry.type === 'complete')
+    ).toEqual([expect.objectContaining({ cancelled: true, mergeSettled: true })])
+    expect(
+      delivered.filter((entry) => entry.sessionId === second.sessionId && entry.type === 'complete')
+    ).toEqual([expect.objectContaining({ cancelled: undefined })])
   })
 })

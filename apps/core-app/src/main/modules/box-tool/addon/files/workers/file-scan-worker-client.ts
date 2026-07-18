@@ -11,9 +11,10 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { FILE_WORKER_IDLE_SHUTDOWN_MS, IdleWorkerShutdownController } from './idle-worker-shutdown'
 
 interface PendingScan {
-  results: ScannedFileInfo[]
-  resolve: (value: ScannedFileInfo[]) => void
-  reject: (error: Error) => void
+  batches: Array<{ sequence: number; batch: ScannedFileInfo[] }>
+  done: boolean
+  error: Error | null
+  wake: (() => void) | null
   startedAt: number
 }
 
@@ -23,7 +24,7 @@ interface PendingMetrics {
 }
 
 type WorkerMessage =
-  | { type: 'batch'; taskId: string; batch: ScannedFileInfo[] }
+  | { type: 'batch'; taskId: string; sequence: number; batch: ScannedFileInfo[] }
   | { type: 'done'; taskId: string; scannedCount: number }
   | { type: 'error'; taskId: string; error: string }
   | WorkerMetricsResponse
@@ -48,23 +49,71 @@ export class FileScanWorkerClient {
   async scan(
     paths: string[],
     excludePaths?: Set<string>,
-    batchSize?: number
+    batchSize?: number,
+    signal?: AbortSignal
   ): Promise<ScannedFileInfo[]> {
+    const results: ScannedFileInfo[] = []
+    for await (const batch of this.scanBatches(paths, excludePaths, batchSize, signal)) {
+      results.push(...batch)
+    }
+    return results
+  }
+
+  async *scanBatches(
+    paths: string[],
+    excludePaths?: Set<string>,
+    batchSize?: number,
+    signal?: AbortSignal
+  ): AsyncIterable<ScannedFileInfo[]> {
     const taskId = `scan-${Date.now()}-${Math.random().toString(16).slice(2)}`
-    const startedAt = Date.now()
     const worker = this.ensureWorker()
+    const pending: PendingScan = {
+      batches: [],
+      done: false,
+      error: null,
+      wake: null,
+      startedAt: Date.now()
+    }
+    const abort = () => {
+      const reason = signal?.reason
+      pending.error = reason instanceof Error ? reason : new Error('FILE_SCAN_ABORTED')
+      pending.done = true
+      worker.postMessage({ type: 'cancel', taskId })
+      pending.wake?.()
+    }
 
-    return new Promise<ScannedFileInfo[]>((resolve, reject) => {
-      this.pending.set(taskId, { results: [], resolve, reject, startedAt })
-
-      worker.postMessage({
-        type: 'scan',
-        taskId,
-        paths,
-        excludePaths: excludePaths ? Array.from(excludePaths) : undefined,
-        batchSize
-      })
+    this.pending.set(taskId, pending)
+    signal?.addEventListener('abort', abort, { once: true })
+    worker.postMessage({
+      type: 'scan',
+      taskId,
+      paths,
+      excludePaths: excludePaths ? Array.from(excludePaths) : undefined,
+      batchSize
     })
+
+    try {
+      if (signal?.aborted) abort()
+      while (true) {
+        const next = pending.batches.shift()
+        if (next) {
+          yield next.batch
+          worker.postMessage({ type: 'batchAck', taskId, sequence: next.sequence })
+          continue
+        }
+        if (pending.error) throw pending.error
+        if (pending.done) return
+        await new Promise<void>((resolve) => {
+          pending.wake = resolve
+        })
+        pending.wake = null
+      }
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      if (!pending.done) worker.postMessage({ type: 'cancel', taskId })
+      this.pending.delete(taskId)
+      this.scheduleIdleShutdown()
+    }
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
@@ -86,6 +135,7 @@ export class FileScanWorkerClient {
   }
 
   shutdown(): void {
+    this.failPendingScans(new Error('FILE_SCAN_WORKER_CLOSED'))
     this.terminateWorker()
   }
 
@@ -130,13 +180,14 @@ export class FileScanWorkerClient {
     }
 
     if (message.type === 'batch') {
-      pending.results.push(...message.batch)
+      pending.batches.push({ sequence: message.sequence, batch: message.batch })
+      pending.wake?.()
       return
     }
 
     if (message.type === 'done') {
-      this.pending.delete(message.taskId)
-      pending.resolve(pending.results)
+      pending.done = true
+      pending.wake?.()
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),
@@ -144,12 +195,14 @@ export class FileScanWorkerClient {
         durationMs: Date.now() - pending.startedAt,
         error: null
       }
-      this.scheduleIdleShutdown()
       return
     }
 
     if (message.type === 'error') {
-      this.pending.delete(message.taskId)
+      const error = new Error(message.error)
+      pending.error = error
+      pending.done = true
+      pending.wake?.()
       this.lastError = message.error
       this.lastTask = {
         id: message.taskId,
@@ -158,30 +211,27 @@ export class FileScanWorkerClient {
         durationMs: Date.now() - pending.startedAt,
         error: message.error
       }
-      pending.reject(new Error(message.error))
-      this.scheduleIdleShutdown()
     }
   }
 
   private handleWorkerError(error: Error): void {
-    if (this.pending.size > 0) {
-      for (const [, pending] of this.pending) {
-        pending.reject(error)
-      }
-      this.pending.clear()
+    this.failPendingScans(error)
+    for (const pending of this.metricsPending.values()) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
     }
-    if (this.metricsPending.size > 0) {
-      for (const [, pending] of this.metricsPending) {
-        clearTimeout(pending.timeout)
-        pending.resolve(null)
-      }
-      this.metricsPending.clear()
-    }
+    this.metricsPending.clear()
     this.terminateWorker()
     this.lastError = error.message
-    fileProviderLog.warn('[FileScanWorker] Worker failed, will restart on demand', {
-      error
-    })
+    fileProviderLog.warn('[FileScanWorker] Worker failed, will restart on demand', { error })
+  }
+
+  private failPendingScans(error: Error): void {
+    for (const pending of this.pending.values()) {
+      pending.error = error
+      pending.done = true
+      pending.wake?.()
+    }
   }
 
   private async requestMetrics(): Promise<WorkerMetricsPayload | null> {

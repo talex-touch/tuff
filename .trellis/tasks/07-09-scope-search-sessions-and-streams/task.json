@@ -3,7 +3,7 @@
   "name": "scope-search-sessions-and-streams",
   "title": "Scope Search Sessions and Streams",
   "description": "Introduce caller-owned search sessions, cancellation, caching identity, and request-scoped streaming/delivery.",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": "Search session registry, explicit caller context, cache/cancellation identity, typed streams, CoreBox/ApplicationIndex/AI migration",
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-09",
-  "completedAt": null,
+  "completedAt": "2026-07-17",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
@@ -21,18 +21,26 @@
   "children": [],
   "parent": "07-09-audit-search-system-architecture",
   "relatedFiles": [
+    "apps/core-app/src/main/modules/box-tool/search-engine/search-session.ts",
     "apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts",
+    "apps/core-app/src/main/modules/box-tool/search-engine/search-provider-registry.ts",
     "apps/core-app/src/main/modules/box-tool/core-box/ipc.ts",
     "apps/core-app/src/main/modules/ai/agents/builtin/search-agent.ts",
     "apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts",
     "apps/core-app/src/renderer/src/views/base/application/ApplicationIndex.vue",
+    "packages/utils/transport/types.ts",
+    "packages/utils/transport/sdk/stream/server-runtime.ts",
+    "packages/utils/transport/sdk/stream/client-runtime.ts",
+    "packages/utils/transport/sdk/port-policy.ts",
     "packages/utils/transport/events/index.ts",
-    "packages/utils/transport/types.ts"
+    "packages/utils/transport/events/types/core-box.ts",
+    "apps/nexus/content/docs/dev/api/transport.en.mdx",
+    "apps/nexus/content/docs/dev/api/transport.zh.mdx"
   ],
-  "notes": "Explicit prerequisite: 07-09-serialize-search-gather-updates.",
+  "notes": "Implementation and verification complete. No commit or archive was created because the user did not request repository commits in this session.",
   "meta": {
-    "nextAction": "Revalidate the archived ordered-gather contract, then implement caller-owned search sessions, cancellation, and request-scoped streams.",
-    "blocker": "Deferred by docs/plan-prd/TODO.md; prerequisite 07-09-serialize-search-gather-updates is archived complete.",
-    "evidence": "prd.md acceptance checklist and cross-caller search session tests."
+    "nextAction": "After a user-directed work commit, archive this completed task through Trellis; then resume the global TODO.md P1 order.",
+    "blocker": "Implementation has no blocker; Trellis archive is intentionally deferred until the work is committed.",
+    "evidence": "CoreApp 8 files/51 tests and utils 4 files/15 tests passed; concurrent UI/AI, two-sender, real cache-hit, stale cancel, early update, destroy, progressive refresh, ApplicationIndex and no-results contracts are covered. Scoped ESLint, CoreApp node/web typechecks, Vite build, legacy-global source search, and isolated Electron ApplicationIndex typed-stream smoke passed; the isolated profile remained fail-closed at onboarding and no real profile/SQLite/FTS data was touched."
   }
 }

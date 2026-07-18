@@ -45,6 +45,11 @@ interface IndexRequest {
   files: IndexFilePayload[]
 }
 
+interface CancelRequest {
+  type: 'cancel'
+  taskId: string
+}
+
 interface IndexDoneMessage {
   type: 'done'
   taskId: string
@@ -113,8 +118,9 @@ function buildMetricsPayload(): WorkerMetricsPayload {
 const MAX_CONTENT_LENGTH = 200_000
 
 const queue: IndexRequest[] = []
+const cancelledTaskIds = new Set<string>()
 let running = false
-
+let activeTaskId: string | null = null
 function buildContentHash(content: string): string | null {
   if (!content) return null
   return createHash('sha256').update(content).digest('hex')
@@ -169,6 +175,7 @@ function buildSearchIndexItem(
 }
 
 function emitFileResult(message: IndexFileResultMessage): void {
+  if (cancelledTaskIds.has(message.taskId)) return
   parentPort?.postMessage(message)
 }
 
@@ -176,9 +183,11 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
   let failed = 0
 
   for (const file of task.files) {
+    if (cancelledTaskIds.has(task.taskId)) break
     const extension = (file.extension || path.extname(file.name) || '').toLowerCase()
     const indexable = CONTENT_INDEXABLE_EXTENSIONS.has(extension)
     const size = await ensureFileSize(file)
+    if (cancelledTaskIds.has(task.taskId)) break
     let content: string | null = null
 
     if (!indexable) {
@@ -263,6 +272,8 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
       })
       continue
     }
+
+    if (cancelledTaskIds.has(task.taskId)) break
 
     if (!result) {
       emitFileResult({
@@ -362,41 +373,47 @@ async function handleIndexTask(task: IndexRequest): Promise<{ processed: number;
 }
 
 async function processQueue(): Promise<void> {
-  if (running) {
-    return
-  }
-  const next = queue.shift()
-  if (!next) {
-    return
-  }
-  running = true
+  if (running) return
 
+  const next = queue.shift()
+  if (!next) return
+  if (cancelledTaskIds.has(next.taskId)) {
+    cancelledTaskIds.delete(next.taskId)
+    void processQueue()
+    return
+  }
+
+  running = true
+  activeTaskId = next.taskId
   try {
     const { processed, failed } = await handleIndexTask(next)
-    parentPort?.postMessage({
-      type: 'done',
-      taskId: next.taskId,
-      processed,
-      failed
-    } satisfies IndexDoneMessage)
-  } catch (error) {
-    parentPort?.postMessage({
-      type: 'error',
-      taskId: next.taskId,
-      error: error instanceof Error ? error.message : String(error)
-    } satisfies IndexErrorMessage)
-  } finally {
-    running = false
-    if (queue.length > 0) {
-      void processQueue()
+    if (!cancelledTaskIds.has(next.taskId)) {
+      parentPort?.postMessage({
+        type: 'done',
+        taskId: next.taskId,
+        processed,
+        failed
+      } satisfies IndexDoneMessage)
     }
+  } catch (error) {
+    if (!cancelledTaskIds.has(next.taskId)) {
+      parentPort?.postMessage({
+        type: 'error',
+        taskId: next.taskId,
+        error: error instanceof Error ? error.message : String(error)
+      } satisfies IndexErrorMessage)
+    }
+  } finally {
+    cancelledTaskIds.delete(next.taskId)
+    activeTaskId = null
+    running = false
+    if (queue.length > 0) void processQueue()
   }
 }
 
-parentPort?.on('message', (payload: IndexRequest | WorkerMetricsRequest) => {
-  if (!payload) {
-    return
-  }
+parentPort?.on('message', (payload: IndexRequest | CancelRequest | WorkerMetricsRequest) => {
+  if (!payload) return
+
   if (payload.type === 'metrics') {
     parentPort?.postMessage({
       type: 'metrics',
@@ -405,9 +422,14 @@ parentPort?.on('message', (payload: IndexRequest | WorkerMetricsRequest) => {
     } satisfies WorkerMetricsResponse)
     return
   }
-  if (payload.type !== 'index') {
+  if (payload.type === 'cancel') {
+    cancelledTaskIds.add(payload.taskId)
+    const queuedIndex = queue.findIndex((task) => task.taskId === payload.taskId)
+    if (queuedIndex >= 0) queue.splice(queuedIndex, 1)
+    if (activeTaskId !== payload.taskId) cancelledTaskIds.delete(payload.taskId)
     return
   }
+
   queue.push(payload)
   void processQueue()
 })

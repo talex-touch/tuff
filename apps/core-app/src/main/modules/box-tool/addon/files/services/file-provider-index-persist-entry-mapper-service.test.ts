@@ -67,16 +67,10 @@ describe('file-provider-index-persist-entry-mapper-service', () => {
           lastError: null,
           startedAt: '2026-05-30T00:00:00.000Z',
           updatedAt: null
-        },
-        indexItem: {
-          itemId: '1',
-          providerId: 'file-provider',
-          type: 'file',
-          name: 'a.txt',
-          content: 'hello'
         }
       }
     ])
+    expect(entries[0]).not.toHaveProperty('indexItem')
   })
 
   it('preserves null file updates for skipped or failed parser results', () => {

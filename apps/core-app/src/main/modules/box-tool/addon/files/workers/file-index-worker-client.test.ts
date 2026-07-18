@@ -89,6 +89,41 @@ describe('FileIndexWorkerClient idle shutdown', () => {
     vi.useRealTimers()
   })
 
+  it('forwards the index batch lease to emitted file callbacks', async () => {
+    const onFile = vi.fn()
+    const client = new FileIndexWorkerClient(onFile)
+    const mutationLeaseId = 'file-provider:0:1'
+    const batch = client.indexFiles('/tmp/search.db', 'local', 'file', [
+      { ...createFile(1, 'a.txt'), mutationLeaseId }
+    ])
+    const worker = workerMock.workers.at(-1)!
+    expect(worker.messages[0]).toMatchObject({
+      type: 'index',
+      files: [expect.objectContaining({ mutationLeaseId })]
+    })
+    const taskId = taskIdOf(worker.messages[0])
+
+    worker.emit('message', {
+      type: 'file',
+      taskId,
+      fileId: 1,
+      progress: {
+        status: 'completed',
+        progress: 1,
+        processedBytes: 10,
+        totalBytes: 10,
+        lastError: null
+      },
+      fileUpdate: null,
+      indexItem: {}
+    })
+
+    expect(onFile).toHaveBeenCalledWith(expect.objectContaining({ mutationLeaseId }))
+
+    worker.emit('message', { type: 'done', taskId, processed: 1, failed: 0 })
+    await expect(batch).resolves.toEqual({ processed: 1, failed: 0 })
+  })
+
   it('terminates the idle worker after indexing and restarts on next batch', async () => {
     vi.useFakeTimers()
     const client = new FileIndexWorkerClient()
@@ -165,5 +200,65 @@ describe('FileIndexWorkerClient idle shutdown', () => {
 
     await vi.advanceTimersByTimeAsync(300)
     expect(worker.terminateCalls).toBe(1)
+  })
+
+  it('cancels only matching lease tasks and ignores their late worker messages', async () => {
+    const onFile = vi.fn()
+    const client = new FileIndexWorkerClient(onFile)
+    const cancelled = client.indexFiles('/tmp/search.db', 'local', 'file', [
+      { ...createFile(1, 'cancelled.txt'), mutationLeaseId: 'file-provider:0:1' }
+    ])
+    const retained = client.indexFiles('/tmp/search.db', 'local', 'file', [
+      { ...createFile(2, 'retained.txt'), mutationLeaseId: 'file-provider:0:2' }
+    ])
+    const worker = workerMock.workers.at(-1)!
+    const cancelledTaskId = taskIdOf(worker.messages[0])
+    const retainedTaskId = taskIdOf(worker.messages[1])
+    const cancelledExpectation = expect(cancelled).rejects.toThrow(
+      `FILE_INDEX_WORKER_TASK_CANCELLED:${cancelledTaskId}`
+    )
+
+    expect(client.cancelLease('file-provider:0:1')).toBe(1)
+    expect(worker.messages[2]).toEqual({ type: 'cancel', taskId: cancelledTaskId })
+    await cancelledExpectation
+
+    worker.emit('message', {
+      type: 'file',
+      taskId: cancelledTaskId,
+      fileId: 1,
+      progress: {
+        status: 'completed',
+        progress: 1,
+        processedBytes: 10,
+        totalBytes: 10,
+        lastError: null
+      },
+      fileUpdate: null,
+      indexItem: {}
+    })
+    worker.emit('message', { type: 'done', taskId: cancelledTaskId, processed: 1, failed: 0 })
+    expect(onFile).not.toHaveBeenCalled()
+
+    worker.emit('message', {
+      type: 'file',
+      taskId: retainedTaskId,
+      fileId: 2,
+      progress: {
+        status: 'completed',
+        progress: 1,
+        processedBytes: 10,
+        totalBytes: 10,
+        lastError: null
+      },
+      fileUpdate: null,
+      indexItem: {}
+    })
+    worker.emit('message', { type: 'done', taskId: retainedTaskId, processed: 1, failed: 0 })
+
+    await expect(retained).resolves.toEqual({ processed: 1, failed: 0 })
+    expect(onFile).toHaveBeenCalledTimes(1)
+    expect(onFile).toHaveBeenCalledWith(
+      expect.objectContaining({ fileId: 2, mutationLeaseId: 'file-provider:0:2' })
+    )
   })
 })

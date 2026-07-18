@@ -31,7 +31,6 @@ describe('file-provider-full-scan-insert-service', () => {
     const upsertFiles = vi.fn(async (chunk) =>
       inserted.filter((record) => chunk.some((item) => item.path === record.path))
     )
-    const dispatchSideEffects = vi.fn()
     const emitRecordBatch = vi.fn(async () => {})
     const emitProgress = vi.fn()
     const sleep = vi.fn(async () => {})
@@ -43,7 +42,6 @@ describe('file-provider-full-scan-insert-service', () => {
       recordBatchDuration,
       waitForIdle: vi.fn(async () => {}),
       upsertFiles,
-      dispatchSideEffects,
       emitRecordBatch,
       mapRecord: (record) => ({
         sourceId: 'file-provider',
@@ -70,7 +68,6 @@ describe('file-provider-full-scan-insert-service', () => {
     expect(upsertFiles).toHaveBeenNthCalledWith(1, [records[0]], 'full-scan.upsert')
     expect(upsertFiles).toHaveBeenNthCalledWith(2, [records[1]], 'full-scan.upsert')
     expect(recordBatchDuration).toHaveBeenCalledWith(30)
-    expect(dispatchSideEffects).toHaveBeenCalledTimes(2)
     expect(emitRecordBatch).toHaveBeenNthCalledWith(
       1,
       {
@@ -104,7 +101,6 @@ describe('file-provider-full-scan-insert-service', () => {
       recordBatchDuration: vi.fn(),
       waitForIdle: vi.fn(),
       upsertFiles,
-      dispatchSideEffects: vi.fn(),
       emitRecordBatch: vi.fn(),
       mapRecord: vi.fn(),
       emitProgress: vi.fn(),

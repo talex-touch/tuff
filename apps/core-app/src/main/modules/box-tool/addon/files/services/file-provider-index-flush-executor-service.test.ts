@@ -1,7 +1,7 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type {
-  PersistAndIndexSummary,
-  PersistEntry
+  PersistEntriesSummary,
+  FilePersistenceEntry
 } from '../../../search-engine/workers/search-index-worker-client'
 import { describe, expect, it, vi } from 'vitest'
 import { FileProviderIndexFlushBufferService } from './file-provider-index-flush-service'
@@ -31,7 +31,7 @@ function createResult(fileId: number, content = `content-${fileId}`): IndexWorke
   }
 }
 
-function toPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
+function toPersistEntries(entries: IndexWorkerFileResult[]): FilePersistenceEntry[] {
   return entries.map((entry) => ({
     fileId: entry.fileId,
     fileUpdate: null,
@@ -43,17 +43,15 @@ function toPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
       lastError: entry.progress.lastError,
       startedAt: entry.progress.startedAt ?? null,
       updatedAt: entry.progress.updatedAt ?? null
-    },
-    indexItem: entry.indexItem
+    }
   }))
 }
 
-function createPersistSummary(entries: PersistEntry[]): PersistAndIndexSummary {
+function createPersistSummary(entries: FilePersistenceEntry[]): PersistEntriesSummary {
   return {
     entries: entries.length,
     chunks: entries.length > 0 ? 1 : 0,
     persistedRows: entries.length,
-    indexedItems: entries.length,
     fileUpdates: 0,
     progressRows: entries.length,
     embeddings: 0
@@ -66,18 +64,20 @@ function createExecutor(options: {
   dbUtils?: unknown | null
   searchIndex?: unknown | null
   ensureSearchIndexWorkerReady?: (reason: string) => Promise<boolean>
-  persistAndIndex?: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
+  persistEntries?: (entries: FilePersistenceEntry[]) => Promise<PersistEntriesSummary>
+  publishRecords?: (entries: IndexWorkerFileResult[]) => Promise<number>
 }) {
   const inflight = options.inflight ?? new Map<number, IndexWorkerFileResult>()
   const buffer = new FileProviderIndexFlushBufferService(options.pending, inflight)
   const recordDuration = vi.fn()
   const waitForCapacity = vi.fn(async () => undefined)
-  const persistAndIndex = vi.fn(
-    options.persistAndIndex ?? (async (entries) => createPersistSummary(entries))
+  const persistEntries = vi.fn(
+    options.persistEntries ?? (async (entries) => createPersistSummary(entries))
   )
   const ensureSearchIndexWorkerReady = vi.fn(
     options.ensureSearchIndexWorkerReady ?? (async () => true)
   )
+  const publishRecords = vi.fn(options.publishRecords ?? (async (entries) => entries.length))
   const nowValues = [100, 145]
   const now = vi.fn(() => nowValues.shift() ?? 145)
 
@@ -85,7 +85,8 @@ function createExecutor(options: {
     inflight,
     recordDuration,
     waitForCapacity,
-    persistAndIndex,
+    persistEntries,
+    publishRecords,
     ensureSearchIndexWorkerReady,
     executor: new FileProviderIndexFlushExecutorService({
       flushBatchScheduler: {
@@ -96,8 +97,9 @@ function createExecutor(options: {
       getSearchIndex: () => ('searchIndex' in options ? options.searchIndex : {}),
       buffer,
       ensureSearchIndexWorkerReady,
-      getSearchIndexWorker: () => ({ persistAndIndex }),
+      getSearchIndexWorker: () => ({ persistEntries }),
       buildPersistEntries: toPersistEntries,
+      publishRecords,
       logDebug: vi.fn(),
       waitForCapacity,
       now,
@@ -115,11 +117,10 @@ describe('file-provider-index-flush-executor-service', () => {
       [2, createResult(2)],
       [3, createResult(3)]
     ])
-    const { executor, inflight, persistAndIndex, waitForCapacity, recordDuration } = createExecutor(
-      {
+    const { executor, inflight, persistEntries, publishRecords, waitForCapacity, recordDuration } =
+      createExecutor({
         pending
-      }
-    )
+      })
 
     const result = await executor.execute()
 
@@ -140,7 +141,12 @@ describe('file-provider-index-flush-executor-service', () => {
       chunks: 1
     })
     expect(waitForCapacity).toHaveBeenCalledWith(3)
-    expect(persistAndIndex).toHaveBeenCalledTimes(1)
+    expect(persistEntries).toHaveBeenCalledTimes(1)
+    expect(persistEntries.mock.calls[0][0][0]).not.toHaveProperty('indexItem')
+    expect(publishRecords).toHaveBeenCalledWith([
+      expect.objectContaining({ indexItem: expect.objectContaining({ itemId: '1' }) }),
+      expect.objectContaining({ indexItem: expect.objectContaining({ itemId: '2' }) })
+    ])
     expect(recordDuration).toHaveBeenCalledWith(45)
     expect(pending.has(1)).toBe(false)
     expect(pending.has(2)).toBe(false)
@@ -150,7 +156,7 @@ describe('file-provider-index-flush-executor-service', () => {
 
   it('rolls back the batch when the worker is not ready', async () => {
     const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
-    const { executor, inflight, persistAndIndex } = createExecutor({
+    const { executor, inflight, persistEntries } = createExecutor({
       pending,
       ensureSearchIndexWorkerReady: async () => false
     })
@@ -165,7 +171,7 @@ describe('file-provider-index-flush-executor-service', () => {
       reason: 'not-ready',
       metadata: { storeBoundary: 'indexed-write-flush', withContent: 1 }
     })
-    expect(persistAndIndex).not.toHaveBeenCalled()
+    expect(persistEntries).not.toHaveBeenCalled()
     expect(pending.has(1)).toBe(true)
     expect(inflight.size).toBe(0)
   })
@@ -175,7 +181,7 @@ describe('file-provider-index-flush-executor-service', () => {
     const persistError = new Error('persist failed')
     const { executor, inflight } = createExecutor({
       pending,
-      persistAndIndex: async () => {
+      persistEntries: async () => {
         throw persistError
       }
     })
@@ -186,9 +192,27 @@ describe('file-provider-index-flush-executor-service', () => {
     expect(inflight.size).toBe(0)
   })
 
+  it('keeps the local batch retryable when runtime publication fails after persistence', async () => {
+    const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
+    const publishError = new Error('runtime publish failed')
+    const { executor, inflight, persistEntries, publishRecords } = createExecutor({
+      pending,
+      publishRecords: async () => {
+        throw publishError
+      }
+    })
+
+    await expect(executor.execute()).rejects.toThrow('runtime publish failed')
+
+    expect(persistEntries).toHaveBeenCalledTimes(1)
+    expect(publishRecords).toHaveBeenCalledTimes(1)
+    expect(pending.get(1)).toMatchObject({ fileId: 1 })
+    expect(inflight.size).toBe(0)
+  })
+
   it('returns idle when storage dependencies are unavailable', async () => {
     const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
-    const { executor, persistAndIndex, waitForCapacity, ensureSearchIndexWorkerReady, inflight } =
+    const { executor, persistEntries, waitForCapacity, ensureSearchIndexWorkerReady, inflight } =
       createExecutor({
         pending,
         dbUtils: null
@@ -204,6 +228,6 @@ describe('file-provider-index-flush-executor-service', () => {
     expect(inflight.size).toBe(0)
     expect(ensureSearchIndexWorkerReady).not.toHaveBeenCalled()
     expect(waitForCapacity).not.toHaveBeenCalled()
-    expect(persistAndIndex).not.toHaveBeenCalled()
+    expect(persistEntries).not.toHaveBeenCalled()
   })
 })

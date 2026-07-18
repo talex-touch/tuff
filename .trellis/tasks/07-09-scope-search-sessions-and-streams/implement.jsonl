@@ -1,1 +1,5 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Keep renderer and cross-layer behavior maintainable while replacing global search delivery."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Preserve request ownership, cancellation, and renderer lifecycle cleanup."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Define a discriminated typed stream contract without unsafe casts."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace caller identity and terminal delivery across renderer, transport, facade, and pipeline."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse one session pipeline and sink contract across UI and collecting callers."}

@@ -6,6 +6,7 @@ import type {
 } from '@talex-touch/utils/search'
 import type { IndexStoreAdapter, IndexStoreDeltaApplySummary } from './indexing-store-adapter'
 import { IndexedSourceReconcileReasons } from '@talex-touch/utils/search'
+import { IndexingSourceMutationGate } from './indexing-source-mutation-gate'
 
 function buildUnsupportedResult(
   sourceId: string,
@@ -26,22 +27,76 @@ function buildUnsupportedResult(
 }
 
 export class ReconcileEngine {
-  constructor(private readonly store?: IndexStoreAdapter) {}
+  constructor(
+    private readonly store?: IndexStoreAdapter,
+    private readonly sourceMutationGate = new IndexingSourceMutationGate()
+  ) {}
 
   async reconcileSource(
     source: IndexedSource,
     request: Partial<IndexedSourceReconcileRequest> = {}
   ): Promise<IndexedSourceReconcileResult> {
     const sourceId = source.descriptor.id
-    if (!source.reconcile) {
-      return buildUnsupportedResult(sourceId, request)
-    }
+    return await this.sourceMutationGate.run(sourceId, async (lease) => {
+      if (!source.reconcile) {
+        return buildUnsupportedResult(sourceId, request)
+      }
 
-    const result = await source.reconcile({
-      ...request,
-      sourceId
+      let drainAttempted = false
+      try {
+        const store = this.store
+        let streamedAppliedDeltas = 0
+        let streamedSkippedDeltas = 0
+        const result = await source.reconcile({
+          ...request,
+          sourceId,
+          mutationLeaseId: lease.id,
+          onRecordBatch: store
+            ? async (batch) => {
+                if (batch.sourceId !== sourceId) {
+                  throw new Error(
+                    `Indexed source '${sourceId}' yielded batch for '${batch.sourceId}'`
+                  )
+                }
+                await store.applyBatch({ ...batch, mutationLeaseId: lease.id })
+              }
+            : request.onRecordBatch,
+          onDelta: store
+            ? async (delta) => {
+                if (delta.sourceId !== sourceId) {
+                  throw new Error(
+                    `Indexed source '${sourceId}' yielded delta for '${delta.sourceId}'`
+                  )
+                }
+                const summary = await store.applyDelta({ ...delta, mutationLeaseId: lease.id })
+                if (isSkippedDeltaSummary(summary)) streamedSkippedDeltas += 1
+                else streamedAppliedDeltas += 1
+              }
+            : request.onDelta
+        })
+        let applied = await this.applyReconcileDeltas(result, lease.id)
+        if (streamedAppliedDeltas > 0 || streamedSkippedDeltas > 0) {
+          applied = {
+            ...applied,
+            appliedDeltas: (applied.appliedDeltas ?? 0) + streamedAppliedDeltas,
+            skippedDeltas: (applied.skippedDeltas ?? 0) + streamedSkippedDeltas
+          }
+        }
+        if (source.drainMutations) {
+          drainAttempted = true
+          await source.drainMutations({ leaseId: lease.id, reason: 'reconcile' })
+        }
+        return { ...applied, completedAt: Date.now() }
+      } catch (error) {
+        if (source.drainMutations && !drainAttempted) {
+          drainAttempted = true
+          await source
+            .drainMutations({ leaseId: lease.id, reason: 'reconcile' })
+            .catch(() => undefined)
+        }
+        throw error
+      }
     })
-    return await this.applyReconcileDeltas(result)
   }
 
   async reconcileSources(sources: IndexedSource[]): Promise<IndexedSourceReconcileResult[]> {
@@ -104,7 +159,8 @@ export class ReconcileEngine {
   }
 
   private async applyReconcileDeltas(
-    result: IndexedSourceReconcileResult
+    result: IndexedSourceReconcileResult,
+    mutationLeaseId: string
   ): Promise<IndexedSourceReconcileResult> {
     if (!this.store || !Array.isArray(result.deltas) || result.deltas.length === 0) {
       return result
@@ -113,7 +169,7 @@ export class ReconcileEngine {
     const settled = await Promise.all(
       result.deltas.map(async (delta) => {
         try {
-          const summary = await this.store?.applyDelta(delta)
+          const summary = await this.store?.applyDelta({ ...delta, mutationLeaseId })
           return { status: 'fulfilled' as const, delta, summary }
         } catch (error) {
           return { status: 'rejected' as const, delta, error }

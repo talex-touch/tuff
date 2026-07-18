@@ -8,11 +8,20 @@ const log = getLogger('search-index-commit')
 export class SearchIndexCommitHub {
   private revision = 0
   private readonly listeners = new Set<SearchIndexCommitListener>()
+  private readonly sourceGenerations = new Map<string, number>()
 
   markCommitted(providerIds: Iterable<string> = []): CoreBoxSearchIndexCommitPayload {
+    const normalizedProviderIds = Array.from(new Set(providerIds)).filter(Boolean).sort()
+    const sourceGenerations: Record<string, number> = {}
+    for (const providerId of normalizedProviderIds) {
+      const generation = (this.sourceGenerations.get(providerId) ?? 0) + 1
+      this.sourceGenerations.set(providerId, generation)
+      sourceGenerations[providerId] = generation
+    }
     const payload: CoreBoxSearchIndexCommitPayload = {
       revision: ++this.revision,
-      providerIds: Array.from(new Set(providerIds)).filter(Boolean).sort(),
+      providerIds: normalizedProviderIds,
+      sourceGenerations,
       committedAt: Date.now()
     }
 
@@ -25,6 +34,23 @@ export class SearchIndexCommitHub {
     }
 
     return payload
+  }
+
+  getRevision(): number {
+    return this.revision
+  }
+
+  getSourceGeneration(sourceId: string): number {
+    return this.sourceGenerations.get(sourceId) ?? 0
+  }
+
+  getSourceGenerations(sourceIds?: Iterable<string>): Record<string, number> {
+    const ids = sourceIds ? Array.from(new Set(sourceIds)) : [...this.sourceGenerations.keys()]
+    const generations: Record<string, number> = {}
+    for (const sourceId of ids.sort()) {
+      generations[sourceId] = this.getSourceGeneration(sourceId)
+    }
+    return generations
   }
 
   subscribe(listener: SearchIndexCommitListener): () => void {

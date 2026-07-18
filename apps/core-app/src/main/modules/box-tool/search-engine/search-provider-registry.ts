@@ -9,7 +9,6 @@ import type {
 import type { TouchApp } from '../../../core/touch-app'
 import type { ProviderContext } from './types'
 import {
-  StorageList,
   getSearchProviderIdsForIndexedSource,
   getSearchProviderUserConfigSignature,
   normalizeSearchProviderUserConfigs
@@ -17,12 +16,16 @@ import {
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { databaseModule } from '../../database'
-import { getMainConfig, storageModule, subscribeMainConfig } from '../../storage'
+import type { OnboardingGateDecision } from '../../storage'
+import { onboardingGate, storageModule } from '../../storage'
 import { getActivationKey } from './search-core-utils'
 import { getSearchProviderUserConfigs } from './search-provider-config'
 import type { SearchIndexService } from './search-index-service'
 
 const log = getLogger('search-engine')
+
+const PROVIDER_LOAD_RETRY_BASE_MS = 1_000
+const PROVIDER_LOAD_RETRY_MAX_MS = 30_000
 
 export interface SearchProviderRegistryPluginIssue {
   type: 'error' | 'warning'
@@ -172,7 +175,8 @@ export function collectSearchProviderIdsForIndexedSource(
 export interface SearchProviderRegistryDeps {
   getTouchApp: () => TouchApp | null
   getSearchIndexService: () => SearchIndexService | null
-  onProvidersReady: () => void
+  beforeProvidersLoad?: (reason: string) => Promise<void>
+  onProvidersReady: () => Promise<void> | void
   onProviderDeactivated: (key: string, pluginFeature: boolean, allDeactivated: boolean) => void
 }
 
@@ -183,6 +187,11 @@ export class SearchProviderRegistry {
   private providersLoaded = false
   private providerLoadPromise: Promise<void> | null = null
   private onboardingReadyUnsubscribe: (() => void) | null = null
+  private providerLoadRetryTimer: NodeJS.Timeout | null = null
+  private providerLoadRetryAttempt = 0
+  private destroyed = false
+  private lifecycleGeneration = 0
+  private readonly ensureLoadedOperations = new Set<Promise<void>>()
 
   constructor(private readonly deps: SearchProviderRegistryDeps) {}
 
@@ -246,25 +255,21 @@ export class SearchProviderRegistry {
   }
 
   getActive(): ISearchProvider<ProviderContext>[] {
-    if (!this.activatedProviders) return this.applyUserConfig([...this.providers.values()])
-    return this.getByIds([
-      ...new Set([...this.activatedProviders.values()].map((activation) => activation.id))
-    ])
+    return this.getActiveFor(this.activatedProviders)
+  }
+
+  getActiveFor(
+    activations: ReadonlyMap<string, IProviderActivate> | null
+  ): ISearchProvider<ProviderContext>[] {
+    if (!activations) return this.applyUserConfig([...this.providers.values()])
+    return this.getByIds([...new Set([...activations.values()].map((activation) => activation.id))])
   }
 
   getActivationState(): IProviderActivate[] | null {
     return this.activatedProviders ? [...this.activatedProviders.values()] : null
   }
 
-  mergeActivations(results: Array<{ activate?: IProviderActivate[] }>): void {
-    const activations = results.flatMap((result) => result.activate ?? [])
-    if (activations.length === 0) return
-    const merged = new Map<string, IProviderActivate>(this.activatedProviders ?? [])
-    for (const activation of activations) merged.set(getActivationKey(activation), activation)
-    this.activatedProviders = merged
-  }
-
-  getActivationMap(): Map<string, IProviderActivate> | null {
+  getActivationMap(): ReadonlyMap<string, IProviderActivate> | null {
     return this.activatedProviders
   }
 
@@ -272,27 +277,112 @@ export class SearchProviderRegistry {
     return getSearchProviderUserConfigSignature(this.getUserConfigs())
   }
 
-  async ensureLoaded(reason: string): Promise<void> {
+  private assertActive(generation = this.lifecycleGeneration): void {
+    if (this.destroyed || generation !== this.lifecycleGeneration) {
+      throw new Error('SEARCH_PROVIDER_REGISTRY_DESTROYED')
+    }
+  }
+
+  ensureLoaded(reason: string): Promise<void> {
+    const operation = this.ensureLoadedInternal(reason)
+    this.ensureLoadedOperations.add(operation)
+    operation.then(
+      () => this.ensureLoadedOperations.delete(operation),
+      () => this.ensureLoadedOperations.delete(operation)
+    )
+    return operation
+  }
+
+  private async ensureLoadedInternal(reason: string): Promise<void> {
+    const generation = this.lifecycleGeneration
+    this.assertActive(generation)
     if (this.providersLoaded) {
-      this.deps.onProvidersReady()
+      await this.deps.onProvidersReady()
+      this.assertActive(generation)
+      this.providerLoadRetryAttempt = 0
+      this.clearProviderLoadRetry()
       return
     }
     if (!this.providerLoadPromise) {
-      this.providerLoadPromise = this.loadAll(reason).finally(() => {
+      this.providerLoadPromise = (async () => {
+        await this.deps.beforeProvidersLoad?.(reason)
+        this.assertActive(generation)
+        await this.loadAll(reason, generation)
+      })().finally(() => {
         this.providerLoadPromise = null
       })
     }
     await this.providerLoadPromise
-    this.deps.onProvidersReady()
+    this.assertActive(generation)
+    await this.deps.onProvidersReady()
+    this.assertActive(generation)
+    this.providerLoadRetryAttempt = 0
+    this.clearProviderLoadRetry()
+  }
+
+  async loadWhenOnboardingAllows(reason: string): Promise<OnboardingGateDecision> {
+    const decision = await onboardingGate.waitForDecision()
+    if (decision.state === 'allowed') {
+      this.clearOnboardingSubscription()
+      await this.ensureLoaded(reason)
+      return decision
+    }
+
+    this.deferUntilOnboardingReady()
+    log.warn('Search provider startup deferred by onboarding gate', {
+      meta: {
+        state: decision.state,
+        reason: decision.reason,
+        recoverable: decision.recoverable
+      }
+    })
+    return decision
   }
 
   deferUntilOnboardingReady(): void {
     if (this.onboardingReadyUnsubscribe) return
-    this.onboardingReadyUnsubscribe = subscribeMainConfig(StorageList.APP_SETTING, () => {
-      if (!this.hasCompletedOnboarding()) return
+
+    this.onboardingReadyUnsubscribe = () => {}
+    const unsubscribe = onboardingGate.subscribe((decision) => {
+      if (decision.state !== 'allowed') return
       this.clearOnboardingSubscription()
-      void this.ensureLoaded('onboarding-complete')
+      void this.ensureLoadedWithRetry('onboarding-complete')
     })
+
+    if (this.onboardingReadyUnsubscribe) {
+      this.onboardingReadyUnsubscribe = unsubscribe
+    } else {
+      unsubscribe()
+    }
+  }
+
+  private async ensureLoadedWithRetry(reason: string): Promise<void> {
+    try {
+      await this.ensureLoaded(reason)
+    } catch (error) {
+      log.warn('Search provider startup failed; retry scheduled', { error })
+      this.scheduleProviderLoadRetry()
+    }
+  }
+
+  private scheduleProviderLoadRetry(): void {
+    if (this.destroyed || this.providerLoadRetryTimer) return
+    const delay = Math.min(
+      PROVIDER_LOAD_RETRY_MAX_MS,
+      PROVIDER_LOAD_RETRY_BASE_MS * 2 ** Math.min(this.providerLoadRetryAttempt, 5)
+    )
+    this.providerLoadRetryAttempt += 1
+    this.providerLoadRetryTimer = setTimeout(() => {
+      this.providerLoadRetryTimer = null
+      void this.ensureLoadedWithRetry('provider-load-retry')
+    }, delay)
+    this.providerLoadRetryTimer.unref?.()
+  }
+
+  private clearProviderLoadRetry(): void {
+    if (!this.providerLoadRetryTimer) return
+    clearTimeout(this.providerLoadRetryTimer)
+    this.providerLoadRetryTimer = null
   }
 
   clearOnboardingSubscription(): void {
@@ -300,8 +390,13 @@ export class SearchProviderRegistry {
     this.onboardingReadyUnsubscribe = null
   }
 
-  destroy(): void {
+  async destroy(): Promise<void> {
+    this.destroyed = true
+    this.lifecycleGeneration += 1
+    this.clearProviderLoadRetry()
     this.clearOnboardingSubscription()
+    const activeLoads = [...this.ensureLoadedOperations]
+    if (activeLoads.length > 0) await Promise.allSettled(activeLoads)
     for (const provider of this.providers.values()) {
       try {
         const destroyableProvider = provider as DestroyableSearchProvider
@@ -317,16 +412,22 @@ export class SearchProviderRegistry {
     this.providersLoaded = false
   }
 
-  private async loadAll(reason: string): Promise<void> {
+  private async loadAll(reason: string, generation: number): Promise<void> {
     const dispose = enterPerfContext('SearchEngine.loadProviders')
     try {
+      this.assertActive(generation)
       log.debug(
         `Loading ${this.providersToLoad.length} providers sequentially (reason: ${reason})...`
       )
-      for (const provider of this.providersToLoad) {
+      while (this.providersToLoad.length > 0) {
+        const provider = this.providersToLoad[0]!
+        this.assertActive(generation)
         await this.load(provider)
+        this.assertActive(generation)
+        this.providersToLoad.shift()
         await new Promise<void>((resolve) => setImmediate(resolve))
       }
+      this.assertActive(generation)
       this.providersToLoad = []
       this.providersLoaded = true
       log.info('All providers loaded successfully')
@@ -338,7 +439,7 @@ export class SearchProviderRegistry {
   private async load(provider: ISearchProvider<ProviderContext>): Promise<void> {
     const touchApp = this.deps.getTouchApp()
     const searchIndex = this.deps.getSearchIndexService()
-    if (!touchApp || !searchIndex) return
+    if (!touchApp || !searchIndex) throw new Error('SEARCH_PROVIDER_CONTEXT_UNAVAILABLE')
     const startedAt = Date.now()
     try {
       await provider.onLoad?.({
@@ -352,6 +453,7 @@ export class SearchProviderRegistry {
       log.error(`Failed to load provider '${provider.id}' after ${Date.now() - startedAt}ms`, {
         error
       })
+      throw error
     }
   }
 
@@ -372,18 +474,5 @@ export class SearchProviderRegistry {
           (byId.get(left.id)?.order ?? Number.MAX_SAFE_INTEGER) -
           (byId.get(right.id)?.order ?? Number.MAX_SAFE_INTEGER)
       )
-  }
-
-  public hasCompletedOnboarding(): boolean {
-    try {
-      const setting = getMainConfig(StorageList.APP_SETTING)
-      if (!setting || typeof setting !== 'object' || !('beginner' in setting)) return false
-      const beginner = setting.beginner
-      return Boolean(
-        beginner && typeof beginner === 'object' && 'init' in beginner && beginner.init === true
-      )
-    } catch {
-      return true
-    }
   }
 }

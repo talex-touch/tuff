@@ -71,7 +71,22 @@ describe('ReconcileScheduler', () => {
     ).rejects.toThrow("Indexed source 'test-source' reconcile is already running")
 
     releaseReconcile()
-    await expect(first).resolves.toMatchObject({ result })
+    await expect(first).resolves.toMatchObject({
+      result: {
+        sourceId: 'test-source',
+        added: 0,
+        changed: 1,
+        deleted: 0,
+        skipped: 0,
+        errors: 0,
+        startedAt: 1700000000000,
+        completedAt: expect.any(Number)
+      },
+      job: {
+        status: 'completed',
+        completedAt: expect.any(Number)
+      }
+    })
     expect(scheduler.isRunning('test-source')).toBe(false)
     expect(reconcile).toHaveBeenCalledTimes(1)
   })

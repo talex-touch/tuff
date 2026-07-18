@@ -19,30 +19,30 @@ when a durable contract is learned, and commits before archive.
 - [x] Obtain the D1 plugin compatibility decision: hard safety cut approved.
 - [x] Review `prd.md`, `design.md`, and this plan with the user.
 - [x] Create the six child tasks from the parent task map with the listed
-  priorities and dependencies.
+      priorities and dependencies.
 - [ ] Give each child a focused PRD, design, and implementation plan before
-  `task.py start`.
+      `task.py start`.
 - [ ] Do not start the parent unless a direct parent-owned integration change is
-  later identified.
+      later identified.
 
 ### 1. Child: contain plugin window boundary
 
 - [ ] Add tests that currently demonstrate remote compatibility loading,
-  permission mapping drift, effective-profile mismatch, and reflective member
-  invocation.
+      permission mapping drift, effective-profile mismatch, and reflective member
+      invocation.
 - [ ] Align actual event identities with permission mappings and route handlers
-  through permission enforcement.
+      through permission enforcement.
 - [ ] Reject remote URLs for compatibility windows under the approved hard-cut
-  policy; canonicalize and constrain local files to the owning plugin root.
+      policy; canonicalize and constrain local files to the owning plugin root.
 - [ ] Replace full BrowserWindow constructor input with the validated public
-  plugin-window option allowlist.
+      plugin-window option allowlist.
 - [ ] Make eligible plugins use `trusted-plugin-view` as the effective profile.
 - [ ] Introduce the allowlisted window-command union and adapt/remove the legacy
-  property API.
+      property API.
 - [ ] Add diagnostics for blocked origins, compatibility reasons, permission
-  decisions, and rejected commands without logging sensitive payloads.
+      decisions, and rejected commands without logging sensitive payloads.
 - [ ] Run plugin SDK, permission, security-profile, navigation, and packaged
-  plugin smoke checks.
+      plugin smoke checks.
 
 Rollback point: revert trusted-profile enablement for a specific audited local
 plugin only. Remote+Node loading and arbitrary reflective commands are not valid
@@ -53,9 +53,9 @@ rollback states.
 - [ ] Add a failing test with a delayed async consumer and late-fast provider.
 - [ ] Change `TuffAggregatorCallback` to `void | Promise<void>`.
 - [ ] Serialize every update path and await the terminal callback before the
-  gather controller resolves.
+      gather controller resolves.
 - [ ] Define rejection and cancellation semantics; prove no callback publishes
-  after terminal state.
+      after terminal state.
 - [ ] Run gather, search regression baseline, trace, and provider timeout tests.
 
 Rollback point: this is an internal contract change. Revert as one unit if
@@ -65,34 +65,34 @@ latency or deadlock evidence appears; do not keep mixed awaited/unawaited paths.
 
 Explicit dependency: the ordered gather child must be complete.
 
-- [ ] Introduce `SearchSession`, `SearchSessionRegistry`, explicit caller context,
-  and sink contracts behind existing behavior.
-- [ ] Move controller, latest id, activation snapshot, cache/session association,
-  and trace ownership into the session.
-- [ ] Route legacy renderer updates only to the request sender; give AI and
-  background callers collecting sinks.
-- [ ] Make cache hits create a new session envelope and make cancellation verify
-  the requested live id.
-- [ ] Add the typed stream event and expose a server-side cancellation signal.
-- [ ] Migrate `useSearch`, then `ApplicationIndex`, and remove their global
-  update/end subscriptions.
-- [ ] Remove `windowManager.current` delivery and the global active controller.
-- [ ] Add concurrent CoreBox/AI, two-window, cache-hit, stale-cancel, early-update,
-  and destroy-with-live-session tests.
+- [x] Introduce `SearchSession`, `SearchSessionRegistry`, explicit caller context,
+      and sink contracts behind existing behavior.
+- [x] Move controller, latest id, activation snapshot, cache/session association,
+      and trace ownership into the session.
+- [x] Route legacy renderer updates only to the request sender; give AI and
+      background callers collecting sinks.
+- [x] Make cache hits create a new session envelope and make cancellation verify
+      the requested live id.
+- [x] Add the typed stream event and expose a server-side cancellation signal.
+- [x] Migrate `useSearch`, then `ApplicationIndex`, and remove their global
+      update/end subscriptions.
+- [x] Remove `windowManager.current` delivery and the global active controller.
+- [x] Add concurrent CoreBox/AI, two-window, cache-hit, stale-cancel, early-update,
+      and destroy-with-live-session tests.
 
 Rollback point: renderer callers may temporarily use the sender-scoped legacy
 sink, but the request-scoped session registry remains authoritative.
 
 ### 4. Child: gate search on storage hydration
 
-- [ ] Add storage readiness state and a single-flight wait primitive.
-- [ ] Add an `OnboardingGate` with allowed/blocked/degraded results.
-- [ ] Replace SearchEngineCore and CoreBox shortcut fail-open catches.
-- [ ] Gate provider startup, indexing startup, maintenance, and consent-sensitive
-  source activation.
-- [ ] Add recovery/retry and diagnostics behavior.
-- [ ] Test pending, ready-complete, ready-incomplete, failed-recoverable,
-  failed-terminal, and repeated-start cases.
+- [x] Add storage readiness state and a single-flight wait primitive.
+- [x] Add an `OnboardingGate` with allowed/blocked/degraded results.
+- [x] Replace SearchEngineCore and CoreBox shortcut fail-open catches.
+- [x] Gate provider startup, indexing startup, maintenance, and consent-sensitive
+      source activation.
+- [x] Add recovery/retry and diagnostics behavior.
+- [x] Test pending, ready-complete, ready-incomplete, failed-recoverable,
+      failed-terminal, and repeated-start cases.
 
 Rollback point: preserve the explicit readiness object and fail-closed result;
 only UI presentation or retry timing may be rolled back.
@@ -103,21 +103,21 @@ Explicit dependency: storage gating must pass before production enablement of
 changed automatic indexing startup. Development and parity instrumentation can
 proceed earlier.
 
-- [ ] Add write-origin, duplicate-attempt, writer-queue, busy/retry, and drain
-  evidence before changing ownership.
-- [ ] Extract a runtime-owned generic writer from the existing search-index
-  worker client and implement `IndexStoreAdapter` over it.
-- [ ] Add single-flight reader/writer readiness and separate non-destructive
-  readiness from explicit repair/migration.
-- [ ] Migrate AppProvider to runtime-only shared FTS mutations and verify parity.
-- [ ] Migrate FileProvider scan, watch, reconcile, cleanup, and reset paths to
-  runtime-only shared FTS mutations while retaining provider-local persistence.
-- [ ] Replace DatabaseModule's FileProvider dependency with the writer drain /
-  checkpoint contract.
+- [x] Add write-origin, duplicate-attempt, writer-queue, busy/retry, and drain
+      evidence before changing ownership.
+- [x] Extract a runtime-owned generic writer from the existing search-index
+      worker client and implement `IndexStoreAdapter` over it.
+- [x] Add single-flight reader/writer readiness and separate non-destructive
+      readiness from explicit repair/migration.
+- [x] Migrate AppProvider to runtime-only shared FTS mutations and verify parity.
+- [x] Migrate FileProvider scan, watch, reconcile, cleanup, and reset paths to
+      runtime-only shared FTS mutations while retaining provider-local persistence.
+- [x] Replace DatabaseModule's FileProvider dependency with the writer drain /
+      checkpoint contract.
 - [ ] Remove source-scoped legacy FTS paths only after parity evidence, reconcile,
-  and rollback rehearsal pass.
+      and rollback rehearsal pass.
 - [ ] Run migration preflight and copy-based FTS ownership simulation against an
-  approved database fixture/profile.
+      approved database fixture/profile.
 
 Rollback point: select the previous writer for one source and reconcile it.
 Never enable both writer paths for the same source mutation.
@@ -129,17 +129,17 @@ complete.
 
 - [ ] Add typed async provider lifecycle and idempotent disposal scope.
 - [ ] Track ready/degraded/stopped state and remove failed providers from search
-  execution while retaining diagnostics.
+      execution while retaining diagnostics.
 - [ ] Move every SearchCore/AppProvider/FileProvider listener, timer, polling job,
-  worker, and stream under an owner scope.
+      worker, and stream under an owner scope.
 - [ ] Build executable registry entries linking descriptor, implementation or
-  indexed-source adapter, policy, health, state, and user configuration.
+      indexed-source adapter, policy, health, state, and user configuration.
 - [ ] Add the generic indexed-source query adapter for sources intended to be
-  pull-searchable.
+      pull-searchable.
 - [ ] Add unload/reload, partial-load failure, repeated-destroy, and shutdown
-  drain tests.
+      drain tests.
 - [ ] Propose module dependency declarations and coordinator extractions only
-  where the new lifecycle boundary demonstrates a concrete owner.
+      where the new lifecycle boundary demonstrates a concrete owner.
 
 Rollback point: registry read views may fall back to the prior descriptor
 snapshot, but provider teardown and degraded-state semantics must remain typed.
@@ -147,19 +147,19 @@ snapshot, but provider teardown and degraded-state semantics must remain typed.
 ### 7. Parent integration and production proof
 
 - [ ] Run concurrent CoreBox, ApplicationIndex, DivisionBox, and AI-agent search
-  stress against one application runtime.
+      stress against one application runtime.
 - [ ] Verify no cross-caller cancellation, activation inheritance, update
-  routing, stale cache identity, or update-after-complete event.
+      routing, stale cache identity, or update-after-complete event.
 - [ ] Verify plugin window permission/profile/URL/command policies in a packaged
-  build.
+      build.
 - [ ] Capture FTS write-origin, duplicate, busy/retry, WAL/checkpoint, and drain
-  evidence under full scan plus watch churn.
+      evidence under full scan plus watch churn.
 - [ ] Run storage-failure and first-run packaged startup scenarios.
 - [ ] Re-run R3 migration readiness, FTS copy simulation, Settings diagnostics,
-  and cold-start evidence.
+      and cold-start evidence.
 - [ ] Run CoreApp type-check and the focused regression suites from every child.
 - [ ] Review whether new executable contracts belong in `.trellis/spec/` before
-  archiving children and the parent.
+      archiving children and the parent.
 
 ## Validation Commands
 

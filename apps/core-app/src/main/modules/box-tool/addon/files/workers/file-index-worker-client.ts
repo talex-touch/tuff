@@ -35,6 +35,7 @@ export interface IndexWorkerFileResult {
   progress: IndexWorkerProgressUpdate
   fileUpdate: IndexWorkerFileUpdate | null
   indexItem: SearchIndexItem
+  mutationLeaseId?: string
 }
 
 export interface IndexWorkerFile {
@@ -46,12 +47,14 @@ export interface IndexWorkerFile {
   size?: number | null
   mtime: number
   ctime: number
+  mutationLeaseId?: string
 }
 
 interface PendingIndex {
   resolve: (value: { processed: number; failed: number }) => void
   reject: (error: Error) => void
   startedAt: number
+  mutationLeaseId?: string
 }
 
 interface PendingMetrics {
@@ -98,7 +101,12 @@ export class FileIndexWorkerClient {
     const worker = this.ensureWorker()
 
     return new Promise<{ processed: number; failed: number }>((resolve, reject) => {
-      this.pending.set(taskId, { resolve, reject, startedAt })
+      this.pending.set(taskId, {
+        resolve,
+        reject,
+        startedAt,
+        mutationLeaseId: files[0]?.mutationLeaseId
+      })
 
       worker.postMessage({
         type: 'index',
@@ -130,11 +138,32 @@ export class FileIndexWorkerClient {
   }
 
   shutdown(): void {
+    const error = new Error('FILE_INDEX_WORKER_CLOSED')
+    for (const pending of this.pending.values()) pending.reject(error)
+    this.pending.clear()
+    for (const pending of this.metricsPending.values()) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
+    }
+    this.metricsPending.clear()
     this.terminateWorker()
   }
 
   hasPendingWork(): boolean {
     return this.pending.size > 0
+  }
+
+  cancelLease(mutationLeaseId: string): number {
+    let cancelled = 0
+    for (const [taskId, pending] of this.pending) {
+      if (pending.mutationLeaseId !== mutationLeaseId) continue
+      this.worker?.postMessage({ type: 'cancel', taskId })
+      this.pending.delete(taskId)
+      pending.reject(new Error(`FILE_INDEX_WORKER_TASK_CANCELLED:${taskId}`))
+      cancelled += 1
+    }
+    this.scheduleIdleShutdown()
+    return cancelled
   }
 
   private ensureWorker(): Worker {
@@ -173,7 +202,9 @@ export class FileIndexWorkerClient {
     }
 
     if (message.type === 'file') {
-      this.onFile?.(message)
+      const pending = this.pending.get(message.taskId)
+      if (!pending) return
+      this.onFile?.({ ...message, mutationLeaseId: pending.mutationLeaseId })
       return
     }
 

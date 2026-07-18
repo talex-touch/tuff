@@ -52,8 +52,29 @@ describe('indexing-write-side-effect-service', () => {
     await settlePromises()
 
     expect(processExtensions).toHaveBeenCalledWith(records)
-    expect(scheduleIndexing).toHaveBeenCalledWith(records, 'file-update')
+    expect(scheduleIndexing).toHaveBeenCalledWith(records, 'file-update', undefined)
     expect(logWarn).not.toHaveBeenCalled()
+  })
+
+  it('forwards mutation leases to indexing scheduling', async () => {
+    const records = [{ id: 1, path: '/tmp/a.txt' }]
+    const processExtensions = vi.fn(async () => undefined)
+    const scheduleIndexing = vi.fn()
+    const logWarn = vi.fn()
+    const service = new IndexedWriteSideEffectService({
+      processExtensions,
+      scheduleIndexing,
+      logWarn
+    })
+
+    service.dispatch(records, {
+      extensionContext: 'file-update',
+      indexReason: 'file-update',
+      mutationLeaseId: 'lease-123'
+    })
+    await settlePromises()
+
+    expect(scheduleIndexing).toHaveBeenCalledWith(records, 'file-update', 'lease-123')
   })
 
   it('logs extension processing failures without blocking indexing scheduling', async () => {
@@ -76,7 +97,7 @@ describe('indexing-write-side-effect-service', () => {
     })
     await settlePromises()
 
-    expect(scheduleIndexing).toHaveBeenCalledWith(records, 'reconciliation-insert')
+    expect(scheduleIndexing).toHaveBeenCalledWith(records, 'reconciliation-insert', undefined)
     expect(logWarn).toHaveBeenCalledWith('processExtensions failed (reconciliation)', error)
   })
 })

@@ -370,6 +370,16 @@ describe('file-provider-watch-service', () => {
     expect(service.ownsWatchPath('/Applications')).toBe(false)
   })
 
+  it('matches only path-segment descendants for literal percent and underscore watch roots', () => {
+    const service = createService({ baseWatchPaths: ['/x/foo', '/x/100%_literal'] })
+
+    expect(service.ownsWatchPath('/x/foo/report.md')).toBe(true)
+    expect(service.ownsWatchPath('/x/foo2/report.md')).toBe(false)
+    expect(service.ownsWatchPath('/x/100%_literal/report.md')).toBe(true)
+    expect(service.ownsWatchPath('/x/100aa_literal/report.md')).toBe(false)
+    expect(service.ownsWatchPath('/x/100%xliteral/report.md')).toBe(false)
+  })
+
   it('deduplicates extra watch paths through normalized roots', () => {
     const service = new FileProviderWatchService({
       baseWatchPaths: ['/tmp/tuff-index-a'],

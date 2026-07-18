@@ -8,6 +8,8 @@ import type {
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult,
   IndexedSourceRoot,
+  IndexedSourceResetRequest,
+  IndexedSourceResetResult,
   IndexedSourceScanRequest,
   IndexedSourceWatchEvent
 } from '@talex-touch/utils/search'
@@ -48,9 +50,9 @@ import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import {
   IndexedSourceGroupedEvidenceService,
+  IndexedSourceResetReasons,
   IndexedSourceRootEvidenceService,
-  IndexedSourceScanReasons,
-  IndexedWriteRuntimeEmitterService
+  IndexedSourceScanReasons
 } from '@talex-touch/utils/search'
 import chalk from 'chalk'
 import { and, eq, inArray, or, sql } from 'drizzle-orm'
@@ -76,7 +78,7 @@ import searchEngineCore from '../../search-engine/search-core'
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
 import { scheduleAppLaunch } from './app-launcher'
 import { AppProviderSourceScanner } from './app-provider-source-scanner'
-import { AppIndexRecordSyncService } from './services/app-index-record-sync-service'
+import { AppIndexedSourceRecordMapper } from './services/app-index-record-sync-service'
 import { AppIndexMaintenanceService } from './services/app-index-maintenance-service'
 import { AppManagedEntryService } from './services/app-managed-entry-service'
 import {
@@ -99,7 +101,6 @@ import {
   APP_SCANNED_OPTIONAL_EXTENSION_KEYS,
   buildAppExtensions,
   buildManagedEntryExtensions,
-  isAppIdentifierExtensionKey,
   isAppEntryEnabledExtensionMap,
   isManagedEntryExtensionMap,
   normalizeAppDisplayNameQuality,
@@ -136,6 +137,7 @@ import { isSearchableAppRow, processSearchResults } from './search-processing-se
 import type { AppLaunchKind, ScannedAppInfo } from './app-types'
 
 const SLOW_SEARCH_THRESHOLD_MS = 400
+const APP_INDEX_SCAN_POLL_MS = 75
 const appProviderLog = getLogger('app-provider')
 
 type AppTimingMeta = TimingMeta & {
@@ -364,6 +366,13 @@ type AppIndexProcessPathResult = AppIndexAddPathResult & {
   appInfo?: ScannedAppInfo
 }
 
+export interface AppIndexedSourceRuntimeDelegate {
+  scan(reason: IndexedSourceScanRequest['reason']): Promise<unknown>
+  reconcile(reason: string): Promise<unknown>
+  applyDelta(delta: IndexedSourceDelta): Promise<unknown>
+  reset(request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult>
+}
+
 const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   hideNoisySystemApps: true,
   startupBackfillEnabled: true,
@@ -376,6 +385,7 @@ const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   fullSyncCooldownMs: 60 * 60 * 1000,
   fullSyncPersistRetry: 3
 }
+const APP_PROVIDER_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000
 
 interface PendingDeletionEntry {
   id: number
@@ -404,11 +414,18 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private startupBackfillStarted = false
   private startupIndexHealthCheckStarted = false
   private volatileLastFullSyncTime: number | null = null
-  private readonly runtimeEmitter = new IndexedWriteRuntimeEmitterService<ScannedAppInfo>({
-    sourceId: this.id,
-    mapRecord: (record) => this.mapScannedAppToIndexedSourceRecord(this.id, record),
-    getPath: (record) => record.path
-  })
+  private indexedSourceRuntimeDelegate: AppIndexedSourceRuntimeDelegate | null = null
+  private shuttingDown = false
+  private mdlsReconcileTask: Promise<void> | null = null
+  private startupIndexHealthTimer: NodeJS.Timeout | null = null
+  private startupIndexHealthTask: Promise<void> | null = null
+  private startupBackfillTimer: NodeJS.Timeout | null = null
+  private startupBackfillTask: Promise<void> | null = null
+  private semanticAliasCatalogTimer: NodeJS.Timeout | null = null
+  private semanticAliasCatalogTask: Promise<void> | null = null
+  private readonly startupProducerAbort = new AbortController()
+  private readonly externalMutationTasks = new Set<Promise<unknown>>()
+  private shutdownPreparation: Promise<void> | null = null
   private readonly sourceScanner = new AppProviderSourceScanner({
     resolveScannedAppKey: (app) => this.resolveScannedAppKey(app),
     isManagedEntry: (extensions) => isManagedEntryExtensionMap(extensions),
@@ -420,10 +437,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await this._saveKnownMissingIconApps(knownMissingIconApps)
     }
   })
-  private readonly recordSync = new AppIndexRecordSyncService({
-    providerId: this.id,
-    providerType: this.type,
-    getSearchIndex: () => this.searchIndex,
+  private readonly recordMapper = new AppIndexedSourceRecordMapper({
     generateKeywords: (app) => this._generateKeywordsForApp(app),
     getAliases: (app) => this._getAliasesForApp(app),
     resolveToolSourceIds: (app) => this.resolveScannedAppToolSourceIds(app)
@@ -433,9 +447,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     fetchExtensions: (apps) => this.fetchExtensionsForFiles(apps),
     mapDbAppToScannedInfo: (app) => this._mapDbAppToScannedInfo(app),
     toExtensionMap: (records) => this.toExtensionMap(records),
-    syncKeywords: (app) => this._syncKeywordsForApp(app),
-    removeIndexedItems: (itemIds) => this.removeIndexedAppItems(itemIds),
-    syncIndexedState: (app, extensions) => this.syncIndexedAppState(app, extensions)
+    syncKeywords: async (appInfo) => {
+      await this.publishAppRuntimeUpsert(appInfo, 'app-managed-entry-upsert')
+    },
+    removeIndexedItems: async (itemIds) => {
+      await this.publishAppRuntimeDeletes(itemIds, 'app-managed-entry-delete')
+    },
+    syncIndexedState: async (appInfo, extensions) => {
+      if (extensions && isAppEntryEnabledExtensionMap(extensions)) {
+        await this.publishAppRuntimeUpsert(appInfo, 'app-managed-entry-enabled')
+      } else {
+        await this.publishAppRuntimeDeletes(
+          resolveAppItemIds(appInfo),
+          'app-managed-entry-disabled'
+        )
+      }
+    }
   })
   private readonly maintenance = new AppIndexMaintenanceService({
     runFullSyncIfDue: async () => await this._runFullSyncIfDue()
@@ -443,6 +470,122 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   constructor() {
     logApp('Initializing AppProvider service', LogStyle.info)
+  }
+
+  public setIndexedSourceRuntimeDelegate(delegate: AppIndexedSourceRuntimeDelegate | null): void {
+    this.indexedSourceRuntimeDelegate = delegate
+  }
+
+  public async prepareForSearchIndexShutdown(): Promise<void> {
+    if (!this.shutdownPreparation) {
+      const preparation = (async () => {
+        this.shuttingDown = true
+        this.startupProducerAbort.abort(new Error('APP_PROVIDER_SHUTTING_DOWN'))
+        this.clearStartupProducerTimers()
+        pollingService.unregister('app_provider_mdls_update_scan')
+        const settlement = Promise.allSettled([
+          this.mdlsReconcileTask,
+          this.startupIndexHealthTask,
+          this.startupBackfillTask,
+          this.semanticAliasCatalogTask,
+          ...this.externalMutationTasks,
+          this.maintenance.stop()
+        ])
+        await this.awaitShutdownProducerSettlement(settlement)
+      })()
+      this.shutdownPreparation = preparation
+      void preparation.catch(() => {
+        if (this.shutdownPreparation === preparation) this.shutdownPreparation = null
+      })
+    }
+    await this.shutdownPreparation
+  }
+
+  private async awaitShutdownProducerSettlement(settlement: Promise<unknown>): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('APP_PROVIDER_SHUTDOWN_PRODUCER_TIMEOUT'))
+      }, APP_PROVIDER_SHUTDOWN_DRAIN_TIMEOUT_MS)
+      timeout.unref?.()
+      void settlement.then(
+        () => {
+          clearTimeout(timeout)
+          resolve()
+        },
+        (error) => {
+          clearTimeout(timeout)
+          reject(error)
+        }
+      )
+    })
+  }
+
+  private clearStartupProducerTimers(): void {
+    if (this.startupIndexHealthTimer) clearTimeout(this.startupIndexHealthTimer)
+    if (this.startupBackfillTimer) clearTimeout(this.startupBackfillTimer)
+    if (this.semanticAliasCatalogTimer) clearTimeout(this.semanticAliasCatalogTimer)
+    this.startupIndexHealthTimer = null
+    this.startupBackfillTimer = null
+    this.semanticAliasCatalogTimer = null
+  }
+
+  private async waitForStartupProducerDelay(delayMs: number): Promise<void> {
+    const signal = this.startupProducerAbort.signal
+    if (signal.aborted) return
+
+    await new Promise<void>((resolve) => {
+      const finish = (): void => {
+        clearTimeout(timer)
+        signal.removeEventListener('abort', finish)
+        resolve()
+      }
+      const timer = setTimeout(finish, delayMs)
+      signal.addEventListener('abort', finish, { once: true })
+    })
+  }
+
+  private runExternalAppMutation<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.shuttingDown) return Promise.reject(new Error('APP_PROVIDER_SHUTTING_DOWN'))
+
+    const task = operation()
+    this.externalMutationTasks.add(task)
+    void task.then(
+      () => this.externalMutationTasks.delete(task),
+      () => this.externalMutationTasks.delete(task)
+    )
+    return task
+  }
+
+  private requireIndexedSourceRuntimeDelegate(): AppIndexedSourceRuntimeDelegate {
+    if (!this.indexedSourceRuntimeDelegate) {
+      throw new Error('APP_INDEXED_SOURCE_RUNTIME_DELEGATE_UNAVAILABLE')
+    }
+    return this.indexedSourceRuntimeDelegate
+  }
+
+  private async publishAppRuntimeUpsert(appInfo: ScannedAppInfo, reason: string): Promise<void> {
+    const record = await this.mapScannedAppToIndexedSourceRecord(this.id, appInfo)
+    await this.requireIndexedSourceRuntimeDelegate().applyDelta({
+      sourceId: this.id,
+      action: 'change',
+      record,
+      path: appInfo.path,
+      reason
+    })
+  }
+
+  private async publishAppRuntimeDeletes(
+    itemIds: readonly string[],
+    reason: string
+  ): Promise<void> {
+    for (const stableKey of new Set(itemIds.filter(Boolean))) {
+      await this.requireIndexedSourceRuntimeDelegate().applyDelta({
+        sourceId: this.id,
+        action: 'delete',
+        stableKey,
+        reason
+      })
+    }
   }
 
   private isDevelopmentRuntime(): boolean {
@@ -462,7 +605,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.searchIndex = context.searchIndex
 
     this.loadAppIndexSettings()
-    this._scheduleStartupBackfill()
     this._scheduleFullSync()
     this._scheduleStartupIndexHealthCheck()
     this._scheduleSemanticAliasCatalogSync()
@@ -559,6 +701,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   async onDestroy(): Promise<void> {
     logApp('Unloading AppProvider service', LogStyle.process)
+    await this.prepareForSearchIndexShutdown()
     logApp('AppProvider service unloaded', LogStyle.success)
   }
 
@@ -596,14 +739,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   public async addAppByPath(rawPath: string): Promise<AppIndexAddPathResult> {
-    const appPath = this.resolveAppPath(rawPath, { skipWatchCheck: true })
-    if (!appPath) {
-      return { success: false, status: 'invalid', reason: 'invalid-path' }
-    }
-    const { appInfo: _appInfo, ...result } = await this.processAppPath(appPath, {
-      managedEntry: true
+    return await this.runExternalAppMutation(async () => {
+      const appPath = this.resolveAppPath(rawPath, { skipWatchCheck: true })
+      if (!appPath) {
+        return { success: false, status: 'invalid', reason: 'invalid-path' }
+      }
+      const { appInfo, ...result } = await this.processAppPath(appPath, {
+        managedEntry: true
+      })
+      if (result.success && appInfo) {
+        await this.publishAppRuntimeUpsert(appInfo, 'app-manual-path-upsert')
+      }
+      return result
     })
-    return result
   }
 
   public async diagnoseAppSearch(request: AppIndexDiagnoseRequest) {
@@ -651,40 +799,106 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return [...evidence, this.getIndexedToolSourceEvidence(), ...appEvidence]
   }
 
-  public async scanIndexedSource(
+  public async *scanIndexedSource(
     request: IndexedSourceScanRequest
-  ): Promise<IndexedSourceRecordBatch | null> {
-    if (
-      request.reason === IndexedSourceScanReasons.ManualRebuild ||
-      request.reason === IndexedSourceScanReasons.SchemaMigration
-    ) {
-      await this._runManualRebuild()
-      return await this.buildIndexedSourceRecordBatch(request.sourceId, { forceRefresh: true })
+  ): AsyncIterable<IndexedSourceRecordBatch> {
+    if (request.sourceId !== this.id) {
+      throw new Error(`Unsupported app index source: ${request.sourceId}`)
+    }
+    if (request.signal?.aborted) {
+      throw request.signal.reason ?? new Error('App index source scan aborted')
     }
 
-    const task = this._runStartupBackfill()
+    if (request.reason === IndexedSourceScanReasons.SchemaMigration) {
+      yield* this.buildIndexedSourceRecordBatches(request.sourceId, request.signal)
+      return
+    }
+
+    if (request.reason === IndexedSourceScanReasons.ManualRebuild) {
+      await this._runManualRebuild()
+      yield* this.buildIndexedSourceRecordBatches(request.sourceId, request.signal)
+      return
+    }
+
+    const task = this._runStartupBackfill(request.signal)
+    let backfillSettled = false
+    const settlement = task.then(
+      () => {
+        backfillSettled = true
+      },
+      () => {
+        backfillSettled = true
+      }
+    )
+    const fingerprints = new Map<string, string>()
     this.isInitializing = task
     try {
+      do {
+        yield* this.buildChangedIndexedSourceRecordBatches(
+          request.sourceId,
+          fingerprints,
+          request.signal,
+          request.onDelta
+        )
+        if (!backfillSettled) {
+          await Promise.race([settlement, sleep(APP_INDEX_SCAN_POLL_MS)])
+        }
+      } while (!backfillSettled)
+
       await task
       await this._setLastBackfillTime(Date.now())
+      yield* this.buildChangedIndexedSourceRecordBatches(
+        request.sourceId,
+        fingerprints,
+        request.signal,
+        request.onDelta
+      )
+      yield { sourceId: request.sourceId, records: [], done: true }
     } finally {
-      if (this.isInitializing === task) {
-        this.isInitializing = null
-      }
+      await settlement
+      if (this.isInitializing === task) this.isInitializing = null
     }
-    return await this.buildIndexedSourceRecordBatch(request.sourceId)
   }
 
   public async reconcileIndexedSource(
-    _request: IndexedSourceReconcileRequest
+    request: IndexedSourceReconcileRequest
   ): Promise<IndexedSourceReconcileResult> {
     const startedAt = Date.now()
-    const syncStats = await this._runFullSync(true)
+    const beforeRecords = await this.collectIndexedSourceRecords(request.sourceId, request.signal)
+    const syncStats = await this._runFullSync(true, true)
     let mdlsStats: AppIndexSyncStats = this.createEmptySyncStats()
     if (process.platform === 'darwin') {
       mdlsStats = await this._runMdlsUpdateScan()
     }
     const stats = this.mergeSyncStats(syncStats, mdlsStats)
+    const afterRecords = await this.collectIndexedSourceRecords(request.sourceId, request.signal)
+    const beforeByStableKey = new Map(beforeRecords.map((record) => [record.stableKey, record]))
+    const afterByStableKey = new Map(afterRecords.map((record) => [record.stableKey, record]))
+    const deltas: IndexedSourceDelta[] = []
+
+    for (const record of afterRecords) {
+      const previous = beforeByStableKey.get(record.stableKey)
+      if (!previous || JSON.stringify(previous) !== JSON.stringify(record)) {
+        deltas.push({
+          sourceId: this.id,
+          action: previous ? 'change' : 'add',
+          record,
+          path: record.path,
+          reason: 'app-provider-reconcile'
+        })
+      }
+    }
+    for (const record of beforeRecords) {
+      if (!afterByStableKey.has(record.stableKey)) {
+        deltas.push({
+          sourceId: this.id,
+          action: 'delete',
+          stableKey: record.stableKey,
+          path: record.path,
+          reason: 'app-provider-reconcile'
+        })
+      }
+    }
 
     return {
       sourceId: this.id,
@@ -693,6 +907,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       deleted: stats.deleted,
       skipped: stats.skipped,
       errors: stats.errors,
+      deltas,
       startedAt,
       completedAt: Date.now(),
       reason: process.platform === 'darwin' ? 'full-sync+mdls-update-scan' : 'full-sync'
@@ -705,12 +920,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const fsEvent = { filePath: event.path }
 
     if (event.action === 'delete') {
-      await this.handleItemUnlinked(fsEvent)
-      return [
-        this.runtimeEmitter.buildDeleteDelta(event.path, {
-          reason: 'app-provider-watch-delete'
-        })
-      ]
+      const deletedItemIds = await this.handleItemUnlinked(fsEvent)
+      return (deletedItemIds ?? []).map((stableKey) => ({
+        sourceId: this.id,
+        action: 'delete' as const,
+        stableKey,
+        reason: 'app-provider-watch-delete'
+      }))
     }
 
     const appPath = this.resolveAppPath(event.path, { logIgnore: true })
@@ -723,11 +939,15 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return []
     }
 
+    const record = await this.mapScannedAppToIndexedSourceRecord(this.id, result.appInfo)
     return [
-      this.runtimeEmitter.buildDelta(result.appInfo, {
+      {
+        sourceId: this.id,
         action: event.action,
+        record,
+        path: result.appInfo.path,
         reason: 'app-provider-watch-event'
-      })
+      }
     ]
   }
 
@@ -737,26 +957,106 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       : 4
   }
 
-  private async buildIndexedSourceRecordBatch(
+  private async *buildIndexedSourceRecordBatches(
     sourceId: string,
-    options: { forceRefresh?: boolean } = {}
-  ): Promise<IndexedSourceRecordBatch> {
+    signal?: AbortSignal,
+    done = true
+  ): AsyncIterable<IndexedSourceRecordBatch> {
     if (sourceId !== this.id) {
       throw new Error(`Unsupported app index source: ${sourceId}`)
     }
+    if (!this.dbUtils) {
+      throw new Error('Cannot scan app index source before database initialization')
+    }
 
-    const apps = await this.loadScannedApps({ forceRefresh: options.forceRefresh === true })
-    return this.runtimeEmitter.buildBatch(apps, { done: true })
+    const apps = await this.dbUtils.getFilesByType('app')
+    const appsWithExtensions = await this.fetchExtensionsForFiles(apps)
+    const searchableApps = appsWithExtensions.filter((app) =>
+      isAppEntryEnabledExtensionMap(app.extensions)
+    )
+    const batchSize = 50
+
+    if (searchableApps.length === 0) {
+      if (signal?.aborted) throw signal.reason ?? new Error('App index source scan aborted')
+      if (done) yield { sourceId, records: [], done: true }
+      return
+    }
+
+    for (let offset = 0; offset < searchableApps.length; offset += batchSize) {
+      if (signal?.aborted) throw signal.reason ?? new Error('App index source scan aborted')
+      const appsBatch = searchableApps.slice(offset, offset + batchSize)
+      const records = await Promise.all(
+        appsBatch.map(
+          async (app) =>
+            await this.mapScannedAppToIndexedSourceRecord(
+              sourceId,
+              this._mapDbAppToScannedInfo(app)
+            )
+        )
+      )
+      if (signal?.aborted) throw signal.reason ?? new Error('App index source scan aborted')
+      yield {
+        sourceId,
+        records,
+        done: done && offset + appsBatch.length >= searchableApps.length
+      }
+    }
   }
 
-  private mapScannedAppToIndexedSourceRecord(
+  private async *buildChangedIndexedSourceRecordBatches(
+    sourceId: string,
+    fingerprints: Map<string, string>,
+    signal?: AbortSignal,
+    onDelta?: IndexedSourceScanRequest['onDelta']
+  ): AsyncIterable<IndexedSourceRecordBatch> {
+    const seenStableKeys = new Set<string>()
+    for await (const batch of this.buildIndexedSourceRecordBatches(sourceId, signal, false)) {
+      const records = batch.records.filter((record) => {
+        seenStableKeys.add(record.stableKey)
+        const fingerprint = JSON.stringify(record)
+        if (fingerprints.get(record.stableKey) === fingerprint) return false
+        fingerprints.set(record.stableKey, fingerprint)
+        return true
+      })
+      if (records.length > 0) {
+        yield { sourceId, records }
+      }
+    }
+
+    for (const stableKey of [...fingerprints.keys()]) {
+      if (seenStableKeys.has(stableKey)) continue
+      const delta: IndexedSourceDelta = {
+        sourceId,
+        action: 'delete',
+        stableKey,
+        reason: 'app-provider-startup-identity-replaced'
+      }
+      if (onDelta) {
+        await onDelta(delta)
+      } else {
+        await this.requireIndexedSourceRuntimeDelegate().applyDelta(delta)
+      }
+      fingerprints.delete(stableKey)
+    }
+  }
+
+  private async collectIndexedSourceRecords(
+    sourceId: string,
+    signal?: AbortSignal
+  ): Promise<IndexedSourceRecord[]> {
+    const records: IndexedSourceRecord[] = []
+    for await (const batch of this.buildIndexedSourceRecordBatches(sourceId, signal)) {
+      records.push(...batch.records)
+    }
+    return records
+  }
+
+  private async mapScannedAppToIndexedSourceRecord(
     sourceId: string,
     appInfo: ScannedAppInfo
-  ): IndexedSourceRecord {
-    const stableKey = resolveAppItemId(appInfo)
+  ): Promise<IndexedSourceRecord> {
+    const { itemId, search, tags, toolSourceIds } = await this.recordMapper.map(appInfo)
     const launchTarget = appInfo.launchTarget || appInfo.path
-    const semanticAliases = resolveScannedAppSemanticAliases(appInfo)
-    const toolSourceIds = this.resolveScannedAppToolSourceIds(appInfo)
     const extension =
       appInfo.launchKind === 'uwp'
         ? '.uwp'
@@ -766,8 +1066,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     return {
       sourceId,
-      recordId: stableKey,
-      stableKey,
+      recordId: itemId,
+      stableKey: itemId,
       kind: 'app',
       title: resolveScannedDisplayName(appInfo) || appInfo.name,
       subtitle: appInfo.description || appInfo.displayPath || launchTarget,
@@ -778,21 +1078,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           : undefined,
       icon: appInfo.icon,
       mtime: appInfo.lastModified?.getTime(),
-      keywords: normalizeStringList([
-        appInfo.name,
-        appInfo.displayName,
-        appInfo.fileName,
-        ...(appInfo.alternateNames ?? []),
-        ...semanticAliases
-      ]),
-      tags: normalizeStringList([
-        appInfo.bundleId,
-        appInfo.stableId,
-        appInfo.uniqueId,
-        appInfo.path,
-        launchTarget,
-        ...toolSourceIds.map((sourceId) => `tool-source:${sourceId}`)
-      ]),
+      keywords: search.keywords?.map((term) => term.value),
+      tags,
+      search,
       metadata: {
         extension,
         launchKind: appInfo.launchKind,
@@ -809,7 +1097,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   public async reindexAppSearchTarget(request: AppIndexReindexRequest) {
-    return reindexAppSearchTarget(this.createDiagnosticsContext(), request)
+    return await this.runExternalAppMutation(
+      async () => await reindexAppSearchTarget(this.createDiagnosticsContext(), request)
+    )
   }
 
   private createDiagnosticsContext() {
@@ -823,8 +1113,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       getAliasesForApp: (appInfo: ScannedAppInfo) => this._getAliasesForApp(appInfo),
       addAppByPath: (rawPath: string) => this.addAppByPath(rawPath),
       buildFtsQuery: (terms: string[]) => this.buildFtsQuery(terms),
-      syncIndexedAppState: (app: DbAppWithExtensions) =>
-        this.syncIndexedAppState(this._mapDbAppToScannedInfo(app), app.extensions),
+      syncIndexedAppState: async (app: DbAppWithExtensions) => {
+        const appInfo = this._mapDbAppToScannedInfo(app)
+        if (isAppEntryEnabledExtensionMap(app.extensions)) {
+          await this.publishAppRuntimeUpsert(appInfo, 'app-diagnostics-reindex')
+        } else {
+          await this.publishAppRuntimeDeletes(
+            resolveAppItemIds(appInfo),
+            'app-diagnostics-disabled'
+          )
+        }
+      },
       logError: (message: string, meta?: Record<string, unknown>) =>
         logApp(message, LogStyle.error, meta)
     }
@@ -837,60 +1136,32 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   public async upsertManagedEntry(
     input: AppIndexUpsertEntryRequest
   ): Promise<AppIndexEntryMutationResult> {
-    return await this.managedEntries.upsert(input)
+    return await this.runExternalAppMutation(async () => await this.managedEntries.upsert(input))
   }
 
   public async removeManagedEntry(pathValue: string): Promise<AppIndexEntryMutationResult> {
-    return await this.managedEntries.remove(pathValue)
+    return await this.runExternalAppMutation(
+      async () => await this.managedEntries.remove(pathValue)
+    )
   }
 
   public async setManagedEntryEnabled(
     pathValue: string,
     enabled: boolean
   ): Promise<AppIndexEntryMutationResult> {
-    return await this.managedEntries.setEnabled(pathValue, enabled)
+    return await this.runExternalAppMutation(
+      async () => await this.managedEntries.setEnabled(pathValue, enabled)
+    )
   }
 
   public async setAliases(aliases: Record<string, string[]>): Promise<void> {
-    logApp('Updating app aliases', LogStyle.process)
-    this.aliases = aliases
-
-    logApp('App aliases updated, resyncing all app keywords', LogStyle.info)
-
-    if (!this.dbUtils) return
-
-    const allApps = await this.dbUtils.getFilesByType('app')
-    const appsWithExtensions = (await this.fetchExtensionsForFiles(allApps)).filter(
-      isSearchableAppRow
-    )
-
-    logApp(
-      `Resyncing keywords for ${chalk.cyan(appsWithExtensions.length)} apps...`,
-      LogStyle.process
-    )
-
-    await runAdaptiveTaskQueue(
-      appsWithExtensions,
-      async (app, index) => {
-        const appInfo = this._mapDbAppToScannedInfo(app)
-        await this._syncKeywordsForApp(appInfo)
-
-        if ((index + 1) % 100 === 0 || index === appsWithExtensions.length - 1) {
-          logApp(
-            `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(appsWithExtensions.length)} app keyword syncs`,
-            LogStyle.info
-          )
-        }
-      },
-      {
-        estimatedTaskTimeMs: 5,
-        yieldIntervalMs: 10,
-        maxBatchSize: 10,
-        label: 'AppProvider::aliasKeywordSync'
-      }
-    )
-
-    logApp('All app keywords synced successfully', LogStyle.success)
+    await this.runExternalAppMutation(async () => {
+      this.aliases = aliases
+      logApp(
+        'App aliases updated; the next runtime scan will publish the new search projection',
+        LogStyle.info
+      )
+    })
   }
 
   private resolveScannedAppKey(
@@ -960,20 +1231,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     managedEntries: DbAppWithExtensions[]
   } {
     return this.sourceScanner.partitionDbApps(apps)
-  }
-
-  private async reindexManagedEntries(): Promise<void> {
-    if (!this.dbUtils) return
-
-    const allApps = await this.dbUtils.getFilesByType('app')
-    const appsWithExtensions = await this.fetchExtensionsForFiles(allApps)
-
-    for (const app of appsWithExtensions) {
-      if (!isAppEntryEnabledExtensionMap(app.extensions)) {
-        continue
-      }
-      await this._syncKeywordsForApp(this._mapDbAppToScannedInfo(app))
-    }
   }
 
   private buildScannedAppsMap(scannedApps: ScannedAppInfo[]): Map<string, ScannedAppInfo> {
@@ -1214,15 +1471,22 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _scheduleStartupIndexHealthCheck(): void {
-    if (this.startupIndexHealthCheckStarted) return
+    if (this.shuttingDown || this.startupIndexHealthCheckStarted) return
     this.startupIndexHealthCheckStarted = true
 
-    setTimeout(() => {
-      void this._ensureStartupIndexHealth()
+    this.startupIndexHealthTimer = setTimeout(() => {
+      this.startupIndexHealthTimer = null
+      if (this.shuttingDown) return
+      const task = this._ensureStartupIndexHealth()
+      this.startupIndexHealthTask = task
+      void task.finally(() => {
+        if (this.startupIndexHealthTask === task) this.startupIndexHealthTask = null
+      })
     }, 1000)
   }
 
   private async _ensureStartupIndexHealth(): Promise<void> {
+    if (this.shuttingDown) return
     if (!this.dbUtils || !this.searchIndex) {
       return
     }
@@ -1242,8 +1506,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
 
       await this.waitForMainRendererReady()
-      await this._runStartupBackfill()
-      await this._setLastBackfillTime(Date.now())
+      if (this.shuttingDown) return
+      await this.requireIndexedSourceRuntimeDelegate().scan(IndexedSourceScanReasons.Startup)
     } catch (error) {
       logApp('Startup app index health check failed', LogStyle.warning, {
         error: error instanceof Error ? error.message : String(error)
@@ -1252,12 +1516,20 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private _scheduleSemanticAliasCatalogSync(): void {
-    setTimeout(() => {
-      void this._syncSemanticAliasCatalogIfNeeded()
+    if (this.shuttingDown) return
+    this.semanticAliasCatalogTimer = setTimeout(() => {
+      this.semanticAliasCatalogTimer = null
+      if (this.shuttingDown) return
+      const task = this._syncSemanticAliasCatalogIfNeeded()
+      this.semanticAliasCatalogTask = task
+      void task.finally(() => {
+        if (this.semanticAliasCatalogTask === task) this.semanticAliasCatalogTask = null
+      })
     }, 2000)
   }
 
   private async _syncSemanticAliasCatalogIfNeeded(): Promise<void> {
+    if (this.shuttingDown) return
     if (!this.dbUtils || !this.searchIndex) {
       return
     }
@@ -1284,49 +1556,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async syncExistingAppKeywordsForSemanticAliasCatalog(): Promise<void> {
-    if (!this.dbUtils) return
-
-    const allApps = await this.dbUtils.getFilesByType('app')
-    const appsWithExtensions = (await this.fetchExtensionsForFiles(allApps)).filter(
-      isSearchableAppRow
-    )
-    if (appsWithExtensions.length === 0) {
-      return
-    }
-
     logApp(
-      `Syncing App Semantic Alias Catalog v${chalk.cyan(
-        APP_SEMANTIC_ALIAS_CATALOG_VERSION
-      )} for ${chalk.cyan(appsWithExtensions.length)} apps...`,
-      LogStyle.process
+      `App Semantic Alias Catalog v${chalk.cyan(APP_SEMANTIC_ALIAS_CATALOG_VERSION)} will apply on the next runtime scan`,
+      LogStyle.info
     )
-
-    await runAdaptiveTaskQueue(
-      appsWithExtensions,
-      async (app, index) => {
-        await this._syncKeywordsForApp(this._mapDbAppToScannedInfo(app))
-
-        if ((index + 1) % 100 === 0 || index === appsWithExtensions.length - 1) {
-          logApp(
-            `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(
-              appsWithExtensions.length
-            )} semantic alias catalog syncs`,
-            LogStyle.info
-          )
-        }
-      },
-      {
-        estimatedTaskTimeMs: 5,
-        yieldIntervalMs: 10,
-        maxBatchSize: 10,
-        label: 'AppProvider::semanticAliasCatalogSync'
-      }
-    )
-
-    logApp('App Semantic Alias Catalog keyword sync complete', LogStyle.success)
   }
 
   private _scheduleStartupBackfill(): void {
+    if (this.shuttingDown) return
     if (!this.appIndexSettings.startupBackfillEnabled) {
       logApp('Startup backfill disabled, skipping', LogStyle.info)
       return
@@ -1339,32 +1576,40 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       ? STARTUP_BACKFILL_INITIAL_DELAY_MS + STARTUP_HEAVY_TASK_EXTRA_DELAY_DEV_MS
       : STARTUP_BACKFILL_INITIAL_DELAY_MS
     logApp(`Scheduling startup backfill (deferred ${Math.round(delayMs / 1000)}s)`, LogStyle.info)
-    setTimeout(() => {
-      void this._runStartupBackfillWithRetry()
+    this.startupBackfillTimer = setTimeout(() => {
+      this.startupBackfillTimer = null
+      if (this.shuttingDown) return
+      const task = this._runStartupBackfillWithRetry()
+      this.startupBackfillTask = task
+      void task
+        .catch((error) => {
+          logApp('Startup backfill producer failed', LogStyle.error, {
+            error: error instanceof Error ? error.message : String(error)
+          })
+        })
+        .finally(() => {
+          if (this.startupBackfillTask === task) this.startupBackfillTask = null
+        })
     }, delayMs)
   }
 
   private async _runStartupBackfillWithRetry(): Promise<void> {
+    if (this.shuttingDown) return
     const maxRetries = this.appIndexSettings.startupBackfillRetryMax
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      if (this.shuttingDown) return
       const readiness = await this._shouldRunStartupBackfill()
 
       if (readiness.allowed) {
-        const task = this._runStartupBackfill()
-        this.isInitializing = task
         try {
-          await task
-          await this._setLastBackfillTime(Date.now())
+          if (this.shuttingDown) return
+          await this.requireIndexedSourceRuntimeDelegate().scan(IndexedSourceScanReasons.Startup)
           return
         } catch (error) {
           logApp('Startup backfill failed', LogStyle.error, {
             error: error instanceof Error ? error.message : String(error)
           })
-        } finally {
-          if (this.isInitializing === task) {
-            this.isInitializing = null
-          }
         }
       }
 
@@ -1390,11 +1635,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         )}s`,
         LogStyle.info
       )
-      await sleep(delay)
+      await this.waitForStartupProducerDelay(delay)
     }
   }
 
   private async _shouldRunStartupBackfill(): Promise<{ allowed: boolean; reason?: string }> {
+    if (this.shuttingDown) return { allowed: false, reason: 'shutting-down' }
     if (!this.dbUtils || !this.searchIndex) {
       return { allowed: false, reason: 'missing-context' }
     }
@@ -1444,13 +1690,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     return Math.round(rawDelay * factor)
   }
 
-  private _runStartupBackfill(): Promise<void> {
+  private _runStartupBackfill(signal?: AbortSignal): Promise<void> {
     return this.runMaintenanceTask('startup-backfill', async () => {
-      await this._performStartupBackfill()
+      await this._performStartupBackfill(signal)
     })
   }
 
-  private async _performStartupBackfill(): Promise<void> {
+  private async _performStartupBackfill(signal?: AbortSignal): Promise<void> {
+    signal?.throwIfAborted()
     if (!this.dbUtils) {
       logApp('Database not initialized, skipping startup backfill', LogStyle.error)
       return
@@ -1461,6 +1708,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const scanStart = startTiming()
     const scannedApps = await this.loadScannedApps({ forceRefresh: true })
+    signal?.throwIfAborted()
     logAppDuration('BackfillScanApps', scanStart, {
       label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
       style: 'info',
@@ -1469,10 +1717,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
 
     await this._recordMissingIconApps(scannedApps)
+    signal?.throwIfAborted()
 
     const dbLoadStart = startTiming()
     const dbApps = await this.dbUtils!.getFilesByType('app')
     const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
+    signal?.throwIfAborted()
     const { scannedApps: dbScannedAppsWithExtensions, managedEntries } =
       this.partitionDbApps(dbAppsWithExtensions)
     logAppDuration('BackfillLoadDbApps', dbLoadStart, {
@@ -1552,6 +1802,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await runAdaptiveTaskQueue(
         toAdd,
         async (app, index) => {
+          signal?.throwIfAborted()
           const cleanDisplayName = resolveScannedDisplayName(app)
           const [insertedFile] = await this.dbUtils!.getDb()
             .insert(filesSchema)
@@ -1575,7 +1826,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           if (insertedFile) {
             await this.syncScannedAppExtensions(insertedFile.id, app)
-            await this._syncKeywordsForApp({ ...app, displayName: cleanDisplayName })
+            signal?.throwIfAborted()
           }
 
           if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
@@ -1590,6 +1841,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           label: 'AppProvider::backfillAddApps'
         }
       )
+      signal?.throwIfAborted()
 
       logAppDuration('BackfillAddApps', addStartTime, {
         label: 'Missing apps added',
@@ -1610,10 +1862,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
       await runAdaptiveTaskQueue(
         toUpdateMetadata,
-        async (
-          { fileId, app, existingDisplayName, existingDisplayNameQuality, existingExtensions },
-          index
-        ) => {
+        async ({ fileId, app, existingDisplayName, existingDisplayNameQuality }, index) => {
+          signal?.throwIfAborted()
           const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
 
           try {
@@ -1630,10 +1880,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             }
 
             await this.syncScannedAppExtensions(fileId, app)
-            await this.syncIndexedAppState(
-              { ...app, displayName: nextDisplayName },
-              existingExtensions
-            )
+
             updatedCount += 1
           } catch (error) {
             failedCount += 1
@@ -1644,6 +1891,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               LogStyle.warning
             )
           }
+          signal?.throwIfAborted()
 
           if ((index + 1) % 50 === 0 || index === toUpdateMetadata.length - 1) {
             logApp(
@@ -1657,6 +1905,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           label: 'AppProvider::backfillUpdateDisplayName'
         }
       )
+      signal?.throwIfAborted()
 
       const correctionStyle = failedCount > 0 ? LogStyle.warning : LogStyle.success
       logApp(
@@ -1671,6 +1920,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         suffix: `(updated=${chalk.green(updatedCount)}, failed=${chalk.yellow(failedCount)})`
       })
     }
+
+    signal?.throwIfAborted()
 
     logAppDuration('StartupBackfill', initStart, {
       label: 'Startup backfill complete',
@@ -1731,18 +1982,26 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    await this._runFullSync(decision.forced === true)
+    await this.requireIndexedSourceRuntimeDelegate().reconcile(
+      decision.forced === true
+        ? 'app-provider-forced-full-sync'
+        : 'app-provider-scheduled-full-sync'
+    )
   }
 
-  private _runFullSync(forced: boolean): Promise<AppIndexSyncStats> {
+  private _runFullSync(forced: boolean, throwOnFailure = false): Promise<AppIndexSyncStats> {
     return this.runMaintenanceTask('full-sync', async () => {
-      return await this._performFullSync(forced)
+      return await this._performFullSync(forced, throwOnFailure)
     })
   }
 
-  private async _performFullSync(forced: boolean): Promise<AppIndexSyncStats> {
+  private async _performFullSync(
+    forced: boolean,
+    throwOnFailure = false
+  ): Promise<AppIndexSyncStats> {
     if (!this.dbUtils) {
       logApp('Database not initialized, skipping full sync', LogStyle.error)
+      if (throwOnFailure) throw new Error('APP_INDEX_DATABASE_UNAVAILABLE')
       return {
         ...this.createEmptySyncStats(),
         skipped: 1,
@@ -1755,6 +2014,9 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     try {
       const stats = await this._initialize({ forceRefresh: true })
+      if (throwOnFailure && stats.errors > 0) {
+        throw new Error(`APP_INDEX_FULL_SYNC_FAILED:${String(stats.errors)}`)
+      }
       await this._setLastFullSyncTime(Date.now())
       logAppDuration('FullSync', syncStart, {
         label: forced ? 'Forced full sync complete' : 'Full sync complete',
@@ -1767,6 +2029,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp('Full sync failed', LogStyle.error, {
         error: error instanceof Error ? error.message : String(error)
       })
+      if (throwOnFailure) throw error
       return {
         ...this.createEmptySyncStats(),
         errors: 1
@@ -1805,14 +2068,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private async removeIndexedAppItems(itemIds: string[]): Promise<void> {
-    await this.recordSync.remove(itemIds)
-  }
-
-  private async _syncKeywordsForApp(appInfo: ScannedAppInfo): Promise<void> {
-    await this.recordSync.sync(appInfo)
-  }
-
   private resolveScannedAppToolSourceIds(appInfo: ScannedAppInfo): string[] {
     return resolveAppToolSourceIds({
       name: appInfo.name,
@@ -1827,13 +2082,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       displayPath: appInfo.displayPath,
       description: appInfo.description
     })
-  }
-
-  private async syncIndexedAppState(
-    appInfo: ScannedAppInfo,
-    extensions: Record<string, string | null> | undefined
-  ): Promise<void> {
-    await this.recordSync.syncState(appInfo, extensions)
   }
 
   private resolveAliasesForApp(appInfo: ScannedAppInfo): string[] {
@@ -2094,7 +2342,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           if (insertedFile) {
             await this.syncScannedAppExtensions(insertedFile.id, app)
-            await this._syncKeywordsForApp({ ...app, displayName: cleanDisplayName })
           }
 
           if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
@@ -2125,14 +2372,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       await runAdaptiveTaskQueue(
         toUpdate,
         async (
-          {
-            fileId,
-            app,
-            existingDisplayName,
-            existingDisplayNameQuality,
-            existingExtensions,
-            existingName
-          },
+          { fileId, app, existingDisplayName, existingDisplayNameQuality, existingName },
           index
         ) => {
           const nextName = isProbablyCorruptedDisplayName(app.name) ? existingName : app.name
@@ -2154,14 +2394,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
 
           await this.syncScannedAppExtensions(fileId, app)
-          await this.syncIndexedAppState(
-            {
-              ...app,
-              name: nextName,
-              displayName: updateData.displayName ?? existingDisplayName ?? nextDisplayName
-            },
-            existingExtensions
-          )
 
           // 改为每100个输出一次，但保持10个一组的处理
           if ((index + 1) % 100 === 0 || index === toUpdate.length - 1) {
@@ -2190,41 +2422,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (toDeleteIds.length > 0) {
       logApp(`Deleting ${chalk.cyan(toDeleteIds.length)} apps...`, LogStyle.process)
 
-      const deletedItemIds = (
-        await db
-          .select({
-            extensionKey: fileExtensions.key,
-            extensionValue: fileExtensions.value,
-            path: filesSchema.path
-          })
-          .from(filesSchema)
-          .leftJoin(
-            fileExtensions,
-            and(
-              eq(filesSchema.id, fileExtensions.fileId),
-              inArray(fileExtensions.key, [...APP_IDENTIFIER_EXTENSION_KEYS])
-            )
-          )
-          .where(inArray(filesSchema.id, toDeleteIds))
-      ).reduce<string[]>((items, row) => {
-        if (row.path) {
-          items.push(row.path)
-        }
-        if (row.extensionValue && isAppIdentifierExtensionKey(row.extensionKey)) {
-          items.push(row.extensionValue)
-        }
-        return items
-      }, [])
-
       const deleteStart = startTiming()
       await db.transaction(async (tx) => {
         await tx.delete(filesSchema).where(inArray(filesSchema.id, toDeleteIds))
         await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, toDeleteIds))
       })
-
-      if (deletedItemIds.length > 0) {
-        await this.removeIndexedAppItems(deletedItemIds)
-      }
 
       logAppDuration('DeleteApps', deleteStart, {
         label: 'Apps deleted successfully',
@@ -2330,16 +2532,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         await this.syncScannedAppExtensions(existingFile.id, appInfo)
       }
 
-      const indexedAppInfo = {
-        ...appInfo,
-        name: updateData.name ?? appInfo.name,
-        displayName: updateData.displayName ?? existingFile.displayName ?? normalizedDisplayName
-      }
-      if (options.managedEntry === true) {
-        await this._syncKeywordsForApp(indexedAppInfo)
-      } else {
-        await this.syncIndexedAppState(indexedAppInfo, existingExtensions)
-      }
       logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
       return 'updated'
     }
@@ -2366,7 +2558,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       } else {
         await this.syncScannedAppExtensions(insertedFile.id, appInfo)
       }
-      await this._syncKeywordsForApp(appInfo)
+
       logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
     }
 
@@ -2411,21 +2603,21 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
-  private handleItemUnlinked = async (event: unknown): Promise<void> => {
+  private handleItemUnlinked = async (event: unknown): Promise<string[]> => {
     const fsEvent = event as FileSystemPathEvent
-    if (!fsEvent || !fsEvent.filePath || this.processingPaths.has(fsEvent.filePath)) return
+    if (!fsEvent || !fsEvent.filePath || this.processingPaths.has(fsEvent.filePath)) return []
 
     let appPath = fsEvent.filePath
     if (this.isMac) {
       if (appPath.includes('.app/')) appPath = appPath.substring(0, appPath.indexOf('.app') + 4)
-      if (!appPath.endsWith('.app')) return
+      if (!appPath.endsWith('.app')) return []
       if (!this._isWatchPathCandidate(appPath)) {
-        return
+        return []
       }
     } else if (process.platform === 'win32') {
       const extension = path.extname(appPath).toLowerCase()
       if (!WINDOWS_REALTIME_APP_EXTENSIONS.has(extension)) {
-        return
+        return []
       }
     }
 
@@ -2433,29 +2625,27 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     this.processingPaths.add(appPath)
 
     try {
-      const fileToDelete = await this.dbUtils!.getFileByPath(appPath)
-      if (fileToDelete) {
-        const extensions = await this.dbUtils!.getFileExtensions(fileToDelete.id)
-        const extensionMap = this.toExtensionMap(extensions)
-        const itemIds = resolveAppItemIds({
-          bundleId: extensionMap.bundleId,
-          appIdentity: extensionMap.appIdentity,
-          path: fileToDelete.path
-        })
-
-        await this.dbUtils!.getDb().transaction(async (tx) => {
-          await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
-          await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, fileToDelete.id))
-        })
-
-        await this.removeIndexedAppItems(itemIds)
-
-        logApp(`App deleted from database: ${chalk.cyan(appPath)}`, LogStyle.success)
-      } else {
+      const fileToDelete = await this.dbUtils?.getFileByPath(appPath)
+      if (!fileToDelete || !this.dbUtils) {
         logApp(`App to delete not found in database: ${chalk.yellow(appPath)}`, LogStyle.warning)
+        return []
       }
+
+      const [storedApp] = await this.fetchExtensionsForFiles([fileToDelete])
+      const itemIds = storedApp
+        ? resolveAppItemIds(this._mapDbAppToScannedInfo(storedApp))
+        : resolveAppItemIds({ path: fileToDelete.path })
+
+      await this.dbUtils.getDb().transaction(async (tx) => {
+        await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
+        await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, fileToDelete.id))
+      })
+
+      logApp(`App deleted from database: ${chalk.cyan(appPath)}`, LogStyle.success)
+      return itemIds
     } catch (error) {
       logApp(`Error deleting app: ${chalk.red((error as Error).message)}`, LogStyle.error)
+      throw error
     } finally {
       this.processingPaths.delete(appPath)
     }
@@ -3021,6 +3211,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
       setTimeout(() => {
         void (async () => {
+          if (this.shuttingDown) return
           const lastScanTimestamp = (await this._getLastScanTime()) || 0
           if (
             lastScanTimestamp &&
@@ -3031,7 +3222,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           }
 
           await this.waitForMainRendererReady()
-          await this._runMdlsUpdateScan()
+          await this._runScheduledMdlsReconcile()
           logApp('Dev mode mdls scan complete', LogStyle.success)
         })()
       }, delayMs)
@@ -3041,16 +3232,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     pollingService.register(
       'app_provider_mdls_update_scan',
       async () => {
+        if (this.shuttingDown) return
         const lastScanTimestamp = (await this._getLastScanTime()) || 0
         const now = Date.now()
 
         if (!isDevelopmentRuntime && now - lastScanTimestamp > 60 * 60 * 1000) {
           logApp('Over 1 hour since last scan, starting mdls scan', LogStyle.info)
-          await this._runMdlsUpdateScan()
+          await this._runScheduledMdlsReconcile()
         } else if (isDevelopmentRuntime && !lastScanTimestamp) {
           logApp('First scan in dev mode', LogStyle.info)
           await this.waitForMainRendererReady()
-          await this._runMdlsUpdateScan()
+          await this._runScheduledMdlsReconcile()
         } else {
           appProviderLog.debug(
             `${chalk.cyan(((now - lastScanTimestamp) / (60 * 1000)).toFixed(1))} minutes since last scan, skipping`
@@ -3068,24 +3260,47 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
   }
 
-  public async rebuildIndex(): Promise<AppIndexRebuildResult> {
-    if (!this.context || !this.dbUtils) {
-      const error = 'Cannot rebuild: initialization context not available'
-      logApp(error, LogStyle.error)
-      return { success: false, error }
+  public async resetIndexedSourceLocalState(
+    request: IndexedSourceResetRequest
+  ): Promise<IndexedSourceResetResult> {
+    const startedAt = Date.now()
+    await this._runManualRebuild()
+    return {
+      sourceId: this.id,
+      reason: request.reason,
+      clearedSearchIndex: false,
+      clearedScanProgress: false,
+      startedAt,
+      completedAt: Date.now()
     }
+  }
 
-    try {
-      await this._forceRebuild()
-      return {
-        success: true,
-        message: 'App index rebuild complete'
+  public async rebuildIndex(): Promise<AppIndexRebuildResult> {
+    return await this.runExternalAppMutation(async () => {
+      if (!this.context || !this.dbUtils) {
+        const error = 'Cannot rebuild: initialization context not available'
+        logApp(error, LogStyle.error)
+        return { success: false, error }
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      logApp('App index rebuild failed', LogStyle.error, { error: message })
-      return { success: false, error: message }
-    }
+
+      try {
+        const result = await this.requireIndexedSourceRuntimeDelegate().reset({
+          sourceId: this.id,
+          reason: IndexedSourceResetReasons.ManualRebuild,
+          clearSearchIndex: true,
+          clearScanProgress: false
+        })
+        if (result.error) return { success: false, error: result.error }
+        return {
+          success: true,
+          message: 'App index rebuild complete'
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        logApp('App index rebuild failed', LogStyle.error, { error: message })
+        return { success: false, error: message }
+      }
+    })
   }
 
   private async _runManualRebuild(): Promise<void> {
@@ -3114,19 +3329,13 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     await this._clearPendingDeletions()
-    await this.searchIndex?.removeByProvider(this.id)
 
     logApp('Database cleared, rebuilding app index...', LogStyle.info)
 
     this.isInitializing = null
     await this._performFullSync(true)
-    await this.reindexManagedEntries()
 
     logApp('App database rebuild complete', LogStyle.success)
-  }
-
-  private async _forceRebuild(): Promise<void> {
-    await this._runManualRebuild()
   }
 
   private async _getConfigNumber(key: string): Promise<number | null> {
@@ -3285,6 +3494,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
+  private async _runScheduledMdlsReconcile(): Promise<void> {
+    if (this.shuttingDown) return
+    if (this.mdlsReconcileTask) {
+      await this.mdlsReconcileTask
+      return
+    }
+
+    const task = this.requireIndexedSourceRuntimeDelegate()
+      .reconcile('app-provider-scheduled-mdls')
+      .then(() => undefined)
+    this.mdlsReconcileTask = task
+    try {
+      await task
+    } finally {
+      if (this.mdlsReconcileTask === task) this.mdlsReconcileTask = null
+    }
+  }
+
   private async _performMdlsUpdateScan(): Promise<AppIndexSyncStats> {
     if (process.platform !== 'darwin') {
       logApp('Not on macOS, skipping mdls scan', LogStyle.info)
@@ -3389,20 +3616,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             .set({ displayName: nextDisplayName })
             .where(eq(filesSchema.id, dbApp.id))
         )
-
-        const appInfo = this._mapDbAppToScannedInfo({
-          ...dbApp,
-          displayName: nextDisplayName || dbApp.displayName,
-          extensions: {
-            ...dbApp.extensions,
-            [APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY]:
-              app.displayNameSource ?? dbApp.extensions[APP_DISPLAY_NAME_SOURCE_EXTENSION_KEY],
-            [APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY]:
-              app.displayNameQuality ?? dbApp.extensions[APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY]
-          }
-        })
-
-        await this.syncIndexedAppState(appInfo, dbApp.extensions)
       }
     }
 
@@ -3435,20 +3648,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             logApp(`App deletion target not found: ${chalk.yellow(app.path)}`, LogStyle.warning)
             continue
           }
-          const extensions = await dbUtils.getFileExtensions(dbApp.id)
-          const extensionMap = this.toExtensionMap(extensions)
-          const itemIds = resolveAppItemIds({
-            bundleId: extensionMap.bundleId,
-            appIdentity: extensionMap.appIdentity,
-            path: dbApp.path
-          })
-
           await db.transaction(async (tx) => {
             await tx.delete(filesSchema).where(eq(filesSchema.id, dbApp.id))
             await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, dbApp.id))
           })
-
-          await this.removeIndexedAppItems(itemIds)
 
           logApp(`App deleted from database: ${chalk.cyan(dbApp.path)}`, LogStyle.success)
         } catch (error) {

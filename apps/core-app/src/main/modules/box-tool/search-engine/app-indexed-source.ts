@@ -6,6 +6,8 @@ import type {
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult,
   IndexedSourceRecordBatch,
+  IndexedSourceResetRequest,
+  IndexedSourceResetResult,
   IndexedSourceScanRequest
 } from '@talex-touch/utils/search'
 import { appProvider } from '../addon/apps/app-provider'
@@ -92,9 +94,24 @@ export function buildAppIndexedSource(): IndexedSource {
     getRoots: async () => appProvider.getIndexedSourceRoots(),
     getEvidence: async () => await appProvider.getIndexedSourceEvidence(),
     async *scan(request: IndexedSourceScanRequest): AsyncIterable<IndexedSourceRecordBatch> {
-      const batch = await appProvider.scanIndexedSource(request)
-      if (batch && batch.records.length > 0) {
-        yield batch
+      const controller = new AbortController()
+      const abort = () => controller.abort(request.signal?.reason)
+      if (request.signal?.aborted) abort()
+      request.signal?.addEventListener('abort', abort, { once: true })
+      const iterator = appProvider
+        .scanIndexedSource({ ...request, signal: controller.signal })
+        [Symbol.asyncIterator]()
+      try {
+        while (true) {
+          const next = await iterator.next()
+          if (next.done) return
+          const batch = next.value
+          if (batch.records.length > 0 || batch.done === true) yield batch
+        }
+      } finally {
+        request.signal?.removeEventListener('abort', abort)
+        controller.abort(new Error('app-indexed-source-consumer-closed'))
+        await iterator.return?.()
       }
     },
     reconcile: async (
@@ -104,8 +121,12 @@ export function buildAppIndexedSource(): IndexedSource {
     },
     handleWatchEvent: async (event) => await appProvider.handleIndexedSourceWatchEvent(event),
     open: openAppIndexedSourceRecord,
+    resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => {
+      return await appProvider.resetIndexedSourceLocalState(request)
+    },
     clearIndex: async () => {
-      await appProvider.rebuildIndex()
+      const result = await appProvider.rebuildIndex()
+      if (!result.success) throw new Error(result.error ?? 'APP_INDEX_REBUILD_FAILED')
     }
   }
 }

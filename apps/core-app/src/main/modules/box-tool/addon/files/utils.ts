@@ -7,7 +7,8 @@ import { pathToFileURL } from 'node:url'
 import { toTfileUrl } from '@talex-touch/utils/network'
 import {
   isIndexableFile as globalIsIndexableFile,
-  scanDirectory as globalScanDirectory
+  scanDirectory as globalScanDirectory,
+  scanDirectoryBatches as globalScanDirectoryBatches
 } from '@talex-touch/utils/common/file-scan-utils'
 import { WHITELISTED_EXTENSIONS } from './constants'
 import {
@@ -54,6 +55,34 @@ export async function scanDirectory(
     ctime: file.ctime,
     mtime: file.mtime
   }))
+}
+
+export async function scanDirectoryBatches(
+  dirPath: string,
+  onBatch: (batch: ScannedFileInfo[]) => Promise<void>,
+  excludePaths?: Set<string>,
+  options?: FileScanOptions,
+  signal?: AbortSignal,
+  batchSize = 500
+): Promise<void> {
+  await globalScanDirectoryBatches(
+    dirPath,
+    async (batch) => {
+      await onBatch(
+        batch.map((file) => ({
+          path: file.path,
+          name: file.name,
+          extension: file.extension,
+          size: file.size,
+          ctime: file.ctime,
+          mtime: file.mtime
+        }))
+      )
+    },
+    options,
+    excludePaths,
+    { batchSize, signal }
+  )
 }
 
 export function mapFileToTuffItem(

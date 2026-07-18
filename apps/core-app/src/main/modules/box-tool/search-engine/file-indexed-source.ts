@@ -1,4 +1,5 @@
 import {
+  IndexedSourceScanReasons,
   IndexedSourceResetReasons,
   type IndexedSource,
   type IndexedSourceDescriptor,
@@ -149,11 +150,84 @@ export function buildFileIndexedSource(): IndexedSource {
     getProgress: getFileIndexedSourceProgress,
     shouldHandleWatchEvent: (event) => fileProvider.ownsWatchPath(event.path),
     async *scan(request: IndexedSourceScanRequest): AsyncIterable<IndexedSourceRecordBatch> {
-      const result = await fileProvider.scanIndexedSource(request)
-      for (const batch of result?.batches ?? []) {
-        if (batch.records.length > 0 || batch.done === true) {
-          yield batch
+      if (request.signal?.aborted) {
+        throw request.signal.reason ?? new Error('file-indexed-source-scan-aborted')
+      }
+      if (request.reason === IndexedSourceScanReasons.SchemaMigration) {
+        yield* fileProvider.streamIndexedSourceSnapshot(request)
+        return
+      }
+
+      const controller = new AbortController()
+      const queued: IndexedSourceRecordBatch[] = []
+      const producerWaiters = new Set<() => void>()
+      let consumerWake: (() => void) | null = null
+      let producerDone = false
+      let producerError: unknown = null
+      let terminalBatchSeen = false
+      const abort = () => {
+        controller.abort(request.signal?.reason)
+        for (const wake of producerWaiters) wake()
+        producerWaiters.clear()
+        consumerWake?.()
+      }
+      request.signal?.addEventListener('abort', abort, { once: true })
+
+      const enqueue = async (batch: IndexedSourceRecordBatch): Promise<void> => {
+        while (queued.length >= 2) {
+          if (controller.signal.aborted) throw new Error('file-indexed-source-scan-aborted')
+          await new Promise<void>((resolve) => producerWaiters.add(resolve))
         }
+        if (controller.signal.aborted) throw new Error('file-indexed-source-scan-aborted')
+        queued.push(batch)
+        if (batch.done === true) terminalBatchSeen = true
+        consumerWake?.()
+      }
+
+      const producer = fileProvider
+        .scanIndexedSource(
+          { ...request, signal: controller.signal },
+          {
+            onRecordBatch: enqueue,
+            onDelta: request.onDelta,
+            throwOnFailure: true,
+            signal: controller.signal,
+            mutationLeaseId: request.mutationLeaseId
+          }
+        )
+        .then(async () => {
+          if (!terminalBatchSeen) {
+            await enqueue({ sourceId: descriptor.id, records: [], done: true })
+          }
+          producerDone = true
+          consumerWake?.()
+        })
+        .catch((error) => {
+          producerError = error
+          producerDone = true
+          consumerWake?.()
+        })
+
+      try {
+        while (true) {
+          const batch = queued.shift()
+          if (batch) {
+            for (const wake of producerWaiters) wake()
+            producerWaiters.clear()
+            yield batch
+            continue
+          }
+          if (producerError) throw producerError
+          if (producerDone) return
+          await new Promise<void>((resolve) => {
+            consumerWake = resolve
+          })
+          consumerWake = null
+        }
+      } finally {
+        abort()
+        request.signal?.removeEventListener('abort', abort)
+        await producer
       }
     },
     reconcile: async (
@@ -161,6 +235,11 @@ export function buildFileIndexedSource(): IndexedSource {
     ): Promise<IndexedSourceReconcileResult> => {
       return await fileProvider.reconcileIndexedSource(request)
     },
+    drainMutations: async (request) =>
+      await fileProvider.drainIndexedSourceMutations(
+        `indexed-source.${request.reason}`,
+        request.leaseId
+      ),
     handleWatchEvent: async (event) => await fileProvider.handleIndexedSourceWatchEvent(event),
     open: async (record) => await openIndexedSourcePath(record.path),
     resetIndex: async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => {
@@ -168,7 +247,7 @@ export function buildFileIndexedSource(): IndexedSource {
     },
     clearIndex: async (): Promise<IndexedSourceResetResult> => {
       return await fileProvider.resetIndexedSourceRuntimeState({
-        sourceId: descriptor.id,
+        sourceId: FILE_INDEXED_SOURCE_ID,
         reason: IndexedSourceResetReasons.UserClear,
         clearSearchIndex: true,
         clearScanProgress: true

@@ -128,6 +128,24 @@ describe("IndexedSourceIntegrityService", () => {
     });
   });
 
+  it("does not reset or clean orphaned records during a read-only integrity check", async () => {
+    const { cleanupOrphanedRecords, resetRuntimeState, service } = createService({
+      cleanupOrphanedRecords: async () => 3,
+    });
+
+    const snapshot = await service.check({
+      sourceId: "test-source",
+      indexedRows: 5,
+      sourceRows: 10,
+      resetReason: IndexedSourceResetReasons.IntegrityRepair,
+      repair: false,
+    });
+
+    expect(snapshot).toMatchObject({ needsRebuild: true, orphanedRecordsRemoved: 0 });
+    expect(resetRuntimeState).not.toHaveBeenCalled();
+    expect(cleanupOrphanedRecords).not.toHaveBeenCalled();
+  });
+
   it("normalizes invalid row counts and ratio input", async () => {
     const { resetRuntimeState, service } = createService();
 

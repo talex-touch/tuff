@@ -7,6 +7,7 @@ import type {
 import type { IndexingRuntimeDiagnostics } from './indexing-diagnostics-service'
 import type { IndexStoreAdapter, IndexStoreDeltaApplySummary } from './indexing-store-adapter'
 import process from 'node:process'
+import { IndexingSourceMutationGate } from './indexing-source-mutation-gate'
 import {
   resolveIndexedSourceTaskEligibility,
   resolveIndexedSourceWatchRootRoute
@@ -46,7 +47,10 @@ export interface WatchEventRouteResult {
 }
 
 export class WatchEventRouter {
-  constructor(private readonly store: IndexStoreAdapter) {}
+  constructor(
+    private readonly store: IndexStoreAdapter,
+    private readonly sourceMutationGate = new IndexingSourceMutationGate()
+  ) {}
 
   async route(
     event: IndexedSourceWatchEvent,
@@ -73,25 +77,49 @@ export class WatchEventRouter {
 
     const sourceResults = await Promise.all(
       eligibleSources.map(async (source) => {
+        const sourceId = source.descriptor.id
         try {
-          if (source.shouldHandleWatchEvent && !source.shouldHandleWatchEvent(event)) {
-            return {
-              status: 'skipped' as const,
-              sourceId: source.descriptor.id,
-              reason: 'source-watch-filtered'
+          return await this.sourceMutationGate.run(sourceId, async (lease) => {
+            if (source.shouldHandleWatchEvent && !source.shouldHandleWatchEvent(event)) {
+              return {
+                status: 'skipped' as const,
+                sourceId,
+                reason: 'source-watch-filtered'
+              }
             }
-          }
-          return {
-            status: 'fulfilled' as const,
-            sourceId: source.descriptor.id,
-            deltas: await (source.handleWatchEvent?.(event) ?? Promise.resolve([]))
-          }
+
+            const deltas = await (source.handleWatchEvent?.(event) ?? Promise.resolve([]))
+            const storeResults = await Promise.all(
+              deltas.map(async (delta) => {
+                if (delta.sourceId !== sourceId) {
+                  return {
+                    status: 'rejected' as const,
+                    delta,
+                    error: new Error(`watch-source-mismatch:${sourceId}:${delta.sourceId}`)
+                  }
+                }
+                try {
+                  const summary = await this.store.applyDelta({
+                    ...delta,
+                    mutationLeaseId: lease.id
+                  })
+                  return {
+                    status: 'fulfilled' as const,
+                    delta,
+                    summary
+                  }
+                } catch (error) {
+                  return { status: 'rejected' as const, delta, error }
+                }
+              })
+            )
+            if (source.drainMutations) {
+              await source.drainMutations({ leaseId: lease.id, reason: 'watch' })
+            }
+            return { status: 'fulfilled' as const, sourceId, deltas, storeResults }
+          })
         } catch (error) {
-          return {
-            status: 'rejected' as const,
-            sourceId: source.descriptor.id,
-            error
-          }
+          return { status: 'rejected' as const, sourceId, error }
         }
       })
     )
@@ -99,46 +127,6 @@ export class WatchEventRouter {
     const deltas: IndexedSourceDelta[] = []
     let handledSources = 0
     let failedSources = 0
-
-    for (const result of sourceResults) {
-      if (result.status === 'fulfilled') {
-        handledSources += 1
-        deltas.push(...result.deltas)
-        continue
-      }
-      if (result.status === 'skipped') {
-        skipped.push({
-          sourceId: result.sourceId,
-          reason: result.reason as IndexedSourceTaskSkipReason
-        })
-        continue
-      }
-      failedSources += 1
-      errors.push({
-        sourceId: result.sourceId,
-        phase: 'handle',
-        message: this.stringifyError(result.error)
-      })
-    }
-
-    const storeResults = await Promise.all(
-      deltas.map(async (delta) => {
-        try {
-          const summary = await this.store.applyDelta(delta)
-          return {
-            status: 'fulfilled' as const,
-            delta,
-            summary
-          }
-        } catch (error) {
-          return {
-            status: 'rejected' as const,
-            delta,
-            error
-          }
-        }
-      })
-    )
     let appliedDeltas = 0
     let failedDeltas = 0
     let skippedDeltas = 0
@@ -157,24 +145,44 @@ export class WatchEventRouter {
       return next
     }
 
-    for (const result of storeResults) {
-      const summary = getDeltaSummary(result.delta.sourceId)
-      summary.deltas += 1
+    for (const result of sourceResults) {
       if (result.status === 'fulfilled') {
-        if (isSkippedDeltaSummary(result.summary)) {
-          skippedDeltas += 1
-          summary.skippedDeltas += 1
-        } else {
-          appliedDeltas += 1
-          summary.appliedDeltas += 1
+        handledSources += 1
+        deltas.push(...result.deltas)
+        for (const storeResult of result.storeResults) {
+          const summary = getDeltaSummary(storeResult.delta.sourceId)
+          summary.deltas += 1
+          if (storeResult.status === 'fulfilled') {
+            if (isSkippedDeltaSummary(storeResult.summary)) {
+              skippedDeltas += 1
+              summary.skippedDeltas += 1
+            } else {
+              appliedDeltas += 1
+              summary.appliedDeltas += 1
+            }
+            continue
+          }
+          failedDeltas += 1
+          summary.failedDeltas += 1
+          errors.push({
+            sourceId: storeResult.delta.sourceId,
+            phase: 'store',
+            message: this.stringifyError(storeResult.error)
+          })
         }
         continue
       }
-      failedDeltas += 1
-      summary.failedDeltas += 1
+      if (result.status === 'skipped') {
+        skipped.push({
+          sourceId: result.sourceId,
+          reason: result.reason as IndexedSourceTaskSkipReason
+        })
+        continue
+      }
+      failedSources += 1
       errors.push({
-        sourceId: result.delta.sourceId,
-        phase: 'store',
+        sourceId: result.sourceId,
+        phase: 'handle',
         message: this.stringifyError(result.error)
       })
     }

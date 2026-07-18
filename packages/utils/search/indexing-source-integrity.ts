@@ -63,6 +63,7 @@ export interface IndexedSourceIntegrityCheckInput {
   sourceRows: number;
   resetReason: IndexedSourceResetReason;
   minIndexedRowRatio?: number;
+  repair?: boolean;
   checkedAt?: number;
 }
 
@@ -127,19 +128,22 @@ export class IndexedSourceIntegrityService {
     let resetResult: IndexedSourceResetResult | null = null;
     let orphanedRecordsRemoved = 0;
 
-    if (needsRebuild) {
+    if (needsRebuild && input.repair !== false) {
       resetResult = await this.resetRuntimeState({
         reason: input.resetReason,
         clearSearchIndex: indexedRows > 0,
         clearScanProgress: true,
       });
-    } else if (indexedRows > 0 && this.cleanupOrphanedRecords) {
+    } else if (input.repair !== false && indexedRows > 0 && this.cleanupOrphanedRecords) {
       orphanedRecordsRemoved = normalizeCount(
         await this.cleanupOrphanedRecords(),
       );
     }
 
-    const completedAt = Math.max(startedAt, normalizeTimestamp(this.now(), startedAt));
+    const completedAt = Math.max(
+      startedAt,
+      normalizeTimestamp(this.now(), startedAt),
+    );
     const checkedAt = normalizeTimestamp(input.checkedAt, completedAt);
 
     return {

@@ -20,7 +20,7 @@ import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { DB_AUX_ENABLED } from '../../db/runtime-flags'
 import { getSqliteBusyRetryCount } from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
-import { fileProvider } from '../box-tool/addon/files/file-provider'
+import { searchIndexWriter } from '../box-tool/search-engine/search-index-writer'
 import {
   planScanProgressSourceScopeMigration,
   runScanProgressSourceScopeMigration
@@ -270,32 +270,13 @@ export class DatabaseModule extends BaseModule {
     return null
   }
 
-  private getSearchIndexWorkerBusyReason(): {
-    reason: 'search-index-worker'
-    queued: number
-    processing: boolean
-  } | null {
-    try {
-      if (fileProvider.isSearchIndexWorkerBusy()) {
-        return {
-          reason: 'search-index-worker',
-          queued: 0,
-          processing: true
-        }
-      }
-    } catch {
-      return null
-    }
-    return null
-  }
-
   private getWalCheckpointBusyReason(): {
-    reason: 'db-write-scheduler' | 'search-index-worker'
+    reason: 'db-write-scheduler'
     queued: number
     processing: boolean
     currentTaskLabel?: string
   } | null {
-    return this.getDbSchedulerBusyReason() ?? this.getSearchIndexWorkerBusyReason()
+    return this.getDbSchedulerBusyReason()
   }
 
   private logWalCheckpointSkippedBusy(
@@ -313,6 +294,28 @@ export class DatabaseModule extends BaseModule {
     })
   }
 
+  private isSearchIndexWriterPausedAndDrained(
+    status: ReturnType<typeof searchIndexWriter.getStatus>
+  ): boolean {
+    return status.admissionPaused && status.activeAdmissions === 0 && status.pending === 0
+  }
+
+  private logWalCheckpointSkippedWriter(
+    mode: 'PASSIVE' | 'TRUNCATE',
+    reason: 'search-index-writer-drain-timeout' | 'search-index-writer-not-quiescent',
+    status: ReturnType<typeof searchIndexWriter.getStatus>
+  ): void {
+    dbLog.info(DB_WAL_CHECKPOINT_SKIPPED_BUSY, {
+      meta: {
+        mode,
+        reason,
+        busyQueueDepth: status.pending,
+        busyProcessing: status.activeAdmissions > 0,
+        admissionPaused: status.admissionPaused
+      }
+    })
+  }
+
   private async runWalCheckpoint(mode: 'PASSIVE' | 'TRUNCATE'): Promise<void> {
     if (!this.client) return
 
@@ -323,44 +326,75 @@ export class DatabaseModule extends BaseModule {
     }
 
     try {
-      await dbWriteScheduler.schedule(
+      await searchIndexWriter.withPausedAdmission(
         `database.wal-checkpoint.${mode.toLowerCase()}`,
-        async () => {
-          const busyBeforeExecute = this.getSearchIndexWorkerBusyReason()
-          if (busyBeforeExecute) {
-            this.logWalCheckpointSkippedBusy(mode, busyBeforeExecute)
+        async (pausedStatus) => {
+          if (!this.isSearchIndexWriterPausedAndDrained(pausedStatus)) {
+            this.logWalCheckpointSkippedWriter(
+              mode,
+              'search-index-writer-not-quiescent',
+              pausedStatus
+            )
             return
           }
 
-          const checkpointStart = Date.now()
-          dbLog.debug('DB_WAL_CHECKPOINT_START', {
-            meta: { mode }
-          })
-          const result = await this.client!.execute(`PRAGMA wal_checkpoint(${mode})`)
-          const parsed = this.parseCheckpointRow(result.rows?.[0])
-          const walSize = await this.getWalSizeBytes()
-          this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
+          await dbWriteScheduler.schedule(
+            `database.wal-checkpoint.${mode.toLowerCase()}`,
+            async () => {
+              const statusBeforeExecute = searchIndexWriter.getStatus()
+              if (!this.isSearchIndexWriterPausedAndDrained(statusBeforeExecute)) {
+                this.logWalCheckpointSkippedWriter(
+                  mode,
+                  'search-index-writer-not-quiescent',
+                  statusBeforeExecute
+                )
+                return
+              }
 
-          dbLog.info(`WAL checkpoint ${mode} complete`, {
-            meta: {
-              mode,
-              busy: parsed.busy,
-              logFrames: parsed.log,
-              checkpointedFrames: parsed.checkpointed,
-              walSizeBytes: walSize,
-              walPeakBytes: this.walPeakBytes,
-              durationMs: Date.now() - checkpointStart,
-              schedulerQueuePeak: this.schedulerQueuePeak
+              const checkpointStart = Date.now()
+              dbLog.debug('DB_WAL_CHECKPOINT_START', {
+                meta: { mode }
+              })
+              const result = await this.client!.execute(`PRAGMA wal_checkpoint(${mode})`)
+              const parsed = this.parseCheckpointRow(result.rows?.[0])
+              const walSize = await this.getWalSizeBytes()
+              this.walPeakBytes = Math.max(this.walPeakBytes, walSize)
+
+              dbLog.info(`WAL checkpoint ${mode} complete`, {
+                meta: {
+                  mode,
+                  busy: parsed.busy,
+                  logFrames: parsed.log,
+                  checkpointedFrames: parsed.checkpointed,
+                  walSizeBytes: walSize,
+                  walPeakBytes: this.walPeakBytes,
+                  durationMs: Date.now() - checkpointStart,
+                  schedulerQueuePeak: this.schedulerQueuePeak
+                }
+              })
+            },
+            {
+              priority: 'best_effort',
+              dropPolicy: 'drop',
+              maxQueueWaitMs: DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
             }
-          })
+          )
         },
-        {
-          priority: 'best_effort',
-          dropPolicy: 'drop',
-          maxQueueWaitMs: DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
-        }
+        DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS
       )
     } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message === 'SEARCH_INDEX_WRITER_DRAIN_TIMEOUT' ||
+          error.message === 'SEARCH_INDEX_WRITER_ADMISSION_DRAIN_TIMEOUT')
+      ) {
+        this.logWalCheckpointSkippedWriter(
+          mode,
+          'search-index-writer-drain-timeout',
+          searchIndexWriter.getStatus()
+        )
+        return
+      }
       dbLog.warn(`WAL checkpoint ${mode} failed`, { error })
     }
   }
@@ -1043,6 +1077,13 @@ export class DatabaseModule extends BaseModule {
     this.auxDb = null
     this.auxInitialized = false
     dbLog.info('DatabaseManager destroyed')
+  }
+
+  public getDatabaseFilePath(): string {
+    if (!this.mainDbPath) {
+      throw new Error('Database path not initialized. Call init() first.')
+    }
+    return this.mainDbPath
   }
 
   public getDb(): LibSQLDatabase<typeof schema> {

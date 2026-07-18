@@ -20,7 +20,8 @@ import { fileFilterService } from '@talex-touch/utils/common/file-filter-service
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { IndexedSourceScanReasons } from '@talex-touch/utils/search'
 import {
   ProviderDeactivatedEvent,
   TalexEvents,
@@ -34,9 +35,11 @@ import { perfMonitor } from '../../../utils/perf-monitor'
 import { databaseModule } from '../../database'
 import PluginFeaturesAdapter from '../../plugin/adapters/plugin-features-adapter'
 import { getSentryService } from '../../sentry'
+import { OnboardingGateError, onboardingGate } from '../../storage'
 import { appProvider } from '../addon/apps/app-provider'
 import { everythingProvider } from '../addon/files/everything-provider'
 import { fileProvider } from '../addon/files/file-provider'
+import { APP_INDEXED_SOURCE_ID } from './app-indexed-source'
 import { FILE_INDEXED_SOURCE_ID } from './file-indexed-source'
 import {
   linuxNativeFileProvider,
@@ -47,7 +50,6 @@ import { mainWindowProvider } from '../addon/system/main-window-provider'
 import { systemActionsProvider } from '../addon/system/system-actions-provider'
 import { contextActionsProvider } from '../addon/context-actions/context-actions-provider'
 import { windowsShellFileProvider } from '../addon/system/windows-shell-file-provider'
-import { windowManager } from '../core-box/window'
 import { indexingRuntime, type IndexingRuntime } from './indexing-runtime'
 import { registerCoreIndexedSources } from './indexing-runtime-sources'
 import { SearchIndexStoreAdapter } from './indexing-store-adapter'
@@ -58,6 +60,11 @@ import { gatherAggregator } from './search-gather'
 import { markSearchActivity } from './search-activity'
 import { SearchIndexService } from './search-index-service'
 import { searchIndexCommitHub } from './search-index-commit-hub'
+import {
+  LegacySearchIndexWriter,
+  SourceScopedIndexWriterRouter,
+  searchIndexWriter
+} from './search-index-writer'
 import { searchLogger } from './search-logger'
 import { Sorter } from './sort/sorter'
 import { tuffSorter } from './sort/tuff-sorter'
@@ -71,17 +78,27 @@ import { SearchUsageService } from './search-usage-service'
 import {
   buildProviderSummary,
   buildProviderTelemetry,
-  buildSearchCacheKey,
   roundDuration,
   resolveProviderCategory,
   resolveSearchScene,
   toQueryHash
 } from './search-core-utils'
 import type { SearchTraceSourceStat } from './search-core-utils'
+import {
+  SearchSessionRegistry,
+  createCachedSearchResultSnapshot,
+  materializeCachedSearchResult,
+  type CachedSearchResultSnapshot,
+  type SearchCallerIdentity,
+  type SearchExecution,
+  type SearchRequestContext,
+  type SearchSession
+} from './search-session'
 
 interface SearchCacheEntry {
-  result: TuffSearchResult
+  result: CachedSearchResultSnapshot
   timestamp: number
+  revision: number
 }
 
 const SEARCH_CACHE_TTL_MS = 5_000
@@ -138,16 +155,22 @@ export class SearchEngineCore
   private readonly indexedSourceEventRouter: IndexedSourceEventRouter
   private readonly queryOrchestrator: SearchQueryOrchestrator
   private readonly searchUsageService: SearchUsageService
-  private currentGatherController: IGatherController | null = null
+  private readonly sessionRegistry = new SearchSessionRegistry({
+    onDeliveryError: (error, session) => {
+      searchEngineLog.warn('Search session delivery failed', {
+        error,
+        meta: { sessionId: session.id, caller: session.caller.id }
+      })
+    }
+  })
   private dbUtils: DbUtils | null = null
+  private indexWriterRouter: SourceScopedIndexWriterRouter | null = null
   private searchIndexService: SearchIndexService | null = null
   private usageSummaryService: UsageSummaryService | null = null
   private queryCompletionService: QueryCompletionService | null = null
   private recommendationEngine: RecommendationEngine | null = null
   private timeStatsAggregator: TimeStatsAggregator | null = null
   private indexingRuntime: IndexingRuntime | null = null
-  private latestSessionId: string | null = null // 跟踪最新的搜索 session，防止竞态条件
-  private searchSessionStartTimes = new Map<string, number>()
   private readonly pollingService = PollingService.getInstance()
   private readonly maintenanceTaskId = 'search-engine.maintenance'
   private readonly providerHealthService = new ProviderHealthService()
@@ -158,23 +181,25 @@ export class SearchEngineCore
 
   private touchApp: TouchApp | null = null
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
-  private lastSearchQuery: string = '' // 记录最后一次搜索的查询，用于完成跟踪
   private startupServicesStarted = false
+  private destroying = false
+  private initialAppScanController: AbortController | null = null
+  private initialAppScanPromise: Promise<void> | null = null
 
-  private cacheSearchResult(
-    query: TuffQuery,
-    providerFilter: string | undefined,
-    result: TuffSearchResult,
-    providerConfigSignature = this.getSearchProviderConfigSignature()
-  ): void {
-    const cacheKey = buildSearchCacheKey(
-      query,
-      providerFilter,
-      this.providerRegistry.getActivationMap(),
-      { providerConfigSignature }
-    )
+  private cacheSearchResult(cacheKey: string, result: TuffSearchResult, revision: number): void {
+    let snapshot: CachedSearchResultSnapshot
+    try {
+      snapshot = createCachedSearchResultSnapshot(result)
+    } catch (error) {
+      searchEngineLog.warn('Search result is not cacheable', {
+        error,
+        meta: { sessionId: result.sessionId }
+      })
+      return
+    }
 
-    // Evict oldest entries if cache is full
+    if (revision !== searchIndexCommitHub.getRevision()) return
+
     if (this.searchCache.size >= SEARCH_CACHE_MAX_SIZE) {
       let oldestKey: string | null = null
       let oldestTime = Infinity
@@ -187,7 +212,11 @@ export class SearchEngineCore
       if (oldestKey) this.searchCache.delete(oldestKey)
     }
 
-    this.searchCache.set(cacheKey, { result, timestamp: Date.now() })
+    this.searchCache.set(cacheKey, {
+      result: snapshot,
+      timestamp: Date.now(),
+      revision
+    })
   }
 
   private limitFrontendItems(items: TuffItem[]): TuffItem[] {
@@ -210,6 +239,10 @@ export class SearchEngineCore
     this.providerRegistry = new SearchProviderRegistry({
       getTouchApp: () => this.touchApp,
       getSearchIndexService: () => this.searchIndexService,
+      beforeProvidersLoad: async () => {
+        await searchIndexWriter.initialize(databaseModule.getDatabaseFilePath())
+        await this.searchIndexService?.warmup()
+      },
       onProvidersReady: () => this.startRuntimeServicesOnce(),
       onProviderDeactivated: (key, isPluginFeature, allDeactivated) => {
         touchEventBus.emit(
@@ -265,9 +298,29 @@ export class SearchEngineCore
   }
 
   private startRuntimeServicesOnce(): void {
+    if (this.destroying) return
     if (this.startupServicesStarted) return
     this.startupServicesStarted = true
     this.usageSummaryService?.start()
+    if (this.indexingRuntime) {
+      const controller = new AbortController()
+      this.initialAppScanController = controller
+      const scanPromise = this.indexingRuntime
+        .scanSource(APP_INDEXED_SOURCE_ID, IndexedSourceScanReasons.Startup, {
+          signal: controller.signal
+        })
+        .then(() => undefined)
+        .catch((error) => {
+          if (!controller.signal.aborted) {
+            searchEngineLog.error('Initial App indexed-source scan failed', { error })
+          }
+        })
+        .finally(() => {
+          if (this.initialAppScanPromise === scanPromise) this.initialAppScanPromise = null
+          if (this.initialAppScanController === controller) this.initialAppScanController = null
+        })
+      this.initialAppScanPromise = scanPromise
+    }
     this.startMaintenance()
   }
 
@@ -282,7 +335,15 @@ export class SearchEngineCore
   }
 
   registerIndexCommitStream(context: StreamContext<CoreBoxSearchIndexCommitPayload>): void {
+    if (context.signal.aborted) return
     this.indexCommitStreams.add(context)
+    context.signal.addEventListener(
+      'abort',
+      () => {
+        this.indexCommitStreams.delete(context)
+      },
+      { once: true }
+    )
   }
 
   private handleSearchIndexCommit(payload: CoreBoxSearchIndexCommitPayload): void {
@@ -316,8 +377,13 @@ export class SearchEngineCore
     this.providerRegistry.deactivateAll()
   }
 
-  getActiveProviders(): ISearchProvider<ProviderContext>[] {
-    return this.providerRegistry.getActive()
+  getActiveProviders(
+    activations: ReadonlyMap<
+      string,
+      IProviderActivate
+    > | null = this.providerRegistry.getActivationMap()
+  ): ISearchProvider<ProviderContext>[] {
+    return this.providerRegistry.getActiveFor(activations)
   }
 
   public getActivationState(): IProviderActivate[] | null {
@@ -419,40 +485,38 @@ export class SearchEngineCore
     }
   }
 
-  private _updateActivationState(newResults: TuffSearchResult[]): void {
-    this.providerRegistry.mergeActivations(newResults)
-  }
+  public cancelSearch(searchId: string, caller?: SearchCallerIdentity): boolean {
+    const session = this.sessionRegistry.get(searchId)
+    if (!session || (caller && !session.owns(caller))) return false
+    if (!this.sessionRegistry.cancel(searchId, caller)) return false
 
-  public getCurrentGatherController(): IGatherController | null {
-    return this.currentGatherController
-  }
-
-  public cancelSearch(searchId: string): void {
-    if (this.currentGatherController) {
-      if (searchLogger.isEnabled()) {
-        searchLogger.logSearchPhase('Cancel Search', `Cancelling search with ID: ${searchId}`)
-      }
-      this.logSearchTrace({
-        event: 'session.cancel',
-        sessionId: searchId,
-        query: { text: this.lastSearchQuery, inputs: [] },
-        cancelled: true,
-        includeDetails: true
-      })
-      this.currentGatherController.abort()
-      this.currentGatherController = null
-
-      // 清理 latestSessionId，允许新搜索
-      if (this.latestSessionId === searchId) {
-        this.latestSessionId = null
-      }
+    if (searchLogger.isEnabled()) {
+      searchLogger.logSearchPhase('Cancel Search', `Cancelling search with ID: ${searchId}`)
     }
+    this.logSearchTrace({
+      event: 'session.cancel',
+      sessionId: searchId,
+      query: session.query,
+      cancelled: true,
+      includeDetails: true
+    })
+    return true
+  }
+
+  public cancelSearchFromSender(searchId: string, senderId: number): boolean {
+    const session = this.sessionRegistry.get(searchId)
+    if (!session || session.caller.senderId !== senderId) return false
+    return this.cancelSearch(searchId, session.caller)
   }
 
   private async orchestrateSearchQuery(
-    query: TuffQuery
+    query: TuffQuery,
+    activations: ReadonlyMap<
+      string,
+      IProviderActivate
+    > | null = this.providerRegistry.getActivationMap()
   ): Promise<QueryOrchestrationResult & { durationMs: number }> {
-    return await this.queryOrchestrator.orchestrate(query)
+    return await this.queryOrchestrator.orchestrate(query, activations)
   }
 
   private aggregateProvidersForQuery(
@@ -607,7 +671,7 @@ export class SearchEngineCore
       enrichmentMode: 'full'
     })
       .then(({ sortedItems }) => {
-        if (signal.aborted || this.latestSessionId !== sessionId) {
+        if (signal.aborted) {
           return
         }
         sendUpdateToFrontend(sortedItems)
@@ -624,10 +688,9 @@ export class SearchEngineCore
    * After first results render, asynchronously surface files that are
    * semantically related to the query but were missed by the keyword/FTS pass,
    * and merge-append them into the still-active session. Runs entirely off the
-   * hot search path; a superseded session (latestSessionId mismatch) or an
-   * aborted signal drops the recall silently. Renderer `search.update` merges by
-   * id, so recalled items append after the primary results without reordering
-   * them.
+   * hot search path; an aborted request-scoped session drops the recall silently.
+   * Renderer stream updates merge by id, so recalled items append after the
+   * primary results without reordering them.
    */
   private scheduleDeferredSemanticRecall(
     sessionId: string,
@@ -643,7 +706,7 @@ export class SearchEngineCore
     if (providerFilter) return
     // Only worth the embedding scan when the primary results are sparse.
     if (baseItems.length >= DEFERRED_SEMANTIC_MAX_BASE_ITEMS) return
-    if (signal.aborted || this.latestSessionId !== sessionId) return
+    if (signal.aborted) return
 
     void (async () => {
       try {
@@ -651,7 +714,7 @@ export class SearchEngineCore
         const recallCandidates = await fileProvider.semanticRecall(query, excludeIds, signal)
         const recallItems = fileFilterService.filterSearchItems(recallCandidates)
         if (recallItems.length === 0) return
-        if (signal.aborted || this.latestSessionId !== sessionId) return
+        if (signal.aborted) return
         this._recordSearchResults(sessionId, [...baseItems, ...recallItems]).catch((error) => {
           searchEngineLog.debug('Failed to record semantic recall results', {
             error,
@@ -668,75 +731,64 @@ export class SearchEngineCore
     })()
   }
 
-  async search(query: TuffQuery): Promise<TuffSearchResult> {
+  startSearch(query: TuffQuery, context?: SearchRequestContext): SearchExecution {
+    const onboardingDecision = onboardingGate.evaluate()
+    if (onboardingDecision.state !== 'allowed') {
+      throw new OnboardingGateError(onboardingDecision)
+    }
+
+    const requestQuery = structuredClone(query)
+    const caller: SearchCallerIdentity = context?.caller ?? {
+      kind: 'background',
+      id: `background:${crypto.randomUUID()}`
+    }
+    const activations =
+      context?.activations === undefined
+        ? this.providerRegistry.getActivationState()
+        : context.activations
+    const session = this.sessionRegistry.create({
+      caller,
+      query: requestQuery,
+      activations,
+      sink: context?.sink
+    })
+    const result = this.executeSearch(requestQuery, session)
+      .then(async (initialResult) => {
+        await session.publishSnapshot(initialResult)
+        return initialResult
+      })
+      .catch((error) => {
+        session.fail(error)
+        throw error
+      })
+
+    return {
+      sessionId: session.id,
+      result,
+      completed: session.completed,
+      cancel: () => this.sessionRegistry.cancel(session.id, caller)
+    }
+  }
+
+  async search(query: TuffQuery, context?: SearchRequestContext): Promise<TuffSearchResult> {
+    return await this.startSearch(query, context).result
+  }
+
+  private async executeSearch(query: TuffQuery, session: SearchSession): Promise<TuffSearchResult> {
     markSearchActivity()
+    const sessionId = session.id
     const pipelineDurations: SearchPipelineStageDurations = {
       parseDuration: 0,
       providerAggregationDuration: 0,
       mergeRankDuration: 0
     }
-    const { providerFilter, cacheKey, durationMs, providerConfigSignature } =
-      await this.orchestrateSearchQuery(query)
+    const { providerFilter, cacheKey, durationMs } = await this.orchestrateSearchQuery(
+      query,
+      session.activationMap
+    )
+    session.associateCache(cacheKey)
     pipelineDurations.parseDuration = durationMs
 
-    const cachedEntry = this.searchCache.get(cacheKey)
-    if (cachedEntry && Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS) {
-      const cacheSessionId = cachedEntry.result.sessionId || crypto.randomUUID()
-      cachedEntry.result.items = fileFilterService.filterSearchItems(cachedEntry.result.items ?? [])
-      const cachedItems = cachedEntry.result.items.length
-      this.logSearchTrace({
-        event: 'ipc.query.received',
-        sessionId: cacheSessionId,
-        query,
-        timings: {
-          parseMs: pipelineDurations.parseDuration,
-          totalMs: pipelineDurations.parseDuration
-        }
-      })
-      this.logSearchTrace({
-        event: 'session.start',
-        sessionId: cacheSessionId,
-        query,
-        timings: {
-          parseMs: pipelineDurations.parseDuration,
-          totalMs: pipelineDurations.parseDuration
-        }
-      })
-      this.logSearchTrace({
-        event: 'first.result',
-        sessionId: cacheSessionId,
-        query,
-        timings: {
-          parseMs: pipelineDurations.parseDuration,
-          totalMs: pipelineDurations.parseDuration
-        },
-        result: { firstCount: cachedItems, totalCount: cachedItems }
-      })
-      this.logSearchTrace({
-        event: 'session.end',
-        sessionId: cacheSessionId,
-        query,
-        timings: {
-          parseMs: pipelineDurations.parseDuration,
-          totalMs: pipelineDurations.parseDuration
-        },
-        result: { firstCount: cachedItems, totalCount: cachedItems },
-        sourceStats: (cachedEntry.result.sources as SearchTraceSourceStat[] | undefined) ?? [],
-        providerFilter,
-        includeDetails: false
-      })
-      searchEngineLog.debug(
-        `Cache hit for query len=${query.text?.length ?? 0}, hash=${toQueryHash(query.text || '')}`
-      )
-      return cachedEntry.result
-    }
-
-    const sessionId = crypto.randomUUID()
-    this.searchSessionStartTimes.set(sessionId, Date.now())
-    if (this.searchSessionStartTimes.size > 200) {
-      const oldest = this.searchSessionStartTimes.keys().next().value
-      if (oldest) this.searchSessionStartTimes.delete(oldest)
-    }
     searchLogger.searchSessionStart(query.text, sessionId)
     searchLogger.logSearchPhase(
       'Query Received',
@@ -755,11 +807,79 @@ export class SearchEngineCore
       timings: { parseMs: pipelineDurations.parseDuration }
     })
 
-    this.currentGatherController?.abort()
+    if (session.signal.aborted) {
+      const cancelledResult = new TuffSearchResultBuilder(query)
+        .setItems([])
+        .setDuration(Date.now() - session.startedAt)
+        .setSources([])
+        .build()
+      cancelledResult.sessionId = sessionId
+      cancelledResult.activate = session.getActivationState() ?? undefined
+      this.logSearchTrace({
+        event: 'session.end',
+        sessionId,
+        query,
+        timings: {
+          parseMs: pipelineDurations.parseDuration,
+          totalMs: Date.now() - session.startedAt
+        },
+        result: { firstCount: 0, totalCount: 0 },
+        cancelled: true,
+        includeDetails: false
+      })
+      session.complete({
+        cancelled: true,
+        activate: cancelledResult.activate,
+        sources: []
+      })
+      return cancelledResult
+    }
 
-    this.latestSessionId = sessionId
+    const searchRevision = searchIndexCommitHub.getRevision()
+    const cachedEntry = this.searchCache.get(cacheKey)
+    if (
+      cachedEntry &&
+      cachedEntry.revision === searchRevision &&
+      Date.now() - cachedEntry.timestamp < SEARCH_CACHE_TTL_MS
+    ) {
+      const cachedResult = materializeCachedSearchResult(cachedEntry.result, sessionId)
+      cachedResult.items = fileFilterService.filterSearchItems(cachedResult.items ?? [])
+      const cachedItems = cachedResult.items.length
+      this.logSearchTrace({
+        event: 'first.result',
+        sessionId,
+        query,
+        timings: {
+          parseMs: pipelineDurations.parseDuration,
+          totalMs: pipelineDurations.parseDuration
+        },
+        result: { firstCount: cachedItems, totalCount: cachedItems }
+      })
+      this.logSearchTrace({
+        event: 'session.end',
+        sessionId,
+        query,
+        timings: {
+          parseMs: pipelineDurations.parseDuration,
+          totalMs: pipelineDurations.parseDuration
+        },
+        result: { firstCount: cachedItems, totalCount: cachedItems },
+        sourceStats: (cachedResult.sources as SearchTraceSourceStat[] | undefined) ?? [],
+        providerFilter,
+        includeDetails: false
+      })
+      searchEngineLog.debug(
+        `Cache hit for query len=${query.text?.length ?? 0}, hash=${toQueryHash(query.text || '')}`
+      )
+      session.complete({
+        activate: cachedResult.activate,
+        sources: cachedResult.sources
+      })
+      return cachedResult
+    }
+
     searchEngineLog.debug(`Starting search session ${sessionId}`)
-    const startTime = Date.now()
+    const startTime = session.startedAt
 
     // Empty query detection: return recommendations
     if ((!query.text || query.text === '') && (!query.inputs || query.inputs.length === 0)) {
@@ -777,25 +897,29 @@ export class SearchEngineCore
             `Generated ${recommendationItems.length} recommendations in ${recommendationResult.duration.toFixed(2)}ms`
           )
 
-          if (this.latestSessionId !== sessionId) {
-            searchEngineLog.debug(
-              `Discarding stale recommendation result ${sessionId} (latest: ${this.latestSessionId})`
-            )
-            const staleResult = new TuffSearchResultBuilder(query)
+          if (session.signal.aborted) {
+            const cancelledResult = new TuffSearchResultBuilder(query)
               .setItems([])
               .setDuration(0)
               .setSources([])
               .build()
-            staleResult.sessionId = sessionId
+            cancelledResult.sessionId = sessionId
+            cancelledResult.activate = session.getActivationState() ?? undefined
             this.logSearchTrace({
               event: 'session.end',
               sessionId,
               query,
               timings: { parseMs: pipelineDurations.parseDuration, totalMs: 0 },
               result: { firstCount: 0, totalCount: 0 },
+              cancelled: true,
               includeDetails: false
             })
-            return staleResult
+            session.complete({
+              cancelled: true,
+              activate: cancelledResult.activate,
+              sources: []
+            })
+            return cancelledResult
           }
 
           const result = new TuffSearchResultBuilder(query)
@@ -806,18 +930,10 @@ export class SearchEngineCore
 
           result.sessionId = sessionId
           result.containerLayout = recommendationResult.containerLayout
+          result.activate = session.getActivationState() ?? undefined
 
-          // If no recommendations, notify CoreBox to shrink
           if (recommendationItems.length === 0) {
-            const coreBoxWindow = windowManager.current?.window
-            if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-              const transport = this.getTransport()
-              void transport
-                .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.noResults, {
-                  shouldShrink: true
-                })
-                .catch(() => {})
-            }
+            session.publishNoResults()
           }
 
           const totalDuration = Date.now() - startTime
@@ -849,6 +965,7 @@ export class SearchEngineCore
             },
             includeDetails: detail
           })
+          session.complete({ activate: result.activate, sources: result.sources })
           return result
         } catch (error) {
           searchEngineLog.error('Failed to generate recommendations', { error })
@@ -871,6 +988,8 @@ export class SearchEngineCore
             .setSources([])
             .build()
           fallbackResult.sessionId = sessionId
+          fallbackResult.activate = session.getActivationState() ?? undefined
+          session.complete({ activate: fallbackResult.activate, sources: [] })
           return fallbackResult
         }
       } else {
@@ -888,17 +1007,18 @@ export class SearchEngineCore
           result: { firstCount: 0, totalCount: 0 },
           includeDetails: false
         })
+        emptyResult.activate = session.getActivationState() ?? undefined
+        session.complete({ activate: emptyResult.activate, sources: [] })
         return emptyResult
       }
     }
 
-    this.lastSearchQuery = query.text || ''
     this._recordSearchUsage(sessionId, query)
 
     return new Promise((resolve) => {
       let isFirstUpdate = true
       let didResolveInitial = false
-      let providersToSearch = this.getActiveProviders()
+      let providersToSearch = this.getActiveProviders(session.activationMap)
       let gatherController: IGatherController | null = null
 
       const finalizeWithError = (error: unknown): void => {
@@ -938,26 +1058,14 @@ export class SearchEngineCore
           .setSources([])
           .build()
         failedResult.sessionId = sessionId
-        failedResult.activate = this.getActivationState() ?? undefined
+        failedResult.activate = session.getActivationState() ?? undefined
 
         if (!didResolveInitial) {
           didResolveInitial = true
           resolve(failedResult)
         }
 
-        this.currentGatherController = null
-        const coreBoxWindow = windowManager.current?.window
-        if (coreBoxWindow) {
-          const finalActivationState = this.getActivationState() ?? undefined
-          const transport = this.getTransport()
-          void transport
-            .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
-              searchId: sessionId,
-              activate: finalActivationState,
-              sources: []
-            })
-            .catch(() => {})
-        }
+        session.complete({ activate: failedResult.activate, sources: [] })
       }
 
       const providerAggregation = this.aggregateProvidersForQuery(providersToSearch, query, {
@@ -969,23 +1077,10 @@ export class SearchEngineCore
       searchLogger.searchProviders(providersToSearch.map((p) => p.id))
 
       const sendUpdateToFrontend = (itemsToSend: TuffItem[]): void => {
-        if (gatherController?.signal.aborted || this.latestSessionId !== sessionId) {
-          return
-        }
+        if (gatherController?.signal.aborted || session.signal.aborted) return
 
-        const coreBoxWindow = windowManager.current?.window
-        if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-          const frontendItems = this.limitFrontendItems(itemsToSend)
-          if (frontendItems.length === 0) return
-
-          const transport = this.getTransport()
-          void transport
-            .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.update, {
-              items: frontendItems,
-              searchId: sessionId
-            })
-            .catch(() => {})
-        }
+        const frontendItems = this.limitFrontendItems(itemsToSend)
+        session.publishUpdate(frontendItems)
       }
 
       searchLogger.logSearchPhase('Initialization', 'Setting up search aggregator')
@@ -1006,7 +1101,7 @@ export class SearchEngineCore
                 .setSources(update.sourceStats || [])
                 .build()
               cancelledResult.sessionId = sessionId
-              cancelledResult.activate = this.getActivationState() ?? undefined
+              cancelledResult.activate = session.getActivationState() ?? undefined
               resolve(cancelledResult)
             }
 
@@ -1029,21 +1124,15 @@ export class SearchEngineCore
               includeDetails: totalDuration >= SEARCH_TRACE_SLOW_THRESHOLD_MS
             })
 
-            const coreBoxWindow = windowManager.current?.window
-            if (coreBoxWindow && !coreBoxWindow.isDestroyed()) {
-              const transport = this.getTransport()
-              await transport
-                .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
-                  searchId: sessionId,
-                  cancelled: true,
-                  activate: this.getActivationState() ?? undefined,
-                  sources: update.sourceStats ?? []
-                })
-                .catch(() => {})
-            }
+            const finalActivationState = session.getActivationState() ?? undefined
+            session.complete({
+              cancelled: true,
+              activate: finalActivationState,
+              sources: update.sourceStats ?? []
+            })
             searchLogger.logSearchPhase(
               'Search End',
-              `Cancelled with activation state: ${JSON.stringify(this.getActivationState())}`
+              `Cancelled with activation state: ${JSON.stringify(finalActivationState)}`
             )
             return
           }
@@ -1078,7 +1167,7 @@ export class SearchEngineCore
                   providerFilter
                 )
 
-                this._updateActivationState(update.newResults)
+                session.mergeActivations(update.newResults)
 
                 const totalDuration = Date.now() - startTime
                 const frontendItems = this.limitFrontendItems(sortedItems)
@@ -1088,7 +1177,7 @@ export class SearchEngineCore
                   .setSources(update.sourceStats || [])
                   .build()
                 initialResult.sessionId = sessionId
-                initialResult.activate = this.getActivationState() ?? undefined
+                initialResult.activate = session.getActivationState() ?? undefined
 
                 this.searchFirstResultMetrics.set(sessionId, {
                   firstResultMs: totalDuration,
@@ -1132,23 +1221,8 @@ export class SearchEngineCore
                   providerFilter
                 })
 
-                if (this.latestSessionId !== sessionId) {
-                  const staleResult = new TuffSearchResultBuilder(query)
-                    .setItems([])
-                    .setDuration(0)
-                    .setSources([])
-                    .build()
-                  staleResult.sessionId = sessionId
-                  resolve(staleResult)
-                } else {
-                  this.cacheSearchResult(
-                    query,
-                    providerFilter,
-                    initialResult,
-                    providerConfigSignature
-                  )
-                  resolve(initialResult)
-                }
+                this.cacheSearchResult(cacheKey, initialResult, searchRevision)
+                resolve(initialResult)
               } else {
                 const totalDuration = Date.now() - startTime
                 const resolvedResult = new TuffSearchResultBuilder(query)
@@ -1157,7 +1231,7 @@ export class SearchEngineCore
                   .setSources(update.sourceStats || [])
                   .build()
                 resolvedResult.sessionId = sessionId
-                resolvedResult.activate = this.getActivationState() ?? undefined
+                resolvedResult.activate = session.getActivationState() ?? undefined
                 resolve(resolvedResult)
               }
             }
@@ -1202,23 +1276,15 @@ export class SearchEngineCore
               providerFilter,
               includeDetails: totalDuration >= SEARCH_TRACE_SLOW_THRESHOLD_MS
             })
-            this.currentGatherController = null
-            this._updateActivationState(update.newResults)
-            const coreBoxWindow = windowManager.current?.window
-            if (coreBoxWindow) {
-              const finalActivationState = this.getActivationState() ?? undefined
-              const transport = this.getTransport()
-              await transport
-                .sendToWindow(coreBoxWindow.id, CoreBoxEvents.search.end, {
-                  searchId: sessionId,
-                  activate: finalActivationState,
-                  sources: update.sourceStats
-                })
-                .catch(() => {})
-            }
+            session.mergeActivations(update.newResults)
+            const finalActivationState = session.getActivationState() ?? undefined
+            session.complete({
+              activate: finalActivationState,
+              sources: update.sourceStats
+            })
             searchLogger.logSearchPhase(
               'Search End',
-              `Final activation state: ${JSON.stringify(this.getActivationState())}`
+              `Final activation state: ${JSON.stringify(finalActivationState)}`
             )
             return
           }
@@ -1241,9 +1307,7 @@ export class SearchEngineCore
               includeCompletion: false,
               enrichmentMode: 'base'
             })
-            if (gatherController!.signal.aborted || this.latestSessionId !== sessionId) {
-              return
-            }
+            if (gatherController!.signal.aborted || session.signal.aborted) return
             pipelineDurations.mergeRankDuration = mergeRankDuration
             const sortedItems = this.appendCompatibilityNotice(
               rawSortedItems,
@@ -1251,7 +1315,7 @@ export class SearchEngineCore
               providerFilter
             )
 
-            this._updateActivationState(update.newResults)
+            session.mergeActivations(update.newResults)
 
             const totalDuration = Date.now() - startTime
             const frontendItems = this.limitFrontendItems(sortedItems)
@@ -1261,7 +1325,7 @@ export class SearchEngineCore
               .setSources(update.sourceStats || [])
               .build()
             initialResult.sessionId = sessionId
-            initialResult.activate = this.getActivationState() ?? undefined
+            initialResult.activate = session.getActivationState() ?? undefined
 
             this.searchFirstResultMetrics.set(sessionId, {
               firstResultMs: totalDuration,
@@ -1298,23 +1362,7 @@ export class SearchEngineCore
               providerFilter
             })
 
-            // 在返回前检查是否仍是最新搜索
-            if (this.latestSessionId !== sessionId) {
-              searchEngineLog.debug(
-                `Discarding stale search result ${sessionId} (latest: ${this.latestSessionId})`
-              )
-              // 返回空结果，前端会忽略旧的 sessionId
-              const staleResult = new TuffSearchResultBuilder(query)
-                .setItems([])
-                .setDuration(0)
-                .setSources([])
-                .build()
-              staleResult.sessionId = sessionId
-              resolve(staleResult)
-              return
-            }
-
-            this.cacheSearchResult(query, providerFilter, initialResult, providerConfigSignature)
+            this.cacheSearchResult(cacheKey, initialResult, searchRevision)
             resolve(initialResult)
             didResolveInitial = true
           } else if (update.newResults.length > 0) {
@@ -1329,10 +1377,8 @@ export class SearchEngineCore
               includeCompletion: false,
               enrichmentMode: 'base'
             })
-            if (gatherController!.signal.aborted || this.latestSessionId !== sessionId) {
-              return
-            }
-            this._updateActivationState(update.newResults)
+            if (gatherController!.signal.aborted || session.signal.aborted) return
+            session.mergeActivations(update.newResults)
             sendUpdateToFrontend(sortedItems)
             this.enrichAndPushSearchItems(
               sessionId,
@@ -1347,7 +1393,7 @@ export class SearchEngineCore
         }
       })
 
-      this.currentGatherController = gatherController
+      session.attachGather(gatherController)
     })
   }
 
@@ -1516,8 +1562,10 @@ export class SearchEngineCore
   }
 
   public async recordExecute(sessionId: string, item: TuffItem): Promise<void> {
+    const sessionTrace = this.sessionRegistry.getTrace(sessionId)
     if (!this.dbUtils) {
-      this.queueExecuteTelemetry(sessionId, item)
+      this.queueExecuteTelemetry(sessionId, item, sessionTrace?.startedAt)
+      this.sessionRegistry.forgetTrace(sessionId)
       return
     }
 
@@ -1526,9 +1574,9 @@ export class SearchEngineCore
     try {
       await this.searchUsageService.recordExecute(sessionId, item, itemId)
 
-      // 记录查询完成（如果有最后的搜索查询）
-      if (this.lastSearchQuery && this.queryCompletionService) {
-        await this.queryCompletionService.recordCompletion(this.lastSearchQuery, item)
+      const queryText = sessionTrace?.query.text
+      if (queryText && this.queryCompletionService) {
+        await this.queryCompletionService.recordCompletion(queryText, item)
       }
 
       if (searchLogger.isEnabled()) {
@@ -1541,20 +1589,17 @@ export class SearchEngineCore
       searchEngineLog.error(`Failed to record execute usage for item ${itemId}`, { error })
     }
 
-    this.queueExecuteTelemetry(sessionId, item)
+    this.queueExecuteTelemetry(sessionId, item, sessionTrace?.startedAt)
+    this.sessionRegistry.forgetTrace(sessionId)
   }
 
-  private queueExecuteTelemetry(sessionId: string, item: TuffItem): void {
+  private queueExecuteTelemetry(sessionId: string, item: TuffItem, startedAt?: number): void {
     try {
       const sentryService = getSentryService()
       if (!sentryService.isTelemetryEnabled()) {
         return
       }
 
-      const startedAt = this.searchSessionStartTimes.get(sessionId)
-      if (startedAt) {
-        this.searchSessionStartTimes.delete(sessionId)
-      }
       this.searchFirstResultMetrics.delete(sessionId)
 
       const meta = item.meta as Record<string, unknown> | undefined
@@ -1769,6 +1814,7 @@ export class SearchEngineCore
 
   init(ctx: ModuleInitContext<TalexEvents>): void {
     const instance = SearchEngineCore.getInstance()
+    if (instance.destroying) throw new Error('SEARCH_CORE_DESTROYED')
 
     instance.touchApp = ctx.app as TouchApp
     instance.registerDefaults()
@@ -1782,13 +1828,40 @@ export class SearchEngineCore
     })
     instance.searchIndexService = new SearchIndexService(db, {
       logger: searchLogger,
-      onCommitted: (providerIds) => searchIndexCommitHub.markCommitted(providerIds)
-    })
-    void instance.searchIndexService.warmup().catch((error) => {
-      searchEngineLog.warn('Search index warmup failed', { error })
+      initializationMode: 'reader',
+      readiness: searchIndexWriter
     })
     instance.searchIndexService.preloadPinyin()
-    indexingRuntime.setStore(new SearchIndexStoreAdapter(instance.searchIndexService))
+    instance.indexWriterRouter = new SourceScopedIndexWriterRouter({
+      runtime: searchIndexWriter,
+      legacy: new LegacySearchIndexWriter(instance.searchIndexService),
+      defaultMode: 'runtime',
+      visibilityBarrier: {
+        waitUntilReadable: async () => await instance.searchIndexService!.waitUntilReadable()
+      }
+    })
+    indexingRuntime.setSourceWriterRouter(instance.indexWriterRouter)
+    indexingRuntime.setStore(
+      new SearchIndexStoreAdapter(instance.indexWriterRouter, {
+        onBatchApplied: async (_summary, batch) => {
+          if (batch?.sourceId === FILE_INDEXED_SOURCE_ID) {
+            await fileProvider.handleIndexedSourceRuntimeRecordsApplied(
+              batch.records,
+              batch.mutationLeaseId
+            )
+          }
+        },
+        onDeltaApplied: async (_summary, delta) => {
+          if (delta.sourceId === FILE_INDEXED_SOURCE_ID && delta.record) {
+            await fileProvider.handleIndexedSourceRuntimeRecordsApplied(
+              [delta.record],
+              delta.mutationLeaseId
+            )
+          }
+        }
+      })
+    )
+    fileProvider.setFilePersistencePort(searchIndexWriter.getFilePersistencePort())
     indexingRuntime.setTaskStateStore(new SqliteIndexingTaskStateStore(db))
     instance.queryCompletionService = new QueryCompletionService(instance.dbUtils)
     instance.searchUsageService.initialize(db)
@@ -1797,6 +1870,25 @@ export class SearchEngineCore
     instance.timeStatsAggregator = new TimeStatsAggregator(instance.dbUtils)
     instance.indexingRuntime = indexingRuntime
     registerCoreIndexedSources(instance.indexingRuntime)
+    appProvider.setIndexedSourceRuntimeDelegate({
+      scan: async (reason) => await indexingRuntime.scanSource(APP_INDEXED_SOURCE_ID, reason),
+      reconcile: async (reason) =>
+        await indexingRuntime.reconcileSource(APP_INDEXED_SOURCE_ID, { reason }),
+      applyDelta: async (delta) => await indexingRuntime.applySourceDelta(delta),
+      reset: async (request) =>
+        await indexingRuntime.resetSourceRuntimeState(APP_INDEXED_SOURCE_ID, request)
+    })
+    fileProvider.setIndexedSourceRuntimeMutationDelegate({
+      applyBatch: async (batch) => await indexingRuntime.applySourceBatch(batch),
+      applyDelta: async (delta) => await indexingRuntime.applySourceDelta(delta),
+      cleanupSource: async (sourceId, mutationLeaseId) =>
+        await indexingRuntime.cleanupSource(sourceId, mutationLeaseId),
+      countSource: async (sourceId, mutationLeaseId) =>
+        await indexingRuntime.countSource(sourceId, mutationLeaseId),
+      drainSource: async (sourceId, timeoutMs) =>
+        await indexingRuntime.drainSourceMutations(sourceId, timeoutMs),
+      scanSource: async (reason) => await indexingRuntime.scanSource(FILE_INDEXED_SOURCE_ID, reason)
+    })
     fileProvider.setIndexedSourceRuntimeResetDelegate(
       async (request) =>
         await instance.indexingRuntime!.resetSourceRuntimeState(FILE_INDEXED_SOURCE_ID, request)
@@ -1811,15 +1903,11 @@ export class SearchEngineCore
     })
 
     touchEventBus.on(TalexEvents.ALL_MODULES_LOADED, async () => {
-      if (instance.providerRegistry.hasCompletedOnboarding()) {
-        await instance.providerRegistry.ensureLoaded('all-modules-loaded')
-        return
-      }
-      instance.providerRegistry.deferUntilOnboardingReady()
+      await instance.providerRegistry.loadWhenOnboardingAllows('all-modules-loaded')
     })
 
     // Register IPC handlers
-    // NOTE: 'core-box:query' is registered in core-box/ipc.ts via coreBoxManager.search()
+    // NOTE: CoreBoxEvents.search.query is registered in core-box/ipc.ts via coreBoxManager.search()
     // Do NOT register it here to avoid duplicate handlers causing race conditions
     const transport = this.getTransport()
 
@@ -1888,7 +1976,6 @@ export class SearchEngineCore
     }
 
     transport.on(CoreBoxEvents.recommendation.get, handleGetRecommendations)
-    transport.on(CoreBoxRetainedEvents.legacy.getRecommendations, handleGetRecommendations)
 
     const handleAggregateTimeStats = async () => {
       if (!instance.timeStatsAggregator) {
@@ -1905,7 +1992,6 @@ export class SearchEngineCore
     }
 
     transport.on(CoreBoxEvents.recommendation.aggregateTimeStats, handleAggregateTimeStats)
-    transport.on(CoreBoxRetainedEvents.legacy.aggregateTimeStats, handleAggregateTimeStats)
 
     transport.on(CoreBoxEvents.item.togglePin, async (data) => {
       if (!instance.dbUtils) {
@@ -1945,18 +2031,66 @@ export class SearchEngineCore
     }
 
     transport.on(CoreBoxEvents.recommendation.isPinned, handleIsPinned)
-    transport.on(CoreBoxRetainedEvents.legacy.isPinned, handleIsPinned)
   }
 
-  destroy(): void {
+  async destroy(): Promise<void> {
+    this.destroying = true
+    const runtime = this.indexingRuntime
+    runtime?.beginShutdown()
     if (searchLogger.isEnabled()) {
       searchLogger.logSearchPhase(
         'Destroy',
-        'Destroying SearchEngineCore and aborting any ongoing search'
+        'Destroying SearchEngineCore and aborting live search sessions'
       )
     }
-    this.currentGatherController?.abort()
-    this.providerRegistry.destroy()
+    await this.sessionRegistry.destroy()
+    this.usageSummaryService?.stop()
+    this.stopMaintenance()
+    this.indexedSourceEventRouter.unsubscribe()
+    const drainFailures: Error[] = []
+    const recordDrainFailure = (message: string, error: unknown): void => {
+      searchEngineLog.error(message, { error })
+      drainFailures.push(error instanceof Error ? error : new Error(String(error)))
+    }
+    const appProducerDrain = appProvider.prepareForSearchIndexShutdown()
+    this.initialAppScanController?.abort(new Error('SEARCH_CORE_DESTROYED'))
+    const appRuntimeDrain = runtime?.abortAndDrainSourceScans(APP_INDEXED_SOURCE_ID)
+    const fileRuntimeDrain = runtime?.abortAndDrainSourceScans(FILE_INDEXED_SOURCE_ID)
+    const fileDrain = fileProvider.prepareForSearchIndexShutdown()
+    const admittedTaskDrain = runtime?.drainAdmittedTasks()
+    await appProducerDrain.catch((error) => {
+      recordDrainFailure('Failed to stop AppProvider producers before writer shutdown', error)
+    })
+    await appRuntimeDrain?.catch((error) => {
+      recordDrainFailure('Failed to drain active Runtime AppProvider scans', error)
+    })
+    await fileRuntimeDrain?.catch((error) => {
+      recordDrainFailure('Failed to drain active Runtime FileProvider scans', error)
+    })
+    await admittedTaskDrain?.catch((error) => {
+      recordDrainFailure('Failed to drain admitted Runtime indexing tasks', error)
+    })
+    await fileDrain.catch((error) => {
+      recordDrainFailure('Failed to drain FileProvider before writer shutdown', error)
+    })
+    const appMutationDrain = runtime?.drainSourceMutations(APP_INDEXED_SOURCE_ID)
+    const fileMutationDrain = runtime?.drainSourceMutations(FILE_INDEXED_SOURCE_ID)
+    await appMutationDrain?.catch((error) => {
+      recordDrainFailure(
+        'Failed to drain AppProvider Runtime mutations before writer shutdown',
+        error
+      )
+    })
+    await fileMutationDrain?.catch((error) => {
+      recordDrainFailure(
+        'Failed to drain FileProvider Runtime mutations before writer shutdown',
+        error
+      )
+    })
+    if (drainFailures.length > 0) {
+      throw new AggregateError(drainFailures, 'SEARCH_CORE_INDEX_DRAIN_FAILED')
+    }
+    await this.providerRegistry.destroy()
     this.indexCommitUnsubscribe?.()
     this.indexCommitUnsubscribe = null
     for (const context of this.indexCommitStreams) {
@@ -1966,15 +2100,21 @@ export class SearchEngineCore
     }
     this.indexCommitStreams.clear()
 
-    // 停止汇总服务
-    this.usageSummaryService?.stop()
-    this.stopMaintenance()
-    this.indexedSourceEventRouter.unsubscribe()
+    appProvider.setIndexedSourceRuntimeDelegate(null)
     fileProvider.setIndexedSourceRuntimeResetDelegate(null)
+    fileProvider.setIndexedSourceRuntimeMutationDelegate(null)
+    fileProvider.setFilePersistencePort(null)
     this.indexingRuntime?.clear()
     this.indexingRuntime = null
+    this.indexWriterRouter = null
+    try {
+      await searchIndexWriter.shutdown()
+    } catch (error) {
+      searchEngineLog.error('Failed to drain search index writer on destroy', { error })
+      throw error
+    }
 
-    void this.searchUsageService.flush().catch((error) => {
+    await this.searchUsageService.flush().catch((error) => {
       searchEngineLog.error('Failed to flush usage stats queue on destroy', { error })
     })
   }

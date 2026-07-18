@@ -3,7 +3,7 @@
   "name": "establish-single-search-index-writer",
   "title": "Establish Single Search Index Writer",
   "description": "Make IndexingRuntime the sole semantic mutation path and one dedicated writer the owner of shared FTS writes and DDL.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": "IndexingRuntime store boundary, search-index worker/service ownership, File/App FTS mutation migration, DDL readiness, and checkpoint contract",
   "package": null,
@@ -29,10 +29,10 @@
     "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
     "apps/core-app/src/main/modules/database/index.ts"
   ],
-  "notes": "Production enablement prerequisite: 07-09-gate-search-on-storage-hydration. Development/parity instrumentation may proceed earlier.",
+  "notes": "Code implementation and all isolated verification gates are complete. Real-profile SQLite/FTS/schema operations and packaged-profile diagnostics remain separately approval-gated, so the task stays in progress until that evidence is recorded.",
   "meta": {
-    "nextAction": "Implement the dedicated FTS writer and migrate mutation callers after the storage-hydration gate is complete.",
-    "blocker": "07-09-gate-search-on-storage-hydration must complete before production enablement.",
-    "evidence": "prd.md acceptance checklist and focused IndexingRuntime/FTS parity checks."
+    "nextAction": "Obtain explicit approval for packaged/real-profile indexing diagnostics evidence, then record the final acceptance and archive after a user-directed work commit.",
+    "blocker": "No code or isolated-verification blocker. Only approval-gated packaged/real-profile diagnostics evidence remains.",
+    "evidence": "540 focused indexing/provider tests passed, including runtime -> legacy -> runtime rollback; CoreApp node and web type-checks passed; scoped ESLint and Prettier passed; electron-vite build passed; isolated copy-execute FTS ownership simulation passed with source unchanged and legacy file_fts retained; final three-reviewer panel reported no blockers."
   }
 }
