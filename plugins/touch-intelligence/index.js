@@ -241,14 +241,37 @@ const registeredCustomAiCommandFeatureIds = new Set()
 const conversationSessions = new Map()
 
 function resolveIntelligenceClient() {
-  if (intelligence?.invoke) {
-    return intelligence
+  const injectedClient = intelligence?.invoke
+    ? intelligence
+    : plugin?.intelligence
+  if (injectedClient?.invoke) {
+    return injectedClient
   }
 
   const {
     createIntelligenceClient,
   } = require('@talex-touch/tuff-intelligence/client')
   return createIntelligenceClient(touchChannel)
+}
+
+function invokeIntelligenceCapability(client, capabilityId, payload, options) {
+  const domainMethod
+    = capabilityId === 'text.chat'
+      ? client?.text?.chat
+      : capabilityId === 'vision.ocr'
+        ? client?.vision?.ocr
+        : null
+
+  if (typeof domainMethod === 'function') {
+    return domainMethod(payload, options)
+  }
+  if (typeof client?.invoke !== 'function') {
+    throw createPluginError(
+      'PROVIDER_UNAVAILABLE',
+      'Intelligence SDK is unavailable for this plugin runtime',
+    )
+  }
+  return client.invoke(capabilityId, payload, options)
 }
 
 function normalizeText(value) {
@@ -2771,7 +2794,8 @@ async function dispatchPrompt({
 
     if (imageDataUrl && !resolvedOcrText) {
       const ocrPayload = buildOcrPayload(imageDataUrl)
-      const ocrResult = await client.invoke(
+      const ocrResult = await invokeIntelligenceCapability(
+        client,
         'vision.ocr',
         ocrPayload,
         buildInvokeOptions({
@@ -2897,7 +2921,12 @@ async function dispatchPrompt({
         ocrText: resolvedOcrText,
       })
       mapped = mapInvokeResult(
-        await client.invoke('text.chat', currentOnlyPayload, invokeOptions),
+        await invokeIntelligenceCapability(
+          client,
+          'text.chat',
+          currentOnlyPayload,
+          invokeOptions,
+        ),
         displayPrompt,
         requestId,
         handoffSessionId,
