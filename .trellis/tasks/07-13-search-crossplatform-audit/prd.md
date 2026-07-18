@@ -93,6 +93,7 @@
 
 - [ ] **R5 — 过度分层反噬**
   - 位置：`addon/files/file-provider.ts:523-870`（347 行 DI 接线板）；30+ service 中大量薄适配层；`search-engine/indexing-write-*.ts`（3-9 行 re-export）vs `packages/utils/search/indexing-write-*.ts`（500+ 行实现）并存，grep 极易读错文件。
+  - 2026-07-18 进展：将 worker 内嵌的文件持久化拆到 `SqliteFileIndexPersistenceRepository`，worker 只保留消息分派；repository 用 `BEGIN IMMEDIATE` 事务内父行校验跳过已删除 fileId，并为竞态补真实 SQLite 回归。R5 仍保持 open：FileProvider DI 接线板、薄 service/re-export 并存问题尚未整体收敛。
 
 - [ ] **R6 — 平台分支散落、`withOSAdapter` 采用不足**
   - 位置：main 目录 141 处 `process.platform`（`touch-window.ts:83`、`update-system.ts:1445`、`capability-adapter.ts` 通篇内联三分支…），`withOSAdapter` 几乎只有 startup-guard 用。**注意**：审计 OS-04/OS-05 已判定并非全部是 bypass，迁移需逐项复核。
@@ -105,6 +106,7 @@
 
 - [ ] **R9 — SQLite 单写瓶颈缓解逻辑分散 5+ 处**
   - `dbWriteScheduler` + `withSqliteRetry` + worker `directMode` + `AdaptiveBatchScheduler` + `UsageStatsQueue` 采样丢弃；同一痛点各自处理，新人难判断某次写走哪条路。
+  - 2026-07-18 进展：文件持久化统一复用 `withSqliteRetry`，flush runtime 复用共享 retry decision/backoff，并对重复失败日志做节流；worker error 传输保留 `cause/code/rawCode`，避免 SQLite 原因丢失。R9 仍保持 open：其它写路径尚未统一到单一调度/诊断入口。
 
 ### 🟢 低危清理
 

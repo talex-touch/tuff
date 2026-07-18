@@ -249,6 +249,39 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
     })
   })
 
+  it('keeps explicit flushes behind an active SQLite busy retry', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
+    const inflight = new Map<number, IndexWorkerFileResult>()
+    const busyError = Object.assign(new Error('database is locked'), {
+      code: 'SQLITE_BUSY',
+      rawCode: 5
+    })
+    const persistEntries = vi
+      .fn<(entries: FilePersistenceEntry[]) => Promise<PersistEntriesSummary>>()
+      .mockRejectedValueOnce(busyError)
+      .mockImplementation(async (entries) => createPersistSummary(entries))
+    const { service } = createService({
+      pending,
+      inflight,
+      ensureSearchIndexWorkerReady: vi.fn(async () => true),
+      persistEntries
+    })
+
+    await service.flush()
+    await service.flush()
+    await service.flush()
+
+    expect(persistEntries).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(249)
+    expect(persistEntries).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(persistEntries).toHaveBeenCalledTimes(2)
+  })
+
   it('uses shared flush runtime config without losing explicit adapter overrides', () => {
     vi.useFakeTimers()
     const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])

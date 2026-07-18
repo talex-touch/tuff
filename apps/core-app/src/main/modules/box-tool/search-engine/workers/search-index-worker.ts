@@ -18,63 +18,46 @@ import type {
   ApplyProviderItemsMessage,
   BeginProviderReplacementMessage,
   CleanupOrphanKeywordsMessage,
+  CommitProviderReplacementMessage,
   CountByProviderMessage,
-  FilePersistenceEntry,
   GetProviderReplacementOutcomeMessage,
   InitMessage,
   PersistEntriesMessage,
-  PersistEntriesSummary,
-  CommitProviderReplacementMessage,
-  StageProviderReplacementItemsMessage,
   RemoveByProviderMessage,
   RemoveFileExtensionsMessage,
   RemoveFileMessage,
   RemoveProviderItemsMessage,
+  StageProviderReplacementItemsMessage,
   WorkerErrorMessage,
   WorkerResultMessage
 } from './search-index-worker-types'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
+import type {
+  FileIndexPersistenceRepository,
+  UpsertFileRecord
+} from '../file-index-persistence-repository'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 import { createClient } from '@libsql/client'
-import { and, eq, inArray, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
-import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createLogger } from '../../../../utils/logger'
-import { noopSearchIndexRuntimeLogger, SearchIndexService } from '../search-index-service'
 import {
-  normalizeScanProgressSourceId,
-  resolveScanProgressSchemaShape,
-  upsertSourceScopedScanProgress
-} from '../scan-progress-schema'
-import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
+  SqliteFileIndexPersistenceRepository,
+  withFileIndexPersistenceRetry
+} from '../file-index-persistence-repository'
+import { noopSearchIndexRuntimeLogger, SearchIndexService } from '../search-index-service'
+import { serializeSearchIndexWorkerError } from './search-index-worker-error'
 
 const searchIndexWorkerLog = createLogger('SearchIndex').child('Worker')
 
-export const WORKER_RETRY_LABELS = {
-  persistChunk: 'search-index.worker.persistChunk',
-  upsertFiles: 'search-index.worker.upsertFiles',
-  upsertScanProgress: 'search-index.worker.upsertScanProgress'
-} as const
-
-export function withWorkerWriteRetry<T>(operation: () => Promise<T>, label: string): Promise<T> {
-  return withSqliteRetry(operation, { label })
-}
+export {
+  FILE_INDEX_PERSISTENCE_RETRY_LABELS as WORKER_RETRY_LABELS,
+  withFileIndexPersistenceRetry as withWorkerWriteRetry
+} from '../file-index-persistence-repository'
 
 // ---------- Internal Message Types (not in shared types) ----------
-
-interface UpsertFileRecord {
-  path: string
-  name: string
-  extension?: string | null
-  size?: number | null
-  mtime: Date | number | string
-  ctime: Date | number | string
-  lastIndexedAt: Date | number | string
-  isDir: boolean
-  type: string
-}
 
 interface UpsertFilesMessage {
   type: 'upsertFiles'
@@ -113,6 +96,7 @@ type WorkerRequest =
 
 let searchIndex: SearchIndexService | null = null
 let db: LibSQLDatabase<typeof schema> | null = null
+let filePersistenceRepository: FileIndexPersistenceRepository | null = null
 let initialized = false
 
 // Serial queue to avoid concurrent DB access within this worker
@@ -237,60 +221,63 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
       }
 
       case 'persistEntries': {
-        if (!db) throw new Error('Worker not initialized — send init first')
-        const PERSIST_CHUNK = 3
-        const summary: PersistEntriesSummary = {
-          entries: message.entries.length,
-          chunks: 0,
-          persistedRows: 0,
-          fileUpdates: 0,
-          progressRows: 0,
-          embeddings: 0
+        if (!filePersistenceRepository) {
+          throw new Error('Worker not initialized — send init first')
         }
-        for (let ci = 0; ci < message.entries.length; ci += PERSIST_CHUNK) {
-          const chunk = message.entries.slice(ci, ci + PERSIST_CHUNK)
-          const chunkSummary = await handlePersistEntries(chunk)
-          summary.chunks += 1
-          summary.persistedRows += chunkSummary.persistedRows
-          summary.fileUpdates += chunkSummary.fileUpdates
-          summary.progressRows += chunkSummary.progressRows
-          summary.embeddings += chunkSummary.embeddings
-          if (ci + PERSIST_CHUNK < message.entries.length) {
-            await new Promise<void>((resolve) => setTimeout(resolve, 30))
-          }
-        }
-        respond({ type: 'result', taskId, result: summary })
+        respond({
+          type: 'result',
+          taskId,
+          result: await filePersistenceRepository.persistEntries(message.entries)
+        })
         break
       }
 
       case 'upsertFiles': {
-        if (!db) throw new Error('Worker not initialized — send init first')
-        const rows = await handleUpsertFiles(message.records)
-        respond({ type: 'result', taskId, result: rows })
+        if (!filePersistenceRepository) {
+          throw new Error('Worker not initialized — send init first')
+        }
+        respond({
+          type: 'result',
+          taskId,
+          result: await filePersistenceRepository.upsertFiles(message.records)
+        })
         break
       }
 
       case 'upsertScanProgress': {
-        if (!db) throw new Error('Worker not initialized — send init first')
-        const upserted = await handleUpsertScanProgress(
-          message.paths,
-          message.lastScanned,
-          message.sourceId
-        )
-        respond({ type: 'result', taskId, result: upserted })
+        if (!filePersistenceRepository) {
+          throw new Error('Worker not initialized — send init first')
+        }
+        respond({
+          type: 'result',
+          taskId,
+          result: await filePersistenceRepository.upsertScanProgress(
+            message.paths,
+            message.lastScanned,
+            message.sourceId
+          )
+        })
         break
       }
 
       case 'removeFile': {
-        if (!db) throw new Error('Worker not initialized — send init first')
-        await handleRemoveFile(message)
+        if (!filePersistenceRepository) {
+          throw new Error('Worker not initialized — send init first')
+        }
+        await filePersistenceRepository.removeFile(message.path)
+        searchIndexWorkerLog.debug('Removed file', { meta: { path: message.path } })
         respond({ type: 'result', taskId })
         break
       }
 
       case 'removeFileExtensions': {
-        if (!db) throw new Error('Worker not initialized — send init first')
-        await handleRemoveFileExtensions(message)
+        if (!filePersistenceRepository) {
+          throw new Error('Worker not initialized — send init first')
+        }
+        await filePersistenceRepository.removeFileExtensions(message.fileId, message.keys)
+        searchIndexWorkerLog.debug('Removed file extensions', {
+          meta: { fileId: message.fileId, keys: message.keys.join(',') }
+        })
         respond({ type: 'result', taskId })
         break
       }
@@ -306,11 +293,7 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         respond({ type: 'error', taskId, error: { message: `Unknown message type` } })
     }
   } catch (error) {
-    const errorObj =
-      error instanceof Error
-        ? { message: error.message, stack: error.stack }
-        : { message: String(error) }
-    respond({ type: 'error', taskId, error: errorObj })
+    respond({ type: 'error', taskId, error: serializeSearchIndexWorkerError(error) })
   }
 }
 
@@ -334,6 +317,7 @@ async function handleInit(message: InitMessage): Promise<void> {
   const workerDb = drizzle(client, { schema })
 
   db = workerDb
+  filePersistenceRepository = new SqliteFileIndexPersistenceRepository(workerDb)
   searchIndex = new SearchIndexService(workerDb, {
     directMode: true,
     logger: noopSearchIndexRuntimeLogger
@@ -347,246 +331,12 @@ async function handleInit(message: InitMessage): Promise<void> {
 }
 
 /** Persist file content, embeddings, and progress rows in one transaction. */
-async function handlePersistEntries(
-  entries: FilePersistenceEntry[]
-): Promise<Omit<PersistEntriesSummary, 'entries' | 'chunks'>> {
-  if (!db) throw new Error('Worker not initialized')
-  if (entries.length === 0) {
-    return { persistedRows: 0, fileUpdates: 0, progressRows: 0, embeddings: 0 }
-  }
-  const workerDb = db
-
-  return await withWorkerWriteRetry(
-    async () =>
-      workerDb.transaction(async (tx) => {
-        const summary = {
-          persistedRows: 0,
-          fileUpdates: 0,
-          progressRows: 0,
-          embeddings: 0
-        }
-        for (const entry of entries) {
-          const { fileId, fileUpdate, progress } = entry
-
-          // 1. Update files table (content + embeddingStatus)
-          if (fileUpdate) {
-            await tx
-              .update(schema.files)
-              .set({
-                content: fileUpdate.content,
-                embeddingStatus: fileUpdate.embeddingStatus as 'none' | 'pending' | 'completed'
-              })
-              .where(eq(schema.files.id, fileId))
-            summary.fileUpdates += 1
-            summary.persistedRows += 1
-
-            // 2. Persist embeddings (delete old → insert new)
-            if (fileUpdate.embeddings && fileUpdate.embeddings.length > 0) {
-              const sourceId = String(fileId)
-              await tx
-                .delete(schema.embeddings)
-                .where(
-                  and(
-                    eq(schema.embeddings.sourceId, sourceId),
-                    eq(schema.embeddings.sourceType, 'file')
-                  )
-                )
-              await tx.insert(schema.embeddings).values(
-                fileUpdate.embeddings.map((emb) => ({
-                  sourceId,
-                  sourceType: 'file',
-                  embedding: emb.vector,
-                  model: emb.model || 'unknown',
-                  contentHash: fileUpdate.contentHash
-                }))
-              )
-              summary.embeddings += fileUpdate.embeddings.length
-              summary.persistedRows += fileUpdate.embeddings.length
-            }
-          }
-
-          // 3. Upsert file_index_progress
-          const startedAt = progress.startedAt ? new Date(progress.startedAt) : null
-          const updatedAt = progress.updatedAt ? new Date(progress.updatedAt) : new Date()
-
-          await tx
-            .insert(schema.fileIndexProgress)
-            .values({
-              fileId,
-              status: progress.status as
-                | 'pending'
-                | 'processing'
-                | 'completed'
-                | 'skipped'
-                | 'failed',
-              progress: progress.progress,
-              processedBytes: progress.processedBytes,
-              totalBytes: progress.totalBytes,
-              lastError: progress.lastError,
-              startedAt,
-              updatedAt
-            })
-            .onConflictDoUpdate({
-              target: schema.fileIndexProgress.fileId,
-              set: {
-                status: progress.status as
-                  | 'pending'
-                  | 'processing'
-                  | 'completed'
-                  | 'skipped'
-                  | 'failed',
-                progress: progress.progress,
-                processedBytes: progress.processedBytes,
-                totalBytes: progress.totalBytes,
-                lastError: progress.lastError,
-                startedAt,
-                updatedAt
-              }
-            })
-          summary.progressRows += 1
-          summary.persistedRows += 1
-        }
-        return summary
-      }),
-    WORKER_RETRY_LABELS.persistChunk
-  )
-}
-
-function toDate(value: Date | number | string): Date {
-  if (value instanceof Date) return value
-  if (typeof value === 'number') return new Date(value)
-  return new Date(value)
-}
-
-async function handleUpsertFiles(
-  records: UpsertFileRecord[]
-): Promise<Array<Record<string, unknown>>> {
-  if (!db || records.length === 0) return []
-  const workerDb = db
-  const rows = await withWorkerWriteRetry(
-    () =>
-      workerDb
-        .insert(schema.files)
-        .values(
-          records.map((record) => ({
-            path: record.path,
-            name: record.name,
-            extension: record.extension ?? null,
-            size: typeof record.size === 'number' ? record.size : null,
-            mtime: toDate(record.mtime),
-            ctime: toDate(record.ctime),
-            lastIndexedAt: toDate(record.lastIndexedAt),
-            isDir: record.isDir,
-            type: record.type
-          }))
-        )
-        .onConflictDoUpdate({
-          target: schema.files.path,
-          set: {
-            name: sql`excluded.name`,
-            extension: sql`excluded.extension`,
-            size: sql`excluded.size`,
-            mtime: sql`excluded.mtime`,
-            ctime: sql`excluded.ctime`,
-            lastIndexedAt: sql`excluded.last_indexed_at`,
-            isDir: sql`excluded.is_dir`,
-            type: sql`excluded.type`
-          }
-        })
-        .returning(),
-    WORKER_RETRY_LABELS.upsertFiles
-  )
-
-  return rows as Array<Record<string, unknown>>
-}
-
-async function handleUpsertScanProgress(
-  paths: string[],
-  lastScanned: string,
-  sourceId?: string
-): Promise<number> {
-  const normalizedUpsert = normalizeScanProgressUpsert(paths, lastScanned)
-  if (!db) throw new Error('Worker not initialized')
-  if (!normalizedUpsert) return 0
-  const workerDb = db
-  const shape = await resolveScanProgressSchemaShape(workerDb)
-  if (shape.sourceScoped) {
-    const resolvedSourceId = normalizeScanProgressSourceId(sourceId)
-    await withWorkerWriteRetry(
-      () =>
-        upsertSourceScopedScanProgress(workerDb, {
-          sourceId: resolvedSourceId,
-          paths: normalizedUpsert.paths,
-          lastScannedAt: normalizedUpsert.lastScanned.getTime()
-        }),
-      WORKER_RETRY_LABELS.upsertScanProgress
-    )
-    return normalizedUpsert.paths.length
-  }
-
-  await withWorkerWriteRetry(
-    () =>
-      workerDb.run(sql`
-        INSERT INTO scan_progress (path, last_scanned)
-        VALUES ${sql.join(
-          normalizedUpsert.paths.map(
-            (entryPath) => sql`(${entryPath}, ${normalizedUpsert.lastScanned.getTime()})`
-          ),
-          sql`, `
-        )}
-        ON CONFLICT(path) DO UPDATE SET
-          last_scanned = excluded.last_scanned
-      `),
-    WORKER_RETRY_LABELS.upsertScanProgress
-  )
-  return normalizedUpsert.paths.length
-}
-
-/**
- * Phase 1: Remove a file record from the files table.
- * Main thread delegates this write to ensure worker is the single writer.
- */
-async function handleRemoveFile(message: RemoveFileMessage): Promise<void> {
-  if (!db) throw new Error('Worker not initialized')
-  const { path } = message
-  const workerDb = db
-  await withWorkerWriteRetry(async () => {
-    await workerDb.delete(schema.files).where(eq(schema.files.path, path))
-  }, 'worker.removeFile')
-  searchIndexWorkerLog.debug('Removed file', { meta: { path } })
-}
-
-/**
- * Phase 1: Remove specific file_extensions entries (stale asset cache cleanup).
- * Main thread delegates thumbnail/icon cleanup writes to the worker.
- */
-async function handleRemoveFileExtensions(message: RemoveFileExtensionsMessage): Promise<void> {
-  if (!db) throw new Error('Worker not initialized')
-  const { fileId, keys } = message
-  if (keys.length === 0) return
-
-  const workerDb = db
-  await withWorkerWriteRetry(async () => {
-    // Use inArray helper for type-safe parameterized IN clause
-    await workerDb
-      .delete(schema.fileExtensions)
-      .where(
-        and(eq(schema.fileExtensions.fileId, fileId), inArray(schema.fileExtensions.key, keys))
-      )
-  }, 'worker.removeFileExtensions')
-  searchIndexWorkerLog.debug('Removed file extensions', { meta: { fileId, keys: keys.join(',') } })
-}
-
-/**
- * Phase 1: Cleanup orphaned keyword_mappings (integrity check).
- * Deletes keywords whose item_id no longer exists in search_index.
- */
 async function handleCleanupOrphanKeywords(message: CleanupOrphanKeywordsMessage): Promise<number> {
   if (!db) throw new Error('Worker not initialized')
   const { sourceId } = message
 
   const workerDb = db
-  const result = await withWorkerWriteRetry(async () => {
+  const result = await withFileIndexPersistenceRetry(async () => {
     return await workerDb.run(sql`
         DELETE FROM keyword_mappings
         WHERE provider_id = ${sourceId}

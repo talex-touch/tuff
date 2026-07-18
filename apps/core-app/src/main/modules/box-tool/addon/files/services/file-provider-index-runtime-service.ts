@@ -23,6 +23,8 @@ import {
   FileProviderIndexFlushRetryService
 } from './file-provider-index-flush-retry-service'
 
+const INDEX_FLUSH_FAILURE_LOG_THROTTLE_MS = 30_000
+
 export type FileProviderIndexFlushSnapshot = Omit<IndexedWriteFlushSnapshot, 'status'> & {
   status: 'idle' | 'flushed' | 'worker-not-ready' | 'failed'
 }
@@ -41,6 +43,7 @@ export interface FileProviderIndexRuntimeServiceDeps {
   publishRecords: (entries: IndexWorkerFileResult[]) => Promise<number>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
+  now?: () => number
   config?: {
     baseDelayMs?: number
     backlogDelayMs?: number
@@ -61,7 +64,10 @@ export class FileProviderIndexRuntimeService {
   private readonly publishRecords: FileProviderIndexRuntimeServiceDeps['publishRecords']
   private readonly logDebug: FileProviderIndexRuntimeServiceDeps['logDebug']
   private readonly logWarn: FileProviderIndexRuntimeServiceDeps['logWarn']
+  private readonly now: () => number
   private readonly config: Required<NonNullable<FileProviderIndexRuntimeServiceDeps['config']>>
+  private explicitFlushNotBefore = 0
+  private failureLogState: { signature: string; loggedAt: number; suppressed: number } | null = null
   private readonly bufferService: FileProviderIndexFlushBufferService
   private readonly retryService: FileProviderIndexFlushRetryService
   private readonly flushExecutor: FileProviderIndexFlushExecutorService
@@ -84,6 +90,7 @@ export class FileProviderIndexRuntimeService {
     this.publishRecords = deps.publishRecords
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
+    this.now = deps.now ?? Date.now
     this.bufferService = new FileProviderIndexFlushBufferService(
       deps.getPendingResults(),
       deps.getInflightResults()
@@ -173,6 +180,7 @@ export class FileProviderIndexRuntimeService {
   }
 
   async flush(): Promise<void> {
+    if (this.now() < this.explicitFlushNotBefore) return
     await this.flushRuntime.flush()
   }
 
@@ -193,6 +201,12 @@ export class FileProviderIndexRuntimeService {
   }
 
   private recordFlushExecutorResult(result: FileProviderIndexFlushExecutorResult): void {
+    if (result.status === 'worker-not-ready') {
+      this.explicitFlushNotBefore = this.now() + this.config.backlogDelayMs
+    } else {
+      this.explicitFlushNotBefore = 0
+      this.failureLogState = null
+    }
     this.recordFlushSnapshot(buildIndexedWriteFlushResultSnapshot(result))
   }
 
@@ -211,12 +225,31 @@ export class FileProviderIndexRuntimeService {
     error: unknown,
     decision: FileProviderIndexFlushFailureDecision
   ): void {
-    this.logWarn('Index worker flush failed, scheduling retry', error, {
-      isBusy: decision.isBusy,
-      delayMs: decision.delayMs,
-      pending: this.bufferService.pendingSize,
-      inflight: this.bufferService.inflightSize
-    })
+    const now = this.now()
+    this.explicitFlushNotBefore = Math.max(this.explicitFlushNotBefore, now + decision.delayMs)
+
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const signature = `${decision.reason}:${errorMessage}`
+    const previousLog = this.failureLogState
+    const shouldLog =
+      !previousLog ||
+      previousLog.signature !== signature ||
+      now - previousLog.loggedAt >= INDEX_FLUSH_FAILURE_LOG_THROTTLE_MS
+
+    if (shouldLog) {
+      const suppressedFailures = previousLog?.signature === signature ? previousLog.suppressed : 0
+      this.logWarn('Index worker flush failed, scheduling retry', error, {
+        isBusy: decision.isBusy,
+        delayMs: decision.delayMs,
+        pending: this.bufferService.pendingSize,
+        inflight: this.bufferService.inflightSize,
+        ...(suppressedFailures > 0 ? { suppressedFailures } : {})
+      })
+      this.failureLogState = { signature, loggedAt: now, suppressed: 0 }
+    } else {
+      previousLog.suppressed += 1
+    }
+
     this.recordFlushFailure(error, {
       ...buildIndexedWriteFlushFailureRetryMetadata({
         delayMs: decision.delayMs,
