@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
-- **Last Active**: 2026-07-17
+- **Total Sessions**: 12
+- **Last Active**: 2026-07-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~555 | Active |
+| `journal-1.md` | ~588 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-07-18 | Merge PR #287 into master | `726c53d00011329e2ba0b724e979cbdc6a12e35e` | `master` |
 | 11 | 2026-07-17 | Harden release signing and official build verification | `723b1bdd4` | `master` |
 | 10 | 2026-07-16 | Downloaded release acceptance flow | `45462a71b` | `master` |
 | 9 | 2026-07-16 | Search core test fixture repair | `69ed465c3` | `master` |
