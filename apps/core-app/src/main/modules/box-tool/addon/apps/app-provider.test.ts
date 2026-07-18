@@ -2,9 +2,13 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { IExecuteArgs, TuffItem } from '@talex-touch/utils'
+import type { IndexedSourceRecordBatch } from '@talex-touch/utils/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addWatchPathMock,
+  appRuntimeApplyDeltaMock,
+  appRuntimeResetMock,
+  appRuntimeScanMock,
   asPrivateProvider,
   createDeferred,
   flushPromises,
@@ -15,7 +19,7 @@ import {
   loadSubject,
   getWatchPathsMock,
   pinyinMock,
-  removeByProviderMock,
+  resetAppRuntimeDelegateMocks,
   runMdlsUpdateScanMock,
   searchRecordExecuteMock,
   upsertExtensionRows,
@@ -165,6 +169,7 @@ describe('appProvider rebuild maintenance', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    resetAppRuntimeDelegateMocks()
     addWatchPathMock.mockResolvedValue(undefined)
     getWatchPathsMock.mockReturnValue([])
     getAppsMock.mockResolvedValue([])
@@ -195,7 +200,7 @@ describe('appProvider rebuild maintenance', () => {
 
       await appProvider.onLoad({
         databaseManager: { getDb: vi.fn() },
-        searchIndex: { indexItems: vi.fn() }
+        searchIndex: {}
       } as unknown as Parameters<typeof appProvider.onLoad>[0])
 
       expect(touchEventBus.on).not.toHaveBeenCalledWith(
@@ -265,8 +270,7 @@ describe('appProvider rebuild maintenance', () => {
         }),
         addFileExtensions: vi.fn(async () => undefined)
       }
-      privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
-      privateProvider._syncKeywordsForApp = vi.fn(async () => undefined)
+      privateProvider.searchIndex = {}
 
       await privateProvider.handleIndexedSourceWatchEvent({
         sourceId: 'app-provider',
@@ -389,7 +393,7 @@ describe('appProvider rebuild maintenance', () => {
         }),
         addFileExtensions: addFileExtensionsMock
       }
-      privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+      privateProvider.searchIndex = {}
 
       await privateProvider.handleIndexedSourceWatchEvent({
         sourceId: 'app-provider',
@@ -440,13 +444,6 @@ describe('appProvider rebuild maintenance', () => {
       const valuesMock = vi.fn(() => ({
         returning: vi.fn(async () => [insertedFile])
       }))
-      const insertMock = vi.fn(() => ({
-        values: valuesMock
-      }))
-      const deleteMock = vi.fn(() => ({
-        where: vi.fn(async () => undefined)
-      }))
-      const indexItemsMock = vi.fn(async () => undefined)
       const waitForItemStable = vi.fn(async () => true)
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
@@ -455,12 +452,11 @@ describe('appProvider rebuild maintenance', () => {
       privateProvider.dbUtils = {
         getFileByPath: vi.fn(async () => null),
         getDb: () => ({
-          insert: insertMock,
-          delete: deleteMock
+          insert: vi.fn(() => ({ values: valuesMock })),
+          delete: vi.fn(() => ({ where: vi.fn(async () => undefined) }))
         }),
         addFileExtensions: addFileExtensionsMock
       }
-      privateProvider.searchIndex = { indexItems: indexItemsMock }
 
       const result = await appProvider.addAppByPath(shellPath)
 
@@ -474,7 +470,20 @@ describe('appProvider rebuild maintenance', () => {
           { fileId: 44, key: 'entryEnabled', value: '1' }
         ])
       )
-      expect(indexItemsMock).toHaveBeenCalledTimes(1)
+      expect(appRuntimeApplyDeltaMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceId: 'app-provider',
+          action: 'change',
+          path: shellPath,
+          reason: 'app-manual-path-upsert',
+          record: expect.objectContaining({
+            recordId: appInfo.stableId,
+            stableKey: appInfo.stableId,
+            path: shellPath,
+            metadata: expect.objectContaining({ extension: '.uwp' })
+          })
+        })
+      )
     })
   })
 
@@ -529,12 +538,19 @@ describe('appProvider rebuild maintenance', () => {
           }),
           addFileExtensions: vi.fn(async () => undefined)
         }
-        privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
-
         const result = await appProvider.addAppByPath(rawPath)
 
         expect(result).toEqual({ success: true, status: 'added', path: expandedPath })
         expect(getAppInfoByPathMock).toHaveBeenCalledWith(expandedPath)
+        expect(appRuntimeApplyDeltaMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sourceId: 'app-provider',
+            action: 'change',
+            path: expandedPath,
+            reason: 'app-manual-path-upsert',
+            record: expect.objectContaining({ stableKey: appInfo.stableId })
+          })
+        )
       } finally {
         if (originalLocalAppData === undefined) {
           delete process.env.LOCALAPPDATA
@@ -580,7 +596,6 @@ describe('appProvider rebuild maintenance', () => {
       const insertMock = vi.fn(() => ({
         values: valuesMock
       }))
-      const indexItemsMock = vi.fn(async () => undefined)
       const waitForItemStable = vi.fn(async () => true)
 
       getAppInfoByPathMock.mockResolvedValue(appInfo)
@@ -596,8 +611,6 @@ describe('appProvider rebuild maintenance', () => {
         }),
         addFileExtensions: addFileExtensionsMock
       }
-      privateProvider.searchIndex = { indexItems: indexItemsMock }
-
       const result = await appProvider.addAppByPath(appId)
 
       expect(result).toEqual({ success: true, status: 'added', path: shellPath })
@@ -609,7 +622,19 @@ describe('appProvider rebuild maintenance', () => {
           { fileId: 45, key: 'entryEnabled', value: '1' }
         ])
       )
-      expect(indexItemsMock).toHaveBeenCalledTimes(1)
+      expect(appRuntimeApplyDeltaMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sourceId: 'app-provider',
+          action: 'change',
+          path: shellPath,
+          reason: 'app-manual-path-upsert',
+          record: expect.objectContaining({
+            recordId: appInfo.stableId,
+            stableKey: appInfo.stableId,
+            uri: appId
+          })
+        })
+      )
     })
   })
 
@@ -645,7 +670,25 @@ describe('appProvider rebuild maintenance', () => {
     })
   })
 
-  it('rebuild only clears app records and preserves file records', async () => {
+  it('requests a runtime reset for public rebuilds', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.context = {}
+    privateProvider.dbUtils = {}
+
+    await expect(appProvider.rebuildIndex()).resolves.toEqual({
+      success: true,
+      message: 'App index rebuild complete'
+    })
+    expect(appRuntimeResetMock).toHaveBeenCalledWith({
+      sourceId: 'app-provider',
+      reason: 'manual-rebuild',
+      clearSearchIndex: true,
+      clearScanProgress: false
+    })
+  })
+
+  it('local reset only clears scanned app records and preserves managed and file records', async () => {
     const { appProvider } = await loadSubject()
     const { files, fileExtensions } = await import('../../../../db/schema')
     const privateProvider = asPrivateProvider(appProvider)
@@ -702,14 +745,17 @@ describe('appProvider rebuild maintenance', () => {
 
     privateProvider.context = {}
     privateProvider.dbUtils = { getDb: () => db }
-    privateProvider.searchIndex = { removeByProvider: removeByProviderMock }
     privateProvider._clearPendingDeletions = vi.fn().mockResolvedValue(undefined)
     privateProvider._performFullSync = vi.fn().mockResolvedValue(undefined)
-    privateProvider.reindexManagedEntries = vi.fn().mockResolvedValue(undefined)
 
-    const result = await appProvider.rebuildIndex()
+    await privateProvider.resetIndexedSourceLocalState({
+      sourceId: 'app-provider',
+      reason: 'manual-rebuild',
+      clearSearchIndex: true,
+      clearScanProgress: false
+    })
 
-    expect(result.success).toBe(true)
+    expect(appRuntimeResetMock).not.toHaveBeenCalled()
     expect(fileRows).toEqual([
       { id: 2, path: '/Users/demo/bin/custom.sh', type: 'app' },
       { id: 3, type: 'file' }
@@ -719,8 +765,6 @@ describe('appProvider rebuild maintenance', () => {
       { fileId: 2, key: 'entryEnabled', value: '1' },
       { fileId: 3, key: 'sha1', value: 'abc123' }
     ])
-    expect(removeByProviderMock).toHaveBeenCalledWith('app-provider')
-    expect(privateProvider.reindexManagedEntries).toHaveBeenCalledTimes(1)
     expect(privateProvider._performFullSync).toHaveBeenCalledWith(true)
   })
 
@@ -747,6 +791,35 @@ describe('appProvider rebuild maintenance', () => {
     await privateProvider._performFullSync(false)
 
     expect(initializeMock).toHaveBeenCalledWith({ forceRefresh: true })
+  })
+
+  it('routes scheduled startup and full sync through the App runtime delegate', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const scan = vi.fn(async () => undefined)
+    const reconcile = vi.fn(async () => undefined)
+    privateProvider.setIndexedSourceRuntimeDelegate({
+      scan,
+      reconcile,
+      applyDelta: vi.fn(async () => undefined),
+      reset: vi.fn(async (request) => ({
+        sourceId: request.sourceId,
+        reason: request.reason,
+        clearedSearchIndex: true,
+        clearedScanProgress: false,
+        startedAt: 0,
+        completedAt: 0
+      }))
+    })
+    privateProvider._shouldRunStartupBackfill = vi.fn(async () => ({ allowed: true }))
+    privateProvider.dbUtils = {}
+    privateProvider._getLastFullSyncTime = vi.fn(async () => null)
+
+    await privateProvider._runStartupBackfillWithRetry()
+    await privateProvider._runFullSyncIfDue()
+
+    expect(scan).toHaveBeenCalledWith('startup')
+    expect(reconcile).toHaveBeenCalledWith('app-provider-scheduled-full-sync')
   })
 
   it('repairs corrupted display names during startup backfill', async () => {
@@ -800,7 +873,7 @@ describe('appProvider rebuild maintenance', () => {
       }),
       addFileExtensions: vi.fn(async () => undefined)
     }
-    privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
+    privateProvider.searchIndex = {}
     privateProvider.fetchExtensionsForFiles = vi.fn(async (files: unknown[]) =>
       files.map((file) => ({
         ...(file as typeof dbRow),
@@ -840,7 +913,12 @@ describe('appProvider rebuild maintenance', () => {
       executionOrder.push('startup-backfill')
     })
 
-    const rebuildPromise = appProvider.rebuildIndex()
+    const rebuildPromise = privateProvider.resetIndexedSourceLocalState({
+      sourceId: 'app-provider',
+      reason: 'manual-rebuild',
+      clearSearchIndex: true,
+      clearScanProgress: false
+    })
     await flushPromises()
 
     const fullSyncPromise = privateProvider._runFullSync(false)
@@ -1005,117 +1083,42 @@ describe('appProvider rebuild maintenance', () => {
     expect(keywords).toContain('wyyy')
   })
 
-  it('indexes app keywords by stable path before bundle id to avoid duplicate bundle collisions', async () => {
+  it('maps path-stable app records with semantic and external aliases', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
-    const indexItemsMock = vi.fn(async () => undefined)
-    const removeItemsMock = vi.fn(async () => undefined)
-    privateProvider.searchIndex = {
-      indexItems: indexItemsMock,
-      removeItems: removeItemsMock
-    }
+    const appPath = '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app'
+    await appProvider.setAliases({ [appPath]: ['retouch'] })
 
-    await privateProvider._syncKeywordsForApp({
-      name: 'NeteaseMusic 2',
-      displayName: 'NeteaseMusic 2',
-      alternateNames: ['网易云音乐'],
-      bundleId: 'com.netease.163music',
-      path: '/Applications/NeteaseMusic 2.app',
-      launchKind: 'path',
-      launchTarget: '/Applications/NeteaseMusic 2.app',
-      stableId: '/Applications/NeteaseMusic 2.app',
-      icon: '',
-      lastModified: new Date(0)
-    })
-
-    expect(indexItemsMock).toHaveBeenCalledWith([
-      expect.objectContaining({
-        itemId: '/Applications/NeteaseMusic 2.app',
-        tags: expect.arrayContaining(['com.netease.163music']),
-        keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
-      })
-    ])
-    expect(removeItemsMock).toHaveBeenCalledWith(['com.netease.163music'])
-  })
-
-  it('indexes Windows Store app keywords by UWP stable id', async () => {
-    const { appProvider } = await loadSubject()
-    const privateProvider = asPrivateProvider(appProvider)
-    const indexItemsMock = vi.fn(async () => undefined)
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
-
-    await privateProvider._syncKeywordsForApp({
-      name: 'Codex',
-      displayName: 'Codex',
-      fileName: 'Codex',
-      bundleId: 'OpenAI.Codex_2p2nqsd0c76g0',
-      path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
-      launchKind: 'uwp',
-      launchTarget: 'OpenAI.Codex_2p2nqsd0c76g0!App',
-      stableId: 'uwp:openai.codex_2p2nqsd0c76g0!app',
-      icon: '',
-      lastModified: new Date(0)
-    })
-
-    expect(indexItemsMock).toHaveBeenCalledWith([
-      expect.objectContaining({
-        itemId: 'uwp:openai.codex_2p2nqsd0c76g0!app',
-        extension: '.uwp',
-        path: 'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App',
-        tags: expect.arrayContaining([
-          'OpenAI.Codex_2p2nqsd0c76g0',
-          'uwp:openai.codex_2p2nqsd0c76g0!app',
-          'shell:AppsFolder\\OpenAI.Codex_2p2nqsd0c76g0!App'
-        ]),
-        keywords: expect.arrayContaining([expect.objectContaining({ value: 'codex' })])
-      })
-    ])
-  })
-
-  it('merges built-in semantic aliases with external aliases when indexing apps', async () => {
-    const { appProvider } = await loadSubject()
-    const privateProvider = asPrivateProvider(appProvider)
-    const indexItemsMock = vi.fn(async (_items: unknown[]) => undefined)
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
-
-    await appProvider.setAliases({
-      '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app': ['retouch']
-    })
-
-    await privateProvider._syncKeywordsForApp({
+    const record = await privateProvider.mapScannedAppToIndexedSourceRecord('app-provider', {
       name: 'Adobe Photoshop 2026',
       displayName: 'Adobe Photoshop 2026',
       fileName: 'Adobe Photoshop 2026',
       bundleId: 'com.adobe.Photoshop',
-      path: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+      path: appPath,
       launchKind: 'path',
-      launchTarget: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
-      stableId: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
+      launchTarget: appPath,
+      stableId: appPath,
       icon: '',
       lastModified: new Date(0)
     })
 
-    expect(indexItemsMock).toHaveBeenCalledTimes(1)
-    const indexedBatch = indexItemsMock.mock.calls[0]?.[0] as Array<{
-      itemId?: string
-      aliases?: Array<{ value: string; priority?: number }>
-      keywords?: Array<{ value: string; priority?: number }>
-      tags?: string[]
-    }>
-    const indexedItem = indexedBatch[0]
-    expect(indexedItem).toMatchObject({
-      itemId: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
-      aliases: expect.arrayContaining([
-        expect.objectContaining({ value: 'retouch', priority: 1.5 }),
-        expect.objectContaining({ value: 'ps', priority: 1.5 }),
-        expect.objectContaining({ value: 'design', priority: 1.5 })
-      ]),
-      keywords: expect.arrayContaining([
-        expect.objectContaining({ value: 'retouch', priority: 1.5 }),
-        expect.objectContaining({ value: 'ps', priority: 1.5 }),
-        expect.objectContaining({ value: 'design', priority: 1.5 })
-      ]),
-      tags: expect.arrayContaining(['tool-source:design'])
+    expect(record).toMatchObject({
+      sourceId: 'app-provider',
+      recordId: appPath,
+      stableKey: appPath,
+      tags: expect.arrayContaining(['com.adobe.Photoshop', appPath, 'tool-source:design']),
+      search: expect.objectContaining({
+        aliases: expect.arrayContaining([
+          expect.objectContaining({ value: 'retouch', priority: 1.5 }),
+          expect.objectContaining({ value: 'ps', priority: 1.5 }),
+          expect.objectContaining({ value: 'design', priority: 1.5 })
+        ]),
+        keywords: expect.arrayContaining([
+          expect.objectContaining({ value: 'retouch', priority: 1.5 }),
+          expect.objectContaining({ value: 'ps', priority: 1.5 }),
+          expect.objectContaining({ value: 'design', priority: 1.5 })
+        ])
+      })
     })
   })
 
@@ -1154,7 +1157,7 @@ describe('appProvider rebuild maintenance', () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
 
-    const record = privateProvider.mapScannedAppToIndexedSourceRecord('app-provider', {
+    const record = await privateProvider.mapScannedAppToIndexedSourceRecord('app-provider', {
       name: 'Codex',
       displayName: 'Codex',
       fileName: 'Codex',
@@ -1170,39 +1173,12 @@ describe('appProvider rebuild maintenance', () => {
     expect(record).toMatchObject({
       sourceId: 'app-provider',
       recordId: 'uwp:openai.codex_2p2nqsd0c76g0!app',
-      keywords: expect.arrayContaining(['Codex', 'dev', 'code']),
+      keywords: expect.arrayContaining(['codex', 'dev', 'code']),
       tags: expect.arrayContaining(['tool-source:dev']),
       metadata: expect.objectContaining({
         toolSources: ['dev']
       })
     })
-  })
-
-  it('keeps steady-state keyword sync removal as a no-op when no retired ids exist', async () => {
-    const { appProvider } = await loadSubject()
-    const privateProvider = asPrivateProvider(appProvider)
-    const indexItemsMock = vi.fn(async () => undefined)
-    const removeItemsMock = vi.fn(async () => undefined)
-    privateProvider.searchIndex = {
-      indexItems: indexItemsMock,
-      removeItems: removeItemsMock
-    }
-
-    await privateProvider._syncKeywordsForApp({
-      name: 'NeteaseMusic 2',
-      displayName: 'NeteaseMusic 2',
-      alternateNames: ['网易云音乐'],
-      bundleId: '',
-      path: '/Applications/NeteaseMusic 2.app',
-      launchKind: 'path',
-      launchTarget: '/Applications/NeteaseMusic 2.app',
-      stableId: '/Applications/NeteaseMusic 2.app',
-      icon: '',
-      lastModified: new Date(0)
-    })
-
-    expect(removeItemsMock).not.toHaveBeenCalled()
-    expect(indexItemsMock).toHaveBeenCalledTimes(1)
   })
 
   it('uses one batched keyword lookup for multi-term app search exact matches', async () => {
@@ -1660,7 +1636,6 @@ describe('appProvider rebuild maintenance', () => {
   it('requires confirmation before reindexing a matched diagnostic target', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
-    const indexItemsMock = vi.fn(async () => undefined)
     const appRow = {
       id: 9,
       path: '/Applications/NeteaseMusic 2.app',
@@ -1682,7 +1657,7 @@ describe('appProvider rebuild maintenance', () => {
       getFilesByType: vi.fn(async () => [appRow])
     }
     privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
+    privateProvider.searchIndex = {}
 
     const result = await appProvider.reindexAppSearchTarget({
       target: '网易云音乐',
@@ -1696,14 +1671,13 @@ describe('appProvider rebuild maintenance', () => {
       path: '/Applications/NeteaseMusic 2.app',
       message: 'App index reindex requires confirmation'
     })
-    expect(indexItemsMock).not.toHaveBeenCalled()
+    expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
     expect(getAppInfoByPathMock).not.toHaveBeenCalled()
   })
 
   it('reindexes a matched diagnostic target only after confirmation', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
-    const indexItemsMock = vi.fn(async () => undefined)
     const appRow = {
       id: 9,
       path: '/Applications/NeteaseMusic 2.app',
@@ -1725,7 +1699,7 @@ describe('appProvider rebuild maintenance', () => {
       getFilesByType: vi.fn(async () => [appRow])
     }
     privateProvider.fetchExtensionsForFiles = vi.fn(async () => [appRow])
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
+    privateProvider.searchIndex = {}
 
     const result = await appProvider.reindexAppSearchTarget({
       target: '网易云音乐',
@@ -1739,12 +1713,20 @@ describe('appProvider rebuild maintenance', () => {
       path: '/Applications/NeteaseMusic 2.app',
       message: 'App index reindex complete'
     })
-    expect(indexItemsMock).toHaveBeenCalledWith([
+    expect(appRuntimeApplyDeltaMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        itemId: '/Applications/NeteaseMusic 2.app',
-        keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
+        sourceId: 'app-provider',
+        action: 'change',
+        reason: 'app-diagnostics-reindex',
+        path: '/Applications/NeteaseMusic 2.app',
+        record: expect.objectContaining({
+          stableKey: '/Applications/NeteaseMusic 2.app',
+          search: expect.objectContaining({
+            keywords: expect.arrayContaining([expect.objectContaining({ value: '网易云音乐' })])
+          })
+        })
       })
-    ])
+    )
     expect(getAppInfoByPathMock).not.toHaveBeenCalled()
   })
 
@@ -1837,7 +1819,6 @@ describe('appProvider rebuild maintenance', () => {
     const addFileExtensionsMock = vi.fn(
       async (_rows: Array<{ fileId: number; key: string; value: string }>) => undefined
     )
-    const indexItemsMock = vi.fn(async () => undefined)
 
     privateProvider.dbUtils = {
       getFilesByType: vi.fn(async () => [dbApp]),
@@ -1851,7 +1832,6 @@ describe('appProvider rebuild maintenance', () => {
     privateProvider.loadScannedApps = vi.fn(async () => [scannedApp])
     privateProvider._recordMissingIconApps = vi.fn(async () => undefined)
     privateProvider._processAppsForDeletion = vi.fn(async () => [])
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
 
     let stats: unknown
     try {
@@ -1870,7 +1850,6 @@ describe('appProvider rebuild maintenance', () => {
     expect(addFileExtensionsMock).toHaveBeenCalledWith(
       expect.arrayContaining([{ fileId: 91, key: 'icon', value: nextIconPath }])
     )
-    expect(indexItemsMock).toHaveBeenCalledTimes(1)
   })
 
   it('upserts managed launcher entries with manual extension flags', async () => {
@@ -1885,8 +1864,6 @@ describe('appProvider rebuild maintenance', () => {
     let nextId = 1
     let fileRows: TestFileRow[] = []
     const extensionRows: Array<{ fileId: number; key: string; value: string }> = []
-    const indexItemsMock = vi.fn(async () => undefined)
-    const removeItemsMock = vi.fn(async () => undefined)
 
     const db = {
       insert: vi.fn((table: unknown) => {
@@ -1964,11 +1941,6 @@ describe('appProvider rebuild maintenance', () => {
         upsertExtensionRows(extensionRows, [{ fileId, key, value }])
       })
     }
-    privateProvider.searchIndex = {
-      indexItems: indexItemsMock,
-      removeItems: removeItemsMock
-    }
-
     const added = await appProvider.upsertManagedEntry({
       path: scriptPath,
       displayName: 'Demo Script',
@@ -1994,7 +1966,15 @@ describe('appProvider rebuild maintenance', () => {
         { fileId: 1, key: 'launchTarget', value: scriptPath }
       ])
     )
-    expect(indexItemsMock).toHaveBeenCalledTimes(1)
+    expect(appRuntimeApplyDeltaMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'app-provider',
+        action: 'change',
+        path: scriptPath,
+        reason: 'app-managed-entry-upsert',
+        record: expect.objectContaining({ stableKey: scriptPath })
+      })
+    )
     const disabled = await appProvider.setManagedEntryEnabled(scriptPath, false)
 
     expect(disabled).toMatchObject({
@@ -2005,7 +1985,12 @@ describe('appProvider rebuild maintenance', () => {
         enabled: false
       }
     })
-    expect(removeItemsMock).toHaveBeenCalledWith([scriptPath])
+    expect(appRuntimeApplyDeltaMock).toHaveBeenLastCalledWith({
+      sourceId: 'app-provider',
+      action: 'delete',
+      stableKey: scriptPath,
+      reason: 'app-managed-entry-disabled'
+    })
 
     const removed = await appProvider.removeManagedEntry(scriptPath)
 
@@ -2015,6 +2000,12 @@ describe('appProvider rebuild maintenance', () => {
       entry: {
         path: scriptPath
       }
+    })
+    expect(appRuntimeApplyDeltaMock).toHaveBeenLastCalledWith({
+      sourceId: 'app-provider',
+      action: 'delete',
+      stableKey: scriptPath,
+      reason: 'app-managed-entry-delete'
     })
     expect(fileRows).toEqual([])
   })
@@ -2119,7 +2110,6 @@ describe('appProvider rebuild maintenance', () => {
       upsertExtensionRows(extensionRows, [{ fileId, key, value }])
     })
     const getDbMock = vi.fn()
-    const removeItemsMock = vi.fn(async () => undefined)
 
     privateProvider.dbUtils = {
       getDb: getDbMock,
@@ -2131,10 +2121,6 @@ describe('appProvider rebuild maintenance', () => {
       ),
       addFileExtension: addFileExtensionMock
     }
-    privateProvider.searchIndex = {
-      removeItems: removeItemsMock
-    }
-
     const disabled = await appProvider.setManagedEntryEnabled(scannedPath, false)
 
     expect(disabled).toMatchObject({
@@ -2148,8 +2134,27 @@ describe('appProvider rebuild maintenance', () => {
       }
     })
     expect(addFileExtensionMock).toHaveBeenCalledWith(7, 'entryEnabled', '0')
-    expect(removeItemsMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['bundle:com.apple.preview', scannedPath, 'com.apple.Preview'])
+    expect(appRuntimeApplyDeltaMock.mock.calls.map(([delta]) => delta)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: 'app-provider',
+          action: 'delete',
+          stableKey: 'bundle:com.apple.preview',
+          reason: 'app-managed-entry-disabled'
+        }),
+        expect.objectContaining({
+          sourceId: 'app-provider',
+          action: 'delete',
+          stableKey: scannedPath,
+          reason: 'app-managed-entry-disabled'
+        }),
+        expect.objectContaining({
+          sourceId: 'app-provider',
+          action: 'delete',
+          stableKey: 'com.apple.Preview',
+          reason: 'app-managed-entry-disabled'
+        })
+      ])
     )
 
     const removed = await appProvider.removeManagedEntry(scannedPath)
@@ -2162,120 +2167,13 @@ describe('appProvider rebuild maintenance', () => {
     expect(getDbMock).not.toHaveBeenCalled()
   })
 
-  it('reindexes enabled scanned and manual entries after provider rebuild cleanup', async () => {
+  it('records semantic alias catalog migration while deferring projection to runtime scans', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)
-    const rows = [
-      {
-        id: 1,
-        path: '/Applications/Preview.app',
-        name: 'Preview',
-        displayName: 'Preview',
-        type: 'app',
-        mtime: new Date(0),
-        ctime: new Date(0)
-      },
-      {
-        id: 2,
-        path: '/Applications/Disabled.app',
-        name: 'Disabled',
-        displayName: 'Disabled',
-        type: 'app',
-        mtime: new Date(0),
-        ctime: new Date(0)
-      },
-      {
-        id: 3,
-        path: '/Users/demo/bin/script.sh',
-        name: 'Script',
-        displayName: 'Script',
-        type: 'app',
-        mtime: new Date(0),
-        ctime: new Date(0)
-      }
-    ]
-    const rowsWithExtensions = [
-      {
-        ...rows[0],
-        extensions: {
-          appIdentity: '/Applications/Preview.app',
-          launchKind: 'path',
-          launchTarget: '/Applications/Preview.app'
-        }
-      },
-      {
-        ...rows[1],
-        extensions: {
-          appIdentity: '/Applications/Disabled.app',
-          entryEnabled: '0',
-          launchKind: 'path',
-          launchTarget: '/Applications/Disabled.app'
-        }
-      },
-      {
-        ...rows[2],
-        extensions: {
-          entrySource: 'manual',
-          entryEnabled: '1',
-          launchKind: 'shortcut',
-          launchTarget: '/Users/demo/bin/script.sh'
-        }
-      }
-    ]
-    const syncKeywordsMock = vi.fn(async () => undefined)
-
-    privateProvider.dbUtils = {
-      getFilesByType: vi.fn(async () => rows)
-    }
-    privateProvider.fetchExtensionsForFiles = vi.fn(async () => rowsWithExtensions)
-    privateProvider._syncKeywordsForApp = syncKeywordsMock
-
-    await privateProvider.reindexManagedEntries()
-
-    expect(syncKeywordsMock).toHaveBeenCalledTimes(2)
-    expect(syncKeywordsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/Applications/Preview.app' })
-    )
-    expect(syncKeywordsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/Users/demo/bin/script.sh' })
-    )
-    expect(syncKeywordsMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/Applications/Disabled.app' })
-    )
-  })
-
-  it('syncs existing app keywords when semantic alias catalog version changes', async () => {
-    const { appProvider } = await loadSubject()
-    const privateProvider = asPrivateProvider(appProvider)
-    const appRows = [
-      {
-        id: 11,
-        path: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
-        name: 'Adobe Photoshop 2026',
-        displayName: 'Adobe Photoshop 2026',
-        type: 'app',
-        mtime: new Date(0),
-        ctime: new Date(0)
-      }
-    ]
-    const rowsWithExtensions = [
-      {
-        ...appRows[0],
-        extensions: {
-          appIdentity: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
-          bundleId: 'com.adobe.Photoshop',
-          launchKind: 'path',
-          launchTarget: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app'
-        }
-      }
-    ]
     const configStore = new Map<string, string>([
       ['app_provider_semantic_alias_catalog_version', '1']
     ])
-    const indexItemsMock = vi.fn(async (_items: unknown[]) => undefined)
-
     privateProvider.dbUtils = {
-      getFilesByType: vi.fn(async () => appRows),
       getDb: () => ({
         select: vi.fn(() => ({
           from: vi.fn(() => ({
@@ -2295,51 +2193,12 @@ describe('appProvider rebuild maintenance', () => {
         }))
       })
     }
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
-    privateProvider.fetchExtensionsForFiles = vi.fn(async () => rowsWithExtensions)
+    privateProvider.searchIndex = {}
 
     await privateProvider._syncSemanticAliasCatalogIfNeeded()
 
-    expect(indexItemsMock).toHaveBeenCalledTimes(1)
-    const indexedItem = indexItemsMock.mock.calls[0]?.[0]?.[0] as {
-      itemId?: string
-      aliases?: Array<{ value: string; priority?: number }>
-    }
-    expect(indexedItem).toMatchObject({
-      itemId: '/Applications/Adobe Photoshop 2026/Adobe Photoshop 2026.app',
-      aliases: expect.arrayContaining([
-        expect.objectContaining({ value: 'ps' }),
-        expect.objectContaining({ value: 'design' })
-      ])
-    })
+    expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
     expect(configStore.get('app_provider_semantic_alias_catalog_version')).toBe('3')
-  })
-
-  it('skips semantic alias catalog sync when the stored version is current', async () => {
-    const { appProvider } = await loadSubject()
-    const privateProvider = asPrivateProvider(appProvider)
-    const indexItemsMock = vi.fn(async (_items: unknown[]) => undefined)
-
-    privateProvider.dbUtils = {
-      getFilesByType: vi.fn(async () => []),
-      getDb: () => ({
-        select: vi.fn(() => ({
-          from: vi.fn(() => ({
-            where: vi.fn(() => ({
-              limit: vi.fn(async () => [
-                { key: 'app_provider_semantic_alias_catalog_version', value: '2' }
-              ])
-            }))
-          }))
-        }))
-      })
-    }
-    privateProvider.searchIndex = { indexItems: indexItemsMock }
-    privateProvider.fetchExtensionsForFiles = vi.fn(async () => [])
-
-    await privateProvider._syncSemanticAliasCatalogIfNeeded()
-
-    expect(indexItemsMock).not.toHaveBeenCalled()
   })
 
   it('rejects managed launcher entries that collide with scanned apps', async () => {
@@ -2420,6 +2279,7 @@ describe('appProvider rebuild maintenance', () => {
       getAppInfoByPathMock.mockResolvedValue(appInfo)
       privateProvider._waitForItemStable = vi.fn(async () => true)
       privateProvider.dbUtils = {
+        getFilesByType: vi.fn(async () => []),
         getFileByPath: vi.fn(async () => null),
         getDb: () => ({
           insert: vi.fn(() => ({
@@ -2448,21 +2308,24 @@ describe('appProvider rebuild maintenance', () => {
         }),
         addFileExtensions: vi.fn(async () => undefined)
       }
-      privateProvider.searchIndex = { indexItems: vi.fn(async () => undefined) }
-      privateProvider._syncKeywordsForApp = vi.fn(async () => undefined)
+      privateProvider.fetchExtensionsForFiles = vi.fn(async () => [])
 
-      await privateProvider.scanIndexedSource({
+      const scanBatches: IndexedSourceRecordBatch[] = []
+      for await (const batch of appProvider.scanIndexedSource({
         sourceId: 'app-provider',
         reason: 'startup'
-      })
+      })) {
+        scanBatches.push(batch)
+      }
 
       expect(privateProvider._runStartupBackfill).toHaveBeenCalledTimes(1)
+      expect(scanBatches).toEqual([{ sourceId: 'app-provider', records: [], done: true }])
 
       const reconcileResult = await privateProvider.reconcileIndexedSource({
         sourceId: 'app-provider'
       })
 
-      expect(privateProvider._runFullSync).toHaveBeenCalledWith(true)
+      expect(privateProvider._runFullSync).toHaveBeenCalledWith(true, true)
       expect(reconcileResult).toMatchObject({
         sourceId: 'app-provider',
         added: 2,
@@ -2659,36 +2522,42 @@ describe('appProvider rebuild maintenance', () => {
       const privateProvider = asPrivateProvider(appProvider)
       privateProvider._runStartupBackfill = vi.fn(async () => undefined)
       vi.spyOn(privateProvider as never, '_setLastBackfillTime').mockResolvedValue(undefined)
-      getAppsMock.mockResolvedValue([
-        {
-          name: 'Example App',
-          displayName: 'Example App',
-          fileName: 'Example App.lnk',
-          path: 'C:\\Start\\Example App.lnk',
-          icon: 'data:image/png;base64,AQID',
-          bundleId: '',
-          uniqueId: 'shortcut:c:\\program files\\example\\example.exe|',
-          stableId: 'shortcut:c:\\program files\\example\\example.exe|',
-          launchKind: 'shortcut',
-          launchTarget: 'C:\\Program Files\\Example\\Example.exe',
-          displayPath: 'C:\\Program Files\\Example\\Example.exe',
-          alternateNames: ['Example'],
-          identityKind: 'windows-shortcut',
-          displayNameSource: 'shortcut',
-          displayNameQuality: 'system',
-          lastModified: new Date('2026-05-30T00:00:00.000Z')
-        }
-      ])
+      const appPath = 'C:\\Start\\Example App.lnk'
+      const appId = 'shortcut:c:\\program files\\example\\example.exe|'
+      const dbApp = createAppSearchRow(48, appPath, 'Example App')
+      dbApp.mtime = new Date('2026-05-30T00:00:00.000Z')
+      const extensionRows = [
+        { fileId: 48, key: 'appIdentity', value: appId },
+        { fileId: 48, key: 'launchKind', value: 'shortcut' },
+        { fileId: 48, key: 'launchTarget', value: 'C:\\Program Files\\Example\\Example.exe' },
+        { fileId: 48, key: 'displayPath', value: 'Example App.lnk' },
+        { fileId: 48, key: 'alternateNames', value: JSON.stringify(['Example']) },
+        { fileId: 48, key: 'identityKind', value: 'windows-shortcut' },
+        { fileId: 48, key: 'displayNameSource', value: 'shortcut' },
+        { fileId: 48, key: 'displayNameQuality', value: 'system' }
+      ]
+      privateProvider.dbUtils = {
+        getFilesByType: vi.fn(async () => [dbApp]),
+        getDb: () => ({
+          select: vi.fn(() => ({
+            from: vi.fn(() => ({
+              where: vi.fn(async () => extensionRows)
+            }))
+          }))
+        })
+      }
 
-      const batch = await appProvider.scanIndexedSource({
+      const batches: IndexedSourceRecordBatch[] = []
+      for await (const batch of appProvider.scanIndexedSource({
         sourceId: 'app-provider',
         reason: 'startup'
-      })
+      })) {
+        batches.push(batch)
+      }
 
-      expect(batch).toEqual(
+      expect(batches).toEqual([
         expect.objectContaining({
           sourceId: 'app-provider',
-          done: true,
           records: [
             expect.objectContaining({
               sourceId: 'app-provider',
@@ -2698,7 +2567,14 @@ describe('appProvider rebuild maintenance', () => {
               title: 'Example App',
               path: 'C:\\Start\\Example App.lnk',
               mtime: new Date('2026-05-30T00:00:00.000Z').getTime(),
-              keywords: expect.arrayContaining(['Example App', 'Example App.lnk', 'Example']),
+              keywords: expect.arrayContaining(['exampleapp', 'example', 'app', 'ea']),
+              search: expect.objectContaining({
+                aliases: expect.arrayContaining([
+                  expect.objectContaining({ value: 'Example App' }),
+                  expect.objectContaining({ value: 'Example App.lnk' }),
+                  expect.objectContaining({ value: 'Example' })
+                ])
+              }),
               metadata: expect.objectContaining({
                 extension: '.exe',
                 launchKind: 'shortcut',
@@ -2707,8 +2583,576 @@ describe('appProvider rebuild maintenance', () => {
               })
             })
           ]
-        })
-      )
+        }),
+        { sourceId: 'app-provider', records: [], done: true }
+      ])
     })
+  })
+
+  it('routes scheduled mdls reconciliation through Runtime with changed and deleted records', async () => {
+    await withPlatform('darwin', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const previousRecord = {
+        sourceId: 'app-provider',
+        recordId: 'bundle:com.example.current',
+        stableKey: 'bundle:com.example.current',
+        kind: 'app',
+        title: 'Example',
+        path: '/Applications/Example.app'
+      }
+      const removedRecord = {
+        sourceId: 'app-provider',
+        recordId: 'bundle:com.example.removed',
+        stableKey: 'bundle:com.example.removed',
+        kind: 'app',
+        title: 'Removed',
+        path: '/Applications/Removed.app'
+      }
+      const changedRecord = { ...previousRecord, title: 'Localized Example' }
+      privateProvider.collectIndexedSourceRecords = vi
+        .fn()
+        .mockResolvedValueOnce([previousRecord, removedRecord])
+        .mockResolvedValueOnce([changedRecord])
+      privateProvider._runFullSync = vi.fn(async () => ({
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 0
+      }))
+      privateProvider._runMdlsUpdateScan = vi.fn(async () => ({
+        added: 0,
+        changed: 1,
+        deleted: 1,
+        skipped: 0,
+        errors: 0
+      }))
+      let runtimeResult: unknown
+      const reconcile = vi.fn(async () => {
+        runtimeResult = await privateProvider.reconcileIndexedSource({ sourceId: 'app-provider' })
+      })
+      privateProvider.setIndexedSourceRuntimeDelegate({
+        scan: vi.fn(async () => undefined),
+        reconcile,
+        applyDelta: vi.fn(async () => undefined),
+        reset: vi.fn(async (request) => ({
+          sourceId: request.sourceId,
+          reason: request.reason,
+          clearedSearchIndex: true,
+          clearedScanProgress: false,
+          startedAt: 0,
+          completedAt: 0
+        }))
+      })
+
+      await privateProvider._runScheduledMdlsReconcile()
+
+      expect(reconcile).toHaveBeenCalledWith('app-provider-scheduled-mdls')
+      expect(runtimeResult).toMatchObject({
+        deltas: [
+          expect.objectContaining({
+            action: 'change',
+            record: expect.objectContaining({
+              stableKey: changedRecord.stableKey,
+              title: 'Localized Example'
+            })
+          }),
+          expect.objectContaining({
+            action: 'delete',
+            stableKey: removedRecord.stableKey,
+            path: removedRecord.path
+          })
+        ]
+      })
+    })
+  })
+
+  it('deletes Windows shortcut records by stored stable and legacy identities', async () => {
+    await withPlatform('win32', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const storedPath =
+        'C:\\Users\\Demo\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo.lnk'
+      const stableKey = 'shortcut:c:\\program files\\foo\\foo.exe|--background'
+      const storedFile = {
+        id: 72,
+        path: storedPath,
+        name: 'Foo',
+        displayName: 'Foo',
+        type: 'app',
+        mtime: new Date('2026-06-01T00:00:00.000Z')
+      }
+      const deleteWhere = vi.fn(async () => undefined)
+      privateProvider.dbUtils = {
+        getFileByPath: vi.fn(async () => storedFile),
+        getDb: () => ({
+          transaction: vi.fn(async (run: (tx: unknown) => Promise<void>) => {
+            await run({ delete: vi.fn(() => ({ where: deleteWhere })) })
+          })
+        })
+      }
+      privateProvider.fetchExtensionsForFiles = vi.fn(async () => [
+        {
+          ...storedFile,
+          extensions: {
+            appIdentity: stableKey,
+            launchKind: 'shortcut',
+            launchTarget: 'C:\\Program Files\\Foo\\Foo.exe',
+            launchArgs: '--background'
+          }
+        }
+      ])
+
+      const deltas = await appProvider.handleIndexedSourceWatchEvent({
+        sourceId: 'app-provider',
+        action: 'delete',
+        path: storedPath.toLowerCase(),
+        occurredAt: 1700000000000
+      })
+
+      expect(deltas).toEqual([
+        expect.objectContaining({ action: 'delete', stableKey }),
+        expect.objectContaining({ action: 'delete', stableKey: storedPath })
+      ])
+      expect(deleteWhere).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('keeps a returned startup scan pending until its backfill settles', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const backfill = createDeferred<void>()
+    const firstRecord = {
+      sourceId: 'app-provider',
+      recordId: 'app-first',
+      stableKey: 'app-first',
+      kind: 'app',
+      title: 'First App'
+    }
+    privateProvider._runStartupBackfill = vi.fn(() => backfill.promise)
+    vi.spyOn(privateProvider as never, '_setLastBackfillTime').mockResolvedValue(undefined)
+    privateProvider.buildIndexedSourceRecordBatches = vi.fn(async function* () {
+      yield { sourceId: 'app-provider', records: [firstRecord] }
+    })
+
+    const iterator = appProvider
+      .scanIndexedSource({ sourceId: 'app-provider', reason: 'startup' })
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({
+      value: { sourceId: 'app-provider', records: [firstRecord] },
+      done: false
+    })
+
+    let closed = false
+    const close = iterator.return!().then(() => {
+      closed = true
+    })
+    await flushPromises()
+    expect(closed).toBe(false)
+
+    backfill.resolve()
+    await expect(close).resolves.toBeUndefined()
+  })
+
+  it('keeps an aborted startup scan pending until its backfill settles', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const backfill = createDeferred<void>()
+    const controller = new AbortController()
+    const firstRecord = {
+      sourceId: 'app-provider',
+      recordId: 'app-first',
+      stableKey: 'app-first',
+      kind: 'app',
+      title: 'First App'
+    }
+    privateProvider._runStartupBackfill = vi.fn(() => backfill.promise)
+    privateProvider.buildIndexedSourceRecordBatches = vi.fn(async function* (_sourceId, signal) {
+      yield { sourceId: 'app-provider', records: [firstRecord] }
+      if (signal?.aborted) throw signal.reason
+      await new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+
+    const iterator = appProvider
+      .scanIndexedSource({
+        sourceId: 'app-provider',
+        reason: 'startup',
+        signal: controller.signal
+      })
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({
+      value: { sourceId: 'app-provider', records: [firstRecord] },
+      done: false
+    })
+
+    controller.abort(new Error('shutdown'))
+    const aborted = iterator.next()
+    let settled = false
+    void aborted.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await flushPromises()
+    expect(settled).toBe(false)
+
+    backfill.resolve()
+    await expect(aborted).rejects.toThrow('shutdown')
+  })
+
+  it('retires a superseded startup identity through scan onDelta without bypassing the Runtime lease', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const backfill = createDeferred<void>()
+    const oldRecord = {
+      sourceId: 'app-provider',
+      recordId: 'shortcut:c:\\program files\\foo\\foo.exe|',
+      stableKey: 'shortcut:c:\\program files\\foo\\foo.exe|',
+      kind: 'app',
+      title: 'Foo',
+      path: 'C:\\Start\\Foo.lnk'
+    }
+    const currentRecord = {
+      ...oldRecord,
+      recordId: 'shortcut:c:\\program files\\foo\\foo.exe|--background',
+      stableKey: 'shortcut:c:\\program files\\foo\\foo.exe|--background'
+    }
+    const visibleStableKeys = new Set<string>()
+    const onDelta = vi.fn(async (delta: { action: string; stableKey?: string }) => {
+      if (delta.action === 'delete' && delta.stableKey) visibleStableKeys.delete(delta.stableKey)
+    })
+    privateProvider._runStartupBackfill = vi.fn(() => backfill.promise)
+    vi.spyOn(privateProvider as never, '_setLastBackfillTime').mockResolvedValue(undefined)
+    let snapshot = 0
+    privateProvider.buildIndexedSourceRecordBatches = vi.fn(async function* () {
+      snapshot += 1
+      yield {
+        sourceId: 'app-provider',
+        records: [snapshot === 1 ? oldRecord : currentRecord]
+      }
+    })
+
+    const iterator = appProvider
+      .scanIndexedSource({ sourceId: 'app-provider', reason: 'startup', onDelta })
+      [Symbol.asyncIterator]()
+    const first = await iterator.next()
+    expect(first).toEqual({
+      value: { sourceId: 'app-provider', records: [oldRecord] },
+      done: false
+    })
+    visibleStableKeys.add(oldRecord.stableKey)
+
+    backfill.resolve()
+    while (true) {
+      const step = await iterator.next()
+      if (step.done || step.value.done) break
+      for (const record of step.value.records) visibleStableKeys.add(record.stableKey)
+    }
+
+    expect(onDelta).toHaveBeenCalledWith({
+      sourceId: 'app-provider',
+      action: 'delete',
+      stableKey: oldRecord.stableKey,
+      reason: 'app-provider-startup-identity-replaced'
+    })
+    expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
+    expect([...visibleStableKeys]).toEqual([currentRecord.stableKey])
+  })
+
+  it('stops delayed startup health and backfill producers before either can request a Runtime scan', async () => {
+    vi.useFakeTimers()
+    try {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      privateProvider.dbUtils = {}
+      privateProvider.searchIndex = {}
+      privateProvider.appIndexSettings.startupBackfillEnabled = true
+      privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
+        healthy: false,
+        appCount: 2,
+        indexedItemCount: 0
+      }))
+      privateProvider.waitForMainRendererReady = vi.fn(async () => undefined)
+      privateProvider._shouldRunStartupBackfill = vi.fn(async () => ({ allowed: true }))
+
+      privateProvider._scheduleStartupIndexHealthCheck()
+      privateProvider._scheduleStartupBackfill()
+      await appProvider.onDestroy()
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      expect(appRuntimeScanMock).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts an in-flight startup backfill retry sleep and waits for its tracked producer', async () => {
+    vi.useFakeTimers()
+    try {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const retryStarted = createDeferred<void>()
+      const retrySleepStarted = createDeferred<void>()
+      const waitForStartupProducerDelay =
+        privateProvider.waitForStartupProducerDelay.bind(privateProvider)
+      privateProvider.waitForStartupProducerDelay = vi.fn(async (delayMs) => {
+        retrySleepStarted.resolve()
+        await waitForStartupProducerDelay(delayMs)
+      })
+      privateProvider.appIndexSettings.startupBackfillEnabled = true
+      privateProvider.appIndexSettings.startupBackfillRetryMax = 1
+      privateProvider.appIndexSettings.startupBackfillRetryBaseMs = 10_000
+      privateProvider.appIndexSettings.startupBackfillRetryMaxMs = 10_000
+      privateProvider._shouldRunStartupBackfill = vi.fn(async () => {
+        retryStarted.resolve()
+        return { allowed: false, reason: 'renderer-not-ready' }
+      })
+
+      privateProvider._scheduleStartupBackfill()
+      await vi.advanceTimersByTimeAsync(15_000)
+      await retryStarted.promise
+      await retrySleepStarted.promise
+      const retryTask = privateProvider.startupBackfillTask
+      expect(retryTask).not.toBeNull()
+      let retrySettled = false
+      void retryTask?.then(() => {
+        retrySettled = true
+      })
+
+      await appProvider.prepareForSearchIndexShutdown()
+
+      expect(retrySettled).toBe(true)
+      expect(appRuntimeScanMock).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drains an in-flight DB-to-Runtime mutation before rejecting later public mutations', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const publishStarted = createDeferred<void>()
+    const releasePublish = createDeferred<void>()
+    const appPath = '/Applications/Manual.app'
+    const appInfo = {
+      name: 'Manual',
+      displayName: 'Manual',
+      path: appPath,
+      icon: '',
+      bundleId: 'com.example.manual',
+      stableId: 'bundle:com.example.manual',
+      uniqueId: 'bundle:com.example.manual',
+      launchKind: 'bundle' as const,
+      launchTarget: appPath,
+      lastModified: new Date('2026-07-17T00:00:00.000Z')
+    }
+    privateProvider.processAppPath = vi.fn(async () => ({
+      success: true,
+      status: 'added',
+      path: appPath,
+      appInfo
+    }))
+    privateProvider.publishAppRuntimeUpsert = vi.fn(async () => {
+      publishStarted.resolve()
+      await releasePublish.promise
+    })
+
+    const inFlightAdd = appProvider.addAppByPath(appPath)
+    await publishStarted.promise
+    let shutdownSettled = false
+    const shutdown = appProvider.prepareForSearchIndexShutdown().then(() => {
+      shutdownSettled = true
+    })
+    await Promise.resolve()
+    expect(shutdownSettled).toBe(false)
+
+    releasePublish.resolve()
+    await shutdown
+    await expect(inFlightAdd).resolves.toEqual({ success: true, status: 'added', path: appPath })
+
+    privateProvider.processAppPath = vi.fn()
+    privateProvider.publishAppRuntimeUpsert = vi.fn()
+    const dbAccess = vi.fn()
+    privateProvider.dbUtils = { getDb: dbAccess }
+    appRuntimeApplyDeltaMock.mockClear()
+    appRuntimeResetMock.mockClear()
+    const mutations: Array<{ name: string; invoke: () => Promise<unknown> }> = [
+      { name: 'add path', invoke: async () => await appProvider.addAppByPath(appPath) },
+      {
+        name: 'upsert managed entry',
+        invoke: async () =>
+          await appProvider.upsertManagedEntry({
+            path: '/Users/demo/bin/managed.sh',
+            displayName: 'Managed',
+            launchKind: 'path'
+          })
+      },
+      {
+        name: 'remove managed entry',
+        invoke: async () => await appProvider.removeManagedEntry('/Users/demo/bin/managed.sh')
+      },
+      {
+        name: 'set managed entry enabled',
+        invoke: async () =>
+          await appProvider.setManagedEntryEnabled('/Users/demo/bin/managed.sh', false)
+      },
+      {
+        name: 'set aliases',
+        invoke: async () => await appProvider.setAliases({ [appPath]: ['manual'] })
+      },
+      {
+        name: 'reindex diagnostic target',
+        invoke: async () =>
+          await appProvider.reindexAppSearchTarget({
+            target: 'Managed',
+            mode: 'keywords',
+            force: true
+          })
+      },
+      { name: 'rebuild index', invoke: async () => await appProvider.rebuildIndex() }
+    ]
+
+    for (const mutation of mutations) {
+      await expect(mutation.invoke()).rejects.toThrow('APP_PROVIDER_SHUTTING_DOWN')
+    }
+
+    expect(privateProvider.processAppPath).not.toHaveBeenCalled()
+    expect(privateProvider.publishAppRuntimeUpsert).not.toHaveBeenCalled()
+    expect(dbAccess).not.toHaveBeenCalled()
+    expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
+    expect(appRuntimeResetMock).not.toHaveBeenCalled()
+  })
+
+  it('drains a synchronously admitted rebuild reset when shutdown begins in the same tick', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const resetStarted = createDeferred<void>()
+    const releaseReset = createDeferred<void>()
+    const reset = vi.fn(async (request) => {
+      resetStarted.resolve()
+      await releaseReset.promise
+      return {
+        sourceId: request.sourceId,
+        reason: request.reason,
+        clearedSearchIndex: true,
+        clearedScanProgress: false,
+        startedAt: 0,
+        completedAt: 0
+      }
+    })
+    privateProvider.context = {}
+    privateProvider.dbUtils = {}
+    privateProvider.setIndexedSourceRuntimeDelegate({
+      scan: vi.fn(async () => undefined),
+      reconcile: vi.fn(async () => undefined),
+      applyDelta: vi.fn(async () => undefined),
+      reset
+    })
+
+    const rebuild = appProvider.rebuildIndex()
+    let shutdownSettled = false
+    const shutdown = appProvider.prepareForSearchIndexShutdown().then(() => {
+      shutdownSettled = true
+    })
+    await resetStarted.promise
+    expect(shutdownSettled).toBe(false)
+
+    releaseReset.resolve()
+    await shutdown
+    await expect(rebuild).resolves.toEqual({
+      success: true,
+      message: 'App index rebuild complete'
+    })
+    expect(reset).toHaveBeenCalledWith({
+      sourceId: 'app-provider',
+      reason: 'manual-rebuild',
+      clearSearchIndex: true,
+      clearScanProgress: false
+    })
+  })
+
+  it('times out a tracked Runtime mutation then retries shutdown after the mutation settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const runtimeMutationStarted = createDeferred<void>()
+      const releaseRuntimeMutation = createDeferred<void>()
+      const appPath = '/Applications/Manual.app'
+      const appInfo = {
+        name: 'Manual',
+        displayName: 'Manual',
+        path: appPath,
+        icon: '',
+        bundleId: 'com.example.manual',
+        stableId: 'bundle:com.example.manual',
+        uniqueId: 'bundle:com.example.manual',
+        launchKind: 'bundle' as const,
+        launchTarget: appPath,
+        lastModified: new Date('2026-07-17T00:00:00.000Z')
+      }
+      const applyDelta = vi.fn(async () => {
+        runtimeMutationStarted.resolve()
+        await releaseRuntimeMutation.promise
+      })
+      privateProvider.processAppPath = vi.fn(async () => ({
+        success: true,
+        status: 'added',
+        path: appPath,
+        appInfo
+      }))
+      privateProvider.setIndexedSourceRuntimeDelegate({
+        scan: vi.fn(async () => undefined),
+        reconcile: vi.fn(async () => undefined),
+        applyDelta,
+        reset: vi.fn(async (request) => ({
+          sourceId: request.sourceId,
+          reason: request.reason,
+          clearedSearchIndex: true,
+          clearedScanProgress: false,
+          startedAt: 0,
+          completedAt: 0
+        }))
+      })
+
+      let mutationSettled = false
+      const mutation = appProvider.addAppByPath(appPath)
+      void mutation.then(
+        () => {
+          mutationSettled = true
+        },
+        () => {
+          mutationSettled = true
+        }
+      )
+      await runtimeMutationStarted.promise
+
+      const timedOutShutdown = appProvider
+        .prepareForSearchIndexShutdown()
+        .catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await expect(timedOutShutdown).resolves.toMatchObject({
+        message: 'APP_PROVIDER_SHUTDOWN_PRODUCER_TIMEOUT'
+      })
+      expect(mutationSettled).toBe(false)
+      expect(applyDelta).toHaveBeenCalledTimes(1)
+      await expect(appProvider.addAppByPath('/Applications/Blocked.app')).rejects.toThrow(
+        'APP_PROVIDER_SHUTTING_DOWN'
+      )
+      expect(privateProvider.processAppPath).toHaveBeenCalledTimes(1)
+
+      releaseRuntimeMutation.resolve()
+      await expect(mutation).resolves.toEqual({ success: true, status: 'added', path: appPath })
+      await expect(appProvider.prepareForSearchIndexShutdown()).resolves.toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -10,10 +10,14 @@ export class AppIndexMaintenanceService {
   private taskQueue: Promise<void> = Promise.resolve()
   private readonly tasks = new Map<string, Promise<unknown>>()
   private fullSyncRegistered = false
+  private fullSyncTask: Promise<void> | null = null
+  private stopped = false
 
   constructor(private readonly options: AppIndexMaintenanceServiceOptions) {}
 
   public run<T>(taskKey: string, task: () => Promise<T>): Promise<T> {
+    if (this.stopped) return Promise.reject(new Error('APP_INDEX_MAINTENANCE_STOPPED'))
+
     const existing = this.tasks.get(taskKey)
     if (existing) return existing as Promise<T>
 
@@ -36,7 +40,16 @@ export class AppIndexMaintenanceService {
     this.fullSyncRegistered = true
     pollingService.register(
       'app_provider_full_sync',
-      async () => await this.options.runFullSyncIfDue(),
+      async () => {
+        if (this.stopped) return
+        const task = this.options.runFullSyncIfDue()
+        this.fullSyncTask = task
+        try {
+          await task
+        } finally {
+          if (this.fullSyncTask === task) this.fullSyncTask = null
+        }
+      },
       {
         interval: intervalMs,
         unit: 'milliseconds',
@@ -53,6 +66,13 @@ export class AppIndexMaintenanceService {
     pollingService.unregister('app_provider_full_sync')
     this.fullSyncRegistered = false
     if (enabled) this.registerFullSync(intervalMs)
+  }
+
+  public async stop(): Promise<void> {
+    this.stopped = true
+    pollingService.unregister('app_provider_full_sync')
+    this.fullSyncRegistered = false
+    await Promise.allSettled([this.fullSyncTask, this.taskQueue])
   }
 
   public isFullSyncRegistered(): boolean {

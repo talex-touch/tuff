@@ -1,190 +1,190 @@
-import { describe, expect, it } from 'vitest'
-import { IndexedWriteFlushEvidenceService } from '../../search'
+import { describe, expect, it } from "vitest";
+import { IndexedWriteFlushEvidenceService } from "../../search";
 
-const service = new IndexedWriteFlushEvidenceService()
+const service = new IndexedWriteFlushEvidenceService();
 
-describe('IndexedWriteFlushEvidenceService', () => {
-  it('builds ready evidence from a successful flush snapshot', () => {
+describe("IndexedWriteFlushEvidenceService", () => {
+  it("builds ready evidence from a successful flush snapshot", () => {
     expect(
       service.build({
-        id: 'source:index-flush',
-        label: 'Source index flush',
+        id: "source:index-flush",
+        label: "Source index flush",
         snapshot: {
-          status: 'flushed',
+          status: "flushed",
           entries: 5,
           pending: 2,
           inflight: 1,
-          reason: 'flush-completed',
+          reason: "flush-completed",
           metadata: {
-            batchSize: 8
+            batchSize: 8,
           },
           durationMs: 12,
-          checkedAt: 123
-        }
-      })
+          checkedAt: 123,
+        },
+      }),
     ).toEqual({
-      id: 'source:index-flush',
-      label: 'Source index flush',
-      status: 'ready',
+      id: "source:index-flush",
+      label: "Source index flush",
+      status: "ready",
       itemCount: 5,
       lastCheckedAt: 123,
-      reason: 'flush-completed',
+      reason: "flush-completed",
       metadata: {
         batchSize: 8,
-        status: 'flushed',
+        status: "flushed",
         entries: 5,
         pending: 2,
         inflight: 1,
         error: undefined,
-        durationMs: 12
-      }
-    })
-  })
+        durationMs: 12,
+      },
+    });
+  });
 
-  it('uses pending count when no entries were flushed', () => {
+  it("uses pending count when no entries were flushed", () => {
     expect(
       service.build({
-        id: 'source:index-flush',
-        label: 'Source index flush',
+        id: "source:index-flush",
+        label: "Source index flush",
         snapshot: {
-          status: 'idle',
+          status: "idle",
           entries: 0,
           pending: 7,
           inflight: 0,
-          checkedAt: 456
-        }
-      })
+          checkedAt: 456,
+        },
+      }),
     ).toMatchObject({
-      status: 'ready',
-      itemCount: 7
-    })
-  })
+      status: "ready",
+      itemCount: 7,
+    });
+  });
 
-  it.each(['failed', 'not-ready', 'worker-not-ready'])(
-    'marks %s flush evidence as degraded',
+  it.each(["failed", "not-ready", "worker-not-ready"])(
+    "marks %s flush evidence as degraded",
     (status) => {
       expect(
         service.build({
-          id: 'source:index-flush',
-          label: 'Source index flush',
+          id: "source:index-flush",
+          label: "Source index flush",
           snapshot: {
             status,
             entries: 0,
             pending: 3,
             inflight: 1,
-            error: 'worker unavailable',
-            checkedAt: 789
-          }
-        })
+            error: "worker unavailable",
+            checkedAt: 789,
+          },
+        }),
       ).toMatchObject({
-        status: 'degraded',
+        status: "degraded",
         itemCount: 3,
         metadata: {
           status,
-          error: 'worker unavailable'
-        }
-      })
-    }
-  )
+          error: "worker unavailable",
+        },
+      });
+    },
+  );
 
-  it('supports custom degraded statuses and caller metadata', () => {
+  it("supports custom degraded statuses and caller metadata", () => {
     expect(
       service.build({
-        id: 'source:index-flush',
-        label: 'Source index flush',
-        degradedStatuses: ['retrying'],
+        id: "source:index-flush",
+        label: "Source index flush",
+        degradedStatuses: ["retrying"],
         metadata: {
-          sourceId: 'source'
+          sourceId: "source",
         },
         snapshot: {
-          status: 'retrying',
+          status: "retrying",
           entries: 1,
           pending: 9,
           inflight: 2,
           metadata: {
-            sourceId: 'from-snapshot',
-            batchSize: 16
+            sourceId: "from-snapshot",
+            batchSize: 16,
           },
-          checkedAt: 1000
-        }
-      })
+          checkedAt: 1000,
+        },
+      }),
     ).toMatchObject({
-      status: 'degraded',
+      status: "degraded",
       metadata: {
-        sourceId: 'source',
+        sourceId: "source",
         batchSize: 16,
-        status: 'retrying',
+        status: "retrying",
         entries: 1,
         pending: 9,
-        inflight: 2
-      }
-    })
-  })
+        inflight: 2,
+      },
+    });
+  });
 
-  it('isolates flush evidence metadata from caller mutation', () => {
+  it("isolates flush evidence metadata from caller mutation", () => {
     const snapshotMetadata = {
       counters: {
-        withContent: 2
-      }
-    }
+        withContent: 2,
+      },
+    };
     const callerMetadata = {
       source: {
-        id: 'source'
-      }
-    }
+        id: "source",
+      },
+    };
     const evidence = service.build({
-      id: 'source:index-flush',
-      label: 'Source index flush',
+      id: "source:index-flush",
+      label: "Source index flush",
       metadata: callerMetadata,
       snapshot: {
-        status: 'flushed',
+        status: "flushed",
         entries: 2,
         pending: 0,
         inflight: 0,
         metadata: snapshotMetadata,
-        checkedAt: 1000
-      }
-    })
+        checkedAt: 1000,
+      },
+    });
 
-    snapshotMetadata.counters.withContent = 99
-    callerMetadata.source.id = 'mutated'
-    const counters = evidence.metadata?.counters as { withContent: number }
-    const source = evidence.metadata?.source as { id: string }
+    snapshotMetadata.counters.withContent = 99;
+    callerMetadata.source.id = "mutated";
+    const counters = evidence.metadata?.counters as { withContent: number };
+    const source = evidence.metadata?.source as { id: string };
 
-    expect(counters.withContent).toBe(2)
-    expect(source.id).toBe('source')
+    expect(counters.withContent).toBe(2);
+    expect(source.id).toBe("source");
 
-    counters.withContent = 100
-    source.id = 'mutated-return'
+    counters.withContent = 100;
+    source.id = "mutated-return";
 
-    expect(snapshotMetadata.counters.withContent).toBe(99)
-    expect(callerMetadata.source.id).toBe('mutated')
-  })
+    expect(snapshotMetadata.counters.withContent).toBe(99);
+    expect(callerMetadata.source.id).toBe("mutated");
+  });
 
-  it('normalizes malformed snapshot counters and timestamps before exposing evidence', () => {
+  it("normalizes malformed snapshot counters and timestamps before exposing evidence", () => {
     const evidence = service.build({
-      id: 'source:index-flush',
-      label: 'Source index flush',
+      id: "source:index-flush",
+      label: "Source index flush",
       snapshot: {
-        status: 'failed',
+        status: "failed",
         entries: Number.POSITIVE_INFINITY,
         pending: -7,
         inflight: Number.NaN,
         durationMs: Number.NEGATIVE_INFINITY,
-        checkedAt: Number.NaN
-      }
-    })
+        checkedAt: Number.NaN,
+      },
+    });
 
     expect(evidence).toMatchObject({
-      status: 'degraded',
+      status: "degraded",
       itemCount: 0,
       metadata: {
         entries: 0,
         pending: 0,
         inflight: 0,
-        durationMs: 0
-      }
-    })
-    expect(evidence.lastCheckedAt).toBeGreaterThan(0)
-  })
-})
+        durationMs: 0,
+      },
+    });
+    expect(evidence.lastCheckedAt).toBeGreaterThan(0);
+  });
+});

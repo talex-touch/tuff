@@ -83,24 +83,24 @@ migration evidence, or rollback capability.
 
 ## Acceptance Criteria
 
-- [ ] Instrumentation and invariant tests observe exactly one FTS mutation origin
+- [x] Instrumentation and invariant tests observe exactly one FTS mutation origin
   per provider/item mutation.
-- [ ] App scan/watch/reconcile paths use runtime writer only with result parity.
-- [ ] File scan/watch/reconcile/cleanup/reset paths use runtime writer only while
-  provider-local durable tables remain correct.
-- [ ] Concurrent reader/writer startup performs FTS readiness/DDL once and no
-  normal read path can trigger destructive repair.
-- [ ] Database checkpoint waits on the shared writer drain contract and imports
-  no FileProvider implementation detail.
-- [ ] Source-scoped rollback switches one source to the previous writer, runs a
-  reconcile, and never enables both writers.
+- [x] App scan/watch/reconcile paths use runtime writer only with result parity.
+- [x] File scan/watch/reconcile/cleanup/reset paths use runtime writer only while
+      provider-local durable tables remain correct.
+- [x] Concurrent reader/writer startup performs FTS readiness/DDL once and no
+      normal read path can trigger destructive repair.
+- [x] Database checkpoint waits on the shared writer drain contract and imports
+      no FileProvider implementation detail.
+- [x] Source-scoped rollback switches one source to the previous writer, runs a
+      reconcile, and never enables both writers.
 - [ ] Copy-based migration preflight/simulation, focused tests, type-check, and
   packaged indexing diagnostics pass.
-- [ ] Legacy `file_fts` retain policy is unchanged.
-- [ ] App and File first-run contract tests keep the scan unfinished while a
-  concurrent reader observes an earlier committed matching batch.
-- [ ] Repeating an identical query after a generation advance cannot hit the
-  pre-commit cache entry.
+- [x] Legacy `file_fts` retain policy is unchanged.
+- [x] App and File first-run contract tests keep the scan unfinished while a
+      concurrent reader observes an earlier committed matching batch.
+- [x] Repeating an identical query after a generation advance cannot hit the
+      pre-commit cache entry.
 
 ## Out of Scope
 

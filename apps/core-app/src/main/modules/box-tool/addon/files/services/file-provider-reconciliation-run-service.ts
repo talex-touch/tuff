@@ -40,8 +40,25 @@ export interface FileProviderReconciliationRunResult {
 export interface FileProviderReconciliationRunDeps<TContext> {
   enterPerfContext: (label: string, metadata: Record<string, unknown>) => () => void
   waitForIdle: () => Promise<void>
-  getDbFiles: (paths: string[]) => Promise<FileProviderReconciliationDbRecord[]>
-  scanDirectory: (rootPath: string, excludePathsSet?: Set<string>) => Promise<ScannedFileInfo[]>
+  assertActive: (context: TContext) => void
+  prepareSeenPaths: (context: TContext) => Promise<void>
+  recordSeenPaths: (paths: string[], context: TContext) => Promise<void>
+  getDbFilesByPaths: (
+    paths: string[],
+    context: TContext
+  ) => Promise<FileProviderReconciliationDbRecord[]>
+  getMissingDbFiles: (
+    rootPath: string,
+    afterId: number,
+    limit: number,
+    context: TContext
+  ) => Promise<FileProviderReconciliationDbRecord[]>
+  clearSeenPaths: (context: TContext) => Promise<void>
+  scanDirectory: (
+    rootPath: string,
+    excludePathsSet: Set<string> | undefined,
+    context: TContext
+  ) => AsyncIterable<ScannedFileInfo[]>
   reconcile: (
     diskFiles: ReconcileDiskFile[],
     dbFiles: ReconcileDbFile[],
@@ -64,38 +81,10 @@ export interface FileProviderReconciliationRunDeps<TContext> {
   logDebug: (message: string, meta?: Record<string, unknown>) => void
 }
 
-export class FileProviderReconciliationRunService<TContext> {
-  private readonly enterPerfContext: FileProviderReconciliationRunDeps<TContext>['enterPerfContext']
-  private readonly waitForIdle: FileProviderReconciliationRunDeps<TContext>['waitForIdle']
-  private readonly getDbFiles: FileProviderReconciliationRunDeps<TContext>['getDbFiles']
-  private readonly scanDirectory: FileProviderReconciliationRunDeps<TContext>['scanDirectory']
-  private readonly reconcile: FileProviderReconciliationRunDeps<TContext>['reconcile']
-  private readonly deleteRecords: FileProviderReconciliationRunDeps<TContext>['deleteRecords']
-  private readonly updateRecords: FileProviderReconciliationRunDeps<TContext>['updateRecords']
-  private readonly insertRecords: FileProviderReconciliationRunDeps<TContext>['insertRecords']
-  private readonly emitProgress: FileProviderReconciliationRunDeps<TContext>['emitProgress']
-  private readonly yieldAfterDbRead: FileProviderReconciliationRunDeps<TContext>['yieldAfterDbRead']
-  private readonly yieldAfterPathScan: FileProviderReconciliationRunDeps<TContext>['yieldAfterPathScan']
-  private readonly now: FileProviderReconciliationRunDeps<TContext>['now']
-  private readonly formatDuration: FileProviderReconciliationRunDeps<TContext>['formatDuration']
-  private readonly logDebug: FileProviderReconciliationRunDeps<TContext>['logDebug']
+const RECONCILIATION_PAGE_SIZE = 500
 
-  constructor(deps: FileProviderReconciliationRunDeps<TContext>) {
-    this.enterPerfContext = deps.enterPerfContext
-    this.waitForIdle = deps.waitForIdle
-    this.getDbFiles = deps.getDbFiles
-    this.scanDirectory = deps.scanDirectory
-    this.reconcile = deps.reconcile
-    this.deleteRecords = deps.deleteRecords
-    this.updateRecords = deps.updateRecords
-    this.insertRecords = deps.insertRecords
-    this.emitProgress = deps.emitProgress
-    this.yieldAfterDbRead = deps.yieldAfterDbRead
-    this.yieldAfterPathScan = deps.yieldAfterPathScan
-    this.now = deps.now
-    this.formatDuration = deps.formatDuration
-    this.logDebug = deps.logDebug
-  }
+export class FileProviderReconciliationRunService<TContext> {
+  constructor(private readonly deps: FileProviderReconciliationRunDeps<TContext>) {}
 
   async execute(
     paths: string[],
@@ -106,80 +95,117 @@ export class FileProviderReconciliationRunService<TContext> {
       return { added: 0, changed: 0, deleted: 0, skipped: 0, completedPaths: [] }
     }
 
-    const finishPerfContext = this.enterPerfContext('FileProvider.reconciliation', {
+    const finishPerfContext = this.deps.enterPerfContext('FileProvider.reconciliation', {
       paths: paths.length
     })
-    const reconciliationStart = this.now()
+    const reconciliationStart = this.deps.now()
+    let added = 0
+    let changed = 0
+    let deleted = 0
+    let skipped = 0
+    const completedPaths: string[] = []
+
     try {
-      this.logDebug('Starting reconciliation scan', {
+      this.deps.logDebug('Starting reconciliation scan', {
         count: paths.length,
         sample: paths.slice(0, 3).join(', ')
       })
+      this.deps.emitProgress(0, paths.length)
 
-      this.emitProgress(0, paths.length)
-      await this.waitForIdle()
-
-      const dbFiles = await this.getDbFiles(paths)
-      await this.yieldAfterDbRead()
-
-      const diskFiles: ScannedFileInfo[] = []
-      let reconciledPaths = 0
       for (const rootPath of paths) {
-        await this.waitForIdle()
-        const scanned = await this.scanDirectory(rootPath, options?.excludePathsSet)
-        diskFiles.push(...scanned)
-        await this.yieldAfterPathScan()
-        reconciledPaths += 1
-        this.emitProgress(reconciledPaths, paths.length)
+        this.deps.assertActive(context)
+        await this.deps.waitForIdle()
+        await this.deps.prepareSeenPaths(context)
+        try {
+          for await (const scannedFiles of this.deps.scanDirectory(
+            rootPath,
+            options?.excludePathsSet,
+            context
+          )) {
+            if (scannedFiles.length === 0) continue
+            const diskPayload = mapIndexedWriteReconciliationDiskPayload(scannedFiles)
+            const diskPaths = diskPayload.map((file) => file.path)
+            await this.deps.recordSeenPaths(diskPaths, context)
+            const dbFiles = await this.deps.getDbFilesByPaths(diskPaths, context)
+            await this.deps.yieldAfterDbRead()
+            const reconcileResult = await this.deps.reconcile(
+              diskPayload,
+              mapIndexedWriteReconciliationDbPayload(dbFiles),
+              [rootPath]
+            )
+
+            if (reconcileResult.deletedIds.length > 0) {
+              const deletedIdSet = new Set(reconcileResult.deletedIds)
+              const deletedRecords = dbFiles
+                .filter((file) => deletedIdSet.has(file.id))
+                .map((file) => ({ id: file.id, path: file.path }))
+              await this.deps.deleteRecords(deletedRecords, context)
+              deleted += deletedRecords.length
+            }
+
+            const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
+              id: file.id,
+              path: file.path,
+              name: file.name,
+              extension: file.extension,
+              size: file.size,
+              mtime: toIndexedWriteDate(file.mtime),
+              ctime: toIndexedWriteDate(file.ctime),
+              type: 'file' as const,
+              isDir: false as const
+            }))
+            if (filesToUpdate.length > 0) {
+              const result = await this.deps.updateRecords(filesToUpdate, context)
+              changed += result.updatedCount
+            }
+            if (reconcileResult.filesToAdd.length > 0) {
+              const result = await this.deps.insertRecords(reconcileResult.filesToAdd, context)
+              added += result.insertedCount
+            }
+            skipped += Math.max(
+              0,
+              diskPayload.length -
+                reconcileResult.filesToAdd.length -
+                reconcileResult.filesToUpdate.length
+            )
+            await this.deps.yieldAfterPathScan()
+          }
+
+          let afterId = 0
+          while (true) {
+            const missingFiles = await this.deps.getMissingDbFiles(
+              rootPath,
+              afterId,
+              RECONCILIATION_PAGE_SIZE,
+              context
+            )
+            if (missingFiles.length === 0) break
+            afterId = missingFiles[missingFiles.length - 1].id
+            await this.deps.deleteRecords(
+              missingFiles.map((file) => ({ id: file.id, path: file.path })),
+              context
+            )
+            deleted += missingFiles.length
+            await this.deps.yieldAfterDbRead()
+          }
+        } finally {
+          await this.deps.clearSeenPaths(context).catch((error) => {
+            this.deps.logDebug('Failed to clear reconciliation seen-path staging', { error })
+          })
+        }
+        this.deps.assertActive(context)
+
+        completedPaths.push(rootPath)
+        this.deps.emitProgress(completedPaths.length, paths.length)
       }
 
-      const diskPayload = mapIndexedWriteReconciliationDiskPayload(diskFiles)
-      const dbPayload = mapIndexedWriteReconciliationDbPayload(dbFiles)
-      const reconcileResult = await this.reconcile(diskPayload, dbPayload, paths)
-
-      const filesToAdd = reconcileResult.filesToAdd
-      const filesToUpdate = reconcileResult.filesToUpdate.map((file) => ({
-        id: file.id,
-        path: file.path,
-        name: file.name,
-        extension: file.extension,
-        size: file.size,
-        mtime: toIndexedWriteDate(file.mtime),
-        ctime: toIndexedWriteDate(file.ctime),
-        type: 'file' as const,
-        isDir: false as const
-      }))
-      const deletedFileIds = reconcileResult.deletedIds
-
-      if (deletedFileIds.length > 0) {
-        const deletedIdSet = new Set(deletedFileIds)
-        const deletedRecords = dbFiles
-          .filter((file) => deletedIdSet.has(file.id))
-          .map((file) => ({ id: file.id, path: file.path }))
-        await this.deleteRecords(deletedRecords, context)
-      }
-
-      const updateResult =
-        filesToUpdate.length > 0
-          ? await this.updateRecords(filesToUpdate, context)
-          : { updatedCount: 0 }
-      const insertResult =
-        filesToAdd.length > 0 ? await this.insertRecords(filesToAdd, context) : { insertedCount: 0 }
-
-      this.logDebug('Reconciliation completed', {
-        duration: this.formatDuration(this.now() - reconciliationStart),
-        added: filesToAdd.length,
-        updated: filesToUpdate.length,
-        deleted: deletedFileIds.length
+      this.deps.logDebug('Reconciliation completed', {
+        duration: this.deps.formatDuration(this.deps.now() - reconciliationStart),
+        added,
+        updated: changed,
+        deleted
       })
-
-      return {
-        added: insertResult.insertedCount,
-        changed: updateResult.updatedCount,
-        deleted: deletedFileIds.length,
-        skipped: Math.max(0, diskPayload.length - filesToAdd.length - filesToUpdate.length),
-        completedPaths: paths
-      }
+      return { added, changed, deleted, skipped, completedPaths }
     } finally {
       finishPerfContext()
     }

@@ -3,7 +3,7 @@ import {
   takeIndexedWriteRecordChunk
 } from '@talex-touch/utils/search'
 import type { IndexedSourceRecord, IndexedSourceRecordBatch } from '@talex-touch/utils/search'
-import type { UpsertFileRecord } from '../../../search-engine/workers/search-index-worker-client'
+import type { UpsertFileRecord } from '../../../search-engine/search-index-writer'
 
 export interface FileProviderFullScanInsertResult<TInserted> {
   inserted: TInserted[]
@@ -17,7 +17,6 @@ export interface FileProviderFullScanInsertDeps<TInserted, TContext> {
   recordBatchDuration: (durationMs: number) => void
   waitForIdle: () => Promise<void>
   upsertFiles: (records: UpsertFileRecord[], reason: string) => Promise<TInserted[]>
-  dispatchSideEffects: (records: TInserted[]) => void
   emitRecordBatch: (batch: IndexedSourceRecordBatch, context: TContext) => Promise<void>
   emitProgress: (current: number, total: number) => void
   sleep: (durationMs: number) => Promise<void>
@@ -35,10 +34,6 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
   >['recordBatchDuration']
   private readonly waitForIdle: FileProviderFullScanInsertDeps<TInserted, TContext>['waitForIdle']
   private readonly upsertFiles: FileProviderFullScanInsertDeps<TInserted, TContext>['upsertFiles']
-  private readonly dispatchSideEffects: FileProviderFullScanInsertDeps<
-    TInserted,
-    TContext
-  >['dispatchSideEffects']
   private readonly sleep: FileProviderFullScanInsertDeps<TInserted, TContext>['sleep']
   private readonly now: FileProviderFullScanInsertDeps<TInserted, TContext>['now']
   private readonly formatDuration: FileProviderFullScanInsertDeps<
@@ -54,7 +49,6 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
     this.recordBatchDuration = deps.recordBatchDuration
     this.waitForIdle = deps.waitForIdle
     this.upsertFiles = deps.upsertFiles
-    this.dispatchSideEffects = deps.dispatchSideEffects
     this.sleep = deps.sleep
     this.now = deps.now
     this.formatDuration = deps.formatDuration
@@ -112,7 +106,6 @@ export class FileProviderFullScanInsertService<TInserted, TContext> {
         duration: this.formatDuration(batchMs)
       })
 
-      this.dispatchSideEffects(inserted)
       await this.runtimeEmitter.emitBatch(inserted, context)
       indexedFiles += chunk.length
       this.runtimeEmitter.emitProgressSnapshot({

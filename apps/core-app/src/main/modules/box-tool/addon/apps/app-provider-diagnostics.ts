@@ -20,7 +20,11 @@ import {
   normalizeDisplayName,
   resolveDisplayName
 } from './display-name-sync-utils'
-import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
+import {
+  isAppEntryEnabledExtensionMap,
+  resolveAppItemId,
+  resolveAppItemIds
+} from './app-index-metadata'
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
@@ -52,30 +56,6 @@ const APP_ENTRY_SOURCE_EXTENSION_KEY = 'entrySource'
 function normalizeOptionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim()
   return normalized ? normalized : undefined
-}
-
-function resolveAppItemId(value: {
-  bundleId?: string | null
-  stableId?: string | null
-  appIdentity?: string | null
-  path: string
-}): string {
-  return value.appIdentity || value.stableId || value.path || value.bundleId || ''
-}
-
-function resolveAppItemIds(value: {
-  bundleId?: string | null
-  stableId?: string | null
-  appIdentity?: string | null
-  path: string
-}): string[] {
-  return normalizeStringList([
-    resolveAppItemId(value),
-    value.appIdentity,
-    value.stableId,
-    value.path,
-    value.bundleId
-  ])
 }
 
 async function findDiagnosticApp(

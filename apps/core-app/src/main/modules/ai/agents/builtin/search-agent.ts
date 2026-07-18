@@ -11,9 +11,14 @@
 import type { AgentDescriptor, AgentPlanStep, TuffItem, TuffQuery } from '@talex-touch/utils'
 import type { AgentExecutionContext, AgentImpl } from '../agent-registry'
 import searchEngineCore from '../../../box-tool/search-engine/search-core'
+import type { SearchRequestContext } from '../../../box-tool/search-engine/search-session'
 import { agentRegistry } from '../agent-registry'
 
 const SEARCH_AGENT_ID = 'builtin.search-agent'
+const SEARCH_AGENT_SEARCH_CONTEXT = {
+  caller: { kind: 'ai-agent', id: SEARCH_AGENT_ID },
+  activations: null
+} satisfies SearchRequestContext
 
 const descriptor: AgentDescriptor = {
   id: SEARCH_AGENT_ID,
@@ -206,7 +211,10 @@ async function executeQuery(
 
   const normalizedScope = normalizeScope(scope)
   const scopedQuery = buildScopedQuery(query.trim(), normalizedScope)
-  const result = await searchEngineCore.search({ text: scopedQuery } as TuffQuery)
+  const result = await searchEngineCore.search(
+    { text: scopedQuery } as TuffQuery,
+    SEARCH_AGENT_SEARCH_CONTEXT
+  )
   const mappedResults = normalizeSearchItems(result.items ?? [])
   const filteredResults = applyResultFilters(mappedResults, filters)
   const finalResults = filteredResults.slice(0, Math.max(1, limit))
@@ -250,7 +258,10 @@ async function executeSemantic(
   }
 
   const scopedQuery = query.trim()
-  const result = await searchEngineCore.search({ text: scopedQuery } as TuffQuery)
+  const result = await searchEngineCore.search(
+    { text: scopedQuery } as TuffQuery,
+    SEARCH_AGENT_SEARCH_CONTEXT
+  )
   const mapped = normalizeSearchItems(result.items ?? [])
   const tokens = tokenize(`${scopedQuery} ${context ?? ''}`)
   const normalizedThreshold = Math.min(1, Math.max(0, threshold))

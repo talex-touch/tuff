@@ -1,134 +1,153 @@
-import { cloneIndexingSnapshotValue } from './indexing-snapshot-clone'
+import { cloneIndexingSnapshotValue } from "./indexing-snapshot-clone";
 
-export const INDEXED_WORKER_STATUS_SNAPSHOT_CACHE_TTL_MS = 1_000
+export const INDEXED_WORKER_STATUS_SNAPSHOT_CACHE_TTL_MS = 1_000;
 
-export type IndexedWorkerState = 'offline' | 'idle' | 'busy'
+export type IndexedWorkerState = "offline" | "idle" | "busy";
 
 export interface IndexedWorkerStatusLike {
-  state: IndexedWorkerState
+  state: IndexedWorkerState;
 }
 
 export interface IndexedWorkerStatusSummary {
-  total: number
-  busy: number
-  idle: number
-  offline: number
+  total: number;
+  busy: number;
+  idle: number;
+  offline: number;
 }
 
-export interface IndexedWorkerStatusSnapshot<TWorker extends IndexedWorkerStatusLike> {
-  summary: IndexedWorkerStatusSummary
-  workers: TWorker[]
+export interface IndexedWorkerStatusSnapshot<
+  TWorker extends IndexedWorkerStatusLike,
+> {
+  summary: IndexedWorkerStatusSummary;
+  workers: TWorker[];
 }
 
-const INDEXED_WORKER_STATES = new Set<IndexedWorkerState>(['offline', 'idle', 'busy'])
+const INDEXED_WORKER_STATES = new Set<IndexedWorkerState>([
+  "offline",
+  "idle",
+  "busy",
+]);
 
-export function summarizeIndexedWorkerStatus<TWorker extends IndexedWorkerStatusLike>(
-  workers: TWorker[]
-): IndexedWorkerStatusSummary {
-  return normalizeIndexedWorkerStatuses(workers).reduce<IndexedWorkerStatusSummary>(
+export function summarizeIndexedWorkerStatus<
+  TWorker extends IndexedWorkerStatusLike,
+>(workers: TWorker[]): IndexedWorkerStatusSummary {
+  return normalizeIndexedWorkerStatuses(
+    workers,
+  ).reduce<IndexedWorkerStatusSummary>(
     (acc, worker) => {
-      acc.total += 1
-      if (worker.state === 'busy') {
-        acc.busy += 1
-      } else if (worker.state === 'idle') {
-        acc.idle += 1
+      acc.total += 1;
+      if (worker.state === "busy") {
+        acc.busy += 1;
+      } else if (worker.state === "idle") {
+        acc.idle += 1;
       } else {
-        acc.offline += 1
+        acc.offline += 1;
       }
-      return acc
+      return acc;
     },
-    { total: 0, busy: 0, idle: 0, offline: 0 }
-  )
+    { total: 0, busy: 0, idle: 0, offline: 0 },
+  );
 }
 
-export function normalizeIndexedWorkerStatuses<TWorker extends IndexedWorkerStatusLike>(
-  workers: unknown
-): TWorker[] {
-  if (!Array.isArray(workers)) return []
+export function normalizeIndexedWorkerStatuses<
+  TWorker extends IndexedWorkerStatusLike,
+>(workers: unknown): TWorker[] {
+  if (!Array.isArray(workers)) return [];
 
-  const normalized: TWorker[] = []
+  const normalized: TWorker[] = [];
   for (const worker of workers) {
-    if (!worker || typeof worker !== 'object') continue
-    const clonedWorker = cloneWorkerStatus(worker as TWorker)
+    if (!worker || typeof worker !== "object") continue;
+    const clonedWorker = cloneWorkerStatus(worker as TWorker);
     if (!INDEXED_WORKER_STATES.has(clonedWorker.state)) {
-      clonedWorker.state = 'offline'
+      clonedWorker.state = "offline";
     }
-    normalized.push(clonedWorker)
+    normalized.push(clonedWorker);
   }
-  return normalized
+  return normalized;
 }
 
 export interface IndexedWorkerStatusSnapshotServiceConfig {
-  cacheTtlMs?: number
-  now?: () => number
+  cacheTtlMs?: number;
+  now?: () => number;
 }
 
-export class IndexedWorkerStatusSnapshotService<TWorker extends IndexedWorkerStatusLike> {
-  private readonly cacheTtlMs: number
-  private readonly now: () => number
+export class IndexedWorkerStatusSnapshotService<
+  TWorker extends IndexedWorkerStatusLike,
+> {
+  private readonly cacheTtlMs: number;
+  private readonly now: () => number;
   private cachedSnapshot: {
-    capturedAt: number
-    snapshot: IndexedWorkerStatusSnapshot<TWorker>
-  } | null = null
+    capturedAt: number;
+    snapshot: IndexedWorkerStatusSnapshot<TWorker>;
+  } | null = null;
 
-  private pendingSnapshot: Promise<IndexedWorkerStatusSnapshot<TWorker>> | null = null
-  private generation = 0
+  private pendingSnapshot: Promise<
+    IndexedWorkerStatusSnapshot<TWorker>
+  > | null = null;
+  private generation = 0;
 
   constructor(config: IndexedWorkerStatusSnapshotServiceConfig = {}) {
-    this.cacheTtlMs = config.cacheTtlMs ?? INDEXED_WORKER_STATUS_SNAPSHOT_CACHE_TTL_MS
-    this.now = config.now ?? (() => Date.now())
+    this.cacheTtlMs =
+      config.cacheTtlMs ?? INDEXED_WORKER_STATUS_SNAPSHOT_CACHE_TTL_MS;
+    this.now = config.now ?? (() => Date.now());
   }
 
   async getSnapshot(
-    loadWorkers: () => Promise<TWorker[]>
+    loadWorkers: () => Promise<TWorker[]>,
   ): Promise<IndexedWorkerStatusSnapshot<TWorker>> {
-    const now = this.now()
-    if (this.cachedSnapshot && now - this.cachedSnapshot.capturedAt < this.cacheTtlMs) {
-      return cloneWorkerStatusSnapshot(this.cachedSnapshot.snapshot)
+    const now = this.now();
+    if (
+      this.cachedSnapshot &&
+      now - this.cachedSnapshot.capturedAt < this.cacheTtlMs
+    ) {
+      return cloneWorkerStatusSnapshot(this.cachedSnapshot.snapshot);
     }
 
     if (this.pendingSnapshot) {
-      return this.pendingSnapshot.then(cloneWorkerStatusSnapshot)
+      return this.pendingSnapshot.then(cloneWorkerStatusSnapshot);
     }
 
-    const generation = this.generation
+    const generation = this.generation;
     this.pendingSnapshot = loadWorkers()
       .then((workers) => {
-        const normalizedWorkers = normalizeIndexedWorkerStatuses<TWorker>(workers)
+        const normalizedWorkers =
+          normalizeIndexedWorkerStatuses<TWorker>(workers);
         const snapshot = cloneWorkerStatusSnapshot({
           summary: summarizeIndexedWorkerStatus(normalizedWorkers),
-          workers: normalizedWorkers
-        })
+          workers: normalizedWorkers,
+        });
         if (this.generation === generation) {
-          this.cachedSnapshot = { capturedAt: this.now(), snapshot }
+          this.cachedSnapshot = { capturedAt: this.now(), snapshot };
         }
-        return cloneWorkerStatusSnapshot(snapshot)
+        return cloneWorkerStatusSnapshot(snapshot);
       })
       .finally(() => {
         if (this.generation === generation) {
-          this.pendingSnapshot = null
+          this.pendingSnapshot = null;
         }
-      })
+      });
 
-    return this.pendingSnapshot
+    return this.pendingSnapshot;
   }
 
   clear(): void {
-    this.generation += 1
-    this.cachedSnapshot = null
-    this.pendingSnapshot = null
+    this.generation += 1;
+    this.cachedSnapshot = null;
+    this.pendingSnapshot = null;
   }
 }
 
 function cloneWorkerStatusSnapshot<TWorker extends IndexedWorkerStatusLike>(
-  snapshot: IndexedWorkerStatusSnapshot<TWorker>
+  snapshot: IndexedWorkerStatusSnapshot<TWorker>,
 ): IndexedWorkerStatusSnapshot<TWorker> {
   return {
     summary: { ...snapshot.summary },
-    workers: snapshot.workers.map(cloneWorkerStatus)
-  }
+    workers: snapshot.workers.map(cloneWorkerStatus),
+  };
 }
 
-function cloneWorkerStatus<TWorker extends IndexedWorkerStatusLike>(worker: TWorker): TWorker {
-  return cloneIndexingSnapshotValue(worker)
+function cloneWorkerStatus<TWorker extends IndexedWorkerStatusLike>(
+  worker: TWorker,
+): TWorker {
+  return cloneIndexingSnapshotValue(worker);
 }

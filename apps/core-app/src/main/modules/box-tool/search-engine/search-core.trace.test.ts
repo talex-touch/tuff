@@ -2,15 +2,32 @@ import type { TuffQuery } from '@talex-touch/utils'
 import { IndexedSourceReconcileReasons, TuffInputType } from '@talex-touch/utils'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TalexEvents, touchEventBus } from '../../../core/eventbus/touch-event'
-import { SearchEngineCore } from './search-core'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { fileProviderSetResetDelegateSpy, infoSpy, warnSpy, transportOnSpy } = vi.hoisted(() => ({
+const {
+  appProviderPrepareForShutdownSpy,
+  appProviderSetRuntimeDelegateSpy,
+  fileProviderPrepareForShutdownSpy,
+  fileProviderSetMutationDelegateSpy,
+  fileProviderSetPersistencePortSpy,
+  fileProviderSetResetDelegateSpy,
+  infoSpy,
+  searchIndexWriterGetFilePersistencePortSpy,
+  searchIndexWriterShutdownSpy,
+  transportOnSpy,
+  warnSpy
+} = vi.hoisted(() => ({
+  appProviderPrepareForShutdownSpy: vi.fn(async () => undefined),
+  appProviderSetRuntimeDelegateSpy: vi.fn(),
+  fileProviderPrepareForShutdownSpy: vi.fn(async () => undefined),
+  fileProviderSetMutationDelegateSpy: vi.fn(),
+  fileProviderSetPersistencePortSpy: vi.fn(),
   fileProviderSetResetDelegateSpy: vi.fn(),
   infoSpy: vi.fn(),
-  warnSpy: vi.fn(),
-  transportOnSpy: vi.fn()
+  searchIndexWriterGetFilePersistencePortSpy: vi.fn(() => null),
+  searchIndexWriterShutdownSpy: vi.fn(async () => undefined),
+  transportOnSpy: vi.fn(),
+  warnSpy: vi.fn()
 }))
 
 interface SearchCoreTraceHarness {
@@ -145,11 +162,33 @@ vi.mock('../../storage', () => ({
   storageModule: {},
   getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
   isMainStorageReady: vi.fn(() => false),
-  subscribeMainConfig: vi.fn(() => () => {})
+  subscribeMainConfig: vi.fn(() => () => {}),
+  OnboardingGateError: class OnboardingGateError extends Error {
+    constructor(
+      readonly decision: {
+        state: 'blocked' | 'degraded'
+        reason: string
+        recoverable: boolean
+      }
+    ) {
+      super(decision.reason)
+    }
+  },
+  onboardingGate: {
+    evaluate: vi.fn(() => ({ state: 'allowed' })),
+    waitForDecision: vi.fn(async () => ({ state: 'allowed' })),
+    subscribe: vi.fn(() => () => {})
+  }
 }))
 
 vi.mock('../addon/apps/app-provider', () => ({
-  appProvider: { id: 'app-provider', type: 'app', onSearch: vi.fn() }
+  appProvider: {
+    id: 'app-provider',
+    type: 'app',
+    onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: appProviderPrepareForShutdownSpy,
+    setIndexedSourceRuntimeDelegate: appProviderSetRuntimeDelegateSpy
+  }
 }))
 vi.mock('../addon/files/everything-provider', () => ({
   everythingProvider: { id: 'everything-provider', type: 'file', onSearch: vi.fn() }
@@ -159,6 +198,9 @@ vi.mock('../addon/files/file-provider', () => ({
     id: 'file-provider',
     type: 'file',
     onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: fileProviderPrepareForShutdownSpy,
+    setFilePersistencePort: fileProviderSetPersistencePortSpy,
+    setIndexedSourceRuntimeMutationDelegate: fileProviderSetMutationDelegateSpy,
     setIndexedSourceRuntimeResetDelegate: fileProviderSetResetDelegateSpy
   }
 }))
@@ -202,6 +244,15 @@ vi.mock('./search-index-service', () => ({
   SearchIndexService: class {
     warmup = vi.fn(async () => {})
     preloadPinyin = vi.fn()
+  }
+}))
+
+vi.mock('./search-index-writer', () => ({
+  LegacySearchIndexWriter: class {},
+  SourceScopedIndexWriterRouter: class {},
+  searchIndexWriter: {
+    getFilePersistencePort: searchIndexWriterGetFilePersistencePortSpy,
+    shutdown: searchIndexWriterShutdownSpy
   }
 }))
 
@@ -273,8 +324,27 @@ vi.mock('talex-mica-electron', () => ({
   useMicaElectron: vi.fn()
 }))
 
+type SearchEngineCoreInstance = InstanceType<typeof import('./search-core').SearchEngineCore>
+type TouchEventModule = typeof import('../../../core/eventbus/touch-event')
+
+let TalexEvents: TouchEventModule['TalexEvents']
+let touchEventBus: TouchEventModule['touchEventBus']
+let testCore: SearchEngineCoreInstance
+let destroyPromise: Promise<void> | undefined
+
+const destroyTestCore = async (): Promise<void> => {
+  destroyPromise ??= testCore.destroy()
+  await destroyPromise
+}
+
 describe('search-core search-trace', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    ;({ TalexEvents, touchEventBus } = await import('../../../core/eventbus/touch-event'))
+    const { SearchEngineCore } = await import('./search-core')
+    testCore = SearchEngineCore.getInstance()
+    destroyPromise = undefined
+
     infoSpy.mockClear()
     warnSpy.mockClear()
     sentryServiceMock.isTelemetryEnabled.mockReturnValue(false)
@@ -282,9 +352,20 @@ describe('search-core search-trace', () => {
     sentryServiceMock.queueNexusTelemetry.mockClear()
     sentryServiceMock.recordSearchMetrics.mockClear()
     transportOnSpy.mockClear()
+    appProviderPrepareForShutdownSpy.mockClear()
+    appProviderSetRuntimeDelegateSpy.mockClear()
+    fileProviderPrepareForShutdownSpy.mockClear()
+    fileProviderSetMutationDelegateSpy.mockClear()
+    fileProviderSetPersistencePortSpy.mockClear()
     fileProviderSetResetDelegateSpy.mockClear()
+    searchIndexWriterGetFilePersistencePortSpy.mockClear()
+    searchIndexWriterShutdownSpy.mockClear()
     vi.mocked(touchEventBus.on).mockClear()
     vi.mocked(touchEventBus.off).mockClear()
+  })
+
+  afterEach(async () => {
+    await destroyTestCore()
   })
 
   it('routes file system events through the indexed source runtime bridge', async () => {
@@ -310,17 +391,30 @@ describe('search-core search-trace', () => {
       failedDeltas: 0,
       errors: []
     }))
-    const core = SearchEngineCore.getInstance() as unknown as {
+    const core = testCore as unknown as {
       indexingRuntime: {
         routeWatchEventWithResult: typeof routeWatchEventWithResult
         getSource: typeof getSource
         reconcileSource: typeof reconcileSource
+        beginShutdown: () => void
+        abortAndDrainSourceScans: (sourceId: string) => Promise<void>
+        drainAdmittedTasks: () => Promise<void>
+        drainSourceMutations: (sourceId: string) => Promise<void>
         clear: () => void
       }
       indexedSourceEventRouter: { subscribe: () => void }
       destroy: () => void
     }
-    core.indexingRuntime = { routeWatchEventWithResult, getSource, reconcileSource, clear: vi.fn() }
+    core.indexingRuntime = {
+      routeWatchEventWithResult,
+      getSource,
+      reconcileSource,
+      beginShutdown: vi.fn(),
+      abortAndDrainSourceScans: vi.fn(async () => undefined),
+      drainAdmittedTasks: vi.fn(async () => undefined),
+      drainSourceMutations: vi.fn(async () => undefined),
+      clear: vi.fn()
+    }
 
     core.indexedSourceEventRouter.subscribe()
 
@@ -384,7 +478,7 @@ describe('search-core search-trace', () => {
       })
     )
 
-    core.destroy()
+    await destroyTestCore()
     expect(fileProviderSetResetDelegateSpy).toHaveBeenCalledWith(null)
     expect(touchEventBus.off).toHaveBeenCalledWith(TalexEvents.FILE_ADDED, expect.any(Function))
     expect(touchEventBus.off).toHaveBeenCalledWith(TalexEvents.FILE_CHANGED, expect.any(Function))
@@ -401,7 +495,7 @@ describe('search-core search-trace', () => {
       inputs: [{ type: TuffInputType.Text, content: 'clipboard payload' }]
     }
 
-    const core = SearchEngineCore.getInstance() as unknown as SearchCoreTraceHarness
+    const core = testCore as unknown as SearchCoreTraceHarness
     core.logSearchTrace({
       event: 'session.start',
       sessionId: 'session-trace-test',
@@ -431,7 +525,7 @@ describe('search-core search-trace', () => {
 
   it('搜索 telemetry 上报 provider 状态与首屏耗时且不包含 query 明文', () => {
     sentryServiceMock.isTelemetryEnabled.mockReturnValue(true)
-    const core = SearchEngineCore.getInstance() as unknown as SearchCoreTraceHarness
+    const core = testCore as unknown as SearchCoreTraceHarness
     const query: TuffQuery = {
       text: 'private search text',
       inputs: [{ type: TuffInputType.Text, content: 'clipboard payload' }]
@@ -495,7 +589,7 @@ describe('search-core search-trace', () => {
   })
 
   it('注册统一 indexing diagnostics transport handler', async () => {
-    const core = SearchEngineCore.getInstance()
+    const core = testCore
     core.init({
       app: {
         channel: {

@@ -144,7 +144,10 @@ describe("IndexedSourceResetExecutorService", () => {
 
   it("normalizes malformed reset row counts from clear operations", async () => {
     const { executor } = createExecutor({
-      clearSearchIndex: async () => ({ cleared: true, rows: Number.POSITIVE_INFINITY }),
+      clearSearchIndex: async () => ({
+        cleared: true,
+        rows: Number.POSITIVE_INFINITY,
+      }),
       clearScanProgress: async () => ({ cleared: true, rows: -4.5 }),
     });
 

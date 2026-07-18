@@ -1,8 +1,8 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type {
-  PersistAndIndexSummary,
-  PersistEntry
-} from '../../../search-engine/workers/search-index-worker-client'
+  FilePersistenceEntry,
+  PersistEntriesSummary
+} from '../../../search-engine/search-index-writer'
 import {
   buildIndexedWriteFlushFailureSnapshot,
   buildIndexedWriteFlushFailureRetryMetadata,
@@ -35,9 +35,10 @@ export interface FileProviderIndexRuntimeServiceDeps {
   getInflightResults: () => Map<number, IndexWorkerFileResult>
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   getSearchIndexWorker: () => {
-    persistAndIndex: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
+    persistEntries: (entries: FilePersistenceEntry[]) => Promise<PersistEntriesSummary>
   }
-  buildPersistEntries: (entries: IndexWorkerFileResult[]) => PersistEntry[]
+  buildPersistEntries: (entries: IndexWorkerFileResult[]) => FilePersistenceEntry[]
+  publishRecords: (entries: IndexWorkerFileResult[]) => Promise<number>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   config?: {
@@ -57,6 +58,7 @@ export class FileProviderIndexRuntimeService {
   private readonly ensureSearchIndexWorkerReady: FileProviderIndexRuntimeServiceDeps['ensureSearchIndexWorkerReady']
   private readonly getSearchIndexWorker: FileProviderIndexRuntimeServiceDeps['getSearchIndexWorker']
   private readonly buildPersistEntries: FileProviderIndexRuntimeServiceDeps['buildPersistEntries']
+  private readonly publishRecords: FileProviderIndexRuntimeServiceDeps['publishRecords']
   private readonly logDebug: FileProviderIndexRuntimeServiceDeps['logDebug']
   private readonly logWarn: FileProviderIndexRuntimeServiceDeps['logWarn']
   private readonly config: Required<NonNullable<FileProviderIndexRuntimeServiceDeps['config']>>
@@ -79,6 +81,7 @@ export class FileProviderIndexRuntimeService {
     this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
     this.getSearchIndexWorker = deps.getSearchIndexWorker
     this.buildPersistEntries = deps.buildPersistEntries
+    this.publishRecords = deps.publishRecords
     this.logDebug = deps.logDebug
     this.logWarn = deps.logWarn
     this.bufferService = new FileProviderIndexFlushBufferService(
@@ -115,6 +118,7 @@ export class FileProviderIndexRuntimeService {
       ensureSearchIndexWorkerReady: this.ensureSearchIndexWorkerReady,
       getSearchIndexWorker: this.getSearchIndexWorker,
       buildPersistEntries: this.buildPersistEntries,
+      publishRecords: this.publishRecords,
       logDebug: this.logDebug,
       config: {
         dbBackpressureMaxQueued: this.config.dbBackpressureMaxQueued

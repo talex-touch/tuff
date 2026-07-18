@@ -15,6 +15,8 @@ const fileProviderMock = vi.hoisted(() => ({
   getPendingWatchPermissionPaths: vi.fn(),
   ownsWatchPath: vi.fn(),
   scanIndexedSource: vi.fn(),
+  streamIndexedSourceSnapshot: vi.fn(),
+  drainIndexedSourceMutations: vi.fn(),
   reconcileIndexedSource: vi.fn(),
   handleIndexedSourceWatchEvent: vi.fn(),
   resetIndexedSourceRuntimeState: vi.fn(),
@@ -63,6 +65,8 @@ describe('fileIndexedSource', () => {
     fileProviderMock.getPendingWatchPermissionPaths.mockReturnValue([])
     fileProviderMock.ownsWatchPath.mockReturnValue(true)
     fileProviderMock.scanIndexedSource.mockResolvedValue(null)
+    fileProviderMock.streamIndexedSourceSnapshot.mockImplementation(async function* () {})
+    fileProviderMock.drainIndexedSourceMutations.mockResolvedValue(undefined)
     fileProviderMock.reconcileIndexedSource.mockResolvedValue({
       sourceId: 'file-provider',
       added: 0,
@@ -254,13 +258,13 @@ describe('fileIndexedSource', () => {
     ])
   })
 
-  it('yields FileProvider scan batches to the runtime store boundary', async () => {
+  it('streams the first committed FileProvider batch before the scan completes', async () => {
     const source = buildFileIndexedSource()
     const request = {
       sourceId: 'file-provider',
       reason: IndexedSourceScanReasons.Scheduled
     }
-    const scanBatch: IndexedSourceRecordBatch = {
+    const firstBatch: IndexedSourceRecordBatch = {
       sourceId: 'file-provider',
       records: [
         {
@@ -271,39 +275,101 @@ describe('fileIndexedSource', () => {
           title: 'a.md',
           path: '/Users/demo/Documents/a.md'
         }
-      ],
+      ]
+    }
+    const secondBatch: IndexedSourceRecordBatch = {
+      sourceId: 'file-provider',
+      records: [],
       done: true
     }
-    fileProviderMock.scanIndexedSource.mockResolvedValue({
-      batches: [scanBatch]
-    })
+    const finishScan = Promise.withResolvers<void>()
+    fileProviderMock.scanIndexedSource.mockImplementation(
+      async (
+        _request: unknown,
+        options: { onRecordBatch: (batch: IndexedSourceRecordBatch) => Promise<void> }
+      ) => {
+        await options.onRecordBatch(firstBatch)
+        await finishScan.promise
+        await options.onRecordBatch(secondBatch)
+        return { batches: [] }
+      }
+    )
 
-    const batches: IndexedSourceRecordBatch[] = []
-    for await (const batch of source.scan(request)) {
-      batches.push(batch)
-    }
+    const iterator = source.scan(request)[Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({ value: firstBatch, done: false })
+    expect(fileProviderMock.scanIndexedSource).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'file-provider' }),
+      expect.objectContaining({ throwOnFailure: true })
+    )
 
-    expect(batches).toEqual([scanBatch])
-    expect(fileProviderMock.scanIndexedSource).toHaveBeenCalledWith(request)
+    finishScan.resolve()
+    await expect(iterator.next()).resolves.toEqual({ value: secondBatch, done: false })
+    await expect(iterator.next()).resolves.toEqual({ value: undefined, done: true })
   })
 
-  it('keeps empty done scan batches so the runtime store can observe completion', async () => {
+  it('aborts and settles the FileProvider producer when a consumer returns early', async () => {
+    const source = buildFileIndexedSource()
+    const request = { sourceId: 'file-provider', reason: IndexedSourceScanReasons.Scheduled }
+    const batch: IndexedSourceRecordBatch = { sourceId: 'file-provider', records: [] }
+    let producerSignal: AbortSignal | undefined
+    fileProviderMock.scanIndexedSource.mockImplementation(
+      async (
+        providerRequest: { signal?: AbortSignal },
+        options: { onRecordBatch: (batch: IndexedSourceRecordBatch) => Promise<void> }
+      ) => {
+        producerSignal = providerRequest.signal
+        await options.onRecordBatch(batch)
+        await new Promise<void>((resolve) =>
+          producerSignal?.addEventListener('abort', () => resolve(), { once: true })
+        )
+        return { batches: [] }
+      }
+    )
+
+    const iterator = source.scan(request)[Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({ value: batch, done: false })
+    await expect(iterator.return?.()).resolves.toEqual({ value: undefined, done: true })
+    expect(producerSignal?.aborted).toBe(true)
+  })
+
+  it('propagates a FileProvider scan failure without yielding a terminal batch', async () => {
+    const source = buildFileIndexedSource()
+    const scanError = new Error('file scan failed')
+    fileProviderMock.scanIndexedSource.mockRejectedValue(scanError)
+
+    const iterator = source
+      .scan({ sourceId: 'file-provider', reason: IndexedSourceScanReasons.Scheduled })
+      [Symbol.asyncIterator]()
+
+    await expect(iterator.next()).rejects.toThrow('file scan failed')
+  })
+
+  it('replays every FileProvider SchemaMigration snapshot batch without starting a scan', async () => {
     const source = buildFileIndexedSource()
     const request = {
       sourceId: 'file-provider',
-      reason: IndexedSourceScanReasons.Scheduled
+      reason: IndexedSourceScanReasons.SchemaMigration
     }
-    const emptyBatch: IndexedSourceRecordBatch = {
+    const firstBatch: IndexedSourceRecordBatch = {
       sourceId: 'file-provider',
-      records: []
+      records: [
+        {
+          sourceId: 'file-provider',
+          recordId: '/tmp/a.txt',
+          stableKey: '/tmp/a.txt',
+          kind: 'file',
+          title: 'a.txt'
+        }
+      ]
     }
     const doneBatch: IndexedSourceRecordBatch = {
       sourceId: 'file-provider',
       records: [],
       done: true
     }
-    fileProviderMock.scanIndexedSource.mockResolvedValue({
-      batches: [emptyBatch, doneBatch]
+    fileProviderMock.streamIndexedSourceSnapshot.mockImplementation(async function* () {
+      yield firstBatch
+      yield doneBatch
     })
 
     const batches: IndexedSourceRecordBatch[] = []
@@ -311,7 +377,9 @@ describe('fileIndexedSource', () => {
       batches.push(batch)
     }
 
-    expect(batches).toEqual([doneBatch])
+    expect(batches).toEqual([firstBatch, doneBatch])
+    expect(fileProviderMock.streamIndexedSourceSnapshot).toHaveBeenCalledWith(request)
+    expect(fileProviderMock.scanIndexedSource).not.toHaveBeenCalled()
   })
 
   it('delegates reconcile and watch lifecycle to FileProvider', async () => {
@@ -356,6 +424,18 @@ describe('fileIndexedSource', () => {
     ).toBe(false)
     expect(fileProviderMock.ownsWatchPath).toHaveBeenCalledWith('/Users/demo/Documents')
     expect(fileProviderMock.ownsWatchPath).toHaveBeenCalledWith('/Applications')
+  })
+  it('delegates source mutation drain with the scheduler lease', async () => {
+    const source = buildFileIndexedSource()
+
+    await expect(
+      source.drainMutations?.({ leaseId: 'file-provider:0:1', reason: 'scan' })
+    ).resolves.toBeUndefined()
+
+    expect(fileProviderMock.drainIndexedSourceMutations).toHaveBeenCalledWith(
+      'indexed-source.scan',
+      'file-provider:0:1'
+    )
   })
 
   it('delegates runtime reset lifecycle to FileProvider', async () => {

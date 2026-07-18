@@ -74,7 +74,23 @@ vi.mock('../../storage', () => ({
   storageModule: {},
   getMainConfig: vi.fn(() => appSettingsMock.value),
   isMainStorageReady: vi.fn(() => false),
-  subscribeMainConfig: vi.fn(() => () => {})
+  subscribeMainConfig: vi.fn(() => () => {}),
+  OnboardingGateError: class OnboardingGateError extends Error {
+    constructor(
+      readonly decision: {
+        state: 'blocked' | 'degraded'
+        reason: string
+        recoverable: boolean
+      }
+    ) {
+      super(decision.reason)
+    }
+  },
+  onboardingGate: {
+    evaluate: vi.fn(() => ({ state: 'allowed' })),
+    waitForDecision: vi.fn(async () => ({ state: 'allowed' })),
+    subscribe: vi.fn(() => () => {})
+  }
 }))
 
 vi.mock('../addon/apps/app-provider', () => ({
@@ -82,7 +98,9 @@ vi.mock('../addon/apps/app-provider', () => ({
     id: 'app-provider',
     type: 'app',
     supportedInputTypes: [TuffInputType.Text],
-    onSearch: vi.fn()
+    onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: vi.fn(async () => undefined),
+    setIndexedSourceRuntimeDelegate: vi.fn()
   }
 }))
 
@@ -103,8 +121,11 @@ vi.mock('../addon/files/file-provider', () => ({
     type: 'file',
     supportedInputTypes: [TuffInputType.Text, TuffInputType.Files],
     onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: vi.fn(async () => undefined),
     hasSearchFilters: fileHasSearchFiltersMock,
     buildStartupDegradedNotice: fileStartupNoticeMock,
+    setFilePersistencePort: vi.fn(),
+    setIndexedSourceRuntimeMutationDelegate: vi.fn(),
     setIndexedSourceRuntimeResetDelegate: vi.fn()
   }
 }))
@@ -662,10 +683,10 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
     expect(enabled.cacheKey).not.toBe(disabled.cacheKey)
   })
 
-  it('destroys registered providers during search engine destroy', () => {
+  it('destroys registered providers during search engine destroy', async () => {
     const core = SearchEngineCore.getInstance() as unknown as {
       registerProvider: (provider: (typeof MOCK_PROVIDERS)[number]) => void
-      destroy: () => void
+      destroy: () => Promise<void>
     }
 
     core.registerProvider({
@@ -676,7 +697,7 @@ describe('search-core regression baseline (roadmap 06-C)', () => {
       onDestroy: providerDestroyMock
     } as unknown as (typeof MOCK_PROVIDERS)[number])
 
-    core.destroy()
+    await core.destroy()
 
     expect(providerDestroyMock).toHaveBeenCalledTimes(1)
   })

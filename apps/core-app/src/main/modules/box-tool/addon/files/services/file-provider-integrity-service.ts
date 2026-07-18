@@ -1,7 +1,6 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../../../../db/schema'
 import type { IndexedSourceResetReason, IndexedSourceResetResult } from '@talex-touch/utils/search'
-import type { SearchIndexWorkerClient } from '../../../search-engine/workers/search-index-worker-client'
 import {
   IndexedSourceIntegrityService,
   IndexedSourceResetReasons,
@@ -27,14 +26,18 @@ export interface FileProviderIntegritySnapshot {
 
 export interface FileProviderIntegrityServiceDeps {
   sourceId: string
-  countSearchIndexByProvider: (providerId: string, reason: string) => Promise<number>
+  countSearchIndexByProvider: (
+    providerId: string,
+    reason: string,
+    mutationLeaseId?: string
+  ) => Promise<number>
   resetRuntimeState: (request: {
     reason: Extract<IndexedSourceResetReason, typeof IndexedSourceResetReasons.IntegrityRepair>
     clearSearchIndex: boolean
     clearScanProgress: boolean
   }) => Promise<IndexedSourceResetResult>
   logInfo: (message: string, meta?: Record<string, unknown>) => void
-  searchIndexWorker: SearchIndexWorkerClient
+  cleanupSource: (sourceId: string, mutationLeaseId?: string) => Promise<number | unknown>
 }
 
 export class FileProviderIntegrityService {
@@ -42,20 +45,27 @@ export class FileProviderIntegrityService {
   private readonly countSearchIndexByProvider: FileProviderIntegrityServiceDeps['countSearchIndexByProvider']
   private readonly resetRuntimeState: FileProviderIntegrityServiceDeps['resetRuntimeState']
   private readonly logInfo: FileProviderIntegrityServiceDeps['logInfo']
-  private readonly searchIndexWorker: SearchIndexWorkerClient
+  private readonly cleanupSource: FileProviderIntegrityServiceDeps['cleanupSource']
 
   constructor(deps: FileProviderIntegrityServiceDeps) {
     this.sourceId = deps.sourceId
     this.countSearchIndexByProvider = deps.countSearchIndexByProvider
     this.resetRuntimeState = deps.resetRuntimeState
     this.logInfo = deps.logInfo
-    this.searchIndexWorker = deps.searchIndexWorker
+    this.cleanupSource = deps.cleanupSource
   }
 
-  async check(db: LibSQLDatabase<typeof schema>): Promise<FileProviderIntegritySnapshot> {
+  async check(
+    db: LibSQLDatabase<typeof schema>,
+    options: { repair?: boolean; mutationLeaseId?: string } = {}
+  ): Promise<FileProviderIntegritySnapshot> {
     this.logInfo('Running cross-table integrity check')
 
-    const ftsCount = await this.countSearchIndexByProvider(this.sourceId, 'integrity.count')
+    const ftsCount = await this.countSearchIndexByProvider(
+      this.sourceId,
+      'integrity.count',
+      options.mutationLeaseId
+    )
     await yieldToEventLoop()
 
     const fileCountResult = await db
@@ -81,14 +91,15 @@ export class FileProviderIntegrityService {
           clearScanProgress: request.clearScanProgress
         })
       },
-      cleanupOrphanedRecords: () => this.removeOrphanedKeywords(db),
+      cleanupOrphanedRecords: () => this.removeOrphanedKeywords(db, options.mutationLeaseId),
       now: () => Date.now()
     })
     const snapshot = await integrity.check({
       sourceId: this.sourceId,
       indexedRows: ftsCount,
       sourceRows: filesCount,
-      resetReason: IndexedSourceResetReasons.IntegrityRepair
+      resetReason: IndexedSourceResetReasons.IntegrityRepair,
+      repair: options.repair
     })
 
     const fileSnapshot = renameIndexedSourceIntegrityAdapterSnapshotFields(
@@ -111,26 +122,16 @@ export class FileProviderIntegrityService {
     return fileSnapshot
   }
 
-  private async removeOrphanedKeywords(db: LibSQLDatabase<typeof schema>): Promise<number> {
+  private async removeOrphanedKeywords(
+    _db: LibSQLDatabase<typeof schema>,
+    mutationLeaseId?: string
+  ): Promise<number> {
     await yieldToEventLoop()
-    const orphanedKeywords = await db.all<{ cnt: number }>(sql`
-      SELECT count(*) as cnt FROM keyword_mappings km
-      WHERE km.provider_id = ${this.sourceId}
-        AND km.item_id NOT IN (
-          SELECT item_id FROM search_index WHERE provider = ${this.sourceId}
-        )
-    `)
-    await yieldToEventLoop()
-    const orphanCount = orphanedKeywords[0]?.cnt ?? 0
-    if (orphanCount === 0) {
-      return 0
-    }
-
-    this.logInfo(`Removing ${orphanCount} orphaned keyword_mappings entries`)
-    // Phase 3: Delegate keyword cleanup to worker (single-writer architecture)
-    const deletedCount = await this.searchIndexWorker.cleanupOrphanKeywords(this.sourceId)
-
-    return deletedCount
+    const cleanup = await this.cleanupSource(this.sourceId, mutationLeaseId)
+    if (typeof cleanup === 'number') return cleanup
+    return cleanup && typeof cleanup === 'object' && 'removedOrphanedKeywords' in cleanup
+      ? Number(cleanup.removedOrphanedKeywords) || 0
+      : 0
   }
 }
 

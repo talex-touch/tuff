@@ -27,6 +27,10 @@ export interface FileProviderIncrementalWriteResult<TInserted, TUpdated> {
   }
 }
 
+export interface FileProviderIncrementalWriteOptions {
+  dispatchSideEffects?: boolean
+}
+
 export interface FileProviderIncrementalWriteServiceDeps<
   TRecord extends FileProviderIncrementalFileRecord,
   TExisting extends FileProviderIncrementalExistingFileRecord,
@@ -37,8 +41,14 @@ export interface FileProviderIncrementalWriteServiceDeps<
   normalizePath: (filePath: string) => string
   buildRecord: (rawPath: string, options: { manualForce: boolean }) => Promise<TRecord | null>
   getExistingRows: (paths: string[]) => Promise<TExisting[]>
-  insertRecords: (records: TRecord[]) => Promise<TInserted[]>
-  updateRecords: (records: FileProviderIncrementalUpdateRecord[]) => Promise<TUpdated[]>
+  insertRecords: (
+    records: TRecord[],
+    options: FileProviderIncrementalWriteOptions
+  ) => Promise<TInserted[]>
+  updateRecords: (
+    records: FileProviderIncrementalUpdateRecord[],
+    options: FileProviderIncrementalWriteOptions
+  ) => Promise<TUpdated[]>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   logInfo: (message: string, meta?: Record<string, unknown>) => void
 }
@@ -112,7 +122,8 @@ export class FileProviderIncrementalWriteService<
   }
 
   async execute(
-    entries: FileProviderIncrementalChangeEntry[]
+    entries: FileProviderIncrementalChangeEntry[],
+    options: FileProviderIncrementalWriteOptions = {}
   ): Promise<FileProviderIncrementalWriteResult<TInserted, TUpdated>> {
     const manualContext = buildIndexedWriteManualContext(entries, this.normalizePath)
 
@@ -143,14 +154,16 @@ export class FileProviderIncrementalWriteService<
 
     const inserted =
       writePlan.filesToInsert.length > 0
-        ? await this.insertRecords(writePlan.filesToInsert as TRecord[])
+        ? await this.insertRecords(writePlan.filesToInsert as TRecord[], options)
         : []
     if (inserted.length > 0) {
       this.logDebug('Incremental index completed', { inserted: inserted.length })
     }
 
     const updated =
-      writePlan.filesToUpdate.length > 0 ? await this.updateRecords(writePlan.filesToUpdate) : []
+      writePlan.filesToUpdate.length > 0
+        ? await this.updateRecords(writePlan.filesToUpdate, options)
+        : []
     if (writePlan.filesToUpdate.length > 0) {
       this.logDebug('Incremental update completed', { updated: writePlan.filesToUpdate.length })
     }

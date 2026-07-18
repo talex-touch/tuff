@@ -190,31 +190,31 @@ Treat this as P2 and begin only after R1-R4 ownership boundaries are stable.
 ## Completed Audit Baseline
 
 - [x] The current-state architecture map names the main runtime/data boundaries
-  and traces search across them.
+      and traces search across them.
 - [x] The audit covers correctness, concurrency/lifecycle, persistence,
-  performance, security/trust boundaries, extensibility, and observability.
+      performance, security/trust boundaries, extensibility, and observability.
 - [x] Every high-severity finding cites current source, tests, configuration, or
-  reproducible repository evidence.
+      reproducible repository evidence.
 - [x] Findings distinguish verified defects, high-confidence risks, and unknowns
-  that still require runtime measurement.
+      that still require runtime measurement.
 - [x] The audit report includes prioritized remediation phases and targeted
-  validation recommendations.
+      validation recommendations.
 - [x] The audit changed no product source files and preserved pre-existing user
-  changes.
+      changes.
 
 ## Parent Task Map
 
 After review, create these independently verifiable child tasks. Dependencies
 listed here must be copied into each child PRD and implementation plan.
 
-| Proposed child | Priority | Explicit dependency |
-| --- | --- | --- |
-| `contain-plugin-window-boundary` | P0 | None; execute first for release safety. |
-| `serialize-search-gather-updates` | P1 | None; complete before search stream/session migration. |
-| `scope-search-sessions-and-streams` | P1 | Depends on `serialize-search-gather-updates`. |
-| `gate-search-on-storage-hydration` | P1 | None; must finish before enabling changed automatic indexing startup. |
-| `establish-single-search-index-writer` | P1 | Storage gate required before production enablement; implementation can be developed independently. |
-| `unify-search-provider-lifecycle` | P2 | Depends on stable session, storage, and index ownership from the preceding P1 children. |
+| Proposed child                         | Priority | Explicit dependency                                                                                |
+| -------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `contain-plugin-window-boundary`       | P0       | None; execute first for release safety.                                                            |
+| `serialize-search-gather-updates`      | P1       | None; complete before search stream/session migration.                                             |
+| `scope-search-sessions-and-streams`    | P1       | Depends on `serialize-search-gather-updates`.                                                      |
+| `gate-search-on-storage-hydration`     | P1       | None; must finish before enabling changed automatic indexing startup.                              |
+| `establish-single-search-index-writer` | P1       | Storage gate required before production enablement; implementation can be developed independently. |
+| `unify-search-provider-lifecycle`      | P2       | Depends on stable session, storage, and index ownership from the preceding P1 children.            |
 
 The parent owns the final concurrent-search, packaged-startup, permission,
 SQLite ownership, and cross-child regression review.
@@ -223,31 +223,31 @@ SQLite ownership, and cross-child regression review.
 
 - [x] The user approved the D1 hard-cut plugin compatibility policy.
 - [x] The user reviews and approves the parent artifacts and the first child's
-  converged artifacts before any implementation task is started.
+      converged artifacts before any implementation task is started.
 - [x] Child tasks are created with the explicit dependencies and acceptance
-  criteria from this parent; only the child owning the next deliverable is
-  started.
+      criteria from this parent; only the child owning the next deliverable is
+      started.
 - [ ] R0 acceptance: privileged window events are permission-enforced, remote
-  content cannot run in the compatibility profile, reflective member invocation
-  is removed, and trusted candidates use hardened preferences.
-- [ ] R1 acceptance: concurrent CoreBox and AI searches retain independent
-  session ids, controllers, activation contexts, cache envelopes, and sinks.
+      content cannot run in the compatibility profile, reflective member invocation
+      is removed, and trusted candidates use hardened preferences.
+- [x] R1 acceptance: concurrent CoreBox and AI searches retain independent
+      session ids, controllers, activation contexts, cache envelopes, and sinks.
 - [ ] R2 acceptance: a delayed async update consumer proves that every update
-  settles before completion, including late-fast and cancellation paths.
-- [ ] R3 acceptance: instrumentation and tests prove one FTS mutation origin per
-  provider/item change, one DDL owner, and single-flight initialization.
-- [ ] R4 acceptance: pending or failed storage blocks consent-sensitive indexing
-  and CoreBox activation until a real onboarding decision is available.
+      settles before completion, including late-fast and cancellation paths.
+- [x] R3 acceptance: instrumentation and tests prove one FTS mutation origin per
+      provider/item change, one DDL owner, and single-flight initialization.
+- [x] R4 acceptance: pending or failed storage blocks consent-sensitive indexing
+      and CoreBox activation until a real onboarding decision is available.
 - [ ] R5 acceptance: failed load, unload/reload, shutdown, and provider health
-  transitions are explicit and leave no registered listener, timer, poller, or
-  worker behind.
-- [ ] Progressive-index acceptance: while a first App/File scan is still
-  running, an unchanged visible CoreBox query observes a newly committed matching
-  record within one second, receives a final replacement snapshot at completion,
-  and never restarts or cancels AI/background callers.
+      transitions are explicit and leave no registered listener, timer, poller, or
+      worker behind.
+- [x] Progressive-index acceptance: while a first App/File scan is still
+      running, an unchanged visible CoreBox query observes a newly committed matching
+      record within one second, receives a final replacement snapshot at completion,
+      and never restarts or cancels AI/background callers.
 - [ ] Parent integration acceptance: targeted tests, CoreApp type-check, packaged
-  cold-start, concurrent UI/AI search, and SQLite preflight/simulation evidence
-  pass without modifying unrelated work.
+      cold-start, concurrent UI/AI search, and SQLite preflight/simulation evidence
+      pass without modifying unrelated work.
 
 ## Out of Scope
 

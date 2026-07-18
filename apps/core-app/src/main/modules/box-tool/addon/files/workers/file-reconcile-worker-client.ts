@@ -104,6 +104,14 @@ export class FileReconcileWorkerClient {
   }
 
   shutdown(): void {
+    const error = new Error('FILE_RECONCILE_WORKER_CLOSED')
+    for (const pending of this.pending.values()) pending.reject(error)
+    this.pending.clear()
+    for (const pending of this.metricsPending.values()) {
+      clearTimeout(pending.timeout)
+      pending.resolve(null)
+    }
+    this.metricsPending.clear()
     this.terminateWorker()
   }
 

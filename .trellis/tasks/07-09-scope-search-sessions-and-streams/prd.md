@@ -20,27 +20,26 @@ query refreshes as first-run index batches commit.
 
 ## Background
 
-- `SearchEngineCore` owns one activated-provider state, gather controller,
-  latest session id, and last query at
-  `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:152`.
-- A new search aborts the current global gather at
-  `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:1297`.
-- Updates are delivered through current-window lookup at
-  `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:1507`
-  and
-  `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:1674`.
-- AI agents call the same singleton directly at
-  `apps/core-app/src/main/modules/ai/agents/builtin/search-agent.ts:209`.
-- Cache lookup can reuse an old session id at
-  `apps/core-app/src/main/modules/box-tool/search-engine/search-core.ts:1222`,
-  and cancellation does not verify the requested id.
-- The query event advertises streaming, but renderers use invoke plus global
-  update/end listeners at `packages/utils/transport/events/index.ts:1133` and
-  `apps/core-app/src/renderer/src/modules/box/adapter/hooks/useSearch.ts:852`.
-- `useSearch.ts` starts queries on input/window events and has no index-commit
-  subscription; later App/File commits cannot refresh an unchanged query.
-- Existing renderer updates merge append-only, so they cannot provide the full
-  replacement and reordering semantics required by a fresh index generation.
+- `SearchEngineCore` still owns one `currentGatherController`, `latestSessionId`,
+  `lastSearchQuery`, mutable provider activation map, and current-window delivery.
+- Starting any search aborts that global gather, so the AI Search Agent and UI
+  callers can cancel or inherit state from one another.
+- `cancelSearch(searchId)` aborts the single current controller without proving
+  that the requested id owns it.
+- Cache entries retain the prior result object and session id; identical cache
+  hits can therefore reuse trace identity.
+- CoreBox and ApplicationIndex use invoke for the initial result plus global
+  `search.update` / `search.end` listeners. Updates can arrive before invoke
+  establishes `currentSearchId`, requiring pending maps and allowing another
+  renderer window to observe traffic not addressed to it.
+- `CoreBoxEvents.search.query` advertises stream capability, but its response is
+  still typed as a single `TuffSearchResult`; no typed request-owned stream
+  contract exists.
+- The archived `07-09-progressive-corebox-index-search` child already delivered
+  commit-driven bounded refresh, full snapshot replacement, selection
+  preservation, transient-hint removal, and lifecycle cleanup. Those completed
+  requirements remain part of this task's integrated acceptance but are not
+  reimplemented here.
 
 ## Requirements
 
@@ -75,25 +74,25 @@ query refreshes as first-run index batches commit.
 
 ## Acceptance Criteria
 
-- [ ] Concurrent CoreBox and AI queries both complete without cross-cancellation,
+- [x] Concurrent CoreBox and AI queries both complete without cross-cancellation,
   UI activation inheritance, or renderer leakage.
-- [ ] Two renderer windows receive only their own snapshots, updates, and
+- [x] Two renderer windows receive only their own snapshots, updates, and
   completion.
-- [ ] Every request, including identical cache hits, has a new session id and
+- [x] Every request, including identical cache hits, has a new session id and
   trace identity.
-- [ ] Cancelling a stale id cannot cancel a newer request.
-- [ ] The first stream chunk establishes session id before any update/completion
+- [x] Cancelling a stale id cannot cancel a newer request.
+- [x] The first stream chunk establishes session id before any update/completion
   processing, eliminating pending-update maps required by invoke ordering.
-- [ ] Renderer unmount or stream cancellation aborts only its session.
-- [ ] No search delivery references `windowManager.current` or a single global
+- [x] Renderer unmount or stream cancellation aborts only its session.
+- [x] No search delivery references `windowManager.current` or a single global
   gather controller.
-- [ ] Existing ranking/provider behavior remains unchanged outside explicit
+- [x] Existing ranking/provider behavior remains unchanged outside explicit
   caller activation context.
-- [ ] During an unfinished first App/File scan, a stable CoreBox query displays a
+- [x] During an unfinished first App/File scan, a stable CoreBox query displays a
   newly committed matching item within one second without text edits.
-- [ ] Generation refresh replaces and reorders the snapshot, preserves selection
+- [x] Generation refresh replaces and reorders the snapshot, preserves selection
   by item id, and performs exactly one final refresh after completion.
-- [ ] Transient CoreBox searching, recommendation warm-up, and indexing hints are
+- [x] Transient CoreBox searching, recommendation warm-up, and indexing hints are
   absent while terminal no-result behavior remains available.
 
 ## Out of Scope

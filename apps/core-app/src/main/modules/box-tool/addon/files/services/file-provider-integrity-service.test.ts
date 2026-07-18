@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { IndexedSourceResetReasons } from '@talex-touch/utils/search'
-import type { SearchIndexWorkerClient } from '../../../search-engine/workers/search-index-worker-client'
 import { FileProviderIntegrityService } from './file-provider-integrity-service'
 
 function createDb(options: { filesRows: number; orphanedKeywords?: number }) {
@@ -44,10 +43,7 @@ function createService(options: {
       }))
   )
   const logInfo = vi.fn()
-  const cleanupOrphanKeywordsSpy = vi.fn().mockResolvedValue(options.orphanedKeywords ?? 0)
-  const searchIndexWorker = {
-    cleanupOrphanKeywords: cleanupOrphanKeywordsSpy
-  } as unknown as SearchIndexWorkerClient
+  const cleanupSource = vi.fn().mockResolvedValue(options.orphanedKeywords ?? 0)
 
   return {
     countSearchIndexByProvider,
@@ -58,9 +54,9 @@ function createService(options: {
       countSearchIndexByProvider,
       resetRuntimeState,
       logInfo,
-      searchIndexWorker
+      cleanupSource
     }),
-    cleanupOrphanKeywords: cleanupOrphanKeywordsSpy
+    cleanupSource
   }
 }
 
@@ -107,7 +103,7 @@ describe('file-provider-integrity-service', () => {
 
   it('removes orphaned keyword mappings when FTS and files rows are aligned', async () => {
     const { db } = createDb({ filesRows: 10, orphanedKeywords: 3 })
-    const { resetRuntimeState, service, cleanupOrphanKeywords } = createService({
+    const { resetRuntimeState, service, cleanupSource } = createService({
       ftsRows: 10,
       orphanedKeywords: 3
     })
@@ -115,7 +111,7 @@ describe('file-provider-integrity-service', () => {
     const snapshot = await service.check(db as never)
 
     expect(resetRuntimeState).not.toHaveBeenCalled()
-    expect(cleanupOrphanKeywords).toHaveBeenCalledWith('file-provider')
+    expect(cleanupSource).toHaveBeenCalledWith('file-provider', undefined)
     expect(snapshot).toMatchObject({
       ftsRows: 10,
       filesRows: 10,
@@ -124,14 +120,17 @@ describe('file-provider-integrity-service', () => {
     })
   })
 
-  it('returns a ready snapshot without cleanup when rows are aligned', async () => {
+  it('cleans runtime search-index state and returns a ready snapshot when rows are aligned', async () => {
     const { db, run } = createDb({ filesRows: 10, orphanedKeywords: 0 })
-    const { resetRuntimeState, service, cleanupOrphanKeywords } = createService({ ftsRows: 10 })
+    const { resetRuntimeState, service, cleanupSource } = createService({
+      ftsRows: 10,
+      orphanedKeywords: 0
+    })
 
     const snapshot = await service.check(db as never)
 
     expect(resetRuntimeState).not.toHaveBeenCalled()
-    expect(cleanupOrphanKeywords).not.toHaveBeenCalled()
+    expect(cleanupSource).toHaveBeenCalledWith('file-provider', undefined)
     expect(run).not.toHaveBeenCalled()
     expect(snapshot).toMatchObject({
       ftsRows: 10,

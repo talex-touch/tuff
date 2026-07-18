@@ -189,6 +189,45 @@ export async function scanDirectory(
   return files;
 }
 
+export interface ScanDirectoryBatchOptions {
+  batchSize?: number;
+  signal?: AbortSignal;
+}
+
+interface ScanDirectoryBatchSink {
+  batchSize: number;
+  signal?: AbortSignal;
+  flushChain: Promise<void>;
+  onBatch: (batch: ScannedFileInfo[]) => Promise<void>;
+}
+
+export async function scanDirectoryBatches(
+  dirPath: string,
+  onBatch: (batch: ScannedFileInfo[]) => Promise<void>,
+  options: FileScanOptions = DEFAULT_SCAN_OPTIONS,
+  excludePaths?: Set<string>,
+  batchOptions: ScanDirectoryBatchOptions = {},
+): Promise<void> {
+  const opts = { ...DEFAULT_SCAN_OPTIONS, ...options };
+  const pending: ScannedFileInfo[] = [];
+  const sink: ScanDirectoryBatchSink = {
+    batchSize: Math.max(1, Math.floor(batchOptions.batchSize ?? 500)),
+    signal: batchOptions.signal,
+    flushChain: Promise.resolve(),
+    onBatch,
+  };
+  sink.signal?.throwIfAborted();
+  await scanDirectoryInto(dirPath, opts, excludePaths, 0, pending, sink);
+  if (pending.length > 0) {
+    const batch = pending.splice(0, pending.length);
+    sink.flushChain = sink.flushChain.then(
+      async () => await sink.onBatch(batch),
+    );
+  }
+  await sink.flushChain;
+  sink.signal?.throwIfAborted();
+}
+
 // ---- scanDirectory 内部实现与工具 ----
 
 /**
@@ -250,7 +289,9 @@ async function scanDirectoryInto(
   excludePaths: Set<string> | undefined,
   depth: number,
   out: ScannedFileInfo[],
+  sink?: ScanDirectoryBatchSink,
 ): Promise<void> {
+  sink?.signal?.throwIfAborted();
   if (depth > MAX_SCAN_DEPTH) return;
   if (excludePaths?.has(dirPath)) return;
   if (fileFilterService.getTraversalExclusionReason(dirPath, opts)) return;
@@ -271,6 +312,7 @@ async function scanDirectoryInto(
   }> = [];
 
   for (const entry of entries) {
+    sink?.signal?.throwIfAborted();
     const fullPath = path.join(dirPath, entry.name);
     if (excludePaths?.has(fullPath)) continue;
 
@@ -290,6 +332,7 @@ async function scanDirectoryInto(
     fileEntries,
     FILE_STAT_CONCURRENCY,
     async ({ fullPath, fileName, extension }) => {
+      sink?.signal?.throwIfAborted();
       try {
         const stats = await fs.stat(fullPath);
         out.push({
@@ -300,7 +343,18 @@ async function scanDirectoryInto(
           ctime: stats.birthtime ?? stats.ctime,
           mtime: stats.mtime,
         });
+        if (sink && out.length >= sink.batchSize) {
+          const batch = out.splice(0, sink.batchSize);
+          sink.flushChain = sink.flushChain.then(
+            async () => await sink.onBatch(batch),
+          );
+          await sink.flushChain;
+          sink.signal?.throwIfAborted();
+        }
       } catch (error) {
+        if (sink?.signal?.aborted) {
+          throw sink.signal.reason ?? error;
+        }
         console.error(
           `[FileScanUtils] Could not stat file ${fullPath}:`,
           error,
@@ -311,7 +365,7 @@ async function scanDirectoryInto(
 
   // Traverse serially to keep aggregate filesystem concurrency bounded.
   for (const subDir of subDirs) {
-    await scanDirectoryInto(subDir, opts, excludePaths, depth + 1, out);
+    await scanDirectoryInto(subDir, opts, excludePaths, depth + 1, out, sink);
   }
 }
 

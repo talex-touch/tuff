@@ -10,6 +10,7 @@ const appProviderMock = vi.hoisted(() => ({
   scanIndexedSource: vi.fn(),
   reconcileIndexedSource: vi.fn(),
   handleIndexedSourceWatchEvent: vi.fn(),
+  resetIndexedSourceLocalState: vi.fn(),
   rebuildIndex: vi.fn()
 }))
 
@@ -64,6 +65,15 @@ describe('appIndexedSource', () => {
       }
     ])
     appProviderMock.rebuildIndex.mockResolvedValue({ success: true })
+    appProviderMock.resetIndexedSourceLocalState.mockResolvedValue({
+      sourceId: 'app-provider',
+      reason: 'health-repair',
+      clearedSearchIndex: false,
+      clearedScanProgress: true,
+      scanProgressRows: 0,
+      startedAt: 1,
+      completedAt: 2
+    })
   })
 
   it('describes Applications as a core app indexed source', () => {
@@ -123,7 +133,11 @@ describe('appIndexedSource', () => {
       ],
       done: true
     }
-    appProviderMock.scanIndexedSource.mockResolvedValue(scanBatch)
+    appProviderMock.scanIndexedSource.mockReturnValue(
+      (async function* () {
+        yield scanBatch
+      })()
+    )
 
     const batches: IndexedSourceRecordBatch[] = []
     for await (const batch of source.scan(request)) {
@@ -131,7 +145,164 @@ describe('appIndexedSource', () => {
     }
 
     expect(batches).toEqual([scanBatch])
-    expect(appProviderMock.scanIndexedSource).toHaveBeenCalledWith(request)
+    expect(appProviderMock.scanIndexedSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'app-provider',
+        reason: request.reason,
+        signal: expect.any(AbortSignal)
+      })
+    )
+  })
+
+  it('yields an App batch before the provider backfill settles', async () => {
+    const source = buildAppIndexedSource()
+    const releaseBackfill = Promise.withResolvers<void>()
+    const firstBatch: IndexedSourceRecordBatch = {
+      sourceId: 'app-provider',
+      records: [
+        {
+          sourceId: 'app-provider',
+          recordId: 'app-first',
+          stableKey: 'app-first',
+          kind: 'app',
+          title: 'First App',
+          path: '/Applications/First.app'
+        }
+      ]
+    }
+    appProviderMock.scanIndexedSource.mockReturnValue(
+      (async function* () {
+        yield firstBatch
+        await releaseBackfill.promise
+        yield { sourceId: 'app-provider', records: [], done: true }
+      })()
+    )
+
+    const iterator = source
+      .scan({ sourceId: 'app-provider', reason: IndexedSourceScanReasons.Startup })
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({ value: firstBatch, done: false })
+
+    releaseBackfill.resolve()
+    await expect(iterator.next()).resolves.toEqual({
+      value: { sourceId: 'app-provider', records: [], done: true },
+      done: false
+    })
+  })
+
+  it('keeps consumer return pending until the App startup backfill iterator settles', async () => {
+    const source = buildAppIndexedSource()
+    const backfill = Promise.withResolvers<void>()
+    const firstBatch: IndexedSourceRecordBatch = {
+      sourceId: 'app-provider',
+      records: [
+        {
+          sourceId: 'app-provider',
+          recordId: 'app-1',
+          stableKey: 'app-1',
+          kind: 'app',
+          title: 'Example App'
+        }
+      ]
+    }
+    const providerIterator = {
+      next: vi.fn(async () => ({ value: firstBatch, done: false })),
+      return: vi.fn(async () => {
+        await backfill.promise
+        return { value: undefined, done: true }
+      })
+    }
+    appProviderMock.scanIndexedSource.mockReturnValue({
+      [Symbol.asyncIterator]: () => providerIterator
+    })
+
+    const iterator = source
+      .scan({ sourceId: 'app-provider', reason: IndexedSourceScanReasons.Startup })
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({ value: firstBatch, done: false })
+
+    let closed = false
+    const close = iterator.return?.().then(() => {
+      closed = true
+    })
+    await Promise.resolve()
+    expect(closed).toBe(false)
+
+    backfill.resolve()
+    await expect(close).resolves.toBeUndefined()
+    expect(providerIterator.return).toHaveBeenCalledOnce()
+  })
+
+  it('closes the App provider iterator when its consumer returns early', async () => {
+    const source = buildAppIndexedSource()
+    let released = false
+    const firstBatch: IndexedSourceRecordBatch = {
+      sourceId: 'app-provider',
+      records: [
+        {
+          sourceId: 'app-provider',
+          recordId: 'app-1',
+          stableKey: 'app-1',
+          kind: 'app',
+          title: 'Example App'
+        }
+      ]
+    }
+    appProviderMock.scanIndexedSource.mockReturnValue(
+      (async function* () {
+        try {
+          yield firstBatch
+          await new Promise<void>(() => undefined)
+        } finally {
+          released = true
+        }
+      })()
+    )
+
+    const iterator = source
+      .scan({ sourceId: 'app-provider', reason: IndexedSourceScanReasons.Startup })
+      [Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toEqual({ value: firstBatch, done: false })
+    await expect(iterator.return?.()).resolves.toEqual({ value: undefined, done: true })
+    expect(released).toBe(true)
+  })
+
+  it('replays every AppProvider SchemaMigration snapshot batch', async () => {
+    const source = buildAppIndexedSource()
+    const request = { sourceId: 'app-provider', reason: IndexedSourceScanReasons.SchemaMigration }
+    const batches: IndexedSourceRecordBatch[] = [
+      {
+        sourceId: 'app-provider',
+        records: [
+          {
+            sourceId: 'app-provider',
+            recordId: 'app-legacy',
+            stableKey: 'app-legacy',
+            kind: 'app',
+            title: 'Legacy App',
+            path: '/Applications/Legacy.app'
+          }
+        ]
+      },
+      { sourceId: 'app-provider', records: [], done: true }
+    ]
+    appProviderMock.scanIndexedSource.mockReturnValue(
+      (async function* () {
+        yield* batches
+      })()
+    )
+
+    const observed: IndexedSourceRecordBatch[] = []
+    for await (const batch of source.scan(request)) observed.push(batch)
+
+    expect(observed).toEqual(batches)
+    expect(appProviderMock.scanIndexedSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'app-provider',
+        reason: request.reason,
+        signal: expect.any(AbortSignal)
+      })
+    )
   })
 
   it('delegates reconcile and watch lifecycle to AppProvider', async () => {
@@ -152,6 +323,21 @@ describe('appIndexedSource', () => {
 
     expect(appProviderMock.reconcileIndexedSource).toHaveBeenCalledWith(reconcileRequest)
     expect(appProviderMock.handleIndexedSourceWatchEvent).toHaveBeenCalledWith(watchEvent)
+  })
+
+  it('delegates resetIndex to AppProvider local runtime state', async () => {
+    const source = buildAppIndexedSource()
+    const request = {
+      sourceId: 'app-provider',
+      reason: 'health-repair' as const,
+      clearScanProgress: true
+    }
+
+    await expect(source.resetIndex?.(request)).resolves.toMatchObject({
+      sourceId: 'app-provider',
+      clearedScanProgress: true
+    })
+    expect(appProviderMock.resetIndexedSourceLocalState).toHaveBeenCalledWith(request)
   })
 
   it('uses AppProvider rebuild for clearIndex', async () => {

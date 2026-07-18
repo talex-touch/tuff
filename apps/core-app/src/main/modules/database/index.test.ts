@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { fileProviderBusyMock, dbLogMock, scanProgressMigrationMocks } = vi.hoisted(() => ({
-  fileProviderBusyMock: vi.fn(() => false),
+const { dbLogMock, scanProgressMigrationMocks, searchIndexWriterMocks } = vi.hoisted(() => ({
   dbLogMock: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -11,6 +10,10 @@ const { fileProviderBusyMock, dbLogMock, scanProgressMigrationMocks } = vi.hoist
   scanProgressMigrationMocks: {
     plan: vi.fn(),
     run: vi.fn()
+  },
+  searchIndexWriterMocks: {
+    getStatus: vi.fn(),
+    withPausedAdmission: vi.fn()
   }
 }))
 
@@ -59,9 +62,10 @@ vi.mock('../../../../resources/db/locator.json?commonjs-external&asset', () => (
   default: '/tmp/db/locator.json'
 }))
 
-vi.mock('../box-tool/addon/files/file-provider', () => ({
-  fileProvider: {
-    isSearchIndexWorkerBusy: fileProviderBusyMock
+vi.mock('../box-tool/search-engine/search-index-writer', () => ({
+  searchIndexWriter: {
+    getStatus: searchIndexWriterMocks.getStatus,
+    withPausedAdmission: searchIndexWriterMocks.withPausedAdmission
   }
 }))
 
@@ -95,7 +99,6 @@ async function runWalCheckpoint(
 describe('DatabaseModule background startup tasks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    fileProviderBusyMock.mockReturnValue(false)
   })
 
   it('keeps primary database available while aux database initializes in background', async () => {
@@ -140,11 +143,31 @@ describe('DatabaseModule WAL checkpoint maintenance', () => {
   beforeEach(async () => {
     await dbWriteScheduler.drain()
     vi.clearAllMocks()
-    fileProviderBusyMock.mockReturnValue(false)
+    searchIndexWriterMocks.getStatus.mockReturnValue({
+      readiness: 'ready',
+      admissionPaused: true,
+      activeAdmissions: 0,
+      pending: 0
+    })
+    searchIndexWriterMocks.withPausedAdmission.mockImplementation(async (_reason, operation) =>
+      operation({
+        readiness: 'ready',
+        admissionPaused: true,
+        activeAdmissions: 0,
+        pending: 0
+      })
+    )
   })
 
-  it('skips checkpoint when search index worker is busy', async () => {
-    fileProviderBusyMock.mockReturnValue(true)
+  it('skips checkpoint when the writer is not quiescent', async () => {
+    searchIndexWriterMocks.withPausedAdmission.mockImplementation(async (_reason, operation) =>
+      operation({
+        readiness: 'ready',
+        admissionPaused: true,
+        activeAdmissions: 0,
+        pending: 1
+      })
+    )
     const client = {
       execute: vi.fn(async () => ({ rows: [{ busy: 0, log: 1, checkpointed: 1 }] }))
     }
@@ -158,20 +181,55 @@ describe('DatabaseModule WAL checkpoint maintenance', () => {
       expect.objectContaining({
         meta: expect.objectContaining({
           mode: 'PASSIVE',
-          reason: 'search-index-worker'
+          reason: 'search-index-writer-not-quiescent',
+          busyQueueDepth: 1,
+          busyProcessing: false,
+          admissionPaused: true
         })
       })
     )
   })
 
-  it('runs checkpoint through the maintenance queue when idle', async () => {
+  it('runs checkpoint after pausing and draining writer admission', async () => {
+    const order: string[] = []
+    searchIndexWriterMocks.withPausedAdmission.mockImplementation(async (_reason, operation) => {
+      order.push('writer-admission-paused-and-drained')
+      return operation({
+        readiness: 'ready',
+        admissionPaused: true,
+        activeAdmissions: 0,
+        pending: 0
+      })
+    })
+    searchIndexWriterMocks.getStatus.mockImplementation(() => {
+      order.push('writer-quiescence-rechecked')
+      return {
+        readiness: 'ready',
+        admissionPaused: true,
+        activeAdmissions: 0,
+        pending: 0
+      }
+    })
     const client = {
-      execute: vi.fn(async () => ({ rows: [{ busy: 0, log: 2, checkpointed: 2 }] }))
+      execute: vi.fn(async (statement: string) => {
+        order.push(statement)
+        return { rows: [{ busy: 0, log: 2, checkpointed: 2 }] }
+      })
     }
     const module = createModule(client)
 
     await runWalCheckpoint(module, 'PASSIVE')
 
+    expect(searchIndexWriterMocks.withPausedAdmission).toHaveBeenCalledWith(
+      'database.wal-checkpoint.passive',
+      expect.any(Function),
+      expect.any(Number)
+    )
+    expect(order).toEqual([
+      'writer-admission-paused-and-drained',
+      'writer-quiescence-rechecked',
+      'PRAGMA wal_checkpoint(PASSIVE)'
+    ])
     expect(client.execute).toHaveBeenCalledWith('PRAGMA wal_checkpoint(PASSIVE)')
     expect(dbLogMock.info).toHaveBeenCalledWith(
       'WAL checkpoint PASSIVE complete',

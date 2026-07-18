@@ -7,11 +7,13 @@ import {
 
 function buildSearchIndex() {
   return {
-    indexItems: vi.fn(async () => {}),
-    removeItems: vi.fn(async () => {}),
-    removeProviderItems: vi.fn(async () => 1),
-    removeByProvider: vi.fn(async () => 0),
-    countByProvider: vi.fn(async () => 0)
+    indexItems: vi.fn(async () => ({ affectedItems: 1 })),
+    beginSourceReplacement: vi.fn(async () => undefined),
+    stageSourceReplacement: vi.fn(async () => 0),
+    commitSourceReplacement: vi.fn(async () => ({ removedItems: 0, indexedItems: 0 })),
+    abortSourceReplacement: vi.fn(async () => undefined),
+    removeProviderItems: vi.fn(async () => ({ affectedItems: 1 })),
+    clearSource: vi.fn(async () => ({ affectedItems: 0 }))
   }
 }
 
@@ -96,21 +98,82 @@ describe('SearchIndexStoreAdapter', () => {
 
     await adapter.applyBatch(batch)
 
-    expect(searchIndex.indexItems).toHaveBeenCalledWith([
-      expect.objectContaining({
-        itemId: 'quicklink-1',
-        providerId: 'quicklink',
-        type: 'plugin',
-        name: 'Open Docs'
-      })
-    ])
-    expect(onBatchApplied).toHaveBeenCalledWith({
-      sourceId: 'quicklink',
-      recordCount: 1,
-      indexedItemCount: 1,
-      done: true,
-      cursor: undefined
-    })
+    expect(searchIndex.indexItems).toHaveBeenCalledWith(
+      'quicklink',
+      [
+        expect.objectContaining({
+          itemId: 'quicklink-1',
+          providerId: 'quicklink',
+          type: 'plugin',
+          name: 'Open Docs'
+        })
+      ],
+      { legacyItemIds: [] }
+    )
+    expect(onBatchApplied).toHaveBeenCalledWith(
+      {
+        sourceId: 'quicklink',
+        recordCount: 1,
+        indexedItemCount: 1,
+        done: true,
+        cursor: undefined
+      },
+      batch
+    )
+  })
+
+  it('maps a complete source snapshot through a staged writer replacement transaction', async () => {
+    const searchIndex = buildSearchIndex()
+    const adapter = new SearchIndexStoreAdapter(searchIndex as never)
+    const records: IndexedSourceRecordBatch['records'] = [
+      {
+        sourceId: 'quicklink',
+        recordId: 'quicklink-1',
+        stableKey: 'quicklink-1',
+        kind: 'quicklink',
+        title: 'Open Docs',
+        uri: 'https://docs.example.com'
+      }
+    ]
+
+    await adapter.replaceSource('quicklink', records)
+
+    expect(searchIndex.beginSourceReplacement).toHaveBeenCalledWith(
+      'quicklink',
+      expect.stringMatching(/^quicklink:/)
+    )
+    expect(searchIndex.stageSourceReplacement).toHaveBeenCalledWith(
+      'quicklink',
+      expect.stringMatching(/^quicklink:/),
+      [expect.objectContaining({ itemId: 'quicklink-1', providerId: 'quicklink' })]
+    )
+    expect(searchIndex.commitSourceReplacement).toHaveBeenCalledWith(
+      'quicklink',
+      expect.stringMatching(/^quicklink:/)
+    )
+  })
+
+  it('aborts a staged replacement when writer staging fails before visibility', async () => {
+    const searchIndex = buildSearchIndex()
+    searchIndex.stageSourceReplacement.mockRejectedValueOnce(new Error('writer unavailable'))
+    const adapter = new SearchIndexStoreAdapter(searchIndex as never)
+    const records: IndexedSourceRecordBatch['records'] = [
+      {
+        sourceId: 'quicklink',
+        recordId: 'quicklink-1',
+        stableKey: 'quicklink-1',
+        kind: 'quicklink',
+        title: 'Open Docs'
+      }
+    ]
+
+    await expect(adapter.replaceSource('quicklink', records)).rejects.toThrow('writer unavailable')
+
+    expect(searchIndex.abortSourceReplacement).toHaveBeenCalledWith(
+      'quicklink',
+      expect.stringMatching(/^quicklink:/)
+    )
+    expect(searchIndex.commitSourceReplacement).not.toHaveBeenCalled()
   })
 
   it('keeps empty done scan batches observable at the store boundary', async () => {
@@ -127,13 +190,16 @@ describe('SearchIndexStoreAdapter', () => {
     await adapter.applyBatch(batch)
 
     expect(searchIndex.indexItems).not.toHaveBeenCalled()
-    expect(onBatchApplied).toHaveBeenCalledWith({
-      sourceId: 'file-provider',
-      recordCount: 0,
-      indexedItemCount: 0,
-      done: true,
-      cursor: 'scan-complete'
-    })
+    expect(onBatchApplied).toHaveBeenCalledWith(
+      {
+        sourceId: 'file-provider',
+        recordCount: 0,
+        indexedItemCount: 0,
+        done: true,
+        cursor: 'scan-complete'
+      },
+      batch
+    )
   })
 
   it('reports scanned records separately from indexable records', async () => {
@@ -171,26 +237,34 @@ describe('SearchIndexStoreAdapter', () => {
       cursor: undefined
     })
 
-    expect(searchIndex.indexItems).toHaveBeenCalledWith([
-      expect.objectContaining({
-        itemId: 'quicklink-1',
-        providerId: 'quicklink',
-        name: 'Open Docs'
-      })
-    ])
-    expect(onBatchApplied).toHaveBeenCalledWith({
-      sourceId: 'quicklink',
-      recordCount: 2,
-      indexedItemCount: 1,
-      done: true,
-      cursor: undefined
-    })
+    expect(searchIndex.indexItems).toHaveBeenCalledWith(
+      'quicklink',
+      [
+        expect.objectContaining({
+          itemId: 'quicklink-1',
+          providerId: 'quicklink',
+          name: 'Open Docs'
+        })
+      ],
+      { legacyItemIds: [] }
+    )
+    expect(onBatchApplied).toHaveBeenCalledWith(
+      {
+        sourceId: 'quicklink',
+        recordCount: 2,
+        indexedItemCount: 1,
+        done: true,
+        cursor: undefined
+      },
+      batch
+    )
   })
 
   it('applies add/change/delete deltas through SearchIndexService', async () => {
     const searchIndex = buildSearchIndex()
     const onDeltaApplied = vi.fn(async () => {})
     const adapter = new SearchIndexStoreAdapter(searchIndex as never, { onDeltaApplied })
+    searchIndex.indexItems.mockResolvedValueOnce({ affectedItems: 2 })
     const changeDelta: IndexedSourceDelta = {
       sourceId: 'obsidian-note',
       action: 'change',
@@ -200,7 +274,8 @@ describe('SearchIndexStoreAdapter', () => {
         stableKey: 'note-1',
         kind: 'obsidian-note',
         title: 'Daily Note',
-        path: '/vault/daily.md'
+        path: '/vault/daily.md',
+        search: { legacyItemIds: ['legacy-note-1'] }
       }
     }
 
@@ -208,7 +283,7 @@ describe('SearchIndexStoreAdapter', () => {
       sourceId: 'obsidian-note',
       action: 'change',
       indexedItemCount: 1,
-      removedItemCount: 0,
+      removedItemCount: 1,
       applied: true
     })
     await expect(
@@ -225,29 +300,27 @@ describe('SearchIndexStoreAdapter', () => {
       applied: true
     })
 
-    expect(searchIndex.indexItems).toHaveBeenCalledWith([
-      expect.objectContaining({ itemId: 'note-1', providerId: 'obsidian-note' })
-    ])
+    expect(searchIndex.indexItems).toHaveBeenCalledWith(
+      'obsidian-note',
+      [expect.objectContaining({ itemId: 'note-1', providerId: 'obsidian-note' })],
+      { legacyItemIds: ['legacy-note-1'] }
+    )
     expect(searchIndex.removeProviderItems).toHaveBeenCalledWith('obsidian-note', ['note-1'])
-    expect(onDeltaApplied).toHaveBeenNthCalledWith(1, {
-      sourceId: 'obsidian-note',
-      action: 'change',
-      indexedItemCount: 1,
-      removedItemCount: 0,
-      applied: true
-    })
-    expect(onDeltaApplied).toHaveBeenNthCalledWith(2, {
-      sourceId: 'obsidian-note',
-      action: 'delete',
-      indexedItemCount: 0,
-      removedItemCount: 1,
-      applied: true
-    })
+    expect(onDeltaApplied).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ sourceId: 'obsidian-note', action: 'change', applied: true }),
+      changeDelta
+    )
+    expect(onDeltaApplied).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ sourceId: 'obsidian-note', action: 'delete', applied: true }),
+      expect.objectContaining({ action: 'delete', stableKey: 'note-1' })
+    )
   })
 
   it('reports provider-scoped delete misses as skipped store deltas', async () => {
     const searchIndex = buildSearchIndex()
-    searchIndex.removeProviderItems.mockResolvedValueOnce(0)
+    searchIndex.removeProviderItems.mockResolvedValueOnce({ affectedItems: 0 })
     const onDeltaApplied = vi.fn(async () => {})
     const adapter = new SearchIndexStoreAdapter(searchIndex as never, { onDeltaApplied })
 
@@ -267,15 +340,15 @@ describe('SearchIndexStoreAdapter', () => {
     })
 
     expect(searchIndex.removeProviderItems).toHaveBeenCalledWith('quicklink', ['shared-key'])
-    expect(searchIndex.removeItems).not.toHaveBeenCalled()
-    expect(onDeltaApplied).toHaveBeenCalledWith({
-      sourceId: 'quicklink',
-      action: 'delete',
-      indexedItemCount: 0,
-      removedItemCount: 0,
-      applied: false,
-      reason: 'missing-indexed-item'
-    })
+    expect(onDeltaApplied).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'quicklink',
+        action: 'delete',
+        applied: false,
+        reason: 'missing-indexed-item'
+      }),
+      expect.objectContaining({ action: 'delete', stableKey: 'shared-key' })
+    )
   })
 
   it('keeps skipped deltas observable without mutating the index', async () => {
@@ -331,14 +404,13 @@ describe('SearchIndexStoreAdapter', () => {
     })
 
     expect(searchIndex.indexItems).not.toHaveBeenCalled()
-    expect(searchIndex.removeItems).not.toHaveBeenCalled()
     expect(searchIndex.removeProviderItems).not.toHaveBeenCalled()
     expect(onDeltaApplied).toHaveBeenCalledTimes(3)
   })
 
   it('clears a source through provider-level removal', async () => {
     const searchIndex = buildSearchIndex()
-    searchIndex.removeByProvider.mockResolvedValueOnce(3)
+    searchIndex.clearSource.mockResolvedValueOnce({ affectedItems: 3 })
     const onClearSource = vi.fn(async () => {})
     const adapter = new SearchIndexStoreAdapter(searchIndex as never, { onClearSource })
 
@@ -347,8 +419,7 @@ describe('SearchIndexStoreAdapter', () => {
       removedIndexedItems: 3
     })
 
-    expect(searchIndex.removeByProvider).toHaveBeenCalledWith('browser-bookmark')
-    expect(searchIndex.countByProvider).not.toHaveBeenCalled()
+    expect(searchIndex.clearSource).toHaveBeenCalledWith('browser-bookmark')
     expect(onClearSource).toHaveBeenCalledWith({
       sourceId: 'browser-bookmark',
       removedIndexedItems: 3

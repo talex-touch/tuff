@@ -24,7 +24,6 @@ describe('file-provider-reconciliation-insert-service', () => {
     ]
     const inserted = filesToAdd.map((file, index) => ({ ...file, id: index + 1 }))
     const upsertFiles = vi.fn(async () => inserted)
-    const dispatchSideEffects = vi.fn()
     const emitRecordBatch = vi.fn(async () => {})
     const emitDelta = vi.fn(async () => {})
     const emitProgress = vi.fn()
@@ -39,7 +38,7 @@ describe('file-provider-reconciliation-insert-service', () => {
       waitForIdle: vi.fn(async () => {}),
       runQueue,
       upsertFiles,
-      dispatchSideEffects,
+      shouldEmitRecordBatch: () => true,
       emitRecordBatch,
       emitDelta,
       mapRecord: (record) => ({
@@ -76,7 +75,6 @@ describe('file-provider-reconciliation-insert-service', () => {
       }
     )
     expect(upsertFiles).toHaveBeenCalledWith(expect.any(Array), 'reconciliation.upsert')
-    expect(dispatchSideEffects).toHaveBeenCalledWith(inserted)
     expect(emitRecordBatch).toHaveBeenCalledWith(
       {
         sourceId: 'file-provider',
@@ -87,16 +85,7 @@ describe('file-provider-reconciliation-insert-service', () => {
       },
       context
     )
-    expect(emitDelta).toHaveBeenCalledTimes(2)
-    expect(emitDelta).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sourceId: 'file-provider',
-        action: 'add',
-        path: '/tmp/a.txt',
-        reason: 'file-provider-reconciliation-add'
-      }),
-      context
-    )
+    expect(emitDelta).not.toHaveBeenCalled()
     expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 2)
     expect(emitProgress).toHaveBeenLastCalledWith(2, 2)
     expect(result.inserted).toEqual(inserted)
@@ -117,7 +106,7 @@ describe('file-provider-reconciliation-insert-service', () => {
         }
       ),
       upsertFiles,
-      dispatchSideEffects: vi.fn(),
+      shouldEmitRecordBatch: () => false,
       emitRecordBatch: vi.fn(async () => {}),
       emitDelta: vi.fn(async () => {}),
       mapRecord: (record: { path: string }) => ({
@@ -164,7 +153,7 @@ describe('file-provider-reconciliation-insert-service', () => {
       waitForIdle: vi.fn(),
       runQueue,
       upsertFiles: vi.fn(),
-      dispatchSideEffects: vi.fn(),
+      shouldEmitRecordBatch: () => false,
       emitRecordBatch: vi.fn(),
       emitDelta: vi.fn(),
       mapRecord: vi.fn(),

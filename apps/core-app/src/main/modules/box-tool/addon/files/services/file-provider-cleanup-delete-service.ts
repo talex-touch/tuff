@@ -5,18 +5,20 @@ import {
   type IndexedWriteDeleteRecord
 } from '../../../search-engine/indexing-write-delete-executor-service'
 
-export interface FileProviderCleanupDeleteResult<TRecord extends IndexedWriteDeleteRecord> {
-  deleted: TRecord[]
+export interface FileProviderCleanupDeleteResult {
   deletedCount: number
 }
 
 export interface FileProviderCleanupDeleteDeps<TRecord extends IndexedWriteDeleteRecord, TContext> {
   sourceId: string
-  getAllIndexedFileRecords: () => Promise<TRecord[]>
+  getIndexedFileRecordsPage: (
+    afterId: number,
+    limit: number,
+    context: TContext
+  ) => Promise<TRecord[]>
   isWithinWatchRoots: (filePath: string) => boolean
   yieldAfterRead: () => Promise<void>
   deleteRecords: (records: TRecord[]) => Promise<void>
-  removeSearchIndexItems: (paths: string[]) => Promise<void>
   emitDelta: (delta: IndexedSourceDelta, context: TContext) => Promise<void> | void
   emitProgress: (current: number, total: number) => void
   now: () => number
@@ -26,10 +28,10 @@ export interface FileProviderCleanupDeleteDeps<TRecord extends IndexedWriteDelet
 }
 
 export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDeleteRecord, TContext> {
-  private readonly getAllIndexedFileRecords: FileProviderCleanupDeleteDeps<
+  private readonly getIndexedFileRecordsPage: FileProviderCleanupDeleteDeps<
     TRecord,
     TContext
-  >['getAllIndexedFileRecords']
+  >['getIndexedFileRecordsPage']
   private readonly isWithinWatchRoots: FileProviderCleanupDeleteDeps<
     TRecord,
     TContext
@@ -39,10 +41,6 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
     TContext
   >['yieldAfterRead']
   private readonly deleteRecords: FileProviderCleanupDeleteDeps<TRecord, TContext>['deleteRecords']
-  private readonly removeSearchIndexItems: FileProviderCleanupDeleteDeps<
-    TRecord,
-    TContext
-  >['removeSearchIndexItems']
   private readonly emitProgress: FileProviderCleanupDeleteDeps<TRecord, TContext>['emitProgress']
   private readonly now: FileProviderCleanupDeleteDeps<TRecord, TContext>['now']
   private readonly formatDuration: FileProviderCleanupDeleteDeps<
@@ -54,11 +52,10 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
   private readonly runtimeEmitter: IndexedWriteRuntimeEmitterService<TRecord, TContext>
 
   constructor(deps: FileProviderCleanupDeleteDeps<TRecord, TContext>) {
-    this.getAllIndexedFileRecords = deps.getAllIndexedFileRecords
+    this.getIndexedFileRecordsPage = deps.getIndexedFileRecordsPage
     this.isWithinWatchRoots = deps.isWithinWatchRoots
     this.yieldAfterRead = deps.yieldAfterRead
     this.deleteRecords = deps.deleteRecords
-    this.removeSearchIndexItems = deps.removeSearchIndexItems
     this.emitProgress = deps.emitProgress
     this.now = deps.now
     this.formatDuration = deps.formatDuration
@@ -71,40 +68,40 @@ export class FileProviderCleanupDeleteService<TRecord extends IndexedWriteDelete
     })
   }
 
-  async execute(context: TContext): Promise<FileProviderCleanupDeleteResult<TRecord>> {
+  async execute(context: TContext): Promise<FileProviderCleanupDeleteResult> {
     const cleanupStart = this.now()
     this.logInfo('Cleaning stale index entries from removed watch paths')
     this.emitProgress(0, 1)
 
-    const allDbFilePaths = await this.getAllIndexedFileRecords()
-    await this.yieldAfterRead()
-    const filesToDelete = allDbFilePaths.filter((file) => !this.isWithinWatchRoots(file.path))
-
-    if (filesToDelete.length > 0) {
-      this.logInfo('Removing stale database entries', {
-        removed: filesToDelete.length
-      })
-
-      const deleteResult = await new IndexedWriteDeleteExecutorService<TRecord>({
-        normalizePath: (rawPath) => rawPath,
-        findExisting: async () => [],
-        deleteRecords: (records) => this.deleteRecords(records),
-        removeSearchIndexItems: (paths) => this.removeSearchIndexItems(paths),
-        logDebug: (message, meta) => this.logDebug(message, meta),
-        successMessage: 'Cleanup remove completed'
-      }).executeExisting(filesToDelete)
-      await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context)
+    let afterId = 0
+    let deletedCount = 0
+    while (true) {
+      const page = await this.getIndexedFileRecordsPage(afterId, 500, context)
+      if (page.length === 0) break
+      afterId = page[page.length - 1].id
+      const filesToDelete = page.filter((file) => !this.isWithinWatchRoots(file.path))
+      if (filesToDelete.length > 0) {
+        this.logInfo('Removing stale database entries', {
+          removed: filesToDelete.length
+        })
+        const deleteResult = await new IndexedWriteDeleteExecutorService<TRecord>({
+          normalizePath: (rawPath) => rawPath,
+          findExisting: async () => [],
+          deleteRecords: (records) => this.deleteRecords(records),
+          logDebug: (message, meta) => this.logDebug(message, meta),
+          successMessage: 'Cleanup remove completed'
+        }).executeExisting(filesToDelete)
+        await this.runtimeEmitter.emitDeleteDeltas(deleteResult.deletedPaths, context)
+        deletedCount += filesToDelete.length
+      }
+      await this.yieldAfterRead()
     }
 
     this.emitProgress(1, 1)
     this.logDebug('Cleanup stage finished', {
       duration: this.formatDuration(this.now() - cleanupStart),
-      removed: filesToDelete.length
+      removed: deletedCount
     })
-
-    return {
-      deleted: filesToDelete,
-      deletedCount: filesToDelete.length
-    }
+    return { deletedCount }
   }
 }

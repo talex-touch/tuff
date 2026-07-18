@@ -6,11 +6,12 @@ import {
 export interface FileProviderWriteSideEffectOptions {
   extensionContext: string
   indexReason: string
+  mutationLeaseId?: string
 }
 
 export interface FileProviderWriteSideEffectServiceDeps<TFile> {
   processFileExtensions: (files: TFile[]) => Promise<void>
-  scheduleIndexing: (files: TFile[], reason: string) => void
+  scheduleIndexing: (files: TFile[], reason: string, mutationLeaseId?: string) => void
   logWarn: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
 }
 

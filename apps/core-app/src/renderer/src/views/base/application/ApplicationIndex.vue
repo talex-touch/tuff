@@ -1,6 +1,7 @@
 <script name="ApplicationIndex" setup lang="ts">
-import type { ITuffIcon, TuffItem, TuffSearchResult } from '@talex-touch/utils'
-import { useTuffTransport } from '@talex-touch/utils/transport'
+import type { ITuffIcon, TuffItem } from '@talex-touch/utils'
+import type { CoreBoxSearchSessionChunk } from '@talex-touch/utils/transport/events/types'
+import { useTuffTransport, type StreamController } from '@talex-touch/utils/transport'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import AppConfigure from './AppConfigure.vue'
 import type { AppConfigureData } from './AppConfigure.vue'
@@ -15,53 +16,88 @@ defineProps<{
 
 type AppListEntry = AppListItem & { raw?: TuffItem }
 
-interface SearchUpdatePayload {
-  searchId?: string
-  items?: TuffItem[]
-}
-
 const index = ref(-1)
 const curSelect = ref<AppListEntry | null>(null)
 const appList = ref<AppListEntry[]>([])
 let currentSearchId: string | null = null
+let searchSequence = 0
+let activeSearchController: StreamController | null = null
 const transport = useTuffTransport()
 
-let unregisterUpdate: (() => void) | null = null
-let unregisterEnd: (() => void) | null = null
-
 onMounted(() => {
-  handleSearch('')
-
-  unregisterUpdate = transport.on(CoreBoxEvents.search.update, (channelData) => {
-    const { searchId, items } = channelData as SearchUpdatePayload
-    if (searchId !== currentSearchId) return
-    const nextItems = items ? items.map(toAppListItem) : []
-    // append to list
-    appList.value = nextItems.length > 0 ? [...appList.value, ...nextItems] : appList.value
-  })
-
-  unregisterEnd = transport.on(CoreBoxEvents.search.end, (channelData) => {
-    const { searchId } = channelData as SearchUpdatePayload
-    if (searchId !== currentSearchId) return
-    devLog('[ApplicationIndex] Search ended', channelData)
-  })
+  void handleSearch('')
 })
 
 onUnmounted(() => {
-  unregisterUpdate?.()
-  unregisterEnd?.()
+  activeSearchController?.cancel()
+  activeSearchController = null
 })
 
 async function handleSearch(value: string): Promise<void> {
+  const sequence = ++searchSequence
+  activeSearchController?.cancel()
+  activeSearchController = null
+  currentSearchId = null
   appList.value = []
   curSelect.value = null
   index.value = -1
 
-  const res = (await transport.send(CoreBoxEvents.search.query, {
-    query: { text: value }
-  })) as TuffSearchResult
-  currentSearchId = res.sessionId ?? null
-  appList.value = (res.items ?? []).map(toAppListItem)
+  let streamEnded = false
+  try {
+    const controller = await transport.stream(
+      CoreBoxEvents.search.session,
+      {
+        query: { text: value },
+        activations: null,
+        surface: 'application-index'
+      },
+      {
+        onData: (chunk: CoreBoxSearchSessionChunk) => {
+          if (sequence !== searchSequence) return
+          switch (chunk.type) {
+            case 'session':
+              currentSearchId = chunk.sessionId
+              return
+            case 'snapshot':
+              if (chunk.sessionId !== currentSearchId) return
+              appList.value = (chunk.result.items ?? []).map(toAppListItem)
+              return
+            case 'update':
+              if (chunk.sessionId !== currentSearchId) return
+              appList.value = mergeAppItems(appList.value, chunk.items)
+              return
+            case 'complete':
+              if (chunk.sessionId === currentSearchId) {
+                devLog('[ApplicationIndex] Search ended', chunk)
+              }
+          }
+        },
+        onError: (error) => {
+          streamEnded = true
+          if (sequence === searchSequence) activeSearchController = null
+          if (sequence === searchSequence) devLog('[ApplicationIndex] Search failed', error)
+        },
+        onEnd: () => {
+          streamEnded = true
+          if (sequence === searchSequence) activeSearchController = null
+        }
+      }
+    )
+    if (sequence !== searchSequence) {
+      controller.cancel()
+      return
+    }
+    if (!streamEnded) activeSearchController = controller
+  } catch (error) {
+    if (sequence === searchSequence) devLog('[ApplicationIndex] Search failed', error)
+  }
+}
+
+function mergeAppItems(current: AppListEntry[], incoming: TuffItem[]): AppListEntry[] {
+  const itemsById = new Map<string, AppListEntry>()
+  for (const item of current) itemsById.set(item.raw?.id ?? item.name, item)
+  for (const item of incoming) itemsById.set(item.id, toAppListItem(item))
+  return [...itemsById.values()]
 }
 
 function handleSelect(item: AppListItem | null, _index: number): void {

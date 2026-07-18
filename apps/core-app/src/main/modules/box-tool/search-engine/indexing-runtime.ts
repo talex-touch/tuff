@@ -1,6 +1,7 @@
 import type {
   IndexedSource,
   IndexedSourceDelta,
+  IndexedSourceRecordBatch,
   IndexedSourceDescriptor,
   IndexedSourceReconcileRequest,
   IndexedSourceReconcileResult,
@@ -30,7 +31,13 @@ import type {
   ScanSchedulerResult,
   ScanSchedulerSkippedSource
 } from './indexing-scan-scheduler'
-import type { IndexStoreAdapter } from './indexing-store-adapter'
+import type {
+  IndexStoreAdapter,
+  IndexStoreBatchApplySummary,
+  IndexStoreCleanupSourceSummary,
+  IndexStoreDeltaApplySummary
+} from './indexing-store-adapter'
+import type { SearchIndexWriterMode } from './search-index-writer'
 import type { IndexingTaskStateStore } from './indexing-task-state-store'
 import type { WatchEventRouteResult } from './indexing-watch-router'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -42,6 +49,7 @@ import {
   buildIndexedSourceWatchTaskState,
   getIndexedSourceContractIssues,
   IndexedSourceResetReasons,
+  IndexedSourceScanReasons,
   IndexedSourceTaskRunGate,
   resolveIndexedSourceTaskEligibility,
   resolveIndexedSourceTaskRetryDecision,
@@ -54,6 +62,7 @@ import { indexingRootPolicy } from './indexing-root-policy'
 import { IndexedSourceRuntimeTaskJobFactory } from './indexing-runtime-task-job'
 import { ScanScheduler } from './indexing-scan-scheduler'
 import { NoopIndexStoreAdapter } from './indexing-store-adapter'
+import { IndexingSourceMutationGate } from './indexing-source-mutation-gate'
 import { MemoryIndexingTaskStateStore } from './indexing-task-state-store'
 import { WatchEventRouter } from './indexing-watch-router'
 
@@ -69,6 +78,7 @@ export interface IndexingRuntimeOptions {
   runGate?: IndexedSourceTaskRunGate
   rootPolicy?: IndexingRootPolicy
   taskStateStore?: IndexingTaskStateStore
+  sourceMutationGate?: IndexingSourceMutationGate
 }
 
 export type { IndexingRuntimeDiagnostics, IndexingRuntimeSourceDiagnostics }
@@ -83,7 +93,33 @@ interface RuntimeEligibleSources {
 
 type RuntimeTaskRetryKind = 'scan' | 'reconcile'
 
+export interface IndexingRuntimeSourceWriterRouter {
+  getMode(sourceId: string): SearchIndexWriterMode
+  setMode(sourceId: string, mode: SearchIndexWriterMode): void
+  drainSelected(sourceId: string, timeoutMs?: number): Promise<void>
+}
+
+export interface IndexingSourceWriterSwitchResult {
+  sourceId: string
+  previousMode: SearchIndexWriterMode
+  mode: SearchIndexWriterMode
+  epoch: number
+  snapshot: ScanSchedulerResult
+}
+
+interface IndexingSourceSnapshotRebuildResult {
+  clearedSearchIndexRows: number
+  snapshot: ScanSchedulerResult
+}
+interface ActiveIndexedSourceScan {
+  controller: AbortController
+  completion: Promise<void>
+  resolveCompletion: () => void
+}
+
 export class IndexingRuntime {
+  private readonly sourceMutationGate: IndexingSourceMutationGate
+  private sourceWriterRouter: IndexingRuntimeSourceWriterRouter | null = null
   private readonly sources = new Map<string, IndexedSource>()
   private readonly taskState = new Map<string, IndexedSourceRuntimeTaskState>()
   private store: IndexStoreAdapter
@@ -96,20 +132,64 @@ export class IndexingRuntime {
   private readonly runGate: IndexedSourceTaskRunGate
   private readonly rootPolicy: IndexingRootPolicy
   private taskStateStore: IndexingTaskStateStore
+  private readonly activeScans = new Map<string, Set<ActiveIndexedSourceScan>>()
+  private taskAdmissionClosed = false
+  private activeAdmittedTasks = 0
+  private readonly admittedTaskIdleWaiters = new Set<() => void>()
 
   constructor(options: IndexingRuntimeOptions = {}) {
     this.jobFactory = options.jobFactory ?? new IndexedSourceRuntimeTaskJobFactory()
     this.runGate = options.runGate ?? new IndexedSourceTaskRunGate()
     this.store = options.store ?? new NoopIndexStoreAdapter()
+    this.sourceMutationGate = options.sourceMutationGate ?? new IndexingSourceMutationGate()
     this.diagnosticsService = options.diagnosticsService ?? new SourceDiagnosticsService()
-    this.watchRouter = options.watchRouter ?? new WatchEventRouter(this.store)
-    this.scanScheduler = options.scanScheduler ?? new ScanScheduler(this.store, this.runGate)
-    this.reconcileEngine = options.reconcileEngine ?? new ReconcileEngine(this.store)
+    this.watchRouter =
+      options.watchRouter ?? new WatchEventRouter(this.store, this.sourceMutationGate)
+    this.scanScheduler =
+      options.scanScheduler ?? new ScanScheduler(this.store, this.runGate, this.sourceMutationGate)
+    this.reconcileEngine =
+      options.reconcileEngine ?? new ReconcileEngine(this.store, this.sourceMutationGate)
     this.reconcileScheduler =
       options.reconcileScheduler ??
       new DefaultReconcileScheduler(this.reconcileEngine, this.jobFactory, this.runGate)
     this.rootPolicy = options.rootPolicy ?? indexingRootPolicy
     this.taskStateStore = options.taskStateStore ?? new MemoryIndexingTaskStateStore()
+  }
+
+  beginShutdown(): void {
+    this.taskAdmissionClosed = true
+  }
+
+  async drainAdmittedTasks(timeoutMs = 10_000): Promise<void> {
+    if (this.activeAdmittedTasks === 0) return
+
+    await new Promise<void>((resolve, reject) => {
+      const waiter = (): void => {
+        clearTimeout(timeout)
+        this.admittedTaskIdleWaiters.delete(waiter)
+        resolve()
+      }
+      const timeout = setTimeout(() => {
+        this.admittedTaskIdleWaiters.delete(waiter)
+        reject(new Error('INDEXING_RUNTIME_TASK_DRAIN_TIMEOUT'))
+      }, timeoutMs)
+      timeout.unref?.()
+      this.admittedTaskIdleWaiters.add(waiter)
+    })
+  }
+
+  private async runAdmittedTask<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.taskAdmissionClosed) throw new Error('INDEXING_RUNTIME_SHUTTING_DOWN')
+
+    this.activeAdmittedTasks += 1
+    try {
+      return await operation()
+    } finally {
+      this.activeAdmittedTasks -= 1
+      if (this.activeAdmittedTasks === 0) {
+        for (const resolve of [...this.admittedTaskIdleWaiters]) resolve()
+      }
+    }
   }
 
   registerSource(source: IndexedSource): boolean {
@@ -176,14 +256,194 @@ export class IndexingRuntime {
 
   setStore(store: IndexStoreAdapter): void {
     this.store = store
-    this.watchRouter = new WatchEventRouter(this.store)
-    this.scanScheduler = new ScanScheduler(this.store, this.runGate)
-    this.reconcileEngine = new ReconcileEngine(this.store)
+    this.watchRouter = new WatchEventRouter(this.store, this.sourceMutationGate)
+    this.scanScheduler = new ScanScheduler(this.store, this.runGate, this.sourceMutationGate)
+    this.reconcileEngine = new ReconcileEngine(this.store, this.sourceMutationGate)
     this.reconcileScheduler = new DefaultReconcileScheduler(
       this.reconcileEngine,
       this.jobFactory,
       this.runGate
     )
+  }
+
+  setSourceWriterRouter(router: IndexingRuntimeSourceWriterRouter): void {
+    this.sourceWriterRouter = router
+  }
+
+  async applySourceBatch(
+    batch: IndexedSourceRecordBatch
+  ): Promise<IndexStoreBatchApplySummary | void> {
+    const source = this.requireSource(batch.sourceId)
+    if (batch.mutationLeaseId) {
+      return await this.sourceMutationGate.runWithinLease(
+        batch.sourceId,
+        batch.mutationLeaseId,
+        async () => await this.store.applyBatch(batch)
+      )
+    }
+    return await this.sourceMutationGate.run(batch.sourceId, async (lease) => {
+      try {
+        const summary = await this.store.applyBatch({ ...batch, mutationLeaseId: lease.id })
+        if (source.drainMutations) {
+          await source.drainMutations({ leaseId: lease.id, reason: 'mutation' })
+        }
+        return summary
+      } catch (error) {
+        await source
+          .drainMutations?.({ leaseId: lease.id, reason: 'mutation' })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
+  async applySourceDelta(delta: IndexedSourceDelta): Promise<IndexStoreDeltaApplySummary | void> {
+    const source = this.requireSource(delta.sourceId)
+    if (delta.mutationLeaseId) {
+      return await this.sourceMutationGate.runWithinLease(
+        delta.sourceId,
+        delta.mutationLeaseId,
+        async () => await this.store.applyDelta(delta)
+      )
+    }
+    return await this.sourceMutationGate.run(delta.sourceId, async (lease) => {
+      try {
+        const summary = await this.store.applyDelta({ ...delta, mutationLeaseId: lease.id })
+        if (source.drainMutations) {
+          await source.drainMutations({ leaseId: lease.id, reason: 'mutation' })
+        }
+        return summary
+      } catch (error) {
+        await source
+          .drainMutations?.({ leaseId: lease.id, reason: 'mutation' })
+          .catch(() => undefined)
+        throw error
+      }
+    })
+  }
+
+  async cleanupSource(
+    sourceId: string,
+    mutationLeaseId?: string
+  ): Promise<IndexStoreCleanupSourceSummary | void> {
+    this.requireSource(sourceId)
+    const operation = async (): Promise<IndexStoreCleanupSourceSummary | void> =>
+      await this.store.cleanupSource(sourceId)
+    return mutationLeaseId
+      ? await this.sourceMutationGate.runWithinLease(sourceId, mutationLeaseId, operation)
+      : await this.sourceMutationGate.run(sourceId, operation)
+  }
+
+  async countSource(sourceId: string, mutationLeaseId?: string): Promise<number> {
+    this.requireSource(sourceId)
+    const operation = async (): Promise<number> => await this.store.countSource(sourceId)
+    return mutationLeaseId
+      ? await this.sourceMutationGate.runWithinLease(sourceId, mutationLeaseId, operation)
+      : await this.sourceMutationGate.run(sourceId, operation)
+  }
+
+  async drainSourceMutations(sourceId: string, timeoutMs = 10_000): Promise<void> {
+    this.requireSource(sourceId)
+    await this.sourceMutationGate.runExclusive(sourceId, async () => undefined, timeoutMs)
+  }
+
+  async abortAndDrainSourceScans(sourceId: string, timeoutMs = 10_000): Promise<void> {
+    const active = [...(this.activeScans.get(sourceId) ?? [])]
+    if (active.length === 0) return
+    for (const scan of active) {
+      scan.controller.abort(new Error(`INDEXED_SOURCE_SCAN_ABORTED:${sourceId}`))
+    }
+
+    const settlement = Promise.allSettled(active.map((scan) => scan.completion))
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`INDEXED_SOURCE_SCAN_DRAIN_TIMEOUT:${sourceId}`))
+      }, timeoutMs)
+      timeout.unref?.()
+      void settlement.then(() => {
+        clearTimeout(timeout)
+        resolve()
+      })
+    })
+  }
+
+  async switchSourceWriter(
+    sourceId: string,
+    mode: SearchIndexWriterMode,
+    timeoutMs = 10_000
+  ): Promise<IndexingSourceWriterSwitchResult> {
+    return await this.runAdmittedTask(
+      async () => await this.switchSourceWriterInternal(sourceId, mode, timeoutMs)
+    )
+  }
+
+  private async switchSourceWriterInternal(
+    sourceId: string,
+    mode: SearchIndexWriterMode,
+    timeoutMs = 10_000
+  ): Promise<IndexingSourceWriterSwitchResult> {
+    const source = this.requireSource(sourceId)
+    const router = this.sourceWriterRouter
+    if (!router) {
+      throw new Error('INDEXING_SOURCE_WRITER_ROUTER_UNAVAILABLE')
+    }
+
+    const startedAt = Date.now()
+    const job = this.createScanJob(sourceId)
+    return await this.sourceMutationGate.runExclusive(
+      sourceId,
+      async (lease) => {
+        const previousMode = router.getMode(sourceId)
+        try {
+          await router.drainSelected(sourceId, timeoutMs)
+          router.setMode(sourceId, mode)
+          const rebuild = await this.rebuildSourceFromSnapshot(source)
+          await router.drainSelected(sourceId, timeoutMs)
+          await this.recordScanResult(
+            rebuild.snapshot,
+            job,
+            IndexedSourceScanReasons.SchemaMigration
+          )
+          return {
+            sourceId,
+            previousMode,
+            mode,
+            epoch: lease.epoch,
+            snapshot: rebuild.snapshot
+          }
+        } catch (error) {
+          router.setMode(sourceId, previousMode)
+          await this.recordScanFailure(
+            sourceId,
+            startedAt,
+            Date.now(),
+            error instanceof Error ? error.message : String(error),
+            job,
+            {
+              trigger: IndexedSourceScanReasons.SchemaMigration,
+              errorCode: 'source-writer-switch'
+            }
+          )
+          throw error
+        }
+      },
+      timeoutMs
+    )
+  }
+
+  private async rebuildSourceFromSnapshot(
+    source: IndexedSource,
+    onClear?: (removedIndexedItems: number) => void
+  ): Promise<IndexingSourceSnapshotRebuildResult> {
+    const replacement = await this.scanScheduler.replaceSourceFromSnapshotWithinLease(
+      source,
+      IndexedSourceScanReasons.SchemaMigration
+    )
+    onClear?.(replacement.removedIndexedItems)
+    return {
+      clearedSearchIndexRows: replacement.removedIndexedItems,
+      snapshot: replacement.snapshot
+    }
   }
 
   setTaskStateStore(taskStateStore: IndexingTaskStateStore): void {
@@ -210,6 +470,14 @@ export class IndexingRuntime {
   }
 
   async routeWatchEventWithResult(event: IndexedSourceWatchEvent): Promise<WatchEventRouteResult> {
+    return await this.runAdmittedTask(
+      async () => await this.routeWatchEventWithResultInternal(event)
+    )
+  }
+
+  private async routeWatchEventWithResultInternal(
+    event: IndexedSourceWatchEvent
+  ): Promise<WatchEventRouteResult> {
     const queuedAt = Date.now()
     const diagnostics = await this.getDiagnostics()
     const result = await this.watchRouter.routeWithResult(event, this.sources, diagnostics)
@@ -222,33 +490,92 @@ export class IndexingRuntime {
     reason: IndexedSourceScanReason,
     request: Partial<IndexedSourceScanRequest> = {}
   ): Promise<ScanSchedulerResult> {
+    return await this.runAdmittedTask(
+      async () => await this.scanSourceInternal(sourceId, reason, request)
+    )
+  }
+
+  private async scanSourceInternal(
+    sourceId: string,
+    reason: IndexedSourceScanReason,
+    request: Partial<IndexedSourceScanRequest> = {}
+  ): Promise<ScanSchedulerResult> {
     const source = this.requireSource(sourceId)
     const job = this.createScanJob(sourceId)
-    const diagnostics = await this.getSourceDiagnostics(sourceId)
+    const controller = new AbortController()
+    const completion = Promise.withResolvers<void>()
+    const activeScan: ActiveIndexedSourceScan = {
+      controller,
+      completion: completion.promise,
+      resolveCompletion: completion.resolve
+    }
+    const activeForSource = this.activeScans.get(sourceId) ?? new Set<ActiveIndexedSourceScan>()
+    activeForSource.add(activeScan)
+    this.activeScans.set(sourceId, activeForSource)
+    const externalSignal = request.signal
+    const abortFromExternalSignal = (): void => {
+      controller.abort(externalSignal?.reason)
+    }
+    let activeScanReleased = false
+    const releaseActiveScan = (): void => {
+      if (activeScanReleased) return
+      activeScanReleased = true
+      externalSignal?.removeEventListener('abort', abortFromExternalSignal)
+      activeForSource.delete(activeScan)
+      if (activeForSource.size === 0) this.activeScans.delete(sourceId)
+      activeScan.resolveCompletion()
+    }
+    if (externalSignal?.aborted) {
+      abortFromExternalSignal()
+    } else {
+      externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true })
+    }
+    const diagnostics = await this.getSourceDiagnostics(sourceId).catch((error) => {
+      releaseActiveScan()
+      throw error
+    })
     const eligibility = resolveIndexedSourceTaskEligibility({
       descriptor: source.descriptor,
       health: diagnostics?.health,
       task: 'scan'
     })
     if (!eligibility.eligible) {
-      const timestamp = Date.now()
-      const reason = eligibility.reason ?? 'diagnostics:unavailable'
-      await this.recordScanSkipped(sourceId, job.queuedAt, timestamp, reason, job, {
-        trigger: request.reason ?? reason,
-        errorCode: 'eligibility'
-      })
-      return {
-        sourceId,
-        batches: 0,
-        records: 0,
-        indexedRecords: 0,
-        startedAt: job.queuedAt,
-        completedAt: timestamp
+      try {
+        const timestamp = Date.now()
+        const reason = eligibility.reason ?? 'diagnostics:unavailable'
+        await this.recordScanSkipped(sourceId, job.queuedAt, timestamp, reason, job, {
+          trigger: request.reason ?? reason,
+          errorCode: 'eligibility'
+        })
+        return {
+          sourceId,
+          batches: 0,
+          records: 0,
+          indexedRecords: 0,
+          startedAt: job.queuedAt,
+          completedAt: timestamp
+        }
+      } finally {
+        releaseActiveScan()
       }
     }
 
     try {
-      const result = await this.scanScheduler.scanSource(source, reason, request)
+      const result =
+        reason === IndexedSourceScanReasons.ManualRebuild
+          ? await this.sourceMutationGate.run(sourceId, async (lease) => {
+              const replacement = await this.scanScheduler.replaceSourceFromSnapshotWithinLease(
+                source,
+                reason,
+                { ...request, signal: controller.signal },
+                lease
+              )
+              return replacement.snapshot
+            })
+          : await this.scanScheduler.scanSource(source, reason, {
+              ...request,
+              signal: controller.signal
+            })
       await this.recordScanResult(result, job, request.reason ?? reason)
       return result
     } catch (error) {
@@ -264,6 +591,8 @@ export class IndexingRuntime {
         }
       )
       throw error
+    } finally {
+      releaseActiveScan()
     }
   }
 
@@ -273,6 +602,12 @@ export class IndexingRuntime {
   }
 
   async scanSourcesWithResult(reason: IndexedSourceScanReason): Promise<ScanSchedulerBatchResult> {
+    return await this.runAdmittedTask(async () => await this.scanSourcesWithResultInternal(reason))
+  }
+
+  private async scanSourcesWithResultInternal(
+    reason: IndexedSourceScanReason
+  ): Promise<ScanSchedulerBatchResult> {
     const allSources = this.listSources()
     const diagnostics = await this.getDiagnostics()
     const eligible = this.filterAutomaticEligibleSources(
@@ -326,6 +661,15 @@ export class IndexingRuntime {
     sourceId: string,
     request: Partial<IndexedSourceReconcileRequest> = {}
   ): Promise<IndexedSourceReconcileResult> {
+    return await this.runAdmittedTask(
+      async () => await this.reconcileSourceInternal(sourceId, request)
+    )
+  }
+
+  private async reconcileSourceInternal(
+    sourceId: string,
+    request: Partial<IndexedSourceReconcileRequest> = {}
+  ): Promise<IndexedSourceReconcileResult> {
     const source = this.requireSource(sourceId)
     const diagnostics = await this.getSourceDiagnostics(sourceId)
     const eligibility = resolveIndexedSourceTaskEligibility({
@@ -364,6 +708,10 @@ export class IndexingRuntime {
   }
 
   async reconcileSourcesWithResult(): Promise<ReconcileEngineBatchResult> {
+    return await this.runAdmittedTask(async () => await this.reconcileSourcesWithResultInternal())
+  }
+
+  private async reconcileSourcesWithResultInternal(): Promise<ReconcileEngineBatchResult> {
     const allSources = this.listSources()
     const diagnostics = await this.getDiagnostics()
     const eligible = this.filterAutomaticEligibleSources(
@@ -409,6 +757,15 @@ export class IndexingRuntime {
     sourceId: string,
     request: Partial<IndexedSourceResetRequest> = {}
   ): Promise<IndexedSourceResetResult> {
+    return await this.runAdmittedTask(
+      async () => await this.resetSourceRuntimeStateInternal(sourceId, request)
+    )
+  }
+
+  private async resetSourceRuntimeStateInternal(
+    sourceId: string,
+    request: Partial<IndexedSourceResetRequest> = {}
+  ): Promise<IndexedSourceResetResult> {
     const source = this.requireSource(sourceId)
     const startedAt = Date.now()
     const reason = request.reason ?? IndexedSourceResetReasons.HealthRepair
@@ -431,67 +788,88 @@ export class IndexingRuntime {
     }
 
     const shouldClearSearchIndex = request.clearSearchIndex === true
-    let clearedSearchIndex = false
-    let clearedSearchIndexRows = 0
     this.runGate.start(sourceId, 'reset', startedAt)
 
     try {
-      const clearSearchIndex = async (): Promise<void> => {
-        if (shouldClearSearchIndex) {
-          const summary = await this.store.clearSource(sourceId)
-          clearedSearchIndex = true
-          clearedSearchIndexRows = summary?.removedIndexedItems ?? 0
+      const result = await this.sourceMutationGate.runExclusive(sourceId, async () => {
+        if (!source.resetIndex && !shouldClearSearchIndex) {
+          return {
+            sourceId,
+            reason,
+            clearedSearchIndex: false,
+            clearedScanProgress: false,
+            startedAt,
+            completedAt: Date.now(),
+            error: 'reset-not-supported'
+          }
         }
-      }
-
-      if (!source.resetIndex) {
-        await clearSearchIndex()
-
-        const result: IndexedSourceResetResult = {
-          sourceId,
-          reason,
-          clearedSearchIndex,
-          clearedSearchIndexRows,
-          clearedScanProgress: false,
-          startedAt,
-          completedAt: Date.now(),
-          error: shouldClearSearchIndex ? undefined : 'reset-not-supported'
+        const localResult = source.resetIndex
+          ? await source.resetIndex({
+              ...request,
+              sourceId,
+              reason,
+              clearSearchIndex: false
+            })
+          : {
+              sourceId,
+              reason,
+              clearedSearchIndex: false,
+              clearedScanProgress: false,
+              startedAt,
+              completedAt: Date.now()
+            }
+        if (localResult.error || !shouldClearSearchIndex) {
+          return localResult
         }
-        await this.recordResetResult(
-          result,
-          job,
-          shouldClearSearchIndex ? undefined : 'skipped',
-          shouldClearSearchIndex ? undefined : 'not-supported'
-        )
-        return result
-      }
 
-      await clearSearchIndex()
-      const result = await source.resetIndex({
-        ...request,
-        sourceId,
-        reason,
-        clearSearchIndex: false
+        let writerClearSucceeded = false
+        let clearedSearchIndexRows = 0
+        try {
+          const rebuild = await this.rebuildSourceFromSnapshot(source, (rows) => {
+            writerClearSucceeded = true
+            clearedSearchIndexRows = rows
+          })
+          await this.recordScanResult(
+            rebuild.snapshot,
+            this.createScanJob(sourceId),
+            IndexedSourceScanReasons.SchemaMigration
+          )
+          return {
+            ...localResult,
+            clearedSearchIndex: true,
+            clearedSearchIndexRows:
+              clearedSearchIndexRows + (localResult.clearedSearchIndexRows ?? 0),
+            completedAt: Date.now()
+          }
+        } catch (error) {
+          return {
+            ...localResult,
+            clearedSearchIndex: writerClearSucceeded || localResult.clearedSearchIndex,
+            clearedSearchIndexRows:
+              clearedSearchIndexRows + (localResult.clearedSearchIndexRows ?? 0),
+            completedAt: Date.now(),
+            error: error instanceof Error ? error.message : String(error)
+          }
+        }
       })
-      const mergedResult = {
-        ...result,
-        clearedSearchIndex: clearedSearchIndex || result.clearedSearchIndex,
-        clearedSearchIndexRows: clearedSearchIndexRows + (result.clearedSearchIndexRows ?? 0)
-      }
-      await this.recordResetResult(mergedResult, job)
-      return mergedResult
+      await this.recordResetResult(
+        result,
+        job,
+        result.error === 'reset-not-supported' ? 'skipped' : result.error ? 'failed' : undefined,
+        result.error === 'reset-not-supported' ? 'not-supported' : undefined
+      )
+      return result
     } catch (error) {
       const result: IndexedSourceResetResult = {
         sourceId,
         reason,
-        clearedSearchIndex,
-        clearedSearchIndexRows,
+        clearedSearchIndex: false,
         clearedScanProgress: false,
         startedAt,
         completedAt: Date.now(),
         error: error instanceof Error ? error.message : String(error)
       }
-      await this.recordResetResult(result, job)
+      await this.recordResetResult(result, job, 'failed')
       return result
     } finally {
       this.runGate.complete(sourceId, 'reset')

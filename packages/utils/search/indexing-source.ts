@@ -253,8 +253,7 @@ export interface IndexedSourceProviderConfigEnablement {
   reason: IndexedSourceProviderConfigEnablementReason;
 }
 
-export interface IndexedSourceManifestDescriptor
-  extends CreateIndexedSourceDescriptorOptions {
+export interface IndexedSourceManifestDescriptor extends CreateIndexedSourceDescriptorOptions {
   id: string;
   template?: IndexedSourceDescriptorTemplate;
   kind?: IndexedSourceKind;
@@ -738,6 +737,17 @@ export interface IndexedSourceEvidence {
   metadata?: Record<string, unknown>;
 }
 
+export interface IndexedSourceSearchTerm {
+  value: string;
+  priority: number;
+}
+
+export interface IndexedSourceSearchProjection {
+  keywords?: IndexedSourceSearchTerm[];
+  aliases?: IndexedSourceSearchTerm[];
+  legacyItemIds?: string[];
+}
+
 export interface IndexedSourceRecord {
   sourceId: string;
   recordId: string;
@@ -754,6 +764,7 @@ export interface IndexedSourceRecord {
   keywords?: string[];
   tags?: string[];
   metadata?: Record<string, unknown>;
+  search?: IndexedSourceSearchProjection;
 }
 
 export interface IndexedFileSourceRecordRow {
@@ -765,6 +776,7 @@ export interface IndexedFileSourceRecordRow {
   mtime?: Date | number | string | null;
   type?: string | null;
   isDir?: boolean | null;
+  content?: string | null;
 }
 
 export interface MapIndexedFileSourceRecordOptions {
@@ -778,7 +790,8 @@ export function toIndexedSourceRecordTimestamp(
     return undefined;
   }
 
-  const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  const timestamp =
+    value instanceof Date ? value.getTime() : new Date(value).getTime();
   return Number.isNaN(timestamp) ? undefined : timestamp;
 }
 
@@ -798,6 +811,7 @@ export function mapIndexedFileSourceRecord(
     size: file.size ?? undefined,
     metadata: {
       extension: file.extension ?? undefined,
+      content: file.content ?? undefined,
       type: file.type ?? "file",
       isDir: file.isDir ?? false,
     },
@@ -809,6 +823,8 @@ export interface IndexedSourceRecordBatch {
   records: IndexedSourceRecord[];
   cursor?: string;
   done?: boolean;
+  /** Internal runtime lease carried through acknowledged enrichment continuations. */
+  mutationLeaseId?: string;
 }
 
 export interface IndexedSourceScanRequest {
@@ -817,6 +833,10 @@ export interface IndexedSourceScanRequest {
   roots?: IndexedSourceRoot[];
   cursor?: string;
   signal?: AbortSignal;
+  /** Internal active source-mutation lease. */
+  mutationLeaseId?: string;
+  /** Internal delta sink owned by the active scan lease. */
+  onDelta?: (delta: IndexedSourceDelta) => Promise<void>;
 }
 
 export interface IndexedSourceWatchEvent {
@@ -834,6 +854,8 @@ export interface IndexedSourceDelta {
   stableKey?: string;
   path?: string;
   reason?: string;
+  /** Internal runtime lease carried through acknowledged enrichment continuations. */
+  mutationLeaseId?: string;
 }
 
 export interface IndexedSourceReconcileRequest {
@@ -842,6 +864,12 @@ export interface IndexedSourceReconcileRequest {
   limit?: number;
   reason?: IndexedSourceReconcileReason | (string & {});
   signal?: AbortSignal;
+  /** Internal active source-mutation lease. */
+  mutationLeaseId?: string;
+  /** Internal batch sink owned by the active reconcile lease. */
+  onRecordBatch?: (batch: IndexedSourceRecordBatch) => Promise<void>;
+  /** Internal delta sink owned by the active reconcile lease. */
+  onDelta?: (delta: IndexedSourceDelta) => Promise<void>;
 }
 
 export interface IndexedSourceReconcileResult {
@@ -946,11 +974,8 @@ const indexedSourceTaskHistoryKinds = new Set<IndexedSourceTaskHistoryKind>([
   "reconcile",
   "reset",
 ]);
-const indexedSourceTaskHistoryStatuses = new Set<IndexedSourceTaskHistoryStatus>([
-  "succeeded",
-  "failed",
-  "skipped",
-]);
+const indexedSourceTaskHistoryStatuses =
+  new Set<IndexedSourceTaskHistoryStatus>(["succeeded", "failed", "skipped"]);
 
 export function appendIndexedSourceTaskHistory(
   current: IndexedSourceTaskHistoryEntry[] = [],
@@ -966,7 +991,9 @@ export function appendIndexedSourceTaskHistory(
 
   const entries = [entry, ...current]
     .map(sanitizeIndexedSourceTaskHistoryEntry)
-    .filter((task): task is IndexedSourceTaskHistoryEntry => task !== undefined);
+    .filter(
+      (task): task is IndexedSourceTaskHistoryEntry => task !== undefined,
+    );
 
   return entries
     .sort((left, right) => right.completedAt - left.completedAt)
@@ -997,8 +1024,12 @@ function sanitizeIndexedSourceTaskHistoryEntry(
     ...(typeof task.reason === "string" ? { reason: task.reason } : {}),
     ...(typeof task.trigger === "string" ? { trigger: task.trigger } : {}),
     ...optionalTaskHistoryNumber("attempt", task.attempt),
-    ...(typeof task.errorCode === "string" ? { errorCode: task.errorCode } : {}),
-    ...(typeof task.errorMessage === "string" ? { errorMessage: task.errorMessage } : {}),
+    ...(typeof task.errorCode === "string"
+      ? { errorCode: task.errorCode }
+      : {}),
+    ...(typeof task.errorMessage === "string"
+      ? { errorMessage: task.errorMessage }
+      : {}),
     ...(typeof task.error === "string" ? { error: task.error } : {}),
     ...sanitizeIndexedSourceTaskHistorySummary(task.summary),
   };
@@ -1009,10 +1040,14 @@ function optionalTaskHistoryNumber<TKey extends "durationMs" | "attempt">(
   value: number | undefined,
 ): Partial<Record<TKey, number>> {
   const number = normalizeNonNegativeFiniteNumber(value);
-  return number === undefined ? {} : ({ [key]: number } as Record<TKey, number>);
+  return number === undefined
+    ? {}
+    : ({ [key]: number } as Record<TKey, number>);
 }
 
-function optionalTaskHistoryTimestamp<TKey extends "queuedAt" | "startedAt" | "occurredAt">(
+function optionalTaskHistoryTimestamp<
+  TKey extends "queuedAt" | "startedAt" | "occurredAt",
+>(
   key: TKey,
   value: number | undefined,
   completedAt: number,
@@ -1023,7 +1058,9 @@ function optionalTaskHistoryTimestamp<TKey extends "queuedAt" | "startedAt" | "o
     : ({ [key]: Math.min(timestamp, completedAt) } as Record<TKey, number>);
 }
 
-function normalizeNonNegativeFiniteNumber(value: number | undefined): number | undefined {
+function normalizeNonNegativeFiniteNumber(
+  value: number | undefined,
+): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
     ? value
     : undefined;
@@ -1147,6 +1184,11 @@ export interface IndexedSourceOpenResult {
   reason?: string;
 }
 
+export interface IndexedSourceMutationDrainRequest {
+  leaseId: string;
+  reason: "scan" | "reconcile" | "watch" | "mutation";
+}
+
 export interface IndexedSource {
   descriptor: IndexedSourceDescriptor;
   getHealth: () => Promise<IndexedSourceHealth>;
@@ -1159,6 +1201,9 @@ export interface IndexedSource {
   reconcile?: (
     request: IndexedSourceReconcileRequest,
   ) => Promise<IndexedSourceReconcileResult>;
+  drainMutations?: (
+    request: IndexedSourceMutationDrainRequest,
+  ) => Promise<void>;
   shouldHandleWatchEvent?: (event: IndexedSourceWatchEvent) => boolean;
   handleWatchEvent?: (
     event: IndexedSourceWatchEvent,
@@ -1383,9 +1428,7 @@ function createIndexedSourceDescriptorFromManifest(
   const admission = {
     ...manifestSource.admission,
     owner:
-      manifestSource.admission?.owner ??
-      defaults.owner ??
-      "third-party-plugin",
+      manifestSource.admission?.owner ?? defaults.owner ?? "third-party-plugin",
   };
 
   if (manifestSource.template) {
@@ -1447,7 +1490,8 @@ export function resolveIndexedSourceManifestDescriptors(
         {
           type: "warning",
           code: "INDEXED_SOURCE_INVALID",
-          message: 'Invalid "indexedSources" in manifest.json (expected array).',
+          message:
+            'Invalid "indexedSources" in manifest.json (expected array).',
         },
       ],
     };
@@ -1488,9 +1532,8 @@ export function resolveIndexedSourceManifestDescriptors(
 
     const admissionIssues = getIndexedSourceAdmissionIssues(descriptor);
     const permissionScopes = descriptor.admission?.permissionScopes ?? [];
-    const requiredPermissionIds = resolveIndexedSourcePermissionIds(
-      permissionScopes,
-    );
+    const requiredPermissionIds =
+      resolveIndexedSourcePermissionIds(permissionScopes);
     const missingPermissionIds = requiredPermissionIds.filter(
       (permissionId) => !declaredPermissionIds.has(permissionId),
     );
@@ -1809,7 +1852,9 @@ export function resolveIndexedSourceProviderConfigEnablement(
   const linkedConfigs = configs.filter((config) =>
     linkedProviderIdSet.has(config.providerId),
   );
-  const configuredProviderIds = linkedConfigs.map((config) => config.providerId);
+  const configuredProviderIds = linkedConfigs.map(
+    (config) => config.providerId,
+  );
   const enabledProviderIds = linkedConfigs
     .filter((config) => config.enabled === true)
     .map((config) => config.providerId);

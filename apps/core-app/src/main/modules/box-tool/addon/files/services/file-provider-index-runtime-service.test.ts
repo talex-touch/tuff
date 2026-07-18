@@ -1,7 +1,7 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type {
-  PersistAndIndexSummary,
-  PersistEntry
+  PersistEntriesSummary,
+  FilePersistenceEntry
 } from '../../../search-engine/workers/search-index-worker-client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -33,7 +33,7 @@ function createResult(fileId: number): IndexWorkerFileResult {
   }
 }
 
-function toPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
+function toPersistEntries(entries: IndexWorkerFileResult[]): FilePersistenceEntry[] {
   return entries.map((entry) => ({
     fileId: entry.fileId,
     fileUpdate: null,
@@ -45,17 +45,15 @@ function toPersistEntries(entries: IndexWorkerFileResult[]): PersistEntry[] {
       lastError: entry.progress.lastError,
       startedAt: entry.progress.startedAt ?? null,
       updatedAt: entry.progress.updatedAt ?? null
-    },
-    indexItem: entry.indexItem
+    }
   }))
 }
 
-function createPersistSummary(entries: PersistEntry[]): PersistAndIndexSummary {
+function createPersistSummary(entries: FilePersistenceEntry[]): PersistEntriesSummary {
   return {
     entries: entries.length,
     chunks: entries.length > 0 ? 1 : 0,
     persistedRows: entries.length,
-    indexedItems: entries.length,
     fileUpdates: 0,
     progressRows: entries.length,
     embeddings: 0
@@ -66,17 +64,20 @@ function createService(options: {
   pending: Map<number, IndexWorkerFileResult>
   inflight: Map<number, IndexWorkerFileResult>
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
-  persistAndIndex?: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
+  persistEntries?: (entries: FilePersistenceEntry[]) => Promise<PersistEntriesSummary>
+  publishRecords?: (entries: IndexWorkerFileResult[]) => Promise<number>
   logWarn?: (message: string, error?: unknown, meta?: Record<string, unknown>) => void
   config?: FileProviderIndexRuntimeServiceDeps['config']
 }) {
-  const persistAndIndex = vi.fn(
-    options.persistAndIndex ?? (async (entries) => createPersistSummary(entries))
+  const persistEntries = vi.fn(
+    options.persistEntries ?? (async (entries) => createPersistSummary(entries))
   )
   const logWarn = vi.fn(options.logWarn ?? (() => undefined))
+  const publishRecords = vi.fn(options.publishRecords ?? (async (entries) => entries.length))
 
   return {
-    persistAndIndex,
+    persistEntries,
+    publishRecords,
     logWarn,
     service: new FileProviderIndexRuntimeService({
       flushBatchScheduler: {
@@ -88,8 +89,9 @@ function createService(options: {
       getPendingResults: () => options.pending,
       getInflightResults: () => options.inflight,
       ensureSearchIndexWorkerReady: options.ensureSearchIndexWorkerReady,
-      getSearchIndexWorker: () => ({ persistAndIndex }),
+      getSearchIndexWorker: () => ({ persistEntries }),
       buildPersistEntries: toPersistEntries,
+      publishRecords,
       logDebug: vi.fn(),
       logWarn,
       config: {
@@ -115,7 +117,7 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
       resolveReady = resolve
     })
     const ensureSearchIndexWorkerReady = vi.fn(() => ready)
-    const { service, persistAndIndex } = createService({
+    const { service, persistEntries } = createService({
       pending,
       inflight,
       ensureSearchIndexWorkerReady
@@ -125,12 +127,12 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
     await Promise.resolve()
 
     expect(ensureSearchIndexWorkerReady).toHaveBeenCalledWith('index-runtime.flush')
-    expect(persistAndIndex).not.toHaveBeenCalled()
+    expect(persistEntries).not.toHaveBeenCalled()
 
     resolveReady(true)
     await flush
 
-    expect(persistAndIndex).toHaveBeenCalledTimes(1)
+    expect(persistEntries).toHaveBeenCalledTimes(1)
     expect(pending.size).toBe(0)
     expect(inflight.size).toBe(0)
     expect(service.getFlushSnapshot()).toMatchObject({
@@ -153,7 +155,7 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
     const pending = new Map<number, IndexWorkerFileResult>()
     const inflight = new Map<number, IndexWorkerFileResult>()
     const ensureSearchIndexWorkerReady = vi.fn(async () => true)
-    const { service, persistAndIndex } = createService({
+    const { service, persistEntries } = createService({
       pending,
       inflight,
       ensureSearchIndexWorkerReady
@@ -162,7 +164,7 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
     await service.flush()
 
     expect(ensureSearchIndexWorkerReady).not.toHaveBeenCalled()
-    expect(persistAndIndex).not.toHaveBeenCalled()
+    expect(persistEntries).not.toHaveBeenCalled()
     expect(service.getFlushSnapshot()).toMatchObject({
       status: 'idle',
       entries: 0,
@@ -176,7 +178,7 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
     vi.useFakeTimers()
     const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
     const inflight = new Map<number, IndexWorkerFileResult>()
-    const { service, persistAndIndex, logWarn } = createService({
+    const { service, persistEntries, logWarn } = createService({
       pending,
       inflight,
       ensureSearchIndexWorkerReady: vi.fn(async () => false)
@@ -184,7 +186,7 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
 
     await service.doFlush()
 
-    expect(persistAndIndex).not.toHaveBeenCalled()
+    expect(persistEntries).not.toHaveBeenCalled()
     expect(pending.has(1)).toBe(true)
     expect(inflight.size).toBe(0)
     expect(logWarn).toHaveBeenCalledWith(
@@ -204,21 +206,23 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
     })
   })
 
-  it('records failed flush snapshot with retry metadata', async () => {
+  it('retains the local batch for retry when runtime publication fails after persistence', async () => {
     vi.useFakeTimers()
     const pending = new Map<number, IndexWorkerFileResult>([[1, createResult(1)]])
     const inflight = new Map<number, IndexWorkerFileResult>()
-    const { service, logWarn } = createService({
+    const { service, persistEntries, publishRecords, logWarn } = createService({
       pending,
       inflight,
       ensureSearchIndexWorkerReady: vi.fn(async () => true),
-      persistAndIndex: async () => {
-        throw new Error('persist exploded')
+      publishRecords: async () => {
+        throw new Error('runtime publish exploded')
       }
     })
 
     await service.flush()
 
+    expect(persistEntries).toHaveBeenCalledTimes(1)
+    expect(publishRecords).toHaveBeenCalledTimes(1)
     expect(pending.has(1)).toBe(true)
     expect(inflight.size).toBe(0)
     expect(logWarn).toHaveBeenCalledWith(
@@ -236,7 +240,7 @@ describe('FileProviderIndexRuntimeService worker readiness', () => {
       pending: 1,
       inflight: 0,
       reason: 'persist-failed',
-      error: 'persist exploded',
+      error: 'runtime publish exploded',
       metadata: {
         withContent: 1,
         isBusy: false,

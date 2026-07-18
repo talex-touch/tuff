@@ -14,8 +14,17 @@ const state = vi.hoisted(() => {
     transportHandlers,
     searchUpdateCompletion,
     addUsageLog: vi.fn(async () => undefined),
+    appProviderPrepareForShutdown: vi.fn(async () => undefined),
+    appProviderRuntimeDelegate: vi.fn(),
+    appRuntimeAbortAndDrain: vi.fn<(sourceId: string, timeoutMs?: number) => Promise<void>>(
+      async () => undefined
+    ),
+    appRuntimeDrainMutations: vi.fn(async () => undefined),
     clearIndexingRuntime: vi.fn(),
     createDbUtils: vi.fn(),
+    fileProviderMutationDelegate: vi.fn(),
+    fileProviderPersistencePort: vi.fn(),
+    fileProviderPrepareForShutdown: vi.fn(async () => undefined),
     fileProviderResetDelegate: vi.fn(),
     forceFlushUsageQueue: vi.fn(async () => undefined),
     getAllPinnedItems: vi.fn<() => Promise<PinnedItem[]>>(async () => []),
@@ -23,8 +32,11 @@ const state = vi.hoisted(() => {
     incrementUsageStats: vi.fn(async () => undefined),
     incrementUsageSummary: vi.fn(async () => undefined),
     incrementUsageTrendDaily: vi.fn(() => Promise.resolve()),
+    indexingRuntimeBeginShutdown: vi.fn(),
+    indexingRuntimeDrainAdmittedTasks: vi.fn(async () => undefined),
     indexingRuntimeSetStore: vi.fn(),
     indexingRuntimeSetTaskStateStore: vi.fn(),
+    indexingRuntimeSetWriterRouter: vi.fn(),
     invalidateRecommendationCache: vi.fn(),
     invalidateUsageStatsCache: vi.fn(),
     registerCoreIndexedSources: vi.fn(),
@@ -37,7 +49,8 @@ const state = vi.hoisted(() => {
     togglePin: vi.fn(async () => true),
     touchEventOff: vi.fn(),
     touchEventOn: vi.fn(),
-    usageQueueEnqueue: vi.fn()
+    usageQueueEnqueue: vi.fn(),
+    writerShutdown: vi.fn(async () => undefined)
   }
 })
 
@@ -108,10 +121,33 @@ vi.mock('../../storage', () => ({
   getMainConfig: vi.fn(() => ({ beginner: { init: true } })),
   storageModule: {},
   isMainStorageReady: vi.fn(() => false),
-  subscribeMainConfig: vi.fn(() => () => {})
+  subscribeMainConfig: vi.fn(() => () => {}),
+  OnboardingGateError: class OnboardingGateError extends Error {
+    constructor(
+      readonly decision: {
+        state: 'blocked' | 'degraded'
+        reason: string
+        recoverable: boolean
+      }
+    ) {
+      super(decision.reason)
+    }
+  },
+  onboardingGate: {
+    evaluate: vi.fn(() => ({ state: 'allowed' })),
+    waitForDecision: vi.fn(async () => ({ state: 'allowed' })),
+    subscribe: vi.fn(() => () => {})
+  }
 }))
 vi.mock('../addon/apps/app-provider', () => ({
-  appProvider: { id: 'app-provider', onSearch: vi.fn(), supportedInputTypes: ['text'], type: 'app' }
+  appProvider: {
+    id: 'app-provider',
+    onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: state.appProviderPrepareForShutdown,
+    setIndexedSourceRuntimeDelegate: state.appProviderRuntimeDelegate,
+    supportedInputTypes: ['text'],
+    type: 'app'
+  }
 }))
 vi.mock('../addon/files/everything-provider', () => ({
   everythingProvider: {
@@ -129,6 +165,9 @@ vi.mock('../addon/files/file-provider', () => ({
     hasSearchFilters: vi.fn(() => false),
     id: 'file-provider',
     onSearch: vi.fn(),
+    prepareForSearchIndexShutdown: state.fileProviderPrepareForShutdown,
+    setFilePersistencePort: state.fileProviderPersistencePort,
+    setIndexedSourceRuntimeMutationDelegate: state.fileProviderMutationDelegate,
     setIndexedSourceRuntimeResetDelegate: state.fileProviderResetDelegate,
     supportedInputTypes: ['text'],
     type: 'file'
@@ -175,14 +214,28 @@ vi.mock('../core-box/window', () => ({
 }))
 vi.mock('./indexing-runtime', () => ({
   indexingRuntime: {
+    abortAndDrainSourceScans: state.appRuntimeAbortAndDrain,
+    beginShutdown: state.indexingRuntimeBeginShutdown,
     clear: state.clearIndexingRuntime,
+    drainAdmittedTasks: state.indexingRuntimeDrainAdmittedTasks,
+    drainSourceMutations: state.appRuntimeDrainMutations,
     resetSourceRuntimeState: vi.fn(),
+    setSourceWriterRouter: state.indexingRuntimeSetWriterRouter,
     setStore: state.indexingRuntimeSetStore,
     setTaskStateStore: state.indexingRuntimeSetTaskStateStore
   }
 }))
 vi.mock('./indexing-runtime-sources', () => ({
   registerCoreIndexedSources: state.registerCoreIndexedSources
+}))
+vi.mock('./search-index-writer', () => ({
+  LegacySearchIndexWriter: class {},
+  SourceScopedIndexWriterRouter: class {},
+  searchIndexWriter: {
+    getFilePersistencePort: vi.fn(() => null),
+    initialize: vi.fn(async () => undefined),
+    shutdown: state.writerShutdown
+  }
 }))
 vi.mock('./indexing-store-adapter', () => ({ SearchIndexStoreAdapter: class {} }))
 vi.mock('./indexing-task-state-store', () => ({ SqliteIndexingTaskStateStore: class {} }))
@@ -291,7 +344,10 @@ vi.mock('talex-mica-electron', () => ({
   useMicaElectron: vi.fn()
 }))
 
-import { SearchEngineCore } from './search-core'
+import type { SearchEngineCore } from './search-core'
+
+let core: SearchEngineCore
+let searchIndexCommitHub: typeof import('./search-index-commit-hub').searchIndexCommitHub
 
 function buildItem(id: string, providerId: string, title: string): TuffItem {
   return {
@@ -315,13 +371,17 @@ function buildProvider(id: string, onSearch: () => Promise<TuffSearchResult>) {
 }
 
 describe('SearchEngineCore facade contracts', () => {
-  const core = SearchEngineCore.getInstance()
-
-  beforeEach(() => {
-    core.destroy()
+  beforeEach(async () => {
+    vi.resetModules()
     vi.clearAllMocks()
     state.transportHandlers.clear()
     state.searchUpdateCompletion.current = Promise.withResolvers<void>()
+    const [searchIndexCommitHubModule, searchCoreModule] = await Promise.all([
+      import('./search-index-commit-hub'),
+      import('./search-core')
+    ])
+    searchIndexCommitHub = searchIndexCommitHubModule.searchIndexCommitHub
+    core = searchCoreModule.SearchEngineCore.getInstance()
     state.createDbUtils.mockReturnValue({
       addUsageLog: state.addUsageLog,
       getAllPinnedItems: state.getAllPinnedItems,
@@ -338,8 +398,19 @@ describe('SearchEngineCore facade contracts', () => {
     core.init({ app: { channel: {} } } as never)
   })
 
-  afterEach(() => {
-    core.destroy()
+  afterEach(async () => {
+    const lifecycle = core as unknown as { destroying: boolean }
+    if (!lifecycle.destroying) await core.destroy()
+  })
+
+  it('injects the App runtime delegate through SearchCore initialization', () => {
+    expect(state.appProviderRuntimeDelegate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scan: expect.any(Function),
+        reconcile: expect.any(Function),
+        applyDelta: expect.any(Function)
+      })
+    )
   })
 
   it('deduplicates activations and limits the public provider pool to active providers', () => {
@@ -412,8 +483,15 @@ describe('SearchEngineCore facade contracts', () => {
       }
     ])
 
-    const result = await core.search({ inputs: [], text: 'merge' } as TuffQuery)
-    await state.searchUpdateCompletion.current.promise
+    const snapshots: TuffSearchResult[] = []
+    const result = await core.search({ inputs: [], text: 'merge' } as TuffQuery, {
+      caller: { kind: 'core-box', id: 'core-box:contract' },
+      sink: {
+        snapshot: (snapshot) => {
+          snapshots.push(snapshot)
+        }
+      }
+    })
 
     expect(result.items.map((item) => item.id)).toEqual(['exact-item', 'partial-item'])
     expect(result.sources).toEqual(
@@ -423,9 +501,7 @@ describe('SearchEngineCore facade contracts', () => {
         expect.objectContaining({ providerId: 'broken-provider', status: 'error' })
       ])
     )
-    expect(state.sendToWindow).toHaveBeenCalledWith(
-      7,
-      CoreBoxEvents.search.update,
+    expect(snapshots).toEqual([
       expect.objectContaining({
         items: expect.arrayContaining([
           expect.objectContaining({
@@ -437,7 +513,7 @@ describe('SearchEngineCore facade contracts', () => {
           })
         ])
       })
-    )
+    ])
   })
 
   it('records execution usage through the facade with the source-qualified item identity', async () => {
@@ -467,6 +543,169 @@ describe('SearchEngineCore facade contracts', () => {
     )
   })
 
+  it('completes concurrent UI and AI searches with isolated sinks and activation snapshots', async () => {
+    const uiSearch = vi.fn(
+      async () =>
+        ({
+          items: [buildItem('ui-only-item', 'ui-provider', 'UI result')]
+        }) as never
+    )
+    const aiSearch = vi.fn(
+      async () =>
+        ({
+          items: [buildItem('ai-only-item', 'ai-provider', 'AI result')]
+        }) as never
+    )
+    const uiActivations = [{ id: 'ui-provider', meta: { scope: 'ui' } }] as IProviderActivate[]
+    const aiActivations = [{ id: 'ai-provider', meta: { scope: 'ai' } }] as IProviderActivate[]
+    const uiDeliveries: Array<{ type: 'start' | 'snapshot' | 'complete'; sessionId: string }> = []
+
+    core.registerProvider(buildProvider('ui-provider', uiSearch) as never)
+    core.registerProvider(buildProvider('ai-provider', aiSearch) as never)
+
+    const uiExecution = core.startSearch(
+      { inputs: [], text: 'concurrent UI request' } as TuffQuery,
+      {
+        caller: { kind: 'core-box', id: 'core-box:facade-contract' },
+        activations: uiActivations,
+        sink: {
+          start: (sessionId) => {
+            uiDeliveries.push({ type: 'start', sessionId })
+          },
+          snapshot: (result) => {
+            uiDeliveries.push({ type: 'snapshot', sessionId: result.sessionId! })
+          },
+          complete: ({ searchId, cancelled }) => {
+            expect(cancelled).toBeUndefined()
+            uiDeliveries.push({ type: 'complete', sessionId: searchId })
+          }
+        }
+      }
+    )
+    const aiExecution = core.startSearch(
+      { inputs: [], text: 'concurrent AI request' } as TuffQuery,
+      {
+        caller: { kind: 'ai-agent', id: 'agent:facade-contract' },
+        activations: aiActivations
+      }
+    )
+
+    const [uiResult, aiResult] = await Promise.all([uiExecution.result, aiExecution.result])
+    await Promise.all([uiExecution.completed, aiExecution.completed])
+
+    expect(uiExecution.sessionId).not.toBe(aiExecution.sessionId)
+    expect(uiResult).toMatchObject({
+      activate: uiActivations,
+      items: [expect.objectContaining({ id: 'ui-only-item' })],
+      sessionId: uiExecution.sessionId
+    })
+    expect(aiResult).toMatchObject({
+      activate: aiActivations,
+      items: [expect.objectContaining({ id: 'ai-only-item' })],
+      sessionId: aiExecution.sessionId
+    })
+    expect(uiSearch).toHaveBeenCalledTimes(1)
+    expect(aiSearch).toHaveBeenCalledTimes(1)
+    expect(uiDeliveries).toEqual([
+      { type: 'start', sessionId: uiExecution.sessionId },
+      { type: 'snapshot', sessionId: uiExecution.sessionId },
+      { type: 'complete', sessionId: uiExecution.sessionId }
+    ])
+    expect(state.sendToWindow).not.toHaveBeenCalled()
+  })
+
+  it('materializes each cache hit as a fresh detached search session result', async () => {
+    const search = vi.fn(
+      async () =>
+        ({
+          items: [buildItem('cached-item', 'cache-provider', 'Cached result')]
+        }) as never
+    )
+    const snapshots: TuffSearchResult[] = []
+    const query = { inputs: [], text: 'facade cache identity contract' } as TuffQuery
+
+    core.registerProvider(buildProvider('cache-provider', search) as never)
+    core.activateProviders([{ id: 'cache-provider' }] as IProviderActivate[])
+
+    const first = core.startSearch(query, {
+      caller: { kind: 'core-box', id: 'core-box:cache-first' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        }
+      }
+    })
+    const firstResult = await first.result
+    await first.completed
+    firstResult.items[0].render.basic!.title = 'Mutated first result'
+
+    const second = core.startSearch(query, {
+      caller: { kind: 'ai-agent', id: 'agent:cache-second' },
+      sink: {
+        snapshot: (result) => {
+          snapshots.push(result)
+        }
+      }
+    })
+    const secondResult = await second.result
+    await second.completed
+
+    expect(search).toHaveBeenCalledTimes(1)
+    expect(first.sessionId).not.toBe(second.sessionId)
+    expect(firstResult).toMatchObject({ sessionId: first.sessionId })
+    expect(secondResult).toMatchObject({
+      items: [expect.objectContaining({ id: 'cached-item' })],
+      sessionId: second.sessionId
+    })
+    expect(secondResult).not.toBe(firstResult)
+    expect(secondResult.items).not.toBe(firstResult.items)
+    expect(secondResult.items[0]).not.toBe(firstResult.items[0])
+    expect(secondResult.items[0].render.basic?.title).toBe('Cached result')
+    expect(secondResult.sources).not.toBe(firstResult.sources)
+    expect(snapshots.map((result) => result.sessionId)).toEqual([first.sessionId, second.sessionId])
+  })
+
+  it('does not cache a result that completed after its search revision was superseded', () => {
+    const harness = core as unknown as {
+      cacheSearchResult: (cacheKey: string, result: TuffSearchResult, revision: number) => void
+      searchCache: Map<string, unknown>
+    }
+    const searchRevision = searchIndexCommitHub.getRevision()
+    searchIndexCommitHub.markCommitted(['file-provider'])
+
+    harness.cacheSearchResult(
+      'stale-search-revision',
+      {
+        items: [buildItem('stale-item', 'stale-provider', 'Stale result')],
+        sources: []
+      } as unknown as TuffSearchResult,
+      searchRevision
+    )
+
+    expect(harness.searchCache.has('stale-search-revision')).toBe(false)
+  })
+
+  it('does not reuse an identical query cache entry after an index commit revision advances', async () => {
+    const search = vi.fn(
+      async () =>
+        ({ items: [buildItem('revision-item', 'revision-provider', 'Revision result')] }) as never
+    )
+    const query = { inputs: [], text: 'revision cache contract' } as TuffQuery
+    core.registerProvider(buildProvider('revision-provider', search) as never)
+    core.activateProviders([{ id: 'revision-provider' }] as IProviderActivate[])
+
+    const first = core.startSearch(query, { caller: { kind: 'core-box', id: 'revision-first' } })
+    await first.result
+    await first.completed
+    searchIndexCommitHub.markCommitted(['file-provider'])
+
+    const second = core.startSearch(query, { caller: { kind: 'core-box', id: 'revision-second' } })
+    await second.result
+    await second.completed
+
+    expect(search).toHaveBeenCalledTimes(2)
+  })
+
   it('cleans initialized index and provider resources when the facade is destroyed', async () => {
     const providerDestroy = vi.fn()
     core.registerProvider({
@@ -476,7 +715,10 @@ describe('SearchEngineCore facade contracts', () => {
       ),
       onDestroy: providerDestroy
     } as never)
-    const togglePin = state.transportHandlers.get(CoreBoxEvents.item.togglePin) as
+    const togglePin = [...state.transportHandlers.entries()].find(([event]) => {
+      const transportEvent = event as { toEventName?: () => string }
+      return transportEvent.toEventName?.() === CoreBoxEvents.item.togglePin.toEventName()
+    })?.[1] as
       | ((payload: { itemId: string; sourceId: string; sourceType: string }) => Promise<unknown>)
       | undefined
 
@@ -488,7 +730,7 @@ describe('SearchEngineCore facade contracts', () => {
       success: true
     })
 
-    core.destroy()
+    await core.destroy()
 
     expect(state.togglePin).toHaveBeenCalledWith('provider-1', 'item-1', 'app')
     expect(state.invalidateRecommendationCache).toHaveBeenCalledTimes(1)
@@ -497,5 +739,351 @@ describe('SearchEngineCore facade contracts', () => {
     expect(state.forceFlushUsageQueue).toHaveBeenCalledTimes(1)
     expect(providerDestroy).toHaveBeenCalledTimes(1)
     expect(state.touchEventOff).toHaveBeenCalledWith('FILE_ADDED', expect.any(Function))
+  })
+
+  it.each([
+    {
+      name: 'Runtime admitted task',
+      reject: () =>
+        state.indexingRuntimeDrainAdmittedTasks.mockRejectedValueOnce(
+          new Error('admitted task drain failed')
+        )
+    },
+    {
+      name: 'App source mutation',
+      reject: () =>
+        state.appRuntimeDrainMutations.mockRejectedValueOnce(new Error('app mutation drain failed'))
+    },
+    {
+      name: 'File producer',
+      reject: () =>
+        state.fileProviderPrepareForShutdown.mockRejectedValueOnce(new Error('file drain failed'))
+    }
+  ])(
+    'fails closed when the $name drain rejects and allows a later teardown retry',
+    async ({ reject }) => {
+      const coreHarness = core as unknown as {
+        providerRegistry: { destroy: () => Promise<void> }
+      }
+      const providerRegistryDestroy = vi.spyOn(coreHarness.providerRegistry, 'destroy')
+      state.appProviderRuntimeDelegate.mockClear()
+      state.fileProviderResetDelegate.mockClear()
+      state.fileProviderMutationDelegate.mockClear()
+      state.fileProviderPersistencePort.mockClear()
+
+      reject()
+
+      await expect(core.destroy()).rejects.toThrow('SEARCH_CORE_INDEX_DRAIN_FAILED')
+
+      expect(providerRegistryDestroy).not.toHaveBeenCalled()
+      expect(state.appProviderRuntimeDelegate).not.toHaveBeenCalledWith(null)
+      expect(state.fileProviderResetDelegate).not.toHaveBeenCalledWith(null)
+      expect(state.fileProviderMutationDelegate).not.toHaveBeenCalledWith(null)
+      expect(state.fileProviderPersistencePort).not.toHaveBeenCalledWith(null)
+      expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
+      expect(state.writerShutdown).not.toHaveBeenCalled()
+
+      await core.destroy()
+
+      expect(providerRegistryDestroy).toHaveBeenCalledTimes(1)
+      expect(state.appProviderRuntimeDelegate).toHaveBeenCalledWith(null)
+      expect(state.fileProviderResetDelegate).toHaveBeenCalledWith(null)
+      expect(state.fileProviderMutationDelegate).toHaveBeenCalledWith(null)
+      expect(state.fileProviderPersistencePort).toHaveBeenCalledWith(null)
+      expect(state.clearIndexingRuntime).toHaveBeenCalledTimes(1)
+      expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+      providerRegistryDestroy.mockRestore()
+    }
+  )
+
+  it.each([
+    { name: 'App', sourceId: 'app-provider' },
+    { name: 'File', sourceId: 'file-provider' }
+  ])(
+    'fails closed when the $name source scan abort drain times out, then succeeds after that scan releases',
+    async ({ sourceId }) => {
+      const scanDrainStarted = Promise.withResolvers<void>()
+      const releaseTimedOutDrain = Promise.withResolvers<void>()
+      const scanReleased = Promise.withResolvers<void>()
+      let retryAfterRelease = false
+      const coreHarness = core as unknown as {
+        providerRegistry: { destroy: () => Promise<void> }
+      }
+      const providerRegistryDestroy = vi.spyOn(coreHarness.providerRegistry, 'destroy')
+      state.appProviderRuntimeDelegate.mockClear()
+      state.fileProviderResetDelegate.mockClear()
+      state.fileProviderMutationDelegate.mockClear()
+      state.fileProviderPersistencePort.mockClear()
+      state.clearIndexingRuntime.mockClear()
+      state.writerShutdown.mockClear()
+      state.appRuntimeAbortAndDrain.mockImplementation(async (drainedSourceId: string) => {
+        if (drainedSourceId !== sourceId) return
+        if (!retryAfterRelease) {
+          scanDrainStarted.resolve()
+          await releaseTimedOutDrain.promise
+          throw new Error(`INDEXED_SOURCE_SCAN_DRAIN_TIMEOUT:${sourceId}`)
+        }
+        await scanReleased.promise
+      })
+
+      try {
+        const destroy = core.destroy()
+        await scanDrainStarted.promise
+
+        expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(1, 'app-provider')
+        expect(state.appRuntimeAbortAndDrain).toHaveBeenNthCalledWith(2, 'file-provider')
+
+        releaseTimedOutDrain.resolve()
+        await expect(destroy).rejects.toThrow('SEARCH_CORE_INDEX_DRAIN_FAILED')
+
+        expect(providerRegistryDestroy).not.toHaveBeenCalled()
+        expect(state.appProviderRuntimeDelegate).not.toHaveBeenCalledWith(null)
+        expect(state.fileProviderResetDelegate).not.toHaveBeenCalledWith(null)
+        expect(state.fileProviderMutationDelegate).not.toHaveBeenCalledWith(null)
+        expect(state.fileProviderPersistencePort).not.toHaveBeenCalledWith(null)
+        expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
+        expect(state.writerShutdown).not.toHaveBeenCalled()
+
+        retryAfterRelease = true
+        scanReleased.resolve()
+        await expect(core.destroy()).resolves.toBeUndefined()
+
+        expect(providerRegistryDestroy).toHaveBeenCalledTimes(1)
+        expect(state.clearIndexingRuntime).toHaveBeenCalledTimes(1)
+        expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+      } finally {
+        state.appRuntimeAbortAndDrain.mockImplementation(async () => undefined)
+        providerRegistryDestroy.mockRestore()
+      }
+    }
+  )
+
+  it('stops App producers, aborts active App scans, and drains App mutations before clearing Runtime or shutting down the writer', async () => {
+    const lifecycle: string[] = []
+    const appProducerStopStarted = Promise.withResolvers<void>()
+    const appProducerStop = Promise.withResolvers<void>()
+    const appProducerStopped = Promise.withResolvers<void>()
+    const initialAppScanController = new AbortController()
+    const initialAppScanSettled = Promise.withResolvers<void>()
+    const appRuntimeDrainStarted = Promise.withResolvers<void>()
+    const appRuntimeDrain = Promise.withResolvers<void>()
+    const appRuntimeDrained = Promise.withResolvers<void>()
+    const appMutationDrainStarted = Promise.withResolvers<void>()
+    const appMutationDrain = Promise.withResolvers<void>()
+    const fileShutdownPreparationStarted = Promise.withResolvers<void>()
+    const fileShutdownPreparation = Promise.withResolvers<void>()
+    const fileShutdownPrepared = Promise.withResolvers<void>()
+    const harness = core as unknown as {
+      initialAppScanController: AbortController | null
+      initialAppScanPromise: Promise<void> | null
+    }
+
+    initialAppScanController.signal.addEventListener(
+      'abort',
+      () => {
+        lifecycle.push('app-scan-aborted')
+        initialAppScanSettled.resolve()
+      },
+      { once: true }
+    )
+    harness.initialAppScanController = initialAppScanController
+    harness.initialAppScanPromise = initialAppScanSettled.promise
+    state.appProviderPrepareForShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('app-producer-stop-started')
+      appProducerStopStarted.resolve()
+      await appProducerStop.promise
+      lifecycle.push('app-producer-stopped')
+      appProducerStopped.resolve()
+    })
+    state.appRuntimeAbortAndDrain.mockImplementationOnce(async () => {
+      lifecycle.push('app-runtime-drain-started')
+      appRuntimeDrainStarted.resolve()
+      await appRuntimeDrain.promise
+      lifecycle.push('app-runtime-drained')
+      appRuntimeDrained.resolve()
+    })
+    state.appRuntimeDrainMutations.mockImplementationOnce(async () => {
+      lifecycle.push('app-mutation-drain-started')
+      appMutationDrainStarted.resolve()
+      await appMutationDrain.promise
+      lifecycle.push('app-mutation-drained')
+    })
+    state.fileProviderPrepareForShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('file-shutdown-preparation-started')
+      fileShutdownPreparationStarted.resolve()
+      await fileShutdownPreparation.promise
+      lifecycle.push('file-shutdown-prepared')
+      fileShutdownPrepared.resolve()
+    })
+    state.clearIndexingRuntime.mockImplementationOnce(() => {
+      lifecycle.push('runtime-cleared')
+    })
+    state.writerShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('writer-shut-down')
+    })
+
+    const destroy = core.destroy()
+    await Promise.all([
+      appProducerStopStarted.promise,
+      appRuntimeDrainStarted.promise,
+      fileShutdownPreparationStarted.promise
+    ])
+
+    expect(lifecycle).toEqual([
+      'app-producer-stop-started',
+      'app-scan-aborted',
+      'app-runtime-drain-started',
+      'file-shutdown-preparation-started'
+    ])
+    expect(initialAppScanController.signal.aborted).toBe(true)
+    expect(state.appRuntimeAbortAndDrain).toHaveBeenCalledWith('app-provider')
+    expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
+
+    appProducerStop.resolve()
+    fileShutdownPreparation.resolve()
+    await Promise.all([appProducerStopped.promise, fileShutdownPrepared.promise])
+
+    expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
+    expect(state.writerShutdown).not.toHaveBeenCalled()
+    expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
+
+    appRuntimeDrain.resolve()
+    await Promise.all([appRuntimeDrained.promise, appMutationDrainStarted.promise])
+
+    expect(state.appRuntimeDrainMutations).toHaveBeenCalledWith('app-provider')
+    expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
+    expect(state.writerShutdown).not.toHaveBeenCalled()
+
+    appMutationDrain.resolve()
+    await destroy
+
+    expect(lifecycle).toEqual([
+      'app-producer-stop-started',
+      'app-scan-aborted',
+      'app-runtime-drain-started',
+      'file-shutdown-preparation-started',
+      'app-producer-stopped',
+      'file-shutdown-prepared',
+      'app-runtime-drained',
+      'app-mutation-drain-started',
+      'app-mutation-drained',
+      'runtime-cleared',
+      'writer-shut-down'
+    ])
+  })
+
+  it('rejects initialization after destruction as a terminal lifecycle', async () => {
+    await core.destroy()
+
+    expect(() => core.init({ app: { channel: {} } } as never)).toThrow('SEARCH_CORE_DESTROYED')
+  })
+
+  it('closes Runtime admission before producer shutdown and waits for admitted tasks and both source drains before clearing Runtime or its writer', async () => {
+    const lifecycle: string[] = []
+    const appScanController = new AbortController()
+    const appScanSettled = Promise.withResolvers<void>()
+    const appProducerStopped = Promise.withResolvers<void>()
+    const fileShutdownStarted = Promise.withResolvers<void>()
+    const releaseFileShutdown = Promise.withResolvers<void>()
+    const fileShutdownPrepared = Promise.withResolvers<void>()
+    const admittedDrainStarted = Promise.withResolvers<void>()
+    const releaseAdmittedDrain = Promise.withResolvers<void>()
+    const admittedDrainFinished = Promise.withResolvers<void>()
+    const sourceDrainsStarted = Promise.withResolvers<void>()
+    const harness = core as unknown as {
+      initialAppScanController: AbortController | null
+      initialAppScanPromise: Promise<void> | null
+    }
+    let sourceDrainCount = 0
+    const recordSourceDrain = async (sourceId?: string): Promise<undefined> => {
+      lifecycle.push(`source-drain:${sourceId}`)
+      sourceDrainCount += 1
+      if (sourceDrainCount === 2) sourceDrainsStarted.resolve()
+      return undefined
+    }
+
+    appScanController.signal.addEventListener(
+      'abort',
+      () => {
+        lifecycle.push('app-scan-stopped')
+        appScanSettled.resolve()
+      },
+      { once: true }
+    )
+    harness.initialAppScanController = appScanController
+    harness.initialAppScanPromise = appScanSettled.promise
+    state.indexingRuntimeBeginShutdown.mockImplementationOnce(() => {
+      lifecycle.push('admission-closed')
+    })
+    state.appProviderPrepareForShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('app-producer-stopped')
+      appProducerStopped.resolve()
+    })
+    state.fileProviderPrepareForShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('file-shutdown-started')
+      fileShutdownStarted.resolve()
+      await releaseFileShutdown.promise
+      lifecycle.push('file-shutdown-prepared')
+      fileShutdownPrepared.resolve()
+    })
+    state.indexingRuntimeDrainAdmittedTasks.mockImplementationOnce(async () => {
+      lifecycle.push('admitted-drain-started')
+      admittedDrainStarted.resolve()
+      await releaseAdmittedDrain.promise
+      lifecycle.push('admitted-drain-finished')
+      admittedDrainFinished.resolve()
+    })
+    state.appRuntimeDrainMutations
+      .mockImplementationOnce(recordSourceDrain)
+      .mockImplementationOnce(recordSourceDrain)
+    state.clearIndexingRuntime.mockImplementationOnce(() => {
+      lifecycle.push('runtime-cleared')
+    })
+    state.writerShutdown.mockImplementationOnce(async () => {
+      lifecycle.push('writer-shut-down')
+    })
+
+    const destroy = core.destroy()
+    await Promise.all([
+      appProducerStopped.promise,
+      appScanSettled.promise,
+      fileShutdownStarted.promise,
+      admittedDrainStarted.promise
+    ])
+
+    expect(lifecycle[0]).toBe('admission-closed')
+    expect(lifecycle).toContain('app-producer-stopped')
+    expect(lifecycle).toContain('app-scan-stopped')
+    expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
+
+    releaseAdmittedDrain.resolve()
+    await admittedDrainFinished.promise
+    expect(state.appRuntimeDrainMutations).not.toHaveBeenCalled()
+    expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
+    expect(state.writerShutdown).not.toHaveBeenCalled()
+
+    releaseFileShutdown.resolve()
+    await Promise.all([fileShutdownPrepared.promise, sourceDrainsStarted.promise])
+
+    expect(state.appRuntimeDrainMutations).toHaveBeenNthCalledWith(1, 'app-provider')
+    expect(state.appRuntimeDrainMutations).toHaveBeenNthCalledWith(2, 'file-provider')
+    expect(state.clearIndexingRuntime).not.toHaveBeenCalled()
+    expect(state.writerShutdown).not.toHaveBeenCalled()
+
+    await destroy
+
+    expect(lifecycle.slice(-2)).toEqual(['runtime-cleared', 'writer-shut-down'])
+  })
+
+  it('rethrows a writer shutdown failure and retries the terminal teardown', async () => {
+    state.writerShutdown.mockRejectedValueOnce(new Error('writer shutdown failed'))
+
+    await expect(core.destroy()).rejects.toThrow('writer shutdown failed')
+
+    expect(state.writerShutdown).toHaveBeenCalledTimes(1)
+
+    await expect(core.destroy()).resolves.toBeUndefined()
+
+    expect(state.writerShutdown).toHaveBeenCalledTimes(2)
   })
 })

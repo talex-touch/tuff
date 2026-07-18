@@ -16,9 +16,9 @@ function scannedFile(path: string): ScannedFileInfo {
 describe('file-provider-full-scan-run-service', () => {
   it('scans paths, inserts mapped records, reports progress, and returns completed paths', async () => {
     const finishPerfContext = vi.fn()
-    const scanDirectory = vi.fn(async (rootPath: string) =>
-      rootPath === '/a' ? [scannedFile('/a/one.txt')] : [scannedFile('/b/two.txt')]
-    )
+    const scanDirectory = vi.fn(async function* (rootPath: string) {
+      yield rootPath === '/a' ? [scannedFile('/a/one.txt')] : [scannedFile('/b/two.txt')]
+    })
     const insertRecords = vi.fn(async (_rootPath, records) => ({
       insertedCount: records.length
     }))
@@ -42,7 +42,7 @@ describe('file-provider-full-scan-run-service', () => {
     const context = { runId: 'scan' }
     const result = await service.execute(['/a', '/b'], context)
 
-    expect(scanDirectory).toHaveBeenNthCalledWith(1, '/a', undefined)
+    expect(scanDirectory).toHaveBeenNthCalledWith(1, '/a', undefined, context)
     expect(insertRecords).toHaveBeenNthCalledWith(
       1,
       '/a',
@@ -90,7 +90,7 @@ describe('file-provider-full-scan-run-service', () => {
 
   it('passes exclude paths to the scanner', async () => {
     const excludePathsSet = new Set(['/tmp/db.sqlite'])
-    const scanDirectory = vi.fn(async () => [])
+    const scanDirectory = vi.fn(async function* () {})
     const service = new FileProviderFullScanRunService({
       enterPerfContext: vi.fn(() => vi.fn()),
       scanDirectory,
@@ -104,6 +104,6 @@ describe('file-provider-full-scan-run-service', () => {
 
     await service.execute(['/a'], {}, { excludePathsSet })
 
-    expect(scanDirectory).toHaveBeenCalledWith('/a', excludePathsSet)
+    expect(scanDirectory).toHaveBeenCalledWith('/a', excludePathsSet, {})
   })
 })

@@ -1,136 +1,136 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { IndexedSourceProfileDiagnosticsService } from '../../search'
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { IndexedSourceProfileDiagnosticsService } from "../../search";
 
-const service = new IndexedSourceProfileDiagnosticsService()
+const service = new IndexedSourceProfileDiagnosticsService();
 
-describe('IndexedSourceProfileDiagnosticsService', () => {
+describe("IndexedSourceProfileDiagnosticsService", () => {
   afterEach(() => {
-    vi.restoreAllMocks()
-  })
+    vi.restoreAllMocks();
+  });
 
-  it('builds profile evidence with roots and metadata', () => {
+  it("builds profile evidence with roots and metadata", () => {
     expect(
       service.buildEvidence({
-        sourceId: 'browser-bookmarks',
+        sourceId: "browser-bookmarks",
         checkedAt: 123,
         metadata: {
-          scannerOwner: 'core-runtime'
+          scannerOwner: "core-runtime",
         },
         diagnostics: [
           {
-            key: 'chrome',
-            label: 'Chrome Bookmarks',
-            status: 'ready',
-            root: '/browser/chrome',
+            key: "chrome",
+            label: "Chrome Bookmarks",
+            status: "ready",
+            root: "/browser/chrome",
             itemCount: 2,
             metadata: {
-              profileCount: 1
-            }
-          }
-        ]
-      })
+              profileCount: 1,
+            },
+          },
+        ],
+      }),
     ).toEqual([
       {
-        id: 'browser-bookmarks:chrome',
-        label: 'Chrome Bookmarks',
-        status: 'ready',
+        id: "browser-bookmarks:chrome",
+        label: "Chrome Bookmarks",
+        status: "ready",
         itemCount: 2,
         rootCount: 1,
-        roots: ['/browser/chrome'],
+        roots: ["/browser/chrome"],
         lastCheckedAt: 123,
         reason: undefined,
         metadata: {
-          scannerOwner: 'core-runtime',
-          profileCount: 1
-        }
-      }
-    ])
-  })
+          scannerOwner: "core-runtime",
+          profileCount: 1,
+        },
+      },
+    ]);
+  });
 
-  it('builds granted roots for supported profile diagnostics', () => {
+  it("builds granted roots for supported profile diagnostics", () => {
     expect(
       service.buildRoots({
-        sourceId: 'browser-bookmarks',
+        sourceId: "browser-bookmarks",
         rootWatchDepth: 2,
         diagnostics: [
           {
-            key: 'chrome',
-            label: 'Chrome Bookmarks',
-            status: 'ready',
-            root: '/browser/chrome'
+            key: "chrome",
+            label: "Chrome Bookmarks",
+            status: "ready",
+            root: "/browser/chrome",
           },
           {
-            key: 'arc',
-            label: 'Arc Bookmarks',
-            status: 'unsupported',
-            root: '/browser/arc'
+            key: "arc",
+            label: "Arc Bookmarks",
+            status: "unsupported",
+            root: "/browser/arc",
           },
           {
-            key: 'edge',
-            label: 'Edge Bookmarks',
-            status: 'degraded'
-          }
-        ]
-      })
+            key: "edge",
+            label: "Edge Bookmarks",
+            status: "degraded",
+          },
+        ],
+      }),
     ).toEqual([
       {
-        sourceId: 'browser-bookmarks',
-        path: '/browser/chrome',
-        permissionState: 'granted',
+        sourceId: "browser-bookmarks",
+        path: "/browser/chrome",
+        permissionState: "granted",
         watchDepth: 2,
-        reason: undefined
-      }
-    ])
-  })
+        reason: undefined,
+      },
+    ]);
+  });
 
-  it('normalizes malformed evidence timestamps and item counts', () => {
-    vi.spyOn(Date, 'now').mockReturnValue(1700000000000)
+  it("normalizes malformed evidence timestamps and item counts", () => {
+    vi.spyOn(Date, "now").mockReturnValue(1700000000000);
 
     expect(
       service.buildEvidence({
-        sourceId: 'browser-bookmarks',
+        sourceId: "browser-bookmarks",
         checkedAt: Number.NaN,
         diagnostics: [
           {
-            key: 'chrome',
-            label: 'Chrome Bookmarks',
-            status: 'degraded',
-            itemCount: -2
-          }
-        ]
-      })
+            key: "chrome",
+            label: "Chrome Bookmarks",
+            status: "degraded",
+            itemCount: -2,
+          },
+        ],
+      }),
     ).toMatchObject([
       {
         itemCount: 0,
-        lastCheckedAt: 1700000000000
-      }
-    ])
-  })
+        lastCheckedAt: 1700000000000,
+      },
+    ]);
+  });
 
-  it('uses root reason override when provided', () => {
+  it("uses root reason override when provided", () => {
     expect(
       service.buildRoots({
-        sourceId: 'browser-history',
+        sourceId: "browser-history",
         rootWatchDepth: 1,
-        rootReason: 'browser-data-profile-root',
+        rootReason: "browser-data-profile-root",
         diagnostics: [
           {
-            key: 'chrome',
-            label: 'Chrome History',
-            status: 'degraded',
-            root: '/browser/chrome',
-            reason: 'history-file-not-found'
-          }
-        ]
-      })
+            key: "chrome",
+            label: "Chrome History",
+            status: "degraded",
+            root: "/browser/chrome",
+            reason: "history-file-not-found",
+          },
+        ],
+      }),
     ).toEqual([
       {
-        sourceId: 'browser-history',
-        path: '/browser/chrome',
-        permissionState: 'granted',
+        sourceId: "browser-history",
+        path: "/browser/chrome",
+        permissionState: "granted",
         watchDepth: 1,
-        reason: 'browser-data-profile-root'
-      }
-    ])
-  })
-})
+        reason: "browser-data-profile-root",
+      },
+    ]);
+  });
+});

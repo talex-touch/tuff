@@ -7,7 +7,6 @@ import type {
   IndexedSourceRoot,
   IndexedSourceRuntimeTaskState
 } from '@talex-touch/utils/search'
-import type { IndexStoreAdapter } from './indexing-store-adapter'
 import {
   IndexedSourceReconcileReasons,
   IndexedSourceResetReasons,
@@ -17,6 +16,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IndexingRootPolicy } from './indexing-root-policy'
 import { IndexingRuntime } from './indexing-runtime'
+import { IndexingSourceMutationGate } from './indexing-source-mutation-gate'
 
 const loggerMock = vi.hoisted(() => ({
   info: vi.fn(),
@@ -96,6 +96,13 @@ describe('indexingRuntime', () => {
     applyBatch: ReturnType<typeof vi.fn>
     applyDelta: ReturnType<typeof vi.fn>
     clearSource: ReturnType<typeof vi.fn>
+    replaceSource: ReturnType<typeof vi.fn>
+    beginSourceReplacement: ReturnType<typeof vi.fn>
+    stageSourceReplacement: ReturnType<typeof vi.fn>
+    commitSourceReplacement: ReturnType<typeof vi.fn>
+    abortSourceReplacement: ReturnType<typeof vi.fn>
+    cleanupSource: ReturnType<typeof vi.fn>
+    countSource: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -103,11 +110,29 @@ describe('indexingRuntime', () => {
     store = {
       applyBatch: vi.fn(async () => {}),
       applyDelta: vi.fn(async () => {}),
-      clearSource: vi.fn(async () => ({ sourceId: 'test-source', removedIndexedItems: 0 }))
+      clearSource: vi.fn(async () => ({ sourceId: 'test-source', removedIndexedItems: 0 })),
+      replaceSource: vi.fn(async () => ({
+        sourceId: 'test-source',
+        recordCount: 0,
+        indexedItemCount: 0,
+        removedIndexedItems: 0
+      })),
+      beginSourceReplacement: vi.fn(async (sourceId) => ({
+        sourceId,
+        replacementId: 'replacement'
+      })),
+      stageSourceReplacement: vi.fn(async (_session, records) => records.length),
+      commitSourceReplacement: vi.fn(async (session, totals) => ({
+        sourceId: session.sourceId,
+        ...totals,
+        removedIndexedItems: 0
+      })),
+      abortSourceReplacement: vi.fn(async () => {}),
+      cleanupSource: vi.fn(async () => ({ sourceId: 'test-source', removedOrphanedKeywords: 0 })),
+      countSource: vi.fn(async () => 0)
     }
-    runtime = new IndexingRuntime({ store: store as IndexStoreAdapter })
+    runtime = new IndexingRuntime({ store: store })
   })
-
   it('registers sources once and returns descriptors', () => {
     const source = buildSource()
 
@@ -282,7 +307,7 @@ describe('indexingRuntime', () => {
 
   it('updates root policy from source diagnostics', async () => {
     const rootPolicy = new IndexingRootPolicy()
-    runtime = new IndexingRuntime({ store: store as IndexStoreAdapter, rootPolicy })
+    runtime = new IndexingRuntime({ store: store, rootPolicy })
     runtime.registerSource(
       buildSource({
         descriptor: { ...descriptor, id: 'file-provider' },
@@ -537,15 +562,17 @@ describe('indexingRuntime', () => {
     })
   })
 
-  it('applies watch deltas through the index store adapter', async () => {
+  it('applies watch deltas and drains the same mutation lease through the index store adapter', async () => {
     const delta: IndexedSourceDelta = {
       sourceId: 'test-source',
       action: 'change',
       path: '/tmp/tuff-source/a.txt'
     }
+    const drainMutations = vi.fn(async () => undefined)
     runtime.registerSource(
       buildSource({
-        handleWatchEvent: vi.fn(async () => [delta])
+        handleWatchEvent: vi.fn(async () => [delta]),
+        drainMutations
       })
     )
 
@@ -556,7 +583,12 @@ describe('indexingRuntime', () => {
       occurredAt: 1700000000000
     })
 
-    expect(store.applyDelta).toHaveBeenCalledWith(delta)
+    const appliedDelta = store.applyDelta.mock.calls[0]?.[0]
+    expect(appliedDelta).toMatchObject({ ...delta, mutationLeaseId: expect.any(String) })
+    expect(drainMutations).toHaveBeenCalledWith({
+      leaseId: appliedDelta?.mutationLeaseId,
+      reason: 'watch'
+    })
   })
 
   it('isolates failing watch handlers and still applies healthy source deltas', async () => {
@@ -603,7 +635,9 @@ describe('indexingRuntime', () => {
         }
       ]
     })
-    expect(store.applyDelta).toHaveBeenCalledWith(delta)
+    expect(store.applyDelta).toHaveBeenCalledWith(
+      expect.objectContaining({ ...delta, mutationLeaseId: expect.any(String) })
+    )
   })
 
   it('reports store delta failures without failing the entire watch route', async () => {
@@ -716,7 +750,7 @@ describe('indexingRuntime', () => {
     })
   })
 
-  it('runs source scans through the scan scheduler and stores batches', async () => {
+  it('passes one scan mutation lease and delta callback through the scan scheduler', async () => {
     const batch: IndexedSourceRecordBatch = {
       sourceId: 'test-source',
       records: [
@@ -730,22 +764,37 @@ describe('indexingRuntime', () => {
       ],
       done: true
     }
-    runtime.registerSource(
-      buildSource({
-        async *scan() {
-          yield batch
-        }
-      })
-    )
+    const streamedDelta: IndexedSourceDelta = {
+      sourceId: 'test-source',
+      action: 'change',
+      path: '/tmp/tuff-source/record-1'
+    }
+    const scan = vi.fn(async function* (request) {
+      await request.onDelta?.(streamedDelta)
+      yield batch
+    })
+    runtime.registerSource(buildSource({ scan }))
 
-    const result = await runtime.scanSource('test-source', IndexedSourceScanReasons.ManualRebuild)
+    const result = await runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
 
     expect(result).toMatchObject({
       sourceId: 'test-source',
       batches: 1,
       records: 1
     })
-    expect(store.applyBatch).toHaveBeenCalledWith(batch)
+    expect(scan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'test-source',
+        reason: IndexedSourceScanReasons.Scheduled,
+        mutationLeaseId: expect.any(String),
+        onDelta: expect.any(Function)
+      })
+    )
+    const appliedBatch = store.applyBatch.mock.calls[0]?.[0]
+    expect(appliedBatch).toMatchObject({ ...batch, mutationLeaseId: expect.any(String) })
+    expect(store.applyDelta).toHaveBeenCalledWith(
+      expect.objectContaining({ ...streamedDelta, mutationLeaseId: appliedBatch?.mutationLeaseId })
+    )
     const diagnostics = await runtime.getDiagnostics()
     expect(diagnostics.sources[0].lastScan).toMatchObject({
       jobId: 'test-source:scan:1',
@@ -754,6 +803,56 @@ describe('indexingRuntime', () => {
       records: 1,
       indexedRecords: 1
     })
+  })
+
+  it('holds one outer lease through ManualRebuild snapshot commit and enrichment drain', async () => {
+    const gate = new IndexingSourceMutationGate()
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    const order: string[] = []
+    const drainStarted = Promise.withResolvers<void>()
+    const releaseDrain = Promise.withResolvers<void>()
+    let scanLeaseId: string | undefined
+    store.beginSourceReplacement = vi.fn(async (sourceId) => {
+      order.push('begin')
+      return { sourceId, replacementId: 'manual-rebuild' }
+    })
+    store.stageSourceReplacement = vi.fn(async (_session, records) => {
+      order.push('stage')
+      return records.length
+    })
+    store.commitSourceReplacement = vi.fn(async (session, totals) => {
+      order.push('commit')
+      return { sourceId: session.sourceId, ...totals, removedIndexedItems: 0 }
+    })
+    const source = buildSource({
+      async *scan(request) {
+        scanLeaseId = request.mutationLeaseId
+        order.push('snapshot')
+        yield { sourceId: 'test-source', records: [], done: true }
+      },
+      drainMutations: vi.fn(async ({ leaseId }) => {
+        expect(leaseId).toBe(scanLeaseId)
+        order.push('drain')
+        drainStarted.resolve()
+        await releaseDrain.promise
+      })
+    })
+    runtime.registerSource(source)
+
+    const rebuild = runtime.scanSource('test-source', IndexedSourceScanReasons.ManualRebuild)
+    await drainStarted.promise
+    const exclusive = gate.runExclusive('test-source', async () => {
+      order.push('exclusive')
+    })
+    expect(order).toEqual(['begin', 'snapshot', 'stage', 'commit', 'drain'])
+
+    releaseDrain.resolve()
+    await rebuild
+    await exclusive
+
+    expect(scanLeaseId).toEqual(expect.any(String))
+    expect(source.drainMutations).toHaveBeenCalledWith({ leaseId: scanLeaseId, reason: 'scan' })
+    expect(order).toEqual(['begin', 'snapshot', 'stage', 'commit', 'drain', 'exclusive'])
   })
 
   it('skips single source scans when runtime eligibility blocks the source', async () => {
@@ -918,7 +1017,9 @@ describe('indexingRuntime', () => {
     })
     expect(result.results).toHaveLength(1)
     expect(result.results[0]).toMatchObject({ sourceId: 'healthy', batches: 1, records: 1 })
-    expect(store.applyBatch).toHaveBeenCalledWith(batch)
+    expect(store.applyBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ ...batch, mutationLeaseId: expect.any(String) })
+    )
   })
 
   it('records store-phase scan failures in runtime diagnostics', async () => {
@@ -1200,7 +1301,26 @@ describe('indexingRuntime', () => {
     const nextStore = {
       applyBatch: vi.fn(async () => {}),
       applyDelta: vi.fn(async () => {}),
-      clearSource: vi.fn(async () => {})
+      clearSource: vi.fn(async () => ({ sourceId: 'test-source', removedIndexedItems: 0 })),
+      replaceSource: vi.fn(async () => ({
+        sourceId: 'test-source',
+        recordCount: 0,
+        indexedItemCount: 0,
+        removedIndexedItems: 0
+      })),
+      beginSourceReplacement: vi.fn(async (sourceId) => ({
+        sourceId,
+        replacementId: 'replacement'
+      })),
+      stageSourceReplacement: vi.fn(async (_session, records) => records.length),
+      commitSourceReplacement: vi.fn(async (session, totals) => ({
+        sourceId: session.sourceId,
+        ...totals,
+        removedIndexedItems: 0
+      })),
+      abortSourceReplacement: vi.fn(async () => {}),
+      cleanupSource: vi.fn(async () => ({ sourceId: 'test-source', removedOrphanedKeywords: 0 })),
+      countSource: vi.fn(async () => 0)
     }
     const batch: IndexedSourceRecordBatch = {
       sourceId: 'test-source',
@@ -1229,8 +1349,8 @@ describe('indexingRuntime', () => {
       })
     )
 
-    runtime.setStore(nextStore as IndexStoreAdapter)
-    await runtime.scanSource('test-source', IndexedSourceScanReasons.ManualRebuild)
+    runtime.setStore(nextStore)
+    await runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
     await runtime.routeWatchEvent({
       sourceId: 'test-source',
       action: 'change',
@@ -1240,8 +1360,12 @@ describe('indexingRuntime', () => {
 
     expect(store.applyBatch).not.toHaveBeenCalled()
     expect(store.applyDelta).not.toHaveBeenCalled()
-    expect(nextStore.applyBatch).toHaveBeenCalledWith(batch)
-    expect(nextStore.applyDelta).toHaveBeenCalledWith(delta)
+    expect(nextStore.applyBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ ...batch, mutationLeaseId: expect.any(String) })
+    )
+    expect(nextStore.applyDelta).toHaveBeenCalledWith(
+      expect.objectContaining({ ...delta, mutationLeaseId: expect.any(String) })
+    )
   })
 
   it('runs reconcile tasks through the reconcile engine', async () => {
@@ -1267,14 +1391,28 @@ describe('indexingRuntime', () => {
       startedAt: 1700000000000,
       completedAt: 1700000000100
     }))
-    runtime.registerSource(buildSource({ reconcile }))
+    const drainMutations = vi.fn(async () => undefined)
+    runtime.registerSource(buildSource({ reconcile, drainMutations }))
 
     const result = await runtime.reconcileSource('test-source', { limit: 10 })
 
-    expect(reconcile).toHaveBeenCalledWith({ sourceId: 'test-source', limit: 10 })
+    expect(reconcile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: 'test-source',
+        limit: 10,
+        mutationLeaseId: expect.any(String),
+        onRecordBatch: expect.any(Function),
+        onDelta: expect.any(Function)
+      })
+    )
     expect(result.changed).toBe(2)
     expect(result.appliedDeltas).toBe(1)
-    expect(store.applyDelta).toHaveBeenCalledWith(delta)
+    const appliedDelta = store.applyDelta.mock.calls[0]?.[0]
+    expect(appliedDelta).toMatchObject({ ...delta, mutationLeaseId: expect.any(String) })
+    expect(drainMutations).toHaveBeenCalledWith({
+      leaseId: appliedDelta?.mutationLeaseId,
+      reason: 'reconcile'
+    })
   })
 
   it('skips single source reconcile when runtime eligibility blocks the source', async () => {
@@ -1332,7 +1470,7 @@ describe('indexingRuntime', () => {
         throw new Error('store failed')
       })
     }
-    runtime = new IndexingRuntime({ store: failedStore as IndexStoreAdapter })
+    runtime = new IndexingRuntime({ store: failedStore })
     runtime.registerSource(
       buildSource({
         reconcile: vi.fn(async () => ({
@@ -1666,7 +1804,7 @@ describe('indexingRuntime', () => {
   it('records integrity-triggered reset in durable task history', async () => {
     const save = vi.fn(async () => {})
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => undefined),
         save,
@@ -1684,7 +1822,14 @@ describe('indexingRuntime', () => {
       startedAt: 1700000000000,
       completedAt: 1700000000100
     }))
-    runtime.registerSource(buildSource({ resetIndex }))
+    runtime.registerSource(
+      buildSource({
+        resetIndex,
+        async *scan() {
+          yield { sourceId: 'test-source', records: [], done: true }
+        }
+      })
+    )
 
     const result = await runtime.resetSourceRuntimeState('test-source', {
       reason: IndexedSourceResetReasons.IntegrityRepair,
@@ -1705,7 +1850,7 @@ describe('indexingRuntime', () => {
       clearedScanProgress: true,
       scanProgressRows: 3
     })
-    expect(save).toHaveBeenCalledWith(
+    expect(save).toHaveBeenLastCalledWith(
       'test-source',
       expect.objectContaining({
         lastReset: expect.objectContaining({
@@ -1716,7 +1861,7 @@ describe('indexingRuntime', () => {
           clearedScanProgress: true,
           scanProgressRows: 3
         }),
-        recentTasks: [
+        recentTasks: expect.arrayContaining([
           expect.objectContaining({
             kind: 'reset',
             status: 'succeeded',
@@ -1729,7 +1874,7 @@ describe('indexingRuntime', () => {
               scanProgressRows: 3
             })
           })
-        ]
+        ])
       })
     )
 
@@ -1767,7 +1912,7 @@ describe('indexingRuntime', () => {
       await saveReleased
     })
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => undefined),
         save,
@@ -1798,7 +1943,6 @@ describe('indexingRuntime', () => {
       })
 
     await saveStarted
-    await Promise.resolve()
     expect(returned).toBe(false)
 
     resolveSave()
@@ -1841,7 +1985,7 @@ describe('indexingRuntime', () => {
       completedAt: 1700000000300
     }))
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => persistedState),
         save,
@@ -1899,29 +2043,308 @@ describe('indexingRuntime', () => {
     ])
   })
 
-  it('clears source search index at runtime reset boundary', async () => {
-    store.clearSource.mockResolvedValueOnce({ sourceId: 'test-source', removedIndexedItems: 4 })
-    const resetIndex = vi.fn(async () => ({
+  it('collects a SchemaMigration snapshot through one staged replacement transaction', async () => {
+    const order: string[] = []
+    const replacement = { sourceId: 'test-source', replacementId: 'snapshot-replacement' }
+    let selectedMode: 'runtime' | 'legacy' = 'runtime'
+    const router = {
+      getMode: vi.fn(() => selectedMode),
+      setMode: vi.fn((_sourceId: string, mode: 'runtime' | 'legacy') => {
+        order.push(`set:${mode}`)
+        selectedMode = mode
+      }),
+      drainSelected: vi.fn(async () => {
+        order.push(`drain:${selectedMode}`)
+      })
+    }
+    store.beginSourceReplacement = vi.fn(async (sourceId) => {
+      order.push('begin')
+      return { ...replacement, sourceId }
+    })
+    store.stageSourceReplacement = vi.fn(async (session, records) => {
+      expect(session).toEqual(replacement)
+      expect(records).toEqual([])
+      order.push('stage')
+      return records.length
+    })
+    store.commitSourceReplacement = vi.fn(async (session, totals) => {
+      expect(session).toEqual(replacement)
+      expect(totals).toEqual({ recordCount: 0, indexedItemCount: 0 })
+      order.push('commit')
+      return { sourceId: session.sourceId, ...totals, removedIndexedItems: 2 }
+    })
+    runtime.setSourceWriterRouter(router)
+    runtime.registerSource(
+      buildSource({
+        async *scan(request) {
+          expect(request).toMatchObject({
+            sourceId: 'test-source',
+            reason: IndexedSourceScanReasons.SchemaMigration
+          })
+          order.push('snapshot')
+          yield { sourceId: 'test-source', records: [], done: true }
+        }
+      })
+    )
+
+    const result = await runtime.switchSourceWriter('test-source', 'legacy')
+
+    expect(order).toEqual([
+      'drain:runtime',
+      'set:legacy',
+      'begin',
+      'snapshot',
+      'stage',
+      'commit',
+      'drain:legacy'
+    ])
+    expect(store.beginSourceReplacement).toHaveBeenCalledWith('test-source')
+    expect(store.abortSourceReplacement).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
       sourceId: 'test-source',
-      reason: IndexedSourceResetReasons.UserClear,
-      clearedSearchIndex: false,
-      clearedScanProgress: false,
-      startedAt: 1700000000000,
-      completedAt: 1700000000100
-    }))
-    runtime.registerSource(buildSource({ resetIndex }))
+      previousMode: 'runtime',
+      mode: 'legacy',
+      snapshot: { batches: 1, records: 0, indexedRecords: 0 }
+    })
+  })
+
+  it('rehearses isolated runtime-to-legacy-to-runtime source writer rollback', async () => {
+    const order: string[] = []
+    const replacements = [
+      { sourceId: 'test-source', replacementId: 'legacy-replacement' },
+      { sourceId: 'test-source', replacementId: 'runtime-replacement' }
+    ]
+    const mutationModes = new Map<string, Set<'runtime' | 'legacy'>>()
+    const committedReplacements: Array<{
+      replacementId: string
+      mode: 'runtime' | 'legacy'
+      summary: { recordCount: number; indexedItemCount: number; removedIndexedItems: number }
+    }> = []
+    let selectedMode: 'runtime' | 'legacy' = 'runtime'
+    let replacementIndex = 0
+    const router = {
+      getMode: vi.fn(() => selectedMode),
+      setMode: vi.fn((_sourceId: string, mode: 'runtime' | 'legacy') => {
+        selectedMode = mode
+        order.push(`set:${mode}`)
+      }),
+      drainSelected: vi.fn(async () => {
+        order.push(`drain:${selectedMode}`)
+      })
+    }
+    const recordMutationMode = (replacementId: string) => {
+      mutationModes.get(replacementId)?.add(selectedMode)
+    }
+    store.beginSourceReplacement = vi.fn(async () => {
+      const replacement = replacements[replacementIndex++]
+      mutationModes.set(replacement.replacementId, new Set([selectedMode]))
+      order.push(`begin:${replacement.replacementId}:${selectedMode}`)
+      return replacement
+    })
+    store.stageSourceReplacement = vi.fn(async (session, records) => {
+      recordMutationMode(session.replacementId)
+      order.push(`stage:${session.replacementId}:${selectedMode}`)
+      return records.length
+    })
+    store.commitSourceReplacement = vi.fn(async (session, totals) => {
+      recordMutationMode(session.replacementId)
+      const summary = {
+        ...totals,
+        removedIndexedItems: session.replacementId === 'legacy-replacement' ? 2 : 3
+      }
+      committedReplacements.push({
+        replacementId: session.replacementId,
+        mode: selectedMode,
+        summary
+      })
+      order.push(`commit:${session.replacementId}:${selectedMode}`)
+      return { sourceId: session.sourceId, ...summary }
+    })
+    runtime.setSourceWriterRouter(router)
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          order.push(`snapshot:${selectedMode}`)
+          yield {
+            sourceId: 'test-source',
+            records: [
+              {
+                sourceId: 'test-source',
+                recordId: `snapshot-${selectedMode}`,
+                stableKey: `snapshot-${selectedMode}`,
+                kind: 'file',
+                title: `Snapshot ${selectedMode}`
+              }
+            ],
+            done: true
+          }
+        }
+      })
+    )
+
+    const legacyResult = await runtime.switchSourceWriter('test-source', 'legacy')
+    const runtimeResult = await runtime.switchSourceWriter('test-source', 'runtime')
+
+    expect(order).toEqual([
+      'drain:runtime',
+      'set:legacy',
+      'begin:legacy-replacement:legacy',
+      'snapshot:legacy',
+      'stage:legacy-replacement:legacy',
+      'commit:legacy-replacement:legacy',
+      'drain:legacy',
+      'drain:legacy',
+      'set:runtime',
+      'begin:runtime-replacement:runtime',
+      'snapshot:runtime',
+      'stage:runtime-replacement:runtime',
+      'commit:runtime-replacement:runtime',
+      'drain:runtime'
+    ])
+    expect(committedReplacements).toEqual([
+      {
+        replacementId: 'legacy-replacement',
+        mode: 'legacy',
+        summary: { recordCount: 1, indexedItemCount: 1, removedIndexedItems: 2 }
+      },
+      {
+        replacementId: 'runtime-replacement',
+        mode: 'runtime',
+        summary: { recordCount: 1, indexedItemCount: 1, removedIndexedItems: 3 }
+      }
+    ])
+    expect(
+      [...mutationModes.entries()].map(([replacementId, modes]) => [replacementId, [...modes]])
+    ).toEqual([
+      ['legacy-replacement', ['legacy']],
+      ['runtime-replacement', ['runtime']]
+    ])
+    expect([legacyResult, runtimeResult]).toMatchObject([
+      {
+        sourceId: 'test-source',
+        previousMode: 'runtime',
+        mode: 'legacy',
+        snapshot: { batches: 1, records: 1, indexedRecords: 1 }
+      },
+      {
+        sourceId: 'test-source',
+        previousMode: 'legacy',
+        mode: 'runtime',
+        snapshot: { batches: 1, records: 1, indexedRecords: 1 }
+      }
+    ])
+  })
+
+  it('aborts the staged replacement and restores the selected writer when snapshot collection fails', async () => {
+    const replacement = { sourceId: 'test-source', replacementId: 'snapshot-replacement' }
+    const router = {
+      getMode: vi.fn(() => 'runtime' as const),
+      setMode: vi.fn(),
+      drainSelected: vi.fn(async () => undefined)
+    }
+    store.beginSourceReplacement = vi.fn(async () => replacement)
+    runtime.setSourceWriterRouter(router)
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          throw new Error('snapshot failed')
+        }
+      })
+    )
+
+    await expect(runtime.switchSourceWriter('test-source', 'legacy')).rejects.toThrow(
+      'snapshot failed'
+    )
+
+    expect(store.beginSourceReplacement).toHaveBeenCalledWith('test-source')
+    expect(store.stageSourceReplacement).not.toHaveBeenCalled()
+    expect(store.commitSourceReplacement).not.toHaveBeenCalled()
+    expect(store.abortSourceReplacement).toHaveBeenCalledWith(replacement)
+    expect(router.setMode).toHaveBeenNthCalledWith(1, 'test-source', 'legacy')
+    expect(router.setMode).toHaveBeenNthCalledWith(2, 'test-source', 'runtime')
+  })
+
+  it('aborts the staged replacement without clearing the selected writer when staging rejects', async () => {
+    const replacement = { sourceId: 'test-source', replacementId: 'snapshot-replacement' }
+    const router = {
+      getMode: vi.fn(() => 'runtime' as const),
+      setMode: vi.fn(),
+      drainSelected: vi.fn(async () => undefined)
+    }
+    store.beginSourceReplacement = vi.fn(async () => replacement)
+    store.stageSourceReplacement.mockRejectedValueOnce(new Error('writer unavailable'))
+    runtime.setSourceWriterRouter(router)
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          yield { sourceId: 'test-source', records: [], done: true }
+        }
+      })
+    )
+
+    await expect(runtime.switchSourceWriter('test-source', 'legacy')).rejects.toThrow(
+      'writer unavailable'
+    )
+
+    expect(store.beginSourceReplacement).toHaveBeenCalledWith('test-source')
+    expect(store.stageSourceReplacement).toHaveBeenCalledWith(replacement, [])
+    expect(store.commitSourceReplacement).not.toHaveBeenCalled()
+    expect(store.abortSourceReplacement).toHaveBeenCalledWith(replacement)
+    expect(router.setMode).toHaveBeenNthCalledWith(1, 'test-source', 'legacy')
+    expect(router.setMode).toHaveBeenNthCalledWith(2, 'test-source', 'runtime')
+  })
+  it('rebuilds the search index through a staged snapshot after local reset succeeds', async () => {
+    const order: string[] = []
+    const replacement = { sourceId: 'test-source', replacementId: 'reset-replacement' }
+    store.beginSourceReplacement = vi.fn(async () => {
+      order.push('begin')
+      return replacement
+    })
+    store.stageSourceReplacement = vi.fn(async (session, records) => {
+      expect(session).toEqual(replacement)
+      expect(records).toEqual([])
+      order.push('stage')
+      return records.length
+    })
+    store.commitSourceReplacement = vi.fn(async (session, totals) => {
+      expect(session).toEqual(replacement)
+      expect(totals).toEqual({ recordCount: 0, indexedItemCount: 0 })
+      order.push('commit')
+      return { sourceId: session.sourceId, ...totals, removedIndexedItems: 4 }
+    })
+    const resetIndex = vi.fn(async () => {
+      order.push('local-reset')
+      return {
+        sourceId: 'test-source',
+        reason: IndexedSourceResetReasons.UserClear,
+        clearedSearchIndex: false,
+        clearedScanProgress: false,
+        startedAt: 1700000000000,
+        completedAt: 1700000000100
+      }
+    })
+    runtime.registerSource(
+      buildSource({
+        resetIndex,
+        async *scan() {
+          yield { sourceId: 'test-source', records: [], done: true }
+        }
+      })
+    )
 
     const result = await runtime.resetSourceRuntimeState('test-source', {
       reason: IndexedSourceResetReasons.UserClear,
       clearSearchIndex: true
     })
 
-    expect(store.clearSource).toHaveBeenCalledWith('test-source')
     expect(resetIndex).toHaveBeenCalledWith({
       sourceId: 'test-source',
       reason: IndexedSourceResetReasons.UserClear,
       clearSearchIndex: false
     })
+    expect(order).toEqual(['local-reset', 'begin', 'stage', 'commit'])
+    expect(store.beginSourceReplacement).toHaveBeenCalledWith('test-source')
+    expect(store.abortSourceReplacement).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       sourceId: 'test-source',
       reason: IndexedSourceResetReasons.UserClear,
@@ -1944,26 +2367,46 @@ describe('indexingRuntime', () => {
     })
   })
 
-  it('supports search-index-only reset for sources without local reset hook', async () => {
-    store.clearSource.mockResolvedValueOnce({ sourceId: 'test-source', removedIndexedItems: 2 })
-    runtime.registerSource(buildSource())
+  it('supports search-index-only reset through a staged snapshot without a local reset hook', async () => {
+    const replacement = { sourceId: 'test-source', replacementId: 'reset-replacement' }
+    store.beginSourceReplacement = vi.fn(async () => replacement)
+    store.stageSourceReplacement = vi.fn(async (session, records) => {
+      expect(session).toEqual(replacement)
+      expect(records).toEqual([])
+      return records.length
+    })
+    store.commitSourceReplacement = vi.fn(async (session, totals) => ({
+      sourceId: session.sourceId,
+      ...totals,
+      removedIndexedItems: 2
+    }))
+    runtime.registerSource(
+      buildSource({
+        async *scan() {
+          yield { sourceId: 'test-source', records: [], done: true }
+        }
+      })
+    )
 
     const result = await runtime.resetSourceRuntimeState('test-source', {
       reason: IndexedSourceResetReasons.UserClear,
       clearSearchIndex: true
     })
 
-    expect(store.clearSource).toHaveBeenCalledWith('test-source')
+    expect(store.beginSourceReplacement).toHaveBeenCalledWith('test-source')
+    expect(store.commitSourceReplacement).toHaveBeenCalledWith(replacement, {
+      recordCount: 0,
+      indexedItemCount: 0
+    })
+    expect(store.abortSourceReplacement).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       sourceId: 'test-source',
       reason: IndexedSourceResetReasons.UserClear,
       clearedSearchIndex: true,
       clearedSearchIndexRows: 2,
-      clearedScanProgress: false,
-      error: undefined
+      clearedScanProgress: false
     })
   })
-
   it('reports unsupported source runtime reset without throwing', async () => {
     runtime.registerSource(buildSource())
 
@@ -1988,6 +2431,49 @@ describe('indexingRuntime', () => {
       status: 'skipped',
       error: 'skipped:not-supported'
     })
+  })
+
+  it('waits for an active source mutation before taking the reset exclusive lease', async () => {
+    const order: string[] = []
+    const scanStarted = Promise.withResolvers<void>()
+    const releaseScan = Promise.withResolvers<void>()
+    const resetIndex = vi.fn(async () => {
+      order.push('reset')
+      return {
+        sourceId: 'test-source',
+        reason: IndexedSourceResetReasons.HealthRepair,
+        clearedSearchIndex: false,
+        clearedScanProgress: true,
+        startedAt: 1,
+        completedAt: 2
+      }
+    })
+    runtime.registerSource(
+      buildSource({
+        resetIndex,
+        async *scan() {
+          order.push('scan:start')
+          scanStarted.resolve()
+          await releaseScan.promise
+          order.push('scan:end')
+          yield { sourceId: 'test-source', records: [], done: true }
+        }
+      })
+    )
+
+    const scan = runtime.scanSource('test-source', IndexedSourceScanReasons.ManualRebuild)
+    await scanStarted.promise
+    const reset = runtime.resetSourceRuntimeState('test-source', {
+      reason: IndexedSourceResetReasons.HealthRepair,
+      clearScanProgress: true
+    })
+
+    expect(resetIndex).not.toHaveBeenCalled()
+    releaseScan.resolve()
+    await scan
+    await reset
+
+    expect(order).toEqual(['scan:start', 'scan:end', 'reset'])
   })
 
   it('guards concurrent reset tasks for the same source', async () => {
@@ -2065,7 +2551,6 @@ describe('indexingRuntime', () => {
       clearedScanProgress: true
     })
     expect(resetIndex).toHaveBeenCalledTimes(1)
-    expect(store.clearSource).not.toHaveBeenCalledWith('test-source')
   })
 
   it('exposes latest scan, watch, and reconcile task state in diagnostics', async () => {
@@ -2143,6 +2628,16 @@ describe('indexingRuntime', () => {
     })
     expect(diagnostics.sources[0].recentTasks).toMatchObject([
       {
+        kind: 'reconcile',
+        status: 'succeeded',
+        jobId: 'test-source:reconcile:1',
+        summary: {
+          added: 1,
+          changed: 2,
+          deleted: 3
+        }
+      },
+      {
         kind: 'watch',
         status: 'succeeded',
         jobId: 'test-source:watch:1',
@@ -2160,23 +2655,14 @@ describe('indexingRuntime', () => {
           batches: 1,
           records: 1
         }
-      },
-      {
-        kind: 'reconcile',
-        status: 'succeeded',
-        summary: {
-          added: 1,
-          changed: 2,
-          deleted: 3
-        }
       }
     ])
   })
 
-  it('keeps durable task-state store when clearing runtime process state', async () => {
+  it('clears durable task state only when clearTaskStateStore is explicitly requested', async () => {
     const clear = vi.fn(async () => {})
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => undefined),
         save: vi.fn(async () => {}),
@@ -2185,7 +2671,7 @@ describe('indexingRuntime', () => {
       }
     })
 
-    runtime.clear()
+    runtime.clear({ clearTaskStateStore: false })
     expect(clear).not.toHaveBeenCalled()
 
     runtime.clear({ clearTaskStateStore: true })
@@ -2232,7 +2718,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => persistedState),
         save: vi.fn(async () => {}),
@@ -2280,7 +2766,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => persistedState),
         save: vi.fn(async () => {}),
@@ -2334,7 +2820,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       runGate: new IndexedSourceTaskRunGate({ debounceMs: 60_000 }),
       taskStateStore: {
         load: vi.fn(async () => persistedState),
@@ -2418,7 +2904,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       runGate: new IndexedSourceTaskRunGate({ debounceMs: 60_000 }),
       taskStateStore: {
         load: vi.fn(async () => persistedState),
@@ -2503,7 +2989,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => persistedState),
         save,
@@ -2598,7 +3084,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => persistedState),
         save,
@@ -2686,7 +3172,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => persistedState),
         save,
@@ -2777,7 +3263,7 @@ describe('indexingRuntime', () => {
       ]
     }
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: {
         load: vi.fn(async () => persistedState),
         save,
@@ -2958,17 +3444,585 @@ describe('indexingRuntime', () => {
       deleted: 0
     })
   })
-  it('clears registered sources and persisted task state during runtime cleanup', () => {
+  it('clears registered sources and persisted task state during explicit runtime cleanup', () => {
     const clearTaskState = vi.fn(async () => undefined)
     runtime = new IndexingRuntime({
-      store: store as IndexStoreAdapter,
+      store: store,
       taskStateStore: { clear: clearTaskState } as never
     })
     runtime.registerSource(buildSource())
 
-    runtime.clear()
+    runtime.clear({ clearTaskStateStore: true })
 
     expect(runtime.listDescriptors()).toEqual([])
     expect(clearTaskState).toHaveBeenCalledTimes(1)
+  })
+
+  it('allows an active lease to continue while an exclusive switch waits, then rejects it after release', async () => {
+    const gate = new IndexingSourceMutationGate()
+    const started = Promise.withResolvers<string>()
+    const releaseLease = Promise.withResolvers<void>()
+    const active = gate.run('file-provider', async (lease) => {
+      started.resolve(lease.id)
+      await releaseLease.promise
+    })
+    const leaseId = await started.promise
+    const exclusive = gate.runExclusive('file-provider', async () => undefined)
+
+    await expect(
+      gate.runWithinLease('file-provider', leaseId, async (lease) => lease.id)
+    ).resolves.toBe(leaseId)
+
+    releaseLease.resolve()
+    await active
+    await exclusive
+
+    await expect(
+      gate.runWithinLease('file-provider', leaseId, async () => undefined)
+    ).rejects.toThrow('INDEXING_SOURCE_MUTATION_LEASE_INVALID:file-provider')
+  })
+
+  it('serializes normal leases per source while allowing another source to progress', async () => {
+    const gate = new IndexingSourceMutationGate()
+    const firstStarted = Promise.withResolvers<void>()
+    const releaseFirst = Promise.withResolvers<void>()
+    const order: string[] = []
+    const first = gate.run('file-provider', async () => {
+      order.push('file:first:start')
+      firstStarted.resolve()
+      await releaseFirst.promise
+      order.push('file:first:end')
+    })
+    await firstStarted.promise
+    const second = gate.run('file-provider', async () => {
+      order.push('file:second')
+    })
+    const otherSource = gate.run('app-provider', async () => {
+      order.push('app:independent')
+    })
+
+    await otherSource
+    expect(order).toEqual(['file:first:start', 'app:independent'])
+
+    releaseFirst.resolve()
+    await Promise.all([first, second])
+
+    expect(order).toEqual(['file:first:start', 'app:independent', 'file:first:end', 'file:second'])
+  })
+
+  it('holds a late nested apply ahead of the next same-source delete after its outer lease settles', async () => {
+    const gate = new IndexingSourceMutationGate()
+    const lateApplyStarted = Promise.withResolvers<void>()
+    const releaseLateApply = Promise.withResolvers<void>()
+    const order: string[] = []
+    let lateApply!: Promise<void>
+    const outer = gate.run('file-provider', async (lease) => {
+      lateApply = gate.runWithinLease('file-provider', lease.id, async () => {
+        order.push('late-apply:start')
+        lateApplyStarted.resolve()
+        await releaseLateApply.promise
+        order.push('late-apply:end')
+      })
+      await lateApplyStarted.promise
+    })
+
+    await outer
+    const nextDelete = gate.run('file-provider', async () => {
+      order.push('next-delete')
+    })
+    const exclusive = gate.runExclusive('file-provider', async () => {
+      order.push('exclusive')
+    })
+
+    await Promise.resolve()
+    expect(order).toEqual(['late-apply:start'])
+
+    releaseLateApply.resolve()
+    await Promise.all([lateApply, nextDelete, exclusive])
+
+    expect(order).toEqual(['late-apply:start', 'late-apply:end', 'next-delete', 'exclusive'])
+  })
+  it('keeps an exclusive transition behind writer apply and source drain in one ordinary lease', async () => {
+    const gate = new IndexingSourceMutationGate()
+    const order: string[] = []
+    const sourceDrainStarted = Promise.withResolvers<void>()
+    const drainRelease = Promise.withResolvers<void>()
+    const ordinary = gate.run('file-provider', async (lease) => {
+      await gate.runWithinLease('file-provider', lease.id, async () => {
+        order.push('writer-apply')
+      })
+      order.push('source-drain')
+      sourceDrainStarted.resolve()
+      await drainRelease.promise
+    })
+    const exclusive = gate.runExclusive('file-provider', async () => {
+      order.push('exclusive')
+    })
+
+    await sourceDrainStarted.promise
+    expect(order).toEqual(['writer-apply', 'source-drain'])
+    drainRelease.resolve()
+    await ordinary
+    await exclusive
+
+    expect(order).toEqual(['writer-apply', 'source-drain', 'exclusive'])
+  })
+
+  it('drains applied reconcile mutations before releasing the lease after source failure', async () => {
+    const sourceError = new Error('reconcile source failed')
+    const order: string[] = []
+    const applyStarted = Promise.withResolvers<void>()
+    const gate = new IndexingSourceMutationGate()
+    store.applyDelta = vi.fn(async () => {
+      order.push('apply')
+      applyStarted.resolve()
+      return {
+        sourceId: 'test-source',
+        action: 'change',
+        indexedItemCount: 1,
+        removedItemCount: 0,
+        applied: true
+      }
+    })
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    runtime.registerSource(
+      buildSource({
+        reconcile: async (request) => {
+          await request.onDelta?.({
+            sourceId: 'test-source',
+            action: 'change',
+            record: {
+              sourceId: 'test-source',
+              recordId: 'one',
+              stableKey: 'one',
+              kind: 'file',
+              title: 'One'
+            }
+          })
+          throw sourceError
+        },
+        drainMutations: async () => {
+          order.push('drain')
+        }
+      })
+    )
+    const reconcile = runtime.reconcileSource('test-source')
+    await applyStarted.promise
+    const exclusive = gate.runExclusive('test-source', async () => {
+      order.push('exclusive')
+    })
+
+    await expect(reconcile).rejects.toBe(sourceError)
+    await exclusive
+
+    expect(order).toEqual(['apply', 'drain', 'exclusive'])
+  })
+
+  it('allows in-scan integrity count to continue on the outer lease while an exclusive switch waits', async () => {
+    const gate = new IndexingSourceMutationGate()
+    const countReached = Promise.withResolvers<void>()
+    const releaseScan = Promise.withResolvers<void>()
+    const order: string[] = []
+    store.countSource = vi.fn(async () => {
+      order.push('count')
+      countReached.resolve()
+      return 1
+    })
+    runtime = new IndexingRuntime({ store, sourceMutationGate: gate })
+    runtime.registerSource(
+      buildSource({
+        async *scan(request) {
+          await runtime.countSource('test-source', request.mutationLeaseId)
+          await releaseScan.promise
+          yield { sourceId: 'test-source', records: [], done: true }
+        }
+      })
+    )
+
+    const scan = runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    await countReached.promise
+    const exclusive = gate.runExclusive('test-source', async () => {
+      order.push('exclusive')
+    })
+
+    expect(order).toEqual(['count'])
+    releaseScan.resolve()
+    await scan
+    await exclusive
+
+    expect(order).toEqual(['count', 'exclusive'])
+  })
+
+  it('aborts and drains an active source scan through the public runtime API', async () => {
+    const scanStarted = Promise.withResolvers<void>()
+    let receivedSignal: AbortSignal | undefined
+    let scanFinalized = false
+    runtime.registerSource(
+      buildSource({
+        async *scan(request) {
+          receivedSignal = request.signal
+          scanStarted.resolve()
+          try {
+            await new Promise<void>((_resolve, reject) => {
+              request.signal?.addEventListener(
+                'abort',
+                () => reject(request.signal?.reason ?? new Error('scan aborted')),
+                { once: true }
+              )
+            })
+          } finally {
+            scanFinalized = true
+          }
+        }
+      })
+    )
+
+    const scan = runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    await scanStarted.promise
+    const draining = runtime.abortAndDrainSourceScans('test-source')
+
+    expect(receivedSignal?.aborted).toBe(true)
+    await expect(scan).rejects.toBeInstanceOf(Error)
+    await draining
+    expect(scanFinalized).toBe(true)
+  })
+
+  it('bounds abort-ignoring source scans and keeps them admitted until released', async () => {
+    vi.useFakeTimers()
+    try {
+      const scanStarted = Promise.withResolvers<void>()
+      const releaseScan = Promise.withResolvers<void>()
+      let receivedSignal: AbortSignal | undefined
+      runtime.registerSource(
+        buildSource({
+          async *scan(request) {
+            receivedSignal = request.signal
+            scanStarted.resolve()
+            await releaseScan.promise
+            yield { sourceId: 'test-source', records: [], done: true }
+          }
+        })
+      )
+
+      const scan = runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+      await scanStarted.promise
+      const draining = runtime.abortAndDrainSourceScans('test-source', 1)
+      const timeout = expect(draining).rejects.toThrow(
+        'INDEXED_SOURCE_SCAN_DRAIN_TIMEOUT:test-source'
+      )
+
+      expect(receivedSignal?.aborted).toBe(true)
+      await vi.advanceTimersByTimeAsync(1)
+      await timeout
+
+      let admittedDrainSettled = false
+      const admittedDrain = runtime.drainAdmittedTasks().then(() => {
+        admittedDrainSettled = true
+      })
+      await Promise.resolve()
+      expect(admittedDrainSettled).toBe(false)
+
+      releaseScan.resolve()
+      await Promise.all([scan, admittedDrain])
+      await expect(runtime.abortAndDrainSourceScans('test-source', 1)).resolves.toBeUndefined()
+      expect(admittedDrainSettled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    {
+      name: 'watch',
+      operation: () =>
+        runtime.routeWatchEvent({
+          sourceId: 'test-source',
+          action: 'change',
+          path: '/tmp/tuff-source/after-close.txt',
+          occurredAt: 1700000000000
+        })
+    },
+    {
+      name: 'scan',
+      operation: () => runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    },
+    {
+      name: 'batch scan',
+      operation: () => runtime.scanSourcesWithResult(IndexedSourceScanReasons.Scheduled)
+    },
+    {
+      name: 'reconcile',
+      operation: () => runtime.reconcileSource('test-source')
+    },
+    {
+      name: 'batch reconcile',
+      operation: () => runtime.reconcileSourcesWithResult()
+    },
+    {
+      name: 'reset',
+      operation: () => runtime.resetSourceRuntimeState('test-source')
+    },
+    {
+      name: 'writer switch',
+      operation: () => runtime.switchSourceWriter('test-source', 'legacy')
+    }
+  ])(
+    'rejects new $name maintenance after shutdown before source or store work',
+    async ({ operation }) => {
+      const sourceCalls: string[] = []
+      runtime.registerSource(
+        buildSource({
+          getHealth: async () => {
+            sourceCalls.push('health')
+            return readyHealth
+          },
+          getRoots: async () => {
+            sourceCalls.push('roots')
+            return []
+          },
+          async *scan() {
+            sourceCalls.push('scan')
+          },
+          handleWatchEvent: async () => {
+            sourceCalls.push('watch')
+            return []
+          },
+          reconcile: async () => {
+            sourceCalls.push('reconcile')
+            return {
+              sourceId: 'test-source',
+              added: 0,
+              changed: 0,
+              deleted: 0,
+              skipped: 0,
+              errors: 0,
+              startedAt: 1700000000000,
+              completedAt: 1700000000000
+            }
+          },
+          resetIndex: async () => {
+            sourceCalls.push('reset')
+            return {
+              sourceId: 'test-source',
+              reason: IndexedSourceResetReasons.HealthRepair,
+              clearedSearchIndex: false,
+              clearedScanProgress: false,
+              startedAt: 1700000000000,
+              completedAt: 1700000000000
+            }
+          }
+        })
+      )
+
+      runtime.beginShutdown()
+
+      await expect(operation()).rejects.toThrow('INDEXING_RUNTIME_SHUTTING_DOWN')
+
+      expect(sourceCalls).toEqual([])
+      expect(store.applyBatch).not.toHaveBeenCalled()
+      expect(store.applyDelta).not.toHaveBeenCalled()
+      expect(store.clearSource).not.toHaveBeenCalled()
+      expect(store.replaceSource).not.toHaveBeenCalled()
+      expect(store.beginSourceReplacement).not.toHaveBeenCalled()
+      expect(store.stageSourceReplacement).not.toHaveBeenCalled()
+      expect(store.commitSourceReplacement).not.toHaveBeenCalled()
+      expect(store.abortSourceReplacement).not.toHaveBeenCalled()
+      expect(store.cleanupSource).not.toHaveBeenCalled()
+      expect(store.countSource).not.toHaveBeenCalled()
+    }
+  )
+
+  it('drains reset admitted during task-state preflight only after the reset source work settles', async () => {
+    const taskStateLoadStarted = Promise.withResolvers<void>()
+    const releaseTaskStateLoad = Promise.withResolvers<void>()
+    const resetStarted = Promise.withResolvers<void>()
+    const releaseReset = Promise.withResolvers<void>()
+    const load = vi.fn(async () => {
+      taskStateLoadStarted.resolve()
+      await releaseTaskStateLoad.promise
+      return undefined
+    })
+    const resetIndex = vi.fn(async () => {
+      resetStarted.resolve()
+      await releaseReset.promise
+      return {
+        sourceId: 'test-source',
+        reason: IndexedSourceResetReasons.HealthRepair,
+        clearedSearchIndex: false,
+        clearedScanProgress: false,
+        startedAt: 1700000000000,
+        completedAt: 1700000000000
+      }
+    })
+    runtime = new IndexingRuntime({
+      store,
+      taskStateStore: {
+        load,
+        save: vi.fn(async () => {}),
+        delete: vi.fn(async () => {}),
+        clear: vi.fn(async () => {})
+      }
+    })
+    runtime.registerSource(buildSource({ resetIndex }))
+
+    const reset = runtime.resetSourceRuntimeState('test-source')
+    await taskStateLoadStarted.promise
+
+    runtime.beginShutdown()
+    let drainSettled = false
+    const drain = runtime.drainAdmittedTasks().then(() => {
+      drainSettled = true
+    })
+
+    await Promise.resolve()
+    expect(resetIndex).not.toHaveBeenCalled()
+    expect(drainSettled).toBe(false)
+
+    releaseTaskStateLoad.resolve()
+    await resetStarted.promise
+    await Promise.resolve()
+
+    expect(drainSettled).toBe(false)
+    releaseReset.resolve()
+    await Promise.all([reset, drain])
+
+    expect(resetIndex).toHaveBeenCalledTimes(1)
+    expect(drainSettled).toBe(true)
+  })
+
+  it('drains reconcile admitted during diagnostics preflight only after source reconciliation settles', async () => {
+    const diagnosticsStarted = Promise.withResolvers<void>()
+    const releaseDiagnostics = Promise.withResolvers<void>()
+    const reconcileStarted = Promise.withResolvers<void>()
+    const releaseReconcile = Promise.withResolvers<void>()
+    const reconcile = vi.fn(async () => {
+      reconcileStarted.resolve()
+      await releaseReconcile.promise
+      return {
+        sourceId: 'test-source',
+        added: 0,
+        changed: 0,
+        deleted: 0,
+        skipped: 0,
+        errors: 0,
+        startedAt: 1700000000000,
+        completedAt: 1700000000000
+      }
+    })
+    runtime.registerSource(
+      buildSource({
+        getHealth: async () => {
+          diagnosticsStarted.resolve()
+          await releaseDiagnostics.promise
+          return readyHealth
+        },
+        reconcile
+      })
+    )
+
+    const reconciliation = runtime.reconcileSource('test-source')
+    await diagnosticsStarted.promise
+
+    runtime.beginShutdown()
+    let drainSettled = false
+    const drain = runtime.drainAdmittedTasks().then(() => {
+      drainSettled = true
+    })
+
+    await Promise.resolve()
+    expect(reconcile).not.toHaveBeenCalled()
+    expect(drainSettled).toBe(false)
+
+    releaseDiagnostics.resolve()
+    await reconcileStarted.promise
+    await Promise.resolve()
+
+    expect(drainSettled).toBe(false)
+    releaseReconcile.resolve()
+    await Promise.all([reconciliation, drain])
+
+    expect(reconcile).toHaveBeenCalledTimes(1)
+    expect(drainSettled).toBe(true)
+  })
+
+  it('allows an admitted scan to apply batch and delta through its existing lease after shutdown closes admission', async () => {
+    const scanStarted = Promise.withResolvers<string>()
+    const allowLeasedApplies = Promise.withResolvers<void>()
+    const batch: IndexedSourceRecordBatch = {
+      sourceId: 'test-source',
+      mutationLeaseId: '',
+      records: [
+        {
+          sourceId: 'test-source',
+          recordId: 'leased-record',
+          stableKey: 'leased-record',
+          kind: 'file',
+          title: 'Leased record'
+        }
+      ],
+      done: false
+    }
+    const delta: IndexedSourceDelta = {
+      sourceId: 'test-source',
+      mutationLeaseId: '',
+      action: 'change',
+      record: {
+        sourceId: 'test-source',
+        recordId: 'leased-record',
+        stableKey: 'leased-record',
+        kind: 'file',
+        title: 'Leased record'
+      }
+    }
+    runtime.registerSource(
+      buildSource({
+        async *scan(request) {
+          const leaseId = request.mutationLeaseId
+          if (!leaseId) throw new Error('Expected scan mutation lease')
+          batch.mutationLeaseId = leaseId
+          delta.mutationLeaseId = leaseId
+          scanStarted.resolve(leaseId)
+          await allowLeasedApplies.promise
+          await runtime.applySourceBatch(batch)
+          await runtime.applySourceDelta(delta)
+        }
+      })
+    )
+
+    const scan = runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    const leaseId = await scanStarted.promise
+
+    runtime.beginShutdown()
+    let drainSettled = false
+    const drain = runtime.drainAdmittedTasks().then(() => {
+      drainSettled = true
+    })
+
+    await expect(
+      runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    ).rejects.toThrow('INDEXING_RUNTIME_SHUTTING_DOWN')
+    expect(drainSettled).toBe(false)
+
+    allowLeasedApplies.resolve()
+    await Promise.all([scan, drain])
+
+    expect(store.applyBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ ...batch, mutationLeaseId: leaseId })
+    )
+    expect(store.applyDelta).toHaveBeenCalledWith(
+      expect.objectContaining({ ...delta, mutationLeaseId: leaseId })
+    )
+    expect(drainSettled).toBe(true)
+  })
+
+  it('keeps shutdown admission closed permanently after runtime clear', async () => {
+    runtime.registerSource(buildSource())
+    runtime.beginShutdown()
+    runtime.clear()
+
+    expect(runtime.listDescriptors()).toEqual([])
+    await expect(
+      runtime.scanSource('test-source', IndexedSourceScanReasons.Scheduled)
+    ).rejects.toThrow('INDEXING_RUNTIME_SHUTTING_DOWN')
   })
 })

@@ -24,7 +24,7 @@ const log = getLogger('search-engine')
 
 export interface SearchQueryOrchestratorDeps {
   getProviderConfigSignature: () => string
-  getActivations: () => Map<string, IProviderActivate> | null
+  getActivations: () => ReadonlyMap<string, IProviderActivate> | null
   shouldSkipProvider: (providerId: string) => boolean
 }
 
@@ -39,7 +39,10 @@ export interface SearchQueryOrchestrationResult {
 export class SearchQueryOrchestrator {
   constructor(private readonly deps: SearchQueryOrchestratorDeps) {}
 
-  async orchestrate(query: TuffQuery): Promise<SearchQueryOrchestrationResult> {
+  async orchestrate(
+    query: TuffQuery,
+    activations = this.deps.getActivations()
+  ): Promise<SearchQueryOrchestrationResult> {
     const startedAt = performance.now()
     const dispose = enterPerfContext('Search.pipeline.parse', {
       queryLength: (query.text || '').length,
@@ -64,7 +67,7 @@ export class SearchQueryOrchestrator {
       return {
         providerFilter: parsed.providerFilter,
         providerConfigSignature,
-        cacheKey: buildSearchCacheKey(query, parsed.providerFilter, this.deps.getActivations(), {
+        cacheKey: buildSearchCacheKey(query, parsed.providerFilter, activations, {
           providerConfigSignature
         }),
         durationMs: performance.now() - startedAt

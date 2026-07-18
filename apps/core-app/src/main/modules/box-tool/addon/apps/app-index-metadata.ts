@@ -71,15 +71,17 @@ export function isAppIdentifierExtensionKey(
 export function resolveAppItemId(value: {
   bundleId?: string | null
   stableId?: string | null
+  uniqueId?: string | null
   appIdentity?: string | null
   path: string
 }): string {
-  return value.appIdentity || value.stableId || value.path || value.bundleId || ''
+  return value.stableId || value.appIdentity || value.uniqueId || value.path || value.bundleId || ''
 }
 
 export function resolveAppItemIds(value: {
   bundleId?: string | null
   stableId?: string | null
+  uniqueId?: string | null
   appIdentity?: string | null
   path: string
 }): string[] {
@@ -87,6 +89,7 @@ export function resolveAppItemIds(value: {
     resolveAppItemId(value),
     value.appIdentity,
     value.stableId,
+    value.uniqueId,
     value.path,
     value.bundleId
   ])

@@ -1,9 +1,26 @@
 import type { IndexedSourceDiagnostics, SearchProviderDescriptor } from '@talex-touch/utils/search'
-import { describe, expect, it } from 'vitest'
+import type { OnboardingGateDecision, OnboardingGateListener } from '../../storage'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('../../database', () => ({
+  databaseModule: {}
+}))
+
+const onboardingGateMock = vi.hoisted(() => ({
+  evaluate: vi.fn<() => OnboardingGateDecision>(() => ({ state: 'allowed' })),
+  waitForDecision: vi.fn<() => Promise<OnboardingGateDecision>>(async () => ({ state: 'allowed' })),
+  subscribe: vi.fn<(listener: OnboardingGateListener) => () => void>((_listener) => () => {})
+}))
+
+vi.mock('../../storage', () => ({
+  storageModule: {},
+  onboardingGate: onboardingGateMock
+}))
 
 import {
   buildSearchProviderRegistrySnapshot,
-  collectSearchProviderIdsForIndexedSource
+  collectSearchProviderIdsForIndexedSource,
+  SearchProviderRegistry
 } from './search-provider-registry'
 
 function createIndexedSource(id: string): IndexedSourceDiagnostics {
@@ -63,6 +80,56 @@ function createPluginProvider(id: string): SearchProviderDescriptor {
 }
 
 describe('search provider registry', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  it('observes deferred onboarding load failures, retries, and stops retrying after success', async () => {
+    vi.useFakeTimers()
+    let notifyOnboardingReady: ((decision: OnboardingGateDecision) => void) | undefined
+    const unsubscribe = vi.fn()
+    onboardingGateMock.waitForDecision.mockResolvedValueOnce({
+      state: 'degraded',
+      reason: 'storage-pending',
+      recoverable: true
+    })
+    onboardingGateMock.subscribe.mockImplementationOnce((listener: OnboardingGateListener) => {
+      notifyOnboardingReady = listener
+      return unsubscribe
+    })
+    let attempts = 0
+    const beforeProvidersLoad = vi.fn(async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('first load failed')
+    })
+    const onProvidersReady = vi.fn(async () => undefined)
+    const registry = new SearchProviderRegistry({
+      beforeProvidersLoad,
+      onProvidersReady,
+      getSearchIndexService: () => null,
+      getTouchApp: () => null,
+      onProviderDeactivated: () => undefined
+    })
+
+    await expect(registry.loadWhenOnboardingAllows('all-modules-loaded')).resolves.toMatchObject({
+      state: 'degraded'
+    })
+    expect(onboardingGateMock.subscribe).toHaveBeenCalledTimes(1)
+
+    notifyOnboardingReady?.({ state: 'allowed' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(beforeProvidersLoad).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(beforeProvidersLoad).toHaveBeenCalledTimes(2)
+    expect(onProvidersReady).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(beforeProvidersLoad).toHaveBeenCalledTimes(2)
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+
+    registry.destroy()
+    vi.useRealTimers()
+  })
+
   it('combines indexed sources and plugin search providers for settings config', () => {
     const snapshot = buildSearchProviderRegistrySnapshot({
       indexedSources: [createIndexedSource('file-provider')],

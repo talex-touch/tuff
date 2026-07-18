@@ -1,8 +1,8 @@
 import type { IndexWorkerFileResult } from '../workers/file-index-worker-client'
 import type {
-  PersistAndIndexSummary,
-  PersistEntry
-} from '../../../search-engine/workers/search-index-worker-client'
+  FilePersistenceEntry,
+  PersistEntriesSummary
+} from '../../../search-engine/search-index-writer'
 import { performance } from 'node:perf_hooks'
 import { dbWriteScheduler } from '../../../../../db/db-write-scheduler'
 import {
@@ -33,9 +33,10 @@ export interface FileProviderIndexFlushExecutorServiceDeps {
   buffer: FileProviderIndexFlushBufferService
   ensureSearchIndexWorkerReady: (reason: string) => Promise<boolean>
   getSearchIndexWorker: () => {
-    persistAndIndex: (entries: PersistEntry[]) => Promise<PersistAndIndexSummary>
+    persistEntries: (entries: FilePersistenceEntry[]) => Promise<PersistEntriesSummary>
   }
-  buildPersistEntries: (entries: IndexWorkerFileResult[]) => PersistEntry[]
+  buildPersistEntries: (entries: IndexWorkerFileResult[]) => FilePersistenceEntry[]
+  publishRecords: (entries: IndexWorkerFileResult[]) => Promise<number>
   logDebug: (message: string, meta?: Record<string, unknown>) => void
   waitForCapacity?: (maxQueued: number) => Promise<void>
   now?: () => number
@@ -52,6 +53,7 @@ export class FileProviderIndexFlushExecutorService {
   private readonly ensureSearchIndexWorkerReady: FileProviderIndexFlushExecutorServiceDeps['ensureSearchIndexWorkerReady']
   private readonly getSearchIndexWorker: FileProviderIndexFlushExecutorServiceDeps['getSearchIndexWorker']
   private readonly buildPersistEntries: FileProviderIndexFlushExecutorServiceDeps['buildPersistEntries']
+  private readonly publishRecords: FileProviderIndexFlushExecutorServiceDeps['publishRecords']
   private readonly logDebug: FileProviderIndexFlushExecutorServiceDeps['logDebug']
   private readonly waitForCapacity: NonNullable<
     FileProviderIndexFlushExecutorServiceDeps['waitForCapacity']
@@ -61,8 +63,8 @@ export class FileProviderIndexFlushExecutorService {
   private readonly executor: IndexedWriteFlushExecutorService<
     number,
     IndexWorkerFileResult,
-    PersistEntry,
-    PersistAndIndexSummary
+    FilePersistenceEntry,
+    PersistEntriesSummary
   >
 
   constructor(deps: FileProviderIndexFlushExecutorServiceDeps) {
@@ -73,6 +75,7 @@ export class FileProviderIndexFlushExecutorService {
     this.ensureSearchIndexWorkerReady = deps.ensureSearchIndexWorkerReady
     this.getSearchIndexWorker = deps.getSearchIndexWorker
     this.buildPersistEntries = deps.buildPersistEntries
+    this.publishRecords = deps.publishRecords
     this.logDebug = deps.logDebug
     this.waitForCapacity =
       deps.waitForCapacity ?? ((maxQueued) => dbWriteScheduler.waitForCapacity(maxQueued))
@@ -84,13 +87,14 @@ export class FileProviderIndexFlushExecutorService {
       isAvailable: () => Boolean(this.getDbUtils() && this.getSearchIndex()),
       ensureReady: () => this.ensureSearchIndexWorkerReady('index-runtime.flush'),
       buildPersistEntries: this.buildPersistEntries,
-      persist: (entries) => this.getSearchIndexWorker().persistAndIndex(entries),
+      persist: (entries) => this.getSearchIndexWorker().persistEntries(entries),
       waitForCapacity: () => this.waitForCapacity(this.dbBackpressureMaxQueued),
       recordDuration: (durationMs) => this.flushBatchScheduler.recordDuration(durationMs),
       now: this.now,
       onBatchTaken: (entries) => this.logBatchTaken(entries),
       resolveBatchMetadata: (entries) => this.resolveBatchMetadata(entries),
-      resolvePersistMetadata: (result) => this.resolvePersistMetadata(result)
+      resolvePersistMetadata: (result) => this.resolvePersistMetadata(result),
+      afterPersist: async ({ entries }) => ({ indexedItems: await this.publishRecords(entries) })
     })
   }
 
@@ -128,9 +132,8 @@ export class FileProviderIndexFlushExecutorService {
     }
   }
 
-  private resolvePersistMetadata(summary: PersistAndIndexSummary): {
+  private resolvePersistMetadata(summary: PersistEntriesSummary): {
     persistedRows: number
-    indexedItems: number
     fileUpdates: number
     progressRows: number
     embeddings: number
@@ -138,7 +141,6 @@ export class FileProviderIndexFlushExecutorService {
   } {
     return {
       persistedRows: summary.persistedRows,
-      indexedItems: summary.indexedItems,
       fileUpdates: summary.fileUpdates,
       progressRows: summary.progressRows,
       embeddings: summary.embeddings,

@@ -2,252 +2,242 @@ import { describe, expect, it, vi } from 'vitest'
 import { FileProviderReconciliationRunService } from './file-provider-reconciliation-run-service'
 import type { ScannedFileInfo } from '../types'
 
-function scannedFile(path: string, mtime = 2000): ScannedFileInfo {
+function scannedFile(path: string, mtime = 2_000): ScannedFileInfo {
   return {
     path,
     name: path.split('/').pop() ?? path,
     extension: '.txt',
     size: 1,
-    ctime: new Date(1000),
+    ctime: new Date(1_000),
     mtime: new Date(mtime)
   }
 }
 
+function streamedBatches(...batches: ScannedFileInfo[][]): AsyncIterable<ScannedFileInfo[]> {
+  return (async function* () {
+    yield* batches
+  })()
+}
+
+function buildDeps(overrides: Record<string, unknown> = {}) {
+  return {
+    enterPerfContext: vi.fn(() => vi.fn()),
+    assertActive: vi.fn(),
+    waitForIdle: vi.fn(async () => {}),
+    prepareSeenPaths: vi.fn(async () => {}),
+    recordSeenPaths: vi.fn(async () => {}),
+    clearSeenPaths: vi.fn(async () => {}),
+    getDbFilesByPaths: vi.fn(async () => []),
+    getMissingDbFiles: vi.fn(async () => []),
+    scanDirectory: vi.fn(() => streamedBatches()),
+    reconcile: vi.fn(async () => ({ filesToAdd: [], filesToUpdate: [], deletedIds: [] })),
+    deleteRecords: vi.fn(async () => {}),
+    updateRecords: vi.fn(async () => ({ updatedCount: 0 })),
+    insertRecords: vi.fn(async () => ({ insertedCount: 0 })),
+    emitProgress: vi.fn(),
+    yieldAfterDbRead: vi.fn(async () => {}),
+    yieldAfterPathScan: vi.fn(async () => {}),
+    now: vi.fn(() => 0),
+    formatDuration: vi.fn((durationMs: number) => `${durationMs}ms`),
+    logDebug: vi.fn(),
+    ...overrides
+  }
+}
+
 describe('file-provider-reconciliation-run-service', () => {
-  it('runs reconciliation scan, applies delete/update/insert operations, and reports stats', async () => {
-    const finishPerfContext = vi.fn()
-    const getDbFiles = vi.fn(async () => [
-      { id: 1, path: '/root/update.txt', mtime: new Date(1000) },
-      { id: 2, path: '/root/delete.txt', mtime: new Date(1000) }
-    ])
-    const scanDirectory = vi.fn(async () => [
-      scannedFile('/root/update.txt', 3000),
-      scannedFile('/root/add.txt', 2000)
-    ])
-    const reconcile = vi.fn(async () => ({
-      filesToAdd: [
-        {
-          path: '/root/add.txt',
-          name: 'add.txt',
-          extension: '.txt',
-          size: 1,
-          mtime: 2000,
-          ctime: 1000
-        }
-      ],
-      filesToUpdate: [
-        {
-          id: 1,
-          path: '/root/update.txt',
-          name: 'update.txt',
-          extension: '.txt',
-          size: 1,
-          mtime: 3000,
-          ctime: 1000
-        }
-      ],
-      deletedIds: [2]
-    }))
-    const deleteRecords = vi.fn(async () => {})
-    const updateRecords = vi.fn(async () => ({ updatedCount: 1 }))
-    const insertRecords = vi.fn(async () => ({ insertedCount: 1 }))
-    const emitProgress = vi.fn()
-    const context = { runId: 'reconcile' }
-    let now = 100
-    const service = new FileProviderReconciliationRunService({
-      enterPerfContext: vi.fn(() => finishPerfContext),
-      waitForIdle: vi.fn(async () => {}),
-      getDbFiles,
-      scanDirectory,
-      reconcile,
-      deleteRecords,
-      updateRecords,
-      insertRecords,
-      emitProgress,
-      yieldAfterDbRead: vi.fn(async () => {}),
-      yieldAfterPathScan: vi.fn(async () => {}),
-      now: () => {
-        now += 20
-        return now
-      },
-      formatDuration: (durationMs) => `${durationMs}ms`,
-      logDebug: vi.fn()
+  it('diffs and persists each streamed disk batch before fetching missing database rows', async () => {
+    const firstBatch = [scannedFile('/root/update.txt', 3_000)]
+    const secondBatch = [scannedFile('/root/add.txt')]
+    const deps = buildDeps({
+      scanDirectory: vi.fn(() => streamedBatches(firstBatch, secondBatch)),
+      getDbFilesByPaths: vi
+        .fn()
+        .mockResolvedValueOnce([{ id: 1, path: '/root/update.txt', mtime: new Date(1_000) }])
+        .mockResolvedValueOnce([]),
+      reconcile: vi
+        .fn()
+        .mockResolvedValueOnce({
+          filesToAdd: [],
+          filesToUpdate: [
+            {
+              id: 1,
+              path: '/root/update.txt',
+              name: 'update.txt',
+              extension: '.txt',
+              size: 1,
+              mtime: 3_000,
+              ctime: 1_000
+            }
+          ],
+          deletedIds: []
+        })
+        .mockResolvedValueOnce({
+          filesToAdd: [
+            {
+              path: '/root/add.txt',
+              name: 'add.txt',
+              extension: '.txt',
+              size: 1,
+              mtime: 2_000,
+              ctime: 1_000
+            }
+          ],
+          filesToUpdate: [],
+          deletedIds: []
+        }),
+      updateRecords: vi.fn(async () => ({ updatedCount: 1 })),
+      insertRecords: vi.fn(async () => ({ insertedCount: 1 }))
     })
+    const service = new FileProviderReconciliationRunService(deps)
 
-    const result = await service.execute(['/root'], context)
-
-    expect(getDbFiles).toHaveBeenCalledWith(['/root'])
-    expect(scanDirectory).toHaveBeenCalledWith('/root', undefined)
-    expect(reconcile).toHaveBeenCalledWith(
-      [
-        expect.objectContaining({ path: '/root/update.txt', mtime: 3000 }),
-        expect.objectContaining({ path: '/root/add.txt', mtime: 2000 })
-      ],
-      [
-        { id: 1, path: '/root/update.txt', mtime: 1000 },
-        { id: 2, path: '/root/delete.txt', mtime: 1000 }
-      ],
-      ['/root']
-    )
-    expect(deleteRecords).toHaveBeenCalledWith([{ id: 2, path: '/root/delete.txt' }], context)
-    expect(updateRecords).toHaveBeenCalledWith(
-      [
-        {
-          id: 1,
-          path: '/root/update.txt',
-          name: 'update.txt',
-          extension: '.txt',
-          size: 1,
-          mtime: new Date(3000),
-          ctime: new Date(1000),
-          type: 'file',
-          isDir: false
-        }
-      ],
-      context
-    )
-    expect(insertRecords).toHaveBeenCalledWith(
-      [
-        {
-          path: '/root/add.txt',
-          name: 'add.txt',
-          extension: '.txt',
-          size: 1,
-          mtime: 2000,
-          ctime: 1000
-        }
-      ],
-      context
-    )
-    expect(emitProgress).toHaveBeenNthCalledWith(1, 0, 1)
-    expect(emitProgress).toHaveBeenLastCalledWith(1, 1)
-    expect(finishPerfContext).toHaveBeenCalledTimes(1)
-    expect(result).toEqual({
+    await expect(service.execute(['/root'], { runId: 'reconcile' })).resolves.toEqual({
       added: 1,
       changed: 1,
-      deleted: 1,
+      deleted: 0,
       skipped: 0,
       completedPaths: ['/root']
     })
+
+    expect(deps.recordSeenPaths).toHaveBeenNthCalledWith(1, ['/root/update.txt'], {
+      runId: 'reconcile'
+    })
+    expect(deps.recordSeenPaths).toHaveBeenNthCalledWith(2, ['/root/add.txt'], {
+      runId: 'reconcile'
+    })
+    expect(deps.getDbFilesByPaths).toHaveBeenNthCalledWith(1, ['/root/update.txt'], {
+      runId: 'reconcile'
+    })
+    expect(deps.getDbFilesByPaths).toHaveBeenNthCalledWith(2, ['/root/add.txt'], {
+      runId: 'reconcile'
+    })
+    expect(deps.updateRecords).toHaveBeenCalledWith(
+      [expect.objectContaining({ id: 1, path: '/root/update.txt', mtime: new Date(3_000) })],
+      { runId: 'reconcile' }
+    )
+    expect(deps.insertRecords).toHaveBeenCalledWith(
+      [expect.objectContaining({ path: '/root/add.txt' })],
+      { runId: 'reconcile' }
+    )
+    expect(deps.clearSeenPaths).toHaveBeenCalledWith({ runId: 'reconcile' })
   })
 
-  it('normalizes invalid update timestamps before applying updates', async () => {
-    const finishPerfContext = vi.fn()
-    const reconcile = vi.fn(async () => ({
-      filesToAdd: [],
-      filesToUpdate: [
-        {
-          id: 1,
-          path: '/root/update.txt',
-          name: 'update.txt',
-          extension: '.txt',
-          size: 1,
-          mtime: Number.NaN,
-          ctime: Number.NaN
-        }
-      ],
-      deletedIds: []
-    }))
-    const updateRecords = vi.fn(async () => ({ updatedCount: 1 }))
-    const service = new FileProviderReconciliationRunService({
-      enterPerfContext: vi.fn(() => finishPerfContext),
-      waitForIdle: vi.fn(async () => {}),
-      getDbFiles: vi.fn(async () => [{ id: 1, path: '/root/update.txt', mtime: 1000 }]),
-      scanDirectory: vi.fn(async () => [scannedFile('/root/update.txt', 3000)]),
-      reconcile,
-      deleteRecords: vi.fn(async () => {}),
-      updateRecords,
-      insertRecords: vi.fn(async () => ({ insertedCount: 0 })),
-      emitProgress: vi.fn(),
-      yieldAfterDbRead: vi.fn(async () => {}),
-      yieldAfterPathScan: vi.fn(async () => {}),
-      now: () => 0,
-      formatDuration: (durationMs) => `${durationMs}ms`,
-      logDebug: vi.fn()
+  it('deletes missing database rows page by page after a streamed scan completes', async () => {
+    const deps = buildDeps({
+      scanDirectory: vi.fn(() => streamedBatches([])),
+      getMissingDbFiles: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 5, path: '/root/missing-5.txt', mtime: new Date(1_000) },
+          { id: 8, path: '/root/missing-8.txt', mtime: new Date(1_000) }
+        ])
+        .mockResolvedValueOnce([{ id: 13, path: '/root/missing-13.txt', mtime: new Date(1_000) }])
+        .mockResolvedValueOnce([])
+    })
+    const service = new FileProviderReconciliationRunService(deps)
+
+    await expect(service.execute(['/root'], { runId: 'reconcile' })).resolves.toMatchObject({
+      deleted: 3,
+      completedPaths: ['/root']
     })
 
-    await service.execute(['/root'], {})
-
-    expect(updateRecords).toHaveBeenCalledWith(
+    expect(deps.getMissingDbFiles).toHaveBeenNthCalledWith(1, '/root', 0, 500, {
+      runId: 'reconcile'
+    })
+    expect(deps.getMissingDbFiles).toHaveBeenNthCalledWith(2, '/root', 8, 500, {
+      runId: 'reconcile'
+    })
+    expect(deps.getMissingDbFiles).toHaveBeenNthCalledWith(3, '/root', 13, 500, {
+      runId: 'reconcile'
+    })
+    expect(deps.deleteRecords).toHaveBeenNthCalledWith(
+      1,
       [
-        expect.objectContaining({
-          path: '/root/update.txt',
-          mtime: new Date(0),
-          ctime: new Date(0)
-        })
+        { id: 5, path: '/root/missing-5.txt' },
+        { id: 8, path: '/root/missing-8.txt' }
       ],
-      {}
+      { runId: 'reconcile' }
     )
-    expect(finishPerfContext).toHaveBeenCalledTimes(1)
+    expect(deps.deleteRecords).toHaveBeenNthCalledWith(
+      2,
+      [{ id: 13, path: '/root/missing-13.txt' }],
+      { runId: 'reconcile' }
+    )
   })
 
-  it('normalizes invalid reconciliation payload timestamps to zero', async () => {
-    const reconcile = vi.fn(async () => ({
-      filesToAdd: [],
-      filesToUpdate: [],
-      deletedIds: []
-    }))
-    const service = new FileProviderReconciliationRunService({
-      enterPerfContext: vi.fn(() => vi.fn()),
-      waitForIdle: vi.fn(async () => {}),
-      getDbFiles: vi.fn(async () => [{ id: 1, path: '/root/invalid.txt', mtime: 'invalid' }]),
-      scanDirectory: vi.fn(async () => [
-        {
-          path: '/root/invalid.txt',
-          name: 'invalid.txt',
-          extension: '.txt',
-          size: 1,
-          ctime: Number.NaN as unknown as Date,
-          mtime: 'invalid' as unknown as Date
-        }
-      ]),
+  it.each([
+    {
+      name: 'diffing fails',
+      reconcile: vi.fn(async () => {
+        throw new Error('diff failed')
+      }),
+      insertRecords: vi.fn(async () => ({ insertedCount: 0 }))
+    },
+    {
+      name: 'inserting fails',
+      reconcile: vi.fn(async () => ({
+        filesToAdd: [
+          {
+            path: '/root/add.txt',
+            name: 'add.txt',
+            extension: '.txt',
+            size: 1,
+            mtime: 2_000,
+            ctime: 1_000
+          }
+        ],
+        filesToUpdate: [],
+        deletedIds: []
+      })),
+      insertRecords: vi.fn(async () => {
+        throw new Error('insert failed')
+      })
+    }
+  ])('clears seen-path staging when $name', async ({ reconcile, insertRecords }) => {
+    const deps = buildDeps({
+      scanDirectory: vi.fn(() => streamedBatches([scannedFile('/root/add.txt')])),
       reconcile,
-      deleteRecords: vi.fn(async () => {}),
-      updateRecords: vi.fn(async () => ({ updatedCount: 0 })),
-      insertRecords: vi.fn(async () => ({ insertedCount: 0 })),
-      emitProgress: vi.fn(),
-      yieldAfterDbRead: vi.fn(async () => {}),
-      yieldAfterPathScan: vi.fn(async () => {}),
-      now: () => 0,
-      formatDuration: (durationMs) => `${durationMs}ms`,
-      logDebug: vi.fn()
+      insertRecords
     })
+    const service = new FileProviderReconciliationRunService(deps)
 
-    await service.execute(['/root'], {})
+    await expect(service.execute(['/root'], { runId: 'reconcile' })).rejects.toThrow(/failed/)
 
-    expect(reconcile).toHaveBeenCalledWith(
-      [expect.objectContaining({ path: '/root/invalid.txt', mtime: 0, ctime: 0 })],
-      [{ id: 1, path: '/root/invalid.txt', mtime: 0 }],
-      ['/root']
-    )
+    expect(deps.clearSeenPaths).toHaveBeenCalledWith({ runId: 'reconcile' })
+    expect(deps.emitProgress).not.toHaveBeenLastCalledWith(1, 1)
   })
 
-  it('returns empty result without work for empty paths', async () => {
-    const enterPerfContext = vi.fn()
-    const service = new FileProviderReconciliationRunService({
-      enterPerfContext,
-      waitForIdle: vi.fn(),
-      getDbFiles: vi.fn(),
-      scanDirectory: vi.fn(),
-      reconcile: vi.fn(),
-      deleteRecords: vi.fn(),
-      updateRecords: vi.fn(),
-      insertRecords: vi.fn(),
-      emitProgress: vi.fn(),
-      yieldAfterDbRead: vi.fn(),
-      yieldAfterPathScan: vi.fn(),
-      now: () => 0,
-      formatDuration: (durationMs) => `${durationMs}ms`,
-      logDebug: vi.fn()
+  it('does not mark a cancelled root complete after clearing seen-path staging', async () => {
+    const cancelled = new Error('reconciliation cancelled')
+    const assertActive = vi
+      .fn()
+      .mockImplementationOnce(() => undefined)
+      .mockImplementationOnce(() => {
+        throw cancelled
+      })
+    const deps = buildDeps({
+      assertActive,
+      scanDirectory: vi.fn(() => streamedBatches([]))
     })
+    const service = new FileProviderReconciliationRunService(deps)
 
-    await expect(service.execute([], {})).resolves.toEqual({
+    await expect(service.execute(['/root'], { runId: 'reconcile' })).rejects.toBe(cancelled)
+    expect(deps.clearSeenPaths).toHaveBeenCalledWith({ runId: 'reconcile' })
+    expect(deps.emitProgress).toHaveBeenCalledWith(0, 1)
+    expect(deps.emitProgress).not.toHaveBeenCalledWith(1, 1)
+  })
+
+  it('returns an empty result without opening reconciliation state for empty paths', async () => {
+    const deps = buildDeps()
+    const service = new FileProviderReconciliationRunService(deps)
+
+    await expect(service.execute([], { runId: 'reconcile' })).resolves.toEqual({
       added: 0,
       changed: 0,
       deleted: 0,
       skipped: 0,
       completedPaths: []
     })
-    expect(enterPerfContext).not.toHaveBeenCalled()
+    expect(deps.enterPerfContext).not.toHaveBeenCalled()
+    expect(deps.prepareSeenPaths).not.toHaveBeenCalled()
   })
 })

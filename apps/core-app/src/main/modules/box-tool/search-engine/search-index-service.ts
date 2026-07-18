@@ -75,6 +75,11 @@ export interface SearchIndexItem {
   content?: string | null
 }
 
+export interface SearchIndexProviderReplacementSummary {
+  removedItems: number
+  indexedItems: number
+}
+
 interface PreparedIndexDocument {
   itemId: string
   providerId: string
@@ -89,9 +94,19 @@ interface PreparedIndexDocument {
   keywordHash: string
 }
 
+interface StagedIndexDocumentRow {
+  sequence: number
+  document: string
+}
+
+interface ProviderReplacementOutcomeRow {
+  removedItems: number
+  indexedItems: number
+}
+
 type SearchIndexWriteTx = Pick<
   LibSQLDatabase<typeof schema>,
-  'run' | 'delete' | 'insert' | 'select'
+  'run' | 'all' | 'delete' | 'insert' | 'select'
 >
 
 type SearchIndexLogAction = 'index' | 'remove' | 'removeByProvider'
@@ -109,24 +124,29 @@ interface SearchIndexColumnInfo {
   name: string
 }
 
+export type SearchIndexInitializationMode = 'writer' | 'reader'
+
+export interface SearchIndexReadinessGate {
+  waitUntilReady(): Promise<void>
+}
+
 export interface SearchIndexServiceOptions {
-  /**
-   * When true, bypass DbWriteScheduler and pacing delays.
-   * Use this in worker threads where the service owns its own DB connection
-   * and there is no event loop contention.
-   */
+  /** Bypass the main-thread write scheduler on the dedicated writer thread. */
   directMode?: boolean
   logger?: SearchIndexRuntimeLogger
-  onCommitted?: (providerIds: readonly string[]) => void
+  initializationMode?: SearchIndexInitializationMode
+  readiness?: SearchIndexReadinessGate
 }
 
 export class SearchIndexService {
   private initialized = false
+  private initializationPromise: Promise<void> | null = null
   private pinyinModule: typeof import('pinyin-pro') | null = null
   private pinyinPromise: Promise<typeof import('pinyin-pro')> | null = null
   private readonly directMode: boolean
   private readonly runtimeLogger: SearchIndexRuntimeLogger
-  private readonly onCommitted?: (providerIds: readonly string[]) => void
+  private readonly initializationMode: SearchIndexInitializationMode
+  private readonly readiness?: SearchIndexReadinessGate
   private readonly zeroResultDiagnosticAt = new Map<string, number>()
   private readonly logWindowMs = 12_000
   private readonly slowLogThresholdMs = 1_500
@@ -152,11 +172,34 @@ export class SearchIndexService {
   ) {
     this.directMode = options?.directMode ?? false
     this.runtimeLogger = options?.logger ?? noopSearchIndexRuntimeLogger
-    this.onCommitted = options?.onCommitted
+    this.initializationMode = options?.initializationMode ?? 'writer'
+    this.readiness = options?.readiness
   }
 
   async warmup(): Promise<void> {
+    if (this.initializationMode === 'reader') {
+      await this.ensureInitialized()
+      return
+    }
     await this.scheduleWrite('search-index.warmup', () => this.ensureInitialized())
+  }
+
+  async waitUntilReadable(): Promise<void> {
+    await this.ensureInitialized()
+    await this.db.all(sql`SELECT item_id FROM search_index LIMIT 1`)
+  }
+
+  async repair(): Promise<void> {
+    if (this.initializationMode !== 'writer') {
+      throw new Error('SEARCH_INDEX_REPAIR_REQUIRES_WRITER')
+    }
+    await this.scheduleWrite('search-index.repair', async () => {
+      await this.repairSearchIndexFtsTables()
+      this.didMigrate = true
+      this.initialized = false
+      this.initializationPromise = null
+      await this.ensureInitialized()
+    })
   }
 
   /**
@@ -289,17 +332,7 @@ export class SearchIndexService {
 
     await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
 
-    // Prepare documents in small groups, yielding between each to avoid
-    // long main-thread stalls from pinyin / n-gram computation.
-    const preparedDocs: PreparedIndexDocument[] = []
-    for (let i = 0; i < items.length; i++) {
-      preparedDocs.push(await this.prepareDocument(items[i]))
-      // Yield every 3 documents: prepareDocument is CPU-intensive (pinyin,
-      // n-grams) — in directMode (worker), skip yielding for throughput.
-      if (!this.directMode && (i + 1) % 3 === 0) {
-        await new Promise<void>((resolve) => setTimeout(resolve, 0))
-      }
-    }
+    const preparedDocs = await this.prepareDocuments(items)
 
     // Adaptive batching: use AIMD scheduler to find the optimal batch size
     // that keeps each transaction close to the target duration (~500ms).
@@ -339,31 +372,209 @@ export class SearchIndexService {
     }
 
     this.recordOperationLog('index', items.length, performance.now() - start)
-    this.onCommitted?.(items.map((item) => item.providerId))
   }
 
-  async removeItems(itemIds: string[]): Promise<void> {
-    if (itemIds.length === 0) return
-    const start = performance.now()
-
-    // Batch removals — same smaller batch size as indexItems to keep
-    // FTS5 DELETE transactions short and event-loop-friendly.
-    const BATCH_SIZE = 10
-    for (let i = 0; i < itemIds.length; i += BATCH_SIZE) {
-      const batch = itemIds.slice(i, i + BATCH_SIZE)
-      await this.scheduleWrite('search-index.removeBatch', async () => {
-        await this.ensureInitialized()
-        await this.db.transaction(async (tx) => {
-          for (const itemId of batch) {
-            await tx.run(sql`DELETE FROM search_index WHERE item_id = ${itemId}`)
-            await tx.delete(schema.keywordMappings).where(eq(schema.keywordMappings.itemId, itemId))
-            await tx.delete(schema.searchIndexMeta).where(eq(schema.searchIndexMeta.itemId, itemId))
-          }
-        })
-      })
+  async applyProviderItems(
+    providerId: string,
+    items: SearchIndexItem[],
+    legacyItemIds: readonly string[] = []
+  ): Promise<SearchIndexProviderReplacementSummary> {
+    if (items.some((item) => item.providerId !== providerId)) {
+      throw new Error(`SEARCH_INDEX_PROVIDER_MISMATCH:${providerId}`)
     }
-    this.recordOperationLog('remove', itemIds.length, performance.now() - start)
-    this.onCommitted?.([])
+    const currentItemIds = new Set(items.map((item) => item.itemId))
+    const retiredItemIds = [...new Set(legacyItemIds)].filter(
+      (itemId) => itemId.length > 0 && !currentItemIds.has(itemId)
+    )
+    const start = performance.now()
+    await this.scheduleWrite('search-index.ensure', () => this.ensureInitialized())
+    const preparedDocs = await this.prepareDocuments(items)
+    const removedItems = await this.scheduleWrite('search-index.applyProviderItems', () =>
+      this.db.transaction(async (tx) => {
+        let removed = 0
+        for (const itemId of retiredItemIds) {
+          const result = await tx.run(
+            sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
+          )
+          removed += Number(result.rowsAffected ?? 0)
+          await tx
+            .delete(schema.keywordMappings)
+            .where(
+              and(
+                eq(schema.keywordMappings.providerId, providerId),
+                eq(schema.keywordMappings.itemId, itemId)
+              )
+            )
+          await tx
+            .delete(schema.searchIndexMeta)
+            .where(
+              and(
+                eq(schema.searchIndexMeta.providerId, providerId),
+                eq(schema.searchIndexMeta.itemId, itemId)
+              )
+            )
+        }
+        for (const doc of preparedDocs) await this.applyDocument(tx, doc)
+        return removed
+      })
+    )
+    this.recordOperationLog(
+      'index',
+      preparedDocs.length,
+      performance.now() - start,
+      `provider=${providerId} retired=${String(removedItems)}`
+    )
+    return { removedItems, indexedItems: preparedDocs.length }
+  }
+
+  async beginProviderReplacement(providerId: string, replacementId: string): Promise<void> {
+    if (replacementId.length === 0) {
+      throw new Error(`SEARCH_INDEX_REPLACEMENT_ID_REQUIRED:${providerId}`)
+    }
+    await this.scheduleWrite('search-index.beginProviderReplacement', async () => {
+      await this.ensureInitialized()
+      await this.db.run(sql`
+        DELETE FROM search_index_replacement_outcome
+        WHERE provider_id = ${providerId} AND replacement_id <> ${replacementId}
+      `)
+      const outcome = await this.db.all<ProviderReplacementOutcomeRow>(sql`
+        SELECT removed_items AS removedItems, indexed_items AS indexedItems
+        FROM search_index_replacement_outcome
+        WHERE replacement_id = ${replacementId} AND provider_id = ${providerId}
+        LIMIT 1
+      `)
+      if (outcome.length > 0) return
+      await this.db.run(
+        sql`DELETE FROM search_index_replacement_stage WHERE provider_id = ${providerId}`
+      )
+    })
+  }
+
+  async stageProviderReplacementItems(
+    providerId: string,
+    replacementId: string,
+    items: SearchIndexItem[]
+  ): Promise<number> {
+    if (items.length === 0) return 0
+    if (items.some((item) => item.providerId !== providerId)) {
+      throw new Error(`SEARCH_INDEX_PROVIDER_MISMATCH:${providerId}`)
+    }
+    const preparedDocs = await this.prepareDocuments(items)
+    return await this.scheduleWrite('search-index.stageProviderReplacement', () =>
+      this.db.transaction(async (tx) => {
+        const outcome = await tx.all<ProviderReplacementOutcomeRow>(sql`
+          SELECT removed_items AS removedItems, indexed_items AS indexedItems
+          FROM search_index_replacement_outcome
+          WHERE replacement_id = ${replacementId} AND provider_id = ${providerId}
+          LIMIT 1
+        `)
+        if (outcome.length > 0) return 0
+        for (const doc of preparedDocs) {
+          await tx.run(sql`
+            INSERT INTO search_index_replacement_stage (replacement_id, provider_id, document)
+            VALUES (${replacementId}, ${providerId}, ${JSON.stringify(doc)})
+          `)
+        }
+        return preparedDocs.length
+      })
+    )
+  }
+
+  async commitProviderReplacement(
+    providerId: string,
+    replacementId: string
+  ): Promise<SearchIndexProviderReplacementSummary> {
+    const start = performance.now()
+    const summary = await this.scheduleWrite('search-index.commitProviderReplacement', () =>
+      this.db.transaction(async (tx) => {
+        const existing = await tx.all<ProviderReplacementOutcomeRow>(sql`
+          SELECT removed_items AS removedItems, indexed_items AS indexedItems
+          FROM search_index_replacement_outcome
+          WHERE replacement_id = ${replacementId} AND provider_id = ${providerId}
+          LIMIT 1
+        `)
+        if (existing.length > 0) return existing[0]
+
+        const current = await tx.all<{ removedItems: number }>(sql`
+          SELECT COUNT(*) AS removedItems
+          FROM search_index
+          WHERE provider = ${providerId}
+        `)
+        const removedItems = Number(current[0]?.removedItems ?? 0)
+        await tx.run(sql`DELETE FROM search_index WHERE provider = ${providerId}`)
+        await tx
+          .delete(schema.keywordMappings)
+          .where(eq(schema.keywordMappings.providerId, providerId))
+        await tx
+          .delete(schema.searchIndexMeta)
+          .where(eq(schema.searchIndexMeta.providerId, providerId))
+        let lastSequence = 0
+        let indexedItems = 0
+        while (true) {
+          const rows = await tx.all<StagedIndexDocumentRow>(sql`
+            SELECT sequence, document
+            FROM search_index_replacement_stage
+            WHERE replacement_id = ${replacementId}
+              AND provider_id = ${providerId}
+              AND sequence > ${lastSequence}
+            ORDER BY sequence
+            LIMIT 50
+          `)
+          if (rows.length === 0) break
+          for (const row of rows) {
+            const doc = JSON.parse(row.document) as PreparedIndexDocument
+            if (doc.providerId !== providerId) {
+              throw new Error(`SEARCH_INDEX_STAGED_PROVIDER_MISMATCH:${providerId}`)
+            }
+            await this.applyDocument(tx, doc)
+            indexedItems += 1
+            lastSequence = row.sequence
+          }
+        }
+        await tx.run(sql`
+          DELETE FROM search_index_replacement_stage
+          WHERE replacement_id = ${replacementId} AND provider_id = ${providerId}
+        `)
+        await tx.run(sql`
+          INSERT INTO search_index_replacement_outcome (
+            replacement_id, provider_id, removed_items, indexed_items
+          ) VALUES (${replacementId}, ${providerId}, ${removedItems}, ${indexedItems})
+        `)
+        return { removedItems, indexedItems }
+      })
+    )
+    this.recordOperationLog(
+      'index',
+      summary.indexedItems,
+      performance.now() - start,
+      `staged-replace provider=${providerId} removed=${String(summary.removedItems)}`
+    )
+    return summary
+  }
+
+  async getProviderReplacementOutcome(
+    providerId: string,
+    replacementId: string
+  ): Promise<SearchIndexProviderReplacementSummary | null> {
+    return await this.scheduleWrite('search-index.getProviderReplacementOutcome', async () => {
+      await this.ensureInitialized()
+      const outcomes = await this.db.all<ProviderReplacementOutcomeRow>(sql`
+        SELECT removed_items AS removedItems, indexed_items AS indexedItems
+        FROM search_index_replacement_outcome
+        WHERE replacement_id = ${replacementId} AND provider_id = ${providerId}
+        LIMIT 1
+      `)
+      return outcomes[0] ?? null
+    })
+  }
+
+  async abortProviderReplacement(providerId: string, replacementId: string): Promise<void> {
+    await this.scheduleWrite('search-index.abortProviderReplacement', async () => {
+      await this.db.run(sql`
+        DELETE FROM search_index_replacement_stage
+        WHERE replacement_id = ${replacementId} AND provider_id = ${providerId}
+      `)
+    })
   }
 
   async removeProviderItems(providerId: string, itemIds: string[]): Promise<number> {
@@ -374,35 +585,41 @@ export class SearchIndexService {
     const BATCH_SIZE = 10
     for (let i = 0; i < itemIds.length; i += BATCH_SIZE) {
       const batch = itemIds.slice(i, i + BATCH_SIZE)
-      await this.scheduleWrite('search-index.removeProviderBatch', async () => {
-        await this.ensureInitialized()
-        await this.db.transaction(async (tx) => {
-          for (const itemId of batch) {
-            const result = await tx.run(
-              sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
-            )
-            const rowsAffected = Number(result.rowsAffected ?? 0)
-            if (rowsAffected <= 0) continue
-            await tx
-              .delete(schema.keywordMappings)
-              .where(
-                and(
-                  eq(schema.keywordMappings.providerId, providerId),
-                  eq(schema.keywordMappings.itemId, itemId)
-                )
+      const removedInBatch = await this.scheduleWrite(
+        'search-index.removeProviderBatch',
+        async () => {
+          await this.ensureInitialized()
+          return await this.db.transaction(async (tx) => {
+            let batchRemovedItems = 0
+            for (const itemId of batch) {
+              const result = await tx.run(
+                sql`DELETE FROM search_index WHERE provider = ${providerId} AND item_id = ${itemId}`
               )
-            await tx
-              .delete(schema.searchIndexMeta)
-              .where(
-                and(
-                  eq(schema.searchIndexMeta.providerId, providerId),
-                  eq(schema.searchIndexMeta.itemId, itemId)
+              const rowsAffected = Number(result.rowsAffected ?? 0)
+              if (rowsAffected <= 0) continue
+              await tx
+                .delete(schema.keywordMappings)
+                .where(
+                  and(
+                    eq(schema.keywordMappings.providerId, providerId),
+                    eq(schema.keywordMappings.itemId, itemId)
+                  )
                 )
-              )
-            removedItems += rowsAffected
-          }
-        })
-      })
+              await tx
+                .delete(schema.searchIndexMeta)
+                .where(
+                  and(
+                    eq(schema.searchIndexMeta.providerId, providerId),
+                    eq(schema.searchIndexMeta.itemId, itemId)
+                  )
+                )
+              batchRemovedItems += rowsAffected
+            }
+            return batchRemovedItems
+          })
+        }
+      )
+      removedItems += removedInBatch
     }
     this.recordOperationLog(
       'remove',
@@ -410,9 +627,6 @@ export class SearchIndexService {
       performance.now() - start,
       `provider=${providerId}`
     )
-    if (removedItems > 0) {
-      this.onCommitted?.([providerId])
-    }
     return removedItems
   }
 
@@ -429,14 +643,20 @@ export class SearchIndexService {
   }
 
   async removeByProvider(providerId: string): Promise<number> {
-    await this.ensureInitialized()
-    const rows = await this.db.all<{ item_id: string }>(
-      sql`SELECT item_id FROM search_index WHERE provider = ${providerId}`
-    )
-    const itemIds = rows.map((row) => row.item_id)
-    if (itemIds.length === 0) return 0
     const start = performance.now()
-    const removedItems = await this.removeProviderItems(providerId, itemIds)
+    const removedItems = await this.scheduleWrite('search-index.removeByProvider', async () => {
+      await this.ensureInitialized()
+      return await this.db.transaction(async (tx) => {
+        const result = await tx.run(sql`DELETE FROM search_index WHERE provider = ${providerId}`)
+        await tx
+          .delete(schema.keywordMappings)
+          .where(eq(schema.keywordMappings.providerId, providerId))
+        await tx
+          .delete(schema.searchIndexMeta)
+          .where(eq(schema.searchIndexMeta.providerId, providerId))
+        return Number(result.rowsAffected ?? 0)
+      })
+    })
     this.recordOperationLog(
       'removeByProvider',
       removedItems,
@@ -721,27 +941,88 @@ export class SearchIndexService {
 
   private async ensureInitialized(): Promise<void> {
     if (this.initialized) return
+    if (this.initializationPromise) return await this.initializationPromise
+
+    const initialization = this.initialize()
+    this.initializationPromise = initialization
+    try {
+      await initialization
+    } catch (error) {
+      if (this.initializationPromise === initialization) {
+        this.initializationPromise = null
+      }
+      throw error
+    }
+  }
+
+  private async initialize(): Promise<void> {
     const initStart = performance.now()
+    if (this.initializationMode === 'reader') {
+      if (!this.readiness) throw new Error('SEARCH_INDEX_READER_READINESS_REQUIRED')
+      await this.readiness.waitUntilReady()
+      await this.verifySearchIndexSchema()
+    } else {
+      await this.prepareSearchIndexSchema()
+    }
+
+    this.initialized = true
+    searchIndexLog.info('Initialization completed', {
+      meta: {
+        durationMs: Math.round(performance.now() - initStart),
+        mode: this.initializationMode
+      }
+    })
+  }
+
+  private async prepareSearchIndexSchema(): Promise<void> {
     await this.createSearchIndexTable()
     await this.createFileFtsTable()
     await this.createSearchIndexMetaTable()
     await this.createKeywordMappingIndexes()
+    await this.createProviderReplacementTables()
+  }
 
-    this.initialized = true
-    searchIndexLog.info('Initialization completed', {
-      meta: { durationMs: Math.round(performance.now() - initStart) }
-    })
+  private async createProviderReplacementTables(): Promise<void> {
+    await this.db.run(sql`
+      CREATE TABLE IF NOT EXISTS search_index_replacement_stage (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+        replacement_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        document TEXT NOT NULL
+      )
+    `)
+    await this.db.run(sql`
+      CREATE INDEX IF NOT EXISTS idx_search_index_replacement_stage_lookup
+      ON search_index_replacement_stage(replacement_id, provider_id, sequence)
+    `)
+    await this.db.run(sql`
+      CREATE TABLE IF NOT EXISTS search_index_replacement_outcome (
+        replacement_id TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        removed_items INTEGER NOT NULL,
+        indexed_items INTEGER NOT NULL,
+        PRIMARY KEY(replacement_id, provider_id)
+      )
+    `)
+  }
+
+  private async verifySearchIndexSchema(): Promise<void> {
+    const columns = await this.readSearchIndexColumns()
+    const columnNames = new Set(columns.map((column) => column.name))
+    const missingColumns = ['item_id', 'provider', 'content'].filter(
+      (column) => !columnNames.has(column)
+    )
+    if (missingColumns.length > 0) {
+      throw new Error(`SEARCH_INDEX_SCHEMA_NOT_READY:${missingColumns.join(',')}`)
+    }
   }
 
   private async createSearchIndexTable(): Promise<void> {
-    // Check if the existing table has the content column (critical for content search).
     const tableInfo = await this.readSearchIndexColumns()
     const hasContent = tableInfo.some((col) => col.name === 'content')
 
     if (tableInfo.length > 0 && !hasContent) {
-      // Table exists but lacks content column - must recreate for content search
-      await this.dropSearchIndexFtsTables()
-      this.didMigrate = true
+      throw new Error('SEARCH_INDEX_SCHEMA_INCOMPATIBLE:missing-content')
     }
 
     await this.db.run(sql`CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
@@ -759,35 +1040,9 @@ export class SearchIndexService {
   }
 
   private async readSearchIndexColumns(): Promise<SearchIndexColumnInfo[]> {
-    try {
-      return await this.db.all<SearchIndexColumnInfo>(
-        sql`SELECT name FROM pragma_table_xinfo('search_index')`
-      )
-    } catch (error) {
-      await this.ensurePrimaryDatabaseReadable(error)
-      searchIndexLog.warn('Search index metadata unreadable; recreating FTS5 table', {
-        error,
-        meta: this.toSqliteErrorMeta(error)
-      })
-      await this.repairSearchIndexFtsTables()
-      this.didMigrate = true
-      return []
-    }
-  }
-
-  private async ensurePrimaryDatabaseReadable(originalError: unknown): Promise<void> {
-    try {
-      await this.db.all(sql`SELECT name FROM sqlite_master LIMIT 1`)
-    } catch (probeError) {
-      searchIndexLog.error(
-        'Primary database metadata is unreadable; search index auto-repair aborted',
-        {
-          error: probeError,
-          meta: this.toSqliteErrorMeta(probeError)
-        }
-      )
-      throw originalError
-    }
+    return await this.db.all<SearchIndexColumnInfo>(
+      sql`SELECT name FROM pragma_table_xinfo('search_index')`
+    )
   }
 
   private async dropSearchIndexFtsTables(): Promise<void> {
@@ -1058,6 +1313,17 @@ export class SearchIndexService {
       .map(([keyword, priority]) => `${keyword}:${priority.toFixed(4)}`)
       .join('\n')
     return createHash('sha1').update(raw).digest('hex')
+  }
+
+  private async prepareDocuments(items: SearchIndexItem[]): Promise<PreparedIndexDocument[]> {
+    const preparedDocs: PreparedIndexDocument[] = []
+    for (let index = 0; index < items.length; index += 1) {
+      preparedDocs.push(await this.prepareDocument(items[index]))
+      if (!this.directMode && (index + 1) % 3 === 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
+    }
+    return preparedDocs
   }
 
   private async prepareDocument(item: SearchIndexItem): Promise<PreparedIndexDocument> {
