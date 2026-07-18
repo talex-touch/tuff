@@ -13,22 +13,22 @@ It reuses typed `NativeEvents.screenshot.*` transport and the host `NativeScreen
 
 ## Manifest
 
-## ::::TuffCodeBlock{lang="json"}
-
+:::TuffCodeBlock{lang="json"}
+---
 code: |
-{
-"sdkapi": 260713,
-"permissions": {
-"required": ["window.capture"],
-"optional": ["intelligence.basic"]
-},
-"permissionReasons": {
-"window.capture": "Capture a user-selected screen area for the plugin action",
-"intelligence.basic": "Recognize text in a captured image when the user requests OCR"
-}
-}
-
-::::
+  {
+  "sdkapi": 260713,
+  "permissions": {
+  "required": ["window.capture"],
+  "optional": ["intelligence.basic"]
+  },
+  "permissionReasons": {
+  "window.capture": "Capture a user-selected screen area for the plugin action",
+  "intelligence.basic": "Recognize text in a captured image when the user requests OCR"
+  }
+  }
+---
+:::
 
 Declare `intelligence.basic` only when the plugin also invokes OCR or another Intelligence capability. Screenshot permission does not grant AI access, and Intelligence permission does not grant screen capture.
 
@@ -62,17 +62,17 @@ interface PluginScreenshotSDK {
 
 ## Capture a selected display
 
-## ::::TuffCodeBlock{lang="typescript"}
-
+:::TuffCodeBlock{lang="typescript"}
+---
 code: |
-export default {
-async onInit(context) {
-const { screenshot } = context.utils
-const support = await screenshot.getSupport()
-if (!support.supported) {
-context.utils.logger.warn(`Screenshot unavailable: ${support.reason ?? 'unsupported'}`)
-return
-}
+  export default {
+  async onInit(context) {
+  const { screenshot } = context.utils
+  const support = await screenshot.getSupport()
+  if (!support.supported) {
+  context.utils.logger.warn(`Screenshot unavailable: ${support.reason ?? 'unsupported'}`)
+  return
+  }
 
       const displays = await screenshot.listDisplays()
       const display = displays.find(item => item.isPrimary) ?? displays[0]
@@ -91,34 +91,34 @@ return
       // Render or pass capture.tfileUrl. Do not log image payloads.
     }
 
-}
-
-::::
+  }
+---
+:::
 
 ## Capture to OCR
 
 Use `data-url` only when the next typed capability needs inline image data. OCR remains separately permissioned through `context.utils.intelligence`.
 
-## ::::TuffCodeBlock{lang="typescript"}
-
+:::TuffCodeBlock{lang="typescript"}
+---
 code: |
-const capture = await context.utils.screenshot.capture({
-target: 'cursor-display',
-output: 'data-url',
-writeClipboard: false
-})
+  const capture = await context.utils.screenshot.capture({
+  target: 'cursor-display',
+  output: 'data-url',
+  writeClipboard: false
+  })
 
-if (!capture.dataUrl) throw new Error('SCREENSHOT_DATA_URL_UNAVAILABLE')
+  if (!capture.dataUrl) throw new Error('SCREENSHOT_DATA_URL_UNAVAILABLE')
 
-const ocr = await context.utils.intelligence.vision.ocr({
-source: { type: 'data-url', dataUrl: capture.dataUrl },
-language: 'en',
-includeLayout: true
-})
+  const ocr = await context.utils.intelligence.vision.ocr({
+  source: { type: 'data-url', dataUrl: capture.dataUrl },
+  language: 'en',
+  includeLayout: true
+  })
 
-context.utils.logger.info(`OCR completed: ${ocr.result.text.length} characters`)
-
-::::
+  context.utils.logger.info(`OCR completed: ${ocr.result.text.length} characters`)
+---
+:::
 
 Do not write the screenshot data URL, OCR text, prompts, or model output to normal logs, plugin metadata, or sync payloads.
 

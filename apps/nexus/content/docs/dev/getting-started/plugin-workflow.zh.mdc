@@ -12,43 +12,41 @@
 
 新插件优先使用 `main: "index.js"`，并声明最新 `sdkapi`、分类、权限和权限用途。
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-{
-"id": "com.example.quick-note",
-"name": "quick-note",
-"version": "0.1.0",
-"author": "Example",
-"sdkapi": 260626,
-"category": "productivity",
-"description": "Save selected text as a quick note.",
-"main": "index.js",
-"permissions": {
-"required": ["clipboard.read"],
-"optional": ["clipboard.write"]
-},
-"permissionReasons": {
-"clipboard.read": "读取剪贴板中的文本作为笔记内容",
-"clipboard.write": "将处理后的笔记内容复制回剪贴板"
-},
-"features": [
-{
-"id": "quick-note.save",
-"name": "保存快速笔记",
-"desc": "将输入或剪贴板文本保存为笔记",
-"keywords": ["note", "memo", "笔记"],
-"push": true,
-"acceptedInputTypes": ["text"],
-"commands": [
-{ "type": "over", "value": ["note", "memo", "笔记"] }
-]
-}
-]
-}
-
+:::TuffCodeBlock{lang="json"}
 ---
-
+code: |
+  {
+  "id": "com.example.quick-note",
+  "name": "quick-note",
+  "version": "0.1.0",
+  "author": "Example",
+  "sdkapi": 260626,
+  "category": "productivity",
+  "description": "Save selected text as a quick note.",
+  "main": "index.js",
+  "permissions": {
+  "required": ["clipboard.read"],
+  "optional": ["clipboard.write"]
+  },
+  "permissionReasons": {
+  "clipboard.read": "读取剪贴板中的文本作为笔记内容",
+  "clipboard.write": "将处理后的笔记内容复制回剪贴板"
+  },
+  "features": [
+  {
+  "id": "quick-note.save",
+  "name": "保存快速笔记",
+  "desc": "将输入或剪贴板文本保存为笔记",
+  "keywords": ["note", "memo", "笔记"],
+  "push": true,
+  "acceptedInputTypes": ["text"],
+  "commands": [
+  { "type": "over", "value": ["note", "memo", "笔记"] }
+  ]
+  }
+  ]
+  }
+---
 :::
 
 检查点：
@@ -61,40 +59,40 @@ code: |
 
 `index.js` 是插件的先导脚本。它运行在 Node.js 沙箱中，通过 `globalThis` 获取插件上下文。
 
-## :::TuffCodeBlock{lang="javascript"}
-
+:::TuffCodeBlock{lang="javascript"}
+---
 code: |
-const { clipboard, logger, box, TuffItemBuilder } = globalThis
+  const { clipboard, logger, box, TuffItemBuilder } = globalThis
 
-const PLUGIN_NAME = 'quick-note'
-const COPY_ACTION_ID = 'copy'
+  const PLUGIN_NAME = 'quick-note'
+  const COPY_ACTION_ID = 'copy'
 
-function getQueryText(query) {
-return typeof query === 'string' ? query : query?.text ?? ''
-}
+  function getQueryText(query) {
+  return typeof query === 'string' ? query : query?.text ?? ''
+  }
 
-function buildCopyItem(text) {
-return new TuffItemBuilder('quick-note.copy')
-.setSource('plugin', 'plugin-features', PLUGIN_NAME)
-.setTitle('复制笔记内容')
-.setSubtitle(text.slice(0, 80))
-.setMeta({
-pluginName: PLUGIN_NAME,
-defaultAction: COPY_ACTION_ID,
-})
-.createAndAddAction(COPY_ACTION_ID, 'copy', '复制', text)
-.build()
-}
+  function buildCopyItem(text) {
+  return new TuffItemBuilder('quick-note.copy')
+  .setSource('plugin', 'plugin-features', PLUGIN_NAME)
+  .setTitle('复制笔记内容')
+  .setSubtitle(text.slice(0, 80))
+  .setMeta({
+  pluginName: PLUGIN_NAME,
+  defaultAction: COPY_ACTION_ID,
+  })
+  .createAndAddAction(COPY_ACTION_ID, 'copy', '复制', text)
+  .build()
+  }
 
-module.exports = {
-async onFeatureTriggered(featureId, query, feature, signal) {
-const text = getQueryText(query).trim()
-if (!text) {
-return []
-}
-logger.info('feature triggered', { featureId, featureName: feature?.name })
-return [buildCopyItem(text)]
-},
+  module.exports = {
+  async onFeatureTriggered(featureId, query, feature, signal) {
+  const text = getQueryText(query).trim()
+  if (!text) {
+  return []
+  }
+  logger.info('feature triggered', { featureId, featureName: feature?.name })
+  return [buildCopyItem(text)]
+  },
 
     async onItemAction(item) {
       const action = item.actions?.find(action => action.id === COPY_ACTION_ID || action.type === 'copy')
@@ -104,8 +102,8 @@ return [buildCopyItem(text)]
       box?.hide?.()
     },
 
-## }
-
+  ## }
+---
 :::
 
 检查点：
@@ -133,14 +131,14 @@ return [buildCopyItem(text)]
 
 实现 Raycast 风格 AI Command 时，命令定义保留在插件内，provider 选择、审计、配额与 fallback 交给宿主：
 
-## ::::TuffCodeBlock{lang="javascript"}
-
+:::TuffCodeBlock{lang="javascript"}
+---
 code: |
-const { intelligence } = globalThis
+  const { intelligence } = globalThis
 
-async function runRewriteCommand(text, tone) {
-const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
-if (!status.available) throw new Error(status.reason || 'AI 不可用')
+  async function runRewriteCommand(text, tone) {
+  const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
+  if (!status.available) throw new Error(status.reason || 'AI 不可用')
 
     return intelligence.text.chat(
       { messages: [{ role: 'user', content: text }] },
@@ -150,9 +148,9 @@ if (!status.available) throw new Error(status.reason || 'AI 不可用')
       },
     )
 
-## }
-
-::::
+  ## }
+---
+:::
 
 命令、prompt variables、插件存储和日志都不得保存 provider credential。typed contract 见 [Intelligence SDK](../api/intelligence.zh.md)。
 
@@ -160,15 +158,13 @@ if (!status.available) throw new Error(status.reason || 'AI 不可用')
 
 发布前至少完成这些本地检查：
 
-## :::TuffCodeBlock{lang="bash"}
-
-code: |
-tuff validate --strict
-tuff build
-tuff publish --dry-run
-
+:::TuffCodeBlock{lang="bash"}
 ---
-
+code: |
+  tuff validate --strict
+  tuff build
+  tuff publish --dry-run
+---
 :::
 
 仓库内改动还应补最近路径验证，例如 focused Vitest、文件级 ESLint 和 `git diff --check`。不要把全仓历史 lint 噪声当作当前插件改动失败。
@@ -177,17 +173,15 @@ tuff publish --dry-run
 
 常规发布路径：
 
-## :::TuffCodeBlock{lang="bash"}
-
-code: |
-tuff login
-tuff validate --strict
-tuff build
-tuff publish --dry-run
-tuff publish --tag 0.1.0 --channel BETA
-
+:::TuffCodeBlock{lang="bash"}
 ---
-
+code: |
+  tuff login
+  tuff validate --strict
+  tuff build
+  tuff publish --dry-run
+  tuff publish --tag 0.1.0 --channel BETA
+---
 :::
 
 发布注意事项：

@@ -12,9 +12,9 @@ Feature SDK 提供插件管理 CoreBox 搜索结果项（TuffItem）的能力。
 ---
 code: |
   import { useFeature } from '@talex-touch/utils/plugin/sdk'
-  
+
   const feature = useFeature()
-  
+
   // 推送搜索结果
   feature.pushItems([
     {
@@ -24,7 +24,7 @@ code: |
       source: { id: 'my-plugin', name: 'My Plugin' }
     }
   ])
-  
+
   // 监听输入变化
   feature.onInputChange((input) => {
     console.log('用户输入:', input)
@@ -44,7 +44,7 @@ code: |
 ---
 code: |
   import { useFeature } from '@talex-touch/utils/plugin/sdk'
-  
+
   const feature = useFeature()
 ---
 :::
@@ -135,12 +135,12 @@ code: |
 code: |
   const unsubscribe = feature.onInputChange((input) => {
     console.log('用户输入:', input)
-    
+
     // 执行实时搜索
     const results = await search(input)
     feature.pushItems(results)
   })
-  
+
   // 停止监听
   unsubscribe()
 ---
@@ -159,26 +159,26 @@ code: |
 code: |
   interface TuffItem {
     id: string
-    
+
     title: {
       text: string
       highlight?: boolean
     }
-    
+
     subtitle?: {
       text: string
       highlight?: boolean
     }
-    
+
     source: {
       id: string
       name: string
     }
-    
+
     icon?: string
-    
+
     actions?: TuffAction[]
-    
+
     meta?: Record<string, any>
   }
 ---
@@ -195,19 +195,19 @@ code: |
 code: |
   import { useFeature, useBox } from '@talex-touch/utils/plugin/sdk'
   import { debounce } from 'lodash-es'
-  
+
   const feature = useFeature()
   const box = useBox()
-  
+
   // 防抖搜索
   const debouncedSearch = debounce(async (query: string) => {
     if (!query.trim()) {
       feature.clearItems()
       return
     }
-    
+
     const results = await fetchSearchResults(query)
-    
+
     feature.clearItems()
     feature.pushItems(results.map((r, i) => ({
       id: `result-${i}`,
@@ -216,14 +216,14 @@ code: |
       source: { id: 'my-search', name: 'Search' },
       icon: r.icon
     })))
-    
+
     // 调整窗口大小
     await box.expand({ length: results.length })
   }, 300)
-  
+
   // 监听输入
   feature.onInputChange(debouncedSearch)
-  
+
   // 键盘交互在插件 UI 组件内使用本地 keydown 或 hostKeyEvent props 处理。
 ---
 :::
@@ -243,7 +243,7 @@ code: |
     getItems(): TuffItem[]
     onInputChange(handler: InputChangeHandler): () => void
   }
-  
+
   type InputChangeHandler = (input: string) => void
 ---
 :::

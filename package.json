@@ -12,7 +12,7 @@
   "scripts": {
     "prepare": "husky install",
     "preinstall": "npx only-allow pnpm",
-    "postinstall": "node scripts/sync-core-package.mjs",
+    "postinstall": "node scripts/sync-core-package.mjs && node scripts/patch-nuxt-content-serialize.mjs",
     "typecheck": "pnpm -F @talex-touch/core-app run typecheck",
     "typecheck:all": "pnpm -F @talex-touch/tuffex run build && pnpm -r --if-present --filter '!@talex-touch/tuffex' run typecheck",
     "sync:core-pkg": "node scripts/sync-core-package.mjs",
@@ -86,6 +86,7 @@
       "@talex-touch/tuff-native",
       "browser-tabs-lock",
       "bufferutil",
+      "better-sqlite3",
       "core-js",
       "electron",
       "electron-clipboard-ex",

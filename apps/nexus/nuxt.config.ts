@@ -199,7 +199,10 @@ export default defineNuxtConfig({
 
   content: {
     experimental: {
-      nativeSqlite: true,
+      // Prefer better-sqlite3 over node:sqlite. nativeSqlite hangs content
+      // indexing on this host (100% CPU microtask loop while parsing .mdc).
+      sqliteConnector: 'better-sqlite3',
+      nativeSqlite: false,
     },
     build: {
       markdown: {

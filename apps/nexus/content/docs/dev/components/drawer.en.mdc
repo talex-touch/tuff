@@ -121,7 +121,7 @@ code: |
 
 Compatibility example: use the `footer` slot to add action buttons.
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -137,11 +137,11 @@ code: |
     </TxDrawer>
   </template>
 ---
-::
+:::
 
 ## Close Behavior
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -164,11 +164,11 @@ code: |
     </TxDrawer>
   </template>
 ---
-::
+:::
 
 ## Events
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -182,7 +182,7 @@ code: |
     </TxDrawer>
   </template>
 ---
-::
+:::
 
 ## Dashboard Navigation Composition
 

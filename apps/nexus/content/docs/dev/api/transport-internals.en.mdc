@@ -175,21 +175,21 @@ code: |
 code: |
   class BatchManager {
     private groups: Map<string, BatchGroup> = new Map()
-    
+
     async add<TReq, TRes>(event: TuffEvent<TReq, TRes>, payload: TReq): Promise<TRes> {
       const config = event._batch
-      
+
       // Skip batching if not enabled
       if (!config?.enabled) {
         return this.sendSingle(event, payload)
       }
-      
+
       return new Promise((resolve, reject) => {
         const group = this.getOrCreateGroup(event)
-        
+
         // Apply merge strategy
         this.applyStrategy(group, { payload, resolve, reject }, config)
-        
+
         // Check flush conditions
         if (group.requests.length >= config.maxSize) {
           this.flush(event.toString())
@@ -281,10 +281,10 @@ code: |
     async handleStreamRequest(eventName: string, payload: any, webContents: WebContents) {
       const { port1, port2 } = new MessageChannelMain()
       const streamId = generateId()
-      
+
       // Send port2 to renderer
       webContents.postMessage('@tuff:stream:port', { streamId }, [port2])
-      
+
       // Create context for handler
       const context: StreamContext = {
         emit: (chunk) => port1.postMessage({ type: 'data', chunk }),
@@ -292,10 +292,10 @@ code: |
         end: () => port1.postMessage({ type: 'end' }),
         isCancelled: () => this.cancelled.has(streamId)
       }
-      
+
       // Execute handler
       await this.handlers.get(eventName)?.(payload, context)
-      
+
       return { streamId }
     }
   }
@@ -433,7 +433,7 @@ code: |
         timestamp: this.timestamp
       }
     }
-    
+
     static fromJSON(obj) {
       return new TuffTransportError(obj.code, obj.message, {
         eventName: obj.eventName
@@ -473,10 +473,10 @@ code: |
   onUnmounted(() => {
     // Cancel pending requests
     controller.cancel()
-    
+
     // Remove handlers
     cleanup()
-    
+
     // Flush batches
     transport.flush()
   })
@@ -505,7 +505,7 @@ code: |
 code: |
   // Retired Channel style kept here only for migration review
   channel.send('event', data)
-  
+
   // Current code uses TuffTransport
   transport.send(TuffEvent, data)
 ---

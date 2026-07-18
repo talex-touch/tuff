@@ -14,7 +14,7 @@ The `@talex-touch/tuff-cli` package provides the `tuff` CLI for building and pub
 code: |
   # Global installation
   pnpm add -g @talex-touch/tuff-cli
-  
+
   # Or use via npx
   npx @talex-touch/tuff-cli <command>
 ---
@@ -186,7 +186,7 @@ code: |
   // vite.config.ts
   import { defineConfig } from 'vite'
   import TuffExport from '@talex-touch/unplugin-export-plugin/vite'
-  
+
   export default defineConfig({
     plugins: [
       TuffExport({

@@ -12,13 +12,13 @@ Account SDK provides user information, subscription status, and quota management
 ---
 code: |
   import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
-  
+
   // Check if user is logged in
   const isLoggedIn = await accountSDK.isLoggedIn()
-  
+
   // Get current subscription plan
   const plan = await accountSDK.getPlan()
-  
+
   // Check if paid user
   if (await accountSDK.isPaidUser()) {
     // Show premium features
@@ -48,7 +48,7 @@ code: |
 ---
 code: |
   import { accountSDK } from '@talex-touch/utils'
-  
+
   // Singleton, use directly
   await accountSDK.getProfile()
 ---
@@ -409,7 +409,7 @@ Get usage percentage for specific quota type.
 code: |
   const aiUsage = await accountSDK.getUsagePercentage('aiRequests')
   console.log(`AI usage: ${aiUsage.toFixed(1)}%`)
-  
+
   const storageUsage = await accountSDK.getUsagePercentage('storage')
   if (storageUsage > 80) {
     console.warn('Storage running low')
@@ -532,7 +532,7 @@ code: |
   if (await accountSDK.isTeamOwner()) {
     // User owns some team
   }
-  
+
   if (await accountSDK.isTeamOwner('team_xxx')) {
     // User owns specific team
   }
@@ -670,7 +670,7 @@ code: |
       showUpgradeDialog(options)
       return
     }
-    
+
     // Show premium feature
   }
 ---
@@ -683,11 +683,11 @@ code: |
 code: |
   async function beforeAiRequest(estimatedTokens: number) {
     const quotaCheck = await accountSDK.checkAiTokenQuota(estimatedTokens)
-    
+
     if (!quotaCheck.allowed) {
       throw new Error(`Quota exceeded: ${quotaCheck.reason}`)
     }
-    
+
     // Proceed with request
   }
 ---
@@ -702,9 +702,9 @@ code: |
     if (!await accountSDK.isTeamOrAbove()) {
       return // Not team tier, skip
     }
-    
+
     const teams = await accountSDK.getTeams()
-    
+
     for (const team of teams) {
       if (team.role === 'owner' || team.role === 'admin') {
         // Show admin features
@@ -728,7 +728,7 @@ code: |
     TEAM = 'team',
     ENTERPRISE = 'enterprise',
   }
-  
+
   interface UserProfile {
     id: string
     displayName: string
@@ -740,7 +740,7 @@ code: |
     twoFactorEnabled: boolean
     socialConnections: SocialConnection[]
   }
-  
+
   interface Subscription {
     id: string
     plan: SubscriptionPlan
@@ -750,7 +750,7 @@ code: |
     currentPeriodEnd: number
     autoRenew: boolean
   }
-  
+
   interface QuotaCheckResult {
     allowed: boolean
     reason?: string

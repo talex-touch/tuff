@@ -26,16 +26,16 @@ All operations are executed in the main process via TuffTransport to avoid WebCo
 ---
 code: |
   import { system, useClipboard } from '@talex-touch/utils/plugin/sdk'
-  
+
   const clipboard = useClipboard()
-  
+
   // Write text
   await clipboard.writeText('Hello World')
-  
+
   // Read clipboard
   const content = await clipboard.read()
   console.log(content.text, content.formats)
-  
+
   // Copy and paste to active app
   await clipboard.copyAndPaste({ text: 'Pasted content' })
 
@@ -110,12 +110,12 @@ code: |
     text: 'Hello',
     html: '<b>Hello</b>'
   })
-  
+
   // Image (data URL)
   await clipboard.write({
     image: 'data:image/png;base64,...'
   })
-  
+
   // Files
   await clipboard.write({
     files: ['/path/to/file.txt', '/path/to/image.png']
@@ -224,23 +224,23 @@ Write content to the clipboard and simulate paste into the active app.
 code: |
   // Paste text
   await clipboard.copyAndPaste({ text: 'Hello' })
-  
+
   // Paste formatted text
   await clipboard.copyAndPaste({
     text: 'Hello',
     html: '<b>Hello</b>'
   })
-  
+
   // Paste image
   await clipboard.copyAndPaste({
     image: 'data:image/png;base64,...'
   })
-  
+
   // Paste files
   await clipboard.copyAndPaste({
     files: ['/path/to/file.txt']
   })
-  
+
   // Custom delay and behavior
   await clipboard.copyAndPaste({
     text: 'Hello',
@@ -307,17 +307,17 @@ code: |
   const result = await clipboard.history.searchHistory({
     keyword: 'hello'
   })
-  
+
   // Filter by type
   const textItems = await clipboard.history.searchHistory({
     type: 'text'
   })
-  
+
   // Time range
   const recent = await clipboard.history.searchHistory({
     startTime: Date.now() - 24 * 60 * 60 * 1000
   })
-  
+
   // Combined filters
   const filtered = await clipboard.history.searchHistory({
     type: 'text',
@@ -394,18 +394,18 @@ Plugins must call `box.allowClipboard(types)` first, otherwise no events are emi
 ---
 code: |
   import { useBox, ClipboardType } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
   const clipboard = useClipboard()
-  
+
   // 1. Enable clipboard monitoring
   await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
-  
+
   // 2. Register listener
   const unsubscribe = clipboard.history.onDidChange((item) => {
     console.log('Clipboard changed:', item.type, item.content)
   })
-  
+
   // 3. Stop listening
   unsubscribe()
 ---
@@ -423,13 +423,13 @@ code: |
 ---
 code: |
   import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
-  
+
   // Text only
   await box.allowClipboard(ClipboardTypePresets.TEXT_ONLY)
-  
+
   // Text + image
   await box.allowClipboard(ClipboardTypePresets.TEXT_AND_IMAGE)
-  
+
   // All types
   await box.allowClipboard(ClipboardTypePresets.ALL)
 ---
@@ -477,7 +477,7 @@ Tags describe **categories only** and never include raw sensitive values.
 code: |
   const latest = await clipboard.history.getLatest()
   const tags = Array.isArray(latest?.meta?.tags) ? latest?.meta?.tags : []
-  
+
   if (tags.includes('api_key') || tags.includes('password')) {
     // e.g. warn the user about sensitive content
   }
@@ -507,7 +507,7 @@ code: |
   const history = useClipboardHistory()
   await history.getLatest()
   await history.applyToActiveApp({ text: 'Hello' })
-  
+
   // New
   const clipboard = useClipboard()
   await clipboard.history.getLatest()

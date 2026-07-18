@@ -17,7 +17,7 @@ TuffEx uses UnoCSS preset-icons to provide a rich icon set, with TuffIcon for un
 
 ### UnoCSS icon classes
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -34,11 +34,11 @@ code: |
     <i class="i-simple-icons-visualstudiocode" />
   </template>
 ---
-::
+:::
 
 ### TuffIcon component
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -48,13 +48,13 @@ code: |
     <TuffIcon :icon="{ type: 'url', value: '/app.svg', colorful: true }" />
   </template>
 ---
-::
+:::
 
 ## TuffIcons constants
 
 `@talex-touch/utils` provides predefined icon constants for consistency:
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   import { TuffIcons, AppIcons } from '@talex-touch/utils'
@@ -68,7 +68,7 @@ code: |
   AppIcons.VSCode // 'i-simple-icons-visualstudiocode'
   AppIcons.GitHub // 'i-simple-icons-github'
 ---
-::
+:::
 
 ## Icon categories
 
@@ -136,7 +136,7 @@ code: |
 
 ## Custom styles
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -155,7 +155,7 @@ code: |
     <i class="i-ri-loader-4-line animate-spin" />
   </template>
 ---
-::
+:::
 
 ## TxStatusIcon
 
@@ -275,7 +275,7 @@ Browse and search icons at [Icônes](https://icones.js.org/).
 
 ### classIcon / getIcon
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   import { classIcon, getIcon } from '@talex-touch/utils'
@@ -286,7 +286,7 @@ code: |
   const searchIcon = getIcon('Search')
   // { type: 'class', value: 'i-ri-search-line' }
 ---
-::
+:::
 
 
 ## Review Notes

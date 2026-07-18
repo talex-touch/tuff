@@ -15,12 +15,12 @@ The Plugin Storage SDK provides:
 ---
 code: |
   import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-  
+
   const storage = usePluginStorage()
-  
+
   // Save settings
   await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
-  
+
   // Read settings
   const settings = await storage.getFile('settings.json')
   console.log(settings) // { theme: 'dark', fontSize: 14 }
@@ -89,7 +89,7 @@ code: |
 ---
 code: |
   import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-  
+
   const storage = usePluginStorage()
 ---
 :::
@@ -255,7 +255,7 @@ code: |
   const unsubscribe = storage.onDidChange('settings.json', (data) => {
     console.log('Config updated:', data)
   })
-  
+
   // Stop listening
   unsubscribe()
 ---
