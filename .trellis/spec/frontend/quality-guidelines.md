@@ -206,3 +206,60 @@ usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
 ```ts
 usage: aggregateWorkflowUsage(run.outputs)
 ```
+
+## Scenario: Electron Main Singleton Cycle Safety
+
+### 1. Scope / Trigger
+
+- Apply when an Electron main-process barrel exports both a service class/accessor and an eagerly constructed module singleton, and any dependency can reach that barrel again during module evaluation.
+
+### 2. Signatures
+
+- `getSentryService(): SentryServiceModule` returns the process singleton.
+- `sentryModule: SentryServiceModule` is initialized only after the class and accessor declarations in `sentry-service.ts` have evaluated.
+- `modules/sentry/module.ts` re-exports the initialized singleton; it does not construct a second instance.
+
+### 3. Contracts
+
+- Internal consumers continue importing `getSentryService` from the public `modules/sentry` barrel so Vitest mocks and the package boundary remain stable.
+- The service implementation owns singleton creation after its class declaration. The barrel and compatibility module only re-export that binding.
+- Controller extraction must not add a controller-to-facade import edge; inject facade-owned callbacks instead.
+
+### 4. Validation & Error Matrix
+
+- Singleton constructor runs before the class binding initializes -> production Electron throws `ReferenceError: Cannot access '<Service>' before initialization` during app load.
+- Consumer bypasses the public barrel -> existing barrel mocks no longer isolate Electron-only dependencies in unit tests.
+- Two files construct the singleton -> lifecycle registration, telemetry queues, and shutdown can diverge between instances.
+
+### 5. Good / Base / Bad Cases
+
+- Good: an isolated Electron profile reaches `TouchApp runtime initialized` and the owning module's initialized log without a TDZ error.
+- Base: production build, focused module tests, and an Electron startup smoke all pass with one singleton instance.
+- Bad: `module.ts` imports the class and executes `new Service()` while the service dependency graph can re-enter the barrel.
+
+### 6. Tests Required
+
+- Focused lifecycle tests keep mocking the public barrel and must pass without importing Electron runtime APIs.
+- `typecheck:node` and the CoreApp main/preload/renderer production build must pass.
+- Launch the built main process with an isolated `--user-data-dir`; assert the owning module initializes and logs contain no TDZ or `App threw an error during load` failure.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+// module.ts can execute during a cycle before Service is initialized.
+import { Service, setService } from './service'
+export const serviceModule = new Service()
+setService(serviceModule)
+```
+
+#### Correct
+
+```ts
+// service.ts, after the class and accessor declarations.
+export const serviceModule = getService()
+
+// module.ts
+export { serviceModule } from './service'
+```
