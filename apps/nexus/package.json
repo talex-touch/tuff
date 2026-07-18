@@ -19,7 +19,7 @@
     "build:analyze-worker": "node build/check-worker-bundle.mjs",
     "dev:pwa": "VITE_PLUGIN_PWA=true nuxt dev",
     "dev": "NUXT_USE_CLOUDFLARE_DEV=true CLOUDFLARE_DEV_ENVIRONMENT=preview nuxt dev --port 3200",
-    "dev:pure": "nuxt dev --port 3200",
+    "dev:pure": "nuxt dev --port 3200 --host 127.0.0.1",
     "dev:cf": "NUXT_USE_CLOUDFLARE_DEV=true CLOUDFLARE_DEV_ENVIRONMENT=preview nuxt dev --port 3200",
     "content:reset": "node --input-type=module -e \"import fs from 'node:fs'; fs.rmSync('.data/content', { recursive: true, force: true })\"",
     "generate": "nuxt generate",
@@ -34,7 +34,8 @@
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
     "visual:smoke:tuffex": "node scripts/tuffex-visual-smoke.mjs",
-    "openapi:sync": "openapi-typescript ./openapi/nexus-sync.yaml -o ./types/sync-api.d.ts"
+    "openapi:sync": "openapi-typescript ./openapi/nexus-sync.yaml -o ./types/sync-api.d.ts",
+    "dev:host": "nuxt dev --port 3200 --host 0.0.0.0"
   },
   "dependencies": {
     "@auth/core": "^0.34.3",
