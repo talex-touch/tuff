@@ -67,7 +67,7 @@ code: |
 ---
 code: |
   import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
-  
+
   const divisionBox = useDivisionBox()
   const { sessionId } = await divisionBox.open({
     url: 'https://example.com/tool',
@@ -75,11 +75,11 @@ code: |
     size: 'medium',
     keepAlive: true
   })
-  
+
   const unsubscribe = divisionBox.onLifecycleChange((event) => {
     console.log(event.sessionId, event.oldState, event.newState)
   })
-  
+
   await divisionBox.close(sessionId)
   unsubscribe()
 ---
@@ -92,7 +92,7 @@ code: |
 code: |
   import { useTuffTransport } from '@talex-touch/utils/transport'
   import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
-  
+
   const transport = useTuffTransport()
   const response = await transport.send(DivisionBoxEvents.open, {
     url: 'plugin://my-plugin/panel.html',

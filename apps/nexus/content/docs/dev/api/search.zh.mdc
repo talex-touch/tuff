@@ -306,7 +306,7 @@ code: |
     start: number  // 起始位置
     end: number    // 结束位置（不含）
   }
-  
+
   // 在 TuffItem.meta.extension 中
   interface FeatureExtension {
     matchResult?: MatchRange[]
@@ -359,7 +359,7 @@ code: |
 ---
 code: |
   import { matchFeature } from '@talex-touch/utils/search'
-  
+
   const result = matchFeature({
     title: '翻译',
     desc: '翻译选中的文本',
@@ -367,7 +367,7 @@ code: |
     query: 'fanyi',
     enableFuzzy: true
   })
-  
+
   if (result.matched) {
     console.log('匹配类型:', result.matchType)
     console.log('匹配分数:', result.score)
@@ -406,13 +406,13 @@ code: |
 ---
 code: |
   import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
-  
+
   const result = fuzzyMatch('hello', 'helol', 2)
-  
+
   if (result.matched) {
     console.log('分数:', result.score)
     console.log('匹配索引:', result.matchedIndices)
-    
+
     // 转换为高亮区域
     const ranges = indicesToRanges(result.matchedIndices)
   }
@@ -479,7 +479,7 @@ code: |
     text: string
     inputs?: TuffQueryInput[]
   }
-  
+
   interface TuffQueryInput {
     type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
     content: string

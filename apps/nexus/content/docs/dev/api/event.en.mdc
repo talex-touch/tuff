@@ -23,7 +23,7 @@ code: |
   const dispose = ctx.events.on('APP_READY', () => {
     ctx.logger.info('App ready')
   })
-  
+
   ctx.events.emit('PLUGIN_STORAGE_UPDATED', { pluginId: ctx.meta.id })
 ---
 :::

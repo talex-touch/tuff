@@ -121,7 +121,7 @@ code: |
 
 兼容旧用法：使用 `footer` 插槽添加底部内容。
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -137,11 +137,11 @@ code: |
     </TxDrawer>
   </template>
 ---
-::
+:::
 
 ## 关闭行为
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -164,11 +164,11 @@ code: |
     </TxDrawer>
   </template>
 ---
-::
+:::
 
 ## 事件
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -182,7 +182,7 @@ code: |
     </TxDrawer>
   </template>
 ---
-::
+:::
 
 ## 后台导航配置组合
 

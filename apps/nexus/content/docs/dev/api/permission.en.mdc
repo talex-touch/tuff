@@ -12,26 +12,24 @@ Permissions follow a least-privilege model and pair `permissions` with `permissi
 
 **1. Declare Permissions in manifest.json**
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-{
-"id": "com.example.plugin",
-"name": "My Plugin",
-"version": "1.0.0",
-"sdkapi": 260626,
-"permissions": {
-"required": ["clipboard.read", "network.internet"],
-"optional": ["storage.shared"]
-},
-"permissionReasons": {
-"clipboard.read": "Read clipboard to get text for translation",
-"network.internet": "Access translation API services"
-}
-}
-
+:::TuffCodeBlock{lang="json"}
 ---
-
+code: |
+  {
+  "id": "com.example.plugin",
+  "name": "My Plugin",
+  "version": "1.0.0",
+  "sdkapi": 260626,
+  "permissions": {
+  "required": ["clipboard.read", "network.internet"],
+  "optional": ["storage.shared"]
+  },
+  "permissionReasons": {
+  "clipboard.read": "Read clipboard to get text for translation",
+  "network.internet": "Access translation API services"
+  }
+  }
+---
 :::
 
 **2. Permission Categories**
@@ -94,19 +92,17 @@ The `sdkapi` field determines whether permission checking can enter the runtime:
 
 If your plugin doesn't declare `sdkapi` or has a lower version:
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-{
-"sdkapi": 260626,
-"permissions": {
-"required": ["clipboard.read"],
-"optional": []
-}
-}
-
+:::TuffCodeBlock{lang="json"}
 ---
-
+code: |
+  {
+  "sdkapi": 260626,
+  "permissions": {
+  "required": ["clipboard.read"],
+  "optional": []
+  }
+  }
+---
 :::
 
 ## Technical Notes
@@ -118,93 +114,85 @@ code: |
 
 **Check Permissions in Prelude (index.js)**
 
-## :::TuffCodeBlock{lang="javascript"}
-
-code: |
-const { permission } = globalThis
-
-// Check if permission is granted
-const hasPermission = await permission.check('clipboard.read')
-
-// Request permission (triggers user confirmation dialog)
-const granted = await permission.request('clipboard.read', 'Need to read clipboard content')
-
-if (granted) {
-// Use clipboard API
-const text = clipboard.readText()
-}
-
+:::TuffCodeBlock{lang="javascript"}
 ---
+code: |
+  const { permission } = globalThis
 
+  // Check if permission is granted
+  const hasPermission = await permission.check('clipboard.read')
+
+  // Request permission (triggers user confirmation dialog)
+  const granted = await permission.request('clipboard.read', 'Need to read clipboard content')
+
+  if (granted) {
+  // Use clipboard API
+  const text = clipboard.readText()
+  }
+---
 :::
 
 **Use in Surface (Vue)**
 
-## :::TuffCodeBlock{lang="typescript"}
-
-code: |
-import { usePermission } from '@talex-touch/utils/plugin/sdk'
-
-const { check, request, status } = usePermission()
-
-// Check permission
-const hasClipboard = await check('clipboard.read')
-
-// Request permission
-const granted = await request('network.internet', 'Need to access translation service')
-
-// Get all permission status
-const allStatus = await status()
-
+:::TuffCodeBlock{lang="typescript"}
 ---
+code: |
+  import { usePermission } from '@talex-touch/utils/plugin/sdk'
 
+  const { check, request, status } = usePermission()
+
+  // Check permission
+  const hasClipboard = await check('clipboard.read')
+
+  // Request permission
+  const granted = await request('network.internet', 'Need to access translation service')
+
+  // Get all permission status
+  const allStatus = await status()
+---
 :::
 
 **SQLite SDK (sdkapi >= 260215)**
 
 When using `usePluginSqlite()`, declare `storage.sqlite` in required permissions:
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-{
-"sdkapi": 260626,
-"permissions": {
-"required": ["storage.sqlite"],
-"optional": []
-},
-"permissionReasons": {
-"storage.sqlite": "Store plugin business data in the local SQLite database"
-}
-}
-
+:::TuffCodeBlock{lang="json"}
 ---
-
+code: |
+  {
+  "sdkapi": 260626,
+  "permissions": {
+  "required": ["storage.sqlite"],
+  "optional": []
+  },
+  "permissionReasons": {
+  "storage.sqlite": "Store plugin business data in the local SQLite database"
+  }
+  }
+---
 :::
 
-## :::TuffCodeBlock{lang="ts"}
-
-code: |
-import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
-
-const sqlite = usePluginSqlite()
-
-await sqlite.execute(
-'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TEXT NOT NULL)'
-)
-
-await sqlite.execute(
-'INSERT INTO notes (title, created_at) VALUES (?, ?)',
-['hello', new Date().toISOString()]
-)
-
-const result = await sqlite.query<{ id: number; title: string }>(
-'SELECT id, title FROM notes ORDER BY id DESC LIMIT 10'
-)
-console.log(result.rows)
-
+:::TuffCodeBlock{lang="ts"}
 ---
+code: |
+  import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
 
+  const sqlite = usePluginSqlite()
+
+  await sqlite.execute(
+  'CREATE TABLE IF NOT EXISTS notes (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, created_at TEXT NOT NULL)'
+  )
+
+  await sqlite.execute(
+  'INSERT INTO notes (title, created_at) VALUES (?, ?)',
+  ['hello', new Date().toISOString()]
+  )
+
+  const result = await sqlite.query<{ id: number; title: string }>(
+  'SELECT id, title FROM notes ORDER BY id DESC LIMIT 10'
+  )
+  console.log(result.rows)
+---
 :::
 
 ## Best Practices
@@ -213,45 +201,41 @@ console.log(result.rows)
 
 Only declare permissions you actually need:
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-// ✅ Good
-"permissions": {
-"required": ["clipboard.read"],
-"optional": []
-}
-
-// ❌ Avoid
-"permissions": {
-"required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
-}
-
+:::TuffCodeBlock{lang="json"}
 ---
+code: |
+  // ✅ Good
+  "permissions": {
+  "required": ["clipboard.read"],
+  "optional": []
+  }
 
+  // ❌ Avoid
+  "permissions": {
+  "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
+  }
+---
 :::
 
 **2. Provide Permission Reasons**
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-"permissionReasons": {
-"clipboard.read": "Read text from clipboard for translation",
-"network.internet": "Connect to Google Translate API"
-}
-
+:::TuffCodeBlock{lang="json"}
 ---
-
+code: |
+  "permissionReasons": {
+  "clipboard.read": "Read text from clipboard for translation",
+  "network.internet": "Connect to Google Translate API"
+  }
+---
 :::
 
 **3. Graceful Degradation**
 
-## :::TuffCodeBlock{lang="javascript"}
-
+:::TuffCodeBlock{lang="javascript"}
+---
 code: |
-async function translateText(text) {
-const hasNetwork = await permission.check('network.internet')
+  async function translateText(text) {
+  const hasNetwork = await permission.check('network.internet')
 
     if (!hasNetwork) {
       // Request permission or prompt user
@@ -264,22 +248,20 @@ const hasNetwork = await permission.check('network.internet')
     // Normal translation logic
     return await http.post('...')
 
-## }
-
+  ## }
+---
 :::
 
 **4. Distinguish Required vs Optional**
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-"permissions": {
-"required": ["clipboard.read"], // Core functionality
-"optional": ["network.internet"] // Enhanced features
-}
-
+:::TuffCodeBlock{lang="json"}
 ---
-
+code: |
+  "permissions": {
+  "required": ["clipboard.read"], // Core functionality
+  "optional": ["network.internet"] // Enhanced features
+  }
+---
 :::
 
 ## User Interface
@@ -295,33 +277,29 @@ Users can manage plugin permissions at:
 
 A: Your `manifest.json` doesn't declare `sdkapi`, uses an invalid / unsupported marker, or the version is below `251212`. Update it to the current supported marker:
 
-## :::TuffCodeBlock{lang="json"}
-
-code: |
-"sdkapi": 260626
-
+:::TuffCodeBlock{lang="json"}
 ---
-
+code: |
+  "sdkapi": 260626
+---
 :::
 
 **Q: How to handle permission denial?**
 
 A: Provide degraded experience or clear error message:
 
-## :::TuffCodeBlock{lang="javascript"}
-
-code: |
-const granted = await permission.request('clipboard.read')
-if (!granted) {
-// Show hint, guide user to manual input or authorize
-feature.pushItems([{
-title: 'Clipboard Permission Required',
-subtitle: 'Please grant permission in plugin settings'
-}])
-}
-
+:::TuffCodeBlock{lang="javascript"}
 ---
-
+code: |
+  const granted = await permission.request('clipboard.read')
+  if (!granted) {
+  // Show hint, guide user to manual input or authorize
+  feature.pushItems([{
+  title: 'Clipboard Permission Required',
+  subtitle: 'Please grant permission in plugin settings'
+  }])
+  }
+---
 :::
 
 **Q: Where is permission data stored?**

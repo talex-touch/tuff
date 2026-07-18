@@ -35,7 +35,7 @@ code: |
 
 最简单的网格布局：
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -49,13 +49,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## 响应式网格
 
 ### 响应式列数
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -66,11 +66,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### 自适应网格
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -84,13 +84,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## 网格间距
 
 ### 统一间距
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -101,11 +101,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### 不同方向间距
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -116,11 +116,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### 响应式间距
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -134,13 +134,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## 网格项配置
 
 ### 跨列布局
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -153,11 +153,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### 跨行布局
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -170,13 +170,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## 对齐方式
 
 ### 网格对齐
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -193,11 +193,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### 项目对齐
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -208,7 +208,7 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## API
 
@@ -234,7 +234,7 @@ code: |
 
 ### 类型定义
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
@@ -252,7 +252,7 @@ code: |
     col?: number | string
   }
 ---
-::
+:::
 
 ### Events
 

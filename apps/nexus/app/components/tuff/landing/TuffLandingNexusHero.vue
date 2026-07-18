@@ -3,6 +3,7 @@ import { hasNavigator } from '@talex-touch/utils/env'
 import { onBeforeUnmount, onMounted } from 'vue'
 import DarkVeil from '../background/DarkVeil.vue'
 import TuffLandingLineShadowText from './TuffLandingLineShadowText.vue'
+import { toLocalizedDocsPath, normalizeDocsLocale, type DocsLocale } from '#shared/utils/docs-path'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 
 type HeroPlatform = 'darwin' | 'win32' | 'linux'
@@ -18,6 +19,8 @@ const {
 } = useLandingRevealState()
 
 const isZh = computed(() => locale.value.startsWith('zh'))
+const docsLocale = computed<DocsLocale>(() => normalizeDocsLocale(isZh.value ? 'zh' : 'en'))
+const docsCtaTo = computed(() => toLocalizedDocsPath('/docs', docsLocale.value))
 
 const heroPlatformMeta = computed(() => {
   const platform = heroPlatform.value
@@ -116,7 +119,7 @@ onBeforeUnmount(() => {
           <TxOsIcon :platform="heroPlatform" />
           <span>{{ primaryCtaLabel }}</span>
         </NuxtLink>
-        <NuxtLink class="NexusButton" to="/docs">
+        <NuxtLink class="NexusButton" :to="docsCtaTo">
           <span class="i-carbon-book" aria-hidden="true" />
           <span>{{ t('landing.nexus.hero.secondaryCta') }}</span>
         </NuxtLink>
@@ -140,7 +143,7 @@ onBeforeUnmount(() => {
   padding: 6.5rem max(1.5rem, calc((100vw - 1480px) / 2)) 4rem;
   overflow: hidden;
   color: var(--nexus-ink);
-  opacity: 0;
+  opacity: 1;
   transition: opacity 720ms ease;
 }
 
@@ -180,8 +183,8 @@ onBeforeUnmount(() => {
   z-index: 2;
   width: min(100%, 86rem);
   text-align: center;
-  opacity: 0;
-  transform: translate3d(0, 28px, 0);
+  opacity: 1;
+  transform: none;
   transition:
     opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
     transform 760ms cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -266,8 +269,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 0.8rem;
   margin-top: 3rem;
-  opacity: 0;
-  transform: translate3d(0, 12px, 0);
+  opacity: 1;
+  transform: none;
   transition:
     opacity 520ms ease,
     transform 520ms ease;
