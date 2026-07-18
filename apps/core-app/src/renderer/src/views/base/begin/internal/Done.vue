@@ -5,11 +5,7 @@ import { sleep } from '@talex-touch/utils/common/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import {
-  AppEvents,
-  CoreBoxEvents,
-  CoreBoxRetainedEvents
-} from '@talex-touch/utils/transport/events'
+import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import WelcomeData from '~/assets/lotties/welcome.json'
@@ -178,15 +174,8 @@ onMounted(() => {
       void runShortcutFinishFlow()
     }
   )
-  const removeLegacyShortcutListener = transport.on(
-    CoreBoxRetainedEvents.legacy.beginnerShortcutTriggered,
-    () => {
-      void runShortcutFinishFlow()
-    }
-  )
   removeShortcutTriggeredListener = () => {
     removeCanonicalShortcutListener()
-    removeLegacyShortcutListener()
   }
 
   window.addEventListener('keydown', handleKeyDown)

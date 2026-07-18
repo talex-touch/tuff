@@ -1,0 +1,30 @@
+{
+  "id": "transport-wave-a",
+  "name": "transport-wave-a",
+  "title": "Transport Wave A",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-17",
+  "completedAt": "2026-07-17",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-17-transport-messageport-lanes",
+    "07-17-transport-typed-event-hard-cut",
+    "07-17-transport-legacy-cutover-evidence"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

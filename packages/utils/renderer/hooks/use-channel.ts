@@ -1,31 +1,27 @@
-import type { InjectionKey } from 'vue'
-import { hasInjectionContext, inject } from 'vue'
-import { hasWindow } from '../../env'
+import type { InjectionKey } from "vue";
+import { hasInjectionContext, inject } from "vue";
+import { hasWindow } from "../../env";
 
 export interface TouchChannel {
   send: <TRequest = any, TResponse = any>(
     eventName: string,
     data?: TRequest,
-  ) => Promise<TResponse>
+  ) => Promise<TResponse>;
 
   regChannel?: <TRequest = any>(
     eventName: string,
     handler: (data: TRequest) => Promise<any> | any,
-  ) => () => void
+  ) => () => void;
 
   unRegChannel?: <TRequest = any>(
     eventName: string,
     handler: (data: TRequest) => Promise<any> | any,
-  ) => boolean
-
-  sendSync?: <TRequest = any, TResponse = any>(
-    eventName: string,
-    data?: TRequest,
-  ) => TResponse
+  ) => boolean;
 }
 
 // Injection key for the TouchChannel
-export const TouchChannelKey: InjectionKey<TouchChannel> = Symbol('TouchChannel')
+export const TouchChannelKey: InjectionKey<TouchChannel> =
+  Symbol("TouchChannel");
 
 /**
  * Global reference to the TouchChannel instance
@@ -33,12 +29,12 @@ export const TouchChannelKey: InjectionKey<TouchChannel> = Symbol('TouchChannel'
  */
 declare global {
   interface Window {
-    touchChannel?: TouchChannel
-    $touchChannel?: TouchChannel
+    touchChannel?: TouchChannel;
+    $touchChannel?: TouchChannel;
   }
 
-  let touchChannel: TouchChannel | undefined
-  let $touchChannel: TouchChannel | undefined
+  let touchChannel: TouchChannel | undefined;
+  let $touchChannel: TouchChannel | undefined;
 }
 
 /**
@@ -47,33 +43,31 @@ declare global {
 function resolveTouchChannel(): TouchChannel | null {
   // Try dependency injection first
   if (hasInjectionContext()) {
-    const injectedChannel = inject(TouchChannelKey, null)
-    if (injectedChannel)
-      return injectedChannel
+    const injectedChannel = inject(TouchChannelKey, null);
+    if (injectedChannel) return injectedChannel;
   }
 
   // Try global variables
-  if (typeof globalThis !== 'undefined') {
-    const channel
-      = (globalThis as any).touchChannel
-        || (globalThis as any).$touchChannel
-        || (globalThis as any).$channel
-        || (globalThis as any).window?.touchChannel
-        || (globalThis as any).window?.$touchChannel
-        || (globalThis as any).window?.$channel
+  if (typeof globalThis !== "undefined") {
+    const channel =
+      (globalThis as any).touchChannel ||
+      (globalThis as any).$touchChannel ||
+      (globalThis as any).$channel ||
+      (globalThis as any).window?.touchChannel ||
+      (globalThis as any).window?.$touchChannel ||
+      (globalThis as any).window?.$channel;
 
-    if (channel)
-      return channel
+    if (channel) return channel;
   }
 
   // Try window object (browser environment)
   if (hasWindow()) {
-    const channel = window.touchChannel || window.$touchChannel || (window as any).$channel
-    if (channel)
-      return channel
+    const channel =
+      window.touchChannel || window.$touchChannel || (window as any).$channel;
+    if (channel) return channel;
   }
 
-  return null
+  return null;
 }
 
 /**
@@ -105,16 +99,16 @@ function resolveTouchChannel(): TouchChannel | null {
  * ```
  */
 export function useChannel(): TouchChannel {
-  const channel = resolveTouchChannel()
+  const channel = resolveTouchChannel();
 
   if (!channel) {
     throw new Error(
-      '[useChannel] TouchChannel not available. '
-      + 'Make sure the TouchChannel is properly injected by the main process.',
-    )
+      "[useChannel] TouchChannel not available. " +
+        "Make sure the TouchChannel is properly injected by the main process.",
+    );
   }
 
-  return channel
+  return channel;
 }
 
 /**
@@ -131,7 +125,7 @@ export function useChannel(): TouchChannel {
  * ```
  */
 export function tryUseChannel(): TouchChannel | null {
-  return resolveTouchChannel()
+  return resolveTouchChannel();
 }
 
 /**
@@ -155,7 +149,7 @@ export function tryUseChannel(): TouchChannel | null {
  * ```
  */
 export function useTypedChannel<TChannelMap extends Record<string, any>>() {
-  const channel = useChannel()
+  const channel = useChannel();
 
   return {
     send<TEventName extends keyof TChannelMap>(
@@ -171,9 +165,9 @@ export function useTypedChannel<TChannelMap extends Record<string, any>>() {
       return channel.send(
         eventName as string,
         args.length > 0 ? args[0] : undefined,
-      )
+      );
     },
 
     regChannel: channel.regChannel,
-  }
+  };
 }

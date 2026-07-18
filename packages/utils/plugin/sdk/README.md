@@ -468,14 +468,14 @@ export default {
 
 新增的 IPC 通道：
 
-- `core-box:hide-input` - 隐藏输入框
-- `core-box:show-input` - 显示输入框
-- `core-box:get-input` - 获取当前输入值
-- `core-box:set-input` - 设置输入框内容
-- `core-box:clear-input` - 清空输入框
-- `core-box:input-change` - 输入变化广播（主进程 → 插件）
-- `core-box:set-input-visibility` - 设置输入框可见性（主进程 → 渲染进程）
-- `core-box:request-input-value` - 请求输入值（主进程 → 渲染进程）
+- `core-box:ui:hide-input` - 隐藏输入框
+- `core-box:ui:show-input` - 显示输入框
+- `core-box:input:get` - 获取当前输入值
+- `core-box:input:set` - 设置输入框内容
+- `core-box:input:clear` - 清空输入框
+- `core-box:input:change` - 输入变化广播（主进程 → 插件）
+- `core-box:input:set-visibility` - 设置输入框可见性（主进程 → 渲染进程）
+- `core-box:input:request-value` - 请求输入值（主进程 → 渲染进程）
 - `plugin:i18n:get-locale` / `plugin:i18n:resolve-text` - permission-gated host locale/localized text
 - `plugin:lexicon:resolve` / `plugin:lexicon:search` / `plugin:lexicon:register` - official + plugin-scoped Domain Lexicon
 

@@ -2,6 +2,7 @@
 import type { Component } from 'vue'
 import { createApp, h, nextTick, ref } from 'vue'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getWidgetSandboxAuditLog } from './widget-sandbox-policy'
 
 const transportState = vi.hoisted(() => ({
   handlers: new Map<string, Function>(),
@@ -226,6 +227,27 @@ describe('widget-registry runtime hosts', () => {
         caches: 'plugin-namespaced',
         broadcastChannel: 'plugin-namespaced'
       },
+      browserFacade: {
+        clipboard: 'blocked-use-host-action',
+        history: 'memory-isolated',
+        location: 'read-only-snapshot',
+        postMessage: 'widget-local',
+        worker: 'blocked',
+        serviceWorker: 'blocked',
+        network: 'blocked-use-host-action',
+        domNavigation: 'blocked'
+      },
+      quota: {
+        windowMs: 10_000,
+        maxCalls: 120,
+        usedCalls: 0,
+        blockedCalls: 0
+      },
+      audit: {
+        mode: 'bounded-memory',
+        maxEntries: 2_048,
+        payloads: 'excluded'
+      },
       windowBoundary: {
         opener: 'null',
         top: 'sandbox-proxy',
@@ -235,7 +257,14 @@ describe('widget-registry runtime hosts', () => {
         documentDefaultView: 'sandbox-proxy'
       },
       dynamicExecution: {
-        mode: 'new-function'
+        mode: 'guarded-new-function',
+        realm: 'same-realm',
+        boundary: 'host-api-containment',
+        sourcePreflight: 'lexical-denylist',
+        limitations: [
+          'Shares JavaScript intrinsics with the host renderer',
+          'Not a process, origin, or realm isolation boundary'
+        ]
       }
     })
     expect(evidence.dynamicExecution.injectedGlobals).toEqual([
@@ -244,14 +273,130 @@ describe('widget-registry runtime hosts', () => {
       'exports',
       'window',
       'globalThis',
+      'self',
+      'top',
+      'parent',
+      'opener',
+      'frames',
+      'frameElement',
+      'origin',
       'localStorage',
       'sessionStorage',
       'document',
       'indexedDB',
       'BroadcastChannel',
       'caches',
-      'self'
+      'navigator',
+      'history',
+      'location',
+      'postMessage',
+      'addEventListener',
+      'removeEventListener',
+      'dispatchEvent',
+      'onmessage',
+      'Worker',
+      'SharedWorker',
+      'fetch',
+      'XMLHttpRequest',
+      'WebSocket',
+      'EventSource',
+      'Function',
+      'eval',
+      'WebAssembly',
+      'importScripts',
+      'open',
+      'close',
+      'undefined',
+      'NaN',
+      'Infinity',
+      'Object',
+      'Array',
+      'Boolean',
+      'Number',
+      'String',
+      'BigInt',
+      'Symbol',
+      'Date',
+      'RegExp',
+      'Error',
+      'TypeError',
+      'RangeError',
+      'Map',
+      'Set',
+      'WeakMap',
+      'WeakSet',
+      'Promise',
+      'Proxy',
+      'Reflect',
+      'JSON',
+      'Math',
+      'Intl',
+      'ArrayBuffer',
+      'DataView',
+      'Uint8Array',
+      'Uint16Array',
+      'Uint32Array',
+      'Int8Array',
+      'Int16Array',
+      'Int32Array',
+      'Float32Array',
+      'Float64Array',
+      'TextEncoder',
+      'TextDecoder',
+      'URL',
+      'URLSearchParams',
+      'Blob',
+      'File',
+      'FormData',
+      'Headers',
+      'Request',
+      'Response',
+      'AbortController',
+      'AbortSignal',
+      'DOMException',
+      'Event',
+      'CustomEvent',
+      'EventTarget',
+      'MessageEvent',
+      'HTMLElement',
+      'Element',
+      'Node',
+      'DocumentFragment',
+      'customElements',
+      'console',
+      'performance',
+      'crypto',
+      'setTimeout',
+      'clearTimeout',
+      'setInterval',
+      'clearInterval',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'getComputedStyle',
+      'matchMedia',
+      'structuredClone'
     ])
+  })
+
+  it.each([
+    ['eval', 'eval("2 + 2")'],
+    ['Function', 'Function("return 2")'],
+    ['dynamic import', 'import("plugin")'],
+    ['WebAssembly', 'WebAssembly.compile(bytes)'],
+    ['constructor escape', '({}).constructor("return 2")']
+  ])('rejects %s before widget source can execute', async (_name, blockedSource) => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const payload = makePayload(
+      'vue',
+      ['console.log("widget-source-executed")', blockedSource, 'module.exports = {}'].join('\n')
+    )
+
+    await expect(handleWidgetRegister(payload)).rejects.toMatchObject({
+      code: 'WIDGET_SANDBOX_DYNAMIC_CODE_BLOCKED'
+    })
+    expect(consoleLog).not.toHaveBeenCalled()
+    expect(await getRenderer(payload.widgetId)).toBeUndefined()
   })
 
   it('records sandbox evidence when widget code requires an undeclared module', async () => {
@@ -393,6 +538,145 @@ describe('widget-registry runtime hosts', () => {
     expect(root.textContent).toContain('isolated')
   })
 
+  it('filters IndexedDB database names to the widget plugin namespace', async () => {
+    const hostDatabases = vi.fn(async () => [
+      { name: 'test-plugin::private', version: 1 },
+      { name: 'other-plugin::foreign', version: 2 }
+    ])
+    vi.stubGlobal('indexedDB', { databases: hostDatabases })
+    const payload = await register(
+      'vue',
+      [
+        'const { h, ref } = require("vue")',
+        'module.exports = {',
+        '  setup() {',
+        '    const names = ref("pending")',
+        '    indexedDB.databases().then((databases) => {',
+        '      names.value = databases.map((database) => database.name).join(",")',
+        '    })',
+        '    return () => h("span", names.value)',
+        '  }',
+        '}'
+      ].join('\n')
+    )
+
+    const renderer = await getRenderer(payload.widgetId)
+    const { root } = await mountRenderer(renderer, { widgetId: payload.widgetId })
+    await Promise.resolve()
+    await nextTick()
+
+    expect(hostDatabases).toHaveBeenCalledTimes(1)
+    expect(root.textContent).toContain('private')
+    expect(root.textContent).not.toContain('foreign')
+  })
+
+  it('namespaces CacheStorage reads while denying cache network loaders with audit and quota evidence', async () => {
+    const hostCacheAdd = vi.fn()
+    const hostCacheAddAll = vi.fn()
+    const hostCache = { add: hostCacheAdd, addAll: hostCacheAddAll }
+    let resolveCacheMatches!: () => void
+    const cacheMatchesFinished = new Promise<void>((resolve) => {
+      resolveCacheMatches = resolve
+    })
+    let cacheMatchCalls = 0
+    const hostCacheMatch = vi.fn(async () => {
+      cacheMatchCalls += 1
+      if (cacheMatchCalls === 2) resolveCacheMatches()
+      return undefined
+    })
+    const hostCaches = {
+      open: vi.fn(async () => hostCache),
+      keys: vi.fn(async () => ['test-plugin::owned', 'other-plugin::foreign']),
+      match: hostCacheMatch
+    }
+    vi.stubGlobal('caches', hostCaches)
+    const payload = await register(
+      'vue',
+      [
+        'const { h, ref } = require("vue")',
+        'module.exports = {',
+        '  setup() {',
+        '    const status = ref("pending")',
+        '    void (async () => {',
+        '      const cache = await caches.open("owned")',
+        '      let blocked = 0',
+        '      try { await cache.add("/network") } catch { blocked += 1 }',
+        '      try { await cache.addAll(["/network-a", "/network-b"]) } catch { blocked += 1 }',
+        '      const names = await caches.keys()',
+        '      await caches.match("/entry", { cacheName: "owned" })',
+        '      await caches.match("/entry")',
+        '      status.value = `${names.join(",")}:${blocked}`',
+        '    })()',
+        '    return () => h("span", status.value)',
+        '  }',
+        '}'
+      ].join('\n')
+    )
+
+    const renderer = await getRenderer(payload.widgetId)
+    await mountRenderer(renderer, { widgetId: payload.widgetId })
+    await cacheMatchesFinished
+
+    expect(hostCaches.open).toHaveBeenCalledWith('test-plugin::owned')
+    expect(hostCaches.keys).toHaveBeenCalledTimes(2)
+    expect(hostCacheMatch).toHaveBeenCalledTimes(2)
+    expect(hostCacheMatch.mock.calls).toEqual([
+      ['/entry', expect.objectContaining({ cacheName: 'test-plugin::owned' })],
+      ['/entry', expect.objectContaining({ cacheName: 'test-plugin::owned' })]
+    ])
+    expect(hostCacheAdd).not.toHaveBeenCalled()
+    expect(hostCacheAddAll).not.toHaveBeenCalled()
+    expect(getWidgetSandboxAuditLog(payload.widgetId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ operation: 'network.access', decision: 'denied' })
+      ])
+    )
+    expect(getWidgetSandboxEvidence(payload.widgetId)?.quota).toMatchObject({
+      usedCalls: 3,
+      blockedCalls: 2
+    })
+  })
+
+  it('namespaces BroadcastChannel delivery and charges postMessage to widget quota and audit', async () => {
+    const channelNames: string[] = []
+    const hostPostMessage = vi.fn()
+    class HostBroadcastChannel {
+      constructor(name: string) {
+        channelNames.push(name)
+      }
+
+      postMessage(message: unknown): void {
+        hostPostMessage(message)
+      }
+    }
+    vi.stubGlobal('BroadcastChannel', HostBroadcastChannel)
+    const payload = await register(
+      'vue',
+      [
+        'const { h } = require("vue")',
+        'const channel = new BroadcastChannel("updates")',
+        'channel.postMessage({ type: "widget-update" })',
+        'module.exports = { setup: () => () => h("span", "broadcast") }'
+      ].join('\n')
+    )
+
+    expect(channelNames).toEqual(['test-plugin::updates'])
+    expect(hostPostMessage).toHaveBeenCalledWith({ type: 'widget-update' })
+    expect(getWidgetSandboxAuditLog(payload.widgetId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          operation: 'postMessage',
+          decision: 'allowed',
+          reason: 'plugin-namespaced-broadcast'
+        })
+      ])
+    )
+    expect(getWidgetSandboxEvidence(payload.widgetId)?.quota).toMatchObject({
+      usedCalls: 2,
+      blockedCalls: 0
+    })
+  })
+
   it('injects sandbox window and document boundaries instead of real escape handles', async () => {
     const payload = await register(
       'vue',
@@ -455,15 +739,14 @@ describe('widget-registry runtime hosts', () => {
     expect(root.querySelector('tuff-widget-demo-touch-widget')).toBeNull()
   })
 
-  it('mounts Arrow widgets, reacts to payload changes, and runs Arrow cleanup on unmount', async () => {
-    const cleanup = vi.fn()
-    vi.stubGlobal('__arrowWidgetCleanup', cleanup)
+  it('mounts Arrow widgets, reacts to payload changes, and runs cleanup through its passed host action', async () => {
+    const hostAction = vi.fn()
     const payload = await register(
       'arrow',
       [
         'const { component, html, onCleanup } = require("@arrow-js/core")',
         'module.exports = component((props) => {',
-        '  onCleanup(() => window.__arrowWidgetCleanup())',
+        '  onCleanup(() => props.onHostAction({ actionId: "widget-cleanup" }))',
         '  return html`<span>${() => props.payload?.title || "Arrow"}</span>`',
         '})'
       ].join('\n')
@@ -474,7 +757,11 @@ describe('widget-registry runtime hosts', () => {
 
     const title = ref('Arrow ok')
     const { root, app } = await mountFactory(() =>
-      h(renderer, { payload: { title: title.value }, widgetId: payload.widgetId })
+      h(renderer, {
+        payload: { title: title.value },
+        widgetId: payload.widgetId,
+        onHostAction: hostAction
+      })
     )
 
     await nextTick()
@@ -486,6 +773,6 @@ describe('widget-registry runtime hosts', () => {
 
     app.unmount()
     await nextTick()
-    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(hostAction).toHaveBeenCalledWith({ actionId: 'widget-cleanup' })
   })
 })

@@ -6,7 +6,6 @@ import {
   AuthEvents,
   ClipboardEvents,
   CoreBoxEvents,
-  CoreBoxRetainedEvents,
   NativeEvents,
   OpenerEvents,
   PermissionEvents,
@@ -245,7 +244,7 @@ describe("transport domain sdk mappings", () => {
     });
   });
 
-  it("sync lifecycle events expose canonical names and retained legacy aliases", () => {
+  it("sync lifecycle events expose canonical names", () => {
     expect(SyncEvents.lifecycle.start.toEventName()).toBe(
       "sync:lifecycle:start",
     );
@@ -257,12 +256,9 @@ describe("transport domain sdk mappings", () => {
     expect(SyncEvents.lifecycle.trigger.toEventName()).toBe(
       "sync:lifecycle:trigger",
     );
-    expect(SyncEvents.legacy.start.toEventName()).toBe("sync:start");
-    expect(SyncEvents.legacy.stop.toEventName()).toBe("sync:stop");
-    expect(SyncEvents.legacy.trigger.toEventName()).toBe("sync:trigger");
   });
 
-  it("terminal session events expose canonical names and retained legacy aliases", () => {
+  it("terminal session events expose canonical names", () => {
     expect(TerminalEvents.session.create.toEventName()).toBe(
       "terminal:session:create",
     );
@@ -274,14 +270,9 @@ describe("transport domain sdk mappings", () => {
     expect(TerminalEvents.session.data.toEventName()).toBe(
       "terminal:session:data",
     );
-    expect(TerminalEvents.legacy.create.toEventName()).toBe("terminal:create");
-    expect(TerminalEvents.legacy.write.toEventName()).toBe("terminal:write");
-    expect(TerminalEvents.legacy.kill.toEventName()).toBe("terminal:kill");
-    expect(TerminalEvents.legacy.data.toEventName()).toBe("terminal:data");
-    expect(TerminalEvents.legacy.exit.toEventName()).toBe("terminal:exit");
   });
 
-  it("opener events expose canonical names and retained legacy aliases", () => {
+  it("opener events expose canonical names", () => {
     expect(OpenerEvents.plugin.open.toEventName()).toBe("plugin:opener:open");
     expect(OpenerEvents.install.request.toEventName()).toBe(
       "plugin:install:request",
@@ -293,20 +284,9 @@ describe("transport domain sdk mappings", () => {
       module: "app",
       action: "resolve",
     });
-    expect(OpenerEvents.legacy.openPlugin.toEventName()).toBe("@open-plugin");
-    expect(OpenerEvents.legacy.installPlugin.toEventName()).toBe(
-      "@install-plugin",
-    );
-    expect(OpenerEvents.legacy.installDevPlugin.toEventName()).toBe(
-      "plugin:install-dev",
-    );
-    expect(OpenerEvents.legacy.dropPlugin.toEventName()).toBe("drop:plugin");
-    expect(OpenerEvents.legacy.resolveApp.toEventName()).toBe(
-      "openers:resolve",
-    );
   });
 
-  it("auth and account events expose canonical names and retained legacy aliases", () => {
+  it("auth and account events expose canonical names", () => {
     expect(AuthEvents.session.getState.toEventName()).toBe(
       "auth:session:get-state",
     );
@@ -323,13 +303,6 @@ describe("transport domain sdk mappings", () => {
     expect(AuthEvents.stepUp.getToken.toEventName()).toBe(
       "auth:step-up:get-token",
     );
-    expect(AuthEvents.legacy.getState.toEventName()).toBe("auth:get-state");
-    expect(AuthEvents.legacy.nexusUpload.toEventName()).toBe(
-      "auth:nexus-upload",
-    );
-    expect(AuthEvents.legacy.getFingerprintHash.toEventName()).toBe(
-      "auth:get-fingerprint-hash",
-    );
 
     expect(AccountEvents.auth.getToken.toEventName()).toBe(
       "account:auth:get-token",
@@ -342,159 +315,141 @@ describe("transport domain sdk mappings", () => {
       module: "sync",
       action: "record-activity",
     });
-    expect(AccountEvents.legacy.getAuthToken.toEventName()).toBe(
-      "account:get-auth-token",
-    );
-    expect(AccountEvents.legacy.recordSyncActivity.toEventName()).toBe(
-      "account:record-sync-activity",
-    );
   });
 
-  it("corebox retained events expose canonical names and retained legacy aliases", () => {
-    expect(CoreBoxRetainedEvents.beginner.shortcutTriggered.toEventName()).toBe(
+  it("corebox events expose canonical names", () => {
+    expect(CoreBoxEvents.beginner.shortcutTriggered.toEventName()).toBe(
       "beginner:shortcut:triggered",
     );
     expect(CoreBoxEvents.beginner.shortcutTriggered.toEventName()).toBe(
       "beginner:shortcut:triggered",
     );
-    expect(CoreBoxRetainedEvents.input.focus.toEventName()).toBe(
+    expect(CoreBoxEvents.input.focus.toEventName()).toBe(
       "core-box:input:focus",
     );
     expect(CoreBoxEvents.input.focus.toEventName()).toBe(
       "core-box:input:focus",
     );
-    expect(CoreBoxRetainedEvents.input.focus).toMatchObject({
+    expect(CoreBoxEvents.input.focus).toMatchObject({
       namespace: "core-box",
       module: "input",
       action: "focus",
     });
-    expect(CoreBoxRetainedEvents.ui.resume.toEventName()).toBe(
-      "core-box:ui:resume",
-    );
     expect(CoreBoxEvents.ui.resume.toEventName()).toBe("core-box:ui:resume");
-    expect(CoreBoxRetainedEvents.ui.show.toEventName()).toBe(
-      "core-box:ui:show",
-    );
-    expect(CoreBoxRetainedEvents.ui.hide.toEventName()).toBe(
-      "core-box:ui:hide",
-    );
-    expect(CoreBoxRetainedEvents.ui.expand.toEventName()).toBe(
-      "core-box:ui:expand",
-    );
-    expect(CoreBoxRetainedEvents.ui.focusWindow.toEventName()).toBe(
+    expect(CoreBoxEvents.ui.resume.toEventName()).toBe("core-box:ui:resume");
+    expect(CoreBoxEvents.ui.show.toEventName()).toBe("core-box:ui:show");
+    expect(CoreBoxEvents.ui.hide.toEventName()).toBe("core-box:ui:hide");
+    expect(CoreBoxEvents.ui.expand.toEventName()).toBe("core-box:ui:expand");
+    expect(CoreBoxEvents.ui.focusWindow.toEventName()).toBe(
       "core-box:ui:focus-window",
     );
-    expect(CoreBoxRetainedEvents.ui.forwardKeyEvent.toEventName()).toBe(
+    expect(CoreBoxEvents.ui.forwardKeyEvent.toEventName()).toBe(
       "core-box:ui:forward-key-event",
     );
-    expect(CoreBoxRetainedEvents.ui.getUIViewState.toEventName()).toBe(
+    expect(CoreBoxEvents.ui.getUIViewState.toEventName()).toBe(
       "core-box:ui:get-ui-view-state",
     );
-    expect(CoreBoxRetainedEvents.ui.shortcutTriggered.toEventName()).toBe(
+    expect(CoreBoxEvents.ui.shortcutTriggered.toEventName()).toBe(
       "core-box:ui:shortcut-triggered",
     );
-    expect(CoreBoxRetainedEvents.ui.uiModeExited.toEventName()).toBe(
+    expect(CoreBoxEvents.ui.uiModeExited.toEventName()).toBe(
       "core-box:ui:mode-exited",
     );
-    expect(CoreBoxRetainedEvents.ui.hideInput.toEventName()).toBe(
+    expect(CoreBoxEvents.ui.hideInput.toEventName()).toBe(
       "core-box:ui:hide-input",
     );
-    expect(CoreBoxRetainedEvents.ui.showInput.toEventName()).toBe(
+    expect(CoreBoxEvents.ui.showInput.toEventName()).toBe(
       "core-box:ui:show-input",
     );
-    expect(CoreBoxRetainedEvents.ui.focusWindow).toMatchObject({
+    expect(CoreBoxEvents.ui.focusWindow).toMatchObject({
       namespace: "core-box",
       module: "ui",
       action: "focus-window",
     });
-    expect(CoreBoxRetainedEvents.input.get.toEventName()).toBe(
-      "core-box:input:get",
-    );
-    expect(CoreBoxRetainedEvents.input.set.toEventName()).toBe(
-      "core-box:input:set",
-    );
-    expect(CoreBoxRetainedEvents.input.clear.toEventName()).toBe(
+    expect(CoreBoxEvents.input.get.toEventName()).toBe("core-box:input:get");
+    expect(CoreBoxEvents.input.set.toEventName()).toBe("core-box:input:set");
+    expect(CoreBoxEvents.input.clear.toEventName()).toBe(
       "core-box:input:clear",
     );
-    expect(CoreBoxRetainedEvents.input.setQuery.toEventName()).toBe(
+    expect(CoreBoxEvents.input.setQuery.toEventName()).toBe(
       "core-box:input:set-query",
     );
-    expect(CoreBoxRetainedEvents.input.setVisibility.toEventName()).toBe(
+    expect(CoreBoxEvents.input.setVisibility.toEventName()).toBe(
       "core-box:input:set-visibility",
     );
-    expect(CoreBoxRetainedEvents.input.requestValue.toEventName()).toBe(
+    expect(CoreBoxEvents.input.requestValue.toEventName()).toBe(
       "core-box:input:request-value",
     );
-    expect(CoreBoxRetainedEvents.input.set).toMatchObject({
+    expect(CoreBoxEvents.input.set).toMatchObject({
       namespace: "core-box",
       module: "input",
       action: "set",
     });
-    expect(CoreBoxRetainedEvents.inputMonitoring.allow.toEventName()).toBe(
+    expect(CoreBoxEvents.inputMonitoring.allow.toEventName()).toBe(
       "core-box:input-monitoring:allow",
     );
-    expect(CoreBoxRetainedEvents.inputMonitoring.allow).toMatchObject({
+    expect(CoreBoxEvents.inputMonitoring.allow).toMatchObject({
       namespace: "core-box",
       module: "input-monitoring",
       action: "allow",
     });
-    expect(CoreBoxRetainedEvents.clipboard.allow.toEventName()).toBe(
+    expect(CoreBoxEvents.clipboard.allow.toEventName()).toBe(
       "core-box:clipboard:allow",
     );
-    expect(CoreBoxRetainedEvents.clipboard.allow).toMatchObject({
+    expect(CoreBoxEvents.clipboard.allow).toMatchObject({
       namespace: "core-box",
       module: "clipboard",
       action: "allow",
     });
-    expect(CoreBoxRetainedEvents.provider.deactivate.toEventName()).toBe(
+    expect(CoreBoxEvents.provider.deactivate.toEventName()).toBe(
       "core-box:provider:deactivate",
     );
-    expect(CoreBoxRetainedEvents.provider.deactivateAll.toEventName()).toBe(
+    expect(CoreBoxEvents.provider.deactivateAll.toEventName()).toBe(
       "core-box:provider:deactivate-all",
     );
-    expect(CoreBoxRetainedEvents.provider.getActivated.toEventName()).toBe(
+    expect(CoreBoxEvents.provider.getActivated.toEventName()).toBe(
       "core-box:provider:get-activated",
     );
-    expect(CoreBoxRetainedEvents.provider.getDetails.toEventName()).toBe(
+    expect(CoreBoxEvents.provider.getDetails.toEventName()).toBe(
       "core-box:provider:get-details",
     );
-    expect(CoreBoxRetainedEvents.provider.deactivate).toMatchObject({
+    expect(CoreBoxEvents.provider.deactivate).toMatchObject({
       namespace: "core-box",
       module: "provider",
       action: "deactivate",
     });
-    expect(CoreBoxRetainedEvents.layout.setHeight.toEventName()).toBe(
+    expect(CoreBoxEvents.layout.setHeight.toEventName()).toBe(
       "core-box:layout:set-height",
     );
-    expect(CoreBoxRetainedEvents.layout.setPositionOffset.toEventName()).toBe(
+    expect(CoreBoxEvents.layout.setPositionOffset.toEventName()).toBe(
       "core-box:layout:set-position-offset",
     );
-    expect(CoreBoxRetainedEvents.layout.getBounds.toEventName()).toBe(
+    expect(CoreBoxEvents.layout.getBounds.toEventName()).toBe(
       "core-box:layout:get-bounds",
     );
-    expect(CoreBoxRetainedEvents.layout.setHeight).toMatchObject({
+    expect(CoreBoxEvents.layout.setHeight).toMatchObject({
       namespace: "core-box",
       module: "layout",
       action: "set-height",
     });
-    expect(CoreBoxRetainedEvents.uiMode.enter.toEventName()).toBe(
+    expect(CoreBoxEvents.uiMode.enter.toEventName()).toBe(
       "core-box:ui-mode:enter",
     );
-    expect(CoreBoxRetainedEvents.uiMode.exit.toEventName()).toBe(
+    expect(CoreBoxEvents.uiMode.exit.toEventName()).toBe(
       "core-box:ui-mode:exit",
     );
-    expect(CoreBoxRetainedEvents.uiMode.enter).toMatchObject({
+    expect(CoreBoxEvents.uiMode.enter).toMatchObject({
       namespace: "core-box",
       module: "ui-mode",
       action: "enter",
     });
-    expect(CoreBoxRetainedEvents.recommendation.get.toEventName()).toBe(
+    expect(CoreBoxEvents.recommendation.get.toEventName()).toBe(
       "core-box:recommendation:get",
     );
-    expect(
-      CoreBoxRetainedEvents.recommendation.aggregateTimeStats.toEventName(),
-    ).toBe("core-box:recommendation:aggregate-time-stats");
-    expect(CoreBoxRetainedEvents.recommendation.isPinned.toEventName()).toBe(
+    expect(CoreBoxEvents.recommendation.aggregateTimeStats.toEventName()).toBe(
+      "core-box:recommendation:aggregate-time-stats",
+    );
+    expect(CoreBoxEvents.recommendation.isPinned.toEventName()).toBe(
       "core-box:recommendation:is-pinned",
     );
     expect(CoreBoxEvents.recommendation.get.toEventName()).toBe(
@@ -506,7 +461,7 @@ describe("transport domain sdk mappings", () => {
     expect(CoreBoxEvents.recommendation.isPinned.toEventName()).toBe(
       "core-box:recommendation:is-pinned",
     );
-    expect(CoreBoxRetainedEvents.previewHistory.show.toEventName()).toBe(
+    expect(CoreBoxEvents.previewHistory.show.toEventName()).toBe(
       "core-box:preview-history:show",
     );
     expect(CoreBoxEvents.previewHistory.show.toEventName()).toBe(
@@ -515,19 +470,19 @@ describe("transport domain sdk mappings", () => {
     expect(CoreBoxEvents.previewHistory.hide.toEventName()).toBe(
       "core-box:preview-history:hide",
     );
-    expect(CoreBoxRetainedEvents.preview.copy.toEventName()).toBe(
+    expect(CoreBoxEvents.preview.copy.toEventName()).toBe(
       "core-box:preview:copy",
     );
     expect(CoreBoxEvents.preview.copy.toEventName()).toBe(
       "core-box:preview:copy",
     );
-    expect(CoreBoxRetainedEvents.actionPanel.open.toEventName()).toBe(
+    expect(CoreBoxEvents.actionPanel.open.toEventName()).toBe(
       "core-box:action-panel:open",
     );
     expect(CoreBoxEvents.actionPanel.open.toEventName()).toBe(
       "core-box:action-panel:open",
     );
-    expect(CoreBoxRetainedEvents.metaOverlay.itemAction.toEventName()).toBe(
+    expect(CoreBoxEvents.metaOverlay.itemAction.toEventName()).toBe(
       "core-box:meta-overlay:item-action",
     );
     expect(CoreBoxEvents.metaOverlay.actionExecuted.toEventName()).toBe(
@@ -538,111 +493,6 @@ describe("transport domain sdk mappings", () => {
     );
     expect(CoreBoxEvents.metaOverlay.flowTransfer.toEventName()).toBe(
       "core-box:meta-overlay:flow-transfer",
-    );
-    expect(
-      CoreBoxRetainedEvents.legacy.beginnerShortcutTriggered.toEventName(),
-    ).toBe("beginner:shortcut-triggered");
-    expect(CoreBoxRetainedEvents.legacy.focusInput.toEventName()).toBe(
-      "corebox:focus-input",
-    );
-    expect(CoreBoxRetainedEvents.legacy.getInput.toEventName()).toBe(
-      "core-box:get-input",
-    );
-    expect(CoreBoxRetainedEvents.legacy.setInput.toEventName()).toBe(
-      "core-box:set-input",
-    );
-    expect(CoreBoxRetainedEvents.legacy.clearInput.toEventName()).toBe(
-      "core-box:clear-input",
-    );
-    expect(CoreBoxRetainedEvents.legacy.setQuery.toEventName()).toBe(
-      "core-box:set-query",
-    );
-    expect(CoreBoxRetainedEvents.legacy.setInputVisibility.toEventName()).toBe(
-      "core-box:set-input-visibility",
-    );
-    expect(CoreBoxRetainedEvents.legacy.requestInputValue.toEventName()).toBe(
-      "core-box:request-input-value",
-    );
-    expect(CoreBoxRetainedEvents.legacy.openActionPanel.toEventName()).toBe(
-      "corebox:open-action-panel",
-    );
-    expect(
-      CoreBoxRetainedEvents.legacy.metaOverlayItemAction.toEventName(),
-    ).toBe("meta-overlay:item-action");
-    expect(CoreBoxRetainedEvents.legacy.show.toEventName()).toBe(
-      "core-box:show",
-    );
-    expect(CoreBoxRetainedEvents.legacy.hide.toEventName()).toBe(
-      "core-box:hide",
-    );
-    expect(CoreBoxRetainedEvents.legacy.expand.toEventName()).toBe(
-      "core-box:expand",
-    );
-    expect(CoreBoxRetainedEvents.legacy.focusWindow.toEventName()).toBe(
-      "core-box:focus-window",
-    );
-    expect(CoreBoxRetainedEvents.legacy.forwardKeyEvent.toEventName()).toBe(
-      "core-box:forward-key-event",
-    );
-    expect(CoreBoxRetainedEvents.legacy.getUIViewState.toEventName()).toBe(
-      "core-box:get-ui-view-state",
-    );
-    expect(CoreBoxRetainedEvents.legacy.shortcutTriggered.toEventName()).toBe(
-      "core-box:shortcut-triggered",
-    );
-    expect(CoreBoxRetainedEvents.legacy.uiModeExited.toEventName()).toBe(
-      "core-box:ui-mode-exited",
-    );
-    expect(CoreBoxRetainedEvents.legacy.hideInput.toEventName()).toBe(
-      "core-box:hide-input",
-    );
-    expect(CoreBoxRetainedEvents.legacy.showInput.toEventName()).toBe(
-      "core-box:show-input",
-    );
-    expect(CoreBoxRetainedEvents.legacy.setHeight.toEventName()).toBe(
-      "core-box:set-height",
-    );
-    expect(CoreBoxRetainedEvents.legacy.setPositionOffset.toEventName()).toBe(
-      "core-box:set-position-offset",
-    );
-    expect(CoreBoxRetainedEvents.legacy.getBounds.toEventName()).toBe(
-      "core-box:get-bounds",
-    );
-    expect(CoreBoxRetainedEvents.legacy.enterUIMode.toEventName()).toBe(
-      "core-box:enter-ui-mode",
-    );
-    expect(CoreBoxRetainedEvents.legacy.exitUIMode.toEventName()).toBe(
-      "core-box:exit-ui-mode",
-    );
-    expect(CoreBoxRetainedEvents.legacy.allowInput.toEventName()).toBe(
-      "core-box:allow-input",
-    );
-    expect(CoreBoxRetainedEvents.legacy.allowClipboard.toEventName()).toBe(
-      "core-box:allow-clipboard",
-    );
-    expect(CoreBoxRetainedEvents.legacy.deactivateProvider.toEventName()).toBe(
-      "core-box:deactivate-provider",
-    );
-    expect(CoreBoxRetainedEvents.legacy.deactivateProviders.toEventName()).toBe(
-      "core-box:deactivate-providers",
-    );
-    expect(
-      CoreBoxRetainedEvents.legacy.getActivatedProviders.toEventName(),
-    ).toBe("core-box:get-activated-providers");
-    expect(CoreBoxRetainedEvents.legacy.getProviderDetails.toEventName()).toBe(
-      "core-box:get-provider-details",
-    );
-    expect(CoreBoxRetainedEvents.legacy.uiResume.toEventName()).toBe(
-      "core-box:ui-resume",
-    );
-    expect(CoreBoxRetainedEvents.legacy.getRecommendations.toEventName()).toBe(
-      "core-box:get-recommendations",
-    );
-    expect(CoreBoxRetainedEvents.legacy.aggregateTimeStats.toEventName()).toBe(
-      "core-box:aggregate-time-stats",
-    );
-    expect(CoreBoxRetainedEvents.legacy.isPinned.toEventName()).toBe(
-      "core-box:is-pinned",
     );
   });
 

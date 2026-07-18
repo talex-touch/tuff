@@ -16,7 +16,7 @@ import {
   makeWidgetId,
   resolveWidgetRuntime,
   resolveWidgetRuntimeStage,
-  WIDGET_ALLOWED_PACKAGE_SCOPE,
+  WIDGET_ALLOWED_PACKAGE_PREFIXES,
   WIDGET_ALLOWED_PACKAGES,
   WIDGET_COMPILED_DIR,
   WIDGET_RUNTIMES,
@@ -30,7 +30,10 @@ import { CompressLimit, TalexCompress } from './compress-util'
 import { generateFilesSha256, generateSignature } from './security-util'
 
 // Default configuration
-const DEFAULT_OPTIONS: Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>> & Pick<Options, 'assets' | 'versionSync'> = {
+const DEFAULT_OPTIONS: Required<
+  Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>
+>
+& Pick<Options, 'assets' | 'versionSync'> = {
   root: process.cwd(),
   manifest: './manifest.json',
   outDir: 'dist',
@@ -50,7 +53,10 @@ const DEFAULT_OPTIONS: Required<Omit<Options, 'assets' | 'versionSync' | 'manife
 const GENERATED_PACKAGE_OUTPUT_DIRECTORIES = new Set(['out', 'build'])
 
 function isGeneratedPackageOutputEntry(entryName: string): boolean {
-  return GENERATED_PACKAGE_OUTPUT_DIRECTORIES.has(entryName) || entryName.toLowerCase().endsWith('.tpex')
+  return (
+    GENERATED_PACKAGE_OUTPUT_DIRECTORIES.has(entryName)
+    || entryName.toLowerCase().endsWith('.tpex')
+  )
 }
 
 interface IndexBuildConfig {
@@ -88,10 +94,20 @@ interface WidgetCompileTarget {
   sourceRelativePath: string
 }
 
-const WIDGET_SUPPORTED_EXTENSIONS = new Set(['.vue', '.ts', '.js', '.cjs', '.tsx', '.jsx'])
+const WIDGET_SUPPORTED_EXTENSIONS = new Set([
+  '.vue',
+  '.ts',
+  '.js',
+  '.cjs',
+  '.tsx',
+  '.jsx',
+])
 const ARROW_WIDGET_SOURCE_PATTERN = /\.arrow\.(?:ts|js)$/i
 
-function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverride | null {
+function normalizeIndexConfig(
+  source: unknown,
+  label: string,
+): IndexConfigOverride | null {
   if (!source || typeof source !== 'object')
     return null
 
@@ -117,8 +133,12 @@ function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverri
   }
 
   if ('external' in config) {
-    if (!Array.isArray(config.external) || config.external.some(item => typeof item !== 'string'))
+    if (
+      !Array.isArray(config.external)
+      || config.external.some(item => typeof item !== 'string')
+    ) {
       throw new Error(`${label}.external must be a string array`)
+    }
     result.external = config.external as string[]
   }
 
@@ -140,19 +160,26 @@ function normalizeIndexConfig(source: unknown, label: string): IndexConfigOverri
 /**
  * Resolve options with defaults
  */
-function resolveOptions(options?: Options): Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>> & Pick<Options, 'assets' | 'versionSync'> {
+function resolveOptions(
+  options?: Options,
+): Required<Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>>
+  & Pick<Options, 'assets' | 'versionSync'> {
   return {
     ...DEFAULT_OPTIONS,
     ...options,
     // Handle deprecated manifestPath
-    manifest: options?.manifest || options?.manifestPath || DEFAULT_OPTIONS.manifest,
+    manifest:
+      options?.manifest || options?.manifestPath || DEFAULT_OPTIONS.manifest,
   }
 }
 
 /**
  * Prompt user for confirmation
  */
-async function promptConfirm(question: string, defaultValue = true): Promise<boolean> {
+async function promptConfirm(
+  question: string,
+  defaultValue = true,
+): Promise<boolean> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -209,7 +236,9 @@ async function checkVersionSync(
   console.log('')
   console.info(
     chalk.bgYellow.black(' VERSION MISMATCH ')
-    + chalk.yellow(` package.json: ${pkgVersion} ≠ manifest.json: ${manifestVersion}`),
+    + chalk.yellow(
+      ` package.json: ${pkgVersion} ≠ manifest.json: ${manifestVersion}`,
+    ),
   )
 
   const versionSync = opts.versionSync
@@ -230,7 +259,9 @@ async function checkVersionSync(
   else {
     // Not enabled, just inform
     console.info(
-      chalk.gray('  → Use --sync-version or set versionSync.enabled to auto-sync'),
+      chalk.gray(
+        '  → Use --sync-version or set versionSync.enabled to auto-sync',
+      ),
     )
     return { synced: false }
   }
@@ -251,7 +282,11 @@ async function checkVersionSync(
 /**
  * Check plugin size and warn if exceeds limit
  */
-function checkPluginSize(tpexPath: string, maxSizeMB: number, chalk: any): void {
+function checkPluginSize(
+  tpexPath: string,
+  maxSizeMB: number,
+  chalk: any,
+): void {
   const stats = fs.statSync(tpexPath)
   const sizeMB = stats.size / (1024 * 1024)
 
@@ -259,10 +294,18 @@ function checkPluginSize(tpexPath: string, maxSizeMB: number, chalk: any): void 
     console.log('')
     console.warn(
       chalk.bgYellow.black(' WARNING ')
-      + chalk.yellow(` Plugin size (${sizeMB.toFixed(2)} MB) exceeds ${maxSizeMB} MB limit!`),
+      + chalk.yellow(
+        ` Plugin size (${sizeMB.toFixed(2)} MB) exceeds ${maxSizeMB} MB limit!`,
+      ),
     )
-    console.warn(chalk.yellow('  → Consider optimizing assets or splitting into smaller plugins'))
-    console.warn(chalk.yellow('  → Large plugins may be rejected by the plugin store'))
+    console.warn(
+      chalk.yellow(
+        '  → Consider optimizing assets or splitting into smaller plugins',
+      ),
+    )
+    console.warn(
+      chalk.yellow('  → Large plugins may be rejected by the plugin store'),
+    )
     console.log('')
   }
   else {
@@ -305,7 +348,8 @@ function resolveIndexBundleConfig(
       : findIndexEntry(indexDirPath)
 
     if (!entryPath || !fs.existsSync(entryPath)) {
-      const displayPath = manifestIndexConfig.entry || `${opts.indexDir}/(main|index).[jt]s`
+      const displayPath
+        = manifestIndexConfig.entry || `${opts.indexDir}/(main|index).[jt]s`
       throw new Error(`manifest.build.index.entry not found: ${displayPath}`)
     }
 
@@ -348,7 +392,10 @@ function withWidgetExtension(rawPath: string): string {
   return path.extname(rawPath) ? rawPath : `${rawPath}.vue`
 }
 
-function resolveWidgetRuntimeFromPath(feature: WidgetFeatureManifest, sourcePath?: string): WidgetRuntime {
+function resolveWidgetRuntimeFromPath(
+  feature: WidgetFeatureManifest,
+  sourcePath?: string,
+): WidgetRuntime {
   const declared = resolveWidgetRuntime(feature.interaction?.runtime)
   if (declared !== WIDGET_RUNTIMES.VUE) {
     return declared
@@ -385,10 +432,17 @@ function collectWidgetImports(source: string): string[] {
   return [...imports]
 }
 
-function validateWidgetDependencies(featureId: string, source: string): string[] {
+function validateWidgetDependencies(
+  featureId: string,
+  source: string,
+): string[] {
   const imports = collectWidgetImports(source)
-  const externalImports = imports.filter(moduleName => !moduleName.startsWith('.'))
-  const disallowed = externalImports.filter(moduleName => !isAllowedWidgetModule(moduleName))
+  const externalImports = imports.filter(
+    moduleName => !moduleName.startsWith('.'),
+  )
+  const disallowed = externalImports.filter(
+    moduleName => !isAllowedWidgetModule(moduleName),
+  )
   if (disallowed.length) {
     throw new Error(
       `WIDGET_INVALID_DEPENDENCY: feature "${featureId}" imports unavailable module(s): ${disallowed.join(', ')}. Allowed packages: ${WIDGET_ALLOWED_PACKAGES.join(', ')}`,
@@ -405,21 +459,31 @@ function resolveWidgetSourceFile(context: WidgetCompileContext): {
   sourcePath: string
   sourceRelativePath: string
 } {
-  const sourceRelativePath = context.sourceRelativePath ?? resolveWidgetSourceRelativePath(context.feature)
+  const sourceRelativePath
+    = context.sourceRelativePath
+      ?? resolveWidgetSourceRelativePath(context.feature)
   const sourcePath = path.resolve(context.buildDir, sourceRelativePath)
   assertWidgetSourceFile(context.feature.id, sourcePath, sourceRelativePath)
 
   return { sourcePath, sourceRelativePath }
 }
 
-function resolveWidgetSourceRelativePath(feature: WidgetFeatureManifest): string {
+function resolveWidgetSourceRelativePath(
+  feature: WidgetFeatureManifest,
+): string {
   const interactionPath = feature.interaction?.path
   if (typeof interactionPath !== 'string' || !interactionPath.trim()) {
-    throw new Error(`WIDGET_PATH_MISSING: feature "${feature.id}" has no widget interaction.path`)
+    throw new Error(
+      `WIDGET_PATH_MISSING: feature "${feature.id}" has no widget interaction.path`,
+    )
   }
 
   const normalized = normalizeWidgetPath(interactionPath)
-  if (!normalized || normalized.startsWith('../') || posixPath.isAbsolute(normalized)) {
+  if (
+    !normalized
+    || normalized.startsWith('../')
+    || posixPath.isAbsolute(normalized)
+  ) {
     throw new Error(
       `WIDGET_PATH_INVALID: feature "${feature.id}" widget path "${interactionPath}" is invalid`,
     )
@@ -428,7 +492,11 @@ function resolveWidgetSourceRelativePath(feature: WidgetFeatureManifest): string
   return posixPath.join('widgets', withWidgetExtension(normalized))
 }
 
-function assertWidgetSourceFile(featureId: string, sourcePath: string, sourceRelativePath: string): void {
+function assertWidgetSourceFile(
+  featureId: string,
+  sourcePath: string,
+  sourceRelativePath: string,
+): void {
   if (!fs.existsSync(sourcePath)) {
     throw new Error(
       `WIDGET_NOT_FOUND: feature "${featureId}" widget source "${sourceRelativePath}" does not exist`,
@@ -443,7 +511,9 @@ function assertWidgetSourceFile(featureId: string, sourcePath: string, sourceRel
   }
 }
 
-function resolveWidgetLoader(lang: string | undefined): 'js' | 'ts' | 'tsx' | 'jsx' {
+function resolveWidgetLoader(
+  lang: string | undefined,
+): 'js' | 'ts' | 'tsx' | 'jsx' {
   const normalized = lang?.toLowerCase()
   if (normalized === 'ts')
     return 'ts'
@@ -454,7 +524,9 @@ function resolveWidgetLoader(lang: string | undefined): 'js' | 'ts' | 'tsx' | 'j
   return 'js'
 }
 
-function resolveScriptWidgetLoader(filePath: string): 'js' | 'ts' | 'tsx' | 'jsx' {
+function resolveScriptWidgetLoader(
+  filePath: string,
+): 'js' | 'ts' | 'tsx' | 'jsx' {
   const ext = path.extname(filePath).toLowerCase()
   if (ext === '.ts')
     return 'ts'
@@ -465,7 +537,11 @@ function resolveScriptWidgetLoader(filePath: string): 'js' | 'ts' | 'tsx' | 'jsx
   return 'js'
 }
 
-function resolveRelativeWidgetImport(importerPath: string, importPath: string, buildDir: string): string | null {
+function resolveRelativeWidgetImport(
+  importerPath: string,
+  importPath: string,
+  buildDir: string,
+): string | null {
   if (!importPath.startsWith('.')) {
     return null
   }
@@ -475,12 +551,16 @@ function resolveRelativeWidgetImport(importerPath: string, importPath: string, b
   const rawCandidate = path.resolve(importerDir, importPath)
   const candidates = path.extname(rawCandidate)
     ? [rawCandidate]
-    : Array.from(WIDGET_SUPPORTED_EXTENSIONS).map(ext => `${rawCandidate}${ext}`)
+    : Array.from(WIDGET_SUPPORTED_EXTENSIONS).map(
+        ext => `${rawCandidate}${ext}`,
+      )
 
   for (const candidate of candidates) {
     const relative = path.relative(widgetsRoot, candidate)
     if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error(`WIDGET_PATH_INVALID: relative widget import "${importPath}" escapes widgets directory`)
+      throw new Error(
+        `WIDGET_PATH_INVALID: relative widget import "${importPath}" escapes widgets directory`,
+      )
     }
     if (fs.existsSync(candidate)) {
       return candidate
@@ -518,7 +598,11 @@ function createWidgetBundlePlugin(
           )
         }
 
-        const resolved = resolveRelativeWidgetImport(args.importer, args.path, buildDir)
+        const resolved = resolveRelativeWidgetImport(
+          args.importer,
+          args.path,
+          buildDir,
+        )
         if (!resolved) {
           throw new Error(
             `WIDGET_NOT_FOUND: feature "${featureId}" relative widget import "${args.path}" from "${args.importer}" does not exist`,
@@ -532,7 +616,9 @@ function createWidgetBundlePlugin(
         const source = await fs.readFile(args.path, 'utf-8')
         const parseResult = parse(source, { filename: args.path })
         if (parseResult.errors.length) {
-          const details = parseResult.errors.map(error => String(error)).join('; ')
+          const details = parseResult.errors
+            .map(error => String(error))
+            .join('; ')
           throw new Error(
             `WIDGET_PARSE_ERROR: feature "${featureId}" Vue SFC parse failed for ${args.path}: ${details}`,
           )
@@ -566,7 +652,9 @@ function createWidgetBundlePlugin(
             })
           : null
         if (templateResult?.errors.length) {
-          const details = templateResult.errors.map(error => String(error)).join('; ')
+          const details = templateResult.errors
+            .map(error => String(error))
+            .join('; ')
           throw new Error(
             `WIDGET_TEMPLATE_ERROR: feature "${featureId}" template compilation failed for ${args.path}: ${details}`,
           )
@@ -574,7 +662,9 @@ function createWidgetBundlePlugin(
 
         return {
           contents: `${scriptCode}\n${templateResult?.code ?? ''}`,
-          loader: resolveWidgetLoader(descriptor.script?.lang ?? descriptor.scriptSetup?.lang),
+          loader: resolveWidgetLoader(
+            descriptor.script?.lang ?? descriptor.scriptSetup?.lang,
+          ),
         }
       })
 
@@ -593,14 +683,29 @@ async function compileWidgetForPackage(
   const { sourcePath, sourceRelativePath } = resolveWidgetSourceFile(context)
   const source = fs.readFileSync(sourcePath, 'utf-8')
   const ext = path.extname(sourcePath).toLowerCase()
-  const baseDependencies = validateWidgetDependencies(context.feature.id, source)
-  const dependencies = ext === '.vue' ? ensureVueDependency(baseDependencies) : baseDependencies
-  const runtime = resolveWidgetRuntimeFromPath(context.feature, sourceRelativePath)
+  const baseDependencies = validateWidgetDependencies(
+    context.feature.id,
+    source,
+  )
+  const dependencies
+    = ext === '.vue' ? ensureVueDependency(baseDependencies) : baseDependencies
+  const runtime = resolveWidgetRuntimeFromPath(
+    context.feature,
+    sourceRelativePath,
+  )
   const runtimeStage = resolveWidgetRuntimeStage(runtime)
   const widgetId = makeWidgetId(context.pluginName, context.feature.id)
   const safeId = makeSafeWidgetFileId(widgetId)
-  const compiledRelativePath = posixPath.join('widgets', WIDGET_COMPILED_DIR, `${safeId}.cjs`)
-  const metaRelativePath = posixPath.join('widgets', WIDGET_COMPILED_DIR, `${safeId}.meta.json`)
+  const compiledRelativePath = posixPath.join(
+    'widgets',
+    WIDGET_COMPILED_DIR,
+    `${safeId}.cjs`,
+  )
+  const metaRelativePath = posixPath.join(
+    'widgets',
+    WIDGET_COMPILED_DIR,
+    `${safeId}.meta.json`,
+  )
   const compiledPath = path.resolve(context.buildDir, compiledRelativePath)
   const metaPath = path.resolve(context.buildDir, metaRelativePath)
   const compiledAt = Date.now()
@@ -646,7 +751,7 @@ module.exports = __component
     target: 'node24',
     external: [
       ...Array.from(WIDGET_ALLOWED_PACKAGES),
-      `${WIDGET_ALLOWED_PACKAGE_SCOPE}*`,
+      ...WIDGET_ALLOWED_PACKAGE_PREFIXES.map(prefix => `${prefix}*`),
     ],
     plugins: [
       createWidgetBundlePlugin(
@@ -764,13 +869,18 @@ async function compilePackageWidgets(
     knownSourcePaths.add(sourceRelativePath)
     return { feature, sourceRelativePath }
   })
-  compileTargets.push(...collectWidgetDirectoryCompileTargets(buildDir, knownSourcePaths))
+  compileTargets.push(
+    ...collectWidgetDirectoryCompileTargets(buildDir, knownSourcePaths),
+  )
 
   if (!compileTargets.length) {
     return []
   }
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Precompiling ${compileTargets.length} widget(s)...`))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.blueBright(` Precompiling ${compileTargets.length} widget(s)...`),
+  )
 
   const entries: WidgetPrecompiledManifestEntry[] = []
   for (const { feature, sourceRelativePath } of compileTargets) {
@@ -785,7 +895,9 @@ async function compilePackageWidgets(
     entries.push(entry)
     console.info(
       chalk.bgBlack.white(' Talex-Touch ')
-      + chalk.gray(` Precompiled widget ${feature.id} -> ${toPosixPath(entry.compiledPath)}`),
+      + chalk.gray(
+        ` Precompiled widget ${feature.id} -> ${toPosixPath(entry.compiledPath)}`,
+      ),
     )
   }
 
@@ -804,7 +916,10 @@ async function bundleIndexFolder(
   try {
     const esbuild = await import('esbuild')
 
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Bundling index/ folder with esbuild...'))
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.blueBright(' Bundling index/ folder with esbuild...'),
+    )
 
     const startTime = Date.now()
     const result = await esbuild.build({
@@ -831,8 +946,13 @@ async function bundleIndexFolder(
     const duration = Date.now() - startTime
 
     if (result.errors.length > 0) {
-      console.error(chalk.bgRed.white(' ERROR ') + chalk.red(' Index folder bundling failed:'))
-      result.errors.forEach(err => console.error(chalk.red(`  - ${err.text}`)))
+      console.error(
+        chalk.bgRed.white(' ERROR ')
+        + chalk.red(' Index folder bundling failed:'),
+      )
+      result.errors.forEach(err =>
+        console.error(chalk.red(`  - ${err.text}`)),
+      )
       return false
     }
 
@@ -842,13 +962,18 @@ async function bundleIndexFolder(
 
     console.info(
       chalk.bgBlack.white(' Talex-Touch ')
-      + chalk.greenBright(` Index folder bundled successfully (${sizeKb}kb) in ${duration}ms`),
+      + chalk.greenBright(
+        ` Index folder bundled successfully (${sizeKb}kb) in ${duration}ms`,
+      ),
     )
 
     return true
   }
   catch (error: any) {
-    console.error(chalk.bgRed.white(' ERROR ') + chalk.red(` Failed to bundle index folder: ${error.message}`))
+    console.error(
+      chalk.bgRed.white(' ERROR ')
+      + chalk.red(` Failed to bundle index folder: ${error.message}`),
+    )
     return false
   }
 }
@@ -867,7 +992,12 @@ export async function build(userOptions?: Options) {
   await checkVersionSync(opts, chalk)
 
   // 步骤1：备份 Vite 构建产物到 dist/out
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Backing up Vite build output to ${opts.outDir}/out/...`))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.blueBright(
+      ` Backing up Vite build output to ${opts.outDir}/out/...`,
+    ),
+  )
 
   fs.rmSync(outDir, { recursive: true, force: true })
   fs.mkdirSync(outDir, { recursive: true })
@@ -884,10 +1014,16 @@ export async function build(userOptions?: Options) {
     }
   }
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Vite output backed up to ${opts.outDir}/out/`))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.greenBright(` Vite output backed up to ${opts.outDir}/out/`),
+  )
 
   // 步骤2：收集文件到 dist/build
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(` Collecting files to ${opts.outDir}/build/...`))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.blueBright(` Collecting files to ${opts.outDir}/build/...`),
+  )
 
   fs.rmSync(buildDir, { recursive: true, force: true })
   fs.mkdirSync(buildDir, { recursive: true })
@@ -895,7 +1031,10 @@ export async function build(userOptions?: Options) {
   // 2.1 复制 Vite 产物
   if (fs.existsSync(outDir)) {
     fs.copySync(outDir, buildDir)
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Vite output copied to ${opts.outDir}/build/`))
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.greenBright(` Vite output copied to ${opts.outDir}/build/`),
+    )
   }
 
   // 2.2 复制插件文件
@@ -910,13 +1049,19 @@ export async function build(userOptions?: Options) {
     const destination = path.join(buildDir, file.to)
     if (fs.existsSync(source)) {
       fs.copySync(source, destination)
-      console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(` Copied ${file.from}`))
+      console.info(
+        chalk.bgBlack.white(' Talex-Touch ')
+        + chalk.gray(` Copied ${file.from}`),
+      )
     }
   }
 
   // 2.2.1 Handle custom assets copy
   if (opts.assets?.copy && opts.assets.copy.length > 0) {
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Copying custom assets...'))
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.blueBright(' Copying custom assets...'),
+    )
     for (const pattern of opts.assets.copy) {
       const files = globSync(pattern, {
         cwd: opts.root,
@@ -930,7 +1075,10 @@ export async function build(userOptions?: Options) {
         fs.copySync(source, destination)
       }
       if (files.length > 0) {
-        console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(` Copied ${files.length} files from ${pattern}`))
+        console.info(
+          chalk.bgBlack.white(' Talex-Touch ')
+          + chalk.gray(` Copied ${files.length} files from ${pattern}`),
+        )
       }
     }
   }
@@ -940,14 +1088,22 @@ export async function build(userOptions?: Options) {
   const manifestData: IManifest | null = fs.existsSync(manifestPath)
     ? JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
     : null
-  const manifestIndexConfig = normalizeIndexConfig(manifestData?.build?.index, 'manifest.build.index')
+  const manifestIndexConfig = normalizeIndexConfig(
+    manifestData?.build?.index,
+    'manifest.build.index',
+  )
   const indexConfig = resolveIndexBundleConfig(opts, manifestIndexConfig)
 
   if (indexConfig) {
     if (!manifestData)
       throw new Error('manifest.json not found for index/ bundling')
 
-    const bundleSuccess = await bundleIndexFolder(indexConfig, buildDir, manifestData, chalk)
+    const bundleSuccess = await bundleIndexFolder(
+      indexConfig,
+      buildDir,
+      manifestData,
+      chalk,
+    )
     if (!bundleSuccess) {
       throw new Error('Failed to bundle index/ folder')
     }
@@ -958,7 +1114,9 @@ export async function build(userOptions?: Options) {
     const indexDest = path.join(buildDir, 'index.js')
     if (fs.existsSync(indexSource)) {
       fs.copySync(indexSource, indexDest)
-      console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(' Copied index.js'))
+      console.info(
+        chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(' Copied index.js'),
+      )
     }
   }
 
@@ -966,10 +1124,18 @@ export async function build(userOptions?: Options) {
   await mergeAssets(chalk, buildDir, opts)
 
   // 2.4 生成配置文件
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Generating manifest.json ...'))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.blueBright(' Generating manifest.json ...'),
+  )
 
   const manifest = genInit(buildDir, opts)
-  const compiledWidgets = await compilePackageWidgets(manifest, buildDir, opts, chalk)
+  const compiledWidgets = await compilePackageWidgets(
+    manifest,
+    buildDir,
+    opts,
+    chalk,
+  )
   if (compiledWidgets.length) {
     manifest.build = {
       ...(manifest.build ?? {}),
@@ -977,12 +1143,18 @@ export async function build(userOptions?: Options) {
     }
   }
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Manifest.json generated successfully!'))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.greenBright(' Manifest.json generated successfully!'),
+  )
 
   // 生成密钥
   const key = genStr(32)
   fs.writeFileSync(path.join(buildDir, 'key.talex'), key)
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' key.talex generated successfully!'))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.greenBright(' key.talex generated successfully!'),
+  )
 
   // 步骤3：压缩生成 .tpex
   const tpexPath = await compressPlugin(manifest, buildDir, opts, chalk)
@@ -990,8 +1162,16 @@ export async function build(userOptions?: Options) {
   // Check plugin size
   checkPluginSize(tpexPath, opts.maxSizeMB, chalk)
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Export plugin ${manifest.name}-${manifest.version}.tpex successfully!`))
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.cyan(` Output path: ${chalk.yellow(tpexPath)}`))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.greenBright(
+      ` Export plugin ${manifest.name}-${manifest.version}.tpex successfully!`,
+    ),
+  )
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.cyan(` Output path: ${chalk.yellow(tpexPath)}`),
+  )
   console.log('\n\n\n')
 }
 
@@ -1033,7 +1213,11 @@ interface IManifest {
   }
 }
 
-async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof resolveOptions>) {
+async function mergeAssets(
+  chalk: any,
+  buildDir: string,
+  opts: ReturnType<typeof resolveOptions>,
+) {
   const assetsDir = path.resolve(opts.root, 'assets')
   const srcAssetsDir = path.resolve(opts.root, opts.sourceDir, 'assets')
   const buildAssetsDir = path.join(buildDir, 'assets')
@@ -1044,18 +1228,31 @@ async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof
 
   if (!assetsExists && !srcAssetsExists) {
     // 没有额外的 assets 目录需要合并
-    if (buildAssetsExists)
-      console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.gray(' Using Vite assets only'))
+    if (buildAssetsExists) {
+      console.info(
+        chalk.bgBlack.white(' Talex-Touch ')
+        + chalk.gray(' Using Vite assets only'),
+      )
+    }
 
     return
   }
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.blueBright(' Merging assets directories...'))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.blueBright(' Merging assets directories...'),
+  )
 
   // 获取所有三个目录的文件列表
-  const buildAssets = buildAssetsExists ? globSync('**/*', { cwd: buildAssetsDir, nodir: true }) : []
-  const userAssets = assetsExists ? globSync('**/*', { cwd: assetsDir, nodir: true }) : []
-  const srcAssets = srcAssetsExists ? globSync('**/*', { cwd: srcAssetsDir, nodir: true }) : []
+  const buildAssets = buildAssetsExists
+    ? globSync('**/*', { cwd: buildAssetsDir, nodir: true })
+    : []
+  const userAssets = assetsExists
+    ? globSync('**/*', { cwd: assetsDir, nodir: true })
+    : []
+  const srcAssets = srcAssetsExists
+    ? globSync('**/*', { cwd: srcAssetsDir, nodir: true })
+    : []
 
   // 检测所有冲突（三方冲突检测）
   const conflicts: Array<{ file: string, sources: string[] }> = []
@@ -1064,10 +1261,15 @@ async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof
   for (const file of userAssets) {
     if (buildAssets.includes(file)) {
       const existing = conflicts.find(c => c.file === file)
-      if (existing)
+      if (existing) {
         existing.sources.push('assets/')
-      else
-        conflicts.push({ file, sources: [`${opts.outDir}/build/assets/`, 'assets/'] })
+      }
+      else {
+        conflicts.push({
+          file,
+          sources: [`${opts.outDir}/build/assets/`, 'assets/'],
+        })
+      }
     }
   }
 
@@ -1080,7 +1282,13 @@ async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof
           existing.sources.push(`${opts.sourceDir}/assets/`)
       }
       else {
-        conflicts.push({ file, sources: [`${opts.outDir}/build/assets/`, `${opts.sourceDir}/assets/`] })
+        conflicts.push({
+          file,
+          sources: [
+            `${opts.outDir}/build/assets/`,
+            `${opts.sourceDir}/assets/`,
+          ],
+        })
       }
     }
   }
@@ -1094,17 +1302,28 @@ async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof
           existing.sources.push(`${opts.sourceDir}/assets/`)
       }
       else {
-        conflicts.push({ file, sources: ['assets/', `${opts.sourceDir}/assets/`] })
+        conflicts.push({
+          file,
+          sources: ['assets/', `${opts.sourceDir}/assets/`],
+        })
       }
     }
   }
 
   if (conflicts.length > 0) {
-    console.error(chalk.bgRed.white(' ERROR ') + chalk.red(' Assets merge conflict detected:'))
-    for (const conflict of conflicts)
-      console.error(chalk.red(`  - ${conflict.file} (in: ${conflict.sources.join(', ')})`))
+    console.error(
+      chalk.bgRed.white(' ERROR ')
+      + chalk.red(' Assets merge conflict detected:'),
+    )
+    for (const conflict of conflicts) {
+      console.error(
+        chalk.red(`  - ${conflict.file} (in: ${conflict.sources.join(', ')})`),
+      )
+    }
 
-    throw new Error('Assets merge conflict: same file exists in multiple asset directories')
+    throw new Error(
+      'Assets merge conflict: same file exists in multiple asset directories',
+    )
   }
 
   // 创建 assets 目录（如果不存在）
@@ -1114,19 +1333,33 @@ async function mergeAssets(chalk: any, buildDir: string, opts: ReturnType<typeof
   // 复制 assets
   if (assetsExists) {
     fs.copySync(assetsDir, buildAssetsDir)
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Merged assets/ into ${opts.outDir}/build/assets/`))
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.greenBright(` Merged assets/ into ${opts.outDir}/build/assets/`),
+    )
   }
 
   // 复制 src/assets
   if (srcAssetsExists) {
     fs.copySync(srcAssetsDir, buildAssetsDir)
-    console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(` Merged ${opts.sourceDir}/assets/ into ${opts.outDir}/build/assets/`))
+    console.info(
+      chalk.bgBlack.white(' Talex-Touch ')
+      + chalk.greenBright(
+        ` Merged ${opts.sourceDir}/assets/ into ${opts.outDir}/build/assets/`,
+      ),
+    )
   }
 
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Assets merged successfully!'))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.greenBright(' Assets merged successfully!'),
+  )
 }
 
-function genInit(_buildDir: string, opts: ReturnType<typeof resolveOptions>): IManifest {
+function genInit(
+  _buildDir: string,
+  opts: ReturnType<typeof resolveOptions>,
+): IManifest {
   const manifestPath = path.resolve(opts.root, opts.manifest)
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
@@ -1141,7 +1374,12 @@ function genInit(_buildDir: string, opts: ReturnType<typeof resolveOptions>): IM
   return manifest as IManifest
 }
 
-async function compressPlugin(manifest: IManifest, buildDir: string, opts: ReturnType<typeof resolveOptions>, chalk: any): Promise<string> {
+async function compressPlugin(
+  manifest: IManifest,
+  buildDir: string,
+  opts: ReturnType<typeof resolveOptions>,
+  chalk: any,
+): Promise<string> {
   const buildConfig = manifest.build || {
     files: [],
     secret: {
@@ -1155,8 +1393,17 @@ async function compressPlugin(manifest: IManifest, buildDir: string, opts: Retur
   }
 
   // Generate file hashes and signature
-  const filesInBuild = globSync('**/*', { cwd: buildDir, nodir: true, absolute: true, dot: true })
-  const filesToHash = filesInBuild.filter(file => path.basename(file) !== 'manifest.json' && path.basename(file) !== 'key.talex')
+  const filesInBuild = globSync('**/*', {
+    cwd: buildDir,
+    nodir: true,
+    absolute: true,
+    dot: true,
+  })
+  const filesToHash = filesInBuild.filter(
+    file =>
+      path.basename(file) !== 'manifest.json'
+      && path.basename(file) !== 'key.talex',
+  )
 
   manifest._files = generateFilesSha256(filesToHash, buildDir)
   manifest._signature = generateSignature(manifest._files)
@@ -1169,11 +1416,18 @@ async function compressPlugin(manifest: IManifest, buildDir: string, opts: Retur
   }
 
   // Write the final manifest with signature
-  fs.writeFileSync(path.join(buildDir, 'manifest.json'), JSON.stringify(manifest, null, 2))
+  fs.writeFileSync(
+    path.join(buildDir, 'manifest.json'),
+    JSON.stringify(manifest, null, 2),
+  )
 
   buildConfig.files = [buildDir]
 
-  const buildPath = path.resolve(opts.root, opts.outDir, `${manifest.name.replace(/\//g, '-')}-${manifest.version}.tpex`)
+  const buildPath = path.resolve(
+    opts.root,
+    opts.outDir,
+    `${manifest.name.replace(/\//g, '-')}-${manifest.version}.tpex`,
+  )
 
   const tCompress = new TalexCompress(buildConfig.files, buildPath)
 
@@ -1206,7 +1460,10 @@ async function compressPlugin(manifest: IManifest, buildDir: string, opts: Retur
   tCompress.setLimit(new CompressLimit(0, 0))
 
   console.log('\n')
-  console.info(chalk.bgBlack.white(' Talex-Touch ') + chalk.greenBright(' Start compressing plugin files...'))
+  console.info(
+    chalk.bgBlack.white(' Talex-Touch ')
+    + chalk.greenBright(' Start compressing plugin files...'),
+  )
   console.log('\n')
 
   await tCompress.compress()
@@ -1215,5 +1472,8 @@ async function compressPlugin(manifest: IManifest, buildDir: string, opts: Retur
 }
 
 function genStr(len: number): string {
-  return (Math.random() * 100000).toString(16).slice(-8) + (len > 8 ? genStr(len - 8) : '')
+  return (
+    (Math.random() * 100000).toString(16).slice(-8)
+    + (len > 8 ? genStr(len - 8) : '')
+  )
 }

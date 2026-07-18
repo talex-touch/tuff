@@ -1,39 +1,41 @@
-import { getEnv } from '../../env'
-import { AppEvents, ClipboardEvents, CoreBoxEvents } from '../events'
+import { getEnv } from "../../env";
+import { AppEvents, ClipboardEvents, CoreBoxEvents } from "../events";
 
-const PORT_CHANNELS_ENV = 'TALEX_TRANSPORT_PORT_CHANNELS'
+const PORT_CHANNELS_ENV = "TALEX_TRANSPORT_PORT_CHANNELS";
 
 const DEFAULT_PORT_CHANNELS = new Set<string>([
   ClipboardEvents.change.toEventName(),
   AppEvents.fileIndex.progress.toEventName(),
-  CoreBoxEvents.search.update.toEventName(),
   CoreBoxEvents.search.indexCommitted.toEventName(),
-  CoreBoxEvents.search.end.toEventName(),
-  CoreBoxEvents.search.noResults.toEventName(),
-])
+  CoreBoxEvents.search.session.toEventName(),
+]);
 
-let cachedRaw: string | undefined
-let cachedAllowlist: ReadonlySet<string> | null = null
+let cachedRaw: string | undefined;
+let cachedAllowlist: ReadonlySet<string> | null = null;
 
 function parsePortChannels(raw: string): ReadonlySet<string> {
-  const trimmed = raw.trim()
+  const trimmed = raw.trim();
   if (!trimmed) {
-    return new Set()
+    return new Set();
   }
-  const entries = trimmed.split(/[,;\s]+/).map(item => item.trim()).filter(Boolean)
-  return new Set(entries)
+  const entries = trimmed
+    .split(/[,;\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return new Set(entries);
 }
 
 export function resolvePortChannelAllowlist(): ReadonlySet<string> {
-  const raw = getEnv(PORT_CHANNELS_ENV)
+  const raw = getEnv(PORT_CHANNELS_ENV);
   if (cachedAllowlist && raw === cachedRaw) {
-    return cachedAllowlist
+    return cachedAllowlist;
   }
-  cachedRaw = raw
-  cachedAllowlist = raw === undefined ? DEFAULT_PORT_CHANNELS : parsePortChannels(raw)
-  return cachedAllowlist
+  cachedRaw = raw;
+  cachedAllowlist =
+    raw === undefined ? DEFAULT_PORT_CHANNELS : parsePortChannels(raw);
+  return cachedAllowlist;
 }
 
 export function isPortChannelEnabled(channel: string): boolean {
-  return resolvePortChannelAllowlist().has(channel)
+  return resolvePortChannelAllowlist().has(channel);
 }

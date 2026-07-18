@@ -12,11 +12,7 @@ import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import {
-  CoreBoxEvents,
-  CoreBoxRetainedEvents,
-  PluginEvents
-} from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import chalk from 'chalk'
 import { app, nativeTheme, screen, WebContentsView } from 'electron'
 import fse from 'fs-extra'
@@ -261,7 +257,7 @@ export class WindowManager {
   public forwardInputChange(payload: CoreBoxInputChangeRequest): void {
     if (!this.inputAllowed || !this.attachedPlugin) return
 
-    this.sendChannelMessageToUIView('core-box:input-change', {
+    this.sendChannelMessageToUIView(CoreBoxEvents.input.change.toEventName(), {
       input: payload.input,
       query: payload.query,
       source: payload.source
@@ -750,13 +746,6 @@ export class WindowManager {
       const transport = this.getTransport()
       void transport
         .sendTo(window.window.webContents, CoreBoxEvents.ui.shortcutTriggered, undefined)
-        .catch(() => {})
-      void transport
-        .sendTo(
-          window.window.webContents,
-          CoreBoxRetainedEvents.legacy.shortcutTriggered,
-          undefined
-        )
         .catch(() => {})
     }
 
@@ -1767,11 +1756,6 @@ export class WindowManager {
     }
   ): void {
     this.broadcastPluginMessage(pluginName, CoreBoxEvents.ui.resume.toEventName(), payload)
-    this.broadcastPluginMessage(
-      pluginName,
-      CoreBoxRetainedEvents.legacy.uiResume.toEventName(),
-      payload
-    )
   }
 
   public getUIView(): WebContentsView | undefined {

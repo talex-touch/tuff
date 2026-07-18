@@ -56,7 +56,21 @@ vi.mock('../../../utils/logger', () => ({
 }))
 
 vi.mock('../../storage', () => ({
-  getMainConfig: mocks.getMainConfig
+  getMainConfig: mocks.getMainConfig,
+  OnboardingGateError: class OnboardingGateError extends Error {
+    constructor(
+      readonly decision: {
+        state: 'blocked' | 'degraded'
+        reason: string
+        recoverable: boolean
+      }
+    ) {
+      super(decision.reason)
+    }
+  },
+  onboardingGate: {
+    evaluate: vi.fn(() => ({ state: 'allowed' }))
+  }
 }))
 
 vi.mock('../search-engine/search-core', () => ({

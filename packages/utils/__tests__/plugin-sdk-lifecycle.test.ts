@@ -1,74 +1,82 @@
-import { describe, expect, it, vi } from 'vitest'
-import { createDivisionBoxSDK } from '../plugin/sdk/division-box'
-import { createFeatureSDK } from '../plugin/sdk/feature-sdk'
-import { createMetaSDK } from '../plugin/sdk/meta-sdk'
-import { createQuickActionsSDK } from '../plugin/sdk/quick-actions-sdk'
-import { CoreBoxEvents, CoreBoxRetainedEvents, DivisionBoxEvents, FlowEvents } from '../transport/events'
+import { describe, expect, it, vi } from "vitest";
+import { createDivisionBoxSDK } from "../plugin/sdk/division-box";
+import { createFeatureSDK } from "../plugin/sdk/feature-sdk";
+import { createMetaSDK } from "../plugin/sdk/meta-sdk";
+import { createQuickActionsSDK } from "../plugin/sdk/quick-actions-sdk";
+import {
+  CoreBoxEvents,
+  DivisionBoxEvents,
+  FlowEvents,
+} from "../transport/events";
 
-type Handler = (payload: unknown) => unknown
+type Handler = (payload: unknown) => unknown;
 
 function createMockChannel() {
-  const listeners = new Map<string, Set<Handler>>()
+  const listeners = new Map<string, Set<Handler>>();
 
   const channel = {
-    send: vi.fn(async (_eventName: string, _payload?: unknown): Promise<unknown> => undefined),
+    send: vi.fn(
+      async (_eventName: string, _payload?: unknown): Promise<unknown> =>
+        undefined,
+    ),
     regChannel: vi.fn((eventName: string, handler: Handler) => {
-      const bucket = listeners.get(eventName) || new Set<Handler>()
-      bucket.add(handler)
-      listeners.set(eventName, bucket)
+      const bucket = listeners.get(eventName) || new Set<Handler>();
+      bucket.add(handler);
+      listeners.set(eventName, bucket);
 
       return () => {
-        const current = listeners.get(eventName)
-        current?.delete(handler)
-      }
+        const current = listeners.get(eventName);
+        current?.delete(handler);
+      };
     }),
-  }
+  };
 
   const emit = async (eventName: string, payload: unknown) => {
-    const bucket = listeners.get(eventName)
+    const bucket = listeners.get(eventName);
     if (!bucket) {
-      return
+      return;
     }
 
     for (const handler of bucket) {
-      await handler(payload)
+      await handler(payload);
     }
-  }
+  };
 
-  const listenerCount = (eventName: string) => listeners.get(eventName)?.size ?? 0
+  const listenerCount = (eventName: string) =>
+    listeners.get(eventName)?.size ?? 0;
 
-  return { channel, emit, listenerCount }
+  return { channel, emit, listenerCount };
 }
 
-describe('plugin sdk lifecycle', () => {
-  it('feature sdk removes channel listeners after dispose', async () => {
-    const { channel, emit, listenerCount } = createMockChannel()
+describe("plugin sdk lifecycle", () => {
+  it("feature sdk removes channel listeners after dispose", async () => {
+    const { channel, emit, listenerCount } = createMockChannel();
     const boxItemsAPI = {
       pushItems: vi.fn(),
       update: vi.fn(),
       remove: vi.fn(),
       clear: vi.fn(),
       getItems: vi.fn(() => []),
-    }
+    };
 
-    const sdk = createFeatureSDK(boxItemsAPI, channel as any)
-    const onInput = vi.fn()
-    sdk.onInputChange(onInput)
+    const sdk = createFeatureSDK(boxItemsAPI, channel as any);
+    const onInput = vi.fn();
+    sdk.onInputChange(onInput);
 
-    expect(listenerCount('core-box:input-change')).toBe(1)
+    expect(listenerCount("core-box:input:change")).toBe(1);
 
-    await emit('core-box:input-change', { input: 'hello' })
-    expect(onInput).toHaveBeenCalledWith('hello')
+    await emit("core-box:input:change", { input: "hello" });
+    expect(onInput).toHaveBeenCalledWith("hello");
 
-    sdk.dispose()
-    expect(listenerCount('core-box:input-change')).toBe(0)
+    sdk.dispose();
+    expect(listenerCount("core-box:input:change")).toBe(0);
 
-    await emit('core-box:input-change', { input: 'world' })
-    expect(onInput).toHaveBeenCalledTimes(1)
-  })
+    await emit("core-box:input:change", { input: "world" });
+    expect(onInput).toHaveBeenCalledTimes(1);
+  });
 
-  it('feature sdk preserves empty input change payloads', async () => {
-    const { channel, emit } = createMockChannel()
+  it("feature sdk preserves empty input change payloads", async () => {
+    const { channel, emit } = createMockChannel();
     const sdk = createFeatureSDK(
       {
         pushItems: vi.fn(),
@@ -78,23 +86,26 @@ describe('plugin sdk lifecycle', () => {
         getItems: vi.fn(() => []),
       },
       channel as any,
-    )
-    const onInput = vi.fn()
-    sdk.onInputChange(onInput)
+    );
+    const onInput = vi.fn();
+    sdk.onInputChange(onInput);
 
-    await emit('core-box:input-change', { input: '', query: { text: 'fallback' } })
-    await emit('core-box:input-change', { query: { text: '' } })
+    await emit("core-box:input:change", {
+      input: "",
+      query: { text: "fallback" },
+    });
+    await emit("core-box:input:change", { query: { text: "" } });
 
-    expect(onInput).toHaveBeenNthCalledWith(1, '')
-    expect(onInput).toHaveBeenNthCalledWith(2, '')
-  })
+    expect(onInput).toHaveBeenNthCalledWith(1, "");
+    expect(onInput).toHaveBeenNthCalledWith(2, "");
+  });
 
-  it('feature sdk returns and awaits host push completion', async () => {
-    const { channel } = createMockChannel()
-    let releaseHostPush!: () => void
+  it("feature sdk returns and awaits host push completion", async () => {
+    const { channel } = createMockChannel();
+    let releaseHostPush!: () => void;
     const hostCompletion = new Promise<void>((resolve) => {
-      releaseHostPush = resolve
-    })
+      releaseHostPush = resolve;
+    });
     const sdk = createFeatureSDK(
       {
         pushItems: vi.fn(() => hostCompletion),
@@ -104,26 +115,26 @@ describe('plugin sdk lifecycle', () => {
         getItems: vi.fn(() => []),
       },
       channel,
-    )
+    );
 
-    const completion = sdk.pushItems([])
-    expect(completion).toBe(hostCompletion)
+    const completion = sdk.pushItems([]);
+    expect(completion).toBe(hostCompletion);
 
-    let awaited = false
+    let awaited = false;
     const awaitingCompletion = (async () => {
-      await completion
-      awaited = true
-    })()
-    await Promise.resolve()
-    expect(awaited).toBe(false)
+      await completion;
+      awaited = true;
+    })();
+    await Promise.resolve();
+    expect(awaited).toBe(false);
 
-    releaseHostPush()
-    await awaitingCompletion
-    expect(awaited).toBe(true)
-  })
+    releaseHostPush();
+    await awaitingCompletion;
+    expect(awaited).toBe(true);
+  });
 
-  it('feature sdk rejects retired plugin key event listener surface', () => {
-    const { channel, listenerCount } = createMockChannel()
+  it("feature sdk rejects retired plugin key event listener surface", () => {
+    const { channel, listenerCount } = createMockChannel();
     const sdk = createFeatureSDK(
       {
         pushItems: vi.fn(),
@@ -133,166 +144,147 @@ describe('plugin sdk lifecycle', () => {
         getItems: vi.fn(() => []),
       },
       channel as any,
-    )
+    );
 
     expect(() => sdk.onKeyEvent(vi.fn())).toThrow(
-      '[Feature SDK] onKeyEvent was removed by the hard-cut',
-    )
-    expect(listenerCount('core-box:key-event')).toBe(0)
-  })
+      "[Feature SDK] onKeyEvent was removed by the hard-cut",
+    );
+    expect(listenerCount("core-box:key-event")).toBe(0);
+  });
 
-  it('division box sdk removes state listener after dispose', async () => {
-    const { channel, emit, listenerCount } = createMockChannel()
-    const sdk = createDivisionBoxSDK(channel as any)
-    const onStateChange = vi.fn()
-    sdk.onStateChange(onStateChange)
+  it("division box sdk removes state listener after dispose", async () => {
+    const { channel, emit, listenerCount } = createMockChannel();
+    const sdk = createDivisionBoxSDK(channel as any);
+    const onStateChange = vi.fn();
+    sdk.onStateChange(onStateChange);
 
-    const eventName = DivisionBoxEvents.stateChanged.toEventName()
-    expect(listenerCount(eventName)).toBe(1)
+    const eventName = DivisionBoxEvents.stateChanged.toEventName();
+    expect(listenerCount(eventName)).toBe(1);
 
-    await emit(eventName, { sessionId: 's1', newState: 'active' })
-    expect(onStateChange).toHaveBeenCalledWith({ sessionId: 's1', state: 'active' })
+    await emit(eventName, { sessionId: "s1", newState: "active" });
+    expect(onStateChange).toHaveBeenCalledWith({
+      sessionId: "s1",
+      state: "active",
+    });
 
-    sdk.dispose()
-    expect(listenerCount(eventName)).toBe(0)
-  })
+    sdk.dispose();
+    expect(listenerCount(eventName)).toBe(0);
+  });
 
-  it('division box sdk accepts direct session info open responses', async () => {
-    const { channel } = createMockChannel()
-    channel.send.mockResolvedValueOnce({ sessionId: 's1', state: 'active' })
-    const sdk = createDivisionBoxSDK(channel as any)
+  it("division box sdk accepts direct session info open responses", async () => {
+    const { channel } = createMockChannel();
+    channel.send.mockResolvedValueOnce({ sessionId: "s1", state: "active" });
+    const sdk = createDivisionBoxSDK(channel as any);
 
     await expect(
       sdk.open({
-        url: 'tuff://detached?itemId=demo',
-        title: 'Demo',
+        url: "tuff://detached?itemId=demo",
+        title: "Demo",
       }),
-    ).resolves.toMatchObject({ sessionId: 's1' })
-  })
+    ).resolves.toMatchObject({ sessionId: "s1" });
+  });
 
-  it('meta sdk clears execute listener after dispose', async () => {
-    const { channel, emit, listenerCount } = createMockChannel()
-    const sdk = createMetaSDK(channel as any, 'demo-plugin')
-    const onExecute = vi.fn()
+  it("meta sdk clears execute listener after dispose", async () => {
+    const { channel, emit, listenerCount } = createMockChannel();
+    const sdk = createMetaSDK(channel as any, "demo-plugin");
+    const onExecute = vi.fn();
 
-    sdk.onActionExecute(onExecute)
+    sdk.onActionExecute(onExecute);
     sdk.registerAction({
-      id: 'action-1',
+      id: "action-1",
       render: {
         basic: {
-          title: 'Action',
-          subtitle: 'Run action',
-          icon: { type: 'class', value: 'i-ri-star-line' },
+          title: "Action",
+          subtitle: "Run action",
+          icon: { type: "class", value: "i-ri-star-line" },
         },
       },
       priority: 1,
-    })
+    });
 
-    const canonicalEventName = CoreBoxEvents.metaOverlay.actionExecuted.toEventName()
-    const legacyEventName = CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted.toEventName()
+    const canonicalEventName =
+      CoreBoxEvents.metaOverlay.actionExecuted.toEventName();
 
-    expect(listenerCount(canonicalEventName)).toBe(1)
-    expect(listenerCount(legacyEventName)).toBe(1)
-
-    await emit(canonicalEventName, {
-      pluginId: 'demo-plugin',
-      actionId: 'action-1',
-      item: {
-        id: 'item-1',
-        title: { text: 'Item 1' },
-        source: { id: 'demo', name: 'Demo' },
-      },
-    })
-    await emit(legacyEventName, {
-      pluginId: 'demo-plugin',
-      actionId: 'action-1',
-      item: {
-        id: 'item-1',
-        title: { text: 'Item 1' },
-        source: { id: 'demo', name: 'Demo' },
-      },
-    })
-    expect(onExecute).toHaveBeenCalledTimes(1)
-
-    sdk.dispose()
-    expect(listenerCount(canonicalEventName)).toBe(0)
-    expect(listenerCount(legacyEventName)).toBe(0)
+    expect(listenerCount(canonicalEventName)).toBe(1);
 
     await emit(canonicalEventName, {
-      pluginId: 'demo-plugin',
-      actionId: 'action-1',
+      pluginId: "demo-plugin",
+      actionId: "action-1",
       item: {
-        id: 'item-2',
-        title: { text: 'Item 2' },
-        source: { id: 'demo', name: 'Demo' },
+        id: "item-1",
+        title: { text: "Item 1" },
+        source: { id: "demo", name: "Demo" },
       },
-    })
-    expect(onExecute).toHaveBeenCalledTimes(1)
-  })
+    });
+    expect(onExecute).toHaveBeenCalledTimes(1);
 
-  it('quick actions sdk clears execute listener after dispose', async () => {
-    const { channel, emit, listenerCount } = createMockChannel()
-    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
-    const onExecute = vi.fn()
+    sdk.dispose();
+    expect(listenerCount(canonicalEventName)).toBe(0);
 
-    sdk.onActionExecute(onExecute)
+    await emit(canonicalEventName, {
+      pluginId: "demo-plugin",
+      actionId: "action-1",
+      item: {
+        id: "item-2",
+        title: { text: "Item 2" },
+        source: { id: "demo", name: "Demo" },
+      },
+    });
+    expect(onExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("quick actions sdk clears execute listener after dispose", async () => {
+    const { channel, emit, listenerCount } = createMockChannel();
+    const sdk = createQuickActionsSDK(channel as any, "quick-plugin");
+    const onExecute = vi.fn();
+
+    sdk.onActionExecute(onExecute);
     sdk.registerAction({
-      id: 'quick-action-1',
+      id: "quick-action-1",
       render: {
         basic: {
-          title: 'Quick Action',
-          subtitle: 'Run quick action',
-          icon: { type: 'class', value: 'i-ri-flashlight-line' },
+          title: "Quick Action",
+          subtitle: "Run quick action",
+          icon: { type: "class", value: "i-ri-flashlight-line" },
         },
       },
       priority: 1,
-    })
+    });
 
-    const canonicalEventName = CoreBoxEvents.metaOverlay.actionExecuted.toEventName()
-    const legacyEventName = CoreBoxRetainedEvents.legacy.metaOverlayActionExecuted.toEventName()
+    const canonicalEventName =
+      CoreBoxEvents.metaOverlay.actionExecuted.toEventName();
 
-    expect(listenerCount(canonicalEventName)).toBe(1)
-    expect(listenerCount(legacyEventName)).toBe(1)
-
-    await emit(canonicalEventName, {
-      pluginId: 'quick-plugin',
-      actionId: 'quick-action-1',
-      item: {
-        id: 'item-qa-1',
-        title: { text: 'Item QA 1' },
-        source: { id: 'demo', name: 'Demo' },
-      },
-    })
-    await emit(legacyEventName, {
-      pluginId: 'quick-plugin',
-      actionId: 'quick-action-1',
-      item: {
-        id: 'item-qa-1',
-        title: { text: 'Item QA 1' },
-        source: { id: 'demo', name: 'Demo' },
-      },
-    })
-    expect(onExecute).toHaveBeenCalledTimes(1)
-
-    sdk.dispose()
-    expect(listenerCount(canonicalEventName)).toBe(0)
-    expect(listenerCount(legacyEventName)).toBe(0)
+    expect(listenerCount(canonicalEventName)).toBe(1);
 
     await emit(canonicalEventName, {
-      pluginId: 'quick-plugin',
-      actionId: 'quick-action-1',
+      pluginId: "quick-plugin",
+      actionId: "quick-action-1",
       item: {
-        id: 'item-qa-2',
-        title: { text: 'Item QA 2' },
-        source: { id: 'demo', name: 'Demo' },
+        id: "item-qa-1",
+        title: { text: "Item QA 1" },
+        source: { id: "demo", name: "Demo" },
       },
-    })
-    expect(onExecute).toHaveBeenCalledTimes(1)
-  })
+    });
+    expect(onExecute).toHaveBeenCalledTimes(1);
 
-  it('quick actions sdk exposes native share targets through FlowBus', async () => {
-    const { channel } = createMockChannel()
-    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+    sdk.dispose();
+    expect(listenerCount(canonicalEventName)).toBe(0);
+
+    await emit(canonicalEventName, {
+      pluginId: "quick-plugin",
+      actionId: "quick-action-1",
+      item: {
+        id: "item-qa-2",
+        title: { text: "Item QA 2" },
+        source: { id: "demo", name: "Demo" },
+      },
+    });
+    expect(onExecute).toHaveBeenCalledTimes(1);
+  });
+
+  it("quick actions sdk exposes native share targets through FlowBus", async () => {
+    const { channel } = createMockChannel();
+    const sdk = createQuickActionsSDK(channel as any, "quick-plugin");
 
     channel.send.mockImplementation(async (eventName: string) => {
       if (eventName === FlowEvents.getTargets.toEventName()) {
@@ -300,141 +292,145 @@ describe('plugin sdk lifecycle', () => {
           success: true,
           data: [
             {
-              id: 'airdrop',
-              fullId: 'native.airdrop',
-              pluginId: 'native',
-              name: 'AirDrop',
-              supportedTypes: ['files'],
+              id: "airdrop",
+              fullId: "native.airdrop",
+              pluginId: "native",
+              name: "AirDrop",
+              supportedTypes: ["files"],
               isEnabled: true,
               hasFlowHandler: true,
               isNativeShare: true,
             },
             {
-              id: 'notes',
-              fullId: 'notes.capture',
-              pluginId: 'notes',
-              name: 'Notes',
-              supportedTypes: ['text'],
+              id: "notes",
+              fullId: "notes.capture",
+              pluginId: "notes",
+              name: "Notes",
+              supportedTypes: ["text"],
               isEnabled: true,
               hasFlowHandler: true,
             },
           ],
-        }
+        };
       }
-      return undefined
-    })
+      return undefined;
+    });
 
-    await expect(sdk.getNativeShareTargets('files')).resolves.toMatchObject([
+    await expect(sdk.getNativeShareTargets("files")).resolves.toMatchObject([
       {
-        id: 'airdrop',
-        fullId: 'native.airdrop',
+        id: "airdrop",
+        fullId: "native.airdrop",
         isNativeShare: true,
       },
-    ])
+    ]);
     expect(channel.send).toHaveBeenCalledWith(
       FlowEvents.getTargets.toEventName(),
-      expect.objectContaining({ payloadType: 'files' }),
-    )
-  })
+      expect.objectContaining({ payloadType: "files" }),
+    );
+  });
 
-  it('quick actions sdk shares Flow payloads through native share transport', async () => {
-    const { channel } = createMockChannel()
-    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+  it("quick actions sdk shares Flow payloads through native share transport", async () => {
+    const { channel } = createMockChannel();
+    const sdk = createQuickActionsSDK(channel as any, "quick-plugin");
 
     channel.send.mockImplementation(async (eventName: string) => {
       if (eventName === FlowEvents.nativeShare.toEventName()) {
-        return { success: true, target: 'airdrop', requiresUserAction: true }
+        return { success: true, target: "airdrop", requiresUserAction: true };
       }
-      return undefined
-    })
+      return undefined;
+    });
 
     const result = await sdk.nativeShare(
       {
-        type: 'text',
-        data: 'Hello',
+        type: "text",
+        data: "Hello",
         context: {
-          sourcePluginId: 'external-plugin',
-          metadata: { title: 'Greeting' },
+          sourcePluginId: "external-plugin",
+          metadata: { title: "Greeting" },
         },
       },
-      { target: 'airdrop' },
-    )
+      { target: "airdrop" },
+    );
 
-    expect(result).toEqual({ success: true, target: 'airdrop', requiresUserAction: true })
+    expect(result).toEqual({
+      success: true,
+      target: "airdrop",
+      requiresUserAction: true,
+    });
     expect(channel.send).toHaveBeenCalledWith(
       FlowEvents.nativeShare.toEventName(),
       expect.objectContaining({
-        target: 'airdrop',
+        target: "airdrop",
         payload: expect.objectContaining({
-          type: 'text',
-          data: 'Hello',
+          type: "text",
+          data: "Hello",
           context: expect.objectContaining({
-            sourcePluginId: 'external-plugin',
+            sourcePluginId: "external-plugin",
           }),
         }),
       }),
-    )
-  })
+    );
+  });
 
-  it('quick actions sdk builds native share payloads from CoreBox items', () => {
-    const { channel } = createMockChannel()
-    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
-
-    expect(
-      sdk.createSharePayloadFromItem({
-        id: 'file-1',
-        source: { type: 'plugin', id: 'quick-plugin' },
-        kind: 'file',
-        render: {
-          mode: 'default',
-          basic: { title: 'Report.pdf', subtitle: 'Quarterly report' },
-        },
-        meta: {
-          file: { path: '/tmp/Report.pdf' },
-        },
-      }),
-    ).toMatchObject({
-      type: 'files',
-      data: ['/tmp/Report.pdf'],
-      context: {
-        sourcePluginId: 'quick-plugin',
-        metadata: {
-          title: 'Report.pdf',
-          itemId: 'file-1',
-          itemKind: 'file',
-        },
-      },
-    })
+  it("quick actions sdk builds native share payloads from CoreBox items", () => {
+    const { channel } = createMockChannel();
+    const sdk = createQuickActionsSDK(channel as any, "quick-plugin");
 
     expect(
       sdk.createSharePayloadFromItem({
-        id: 'link-1',
-        source: { type: 'plugin', id: 'quick-plugin' },
-        kind: 'url',
+        id: "file-1",
+        source: { type: "plugin", id: "quick-plugin" },
+        kind: "file",
         render: {
-          mode: 'default',
-          basic: { title: 'Tuff Docs', subtitle: 'Developer docs' },
+          mode: "default",
+          basic: { title: "Report.pdf", subtitle: "Quarterly report" },
         },
         meta: {
-          web: { url: 'https://example.com/docs' },
+          file: { path: "/tmp/Report.pdf" },
         },
       }),
     ).toMatchObject({
-      type: 'text',
-      data: 'Tuff Docs\nDeveloper docs\nhttps://example.com/docs',
+      type: "files",
+      data: ["/tmp/Report.pdf"],
       context: {
-        sourcePluginId: 'quick-plugin',
+        sourcePluginId: "quick-plugin",
         metadata: {
-          title: 'Tuff Docs',
-          url: 'https://example.com/docs',
+          title: "Report.pdf",
+          itemId: "file-1",
+          itemKind: "file",
         },
       },
-    })
-  })
+    });
 
-  it('quick actions sdk resolves native share targets by payload-aware preferences', async () => {
-    const { channel } = createMockChannel()
-    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+    expect(
+      sdk.createSharePayloadFromItem({
+        id: "link-1",
+        source: { type: "plugin", id: "quick-plugin" },
+        kind: "url",
+        render: {
+          mode: "default",
+          basic: { title: "Tuff Docs", subtitle: "Developer docs" },
+        },
+        meta: {
+          web: { url: "https://example.com/docs" },
+        },
+      }),
+    ).toMatchObject({
+      type: "text",
+      data: "Tuff Docs\nDeveloper docs\nhttps://example.com/docs",
+      context: {
+        sourcePluginId: "quick-plugin",
+        metadata: {
+          title: "Tuff Docs",
+          url: "https://example.com/docs",
+        },
+      },
+    });
+  });
+
+  it("quick actions sdk resolves native share targets by payload-aware preferences", async () => {
+    const { channel } = createMockChannel();
+    const sdk = createQuickActionsSDK(channel as any, "quick-plugin");
 
     channel.send.mockImplementation(async (eventName: string) => {
       if (eventName === FlowEvents.getTargets.toEventName()) {
@@ -442,52 +438,54 @@ describe('plugin sdk lifecycle', () => {
           success: true,
           data: [
             {
-              id: 'mail',
-              fullId: 'native.mail',
-              pluginId: 'native',
-              name: 'Mail',
-              supportedTypes: ['files'],
+              id: "mail",
+              fullId: "native.mail",
+              pluginId: "native",
+              name: "Mail",
+              supportedTypes: ["files"],
               isEnabled: true,
               hasFlowHandler: true,
               isNativeShare: true,
             },
             {
-              id: 'airdrop',
-              fullId: 'native.airdrop',
-              pluginId: 'native',
-              name: 'AirDrop',
-              supportedTypes: ['files'],
+              id: "airdrop",
+              fullId: "native.airdrop",
+              pluginId: "native",
+              name: "AirDrop",
+              supportedTypes: ["files"],
               isEnabled: true,
               hasFlowHandler: true,
               isNativeShare: true,
             },
           ],
-        }
+        };
       }
-      return undefined
-    })
+      return undefined;
+    });
 
-    await expect(sdk.resolveNativeShareTarget({ payloadType: 'files' })).resolves.toMatchObject({
-      id: 'airdrop',
-    })
+    await expect(
+      sdk.resolveNativeShareTarget({ payloadType: "files" }),
+    ).resolves.toMatchObject({
+      id: "airdrop",
+    });
     await expect(
       sdk.resolveNativeShareTarget({
-        payloadType: 'files',
-        preferredTargets: ['messages'],
+        payloadType: "files",
+        preferredTargets: ["messages"],
       }),
-    ).resolves.toMatchObject({ id: 'mail' })
+    ).resolves.toMatchObject({ id: "mail" });
     await expect(
       sdk.resolveNativeShareTarget({
-        payloadType: 'files',
-        preferredTargets: ['messages'],
+        payloadType: "files",
+        preferredTargets: ["messages"],
         allowFallback: false,
       }),
-    ).resolves.toBeUndefined()
-  })
+    ).resolves.toBeUndefined();
+  });
 
-  it('quick actions sdk shares items with resolved native targets', async () => {
-    const { channel } = createMockChannel()
-    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+  it("quick actions sdk shares items with resolved native targets", async () => {
+    const { channel } = createMockChannel();
+    const sdk = createQuickActionsSDK(channel as any, "quick-plugin");
 
     channel.send.mockImplementation(async (eventName: string) => {
       if (eventName === FlowEvents.getTargets.toEventName()) {
@@ -495,87 +493,87 @@ describe('plugin sdk lifecycle', () => {
           success: true,
           data: [
             {
-              id: 'airdrop',
-              fullId: 'native.airdrop',
-              pluginId: 'native',
-              name: 'AirDrop',
-              supportedTypes: ['files'],
+              id: "airdrop",
+              fullId: "native.airdrop",
+              pluginId: "native",
+              name: "AirDrop",
+              supportedTypes: ["files"],
               isEnabled: true,
               hasFlowHandler: true,
               isNativeShare: true,
             },
           ],
-        }
+        };
       }
       if (eventName === FlowEvents.nativeShare.toEventName()) {
-        return { success: true, target: 'airdrop' }
+        return { success: true, target: "airdrop" };
       }
-      return undefined
-    })
+      return undefined;
+    });
 
     await expect(
       sdk.shareItem({
-        id: 'file-2',
-        source: { type: 'plugin', id: 'quick-plugin' },
-        kind: 'file',
+        id: "file-2",
+        source: { type: "plugin", id: "quick-plugin" },
+        kind: "file",
         render: {
-          mode: 'default',
-          basic: { title: 'Design.png' },
+          mode: "default",
+          basic: { title: "Design.png" },
         },
         meta: {
-          file: { path: ' /tmp/Design.png ' },
+          file: { path: " /tmp/Design.png " },
         },
       }),
-    ).resolves.toEqual({ success: true, target: 'airdrop' })
+    ).resolves.toEqual({ success: true, target: "airdrop" });
 
     expect(channel.send).toHaveBeenCalledWith(
       FlowEvents.nativeShare.toEventName(),
       expect.objectContaining({
-        target: 'airdrop',
+        target: "airdrop",
         payload: expect.objectContaining({
-          type: 'files',
-          data: ['/tmp/Design.png'],
+          type: "files",
+          data: ["/tmp/Design.png"],
         }),
       }),
-    )
-  })
+    );
+  });
 
-  it('quick actions sdk shares items with explicit native targets without target discovery', async () => {
-    const { channel } = createMockChannel()
-    const sdk = createQuickActionsSDK(channel as any, 'quick-plugin')
+  it("quick actions sdk shares items with explicit native targets without target discovery", async () => {
+    const { channel } = createMockChannel();
+    const sdk = createQuickActionsSDK(channel as any, "quick-plugin");
 
     channel.send.mockImplementation(async (eventName: string) => {
       if (eventName === FlowEvents.nativeShare.toEventName()) {
-        return { success: true, target: 'mail' }
+        return { success: true, target: "mail" };
       }
-      return undefined
-    })
+      return undefined;
+    });
 
     await expect(
       sdk.shareItem(
         {
-          id: 'link-2',
-          source: { type: 'plugin', id: 'quick-plugin' },
-          kind: 'url',
+          id: "link-2",
+          source: { type: "plugin", id: "quick-plugin" },
+          kind: "url",
           render: {
-            mode: 'default',
-            basic: { title: 'Release notes' },
+            mode: "default",
+            basic: { title: "Release notes" },
           },
           meta: {
-            web: { url: 'https://example.com/release' },
+            web: { url: "https://example.com/release" },
           },
         },
-        { target: 'mail' },
+        { target: "mail" },
       ),
-    ).resolves.toEqual({ success: true, target: 'mail' })
+    ).resolves.toEqual({ success: true, target: "mail" });
 
     expect(channel.send).not.toHaveBeenCalledWith(
       FlowEvents.getTargets.toEventName(),
       expect.anything(),
-    )
+    );
     expect(channel.send).toHaveBeenCalledWith(
       FlowEvents.nativeShare.toEventName(),
-      expect.objectContaining({ target: 'mail' }),
-    )
-  })
-})
+      expect.objectContaining({ target: "mail" }),
+    );
+  });
+});

@@ -1,14 +1,10 @@
-import type { MathJsInstance } from 'mathjs'
-// Use mathjs/number instead of mathjs/all to exclude matrix/statistics/calculus modules (~11MB savings)
-// mathjs/number includes: arithmetic, trigonometry, logarithms, BigNumber — everything needed for
-// expression evaluation, but without the heavy symbolic math, units, and data structures.
-import { create, all } from 'mathjs/number'
+import { evaluateSafeMathExpression } from '@talex-touch/utils/core-box'
 
-const math: MathJsInstance = create(all, {
-  number: 'BigNumber',
-  precision: 64
-})
-
+/**
+ * Normalize expression for evaluation
+ * - Replace Chinese operators
+ * - Handle percentage syntax
+ */
 export interface ExpressionResult {
   success: boolean
   value?: string
@@ -18,26 +14,6 @@ export interface ExpressionResult {
   formatted?: string
 }
 
-const DANGEROUS_PATTERNS = [
-  /import\s*\(/i,
-  /require\s*\(/i,
-  /eval\s*\(/i,
-  /Function\s*\(/i,
-  /\bprocess\b/i,
-  /\bglobal\b/i,
-  /\bwindow\b/i,
-  /\bdocument\b/i
-]
-
-function isSafeExpression(expr: string): boolean {
-  return !DANGEROUS_PATTERNS.some((pattern) => pattern.test(expr))
-}
-
-/**
- * Normalize expression for evaluation
- * - Replace Chinese operators
- * - Handle percentage syntax
- */
 function normalizeExpression(expr: string): string {
   let normalized = expr
     .replace(/×/g, '*')
@@ -68,33 +44,12 @@ function normalizeExpression(expr: string): string {
 /**
  * Format result for display
  */
-function formatResult(value: unknown): string {
-  if (typeof value === 'number') {
-    if (Number.isInteger(value)) {
-      return value.toString()
-    }
-    // Round to reasonable precision
-    const rounded = Math.round(value * 1e10) / 1e10
-    return rounded.toString()
+function formatResult(value: number): string {
+  if (Number.isInteger(value)) {
+    return value.toString()
   }
-
-  const derived = extractNumber(value)
-  if (derived !== undefined) {
-    if (Number.isInteger(derived)) {
-      return derived.toString()
-    }
-    const rounded = Math.round(derived * 1e10) / 1e10
-    return rounded.toString()
-  }
-
-  return String(value)
-}
-
-function extractNumber(value: unknown): number | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  if (!('toNumber' in value)) return undefined
-  const candidate = (value as { toNumber?: unknown }).toNumber
-  return typeof candidate === 'function' ? candidate() : undefined
+  const rounded = Math.round(value * 1e10) / 1e10
+  return rounded.toString()
 }
 
 /**
@@ -107,40 +62,19 @@ export function evaluateExpression(expression: string): ExpressionResult {
     return { success: false, error: 'EMPTY_EXPRESSION', expression }
   }
 
-  if (!isSafeExpression(trimmed)) {
+  const normalized = normalizeExpression(trimmed)
+  const result = evaluateSafeMathExpression(normalized)
+  if (result === null) {
     return { success: false, error: 'UNSAFE_EXPRESSION', expression }
   }
 
-  try {
-    const normalized = normalizeExpression(trimmed)
-    const result = math.evaluate(normalized)
-
-    if (result === undefined || result === null) {
-      return { success: false, error: 'NO_RESULT', expression }
-    }
-
-    // Skip if result is a function or complex object
-    if (typeof result === 'function') {
-      return { success: false, error: 'INVALID_RESULT_TYPE', expression }
-    }
-
-    const formatted = formatResult(result)
-    const numericValue =
-      typeof result === 'number' ? result : (extractNumber(result) ?? Number.parseFloat(formatted))
-
-    return {
-      success: true,
-      value: formatted,
-      numericValue,
-      expression: trimmed,
-      formatted: `${trimmed} = ${formatted}`
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'EVALUATION_ERROR',
-      expression
-    }
+  const formatted = formatResult(result)
+  return {
+    success: true,
+    value: formatted,
+    numericValue: result,
+    expression: trimmed,
+    formatted: `${trimmed} = ${formatted}`
   }
 }
 

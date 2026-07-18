@@ -1,16 +1,18 @@
 type PluginChannelPreludeOptions = {
-  uniqueKey: string
-  initialData?: Record<string, unknown>
-}
+  uniqueKey: string;
+  initialData?: Record<string, unknown>;
+};
 
 const DATA_CODE = {
   SUCCESS: 200,
   NETWORK_ERROR: 500,
   ERROR: 100,
-} as const
+} as const;
 
-export function getPluginChannelPreludeCode(options: PluginChannelPreludeOptions): string {
-  const initialData = options.initialData ?? {}
+export function getPluginChannelPreludeCode(
+  options: PluginChannelPreludeOptions,
+): string {
+  const initialData = options.initialData ?? {};
 
   return `
 (function() {
@@ -182,16 +184,9 @@ export function getPluginChannelPreludeCode(options: PluginChannelPreludeOptions
         });
       });
     }
-
-    sendSync(eventName, arg) {
-      const error = new Error('Plugin channel sendSync was removed by the hard-cut. Migrate "' + eventName + '" to typed transport send/on APIs.');
-      error.code = 'plugin_channel_send_sync_removed';
-      console.error('[Plugin] Blocked removed sendSync channel call', eventName);
-      throw error;
-    }
   }
 
   window['$channel'] = new TouchChannel();
 })();
-`
+`;
 }

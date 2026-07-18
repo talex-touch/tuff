@@ -1,5 +1,5 @@
 import type { TuffItem } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
 import type {
   ActivationState,
   AllowClipboardRequest,
@@ -11,7 +11,9 @@ import type {
   ProviderDetail,
   SetInputRequest,
   SetInputVisibilityRequest,
-  SetQueryRequest
+  SetQueryRequest,
+  CoreBoxSearchSessionChunk,
+  CoreBoxSearchSurface
 } from '@talex-touch/utils/transport/events/types'
 import type {
   MetaAction,
@@ -21,16 +23,16 @@ import type {
 import type { TouchApp } from '../../../core/touch-app'
 import crypto from 'node:crypto'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { CoreBoxEvents, CoreBoxRetainedEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
-import { withLegacyAliasTelemetry } from '../../../utils/legacy-alias-telemetry'
 import { coreBoxImageTranslateEvent } from '../../../../shared/events/corebox-scenes'
 import { pluginModule } from '../../plugin/plugin-module'
 import { getBoxItemManager } from '../item-sdk'
 import searchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
+import type { SearchCallerIdentity, SearchSink } from '../search-engine/search-session'
 import { coreBoxInputTransport } from './input-transport'
 import { coreBoxKeyTransport } from './key-transport'
 import { translateCoreBoxImageItem } from './image-translate'
@@ -42,9 +44,57 @@ const metaOverlayIpcLog = createLogger('CoreBox').child('MetaOverlayIpc')
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 
-type CoreBoxEventDefinition<TPayload, TResult> = Parameters<ITuffTransportMain['on']>[0] & {
-  _request: TPayload
-  _response: TResult
+function resolveSearchCaller(surface: unknown, senderId: number): SearchCallerIdentity {
+  let kind: CoreBoxSearchSurface = 'core-box'
+  if (surface === 'application-index' || surface === 'division-box') {
+    kind = surface
+  }
+  return {
+    kind,
+    id: `${kind}:sender:${senderId}`,
+    senderId
+  }
+}
+
+type SearchSender = Parameters<ITuffTransportMain['sendTo']>[0]
+
+function createSenderSearchSink(transport: ITuffTransportMain, sender: SearchSender): SearchSink {
+  return {
+    update: async (payload) => {
+      await transport.sendTo(sender, CoreBoxEvents.search.update, payload)
+    },
+    noResults: async () => {
+      await transport.sendTo(sender, CoreBoxEvents.search.noResults, { shouldShrink: true })
+    },
+    complete: async (payload) => {
+      await transport.sendTo(sender, CoreBoxEvents.search.end, payload)
+    }
+  }
+}
+
+function createStreamSearchSink(context: StreamContext<CoreBoxSearchSessionChunk>): SearchSink {
+  return {
+    start: (sessionId) => {
+      context.emit({ type: 'session', sessionId })
+    },
+    snapshot: (result) => {
+      context.emit({ type: 'snapshot', sessionId: result.sessionId!, result })
+    },
+    update: ({ searchId, items }) => {
+      context.emit({ type: 'update', sessionId: searchId, items })
+    },
+    noResults: (sessionId) => {
+      context.emit({ type: 'no-results', sessionId, shouldShrink: true })
+    },
+    complete: (payload) => {
+      const { searchId, ...completion } = payload
+      context.emit({ type: 'complete', sessionId: searchId, ...completion })
+      context.end()
+    },
+    error: (error) => {
+      context.error(error)
+    }
+  }
 }
 
 /**
@@ -152,23 +202,6 @@ export class IpcManager {
     })
   }
 
-  private onLegacy<TPayload, TResult>(
-    legacyEvent: CoreBoxEventDefinition<TPayload, TResult>,
-    canonicalEvent: CoreBoxEventDefinition<TPayload, TResult>,
-    handler: (payload: TPayload) => TResult | Promise<TResult>
-  ): () => void {
-    return this.ensureTransport().on(
-      legacyEvent,
-      withLegacyAliasTelemetry(handler, {
-        family: 'core-box',
-        legacyEvent,
-        canonicalEvent,
-        direction: 'renderer-to-main',
-        sourceModule: 'CoreBoxIpc'
-      })
-    )
-  }
-
   private getActiveProvidersState(): ActivationState {
     const activeProviders = (searchEngineCore.getActivationState() ?? [])
       .map((activation) => {
@@ -225,7 +258,7 @@ export class IpcManager {
       })
     )
     this.transportDisposers.push(
-      this.onLegacy(CoreBoxRetainedEvents.legacy.show, CoreBoxEvents.ui.show, () => {
+      this.ensureTransport().on(CoreBoxEvents.ui.show, () => {
         coreBoxManager.trigger(true)
       })
     )
@@ -235,9 +268,7 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.ui.hide, handleHide))
-    this.transportDisposers.push(
-      this.onLegacy(CoreBoxRetainedEvents.legacy.hide, CoreBoxEvents.ui.hide, handleHide)
-    )
+    this.transportDisposers.push(this.ensureTransport().on(CoreBoxEvents.ui.hide, handleHide))
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.setPinned, (payload) => {
@@ -253,7 +284,7 @@ export class IpcManager {
       })
     )
     this.transportDisposers.push(
-      this.onLegacy(CoreBoxRetainedEvents.legacy.expand, CoreBoxEvents.ui.expand, (payload) => {
+      this.ensureTransport().on(CoreBoxEvents.ui.expand, (payload) => {
         this.handleExpandRequest(payload as ExpandOptions | number)
       })
     )
@@ -268,15 +299,12 @@ export class IpcManager {
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.ui.focusWindow, handleFocusWindow))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.focusWindow,
-        CoreBoxEvents.ui.focusWindow,
-        handleFocusWindow
-      )
+      this.ensureTransport().on(CoreBoxEvents.ui.focusWindow, handleFocusWindow)
     )
 
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.search.query, async ({ query }) => {
+      transport.on(CoreBoxEvents.search.query, async ({ query, activations, surface }, context) => {
+        const senderId = context.sender.id
         if (searchLogger.isEnabled()) {
           const text = query?.text ?? ''
           const queryHash = crypto.createHash('sha1').update(text).digest('hex').slice(0, 12)
@@ -285,7 +313,39 @@ export class IpcManager {
             `len=${text.length}, hash=${queryHash}, inputs=${query?.inputs?.length ?? 0}`
           )
         }
-        return await coreBoxManager.search(query)
+        return await coreBoxManager.search(query, {
+          caller: resolveSearchCaller(surface, senderId),
+          activations,
+          sink: createSenderSearchSink(transport, context.sender)
+        })
+      })
+    )
+
+    this.transportDisposers.push(
+      transport.onStream(CoreBoxEvents.search.session, async (request, context) => {
+        const senderId = context.sender?.id
+        if (typeof senderId !== 'number') {
+          context.error(new Error('Search stream sender is unavailable'))
+          return
+        }
+
+        const execution = searchEngineCore.startSearch(request.query, {
+          caller: resolveSearchCaller(request.surface, senderId),
+          activations: request.activations,
+          sink: createStreamSearchSink(context)
+        })
+        const cancel = (): void => {
+          execution.cancel()
+        }
+        if (context.signal.aborted) cancel()
+        else context.signal.addEventListener('abort', cancel, { once: true })
+
+        try {
+          await execution.result
+          await execution.completed
+        } finally {
+          context.signal.removeEventListener('abort', cancel)
+        }
       })
     )
 
@@ -296,13 +356,11 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      transport.on(CoreBoxEvents.search.cancel, ({ searchId }) => {
-        if (searchId && searchEngineCore.getCurrentGatherController()) {
-          searchEngineCore.cancelSearch(searchId)
-          return { cancelled: true }
-        }
-        return { cancelled: false }
-      })
+      transport.on(CoreBoxEvents.search.cancel, ({ searchId }, context) => ({
+        cancelled: Boolean(
+          searchId && searchEngineCore.cancelSearchFromSender(searchId, context.sender.id)
+        )
+      }))
     )
 
     const handleGetInput = async () => {
@@ -311,9 +369,7 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.get, handleGetInput))
-    this.transportDisposers.push(
-      this.onLegacy(CoreBoxRetainedEvents.legacy.getInput, CoreBoxEvents.input.get, handleGetInput)
-    )
+    this.transportDisposers.push(this.ensureTransport().on(CoreBoxEvents.input.get, handleGetInput))
 
     this.transportDisposers.push(
       transport.on(coreBoxImageTranslateEvent, async (request) => {
@@ -338,9 +394,7 @@ export class IpcManager {
     }
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.set, handleSetInput))
-    this.transportDisposers.push(
-      this.onLegacy(CoreBoxRetainedEvents.legacy.setInput, CoreBoxEvents.input.set, handleSetInput)
-    )
+    this.transportDisposers.push(this.ensureTransport().on(CoreBoxEvents.input.set, handleSetInput))
 
     const handleSetQuery = async (request: SetQueryRequest) => {
       const value = typeof request?.value === 'string' ? request.value : ''
@@ -352,11 +406,7 @@ export class IpcManager {
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.setQuery, handleSetQuery))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.setQuery,
-        CoreBoxEvents.input.setQuery,
-        handleSetQuery
-      )
+      this.ensureTransport().on(CoreBoxEvents.input.setQuery, handleSetQuery)
     )
 
     const handleClearInput = async () => {
@@ -366,11 +416,7 @@ export class IpcManager {
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.input.clear, handleClearInput))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.clearInput,
-        CoreBoxEvents.input.clear,
-        handleClearInput
-      )
+      this.ensureTransport().on(CoreBoxEvents.input.clear, handleClearInput)
     )
 
     const handleSetInputVisibility = async (request: SetInputVisibilityRequest) => {
@@ -381,11 +427,7 @@ export class IpcManager {
       transport.on(CoreBoxEvents.input.setVisibility, handleSetInputVisibility)
     )
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.setInputVisibility,
-        CoreBoxEvents.input.setVisibility,
-        handleSetInputVisibility
-      )
+      this.ensureTransport().on(CoreBoxEvents.input.setVisibility, handleSetInputVisibility)
     )
 
     const handleDeactivateProvider = async (request: DeactivateProviderRequest) => {
@@ -442,32 +484,22 @@ export class IpcManager {
       transport.on(CoreBoxEvents.provider.deactivate, handleDeactivateProvider)
     )
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.deactivateProvider,
-        CoreBoxEvents.provider.deactivate,
-        handleDeactivateProvider
-      )
+      this.ensureTransport().on(CoreBoxEvents.provider.deactivate, handleDeactivateProvider)
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.provider.deactivateAll, handleDeactivateAllProviders)
     )
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.deactivateProviders,
-        CoreBoxEvents.provider.deactivateAll,
-        handleDeactivateAllProviders
-      )
+      this.ensureTransport().on(CoreBoxEvents.provider.deactivateAll, handleDeactivateAllProviders)
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.provider.getActivated, async () => this.getActiveProvidersState())
     )
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.getActivatedProviders,
-        CoreBoxEvents.provider.getActivated,
-        async () => this.getActiveProvidersState()
+      this.ensureTransport().on(CoreBoxEvents.provider.getActivated, async () =>
+        this.getActiveProvidersState()
       )
     )
 
@@ -475,11 +507,7 @@ export class IpcManager {
       transport.on(CoreBoxEvents.provider.getDetails, handleGetProviderDetails)
     )
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.getProviderDetails,
-        CoreBoxEvents.provider.getDetails,
-        handleGetProviderDetails
-      )
+      this.ensureTransport().on(CoreBoxEvents.provider.getDetails, handleGetProviderDetails)
     )
 
     const handleEnterUIMode = (request: EnterUIModeRequest) => {
@@ -495,20 +523,12 @@ export class IpcManager {
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.enter, handleEnterUIMode))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.enterUIMode,
-        CoreBoxEvents.uiMode.enter,
-        handleEnterUIMode
-      )
+      this.ensureTransport().on(CoreBoxEvents.uiMode.enter, handleEnterUIMode)
     )
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.exit, handleExitUIMode))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.exitUIMode,
-        CoreBoxEvents.uiMode.exit,
-        handleExitUIMode
-      )
+      this.ensureTransport().on(CoreBoxEvents.uiMode.exit, handleExitUIMode)
     )
 
     const handleAllowClipboard = (request: AllowClipboardRequest) => {
@@ -519,11 +539,7 @@ export class IpcManager {
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.clipboard.allow, handleAllowClipboard))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.allowClipboard,
-        CoreBoxEvents.clipboard.allow,
-        handleAllowClipboard
-      )
+      this.ensureTransport().on(CoreBoxEvents.clipboard.allow, handleAllowClipboard)
     )
 
     this.transportDisposers.push(
@@ -541,14 +557,10 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.hideInput,
-        CoreBoxEvents.ui.hideInput,
-        async () => {
-          await this.setInputVisibility(false)
-          return { hidden: true }
-        }
-      )
+      this.ensureTransport().on(CoreBoxEvents.ui.hideInput, async () => {
+        await this.setInputVisibility(false)
+        return { hidden: true }
+      })
     )
 
     this.transportDisposers.push(
@@ -559,25 +571,17 @@ export class IpcManager {
     )
 
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.showInput,
-        CoreBoxEvents.ui.showInput,
-        async () => {
-          await this.setInputVisibility(true)
-          return { shown: true }
-        }
-      )
+      this.ensureTransport().on(CoreBoxEvents.ui.showInput, async () => {
+        await this.setInputVisibility(true)
+        return { shown: true }
+      })
     )
 
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.allowInput,
-        CoreBoxEvents.inputMonitoring.allow,
-        () => {
-          windowManager.enableInputMonitoring()
-          return { enabled: true }
-        }
-      )
+      this.ensureTransport().on(CoreBoxEvents.inputMonitoring.allow, () => {
+        windowManager.enableInputMonitoring()
+        return { enabled: true }
+      })
     )
 
     const handleSetHeight = (payload: { height: number }) => {
@@ -612,31 +616,19 @@ export class IpcManager {
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.layout.setHeight, handleSetHeight))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.setHeight,
-        CoreBoxEvents.layout.setHeight,
-        handleSetHeight
-      )
+      this.ensureTransport().on(CoreBoxEvents.layout.setHeight, handleSetHeight)
     )
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.layout.getBounds, handleGetBounds))
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.getBounds,
-        CoreBoxEvents.layout.getBounds,
-        handleGetBounds
-      )
+      this.ensureTransport().on(CoreBoxEvents.layout.getBounds, handleGetBounds)
     )
 
     this.transportDisposers.push(
       transport.on(CoreBoxEvents.layout.setPositionOffset, handleSetPositionOffset)
     )
     this.transportDisposers.push(
-      this.onLegacy(
-        CoreBoxRetainedEvents.legacy.setPositionOffset,
-        CoreBoxEvents.layout.setPositionOffset,
-        handleSetPositionOffset
-      )
+      this.ensureTransport().on(CoreBoxEvents.layout.setPositionOffset, handleSetPositionOffset)
     )
 
     this.transportDisposers.push(

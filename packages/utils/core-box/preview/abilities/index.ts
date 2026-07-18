@@ -24,6 +24,7 @@ export {
   type ParsedCurrencyQuery,
 } from "./currency-ability";
 export { PercentageAbility } from "./percentage-ability";
+export { evaluateSafeMathExpression } from "./safe-math-expression";
 export {
   hasQuickOpsDeveloperCommand,
   QuickOpsDeveloperAbility,

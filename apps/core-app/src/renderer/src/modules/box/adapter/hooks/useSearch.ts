@@ -11,18 +11,17 @@ import {
   type TuffQueryInput,
   type TuffSearchResult
 } from '@talex-touch/utils'
-import type { ActivationState } from '@talex-touch/utils/transport/events/types'
+import type {
+  ActivationState,
+  CoreBoxSearchSessionChunk
+} from '@talex-touch/utils/transport/events/types'
 import type { IBoxOptions } from '..'
 import type { IUseSearch } from '../types'
 import type { DetachedDivisionConfig } from './detached-division'
 import type { IClipboardOptions } from './types'
-import { useTuffTransport } from '@talex-touch/utils/transport'
+import { useTuffTransport, type StreamController } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import {
-  CoreBoxEvents,
-  CoreBoxRetainedEvents,
-  DivisionBoxEvents
-} from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -431,9 +430,6 @@ export function useSearch(
     'trigger-plugin-feature-exit'
   )
 
-  const pendingSearchEndById = new Map<string, SearchEndData>()
-  const pendingSearchUpdatesById = new Map<string, TuffItem[]>()
-
   // Search-trigger debounce. Each "major" result change re-mounts the entire
   // result list through <Transition mode="out-in"> in CoreBox.vue, so a higher
   // value directly cuts the number of full list re-renders while typing. 80ms
@@ -465,8 +461,12 @@ export function useSearch(
   }
 
   let searchSequence = 0
+  let activeSearchStreamController: StreamController | null = null
+  let cancelPendingSearchSnapshot: (() => void) | null = null
+  const searchStreamSupersededError = new Error('Search stream superseded')
   let recommendationTimeoutId: ReturnType<typeof setTimeout> | null = null
-  let inFlightQueryKey: string | null = null
+  let recommendationTimeoutSequence: number | null = null
+  let inFlightQuery: { key: string; sequence: number } | null = null
   let lastQueryKey = ''
   let lastQueryAt = 0
   let oneShotQueryContext: TuffContext | undefined
@@ -674,16 +674,23 @@ export function useSearch(
     }
   }
 
-  function clearRecommendationTimeout(): void {
-    if (!recommendationTimeoutId) return
-    clearTimeout(recommendationTimeoutId)
+  function cancelActiveSearchStream(): void {
+    activeSearchStreamController?.cancel()
+    activeSearchStreamController = null
+    cancelPendingSearchSnapshot?.()
+    cancelPendingSearchSnapshot = null
+  }
+
+  function clearRecommendationTimeout(sequence?: number): void {
+    if (sequence !== undefined && recommendationTimeoutSequence !== sequence) return
+    clearTimeout(recommendationTimeoutId ?? undefined)
     recommendationTimeoutId = null
+    recommendationTimeoutSequence = null
   }
 
   function beginSearchSequence(inputs: TuffQueryInput[], options: ExecuteSearchOptions): number {
+    cancelActiveSearchStream()
     const currentSequence = ++searchSequence
-    pendingSearchEndById.clear()
-    pendingSearchUpdatesById.clear()
     clearRecommendationTimeout()
     recommendationPending.value = false
 
@@ -697,6 +704,15 @@ export function useSearch(
 
     return currentSequence
   }
+  function markInFlightQuery(queryKey: string, sequence: number): void {
+    inFlightQuery = { key: queryKey, sequence }
+  }
+
+  function clearInFlightQuery(queryKey: string, sequence: number): void {
+    if (inFlightQuery?.key === queryKey && inFlightQuery.sequence === sequence) {
+      inFlightQuery = null
+    }
+  }
 
   function shouldSkipDuplicateQuery(
     queryKey: string,
@@ -706,7 +722,7 @@ export function useSearch(
     if (force) return false
 
     const now = Date.now()
-    if (inFlightQueryKey === queryKey) {
+    if (inFlightQuery?.key === queryKey) {
       logDebug('[useSearch] Skipping duplicate in-flight query:', {
         text: searchVal.value,
         inputs: inputs.length
@@ -728,6 +744,7 @@ export function useSearch(
   }
 
   const resetSearchState = (): void => {
+    cancelActiveSearchStream()
     searchResults.value = []
     searchResult.value = null
     currentSearchId.value = null
@@ -735,8 +752,6 @@ export function useSearch(
     boxOptions.layout = undefined
     loading.value = false
     recommendationPending.value = false
-    pendingSearchEndById.clear()
-    pendingSearchUpdatesById.clear()
     window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
   }
 
@@ -769,17 +784,129 @@ export function useSearch(
 
     activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
 
-    if (currentSearchId.value) {
-      const pending = pendingSearchEndById.get(currentSearchId.value)
-      if (pending) {
-        pendingSearchEndById.delete(currentSearchId.value)
-        applySearchEnd(pending)
-      }
-    }
-
     nextTick(() => {
       window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
     })
+  }
+  async function requestSearchSnapshot(
+    query: TuffQuery,
+    currentSequence: number
+  ): Promise<TuffSearchResult> {
+    let snapshotSettled = false
+    let streamEnded = false
+    let resolveSnapshot!: (result: TuffSearchResult) => void
+    let rejectSnapshot!: (error: unknown) => void
+    const snapshotPromise = new Promise<TuffSearchResult>((resolve, reject) => {
+      resolveSnapshot = resolve
+      rejectSnapshot = reject
+    })
+    const rejectBeforeSnapshot = (error: unknown): void => {
+      if (snapshotSettled) return
+      snapshotSettled = true
+      rejectSnapshot(error)
+    }
+    const supersede = (): void => {
+      rejectBeforeSnapshot(searchStreamSupersededError)
+    }
+    cancelPendingSearchSnapshot = supersede
+
+    let controller: StreamController | null = null
+    try {
+      controller = await transport.stream(
+        CoreBoxEvents.search.session,
+        {
+          query,
+          activations: activeActivations.value,
+          surface: isDetachedDivisionMode() ? 'division-box' : 'core-box'
+        },
+        {
+          onData: (chunk: CoreBoxSearchSessionChunk) => {
+            if (currentSequence !== searchSequence) return
+
+            switch (chunk.type) {
+              case 'session':
+                currentSearchId.value = chunk.sessionId
+                return
+              case 'snapshot':
+                if (currentSearchId.value !== chunk.sessionId) {
+                  rejectBeforeSnapshot(new Error('Search snapshot arrived before session identity'))
+                  return
+                }
+                if (!snapshotSettled) {
+                  snapshotSettled = true
+                  cancelPendingSearchSnapshot = null
+                  resolveSnapshot(chunk.result)
+                }
+                return
+              case 'update': {
+                if (currentSearchId.value !== chunk.sessionId) return
+                const items = limitRenderedItems(filterDetachedItems(chunk.items))
+                if (items.length === 0) return
+                searchResults.value = mergeRenderedItems(searchResults.value, items)
+                activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, items)
+                return
+              }
+              case 'no-results':
+                if (currentSearchId.value === chunk.sessionId && chunk.shouldShrink) {
+                  applyNoResults()
+                }
+                return
+              case 'complete':
+                if (currentSearchId.value === chunk.sessionId) {
+                  applySearchEnd({
+                    searchId: chunk.sessionId,
+                    cancelled: chunk.cancelled,
+                    activate: chunk.activate,
+                    sources: chunk.sources
+                  })
+                }
+            }
+          },
+          onError: (error) => {
+            streamEnded = true
+            if (activeSearchStreamController === controller) {
+              activeSearchStreamController = null
+            }
+            if (currentSequence !== searchSequence) return
+            if (!snapshotSettled) {
+              rejectBeforeSnapshot(error)
+              return
+            }
+            loading.value = false
+            recommendationPending.value = false
+            devLog('Search stream failed:', error)
+          },
+          onEnd: () => {
+            streamEnded = true
+            if (activeSearchStreamController === controller) {
+              activeSearchStreamController = null
+            }
+            if (currentSequence === searchSequence && !snapshotSettled) {
+              rejectBeforeSnapshot(new Error('Search stream ended before its snapshot'))
+            }
+          }
+        }
+      )
+    } catch (error) {
+      rejectBeforeSnapshot(error)
+    }
+
+    if (controller) {
+      if (currentSequence !== searchSequence) {
+        controller.cancel()
+        rejectBeforeSnapshot(searchStreamSupersededError)
+      } else if (!streamEnded) {
+        activeSearchStreamController = controller
+      }
+    }
+
+    try {
+      return await snapshotPromise
+    } finally {
+      if (cancelPendingSearchSnapshot === supersede) {
+        cancelPendingSearchSnapshot = null
+      }
+    }
   }
 
   async function executeSearch(options: ExecuteSearchOptions = {}): Promise<void> {
@@ -826,15 +953,18 @@ export function useSearch(
       // This prevents the jarring collapse-then-expand animation
 
       const RECOMMENDATION_TIMEOUT_MS = 400
+      recommendationTimeoutSequence = currentSequence
       recommendationTimeoutId = setTimeout(() => {
+        if (recommendationTimeoutSequence !== currentSequence) return
         if (recommendationPending.value && searchResults.value.length === 0) {
           resetSearchState()
         }
         recommendationTimeoutId = null
+        recommendationTimeoutSequence = null
       }, RECOMMENDATION_TIMEOUT_MS)
 
       try {
-        inFlightQueryKey = queryKey
+        markInFlightQuery(queryKey, currentSequence)
         const query = buildCurrentQuery('', inputs, queryContext)
         inputTransport.broadcast({ input: query.text, query, source: 'renderer' })
 
@@ -844,20 +974,15 @@ export function useSearch(
         })
 
         const requestStartedAt = performance.now()
-        const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
-          query
-        })
-        logDebug('[useSearch] Recommendation IPC duration:', {
+        const initialResult = await requestSearchSnapshot(query, currentSequence)
+        logDebug('[useSearch] Recommendation stream snapshot duration:', {
           ms: Math.round(performance.now() - requestStartedAt),
           sessionId: initialResult?.sessionId
         })
-        clearRecommendationTimeout()
-        if (inFlightQueryKey === queryKey) {
-          inFlightQueryKey = null
-        }
+        clearRecommendationTimeout(currentSequence)
+        clearInFlightQuery(queryKey, currentSequence)
 
         if (currentSequence !== searchSequence) {
-          recommendationPending.value = false
           logDebug('[useSearch] Discarding stale recommendation result', {
             sessionId: initialResult?.sessionId,
             sequence: currentSequence,
@@ -874,10 +999,9 @@ export function useSearch(
         loading.value = false
         recommendationPending.value = false
       } catch (error) {
-        clearRecommendationTimeout()
-        if (inFlightQueryKey === queryKey) {
-          inFlightQueryKey = null
-        }
+        clearRecommendationTimeout(currentSequence)
+        clearInFlightQuery(queryKey, currentSequence)
+        if (error === searchStreamSupersededError) return
         devLog('Recommendation search failed:', error)
         resetSearchState()
       }
@@ -910,7 +1034,7 @@ export function useSearch(
     // Results will be replaced when new search completes
 
     try {
-      inFlightQueryKey = queryKey
+      markInFlightQuery(queryKey, currentSequence)
       const query = buildCurrentQuery(searchVal.value, inputs, queryContext)
 
       logDebug('[useSearch] Sending search query:', {
@@ -925,16 +1049,12 @@ export function useSearch(
       })
 
       const requestStartedAt = performance.now()
-      const initialResult: TuffSearchResult = await transport.send(CoreBoxEvents.search.query, {
-        query
-      })
-      logDebug('[useSearch] Search IPC duration:', {
+      const initialResult = await requestSearchSnapshot(query, currentSequence)
+      logDebug('[useSearch] Search stream snapshot duration:', {
         ms: Math.round(performance.now() - requestStartedAt),
         sessionId: initialResult?.sessionId
       })
-      if (inFlightQueryKey === queryKey) {
-        inFlightQueryKey = null
-      }
+      clearInFlightQuery(queryKey, currentSequence)
 
       logDebug('[useSearch] Search result received:', {
         sessionId: initialResult.sessionId,
@@ -961,31 +1081,12 @@ export function useSearch(
 
       activeActivations.value = initialResult.activate?.length ? initialResult.activate : null
 
-      if (currentSearchId.value) {
-        const pending = pendingSearchEndById.get(currentSearchId.value)
-        if (pending) {
-          pendingSearchEndById.delete(currentSearchId.value)
-          applySearchEnd(pending)
-        }
-      }
-
       searchResults.value = filteredItems
       if (options.preserveSelection) {
         const preservedIndex = selectedItemId
           ? res.value.findIndex((item) => item.id === selectedItemId)
           : -1
         boxOptions.focus = preservedIndex >= 0 ? preservedIndex : res.value.length > 0 ? 0 : -1
-      }
-      if (currentSearchId.value) {
-        const pendingUpdates = pendingSearchUpdatesById.get(currentSearchId.value)
-        if (pendingUpdates && pendingUpdates.length > 0) {
-          pendingSearchUpdatesById.delete(currentSearchId.value)
-          logDebug('[useSearch] Applying queued search updates:', {
-            sessionId: currentSearchId.value,
-            itemCount: pendingUpdates.length
-          })
-          searchResults.value = mergeRenderedItems(searchResults.value, pendingUpdates)
-        }
       }
       logDebug('[useSearch] searchResults updated:', searchResults.value.length, 'items')
 
@@ -994,10 +1095,9 @@ export function useSearch(
         window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
       })
     } catch (error) {
+      clearInFlightQuery(queryKey, currentSequence)
+      if (error === searchStreamSupersededError) return
       devLog('Search initiation failed:', error)
-      if (inFlightQueryKey === queryKey) {
-        inFlightQueryKey = null
-      }
       searchResults.value = []
       searchResult.value = null
       currentSearchId.value = null
@@ -1045,7 +1145,7 @@ export function useSearch(
       indexCommitRefreshPending = false
       return
     }
-    if (loading.value || inFlightQueryKey !== null) {
+    if (loading.value || inFlightQuery !== null) {
       scheduleIndexCommitRefresh()
       return
     }
@@ -1479,48 +1579,6 @@ export function useSearch(
 
   const activeItem = computed(() => res.value[boxOptions.focus])
 
-  const unregSearchUpdate = transport.on(CoreBoxEvents.search.update, (data) => {
-    const filteredItems = limitRenderedItems(filterDetachedItems(data.items ?? []))
-    const itemCount = filteredItems.length
-    if (!data.searchId) return
-    if (!currentSearchId.value) {
-      if (itemCount > 0) {
-        const queued = pendingSearchUpdatesById.get(data.searchId) ?? []
-        pendingSearchUpdatesById.set(data.searchId, mergeRenderedItems(queued, filteredItems))
-        logDebug('[useSearch] Queued search update (no active session):', {
-          sessionId: data.searchId,
-          itemCount,
-          queuedTotal: queued.length + itemCount
-        })
-      } else {
-        logDebug('[useSearch] Ignoring empty search update (no active session):', {
-          sessionId: data.searchId
-        })
-      }
-      return
-    }
-    if (data.searchId !== currentSearchId.value) {
-      logDebug('[useSearch] Ignoring search update (session mismatch):', {
-        sessionId: data.searchId,
-        currentSessionId: currentSearchId.value,
-        itemCount
-      })
-      return
-    }
-    // Skip empty updates to avoid unnecessary re-renders
-    if (filteredItems.length === 0) {
-      logDebug('[useSearch] Ignoring empty search update:', { sessionId: data.searchId })
-      return
-    }
-    logDebug('[useSearch] Applying search update:', {
-      sessionId: data.searchId,
-      itemCount,
-      currentTotal: searchResults.value.length
-    })
-    searchResults.value = mergeRenderedItems(searchResults.value, filteredItems)
-    activeActivations.value = refreshActiveWidgetFeature(activeActivations.value, filteredItems)
-  })
-
   const unregContextActionsOpen = transport.on(
     CoreBoxEvents.contextActions.open,
     async (payload) => {
@@ -1539,7 +1597,6 @@ export function useSearch(
 
       await handleSearchImmediate({ force: true })
       window.dispatchEvent(new CustomEvent(CoreBoxEvents.input.focus.toEventName()))
-      window.dispatchEvent(new CustomEvent(CoreBoxRetainedEvents.legacy.focusInput.toEventName()))
     }
   )
 
@@ -1552,7 +1609,6 @@ export function useSearch(
     searchVal.value = nextValue
     void handleSearchImmediate({ force: true })
     window.dispatchEvent(new CustomEvent(CoreBoxEvents.input.focus.toEventName()))
-    window.dispatchEvent(new CustomEvent(CoreBoxRetainedEvents.legacy.focusInput.toEventName()))
   })
 
   let coreBoxShownHandler: (() => void) | null = null
@@ -1593,13 +1649,11 @@ export function useSearch(
   })
 
   onBeforeUnmount(() => {
+    cancelActiveSearchStream()
     stopIndexCommitStream()
-    unregSearchUpdate()
     unregContextActionsOpen()
     unregSetQuery()
-    unregSearchEnd()
     unregItemClear()
-    unregNoResults()
 
     if (coreBoxShownHandler) {
       window.removeEventListener('corebox:shown', coreBoxShownHandler)
@@ -1610,39 +1664,7 @@ export function useSearch(
     clearRecommendationTimeout()
   })
 
-  const unregSearchEnd = transport.on(CoreBoxEvents.search.end, (payload) => {
-    if (!payload || typeof payload !== 'object') return
-    if (!payload.searchId) return
-
-    if (!currentSearchId.value) {
-      pendingSearchEndById.set(payload.searchId, payload as SearchEndData)
-      logDebug('[useSearch] Queued search end (no active session):', {
-        sessionId: payload.searchId,
-        cancelled: Boolean(payload.cancelled)
-      })
-      return
-    }
-
-    if (payload.searchId === currentSearchId.value) {
-      const activateCount = Array.isArray(payload.activate) ? payload.activate.length : 0
-      const sourceCount = Array.isArray(payload.sources) ? payload.sources.length : 0
-      logDebug('[useSearch] Applying search end:', {
-        sessionId: payload.searchId,
-        cancelled: Boolean(payload.cancelled),
-        activateCount,
-        sourceCount
-      })
-      applySearchEnd(payload as SearchEndData)
-      return
-    }
-
-    logDebug('[useSearch] Ignoring search end (session mismatch):', {
-      sessionId: payload.searchId,
-      currentSessionId: currentSearchId.value
-    })
-  })
-
-  const applySearchEnd = (data: SearchEndData): void => {
+  function applySearchEnd(data: SearchEndData): void {
     if (data.cancelled) {
       resetSearchState()
       activeActivations.value = null
@@ -1666,9 +1688,7 @@ export function useSearch(
     resetSearchState()
   })
 
-  const unregNoResults = transport.on(CoreBoxEvents.search.noResults, (payload) => {
-    if (!payload || typeof payload !== 'object') return
-    if (!payload.shouldShrink) return
+  function applyNoResults(): void {
     if (searchVal.value || activeActivations.value?.length) return
 
     recommendationPending.value = false
@@ -1680,7 +1700,7 @@ export function useSearch(
     }
 
     window.dispatchEvent(new CustomEvent('corebox:layout-refresh'))
-  })
+  }
 
   return {
     searchVal,

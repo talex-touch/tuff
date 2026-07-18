@@ -210,7 +210,7 @@ function withPluginSdkapiPayload(payload: unknown, sdkapi?: number): unknown {
   }
 }
 
-function createRemovedChannelError(capability: 'channel.raw' | 'channel.sendSync'): Error {
+function createRemovedChannelError(capability: 'channel.raw'): Error {
   return new Error(
     `[Plugin API] ${capability} was removed by the core-app hard-cut. Migrate this plugin to typed transport send/on APIs.`
   )

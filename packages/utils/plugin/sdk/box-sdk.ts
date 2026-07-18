@@ -4,10 +4,10 @@
  * Provides a unified API for plugins to control the CoreBox window behavior,
  * including visibility, size, input field control, and input value access.
  */
-import type { PluginChannelClient } from './channel-client'
-import { createPluginTuffTransport } from '../../transport'
-import { CoreBoxEvents } from '../../transport/events'
-import { ensureRendererChannel } from './channel'
+import type { PluginChannelClient } from "./channel-client";
+import { createPluginTuffTransport } from "../../transport";
+import { CoreBoxEvents } from "../../transport/events";
+import { ensureRendererChannel } from "./channel";
 
 /**
  * Clipboard content type flags for binary combination
@@ -25,16 +25,16 @@ export const ClipboardTypePresets = {
   TEXT_ONLY: ClipboardType.TEXT,
   TEXT_AND_IMAGE: ClipboardType.TEXT | ClipboardType.IMAGE,
   ALL: ClipboardType.TEXT | ClipboardType.IMAGE | ClipboardType.FILE,
-} as const
+} as const;
 
 /**
  * Expand options for CoreBox window
  */
 export interface BoxExpandOptions {
   /** Number of items to show (affects window height) */
-  length?: number
+  length?: number;
   /** Force maximum expansion */
-  forceMax?: boolean
+  forceMax?: boolean;
 }
 
 /**
@@ -64,7 +64,7 @@ export interface BoxSDK {
    * plugin.box.hide()
    * ```
    */
-  hide: () => void
+  hide: () => void;
 
   /**
    * Shows the CoreBox window
@@ -74,7 +74,7 @@ export interface BoxSDK {
    * plugin.box.show()
    * ```
    */
-  show: () => void
+  show: () => void;
 
   /**
    * Expands the CoreBox window
@@ -93,7 +93,7 @@ export interface BoxSDK {
    * plugin.box.expand()
    * ```
    */
-  expand: (options?: BoxExpandOptions) => Promise<void>
+  expand: (options?: BoxExpandOptions) => Promise<void>;
 
   /**
    * Shrinks the CoreBox window to compact size
@@ -103,7 +103,7 @@ export interface BoxSDK {
    * plugin.box.shrink()
    * ```
    */
-  shrink: () => Promise<void>
+  shrink: () => Promise<void>;
 
   /**
    * Hides the input field in CoreBox
@@ -113,7 +113,7 @@ export interface BoxSDK {
    * plugin.box.hideInput()
    * ```
    */
-  hideInput: () => Promise<void>
+  hideInput: () => Promise<void>;
 
   /**
    * Shows the input field in CoreBox
@@ -123,7 +123,7 @@ export interface BoxSDK {
    * plugin.box.showInput()
    * ```
    */
-  showInput: () => Promise<void>
+  showInput: () => Promise<void>;
 
   /**
    * Gets the current input value from CoreBox search field
@@ -136,7 +136,7 @@ export interface BoxSDK {
    * console.log('Current input:', input)
    * ```
    */
-  getInput: () => Promise<string>
+  getInput: () => Promise<string>;
 
   /**
    * Sets the CoreBox search input to the specified value
@@ -146,7 +146,7 @@ export interface BoxSDK {
    * await plugin.box.setInput('hello world')
    * ```
    */
-  setInput: (value: string) => Promise<void>
+  setInput: (value: string) => Promise<void>;
 
   /**
    * Clears the CoreBox search input
@@ -156,7 +156,7 @@ export interface BoxSDK {
    * await plugin.box.clearInput()
    * ```
    */
-  clearInput: () => Promise<void>
+  clearInput: () => Promise<void>;
 
   /**
    * Enable input monitoring for attached UI view
@@ -164,12 +164,12 @@ export interface BoxSDK {
    * @example
    * ```typescript
    * await plugin.box.allowInput()
-   * plugin.channel.regChannel('core-box:input-change', ({ data }) => {
+   * plugin.channel.regChannel('core-box:input:change', ({ data }) => {
    *   console.log('Input changed:', data.input)
    * })
    * ```
    */
-  allowInput: () => Promise<void>
+  allowInput: () => Promise<void>;
 
   /**
    * Enable clipboard monitoring for specified type combination
@@ -185,7 +185,7 @@ export interface BoxSDK {
    * await plugin.box.allowClipboard(ClipboardTypePresets.TEXT_AND_IMAGE)
    * ```
    */
-  allowClipboard: (types: number) => Promise<void>
+  allowClipboard: (types: number) => Promise<void>;
 
   /**
    * Set CoreBox window to a specific height (60-800px)
@@ -198,7 +198,7 @@ export interface BoxSDK {
    * await plugin.box.setHeight(400)
    * ```
    */
-  setHeight: (height: number) => Promise<void>
+  setHeight: (height: number) => Promise<void>;
 
   /**
    * Set CoreBox vertical position as percentage from top (0.1-0.9)
@@ -211,14 +211,19 @@ export interface BoxSDK {
    * await plugin.box.setPositionOffset(0.4)
    * ```
    */
-  setPositionOffset: (topPercent: number) => Promise<void>
+  setPositionOffset: (topPercent: number) => Promise<void>;
 
   /**
    * Get current CoreBox window bounds
    *
    * @returns Window bounds { x, y, width, height }
    */
-  getBounds: () => Promise<{ x: number, y: number, width: number, height: number }>
+  getBounds: () => Promise<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }>;
 }
 
 /**
@@ -230,143 +235,141 @@ export interface BoxSDK {
  * @internal
  */
 export function createBoxSDK(channel: PluginChannelClient): BoxSDK {
-  const transport = createPluginTuffTransport(channel)
+  const transport = createPluginTuffTransport(channel);
 
   return {
     hide(): void {
       transport.send(CoreBoxEvents.ui.hide, undefined).catch((error: any) => {
-        console.error('[Box SDK] Failed to hide CoreBox:', error)
-      })
+        console.error("[Box SDK] Failed to hide CoreBox:", error);
+      });
     },
 
     show(): void {
       transport.send(CoreBoxEvents.ui.show).catch((error: any) => {
-        console.error('[Box SDK] Failed to show CoreBox:', error)
-      })
+        console.error("[Box SDK] Failed to show CoreBox:", error);
+      });
     },
 
     async expand(options?: BoxExpandOptions): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.ui.expand, options || {})
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to expand CoreBox:', error)
-        throw error
+        await transport.send(CoreBoxEvents.ui.expand, options || {});
+      } catch (error) {
+        console.error("[Box SDK] Failed to expand CoreBox:", error);
+        throw error;
       }
     },
 
     async shrink(): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.ui.expand, { mode: 'collapse' })
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to shrink CoreBox:', error)
-        throw error
+        await transport.send(CoreBoxEvents.ui.expand, { mode: "collapse" });
+      } catch (error) {
+        console.error("[Box SDK] Failed to shrink CoreBox:", error);
+        throw error;
       }
     },
 
     async hideInput(): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.ui.hideInput)
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to hide input:', error)
-        throw error
+        await transport.send(CoreBoxEvents.ui.hideInput);
+      } catch (error) {
+        console.error("[Box SDK] Failed to hide input:", error);
+        throw error;
       }
     },
 
     async showInput(): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.ui.showInput)
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to show input:', error)
-        throw error
+        await transport.send(CoreBoxEvents.ui.showInput);
+      } catch (error) {
+        console.error("[Box SDK] Failed to show input:", error);
+        throw error;
       }
     },
 
     async getInput(): Promise<string> {
       try {
-        const result = await transport.send(CoreBoxEvents.input.get)
-        return result?.input || ''
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to get input:', error)
-        throw error
+        const result = await transport.send(CoreBoxEvents.input.get);
+        return result?.input || "";
+      } catch (error) {
+        console.error("[Box SDK] Failed to get input:", error);
+        throw error;
       }
     },
 
     async setInput(value: string): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.input.set, { value })
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to set input:', error)
-        throw error
+        await transport.send(CoreBoxEvents.input.set, { value });
+      } catch (error) {
+        console.error("[Box SDK] Failed to set input:", error);
+        throw error;
       }
     },
 
     async clearInput(): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.input.clear)
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to clear input:', error)
-        throw error
+        await transport.send(CoreBoxEvents.input.clear);
+      } catch (error) {
+        console.error("[Box SDK] Failed to clear input:", error);
+        throw error;
       }
     },
 
     async allowInput(): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.inputMonitoring.allow)
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to enable input monitoring:', error)
-        throw error
+        await transport.send(CoreBoxEvents.inputMonitoring.allow);
+      } catch (error) {
+        console.error("[Box SDK] Failed to enable input monitoring:", error);
+        throw error;
       }
     },
 
     async allowClipboard(types: number): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.clipboard.allow, { types })
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to enable clipboard monitoring:', error)
-        throw error
+        await transport.send(CoreBoxEvents.clipboard.allow, { types });
+      } catch (error) {
+        console.error(
+          "[Box SDK] Failed to enable clipboard monitoring:",
+          error,
+        );
+        throw error;
       }
     },
 
     async setHeight(height: number): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.layout.setHeight, { height })
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to set height:', error)
-        throw error
+        await transport.send(CoreBoxEvents.layout.setHeight, { height });
+      } catch (error) {
+        console.error("[Box SDK] Failed to set height:", error);
+        throw error;
       }
     },
 
     async setPositionOffset(topPercent: number): Promise<void> {
       try {
-        await transport.send(CoreBoxEvents.layout.setPositionOffset, { topPercent })
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to set position offset:', error)
-        throw error
+        await transport.send(CoreBoxEvents.layout.setPositionOffset, {
+          topPercent,
+        });
+      } catch (error) {
+        console.error("[Box SDK] Failed to set position offset:", error);
+        throw error;
       }
     },
 
-    async getBounds(): Promise<{ x: number, y: number, width: number, height: number }> {
+    async getBounds(): Promise<{
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }> {
       try {
-        const result = await transport.send(CoreBoxEvents.layout.getBounds)
-        return result.bounds
-      }
-      catch (error) {
-        console.error('[Box SDK] Failed to get bounds:', error)
-        throw error
+        const result = await transport.send(CoreBoxEvents.layout.getBounds);
+        return result.bounds;
+      } catch (error) {
+        console.error("[Box SDK] Failed to get bounds:", error);
+        throw error;
       }
     },
-  }
+  };
 }
 
 /**
@@ -384,6 +387,8 @@ export function createBoxSDK(channel: PluginChannelClient): BoxSDK {
  * ```
  */
 export function useBox(): BoxSDK {
-  const channel = ensureRendererChannel('[Box SDK] Channel not available. Make sure this is called in a plugin context.')
-  return createBoxSDK(channel)
+  const channel = ensureRendererChannel(
+    "[Box SDK] Channel not available. Make sure this is called in a plugin context.",
+  );
+  return createBoxSDK(channel);
 }

@@ -1,0 +1,898 @@
+{
+  "schemaVersion": "legacy-alias-evidence/v1",
+  "generatedAt": "2026-07-17T19:00:30.772Z",
+  "repository": {
+    "version": "2.4.13-beta.14",
+    "revision": "41f08e8fdf8bb9d5b7bebec5a794ae3e9090085d"
+  },
+  "registry": {
+    "aliasCount": 71,
+    "familyCounts": {
+      "core-box": 40,
+      "auth": 14,
+      "account": 4,
+      "sync": 3,
+      "terminal": 5,
+      "opener": 5
+    }
+  },
+  "aliases": [
+    {
+      "family": "core-box",
+      "legacyEvent": "beginner:shortcut-triggered",
+      "canonicalEvent": "beginner:shortcut:triggered",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "corebox:focus-input",
+      "canonicalEvent": "core-box:input:focus",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxRenderer",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:get-input",
+      "canonicalEvent": "core-box:input:get",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:set-input",
+      "canonicalEvent": "core-box:input:set",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:clear-input",
+      "canonicalEvent": "core-box:input:clear",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:set-query",
+      "canonicalEvent": "core-box:input:set-query",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:set-input-visibility",
+      "canonicalEvent": "core-box:input:set-visibility",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:request-input-value",
+      "canonicalEvent": "core-box:input:request-value",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxRenderer",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "corebox:show-history",
+      "canonicalEvent": "core-box:preview-history:show",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxPreviewHistory",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "corebox:hide-history",
+      "canonicalEvent": "core-box:preview-history:hide",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxPreviewHistory",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "corebox:copy-preview",
+      "canonicalEvent": "core-box:preview:copy",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxPreview",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "corebox:open-action-panel",
+      "canonicalEvent": "core-box:action-panel:open",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxActionPanel",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "meta-overlay:action-executed",
+      "canonicalEvent": "core-box:meta-overlay:action-executed",
+      "direction": "main-to-plugin",
+      "sourceModule": "MetaOverlayManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "meta-overlay:item-action",
+      "canonicalEvent": "core-box:meta-overlay:item-action",
+      "direction": "main-to-renderer",
+      "sourceModule": "MetaOverlayManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "meta-overlay:flow-transfer",
+      "canonicalEvent": "core-box:meta-overlay:flow-transfer",
+      "direction": "main-to-renderer",
+      "sourceModule": "MetaOverlayManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:show",
+      "canonicalEvent": "core-box:ui:show",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:hide",
+      "canonicalEvent": "core-box:ui:hide",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:expand",
+      "canonicalEvent": "core-box:ui:expand",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:focus-window",
+      "canonicalEvent": "core-box:ui:focus-window",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:forward-key-event",
+      "canonicalEvent": "core-box:ui:forward-key-event",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxKeyTransport",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:get-ui-view-state",
+      "canonicalEvent": "core-box:ui:get-ui-view-state",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxKeyTransport",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:shortcut-triggered",
+      "canonicalEvent": "core-box:ui:shortcut-triggered",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxWindowManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:ui-mode-exited",
+      "canonicalEvent": "core-box:ui:mode-exited",
+      "direction": "main-to-renderer",
+      "sourceModule": "CoreBoxManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:hide-input",
+      "canonicalEvent": "core-box:ui:hide-input",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:show-input",
+      "canonicalEvent": "core-box:ui:show-input",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:set-height",
+      "canonicalEvent": "core-box:layout:set-height",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:set-position-offset",
+      "canonicalEvent": "core-box:layout:set-position-offset",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:get-bounds",
+      "canonicalEvent": "core-box:layout:get-bounds",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:enter-ui-mode",
+      "canonicalEvent": "core-box:ui-mode:enter",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:exit-ui-mode",
+      "canonicalEvent": "core-box:ui-mode:exit",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:allow-input",
+      "canonicalEvent": "core-box:input-monitoring:allow",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:allow-clipboard",
+      "canonicalEvent": "core-box:clipboard:allow",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:deactivate-provider",
+      "canonicalEvent": "core-box:provider:deactivate",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:deactivate-providers",
+      "canonicalEvent": "core-box:provider:deactivate-all",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:get-activated-providers",
+      "canonicalEvent": "core-box:provider:get-activated",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:get-provider-details",
+      "canonicalEvent": "core-box:provider:get-details",
+      "direction": "renderer-to-main",
+      "sourceModule": "CoreBoxIpcManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:ui-resume",
+      "canonicalEvent": "core-box:ui:resume",
+      "direction": "main-to-plugin",
+      "sourceModule": "CoreBoxWindowManager",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:get-recommendations",
+      "canonicalEvent": "core-box:recommendation:get",
+      "direction": "renderer-to-main",
+      "sourceModule": "SearchEngineCore",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:aggregate-time-stats",
+      "canonicalEvent": "core-box:recommendation:aggregate-time-stats",
+      "direction": "renderer-to-main",
+      "sourceModule": "SearchEngineCore",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "core-box",
+      "legacyEvent": "core-box:is-pinned",
+      "canonicalEvent": "core-box:recommendation:is-pinned",
+      "direction": "renderer-to-main",
+      "sourceModule": "SearchEngineCore",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:get-state",
+      "canonicalEvent": "auth:session:get-state",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:login",
+      "canonicalEvent": "auth:session:login",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:logout",
+      "canonicalEvent": "auth:session:logout",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:update-profile",
+      "canonicalEvent": "auth:profile:update",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:update-avatar",
+      "canonicalEvent": "auth:profile:update-avatar",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:attest-device",
+      "canonicalEvent": "auth:device:attest",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:nexus-request",
+      "canonicalEvent": "auth:nexus:request",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:nexus-upload",
+      "canonicalEvent": "auth:nexus:upload",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:state-changed",
+      "canonicalEvent": "auth:session:state-changed",
+      "direction": "main-to-renderer",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:manual-token",
+      "canonicalEvent": "auth:token:manual",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:request-stepup",
+      "canonicalEvent": "auth:step-up:request",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:get-stepup-token",
+      "canonicalEvent": "auth:step-up:get-token",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:clear-stepup-token",
+      "canonicalEvent": "auth:step-up:clear-token",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "auth",
+      "legacyEvent": "auth:get-fingerprint-hash",
+      "canonicalEvent": "auth:device:get-fingerprint-hash",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "account",
+      "legacyEvent": "account:get-auth-token",
+      "canonicalEvent": "account:auth:get-token",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "account",
+      "legacyEvent": "account:get-device-id",
+      "canonicalEvent": "account:device:get-id",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "account",
+      "legacyEvent": "account:get-sync-enabled",
+      "canonicalEvent": "account:sync:get-enabled",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "account",
+      "legacyEvent": "account:record-sync-activity",
+      "canonicalEvent": "account:sync:record-activity",
+      "direction": "renderer-to-main",
+      "sourceModule": "AuthModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "sync",
+      "legacyEvent": "sync:start",
+      "canonicalEvent": "sync:lifecycle:start",
+      "direction": "renderer-to-main",
+      "sourceModule": "SyncModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "sync",
+      "legacyEvent": "sync:stop",
+      "canonicalEvent": "sync:lifecycle:stop",
+      "direction": "renderer-to-main",
+      "sourceModule": "SyncModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "sync",
+      "legacyEvent": "sync:trigger",
+      "canonicalEvent": "sync:lifecycle:trigger",
+      "direction": "renderer-to-main",
+      "sourceModule": "SyncModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "terminal",
+      "legacyEvent": "terminal:create",
+      "canonicalEvent": "terminal:session:create",
+      "direction": "renderer-to-main",
+      "sourceModule": "TerminalModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "terminal",
+      "legacyEvent": "terminal:write",
+      "canonicalEvent": "terminal:session:write",
+      "direction": "renderer-to-main",
+      "sourceModule": "TerminalModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "terminal",
+      "legacyEvent": "terminal:kill",
+      "canonicalEvent": "terminal:session:kill",
+      "direction": "renderer-to-main",
+      "sourceModule": "TerminalModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "terminal",
+      "legacyEvent": "terminal:data",
+      "canonicalEvent": "terminal:session:data",
+      "direction": "main-to-renderer",
+      "sourceModule": "TerminalModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "terminal",
+      "legacyEvent": "terminal:exit",
+      "canonicalEvent": "terminal:session:exit",
+      "direction": "main-to-renderer",
+      "sourceModule": "TerminalModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "opener",
+      "legacyEvent": "@open-plugin",
+      "canonicalEvent": "plugin:opener:open",
+      "direction": "main-to-renderer",
+      "sourceModule": "AddonOpenerModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "opener",
+      "legacyEvent": "@install-plugin",
+      "canonicalEvent": "plugin:install:request",
+      "direction": "renderer-to-main",
+      "sourceModule": "AddonOpenerModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "opener",
+      "legacyEvent": "plugin:install-dev",
+      "canonicalEvent": "plugin:install:dev",
+      "direction": "renderer-to-main",
+      "sourceModule": "AddonOpenerModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "opener",
+      "legacyEvent": "drop:plugin",
+      "canonicalEvent": "plugin:drop:install",
+      "direction": "renderer-to-main",
+      "sourceModule": "AddonOpenerModule",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    },
+    {
+      "family": "opener",
+      "legacyEvent": "openers:resolve",
+      "canonicalEvent": "opener:app:resolve",
+      "direction": "renderer-to-main",
+      "sourceModule": "FileProvider",
+      "removedIn": "2.4.13-beta.14",
+      "sourceHits": {
+        "production": 0,
+        "testFixture": 0
+      }
+    }
+  ],
+  "sourceAudit": {
+    "roots": [
+      "apps/core-app/src",
+      "packages/utils",
+      "plugins"
+    ],
+    "scannedProductionFiles": 1683,
+    "scannedTestFixtureFiles": 544,
+    "productionHits": [],
+    "testFixtureHits": []
+  },
+  "runtimeObservation": {
+    "status": "not-collected",
+    "hitCount": null,
+    "observedFrom": null,
+    "observedUntil": null,
+    "source": null
+  },
+  "operatorDecision": {
+    "type": "explicit-hard-cut",
+    "decidedAt": "2026-07-17T19:00:30.772Z"
+  },
+  "warnings": [
+    "Runtime legacy-hit observation was not collected; no zero-hit claim is made."
+  ]
+}

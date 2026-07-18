@@ -3,32 +3,25 @@ import type {
   CachedUpdateRecord,
   GitHubRelease,
   UpdateCheckResult,
+  UpdateLifecycleSnapshot,
   UpdateSettings,
-  UpdateUserAction,
+  UpdateUserAction
 } from '../../../types/update'
 
 export interface UpdateOpResponse<T = void> {
   success: boolean
   data?: T
   error?: string
+  errorCode?: string
+  retryable?: boolean
+  snapshot?: UpdateLifecycleSnapshot
 }
 
 export interface UpdateCheckRequest {
   force?: boolean
 }
 
-export type UpdateGetStatusResponse = UpdateOpResponse<{
-  enabled: boolean
-  frequency: UpdateSettings['frequency']
-  source: UpdateSettings['source']
-  channel: AppPreviewChannel
-  polling: boolean
-  lastCheck: number | null
-  downloadReady?: boolean
-  downloadReadyVersion?: string | null
-  downloadTaskId?: string | null
-  autoInstallDownloadedUpdates?: boolean
-}>
+export type UpdateGetStatusResponse = UpdateOpResponse<UpdateLifecycleSnapshot>
 
 export interface UpdateCachedReleaseRequest {
   channel?: AppPreviewChannel
@@ -39,7 +32,9 @@ export interface UpdateRecordActionRequest {
   action: UpdateUserAction
 }
 
-export type UpdateDownloadRequest = GitHubRelease
+export interface UpdateDownloadRequest {
+  tag: string
+}
 
 export type UpdateDownloadResponse = UpdateOpResponse<{
   taskId?: string
@@ -65,6 +60,7 @@ export interface UpdateAvailablePayload {
   hasUpdate: boolean
   release: GitHubRelease
   source: string
+  snapshot: UpdateLifecycleSnapshot
   channel?: AppPreviewChannel
 }
 
