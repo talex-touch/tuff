@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-landing-container {
-  opacity: 0;
+  opacity: 1;
   filter: blur(32px);
   transform: translate3d(0, 48px, 0);
   transition:
