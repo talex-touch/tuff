@@ -1,8 +1,9 @@
+import { spawnSync } from 'node:child_process'
 import { promises as fs } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   collectFiles,
@@ -119,6 +120,59 @@ describe('plugin source package audit contracts', () => {
 
     for (const repeat of ['0', '3', '1.5', 'not-a-number'])
       expect(() => parseArgs(['--repeat', repeat])).toThrow('--repeat must be 1 or 2.')
+  })
+
+  it('loads the audit module through Node and tsx without resolving unbuilt CLI source, then verifies the built runtime contract', async () => {
+    const fixtureRoot = await createTemporaryDirectory('plugin-source-runtime-loader-')
+    const preloadPath = path.join(fixtureRoot, 'register-loader.mjs')
+    const loaderPath = path.join(fixtureRoot, 'reject-cli-source-loader.mjs')
+    const forbiddenSourcePrefix = pathToFileURL(
+      `${path.join(repoRoot, 'packages', 'tuff-cli-core', 'src')}${path.sep}`,
+    ).href
+
+    await Promise.all([
+      fs.writeFile(
+        preloadPath,
+        `import { register } from 'node:module'\nregister(new URL('./reject-cli-source-loader.mjs', import.meta.url))\n`,
+      ),
+      fs.writeFile(
+        loaderPath,
+        `const forbiddenSourcePrefix = ${JSON.stringify(forbiddenSourcePrefix)}\nexport async function resolve(specifier, context, nextResolve) {\n  const resolved = await nextResolve(specifier, context)\n  if (resolved.url.startsWith(forbiddenSourcePrefix))\n    throw new Error('audit module eagerly resolved unbuilt tuff-cli-core source: ' + resolved.url)\n  return resolved\n}\n`,
+      ),
+    ])
+
+    // Static imports cannot exercise this subprocess-only Node/tsx runtime-loading boundary.
+    const childProgram = `
+      await import('./scripts/plugin-source-package-audit.ts')
+      const runtime = await import('./packages/tuff-cli-core/dist/index.js')
+      for (const exportName of [
+        'createPluginPublisherSignature',
+        'scanBuiltPluginPackage',
+        'readTpexSecurityScanInput',
+      ]) {
+        if (typeof runtime[exportName] !== 'function')
+          throw new TypeError('missing built runtime export: ' + exportName)
+      }
+      process.stdout.write('audit-imported-with-built-runtime-contract')
+    `
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        'tsx',
+        '--import',
+        pathToFileURL(preloadPath).href,
+        '--input-type=module',
+        '--eval',
+        childProgram,
+      ],
+      { cwd: repoRoot, encoding: 'utf8' },
+    )
+
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(result.stdout).toBe('audit-imported-with-built-runtime-contract')
   })
 
   it('copies only canonical source inputs into an isolated plugin workspace', async () => {

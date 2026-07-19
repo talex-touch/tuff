@@ -1,4 +1,5 @@
 import type { PluginPublisherSigningBundle } from '../packages/tuff-cli-core/src/plugin-signer'
+import type { TpexSecurityScanInput } from '../packages/tuff-cli-core/src/tpex-security-reader'
 import type { PluginSecurityScanReport } from '../packages/utils/plugin/security-scan'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash, generateKeyPairSync } from 'node:crypto'
@@ -9,11 +10,16 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
-import {
-  createPluginPublisherSignature,
-} from '../packages/tuff-cli-core/src/plugin-signer'
-import { scanBuiltPluginPackage } from '../packages/tuff-cli-core/src/security-scan'
-import { readTpexSecurityScanInput } from '../packages/tuff-cli-core/src/tpex-security-reader'
+
+interface AuditRuntime {
+  createPluginPublisherSignature: (
+    packagePath: string,
+    channel: 'RELEASE',
+    options: { privateKeyPem?: string, keyId?: string },
+  ) => PluginPublisherSigningBundle
+  scanBuiltPluginPackage: (input: { packagePath: string }) => PluginSecurityScanReport
+  readTpexSecurityScanInput: (packagePath: string) => TpexSecurityScanInput
+}
 
 interface CommandSpec {
   command: string
@@ -442,10 +448,11 @@ function resolveSigningOptions(ephemeralSigning: boolean): SigningOptions {
 }
 
 function createSigningBundle(
+  runtime: AuditRuntime,
   artifactPath: string,
   signing: SigningOptions,
 ): PluginPublisherSigningBundle {
-  return createPluginPublisherSignature(artifactPath, 'RELEASE', {
+  return runtime.createPluginPublisherSignature(artifactPath, 'RELEASE', {
     ...(signing.privateKeyPem ? { privateKeyPem: signing.privateKeyPem } : {}),
     ...(signing.keyId ? { keyId: signing.keyId } : {}),
   })
@@ -486,6 +493,7 @@ function gateSummary(target: PluginReleaseTarget): TargetAuditRecord['gates'] {
 }
 
 async function auditTargetRun(
+  runtime: AuditRuntime,
   target: PluginReleaseTarget,
   run: number,
   signing: SigningOptions,
@@ -532,7 +540,7 @@ async function auditTargetRun(
       let scanDetail = ''
       try {
         const rejectedArtifact = await findArtifact(staging.pluginRoot, target.pluginName, version)
-        const rejectedScan = scanBuiltPluginPackage({ packagePath: rejectedArtifact })
+        const rejectedScan = runtime.scanBuiltPluginPackage({ packagePath: rejectedArtifact })
         scanDetail = rejectedScan.findings
           .filter(finding => !finding.waiver)
           .slice(0, 5)
@@ -547,18 +555,18 @@ async function auditTargetRun(
     }
 
     const artifactPath = await findArtifact(staging.pluginRoot, target.pluginName, version)
-    const archive = readTpexSecurityScanInput(artifactPath)
+    const archive = runtime.readTpexSecurityScanInput(artifactPath)
     if (archive.policy.ok === false) {
       const first = archive.policy.violations[0]
       throw new Error(first ? `${first.code} at ${first.location}` : 'Package Policy rejected artifact.')
     }
     if (!archive.integrityPassed)
       throw new Error('Artifact file-map integrity failed.')
-    const scan = scanBuiltPluginPackage({ packagePath: artifactPath })
+    const scan = runtime.scanBuiltPluginPackage({ packagePath: artifactPath })
     if (scan.decision === 'blocked' || scan.decision === 'unavailable') {
       throw new Error(`Security scan ${scan.decision}.`)
     }
-    const signingBundle = createSigningBundle(artifactPath, signing)
+    const signingBundle = createSigningBundle(runtime, artifactPath, signing)
     const archiveInventory: InventoryEntry[] = archive.files
       .filter(file => file.path !== 'manifest.json' && file.path !== 'key.talex')
       .map(file => ({ path: String(file.path), size: Number(file.size), sha256: String(file.sha256) }))
@@ -636,6 +644,7 @@ async function auditTarget(
   target: PluginReleaseTarget,
   options: AuditOptions,
   signing: SigningOptions,
+  runtime: AuditRuntime,
 ): Promise<TargetAuditRecord> {
   const packageJson = readJson(path.join(repoRoot, target.root, 'package.json'))
   const manifest = readJson(path.join(repoRoot, target.root, target.manifest))
@@ -661,7 +670,7 @@ async function auditTarget(
 
   try {
     for (let run = 1; run <= options.repeat; run += 1)
-      record.runs.push(await auditTargetRun(target, run, signing, options))
+      record.runs.push(await auditTargetRun(runtime, target, run, signing, options))
     if (record.runs.length === 2) {
       record.reproducibility.normalizedInventory = record.runs[0]!.inventorySha256 === record.runs[1]!.inventorySha256
         ? 'passed'
@@ -678,6 +687,23 @@ async function auditTarget(
     record.blockers.push(error instanceof Error ? error.message : 'Unknown target audit failure.')
   }
   return record
+}
+
+async function loadAuditRuntime(): Promise<AuditRuntime> {
+  // A clean checkout has no dist entry; prerequisites must build CLI core before loading this runtime.
+  const runtime = await import('../packages/tuff-cli-core/dist/index.js')
+  if (
+    typeof runtime.createPluginPublisherSignature !== 'function'
+    || typeof runtime.scanBuiltPluginPackage !== 'function'
+    || typeof runtime.readTpexSecurityScanInput !== 'function'
+  ) {
+    throw new TypeError('Built Tuff CLI core does not expose the source-audit runtime contract.')
+  }
+  return {
+    createPluginPublisherSignature: runtime.createPluginPublisherSignature,
+    scanBuiltPluginPackage: runtime.scanBuiltPluginPackage,
+    readTpexSecurityScanInput: runtime.readTpexSecurityScanInput,
+  }
 }
 
 async function writeReport(outputPath: string, report: SourceAuditReport): Promise<void> {
@@ -747,9 +773,10 @@ async function main(): Promise<void> {
       }
     }
 
+    const runtime = await loadAuditRuntime()
     const signing = resolveSigningOptions(options.ephemeralSigning)
     for (const target of selectedTargets) {
-      const targetRecord = await auditTarget(target, options, signing)
+      const targetRecord = await auditTarget(target, options, signing, runtime)
       report.targets.push(targetRecord)
       if (targetRecord.status === 'failed') {
         report.status = 'failed'
