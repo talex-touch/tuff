@@ -1102,4 +1102,15 @@ watch(
     background-position: 100% 50%;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .outline-link,
+  .outline-indicator,
+  .outline-track,
+  .outline-shimmer,
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 </style>
