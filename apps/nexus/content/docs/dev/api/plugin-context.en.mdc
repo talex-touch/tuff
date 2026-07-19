@@ -8,35 +8,35 @@ Legacy `globalThis` utilities remain available to existing CommonJS plugins, but
 
 ## Canonical lifecycle context
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import type { IPluginLifecycle } from '@talex-touch/utils/plugin/sdk'
 
   const lifecycle: IPluginLifecycle = {
-    async onInit(context) {
-      const {
-        logger,
-        http,
-        storage,
-        secret,
-        clipboard,
-        channel,
-        dialog,
-        box,
-        feature,
-        quickActions,
-        quickOps,
-        intelligence,
-        screenshot,
-        system,
-        i18n,
-        lexicon,
-        power,
-        recommend,
-        divisionBox,
-        openUrl
-      } = context.utils
+  async onInit(context) {
+  const {
+  logger,
+  http,
+  storage,
+  secret,
+  clipboard,
+  channel,
+  dialog,
+  box,
+  feature,
+  quickActions,
+  quickOps,
+  intelligence,
+  screenshot,
+  system,
+  i18n,
+  lexicon,
+  power,
+  recommend,
+  divisionBox,
+  openUrl
+  } = context.utils
 
       logger.info(`Loaded ${context.pluginName}`)
       void [
@@ -69,9 +69,9 @@ code: |
 
   }
 
-  export default lifecycle
+  ## export default lifecycle
 ---
-::
+:::
 
 `context` also includes `pluginPath` and plugin `config`. Store secrets through `context.utils.secret`, not normal storage or logs.
 
@@ -101,7 +101,7 @@ Existing `index.js` plugins may still read utilities such as `logger`, `clipboar
 
 Plugin logger - logs are saved to the plugin's log directory.
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   logger.info('Info message', { extra: 'data' })
@@ -109,7 +109,7 @@ code: |
   logger.error('Error message', error)
   logger.debug('Debug message')
 ---
-::
+:::
 
 ---
 
@@ -117,7 +117,7 @@ code: |
 
 HTTP request library (axios-based):
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // GET request
@@ -131,7 +131,7 @@ code: |
   data: 'payload'
   }, { signal })
 ---
-::
+:::
 
 ---
 
@@ -139,7 +139,7 @@ code: |
 
 Clipboard operations:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Write text
@@ -154,7 +154,7 @@ code: |
   // Write image
   clipboard.writeImage(nativeImage)
 ---
-::
+:::
 
 ---
 
@@ -162,7 +162,7 @@ code: |
 
 Plugin-specific storage (10MB limit per plugin):
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Read config file
@@ -185,7 +185,7 @@ code: |
   // Unsubscribe
   unsubscribe()
 ---
-::
+:::
 
 ---
 
@@ -193,7 +193,7 @@ code: |
 
 PowerSDK for low-power adaptation:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Read current low-power status
@@ -211,7 +211,7 @@ code: |
   // Optional: stop listening
   disposePower()
 ---
-::
+:::
 
 > Note: In `index.js` context, `power.onLowPowerChanged` currently uses polling (about 60s), and strict real-time push is pending.
 
@@ -221,7 +221,7 @@ code: |
 
 RecommendSDK for registering custom recommendation providers with CoreBox.
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Register recommendation provider
@@ -248,7 +248,7 @@ code: |
   // or
   recommend.unregisterProvider('my-recommendation')
 ---
-::
+:::
 
 > See [RecommendSDK API](./recommend.en.md) for full documentation.
 
@@ -258,7 +258,7 @@ code: |
 
 Feature SDK for managing search results:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Push search results
@@ -276,7 +276,7 @@ code: |
   // Get current plugin's search results
   const items = feature.getItems()
 ---
-::
+:::
 
 ---
 
@@ -284,7 +284,7 @@ code: |
 
 CoreBox control SDK:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Hide CoreBox
@@ -299,7 +299,7 @@ code: |
   // Get input content
   const input = box.getInput()
 ---
-::
+:::
 
 ---
 
@@ -307,7 +307,7 @@ code: |
 
 BoxItem management SDK (new API):
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Push single item
@@ -328,7 +328,7 @@ code: |
   // Get all items for this plugin
   const items = boxItems.getItems()
 ---
-::
+:::
 
 ---
 
@@ -336,7 +336,7 @@ code: |
 
 QuickActions SDK registers MetaK / Quick Actions global actions and can call native share from those actions. `meta` is a compatibility alias that points to the same SDK instance. New plugins should prefer `quickActions`.
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   quickActions.registerAction({
@@ -362,9 +362,9 @@ code: |
         logger.warn('Native share failed', result.error)
       }
 
-  })
+  ## })
 ---
-::
+:::
 
 Common methods:
 
@@ -386,7 +386,7 @@ Common methods:
 
 Current plugin info API:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Get complete plugin info
@@ -417,7 +417,7 @@ code: |
   // Get platform support info
   const platforms = plugin.getPlatforms()
 ---
-::
+:::
 
 ---
 
@@ -425,7 +425,7 @@ code: |
 
 Other plugins API (read-only access):
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Get all plugins list
@@ -437,7 +437,7 @@ code: |
   // Get plugin status
   const status = await plugins.getStatus('other-plugin-name')
 ---
-::
+:::
 
 ---
 
@@ -445,7 +445,7 @@ code: |
 
 Dynamic Feature management:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Add Feature dynamically
@@ -477,7 +477,7 @@ code: |
   // Get sorted by priority
   const sorted = features.getFeaturesByPriority()
 ---
-::
+:::
 
 Runtime-added features with `icon.type: 'file'` are initialized by the host. Relative values are resolved against the owning plugin root; traversal and missing targets fail closed instead of leaving an unresolved relative path in CoreBox.
 
@@ -487,7 +487,7 @@ Runtime-added features with `icon.type: 'file'` are initialized by the host. Rel
 
 IPC channel bridge:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Send message to main process
@@ -509,7 +509,7 @@ code: |
   // Access raw channel object
   channel.raw
 ---
-::
+:::
 
 ---
 
@@ -517,7 +517,7 @@ code: |
 
 Feature event listeners:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Listen to Feature lifecycle
@@ -531,7 +531,7 @@ code: |
   // Remove listener
   $event.offFeatureLifeCycle('feature-id', callback)
 ---
-::
+:::
 
 ---
 
@@ -539,7 +539,7 @@ code: |
 
 System dialogs:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Message dialog
@@ -561,7 +561,7 @@ code: |
   defaultPath: 'file.txt'
   })
 ---
-::
+:::
 
 ---
 
@@ -569,7 +569,7 @@ code: |
 
 DivisionBox SDK for creating independent windows:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // Open DivisionBox
@@ -588,7 +588,7 @@ code: |
   console.log('State changed:', state)
   })
 ---
-::
+:::
 
 ---
 
@@ -596,7 +596,7 @@ code: |
 
 Search result builder:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const item = new TuffItemBuilder('unique-id')
@@ -613,7 +613,7 @@ code: |
   })
   .build()
 ---
-::
+:::
 
 ---
 
@@ -621,12 +621,12 @@ code: |
 
 Open external links:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   openUrl('https://example.com')
 ---
-::
+:::
 
 ---
 
@@ -634,7 +634,7 @@ code: |
 
 Plugin index.js must export a lifecycle hooks object:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const pluginLifecycle = {
@@ -668,9 +668,9 @@ code: |
 
   }
 
-  module.exports = pluginLifecycle
+  ## module.exports = pluginLifecycle
 ---
-::
+:::
 
 ---
 

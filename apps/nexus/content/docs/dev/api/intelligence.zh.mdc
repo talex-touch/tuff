@@ -8,7 +8,7 @@ Intelligence SDK 提供插件访问 AI 能力的统一接口，支持多种 AI P
 
 **快速开始**
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
@@ -25,7 +25,7 @@ code: |
   console.log(chatRes.result)
   }
 ---
-::
+:::
 插件运行时 handler 也可以通过 `context.utils.intelligence` 或 `context.utils.plugin.intelligence` 使用同一套能力发现与调用接口，再决定是否渲染 AI 动作。
 
 ## 延伸阅读
@@ -43,14 +43,14 @@ code: |
 
 插件 UI 与生命周期代码应使用 plugin SDK 导出的 `intelligence`，或运行时注入的 `context.utils.intelligence`。两者都会解析到 typed Intelligence domain SDK，并在权限检查调用里携带当前插件的 `sdkapi` marker。
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
-  void intelligence
+  ## void intelligence
 ---
-::
+:::
 
 仅 CoreApp renderer 内部代码可以从 `@talex-touch/utils/renderer` 使用 `useIntelligenceSdk()`，通过 TuffTransport 获取同一套 typed domain SDK。
 
@@ -148,7 +148,7 @@ Workflow 执行与 Agent 运行是内部编排能力。声明 `text.chat` 的 pr
 
 ### AI 对话
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
@@ -172,13 +172,13 @@ code: |
       console.log(result.result)
       console.log(result.usage)
 
-  }
+  ## }
 ---
-::
+:::
 
 ### OCR 文字识别
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await intelligence.vision.ocr({
@@ -191,26 +191,26 @@ code: |
   includeKeywords: true
   })
 
-  console.log(result.result.text)
+  ## console.log(result.result.text)
 ---
-::
+:::
 
 **Image Source 类型**：
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
   const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
   const sourceBase64 = { type: 'base64', base64: '...' } as const
 
-  console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
+  ## console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
 ---
-::
+:::
 
 ### RAG 重排序
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await intelligence.search.rerank({
@@ -219,30 +219,30 @@ code: |
   topK: 5
   })
 
-  console.log(result.result)
+  ## console.log(result.result)
 ---
-::
+:::
 
 ### 通用调用
 
 自定义能力或尚未提供 domain wrapper 的新注册 Capability ID，仍可直接使用 `invoke`：
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await intelligence.invoke('custom.extract-json', {
   text: 'name: Ada Lovelace'
   })
 
-  console.log(result.result)
+  ## console.log(result.result)
 ---
-::
+:::
 
 ### 调用选项
 
 `invoke(capabilityId, payload, options)` 的第三个参数使用下列对象；`text.chat(payload, options)` 等类型化 wrapper 的第二个参数复用同一对象：
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   interface IntelligenceInvokeOptions {
@@ -261,14 +261,14 @@ code: |
   const \_invokeOptions: IntelligenceInvokeOptions = {}
   void \_invokeOptions
 ---
-::
+:::
 `strategy` 的优先级低于显式 `preferredProviderId` 和 `modelPreference`。支持 `adaptive-default`（默认）、`rule-based-default`、`round-robin`：前两个目前都按 capability binding / provider 的稳定 priority 顺序路由，不是基于延迟或成本的优化器；`round-robin` 会按每个 capability 的已排序可用 provider 轮换，并按同一循环顺序尝试后备 provider。旧值 `adaptive`、`priority` 会分别归一化为前两个值；未知策略会安全回退到稳定的 priority 路由。
 
 ### AI Command Prompt 模板
 
 插件定义 AI Command 时，可将 `promptTemplate` 和 `promptVariables` 作为一等调用选项传入。显式模板优先于 legacy metadata 形式和 capability 已配置 binding；宿主只渲染一次，并在路由切换到后备 provider 时保留同一模板。
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
@@ -283,9 +283,9 @@ code: |
   },
   )
 
-  console.log(response.result)
+  ## console.log(response.result)
 ---
-::
+:::
 
 插件 manifest 必须声明 `intelligence.basic`，并在展示动作前执行 capability discovery。模板变量会进入 provider 输入，禁止放入凭证或 secret；审计只保留 prompt hash，不保留原始模板。
 
@@ -293,7 +293,7 @@ code: |
 
 所有 `invoke` 调用都返回统一的响应结构：
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   interface IntelligenceInvokeResult<T> {
@@ -313,13 +313,13 @@ code: |
   const \_invokeResult = {} as IntelligenceInvokeResult<string>
   void \_invokeResult
 ---
-::
+:::
 
 ### Stream 事件
 
 `stream()` 与 `contextStream()` 使用 callback，并返回 `Promise<StreamController>`；当前 runtime 只允许 chat capability 进入 stream。controller 暴露 `streamId`、`cancelled` 与 `cancel()`。
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   let answer = ''
@@ -364,7 +364,7 @@ code: |
   // owning UI 销毁时调用 controller.cancel()。
   void controller
 ---
-::
+:::
 
 调用方必须把 event 边界视为 transport 细节：
 
@@ -378,7 +378,7 @@ code: |
 
 **翻译插件**
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { intelligence, useClipboard } from '@talex-touch/utils/plugin/sdk'
@@ -398,13 +398,13 @@ code: |
 
   }
 
-  void translateAndPaste
+  ## void translateAndPaste
 ---
-::
+:::
 
 **OCR 识别插件**
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
@@ -422,15 +422,15 @@ code: |
 
   }
 
-  void recognizeText
+  ## void recognizeText
 ---
-::
+:::
 
 ---
 
 ## 状态管理
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { watch } from 'vue'
@@ -441,13 +441,13 @@ code: |
   watch(isLoading, loading => console.log('loading', loading))
   watch(lastError, error => console.log('error', error))
 ---
-::
+:::
 
 ---
 
 ## Provider 类型
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   enum IntelligenceProviderType {
@@ -459,15 +459,15 @@ code: |
   CUSTOM = 'custom'
   }
 
-  void IntelligenceProviderType.OPENAI
+  ## void IntelligenceProviderType.OPENAI
 ---
-::
+:::
 
 ---
 
 ## 能力类型
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { IntelligenceCapabilityType } from '@talex-touch/utils/types/intelligence'
@@ -492,7 +492,7 @@ code: |
   void IntelligenceCapabilityType.SEMANTIC_SEARCH // 'semantic-search'
   void IntelligenceCapabilityType.AGENT // 'agent'
 ---
-::
+:::
 
 ## 最佳实践
 

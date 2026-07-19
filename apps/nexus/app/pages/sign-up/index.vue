@@ -9,6 +9,12 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const pageTitle = computed(() => t('auth.signUpTitle', 'Sign up'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('auth.redirectingToSignIn', 'Redirecting to sign in…')),
+})
 const route = useRoute()
 
 const redirectTarget = computed(() => {

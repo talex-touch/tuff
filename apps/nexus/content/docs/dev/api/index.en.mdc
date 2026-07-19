@@ -10,12 +10,12 @@ The SDK exposes window control, clipboard, search, storage, and transport capabi
 
 ## Installation
 
-::TuffCodeBlock{lang="bash"}
+:::TuffCodeBlock{lang="bash"}
 ---
 code: |
   pnpm add @talex-touch/utils
 ---
-::
+:::
 
 ## API Reference
 
@@ -50,7 +50,7 @@ code: |
 
 ## Quick Start
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import {
@@ -95,9 +95,9 @@ code: |
         console.log('Clipboard changed:', item)
       })
 
-  }
+  ## }
 ---
-::
+:::
 
 ---
 
@@ -107,7 +107,7 @@ code: |
 
 All SDKs are accessed through `use*` functions, no context passing required:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   // ✅ Correct
@@ -118,25 +118,25 @@ code: |
   // const storage = ctx.storage
   // await storage.getItem('key')
 ---
-::
+:::
 
 **2. Automatic Context Detection**
 
 SDKs automatically detect plugin context, no manual configuration needed:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const storage = usePluginStorage()
   // Automatically gets current plugin name
 ---
-::
+:::
 
 **3. Returns Dispose Function**
 
 All listeners return an unsubscribe function:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const unsubscribe = feature.onInputChange((input) => {
@@ -148,19 +148,19 @@ code: |
   unsubscribe()
   })
 ---
-::
+:::
 
 **4. Promise-based Async**
 
 All async operations return Promises:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const config = await storage.getFile('config.json')
   await clipboard.copyAndPaste({ text: 'Hello' })
 ---
-::
+:::
 
 ---
 
@@ -171,7 +171,7 @@ code: |
 
 ## Type Imports
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import type {
@@ -182,7 +182,7 @@ code: |
   FlowPayload
   } from '@talex-touch/utils/plugin/sdk'
 ---
-::
+:::
 
 ---
 

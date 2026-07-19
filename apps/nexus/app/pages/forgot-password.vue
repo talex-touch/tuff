@@ -11,6 +11,12 @@ definePageMeta({
 defineI18nRoute(false)
 
 const { t } = useI18n()
+const pageTitle = computed(() => t('auth.forgotTitle', 'Reset password'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('auth.forgotSubtitle', 'Enter your email and we will send a reset link.')),
+})
 const email = ref('')
 const loading = ref(false)
 const success = ref(false)

@@ -29,14 +29,14 @@ Use TempFile when you need short-lived, namespaced files with automatic cleanup.
 ---
 code: |
   import { useTempPluginFiles } from '@talex-touch/utils/plugin/sdk'
-  
+
   const temp = useTempPluginFiles()
   const result = await temp.create({
     ext: 'svg',
     text: '<svg></svg>',
     retentionMs: 24 * 60 * 60 * 1000
   })
-  
+
   console.log(result.url)
 ---
 :::
@@ -47,7 +47,7 @@ code: |
 ---
 code: |
   import { useTouchSDK } from '@talex-touch/utils/renderer'
-  
+
   const sdk = useTouchSDK()
   const result = await sdk.createTempFile({
     namespace: 'icons/svg',

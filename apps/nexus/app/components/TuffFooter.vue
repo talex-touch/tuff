@@ -27,7 +27,7 @@ const footerSections = computed(() => [
     links: [
       { to: '/store', label: t('nav.store') },
       { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
-      { to: '/developer', label: t('nav.developer') },
+      { to: docsLink('/docs/dev'), label: t('nav.developer') },
       { to: '/updates', label: t('nav.download') },
       { to: '/pricing', label: t('nav.pricing') },
     ],
@@ -36,7 +36,8 @@ const footerSections = computed(() => [
     title: t('landing.footer.sections.resources'),
     links: [
       { to: docsLink('/docs'), label: t('nav.doc') },
-      { to: '/blog', label: t('nav.blog') },
+      { to: '/privacy', label: t('nav.privacy', 'Privacy') },
+      { to: '/protocol', label: t('nav.license', 'License') },
     ],
   },
 ])
@@ -190,10 +191,10 @@ onBeforeUnmount(() => {
                 {{ t('landing.footer.privacy') }}
               </NuxtLink>
               <NuxtLink to="/license" class="text-black/60 no-underline transition-colors dark:text-white/60 hover:op-70">
-                {{ t('landing.footer.license') }}
+                {{ t('landing.footer.terms') }}
               </NuxtLink>
               <NuxtLink to="/protocol" class="text-black/60 no-underline transition-colors dark:text-white/60 hover:op-70">
-                {{ t('landing.footer.terms') }}
+                {{ t('landing.footer.license') }}
               </NuxtLink>
             </div>
           </div>

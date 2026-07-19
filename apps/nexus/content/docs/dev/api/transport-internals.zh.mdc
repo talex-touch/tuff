@@ -175,21 +175,21 @@ code: |
 code: |
   class BatchManager {
     private groups: Map<string, BatchGroup> = new Map()
-    
+
     async add<TReq, TRes>(event: TuffEvent<TReq, TRes>, payload: TReq): Promise<TRes> {
       const config = event._batch
-      
+
       // 如果未启用批量，直接发送
       if (!config?.enabled) {
         return this.sendSingle(event, payload)
       }
-      
+
       return new Promise((resolve, reject) => {
         const group = this.getOrCreateGroup(event)
-        
+
         // 应用合并策略
         this.applyStrategy(group, { payload, resolve, reject }, config)
-        
+
         // 检查刷新条件
         if (group.requests.length >= config.maxSize) {
           this.flush(event.toString())
@@ -281,10 +281,10 @@ code: |
     async handleStreamRequest(eventName: string, payload: any, webContents: WebContents) {
       const { port1, port2 } = new MessageChannelMain()
       const streamId = generateId()
-      
+
       // 发送 port2 给渲染进程
       webContents.postMessage('@tuff:stream:port', { streamId }, [port2])
-      
+
       // 创建处理器上下文
       const context: StreamContext = {
         emit: (chunk) => port1.postMessage({ type: 'data', chunk }),
@@ -292,10 +292,10 @@ code: |
         end: () => port1.postMessage({ type: 'end' }),
         isCancelled: () => this.cancelled.has(streamId)
       }
-      
+
       // 执行处理器
       await this.handlers.get(eventName)?.(payload, context)
-      
+
       return { streamId }
     }
   }
@@ -433,7 +433,7 @@ code: |
         timestamp: this.timestamp
       }
     }
-    
+
     static fromJSON(obj) {
       return new TuffTransportError(obj.code, obj.message, {
         eventName: obj.eventName
@@ -473,10 +473,10 @@ code: |
   onUnmounted(() => {
     // 取消待处理请求
     controller.cancel()
-    
+
     // 移除处理器
     cleanup()
-    
+
     // 刷新批量
     transport.flush()
   })
@@ -505,7 +505,7 @@ code: |
 code: |
   // 已退役 Channel 写法仅用于迁移审阅
   channel.send('event', data)
-  
+
   // 当前代码使用 TuffTransport
   transport.send(TuffEvent, data)
 ---

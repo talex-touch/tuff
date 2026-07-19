@@ -8,6 +8,14 @@ definePageMeta({
 })
 
 const { t } = useI18n()
+const pageTitle = computed(() => t('nav.pricing', 'Pricing'))
+const pageDescription = computed(() => t('pricing.subtitle', 'Choose the plan that matches your momentum.'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: pageDescription,
+  ogDescription: pageDescription,
+})
 
 const plans = [
   {

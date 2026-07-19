@@ -35,7 +35,7 @@ code: |
 
 Simple grid layout:
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -49,13 +49,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## Responsive Grid
 
 ### Responsive columns
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -66,11 +66,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### Auto-fit grid
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -84,13 +84,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## Grid Gaps
 
 ### Uniform gap
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -101,11 +101,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### Row / column gaps
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -116,11 +116,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### Responsive gaps
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -134,13 +134,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## Grid Items
 
 ### Column span
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -153,11 +153,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### Row span
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -170,13 +170,13 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## Alignment
 
 ### Grid alignment
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -193,11 +193,11 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ### Item alignment
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -208,7 +208,7 @@ code: |
     </TxGrid>
   </template>
 ---
-::
+:::
 
 ## API
 
@@ -234,7 +234,7 @@ code: |
 
 ### Types
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
@@ -252,7 +252,7 @@ code: |
     col?: number | string
   }
 ---
-::
+:::
 
 ### Events
 

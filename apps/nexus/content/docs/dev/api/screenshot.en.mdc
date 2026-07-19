@@ -13,7 +13,7 @@ It reuses typed `NativeEvents.screenshot.*` transport and the host `NativeScreen
 
 ## Manifest
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -28,7 +28,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 Declare `intelligence.basic` only when the plugin also invokes OCR or another Intelligence capability. Screenshot permission does not grant AI access, and Intelligence permission does not grant screen capture.
 
@@ -62,7 +62,7 @@ interface PluginScreenshotSDK {
 
 ## Capture a selected display
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   export default {
@@ -93,13 +93,13 @@ code: |
 
   }
 ---
-::
+:::
 
 ## Capture to OCR
 
 Use `data-url` only when the next typed capability needs inline image data. OCR remains separately permissioned through `context.utils.intelligence`.
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const capture = await context.utils.screenshot.capture({
@@ -118,7 +118,7 @@ code: |
 
   context.utils.logger.info(`OCR completed: ${ocr.result.text.length} characters`)
 ---
-::
+:::
 
 Do not write the screenshot data URL, OCR text, prompts, or model output to normal logs, plugin metadata, or sync payloads.
 

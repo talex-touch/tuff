@@ -33,13 +33,13 @@ code: |
   interface FlowPayload {
     /** 载荷类型 */
     type: 'text' | 'image' | 'files' | 'json' | 'html' | 'custom'
-    
+
     /** 主要数据内容 */
     data: string | object
-    
+
     /** 数据的 MIME 类型（可选） */
     mimeType?: string
-    
+
     /** 上下文元信息 */
     context?: {
       sourcePluginId: string
@@ -66,19 +66,19 @@ code: |
   interface FlowTarget {
     /** 目标唯一 ID（插件内唯一） */
     id: string
-    
+
     /** 显示名称 */
     name: string
-    
+
     /** 描述 */
     description?: string
-    
+
     /** 支持的载荷类型 */
     supportedTypes: ('text' | 'image' | 'files' | 'json' | 'html' | 'custom')[]
-    
+
     /** 图标（iconify 格式） */
     icon?: string
-    
+
     /** 关联的 Feature ID */
     featureId?: string
   }
@@ -109,9 +109,9 @@ code: |
   {
     "name": "my-plugin",
     "version": "1.0.0",
-    
+
     "flowSender": true,
-    
+
     "flowTargets": [
       {
         "id": "quick-note",
@@ -142,10 +142,10 @@ code: |
 ---
 code: |
   import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
-  
+
   // 创建 Flow SDK 实例
   const flow = createFlowSDK(channel, 'my-plugin-id')
-  
+
   // 发起流转
   async function shareToOtherPlugin() {
     const result = await flow.dispatch(
@@ -162,10 +162,10 @@ code: |
         description: '将文本发送到其他插件'
       }
     )
-    
+
     console.log('Flow result:', result.state)
   }
-  
+
   // 直接发送到指定目标（跳过选择面板）
   async function sendToSpecificTarget() {
     const result = await flow.dispatch(
@@ -181,7 +181,7 @@ code: |
         fallbackAction: 'copy'
       }
     )
-    
+
     if (result.state === 'ACKED') {
       console.log('Acknowledged:', result.ackPayload)
     }
@@ -196,7 +196,7 @@ code: |
 code: |
   // 获取所有可用目标
   const allTargets = await flow.getAvailableTargets()
-  
+
   // 获取支持特定类型的目标
   const textTargets = await flow.getAvailableTargets('text')
   const imageTargets = await flow.getAvailableTargets('image')
@@ -211,17 +211,17 @@ code: |
 ---
 code: |
   import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
-  
+
   const flow = createFlowSDK(channel, 'my-plugin-id')
-  
+
   // 注册 Flow 接收处理器（必需！）
   const unsubscribe = flow.onFlowTransfer(async (payload, sessionId, sender) => {
     console.log(`收到来自 ${sender.senderName} 的 ${payload.type} 数据`)
-    
+
     try {
       // 处理数据
       const result = await processPayload(payload)
-      
+
       // 发送确认
       await flow.acknowledge(sessionId, { success: true, result })
     } catch (error) {
@@ -229,7 +229,7 @@ code: |
       await flow.reportError(sessionId, error.message)
     }
   })
-  
+
   // 组件卸载时取消注册
   onUnmounted(() => {
     unsubscribe()
@@ -245,7 +245,7 @@ code: |
 ---
 code: |
   import { extractFlowData, isFlowTriggered } from '@talex-touch/utils/plugin/sdk'
-  
+
   function onFeatureTriggered(featureId: string, query: TuffQuery) {
     // 检查是否通过 Flow 触发
     if (isFlowTriggered(query)) {
@@ -254,7 +254,7 @@ code: |
         console.log('来自:', flowData.senderId)
         console.log('类型:', flowData.payload.type)
         console.log('数据:', flowData.payload.data)
-        
+
         // 处理 Flow 数据
         processFlowPayload(flowData.sessionId, flowData.payload)
       }
@@ -275,7 +275,7 @@ code: |
     try {
       // 处理数据...
       const result = await saveNote(payload.data)
-      
+
       // 发送确认
       await flow.acknowledge(sessionId, {
         success: true,
@@ -338,19 +338,19 @@ Flow Transfer 集成了系统原生分享功能，可以将数据分享到 AirDr
 ---
 code: |
   const flow = createFlowSDK(channel, 'my-plugin-id')
-  
+
   // 使用系统分享
   const result = await flow.nativeShare({
     type: 'text',
     data: 'Hello World!'
   })
-  
+
   // 指定分享目标
   const result = await flow.nativeShare(
     { type: 'text', data: 'Hello!' },
     'airdrop'  // 可选: 'system' | 'airdrop' | 'mail' | 'messages'
   )
-  
+
   if (result.success) {
     console.log('分享成功:', result.target)
   } else {

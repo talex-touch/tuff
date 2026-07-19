@@ -12,13 +12,13 @@
 ---
 code: |
   import { accountSDK, SubscriptionPlan } from '@talex-touch/utils'
-  
+
   // 检查用户是否已登录
   const isLoggedIn = await accountSDK.isLoggedIn()
-  
+
   // 获取当前订阅计划
   const plan = await accountSDK.getPlan()
-  
+
   // 检查是否为付费用户
   if (await accountSDK.isPaidUser()) {
     // 显示高级功能
@@ -48,7 +48,7 @@ code: |
 ---
 code: |
   import { accountSDK } from '@talex-touch/utils'
-  
+
   // 单例模式，直接使用
   await accountSDK.getProfile()
 ---
@@ -409,7 +409,7 @@ code: |
 code: |
   const aiUsage = await accountSDK.getUsagePercentage('aiRequests')
   console.log(`AI 请求使用率: ${aiUsage.toFixed(1)}%`)
-  
+
   const storageUsage = await accountSDK.getUsagePercentage('storage')
   if (storageUsage > 80) {
     console.warn('存储空间即将用尽')
@@ -532,7 +532,7 @@ code: |
   if (await accountSDK.isTeamOwner()) {
     // 用户是某个团队的所有者
   }
-  
+
   if (await accountSDK.isTeamOwner('team_xxx')) {
     // 用户是指定团队的所有者
   }
@@ -670,7 +670,7 @@ code: |
       showUpgradeDialog(options)
       return
     }
-    
+
     // 显示付费功能
   }
 ---
@@ -683,11 +683,11 @@ code: |
 code: |
   async function beforeAiRequest(estimatedTokens: number) {
     const quotaCheck = await accountSDK.checkAiTokenQuota(estimatedTokens)
-    
+
     if (!quotaCheck.allowed) {
       throw new Error(`配额不足: ${quotaCheck.reason}`)
     }
-    
+
     // 继续请求
   }
 ---
@@ -702,9 +702,9 @@ code: |
     if (!await accountSDK.isTeamOrAbove()) {
       return // 非团队版，跳过
     }
-    
+
     const teams = await accountSDK.getTeams()
-    
+
     for (const team of teams) {
       if (team.role === 'owner' || team.role === 'admin') {
         // 显示管理功能
@@ -728,7 +728,7 @@ code: |
     TEAM = 'team',
     ENTERPRISE = 'enterprise',
   }
-  
+
   interface UserProfile {
     id: string
     displayName: string
@@ -740,7 +740,7 @@ code: |
     twoFactorEnabled: boolean
     socialConnections: SocialConnection[]
   }
-  
+
   interface Subscription {
     id: string
     plan: SubscriptionPlan
@@ -750,7 +750,7 @@ code: |
     currentPeriodEnd: number
     autoRenew: boolean
   }
-  
+
   interface QuotaCheckResult {
     allowed: boolean
     reason?: string

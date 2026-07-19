@@ -282,7 +282,7 @@ onBeforeUnmount(() => {
 }
 
 .hero-landing-container {
-  opacity: 0;
+  opacity: 1;
   filter: blur(32px);
   transform: translate3d(0, 48px, 0);
   transition:
@@ -298,9 +298,9 @@ onBeforeUnmount(() => {
 }
 
 .hero-landing-stage {
-  opacity: 0;
-  filter: blur(28px);
-  transform: translate3d(0, 28px, 0);
+  opacity: 1;
+  filter: none;
+  transform: none;
   transition:
     opacity 1s cubic-bezier(0.22, 0.61, 0.36, 1),
     filter 1.3s cubic-bezier(0.22, 0.61, 0.36, 1),
@@ -356,5 +356,15 @@ onBeforeUnmount(() => {
 
 .hero-cta.is-interactive {
   pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-landing-stage,
+  .hero-landing-container {
+    opacity: 1 !important;
+    filter: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 </style>

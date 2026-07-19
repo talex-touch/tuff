@@ -1,14 +1,15 @@
 <script setup lang="ts">
+import { resolveDocsLocaleFromRoute } from '#shared/utils/docs-path'
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import NexusPwaManifest from '~/components/NexusPwaManifest.vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { appName, toastHostRequestedEvent } from '~/constants'
-import { resolveDocsLocaleFromRoute } from '#shared/utils/docs-path'
 
 const LazyToastContainer = defineAsyncComponent(() => import('~/components/ToastContainer.vue'))
 
 useHead({
   title: appName,
+  titleTemplate: title => (!title || title === appName) ? appName : (title.includes(appName) || title.includes('Tuff') ? title : `${title} · Tuff Nexus`),
 })
 
 const route = useRoute()
@@ -27,6 +28,17 @@ const isAuthShellRoute = computed(() => {
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useNexusAuth()
+
+useHead(() => {
+  if (!isProtectedRoute.value)
+    return {}
+  if (status.value === 'authenticated')
+    return {}
+  return {
+    title: status.value === 'loading' ? 'Checking session · Tuff Nexus' : 'Sign in required · Tuff Nexus',
+    meta: [{ name: 'robots', content: 'noindex, nofollow' }],
+  }
+})
 interface AppAuthUserState {
   id?: string
   locale?: string | null
@@ -51,7 +63,7 @@ const protectedSessionRecheckRunning = ref(false)
 const searchTriggerSelector = '[data-role="global-search-trigger"]'
 const docsRouteLocale = computed(() => {
   const path = route.path || ''
-  return /^\/(en|zh)\/docs(?=\/|$)/.test(path)
+  return /^\/(?:en|zh)\/docs(?=\/|$)/.test(path)
     ? resolveDocsLocaleFromRoute(path)
     : null
 })

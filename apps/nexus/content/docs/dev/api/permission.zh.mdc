@@ -12,7 +12,7 @@
 
 **1. 在 manifest.json 中声明权限**
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -30,7 +30,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 **2. 权限分类**
 
@@ -92,7 +92,7 @@ code: |
 
 如果您的插件未声明 `sdkapi` 或版本较低：
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -103,7 +103,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 ## 技术原理
 
@@ -114,7 +114,7 @@ code: |
 
 **在 Prelude (index.js) 中检查权限**
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const { permission } = globalThis
@@ -130,11 +130,11 @@ code: |
   const text = clipboard.readText()
   }
 ---
-::
+:::
 
 **在 Surface (Vue) 中使用**
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { usePermission } from '@talex-touch/utils/plugin/sdk'
@@ -150,13 +150,13 @@ code: |
   // 获取所有权限状态
   const allStatus = await status()
 ---
-::
+:::
 
 **SQLite SDK（sdkapi >= 260215）**
 
 当使用 `usePluginSqlite()` 时，需要在 manifest 中声明 `storage.sqlite` 必需权限：
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -170,13 +170,12 @@ code: |
   }
   }
 ---
-::
+:::
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
-
   const sqlite = usePluginSqlite()
 
   await sqlite.execute(
@@ -193,7 +192,7 @@ code: |
   )
   console.log(result.rows)
 ---
-::
+:::
 
 ## 最佳实践
 
@@ -201,7 +200,7 @@ code: |
 
 只声明实际需要的权限：
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   // ✅ 好的做法
@@ -215,11 +214,11 @@ code: |
   "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
   }
 ---
-::
+:::
 
 **2. 提供权限说明**
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   "permissionReasons": {
@@ -227,11 +226,11 @@ code: |
   "network.internet": "连接 Google 翻译 API"
   }
 ---
-::
+:::
 
 **3. 优雅降级**
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   async function translateText(text) {
@@ -248,13 +247,13 @@ code: |
       // 正常翻译逻辑
       return await http.post('...')
 
-  }
+  ## }
 ---
-::
+:::
 
 **4. 区分必需和可选权限**
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   "permissions": {
@@ -262,7 +261,7 @@ code: |
   "optional": ["network.internet"] // 增强功能可选
   }
 ---
-::
+:::
 
 ## 用户界面
 
@@ -277,18 +276,18 @@ code: |
 
 A: 您的 `manifest.json` 未声明 `sdkapi`、使用了非法 / 未受支持 marker，或版本低于 `251212`。请更新为当前受支持的版本：
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   "sdkapi": 260626
 ---
-::
+:::
 
 **Q: 如何处理用户拒绝权限？**
 
 A: 提供降级方案或清晰的错误提示：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const granted = await permission.request('clipboard.read')
@@ -300,7 +299,7 @@ code: |
   }])
   }
 ---
-::
+:::
 
 **Q: 权限数据存储在哪里？**
 

@@ -39,7 +39,7 @@ code: |
 :::
 ### 按钮类型
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   const btns = [
@@ -49,11 +49,11 @@ code: |
     { content: '成功', type: 'success', onClick: () => true },
   ]
 ---
-::
+:::
 
 ### 自动点击计时器
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   const btns = [
@@ -65,11 +65,11 @@ code: |
     },
   ]
 ---
-::
+:::
 
 ### 加载状态
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   const btns = [
@@ -83,7 +83,7 @@ code: |
     },
   ]
 ---
-::
+:::
 
 ## BlowDialog 爆炸对话框
 
@@ -149,7 +149,7 @@ code: |
 :::
 ## 自定义组件
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   import CustomContent from './CustomContent.vue'
@@ -161,11 +161,11 @@ code: |
     })
   }
 ---
-::
+:::
 
 ## 渲染函数
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   function showRenderDialog() {
@@ -178,7 +178,7 @@ code: |
     })
   }
 ---
-::
+:::
 
 ## API
 
@@ -198,7 +198,7 @@ code: |
 
 ### DialogButton 接口
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   interface DialogButton {
@@ -209,7 +209,7 @@ code: |
     loading?: (done: () => void) => void
   }
 ---
-::
+:::
 
 ### TxBlowDialog Props
 

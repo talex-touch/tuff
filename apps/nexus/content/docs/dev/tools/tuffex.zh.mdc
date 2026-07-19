@@ -20,10 +20,10 @@ TuffEx（中文名：塔芙）是一个专注于触感体验和流畅动画的�
 code: |
   # npm
   npm install @talex-touch/tuffex
-  
+
   # yarn
   yarn add @talex-touch/tuffex
-  
+
   # pnpm（推荐）
   pnpm add @talex-touch/tuffex
 ---
@@ -39,7 +39,7 @@ code: |
   import { createApp } from 'vue'
   import TuffUI from '@talex-touch/tuffex'
   import '@talex-touch/tuffex/style.css'
-  
+
   const app = createApp(App)
   app.use(TuffUI)
   app.mount('#app')
@@ -61,7 +61,7 @@ code: |
   import '@talex-touch/tuffex/button/style.css'
   import '@talex-touch/tuffex/switch/style.css'
   import '@talex-touch/tuffex/flat-button/style.css'
-  
+
   const app = createApp(App)
   app.use(TxButton)
   app.use(TxSwitch)
@@ -114,15 +114,15 @@ code: |
     /* 主色调 */
     --tx-color-primary: #409eff;
     --tx-color-primary-light-3: #79bbff;
-    
+
     /* 文本颜色 */
     --tx-text-color-primary: #303133;
     --tx-text-color-secondary: #909399;
-    
+
     /* 边框和圆角 */
     --tx-border-color: #dcdfe6;
     --tx-border-radius-base: 4px;
-    
+
     /* 过渡 */
     --tx-transition-duration: 0.3s;
   }
@@ -146,7 +146,7 @@ code: |
 code: |
   # 在 monorepo 根目录
   pnpm install
-  
+
   # 组件源码包
   pnpm -C packages/tuffex run build
   pnpm -C packages/tuffex run test

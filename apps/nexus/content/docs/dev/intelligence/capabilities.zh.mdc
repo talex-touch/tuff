@@ -18,14 +18,14 @@
 ---
 code: |
   import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
-  
+
   const intelligence = useIntelligenceSdk()
   const res = await intelligence.vision.ocr({
     source: { type: 'data-url', dataUrl },
     includeLayout: true,
     includeKeywords: true,
   })
-  
+
   console.log(res.result.text)
 ---
 :::
@@ -48,12 +48,12 @@ code: |
 ---
 code: |
   import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
-  
+
   const intelligence = useIntelligenceSdk()
   const res = await intelligence.embedding.generate({
     text: veryLongText,
   })
-  
+
   console.log(res.result.length)
 ---
 :::

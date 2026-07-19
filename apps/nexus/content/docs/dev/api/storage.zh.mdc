@@ -15,12 +15,12 @@
 ---
 code: |
   import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-  
+
   const storage = usePluginStorage()
-  
+
   // 保存配置
   await storage.setFile('settings.json', { theme: 'dark', fontSize: 14 })
-  
+
   // 读取配置
   const settings = await storage.getFile('settings.json')
   console.log(settings) // { theme: 'dark', fontSize: 14 }
@@ -89,7 +89,7 @@ code: |
 ---
 code: |
   import { usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-  
+
   const storage = usePluginStorage()
 ---
 :::
@@ -280,7 +280,7 @@ code: |
     console.log('配置已更新:', data)
     // 重新加载配置
   })
-  
+
   // 停止监听
   unsubscribe()
 ---
@@ -306,18 +306,18 @@ code: |
     language: string
     shortcuts: Record<string, string>
   }
-  
+
   async function loadSettings(): Promise<PluginSettings> {
     const defaults: PluginSettings = {
       theme: 'dark',
       language: 'zh-CN',
       shortcuts: {}
     }
-    
+
     const saved = await storage.getFile('settings.json')
     return { ...defaults, ...saved }
   }
-  
+
   async function saveSettings(settings: PluginSettings) {
     await storage.setFile('settings.json', settings)
   }
@@ -333,19 +333,19 @@ code: |
     data: T
     expiresAt: number
   }
-  
+
   async function getCached<T>(key: string): Promise<T | null> {
     const entry = await storage.getFile(`cache/${key}.json`) as CacheEntry<T> | null
-    
+
     if (!entry) return null
     if (Date.now() > entry.expiresAt) {
       await storage.deleteFile(`cache/${key}.json`)
       return null
     }
-    
+
     return entry.data
   }
-  
+
   async function setCache<T>(key: string, data: T, ttlMs: number = 3600000) {
     const entry: CacheEntry<T> = {
       data,
@@ -363,7 +363,7 @@ code: |
 code: |
   async function checkStorageQuota() {
     const stats = await storage.getStats()
-    
+
     if (stats.usagePercent > 0.8) {
       console.warn('[Plugin] 存储空间使用超过 80%，考虑清理旧数据')
       // 清理过期缓存
@@ -394,14 +394,14 @@ code: |
     limit: number
     usagePercent: number
   }
-  
+
   interface StorageTreeNode {
     name: string
     type: 'file' | 'directory'
     size?: number
     children?: StorageTreeNode[]
   }
-  
+
   interface FileDetails {
     name: string
     size: number
