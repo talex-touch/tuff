@@ -191,10 +191,10 @@ onBeforeUnmount(() => {
                 {{ t('landing.footer.privacy') }}
               </NuxtLink>
               <NuxtLink to="/license" class="text-black/60 no-underline transition-colors dark:text-white/60 hover:op-70">
-                {{ t('landing.footer.license') }}
+                {{ t('landing.footer.terms') }}
               </NuxtLink>
               <NuxtLink to="/protocol" class="text-black/60 no-underline transition-colors dark:text-white/60 hover:op-70">
-                {{ t('landing.footer.terms') }}
+                {{ t('landing.footer.license') }}
               </NuxtLink>
             </div>
           </div>
