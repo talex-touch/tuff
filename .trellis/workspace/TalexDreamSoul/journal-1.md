@@ -752,3 +752,36 @@ Closed the single-writer task with real-profile query-only/copy evidence, correl
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: Plugin Security Scan
+
+**Date**: 2026-07-18
+**Task**: Plugin Security Scan
+**Branch**: `master`
+
+### Summary
+
+Implemented deterministic TPEX security scanning across shared rules, CLI artifact preflight and Nexus admission with persisted summaries, governance events and server-owned waivers; 24 focused assertions, type/build/lint/plugin validation and two real TPEX smoke scans passed.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9d2a4e5e1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
