@@ -93,7 +93,7 @@
     "@types/fs-extra": "^11.0.4",
     "@types/glob": "^8.1.0",
     "@types/node": "^18.19.130",
-    "bumpp": "^9.11.1",
+    "bumpp": "^11.1.0",
     "eslint": "^9.39.4",
     "esno": "^4.8.0",
     "find-up": "^7.0.0",
