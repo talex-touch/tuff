@@ -37,9 +37,12 @@ const { data: updatesPayload } = await useAsyncData('public-updates-all', () =>
 
 const updateItems = computed<DashboardUpdate[]>(() => updatesPayload.value?.updates ?? [])
 
-useHead(() => ({
-  title: `${t('updates.all.title')} | Tuff`,
-}))
+const pageTitle = computed(() => `${t('updates.all.title', 'All updates')} · Tuff Nexus`)
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('updates.all.description', 'Browse every release note and product update.')),
+})
 </script>
 
 <template>
