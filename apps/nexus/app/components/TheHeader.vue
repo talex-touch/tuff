@@ -179,7 +179,10 @@ onUnmounted(() => {
   position: absolute;
 
   top: 1rem;
-  left: 50%;
+  /* Center with inset + margin so reveal animation can own transform safely. */
+  left: 0;
+  right: 0;
+  margin-inline: auto;
 
   width: min(1056px, calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
@@ -200,11 +203,8 @@ onUnmounted(() => {
   overflow: hidden;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
+  transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
   animation: tuff-header-quick-reveal 280ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-}
-
-.TuffHeader-Main {
-  transform: translate3d(calc(-50% + var(--wm-jitter-x1, 0px)), var(--wm-jitter-y1, 0px), 0);
 }
 
 .TuffHeader-Main--scrolled {
@@ -248,13 +248,13 @@ nav :deep(a) {
   from {
     opacity: 0;
     filter: blur(4px);
-    transform: translateY(-6px);
+    transform: translate3d(var(--wm-jitter-x1, 0px), calc(var(--wm-jitter-y1, 0px) - 6px), 0);
   }
 
   to {
     opacity: 1;
     filter: blur(0);
-    transform: translateY(0);
+    transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
   }
 }
 
@@ -270,6 +270,7 @@ nav :deep(a) {
     right: 1rem;
     width: auto;
     max-width: none;
+    margin-inline: 0;
     transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
   }
 
