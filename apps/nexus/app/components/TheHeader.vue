@@ -54,12 +54,18 @@ const normalizedPath = computed(() => {
 const isDocs = computed(() => normalizedPath.value.startsWith('/docs'))
 const isHome = computed(() => normalizedPath.value === '/')
 
+function normalizeNavPath(path: string) {
+  const trimmed = path.replace(/^\/(en|zh)(?=\/|$)/i, '')
+  return trimmed || '/'
+}
+
 function isActiveLink(link: { to: string }) {
   const path = normalizedPath.value
   const matches = (item: { to: string }) => {
-    if (item.to === '/')
+    const target = normalizeNavPath(item.to)
+    if (target === '/')
       return path === '/'
-    return path === item.to || path.startsWith(`${item.to}/`)
+    return path === target || path.startsWith(`${target}/`)
   }
 
   if (!matches(link))
@@ -68,7 +74,7 @@ function isActiveLink(link: { to: string }) {
   const bestMatch = links.value.reduce<{ to: string } | null>((best, item) => {
     if (!matches(item))
       return best
-    if (!best || item.to.length > best.to.length)
+    if (!best || normalizeNavPath(item.to).length > normalizeNavPath(best.to).length)
       return item
     return best
   }, null)
