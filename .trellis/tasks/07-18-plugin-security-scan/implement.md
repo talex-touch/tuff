@@ -2,15 +2,15 @@
 
 ## Ordered Checklist
 
-1. [ ] Define versioned scan report/finding/waiver contracts and stable decision codes in the owning shared package.
-2. [ ] Implement bounded inventory/text/binary readers that consume package-policy normalized entries without executing code.
-3. [ ] Implement initial rules for secrets/private keys, prod dev source, raw Electron/transport, dynamic execution, native binaries and permission-capability mismatch.
-4. [ ] Add deterministic reducer, timeout/limit handling and report sanitizer.
-5. [ ] Add CLI local scan command/path and JSON output bound to artifact SHA-256.
-6. [ ] Add Nexus authoritative scan before pending review, governance events and persisted report summary/digest.
-7. [ ] Add Nexus-owned waiver storage/authorization/expiry; package data cannot define waivers.
-8. [ ] Integrate scan decisions with the later eligibility projection without duplicating visibility logic.
-9. [ ] Document rule limits, false-positive review and evidence hygiene.
+1. [x] Define versioned scan report/finding/waiver contracts and stable decision codes in the owning shared package.
+2. [x] Implement bounded inventory/text/binary readers that consume package-policy normalized entries without executing code.
+3. [x] Implement initial rules for secrets/private keys, prod dev source, raw Electron/transport, dynamic execution, native binaries and permission-capability mismatch.
+4. [x] Add deterministic reducer, timeout/limit handling and report sanitizer.
+5. [x] Add CLI local scan command/path and JSON output bound to artifact SHA-256.
+6. [x] Add Nexus authoritative scan before pending review, governance events and persisted report summary/digest.
+7. [x] Add Nexus-owned waiver storage/authorization/expiry; package data cannot define waivers.
+8. [x] Integrate scan decisions with the later eligibility projection without duplicating visibility logic.
+9. [x] Document rule limits, false-positive review and evidence hygiene.
 
 ## Contract Tests
 
@@ -35,6 +35,14 @@ corepack pnpm -C apps/nexus run typecheck
 corepack pnpm lint:changed
 git diff --check
 ```
+
+## Verification Results
+
+- `packages/utils`: 13 focused scanner assertions passed.
+- `packages/tuff-cli-core`: 2 artifact scanner assertions and DTS build passed.
+- `apps/nexus`: 9 authoritative scan, waiver and publish/re-edit assertions plus Nuxt typecheck passed.
+- `packages/tuff-cli`: CLI build passed; `tuff scan --json` returned `passed` for real quickops and authorized-shell archives.
+- Repository gates: 23/23 plugin validation, `lint:changed` and `git diff --check` passed.
 
 ## Risky Files and Boundaries
 

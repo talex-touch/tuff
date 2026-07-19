@@ -3,7 +3,7 @@
   "name": "plugin-security-scan",
   "title": "实施插件 Security Scan",
   "description": "对不可变 TPEX 执行共享、分级、可审计且不泄密的安全扫描。",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": "feature",
   "scope": "plugin-security-scan",
   "package": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-18",
-  "completedAt": null,
+  "completedAt": "2026-07-19",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
@@ -23,9 +23,14 @@
   "relatedFiles": [
     "packages/utils/plugin",
     "packages/tuff-cli-core/src",
+    "packages/tuff-cli/src/bin/tuff.ts",
     "apps/nexus/server/utils",
-    "apps/nexus/server/api/dashboard/plugins"
+    "apps/nexus/server/api/admin/plugin-scan-waivers",
+    "apps/nexus/server/api/dashboard/plugins",
+    "apps/nexus/content/docs/dev/tools/tuff-cli.en.mdc",
+    "apps/nexus/content/docs/dev/tools/tuff-cli.zh.mdc",
+    ".trellis/spec/frontend/plugin-runtime-security.md"
   ],
-  "notes": "",
+  "notes": "Shared versioned scanner, artifact-only CLI preflight, Nexus authoritative admission, summary persistence, governance events and server-owned waivers are implemented. 24 focused assertions, CLI builds, Nexus typecheck, plugin validation, scoped lint and two real TPEX smoke scans passed.",
   "meta": {}
 }

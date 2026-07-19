@@ -2,9 +2,17 @@ import type {
   PluginPackageEntry,
   PluginPackageExpectedIdentity,
   PluginPackagePolicyResult,
+  PluginSecurityScanReport,
+  PluginSecurityScanWaiver,
 } from '@talex-touch/utils/plugin'
 import type { TpexMetadata } from '@talex-touch/utils/plugin/providers'
-import { validatePluginPackagePolicy } from '@talex-touch/utils/plugin'
+import {
+  isPluginSecurityScanTextPath,
+  PLUGIN_PACKAGE_MAX_ENTRY_COUNT,
+  PLUGIN_SECURITY_MAX_FILE_INSPECTION_BYTES,
+  scanPluginPackage,
+  validatePluginPackagePolicy,
+} from '@talex-touch/utils/plugin'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 
@@ -21,6 +29,7 @@ export interface TpexExtractedMetadata extends TpexMetadata {
   iconMimeType?: string | null
   integrity: TpexIntegrityResult
   packagePolicy: PluginPackagePolicyResult
+  securityScan: PluginSecurityScanReport
 }
 
 export interface TpexAdmissionFailure {
@@ -42,6 +51,21 @@ export function getTpexAdmissionFailure(
     return {
       code: first?.code ?? 'PLUGIN_PACKAGE_POLICY_REJECTED',
       reason: first ? `${first.code} at ${first.location}` : 'Package policy rejected the archive.',
+    }
+  }
+  if (metadata.securityScan.decision === 'unavailable') {
+    return {
+      code: metadata.securityScan.failure?.code ?? 'PLUGIN_SCAN_ENGINE_ERROR',
+      reason: 'Plugin security scan is unavailable.',
+    }
+  }
+  if (metadata.securityScan.decision === 'blocked') {
+    const first = metadata.securityScan.findings.find(finding => !finding.waiver)
+    return {
+      code: first?.code ?? 'PLUGIN_SCAN_BLOCKED',
+      reason: first
+        ? `${first.code} at ${first.location.path}`
+        : 'Plugin security scan blocked the archive.',
     }
   }
   return null
@@ -137,6 +161,28 @@ function mapTarEntryType(typeFlag: string): PluginPackageEntry['type'] {
   return 'other'
 }
 
+function buildSecurityScanFiles(files: Record<string, Buffer>) {
+  return Object.entries(files).map(([rawPath, content]) => {
+    const path = normalizeTarEntryName(rawPath)
+    const isText = isPluginSecurityScanTextPath(path)
+    const truncated = isText && content.length > PLUGIN_SECURITY_MAX_FILE_INSPECTION_BYTES
+    return {
+      path,
+      size: content.length,
+      sha256: createHash('sha256').update(content).digest('hex'),
+      kind: isText ? 'text' as const : 'binary' as const,
+      ...(isText
+        ? {
+            text: content
+              .subarray(0, PLUGIN_SECURITY_MAX_FILE_INSPECTION_BYTES)
+              .toString('utf8'),
+            ...(truncated ? { truncated: true } : {}),
+          }
+        : {}),
+    }
+  })
+}
+
 function generateSignature(filesObject: Record<string, string>): string {
   const sortedKeys = Object.keys(filesObject).sort()
   const sortedObject: Record<string, string> = {}
@@ -218,6 +264,7 @@ function verifyManifestIntegrity(
 export async function extractTpexMetadata(
   buffer: Buffer,
   expected?: PluginPackageExpectedIdentity,
+  waivers: readonly PluginSecurityScanWaiver[] = [],
 ): Promise<TpexExtractedMetadata> {
   let readmeMarkdown: string | null = null
   let manifest: Record<string, unknown> | null = null
@@ -289,6 +336,7 @@ export async function extractTpexMetadata(
     }
 
     entries.push({ path: name, type: entryType, size })
+    if (entries.length > PLUGIN_PACKAGE_MAX_ENTRY_COUNT) break
     const fileBuffer = buffer.subarray(offset, fileEnd)
     const isRegularFile = entryType === 'file'
     if (isRegularFile) files[name] = Buffer.from(fileBuffer)
@@ -325,19 +373,31 @@ export async function extractTpexMetadata(
     offset = fileEnd + padding
   }
 
+  const integrity = verifyManifestIntegrity(manifest, files)
+  const packagePolicy = validatePluginPackagePolicy({
+    profile: 'registry-admission',
+    manifest,
+    entries,
+    archiveSize: buffer.length,
+    expected,
+  })
+  const securityScan = scanPluginPackage({
+    artifactSha256: createHash('sha256').update(buffer).digest('hex'),
+    policyVersion: packagePolicy.policyVersion,
+    policyPassed: integrity.valid && packagePolicy.ok,
+    manifest,
+    files: buildSecurityScanFiles(files),
+    waivers,
+  })
+
   return {
     readmeMarkdown,
     manifest,
     iconBuffer,
     iconFileName,
     iconMimeType,
-    integrity: verifyManifestIntegrity(manifest, files),
-    packagePolicy: validatePluginPackagePolicy({
-      profile: 'registry-admission',
-      manifest,
-      entries,
-      archiveSize: buffer.length,
-      expected,
-    }),
+    integrity,
+    packagePolicy,
+    securityScan,
   }
 }

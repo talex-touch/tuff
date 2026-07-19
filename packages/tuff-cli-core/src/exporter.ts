@@ -1,8 +1,5 @@
 /* eslint-disable no-console */
-import type {
-  PluginPackageEntry,
-  PluginPackagePolicyResult,
-} from '@talex-touch/utils/plugin'
+import type { PluginPackagePolicyResult } from '@talex-touch/utils/plugin'
 import type {
   WidgetPrecompiledManifestEntry,
   WidgetPrecompiledMeta,
@@ -35,6 +32,11 @@ import fs from 'fs-extra'
 import { globSync } from 'glob'
 import path from 'pathe'
 import { CompressLimit, TalexCompress } from './compress-util'
+import { collectPackageEntries } from './package-files'
+import {
+  assertPluginSecurityScan,
+  scanBuiltPluginPackage,
+} from './security-scan'
 import { generateFilesSha256, generateSignature } from './security-util'
 
 // Default configuration
@@ -986,29 +988,6 @@ async function bundleIndexFolder(
   }
 }
 
-function collectStagedPackageEntries(buildDir: string): PluginPackageEntry[] {
-  return globSync('**/*', {
-    cwd: buildDir,
-    dot: true,
-    follow: false,
-  }).map((relativePath) => {
-    const normalizedPath = relativePath.replace(/\\/g, '/')
-    const stats = fs.lstatSync(path.join(buildDir, relativePath))
-    const type: PluginPackageEntry['type'] = stats.isSymbolicLink()
-      ? 'symlink'
-      : stats.isDirectory()
-        ? 'directory'
-        : stats.isFile()
-          ? 'file'
-          : 'other'
-    return {
-      path: normalizedPath,
-      type,
-      size: stats.size,
-    }
-  })
-}
-
 function assertPluginPackagePolicy(
   result: PluginPackagePolicyResult,
   phase: string,
@@ -1214,11 +1193,18 @@ export async function build(userOptions?: Options) {
     validatePluginPackagePolicy({
       profile: 'staged-package',
       manifest,
-      entries: collectStagedPackageEntries(buildDir),
+      entries: collectPackageEntries(buildDir),
       archiveSize: fs.statSync(tpexPath).size,
     }),
     'archive size validation',
   )
+  const securityScan = scanBuiltPluginPackage({ packagePath: tpexPath })
+  assertPluginSecurityScan(securityScan)
+  if (securityScan.decision === 'review-required') {
+    console.warn(
+      `Plugin security scan requires review (${securityScan.findings.length} finding(s)).`,
+    )
+  }
 
   // Check plugin size
   checkPluginSize(tpexPath, opts.maxSizeMB, chalk)
@@ -1468,7 +1454,7 @@ async function compressPlugin(
     validatePluginPackagePolicy({
       profile: 'staged-package',
       manifest,
-      entries: collectStagedPackageEntries(buildDir),
+      entries: collectPackageEntries(buildDir),
     }),
     'staged package validation',
   )

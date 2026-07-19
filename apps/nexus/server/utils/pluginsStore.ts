@@ -1,4 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types'
+import type {
+  PluginSecurityScanDecision,
+  PluginSecurityScanWaiver,
+} from '@talex-touch/utils/plugin'
+import { serializePluginSecurityScanReport } from '@talex-touch/utils/plugin'
 import type { H3Event } from 'h3'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
@@ -9,6 +14,8 @@ import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
 import { deleteImage, uploadImageFromBuffer } from './imageStorage'
 import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
+import { listActivePluginSecurityScanWaivers } from './pluginSecurityScanWaiverStore'
+import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
 import type { TpexExtractedMetadata } from './tpex'
 import { extractTpexMetadata, getTpexAdmissionFailure } from './tpex'
 import {
@@ -51,6 +58,10 @@ function classifyPluginPackageUploadFailure(error: unknown): string {
 
   if (statusCode === 429)
     return 'storage-policy-blocked'
+  if (normalized.includes('plugin_scan'))
+    return normalized.includes('unavailable') || normalized.includes('timeout') || normalized.includes('engine')
+      ? 'plugin-security-scan-unavailable'
+      : 'plugin-security-scan-blocked'
   if (normalized.includes('plugin_package_'))
     return 'plugin-package-policy-rejected'
   if (normalized.includes('integrity'))
@@ -71,6 +82,59 @@ function assertTpexAdmission(metadata: TpexExtractedMetadata): void {
     statusCode: 400,
     statusMessage: `${failure.code}: ${failure.reason}`,
   })
+}
+
+async function extractTpexForAdmission(
+  event: H3Event,
+  packageBuffer: Buffer,
+  expected: { pluginId: string, version: string },
+  waivers: readonly PluginSecurityScanWaiver[],
+  actorId: string,
+  resourceId: string,
+): Promise<TpexExtractedMetadata> {
+  await recordPlatformGovernanceEvent(event, {
+    scope: 'plugin-security-scan',
+    action: 'scan.started',
+    actorId,
+    resourceType: 'plugin-package',
+    resourceId,
+    metadata: { pluginId: expected.pluginId, version: expected.version },
+  })
+  try {
+    const metadata = await extractTpexMetadata(packageBuffer, expected, waivers)
+    const report = metadata.securityScan
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'plugin-security-scan',
+      action: report.decision === 'blocked'
+        ? 'scan.blocked'
+        : report.decision === 'unavailable'
+          ? 'scan.unavailable'
+          : 'scan.completed',
+      actorId,
+      resourceType: 'plugin-package',
+      resourceId,
+      metadata: {
+        artifactSha256: report.artifactSha256,
+        decision: report.decision,
+        scannerVersion: report.scannerVersion,
+        ruleSetVersion: report.ruleSetVersion,
+        findingCount: report.findings.length,
+        failureCode: report.failure?.code ?? null,
+      },
+    })
+    return metadata
+  }
+  catch (error) {
+    await recordPlatformGovernanceEvent(event, {
+      scope: 'plugin-security-scan',
+      action: 'scan.unavailable',
+      actorId,
+      resourceType: 'plugin-package',
+      resourceId,
+      metadata: { reason: 'archive-extraction-failed' },
+    })
+    throw error
+  }
 }
 
 // region debug [DBG-nexus-coreapp-planprd-2026-01-12]
@@ -129,6 +193,12 @@ export interface DashboardPluginVersion {
   status: PluginVersionStatus
   reviewedAt?: string | null
   rejectReason?: string | null
+  securityScanDecision?: PluginSecurityScanDecision | null
+  securityScanReportDigest?: string | null
+  securityScannerVersion?: string | null
+  securityRuleSetVersion?: string | null
+  securityScanFindingCount?: number | null
+  securityScanCompletedAt?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -218,6 +288,12 @@ interface D1PluginVersionRow {
   status: string | null
   reviewed_at: string | null
   reject_reason: string | null
+  security_scan_decision?: string | null
+  security_scan_report_digest?: string | null
+  security_scanner_version?: string | null
+  security_rule_set_version?: string | null
+  security_scan_finding_count?: number | null
+  security_scan_completed_at?: string | null
   created_at: string
   updated_at: string
 }
@@ -478,6 +554,12 @@ async function ensurePluginSchema(db: D1Database) {
       status TEXT NOT NULL DEFAULT 'pending',
       reviewed_at TEXT,
       reject_reason TEXT,
+      security_scan_decision TEXT,
+      security_scan_report_digest TEXT,
+      security_scanner_version TEXT,
+      security_rule_set_version TEXT,
+      security_scan_finding_count INTEGER,
+      security_scan_completed_at TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -550,6 +632,12 @@ async function ensurePluginSchema(db: D1Database) {
   await addVersionColumnIfMissing('status', 'status TEXT NOT NULL DEFAULT \'pending\'')
   await addVersionColumnIfMissing('reviewed_at', 'reviewed_at TEXT')
   await addVersionColumnIfMissing('reject_reason', 'reject_reason TEXT')
+  await addVersionColumnIfMissing('security_scan_decision', 'security_scan_decision TEXT')
+  await addVersionColumnIfMissing('security_scan_report_digest', 'security_scan_report_digest TEXT')
+  await addVersionColumnIfMissing('security_scanner_version', 'security_scanner_version TEXT')
+  await addVersionColumnIfMissing('security_rule_set_version', 'security_rule_set_version TEXT')
+  await addVersionColumnIfMissing('security_scan_finding_count', 'security_scan_finding_count INTEGER')
+  await addVersionColumnIfMissing('security_scan_completed_at', 'security_scan_completed_at TEXT')
 
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_store_plugin_status_created ON ${PLUGIN_VERSIONS_TABLE}(plugin_id, status, created_at DESC);`).run()
 
@@ -667,6 +755,14 @@ function mapPluginVersionRow(row: D1PluginVersionRow): DashboardPluginVersion {
     status: (row.status as PluginVersionStatus) || 'pending',
     reviewedAt: row.reviewed_at,
     rejectReason: row.reject_reason,
+    securityScanDecision: row.security_scan_decision as PluginSecurityScanDecision | null | undefined,
+    securityScanReportDigest: row.security_scan_report_digest ?? null,
+    securityScannerVersion: row.security_scanner_version ?? null,
+    securityRuleSetVersion: row.security_rule_set_version ?? null,
+    securityScanFindingCount: row.security_scan_finding_count == null
+      ? null
+      : Number(row.security_scan_finding_count),
+    securityScanCompletedAt: row.security_scan_completed_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
@@ -2179,11 +2275,16 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       const packageArrayBuffer = await input.packageFile.arrayBuffer()
       const packageBuffer = Buffer.from(packageArrayBuffer)
       const signature = await sha256Hex(packageBuffer)
+      const scanWaivers = await listActivePluginSecurityScanWaivers(event, signature)
 
-      const metadata = await extractTpexMetadata(packageBuffer, {
-        pluginId: plugin.slug,
-        version: input.version,
-      })
+      const metadata = await extractTpexForAdmission(
+        event,
+        packageBuffer,
+        { pluginId: plugin.slug, version: input.version },
+        scanWaivers,
+        input.createdBy,
+        packageGovernanceResourceId,
+      )
       assertTpexAdmission(metadata)
 
       let iconKey = plugin.iconKey ?? null
@@ -2271,6 +2372,9 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
   })()
 
   const now = new Date().toISOString()
+  const securityScanReportDigest = await sha256Hex(
+    Buffer.from(serializePluginSecurityScanReport(metadata.securityScan)),
+  )
   const status: PluginVersionStatus = 'pending'
   const reviewedAt: string | null = null
   const rawVersion: DashboardPluginVersion = {
@@ -2291,6 +2395,12 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     status,
     reviewedAt,
     rejectReason: null,
+    securityScanDecision: metadata.securityScan.decision,
+    securityScanReportDigest,
+    securityScannerVersion: metadata.securityScan.scannerVersion,
+    securityRuleSetVersion: metadata.securityScan.ruleSetVersion,
+    securityScanFindingCount: metadata.securityScan.findings.length,
+    securityScanCompletedAt: metadata.securityScan.completedAt,
     createdAt: now,
     updatedAt: now,
   }
@@ -2328,9 +2438,15 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         status,
         reviewed_at,
         reject_reason,
+        security_scan_decision,
+        security_scan_report_digest,
+        security_scanner_version,
+        security_rule_set_version,
+        security_scan_finding_count,
+        security_scan_completed_at,
         created_at,
         updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25);
     `).bind(
       version.id,
       version.pluginId,
@@ -2349,6 +2465,12 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       version.status,
       version.reviewedAt ?? null,
       version.rejectReason ?? null,
+      version.securityScanDecision ?? null,
+      version.securityScanReportDigest ?? null,
+      version.securityScannerVersion ?? null,
+      version.securityRuleSetVersion ?? null,
+      version.securityScanFindingCount ?? null,
+      version.securityScanCompletedAt ?? null,
       version.createdAt,
       version.updatedAt,
     ).run()
@@ -2490,10 +2612,15 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
       const packageArrayBuffer = await input.packageFile.arrayBuffer()
       const packageBuffer = Buffer.from(packageArrayBuffer)
       const signature = await sha256Hex(packageBuffer)
-      const metadata = await extractTpexMetadata(packageBuffer, {
-        pluginId: plugin.slug,
-        version: targetVersion.version,
-      })
+      const scanWaivers = await listActivePluginSecurityScanWaivers(event, signature)
+      const metadata = await extractTpexForAdmission(
+        event,
+        packageBuffer,
+        { pluginId: plugin.slug, version: targetVersion.version },
+        scanWaivers,
+        input.updatedBy,
+        packageGovernanceResourceId,
+      )
       assertTpexAdmission(metadata)
 
       let iconKey = targetVersion.iconKey ?? plugin.iconKey ?? null
@@ -2570,6 +2697,9 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     }
   })()
   const now = new Date().toISOString()
+  const securityScanReportDigest = await sha256Hex(
+    Buffer.from(serializePluginSecurityScanReport(metadata.securityScan)),
+  )
 
   const updatedVersion: DashboardPluginVersion = sanitizeVersion({
     ...targetVersion,
@@ -2585,6 +2715,12 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     status: 'pending',
     reviewedAt: null,
     rejectReason: null,
+    securityScanDecision: metadata.securityScan.decision,
+    securityScanReportDigest,
+    securityScannerVersion: metadata.securityScan.scannerVersion,
+    securityRuleSetVersion: metadata.securityScan.ruleSetVersion,
+    securityScanFindingCount: metadata.securityScan.findings.length,
+    securityScanCompletedAt: metadata.securityScan.completedAt,
     updatedAt: now,
   })
 
@@ -2606,8 +2742,14 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
         status = ?10,
         reviewed_at = NULL,
         reject_reason = NULL,
-        updated_at = ?11
-      WHERE id = ?12;
+        security_scan_decision = ?11,
+        security_scan_report_digest = ?12,
+        security_scanner_version = ?13,
+        security_rule_set_version = ?14,
+        security_scan_finding_count = ?15,
+        security_scan_completed_at = ?16,
+        updated_at = ?17
+      WHERE id = ?18;
     `).bind(
       updatedVersion.signature,
       updatedVersion.packageKey,
@@ -2619,6 +2761,12 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
       updatedVersion.manifest ? JSON.stringify(updatedVersion.manifest) : null,
       updatedVersion.changelog ?? null,
       updatedVersion.status,
+      updatedVersion.securityScanDecision ?? null,
+      updatedVersion.securityScanReportDigest ?? null,
+      updatedVersion.securityScannerVersion ?? null,
+      updatedVersion.securityRuleSetVersion ?? null,
+      updatedVersion.securityScanFindingCount ?? null,
+      updatedVersion.securityScanCompletedAt ?? null,
       updatedVersion.updatedAt,
       updatedVersion.id,
     ).run()

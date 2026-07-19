@@ -22,13 +22,21 @@
 
 ## Acceptance Criteria
 
-- [ ] clean official `.tpex` 生成 `passed` 报告，digest 与 package policy 输出一致。
-- [ ] secret fixture、raw Electron/transport fixture、未声明高风险能力和 native binary fixture 产生预期稳定 finding code。
-- [ ] Critical/High、timeout 和 scanner exception 均阻止版本进入可审核/可展示状态；无 package/version 半写入。
-- [ ] CLI 与 Nexus 使用同一 rule set，对同一 fixture 产生相同核心 findings。
-- [ ] 豁免过期或缺 owner/reason 时无效；有效豁免仍保留原 finding 与审计元数据。
-- [ ] 输出经过 secret leakage 回归，报告中不存在 fixture secret 原文或完整源码。
-- [ ] focused scanner、Nexus integration、lint/typecheck 通过。
+- [x] clean official `.tpex` 生成 `passed` 报告，digest 与 package policy 输出一致。
+- [x] secret fixture、raw Electron/transport fixture、未声明高风险能力和 native binary fixture 产生预期稳定 finding code。
+- [x] Critical/High、timeout 和 scanner exception 均阻止版本进入可审核/可展示状态；无 package/version 半写入。
+- [x] CLI 与 Nexus 使用同一 rule set，对同一 fixture 产生相同核心 findings。
+- [x] 豁免过期或缺 owner/reason 时无效；有效豁免仍保留原 finding 与审计元数据。
+- [x] 输出经过 secret leakage 回归，报告中不存在 fixture secret 原文或完整源码。
+- [x] focused scanner、Nexus integration、lint/typecheck 通过。
+
+## Verification Evidence
+
+- Shared scanner：13 assertions passed，覆盖稳定排序、全部初始规则、limits/timeout/engine exception、waiver 与 secret leakage。
+- CLI artifact scanner：2 assertions passed；直接读取 policy-valid `.tpex`，不以 staging 内容替代归档。
+- Nexus authoritative scan/waiver/publish：9 assertions passed；验证 admission、summary persistence、governance events、无半写入和 re-edit refresh。
+- `touch-quickops-0.1.0.tpex` 与含已声明 `system.shell` 能力的 `touch-browser-open-1.0.4.tpex` 均真实构建并返回 `passed`/zero findings。
+- CLI Core/Tuff CLI build、Nexus typecheck、23-plugin validation、scoped lint 与 `git diff --check` 通过。`packages/utils` 无独立 typecheck script；CLI DTS build 与 Nexus typecheck 均编译共享扫描契约。
 
 ## Out of Scope
 

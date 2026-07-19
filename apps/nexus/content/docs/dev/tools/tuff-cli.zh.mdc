@@ -79,6 +79,19 @@ code: |
 - `--port <port>` - 开发服务器端口
 - `--open` - 启动后打开浏览器
 
+**`tuff scan`**
+
+对最终 `.tpex` 产物执行版本化静态安全规则。报告绑定该归档的 SHA-256；命令不会执行插件代码，也不会用独立暂存目录冒充归档内容。
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff scan --package dist/com.example.plugin-1.0.0.tpex --json
+---
+:::
+
+`critical`/`high`、扫描超时、包完整性异常和规则不可用均 fail closed。报告只包含规则编码、相对路径、哈希和位置，不包含命中的秘密值或源码片段。
+
 **`tuff publish`**
 
 发布最新 `.tpex` 包到 Tuff Nexus。
