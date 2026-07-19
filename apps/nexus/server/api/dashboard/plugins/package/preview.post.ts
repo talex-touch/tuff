@@ -1,6 +1,8 @@
 import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
 import { createError, readFormData } from 'h3'
 import { requireAuthOrApiKey } from '../../../../utils/auth'
+import { listActivePluginSecurityScanWaivers } from '../../../../utils/pluginSecurityScanWaiverStore'
 import { extractTpexMetadata, getTpexAdmissionFailure } from '../../../../utils/tpex'
 
 const isFile = (value: unknown): value is File => typeof File !== 'undefined' && value instanceof File
@@ -15,7 +17,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Package file is required.' })
 
   const buffer = Buffer.from(await packageFile.arrayBuffer())
-  const metadata = await extractTpexMetadata(buffer)
+  const artifactSha256 = createHash('sha256').update(buffer).digest('hex')
+  const waivers = await listActivePluginSecurityScanWaivers(event, artifactSha256)
+  const metadata = await extractTpexMetadata(buffer, undefined, waivers)
   const admissionFailure = getTpexAdmissionFailure(metadata)
   if (admissionFailure) {
     throw createError({
@@ -36,5 +40,18 @@ export default defineEventHandler(async (event) => {
     readmeMarkdown: metadata.readmeMarkdown ?? null,
     iconDataUrl,
     hasIcon: !!metadata.iconBuffer,
+    securityScan: {
+      decision: metadata.securityScan.decision,
+      scannerVersion: metadata.securityScan.scannerVersion,
+      ruleSetVersion: metadata.securityScan.ruleSetVersion,
+      artifactSha256: metadata.securityScan.artifactSha256,
+      findings: metadata.securityScan.findings.map(finding => ({
+        code: finding.code,
+        severity: finding.severity,
+        location: finding.location,
+        permissionId: finding.permissionId,
+        waived: Boolean(finding.waiver),
+      })),
+    },
   }
 })

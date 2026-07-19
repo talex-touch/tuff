@@ -56,7 +56,7 @@ Reports store relative path, content digest, optional line/column span and redac
 
 ## Nexus Persistence
 
-Version rows store scan decision, report digest, scanner/rule-set versions and completed timestamp. Full bounded report may live in governed object storage. Timeline records started/completed/blocked/unavailable without embedding report content.
+Version rows store scan decision, report digest, scanner/rule-set versions, finding count and completed timestamp. The full bounded report remains admission-local; platform governance records started/completed/blocked/unavailable plus waiver create/revoke without embedding report content.
 
 ## Determinism and Limits
 

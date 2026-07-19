@@ -79,6 +79,19 @@ code: |
 - `--port <port>` - Dev server port
 - `--open` - Open browser on start
 
+**`tuff scan`**
+
+Run the versioned static security rules against the finalized `.tpex` artifact. The report is bound to that archive's SHA-256; the command does not execute plugin code or scan a separate staging directory.
+
+:::TuffCodeBlock{lang="bash"}
+---
+code: |
+  tuff scan --package dist/com.example.plugin-1.0.0.tpex --json
+---
+:::
+
+`critical`/`high`, scanner timeout, invalid package integrity and unavailable rules fail closed. Reports contain rule codes, relative paths, hashes and positions, never matched secret values or source snippets.
+
 **`tuff publish`**
 
 Publish the latest `.tpex` package to Tuff Nexus.

@@ -1369,3 +1369,80 @@ const failure = getTpexAdmissionFailure(metadata)
 if (failure) throw createSafeAdmissionError(failure)
 await uploadPluginPackage(file, bytes)
 ```
+
+## Scenario: Deterministic TPEX Security Scan
+
+### 1. Scope / Trigger
+
+- Trigger: a finalized `.tpex` is scanned locally by Tuff CLI or admitted by Nexus after integrity and Package Policy validation.
+- The scanner is static and bounded: it reads package inventory and text/binary content without executing plugin code or extracting untrusted paths.
+
+### 2. Signatures
+
+```ts
+scanPluginPackage({
+  artifactSha256,
+  policyVersion,
+  policyPassed,
+  manifest,
+  files,
+  waivers,
+}): PluginSecurityScanReport
+```
+
+The report carries scanner/rule-set versions, artifact digest, bounded findings, inspected counts, timestamps and one of `passed`, `review-required`, `blocked` or `unavailable`.
+
+### 3. Contracts
+
+- `packages/utils/plugin/security-scan.ts` owns stable rule/failure codes, limits, deterministic finding reduction, waiver application and report serialization. CLI and Nexus must not fork the rule set.
+- CLI scans the actual finalized `.tpex`; it must not bind a package digest to content read from a separate staging directory.
+- Nexus performs the authoritative scan before package object upload or version-row persistence. `critical`/`high`, timeout, invalid input, rule-engine failure and Package Policy prerequisite failure all fail closed.
+- `medium`/`low` unwaived findings produce `review-required`; they stay visible to reviewers but do not masquerade as `passed`.
+- Findings retain only stable code, severity, relative path, line/column, file hash and permission id. Reports must never contain the matched value, source snippets, private-key body, token or user path.
+- Version rows persist only the scan decision, report digest, scanner/rule-set versions, finding count and completion time. Full reports are not copied into public plugin metadata.
+- Waivers are Nexus-owned records keyed by artifact SHA-256 and rule id. They require an authenticated admin owner, non-empty reason and future expiry; revocation and expiry take effect immediately. Package content cannot declare a waiver.
+- Private-key, high-confidence secret and raw runtime escape findings are not waivable. A valid waiver keeps the original finding and attaches bounded audit metadata.
+- Scan lifecycle and waiver mutation write governance events without source or secret material.
+
+### 4. Rule / Decision Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Private key or high-confidence secret material | Critical finding; `blocked`; non-waivable |
+| Raw Electron, raw transport, `ipcRenderer`, process binding or non-webpack require escape | Critical finding; `blocked`; non-waivable |
+| Dynamic execution marker, Node VM or native executable/addon | High finding; blocked unless an active server-owned waiver permits the rule |
+| Capability reference lacks its declared permission | High `PLUGIN_SCAN_PERMISSION_MISMATCH` |
+| Per-file/total/file-count limit or timeout exceeded | `blocked` finding or `unavailable`; never pass |
+| Scanner exception, invalid digest or missing policy prerequisite | `unavailable`; no package/version write |
+| Only valid waived findings remain | `passed`, with original findings and waiver metadata retained |
+
+### 5. Tests Required
+
+- Shared scanner tests cover clean deterministic output, lexical ordering, every stable rule code, timeout/invalid input fail-closed, waiver validity/expiry and secret-leakage serialization.
+- CLI tests construct a real policy-valid `.tpex`, prove the report digest matches that artifact and prove a raw runtime escape blocks.
+- Nexus tests cover clean, secret, raw escape and native package admission plus server-provided waiver behavior.
+- Waiver-store tests cover create, active lookup, expiry, revocation and memory/D1-compatible persisted state.
+- A real canonical plugin build must produce a `.tpex` that passes the same scanner used by Nexus.
+
+### 6. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const artifactSha256 = sha256(tpexBytes)
+const files = readFiles('dist/build')
+return scanPluginPackage({ artifactSha256, files })
+```
+
+#### Correct
+
+```ts
+const archive = readBoundedTpex(packagePath)
+const report = scanPluginPackage({
+  artifactSha256: sha256(archive.bytes),
+  policyPassed: archive.integrityPassed && archive.policy.ok,
+  manifest: archive.manifest,
+  files: archive.files,
+})
+assertPluginSecurityScan(report)
+```

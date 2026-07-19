@@ -21,6 +21,7 @@ import {
   readCliConfig,
   resolveBuildConfig,
   resolveDevConfig,
+  runSecurityScan,
   runValidate,
   saveAuthToken,
   trackRepository,
@@ -143,6 +144,7 @@ function printHelp() {
   console.log('  builder     Package existing build output into .tpex')
   console.log('  dev         Start Vite dev server for plugin development')
   console.log('  publish     Publish plugin package to Tuff Nexus')
+  console.log('  scan        Security-scan a built .tpex package')
   console.log('  validate    Validate manifest.json and permission declarations')
   console.log('  login       Authenticate with Tuff Nexus')
   console.log('  logout      Clear authentication')
@@ -174,6 +176,7 @@ function printAbout() {
   console.log('  - builder: Package existing build output into .tpex')
   console.log('  - dev:     Start a Vite dev server for plugin development')
   console.log('  - publish: Publish plugin packages to Nexus server')
+  console.log('  - scan:    Security-scan built plugin packages')
   console.log('  - validate: Validate manifest compatibility and permissions')
   console.log('  - doctor:  Inspect local AI tools and skill readiness')
   console.log('  - setup:   Configure optional Codex skills and MCP capability hints')
@@ -212,6 +215,17 @@ function printValidateHelp() {
   console.log('  --manifest <path>  Manifest file path (default: ./manifest.json)')
   console.log('  --strict           Treat warnings as errors')
   console.log('  --help, -h         Show this help message')
+  console.log('')
+}
+
+function printSecurityScanHelp() {
+  console.log(`Usage: ${CLI_COMMAND_NAME} scan [options]`)
+  console.log('')
+  console.log('Options:')
+  console.log('  --root <path>       Plugin project root (default: current directory)')
+  console.log('  --package <path>    .tpex path (default: latest package in dist)')
+  console.log('  --json              Emit the bounded machine-readable report')
+  console.log('  --help, -h          Show this help message')
   console.log('')
 }
 
@@ -1714,6 +1728,14 @@ async function main() {
       }
       else {
         await runValidate(commandArgs)
+      }
+    }
+    else if (command === 'scan') {
+      if (hasHelpFlag) {
+        printSecurityScanHelp()
+      }
+      else {
+        await runSecurityScan(commandArgs)
       }
     }
     else if (command === 'publish') {
