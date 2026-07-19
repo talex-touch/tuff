@@ -29,7 +29,7 @@ const links = computed(() => [
   // { to: '/#developer', label: t('nav.developer') },
   { to: '/updates', label: t('nav.download') },
   // { to: '/#blog', label: t('nav.blog') },
-  // { to: '/pricing', label: t('nav.pricing') },
+  { to: '/pricing', label: t('nav.pricing') },
 ])
 
 const fullPath = computed(() => route.fullPath || '/')

@@ -5,7 +5,7 @@ import { fetchContentApi } from '~/utils/content-api-client'
 
 const searchTerm = ref('')
 const searchResults = ref<DocsSearchItem[]>([])
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 let searchRunId = 0
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let cachedItems: DocsSearchItem[] | null = null
@@ -66,8 +66,8 @@ watch(searchTerm, (newTerm) => {
     <TxSearchInput
       v-model="searchTerm"
       class="w-full"
-      placeholder="Search..."
-      aria-label="Search"
+       :placeholder="t('search.placeholder', 'Search...')"
+       :aria-label="t('search.ariaLabel', 'Search documentation')"
     />
     <ul
       v-if="searchResults.length"
