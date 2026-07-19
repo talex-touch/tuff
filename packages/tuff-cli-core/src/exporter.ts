@@ -584,7 +584,7 @@ function createWidgetBundlePlugin(
   buildDir: string,
   featureId: string,
   dependencies: Set<string>,
-  styles: string[],
+  styles: Map<string, string>,
 ): EsbuildPlugin {
   return {
     name: 'tuff-widget-bundle',
@@ -624,7 +624,11 @@ function createWidgetBundlePlugin(
 
       build.onLoad({ filter: /\.vue$/ }, async (args) => {
         const source = await fs.readFile(args.path, 'utf-8')
-        const parseResult = parse(source, { filename: args.path })
+        const stableSourcePath = path.relative(buildDir, args.path).replace(/\\/g, '/')
+        if (stableSourcePath.startsWith('../') || path.isAbsolute(stableSourcePath))
+          throw new Error(`WIDGET_PATH_INVALID: feature "${featureId}" source escapes build directory`)
+        const sourceId = hashWidgetSource(stableSourcePath)
+        const parseResult = parse(source, { filename: stableSourcePath })
         if (parseResult.errors.length) {
           const details = parseResult.errors
             .map(error => String(error))
@@ -639,22 +643,21 @@ function createWidgetBundlePlugin(
           .map(style => style.content || '')
           .join('\n')
           .trim()
-        if (styleContent) {
-          styles.push(styleContent)
-        }
+        if (styleContent)
+          styles.set(stableSourcePath, styleContent)
 
         let scriptCode = 'export default {}'
         if (descriptor.script || descriptor.scriptSetup) {
           scriptCode = compileScript(descriptor, {
-            id: hashWidgetSource(args.path),
+            id: sourceId,
             inlineTemplate: false,
           }).content
         }
 
         const templateResult = descriptor.template
           ? compileTemplate({
-              id: hashWidgetSource(args.path),
-              filename: args.path,
+              id: sourceId,
+              filename: stableSourcePath,
               source: descriptor.template.content,
               compilerOptions: {
                 mode: 'module',
@@ -684,6 +687,19 @@ function createWidgetBundlePlugin(
       }))
     },
   }
+}
+
+function resolveWidgetCompiledAt(): number {
+  const sourceDateEpoch = process.env.SOURCE_DATE_EPOCH?.trim()
+  if (!sourceDateEpoch)
+    return Date.now()
+  if (!/^\d+$/.test(sourceDateEpoch))
+    throw new Error('SOURCE_DATE_EPOCH must be a non-negative integer in seconds.')
+
+  const seconds = Number(sourceDateEpoch)
+  if (!Number.isSafeInteger(seconds))
+    throw new Error('SOURCE_DATE_EPOCH exceeds the supported timestamp range.')
+  return seconds * 1000
 }
 
 async function compileWidgetForPackage(
@@ -718,10 +734,10 @@ async function compileWidgetForPackage(
   )
   const compiledPath = path.resolve(context.buildDir, compiledRelativePath)
   const metaPath = path.resolve(context.buildDir, metaRelativePath)
-  const compiledAt = Date.now()
+  const compiledAt = resolveWidgetCompiledAt()
   const hash = hashWidgetSource(source)
   const bundledDependencies = new Set(dependencies)
-  const bundledStyles: string[] = []
+  const bundledStyles = new Map<string, string>()
 
   if (ext === '.cjs') {
     const meta: WidgetPrecompiledMeta = {
@@ -733,7 +749,7 @@ async function compileWidgetForPackage(
       runtimeStage,
       hash,
       styles: '',
-      dependencies: Array.from(bundledDependencies),
+      dependencies: Array.from(bundledDependencies).sort((left, right) => left.localeCompare(right, 'en')),
       compiledAt,
     }
     const code = `
@@ -774,7 +790,11 @@ module.exports = __component
     logLevel: 'silent',
   })
   const bundledCode = result.outputFiles?.[0]?.text ?? ''
-  const styles = bundledStyles.join('\n').trim()
+  const styles = Array.from(bundledStyles.entries())
+    .sort(([left], [right]) => left.localeCompare(right, 'en'))
+    .map(([, style]) => style)
+    .join('\n')
+    .trim()
   const finalBundle = `
 ${bundledCode}
 const __component = exports.default || module.exports || {}
@@ -792,7 +812,7 @@ module.exports = __component
     runtimeStage,
     hash,
     styles,
-    dependencies: Array.from(bundledDependencies),
+    dependencies: Array.from(bundledDependencies).sort((left, right) => left.localeCompare(right, 'en')),
     compiledAt,
   }
 
@@ -1179,14 +1199,6 @@ export async function build(userOptions?: Options) {
     + chalk.greenBright(' Manifest.json generated successfully!'),
   )
 
-  // 生成密钥
-  const key = genStr(32)
-  fs.writeFileSync(path.join(buildDir, 'key.talex'), key)
-  console.info(
-    chalk.bgBlack.white(' Talex-Touch ')
-    + chalk.greenBright(' key.talex generated successfully!'),
-  )
-
   // 步骤3：压缩生成 .tpex
   const tpexPath = await compressPlugin(manifest, buildDir, opts, chalk)
   assertPluginPackagePolicy(
@@ -1430,8 +1442,7 @@ async function compressPlugin(
   })
   const filesToHash = filesInBuild.filter(
     file =>
-      path.basename(file) !== 'manifest.json'
-      && path.basename(file) !== 'key.talex',
+      path.basename(file) !== 'manifest.json',
   )
 
   manifest._files = generateFilesSha256(filesToHash, buildDir)
@@ -1507,11 +1518,4 @@ async function compressPlugin(
   await tCompress.compress()
 
   return path.resolve(buildPath)
-}
-
-function genStr(len: number): string {
-  return (
-    (Math.random() * 100000).toString(16).slice(-8)
-    + (len > 8 ? genStr(len - 8) : '')
-  )
 }

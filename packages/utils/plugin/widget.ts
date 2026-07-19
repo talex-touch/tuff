@@ -36,6 +36,8 @@ export const WIDGET_ALLOWED_PACKAGES = [
   "@arrow-js/core",
   "vue",
   "@talex-touch/utils/core-box",
+  "@talex-touch/utils/plugin",
+  "@talex-touch/utils/plugin/sdk",
   "@talex-touch/tuffex",
   "@talex-touch/tuffex/ai-elements",
 ] as const;

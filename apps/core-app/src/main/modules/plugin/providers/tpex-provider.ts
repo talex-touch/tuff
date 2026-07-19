@@ -291,10 +291,13 @@ export class TpexPluginProvider implements PluginProvider {
       metadata: {
         sourceType: 'registry',
         slug: plugin.slug,
+        pluginId: targetVersion.nexusAttestation.payload.pluginId,
+        pluginName: targetVersion.nexusAttestation.payload.pluginName,
         version: targetVersion.version,
         channel: targetVersion.channel,
         packageSize: targetVersion.packageSize,
-        signature: targetVersion.signature,
+        artifactSha256: targetVersion.artifactSha256,
+        nexusAttestation: targetVersion.nexusAttestation,
         installs: plugin.installs
       }
     }

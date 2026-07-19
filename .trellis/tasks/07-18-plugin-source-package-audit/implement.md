@@ -2,15 +2,15 @@
 
 ## Ordered Checklist
 
-1. [ ] Inventory official/release-supported plugin workspaces and their actual scripts; define one explicit release-target registry with reasons for non-applicable gates.
-2. [ ] Refactor existing CoreApp official plugin build/seed tooling to consume the registry where ownership overlaps; avoid a second target list.
-3. [ ] Implement an isolated clean-build orchestrator with fixed prerequisite/target order and sanitized command records.
-4. [ ] Ensure generated `dist/out`, `dist/build` and stale `.tpex` inputs are removed from the isolated target before build.
-5. [ ] Execute declared build/test/typecheck/lint gates and stop on first failure.
-6. [ ] Run canonical CLI builder, package policy, security scan and signing; calculate final artifact and normalized inventory digests.
-7. [ ] Compare canonical build with any bundled projection by content, not version only.
-8. [ ] Emit machine-readable per-target and aggregate build audit records.
-9. [ ] Integrate the audit command into the plugin release workflow/CI without publishing.
+1. [x] Inventory official/release-supported plugin workspaces and their actual scripts; define one explicit release-target registry with reasons for non-applicable gates.
+2. [x] Refactor existing CoreApp official plugin build/seed tooling to consume the registry where ownership overlaps; avoid a second target list.
+3. [x] Implement an isolated clean-build orchestrator with fixed prerequisite/target order and sanitized command records.
+4. [x] Ensure generated `dist/out`, `dist/build` and stale `.tpex` inputs are removed from the isolated target before build.
+5. [x] Execute declared build/test/typecheck/lint gates and stop on first failure.
+6. [x] Run canonical CLI builder, package policy, security scan and signing; calculate final artifact and normalized inventory digests.
+7. [x] Compare canonical build with any bundled projection by content, not version only.
+8. [x] Emit machine-readable per-target and aggregate build audit records.
+9. [x] Integrate the audit command into the plugin release workflow/CI without publishing.
 
 ## Contract Tests
 
@@ -29,7 +29,7 @@
 corepack pnpm -C apps/core-app exec vitest run scripts/lib/official-plugin-runtime-sync.test.ts scripts/plugin-source-package-audit.test.ts
 corepack pnpm -C packages/tuff-cli-core test
 corepack pnpm plugins:validate
-# Run the new plugin source audit in no-publish mode for every registered target
+corepack pnpm plugins:release:audit
 corepack pnpm lint:changed
 git diff --check
 ```

@@ -21,12 +21,12 @@
 
 ## Acceptance Criteria
 
-- [ ] 在 clean checkout/隔离输出目录中按目标清单构建所有选定 official plugins，任何 prerequisite 或 plugin gate 失败即停止。
-- [ ] 每个目标都有 build/test/typecheck/lint/package-policy/scan/signature 的明确结果；不适用项必须在 registry 中显式说明。
-- [ ] 重复两次构建得到相同的规范化 entry inventory 和内容摘要；若 archive 容器含时间戳，报告明确区分容器差异与内容差异。
-- [ ] stale `.tpex`、nested `dist/build`、未哈希文件、Manifest/package 版本不一致和过期 bundled projection fixture 均被拒绝。
-- [ ] machine-readable audit 可被后续发布证据 verifier 消费，并绑定 source revision 与最终 artifact SHA-256。
-- [ ] official plugin focused builds/tests、审计器 tests、lint/typecheck 通过。
+- [x] 在 clean checkout/隔离输出目录中按目标清单构建所有选定 official plugins，任何 prerequisite 或 plugin gate 失败即停止。
+- [x] 每个目标都有 build/test/typecheck/lint/package-policy/scan/signature 的明确结果；不适用项必须在 registry 中显式说明。
+- [x] 重复两次构建得到相同的规范化 entry inventory 和内容摘要；若 archive 容器含时间戳，报告明确区分容器差异与内容差异。
+- [x] stale `.tpex`、nested `dist/build`、未哈希文件、Manifest/package 版本不一致和过期 bundled projection fixture 均被拒绝。
+- [x] machine-readable audit 可被后续发布证据 verifier 消费，并绑定 source revision 与最终 artifact SHA-256。
+- [x] official plugin focused builds/tests、审计器 tests、lint/typecheck 通过。
 
 ## Out of Scope
 

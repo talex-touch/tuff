@@ -34,27 +34,38 @@ function readBoundedInteger(value: unknown, fallback: number, min: number, max: 
   return Math.min(Math.max(Math.floor(parsed), min), max)
 }
 
-function cleanVersionForSearch(slug: string, version: DashboardPluginVersion) {
-  return {
+function cleanVersionForSearch(slug: string, version: DashboardPluginVersion, compact: boolean) {
+  const base = {
     id: version.id,
     pluginId: version.pluginId,
     channel: version.channel,
     version: version.version,
-    signature: version.signature,
+    artifactSha256: version.artifactSha256,
+    nexusAttestation: version.nexusAttestation,
+    availability: 'available' as const,
     packageUrl: buildStoreDownloadUrl(slug, version.version),
     packageSize: version.packageSize,
     status: version.status,
     createdAt: version.createdAt,
     updatedAt: version.updatedAt,
   }
+  if (compact)
+    return base
+
+  return {
+    ...base,
+    readmeMarkdown: version.readmeMarkdown ?? null,
+    manifest: version.manifest,
+    changelog: version.changelog,
+  }
 }
 
-function cleanPluginForSearch(plugin: StorePluginSearchPlugin) {
+function cleanPluginForSearch(plugin: StorePluginSearchPlugin, compact: boolean) {
   const latest = plugin.latestVersion ?? plugin.versions.find(version => version.id === plugin.latestVersionId) ?? plugin.versions[0]
   if (!latest)
     return null
 
-  return {
+  const base = {
     id: plugin.id,
     slug: plugin.slug,
     name: plugin.name,
@@ -68,8 +79,16 @@ function cleanPluginForSearch(plugin: StorePluginSearchPlugin) {
     iconUrl: plugin.iconUrl,
     createdAt: plugin.createdAt,
     updatedAt: plugin.updatedAt,
-    latestVersion: cleanVersionForSearch(plugin.slug, latest),
+    latestVersion: cleanVersionForSearch(plugin.slug, latest, compact),
     readmeUrl: plugin.readmeMarkdown ? `/api/store/plugins/${plugin.slug}/readme` : null,
+  }
+  if (compact)
+    return base
+
+  return {
+    ...base,
+    readmeMarkdown: plugin.readmeMarkdown ?? null,
+    versions: plugin.versions.map(version => cleanVersionForSearch(plugin.slug, version, false)),
   }
 }
 
@@ -88,12 +107,9 @@ export default defineEventHandler(async (event) => {
     offset,
   })
 
-  const plugins = compact
-    ? result.plugins
-        .map(cleanPluginForSearch)
-        .filter((value): value is NonNullable<typeof value> => Boolean(value))
-    : result.plugins
-
+  const plugins = result.plugins
+    .map(plugin => cleanPluginForSearch(plugin, compact))
+    .filter((value): value is NonNullable<typeof value> => Boolean(value))
   return {
     plugins,
     total: result.total,

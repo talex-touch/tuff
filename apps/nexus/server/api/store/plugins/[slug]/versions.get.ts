@@ -25,7 +25,9 @@ export default defineEventHandler(async (event) => {
     channel: v.channel,
     packageUrl: buildStoreDownloadUrl(plugin.slug, v.version),
     packageSize: v.packageSize,
-    signature: v.signature,
+    artifactSha256: v.artifactSha256,
+    nexusAttestation: v.nexusAttestation,
+    availability: 'available' as const,
     changelog: v.changelog,
     createdAt: v.createdAt,
   }))

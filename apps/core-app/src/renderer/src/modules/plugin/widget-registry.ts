@@ -12,6 +12,8 @@ import {
 } from '@talex-touch/utils/plugin/widget'
 import * as ArrowCore from '@arrow-js/core'
 import * as TalexUtilsCoreBox from '@talex-touch/utils/core-box'
+import * as TalexPlugin from '@talex-touch/utils/plugin'
+import * as TalexPluginSdk from '@talex-touch/utils/plugin/sdk'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, PluginEvents } from '@talex-touch/utils/transport/events'
@@ -859,6 +861,8 @@ const preloadedModuleCache: Record<string, unknown> = {
   '@arrow-js/core': ArrowCore,
   vue: Vue,
   '@talex-touch/utils/core-box': TalexUtilsCoreBox,
+  '@talex-touch/utils/plugin': TalexPlugin,
+  '@talex-touch/utils/plugin/sdk': TalexPluginSdk,
   '@talex-touch/tuffex': Tuffex,
   '@talex-touch/tuffex/ai-elements': TuffexAiElements
 }

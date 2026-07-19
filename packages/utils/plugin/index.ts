@@ -24,6 +24,8 @@ import type {
 
 import type { WidgetPrecompiledManifestEntry, WidgetRuntime } from './widget'
 
+export * from './signing'
+
 export enum PluginStatus {
   DISABLED,
   DISABLING,
@@ -664,7 +666,8 @@ export interface IManifest {
     source?: boolean
   }
   /**
-   * Optional digital signature of the plugin package, used for verification.
+   * Legacy checksum of the sorted `_files` map. This is content integrity metadata,
+   * not publisher identity or Nexus admission trust.
    */
   _signature?: string
   /**

@@ -1,7 +1,7 @@
 import { createError } from 'h3'
 import { requireAuth } from '../../../../utils/auth'
 import { getUserById } from '../../../../utils/authStore'
-import { getPluginById, listPluginVersions } from '../../../../utils/pluginsStore'
+import { getPluginById, getPluginVersionEligibility, listPluginVersions } from '../../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuth(event)
@@ -29,6 +29,9 @@ export default defineEventHandler(async (event) => {
   })
 
   return {
-    versions,
+    versions: versions.map(version => ({
+      ...version,
+      eligibility: getPluginVersionEligibility(plugin, version, isAdmin ? 'admin' : 'owner'),
+    })),
   }
 })

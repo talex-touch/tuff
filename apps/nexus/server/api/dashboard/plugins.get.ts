@@ -1,7 +1,7 @@
 import { getQuery } from 'h3'
 import { requireAuthOrApiKey } from '../../utils/auth'
 import { getUserById } from '../../utils/authStore'
-import { listPlugins } from '../../utils/pluginsStore'
+import { getPluginVersionEligibility, listPlugins } from '../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuthOrApiKey(event, ['plugin:read'])
@@ -33,10 +33,14 @@ export default defineEventHandler(async (event) => {
   })
 
   const enriched = plugins.map((plugin) => {
-    const versions = plugin.versions ?? []
+    const versions = (plugin.versions ?? []).map(version => ({
+      ...version,
+      eligibility: getPluginVersionEligibility(plugin, version, isAdmin ? 'admin' : 'owner'),
+    }))
     const latest = versions.find(version => version.id === plugin.latestVersionId) ?? versions[0] ?? null
     return {
       ...plugin,
+      versions,
       latestVersion: latest,
     }
   })

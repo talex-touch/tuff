@@ -2,17 +2,17 @@
 
 ## Ordered Checklist
 
-1. [ ] Rename current package digest fields/types away from ambiguous `signature`; inventory every CLI/Nexus/CoreApp caller before changing exports.
-2. [ ] Define canonical publisher payload, Nexus attestation payload, stable serialization and trust-result/error types in the shared owning package.
-3. [ ] Implement cross-runtime Ed25519 test vectors for sign/verify and canonical serialization.
-4. [ ] Add CLI signer abstraction backed by environment/keychain/CI secret providers; ensure private material never enters package/log/config.
-5. [ ] Add Nexus publisher public-key registration/status/rotation/revocation persistence and authorization.
-6. [ ] Verify publisher signature after digest/policy and before scan/review; persist bounded result.
-7. [ ] Sign Nexus admission attestation only after scan and human review; persist attestation and expose safe download metadata.
-8. [ ] Add CoreApp trust-root/key-set verification before package extraction/enable; separate official and explicit local-dev trust.
-9. [ ] Backfill/shadow-verify current approved artifacts, then hard-cut official admission/install to signed attestations.
-10. [ ] Remove `key.talex` trust fallback/semantics after all readers migrate; coordinate physical file removal with CLI shim task.
-11. [ ] Document key operations, rotation, revocation and incident rollback without private material.
+1. [x] Rename current package digest fields/types away from ambiguous `signature`; inventory every CLI/Nexus/CoreApp caller before changing exports.
+2. [x] Define canonical publisher payload, Nexus attestation payload, stable serialization and trust-result/error types in the shared owning package.
+3. [x] Implement cross-runtime Ed25519 test vectors for sign/verify and canonical serialization.
+4. [x] Add CLI signer abstraction backed by environment/keychain/CI secret providers; ensure private material never enters package/log/config.
+5. [x] Add Nexus publisher public-key registration/status/rotation/revocation persistence and authorization.
+6. [x] Verify publisher signature after digest/policy and before scan/review; persist bounded result.
+7. [x] Sign Nexus admission attestation only after scan and human review; persist attestation and expose safe download metadata.
+8. [x] Add CoreApp trust-root/key-set verification before package extraction/enable; separate official and explicit local-dev trust.
+9. [x] Hard-cut official admission/install to signed attestations; classify legacy unsigned artifacts as ineligible and require republish instead of fabricating a backfill signature.
+10. [x] Remove `key.talex` trust fallback/semantics; coordinate physical file removal with CLI shim task.
+11. [x] Document key operations, rotation, revocation and incident rollback without private material.
 
 ## Contract Tests
 

@@ -212,19 +212,12 @@ export class PluginResolver {
       await this.sanitizeNodeModules(tempDir)
 
       const manifestPath = path.join(tempDir, 'manifest.json')
-      const keyPath = path.join(tempDir, 'key.talex')
-      let finalManifestPath = ''
-
-      if (await fse.pathExists(manifestPath)) {
-        finalManifestPath = manifestPath
-      } else if (await fse.pathExists(keyPath)) {
-        finalManifestPath = keyPath
-      } else {
+      if (!(await fse.pathExists(manifestPath))) {
         event.msg = ResolverStatus.MANIFEST_NOT_FOUND
         return callback({ event, type: 'error' })
       }
 
-      const manifestContent = await fse.readFile(finalManifestPath, 'utf-8')
+      const manifestContent = await fse.readFile(manifestPath, 'utf-8')
       const manifest = JSON.parse(manifestContent)
 
       if (!manifest._files || !manifest._signature) {

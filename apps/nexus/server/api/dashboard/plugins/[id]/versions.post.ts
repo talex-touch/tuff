@@ -22,6 +22,10 @@ export default defineEventHandler(async (event) => {
   const packageFile = formData.get('package')
   const iconField = formData.get('icon')
   const iconFile = isFile(iconField) ? iconField : null
+  const publisherSignature = formData.get('publisherSignature')
+  const publisherPublicKey = formData.get('publisherPublicKey')
+  const publisherKeyValidFrom = formData.get('publisherKeyValidFrom')
+  const publisherKeyValidUntil = formData.get('publisherKeyValidUntil')
 
   if (typeof version !== 'string' || !version.trim())
     throw createError({ statusCode: 400, statusMessage: 'Version is required.' })
@@ -31,6 +35,13 @@ export default defineEventHandler(async (event) => {
 
   if (!isFile(packageFile))
     throw createError({ statusCode: 400, statusMessage: 'Package file is required.' })
+
+  if (typeof publisherSignature !== 'string' || !publisherSignature.trim())
+    throw createError({ statusCode: 400, statusMessage: 'Publisher signature is required.' })
+  if (typeof publisherPublicKey !== 'string' || !publisherPublicKey.trim())
+    throw createError({ statusCode: 400, statusMessage: 'Publisher public key is required.' })
+  if (typeof publisherKeyValidFrom !== 'string' || !publisherKeyValidFrom.trim())
+    throw createError({ statusCode: 400, statusMessage: 'Publisher key validFrom is required.' })
 
   const changelog = typeof changelogField === 'string' ? changelogField.trim() : ''
 
@@ -55,6 +66,12 @@ export default defineEventHandler(async (event) => {
     changelog,
     homepage: typeof homepage === 'string' ? homepage.trim() || null : null,
     packageFile,
+    publisherSignature,
+    publisherPublicKey,
+    publisherKeyValidFrom,
+    ...(typeof publisherKeyValidUntil === 'string' && publisherKeyValidUntil.trim()
+      ? { publisherKeyValidUntil: publisherKeyValidUntil.trim() }
+      : {}),
     iconFile: iconFile ?? undefined,
     createdBy: userId,
     canModerate: isAdmin,

@@ -1,7 +1,7 @@
 import { createError } from 'h3'
 import { requireAuthOrApiKey } from '../../../utils/auth'
 import { getUserById } from '../../../utils/authStore'
-import { getPluginById } from '../../../utils/pluginsStore'
+import { getPluginById, getPluginVersionEligibility } from '../../../utils/pluginsStore'
 
 export default defineEventHandler(async (event) => {
   const { userId } = await requireAuthOrApiKey(event, ['plugin:read'])
@@ -25,12 +25,16 @@ export default defineEventHandler(async (event) => {
   if (!isAdmin && plugin.userId !== userId)
     throw createError({ statusCode: 403, statusMessage: 'Forbidden' })
 
-  const versions = plugin.versions ?? []
+  const versions = (plugin.versions ?? []).map(version => ({
+    ...version,
+    eligibility: getPluginVersionEligibility(plugin, version, isAdmin ? 'admin' : 'owner'),
+  }))
   const latest = versions.find(version => version.id === plugin.latestVersionId) ?? versions[0] ?? null
 
   return {
     plugin: {
       ...plugin,
+      versions,
       latestVersion: latest,
     },
   }

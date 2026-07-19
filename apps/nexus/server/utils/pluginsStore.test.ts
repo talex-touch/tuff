@@ -1,5 +1,15 @@
+import type { H3Event } from 'h3'
+import type {
+  DashboardPlugin,
+  DashboardPluginVersion,
+  getPluginById as getPluginByIdType,
+  getPluginVersionEligibility as getPluginVersionEligibilityType,
+  invalidatePluginVersionsForPublisherKey as invalidatePluginVersionsForPublisherKeyType,
+  listPluginTimeline as listPluginTimelineType,
+  listStorePlugins as listStorePluginsType,
+  searchStorePlugins as searchStorePluginsType,
+} from './pluginsStore'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { listStorePlugins as listStorePluginsType, searchStorePlugins as searchStorePluginsType } from './pluginsStore'
 
 interface StoredPlugin {
   id: string
@@ -30,7 +40,18 @@ interface StoredVersion {
   createdBy: string
   channel: 'SNAPSHOT' | 'BETA' | 'RELEASE'
   version: string
-  signature: string
+  artifactSha256: string
+  publisherSignature: Record<string, unknown> | null
+  publisherKey: Record<string, unknown> | null
+  publisherVerifiedAt: string | null
+  nexusAttestation: Record<string, unknown> | null
+  admissionStatus: 'pending' | 'eligible' | 'blocked'
+  policyDecision: 'passed' | 'failed' | 'unavailable' | 'not-evaluated'
+  artifactState: 'available' | 'missing' | 'quarantined'
+  revokedAt: string | null
+  eligibilityRevision: number
+  eligibilityEvaluatedAt: string | null
+  eligibilityReasons: string[]
   packageKey: string
   packageUrl: string
   packageSize: number
@@ -42,6 +63,12 @@ interface StoredVersion {
   status: 'pending' | 'approved' | 'rejected'
   reviewedAt: string | null
   rejectReason: string | null
+  securityScanDecision: 'passed' | 'review-required' | 'blocked' | 'unavailable' | 'not-evaluated'
+  securityScanReportDigest: string | null
+  securityScannerVersion: string | null
+  securityRuleSetVersion: string | null
+  securityScanFindingCount: number | null
+  securityScanCompletedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -80,6 +107,19 @@ interface D1VersionRow {
   channel: 'SNAPSHOT' | 'BETA' | 'RELEASE'
   version: string
   signature: string
+  artifact_sha256: string
+  publisher_signature: string | null
+  publisher_key: string | null
+  publisher_key_id: string | null
+  publisher_verified_at: string | null
+  nexus_attestation: string | null
+  admission_status: 'pending' | 'eligible' | 'blocked'
+  policy_decision: 'passed' | 'failed' | 'unavailable' | 'not-evaluated'
+  artifact_state: 'available' | 'missing' | 'quarantined'
+  revoked_at: string | null
+  eligibility_revision: number
+  eligibility_evaluated_at: string | null
+  eligibility_reasons: string | null
   package_key: string
   package_url: string
   package_size: number
@@ -91,13 +131,14 @@ interface D1VersionRow {
   status: 'pending' | 'approved' | 'rejected'
   reviewed_at: string | null
   reject_reason: string | null
+  security_scan_decision: 'passed' | 'review-required' | 'blocked' | 'unavailable' | 'not-evaluated'
+  security_scan_report_digest: string | null
+  security_scanner_version: string | null
+  security_rule_set_version: string | null
+  security_scan_finding_count: number | null
+  security_scan_completed_at: string | null
   created_at: string
   updated_at: string
-}
-
-interface PreparedQuery {
-  sql: string
-  bindings: unknown[]
 }
 
 const state = vi.hoisted(() => ({
@@ -121,122 +162,118 @@ vi.mock('nitropack/runtime/internal/storage', () => ({
 class MockD1Database {
   plugins: D1PluginRow[] = []
   versions: D1VersionRow[] = []
-  prepared: PreparedQuery[] = []
+  timeline: Array<Record<string, unknown>> = []
 
   prepare(sql: string) {
-    const query: PreparedQuery = { sql, bindings: [] }
-    this.prepared.push(query)
-
     return {
-      bind: (...bindings: unknown[]) => {
-        query.bindings = bindings
-        return {
-          first: async <T>() => this.first<T>(sql, bindings),
-          all: async <T>() => this.all<T>(sql, bindings),
-          run: async () => ({ success: true, meta: { changes: 0 } }),
-        }
-      },
+      bind: (...bindings: unknown[]) => ({
+        first: async <T>() => this.first<T>(sql, bindings),
+        all: async <T>() => this.all<T>(sql, bindings),
+        run: async () => this.run(sql, bindings),
+      }),
       first: async <T>() => this.first<T>(sql, []),
       all: async <T>() => this.all<T>(sql, []),
-      run: async () => ({ success: true, meta: { changes: 0 } }),
+      run: async () => this.run(sql, []),
     }
   }
 
   private async first<T>(sql: string, bindings: unknown[]): Promise<T | null> {
-    if (sql.includes('COUNT(*) AS total'))
-      return { total: this.filteredRows(bindings).length } as T
+    if (sql.includes('FROM dashboard_plugins') && sql.includes('WHERE id')) {
+      const pluginId = bindings[0]
+      return (this.plugins.find(plugin => plugin.id === pluginId) ?? null) as T | null
+    }
     return null
   }
 
   private async all<T>(sql: string, bindings: unknown[]): Promise<{ results: T[] }> {
     if (sql.includes('PRAGMA table_info'))
       return { results: [] }
-    if (sql.includes('SELECT') && sql.includes('FROM dashboard_plugins') && sql.includes('JOIN dashboard_plugin_versions')) {
-      const limit = Number(bindings.at(-2) ?? 50)
-      const offset = Number(bindings.at(-1) ?? 0)
-      return { results: this.filteredRows(bindings).slice(offset, offset + limit) as T[] }
-    }
-    if (sql.includes('SELECT *') && sql.includes('FROM dashboard_plugin_versions') && sql.includes('WHERE plugin_id IN')) {
-      const status = sql.includes('status =') ? bindings.at(-1) : null
-      const pluginIds = status ? bindings.slice(0, -1) : bindings
+    if (sql.includes('FROM dashboard_plugin_timeline'))
+      return { results: this.timeline.filter(event => event.plugin_id === bindings[0]) as T[] }
+    if (sql.includes('FROM dashboard_plugin_versions') && sql.includes('WHERE publisher_key_id')) {
+      const keyId = bindings[0]
       return {
         results: this.versions
-          .filter(version => pluginIds.includes(version.plugin_id))
-          .filter(version => !status || version.status === status)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at)) as T[],
+          .filter(version => version.publisher_key_id === keyId && !version.revoked_at)
+          .map(version => ({
+            id: version.id,
+            plugin_id: version.plugin_id,
+            version: version.version,
+            channel: version.channel,
+          })) as T[],
       }
     }
+    if (sql.includes('FROM dashboard_plugin_versions')) {
+      const pluginIds = new Set(bindings.filter((value): value is string => typeof value === 'string'))
+      return { results: this.versions.filter(version => pluginIds.has(version.plugin_id)) as T[] }
+    }
+    if (sql.includes('FROM dashboard_plugins'))
+      return { results: this.plugins as T[] }
     return { results: [] }
   }
 
-  private filteredRows(bindings: unknown[]) {
-    const keyword = typeof bindings[2] === 'string' && String(bindings[2]).startsWith('%')
-      ? String(bindings[2]).slice(1, -1).toLowerCase()
-      : ''
-    const category = bindings.find(value => value === 'productivity' || value === 'theme') as string | undefined
-
-    return this.plugins
-      .filter(plugin => plugin.status === 'approved')
-      .filter(plugin => !category || plugin.category === category)
-      .map((plugin) => {
-        const selected = this.selectLatestApprovedVersion(plugin.id)
-        return selected ? { plugin, selected } : null
+  private async run(sql: string, bindings: unknown[]) {
+    if (sql.includes('UPDATE dashboard_plugin_versions') && sql.includes('admission_status = \'blocked\'')) {
+      const [revokedAt, eligibilityReasons, keyId] = bindings as [string, string, string]
+      const affected = this.versions.filter(version => version.publisher_key_id === keyId && !version.revoked_at)
+      for (const version of affected) {
+        version.admission_status = 'blocked'
+        version.nexus_attestation = null
+        version.revoked_at = revokedAt
+        version.eligibility_revision += 1
+        version.eligibility_evaluated_at = revokedAt
+        version.eligibility_reasons = eligibilityReasons
+        version.updated_at = revokedAt
+      }
+      return { success: true, meta: { changes: affected.length } }
+    }
+    if (sql.includes('UPDATE dashboard_plugins') && sql.includes('latest_version_id')) {
+      const [latestVersionId, updatedAt, pluginId] = bindings as [string | null, string, string]
+      const plugin = this.plugins.find(plugin => plugin.id === pluginId)
+      if (plugin) {
+        plugin.latest_version_id = latestVersionId
+        plugin.updated_at = updatedAt
+      }
+      return { success: true, meta: { changes: plugin ? 1 : 0 } }
+    }
+    if (sql.includes('INSERT INTO dashboard_plugin_timeline')) {
+      const [id, pluginId, versionId, eventType, actorId, actorRole, fromStatus, toStatus, reason, meta, createdAt] = bindings
+      this.timeline.unshift({
+        id,
+        plugin_id: pluginId,
+        version_id: versionId,
+        event_type: eventType,
+        actor_id: actorId,
+        actor_role: actorRole,
+        from_status: fromStatus,
+        to_status: toStatus,
+        reason,
+        meta,
+        created_at: createdAt,
       })
-      .filter((entry): entry is { plugin: D1PluginRow, selected: D1VersionRow } => Boolean(entry))
-      .filter(({ plugin }) => {
-        if (!keyword)
-          return true
-        return [plugin.name, plugin.slug, plugin.summary, plugin.author ?? '']
-          .join('\n')
-          .toLowerCase()
-          .includes(keyword)
-      })
-      .sort((a, b) => b.plugin.created_at.localeCompare(a.plugin.created_at))
-      .map(({ plugin, selected }) => ({
-        ...plugin,
-        selected_version_id: selected.id,
-        selected_version_plugin_id: selected.plugin_id,
-        selected_version_created_by: selected.created_by,
-        selected_version_channel: selected.channel,
-        selected_version_version: selected.version,
-        selected_version_signature: selected.signature,
-        selected_version_package_key: selected.package_key,
-        selected_version_package_url: selected.package_url,
-        selected_version_package_size: selected.package_size,
-        selected_version_icon_key: selected.icon_key,
-        selected_version_icon_url: selected.icon_url,
-        selected_version_readme_markdown: selected.readme_markdown,
-        selected_version_manifest: selected.manifest,
-        selected_version_notes: selected.notes,
-        selected_version_status: selected.status,
-        selected_version_reviewed_at: selected.reviewed_at,
-        selected_version_reject_reason: selected.reject_reason,
-        selected_version_created_at: selected.created_at,
-        selected_version_updated_at: selected.updated_at,
-      }))
-  }
-
-  private selectLatestApprovedVersion(pluginId: string) {
-    const channelPriority = { RELEASE: 3, SNAPSHOT: 2, BETA: 1 } as const
-    return this.versions
-      .filter(version => version.plugin_id === pluginId && version.status === 'approved')
-      .sort((a, b) => {
-        const channelDiff = channelPriority[b.channel] - channelPriority[a.channel]
-        if (channelDiff !== 0)
-          return channelDiff
-        return b.created_at.localeCompare(a.created_at)
-      })[0]
+      return { success: true, meta: { changes: 1 } }
+    }
+    return { success: true, meta: { changes: 0 } }
   }
 }
 
+let getPluginById: typeof getPluginByIdType
+let getPluginVersionEligibility: typeof getPluginVersionEligibilityType
+let invalidatePluginVersionsForPublisherKey: typeof invalidatePluginVersionsForPublisherKeyType
+let listPluginTimeline: typeof listPluginTimelineType
 let searchStorePlugins: typeof searchStorePluginsType
 let listStorePlugins: typeof listStorePluginsType
-const event = {} as any
+// The store test only needs an event identity for the mocked Cloudflare binding.
+const event = {} as H3Event
 
 beforeAll(async () => {
   const store = await import('./pluginsStore')
-  listStorePlugins = store.listStorePlugins
+  getPluginById = store.getPluginById
+  getPluginVersionEligibility = store.getPluginVersionEligibility
+  invalidatePluginVersionsForPublisherKey = store.invalidatePluginVersionsForPublisherKey
+  listPluginTimeline = store.listPluginTimeline
   searchStorePlugins = store.searchStorePlugins
+  listStorePlugins = store.listStorePlugins
 })
 
 beforeEach(() => {
@@ -244,364 +281,249 @@ beforeEach(() => {
   state.storage.clear()
 })
 
-describe('searchStorePlugins', () => {
-  it('filters store fallback by approval, keyword, category, pagination, and selected approved version', async () => {
-    seedMemoryStore([
-      plugin({
-        id: 'approved-alpha',
-        slug: 'alpha-flow',
-        name: 'Alpha Flow',
-        summary: 'Keyboard automation for focused writing',
-        category: 'productivity',
-        author: { name: 'Flow Labs' },
-        status: 'approved',
-        createdAt: '2026-06-03T00:00:00.000Z',
-        latestVersionId: 'alpha-pending-release',
-      }),
-      plugin({
-        id: 'approved-beta',
-        slug: 'beta-flow',
-        name: 'Beta Flow',
-        summary: 'Keyboard launcher for flow state',
-        category: 'productivity',
-        author: { name: 'Shortcuts Inc' },
-        status: 'approved',
-        createdAt: '2026-06-02T00:00:00.000Z',
-        latestVersionId: 'beta-approved-release',
-      }),
-      plugin({
-        id: 'approved-theme',
-        slug: 'flow-theme',
-        name: 'Flow Theme',
-        summary: 'Flow visuals for Touch',
-        category: 'theme',
-        author: { name: 'Theme Studio' },
-        status: 'approved',
-        createdAt: '2026-06-04T00:00:00.000Z',
-        latestVersionId: 'theme-approved-release',
-      }),
-      plugin({
-        id: 'pending-plugin',
-        slug: 'pending-flow',
-        name: 'Pending Flow',
-        summary: 'Should be invisible to store search',
-        category: 'productivity',
-        author: { name: 'Hidden Labs' },
-        status: 'pending',
-        createdAt: '2026-06-05T00:00:00.000Z',
-        latestVersionId: 'pending-plugin-approved-release',
-      }),
-      plugin({
-        id: 'approved-no-visible-version',
-        slug: 'draft-only-flow',
-        name: 'Draft Only Flow',
-        summary: 'Approved plugin without approved versions',
-        category: 'productivity',
-        author: { name: 'Invisible Versions' },
-        status: 'approved',
-        createdAt: '2026-06-01T00:00:00.000Z',
-        latestVersionId: 'draft-only-pending-release',
-      }),
-    ], [
-      version({
-        id: 'alpha-pending-release',
-        pluginId: 'approved-alpha',
-        channel: 'RELEASE',
-        version: '2.0.0',
-        status: 'pending',
-        createdAt: '2026-06-04T00:00:00.000Z',
-      }),
-      version({
-        id: 'alpha-approved-snapshot',
-        pluginId: 'approved-alpha',
-        channel: 'SNAPSHOT',
-        version: '1.5.0',
-        status: 'approved',
-        createdAt: '2026-06-03T00:00:00.000Z',
-      }),
-      version({
-        id: 'alpha-approved-release',
-        pluginId: 'approved-alpha',
-        channel: 'RELEASE',
-        version: '1.0.0',
-        status: 'approved',
-        createdAt: '2026-05-01T00:00:00.000Z',
-      }),
-      version({
-        id: 'beta-approved-release',
-        pluginId: 'approved-beta',
-        channel: 'RELEASE',
-        version: '3.0.0',
-        status: 'approved',
-        createdAt: '2026-06-02T00:00:00.000Z',
-      }),
-      version({
-        id: 'theme-approved-release',
-        pluginId: 'approved-theme',
-        channel: 'RELEASE',
-        version: '1.0.0',
-        status: 'approved',
-        createdAt: '2026-06-04T00:00:00.000Z',
-      }),
-      version({
-        id: 'pending-plugin-approved-release',
-        pluginId: 'pending-plugin',
-        channel: 'RELEASE',
-        version: '1.0.0',
-        status: 'approved',
-        createdAt: '2026-06-05T00:00:00.000Z',
-      }),
-      version({
-        id: 'draft-only-pending-release',
-        pluginId: 'approved-no-visible-version',
-        channel: 'RELEASE',
-        version: '1.0.0',
-        status: 'pending',
-        createdAt: '2026-06-01T00:00:00.000Z',
-      }),
+describe('searchStorePlugins eligibility projection', () => {
+  it('keeps the prior eligible RELEASE, ignores newer pending/rejected and private channels, and selects semver over creation time in memory fallback', async () => {
+    seedMemoryStore([plugin({ id: 'focus-flow', name: 'Focus Flow' })], [
+      version({ id: 'eligible-1-10', pluginId: 'focus-flow', version: '1.10.0', createdAt: '2026-07-01T00:00:00.000Z' }),
+      version({ id: 'eligible-1-9', pluginId: 'focus-flow', version: '1.9.0', createdAt: '2026-07-08T00:00:00.000Z' }),
+      version({ id: 'pending-3', pluginId: 'focus-flow', version: '3.0.0', status: 'pending', admissionStatus: 'pending' }),
+      version({ id: 'rejected-2', pluginId: 'focus-flow', version: '2.0.0', status: 'rejected', admissionStatus: 'blocked' }),
+      version({ id: 'beta-9', pluginId: 'focus-flow', channel: 'BETA', version: '9.0.0' }),
+      version({ id: 'snapshot-10', pluginId: 'focus-flow', channel: 'SNAPSHOT', version: '10.0.0' }),
     ])
 
-    const result = await searchStorePlugins(event, {
-      keyword: 'flow',
-      category: 'productivity',
-      limit: 1,
-      offset: 1,
-    })
+    const result = await searchStorePlugins(event, { keyword: 'focus' })
 
-    expect(result).toMatchObject({
-      total: 2,
-      limit: 1,
-      offset: 1,
-    })
-    expect(Object.keys(result).sort()).toEqual(['limit', 'offset', 'plugins', 'total'])
+    expect(result).toMatchObject({ total: 1 })
     expect(result.plugins).toHaveLength(1)
-    expect(result.plugins[0]).toMatchObject({
-      id: 'approved-beta',
-      status: 'approved',
-      category: 'productivity',
-      latestVersionId: 'beta-approved-release',
-      latestVersion: {
-        id: 'beta-approved-release',
-        status: 'approved',
-        version: '3.0.0',
-      },
-    })
-    expect(result.plugins[0].versions.length).toBeGreaterThan(0)
-    expect(result.plugins[0].versions.every(version => version.status === 'approved')).toBe(true)
-
-    const firstPage = await searchStorePlugins(event, {
-      keyword: 'flow',
-      category: 'productivity',
-      limit: 1,
-      offset: 0,
-    })
-
-    expect(firstPage.plugins).toHaveLength(1)
-    expect(firstPage.plugins[0]).toMatchObject({
-      id: 'approved-alpha',
-      latestVersionId: 'alpha-approved-release',
-      latestVersion: {
-        id: 'alpha-approved-release',
-        status: 'approved',
-        version: '1.0.0',
-      },
-    })
-    expect(firstPage.plugins[0].versions.map(version => version.id)).toEqual([
-      'alpha-approved-snapshot',
-      'alpha-approved-release',
-    ])
+    expect(result.plugins[0].latestVersionId).toBe('eligible-1-10')
+    expect(result.plugins[0].latestVersion).toMatchObject({ id: 'eligible-1-10', version: '1.10.0' })
+    expect(result.plugins[0].versions.map(version => version.id)).toEqual(['eligible-1-9', 'eligible-1-10'])
   })
 
-  it('maps the D1 search result and binds approved filters before keyword/category pagination', async () => {
-    const db = new MockD1Database()
-    state.db = db
-    db.plugins = [
-      d1Plugin({
-        id: 'd1-alpha',
-        slug: 'd1-alpha-flow',
-        name: 'D1 Alpha Flow',
-        summary: 'Durable keyboard launcher',
-        category: 'productivity',
-        status: 'approved',
-        created_at: '2026-07-02T00:00:00.000Z',
-        latest_version_id: 'd1-alpha-pending-release',
-      }),
-      d1Plugin({
-        id: 'd1-hidden',
-        slug: 'd1-hidden-flow',
-        name: 'D1 Hidden Flow',
-        summary: 'Pending plugin should not be counted',
-        category: 'productivity',
-        status: 'pending',
-        created_at: '2026-07-03T00:00:00.000Z',
-        latest_version_id: 'd1-hidden-approved-release',
-      }),
-    ]
-    db.versions = [
-      d1Version({
-        id: 'd1-alpha-pending-release',
-        plugin_id: 'd1-alpha',
-        channel: 'RELEASE',
-        version: '2.0.0',
-        status: 'pending',
-        created_at: '2026-07-03T00:00:00.000Z',
-      }),
-      d1Version({
-        id: 'd1-alpha-approved-release',
-        plugin_id: 'd1-alpha',
-        channel: 'RELEASE',
-        version: '1.0.0',
-        status: 'approved',
-        created_at: '2026-07-01T00:00:00.000Z',
-      }),
-      d1Version({
-        id: 'd1-hidden-approved-release',
-        plugin_id: 'd1-hidden',
-        channel: 'RELEASE',
-        version: '1.0.0',
-        status: 'approved',
-        created_at: '2026-07-03T00:00:00.000Z',
-      }),
-    ]
+  it.each([
+    { name: 'missing policy', overrides: { policyDecision: 'not-evaluated' as const } },
+    { name: 'missing scan', overrides: { securityScanDecision: 'not-evaluated' as const } },
+    { name: 'missing publisher verification', overrides: { publisherSignature: null, publisherKey: null, publisherVerifiedAt: null } },
+    { name: 'missing Nexus attestation', overrides: { nexusAttestation: null } },
+  ])('hides a release with $name from list and search', async ({ overrides }) => {
+    seedMemoryStore([plugin({ id: 'focus-flow' })], [version({ pluginId: 'focus-flow', ...overrides })])
 
-    const result = await searchStorePlugins(event, {
-      keyword: 'FLOW',
-      category: 'productivity',
-      limit: 5,
-      offset: 0,
-    })
+    await expect(searchStorePlugins(event)).resolves.toMatchObject({ total: 0, plugins: [] })
+    await expect(listStorePlugins(event)).resolves.toMatchObject({ total: 0, plugins: [] })
+  })
 
-    const countQuery = db.prepared.find(query => query.sql.includes('COUNT(*) AS total'))
-    const rowsQuery = db.prepared.find(query => query.sql.includes('SELECT') && query.sql.includes('LIMIT ?5 OFFSET ?6'))
-    expect(countQuery?.bindings).toEqual(['approved', 'approved', '%flow%', 'productivity'])
-    expect(rowsQuery?.bindings).toEqual(['approved', 'approved', '%flow%', 'productivity', 5, 0])
-    expect(rowsQuery?.sql).toContain('vv.status = ?2')
-    expect(rowsQuery?.sql).toContain('p.category = ?4')
-    expect(result).toMatchObject({
-      total: 1,
-      limit: 5,
-      offset: 0,
-      plugins: [
-        {
-          id: 'd1-alpha',
-          status: 'approved',
-          latestVersionId: 'd1-alpha-approved-release',
-          latestVersion: {
-            id: 'd1-alpha-approved-release',
-            status: 'approved',
-            version: '1.0.0',
-          },
-        },
+  it.each([
+    { name: 'missing artifact', overrides: { artifactState: 'missing' as const } },
+    { name: 'quarantined artifact', overrides: { artifactState: 'quarantined' as const } },
+    { name: 'revoked publisher', overrides: { revokedAt: '2026-07-08T00:00:00.000Z' } },
+  ])('withdraws $name without replacing an older eligible RELEASE', async ({ overrides }) => {
+    seedMemoryStore([plugin({ id: 'focus-flow' })], [
+      version({ id: 'eligible-1', pluginId: 'focus-flow', version: '1.0.0' }),
+      version({ id: 'withdrawn-2', pluginId: 'focus-flow', version: '2.0.0', ...overrides }),
+    ])
+
+    const result = await listStorePlugins(event)
+
+    expect(result.plugins[0].latestVersionId).toBe('eligible-1')
+    expect(result.plugins[0].versions.map(version => version.id)).toEqual(['eligible-1'])
+  })
+
+  it('computes dashboard reasons without requiring an internal scan report', () => {
+    // The storage fixture deliberately models a serialized release record.
+    const dashboardPlugin = plugin({ id: 'focus-flow' }) as unknown as DashboardPlugin
+    const dashboardVersion = version({
+      pluginId: 'focus-flow',
+      policyDecision: 'failed',
+      securityScanDecision: 'blocked',
+      securityScanReportDigest: null,
+      admissionStatus: 'blocked',
+    }) as unknown as DashboardPluginVersion
+    expect(getPluginVersionEligibility(dashboardPlugin, dashboardVersion, 'admin')).toEqual({
+      eligible: false,
+      visibility: 'private',
+      reasons: [
+        'PLUGIN_ELIGIBILITY_POLICY_NOT_PASSED',
+        'PLUGIN_ELIGIBILITY_SCAN_NOT_PASSED',
+        'PLUGIN_ELIGIBILITY_ADMISSION_NOT_ELIGIBLE',
       ],
     })
-    expect(result.plugins[0].versions).toEqual([result.plugins[0].latestVersion])
   })
 })
 
-describe('listStorePlugins', () => {
-  it('hydrates approved versions only for the bounded D1 page when compact is false', async () => {
+describe('listStorePlugins D1 projection', () => {
+  it('matches memory fallback eligibility with complete persisted evidence', async () => {
     const db = new MockD1Database()
     state.db = db
-    db.plugins = [
-      d1Plugin({
-        id: 'd1-newest',
-        slug: 'd1-newest-flow',
-        name: 'D1 Newest Flow',
-        created_at: '2026-07-03T00:00:00.000Z',
-        latest_version_id: 'd1-newest-release',
-      }),
-      d1Plugin({
-        id: 'd1-current-page',
-        slug: 'd1-current-page-flow',
-        name: 'D1 Current Page Flow',
-        created_at: '2026-07-02T00:00:00.000Z',
-        latest_version_id: 'd1-current-release',
-      }),
-      d1Plugin({
-        id: 'd1-oldest',
-        slug: 'd1-oldest-flow',
-        name: 'D1 Oldest Flow',
-        created_at: '2026-07-01T00:00:00.000Z',
-        latest_version_id: 'd1-oldest-release',
-      }),
-    ]
+    db.plugins = [d1Plugin({ id: 'focus-flow', name: 'Focus Flow' })]
     db.versions = [
-      d1Version({
-        id: 'd1-newest-release',
-        plugin_id: 'd1-newest',
-        status: 'approved',
-        version: '3.0.0',
-        created_at: '2026-07-03T00:00:00.000Z',
-      }),
-      d1Version({
-        id: 'd1-current-pending',
-        plugin_id: 'd1-current-page',
-        status: 'pending',
-        version: '2.1.0',
-        created_at: '2026-07-05T00:00:00.000Z',
-      }),
-      d1Version({
-        id: 'd1-current-rejected',
-        plugin_id: 'd1-current-page',
-        status: 'rejected',
-        version: '2.0.1',
-        created_at: '2026-07-04T00:00:00.000Z',
-      }),
-      d1Version({
-        id: 'd1-current-snapshot',
-        plugin_id: 'd1-current-page',
-        channel: 'SNAPSHOT',
-        status: 'approved',
-        version: '1.5.0',
-        created_at: '2026-07-03T00:00:00.000Z',
-      }),
-      d1Version({
-        id: 'd1-current-release',
-        plugin_id: 'd1-current-page',
-        channel: 'RELEASE',
-        status: 'approved',
-        version: '1.0.0',
-        created_at: '2026-07-02T00:00:00.000Z',
-      }),
-      d1Version({
-        id: 'd1-oldest-release',
-        plugin_id: 'd1-oldest',
-        status: 'approved',
-        version: '0.9.0',
-        created_at: '2026-07-01T00:00:00.000Z',
-      }),
+      d1Version({ id: 'eligible-1', plugin_id: 'focus-flow', version: '1.0.0' }),
+      d1Version({ id: 'pending-2', plugin_id: 'focus-flow', version: '2.0.0', status: 'pending', admission_status: 'pending' }),
+      d1Version({ id: 'beta-3', plugin_id: 'focus-flow', channel: 'BETA', version: '3.0.0' }),
+      d1Version({ id: 'missing-policy', plugin_id: 'focus-flow', version: '4.0.0', policy_decision: 'not-evaluated' }),
     ]
 
-    const result = await listStorePlugins(event, {
-      compact: false,
-      limit: 1,
-      offset: 1,
-    })
+    const result = await listStorePlugins(event, { compact: false })
 
-    expect(result).toMatchObject({
-      total: 3,
-      limit: 1,
-      offset: 1,
-    })
-    expect(result.plugins).toHaveLength(1)
-    expect(result.plugins[0]).toMatchObject({
-      id: 'd1-current-page',
-      latestVersionId: 'd1-current-release',
-      latestVersion: {
-        id: 'd1-current-release',
-        status: 'approved',
-      },
-    })
-    expect(result.plugins[0].versions.map(version => ({ id: version.id, pluginId: version.pluginId, status: version.status }))).toEqual([
-      { id: 'd1-current-snapshot', pluginId: 'd1-current-page', status: 'approved' },
-      { id: 'd1-current-release', pluginId: 'd1-current-page', status: 'approved' },
+    expect(result).toMatchObject({ total: 1 })
+    expect(result.plugins[0].latestVersionId).toBe('eligible-1')
+    expect(result.plugins[0].versions.map(version => version.id)).toEqual(['eligible-1'])
+  })
+})
+
+describe('publisher key revocation invalidation', () => {
+  it('immediately withdraws every memory-backed release for the key while retaining a prior eligible download', async () => {
+    seedMemoryStore([plugin({ id: 'focus-flow' })], [
+      version({
+        id: 'prior-1',
+        pluginId: 'focus-flow',
+        version: '1.0.0',
+        publisherSignature: { algorithm: 'Ed25519', keyId: 'publisher-key-other' },
+        publisherKey: { keyId: 'publisher-key-other', status: 'active' },
+      }),
+      version({ id: 'revoked-2', pluginId: 'focus-flow', version: '2.0.0' }),
+      version({ id: 'revoked-3', pluginId: 'focus-flow', version: '3.0.0' }),
     ])
 
-    const versionQueries = db.prepared.filter(query => query.sql.includes('FROM dashboard_plugin_versions') && query.sql.includes('WHERE plugin_id IN'))
-    expect(versionQueries).toHaveLength(1)
-    expect(versionQueries[0].bindings).toEqual(['d1-current-page', 'approved'])
-    expect(versionQueries[0].sql).toContain('AND status = ?2')
-    expect(db.prepared.some(query => query.sql.includes('FROM dashboard_plugins') && !query.sql.includes('JOIN dashboard_plugin_versions') && !query.sql.includes('LIMIT'))).toBe(false)
+    expect(await invalidatePluginVersionsForPublisherKey(event, 'publisher-key-1', 'owner-1')).toBe(2)
+
+    const storedVersions = state.storage.get('dashboard:pluginVersions') as StoredVersion[]
+    const revokedVersions = storedVersions.filter(version => version.id.startsWith('revoked-'))
+    expect(revokedVersions).toHaveLength(2)
+    for (const revokedVersion of revokedVersions) {
+      expect(revokedVersion).toMatchObject({
+        admissionStatus: 'blocked',
+        nexusAttestation: null,
+        eligibilityRevision: 2,
+        eligibilityReasons: [
+          'PLUGIN_ELIGIBILITY_PUBLISHER_REVOKED',
+          'PLUGIN_ELIGIBILITY_ATTESTATION_UNVERIFIED',
+          'PLUGIN_ELIGIBILITY_ADMISSION_NOT_ELIGIBLE',
+        ],
+      })
+      expect(revokedVersion.revokedAt).toEqual(expect.any(String))
+      expect(getPluginVersionEligibility(plugin({ id: 'focus-flow' }) as DashboardPlugin, revokedVersion as DashboardPluginVersion, 'public')).toMatchObject({
+        eligible: false,
+        visibility: 'private',
+      })
+    }
+
+    const store = await listStorePlugins(event, { compact: false })
+    expect(store.plugins[0]).toMatchObject({ latestVersionId: 'prior-1' })
+    expect(store.plugins[0].versions.map(version => version.id)).toEqual(['prior-1'])
+    expect((state.storage.get('dashboard:plugins') as StoredPlugin[])[0].latestVersionId).toBe('prior-1')
+
+    const timeline = await listPluginTimeline(event, 'focus-flow')
+    expect(timeline).toHaveLength(2)
+    expect(timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        versionId: 'revoked-2',
+        eventType: 'version.status.changed',
+        reason: 'publisher-key-revoked',
+        meta: expect.objectContaining({ keyId: 'publisher-key-1', admissionStatus: 'blocked' }),
+      }),
+      expect.objectContaining({
+        versionId: 'revoked-3',
+        eventType: 'version.status.changed',
+        reason: 'publisher-key-revoked',
+        meta: expect.objectContaining({ keyId: 'publisher-key-1', admissionStatus: 'blocked' }),
+      }),
+    ]))
+
+    const initialRevocationState = revokedVersions.map(version => ({
+      id: version.id,
+      eligibilityRevision: version.eligibilityRevision,
+      revokedAt: version.revokedAt,
+    }))
+    expect(await invalidatePluginVersionsForPublisherKey(event, 'publisher-key-1', 'owner-1')).toBe(0)
+    expect((state.storage.get('dashboard:pluginVersions') as StoredVersion[])
+      .filter(version => version.id.startsWith('revoked-'))
+      .map(version => ({
+        id: version.id,
+        eligibilityRevision: version.eligibilityRevision,
+        revokedAt: version.revokedAt,
+      }))).toEqual(initialRevocationState)
+    await expect(listPluginTimeline(event, 'focus-flow')).resolves.toHaveLength(2)
+  })
+
+  it('persists the same withdrawal, selection, and timeline contract through D1', async () => {
+    const db = new MockD1Database()
+    state.db = db
+    db.plugins = [d1Plugin({ id: 'focus-flow' })]
+    db.versions = [
+      d1Version({
+        id: 'prior-1',
+        plugin_id: 'focus-flow',
+        version: '1.0.0',
+        publisher_key: JSON.stringify({ keyId: 'publisher-key-other', status: 'active' }),
+        publisher_key_id: 'publisher-key-other',
+      }),
+      d1Version({ id: 'revoked-2', plugin_id: 'focus-flow', version: '2.0.0' }),
+      d1Version({ id: 'revoked-3', plugin_id: 'focus-flow', version: '3.0.0' }),
+    ]
+
+    expect(await invalidatePluginVersionsForPublisherKey(event, 'publisher-key-1', 'owner-1')).toBe(2)
+
+    const revokedVersions = db.versions.filter(version => version.id.startsWith('revoked-'))
+    expect(revokedVersions).toHaveLength(2)
+    for (const revokedVersion of revokedVersions) {
+      expect(revokedVersion).toMatchObject({
+        admission_status: 'blocked',
+        nexus_attestation: null,
+        eligibility_revision: 2,
+        eligibility_reasons: JSON.stringify([
+          'PLUGIN_ELIGIBILITY_PUBLISHER_REVOKED',
+          'PLUGIN_ELIGIBILITY_ATTESTATION_UNVERIFIED',
+          'PLUGIN_ELIGIBILITY_ADMISSION_NOT_ELIGIBLE',
+        ]),
+      })
+      expect(revokedVersion.revoked_at).toEqual(expect.any(String))
+    }
+
+    const store = await listStorePlugins(event, { compact: false })
+    expect(store.plugins[0]).toMatchObject({ latestVersionId: 'prior-1' })
+    expect(store.plugins[0].versions.map(version => version.id)).toEqual(['prior-1'])
+    expect(db.plugins[0].latest_version_id).toBe('prior-1')
+
+    const dashboardPlugin = await getPluginById(event, 'focus-flow', { includeVersions: true, viewerIsAdmin: true })
+    const revokedVersion = dashboardPlugin?.versions?.find(version => version.id === 'revoked-2')
+    expect(revokedVersion).toBeDefined()
+    expect(getPluginVersionEligibility(dashboardPlugin as DashboardPlugin, revokedVersion as DashboardPluginVersion, 'public')).toMatchObject({
+      eligible: false,
+      visibility: 'private',
+    })
+
+    const timeline = await listPluginTimeline(event, 'focus-flow')
+    expect(timeline).toHaveLength(2)
+    expect(timeline).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        versionId: 'revoked-2',
+        eventType: 'version.status.changed',
+        reason: 'publisher-key-revoked',
+        meta: expect.objectContaining({ keyId: 'publisher-key-1', admissionStatus: 'blocked' }),
+      }),
+      expect.objectContaining({
+        versionId: 'revoked-3',
+        eventType: 'version.status.changed',
+        reason: 'publisher-key-revoked',
+        meta: expect.objectContaining({ keyId: 'publisher-key-1', admissionStatus: 'blocked' }),
+      }),
+    ]))
+
+    const initialRevocationState = revokedVersions.map(version => ({
+      id: version.id,
+      eligibilityRevision: version.eligibility_revision,
+      revokedAt: version.revoked_at,
+    }))
+    expect(await invalidatePluginVersionsForPublisherKey(event, 'publisher-key-1', 'owner-1')).toBe(0)
+    expect(db.versions
+      .filter(version => version.id.startsWith('revoked-'))
+      .map(version => ({
+        id: version.id,
+        eligibilityRevision: version.eligibility_revision,
+        revokedAt: version.revoked_at,
+      }))).toEqual(initialRevocationState)
+    await expect(listPluginTimeline(event, 'focus-flow')).resolves.toHaveLength(2)
   })
 })
 
@@ -642,13 +564,33 @@ function version(overrides: Partial<StoredVersion>): StoredVersion {
   const id = overrides.id ?? 'version-id'
   const pluginId = overrides.pluginId ?? 'plugin-id'
   const createdAt = overrides.createdAt ?? '2026-06-01T00:00:00.000Z'
+  const publisherSignature = {
+    algorithm: 'Ed25519',
+    keyId: 'publisher-key-1',
+    payload: { policyVersion: 'policy-1' },
+    payloadSha256: 'payload-sha',
+    signature: 'publisher-signature',
+  }
+  const publisherKey = { keyId: 'publisher-key-1', status: 'active' }
+  const nexusAttestation = { keyId: 'nexus-key-1', signature: 'nexus-attestation' }
   return {
     id,
     pluginId,
     createdBy: 'owner-1',
     channel: 'RELEASE',
     version: '1.0.0',
-    signature: `${id}-signature`,
+    artifactSha256: 'a'.repeat(64),
+    publisherSignature,
+    publisherKey,
+    publisherVerifiedAt: createdAt,
+    nexusAttestation,
+    admissionStatus: 'eligible',
+    policyDecision: 'passed',
+    artifactState: 'available',
+    revokedAt: null,
+    eligibilityRevision: 1,
+    eligibilityEvaluatedAt: createdAt,
+    eligibilityReasons: [],
     packageKey: `${id}.tpex`,
     packageUrl: `/packages/${id}.tpex`,
     packageSize: 128,
@@ -658,8 +600,14 @@ function version(overrides: Partial<StoredVersion>): StoredVersion {
     manifest: { id: pluginId },
     changelog: null,
     status: 'approved',
-    reviewedAt: null,
+    reviewedAt: createdAt,
     rejectReason: null,
+    securityScanDecision: 'passed',
+    securityScanReportDigest: 'scan-report-sha',
+    securityScannerVersion: 'scanner-1',
+    securityRuleSetVersion: 'rules-1',
+    securityScanFindingCount: 0,
+    securityScanCompletedAt: createdAt,
     createdAt,
     updatedAt: createdAt,
     ...overrides,
@@ -708,7 +656,20 @@ function d1Version(overrides: Partial<D1VersionRow>): D1VersionRow {
     created_by: 'owner-1',
     channel: 'RELEASE',
     version: '1.0.0',
-    signature: `${id}-signature`,
+    signature: 'legacy-signature',
+    artifact_sha256: 'a'.repeat(64),
+    publisher_signature: JSON.stringify({ payload: { policyVersion: 'policy-1' } }),
+    publisher_key: JSON.stringify({ keyId: 'publisher-key-1', status: 'active' }),
+    publisher_key_id: 'publisher-key-1',
+    publisher_verified_at: createdAt,
+    nexus_attestation: JSON.stringify({ keyId: 'nexus-key-1', signature: 'nexus-attestation' }),
+    admission_status: 'eligible',
+    policy_decision: 'passed',
+    artifact_state: 'available',
+    revoked_at: null,
+    eligibility_revision: 1,
+    eligibility_evaluated_at: createdAt,
+    eligibility_reasons: JSON.stringify([]),
     package_key: `${id}.tpex`,
     package_url: `/packages/${id}.tpex`,
     package_size: 128,
@@ -718,8 +679,14 @@ function d1Version(overrides: Partial<D1VersionRow>): D1VersionRow {
     manifest: JSON.stringify({ id: pluginId }),
     notes: null,
     status: 'approved',
-    reviewed_at: null,
+    reviewed_at: createdAt,
     reject_reason: null,
+    security_scan_decision: 'passed',
+    security_scan_report_digest: 'scan-report-sha',
+    security_scanner_version: 'scanner-1',
+    security_rule_set_version: 'rules-1',
+    security_scan_finding_count: 0,
+    security_scan_completed_at: createdAt,
     created_at: createdAt,
     updated_at: createdAt,
     ...overrides,

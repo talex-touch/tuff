@@ -58,6 +58,21 @@ const plugin = {
     channel: 'RELEASE',
     version: '1.0.0+build/5',
     signature: 'sig-release',
+    artifactSha256: 'a'.repeat(64),
+    publisherSignature: { keyId: 'publisher-key', signature: 'publisher-signature' },
+    publisherKey: { keyId: 'publisher-key', status: 'active' },
+    publisherVerifiedAt: '2026-06-01T00:00:00.000Z',
+    nexusAttestation: { keyId: 'nexus-key', signature: 'nexus-attestation' },
+    admissionStatus: 'eligible',
+    policyDecision: 'passed',
+    artifactState: 'available',
+    revokedAt: null,
+    securityScanDecision: 'passed',
+    securityScanReportDigest: 'scan-report-sha',
+    securityScannerVersion: 'scanner-1',
+    securityRuleSetVersion: 'rules-1',
+    securityScanFindingCount: 0,
+    securityScanCompletedAt: '2026-06-01T00:00:00.000Z',
     packageKey: 'plugins/focus-flow/1.0.0.tpex',
     packageUrl: 'https://storage.example.test/private/focus-flow.tpex',
     packageSize: 1024,
@@ -78,6 +93,21 @@ const plugin = {
       channel: 'BETA',
       version: '0.9.0',
       signature: 'sig-beta',
+    artifactSha256: 'b'.repeat(64),
+    publisherSignature: { keyId: 'publisher-key', signature: 'publisher-signature' },
+    publisherKey: { keyId: 'publisher-key', status: 'active' },
+    publisherVerifiedAt: '2026-05-01T00:00:00.000Z',
+    nexusAttestation: { keyId: 'nexus-key', signature: 'nexus-attestation' },
+    admissionStatus: 'eligible',
+    policyDecision: 'passed',
+    artifactState: 'available',
+    revokedAt: null,
+    securityScanDecision: 'passed',
+    securityScanReportDigest: 'scan-report-sha',
+    securityScannerVersion: 'scanner-1',
+    securityRuleSetVersion: 'rules-1',
+    securityScanFindingCount: 0,
+    securityScanCompletedAt: '2026-05-01T00:00:00.000Z',
       packageKey: 'plugins/focus-flow/0.9.0.tpex',
       packageUrl: 'https://storage.example.test/private/focus-flow-beta.tpex',
       packageSize: 512,
@@ -97,6 +127,21 @@ const plugin = {
       channel: 'RELEASE',
       version: '1.0.0+build/5',
       signature: 'sig-release',
+      artifactSha256: 'a'.repeat(64),
+      publisherSignature: { keyId: 'publisher-key', signature: 'publisher-signature' },
+      publisherKey: { keyId: 'publisher-key', status: 'active' },
+      publisherVerifiedAt: '2026-06-01T00:00:00.000Z',
+      nexusAttestation: { keyId: 'nexus-key', signature: 'nexus-attestation' },
+      admissionStatus: 'eligible',
+      policyDecision: 'passed',
+      artifactState: 'available',
+      revokedAt: null,
+      securityScanDecision: 'passed',
+      securityScanReportDigest: 'scan-report-sha',
+      securityScannerVersion: 'scanner-1',
+      securityRuleSetVersion: 'rules-1',
+      securityScanFindingCount: 0,
+      securityScanCompletedAt: '2026-06-01T00:00:00.000Z',
       packageKey: 'plugins/focus-flow/1.0.0.tpex',
       packageUrl: 'https://storage.example.test/private/focus-flow.tpex',
       packageSize: 1024,
@@ -154,7 +199,9 @@ describe('/api/store/search', () => {
             pluginId: 'plugin_1',
             channel: 'RELEASE',
             version: '1.0.0+build/5',
-            signature: 'sig-release',
+            artifactSha256: 'a'.repeat(64),
+            nexusAttestation: { keyId: 'nexus-key', signature: 'nexus-attestation' },
+            availability: 'available',
             packageUrl: '/api/store/plugins/focus-flow/download.tpex?version=1.0.0%2Bbuild%2F5',
             packageSize: 1024,
             status: 'approved',
@@ -193,7 +240,7 @@ describe('/api/store/search', () => {
     expect(result.plugins[0].latestVersion.packageUrl).not.toContain('storage.example.test')
   })
 
-  it('returns full searchStorePlugins plugins when compact is disabled for compatibility', async () => {
+  it('keeps compact=false responses sanitized while preserving public release metadata', async () => {
     h3Mocks.getQuery.mockReturnValue({ q: 'flow', compact: '0', limit: '10', offset: '2' })
     pluginsStoreMocks.searchStorePlugins.mockResolvedValue({
       plugins: [plugin],
@@ -210,17 +257,24 @@ describe('/api/store/search', () => {
       limit: 10,
       offset: 2,
     })
-    expect(result).toEqual({
-      plugins: [plugin],
-      total: 1,
-      limit: 10,
-      offset: 2,
+    expect(result).toMatchObject({ total: 1, limit: 10, offset: 2 })
+    expect(result.plugins[0].versions).toHaveLength(2)
+    expect(result.plugins[0].latestVersion).toMatchObject({
+      artifactSha256: 'a'.repeat(64),
+      nexusAttestation: { keyId: 'nexus-key', signature: 'nexus-attestation' },
+      availability: 'available',
+      packageUrl: '/api/store/plugins/focus-flow/download.tpex?version=1.0.0%2Bbuild%2F5',
+      manifest: { permissions: ['clipboard', 'storage'] },
+      changelog: 'Stable release',
     })
-    expect(result.plugins[0].versions).toEqual(plugin.versions)
-    expect(result.plugins[0].readmeMarkdown).toBe('# Focus Flow')
-    expect(result.plugins[0].latestVersion.manifest).toEqual({ permissions: ['clipboard', 'storage'] })
-    expect(result.plugins[0].latestVersion.changelog).toBe('Stable release')
-    expect(result.plugins[0].latestVersion.packageUrl).toBe('https://storage.example.test/private/focus-flow.tpex')
+    for (const publicVersion of result.plugins[0].versions) {
+      expect(publicVersion).not.toHaveProperty('packageKey')
+      expect(publicVersion).not.toHaveProperty('publisherKey')
+      expect(publicVersion).not.toHaveProperty('publisherSignature')
+      expect(publicVersion).not.toHaveProperty('policyDecision')
+      expect(publicVersion).not.toHaveProperty('artifactState')
+      expect(publicVersion).not.toHaveProperty('securityScanReportDigest')
+    }
   })
 
   it('clamps invalid pagination before searching the store', async () => {

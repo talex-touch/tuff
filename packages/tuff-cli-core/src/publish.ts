@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import type { NetworkResponse } from '@talex-touch/utils/network'
+import type { PluginPublisherSigningBundle } from './plugin-signer'
 import type { PublishConfig } from './types'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
@@ -12,6 +13,7 @@ import { parsePublishArgs } from './args'
 import { clearAuthToken, getAuthToken, getAuthTokenPath, readAuthState, saveAuthToken } from './auth'
 import { resolvePublishConfig } from './config'
 import { ensureCliDeviceInfo } from './device'
+import { createPluginPublisherSignature } from './plugin-signer'
 
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
 const CLI_COMMAND_NAME = process.env.TUFF_CLI_COMMAND || 'tuffcli'
@@ -468,6 +470,7 @@ function createPublishForm(
   notes: string,
   target: PackageInfo,
   content: Buffer,
+  signing: PluginPublisherSigningBundle,
 ): FormData {
   const form = new FormData()
   form.set('name', manifest.name)
@@ -478,6 +481,11 @@ function createPublishForm(
   form.set('changelog', notes)
   if (manifest.homepage)
     form.set('homepage', manifest.homepage)
+  form.set('publisherSignature', JSON.stringify(signing.envelope))
+  form.set('publisherPublicKey', signing.publicKeyPem)
+  form.set('publisherKeyValidFrom', signing.validFrom)
+  if (signing.validUntil)
+    form.set('publisherKeyValidUntil', signing.validUntil)
   const packageBody = new ArrayBuffer(content.byteLength)
   new Uint8Array(packageBody).set(content)
   form.set('package', new Blob([packageBody]), target.filename)
@@ -662,7 +670,8 @@ export async function publish(options: PublishConfig = {}, runtime?: PublishAuth
       ? resolveDashboardPublishUrlFromPlugins(preflightPlugins, dashboardSlug, manifest)
       : await resolveDashboardPublishUrl(authToken, dashboardSlug, manifest))
     const content = await fs.readFile(target.path)
-    const form = createPublishForm(pkg, manifest, tag, channel, notes, target, content)
+    const signing = createPluginPublisherSignature(target.path, channel)
+    const form = createPublishForm(pkg, manifest, tag, channel, notes, target, content, signing)
     const version = await publishPackage(authToken, publishUrl, form)
     const submitted = version.status === 'approved' ? 'published' : 'submitted'
 
