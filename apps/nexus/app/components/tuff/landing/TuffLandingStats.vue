@@ -76,7 +76,7 @@ const aiSpotlight = computed(() => {
     :reveal-options="{
       targetSelector: ':scope [data-reveal]',
       from: {
-        opacity: 0,
+        opacity: 0.16,
         y: 48,
         scale: 1.08,
         filter: 'blur(0px)',
@@ -134,5 +134,13 @@ const aiSpotlight = computed(() => {
 .tuff-stats-showcase :deep(.tuff-showcase) {
   max-width: 100%;
   max-height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 </style>
