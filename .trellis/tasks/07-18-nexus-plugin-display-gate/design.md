@@ -61,4 +61,4 @@ Eligibility is derived from persisted state and revisioned. Public caches includ
 
 ## Rollout/Rollback
 
-Backfill current versions through policy/scan/signature before enforcement. Shadow compare old status-only visibility with new eligibility, then hard cut all public endpoints together. Rollback may restore prior eligible projection code, but revoked/quarantined artifacts remain blocked.
+Legacy rows are backfilled only to explicit `not-evaluated`/ineligible state; cryptographic trust is never manufactured for old artifacts, which require canonical republish. The hard cut applies to all public endpoints together. Rollback may restore prior projection code, but revoked/quarantined artifacts remain blocked.

@@ -2,15 +2,15 @@
 
 ## Ordered Checklist
 
-1. [ ] Add shared eligibility types/reason codes and one pure projection with audience/channel rules.
-2. [ ] Add an additive D1 migration and memory-fallback fields for artifact, policy, scan, publisher trust, Nexus attestation, revocation and eligibility revision.
-3. [ ] Hydrate existing versions as not-evaluated/ineligible; add a backfill evaluator for current approved artifacts.
-4. [ ] Replace status-only checks in Store list/search/detail/versions/latest selection with the projection.
-5. [ ] Re-evaluate the exact version in download before object access; block missing/quarantined/revoked artifacts.
-6. [ ] Expose safe reason codes to owner/admin Dashboard and keep internal reports/paths out of public payloads.
-7. [ ] Recompute latest eligible version and append timeline events on review/policy/scan/signature/artifact/revocation transitions.
-8. [ ] Add eligibility revision to cache keys/invalidation and prove immediate withdrawal.
-9. [ ] Shadow-compare old/new visibility, backfill, then hard-cut all public endpoints together.
+1. [x] Add shared eligibility types/reason codes and one pure projection with audience/channel rules.
+2. [x] Add additive D1 schema fields and memory-fallback fields for artifact, policy, scan, publisher trust, Nexus attestation, revocation and eligibility revision.
+3. [x] Hydrate existing versions as not-evaluated/ineligible; require canonical republish because publisher trust cannot be backfilled.
+4. [x] Replace status-only checks in Store list/search/detail/versions/latest selection with the projection.
+5. [x] Re-evaluate the exact version in download before object access; block missing/quarantined/revoked artifacts.
+6. [x] Expose safe reason codes to owner/admin Dashboard and keep internal reports/paths out of public payloads.
+7. [x] Recompute latest eligible version and append timeline events on review/policy/scan/signature/artifact/revocation transitions.
+8. [x] Persist eligibility revision on transitions and prove download/list decisions are re-evaluated rather than cached.
+9. [x] Hard-cut all public endpoints together; legacy unsigned rows remain explicitly ineligible until republished.
 
 ## Contract Tests
 

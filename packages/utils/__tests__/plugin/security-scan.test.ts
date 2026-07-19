@@ -1,11 +1,10 @@
+import type { PluginSecurityScanFile, PluginSecurityScanInput, PluginSecurityScanWaiver } from '../../plugin'
+import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   scanPluginPackage,
   serializePluginSecurityScanReport,
-  type PluginSecurityScanFile,
-  type PluginSecurityScanInput,
-  type PluginSecurityScanWaiver,
 } from '../../plugin'
 
 const ARTIFACT_SHA256 = 'a'.repeat(64)
@@ -69,6 +68,35 @@ describe('plugin security scan', () => {
     expect(ordered.findings.map(finding => [finding.location.path, finding.code])).toEqual([
       ['a-first.js', 'PLUGIN_SCAN_SECRET_MATERIAL'],
       ['z-last.js', 'PLUGIN_SCAN_DYNAMIC_EXECUTION'],
+    ])
+  })
+
+  it.each([
+    ['your prefix', 'your-api-key'],
+    ['example prefix', 'example-api-key'],
+    ['replace-me', 'replace-me'],
+    ['change-me', 'change-me'],
+    ['dummy prefix', 'dummy-api-key'],
+    ['test prefix', 'test-api-key'],
+    ['angle-bracket reference', '<api-key>'],
+    ['template reference', ['$', '{API_KEY}'].join('')],
+    ['all x characters', 'xxxxxxxx'],
+    ['all asterisks', '********'],
+    ['all zeroes', '00000000'],
+  ] as const)('accepts %s secret placeholder without a finding', (_name, value) => {
+    const report = scan([textFile('placeholder.js', `const api_key = "${value}"`)])
+
+    expect(report).toMatchObject({ decision: 'passed', findings: [] })
+  })
+
+  it('blocks a realistic assigned secret with the stable finding code', () => {
+    const report = scan([
+      textFile('config.js', 'const api_key = "sk-12345678901234567890"'),
+    ])
+
+    expect(report.decision).toBe('blocked')
+    expect(report.findings.map(finding => finding.code)).toEqual([
+      'PLUGIN_SCAN_SECRET_MATERIAL',
     ])
   })
 

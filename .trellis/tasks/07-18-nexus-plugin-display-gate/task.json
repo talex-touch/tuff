@@ -3,7 +3,7 @@
   "name": "nexus-plugin-display-gate",
   "title": "建立 Nexus 插件展示门禁",
   "description": "用统一发布资格判定保护 Nexus Store 列表、搜索、详情、版本和下载入口。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": "feature",
   "scope": "nexus-plugin-display-gate",
   "package": null,

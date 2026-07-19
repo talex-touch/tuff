@@ -11,7 +11,7 @@ import crypto from 'node:crypto'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { createLogger } from '../../utils/logger'
 import { checkPluginActiveUI } from './plugin-ui-utils'
-import { extractSignatureInfo, verifyPackageSignature } from './signature-verifier'
+import { extractPluginTrustMetadata, verifyPluginPackageTrust } from './signature-verifier'
 
 const pluginInstallQueueLog = createLogger('PluginSystem').child('InstallQueue')
 
@@ -181,20 +181,22 @@ export class PluginInstallQueue {
       task.prepared = prepared
       task.officialActual = Boolean(prepared.providerResult.official)
 
-      // Verify package signature if available
       if (prepared.providerResult.filePath) {
         this.emitProgress(task, 'verifying', { progress: 0 })
 
-        const signatureInfo = extractSignatureInfo(prepared.providerResult.metadata)
-        const verifyResult = await verifyPackageSignature(
-          prepared.providerResult.filePath,
-          signatureInfo?.signature,
-          signatureInfo?.packageSize
-        )
+        const providerMetadata = prepared.providerResult.metadata
+        const trustMetadata = extractPluginTrustMetadata(providerMetadata)
+        const requiresRegistryTrust =
+          prepared.providerResult.official || providerMetadata?.sourceType === 'registry'
+        if (requiresRegistryTrust && !trustMetadata)
+          throw new Error('PLUGIN_TRUST_METADATA_REQUIRED')
 
-        if (!verifyResult.valid && signatureInfo?.signature) {
-          // Only fail if signature was expected but invalid
-          throw new Error(`Package verification failed: ${verifyResult.reason}`)
+        if (trustMetadata) {
+          const trustResult = await verifyPluginPackageTrust(
+            prepared.providerResult.filePath,
+            trustMetadata
+          )
+          if (!trustResult.ok) throw new Error(trustResult.code)
         }
 
         this.emitProgress(task, 'verifying', { progress: 100 })

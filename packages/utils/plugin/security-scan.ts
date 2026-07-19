@@ -110,18 +110,18 @@ interface RuleMatch {
 
 const SHA256_RE = /^[a-f0-9]{64}$/
 const PRIVATE_KEY_RE = /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/
-const HIGH_CONFIDENCE_SECRET_RE = /(?:AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})/
-const SECRET_ASSIGNMENT_RE = /(?:api[_-]?key|client[_-]?secret|access[_-]?token|private[_-]?key)\s*[:=]\s*['"][^'"\r\n]{8,}['"]/i
+const HIGH_CONFIDENCE_SECRET_RE = /AKIA[0-9A-Z]{16}|gh[pousr]_\w{20,}|sk-[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}/
+const SECRET_ASSIGNMENT_RE = /(?:api[_-]?key|client[_-]?secret|access[_-]?token|private[_-]?key)\s*[:=]\s*['"]([^'"\r\n]{8,})['"]/gi
 const RAW_RUNTIME_ESCAPE_PATTERNS = [
-  /(?:from\s*['"]|require\s*\(\s*['"])electron(?:['"]|\/)/,
-  /(?:from\s*['"]|require\s*\(\s*['"])@talex-touch\/utils\/transport(?:['"]|\/)/,
+  /(?:from\s*['"]|require\s*\(\s*['"])electron['"/]/,
+  /(?:from\s*['"]|require\s*\(\s*['"])@talex-touch\/utils\/transport['"/]/,
   /\bipcRenderer\s*\.\s*(?:send|sendSync|invoke|postMessage)\s*\(/,
   /\b(?:window|globalThis)\s*\.\s*(?:electron|electronAPI)\b/,
   /\bprocess\s*\.\s*(?:binding|mainModule)\b/,
   /\b__non_webpack_require__\b/,
 ] as const
 const DYNAMIC_EXECUTION_PATTERNS = [
-  /(?:from\s*['"]|require\s*\(\s*['"])(?:node:)?vm(?:['"]|\/)/,
+  /(?:from\s*['"]|require\s*\(\s*['"])(?:node:)?vm['"/]/,
   /\beval\s*\(/,
   /\bnew\s+Function\s*\(/,
   /\bFunction\s*\(\s*['"]/,
@@ -130,21 +130,53 @@ const DYNAMIC_EXECUTION_PATTERNS = [
 ] as const
 const NATIVE_BINARY_RE = /\.(?:node|dll|dylib|so|exe)$/i
 const SECURITY_SCAN_EXECUTABLE_EXTENSIONS = new Set([
-  '.cjs', '.html', '.htm', '.js', '.jsx', '.mjs', '.ts', '.tsx', '.vue',
+  '.cjs',
+  '.html',
+  '.htm',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.ts',
+  '.tsx',
+  '.vue',
 ])
 const SECURITY_SCAN_TEXT_EXTENSIONS = new Set([
-  '.cjs', '.css', '.html', '.htm', '.js', '.json', '.jsx', '.md', '.mjs',
-  '.conf', '.crt', '.ini', '.key', '.pem', '.properties', '.svg', '.toml',
-  '.ts', '.tsx', '.txt', '.vue', '.xml', '.yaml', '.yml',
+  '.cjs',
+  '.css',
+  '.html',
+  '.htm',
+  '.js',
+  '.json',
+  '.jsx',
+  '.md',
+  '.mjs',
+  '.conf',
+  '.crt',
+  '.ini',
+  '.key',
+  '.pem',
+  '.properties',
+  '.svg',
+  '.toml',
+  '.ts',
+  '.tsx',
+  '.txt',
+  '.vue',
+  '.xml',
+  '.yaml',
+  '.yml',
 ])
 
 export function isPluginSecurityScanTextPath(path: string): boolean {
   const normalizedPath = path.replace(/\\/g, '/')
   const basename = normalizedPath.split('/').at(-1)?.toLowerCase() ?? ''
-  if (basename === 'dockerfile' || basename === 'license' || basename === 'readme') return true
-  if (basename === '.npmrc' || basename === '.yarnrc' || basename.startsWith('.env')) return true
+  if (basename === 'dockerfile' || basename === 'license' || basename === 'readme')
+    return true
+  if (basename === '.npmrc' || basename === '.yarnrc' || basename.startsWith('.env'))
+    return true
   const extensionIndex = basename.lastIndexOf('.')
-  if (extensionIndex < 0) return false
+  if (extensionIndex < 0)
+    return false
   return SECURITY_SCAN_TEXT_EXTENSIONS.has(basename.slice(extensionIndex))
 }
 
@@ -164,7 +196,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizePermissions(manifest: unknown): Set<string> {
-  if (!isRecord(manifest) || !isRecord(manifest.permissions)) return new Set()
+  if (!isRecord(manifest) || !isRecord(manifest.permissions))
+    return new Set()
   const values = ['required', 'optional'].flatMap((field) => {
     const raw = manifest.permissions && isRecord(manifest.permissions)
       ? manifest.permissions[field]
@@ -177,7 +210,8 @@ function normalizePermissions(manifest: unknown): Set<string> {
 }
 
 function toLocation(path: string, text: string, index?: number): PluginSecurityFindingLocation {
-  if (index === undefined || index < 0) return { path }
+  if (index === undefined || index < 0)
+    return { path }
   const before = text.slice(0, index)
   const lines = before.split('\n')
   return {
@@ -192,7 +226,8 @@ function firstPatternIndex(text: string, patterns: readonly RegExp[]): number | 
   for (const pattern of patterns) {
     pattern.lastIndex = 0
     const index = text.search(pattern)
-    if (index >= 0 && (result === undefined || index < result)) result = index
+    if (index >= 0 && (result === undefined || index < result))
+      result = index
   }
   return result
 }
@@ -230,7 +265,7 @@ function capabilityMatches(text: string, permissions: Set<string>): RuleMatch[] 
   }
 
   const shellIndex = firstPatternIndex(text, [
-    /(?:from\s*['"]|require\s*\(\s*['"])(?:node:)?child_process(?:['"]|\/)/,
+    /(?:from\s*['"]|require\s*\(\s*['"])(?:node:)?child_process['"/]/,
   ])
   if (shellIndex !== undefined && !permissions.has('system.shell')) {
     matches.push({
@@ -260,6 +295,18 @@ function capabilityMatches(text: string, permissions: Set<string>): RuleMatch[] 
   return matches
 }
 
+function firstSecretAssignmentIndex(text: string): number {
+  SECRET_ASSIGNMENT_RE.lastIndex = 0
+  for (const match of text.matchAll(SECRET_ASSIGNMENT_RE)) {
+    const value = (match[1] ?? '').trim()
+    const placeholder = /^(?:your[-_]|example[-_]|replace[-_ ]?me|change[-_ ]?me|dummy[-_]|test[-_]|<[^>]+>|\$\{[^}]+\})/i.test(value)
+      || /^(?:x+|\*+|0+)$/.test(value)
+    if (!placeholder)
+      return match.index ?? -1
+  }
+  return -1
+}
+
 function scanText(path: string, text: string, permissions: Set<string>): RuleMatch[] {
   const matches: RuleMatch[] = []
   const privateKeyIndex = text.search(PRIVATE_KEY_RE)
@@ -272,7 +319,7 @@ function scanText(path: string, text: string, permissions: Set<string>): RuleMat
   }
 
   const highSecretIndex = text.search(HIGH_CONFIDENCE_SECRET_RE)
-  const assignmentIndex = text.search(SECRET_ASSIGNMENT_RE)
+  const assignmentIndex = firstSecretAssignmentIndex(text)
   const secretIndex = [highSecretIndex, assignmentIndex]
     .filter(index => index >= 0)
     .sort((left, right) => left - right)[0]
@@ -284,7 +331,8 @@ function scanText(path: string, text: string, permissions: Set<string>): RuleMat
     })
   }
 
-  if (!isPluginSecurityScanExecutablePath(path)) return matches
+  if (!isPluginSecurityScanExecutablePath(path))
+    return matches
 
   const escapeIndex = firstPatternIndex(text, RAW_RUNTIME_ESCAPE_PATTERNS)
   if (escapeIndex !== undefined) {
@@ -314,7 +362,8 @@ function validWaiver(
   finding: PluginSecurityFinding,
   now: number,
 ): PluginSecurityFindingWaiver | undefined {
-  if (finding.severity === 'critical') return undefined
+  if (finding.severity === 'critical')
+    return undefined
   const waiver = waivers.find(candidate =>
     candidate.artifactSha256 === artifactSha256
     && candidate.ruleId === finding.ruleId
@@ -324,7 +373,8 @@ function validWaiver(
     && Number.isFinite(Date.parse(candidate.createdAt))
     && Date.parse(candidate.createdAt) <= now
     && Date.parse(candidate.expiresAt) > now)
-  if (!waiver) return undefined
+  if (!waiver)
+    return undefined
   return {
     id: waiver.id,
     owner: waiver.owner,
@@ -454,7 +504,8 @@ export function scanPluginPackage(
         })
         continue
       }
-      if (file.kind !== 'text' || file.text === undefined) continue
+      if (file.kind !== 'text' || file.text === undefined)
+        continue
 
       for (const match of scanText(file.path, file.text, permissions)) {
         findings.push({

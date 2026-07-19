@@ -1,5 +1,13 @@
+import { createHash } from 'node:crypto'
 import { createError, sendRedirect } from 'h3'
-import { getPluginBySlug, incrementPluginInstalls } from '../../../../utils/pluginsStore'
+import { getPluginPackage } from '../../../../utils/pluginPackageStorage'
+import {
+  blockPluginVersionAdmission,
+  buildPluginPackageGovernanceResourceId,
+  getPluginBySlug,
+  getPluginVersionEligibility,
+  incrementPluginInstalls,
+} from '../../../../utils/pluginsStore'
 import { recordPlatformGovernanceEvent } from '../../../../utils/platformGovernanceStore'
 import { resolveRequestGeo } from '../../../../utils/requestGeo'
 
@@ -50,14 +58,31 @@ export default defineEventHandler(async (event) => {
   let targetVersion = versions.find(v => v.id === plugin.latestVersionId) ?? versions[0]
 
   if (version) {
-    const specificVersion = versions.find(v => v.version === version)
-    if (specificVersion) {
-      targetVersion = specificVersion
-    }
+    targetVersion = versions.find(candidate => candidate.version === version)
+    if (!targetVersion)
+      throw createError({ statusCode: 404, statusMessage: 'Plugin version not found.' })
   }
 
   if (!targetVersion?.packageUrl)
     throw createError({ statusCode: 404, statusMessage: 'No downloadable version available.' })
+  if (!getPluginVersionEligibility(plugin, targetVersion, 'public').eligible)
+    throw createError({ statusCode: 404, statusMessage: 'No admitted version available.' })
+
+  const artifact = await getPluginPackage(event, targetVersion.packageKey, {
+    governanceResourceId: buildPluginPackageGovernanceResourceId(targetVersion),
+  })
+  if (!artifact) {
+    await blockPluginVersionAdmission(event, plugin.id, targetVersion.id, 'artifact-missing')
+    throw createError({ statusCode: 404, statusMessage: 'Plugin artifact is unavailable.' })
+  }
+  const artifactBytes = artifact.data instanceof ArrayBuffer
+    ? new Uint8Array(artifact.data)
+    : artifact.data
+  const artifactSha256 = createHash('sha256').update(artifactBytes).digest('hex')
+  if (artifactSha256 !== targetVersion.artifactSha256) {
+    await blockPluginVersionAdmission(event, plugin.id, targetVersion.id, 'artifact-digest-mismatch')
+    throw createError({ statusCode: 409, statusMessage: 'Plugin artifact is quarantined.' })
+  }
 
   // region debug [H1]
   await dbgLog(

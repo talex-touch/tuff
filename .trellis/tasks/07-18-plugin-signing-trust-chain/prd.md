@@ -22,13 +22,13 @@
 
 ## Acceptance Criteria
 
-- [ ] 合法 publisher signature + Nexus attestation 在 CLI/Nexus/CoreApp 三端验证同一 canonical payload 成功。
-- [ ] package byte、Manifest identity/version/channel、file-map digest 或签名任一篡改均产生稳定失败 code，且不进入安装/公开展示。
-- [ ] 私钥材料不会出现在 `.tpex` inventory、git tracked files、日志、错误响应或 evidence；旧 `key.talex` 不再承担信任语义。
-- [ ] 未知 key、过期 key、撤销 key、错误 issuer/audience 和降级算法全部 fail closed。
-- [ ] rotation overlap 允许新旧有效 key 验证；overlap 结束后旧 key 按策略拒绝，历史审计仍可解释。
-- [ ] registry SHA-256、publisher signature、Nexus attestation 在类型和 UI/诊断中使用不同字段，不再统称 signature。
-- [ ] focused crypto vectors、Nexus admission、CoreApp install、lint/typecheck 与 packaged install smoke 通过。
+- [x] 合法 publisher signature + Nexus attestation 在 CLI/Nexus/CoreApp 三端验证同一 canonical payload 成功。
+- [x] package byte、Manifest identity/version/channel、file-map digest 或签名任一篡改均产生稳定失败 code，且不进入安装/公开展示。
+- [x] 私钥材料不会出现在 `.tpex` inventory、git tracked files、日志、错误响应或 evidence；旧 `key.talex` 不再承担信任语义。
+- [x] 未知 key、过期 key、撤销 key、错误 issuer/audience 和降级算法全部 fail closed。
+- [x] rotation overlap 允许新旧有效 key 验证；overlap 结束后旧 key 按策略拒绝，历史审计仍可解释。
+- [x] registry SHA-256、publisher signature、Nexus attestation 在类型和 UI/诊断中使用不同字段，不再统称 signature。
+- [x] focused crypto vectors、Nexus admission、CoreApp install、lint/typecheck 与 packaged install smoke 通过。
 
 ## Out of Scope
 

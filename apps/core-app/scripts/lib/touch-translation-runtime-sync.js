@@ -2,25 +2,14 @@ const { execFileSync } = require('child_process')
 const fs = require('fs')
 const path = require('path')
 
+const {
+  PLUGIN_RELEASE_PREREQUISITES,
+  PLUGIN_RELEASE_TARGETS
+} = require('../../../../scripts/lib/plugin-release-targets.cjs')
+
 const TOUCH_TRANSLATION_PLUGIN_NAME = 'touch-translation'
-
-const OFFICIAL_PLUGIN_BUILD_TARGETS = Object.freeze([
-  {
-    packageName: '@talex-touch/touch-translation-plugin',
-    pluginName: TOUCH_TRANSLATION_PLUGIN_NAME
-  },
-  {
-    packageName: '@talex-touch/touch-intelligence-plugin',
-    pluginName: 'touch-intelligence'
-  }
-])
-
-const OFFICIAL_PLUGIN_BUILD_PREREQUISITES = Object.freeze([
-  '@talex-touch/tuff-cli-core',
-  '@talex-touch/unplugin-export-plugin',
-  '@talex-touch/tuff-cli',
-  '@talex-touch/tuffex'
-])
+const OFFICIAL_PLUGIN_BUILD_TARGETS = PLUGIN_RELEASE_TARGETS
+const OFFICIAL_PLUGIN_BUILD_PREREQUISITES = PLUGIN_RELEASE_PREREQUISITES
 
 function copyDirectoryContents(sourceDir, targetDir) {
   fs.mkdirSync(targetDir, { recursive: true })

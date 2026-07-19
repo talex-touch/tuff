@@ -3,7 +3,7 @@
   "name": "plugin-source-package-audit",
   "title": "构建测试审计插件源码包",
   "description": "从 canonical plugin source 完成 clean build、质量门禁、包审计和可复现报告。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": "feature",
   "scope": "plugin-source-package-audit",
   "package": null,

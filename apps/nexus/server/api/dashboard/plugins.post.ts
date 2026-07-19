@@ -189,6 +189,12 @@ export default defineEventHandler(async (event) => {
         changelog: initialChangelog || `Initial release v${initialVersion}`,
         homepage: homepage || null,
         packageFile,
+        publisherSignature: getString('publisherSignature') ?? '',
+        publisherPublicKey: getString('publisherPublicKey') ?? '',
+        publisherKeyValidFrom: getString('publisherKeyValidFrom') ?? '',
+        ...(getString('publisherKeyValidUntil')
+          ? { publisherKeyValidUntil: getString('publisherKeyValidUntil') }
+          : {}),
         createdBy: userId,
         canModerate: isAdmin,
       })

@@ -3,7 +3,7 @@
   "name": "plugin-signing-trust-chain",
   "title": "建立插件签名信任链",
   "description": "建立发布者签名、Nexus admission attestation、CoreApp 验证及密钥轮换撤销链路。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": "feature",
   "scope": "plugin-signing-trust",
   "package": null,

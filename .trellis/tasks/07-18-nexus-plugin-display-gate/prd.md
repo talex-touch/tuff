@@ -21,12 +21,12 @@
 
 ## Acceptance Criteria
 
-- [ ] plugin approved 但 version 缺 policy/scan/signature 任一条件时，Store list/search/detail/version/download 全部不可达。
-- [ ] eligible RELEASE 可公开展示和下载；pending/rejected 新版本不遮蔽上一个 eligible RELEASE。
-- [ ] BETA 仅在明确 beta 上下文可见；SNAPSHOT 不出现在公共 Store。
-- [ ] eligibility reason codes 在 admin/owner Dashboard 可见，公共响应只返回安全的 availability 状态。
-- [ ] artifact missing、signature revoked、scan failed 的状态转换立即从所有公共入口撤下并留下 timeline 证据。
-- [ ] memory fallback 与 D1 路径行为一致；focused store API/tests、Nexus typecheck/lint/build guard 通过。
+- [x] plugin approved 但 version 缺 policy/scan/signature 任一条件时，Store list/search/detail/version/download 全部不可达。
+- [x] eligible RELEASE 可公开展示和下载；pending/rejected 新版本不遮蔽上一个 eligible RELEASE。
+- [x] BETA 仅在明确 beta 上下文可见；SNAPSHOT 不出现在公共 Store。
+- [x] eligibility reason codes 在 admin/owner Dashboard 可见，公共响应只返回安全的 availability 状态。
+- [x] artifact missing、signature revoked、scan failed 的状态转换立即从所有公共入口撤下并留下 timeline 证据。
+- [x] memory fallback 与 D1 路径行为一致；focused store API/tests、Nexus typecheck/lint/build guard 通过。
 
 ## Out of Scope
 

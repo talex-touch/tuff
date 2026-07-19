@@ -51,7 +51,7 @@ Key sets are versioned and signed. Rotation supports an overlap window with both
 
 ## Migration
 
-Shadow-generate signatures while existing digest fields remain readable, backfill current approved artifacts, then hard-cut official registry admission/install to signed attestations. No indefinite unsigned official fallback remains. Local developer install uses a separate explicit dev-trust decision.
+Hard-cut official admission/install to signed attestations. Legacy unsigned artifacts cannot be back-signed without misrepresenting publisher identity; they remain ineligible and require canonical republish. Local developer install uses a separate explicit dev-trust decision.
 
 ## Rollback
 

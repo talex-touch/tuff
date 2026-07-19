@@ -1,4 +1,4 @@
-import type { IManifest } from '..'
+import type { IManifest, PluginAdmissionAttestationV1 } from '..'
 import type {
   PluginInstallRequest,
   PluginInstallResult,
@@ -46,7 +46,8 @@ export interface TpexPluginInfo {
     channel: string
     packageUrl: string
     packageSize: number
-    signature?: string
+    artifactSha256: string
+    nexusAttestation: PluginAdmissionAttestationV1
     manifest?: Record<string, unknown> | null
     changelog?: string | null
   }
@@ -65,7 +66,8 @@ export interface TpexDetailResponse {
       channel: string
       packageUrl: string
       packageSize: number
-      signature?: string
+      artifactSha256: string
+      nexusAttestation: PluginAdmissionAttestationV1
       manifest?: Record<string, unknown> | null
       changelog?: string | null
     }>
@@ -249,10 +251,13 @@ export class TpexProvider implements PluginProvider {
       metadata: {
         sourceType: 'registry',
         slug: plugin.slug,
+        pluginId: targetVersion.nexusAttestation.payload.pluginId,
+        pluginName: targetVersion.nexusAttestation.payload.pluginName,
         version: targetVersion.version,
         channel: targetVersion.channel,
         packageSize: targetVersion.packageSize,
-        signature: targetVersion.signature,
+        artifactSha256: targetVersion.artifactSha256,
+        nexusAttestation: targetVersion.nexusAttestation,
         installs: plugin.installs,
       },
     }

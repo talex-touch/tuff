@@ -1446,3 +1446,236 @@ const report = scanPluginPackage({
 })
 assertPluginSecurityScan(report)
 ```
+
+## Scenario: Ed25519 Plugin Signing Trust Chain
+
+### 1. Scope / Trigger
+
+- Trigger: publishing, admitting, downloading, or installing a registry `.tpex`.
+- The chain separates artifact integrity, publisher identity, Nexus review/admission, and CoreApp trust-root verification. A SHA-256 digest or legacy `key.talex` is never an identity signature.
+
+### 2. Signatures
+
+```ts
+createPluginPublisherSignature(packagePath, channel, options): PluginPublisherSigningBundle
+verifyPluginPublisherSignature(event, input): Promise<VerifiedPublisherSignature>
+createPluginAdmissionAttestation(event, input): Promise<PluginAdmissionAttestationV1>
+verifyPluginPackageTrust(filePath, metadata, options): Promise<PluginTrustVerificationResult>
+```
+
+Required secret inputs are `TUFF_PLUGIN_SIGNING_PRIVATE_KEY_PEM` or `TUFF_PLUGIN_SIGNING_PRIVATE_KEY_FILE`, `TUFF_PLUGIN_SIGNING_KEY_ID`, `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM`, and `PLUGIN_ATTESTATION_KEY_ID`. CoreApp reads public `TUFF_PLUGIN_TRUST_ROOTS_JSON` and optional `TUFF_PLUGIN_REVOKED_PUBLISHER_KEYS_JSON` only.
+
+### 3. Contracts
+
+- `talex.plugin-signing/v1` binds policy version, plugin id/name/version, channel, artifact SHA-256/size, normalized Manifest `_files` digest, issue time, and optional expiry. Canonical JSON recursively sorts object keys and rejects non-JSON/non-finite values.
+- CLI reads the finalized policy-valid `.tpex`, signs canonical UTF-8 bytes with Ed25519, self-verifies, and sends only the envelope, public key, key id, and validity metadata. Private key bytes never enter multipart data, package inventory, logs, config, or evidence.
+- Nexus registers public keys to the authenticated publisher owner. Key ids are globally stable; conflicting owner/fingerprint, revoked keys, invalid time windows, or non-Ed25519 keys fail closed.
+- Nexus publish verifies package digest/policy/integrity, publisher payload fields, Manifest file-map digest, payload digest, key ownership/status/time, and Ed25519 signature before scan/persistence. Approval re-runs the same verification against persisted Manifest/artifact fields before attestation; a prior `verifiedAt` flag is not sufficient.
+- Nexus signs `talex.plugin-attestation/v1` only after policy pass, scan `passed|review-required`, and explicit approved review. The payload fixes issuer `tuff-nexus`, audience `talex-touch-core-app`, publisher key/envelope, scan report digest, reviewer identity/time, and `admission: eligible`.
+- CoreApp registry installs verify downloaded size/SHA-256, strict attestation shape, specific issuer/audience/algorithm/decision codes, trusted Nexus root validity/signature, current publisher revocation, publisher key time/status/signature, and identity/version/channel before extraction or installer mutation.
+- Publisher key revocation is append-only for trust decisions. Nexus immediately blocks affected versions and clears their admission attestation; CoreApp rejects new installs through the signed key-set/revocation input.
+- Legacy unsigned versions are not back-signed. They remain ineligible and must be republished through the canonical CLI; local developer trust is a separate explicit path and cannot produce registry-trusted metadata.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Missing/private key invalid or algorithm is not Ed25519 | CLI/Nexus fail before publish; no unsigned fallback |
+| Publisher key unknown, wrong owner, not yet valid, expired, or revoked | Stable signing/trust code; no scan, attestation, listing, or install |
+| Artifact, size, identity, channel, policy version, file map, payload digest, or signature differs | Reject at publisher verification and again at review |
+| Scan blocked/unavailable or review not approved | No Nexus attestation |
+| Attestation root unknown/invalid/expired/revoked | CoreApp `PLUGIN_TRUST_KEY_*` failure before extraction |
+| Wrong issuer/audience or algorithm downgrade | Specific issuer/audience/algorithm trust code, not generic success/fallback |
+| Publisher key revoked after attestation | Nexus withdraws immediately; CoreApp rejects new install |
+
+### 5. Good / Base / Bad Cases
+
+- Good: CLI signs one finalized artifact; Nexus re-verifies it, scans and approves it, then CoreApp validates both signatures against the same artifact digest before installation.
+- Base: old and new publisher keys overlap during rotation; either valid key verifies until its declared window ends, while evidence identifies the exact key id.
+- Bad: call a digest `signature`, trust `key.talex`, attest a persisted `verifiedAt` flag without re-verifying, embed a private PEM, or let local-dev trust impersonate Nexus.
+
+### 6. Tests Required
+
+- Shared/CLI vectors cover canonical key order, strict normalization, real Ed25519 sign/verify, every payload-field and artifact tamper, invalid configuration, and private-material exclusion.
+- Nexus tests cover memory/D1 key lifecycle parity, ownership, overlap/revocation/time windows, publish verification, review-stage re-verification, canonical attestation fields, and unavailable/invalid platform keys.
+- CoreApp tests cover every stable failure code, env trust-root parsing, valid two-layer verification, publisher revocation, and a real install-queue proof that verification failure performs no extraction/finalization mutation.
+- CLI core tests, Nexus typecheck/build, CoreApp node typecheck, focused signing tests, and `git diff --check` are required gates.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (sha256(download) === version.signature)
+  await install(download)
+```
+
+#### Correct
+
+```ts
+const trust = await verifyPluginPackageTrust(downloadPath, registryMetadata)
+if (!trust.ok) throw new PluginTrustError(trust.code)
+await installer.installVerified(downloadPath)
+```
+
+## Scenario: Nexus Plugin Release Eligibility Gate
+
+### 1. Scope / Trigger
+
+- Trigger: returning plugin data from Store list, search, detail, versions, latest selection, or download; also any review, artifact, policy, scan, signature, attestation, or revocation transition.
+- Dashboard owner/admin inspection remains separate from public eligibility and may show safe reason codes for ineligible versions.
+
+### 2. Signatures
+
+```ts
+evaluatePluginReleaseEligibility(input: PluginReleaseEligibilityInput): PluginReleaseEligibility
+getPluginVersionEligibility(plugin, version, audience): PluginReleaseEligibility
+invalidatePluginVersionsForPublisherKey(event, keyId, actorId): Promise<number>
+markPluginVersionAdmissionBlocked(event, pluginId, versionId, reason, actorId?): Promise<void>
+```
+
+The ordered stable reasons use the `PLUGIN_ELIGIBILITY_*` namespace. Human text, source snippets, storage paths, and full scan/signature records are not public contracts.
+
+### 3. Contracts
+
+- One pure projection combines plugin/version review, channel/audience, artifact state, policy, scan, publisher trust, Nexus attestation, admission decision, and revocation. Public endpoints never restate a subset of these checks.
+- Public Store permits approved eligible `RELEASE` only. Explicit beta audience may include `BETA`; `SNAPSHOT` remains owner/admin-only. Dashboard visibility does not grant public download eligibility.
+- Latest selection filters eligibility first, then compares channel, semantic version, and deterministic creation/id tie-breakers. A newer pending/rejected/private version never hides the previous eligible release.
+- Existing rows hydrate missing policy/signature/attestation fields as `not-evaluated` and ineligible. Cryptographic eligibility cannot be backfilled; legacy artifacts require canonical republish.
+- D1 and memory fallback persist the same artifact/admission/revocation fields and eligibility revision/reasons. Every review or trust-state transition increments the revision and appends a bounded timeline event.
+- Store list/search/detail/versions omit plugins or versions with no eligible release. Download re-evaluates the exact requested version immediately before R2/object access and marks missing/digest-mismatched artifacts blocked.
+- There is no cached public eligibility decision. Cacheable readme/assets do not authorize package download; if a future Store cache is added, eligibility revision must enter its key/invalidation path.
+- Publisher revocation clears Nexus attestation, blocks admission, sets revocation time/reasons, recomputes latest eligible selection, and writes timeline evidence in the same operation.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Plugin/version not approved | Publicly ineligible; owner/admin receives safe reason code |
+| Policy missing/failed, scan blocked/unavailable, publisher unverified, attestation missing, admission pending/blocked | Hidden from every public Store surface and download |
+| Artifact missing/quarantined or key/version revoked | Immediate withdrawal before object retrieval |
+| Eligible old release plus newer pending/rejected release | Keep the old release as public latest |
+| `BETA` on public audience or any `SNAPSHOT` public request | `PLUGIN_ELIGIBILITY_CHANNEL_PRIVATE` |
+| No eligible version remains | Omit plugin from list/search/detail; download returns safe unavailable/not-found response |
+
+### 5. Good / Base / Bad Cases
+
+- Good: one reviewed, policy-valid, scanned, publisher-verified, Nexus-attested RELEASE appears identically in list/search/detail/versions and downloads after exact re-evaluation.
+- Base: version 1.0 remains eligible while 2.0 is pending; Store continues selecting 1.0 and Dashboard explains 2.0's reasons.
+- Bad: list checks only plugin approval, detail checks only version status, download trusts a cached latest pointer, or revocation waits for TTL expiry.
+
+### 6. Tests Required
+
+- Pure matrix tests cover every status/channel/audience/artifact/policy/scan/publisher/attestation/admission/revocation dimension and stable reason order.
+- Store API tests prove list/search/detail/versions/download consistency, beta/snapshot boundaries, old-release fallback, missing artifact, digest mismatch, and safe public responses.
+- Store tests exercise memory and D1 parity. Revocation tests assert attestation clearing, blocked admission, revision/reason updates, latest recomputation, and timeline evidence.
+- Nexus typecheck, focused API/store tests, and production build are required. The API route-tree guard has a repository-wide pre-existing failure if unrelated test files remain under `server/api`; it is not replaced by a narrowed pass claim.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (plugin.status === 'approved' && version.status === 'approved')
+  return download(version.packageKey)
+```
+
+#### Correct
+
+```ts
+const eligibility = getPluginVersionEligibility(plugin, version, 'public')
+if (!eligibility.eligible) throw createSafeUnavailableError(eligibility.reasons)
+return getVerifiedPluginPackage(version)
+```
+
+## Scenario: Canonical Plugin Source Package Audit
+
+### 1. Scope / Trigger
+
+- Trigger: building an official or release-supported plugin artifact for Nexus admission, bundled projection, or release evidence.
+- The boundary spans the versioned release-target registry, canonical plugin source, Tuff CLI prerequisites, package policy, security scan, publisher signature, CoreApp bundled projection, and machine-readable audit evidence.
+
+### 2. Signatures
+
+```text
+pnpm plugins:release:audit -- [--target <plugin>] [--repeat 1|2]
+  [--allow-dirty] [--ephemeral-signing] [--skip-prerequisites]
+  [--output <report.json>]
+```
+
+```ts
+interface PluginReleaseTarget {
+  pluginName: string
+  packageName: string
+  root: string
+  manifest: string
+  bundledProjection?: string
+  gates: {
+    build: CommandSpec
+    test: CommandSpec | NotApplicableGate
+    typecheck: CommandSpec | NotApplicableGate
+    lint: CommandSpec | NotApplicableGate
+  }
+}
+```
+
+`scripts/lib/plugin-release-targets.cjs` owns the ordered prerequisites and targets. `scripts/plugin-source-package-audit.ts` emits `talex.plugin-source-audit/v1`.
+
+### 3. Contracts
+
+- Copy canonical source into an isolated temporary workspace. Exclude every `node_modules`, nested `dist`, and existing `.tpex`; no generated archive may become build input.
+- Derive `SOURCE_DATE_EPOCH` from the audited Git revision unless the caller supplies the same explicit epoch. Widget compilation uses build-relative POSIX paths for compiler ids and filenames, then sorts extracted styles by source path and external dependencies lexically.
+- Run prerequisites and target gates in registry order. `test`, `typecheck`, or `lint` may be skipped only through a registry `notApplicable: true` entry with a non-empty reason.
+- Read the final `.tpex` back through the bounded security reader. Package Policy, `_files` integrity, security scan, publisher signature, Manifest/package identity, and configured bundled projection must all bind to the audited content.
+- Projection freshness compares normalized relative-path/SHA-256 inventories. Equal versions never substitute for content equality.
+- Repeat mode compares normalized inventory digests separately from archive-container SHA-256. Container bytes may differ because of archive/signature metadata; the report must say `artifactContainer: different` instead of claiming byte reproducibility.
+- Reports contain source revision, dirty policy, tool versions, sanitized command results, relative artifact paths/digests, gate applicability, decisions, and stable blockers. They never contain raw logs, absolute temporary paths, tokens, passwords, secrets, or private-key material.
+- `--ephemeral-signing` produces local evidence only. Release-candidate evidence requires configured signing material and must not relabel an ephemeral audit as trusted release proof.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Unknown target, invalid repeat, dirty scoped source without opt-in | Reject before prerequisites or target build |
+| Prerequisite or required target gate fails | Stop in deterministic order; emit failed record with bounded sanitized reason |
+| Stale/nested `.tpex`, `dist`, or `node_modules` exists in source | Exclude from staging; never consume as input |
+| Manifest/package identity or version differs | Reject the target before evidence can pass |
+| `_files` mismatch, untracked archive entry, policy failure, or scan failure | Reject the final artifact |
+| Bundled projection missing, extra, or changed content | Reject with bounded relative-path differences |
+| Repeated normalized inventory digest differs | `normalizedInventory: failed`; overall audit fails |
+| Signing key absent without explicit ephemeral mode | Reject; do not fabricate a signature state |
+
+### 5. Good / Base / Bad Cases
+
+- Good: clean canonical sources pass declared gates twice, both normalized inventories match, policy/scan/signature pass, bundled projections match, and the report binds each retained artifact SHA-256.
+- Base: archive-container hashes differ while normalized inventories match. The audit passes content reproducibility and reports the container difference explicitly.
+- Bad: copying an existing `dist/build`, accepting version-only projection parity, using host absolute paths as Vue compiler ids, or marking a missing test command as implicitly optional.
+
+### 6. Tests Required
+
+- Registry tests assert exact prerequisite/target order and a reason for every non-applicable gate.
+- Staging tests prove nested `dist`, `node_modules`, and case-insensitive `.tpex` files are excluded.
+- Inventory tests prove lexical path normalization, symlink rejection, digest order independence, and digest sensitivity to content.
+- Command tests prove exit-code capture plus bounded path/token/secret/password/PEM redaction.
+- Builder tests prove stable widget compiler ids, source-ordered styles, dependency ordering, and repeatable normalized projection inventory.
+- Functional audit runs twice for every registered target and proves gate, policy, scan, signature, projection, and aggregate status fields.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const artifact = findExistingTpex(pluginRoot)
+if (bundledManifest.version === sourceManifest.version)
+  markProjectionFresh(artifact)
+```
+
+#### Correct
+
+```ts
+const staging = await createIsolatedSourceWorkspace(target)
+const artifact = await buildCanonicalTarget(staging, sourceRevision)
+const inventory = readVerifiedArtifactInventory(artifact)
+assertProjectionInventory(target.bundledProjection, inventory)
+writeAuditRecord({ sourceRevision, artifactSha256: sha256(artifact), inventory })
+```

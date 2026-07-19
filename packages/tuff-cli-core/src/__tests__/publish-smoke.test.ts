@@ -1,4 +1,6 @@
 import type { NetworkRequestOptions, NetworkResponse } from '@talex-touch/utils/network'
+import { Buffer } from 'node:buffer'
+import { createHash, generateKeyPairSync } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import { networkClient } from '@talex-touch/utils/network'
@@ -17,6 +19,11 @@ const freshAppJwt = [
   'eyJleHAiOjQxMDI0NDQ4MDAsImd0IjoibG9uZyIsImRldmljZUlkIjoiZGV2aWNlLTEifQ',
   'signature',
 ].join('.')
+
+const publisherSigningPrivateKey = generateKeyPairSync('ed25519')
+  .privateKey
+  .export({ format: 'pem', type: 'pkcs8' })
+  .toString()
 
 function textResponse(
   options: NetworkRequestOptions,
@@ -38,29 +45,75 @@ function textResponse(
   }
 }
 
+const TAR_BLOCK_SIZE = 512
+
+function writeOctal(buffer: Buffer, value: number, start: number, length: number) {
+  buffer.write(`${value.toString(8).padStart(length - 1, '0')}\0`, start, length, 'ascii')
+}
+
+function createTarEntry(name: string, content: string): Buffer {
+  const contentBuffer = Buffer.from(content)
+  const header = Buffer.alloc(TAR_BLOCK_SIZE)
+  header.write(name, 0, Math.min(Buffer.byteLength(name), 100), 'utf8')
+  writeOctal(header, 0o644, 100, 8)
+  writeOctal(header, contentBuffer.length, 124, 12)
+  header.fill(' ', 148, 156)
+  header.write('0', 156, 1, 'ascii')
+  header.write('ustar\0', 257, 6, 'ascii')
+  header.write('00', 263, 2, 'ascii')
+  let checksum = 0
+  for (const byte of header)
+    checksum += byte
+  header.write(`${checksum.toString(8).padStart(6, '0')}\0 `, 148, 8, 'ascii')
+  const padding = Buffer.alloc((TAR_BLOCK_SIZE - (contentBuffer.length % TAR_BLOCK_SIZE)) % TAR_BLOCK_SIZE)
+  return Buffer.concat([header, contentBuffer, padding])
+}
+
+function createTpex(manifest: { id: string, name: string, version: string }): Buffer {
+  const source = 'export const ready = true\n'
+  const files = { 'index.js': `sha256-${createHash('sha256').update(source).digest('hex')}` }
+  const archiveManifest = {
+    ...manifest,
+    sdkapi: 260428,
+    category: 'utilities',
+    permissions: { required: [], optional: [] },
+    _files: files,
+    _signature: createHash('md5').update(JSON.stringify(files)).digest('base64'),
+  }
+  return Buffer.concat([
+    createTarEntry('index.js', source),
+    createTarEntry('manifest.json', JSON.stringify(archiveManifest)),
+    Buffer.alloc(TAR_BLOCK_SIZE * 2),
+  ])
+}
+
 async function withPluginFixture(
   callback: (root: string) => Promise<void>,
   manifestOverrides: Record<string, unknown> = {},
 ) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'tuff-publish-'))
   const previousCwd = process.cwd()
+  const manifest = {
+    id: 'com.tuffex.demo-plugin',
+    name: 'demo-plugin',
+    version: '1.0.0',
+    ...manifestOverrides,
+  }
 
   try {
     process.chdir(root)
     await fs.writeJson(path.join(root, 'package.json'), {
-      name: 'demo-plugin',
-      version: '1.0.0',
+      name: manifest.name,
+      version: manifest.version,
     })
-    await fs.writeJson(path.join(root, 'manifest.json'), {
-      id: 'com.tuffex.demo-plugin',
-      name: 'demo-plugin',
-      version: '1.0.0',
-      ...manifestOverrides,
-    })
+    await fs.writeJson(path.join(root, 'manifest.json'), manifest)
 
     const buildDir = path.join(root, 'dist', 'build')
     await fs.ensureDir(buildDir)
-    await fs.writeFile(path.join(buildDir, 'demo-plugin-1.0.0.tpex'), 'dummy')
+    await fs.writeFile(
+      path.join(buildDir, `${manifest.name}-${manifest.version}.tpex`),
+      createTpex(manifest),
+    )
 
     await callback(root)
   }
@@ -73,11 +126,15 @@ async function withPluginFixture(
 describe('publish', () => {
   const previousToken = process.env.TUFF_AUTH_TOKEN
   const previousConfigDir = process.env.TUFF_CONFIG_DIR
+  const previousSigningKey = process.env.TUFF_PLUGIN_SIGNING_PRIVATE_KEY_PEM
+  const previousSigningKeyId = process.env.TUFF_PLUGIN_SIGNING_KEY_ID
   const previousExitCode = process.exitCode
 
   beforeEach(() => {
     process.env.TUFF_AUTH_TOKEN = 'test-token'
     process.env.TUFF_CONFIG_DIR = path.join(os.tmpdir(), `tuff-cli-core-auth-${Date.now()}-${Math.random().toString(16).slice(2)}`)
+    process.env.TUFF_PLUGIN_SIGNING_PRIVATE_KEY_PEM = publisherSigningPrivateKey
+    process.env.TUFF_PLUGIN_SIGNING_KEY_ID = 'publish-smoke-key'
     process.exitCode = undefined
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -93,6 +150,14 @@ describe('publish', () => {
       delete process.env.TUFF_CONFIG_DIR
     else
       process.env.TUFF_CONFIG_DIR = previousConfigDir
+    if (previousSigningKey === undefined)
+      delete process.env.TUFF_PLUGIN_SIGNING_PRIVATE_KEY_PEM
+    else
+      process.env.TUFF_PLUGIN_SIGNING_PRIVATE_KEY_PEM = previousSigningKey
+    if (previousSigningKeyId === undefined)
+      delete process.env.TUFF_PLUGIN_SIGNING_KEY_ID
+    else
+      process.env.TUFF_PLUGIN_SIGNING_KEY_ID = previousSigningKeyId
     process.exitCode = previousExitCode
   })
 

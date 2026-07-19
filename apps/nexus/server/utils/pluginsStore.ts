@@ -1,22 +1,28 @@
 import type { D1Database } from '@cloudflare/workers-types'
 import type {
+  PluginAdmissionAttestationV1,
+  PluginPublisherSignatureV1,
   PluginSecurityScanDecision,
   PluginSecurityScanWaiver,
 } from '@talex-touch/utils/plugin'
-import { serializePluginSecurityScanReport } from '@talex-touch/utils/plugin'
 import type { H3Event } from 'h3'
+import type { PluginReleaseAudience, PluginReleaseEligibility, PluginReleaseEligibilityReason } from './pluginReleaseEligibility'
+import type { PublisherSigningKeyRecord, VerifiedPublisherSignature } from './pluginSigning'
+import type { TpexExtractedMetadata } from './tpex'
 import { Buffer } from 'node:buffer'
 import { createHash, randomUUID } from 'node:crypto'
 import process from 'node:process'
+import { serializePluginSecurityScanReport } from '@talex-touch/utils/plugin'
 import { createError } from 'h3'
 import { useStorage } from 'nitropack/runtime/internal/storage'
 import { isPluginCategoryId } from '~/utils/plugin-categories'
 import { readCloudflareBindings } from './cloudflare'
 import { deleteImage, uploadImageFromBuffer } from './imageStorage'
-import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
-import { listActivePluginSecurityScanWaivers } from './pluginSecurityScanWaiverStore'
 import { recordPlatformGovernanceEvent } from './platformGovernanceStore'
-import type { TpexExtractedMetadata } from './tpex'
+import { deletePluginPackage, uploadPluginPackage } from './pluginPackageStorage'
+import { evaluatePluginReleaseEligibility } from './pluginReleaseEligibility'
+import { listActivePluginSecurityScanWaivers } from './pluginSecurityScanWaiverStore'
+import { createPluginAdmissionAttestation, verifyPluginPublisherSignature } from './pluginSigning'
 import { extractTpexMetadata, getTpexAdmissionFailure } from './tpex'
 import {
   completeUploadGovernance,
@@ -47,6 +53,22 @@ export function buildPluginPackageGovernanceResourceId(input: {
   return `plugin:${input.pluginId}:version:${input.channel.toLowerCase()}:${input.version}`
 }
 
+function extractPublisherSignatureKeyId(value: unknown): string {
+  let parsed = value
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed)
+    }
+    catch {
+      return ''
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    return ''
+  const keyId = (parsed as Record<string, unknown>).keyId
+  return typeof keyId === 'string' ? keyId.trim() : ''
+}
+
 function classifyPluginPackageUploadFailure(error: unknown): string {
   const statusCode = error && typeof error === 'object'
     ? (error as { statusCode?: unknown }).statusCode
@@ -58,10 +80,11 @@ function classifyPluginPackageUploadFailure(error: unknown): string {
 
   if (statusCode === 429)
     return 'storage-policy-blocked'
-  if (normalized.includes('plugin_scan'))
+  if (normalized.includes('plugin_scan')) {
     return normalized.includes('unavailable') || normalized.includes('timeout') || normalized.includes('engine')
       ? 'plugin-security-scan-unavailable'
       : 'plugin-security-scan-blocked'
+  }
   if (normalized.includes('plugin_package_'))
     return 'plugin-package-policy-rejected'
   if (normalized.includes('integrity'))
@@ -77,7 +100,8 @@ function classifyPluginPackageUploadFailure(error: unknown): string {
 
 function assertTpexAdmission(metadata: TpexExtractedMetadata): void {
   const failure = getTpexAdmissionFailure(metadata)
-  if (!failure) return
+  if (!failure)
+    return
   throw createError({
     statusCode: 400,
     statusMessage: `${failure.code}: ${failure.reason}`,
@@ -181,7 +205,18 @@ export interface DashboardPluginVersion {
   createdBy: string
   channel: PluginChannel
   version: string
-  signature: string
+  artifactSha256: string
+  publisherSignature?: PluginPublisherSignatureV1 | null
+  publisherKey?: PublisherSigningKeyRecord | null
+  publisherVerifiedAt?: string | null
+  nexusAttestation?: PluginAdmissionAttestationV1 | null
+  admissionStatus?: 'pending' | 'eligible' | 'blocked'
+  policyDecision?: 'passed' | 'failed' | 'unavailable' | 'not-evaluated'
+  artifactState?: 'available' | 'missing' | 'quarantined'
+  revokedAt?: string | null
+  eligibilityRevision?: number
+  eligibilityEvaluatedAt?: string | null
+  eligibilityReasons?: PluginReleaseEligibilityReason[]
   packageKey: string
   packageUrl: string
   packageSize: number
@@ -276,7 +311,20 @@ interface D1PluginVersionRow {
   created_by: string
   channel: string
   version: string
-  signature: string
+  signature?: string | null
+  artifact_sha256?: string | null
+  publisher_signature?: string | null
+  publisher_key?: string | null
+  publisher_key_id?: string | null
+  publisher_verified_at?: string | null
+  nexus_attestation?: string | null
+  admission_status?: string | null
+  policy_decision?: string | null
+  artifact_state?: string | null
+  revoked_at?: string | null
+  eligibility_revision?: number | null
+  eligibility_evaluated_at?: string | null
+  eligibility_reasons?: string | null
   package_key: string
   package_url: string
   package_size: number
@@ -368,32 +416,6 @@ export interface StorePluginListResult {
   offset: number
 }
 
-interface D1StorePluginSearchRow extends D1PluginRow {
-  selected_version_id: string
-  selected_version_plugin_id: string
-  selected_version_created_by: string
-  selected_version_channel: string
-  selected_version_version: string
-  selected_version_signature: string
-  selected_version_package_key: string
-  selected_version_package_url: string
-  selected_version_package_size: number
-  selected_version_icon_key: string
-  selected_version_icon_url: string
-  selected_version_readme_markdown: string | null
-  selected_version_manifest: string | null
-  selected_version_notes: string | null
-  selected_version_status: string | null
-  selected_version_reviewed_at: string | null
-  selected_version_reject_reason: string | null
-  selected_version_created_at: string
-  selected_version_updated_at: string
-}
-
-interface D1CountRow {
-  total: number
-}
-
 interface CreatePluginInput {
   slug: string
   name: string
@@ -420,6 +442,10 @@ interface PublishVersionInput {
   version: string
   changelog: string
   packageFile: File
+  publisherSignature: unknown
+  publisherPublicKey: string
+  publisherKeyValidFrom: string
+  publisherKeyValidUntil?: string
   createdBy: string
   canModerate?: boolean
   homepage?: string | null
@@ -430,6 +456,10 @@ interface ReeditVersionInput {
   pluginId: string
   versionId: string
   packageFile: File
+  publisherSignature: unknown
+  publisherPublicKey: string
+  publisherKeyValidFrom: string
+  publisherKeyValidUntil?: string
   changelog: string
   updatedBy: string
   canModerate?: boolean
@@ -543,6 +573,19 @@ async function ensurePluginSchema(db: D1Database) {
       channel TEXT NOT NULL,
       version TEXT NOT NULL,
       signature TEXT NOT NULL,
+      artifact_sha256 TEXT,
+      publisher_signature TEXT,
+      publisher_key TEXT,
+      publisher_key_id TEXT,
+      publisher_verified_at TEXT,
+      nexus_attestation TEXT,
+      admission_status TEXT NOT NULL DEFAULT 'pending',
+      policy_decision TEXT NOT NULL DEFAULT 'not-evaluated',
+      artifact_state TEXT NOT NULL DEFAULT 'available',
+      revoked_at TEXT,
+      eligibility_revision INTEGER NOT NULL DEFAULT 0,
+      eligibility_evaluated_at TEXT,
+      eligibility_reasons TEXT,
       package_key TEXT NOT NULL,
       package_url TEXT NOT NULL,
       package_size INTEGER NOT NULL,
@@ -597,7 +640,7 @@ async function ensurePluginSchema(db: D1Database) {
   await addColumnIfMissing('name', 'name TEXT')
   await addColumnIfMissing('summary', 'summary TEXT')
   await addColumnIfMissing('category', 'category TEXT')
-  await addColumnIfMissing('artifact_type', "artifact_type TEXT DEFAULT 'plugin'")
+  await addColumnIfMissing('artifact_type', 'artifact_type TEXT DEFAULT \'plugin\'')
   await addColumnIfMissing('installs', 'installs INTEGER DEFAULT 0')
   await addColumnIfMissing('homepage', 'homepage TEXT')
   await addColumnIfMissing('icon', 'icon TEXT')
@@ -632,6 +675,19 @@ async function ensurePluginSchema(db: D1Database) {
   await addVersionColumnIfMissing('status', 'status TEXT NOT NULL DEFAULT \'pending\'')
   await addVersionColumnIfMissing('reviewed_at', 'reviewed_at TEXT')
   await addVersionColumnIfMissing('reject_reason', 'reject_reason TEXT')
+  await addVersionColumnIfMissing('artifact_sha256', 'artifact_sha256 TEXT')
+  await addVersionColumnIfMissing('publisher_signature', 'publisher_signature TEXT')
+  await addVersionColumnIfMissing('publisher_key', 'publisher_key TEXT')
+  await addVersionColumnIfMissing('publisher_key_id', 'publisher_key_id TEXT')
+  await addVersionColumnIfMissing('publisher_verified_at', 'publisher_verified_at TEXT')
+  await addVersionColumnIfMissing('nexus_attestation', 'nexus_attestation TEXT')
+  await addVersionColumnIfMissing('admission_status', 'admission_status TEXT NOT NULL DEFAULT \'pending\'')
+  await addVersionColumnIfMissing('policy_decision', 'policy_decision TEXT NOT NULL DEFAULT \'not-evaluated\'')
+  await addVersionColumnIfMissing('artifact_state', 'artifact_state TEXT NOT NULL DEFAULT \'available\'')
+  await addVersionColumnIfMissing('revoked_at', 'revoked_at TEXT')
+  await addVersionColumnIfMissing('eligibility_revision', 'eligibility_revision INTEGER NOT NULL DEFAULT 0')
+  await addVersionColumnIfMissing('eligibility_evaluated_at', 'eligibility_evaluated_at TEXT')
+  await addVersionColumnIfMissing('eligibility_reasons', 'eligibility_reasons TEXT')
   await addVersionColumnIfMissing('security_scan_decision', 'security_scan_decision TEXT')
   await addVersionColumnIfMissing('security_scan_report_digest', 'security_scan_report_digest TEXT')
   await addVersionColumnIfMissing('security_scanner_version', 'security_scanner_version TEXT')
@@ -640,6 +696,7 @@ async function ensurePluginSchema(db: D1Database) {
   await addVersionColumnIfMissing('security_scan_completed_at', 'security_scan_completed_at TEXT')
 
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_store_plugin_status_created ON ${PLUGIN_VERSIONS_TABLE}(plugin_id, status, created_at DESC);`).run()
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_VERSIONS_TABLE}_publisher_key ON ${PLUGIN_VERSIONS_TABLE}(publisher_key_id, admission_status);`).run()
 
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_plugin_created ON ${PLUGIN_TIMELINE_TABLE}(plugin_id, created_at DESC);`).run()
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_${PLUGIN_TIMELINE_TABLE}_version_created ON ${PLUGIN_TIMELINE_TABLE}(version_id, created_at DESC);`).run()
@@ -662,10 +719,6 @@ function parseJsonArray(value: string | null): string[] {
 
 function normalizeArtifactType(value: unknown): PluginArtifactType {
   return value === 'layout' || value === 'theme' ? value : 'plugin'
-}
-
-function escapeSqlLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, char => `\\${char}`)
 }
 
 function parseJsonObject<T>(value: string | null): T | null {
@@ -737,13 +790,31 @@ function mapPluginRow(row: D1PluginRow): DashboardPlugin {
 }
 
 function mapPluginVersionRow(row: D1PluginVersionRow): DashboardPluginVersion {
+  const admissionStatus = row.admission_status === 'eligible' || row.admission_status === 'pending'
+    ? row.admission_status
+    : 'blocked'
   return sanitizeVersion({
     id: row.id,
     pluginId: row.plugin_id,
     createdBy: row.created_by,
     channel: row.channel as PluginChannel,
     version: row.version,
-    signature: row.signature,
+    artifactSha256: row.artifact_sha256 ?? row.signature ?? '',
+    publisherSignature: parseJsonObject<PluginPublisherSignatureV1>(row.publisher_signature ?? null) ?? null,
+    publisherKey: parseJsonObject<PublisherSigningKeyRecord>(row.publisher_key ?? null) ?? null,
+    publisherVerifiedAt: row.publisher_verified_at ?? null,
+    nexusAttestation: parseJsonObject<PluginAdmissionAttestationV1>(row.nexus_attestation ?? null) ?? null,
+    admissionStatus,
+    policyDecision: row.policy_decision === 'passed' || row.policy_decision === 'failed' || row.policy_decision === 'unavailable'
+      ? row.policy_decision
+      : 'not-evaluated',
+    artifactState: row.artifact_state === 'missing' || row.artifact_state === 'quarantined'
+      ? row.artifact_state
+      : 'available',
+    revokedAt: row.revoked_at ?? null,
+    eligibilityRevision: Number(row.eligibility_revision ?? 0),
+    eligibilityEvaluatedAt: row.eligibility_evaluated_at ?? null,
+    eligibilityReasons: parseJsonArray(row.eligibility_reasons ?? null) as PluginReleaseEligibilityReason[],
     packageKey: row.package_key,
     packageUrl: row.package_url,
     packageSize: Number(row.package_size),
@@ -766,40 +837,6 @@ function mapPluginVersionRow(row: D1PluginVersionRow): DashboardPluginVersion {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   })
-}
-
-function mapStorePluginSearchVersionRow(row: D1StorePluginSearchRow): DashboardPluginVersion {
-  return mapPluginVersionRow({
-    id: row.selected_version_id,
-    plugin_id: row.selected_version_plugin_id,
-    created_by: row.selected_version_created_by,
-    channel: row.selected_version_channel,
-    version: row.selected_version_version,
-    signature: row.selected_version_signature,
-    package_key: row.selected_version_package_key,
-    package_url: row.selected_version_package_url,
-    package_size: row.selected_version_package_size,
-    icon_key: row.selected_version_icon_key,
-    icon_url: row.selected_version_icon_url,
-    readme_markdown: row.selected_version_readme_markdown,
-    manifest: row.selected_version_manifest,
-    notes: row.selected_version_notes,
-    status: row.selected_version_status,
-    reviewed_at: row.selected_version_reviewed_at,
-    reject_reason: row.selected_version_reject_reason,
-    created_at: row.selected_version_created_at,
-    updated_at: row.selected_version_updated_at,
-  })
-}
-
-function mapStorePluginSearchRow(row: D1StorePluginSearchRow): StorePluginSearchPlugin {
-  const latestVersion = mapStorePluginSearchVersionRow(row)
-  return {
-    ...mapPluginRow(row),
-    latestVersion,
-    latestVersionId: latestVersion.id,
-    versions: [latestVersion],
-  }
 }
 
 function mapPluginTimelineRow(row: D1PluginTimelineRow): PluginTimelineEvent {
@@ -898,20 +935,53 @@ function validateSemanticVersion(version: string): boolean {
  * @returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  */
 function compareVersions(v1: string, v2: string): number {
-  // Extract major.minor.patch from version strings (ignore pre-release and build metadata)
-  const normalize = (v: string) => {
-    const base = v.split('-').shift() ?? v
-    const core = base.split('+').shift() ?? base
-    return core.split('.').map(part => Number(part))
+  const parse = (value: string) => {
+    const withoutBuild = value.split('+', 1)[0] ?? value
+    const prereleaseIndex = withoutBuild.indexOf('-')
+    const core = prereleaseIndex === -1 ? withoutBuild : withoutBuild.slice(0, prereleaseIndex)
+    const prerelease = prereleaseIndex === -1
+      ? []
+      : withoutBuild.slice(prereleaseIndex + 1).split('.')
+    return { core: core.split('.'), prerelease }
   }
-  const parts1 = normalize(v1)
-  const parts2 = normalize(v2)
+  const compareNumeric = (left: string, right: string): number => {
+    if (left.length !== right.length)
+      return left.length > right.length ? 1 : -1
+    if (left === right)
+      return 0
+    return left > right ? 1 : -1
+  }
 
-  for (let i = 0; i < 3; i++) {
-    if ((parts1[i] ?? 0) > (parts2[i] ?? 0))
-      return 1
-    if ((parts1[i] ?? 0) < (parts2[i] ?? 0))
-      return -1
+  const left = parse(v1)
+  const right = parse(v2)
+  for (let index = 0; index < 3; index++) {
+    const coreDiff = compareNumeric(left.core[index] ?? '0', right.core[index] ?? '0')
+    if (coreDiff !== 0)
+      return coreDiff
+  }
+
+  if (left.prerelease.length === 0 || right.prerelease.length === 0) {
+    if (left.prerelease.length === right.prerelease.length)
+      return 0
+    return left.prerelease.length === 0 ? 1 : -1
+  }
+
+  const length = Math.max(left.prerelease.length, right.prerelease.length)
+  for (let index = 0; index < length; index++) {
+    const leftPart = left.prerelease[index]
+    const rightPart = right.prerelease[index]
+    if (leftPart === undefined || rightPart === undefined)
+      return leftPart === undefined ? -1 : 1
+    if (leftPart === rightPart)
+      continue
+
+    const leftNumeric = /^\d+$/.test(leftPart)
+    const rightNumeric = /^\d+$/.test(rightPart)
+    if (leftNumeric && rightNumeric)
+      return compareNumeric(leftPart, rightPart)
+    if (leftNumeric !== rightNumeric)
+      return leftNumeric ? -1 : 1
+    return leftPart > rightPart ? 1 : -1
   }
   return 0
 }
@@ -939,6 +1009,45 @@ async function ensureUniquePluginSlug(event: H3Event | undefined, slug: string, 
     throw createError({ statusCode: 400, statusMessage: 'Plugin identifier is already in use.' })
 }
 
+function resolvePluginPolicyDecision(
+  version: DashboardPluginVersion,
+): NonNullable<DashboardPluginVersion['policyDecision']> {
+  if (version.policyDecision)
+    return version.policyDecision
+  return version.publisherSignature?.payload.policyVersion ? 'passed' : 'not-evaluated'
+}
+
+export function getPluginVersionEligibility(
+  plugin: DashboardPlugin,
+  version: DashboardPluginVersion,
+  audience: PluginReleaseAudience = 'public',
+): PluginReleaseEligibility {
+  const artifactState = version.artifactState
+    ?? (version.packageKey && version.packageUrl && version.packageSize > 0 ? 'available' : 'missing')
+  const policyDecision = resolvePluginPolicyDecision(version)
+  const publisherTrust = version.revokedAt
+    ? 'revoked'
+    : version.publisherSignature && version.publisherKey && version.publisherVerifiedAt
+      ? 'verified'
+      : 'not-evaluated'
+  const nexusAttestation = version.nexusAttestation
+    ? 'verified'
+    : 'not-evaluated'
+  return evaluatePluginReleaseEligibility({
+    pluginStatus: plugin.status,
+    versionStatus: version.status,
+    channel: version.channel,
+    artifactState,
+    policyDecision,
+    scanDecision: version.securityScanDecision ?? 'not-evaluated',
+    publisherTrust,
+    nexusAttestation,
+    admissionDecision: version.admissionStatus ?? 'blocked',
+    revokedAt: version.revokedAt,
+    audience,
+  })
+}
+
 function versionIsVisible(
   version: DashboardPluginVersion,
   plugin: DashboardPlugin,
@@ -948,24 +1057,50 @@ function versionIsVisible(
   const isOwner = options.viewerId === plugin.userId
 
   if (options.forStore)
-    return version.status === 'approved'
+    return getPluginVersionEligibility(plugin, version, 'public').eligible
 
-  if (!viewerIsAdmin && !isOwner && version.status !== 'approved')
-    return false
-
-  if (version.channel !== 'BETA')
+  if (viewerIsAdmin || isOwner)
     return true
 
-  if (viewerIsAdmin)
-    return true
+  if (version.channel === 'BETA'
+    && plugin.ownerOrgId
+    && options.viewerOrgIds?.includes(plugin.ownerOrgId)) {
+    return getPluginVersionEligibility(plugin, version, 'beta').eligible
+  }
 
-  if (isOwner)
-    return true
+  return getPluginVersionEligibility(plugin, version, 'public').eligible
+}
 
-  if (plugin.ownerOrgId && options.viewerOrgIds?.includes(plugin.ownerOrgId))
-    return true
+function comparePluginVersions(left: DashboardPluginVersion, right: DashboardPluginVersion): number {
+  const byChannelPriority = { RELEASE: 3, BETA: 2, SNAPSHOT: 1 } as const
+  const channelDiff = byChannelPriority[left.channel] - byChannelPriority[right.channel]
+  if (channelDiff !== 0)
+    return channelDiff
 
-  return false
+  const semanticDiff = compareVersions(left.version, right.version)
+  if (semanticDiff !== 0)
+    return semanticDiff
+
+  return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+}
+
+function projectVisibleVersions(
+  versions: DashboardPluginVersion[],
+  plugin: DashboardPlugin,
+  options: PluginVisibilityOptions,
+): { versions: DashboardPluginVersion[], latest?: DashboardPluginVersion } {
+  const visible: DashboardPluginVersion[] = []
+  let latest: DashboardPluginVersion | undefined
+
+  for (const version of versions) {
+    if (!versionIsVisible(version, plugin, options))
+      continue
+    visible.push(version)
+    if (!latest || comparePluginVersions(version, latest) > 0)
+      latest = version
+  }
+
+  return { versions: visible, latest }
 }
 
 function selectLatestVisibleVersion(
@@ -973,20 +1108,24 @@ function selectLatestVisibleVersion(
   plugin: DashboardPlugin,
   options: PluginVisibilityOptions,
 ): DashboardPluginVersion | undefined {
-  const visible = versions.filter(version => versionIsVisible(version, plugin, options))
-  if (!visible.length)
-    return undefined
+  return projectVisibleVersions(versions, plugin, options).latest
+}
 
-  const byChannelPriority = { RELEASE: 3, SNAPSHOT: 2, BETA: 1 } as const
+function projectPluginVersions(
+  plugin: DashboardPlugin,
+  versions: DashboardPluginVersion[],
+  options: PluginVisibilityOptions,
+): DashboardPlugin | null {
+  const projection = projectVisibleVersions(versions, plugin, options)
+  if (options.forStore && !projection.latest)
+    return null
 
-  return visible
-    .slice()
-    .sort((a, b) => {
-      const channelDiff = (byChannelPriority[b.channel] ?? 0) - (byChannelPriority[a.channel] ?? 0)
-      if (channelDiff !== 0)
-        return channelDiff
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    })[0]
+  return {
+    ...plugin,
+    versions: projection.versions,
+    latestVersionId: projection.latest?.id ?? null,
+    ...resolvePendingReviewMeta(plugin, versions),
+  }
 }
 
 function resolvePendingReviewMeta(plugin: DashboardPlugin, versions: DashboardPluginVersion[]) {
@@ -1248,7 +1387,7 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
     const plugins = (results ?? []).map(mapPluginRow)
     const visiblePlugins = plugins.filter(plugin => pluginIsVisible(plugin, options))
 
-    if (!options.includeVersions || !visiblePlugins.length)
+    if ((!options.includeVersions && !options.forStore) || !visiblePlugins.length)
       return visiblePlugins
 
     const ids = visiblePlugins.map(plugin => plugin.id)
@@ -1271,19 +1410,9 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
       byPlugin.get(version.pluginId)!.push(version)
     }
 
-    return visiblePlugins.map((plugin) => {
-      const pluginVersions = byPlugin.get(plugin.id) ?? []
-      const filtered = pluginVersions.filter(version => versionIsVisible(version, plugin, options))
-      const latest = selectLatestVisibleVersion(pluginVersions, plugin, options)
-      const pendingReviewMeta = resolvePendingReviewMeta(plugin, pluginVersions)
-
-      return {
-        ...plugin,
-        versions: filtered,
-        latestVersionId: latest?.id ?? null,
-        ...pendingReviewMeta,
-      }
-    })
+    return visiblePlugins
+      .map(plugin => projectPluginVersions(plugin, byPlugin.get(plugin.id) ?? [], options))
+      .filter((plugin): plugin is DashboardPlugin => Boolean(plugin))
   }
 
   const storedPlugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
@@ -1296,13 +1425,12 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
     status: (plugin.status ?? 'draft') as PluginStatus,
   }))
 
-
   const plugins = normalized
     .filter(plugin => (options.ownerId ? plugin.userId === options.ownerId : true))
     .filter(plugin => pluginIsVisible(plugin, options))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-  if (!options.includeVersions)
+  if (!options.includeVersions && !options.forStore)
     return plugins
 
   const storedVersions = await readStoredPluginVersions()
@@ -1314,20 +1442,13 @@ export async function listPlugins(event: H3Event | undefined, options: PluginVis
     byPlugin.get(version.pluginId)!.push(version)
   }
 
-  return plugins.map((plugin) => {
-    const pluginVersions = (byPlugin.get(plugin.id) ?? [])
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    const filtered = pluginVersions.filter(version => versionIsVisible(version, plugin, options))
-    const latest = selectLatestVisibleVersion(pluginVersions, plugin, options)
-    const pendingReviewMeta = resolvePendingReviewMeta(plugin, pluginVersions)
-
-    return {
-      ...plugin,
-      versions: filtered,
-      latestVersionId: latest?.id ?? null,
-      ...pendingReviewMeta,
-    }
-  })
+  return plugins
+    .map((plugin) => {
+      const pluginVersions = (byPlugin.get(plugin.id) ?? [])
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      return projectPluginVersions(plugin, pluginVersions, options)
+    })
+    .filter((plugin): plugin is DashboardPlugin => Boolean(plugin))
 }
 
 export async function searchStorePlugins(
@@ -1338,145 +1459,6 @@ export async function searchStorePlugins(
   const offset = Math.max(Math.floor(options.offset ?? 0), 0)
   const keyword = options.keyword?.trim().toLowerCase() ?? ''
   const category = options.category?.trim() ?? ''
-  const db = getD1Database(event)
-
-  if (db) {
-    await ensurePluginSchema(db)
-
-    const filters: string[] = [
-      'p.status = ?1',
-      'v.status = ?2',
-    ]
-    const bindings: unknown[] = ['approved', 'approved']
-
-    if (keyword) {
-      const likeIndex = bindings.length + 1
-      filters.push(`(
-        lower(p.name) LIKE ?${likeIndex} ESCAPE '\\'
-        OR lower(p.slug) LIKE ?${likeIndex} ESCAPE '\\'
-        OR lower(p.summary) LIKE ?${likeIndex} ESCAPE '\\'
-        OR lower(coalesce(p.author, '')) LIKE ?${likeIndex} ESCAPE '\\'
-      )`)
-      bindings.push(`%${escapeSqlLikePattern(keyword)}%`)
-    }
-
-    if (category) {
-      const categoryIndex = bindings.length + 1
-      filters.push(`p.category = ?${categoryIndex}`)
-      bindings.push(category)
-    }
-
-    const whereClause = filters.join(' AND ')
-    const countQuery = `
-      SELECT COUNT(*) AS total
-      FROM ${PLUGINS_TABLE} p
-      JOIN ${PLUGIN_VERSIONS_TABLE} v
-        ON v.id = (
-          SELECT vv.id
-          FROM ${PLUGIN_VERSIONS_TABLE} vv
-          WHERE vv.plugin_id = p.id
-            AND vv.status = ?2
-          ORDER BY
-            CASE vv.channel
-              WHEN 'RELEASE' THEN 3
-              WHEN 'SNAPSHOT' THEN 2
-              WHEN 'BETA' THEN 1
-              ELSE 0
-            END DESC,
-            datetime(vv.created_at) DESC
-          LIMIT 1
-        )
-      WHERE ${whereClause};
-    `
-    const countRow = await db.prepare(countQuery).bind(...bindings).first<D1CountRow>()
-    const total = Number(countRow?.total ?? 0)
-
-    if (total === 0) {
-      return { plugins: [], total, limit, offset }
-    }
-
-    const limitIndex = bindings.length + 1
-    const offsetIndex = bindings.length + 2
-    const rowsQuery = `
-      SELECT
-        p.id,
-        p.user_id,
-        p.owner_org_id,
-        p.slug,
-        p.name,
-        p.summary,
-        p.category,
-        p.artifact_type,
-        p.installs,
-        p.homepage,
-        p.is_official,
-        p.badges,
-        p.author,
-        p.status,
-        p.readme_markdown,
-        p.icon,
-        p.icon_key,
-        p.icon_url,
-        p.image_url,
-        p.last_updated,
-        p.version,
-        p.created_at,
-        p.updated_at,
-        p.latest_version_id,
-        v.id AS selected_version_id,
-        v.plugin_id AS selected_version_plugin_id,
-        v.created_by AS selected_version_created_by,
-        v.channel AS selected_version_channel,
-        v.version AS selected_version_version,
-        v.signature AS selected_version_signature,
-        v.package_key AS selected_version_package_key,
-        v.package_url AS selected_version_package_url,
-        v.package_size AS selected_version_package_size,
-        v.icon_key AS selected_version_icon_key,
-        v.icon_url AS selected_version_icon_url,
-        v.readme_markdown AS selected_version_readme_markdown,
-        v.manifest AS selected_version_manifest,
-        v.notes AS selected_version_notes,
-        v.status AS selected_version_status,
-        v.reviewed_at AS selected_version_reviewed_at,
-        v.reject_reason AS selected_version_reject_reason,
-        v.created_at AS selected_version_created_at,
-        v.updated_at AS selected_version_updated_at
-      FROM ${PLUGINS_TABLE} p
-      JOIN ${PLUGIN_VERSIONS_TABLE} v
-        ON v.id = (
-          SELECT vv.id
-          FROM ${PLUGIN_VERSIONS_TABLE} vv
-          WHERE vv.plugin_id = p.id
-            AND vv.status = ?2
-          ORDER BY
-            CASE vv.channel
-              WHEN 'RELEASE' THEN 3
-              WHEN 'SNAPSHOT' THEN 2
-              WHEN 'BETA' THEN 1
-              ELSE 0
-            END DESC,
-            datetime(vv.created_at) DESC
-          LIMIT 1
-        )
-      WHERE ${whereClause}
-      ORDER BY datetime(p.created_at) DESC
-      LIMIT ?${limitIndex} OFFSET ?${offsetIndex};
-    `
-
-    const { results } = await db
-      .prepare(rowsQuery)
-      .bind(...bindings, limit, offset)
-      .all<D1StorePluginSearchRow>()
-
-    return {
-      plugins: (results ?? []).map(mapStorePluginSearchRow),
-      total,
-      limit,
-      offset,
-    }
-  }
-
   const plugins = await listPlugins(event, {
     includeVersions: true,
     forStore: true,
@@ -1485,7 +1467,7 @@ export async function searchStorePlugins(
   const filtered = plugins
     .map((plugin) => {
       const versions = plugin.versions ?? []
-      const latestVersion = versions.find(version => version.id === plugin.latestVersionId) ?? versions[0]
+      const latestVersion = versions.find(version => version.id === plugin.latestVersionId)
       if (!latestVersion)
         return null
       return {
@@ -1524,45 +1506,7 @@ export async function listStorePlugins(
 ): Promise<StorePluginListResult> {
   const limit = Math.min(Math.max(Math.floor(options.limit ?? 100), 1), 100)
   const offset = Math.max(Math.floor(options.offset ?? 0), 0)
-  const result = await searchStorePlugins(event, { limit, offset })
-
-  if (options.compact || result.plugins.length === 0)
-    return result
-
-  const db = getD1Database(event)
-  if (!db)
-    return result
-
-  await ensurePluginSchema(db)
-
-  const pluginIds = result.plugins.map(plugin => plugin.id)
-  const placeholders = pluginIds.map((_, idx) => `?${idx + 1}`).join(', ')
-  const statusIndex = pluginIds.length + 1
-  const { results } = await db.prepare(`
-    SELECT *
-    FROM ${PLUGIN_VERSIONS_TABLE}
-    WHERE plugin_id IN (${placeholders})
-      AND status = ?${statusIndex}
-    ORDER BY datetime(created_at) DESC;
-  `).bind(...pluginIds, 'approved').all<D1PluginVersionRow>()
-
-  const byPlugin = new Map<string, DashboardPluginVersion[]>()
-  for (const version of (results ?? []).map(mapPluginVersionRow)) {
-    if (!byPlugin.has(version.pluginId))
-      byPlugin.set(version.pluginId, [])
-    byPlugin.get(version.pluginId)!.push(version)
-  }
-
-  return {
-    ...result,
-    plugins: result.plugins.map((plugin) => {
-      const versions = byPlugin.get(plugin.id)
-      return {
-        ...plugin,
-        versions: versions?.length ? versions : plugin.versions,
-      }
-    }),
-  }
+  return searchStorePlugins(event, { limit, offset })
 }
 
 export async function getPluginById(event: H3Event | undefined, id: string, options: PluginVisibilityOptions = {}) {
@@ -1570,7 +1514,6 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
 
   if (db) {
     await ensurePluginSchema(db)
-
     const row = await db.prepare(`
       SELECT *
       FROM ${PLUGINS_TABLE}
@@ -1581,8 +1524,9 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
       return null
 
     const plugin = mapPluginRow(row)
-
-    if (!options.includeVersions)
+    if (options.forStore && !pluginIsVisible(plugin, options))
+      return null
+    if (!options.includeVersions && !options.forStore)
       return plugin
 
     const versionResults = await db.prepare(`
@@ -1591,53 +1535,33 @@ export async function getPluginById(event: H3Event | undefined, id: string, opti
       WHERE plugin_id = ?1
       ORDER BY datetime(created_at) DESC;
     `).bind(id).all<D1PluginVersionRow>()
-
     const versions = (versionResults.results ?? []).map(mapPluginVersionRow)
-    const filtered = versions.filter(version => versionIsVisible(version, plugin, options))
-    const latest = selectLatestVisibleVersion(versions, plugin, options)
-    const pendingReviewMeta = resolvePendingReviewMeta(plugin, versions)
-
-    return {
-      ...plugin,
-      versions: filtered,
-      latestVersionId: latest?.id ?? null,
-      ...pendingReviewMeta,
-    }
+    return projectPluginVersions(plugin, versions, options)
   }
 
   const storedPlugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
-  const normalized = storedPlugins.map(item => ({
-    ...item,
-    badges: Array.isArray(item.badges) ? item.badges : [],
-    author: item.author ?? null,
-    artifactType: normalizeArtifactType(item.artifactType),
-    slug: item.slug ?? item.id,
-    status: (item.status ?? 'draft') as PluginStatus,
-  }))
-
-  const plugin = normalized.find(item => item.id === id)
-
-  if (!plugin)
+  const storedPlugin = storedPlugins.find(item => item.id === id)
+  if (!storedPlugin)
     return null
 
-  if (!options.includeVersions)
+  const plugin: DashboardPlugin = {
+    ...storedPlugin,
+    badges: Array.isArray(storedPlugin.badges) ? storedPlugin.badges : [],
+    author: storedPlugin.author ?? null,
+    artifactType: normalizeArtifactType(storedPlugin.artifactType),
+    slug: storedPlugin.slug ?? storedPlugin.id,
+    status: (storedPlugin.status ?? 'draft') as PluginStatus,
+  }
+  if (options.forStore && !pluginIsVisible(plugin, options))
+    return null
+  if (!options.includeVersions && !options.forStore)
     return plugin
 
   const versions = await readStoredPluginVersions()
   const pluginVersions = versions
     .filter(version => version.pluginId === id)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-  const filtered = pluginVersions.filter(version => versionIsVisible(version, plugin, options))
-  const latest = selectLatestVisibleVersion(pluginVersions, plugin, options)
-  const pendingReviewMeta = resolvePendingReviewMeta(plugin, pluginVersions)
-
-  return {
-    ...plugin,
-    versions: filtered,
-    latestVersionId: latest?.id ?? null,
-    ...pendingReviewMeta,
-  }
+  return projectPluginVersions(plugin, pluginVersions, options)
 }
 
 export async function getPluginBySlug(event: H3Event | undefined, slug: string, options: PluginVisibilityOptions = {}) {
@@ -2012,15 +1936,19 @@ export async function setPluginStatus(
   } = {},
 ) {
   const plugin = await getPluginById(event, id)
-
   if (!plugin)
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
-
   if (plugin.status === status)
     return plugin
 
   const now = new Date().toISOString()
+  const updatedPlugin: DashboardPlugin = {
+    ...plugin,
+    status,
+    updatedAt: now,
+  }
   const db = getD1Database(event)
+  let versions: DashboardPluginVersion[]
 
   if (db) {
     await ensurePluginSchema(db)
@@ -2029,21 +1957,63 @@ export async function setPluginStatus(
       SET status = ?1, updated_at = ?2
       WHERE id = ?3;
     `).bind(status, now, id).run()
+
+    const rows = await db.prepare(`
+      SELECT *
+      FROM ${PLUGIN_VERSIONS_TABLE}
+      WHERE plugin_id = ?1;
+    `).bind(id).all<D1PluginVersionRow>()
+    versions = (rows.results ?? []).map(mapPluginVersionRow)
+    for (const version of versions) {
+      version.eligibilityRevision = (version.eligibilityRevision ?? 0) + 1
+      version.eligibilityEvaluatedAt = now
+      version.eligibilityReasons = [...getPluginVersionEligibility(updatedPlugin, version, 'public').reasons]
+      await db.prepare(`
+        UPDATE ${PLUGIN_VERSIONS_TABLE}
+        SET eligibility_revision = ?1, eligibility_evaluated_at = ?2, eligibility_reasons = ?3
+        WHERE id = ?4;
+      `).bind(
+        version.eligibilityRevision,
+        version.eligibilityEvaluatedAt,
+        JSON.stringify(version.eligibilityReasons),
+        version.id,
+      ).run()
+    }
   }
   else {
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
     const index = plugins.findIndex(item => item.id === id)
     if (index === -1)
       throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
-    const existing = plugins[index]
-    if (!existing)
-      throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
-    plugins[index] = {
-      ...existing,
-      status,
-      updatedAt: now,
+
+    const storedVersions = await readStoredPluginVersions()
+    versions = storedVersions.filter(version => version.pluginId === id)
+    for (const version of versions) {
+      version.eligibilityRevision = (version.eligibilityRevision ?? 0) + 1
+      version.eligibilityEvaluatedAt = now
+      version.eligibilityReasons = [...getPluginVersionEligibility(updatedPlugin, version, 'public').reasons]
     }
+    await writeStoredPluginVersions(storedVersions)
+    plugins[index] = updatedPlugin
     await writeCollection(PLUGINS_KEY, plugins)
+  }
+
+  const latest = selectLatestVisibleVersion(versions, updatedPlugin, { forStore: true })
+  updatedPlugin.latestVersionId = latest?.id ?? null
+  if (db) {
+    await db.prepare(`
+      UPDATE ${PLUGINS_TABLE}
+      SET latest_version_id = ?1
+      WHERE id = ?2;
+    `).bind(updatedPlugin.latestVersionId, id).run()
+  }
+  else {
+    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+    const index = plugins.findIndex(item => item.id === id)
+    if (index !== -1 && plugins[index]) {
+      plugins[index] = updatedPlugin
+      await writeCollection(PLUGINS_KEY, plugins)
+    }
   }
 
   await appendPluginTimelineEvent(event, {
@@ -2054,14 +2024,17 @@ export async function setPluginStatus(
     fromStatus: plugin.status,
     toStatus: status,
     reason: options.reason ?? null,
+    meta: {
+      latestVersionId: updatedPlugin.latestVersionId,
+      eligibilityRevisions: versions.map(version => ({
+        versionId: version.id,
+        revision: version.eligibilityRevision,
+      })),
+    },
     createdAt: now,
   })
 
-  return {
-    ...plugin,
-    status,
-    updatedAt: now,
-  }
+  return updatedPlugin
 }
 
 export async function setPluginVersionStatus(
@@ -2076,91 +2049,142 @@ export async function setPluginVersionStatus(
   } = {},
 ) {
   const plugin = await getPluginById(event, pluginId, { includeVersions: true, viewerIsAdmin: true })
-
   if (!plugin)
     throw createError({ statusCode: 404, statusMessage: 'Plugin not found.' })
 
   const version = (plugin.versions ?? []).find(item => item.id === versionId)
-
   if (!version)
     throw createError({ statusCode: 404, statusMessage: 'Version not found.' })
-
-  if (version.status === status)
+  if (version.status === status && (status !== 'approved' || version.admissionStatus === 'eligible'))
     return version
 
   const now = new Date().toISOString()
   const reviewedAt = status === 'approved' ? now : null
   const rejectReason = status === 'rejected' ? (options.reason?.trim() || null) : null
-  const db = getD1Database(event)
+  let nexusAttestation: PluginAdmissionAttestationV1 | null = null
+  let admissionStatus: NonNullable<DashboardPluginVersion['admissionStatus']>
+    = status === 'pending' ? 'pending' : 'blocked'
 
+  if (status === 'approved') {
+    if (
+      !version.artifactSha256
+      || version.artifactState !== 'available'
+      || resolvePluginPolicyDecision(version) !== 'passed'
+      || Boolean(version.revokedAt)
+      || !version.publisherSignature
+      || !version.manifest
+      || !version.publisherKey
+      || !version.publisherVerifiedAt
+      || !version.securityScanReportDigest
+      || (version.securityScanDecision !== 'passed' && version.securityScanDecision !== 'review-required')
+      || !options.actorId
+    ) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'PLUGIN_ADMISSION_PREREQUISITES_MISSING',
+      })
+    }
+
+    const publisher: VerifiedPublisherSignature = {
+      envelope: version.publisherSignature,
+      key: version.publisherKey,
+      verifiedAt: version.publisherVerifiedAt,
+    }
+    nexusAttestation = await createPluginAdmissionAttestation(event, {
+      artifactSha256: version.artifactSha256,
+      artifactSize: version.packageSize,
+      pluginId: version.publisherSignature.payload.pluginId,
+      pluginName: version.publisherSignature.payload.pluginName,
+      version: version.version,
+      channel: version.channel,
+      policyVersion: version.publisherSignature.payload.policyVersion,
+      manifest: version.manifest,
+      scanReportSha256: version.securityScanReportDigest,
+      scanDecision: version.securityScanDecision,
+      publisher,
+      reviewActorId: options.actorId,
+      reviewedAt: now,
+    })
+    admissionStatus = 'eligible'
+  }
+
+  const nextVersion: DashboardPluginVersion = {
+    ...version,
+    status,
+    reviewedAt,
+    rejectReason,
+    nexusAttestation,
+    admissionStatus,
+    policyDecision: resolvePluginPolicyDecision(version),
+    eligibilityRevision: (version.eligibilityRevision ?? 0) + 1,
+    eligibilityEvaluatedAt: now,
+    eligibilityReasons: [],
+    updatedAt: now,
+  }
+  nextVersion.eligibilityReasons = [...getPluginVersionEligibility(plugin, nextVersion, 'public').reasons]
+
+  const db = getD1Database(event)
   if (db) {
     await ensurePluginSchema(db)
     await db.prepare(`
       UPDATE ${PLUGIN_VERSIONS_TABLE}
-      SET status = ?1, reviewed_at = ?2, reject_reason = ?3, updated_at = ?4
-      WHERE id = ?5;
-    `).bind(status, reviewedAt, rejectReason, now, versionId).run()
+      SET
+        status = ?1,
+        reviewed_at = ?2,
+        reject_reason = ?3,
+        nexus_attestation = ?4,
+        admission_status = ?5,
+        policy_decision = ?6,
+        eligibility_revision = ?7,
+        eligibility_evaluated_at = ?8,
+        eligibility_reasons = ?9,
+        updated_at = ?10
+      WHERE id = ?11;
+    `).bind(
+      nextVersion.status,
+      nextVersion.reviewedAt ?? null,
+      nextVersion.rejectReason ?? null,
+      nextVersion.nexusAttestation ? JSON.stringify(nextVersion.nexusAttestation) : null,
+      nextVersion.admissionStatus ?? 'blocked',
+      nextVersion.policyDecision ?? 'not-evaluated',
+      nextVersion.eligibilityRevision ?? 0,
+      nextVersion.eligibilityEvaluatedAt ?? null,
+      JSON.stringify(nextVersion.eligibilityReasons ?? []),
+      nextVersion.updatedAt,
+      versionId,
+    ).run()
   }
   else {
     const versions = await readStoredPluginVersions()
     const index = versions.findIndex(item => item.id === versionId)
     if (index === -1)
       throw createError({ statusCode: 404, statusMessage: 'Version not found.' })
-    const existing = versions[index]
-    if (!existing)
-      throw createError({ statusCode: 404, statusMessage: 'Version not found.' })
-    versions[index] = {
-      ...existing,
-      status,
-      reviewedAt,
-      rejectReason,
-      updatedAt: now,
-    }
+    versions[index] = nextVersion
     await writeStoredPluginVersions(versions)
   }
 
+  const refreshed = await getPluginById(event, pluginId, {
+    includeVersions: true,
+    viewerIsAdmin: true,
+  })
+  const latest = refreshed
+    ? selectLatestVisibleVersion(refreshed.versions ?? [], refreshed, { forStore: true })
+    : null
+
   if (db) {
-    const refreshed = await getPluginById(event, pluginId, {
-      includeVersions: true,
-      viewerIsAdmin: true,
-    })
-
-    if (refreshed) {
-      const latest = selectLatestVisibleVersion(refreshed.versions ?? [], refreshed, {
-        viewerIsAdmin: true,
-      })
-
-      await db.prepare(`
-        UPDATE ${PLUGINS_TABLE}
-        SET latest_version_id = ?1, updated_at = ?2
-        WHERE id = ?3;
-      `).bind(latest?.id ?? null, now, pluginId).run()
-    }
+    await db.prepare(`
+      UPDATE ${PLUGINS_TABLE}
+      SET latest_version_id = ?1, updated_at = ?2
+      WHERE id = ?3;
+    `).bind(latest?.id ?? null, now, pluginId).run()
   }
   else {
     const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
     const index = plugins.findIndex(item => item.id === pluginId)
-    if (index !== -1) {
-      const existing = plugins[index]
-      if (!existing) {
-        return {
-          ...version,
-          status,
-          reviewedAt,
-          rejectReason,
-          updatedAt: now,
-        }
-      }
-      const refreshed = await getPluginById(event, pluginId, {
-        includeVersions: true,
-        viewerIsAdmin: true,
-      })
-      const latest = selectLatestVisibleVersion(refreshed?.versions ?? [], refreshed ?? plugin, {
-        viewerIsAdmin: true,
-      })
+    if (index !== -1 && plugins[index]) {
       plugins[index] = {
-        ...existing,
-        latestVersionId: latest?.id ?? existing.latestVersionId ?? null,
+        ...plugins[index]!,
+        latestVersionId: latest?.id ?? null,
         updatedAt: now,
       }
       await writeCollection(PLUGINS_KEY, plugins)
@@ -2179,17 +2203,256 @@ export async function setPluginVersionStatus(
     meta: {
       version: version.version,
       channel: version.channel,
+      artifactSha256: version.artifactSha256,
+      admissionStatus,
+      eligibilityRevision: nextVersion.eligibilityRevision,
+      eligibilityReasons: nextVersion.eligibilityReasons,
+      nexusKeyId: nexusAttestation?.keyId ?? null,
     },
     createdAt: now,
   })
 
-  return {
+  return nextVersion
+}
+
+export async function invalidatePluginVersionsForPublisherKey(
+  event: H3Event,
+  keyId: string,
+  actorId: string,
+): Promise<number> {
+  const normalizedKeyId = keyId.trim()
+  if (!normalizedKeyId)
+    return 0
+
+  const now = new Date().toISOString()
+  const db = getD1Database(event)
+  let affected: Array<{ id: string, pluginId: string, version: string, channel: PluginChannel, status: PluginVersionStatus }> = []
+
+  if (db) {
+    await ensurePluginSchema(db)
+    const result = await db.prepare(`
+      SELECT id, plugin_id, version, channel, status
+      FROM ${PLUGIN_VERSIONS_TABLE}
+      WHERE publisher_key_id = ?1 AND revoked_at IS NULL;
+    `).bind(normalizedKeyId).all<{ id: string, plugin_id: string, version: string, channel: PluginChannel, status: PluginVersionStatus }>()
+    affected = (result.results ?? []).map(row => ({
+      id: row.id,
+      pluginId: row.plugin_id,
+      version: row.version,
+      channel: row.channel,
+      status: row.status,
+    }))
+    await db.prepare(`
+      UPDATE ${PLUGIN_VERSIONS_TABLE}
+      SET
+        admission_status = 'blocked',
+        nexus_attestation = NULL,
+        revoked_at = ?1,
+        eligibility_revision = eligibility_revision + 1,
+        eligibility_evaluated_at = ?1,
+        eligibility_reasons = ?2,
+        updated_at = ?1
+      WHERE publisher_key_id = ?3 AND revoked_at IS NULL;
+    `).bind(
+      now,
+      JSON.stringify([
+        'PLUGIN_ELIGIBILITY_PUBLISHER_REVOKED',
+        'PLUGIN_ELIGIBILITY_ATTESTATION_UNVERIFIED',
+        'PLUGIN_ELIGIBILITY_ADMISSION_NOT_ELIGIBLE',
+      ] satisfies PluginReleaseEligibilityReason[]),
+      normalizedKeyId,
+    ).run()
+
+    for (const pluginId of new Set(affected.map(version => version.pluginId))) {
+      const plugin = await getPluginById(event, pluginId, { includeVersions: true, viewerIsAdmin: true })
+      const latest = plugin
+        ? selectLatestVisibleVersion(plugin.versions ?? [], plugin, { forStore: true })
+        : null
+      await db.prepare(`
+        UPDATE ${PLUGINS_TABLE}
+        SET latest_version_id = ?1, updated_at = ?2
+        WHERE id = ?3;
+      `).bind(latest?.id ?? null, now, pluginId).run()
+    }
+  }
+  else {
+    const versions = await readStoredPluginVersions()
+    affected = versions
+      .filter(version => version.publisherKey?.keyId === normalizedKeyId && !version.revokedAt)
+      .map(version => ({
+        id: version.id,
+        pluginId: version.pluginId,
+        version: version.version,
+        channel: version.channel,
+        status: version.status,
+      }))
+
+    for (const version of versions) {
+      if (version.publisherKey?.keyId !== normalizedKeyId || version.revokedAt)
+        continue
+      version.admissionStatus = 'blocked'
+      version.nexusAttestation = null
+      version.revokedAt = now
+      version.eligibilityRevision = (version.eligibilityRevision ?? 0) + 1
+      version.eligibilityEvaluatedAt = now
+      version.eligibilityReasons = [
+        'PLUGIN_ELIGIBILITY_PUBLISHER_REVOKED',
+        'PLUGIN_ELIGIBILITY_ATTESTATION_UNVERIFIED',
+        'PLUGIN_ELIGIBILITY_ADMISSION_NOT_ELIGIBLE',
+      ]
+      version.updatedAt = now
+    }
+    await writeStoredPluginVersions(versions)
+
+    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+    const affectedPluginIds = new Set(affected.map(version => version.pluginId))
+    for (const plugin of plugins) {
+      if (!affectedPluginIds.has(plugin.id))
+        continue
+      const candidates = versions.filter(version => version.pluginId === plugin.id)
+      plugin.latestVersionId = selectLatestVisibleVersion(candidates, plugin, { forStore: true })?.id ?? null
+      plugin.updatedAt = now
+    }
+    await writeCollection(PLUGINS_KEY, plugins)
+  }
+
+  for (const version of affected) {
+    await appendPluginTimelineEvent(event, {
+      pluginId: version.pluginId,
+      versionId: version.id,
+      eventType: 'version.status.changed',
+      actorId,
+      actorRole: 'owner',
+      fromStatus: version.status,
+      toStatus: version.status,
+      reason: 'publisher-key-revoked',
+      meta: {
+        version: version.version,
+        channel: version.channel,
+        keyId: normalizedKeyId,
+        admissionStatus: 'blocked',
+        revokedAt: now,
+      },
+      createdAt: now,
+    })
+  }
+  return affected.length
+}
+
+export async function blockPluginVersionAdmission(
+  event: H3Event,
+  pluginId: string,
+  versionId: string,
+  reason: 'artifact-missing' | 'artifact-digest-mismatch' | 'publisher-key-revoked' | 'policy-failed' | 'scan-failed',
+  actorId: string | null = null,
+): Promise<void> {
+  const plugin = await getPluginById(event, pluginId, { includeVersions: true, viewerIsAdmin: true })
+  const version = plugin?.versions?.find(candidate => candidate.id === versionId)
+  if (!plugin || !version)
+    return
+
+  const now = new Date().toISOString()
+  const nextVersion: DashboardPluginVersion = {
     ...version,
-    status,
-    reviewedAt,
-    rejectReason,
+    admissionStatus: 'blocked',
+    nexusAttestation: null,
+    policyDecision: reason === 'policy-failed' ? 'failed' : version.policyDecision,
+    securityScanDecision: reason === 'scan-failed' ? 'blocked' : version.securityScanDecision,
+    artifactState: reason === 'artifact-missing'
+      ? 'missing'
+      : reason === 'artifact-digest-mismatch'
+        ? 'quarantined'
+        : version.artifactState,
+    revokedAt: reason === 'publisher-key-revoked' ? now : version.revokedAt,
+    eligibilityRevision: (version.eligibilityRevision ?? 0) + 1,
+    eligibilityEvaluatedAt: now,
+    eligibilityReasons: [],
     updatedAt: now,
   }
+  nextVersion.eligibilityReasons = [...getPluginVersionEligibility(plugin, nextVersion, 'public').reasons]
+
+  const db = getD1Database(event)
+  if (db) {
+    await ensurePluginSchema(db)
+    await db.prepare(`
+      UPDATE ${PLUGIN_VERSIONS_TABLE}
+      SET
+        admission_status = 'blocked',
+        nexus_attestation = NULL,
+        policy_decision = ?1,
+        security_scan_decision = ?2,
+        artifact_state = ?3,
+        revoked_at = ?4,
+        eligibility_revision = ?5,
+        eligibility_evaluated_at = ?6,
+        eligibility_reasons = ?7,
+        updated_at = ?8
+      WHERE id = ?9;
+    `).bind(
+      nextVersion.policyDecision ?? 'not-evaluated',
+      nextVersion.securityScanDecision ?? null,
+      nextVersion.artifactState ?? 'missing',
+      nextVersion.revokedAt ?? null,
+      nextVersion.eligibilityRevision ?? 0,
+      nextVersion.eligibilityEvaluatedAt ?? null,
+      JSON.stringify(nextVersion.eligibilityReasons ?? []),
+      nextVersion.updatedAt,
+      versionId,
+    ).run()
+  }
+  else {
+    const versions = await readStoredPluginVersions()
+    const index = versions.findIndex(candidate => candidate.id === versionId)
+    if (index >= 0)
+      versions[index] = nextVersion
+    await writeStoredPluginVersions(versions)
+  }
+
+  const refreshed = await getPluginById(event, pluginId, { includeVersions: true, viewerIsAdmin: true })
+  const latest = refreshed
+    ? selectLatestVisibleVersion(refreshed.versions ?? [], refreshed, { forStore: true })
+    : null
+  if (db) {
+    await db.prepare(`
+      UPDATE ${PLUGINS_TABLE}
+      SET latest_version_id = ?1, updated_at = ?2
+      WHERE id = ?3;
+    `).bind(latest?.id ?? null, now, pluginId).run()
+  }
+  else {
+    const plugins = await readCollection<DashboardPlugin>(PLUGINS_KEY)
+    const index = plugins.findIndex(candidate => candidate.id === pluginId)
+    if (index >= 0 && plugins[index]) {
+      plugins[index] = {
+        ...plugins[index]!,
+        latestVersionId: latest?.id ?? null,
+        updatedAt: now,
+      }
+      await writeCollection(PLUGINS_KEY, plugins)
+    }
+  }
+
+  await appendPluginTimelineEvent(event, {
+    pluginId,
+    versionId,
+    eventType: 'version.status.changed',
+    actorId,
+    actorRole: actorId ? 'admin' : 'system',
+    fromStatus: version.status,
+    toStatus: version.status,
+    reason,
+    meta: {
+      version: version.version,
+      channel: version.channel,
+      artifactSha256: version.artifactSha256,
+      artifactState: nextVersion.artifactState,
+      revokedAt: nextVersion.revokedAt,
+      admissionStatus: 'blocked',
+      eligibilityRevision: nextVersion.eligibilityRevision,
+      eligibilityReasons: nextVersion.eligibilityReasons,
+    },
+    createdAt: now,
+  })
 }
 
 export async function publishPluginVersion(event: H3Event, input: PublishVersionInput) {
@@ -2265,7 +2528,8 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     },
   })
   const {
-    signature,
+    artifactSha256,
+    verifiedPublisher,
     metadata,
     iconKey,
     iconUrl,
@@ -2274,8 +2538,8 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     try {
       const packageArrayBuffer = await input.packageFile.arrayBuffer()
       const packageBuffer = Buffer.from(packageArrayBuffer)
-      const signature = await sha256Hex(packageBuffer)
-      const scanWaivers = await listActivePluginSecurityScanWaivers(event, signature)
+      const artifactSha256 = await sha256Hex(packageBuffer)
+      const scanWaivers = await listActivePluginSecurityScanWaivers(event, artifactSha256)
 
       const metadata = await extractTpexForAdmission(
         event,
@@ -2286,6 +2550,31 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         packageGovernanceResourceId,
       )
       assertTpexAdmission(metadata)
+      if (!metadata.manifest)
+        throw createError({ statusCode: 400, statusMessage: 'PLUGIN_SIGNING_MANIFEST_REQUIRED' })
+      const manifestName = typeof metadata.manifest.name === 'string'
+        ? metadata.manifest.name.trim()
+        : ''
+      if (!manifestName)
+        throw createError({ statusCode: 400, statusMessage: 'PLUGIN_SIGNING_IDENTITY_MISMATCH' })
+      const verifiedPublisher = await verifyPluginPublisherSignature(event, {
+        ownerId: input.createdBy,
+        publicKey: {
+          keyId: extractPublisherSignatureKeyId(input.publisherSignature),
+          publicKeyPem: input.publisherPublicKey,
+          validFrom: input.publisherKeyValidFrom,
+          ...(input.publisherKeyValidUntil ? { validUntil: input.publisherKeyValidUntil } : {}),
+        },
+        publisherSignature: input.publisherSignature,
+        artifactSha256,
+        artifactSize: packageBuffer.length,
+        pluginId: plugin.slug,
+        pluginName: manifestName,
+        version: input.version,
+        channel: input.channel,
+        policyVersion: metadata.packagePolicy.policyVersion,
+        manifest: metadata.manifest,
+      })
 
       let iconKey = plugin.iconKey ?? null
       let iconUrl = plugin.iconUrl ?? null
@@ -2354,7 +2643,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         },
       })
 
-      return { signature, metadata, iconKey, iconUrl, packageResult }
+      return { artifactSha256, verifiedPublisher, metadata, iconKey, iconUrl, packageResult }
     }
     catch (error) {
       await failUploadGovernance(event, packageAttempt, error, {
@@ -2383,7 +2672,18 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     createdBy: input.createdBy,
     channel: input.channel,
     version: input.version,
-    signature,
+    artifactSha256,
+    publisherSignature: verifiedPublisher.envelope,
+    publisherKey: verifiedPublisher.key,
+    publisherVerifiedAt: verifiedPublisher.verifiedAt,
+    nexusAttestation: null,
+    admissionStatus: 'pending',
+    policyDecision: 'passed',
+    artifactState: 'available',
+    revokedAt: null,
+    eligibilityRevision: 1,
+    eligibilityEvaluatedAt: now,
+    eligibilityReasons: [],
     packageKey: packageResult.key,
     packageUrl: packageResult.url,
     packageSize: packageResult.size,
@@ -2404,6 +2704,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     createdAt: now,
     updatedAt: now,
   }
+  rawVersion.eligibilityReasons = [...getPluginVersionEligibility(plugin, rawVersion, 'public').reasons]
   const version = sanitizeVersion(rawVersion)
 
   const db = getD1Database(event)
@@ -2427,6 +2728,19 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         channel,
         version,
         signature,
+        artifact_sha256,
+        publisher_signature,
+        publisher_key,
+        publisher_key_id,
+        publisher_verified_at,
+        nexus_attestation,
+        admission_status,
+        policy_decision,
+        artifact_state,
+        revoked_at,
+        eligibility_revision,
+        eligibility_evaluated_at,
+        eligibility_reasons,
         package_key,
         package_url,
         package_size,
@@ -2446,14 +2760,27 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         security_scan_completed_at,
         created_at,
         updated_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25);
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38);
     `).bind(
       version.id,
       version.pluginId,
       version.createdBy,
       version.channel,
       version.version,
-      version.signature,
+      version.artifactSha256,
+      version.artifactSha256,
+      version.publisherSignature ? JSON.stringify(version.publisherSignature) : null,
+      version.publisherKey ? JSON.stringify(version.publisherKey) : null,
+      version.publisherKey?.keyId ?? null,
+      version.publisherVerifiedAt ?? null,
+      version.nexusAttestation ? JSON.stringify(version.nexusAttestation) : null,
+      version.admissionStatus ?? 'pending',
+      version.policyDecision ?? 'not-evaluated',
+      version.artifactState ?? 'missing',
+      version.revokedAt ?? null,
+      version.eligibilityRevision ?? 0,
+      version.eligibilityEvaluatedAt ?? null,
+      JSON.stringify(version.eligibilityReasons ?? []),
       version.packageKey,
       version.packageUrl,
       version.packageSize,
@@ -2478,7 +2805,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     const latest = selectLatestVisibleVersion(
       [...currentVersions, version],
       { ...plugin, versions: currentVersions },
-      { viewerId: plugin.userId, viewerOrgIds: plugin.ownerOrgId ? [plugin.ownerOrgId] : [], viewerIsAdmin: false },
+      { forStore: true },
     )
 
     await db.prepare(`
@@ -2488,7 +2815,7 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
         updated_at = ?2
       WHERE id = ?3;
     `).bind(
-      latest?.id ?? version.id,
+      latest?.id ?? plugin.latestVersionId ?? null,
       version.createdAt,
       plugin.id,
     ).run()
@@ -2513,12 +2840,12 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
       const latest = selectLatestVisibleVersion(
         [...currentVersions, version],
         { ...plugin, versions: currentVersions },
-        { viewerId: plugin.userId, viewerOrgIds: plugin.ownerOrgId ? [plugin.ownerOrgId] : [], viewerIsAdmin: false },
+        { forStore: true },
       )
 
       plugins[index] = {
         ...existing,
-        latestVersionId: latest?.id ?? version.id,
+        latestVersionId: latest?.id ?? plugin.latestVersionId ?? null,
         updatedAt: version.createdAt,
       }
 
@@ -2540,16 +2867,18 @@ export async function publishPluginVersion(event: H3Event, input: PublishVersion
     createdAt: version.createdAt,
   })
 
-  if (!canModerate && plugin.status === 'draft')
+  if (!canModerate && plugin.status === 'draft') {
     await setPluginStatus(event, plugin.id, 'pending', {
       actorId: input.createdBy,
       actorRole: 'owner',
     })
-  else if (canModerate && plugin.status !== 'approved')
+  }
+  else if (canModerate && plugin.status !== 'approved') {
     await setPluginStatus(event, plugin.id, 'approved', {
       actorId: input.createdBy,
       actorRole: 'admin',
     })
+  }
 
   return version
 }
@@ -2602,7 +2931,8 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     },
   })
   const {
-    signature,
+    artifactSha256,
+    verifiedPublisher,
     metadata,
     iconKey,
     iconUrl,
@@ -2611,8 +2941,8 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     try {
       const packageArrayBuffer = await input.packageFile.arrayBuffer()
       const packageBuffer = Buffer.from(packageArrayBuffer)
-      const signature = await sha256Hex(packageBuffer)
-      const scanWaivers = await listActivePluginSecurityScanWaivers(event, signature)
+      const artifactSha256 = await sha256Hex(packageBuffer)
+      const scanWaivers = await listActivePluginSecurityScanWaivers(event, artifactSha256)
       const metadata = await extractTpexForAdmission(
         event,
         packageBuffer,
@@ -2622,6 +2952,31 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
         packageGovernanceResourceId,
       )
       assertTpexAdmission(metadata)
+      if (!metadata.manifest)
+        throw createError({ statusCode: 400, statusMessage: 'PLUGIN_SIGNING_MANIFEST_REQUIRED' })
+      const manifestName = typeof metadata.manifest.name === 'string'
+        ? metadata.manifest.name.trim()
+        : ''
+      if (!manifestName)
+        throw createError({ statusCode: 400, statusMessage: 'PLUGIN_SIGNING_IDENTITY_MISMATCH' })
+      const verifiedPublisher = await verifyPluginPublisherSignature(event, {
+        ownerId: input.updatedBy,
+        publicKey: {
+          keyId: extractPublisherSignatureKeyId(input.publisherSignature),
+          publicKeyPem: input.publisherPublicKey,
+          validFrom: input.publisherKeyValidFrom,
+          ...(input.publisherKeyValidUntil ? { validUntil: input.publisherKeyValidUntil } : {}),
+        },
+        publisherSignature: input.publisherSignature,
+        artifactSha256,
+        artifactSize: packageBuffer.length,
+        pluginId: plugin.slug,
+        pluginName: manifestName,
+        version: targetVersion.version,
+        channel: targetVersion.channel,
+        policyVersion: metadata.packagePolicy.policyVersion,
+        manifest: metadata.manifest,
+      })
 
       let iconKey = targetVersion.iconKey ?? plugin.iconKey ?? null
       let iconUrl = targetVersion.iconUrl ?? plugin.iconUrl ?? null
@@ -2680,7 +3035,7 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
         },
       })
 
-      return { signature, metadata, iconKey, iconUrl, packageResult }
+      return { artifactSha256, verifiedPublisher, metadata, iconKey, iconUrl, packageResult }
     }
     catch (error) {
       await failUploadGovernance(event, packageAttempt, error, {
@@ -2703,7 +3058,18 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
 
   const updatedVersion: DashboardPluginVersion = sanitizeVersion({
     ...targetVersion,
-    signature,
+    artifactSha256,
+    publisherSignature: verifiedPublisher.envelope,
+    publisherKey: verifiedPublisher.key,
+    publisherVerifiedAt: verifiedPublisher.verifiedAt,
+    nexusAttestation: null,
+    admissionStatus: 'pending',
+    policyDecision: 'passed',
+    artifactState: 'available',
+    revokedAt: null,
+    eligibilityRevision: (targetVersion.eligibilityRevision ?? 0) + 1,
+    eligibilityEvaluatedAt: now,
+    eligibilityReasons: [],
     packageKey: packageResult.key,
     packageUrl: packageResult.url,
     packageSize: packageResult.size,
@@ -2723,6 +3089,7 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     securityScanCompletedAt: metadata.securityScan.completedAt,
     updatedAt: now,
   })
+  updatedVersion.eligibilityReasons = [...getPluginVersionEligibility(plugin, updatedVersion, 'public').reasons]
 
   const db = getD1Database(event)
   if (db) {
@@ -2731,27 +3098,53 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
       UPDATE ${PLUGIN_VERSIONS_TABLE}
       SET
         signature = ?1,
-        package_key = ?2,
-        package_url = ?3,
-        package_size = ?4,
-        icon_key = ?5,
-        icon_url = ?6,
-        readme_markdown = ?7,
-        manifest = ?8,
-        notes = ?9,
-        status = ?10,
+        artifact_sha256 = ?2,
+        publisher_signature = ?3,
+        publisher_key = ?4,
+        publisher_key_id = ?5,
+        publisher_verified_at = ?6,
+        nexus_attestation = ?7,
+        admission_status = ?8,
+        policy_decision = ?9,
+        artifact_state = ?10,
+        revoked_at = ?11,
+        eligibility_revision = ?12,
+        eligibility_evaluated_at = ?13,
+        eligibility_reasons = ?14,
+        package_key = ?15,
+        package_url = ?16,
+        package_size = ?17,
+        icon_key = ?18,
+        icon_url = ?19,
+        readme_markdown = ?20,
+        manifest = ?21,
+        notes = ?22,
+        status = ?23,
         reviewed_at = NULL,
         reject_reason = NULL,
-        security_scan_decision = ?11,
-        security_scan_report_digest = ?12,
-        security_scanner_version = ?13,
-        security_rule_set_version = ?14,
-        security_scan_finding_count = ?15,
-        security_scan_completed_at = ?16,
-        updated_at = ?17
-      WHERE id = ?18;
+        security_scan_decision = ?24,
+        security_scan_report_digest = ?25,
+        security_scanner_version = ?26,
+        security_rule_set_version = ?27,
+        security_scan_finding_count = ?28,
+        security_scan_completed_at = ?29,
+        updated_at = ?30
+      WHERE id = ?31;
     `).bind(
-      updatedVersion.signature,
+      updatedVersion.artifactSha256,
+      updatedVersion.artifactSha256,
+      updatedVersion.publisherSignature ? JSON.stringify(updatedVersion.publisherSignature) : null,
+      updatedVersion.publisherKey ? JSON.stringify(updatedVersion.publisherKey) : null,
+      updatedVersion.publisherKey?.keyId ?? null,
+      updatedVersion.publisherVerifiedAt ?? null,
+      null,
+      updatedVersion.admissionStatus ?? 'pending',
+      updatedVersion.policyDecision ?? 'not-evaluated',
+      updatedVersion.artifactState ?? 'missing',
+      updatedVersion.revokedAt ?? null,
+      updatedVersion.eligibilityRevision ?? 0,
+      updatedVersion.eligibilityEvaluatedAt ?? null,
+      JSON.stringify(updatedVersion.eligibilityReasons ?? []),
       updatedVersion.packageKey,
       updatedVersion.packageUrl,
       updatedVersion.packageSize,
@@ -2777,7 +3170,7 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
     })
     if (refreshed) {
       const latest = selectLatestVisibleVersion(refreshed.versions ?? [], refreshed, {
-        viewerIsAdmin: true,
+        forStore: true,
       })
       await db.prepare(`
         UPDATE ${PLUGINS_TABLE}
@@ -2808,11 +3201,11 @@ export async function reeditPluginVersion(event: H3Event, input: ReeditVersionIn
           viewerIsAdmin: true,
         })
         const latest = selectLatestVisibleVersion(refreshed?.versions ?? [], refreshed ?? plugin, {
-          viewerIsAdmin: true,
+          forStore: true,
         })
         plugins[pluginIndex] = {
           ...existing,
-          latestVersionId: latest?.id ?? existing.latestVersionId ?? null,
+          latestVersionId: latest?.id ?? null,
           updatedAt: now,
         }
         await writeCollection(PLUGINS_KEY, plugins)
@@ -2911,7 +3304,7 @@ export async function deletePluginVersion(event: H3Event, pluginId: string, vers
     const latest = selectLatestVisibleVersion(
       (plugin.versions ?? []).filter(item => item.id !== version.id),
       plugin,
-      { viewerId: plugin.userId, viewerOrgIds: plugin.ownerOrgId ? [plugin.ownerOrgId] : [], viewerIsAdmin: false },
+      { forStore: true },
     )
 
     await db.prepare(`
@@ -2944,7 +3337,7 @@ export async function deletePluginVersion(event: H3Event, pluginId: string, vers
       const latest = selectLatestVisibleVersion(
         remainingVersions,
         plugin,
-        { viewerId: plugin.userId, viewerOrgIds: plugin.ownerOrgId ? [plugin.ownerOrgId] : [], viewerIsAdmin: false },
+        { forStore: true },
       )
 
       plugins[index] = {
