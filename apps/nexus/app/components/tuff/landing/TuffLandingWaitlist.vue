@@ -59,7 +59,7 @@ function goToSignIn() {
     container-class="max-w-6xl w-full"
     :reveal-options="{
       from: {
-        opacity: 0,
+        opacity: 0.16,
         y: 48,
         duration: 1.05,
       },
@@ -160,5 +160,13 @@ function goToSignIn() {
 
 .pioneer-aurora {
   container-type: size;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 </style>

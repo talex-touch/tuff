@@ -111,12 +111,21 @@ const featuredUpdateLimit = 3
 const releaseUpdates = computed(() => updateItems.value.filter(update => update.type !== 'announcement').slice(0, featuredUpdateLimit))
 const hasUpdateList = computed(() => releaseUpdates.value.length > 0)
 
-const pageTitle = computed(() => t('updates.title', 'Updates & downloads'))
+const pageTitle = computed(() => {
+  if (isAllUpdatesView.value)
+    return `${t('updates.all.title')} · Tuff Nexus`
+  return t('updates.title', 'Updates & downloads')
+})
+const pageDescription = computed(() => {
+  if (isAllUpdatesView.value)
+    return t('updates.all.subtitle')
+  return heroSubtitle.value
+})
 useSeoMeta({
   title: pageTitle,
   ogTitle: pageTitle,
-  description: heroSubtitle,
-  ogDescription: heroSubtitle,
+  description: pageDescription,
+  ogDescription: pageDescription,
 })
 
 useHead(() => ({
