@@ -8,7 +8,7 @@ const hideFooter = computed(() => {
 
 <template>
   <div class="min-h-screen text-light">
-    <TheHeader class="z-10" />
+    <TheHeader />
     <main class="relative z-1 w-full">
       <slot />
     </main>

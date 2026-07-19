@@ -323,4 +323,14 @@ function handleSelect(command: CoreBoxCommand, index: number) {
 .footer-fade-leave-to {
   opacity: 0;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  :deep(*),
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 </style>

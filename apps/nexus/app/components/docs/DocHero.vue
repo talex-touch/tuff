@@ -64,17 +64,19 @@ const hasTags = computed(() => tagItems.value.length > 0)
 <style scoped>
 .docs-hero {
   position: relative;
-  padding: 36px 44px;
-  border-radius: calc(var(--tx-border-radius-round, 20px) + 8px);
-  border: 1px solid var(--tx-border-color-lighter);
-  --docs-hero-grid-opacity: 0.35;
-  --docs-hero-tag-border: color-mix(in srgb, var(--tx-border-color) 62%, transparent);
-  --docs-hero-tag-bg: color-mix(in srgb, var(--tx-fill-color-light) 72%, transparent);
-  --docs-hero-tag-text: color-mix(in srgb, var(--tx-text-color-secondary) 90%, var(--tx-text-color-primary));
+  padding: 32px 36px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--tx-border-color-lighter, var(--tx-border-color)) 88%, transparent);
+  --docs-hero-tag-border: color-mix(in srgb, var(--tx-border-color) 55%, transparent);
+  --docs-hero-tag-bg: color-mix(in srgb, var(--tx-fill-color-light) 58%, transparent);
+  --docs-hero-tag-text: color-mix(in srgb, var(--tx-text-color-secondary) 88%, var(--tx-text-color-primary));
   background:
-    radial-gradient(circle at center, color-mix(in srgb, var(--tx-text-color-primary) 18%, transparent) 0 1px, transparent 1.4px) 0 0 / 16px 16px,
-    linear-gradient(135deg, color-mix(in srgb, var(--tx-color-primary) 4%, transparent), transparent 58%);
-  box-shadow: none;
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--tx-fill-color-light, #f5f7fa) 72%, transparent),
+      color-mix(in srgb, var(--tx-bg-color, #fff) 88%, transparent)
+    );
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--tx-text-color-primary) 4%, transparent);
   overflow: hidden;
 }
 
@@ -83,21 +85,16 @@ const hasTags = computed(() => tagItems.value.length > 0)
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  /* Single restrained top highlight — no noisy double grid. */
   background:
-    radial-gradient(circle at center, color-mix(in srgb, var(--tx-text-color-primary) 22%, transparent) 0 1px, transparent 1.4px) 8px 8px / 24px 24px;
+    radial-gradient(ellipse 90% 70% at 12% 0%, color-mix(in srgb, var(--tx-color-primary) 10%, transparent), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--tx-text-color-primary) 3.5%, transparent), transparent 46%);
   content: '';
-  mix-blend-mode: multiply;
-  opacity: var(--docs-hero-grid-opacity, 0.35);
+  opacity: 1;
 }
 
 .docs-hero::after {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--tx-bg-color) 42%, transparent), transparent 28%, transparent 72%, color-mix(in srgb, var(--tx-bg-color) 48%, transparent)),
-    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--tx-bg-color) 28%, transparent) 100%);
+  display: none;
   content: '';
 }
 
@@ -161,10 +158,12 @@ const hasTags = computed(() => tagItems.value.length > 0)
 
 .docs-hero__title {
   margin: 0;
-  font-size: 3rem;
+  font-size: clamp(2.1rem, 2.4vw + 1.4rem, 2.85rem);
   font-weight: 700;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
   color: var(--tx-text-color-primary);
+  text-wrap: balance;
 }
 
 .docs-hero__desc {
@@ -176,12 +175,22 @@ const hasTags = computed(() => tagItems.value.length > 0)
 
 ::global(.dark .docs-hero),
 ::global([data-theme='dark'] .docs-hero) {
-  --docs-hero-grid-opacity: 0.5;
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.035),
+      rgba(255, 255, 255, 0.012)
+    );
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 ::global(.dark .docs-hero::before),
 ::global([data-theme='dark'] .docs-hero::before) {
-  mix-blend-mode: screen;
+  background:
+    radial-gradient(ellipse 90% 70% at 10% 0%, rgba(148, 163, 184, 0.08), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 50%);
+  mix-blend-mode: normal;
 }
 
 @media (max-width: 768px) {

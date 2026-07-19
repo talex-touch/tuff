@@ -3,6 +3,7 @@ import { hasNavigator } from '@talex-touch/utils/env'
 import { onBeforeUnmount, onMounted } from 'vue'
 import DarkVeil from '../background/DarkVeil.vue'
 import TuffLandingLineShadowText from './TuffLandingLineShadowText.vue'
+import { toLocalizedDocsPath, normalizeDocsLocale, type DocsLocale } from '#shared/utils/docs-path'
 import { useLandingRevealState } from '~/composables/useLandingRevealState'
 
 type HeroPlatform = 'darwin' | 'win32' | 'linux'
@@ -18,6 +19,8 @@ const {
 } = useLandingRevealState()
 
 const isZh = computed(() => locale.value.startsWith('zh'))
+const docsLocale = computed<DocsLocale>(() => normalizeDocsLocale(isZh.value ? 'zh' : 'en'))
+const docsCtaTo = computed(() => toLocalizedDocsPath('/docs', docsLocale.value))
 
 const heroPlatformMeta = computed(() => {
   const platform = heroPlatform.value
@@ -93,7 +96,7 @@ onBeforeUnmount(() => {
           :scanline-frequency="4.8"
           :speed="1.4"
           :warp-amount="1"
-          :resolution-scale="0.82"
+           :resolution-scale="0.7"
         />
       </ClientOnly>
     </div>
@@ -116,7 +119,7 @@ onBeforeUnmount(() => {
           <TxOsIcon :platform="heroPlatform" />
           <span>{{ primaryCtaLabel }}</span>
         </NuxtLink>
-        <NuxtLink class="NexusButton" to="/docs">
+        <NuxtLink class="NexusButton" :to="docsCtaTo">
           <span class="i-carbon-book" aria-hidden="true" />
           <span>{{ t('landing.nexus.hero.secondaryCta') }}</span>
         </NuxtLink>
@@ -140,7 +143,7 @@ onBeforeUnmount(() => {
   padding: 6.5rem max(1.5rem, calc((100vw - 1480px) / 2)) 4rem;
   overflow: hidden;
   color: var(--nexus-ink);
-  opacity: 0;
+  opacity: 1;
   transition: opacity 720ms ease;
 }
 
@@ -160,7 +163,10 @@ onBeforeUnmount(() => {
 .NexusHero-Veil {
   z-index: 0;
   background:
-    #050608;
+    radial-gradient(120% 80% at 50% -10%, rgba(110, 114, 255, 0.28), transparent 55%),
+    radial-gradient(70% 50% at 85% 20%, rgba(154, 208, 188, 0.18), transparent 50%),
+    radial-gradient(60% 40% at 10% 70%, rgba(215, 247, 233, 0.12), transparent 55%),
+    linear-gradient(180deg, #07090f 0%, #050608 48%, #040507 100%);
 }
 
 .NexusHero-Veil :deep(canvas) {
@@ -180,8 +186,8 @@ onBeforeUnmount(() => {
   z-index: 2;
   width: min(100%, 86rem);
   text-align: center;
-  opacity: 0;
-  transform: translate3d(0, 28px, 0);
+  opacity: 1;
+  transform: none;
   transition:
     opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
     transform 760ms cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -266,8 +272,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 0.8rem;
   margin-top: 3rem;
-  opacity: 0;
-  transform: translate3d(0, 12px, 0);
+  opacity: 1;
+  transform: none;
   transition:
     opacity 520ms ease,
     transform 520ms ease;

@@ -101,10 +101,11 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
 
 <style lang="scss" scoped>
 .TuffLandingSection {
-  --tuff-landing-header-height: 64px;
-  --tuff-landing-header-gap: 16px;
-  --tuff-landing-sticky-height: 56px;
-  --tuff-landing-sticky-gap: 2.5vh;
+  /* Floating pill sits at top:1rem (~16px) with ~52-56px content height. */
+  --tuff-landing-header-height: 72px;
+  --tuff-landing-header-gap: 28px;
+  --tuff-landing-sticky-height: 40px;
+  --tuff-landing-sticky-gap: 2vh;
   --tuff-landing-safe-top: calc(var(--tuff-landing-header-height) + var(--tuff-landing-header-gap));
   --tuff-landing-safe-bottom: calc(var(--tuff-landing-sticky-height) + var(--tuff-landing-sticky-gap));
 }
@@ -125,7 +126,7 @@ useGsapReveal(sectionRef, props.revealOptions ?? {})
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center;
   width: 100%;
   min-height: 0;
   box-sizing: border-box;

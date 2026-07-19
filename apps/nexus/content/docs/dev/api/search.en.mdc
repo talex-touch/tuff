@@ -306,7 +306,7 @@ code: |
     start: number  // Start position
     end: number    // End position (exclusive)
   }
-  
+
   // In TuffItem.meta.extension
   interface FeatureExtension {
     matchResult?: MatchRange[]
@@ -359,7 +359,7 @@ The `matchFeature` function from `@talex-touch/utils/search` enables custom sear
 ---
 code: |
   import { matchFeature } from '@talex-touch/utils/search'
-  
+
   const result = matchFeature({
     title: 'translate',
     desc: 'Translate selected text',
@@ -367,7 +367,7 @@ code: |
     query: 'fanyi',
     enableFuzzy: true
   })
-  
+
   if (result.matched) {
     console.log('Match type:', result.matchType)
     console.log('Match score:', result.score)
@@ -406,13 +406,13 @@ For typo-tolerant search:
 ---
 code: |
   import { fuzzyMatch, indicesToRanges } from '@talex-touch/utils/search'
-  
+
   const result = fuzzyMatch('hello', 'helol', 2)
-  
+
   if (result.matched) {
     console.log('Score:', result.score)
     console.log('Matched indices:', result.matchedIndices)
-    
+
     // Convert to highlight ranges
     const ranges = indicesToRanges(result.matchedIndices)
   }
@@ -479,7 +479,7 @@ code: |
     text: string
     inputs?: TuffQueryInput[]
   }
-  
+
   interface TuffQueryInput {
     type: TuffInputType  // 'text' | 'image' | 'files' | 'html'
     content: string

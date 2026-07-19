@@ -47,29 +47,29 @@ code: |
   interface DivisionBoxConfig {
     /** 加载的 URL */
     url: string
-    
+
     /** 窗口标题 */
     title: string
-    
+
     /** 图标（可选） */
     icon?: string
-    
+
     /** 窗口大小 */
     size?: 'compact' | 'medium' | 'expanded'
-    
+
     /** 是否保持活跃（后台缓存） */
     keepAlive?: boolean
-    
+
     /** 关联的插件 ID */
     pluginId?: string
-    
+
     /** Header 配置（可选） */
     header?: {
       show: boolean
       title?: string
       icon?: string
     }
-  
+
     /** CoreBox 头部 UI 控制（可选） */
     ui?: {
       showInput?: boolean
@@ -97,9 +97,9 @@ code: |
 ---
 code: |
   import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
-  
+
   const divisionBox = useDivisionBox()
-  
+
   // 打开 DivisionBox
   const { sessionId } = await divisionBox.open({
     url: 'https://example.com/tool',
@@ -107,12 +107,12 @@ code: |
     size: 'medium',
     keepAlive: true
   })
-  
+
   // 监听生命周期变化
   const unsubscribe = divisionBox.onLifecycleChange((event) => {
     console.log(event.sessionId, event.oldState, event.newState)
   })
-  
+
   // 关闭 DivisionBox
   await divisionBox.close(sessionId)
   unsubscribe()
@@ -126,7 +126,7 @@ code: |
 code: |
   import { useTuffTransport } from '@talex-touch/utils/transport'
   import { DivisionBoxEvents } from '@talex-touch/utils/transport/events'
-  
+
   async function openDivisionBox() {
     const transport = useTuffTransport()
     const response = await transport.send(DivisionBoxEvents.open, {
@@ -137,7 +137,7 @@ code: |
       keepAlive: true,
       pluginId: 'my-plugin'
     })
-    
+
     if (response?.success) {
       console.log('Session ID:', response.data.sessionId)
     }
@@ -174,7 +174,7 @@ code: |
     const response = await transport.send(DivisionBoxEvents.getState, {
       sessionId
     })
-    
+
     if (response?.success) {
       console.log('State:', response.data.state)
     }
@@ -206,7 +206,7 @@ code: |
   async function getActiveSessions() {
     const transport = useTuffTransport()
     const response = await transport.send(DivisionBoxEvents.getActiveSessions, {})
-    
+
     if (response?.success) {
       console.log('Active sessions:', response.data)
     }
@@ -226,9 +226,9 @@ code: |
 ---
 code: |
   import { useDivisionBox } from '@talex-touch/utils/plugin/sdk'
-  
+
   const divisionBox = useDivisionBox()
-  
+
   const { sessionId } = await divisionBox.open({
     url: 'https://example.com',
     title: 'Web Tool',
@@ -252,13 +252,13 @@ code: |
 code: |
   // 简单关闭
   await divisionBox.close(sessionId)
-  
+
   // 带延迟和动画
   await divisionBox.close(sessionId, {
     delay: 1000,
     animation: true
   })
-  
+
   // 强制关闭（忽略 keepAlive）
   await divisionBox.close(sessionId, { force: true })
 ---
@@ -276,7 +276,7 @@ code: |
   const unsubscribe = divisionBox.onStateChange((data) => {
     console.log(`Session ${data.sessionId} changed to ${data.state}`)
   })
-  
+
   // 停止监听
   unsubscribe()
 ---
@@ -292,7 +292,7 @@ code: |
   const unsubscribe = divisionBox.onLifecycleChange((event) => {
     console.log(event.sessionId, event.oldState, event.newState)
   })
-  
+
   // 停止监听
   unsubscribe()
 ---
@@ -307,7 +307,7 @@ code: |
 code: |
   // 保存滚动位置
   await divisionBox.updateState(sessionId, 'scrollY', 150)
-  
+
   // 保存草稿
   await divisionBox.updateState(sessionId, 'draft', {
     text: 'Hello world',
@@ -367,7 +367,7 @@ code: |
   function onFeatureTriggered(featureId: string, query: TuffQuery) {
     if (isFlowTriggered(query)) {
       const flowData = extractFlowData(query)
-      
+
       // 打开 DivisionBox 显示 Flow 数据
       divisionBox.open({
         url: `/viewer.html?sessionId=${flowData.sessionId}`,

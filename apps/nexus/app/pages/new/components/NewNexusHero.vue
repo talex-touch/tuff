@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
           :scanline-frequency="4.8"
           :speed="1.4"
           :warp-amount="1"
-          :resolution-scale="0.82"
+          :resolution-scale="0.7"
         />
       </ClientOnly>
     </div>
@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
   padding: 6.5rem max(1.5rem, calc((100vw - 1480px) / 2)) 3rem;
   overflow: hidden;
   color: var(--nexus-ink);
-  opacity: 0;
+  opacity: 1;
   transition: opacity 720ms ease;
 }
 
@@ -197,7 +197,10 @@ onBeforeUnmount(() => {
 
 .NexusHero-Veil {
   z-index: 0;
-  background: #050608;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(110, 114, 255, 0.28), transparent 55%),
+    radial-gradient(70% 50% at 85% 20%, rgba(154, 208, 188, 0.18), transparent 50%),
+    linear-gradient(180deg, #07090f 0%, #050608 48%, #040507 100%);
 }
 
 .NexusHero-Veil :deep(canvas) {
@@ -217,8 +220,8 @@ onBeforeUnmount(() => {
   z-index: 2;
   width: min(100%, 86rem);
   text-align: center;
-  opacity: 0;
-  transform: translate3d(0, 28px, 0);
+  opacity: 1;
+  transform: none;
   transition:
     opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
     transform 760ms cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -303,8 +306,8 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 0.8rem;
   margin-top: 3rem;
-  opacity: 0;
-  transform: translate3d(0, 12px, 0);
+  opacity: 1;
+  transform: none;
   transition:
     opacity 520ms ease,
     transform 520ms ease;
@@ -322,8 +325,8 @@ onBeforeUnmount(() => {
   margin: clamp(4.6rem, 9vh, 7rem) auto 0;
   padding: 1.2rem 0;
   color: rgba(246, 247, 244, 0.74);
-  opacity: 0;
-  transform: translate3d(0, 18px, 0);
+  opacity: 1;
+  transform: none;
   transition:
     opacity 640ms ease,
     transform 640ms ease;

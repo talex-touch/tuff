@@ -129,12 +129,12 @@ async function setupGsapAnimations() {
   }
 
   gsapContext = gsap.context(() => {
-    gsap.set(textTargets, { opacity: 0, y: 18 });
-    gsap.set(contentEl, { opacity: 0, y: 20, scale: 0.98, transformOrigin: "center" });
-    gsap.set(controlsEl, { opacity: 0, y: 12 });
-    gsap.set(featureCardsEl, { opacity: 0, y: 16 });
-    gsap.set(backgroundEl, { opacity: 0, scale: 1.02, transformOrigin: "center" });
-    gsap.set(borderEl, { opacity: 0, scale: 0.96, transformOrigin: "center" });
+    gsap.set(textTargets, { opacity: 0.18, y: 10 });
+    gsap.set(contentEl, { opacity: 0.2, y: 12, scale: 0.99, transformOrigin: "center" });
+    gsap.set(controlsEl, { opacity: 0.2, y: 8 });
+    gsap.set(featureCardsEl, { opacity: 0.18, y: 10 });
+    gsap.set(backgroundEl, { opacity: 0.35, scale: 1.01, transformOrigin: "center" });
+    gsap.set(borderEl, { opacity: 0.35, scale: 0.99, transformOrigin: "center" });
 
     enterTimeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } })
       .to(textTargets, { opacity: 1, y: 0, duration: 0.45, stagger: 0.08 })

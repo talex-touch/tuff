@@ -12,15 +12,15 @@ The Box SDK provides plugins with the ability to control CoreBox window behavior
 ---
 code: |
   import { useBox } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
-  
+
   // Hide CoreBox
   box.hide()
-  
+
   // Expand CoreBox to show 10 results
   await box.expand({ length: 10 })
-  
+
   // Get current input
   const input = await box.getInput()
 ---
@@ -38,7 +38,7 @@ Get Box SDK instance.
 ---
 code: |
   import { useBox } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
 ---
 :::
@@ -80,10 +80,10 @@ Expand the CoreBox window to show more results.
 code: |
   // Expand to show 10 items
   await box.expand({ length: 10 })
-  
+
   // Force maximum expansion
   await box.expand({ forceMax: true })
-  
+
   // Default expansion
   await box.expand()
 ---
@@ -177,12 +177,12 @@ Enable input monitoring, allowing plugin to receive input change events.
 ---
 code: |
   import { onCoreBoxInputChange, useBox } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
-  
+
   // Enable input monitoring
   await box.allowInput()
-  
+
   // Listen to input changes
   onCoreBoxInputChange(({ data }) => {
     console.log('Input changed:', data.query.text)
@@ -198,12 +198,12 @@ Enable clipboard monitoring, allowing plugin to receive clipboard change events.
 ---
 code: |
   import { useBox, ClipboardType, ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
-  
+
   // Monitor text and images
   await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
-  
+
   // Or use presets
   await box.allowClipboard(ClipboardTypePresets.ALL)
 ---
@@ -223,13 +223,13 @@ code: |
 ---
 code: |
   import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
-  
+
   // Text only
   ClipboardTypePresets.TEXT_ONLY
-  
+
   // Text and images
   ClipboardTypePresets.TEXT_AND_IMAGE
-  
+
   // All types
   ClipboardTypePresets.ALL
 ---
@@ -255,12 +255,12 @@ code: |
     allowInput(): Promise<void>
     allowClipboard(types: number): Promise<void>
   }
-  
+
   interface BoxExpandOptions {
     length?: number
     forceMax?: boolean
   }
-  
+
   enum ClipboardType {
     TEXT = 0b0001,
     IMAGE = 0b0010,

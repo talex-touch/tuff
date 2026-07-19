@@ -260,22 +260,22 @@ code: |
   async invoke(capabilityId, payload, options) {
     // 1. 验证能力存在
     const capability = aiCapabilityRegistry.get(capabilityId)
-    
+
     // 2. 加载能力路由配置
     const routing = config.capabilities[capabilityId]
-    
+
     // 3. 合并运行时选项和配置
     const runtimeOptions = mergeOptions(options, routing)
-    
+
     // 4. 检查缓存（如果启用）
     if (enableCache && !stream) {
       const cached = getFromCache(cacheKey)
       if (cached) return cached
     }
-    
+
     // 5. 获取支持此能力的已启用提供商
     const availableProviders = filterProviders(capability, runtimeOptions)
-    
+
     // 6. 通过策略选择提供商
     const { selectedProvider, fallbackProviders } = 
       await strategyManager.select({
@@ -283,17 +283,17 @@ code: |
         options: runtimeOptions,
         availableProviders
       })
-    
+
     // 7. 调用提供商
     const provider = providerManager.get(selectedProvider.id)
     const result = await provider[capability.type](payload, runtimeOptions)
-    
+
     // 8. 缓存结果（如果启用）
     if (enableCache) setToCache(cacheKey, result)
-    
+
     // 9. 审计日志（如果启用）
     if (enableAudit) await logAudit(...)
-    
+
     return result
   }
 ---
@@ -320,9 +320,9 @@ code: |
       }),
       signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
-    
+
     const data = await response.json()
-    
+
     return {
       result: data.choices[0].message.content,
       usage: {
@@ -432,7 +432,7 @@ code: |
         maxTokens: 100
       }
     }
-    
+
     formatTestResult(result) {
       return {
         success: true,
@@ -454,21 +454,21 @@ code: |
   // 主进程
   transport.on(intelligenceApiEvents.testCapability, async (data) => {
     const { capabilityId, providerId, userInput } = data
-    
+
     // 获取测试器
     const tester = capabilityTesterRegistry.get(capabilityId)
-    
+
     // 生成测试载荷
     const payload = await tester.generateTestPayload({ providerId, userInput })
-    
+
     // 执行测试
     const result = await ai.invoke(capabilityId, payload, {
       allowedProviderIds: providerId ? [providerId] : undefined
     })
-    
+
     // 格式化结果
     const formattedResult = tester.formatTestResult(result)
-    
+
     return { ok: true, result: formattedResult }
   })
 ---
@@ -535,10 +535,10 @@ code: |
 code: |
   // useIntelligence composable
   const { text, vision, code, analysis, embedding, rag, agent } = useIntelligence()
-  
+
   // 直接调用
   await text.chat({ messages: [...] })
-  
+
   // 带选项
   await text.chat({ messages: [...] }, {
     preferredProviderId: 'openai-default',
@@ -591,14 +591,14 @@ code: |
     async chat(payload, options) {
       // 自定义实现
     }
-    
+
     async translate(payload, options) {
       // 自定义实现
     }
-    
+
     // ... 其他能力
   }
-  
+
   // 注册工厂
   providerManager.registerFactory('custom', (config) => {
     return new CustomProvider(config)
@@ -635,7 +635,7 @@ code: |
       // 自定义选择逻辑
     }
   }
-  
+
   strategyManager.setDefaultStrategy('custom-strategy')
 ---
 :::

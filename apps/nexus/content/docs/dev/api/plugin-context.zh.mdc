@@ -8,35 +8,35 @@
 
 ## Canonical lifecycle context
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import type { IPluginLifecycle } from '@talex-touch/utils/plugin/sdk'
 
   const lifecycle: IPluginLifecycle = {
-    async onInit(context) {
-      const {
-        logger,
-        http,
-        storage,
-        secret,
-        clipboard,
-        channel,
-        dialog,
-        box,
-        feature,
-        quickActions,
-        quickOps,
-        intelligence,
-        screenshot,
-        system,
-        i18n,
-        lexicon,
-        power,
-        recommend,
-        divisionBox,
-        openUrl
-      } = context.utils
+  async onInit(context) {
+  const {
+  logger,
+  http,
+  storage,
+  secret,
+  clipboard,
+  channel,
+  dialog,
+  box,
+  feature,
+  quickActions,
+  quickOps,
+  intelligence,
+  screenshot,
+  system,
+  i18n,
+  lexicon,
+  power,
+  recommend,
+  divisionBox,
+  openUrl
+  } = context.utils
 
       logger.info(`Loaded ${context.pluginName}`)
       void [
@@ -69,9 +69,9 @@ code: |
 
   }
 
-  export default lifecycle
+  ## export default lifecycle
 ---
-::
+:::
 
 `context` 还包含 `pluginPath` 与插件 `config`。secret 必须写入 `context.utils.secret`，不能进入普通 storage 或日志。
 
@@ -101,7 +101,7 @@ code: |
 
 插件日志记录器，日志会保存到插件的日志目录。
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   logger.info('信息日志', { extra: 'data' })
@@ -109,7 +109,7 @@ code: |
   logger.error('错误日志', error)
   logger.debug('调试日志')
 ---
-::
+:::
 
 ---
 
@@ -117,7 +117,7 @@ code: |
 
 HTTP 请求库 (基于 axios)：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // GET 请求
@@ -131,7 +131,7 @@ code: |
   data: 'payload'
   }, { signal })
 ---
-::
+:::
 
 ---
 
@@ -139,7 +139,7 @@ code: |
 
 剪贴板操作：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 写入文本
@@ -154,7 +154,7 @@ code: |
   // 写入图片
   clipboard.writeImage(nativeImage)
 ---
-::
+:::
 
 ---
 
@@ -162,7 +162,7 @@ code: |
 
 插件专属存储（每个插件 10MB 限制）：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 读取配置文件
@@ -185,7 +185,7 @@ code: |
   // 取消监听
   unsubscribe()
 ---
-::
+:::
 
 ---
 
@@ -193,7 +193,7 @@ code: |
 
 PowerSDK：用于在低电量场景自动做能力降级。
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 读取当前低电量状态
@@ -211,7 +211,7 @@ code: |
   // 可选：取消监听
   disposePower()
 ---
-::
+:::
 
 > 说明：在 `index.js` 上下文里，`power.onLowPowerChanged` 当前是轮询（约 60 秒），严格实时推送还在待定。
 
@@ -221,7 +221,7 @@ code: |
 
 RecommendSDK：向 CoreBox 推荐引擎注册自定义推荐提供者。
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 注册推荐提供者
@@ -248,7 +248,7 @@ code: |
   // 或
   recommend.unregisterProvider('my-recommendation')
 ---
-::
+:::
 
 > 详见 [RecommendSDK API](./recommend.zh.md)
 
@@ -258,7 +258,7 @@ code: |
 
 Feature SDK，用于管理搜索结果：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 推送搜索结果
@@ -276,7 +276,7 @@ code: |
   // 获取当前插件的搜索结果
   const items = feature.getItems()
 ---
-::
+:::
 
 ---
 
@@ -284,7 +284,7 @@ code: |
 
 CoreBox 控制 SDK：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 隐藏 CoreBox
@@ -299,7 +299,7 @@ code: |
   // 获取输入框内容
   const input = box.getInput()
 ---
-::
+:::
 
 ---
 
@@ -307,7 +307,7 @@ code: |
 
 BoxItem 管理 SDK（新版 API）：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 推送单个 item
@@ -328,7 +328,7 @@ code: |
   // 获取该插件的所有 items
   const items = boxItems.getItems()
 ---
-::
+:::
 
 ---
 
@@ -336,7 +336,7 @@ code: |
 
 QuickActions SDK 用于注册 MetaK / Quick Actions 全局动作，也可以从动作中调用原生分享。`meta` 是历史兼容别名，和 `quickActions` 指向同一个 SDK 实例；新插件请优先使用 `quickActions`。
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   quickActions.registerAction({
@@ -362,9 +362,9 @@ code: |
         logger.warn('原生分享失败', result.error)
       }
 
-  })
+  ## })
 ---
-::
+:::
 
 常用方法：
 
@@ -386,7 +386,7 @@ code: |
 
 当前插件信息 API：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 获取插件完整信息
@@ -417,7 +417,7 @@ code: |
   // 获取平台支持信息
   const platforms = plugin.getPlatforms()
 ---
-::
+:::
 
 ---
 
@@ -425,7 +425,7 @@ code: |
 
 其他插件 API（只读访问）：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 获取所有插件列表
@@ -437,7 +437,7 @@ code: |
   // 获取插件状态
   const status = await plugins.getStatus('other-plugin-name')
 ---
-::
+:::
 
 ---
 
@@ -445,7 +445,7 @@ code: |
 
 动态 Feature 管理：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 动态添加 Feature
@@ -477,7 +477,7 @@ code: |
   // 按优先级排序获取
   const sorted = features.getFeaturesByPriority()
 ---
-::
+:::
 
 运行时新增 Feature 的 `icon.type: 'file'` 由宿主初始化。相对路径会在所属插件根目录内解析；目录穿越或目标缺失会 fail closed，不会把未解析的相对路径留给 CoreBox。
 
@@ -487,7 +487,7 @@ code: |
 
 IPC 通道桥接：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 发送消息到主进程
@@ -509,7 +509,7 @@ code: |
   // 访问原始 channel 对象
   channel.raw
 ---
-::
+:::
 
 ---
 
@@ -517,7 +517,7 @@ code: |
 
 Feature 事件监听：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 监听 Feature 生命周期
@@ -531,7 +531,7 @@ code: |
   // 取消监听
   $event.offFeatureLifeCycle('feature-id', callback)
 ---
-::
+:::
 
 ---
 
@@ -539,7 +539,7 @@ code: |
 
 系统对话框：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 消息对话框
@@ -561,7 +561,7 @@ code: |
   defaultPath: 'file.txt'
   })
 ---
-::
+:::
 
 ---
 
@@ -569,7 +569,7 @@ code: |
 
 DivisionBox SDK，用于创建独立窗口：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   // 打开 DivisionBox
@@ -588,7 +588,7 @@ code: |
   console.log('状态变化:', state)
   })
 ---
-::
+:::
 
 ---
 
@@ -596,7 +596,7 @@ code: |
 
 搜索结果构建器：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const item = new TuffItemBuilder('unique-id')
@@ -613,7 +613,7 @@ code: |
   })
   .build()
 ---
-::
+:::
 
 ---
 
@@ -621,12 +621,12 @@ code: |
 
 打开外部链接：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   openUrl('https://example.com')
 ---
-::
+:::
 
 ---
 
@@ -634,7 +634,7 @@ code: |
 
 插件 index.js 需要导出生命周期钩子对象：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const pluginLifecycle = {
@@ -668,9 +668,9 @@ code: |
 
   }
 
-  module.exports = pluginLifecycle
+  ## module.exports = pluginLifecycle
 ---
-::
+:::
 
 ---
 

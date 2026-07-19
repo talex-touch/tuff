@@ -26,16 +26,16 @@ Clipboard SDK 提供插件访问系统剪贴板的能力，包括：
 ---
 code: |
   import { system, useClipboard } from '@talex-touch/utils/plugin/sdk'
-  
+
   const clipboard = useClipboard()
-  
+
   // 写入文本
   await clipboard.writeText('Hello World')
-  
+
   // 读取剪贴板
   const content = await clipboard.read()
   console.log(content.text, content.formats)
-  
+
   // 复制并粘贴到当前应用
   await clipboard.copyAndPaste({ text: 'Pasted content' })
 
@@ -110,12 +110,12 @@ code: |
     text: 'Hello',
     html: '<b>Hello</b>'
   })
-  
+
   // 写入图片（data URL）
   await clipboard.write({
     image: 'data:image/png;base64,...'
   })
-  
+
   // 写入文件路径
   await clipboard.write({
     files: ['/path/to/file.txt', '/path/to/image.png']
@@ -224,23 +224,23 @@ code: |
 code: |
   // 粘贴文本
   await clipboard.copyAndPaste({ text: 'Hello' })
-  
+
   // 粘贴带格式的文本
   await clipboard.copyAndPaste({
     text: 'Hello',
     html: '<b>Hello</b>'
   })
-  
+
   // 粘贴图片
   await clipboard.copyAndPaste({
     image: 'data:image/png;base64,...'
   })
-  
+
   // 粘贴文件
   await clipboard.copyAndPaste({
     files: ['/path/to/file.txt']
   })
-  
+
   // 自定义延迟和行为
   await clipboard.copyAndPaste({
     text: 'Hello',
@@ -307,17 +307,17 @@ code: |
   const result = await clipboard.history.searchHistory({
     keyword: 'hello'
   })
-  
+
   // 按类型筛选
   const textItems = await clipboard.history.searchHistory({
     type: 'text'
   })
-  
+
   // 时间范围筛选
   const recent = await clipboard.history.searchHistory({
     startTime: Date.now() - 24 * 60 * 60 * 1000  // 最近 24 小时
   })
-  
+
   // 组合筛选
   const filtered = await clipboard.history.searchHistory({
     type: 'text',
@@ -394,18 +394,18 @@ code: |
 ---
 code: |
   import { useBox, ClipboardType } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
   const clipboard = useClipboard()
-  
+
   // 1. 先声明要监听的类型
   await box.allowClipboard(ClipboardType.TEXT | ClipboardType.IMAGE)
-  
+
   // 2. 注册监听器
   const unsubscribe = clipboard.history.onDidChange((item) => {
     console.log('剪贴板变化:', item.type, item.content)
   })
-  
+
   // 3. 停止监听
   unsubscribe()
 ---
@@ -423,13 +423,13 @@ code: |
 ---
 code: |
   import { ClipboardTypePresets } from '@talex-touch/utils/plugin/sdk'
-  
+
   // 仅文本
   await box.allowClipboard(ClipboardTypePresets.TEXT_ONLY)
-  
+
   // 文本和图片
   await box.allowClipboard(ClipboardTypePresets.TEXT_AND_IMAGE)
-  
+
   // 所有类型
   await box.allowClipboard(ClipboardTypePresets.ALL)
 ---
@@ -476,7 +476,7 @@ code: |
 code: |
   const latest = await clipboard.history.getLatest()
   const tags = Array.isArray(latest?.meta?.tags) ? latest?.meta?.tags : []
-  
+
   if (tags.includes('api_key') || tags.includes('password')) {
     // 例如：提示用户注意敏感信息
   }
@@ -506,7 +506,7 @@ code: |
   const history = useClipboardHistory()
   await history.getLatest()
   await history.applyToActiveApp({ text: 'Hello' })
-  
+
   // 新代码
   const clipboard = useClipboard()
   await clipboard.history.getLatest()

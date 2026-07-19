@@ -11,6 +11,11 @@ definePageMeta({
   layout: 'fullscreen',
 })
 
+useSeoMeta({
+  title: computed(() => 'Redirecting to docs · Tuff Docs'),
+  robots: 'noindex, nofollow',
+})
+
 if (import.meta.server) {
   await navigateTo(target.value, { redirectCode: 302 })
 }

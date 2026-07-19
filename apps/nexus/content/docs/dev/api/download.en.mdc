@@ -28,7 +28,7 @@ Use this SDK when you need progress-aware downloads in the renderer without mana
 ---
 code: |
   import { useDownloadSdk } from '@talex-touch/utils/renderer'
-  
+
   const download = useDownloadSdk()
   const res = await download.addTask({
     url: 'https://example.com/file.zip',
@@ -38,7 +38,7 @@ code: |
     module: 'resource_download',
     metadata: { hidden: true }
   })
-  
+
   if (!res.success) {
     throw new Error(res.error || 'Download failed')
   }

@@ -12,7 +12,7 @@ verified: true
 # Switch
 
 ## Basic Usage
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <script setup lang="ts">
@@ -25,7 +25,7 @@ code: |
     <TuffSwitch v-model="enabled" />
   </template>
 ---
-::
+:::
 
 ## Demo
 ### Toggle State

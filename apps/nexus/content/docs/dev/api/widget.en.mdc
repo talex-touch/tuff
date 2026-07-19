@@ -31,7 +31,7 @@ Declare widgets in the manifest, then provide the renderer entry in your plugin 
 
 ## Manifest Entry
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -45,13 +45,13 @@ code: |
   }
   }
 ---
-::
+:::
 
 ## Reuse a Renderer for Dynamic Features
 
 Runtime-added features do not have their own build-time widget entry. Point them at an existing widget feature from the same plugin with `interaction.rendererFeatureId`. The target feature must declare `type: "widget"` and a concrete `path`; missing, pathless, or non-widget targets fail closed before the dynamic lifecycle runs.
 
-::TuffCodeBlock{lang="js"}
+:::TuffCodeBlock{lang="js"}
 ---
 code: |
   features.addFeature({
@@ -71,13 +71,13 @@ code: |
   }
   })
 ---
-::
+:::
 
 The host registers the precompiled `assistant-panel` renderer but invokes the lifecycle with `professional-tone`. Items emitted by the dynamic feature must therefore use the target widget id, such as `makeWidgetId(pluginName, "assistant-panel")`, rather than an unbuilt dynamic widget id.
 
 ## File Structure
 
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   my-plugin/
@@ -88,7 +88,7 @@ code: |
   ├── manifest.json
   └── index.js
 ---
-::
+:::
 
 ## Dev Mode (Remote Source)
 
@@ -96,7 +96,7 @@ When `dev.enable` and `dev.source` are true, widgets are loaded from your dev se
 
 `{dev.address}/widgets/{interaction.path}` (defaults to `.vue` when no extension is provided).
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -107,7 +107,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 Remote widgets are fetched on each trigger; local file watching only applies to local sources.
 
@@ -115,7 +115,7 @@ Remote widgets are fetched on each trigger; local file watching only applies to 
 
 The `arrow` runtime is the new recommended TouchWidget beta entry. Widget paths without an extension still default to `.vue`; ArrowJS widgets should explicitly use `.arrow.ts` or `.arrow.js` and declare `runtime: "arrow"`.
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -129,32 +129,30 @@ code: |
   }
   }
 ---
-::
+:::
 
 `widgets/todo-panel.arrow.ts`
 :::TuffCodeBlock{lang="ts"}
-
 ---
-
 code: |
-import { component, html, reactive } from '@arrow-js/core'
+  import { component, html, reactive } from '@arrow-js/core'
 
-export default component((props) => {
-const state = reactive({ count: 0 })
+  export default component((props) => {
+  const state = reactive({ count: 0 })
 
     return html`<button @click="${() => state.count++}">
       ${() => props.payload?.title || 'TouchWidget'} ${() => state.count}
     </button>`
 
-## })
-
+  ## })
+---
 :::
 
 ## TouchWidget Beta: WebComponent
 
 The `webcomponent` runtime is also beta. The default export may be a defined tag name, an `HTMLElement` subclass, or `{ tagName, define }`. The host passes `item`, `payload`, `preview`, `widgetId`, and `hostKeyEvent` as DOM properties.
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -168,30 +166,28 @@ code: |
   }
   }
 ---
-::
+:::
 
 ## Vue Widget Example
 
 `widgets/todo-panel.vue`
 :::TuffCodeBlock{lang="vue"}
-
 ---
-
 code: |
-<template>
+  <template>
 
-<div class="todo-panel">
-<h3>{{ title }}</h3>
-<ul>
-<li v-for="item in items" :key="item.id">{{ item.text }}</li>
-</ul>
-</div>
-</template>
+  <div class="todo-panel">
+  <h3>{{ title }}</h3>
+  <ul>
+  <li v-for="item in items" :key="item.id">{{ item.text }}</li>
+  </ul>
+  </div>
+  </template>
 
   <script setup lang="ts">
   import { ref } from 'vue'
   import { usePluginContext } from '@talex-touch/utils/plugin/sdk'
-  
+
   const ctx = usePluginContext()
   const title = ref('My Tasks')
   const items = ref([{ id: 1, text: 'Learn Widgets' }])
@@ -200,37 +196,31 @@ code: |
   <style scoped>
   .todo-panel { padding: 16px; }
   </style>
-
 ---
-
 :::
 
 ## TSX Widget Example
 
 `widgets/quick-action.tsx`
 :::TuffCodeBlock{lang="tsx"}
-
 ---
-
 code: |
-import { defineComponent, ref } from 'vue'
+  import { defineComponent, ref } from 'vue'
 
-export default defineComponent({
-setup() {
-const count = ref(0)
-return () => (
+  export default defineComponent({
+  setup() {
+  const count = ref(0)
+  return () => (
 
-<div class="action-panel">
-<button onClick={() => count.value++}>
-Clicked {count.value} times
-</button>
-</div>
-)
-}
-})
-
+  <div class="action-panel">
+  <button onClick={() => count.value++}>
+  Clicked {count.value} times
+  </button>
+  </div>
+  )
+  }
+  })
 ---
-
 :::
 
 ## Allowed Dependencies

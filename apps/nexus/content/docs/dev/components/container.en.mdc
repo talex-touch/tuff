@@ -143,7 +143,7 @@ code: |
       </TxRow>
     </TxContainer>
   </template>
-  
+
   <style scoped>
   .col-content {
     background: var(--tx-color-surface);
@@ -221,7 +221,7 @@ code: |
           </TxCol>
         </TxRow>
       </TxContainer>
-      
+
       <!-- Main content -->
       <TxContainer class="main-content">
         <TxRow :gutter="32">
@@ -233,26 +233,26 @@ code: |
           </TxCol>
         </TxRow>
       </TxContainer>
-      
+
       <!-- Footer -->
       <TxContainer class="footer" fluid>
         <footer>Footer content</footer>
       </TxContainer>
     </div>
   </template>
-  
+
   <style scoped>
   .header {
     background: var(--tx-color-surface);
     padding: 16px 0;
     border-bottom: 1px solid var(--tx-color-border);
   }
-  
+
   .main-content {
     min-height: 500px;
     padding: 32px 0;
   }
-  
+
   .footer {
     background: var(--tx-color-surface);
     padding: 24px 0;
@@ -344,16 +344,16 @@ TouchX UI uses the following breakpoints:
 code: |
   /* Extra small screens */
   @media (max-width: 639px) { /* xs */ }
-  
+
   /* Small screens */
   @media (min-width: 640px) { /* sm */ }
-  
+
   /* Medium screens */
   @media (min-width: 768px) { /* md */ }
-  
+
   /* Large screens */
   @media (min-width: 1024px) { /* lg */ }
-  
+
   /* XL screens */
   @media (min-width: 1280px) { /* xl */ }
 ---
@@ -391,7 +391,7 @@ code: |
     <TxContainer max-width="800px" margin="auto">
       <div class="content">Main content</div>
     </TxContainer>
-    
+
     <!-- Content with sidebar -->
     <TxContainer>
       <TxRow :gutter="32">
@@ -399,7 +399,7 @@ code: |
         <TxCol :span="8">Sidebar</TxCol>
       </TxRow>
     </TxContainer>
-    
+
     <!-- Three-column layout -->
     <TxContainer>
       <TxRow :gutter="24">

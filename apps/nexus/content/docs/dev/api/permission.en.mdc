@@ -12,7 +12,7 @@ Permissions follow a least-privilege model and pair `permissions` with `permissi
 
 **1. Declare Permissions in manifest.json**
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -30,7 +30,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 **2. Permission Categories**
 
@@ -92,7 +92,7 @@ The `sdkapi` field determines whether permission checking can enter the runtime:
 
 If your plugin doesn't declare `sdkapi` or has a lower version:
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -103,7 +103,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 ## Technical Notes
 
@@ -114,7 +114,7 @@ code: |
 
 **Check Permissions in Prelude (index.js)**
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const { permission } = globalThis
@@ -130,11 +130,11 @@ code: |
   const text = clipboard.readText()
   }
 ---
-::
+:::
 
 **Use in Surface (Vue)**
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { usePermission } from '@talex-touch/utils/plugin/sdk'
@@ -150,13 +150,13 @@ code: |
   // Get all permission status
   const allStatus = await status()
 ---
-::
+:::
 
 **SQLite SDK (sdkapi >= 260215)**
 
 When using `usePluginSqlite()`, declare `storage.sqlite` in required permissions:
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -170,13 +170,12 @@ code: |
   }
   }
 ---
-::
+:::
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   import { usePluginSqlite } from '@talex-touch/utils/plugin/sdk'
-
   const sqlite = usePluginSqlite()
 
   await sqlite.execute(
@@ -193,7 +192,7 @@ code: |
   )
   console.log(result.rows)
 ---
-::
+:::
 
 ## Best Practices
 
@@ -201,7 +200,7 @@ code: |
 
 Only declare permissions you actually need:
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   // ✅ Good
@@ -215,11 +214,11 @@ code: |
   "required": ["fs.read", "fs.write", "fs.execute", "system.shell"]
   }
 ---
-::
+:::
 
 **2. Provide Permission Reasons**
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   "permissionReasons": {
@@ -227,11 +226,11 @@ code: |
   "network.internet": "Connect to Google Translate API"
   }
 ---
-::
+:::
 
 **3. Graceful Degradation**
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   async function translateText(text) {
@@ -248,13 +247,13 @@ code: |
       // Normal translation logic
       return await http.post('...')
 
-  }
+  ## }
 ---
-::
+:::
 
 **4. Distinguish Required vs Optional**
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   "permissions": {
@@ -262,7 +261,7 @@ code: |
   "optional": ["network.internet"] // Enhanced features
   }
 ---
-::
+:::
 
 ## User Interface
 
@@ -277,18 +276,18 @@ Users can manage plugin permissions at:
 
 A: Your `manifest.json` doesn't declare `sdkapi`, uses an invalid / unsupported marker, or the version is below `251212`. Update it to the current supported marker:
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   "sdkapi": 260626
 ---
-::
+:::
 
 **Q: How to handle permission denial?**
 
 A: Provide degraded experience or clear error message:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const granted = await permission.request('clipboard.read')
@@ -300,7 +299,7 @@ code: |
   }])
   }
 ---
-::
+:::
 
 **Q: Where is permission data stored?**
 

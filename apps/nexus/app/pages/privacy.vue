@@ -8,9 +8,7 @@ definePageMeta({
 
 const { t } = useI18n()
 const { doc: privacyDoc } = usePolicyMarkdown('privacy')
-const { doc: protocolDoc } = usePolicyMarkdown('protocol')
-
-const resolvedDoc = computed(() => privacyDoc.value ?? protocolDoc.value ?? {})
+const resolvedDoc = computed(() => privacyDoc.value ?? {})
 
 useHead({
   title: t('privacy.title'),
@@ -25,7 +23,7 @@ useHead({
     <ContentRenderer
       :value="resolvedDoc"
       :prose="false"
-      class="prose prose-neutral dark:prose-invert max-w-none"
+      class="prose prose-neutral dark:prose-invert max-w-none legal-prose"
     />
   </div>
 </template>
@@ -50,5 +48,10 @@ useHead({
 
 :deep(.prose p) {
   line-height: 1.75;
+}
+
+:deep(.legal-prose) {
+  content-visibility: auto;
+  contain-intrinsic-size: 900px;
 }
 </style>

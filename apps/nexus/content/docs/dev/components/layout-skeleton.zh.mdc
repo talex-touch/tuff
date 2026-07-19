@@ -29,7 +29,7 @@ code: |
 ---
 :::
 ## 基础用法
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -38,7 +38,7 @@ code: |
     </div>
   </template>
 ---
-::
+:::
 
 ## 使用建议
 - 外层容器决定骨架尺寸与布局比例。

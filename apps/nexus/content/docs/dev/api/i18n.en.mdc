@@ -21,7 +21,7 @@ The current host locales are `en-US` and `zh-CN`.
 
 Declare only the permissions used by the plugin:
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -37,7 +37,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 | Permission         | Required by                    |
 | ------------------ | ------------------------------ |
@@ -51,7 +51,7 @@ The host checks the SDK marker, manifest declaration, current grant, loaded plug
 
 ## Runtime usage
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   export default {
@@ -83,13 +83,13 @@ code: |
         )
       }
 
-  }
+  ## }
 ---
-::
+:::
 
 ## Renderer usage
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import {
@@ -110,7 +110,7 @@ code: |
   domain: 'capability'
   })
 ---
-::
+:::
 
 Renderer hooks require an active plugin renderer channel. Do not call them from a normal application renderer or before the plugin channel is ready.
 
@@ -136,7 +136,7 @@ Supported domains are `unit`, `currency`, `timezone`, `capability`, `fileType`, 
 
 ## Register plugin-scoped entries
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await context.utils.lexicon.register(
@@ -161,7 +161,7 @@ code: |
   // The host assigns plugin:<pluginId>:status.ready.
   console.log(result.ids[0])
 ---
-::
+:::
 
 Registration boundaries:
 

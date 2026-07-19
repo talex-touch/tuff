@@ -26,7 +26,7 @@ const faq = computed(() => ({
     container-class="max-w-5xl w-full space-y-10"
     :reveal-options="{
       from: {
-        opacity: 0,
+        opacity: 0.16,
         y: 28,
         duration: 0.9,
       },
