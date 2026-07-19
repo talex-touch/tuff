@@ -765,7 +765,7 @@ publish(visibleItems.slice(0, 50))
 
 ### 1. Scope / Trigger
 
-- Trigger: changing AppProvider/FileProvider searchable mutations, `IndexingRuntime`, `SearchIndexStoreAdapter`, SearchIndex worker messages, source reset/rebuild, enrichment scheduling, or SearchCore teardown.
+- Trigger: changing AppProvider/FileProvider searchable mutations, `IndexingRuntime`, `SearchIndexStoreAdapter`, SearchIndex worker messages, shared-index DDL, migration preflight/evidence verification, source reset/rebuild, enrichment scheduling, or SearchCore teardown.
 - Producer databases are source-local state. Every mutation of shared `search_index`, `keyword_mappings`, and `search_index_meta` enters `IndexingRuntime` and the selected `SourceScopedIndexWriterRouter`; Providers never call the shared writer/client/service directly.
 
 ### 2. Signatures
@@ -789,6 +789,9 @@ IndexedSourceDelta.mutationLeaseId?: string
 - `search_index_replacement_stage(replacement_id, provider_id, sequence, document)` stores bounded candidate batches; readers never query it.
 - `SearchIndexService.applyProviderItems(providerId, items, legacyItemIds)` atomically retires provider-scoped legacy IDs and inserts their replacements.
 
+- Persistent shared-index DDL, including `idx_keyword_mappings_keyword` and provider-scoped keyword indexes, runs only from writer-mode `SearchIndexService` initialization before provider scans begin.
+- `IndexedSourceTaskHistoryEntry` scan records expose both `reason` (the semantic scan reason) and `trigger` (the initiating request/caller reason) when available.
+
 ### 3. Contracts
 
 - Runtime assigns one mutation lease per source operation. Base store application and every accepted File enrichment continuation carry that lease; `source.drainMutations({ leaseId })` settles the same scope before lease release.
@@ -798,6 +801,9 @@ IndexedSourceDelta.mutationLeaseId?: string
 - Counts are observed results: removed rows come from SQLite/worker summaries, indexed rows come from the commit, and skipped delete misses report `applied: false` with zero removed rows.
 - A worker batch with `failed > 0`, dispatch rejection, flush timeout, or expired lease fails the initiating Runtime task and clears source scan progress for retry. Logging a warning is not success.
 - SearchCore aborts and drains active App source scans and prepares FileProvider shutdown before clearing Runtime delegates or stopping the SearchIndex writer.
+- `files` stores App and File producer rows together; real-profile parity compares `search_index.provider = 'file-provider'` with `files.type = 'file'` (and App with `files.type = 'app'`), never with the unfiltered table count.
+- A source-scoped `scan_progress` profile may legitimately produce `plan.status = 'not-needed'`, `requiresApproval = false`, and copy-simulation `execution.executed = false`. Evidence verification treats that as a successful no-op only when the source snapshot is unchanged and the post-plan is still `not-needed`.
+- Packaged maintenance evidence requires a successful typed scan task plus visible `duration`, `reason`, and `trigger`; seeded or failed task history cannot be relabeled as successful packaged indexing evidence.
 
 ### 4. Validation & Error Matrix
 
@@ -809,6 +815,10 @@ IndexedSourceDelta.mutationLeaseId?: string
 - Healthy scope drains beside a failed scope -> healthy resolves; failed scope retains its own `AggregateError`.
 - Reset hook fails -> no shared replacement commit; reset result contains `error`.
 - App scan is active during destroy -> abort iterator, await provider `return()`/finally, then shut down writer.
+- Provider executes `CREATE INDEX` on a shared table -> ownership violation and possible startup `SQLITE_BUSY`; move the DDL to writer initialization rather than adding a Provider retry.
+- Real-profile preflight compares one provider with all shared `files` rows -> false parity failure; scope the durable row count by producer type.
+- Already migrated `scan_progress` returns a no-op copy simulation -> pass only the explicit `not-needed` contract; do not force or fake an execute-mode migration.
+- Successful packaged scan omits `reason` from task history -> diagnostics evidence fails even when the scan itself succeeds.
 
 ### 5. Good / Base / Bad Cases
 
@@ -825,6 +835,8 @@ IndexedSourceDelta.mutationLeaseId?: string
 - App tests cover UWP stable ID continuity, Runtime delta routing, local reset versus public Runtime rebuild, and early iterator return.
 - File tests cover bounded streaming, terminal batches, worker `failed` summaries, lease propagation through worker results, scoped drain, and scan-progress recovery.
 - SearchCore destroy tests prove App/File drain completes before writer shutdown. CoreApp node type-check and the focused App/File/search-engine suites must pass.
+- Real-profile closure uses query-only preflight/plan plus copy-execute simulations. Assert correlated database identity, source snapshot/checksum unchanged, source-scoped row parity, no blockers, and retained legacy `file_fts`.
+- Rebuild the unpacked packaged app after main/shared source changes, run the isolated fixture-root diagnostics probe, and assert scan success plus visible `duration`, `reason`, and `trigger` artifacts.
 
 ### 7. Wrong vs Correct
 
@@ -844,4 +856,19 @@ return sourceMutationGate.run(sourceId, async (lease) => {
   await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease.id })
   await source.drainMutations?.({ leaseId: lease.id, reason: 'scan' })
 })
+```
+
+#### Wrong: Provider-owned shared DDL and unscoped evidence
+
+```ts
+await providerDb.run(sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`)
+const parity = sourceIndexedRows === allFilesRows
+```
+
+#### Correct: Writer-owned DDL and source-scoped evidence
+
+```ts
+await searchIndexWriter.initialize(databasePath)
+const sourceFilesRows = await countFilesByType('file')
+const parity = sourceIndexedRows === sourceFilesRows
 ```

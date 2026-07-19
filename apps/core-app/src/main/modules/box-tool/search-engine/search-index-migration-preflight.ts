@@ -276,7 +276,7 @@ export function buildSearchIndexMigrationPreflightReport(
       snapshot.ftsOwnership.sourceIndexedRows === snapshot.ftsOwnership.filesRows
         ? 'passed'
         : 'failed',
-      'Source indexed row count compared with files table row count.',
+      'Source indexed row count compared with source-owned files table rows.',
       {
         sourceId: snapshot.sourceId,
         sourceIndexedRows: snapshot.ftsOwnership.sourceIndexedRows,

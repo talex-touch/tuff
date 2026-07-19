@@ -29,10 +29,10 @@
     "apps/core-app/src/main/modules/box-tool/addon/apps/app-provider.ts",
     "apps/core-app/src/main/modules/database/index.ts"
   ],
-  "notes": "Code implementation and all isolated verification gates are complete. Real-profile SQLite/FTS/schema operations and packaged-profile diagnostics remain separately approval-gated, so the task stays in progress until that evidence is recorded.",
+  "notes": "Implementation and every acceptance gate are complete. On 2026-07-18, real-profile query-only preflight, correlated copy simulations, no-op scan_progress plan, and isolated packaged maintenance scan passed without modifying the source database. The user authorized the closure work commit and Trellis archive.",
   "meta": {
-    "nextAction": "Obtain explicit approval for packaged/real-profile indexing diagnostics evidence, then record the final acceptance and archive after a user-directed work commit.",
-    "blocker": "No code or isolated-verification blocker. Only approval-gated packaged/real-profile diagnostics evidence remains.",
-    "evidence": "540 focused indexing/provider tests passed, including runtime -> legacy -> runtime rollback; CoreApp node and web type-checks passed; scoped ESLint and Prettier passed; electron-vite build passed; isolated copy-execute FTS ownership simulation passed with source unchanged and legacy file_fts retained; final three-reviewer panel reported no blockers."
+    "nextAction": "Archive this completed task and record the session journal after the authorized closure work commit.",
+    "blocker": "None.",
+    "evidence": "Real-profile preflight passed with file-provider source parity 752/752, source-scoped scan_progress, and 2 durable task-state rows; FTS and scan_progress copy simulations passed with sourceSnapshotUnchanged=true and legacy file_fts retained; source database SHA-256 stayed 077b925c12973189669882a4da63cf61d921f3ec1c97fb2aee052fea5aaea285; correlated evidence verifier passed; rebuilt packaged 2.4.13-beta.14 isolated scan passed with visible duration/reason/trigger; focused waves passed 200 tests total; scoped ESLint, CoreApp node/web type-checks, Vite build, and unpacked Electron packaging passed."
   }
 }

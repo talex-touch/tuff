@@ -576,7 +576,7 @@ export class IndexingRuntime {
               ...request,
               signal: controller.signal
             })
-      await this.recordScanResult(result, job, request.reason ?? reason)
+      await this.recordScanResult(result, job, reason, request.reason ?? reason)
       return result
     } catch (error) {
       await this.recordScanFailure(
@@ -586,6 +586,7 @@ export class IndexingRuntime {
         error instanceof Error ? error.message : String(error),
         job,
         {
+          reason,
           trigger: request.reason ?? reason,
           errorCode: 'runtime'
         }
@@ -622,7 +623,7 @@ export class IndexingRuntime {
     const result = await this.scanScheduler.scanSourcesWithResult(eligible.sources, reason)
     const enrichedResult = this.withScanSkippedSources(result, allSources.length, eligible.skipped)
     for (const sourceResult of result.results) {
-      await this.recordScanResult(sourceResult, jobs.get(sourceResult.sourceId), reason)
+      await this.recordScanResult(sourceResult, jobs.get(sourceResult.sourceId), reason, reason)
     }
     for (const failure of result.errors) {
       await this.recordScanFailure(
@@ -632,6 +633,7 @@ export class IndexingRuntime {
         failure.message,
         jobs.get(failure.sourceId),
         {
+          reason,
           phase: failure.phase,
           batches: failure.batches,
           records: failure.records,
@@ -1139,12 +1141,14 @@ export class IndexingRuntime {
   private async recordScanResult(
     result: ScanSchedulerResult,
     job?: IndexedSourceRuntimeTaskJob,
+    reason?: string,
     trigger?: string
   ): Promise<void> {
     const taskState = buildIndexedSourceScanTaskState({
       sourceId: result.sourceId,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
+      reason,
       trigger,
       batches: result.batches,
       records: result.records,
@@ -1166,6 +1170,7 @@ export class IndexingRuntime {
     error: string,
     job?: IndexedSourceRuntimeTaskJob,
     summary?: {
+      reason?: string
       phase?: string
       batches?: number
       records?: number
@@ -1180,6 +1185,7 @@ export class IndexingRuntime {
       completedAt,
       status: 'failed',
       error,
+      reason: summary?.reason,
       trigger: summary?.trigger,
       errorCode: summary?.errorCode,
       phase: summary?.phase,
@@ -1213,6 +1219,7 @@ export class IndexingRuntime {
       completedAt,
       status: 'skipped',
       skipReason: reason,
+      reason,
       trigger: summary?.trigger,
       errorCode: summary?.errorCode,
       job

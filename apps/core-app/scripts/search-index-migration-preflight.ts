@@ -387,6 +387,14 @@ async function buildSnapshot(
         [sourceId]
       )
     : 0
+  const sourceRecordType =
+    sourceId === 'file-provider' ? 'file' : sourceId === 'app-provider' ? 'app' : null
+  const sourceFilesRows =
+    sourceRecordType && hasColumn(tables.files, 'type')
+      ? await safeCount(client, 'SELECT count(*) AS count FROM files WHERE type = ?', [
+          sourceRecordType
+        ])
+      : (tables.files.rowCount ?? 0)
 
   return {
     generatedAt: new Date().toISOString(),
@@ -409,7 +417,7 @@ async function buildSnapshot(
       sourceIndexedRows,
       sourceKeywordRows,
       sourceMetaRows,
-      filesRows: tables.files.rowCount ?? 0,
+      filesRows: sourceFilesRows,
       fileFtsRows: tables.fileFts.exists ? (tables.fileFts.rowCount ?? 0) : null,
       orphanKeywordRows:
         hasKeywordMappings && hasSearchIndex

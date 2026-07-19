@@ -94,8 +94,10 @@ migration evidence, or rollback capability.
       no FileProvider implementation detail.
 - [x] Source-scoped rollback switches one source to the previous writer, runs a
       reconcile, and never enables both writers.
-- [ ] Copy-based migration preflight/simulation, focused tests, type-check, and
-  packaged indexing diagnostics pass.
+- [x] Copy-based migration preflight/simulation, focused tests, type-check, and
+  packaged indexing diagnostics pass. Real-profile query-only/copy evidence and
+  isolated packaged maintenance scan both passed on 2026-07-18; the source DB
+  checksum remained unchanged and legacy `file_fts` retained.
 - [x] Legacy `file_fts` retain policy is unchanged.
 - [x] App and File first-run contract tests keep the scan unfinished while a
       concurrent reader observes an earlier committed matching batch.
