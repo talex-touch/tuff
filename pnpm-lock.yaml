@@ -81,7 +81,7 @@ catalogs:
       specifier: ^4.20260702.1
       version: 4.20260702.1
     baseline-browser-mapping:
-      specifier: ^2.10.42
+      specifier: ^2.10.43
       version: 2.10.43
     eslint:
       specifier: ^9.39.4
@@ -143,18 +143,18 @@ overrides:
   diff@^4.0.0: 4.0.4
   diff@^8.0.0: 8.0.4
   esbuild: 0.28.1
-  fast-xml-parser: 5.9.3
   fast-uri: 3.1.2
-  form-data: 4.0.6
+  fast-xml-parser: 5.9.3
   flatted: 3.4.2
   follow-redirects: 1.16.0
+  form-data: 4.0.6
   h3: 1.15.11
   hono: 4.12.25
   immutable: 5.1.9
-  langsmith: 0.6.0
   ip-address: 10.1.1
   js-cookie: 3.0.7
   js-yaml: 4.2.0
+  langsmith: 0.6.0
   launch-editor: 2.14.1
   lodash: 4.18.1
   lodash-es: 4.18.1
@@ -169,8 +169,8 @@ overrides:
   picomatch@^2.0.0: 2.3.2
   picomatch@^4.0.0: 4.0.5
   postcss: 8.5.16
-  qs: 6.15.2
   preact: 10.29.6
+  qs: 6.15.2
   rollup@^2.0.0: 2.80.0
   rollup@^3.0.0: 3.30.0
   rollup@^4.0.0: 4.62.2
@@ -182,12 +182,12 @@ overrides:
   svgo: 4.0.1
   tar: 7.5.19
   undici@^6.0.0: 6.27.0
-  ws: 8.21.0
   undici@^7.0.0: 7.28.0
   unhead: 2.1.15
   unplugin: ^2.3.11
   uuid: 14.0.1
   vite: 7.3.6
+  ws: 8.21.0
   yaml@^1.0.0: 1.10.3
   yaml@^2.0.0: 2.9.0
   yauzl: 3.4.0
@@ -6888,11 +6888,6 @@ packages:
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
-
-  baseline-browser-mapping@2.10.23:
-    resolution: {integrity: sha512-xwVXGqevyKPsiuQdLj+dZMVjidjJV508TBqexND5HrF89cGdCYCJFB3qhcxRHSeMctdCfbR1jrxBajhDy7o29g==}
-    engines: {node: '>=6.0.0'}
-    hasBin: true
 
   baseline-browser-mapping@2.10.43:
     resolution: {integrity: sha512-AjYpR78kDWAY3Efj+cDTFH9t9SCoL7OoTp1BOb0mQV7S+6CiLwnWM3FyxhJtdPufDFKzmCSFoUncKjWgJEZTCQ==}
@@ -20596,8 +20591,6 @@ snapshots:
 
   base64-js@1.5.1: {}
 
-  baseline-browser-mapping@2.10.23: {}
-
   baseline-browser-mapping@2.10.43: {}
 
   better-sqlite3@12.11.1:
@@ -20688,7 +20681,7 @@ snapshots:
 
   browserslist@4.28.0:
     dependencies:
-      baseline-browser-mapping: 2.10.23
+      baseline-browser-mapping: 2.10.43
       caniuse-lite: 1.0.30001754
       electron-to-chromium: 1.5.253
       node-releases: 2.0.27
