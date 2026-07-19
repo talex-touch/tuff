@@ -719,3 +719,36 @@ Resolved master conflicts, preserved Pi-only orchestration and CoreBox/plugin se
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Close single search-index writer acceptance
+
+**Date**: 2026-07-18
+**Task**: Close single search-index writer acceptance
+**Branch**: `master`
+
+### Summary
+
+Closed the single-writer task with real-profile query-only/copy evidence, correlated migration verification, and a passing isolated packaged scan. Fixed provider-scoped preflight parity, moved the remaining shared keyword-index DDL into the writer, preserved scan reason/trigger diagnostics, and accepted already-migrated scan_progress no-op evidence.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5f2f4ab99` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

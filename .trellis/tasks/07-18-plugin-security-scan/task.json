@@ -3,7 +3,7 @@
   "name": "plugin-security-scan",
   "title": "实施插件 Security Scan",
   "description": "对不可变 TPEX 执行共享、分级、可审计且不泄密的安全扫描。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": "feature",
   "scope": "plugin-security-scan",
   "package": null,
