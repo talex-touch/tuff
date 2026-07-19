@@ -8,9 +8,7 @@ definePageMeta({
 
 const { t } = useI18n()
 const { doc: privacyDoc } = usePolicyMarkdown('privacy')
-const { doc: protocolDoc } = usePolicyMarkdown('protocol')
-
-const resolvedDoc = computed(() => privacyDoc.value ?? protocolDoc.value ?? {})
+const resolvedDoc = computed(() => privacyDoc.value ?? {})
 
 useHead({
   title: t('privacy.title'),
