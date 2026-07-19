@@ -62,7 +62,7 @@ jobs:
 
     steps:
       - name: Check out git repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Python (for native dependencies)
         uses: actions/setup-python@v6
@@ -825,7 +825,7 @@ jobs:
           echo "Linux: ${{ needs.build-and-release.result == 'success' }}"
 
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -1162,7 +1162,7 @@ jobs:
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
