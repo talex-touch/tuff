@@ -395,4 +395,13 @@ const coreBoxCommands = computed<CoreBoxCommand[]>(() =>
     letter-spacing: 0.22em;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 </style>
