@@ -397,7 +397,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="docs-layout-root relative min-h-screen flex flex-col bg-white text-black dark:bg-dark dark:text-light"
-    :class="{ 'docs-layout-root--tutorial dark': isTutorialDocs }"
+    :class="{ 'docs-layout-root--tutorial': isTutorialDocs }"
   >
     <div class="docs-layout-stage relative flex-1">
       <div class="docs-layout-background pointer-events-none absolute inset-0 overflow-hidden">
@@ -535,7 +535,16 @@ onBeforeUnmount(() => {
 }
 
 .docs-layout-root--tutorial {
-  /* Quiet editorial reading surface: near-black, no neon fog. */
+  /* Same theme as the rest of docs; only a calmer field wash. */
+  background:
+    radial-gradient(ellipse 90% 50% at 50% -12%, color-mix(in srgb, var(--tx-color-primary, #409eff) 7%, transparent), transparent 62%),
+    var(--tx-bg-color, #fff);
+  color: var(--tx-text-color-primary, #111);
+}
+
+.dark .docs-layout-root--tutorial,
+[data-theme='dark'] .docs-layout-root--tutorial,
+.docs-layout-root--tutorial.dark {
   background:
     radial-gradient(ellipse 90% 55% at 50% -8%, rgba(148, 163, 184, 0.07), transparent 58%),
     linear-gradient(180deg, #07080a 0%, #0b0c0f 48%, #07080a 100%);
@@ -619,10 +628,15 @@ onBeforeUnmount(() => {
 }
 
 .docs-layout-root--tutorial .docs-edge-blur {
-  background: linear-gradient(to bottom, rgba(7, 8, 10, 0.72), transparent);
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--tx-bg-color, #fff) 78%, transparent), transparent);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   opacity: 1;
+}
+
+.dark .docs-layout-root--tutorial .docs-edge-blur,
+[data-theme='dark'] .docs-layout-root--tutorial .docs-edge-blur {
+  background: linear-gradient(to bottom, rgba(7, 8, 10, 0.72), transparent);
 }
 
 .docs-edge-blur--top {
@@ -657,17 +671,31 @@ onBeforeUnmount(() => {
 .docs-tutorial-background__grain {
   position: absolute;
   inset: 0;
-  opacity: 0.035;
+  opacity: 0.02;
   background-image:
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.9) 0.65px, transparent 0.75px);
+    radial-gradient(circle at 1px 1px, currentColor 0.65px, transparent 0.75px);
   background-size: 18px 18px;
+  color: rgba(15, 23, 42, 0.9);
   mask-image: radial-gradient(ellipse 80% 60% at 50% 18%, black 0%, transparent 78%);
   -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 18%, black 0%, transparent 78%);
+}
+
+.dark .docs-tutorial-background__grain,
+[data-theme='dark'] .docs-tutorial-background__grain {
+  opacity: 0.035;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .docs-tutorial-background__veil {
   position: absolute;
   inset: 0;
+  background:
+    radial-gradient(ellipse 70% 42% at 50% 0%, color-mix(in srgb, var(--tx-color-primary, #409eff) 5%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--tx-text-color-primary) 2%, transparent), transparent 30%);
+}
+
+.dark .docs-tutorial-background__veil,
+[data-theme='dark'] .docs-tutorial-background__veil {
   background:
     radial-gradient(ellipse 70% 42% at 50% 0%, rgba(226, 232, 240, 0.045), transparent 70%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.18));
