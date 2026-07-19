@@ -1123,6 +1123,9 @@ export class SearchIndexService {
 
   private async createKeywordMappingIndexes(): Promise<void> {
     await this.db.run(
+      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`
+    )
+    await this.db.run(
       sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_provider_keyword ON keyword_mappings(provider_id, keyword)`
     )
     await this.db.run(

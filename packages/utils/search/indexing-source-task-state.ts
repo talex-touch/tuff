@@ -36,6 +36,7 @@ export interface IndexedSourceScanTaskStateInput {
   startedAt: number;
   completedAt: number;
   now?: number;
+  reason?: string;
   trigger?: string;
   attempt?: number;
   batches?: number;
@@ -191,6 +192,7 @@ export function buildIndexedSourceScanTaskState(
     input.now,
   );
   const durationMs = calculateDurationMs(timestamps);
+  const reason = normalizeOptionalTaskText(input.reason);
   const trigger = normalizeOptionalTaskText(input.trigger);
   const attempt = normalizeOptionalTaskCount(input.attempt);
   const errorCode = normalizeOptionalTaskText(input.errorCode);
@@ -212,6 +214,7 @@ export function buildIndexedSourceScanTaskState(
     status === "succeeded" || status === "failed"
       ? {
           durationMs,
+          ...(reason ? { reason } : {}),
           ...(trigger ? { trigger } : {}),
           ...(attempt !== undefined ? { attempt } : {}),
           batches,
@@ -223,6 +226,7 @@ export function buildIndexedSourceScanTaskState(
         }
       : {
           durationMs,
+          ...(reason ? { reason } : {}),
           ...(trigger ? { trigger } : {}),
           ...(attempt !== undefined ? { attempt } : {}),
         };
@@ -232,6 +236,7 @@ export function buildIndexedSourceScanTaskState(
     startedAt: timestamps.startedAt,
     completedAt: timestamps.completedAt,
     durationMs,
+    ...(reason ? { reason } : {}),
     ...(trigger ? { trigger } : {}),
     ...(attempt !== undefined ? { attempt } : {}),
     jobId: input.job?.id,

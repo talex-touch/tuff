@@ -3088,13 +3088,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (!this.dbUtils) return stats
 
     const db = this.dbUtils.getDb()
-    const indexEnsuredStart = performance.now()
-    await this.ensureKeywordIndexes(db)
-    options?.signal?.throwIfAborted()
     // file_index_progress 表由数据库迁移自动创建，无需手动创建
-    this.logDebug('Keyword indexes ensured', {
-      duration: formatDuration(performance.now() - indexEnsuredStart)
-    })
     const excludePathsSet = this.databaseFilePath ? new Set([this.databaseFilePath]) : undefined
 
     // If FTS5 table was recreated (schema migration), clear scan_progress
@@ -3536,12 +3530,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
   async onSearch(query: TuffQuery, signal: AbortSignal): Promise<TuffSearchResult> {
     return await this.searchResultService.search(query, signal)
-  }
-
-  private async ensureKeywordIndexes(db: LibSQLDatabase<typeof schema>): Promise<void> {
-    await db.run(
-      sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`
-    )
   }
 
   async onExecute(args: IExecuteArgs): Promise<IProviderActivate | null> {

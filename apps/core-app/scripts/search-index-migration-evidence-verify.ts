@@ -519,8 +519,26 @@ function verifyScanProgressSimulation(
   if (readBoolean(artifact, ['sourceSnapshotUnchanged']) !== true) {
     failures.push('scan_progress simulation sourceSnapshotUnchanged must be true')
   }
-  if (readBoolean(artifact, ['execution', 'executed']) !== true) {
-    failures.push('scan_progress simulation must execute migration only on the copy')
+  const beforeStatus = readString(artifact, ['before', 'plan', 'status'])
+  const afterStatus = readString(artifact, ['after', 'plan', 'status'])
+  const executed = readBoolean(artifact, ['execution', 'executed'])
+  if (beforeStatus === null) {
+    if (executed !== true) {
+      failures.push('scan_progress simulation must execute migration only on the copy')
+    }
+  } else if (beforeStatus === 'ready') {
+    if (executed !== true) {
+      failures.push('scan_progress simulation must execute a ready migration only on the copy')
+    }
+  } else if (beforeStatus === 'not-needed') {
+    if (executed !== false) {
+      failures.push('scan_progress simulation must remain a no-op when migration is not needed')
+    }
+  } else {
+    failures.push('scan_progress simulation before.plan.status must be ready or not-needed')
+  }
+  if (beforeStatus !== null && afterStatus !== 'not-needed') {
+    failures.push('scan_progress simulation after.plan.status must be not-needed')
   }
   if (requireRealProfileEvidence) {
     if (readString(artifact, ['evidenceSource', 'scope']) !== 'real-profile') {
@@ -552,8 +570,22 @@ function verifyScanProgressPlan(artifact: unknown, requireRealProfileEvidence: b
   if (readBoolean(artifact, ['plan', 'destructiveActions']) !== false) {
     failures.push('scan_progress plan.plan.destructiveActions must be false')
   }
-  if (readBoolean(artifact, ['plan', 'requiresApproval']) !== true) {
-    failures.push('scan_progress plan.plan.requiresApproval must be true')
+  const planStatus = readString(artifact, ['plan', 'status'])
+  const requiresApproval = readBoolean(artifact, ['plan', 'requiresApproval'])
+  if (planStatus === null) {
+    if (requiresApproval !== true) {
+      failures.push('scan_progress plan.plan.requiresApproval must be true')
+    }
+  } else if (planStatus === 'ready') {
+    if (requiresApproval !== true) {
+      failures.push('scan_progress ready plan must require approval')
+    }
+  } else if (planStatus === 'not-needed') {
+    if (requiresApproval !== false) {
+      failures.push('scan_progress not-needed plan must not require approval')
+    }
+  } else {
+    failures.push('scan_progress plan.plan.status must be ready or not-needed')
   }
   if ((arrayLength(artifact, ['plan', 'blockers']) ?? 1) !== 0) {
     failures.push('scan_progress plan blockers must be empty')
