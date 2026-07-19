@@ -160,7 +160,14 @@ onUnmounted(() => {
   left: 0;
 
   width: 100%;
-  height: 64px;
+  /* Reserve the floating pill band (top offset + pill height). */
+  height: 88px;
+  pointer-events: none;
+}
+
+.TuffHeader-Main,
+.TuffHeader-Main * {
+  pointer-events: auto;
 }
 
 .TuffHeader-Main {
