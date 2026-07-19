@@ -117,7 +117,8 @@ onUnmounted(() => {
             :key="link.to"
             :to="link.to"
             class="rounded-full px-2.5 py-1 text-black/65 font-medium no-underline transition-colors duration-200 hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
-            :class="isActiveLink(link) ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
+            :data-active="isActiveLink(link) || undefined"
+              :class="isActiveLink(link) ? 'is-active bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
           >
             {{ link.label }}
           </NuxtLink>
