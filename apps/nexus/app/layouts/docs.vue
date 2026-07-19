@@ -408,9 +408,14 @@ onBeforeUnmount(() => {
             </ClientOnly>
           </div>
           <div v-else-if="isTutorialDocs" class="docs-tutorial-background" aria-hidden="true">
-            <div class="docs-tutorial-background__beam" />
+            <div class="docs-tutorial-background__grain" />
+            <div class="docs-tutorial-background__veil" />
           </div>
-          <div v-else class="docs-background absolute left-1/2 h-[420px] w-[820px] rounded-[200px] from-primary/6 via-primary/3 to-transparent bg-gradient-to-br blur-3xl -top-32 -translate-x-1/2 dark:from-light/10 dark:via-light/5 dark:to-transparent" />
+          <div
+            v-else
+            class="docs-background absolute inset-x-0 top-0 h-[42vh] max-h-[420px]"
+            aria-hidden="true"
+          />
         </Transition>
       </div>
       <div class="docs-edge-blur docs-edge-blur--top" aria-hidden="true" />
@@ -530,10 +535,10 @@ onBeforeUnmount(() => {
 }
 
 .docs-layout-root--tutorial {
+  /* Quiet editorial reading surface: near-black, no neon fog. */
   background:
-    radial-gradient(circle at 50% -10%, rgba(96, 165, 250, 0.22), transparent 34%),
-    radial-gradient(circle at 78% 78%, rgba(168, 85, 247, 0.18), transparent 32%),
-    linear-gradient(135deg, #050607 0%, #111217 58%, #050607 100%);
+    radial-gradient(ellipse 90% 55% at 50% -8%, rgba(148, 163, 184, 0.07), transparent 58%),
+    linear-gradient(180deg, #07080a 0%, #0b0c0f 48%, #07080a 100%);
   color: var(--tx-text-color-primary, #f5f7fa);
 }
 
@@ -603,13 +608,21 @@ onBeforeUnmount(() => {
   left: 0;
   z-index: 20;
   width: 100vw;
-  height: 72px;
+  height: 64px;
   pointer-events: none;
-  backdrop-filter: blur(1.05rem);
-  opacity: 0.85;
-  mask-image: linear-gradient(to bottom, black 0%, black 48%, transparent 100%);
-  -webkit-backdrop-filter: blur(1.05rem);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 48%, transparent 100%);
+  /* Softer top/bottom fade instead of heavy frosted glass. */
+  backdrop-filter: blur(0.55rem) saturate(1.05);
+  opacity: 0.72;
+  mask-image: linear-gradient(to bottom, black 0%, black 42%, transparent 100%);
+  -webkit-backdrop-filter: blur(0.55rem) saturate(1.05);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 42%, transparent 100%);
+}
+
+.docs-layout-root--tutorial .docs-edge-blur {
+  background: linear-gradient(to bottom, rgba(7, 8, 10, 0.72), transparent);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  opacity: 1;
 }
 
 .docs-edge-blur--top {
@@ -629,28 +642,54 @@ onBeforeUnmount(() => {
   min-height: 520px;
   overflow: hidden;
   background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.045), transparent 42%, rgba(244, 63, 94, 0.045)),
-    linear-gradient(180deg, rgba(6, 182, 212, 0.025), transparent 48%);
-  opacity: 0.42;
+    linear-gradient(180deg, rgba(15, 23, 42, 0.04), transparent 46%),
+    linear-gradient(135deg, rgba(99, 102, 241, 0.03), transparent 48%, rgba(244, 63, 94, 0.025));
+  opacity: 0.34;
 }
 
 .docs-tutorial-background {
   position: absolute;
-  inset: -20%;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(96, 165, 250, 0.2), transparent 28%),
-    radial-gradient(circle at 76% 72%, rgba(168, 85, 247, 0.16), transparent 30%);
-  filter: blur(18px);
-  opacity: 0.62;
+  inset: 0;
+  overflow: hidden;
+  background: transparent;
 }
 
-.docs-tutorial-background__beam {
+.docs-tutorial-background__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.9) 0.65px, transparent 0.75px);
+  background-size: 18px 18px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 18%, black 0%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 18%, black 0%, transparent 78%);
+}
+
+.docs-tutorial-background__veil {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(115deg, transparent 22%, rgba(255, 255, 255, 0.08) 42%, transparent 58%),
-    radial-gradient(circle at 20% 72%, rgba(64, 158, 255, 0.18), transparent 28%);
-  transform: rotate(-8deg);
+    radial-gradient(ellipse 70% 42% at 50% 0%, rgba(226, 232, 240, 0.045), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.18));
+}
+
+.docs-background {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% -10%, color-mix(in srgb, var(--tx-color-primary, #409eff) 8%, transparent), transparent 68%);
+  opacity: 0.55;
+  filter: blur(2px);
+}
+
+.dark .docs-background,
+[data-theme='dark'] .docs-background {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% -10%, rgba(148, 163, 184, 0.08), transparent 68%);
+  opacity: 0.7;
+}
+
+.docs-layout-root--tutorial .docs-layout-foreground {
+  /* Slightly higher contrast reading stack on the quiet dark field. */
+  --docs-sidebar-ink: rgba(255, 255, 255, 0.78);
 }
 
 .tuffex-docs-hero-bg-fade-enter-active,
@@ -791,7 +830,7 @@ onBeforeUnmount(() => {
 <style>
 .dark .docs-tuffex-hero-bg-frame,
 [data-theme='dark'] .docs-tuffex-hero-bg-frame {
-  --tuffex-docs-hero-tone: 2.1;
-  opacity: 0.46;
+  --tuffex-docs-hero-tone: 1.15;
+  opacity: 0.28;
 }
 </style>
