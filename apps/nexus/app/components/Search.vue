@@ -5,6 +5,8 @@ import { fetchContentApi } from '~/utils/content-api-client'
 
 const searchTerm = ref('')
 const searchResults = ref<DocsSearchItem[]>([])
+const hasSearched = ref(false)
+const isSearching = ref(false)
 const { locale, t } = useI18n()
 let searchRunId = 0
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -12,6 +14,7 @@ let cachedItems: DocsSearchItem[] | null = null
 let cachedLocale: DocsLocale | null = null
 
 const docsLocale = computed<DocsLocale>(() => (locale.value === 'zh' ? 'zh' : 'en'))
+const showEmpty = computed(() => hasSearched.value && !isSearching.value && searchTerm.value.trim().length > 0 && searchResults.value.length === 0)
 
 async function loadSearchIndex(targetLocale: DocsLocale) {
   if (cachedItems && cachedLocale === targetLocale)
@@ -43,19 +46,30 @@ watch(searchTerm, (newTerm) => {
   }
 
   if (!query) {
+    hasSearched.value = false
+    isSearching.value = false
     searchResults.value = []
     return
   }
 
+  isSearching.value = true
   debounceTimer = setTimeout(async () => {
     try {
       const items = await loadSearchIndex(docsLocale.value)
-      if (runId === searchRunId)
+      if (runId === searchRunId) {
         searchResults.value = filterItems(items, query)
+        hasSearched.value = true
+      }
     }
     catch {
-      if (runId === searchRunId)
+      if (runId === searchRunId) {
         searchResults.value = []
+        hasSearched.value = true
+      }
+    }
+    finally {
+      if (runId === searchRunId)
+        isSearching.value = false
     }
   }, 140)
 })
@@ -66,8 +80,8 @@ watch(searchTerm, (newTerm) => {
     <TxSearchInput
       v-model="searchTerm"
       class="w-full"
-       :placeholder="t('search.placeholder', 'Search...')"
-       :aria-label="t('search.ariaLabel', 'Search documentation')"
+      :placeholder="t('search.placeholder')"
+      :aria-label="t('search.openAria')"
     />
     <ul
       v-if="searchResults.length"
@@ -86,5 +100,11 @@ watch(searchTerm, (newTerm) => {
         </NuxtLink>
       </li>
     </ul>
+    <div
+      v-else-if="showEmpty"
+      class="absolute inset-x-0 top-[calc(100%+0.5rem)] z-20 rounded-2xl border border-primary/10 bg-white/95 px-4 py-3 text-sm text-black/60 shadow-xl backdrop-blur-sm dark:border-light/10 dark:bg-dark/90 dark:text-light/70"
+    >
+      {{ t('search.empty') }}
+    </div>
   </div>
 </template>
