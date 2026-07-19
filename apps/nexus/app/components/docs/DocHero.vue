@@ -85,9 +85,9 @@ const hasTags = computed(() => tagItems.value.length > 0)
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* Single restrained top highlight — no noisy double grid. */
+  /* Single restrained center highlight — no noisy double grid. */
   background:
-    radial-gradient(ellipse 90% 70% at 12% 0%, color-mix(in srgb, var(--tx-color-primary) 10%, transparent), transparent 55%),
+    radial-gradient(circle at center, color-mix(in srgb, var(--tx-color-primary) 10%, transparent), transparent 55%),
     linear-gradient(180deg, color-mix(in srgb, var(--tx-text-color-primary) 3.5%, transparent), transparent 46%);
   content: '';
   opacity: 1;
