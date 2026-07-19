@@ -24,6 +24,7 @@ import { useStoreCategories } from '~/composables/useStoreCategories'
 import { useStoreFormatters } from '~/composables/useStoreFormatters'
 import { useToast } from '~/composables/useToast'
 import { requestJson } from '~/utils/request'
+import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
 const LazyFlipDialog = defineAsyncComponent(() => import('~/components/base/dialog/FlipDialog.vue'))
 const LazyPluginMetaHeader = defineAsyncComponent(() => import('~/components/plugin/PluginMetaHeader.vue'))
@@ -42,7 +43,8 @@ definePageMeta({
 
 defineI18nRoute(false)
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const docsDevLink = computed(() => toLocalizedDocsPath('/docs/dev', locale.value === 'zh' ? 'zh' : 'en'))
 const route = useRoute()
 const toast = useToast()
 const { user, status, isAuthenticated } = useAuthUser()
@@ -495,7 +497,23 @@ useSeoMeta({
         v-if="!hasPlugins"
         class="border border-primary/10 rounded-3xl bg-white/80 px-6 py-12 text-center text-sm text-black/70 shadow-sm dark:border-light/15 dark:bg-dark/30 dark:text-light/80"
       >
-        {{ t('store.results.none') }}
+        <p class="m-0">
+{{ t('store.results.none') }}
+</p>
+        <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
+          <NuxtLink
+            class="inline-flex items-center gap-1.5 rounded-full bg-dark px-3 py-1.5 text-xs text-white font-semibold no-underline dark:bg-light dark:text-dark"
+            :to="docsDevLink"
+          >
+            {{ t('nav.developer') }}
+          </NuxtLink>
+          <NuxtLink
+            class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 px-3 py-1.5 text-xs text-black/70 font-semibold no-underline dark:border-light/20 dark:text-light/80"
+            to="/updates"
+          >
+            {{ t('nav.download') }}
+          </NuxtLink>
+        </div>
       </div>
       <div
         v-else-if="!hasResults"
