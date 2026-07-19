@@ -28,6 +28,17 @@ const isAuthShellRoute = computed(() => {
 const { open: globalSearchOpen, closeSearch, summonSearch } = useGlobalSearchState()
 const { initLocale, reconcileClientLocale, setLocaleSerial, syncFromProfileOnAuth } = useLocaleOrchestrator()
 const { status, getSession } = useNexusAuth()
+
+useHead(() => {
+  if (!isProtectedRoute.value)
+    return {}
+  if (status.value === 'authenticated')
+    return {}
+  return {
+    title: status.value === 'loading' ? 'Checking session · Tuff Nexus' : 'Sign in required · Tuff Nexus',
+    meta: [{ name: 'robots', content: 'noindex, nofollow' }],
+  }
+})
 interface AppAuthUserState {
   id?: string
   locale?: string | null
