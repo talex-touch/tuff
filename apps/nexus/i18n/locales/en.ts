@@ -410,6 +410,7 @@ export default {
       count: '{count} official plugins',
       filtered: '{count} of {total} official plugins',
       empty: 'No official plugins match your filters.',
+      clearFilters: 'Clear filters',
       none: 'No official plugins are available yet.',
       loadMore: 'Load more plugins',
       loadMoreFailed: 'Failed to load more plugins.',

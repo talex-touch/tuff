@@ -318,6 +318,7 @@ export default defineNuxtConfig({
   },
 
   routeRules: {
+    '/terms': { redirect: '/license' },
     '/updates': { disableServerSideAuth: true },
     '/updates/**': { disableServerSideAuth: true },
   } as Record<string, Record<string, unknown>>,

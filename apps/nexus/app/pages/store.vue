@@ -170,6 +170,14 @@ const allPlugins = computed(() => (pluginsPayload.value?.plugins ?? []).filter(p
 const displayedPluginCount = computed(() => allPlugins.value.length)
 const totalPlugins = computed(() => pluginsPayload.value?.total ?? displayedPluginCount.value)
 const hasActiveStoreFilter = computed(() => Boolean(activeSearch.value) || activeCategory.value !== 'all')
+
+function clearStoreFilters() {
+  filters.search = ''
+  filters.category = 'all'
+  activeSearch.value = ''
+  activeCategory.value = 'all'
+  applyStoreSearch('')
+}
 const canLoadMorePlugins = computed(() => displayedPluginCount.value < totalPlugins.value)
 
 async function loadMorePlugins() {
@@ -519,7 +527,18 @@ useSeoMeta({
         v-else-if="!hasResults"
         class="border border-primary/10 rounded-3xl bg-white/80 px-6 py-12 text-center text-sm text-black/70 shadow-sm dark:border-light/15 dark:bg-dark/30 dark:text-light/80"
       >
-        {{ t('store.results.empty') }}
+        <p class="m-0">
+{{ t('store.results.empty') }}
+</p>
+        <div class="mt-4 flex justify-center">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-transparent px-3 py-1.5 text-xs text-black/70 font-semibold transition hover:bg-dark/5 dark:border-light/20 dark:text-light/80 dark:hover:bg-light/10"
+            @click="clearStoreFilters"
+          >
+            {{ t('store.results.clearFilters') }}
+          </button>
+        </div>
       </div>
       <div
         v-else
