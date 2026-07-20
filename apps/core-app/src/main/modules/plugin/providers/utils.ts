@@ -46,6 +46,7 @@ export async function downloadToTempFile(
       method: 'GET',
       url,
       timeoutMs: requestTimeout,
+      headers: options?.headers,
       responseType: 'stream'
     })
     .catch((error) => {

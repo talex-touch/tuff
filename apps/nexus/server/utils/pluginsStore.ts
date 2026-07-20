@@ -380,6 +380,7 @@ interface PluginVisibilityOptions {
   viewerIsAdmin?: boolean
   includeVersions?: boolean
   forStore?: boolean
+  audience?: PluginReleaseAudience
   statuses?: PluginStatus[]
 }
 
@@ -1057,7 +1058,7 @@ function versionIsVisible(
   const isOwner = options.viewerId === plugin.userId
 
   if (options.forStore)
-    return getPluginVersionEligibility(plugin, version, 'public').eligible
+    return getPluginVersionEligibility(plugin, version, options.audience ?? 'public').eligible
 
   if (viewerIsAdmin || isOwner)
     return true

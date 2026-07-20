@@ -9,6 +9,7 @@ import {
   incrementPluginInstalls,
 } from '../../../../utils/pluginsStore'
 import { recordPlatformGovernanceEvent } from '../../../../utils/platformGovernanceStore'
+import { resolvePluginStoreAudience } from '../../../../utils/pluginStoreAccess'
 import { resolveRequestGeo } from '../../../../utils/requestGeo'
 
 // region debug [DBG-nexus-coreapp-planprd-2026-01-12]
@@ -45,10 +46,12 @@ export default defineEventHandler(async (event) => {
 
   if (!slug)
     throw createError({ statusCode: 400, statusMessage: 'Plugin slug is required.' })
+  const audience = await resolvePluginStoreAudience(event)
 
   const plugin = await getPluginBySlug(event, slug, {
     includeVersions: true,
     forStore: true,
+    audience,
   })
 
   if (!plugin)
@@ -65,7 +68,7 @@ export default defineEventHandler(async (event) => {
 
   if (!targetVersion?.packageUrl)
     throw createError({ statusCode: 404, statusMessage: 'No downloadable version available.' })
-  if (!getPluginVersionEligibility(plugin, targetVersion, 'public').eligible)
+  if (!getPluginVersionEligibility(plugin, targetVersion, audience).eligible)
     throw createError({ statusCode: 404, statusMessage: 'No admitted version available.' })
 
   const artifact = await getPluginPackage(event, targetVersion.packageKey, {
@@ -139,5 +142,8 @@ export default defineEventHandler(async (event) => {
     },
   }).catch(() => {})
 
-  return sendRedirect(event, targetVersion.packageUrl, 302)
+  const packageUrl = audience === 'beta'
+    ? `${targetVersion.packageUrl}?channel=BETA`
+    : targetVersion.packageUrl
+  return sendRedirect(event, packageUrl, 302)
 })

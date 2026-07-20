@@ -31,10 +31,16 @@ describe('downloadToTempFile', () => {
     })
 
     await expect(
-      downloadToTempFile('https://example.test/plugin.tpex', '.tpex', { timeout: 42 })
+      downloadToTempFile('https://example.test/plugin.tpex', '.tpex', {
+        timeout: 42,
+        headers: { Authorization: 'Bearer acceptance-token' }
+      })
     ).rejects.toMatchObject({
       name: 'NetworkTimeoutError',
       message: 'NETWORK_TIMEOUT after 42ms'
     })
+    expect(requestStreamMock).toHaveBeenCalledWith(
+      expect.objectContaining({ headers: { Authorization: 'Bearer acceptance-token' } })
+    )
   })
 })

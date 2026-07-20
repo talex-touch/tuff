@@ -4,6 +4,7 @@ import { getOptionalAuth } from '../../../utils/auth'
 import { getPluginPackage } from '../../../utils/pluginPackageStorage'
 import { getUserById } from '../../../utils/authStore'
 import { buildPluginPackageGovernanceResourceId, findVersionByPackageKey } from '../../../utils/pluginsStore'
+import { resolvePluginStoreAudience } from '../../../utils/pluginStoreAccess'
 
 export default defineEventHandler(async (event) => {
   const key = event.context.params?.key
@@ -17,6 +18,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Package not found.' })
 
   const { plugin, version } = record
+  const audience = await resolvePluginStoreAudience(event)
 
   let viewerId: string | null = null
   let viewerIsAdmin = false
@@ -30,6 +32,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const canAccessBeta = () => {
+    if (audience === 'beta')
+      return true
     if (version.channel !== 'BETA')
       return true
     if (viewerIsAdmin)

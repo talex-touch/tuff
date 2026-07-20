@@ -20,6 +20,9 @@ const pluginsStoreMocks = vi.hoisted(() => ({
 const pluginPackageStorageMocks = vi.hoisted(() => ({
   getPluginPackage: vi.fn(),
 }))
+const pluginStoreAccessMocks = vi.hoisted(() => ({
+  resolvePluginStoreAudience: vi.fn(),
+}))
 
 const governanceMocks = vi.hoisted(() => ({
   recordPlatformGovernanceEvent: vi.fn(),
@@ -47,6 +50,7 @@ vi.mock('h3', () => ({
 }))
 vi.mock('../../../server/utils/pluginPackageStorage', () => pluginPackageStorageMocks)
 vi.mock('../../../server/utils/pluginsStore', () => pluginsStoreMocks)
+vi.mock('../../../server/utils/pluginStoreAccess', () => pluginStoreAccessMocks)
 vi.mock('../../../server/utils/platformGovernanceStore', () => governanceMocks)
 vi.mock('../../../server/utils/requestGeo', () => geoMocks)
 
@@ -80,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   h3Mocks.getQuery.mockReturnValue({ version: version.version })
   h3Mocks.sendRedirect.mockReturnValue({ redirected: version.packageUrl })
+  pluginStoreAccessMocks.resolvePluginStoreAudience.mockResolvedValue('public')
   pluginsStoreMocks.getPluginBySlug.mockResolvedValue(plugin)
   pluginsStoreMocks.getPluginVersionEligibility.mockReturnValue({ eligible: true })
   pluginsStoreMocks.buildPluginPackageGovernanceResourceId.mockReturnValue('plugin-package:version_1')
@@ -130,5 +135,34 @@ describe('/api/store/plugins/:slug/download.tpex', () => {
     expect(h3Mocks.sendRedirect).toHaveBeenCalledWith(event, version.packageUrl, 302)
     expect(result).toEqual({ redirected: version.packageUrl })
     expect(pluginsStoreMocks.blockPluginVersionAdmission).not.toHaveBeenCalled()
+  })
+
+  it('uses the authenticated beta audience across Store and asset redirects', async () => {
+    const betaVersion = {
+      ...version,
+      channel: 'BETA',
+      packageUrl: '/api/plugins/assets/beta-package.tpex',
+    }
+    const betaPlugin = {
+      ...plugin,
+      latestVersionId: betaVersion.id,
+      versions: [betaVersion],
+    }
+    pluginStoreAccessMocks.resolvePluginStoreAudience.mockResolvedValue('beta')
+    pluginsStoreMocks.getPluginBySlug.mockResolvedValue(betaPlugin)
+
+    await handler(event)
+
+    expect(pluginsStoreMocks.getPluginBySlug).toHaveBeenCalledWith(event, plugin.slug, {
+      includeVersions: true,
+      forStore: true,
+      audience: 'beta',
+    })
+    expect(pluginsStoreMocks.getPluginVersionEligibility).toHaveBeenCalledWith(betaPlugin, betaVersion, 'beta')
+    expect(h3Mocks.sendRedirect).toHaveBeenCalledWith(
+      event,
+      '/api/plugins/assets/beta-package.tpex?channel=BETA',
+      302,
+    )
   })
 })
