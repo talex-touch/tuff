@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
 import TuffLandingHero from './landing/TuffLandingHero.vue'
 import TuffLandingStats from './landing/TuffLandingStats.vue'
 import TuffLandingInstantPreview from './landing/TuffLandingInstantPreview.vue'
@@ -22,6 +23,13 @@ const showPricing = false
 
 const vObserve = {
   mounted: (el: HTMLElement) => {
+    const prefersReducedMotion = hasWindow()
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion || typeof IntersectionObserver === 'undefined') {
+      el.classList.add('is-visible')
+      return
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -31,10 +39,10 @@ const vObserve = {
           }
         })
       },
-      { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
+      { threshold: 0.08, rootMargin: '0px 0px -10% 0px' },
     )
     observer.observe(el)
-  }
+  },
 }
 
 useHead({
@@ -114,8 +122,16 @@ useHead({
   padding: 4rem 0;
   box-sizing: border-box;
   opacity: 0;
-  transform: translateY(40px);
-  transition: opacity 0.8s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.8s cubic-bezier(0.22, 0.61, 0.36, 1);
+  transform: translateY(24px);
+  transition: opacity 0.55s cubic-bezier(0.22, 0.61, 0.36, 1), transform 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .TuffHomeV2-Section {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
 .TuffHomeV2-Section.is-visible {

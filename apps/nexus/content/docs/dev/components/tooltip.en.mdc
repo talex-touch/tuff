@@ -41,7 +41,7 @@ code: |
 ::
 
 ## Basic Usage
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -50,10 +50,10 @@ code: |
     </TxTooltip>
   </template>
 ---
-::
+:::
 
 ## Anchor Passthrough
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -65,7 +65,7 @@ code: |
     </TxTooltip>
   </template>
 ---
-::
+:::
 
 ## Click Toggle (close on outside click)
 ::TuffDemoWrapper{demo="TooltipClickOutsideCloseDemo" code-lang="vue"}

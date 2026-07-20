@@ -13,12 +13,21 @@ interface TocFlatLink extends TocLink {
 }
 
 interface OutlineEntry extends TocFlatLink {
-  indent: number
+  level: 0 | 1
 }
 
-interface TreeNode extends OutlineEntry {
-  isLastChild: boolean
-  hasChildren: boolean
+interface EntryGeometry {
+  id: string
+  top: number
+  bottom: number
+  x: number
+}
+
+interface RailGeometry {
+  entries: EntryGeometry[]
+  width: number
+  height: number
+  d: string
 }
 
 const { t } = useI18n()
@@ -31,29 +40,30 @@ const activeHash = ref('')
 const headingElements = ref<Record<string, HTMLElement>>({})
 const SCROLL_OFFSET = 120
 
-// Skeleton entries with hierarchical indentation
-const skeletonEntries = [
-  { width: '72%', indent: 0 },
-  { width: '56%', indent: 1 },
-  { width: '64%', indent: 1 },
-  { width: '88%', indent: 0 },
-  { width: '60%', indent: 1 },
-  { width: '48%', indent: 1 },
-  { width: '76%', indent: 0 },
-]
+// Fumadocs-style rail geometry, limited to two levels.
+// getLineOffset → x of the guide line; getItemOffset → text indent.
+const RAIL_BASE = 8
+function lineOffset(level: number) {
+  return level <= 0 ? RAIL_BASE : RAIL_BASE + 8
+}
+function itemOffset(level: number) {
+  return level <= 0 ? RAIL_BASE + 12 : RAIL_BASE + 24
+}
 
-// Tree line geometry
-// SVG is inside contentRef wrapper (after nav's 6px padding)
-// Link paddingLeft: 14 + indent*12 (from wrapper left)
-// Trunk at 4 + indent*12 (before text start at 14)
-const TREE_LINE_X = 4
-const INDENT_SIZE = 12
-const BRANCH_CURVE_H = 12
-const SKELETON_ROW_HEIGHT = 24
+// Two-level skeleton rows shown while the outline is resolving.
+const skeletonEntries = [
+  { width: '70%', indent: 0 },
+  { width: '52%', indent: 1 },
+  { width: '60%', indent: 1 },
+  { width: '82%', indent: 0 },
+  { width: '48%', indent: 1 },
+]
 
 const navRef = ref<HTMLElement | null>(null)
 const contentRef = ref<HTMLElement | null>(null)
 let navResizeObserver: ResizeObserver | null = null
+
+const geometry = ref<RailGeometry>({ entries: [], width: 0, height: 0, d: '' })
 
 function createThrottleFn<Args extends unknown[]>(fn: (...args: Args) => void, delayMs: number) {
   let lastRun = 0
@@ -107,9 +117,11 @@ function disconnectNavResizeObserver() {
   navResizeObserver = null
 }
 
-// Entry positions for SVG tree lines
-const entryPositions = ref<Map<string, { top: number, centerY: number, height: number }>>(new Map())
-const navContentHeight = ref(0)
+function escapeSelector(value: string) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function')
+    return CSS.escape(value)
+  return value.replace(/["\\]/g, '\\$&')
+}
 
 function normalizeHash(hash: string) {
   const raw = hash.replace(/^#/, '')
@@ -121,11 +133,6 @@ function normalizeHash(hash: string) {
   catch {
     return raw
   }
-}
-
-function isValidSvgPath(path: string) {
-  const trimmed = path.trim()
-  return /^[Mm]/.test(trimmed) && !trimmed.includes('NaN')
 }
 
 function setActiveHash(hash?: string | null) {
@@ -145,23 +152,49 @@ function syncUrlHash(id: string) {
     history.replaceState(history.state, '', `${window.location.pathname}${window.location.search}${next}`)
 }
 
-const updateEntryPositions = createThrottleFn(() => {
-  if (!contentRef.value)
+// Measure the on-screen position of every visible outline link and build the
+// continuous bezier rail path (identical technique to Fumadocs' default TOC).
+const updateGeometry = createThrottleFn(() => {
+  if (!import.meta.client || !contentRef.value)
     return
-  const map = new Map<string, { top: number, centerY: number, height: number }>()
-  const links = contentRef.value.querySelectorAll<HTMLElement>('a[data-id]')
-  const wrapperRect = contentRef.value.getBoundingClientRect()
-  for (const link of links) {
-    const id = link.getAttribute('data-id')
-    if (!id)
+
+  const wrapper = contentRef.value
+  const linkEls = new Map<string, HTMLElement>()
+  wrapper.querySelectorAll<HTMLElement>('a[data-id]').forEach((el) => {
+    const id = el.getAttribute('data-id')
+    if (id)
+      linkEls.set(id, el)
+  })
+
+  const entries: EntryGeometry[] = []
+  let width = 0
+  let height = 0
+  let d = ''
+
+  for (const entry of outlineEntries.value) {
+    const link = linkEls.get(entry.id)
+    if (!link)
       continue
-    const linkRect = link.getBoundingClientRect()
-    const top = linkRect.top - wrapperRect.top
-    const height = linkRect.height
-    map.set(id, { top, centerY: top + height / 2, height })
+    const styles = getComputedStyle(link)
+    const x = lineOffset(entry.level) + 0.5
+    const top = link.offsetTop + Number.parseFloat(styles.paddingTop || '0')
+    const bottom = link.offsetTop + link.clientHeight - Number.parseFloat(styles.paddingBottom || '0')
+
+    width = Math.max(x + 8, width)
+    height = Math.max(height, bottom)
+
+    if (!entries.length) {
+      d += `M${x} ${top} L${x} ${bottom}`
+    }
+    else {
+      const prev = entries[entries.length - 1]!
+      d += ` C ${prev.x} ${top - 4} ${x} ${prev.bottom + 4} ${x} ${top} L${x} ${bottom}`
+    }
+
+    entries.push({ id: entry.id, top, bottom, x })
   }
-  entryPositions.value = map
-  navContentHeight.value = contentRef.value.scrollHeight
+
+  geometry.value = { entries, width, height, d }
 }, 50)
 
 function scrollToHeading(id: string, behavior: ScrollBehavior = 'smooth') {
@@ -235,7 +268,7 @@ if (import.meta.client) {
   const onResize = () => {
     refreshHeadingElements()
     updateActiveFromScroll()
-    updateEntryPositions()
+    updateGeometry()
   }
 
   onMounted(() => {
@@ -247,7 +280,7 @@ if (import.meta.client) {
         scrollToHeading(initialHash, 'auto')
       else
         updateActiveFromScroll()
-      updateEntryPositions()
+      updateGeometry()
     })
     window.addEventListener('hashchange', onHashChange)
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -262,7 +295,7 @@ if (import.meta.client) {
         return
 
       navResizeObserver = new ResizeObserver(() => {
-        updateEntryPositions()
+        updateGeometry()
       })
       navResizeObserver.observe(element)
     },
@@ -274,7 +307,7 @@ if (import.meta.client) {
     window.removeEventListener('scroll', onScroll)
     window.removeEventListener('resize', onResize)
     disconnectNavResizeObserver()
-    updateEntryPositions.cancel()
+    updateGeometry.cancel()
     updateActiveFromScroll.cancel()
   })
 }
@@ -305,483 +338,104 @@ const baseDepth = computed(() => {
   return flatLinks.value.reduce((minDepth, link) => Math.min(minDepth, link.depth), Number.POSITIVE_INFINITY)
 })
 
-function findAncestorId(id: string | undefined, targetDepth: number, map: Map<string, TocFlatLink>) {
-  if (!id)
-    return ''
-  let current = map.get(id)
-  while (current && current.depth > targetDepth)
-    current = current.parentId ? map.get(current.parentId) : undefined
-  if (current?.depth === targetDepth)
-    return current.id
-  return ''
-}
-
-const activeLink = computed(() => linkMap.value.get(activeHash.value))
-const activeLevel1Id = computed(() => findAncestorId(activeLink.value?.id, baseDepth.value, linkMap.value))
-const activeLevel2Id = computed(() => findAncestorId(activeLink.value?.id, baseDepth.value + 1, linkMap.value))
-
+// Only the first two heading levels are rendered.
 const outlineEntries = computed<OutlineEntry[]>(() => {
   if (!flatLinks.value.length)
     return []
   const base = baseDepth.value
-  const level2Depth = base + 1
-  const level3Depth = base + 2
-  const activeLevel2 = activeLevel2Id.value
   return flatLinks.value
-    .filter((link) => {
-      if (link.depth === base)
-        return true
-      if (link.depth === level2Depth)
-        return true
-      if (link.depth === level3Depth)
-        return !!activeLevel2 && link.parentId === activeLevel2
-      return false
-    })
-    .map(link => ({
-      ...link,
-      indent: Math.min(2, Math.max(0, link.depth - base)),
-    }))
+    .filter(link => link.depth === base || link.depth === base + 1)
+    .map(link => ({ ...link, level: (link.depth === base ? 0 : 1) as 0 | 1 }))
 })
 
-// Tree structure with parent-child metadata
-const treeStructure = computed<TreeNode[]>(() => {
-  const entries = outlineEntries.value
-  if (!entries.length)
-    return []
-
-  return entries.map((entry, idx) => {
-    // Check if this is the last child at its indent level under the same parent
-    let isLastChild = true
-    for (let j = idx + 1; j < entries.length; j++) {
-      const next = entries[j]
-      if (!next)
-        continue
-      if (next.indent < entry.indent)
-        break
-      if (next.indent === entry.indent && next.parentId === entry.parentId) {
-        isLastChild = false
-        break
-      }
-    }
-
-    // Check if has visible children (next entries with indent + 1)
-    let hasChildren = false
-    for (let j = idx + 1; j < entries.length; j++) {
-      const next = entries[j]
-      if (!next)
-        continue
-      if (next.indent <= entry.indent)
-        break
-      if (next.indent === entry.indent + 1) {
-        hasChildren = true
-        break
-      }
-    }
-
-    return {
-      ...entry,
-      isLastChild,
-      hasChildren,
-    }
-  })
+// When the active heading is deeper than two levels, fall back to its nearest
+// visible ancestor so the highlight always lands on a rendered row.
+const activeVisibleId = computed(() => {
+  const base = baseDepth.value
+  let current = linkMap.value.get(activeHash.value)
+  while (current && current.depth > base + 1)
+    current = current.parentId ? linkMap.value.get(current.parentId) : undefined
+  return current?.id ?? ''
 })
 
-// SVG paths for tree guide lines
-const svgPaths = computed(() => {
-  const nodes = treeStructure.value
-  const positions = entryPositions.value
-  if (!nodes.length || !positions.size)
-    return []
-
-  const paths: { d: string, class: string }[] = []
-  const pushPath = (path: { d: string, class: string }) => {
-    if (isValidSvgPath(path.d))
-      paths.push(path)
-  }
-
-  // Step 1: Group siblings by (indent, parentId)
-  const siblingGroups = new Map<string, TreeNode[]>()
-  for (const node of nodes) {
-    const key = `${node.indent}:${node.parentId || '__root__'}`
-    let group = siblingGroups.get(key)
-    if (!group) {
-      group = []
-      siblingGroups.set(key, group)
-    }
-    group.push(node)
-  }
-
-  // Step 2: Draw segmented trunk lines (skip gaps where children detour)
-  for (const [, group] of siblingGroups) {
-    const first = group[0]
-    const last = group[group.length - 1]
-    if (!first || !last)
-      continue
-    const firstPos = positions.get(first.id)
-    const lastPos = positions.get(last.id)
-    if (!firstPos || !lastPos)
-      continue
-
-    let endY = lastPos.centerY
-
-    // Compute gaps where children detour via diagonals
-    const gaps: { start: number, end: number }[] = []
-    for (const entry of group) {
-      if (!entry.hasChildren)
-        continue
-      const entryIdx = nodes.indexOf(entry)
-      let firstChildCy = Infinity
-      let lastChildCy = -Infinity
-      for (let j = entryIdx + 1; j < nodes.length; j++) {
-        const next = nodes[j]
-        if (!next)
-          continue
-        if (next.indent <= entry.indent)
-          break
-        if (next.indent === entry.indent + 1) {
-          const cp = positions.get(next.id)
-          if (cp) {
-            if (cp.centerY < firstChildCy)
-              firstChildCy = cp.centerY
-            if (cp.centerY > lastChildCy)
-              lastChildCy = cp.centerY
-          }
-        }
-      }
-      if (firstChildCy !== Infinity && lastChildCy !== -Infinity) {
-        const gapStart = firstChildCy - BRANCH_CURVE_H
-        const gapEnd = lastChildCy + BRANCH_CURVE_H
-        gaps.push({ start: gapStart, end: gapEnd })
-        if (gapEnd > endY)
-          endY = gapEnd
-      }
-    }
-
-    const startY = firstPos.centerY
-    if (endY <= startY)
-      continue
-
-    const x = TREE_LINE_X + first.indent * INDENT_SIZE
-
-    if (gaps.length === 0) {
-      pushPath({ d: `M ${x} ${startY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
-    }
-    else {
-      // Sort and merge overlapping gaps
-      gaps.sort((a, b) => a.start - b.start)
-      const merged: { start: number, end: number }[] = []
-      for (const gap of gaps) {
-        const lastGap = merged[merged.length - 1]
-        if (lastGap && gap.start <= lastGap.end)
-          lastGap.end = Math.max(lastGap.end, gap.end)
-        else
-          merged.push({ start: gap.start, end: gap.end })
-      }
-
-      // Draw trunk segments between gaps
-      let currentY = startY
-      for (const gap of merged) {
-        if (gap.start > currentY)
-          pushPath({ d: `M ${x} ${currentY} L ${x} ${gap.start}`, class: 'tree-line tree-trunk' })
-        currentY = Math.max(currentY, gap.end)
-      }
-      if (endY > currentY)
-        pushPath({ d: `M ${x} ${currentY} L ${x} ${endY}`, class: 'tree-line tree-trunk' })
-    }
-  }
-
-  // Step 3: Forward branch diagonal (only for FIRST child of each parent)
-  const firstChildDrawn = new Set<string>()
-  for (const node of nodes) {
-    if (node.indent <= 0)
-      continue
-    const parentId = node.parentId || '__root__'
-    if (firstChildDrawn.has(parentId))
-      continue
-    firstChildDrawn.add(parentId)
-
-    const pos = positions.get(node.id)
-    if (!pos)
-      continue
-
-    const parentTrunkX = TREE_LINE_X + (node.indent - 1) * INDENT_SIZE
-    const endX = TREE_LINE_X + node.indent * INDENT_SIZE
-    const cy = pos.centerY
-
-    pushPath({
-      d: `M ${parentTrunkX} ${cy - BRANCH_CURVE_H} L ${endX} ${cy}`,
-      class: 'tree-line tree-branch',
-    })
-  }
-
-  // Step 4: Reverse branch diagonal (from last child back to trunk)
-  for (const node of nodes) {
-    if (!node.hasChildren)
-      continue
-    const nodeIdx = nodes.indexOf(node)
-    let lastChild: TreeNode | null = null
-    for (let j = nodeIdx + 1; j < nodes.length; j++) {
-      const next = nodes[j]
-      if (!next)
-        continue
-      if (next.indent <= node.indent)
-        break
-      if (next.indent === node.indent + 1)
-        lastChild = next
-    }
-    if (!lastChild)
-      continue
-    const lcp = positions.get(lastChild.id)
-    if (!lcp)
-      continue
-    const trunkX = TREE_LINE_X + node.indent * INDENT_SIZE
-    const childX = TREE_LINE_X + lastChild.indent * INDENT_SIZE
-    pushPath({
-      d: `M ${childX} ${lcp.centerY} L ${trunkX} ${lcp.centerY + BRANCH_CURVE_H}`,
-      class: 'tree-line tree-branch',
-    })
-  }
-
-  return paths
-})
-
-// Active chain: active entry + all its ancestors
+// Active row plus its visible ancestor(s) — highlighted in the primary colour.
 const activeChainIds = computed(() => {
   const ids = new Set<string>()
-  if (!activeHash.value)
-    return ids
-  ids.add(activeHash.value)
-  let current = linkMap.value.get(activeHash.value)
-  while (current?.parentId) {
-    ids.add(current.parentId)
-    current = linkMap.value.get(current.parentId)
+  const base = baseDepth.value
+  let current = linkMap.value.get(activeVisibleId.value)
+  while (current) {
+    if (current.depth <= base + 1)
+      ids.add(current.id)
+    current = current.parentId ? linkMap.value.get(current.parentId) : undefined
   }
   return ids
 })
 
-// SVG dots for each outline entry node (base layer, highlight when in active chain)
-const svgDots = computed(() => {
-  const positions = entryPositions.value
-  if (!positions.size)
-    return []
-  const chain = activeChainIds.value
-
-  return outlineEntries.value
-    .map((entry) => {
-      const pos = positions.get(entry.id)
-      if (!pos)
-        return null
-      return {
-        cx: TREE_LINE_X + entry.indent * INDENT_SIZE,
-        cy: pos.centerY,
-        active: chain.has(entry.id),
-      }
-    })
-    .filter(Boolean) as { cx: number, cy: number, active: boolean }[]
-})
-
-// Indicator track range: computes the start/end distances along treeTrack for highlighting
-const indicatorTrackRange = computed<{ start: number, length: number } | null>(() => {
-  if (!activeHash.value)
+// Contiguous range of rows covered by the active chain (active row back up to
+// its visible ancestor). Highlighted as one continuous run, matching the band.
+const activeRange = computed<{ startId: string, endId: string, startIdx: number, endIdx: number } | null>(() => {
+  const entries = outlineEntries.value
+  if (!entries.length || !activeVisibleId.value)
     return null
-  const distances = treeTrack.value.distances
-  if (!distances.size)
+  const endIdx = entries.findIndex(entry => entry.id === activeVisibleId.value)
+  if (endIdx < 0)
     return null
   const chain = activeChainIds.value
-
-  // Start: smallest distance in the active chain (topmost ancestor)
-  let startDist = Infinity
-  for (const id of chain) {
-    const d = distances.get(id)
-    if (d != null && d < startDist)
-      startDist = d
-  }
-
-  // End: active node's distance, extended to last child if has children
-  let endDist = distances.get(activeHash.value) ?? 0
-  const nodes = treeStructure.value
-  const activeIdx = nodes.findIndex(n => n.id === activeHash.value)
-  if (activeIdx >= 0) {
-    const activeNode = nodes[activeIdx]
-    if (activeNode && activeNode.hasChildren) {
-      for (let j = activeIdx + 1; j < nodes.length; j++) {
-        const next = nodes[j]
-        if (!next)
-          continue
-        if (next.indent <= activeNode.indent)
-          break
-        if (next.indent === activeNode.indent + 1) {
-          const d = distances.get(next.id)
-          if (d != null && d > endDist)
-            endDist = d
-        }
-      }
+  let startIdx = endIdx
+  for (let i = 0; i < endIdx; i++) {
+    if (chain.has(entries[i]!.id)) {
+      startIdx = i
+      break
     }
   }
-
-  if (startDist === Infinity)
-    return null
-
-  return { start: startDist, length: endDist - startDist }
+  return { startId: entries[startIdx]!.id, endId: entries[endIdx]!.id, startIdx, endIdx }
 })
 
-// Continuous tree track path for offset-path animation
-// Traces the full tree structure: trunk → forward diagonal → child trunk → reverse diagonal → trunk...
-const treeTrack = computed(() => {
-  const nodes = treeStructure.value
-  const positions = entryPositions.value
-  if (!nodes.length || !positions.size)
-    return { d: '', distances: new Map<string, number>() }
-
-  const distances = new Map<string, number>()
-  const parts: string[] = []
-  let totalLength = 0
-  let curX = 0
-  let curY = 0
-
-  let hasStarted = false
-  let prevNode: TreeNode | null = null
-
-  for (const node of nodes) {
-    const pos = positions.get(node.id)
-    if (!pos)
-      continue
-
-    const x = TREE_LINE_X + node.indent * INDENT_SIZE
-    const cy = pos.centerY
-
-    if (!hasStarted || !prevNode) {
-      parts.push(`M ${x} ${cy}`)
-      curX = x
-      curY = cy
-      distances.set(node.id, 0)
-      hasStarted = true
-      prevNode = node
-      continue
-    }
-
-    if (node.indent > prevNode.indent) {
-      // Going deeper: trunk down to branch start, then forward 45° diagonal
-      const branchY = cy - BRANCH_CURVE_H
-      if (branchY > curY) {
-        parts.push(`L ${curX} ${branchY}`)
-        totalLength += branchY - curY
-        curY = branchY
-      }
-      const dx = x - curX
-      const dy = cy - curY
-      parts.push(`L ${x} ${cy}`)
-      totalLength += Math.sqrt(dx * dx + dy * dy)
-    }
-    else if (node.indent < prevNode.indent) {
-      // Going shallower: reverse 45° diagonal, then trunk down
-      const rdx = x - curX
-      parts.push(`L ${x} ${curY + BRANCH_CURVE_H}`)
-      totalLength += Math.sqrt(rdx * rdx + BRANCH_CURVE_H * BRANCH_CURVE_H)
-      const returnY = curY + BRANCH_CURVE_H
-      if (cy > returnY) {
-        parts.push(`L ${x} ${cy}`)
-        totalLength += cy - returnY
-      }
-    }
-    else {
-      // Same indent: straight down
-      if (cy > curY) {
-        parts.push(`L ${x} ${cy}`)
-        totalLength += cy - curY
-      }
-    }
-
-    curX = x
-    curY = cy
-    distances.set(node.id, totalLength)
-    prevNode = node
+const activeEntryIds = computed(() => {
+  const range = activeRange.value
+  const ids = new Set<string>()
+  if (!range)
+    return ids
+  const entries = outlineEntries.value
+  for (let i = range.startIdx; i <= range.endIdx; i++) {
+    const entry = entries[i]
+    if (entry)
+      ids.add(entry.id)
   }
-
-  return { d: parts.join(' '), distances, totalLength }
+  return ids
 })
 
-const activeTrackOffset = computed(() => {
-  if (!activeHash.value || !treeTrack.value.d)
-    return 0
-  return treeTrack.value.distances.get(activeHash.value) ?? 0
+const highlightStyle = computed(() => {
+  const range = activeRange.value
+  const entries = geometry.value.entries
+  if (!range || !entries.length)
+    return { opacity: '0', clipPath: 'polygon(0 0, 100% 0, 100% 0, 0 0)' }
+  const startGeo = entries.find(entry => entry.id === range.startId)
+  const endGeo = entries.find(entry => entry.id === range.endId)
+  if (!startGeo || !endGeo)
+    return { opacity: '0', clipPath: 'polygon(0 0, 100% 0, 100% 0, 0 0)' }
+  return {
+    opacity: '1',
+    clipPath: `polygon(0 ${startGeo.top}px, 100% ${startGeo.top}px, 100% ${endGeo.bottom}px, 0 ${endGeo.bottom}px)`,
+  }
 })
 
-// Static SVG paths for skeleton tree lines
-const skeletonSvgPaths = computed(() => {
-  const paths: { d: string }[] = []
-  const pushPath = (path: { d: string }) => {
-    if (isValidSvgPath(path.d))
-      paths.push(path)
-  }
-
-  // Branch connectors for indented items
-  for (let i = 0; i < skeletonEntries.length; i++) {
-    const entry = skeletonEntries[i]
-    if (!entry)
-      continue
-    const centerY = i * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-
-    if (entry.indent > 0) {
-      const parentTrunkX = TREE_LINE_X + (entry.indent - 1) * INDENT_SIZE
-      const endX = TREE_LINE_X + entry.indent * INDENT_SIZE
-
-      pushPath({
-        d: `M ${parentTrunkX} ${centerY - BRANCH_CURVE_H} L ${endX} ${centerY}`,
-      })
-    }
-  }
-
-  // Sibling group vertical lines (same logic as real tree)
-  // Group by indent level
-  const groups = new Map<number, number[]>()
-  for (let i = 0; i < skeletonEntries.length; i++) {
-    const entry = skeletonEntries[i]
-    if (!entry)
-      continue
-    const indent = entry.indent
-    let group = groups.get(indent)
-    if (!group) {
-      group = []
-      groups.set(indent, group)
-    }
-    group.push(i)
-  }
-
-  // For indent-0 group: continuous vertical line from first to last
-  const rootIndices = groups.get(0)
-  if (rootIndices && rootIndices.length >= 2) {
-    const firstIndex = rootIndices[0]
-    const lastIndex = rootIndices[rootIndices.length - 1]
-    if (firstIndex == null || lastIndex == null)
-      return paths
-    const firstY = firstIndex * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-    let lastY = lastIndex * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-
-    // Extend to cover children below last root
-    for (const ri of rootIndices) {
-      for (let j = ri + 1; j < skeletonEntries.length; j++) {
-        const child = skeletonEntries[j]
-        if (!child)
-          continue
-        if (child.indent === 0)
-          break
-        const childY = j * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2
-        if (childY > lastY)
-          lastY = childY
-      }
-    }
-
-    pushPath({
-      d: `M ${TREE_LINE_X} ${firstY} L ${TREE_LINE_X} ${lastY}`,
-    })
-  }
-
-  return paths
+const dotStyle = computed(() => {
+  const range = activeRange.value
+  const entries = geometry.value.entries
+  if (!range || !entries.length)
+    return { opacity: '0' }
+  const endGeo = entries.find(entry => entry.id === range.endId)
+  if (!endGeo)
+    return { opacity: '0' }
+  const cx = endGeo.x
+  const cy = (endGeo.top + endGeo.bottom) / 2
+  return { opacity: '1', transform: `translate(${cx - 3.5}px, ${cy - 3.5}px)` }
 })
 
-const skeletonSvgHeight = computed(() => skeletonEntries.length * SKELETON_ROW_HEIGHT)
-const safeTreeTrackPath = computed(() => isValidSvgPath(treeTrack.value.d) ? treeTrack.value.d : '')
+function isEntryActive(id: string) {
+  return activeEntryIds.value.has(id)
+}
 
 const hasOutline = computed(() => outlineEntries.value.length > 0)
 const showSkeleton = computed(() => outlineLoadingState.value && !hasOutline.value)
@@ -807,42 +461,46 @@ watch(
     nextTick(() => {
       refreshHeadingElements()
       updateActiveFromScroll()
-      updateEntryPositions()
+      updateGeometry()
     })
   },
   { immediate: true },
 )
 
-watch(activeHash, (hash) => {
+watch(outlineEntries, () => {
+  if (!import.meta.client)
+    return
   nextTick(() => {
-    updateEntryPositions()
-    // Auto-scroll outline to keep active item visible
-    if (hash && navRef.value && contentRef.value) {
-      const activeEl = contentRef.value.querySelector(`[data-id="${hash}"]`)?.closest('.outline-item') as HTMLElement | null
+    updateGeometry()
+  })
+})
+
+watch(activeVisibleId, (id) => {
+  nextTick(() => {
+    // Keep the active row visible inside the scrollable outline panel.
+    if (id && navRef.value && contentRef.value) {
+      const activeEl = contentRef.value.querySelector(`a[data-id="${escapeSelector(id)}"]`) as HTMLElement | null
       if (activeEl) {
         const nav = navRef.value
         const navRect = nav.getBoundingClientRect()
         const elRect = activeEl.getBoundingClientRect()
         const margin = 40
-        if (elRect.top < navRect.top + margin || elRect.bottom > navRect.bottom - margin) {
+        if (elRect.top < navRect.top + margin || elRect.bottom > navRect.bottom - margin)
           activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-        }
       }
     }
   })
 })
 
-// Watch route changes to refresh heading elements after DOM update
+// Refresh everything after client-side route changes swap in new content.
 watch(
   () => route.fullPath,
   () => {
     if (!import.meta.client)
       return
-    // Reset state on route change
     headingElements.value = {}
     activeHash.value = ''
 
-    // Wait for DOM to be ready with new content
     nextTick(() => {
       setTimeout(() => {
         refreshHeadingElements()
@@ -852,7 +510,7 @@ watch(
         else
           updateActiveFromScroll()
         setActiveHash(window.location.hash)
-        updateEntryPositions()
+        updateGeometry()
       }, 100)
     })
   },
@@ -862,111 +520,65 @@ watch(
 <template>
   <div class="docs-outline flex flex-col text-sm">
     <div class="docs-outline__label">
-      {{ t('docs.outlineLabel') }}
+      <span class="docs-outline__icon i-carbon-text-align-left" aria-hidden="true" />
+      <span>{{ t('docs.outlineLabel') }}</span>
     </div>
 
     <nav v-if="hasOutline" ref="navRef" class="outline-nav">
-      <div ref="contentRef" class="relative">
-        <!-- SVG tree guide lines: base layer (grey) + indicator layer (primary) -->
+      <div ref="contentRef" class="outline-track relative flex flex-col">
+        <!-- Base rail (muted) traces every visible heading. -->
         <svg
-          class="outline-tree-svg"
-          :style="{ height: `${navContentHeight}px` }"
+          v-if="geometry.d"
+          class="outline-rail"
+          :width="geometry.width"
+          :height="geometry.height"
+          :viewBox="`0 0 ${geometry.width} ${geometry.height}`"
           aria-hidden="true"
         >
-          <!-- Base layer: all tree lines + dots in grey -->
-          <g class="tree-base-layer">
-            <path
-              v-for="(p, i) in svgPaths"
-              :key="i"
-              :d="p.d"
-              :class="p.class"
-              fill="none"
-            />
-            <circle
-              v-for="(dot, i) in svgDots"
-              :key="`dot-${i}`"
-              :cx="dot.cx"
-              :cy="dot.cy"
-              :r="dot.active ? 3 : 2.5"
-              :class="dot.active ? 'tree-dot-active' : 'tree-dot'"
-            />
-          </g>
-
-          <!-- Indicator layer: highlighted segment of tree track -->
-          <g class="tree-indicator-layer">
-            <!-- Indicator line: same treeTrack path, dash-clipped to active chain range -->
-            <path
-              :d="safeTreeTrackPath"
-              class="tree-indicator-line"
-              fill="none"
-              :stroke-dasharray="`${indicatorTrackRange?.length ?? 0} ${(treeTrack.totalLength || 9999) * 2}`"
-              :stroke-dashoffset="`${-(indicatorTrackRange?.start ?? 0)}`"
-              :style="{ opacity: indicatorTrackRange && safeTreeTrackPath ? 1 : 0 }"
-            />
-            <!-- Main active dot: stroke-dash animation along tree track -->
-            <path
-              :d="safeTreeTrackPath"
-              class="tree-indicator-dot-track"
-              fill="none"
-              :stroke-dasharray="`0.1 ${(treeTrack.totalLength || 9999) * 2}`"
-              :stroke-dashoffset="`${-activeTrackOffset}`"
-              :style="{ opacity: activeHash && safeTreeTrackPath ? 1 : 0 }"
-            />
-          </g>
+          <path :d="geometry.d" class="outline-rail__base" fill="none" />
         </svg>
 
-        <div
+        <!-- Same rail, clipped to the active range and painted in the accent. -->
+        <svg
+          v-if="geometry.d"
+          class="outline-rail outline-rail--active"
+          :width="geometry.width"
+          :height="geometry.height"
+          :viewBox="`0 0 ${geometry.width} ${geometry.height}`"
+          :style="highlightStyle"
+          aria-hidden="true"
+        >
+          <path :d="geometry.d" class="outline-rail__active" fill="none" />
+        </svg>
+
+        <!-- Marker riding the current reading position. -->
+        <span v-if="geometry.d" class="outline-dot" :style="dotStyle" aria-hidden="true" />
+
+        <NuxtLink
           v-for="entry in outlineEntries"
           :key="entry.id"
-          class="outline-item relative"
-          :class="{ 'outline-item-nested': entry.indent > 0 }"
+          :to="`#${entry.id}`"
+          replace
+          class="outline-link relative z-1 flex items-center py-1.5 leading-snug no-underline transition-colors duration-150"
+          :style="{ paddingInlineStart: `${itemOffset(entry.level)}px` }"
+          :class="{ 'is-active': isEntryActive(entry.id) }"
+          :data-id="entry.id"
+          @click.prevent="scrollToHeading(entry.id)"
         >
-          <NuxtLink
-            :to="`#${entry.id}`"
-            replace
-            class="outline-link group relative flex items-center py-2 text-[14px] leading-snug no-underline transition-all duration-150"
-            :style="{ paddingLeft: `${14 + entry.indent * 12}px` }"
-            :class="{ 'is-active': activeHash === entry.id }"
-            :data-id="entry.id"
-            @click.prevent="scrollToHeading(entry.id)"
-          >
-            <span class="line-clamp-2">{{ entry.text }}</span>
-          </NuxtLink>
-        </div>
+          <span class="line-clamp-2">{{ entry.text }}</span>
+        </NuxtLink>
       </div>
     </nav>
 
-    <div v-else-if="showSkeleton" class="outline-skeleton relative">
-      <!-- Skeleton SVG tree lines -->
-      <svg
-        class="outline-tree-svg"
-        :style="{ height: `${skeletonSvgHeight}px` }"
-        aria-hidden="true"
-      >
-        <path
-          v-for="(p, i) in skeletonSvgPaths"
-          :key="i"
-          :d="p.d"
-          class="tree-line tree-skeleton-line"
-          fill="none"
-        />
-        <circle
-          v-for="(entry, i) in skeletonEntries"
-          :key="`sk-dot-${i}`"
-          :cx="TREE_LINE_X + entry.indent * INDENT_SIZE"
-          :cy="i * SKELETON_ROW_HEIGHT + SKELETON_ROW_HEIGHT / 2"
-          r="2.5"
-          class="tree-dot tree-skeleton-dot"
-        />
-      </svg>
-
+    <div v-else-if="showSkeleton" class="outline-skeleton">
+      <span class="outline-skeleton__rail" aria-hidden="true" />
       <div
         v-for="(entry, index) in skeletonEntries"
         :key="index"
-        class="outline-skeleton__item"
+        class="outline-skeleton__bar"
         :style="{
           width: entry.width,
-          marginLeft: `${entry.indent * 12}px`,
+          marginInlineStart: `${entry.indent * 12}px`,
           animationDelay: `${index * 0.12}s`,
         }"
       />
@@ -976,105 +588,90 @@ watch(
 
 <style scoped>
 .docs-outline {
-  gap: 14px;
+  gap: 12px;
 }
 
 .docs-outline__label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--tx-text-color-secondary, #909399) 70%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #909399) 88%, transparent);
+}
+
+.docs-outline__icon {
+  font-size: 15px;
+  color: color-mix(in srgb, var(--tx-text-color-secondary, #909399) 78%, transparent);
 }
 
 .outline-nav {
-  padding-left: 6px;
-  padding-right: 6px;
-  max-height: min(420px, calc(100vh - 16rem));
+  position: relative;
+  max-height: min(60vh, calc(100vh - 16rem));
+  overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE/Edge */
+  /* Soft fade at the top/bottom edges, like Fumadocs' TOC scroll area. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 }
 
 .outline-nav::-webkit-scrollbar {
   display: none; /* Chrome/Safari */
 }
 
-.outline-tree-svg {
+.outline-track {
+  padding: 2px 0;
+}
+
+.outline-rail {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 100%;
-  pointer-events: none;
+  inset-inline-start: 0;
   z-index: 0;
+  pointer-events: none;
+  overflow: visible;
 }
 
-.tree-line {
-  stroke: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
-  stroke-width: 1;
+.outline-rail__base {
+  stroke: color-mix(in srgb, var(--tx-text-color-primary, #303133) 12%, transparent);
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: opacity 0.3s ease;
 }
 
-.tree-skeleton-line {
-  stroke: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 80%, transparent);
+.outline-rail--active {
+  transition: clip-path 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease;
 }
 
-.tree-dot {
-  fill: color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
-  transition: fill 0.3s ease, r 0.3s ease;
-}
-
-.tree-skeleton-dot {
-  fill: color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 80%, transparent);
-}
-
-.tree-dot-active {
-  fill: var(--tx-color-primary, #409eff);
-  transition: fill 0.3s ease, r 0.3s ease;
-}
-
-.tree-indicator-line {
+.outline-rail__active {
   stroke: var(--tx-color-primary, #409eff);
   stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: stroke-dashoffset 0.4s ease, stroke-dasharray 0.4s ease, opacity 0.2s ease;
 }
 
-.tree-indicator-dot-track {
-  stroke: var(--tx-color-primary, #409eff);
-  stroke-width: 6;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.4s ease, opacity 0.2s ease;
-}
-
-.outline-skeleton {
-  display: grid;
-  gap: 10px;
-  padding-left: 6px;
-}
-
-.outline-skeleton__item {
-  height: 14px;
+.outline-dot {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  z-index: 1;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent) 0%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 92%, transparent) 50%,
-    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent) 100%
-  );
-  background-size: 200% 100%;
-  animation: outline-shimmer 1.6s ease-in-out infinite;
+  background: var(--tx-color-primary, #409eff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-color-primary, #409eff) 18%, transparent);
+  pointer-events: none;
+  will-change: transform;
+  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.2s ease;
 }
 
 .outline-link {
   color: color-mix(in srgb, var(--tx-text-color-secondary, #909399) 85%, transparent);
-  transition: color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
+  font-size: 13.5px;
   letter-spacing: var(--wm-letter-space-2, 0px);
-  transform: translateX(var(--wm-jitter-x2, 0px));
 }
 
 .outline-link:hover {
@@ -1086,12 +683,35 @@ watch(
   font-weight: 600;
 }
 
-.outline-item + .outline-item {
-  margin-top: 2px;
+.outline-skeleton {
+  position: relative;
+  display: grid;
+  gap: 12px;
+  padding: 4px 0 4px 8px;
 }
 
-.outline-item-nested .outline-link {
-  font-size: 13px;
+.outline-skeleton__rail {
+  position: absolute;
+  inset-inline-start: 8.5px;
+  top: 6px;
+  bottom: 6px;
+  width: 1.5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--tx-text-color-primary, #303133) 12%, transparent);
+}
+
+.outline-skeleton__bar {
+  height: 12px;
+  margin-inline-start: 16px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent) 0%,
+    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 92%, transparent) 50%,
+    color-mix(in srgb, var(--tx-fill-color, #f0f2f5) 55%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: outline-shimmer 1.6s ease-in-out infinite;
 }
 
 @keyframes outline-shimmer {
@@ -1100,6 +720,16 @@ watch(
   }
   100% {
     background-position: 100% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outline-rail--active,
+  .outline-dot,
+  .outline-link,
+  .outline-skeleton__bar {
+    animation: none !important;
+    transition: none !important;
   }
 }
 </style>

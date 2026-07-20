@@ -12,7 +12,7 @@ If the plugin needs a heavier Vue/React UI, keep the same flow: Manifest declare
 
 New plugins should use `main: "index.js"` and declare the latest `sdkapi`, category, permissions, and permission reasons.
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -47,7 +47,7 @@ code: |
   ]
   }
 ---
-::
+:::
 
 Checklist:
 
@@ -59,7 +59,7 @@ Checklist:
 
 `index.js` is the plugin Prelude. It runs in a Node.js sandbox and reads plugin APIs from `globalThis`.
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const { clipboard, logger, box, TuffItemBuilder } = globalThis
@@ -102,9 +102,9 @@ code: |
         box?.hide?.()
       },
 
-  }
+  ## }
 ---
-::
+:::
 
 Checklist:
 
@@ -131,7 +131,7 @@ Choose the smallest SDK for the task. Do not request permissions for future feat
 
 For a Raycast-style AI Command, keep the command definition in the plugin and let the host own provider selection, audit, quota, and fallback:
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const { intelligence } = globalThis
@@ -148,9 +148,9 @@ code: |
         },
       )
 
-  }
+  ## }
 ---
-::
+:::
 
 Do not store provider credentials in the command, prompt variables, plugin storage, or logs. See [Intelligence SDK](../api/intelligence.en.md) for the typed contract.
 
@@ -158,14 +158,14 @@ Do not store provider credentials in the command, prompt variables, plugin stora
 
 Run these local checks before publishing:
 
-::TuffCodeBlock{lang="bash"}
+:::TuffCodeBlock{lang="bash"}
 ---
 code: |
   tuff validate --strict
   tuff build
   tuff publish --dry-run
 ---
-::
+:::
 
 Repository changes should also include nearest-path validation such as focused Vitest, file-level ESLint, and `git diff --check`. Do not report unrelated historical lint noise as a failure of the current plugin change.
 
@@ -173,7 +173,7 @@ Repository changes should also include nearest-path validation such as focused V
 
 Standard publish path:
 
-::TuffCodeBlock{lang="bash"}
+:::TuffCodeBlock{lang="bash"}
 ---
 code: |
   tuff login
@@ -182,7 +182,7 @@ code: |
   tuff publish --dry-run
   tuff publish --tag 0.1.0 --channel BETA
 ---
-::
+:::
 
 Publishing notes:
 

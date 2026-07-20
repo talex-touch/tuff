@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import { Mesh, Program, Renderer, Triangle, Vec2 } from 'ogl'
 import { onMounted, onUnmounted, useTemplateRef, watch } from 'vue'
+import { hasWindow } from '@talex-touch/utils/env'
 
 interface DarkVeilProps {
   hueShift?: number
@@ -112,7 +113,17 @@ function cleanup() {
     frame = null
   }
 
-  window.removeEventListener('resize', resize)
+  if (hasWindow())
+    window.removeEventListener('resize', resize)
+
+  try {
+    const loseContext = renderer?.gl?.getExtension?.('WEBGL_lose_context')
+    loseContext?.loseContext?.()
+  }
+  catch {
+    // ignore dispose failures in headless / no-gl environments
+  }
+
   renderer = null
   program = null
   mesh = null
@@ -150,38 +161,50 @@ function loop() {
 }
 
 onMounted(() => {
-  if (!canvasRef.value)
+  if (!canvasRef.value || !hasWindow())
     return
 
-  renderer = new Renderer({
-    dpr: Math.min(window.devicePixelRatio, 2),
-    canvas: canvasRef.value,
-  })
+  // Headless Chrome / locked-down GPUs can fail WebGL init. Fail closed to the
+  // CSS fallback background instead of crashing the whole landing page.
+  try {
+    renderer = new Renderer({
+      dpr: Math.min(window.devicePixelRatio || 1, 2),
+      canvas: canvasRef.value,
+    })
 
-  const gl = renderer.gl
-  const geometry = new Triangle(gl)
+    if (!renderer?.gl) {
+      cleanup()
+      return
+    }
 
-  program = new Program(gl, {
-    vertex,
-    fragment,
-    uniforms: {
-      uTime: { value: 0 },
-      uResolution: { value: new Vec2() },
-      uHueShift: { value: props.hueShift },
-      uNoise: { value: props.noiseIntensity },
-      uScan: { value: props.scanlineIntensity },
-      uScanFreq: { value: props.scanlineFrequency },
-      uWarp: { value: props.warpAmount },
-    },
-  })
+    const gl = renderer.gl
+    const geometry = new Triangle(gl)
 
-  mesh = new Mesh(gl, { geometry, program })
+    program = new Program(gl, {
+      vertex,
+      fragment,
+      uniforms: {
+        uTime: { value: 0 },
+        uResolution: { value: new Vec2() },
+        uHueShift: { value: props.hueShift },
+        uNoise: { value: props.noiseIntensity },
+        uScan: { value: props.scanlineIntensity },
+        uScanFreq: { value: props.scanlineFrequency },
+        uWarp: { value: props.warpAmount },
+      },
+    })
 
-  window.addEventListener('resize', resize)
-  resize()
+    mesh = new Mesh(gl, { geometry, program })
 
-  start = performance.now()
-  loop()
+    window.addEventListener('resize', resize)
+    resize()
+
+    start = performance.now()
+    loop()
+  }
+  catch {
+    cleanup()
+  }
 })
 
 onUnmounted(cleanup)

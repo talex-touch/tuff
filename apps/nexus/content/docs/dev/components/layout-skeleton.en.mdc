@@ -29,7 +29,7 @@ code: |
 ---
 :::
 ## Basic Usage
-::TuffCodeBlock{lang="vue"}
+:::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
@@ -38,7 +38,7 @@ code: |
     </div>
   </template>
 ---
-::
+:::
 
 ## Usage Notes
 - The wrapper controls size and layout ratio.

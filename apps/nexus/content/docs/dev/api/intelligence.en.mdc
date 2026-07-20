@@ -8,7 +8,7 @@ The Intelligence SDK provides a unified interface for plugins to access AI capab
 
 **Quick Start**
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
@@ -25,7 +25,7 @@ code: |
   console.log(chatRes.result)
   }
 ---
-::
+:::
 Runtime plugin handlers can also use the same surface through `context.utils.intelligence` or `context.utils.plugin.intelligence` before rendering an AI action.
 
 ## See also
@@ -43,14 +43,14 @@ Runtime plugin handlers can also use the same surface through `context.utils.int
 
 Plugin UI and lifecycle code should use the plugin SDK export or `context.utils.intelligence`. Both resolve to the typed Intelligence domain SDK and carry the current plugin `sdkapi` marker through permission-checked calls.
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { intelligence } from '@talex-touch/utils/plugin/sdk'
 
-  void intelligence
+  ## void intelligence
 ---
-::
+:::
 
 Renderer-only CoreApp code can use `useIntelligenceSdk()` from `@talex-touch/utils/renderer` to get the same typed domain SDK over TuffTransport.
 
@@ -148,7 +148,7 @@ The legacy renderer wrappers remain available from `useIntelligence()` for loadi
 
 ### Text chat
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
@@ -172,13 +172,13 @@ code: |
       console.log(result.result)
       console.log(result.usage)
 
-  }
+  ## }
 ---
-::
+:::
 
 ### Vision OCR
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await intelligence.vision.ocr({
@@ -191,26 +191,26 @@ code: |
   includeKeywords: true
   })
 
-  console.log(result.result.text)
+  ## console.log(result.result.text)
 ---
-::
+:::
 
 **Image Source Types**:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const sourceDataUrl = { type: 'data-url', dataUrl: 'data:image/png;base64,...' } as const
   const sourceFile = { type: 'file', filePath: '/path/to/image.png' } as const
   const sourceBase64 = { type: 'base64', base64: '...' } as const
 
-  console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
+  ## console.log(sourceDataUrl.type, sourceFile.type, sourceBase64.type)
 ---
-::
+:::
 
 ### RAG rerank
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await intelligence.search.rerank({
@@ -219,30 +219,30 @@ code: |
   topK: 5
   })
 
-  console.log(result.result)
+  ## console.log(result.result)
 ---
-::
+:::
 
 ### Generic invocation
 
 Use `invoke` directly for custom capabilities or newly registered capability IDs that do not yet have a domain wrapper:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await intelligence.invoke('custom.extract-json', {
   text: 'name: Ada Lovelace'
   })
 
-  console.log(result.result)
+  ## console.log(result.result)
 ---
-::
+:::
 
 ### Invocation options
 
 `invoke(capabilityId, payload, options)` accepts the following third argument; typed wrappers such as `text.chat(payload, options)` accept the same object as their second argument:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   interface IntelligenceInvokeOptions {
@@ -261,14 +261,14 @@ code: |
   const \_invokeOptions: IntelligenceInvokeOptions = {}
   void \_invokeOptions
 ---
-::
+:::
 `strategy` applies after an explicit `preferredProviderId` and `modelPreference`. Supported values are `adaptive-default` (the default), `rule-based-default`, and `round-robin`. `adaptive-default` and `rule-based-default` currently use deterministic capability-binding/provider priority order; they are not latency- or cost-based optimizers. `round-robin` rotates the sorted eligible providers per capability and preserves that cyclic order for fallback. Legacy `adaptive` and `priority` normalize to the first two values; an unknown strategy safely falls back to deterministic priority routing.
 
 ### AI Command prompt templates
 
 For a plugin-defined AI Command, pass `promptTemplate` and `promptVariables` as first-class invoke options. The explicit template wins over the legacy metadata form and the configured capability binding. The host renders it once and preserves it when routing falls back to another provider.
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const status = await intelligence.getCapabilityStatus({ capabilityId: 'text.chat' })
@@ -283,9 +283,9 @@ code: |
   },
   )
 
-  console.log(response.result)
+  ## console.log(response.result)
 ---
-::
+:::
 
 Declare `intelligence.basic` in the plugin manifest and run capability discovery before rendering the action. Template variables become provider input, so never put credentials or secrets in them. Audit records retain the prompt hash, not the raw template.
 
@@ -293,7 +293,7 @@ Declare `intelligence.basic` in the plugin manifest and run capability discovery
 
 All `invoke` calls return a unified response structure:
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   interface IntelligenceInvokeResult<T> {
@@ -313,13 +313,13 @@ code: |
   const \_invokeResult = {} as IntelligenceInvokeResult<string>
   void \_invokeResult
 ---
-::
+:::
 
 ### Streaming events
 
 `stream()` and `contextStream()` use callbacks and return a `Promise<StreamController>`. The current runtime only streams chat capabilities. The controller exposes `streamId`, `cancelled`, and `cancel()`.
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   let answer = ''
@@ -364,7 +364,7 @@ code: |
   // Call controller.cancel() when the owning UI is disposed.
   void controller
 ---
-::
+:::
 
 Stream consumers must treat event boundaries as transport details:
 
@@ -378,7 +378,7 @@ Stream consumers must treat event boundaries as transport details:
 
 ## State Management
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { watch } from 'vue'
@@ -392,13 +392,13 @@ code: |
   // Watch errors
   watch(lastError, error => console.log('error', error))
 ---
-::
+:::
 
 ---
 
 ## Provider Types
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   enum IntelligenceProviderType {
@@ -410,15 +410,15 @@ code: |
   CUSTOM = 'custom'
   }
 
-  void IntelligenceProviderType.OPENAI
+  ## void IntelligenceProviderType.OPENAI
 ---
-::
+:::
 
 ---
 
 ## Capability Types
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import { IntelligenceCapabilityType } from '@talex-touch/utils/types/intelligence'
@@ -443,7 +443,7 @@ code: |
   void IntelligenceCapabilityType.SEMANTIC_SEARCH // 'semantic-search'
   void IntelligenceCapabilityType.AGENT // 'agent'
 ---
-::
+:::
 
 ## Best Practices
 

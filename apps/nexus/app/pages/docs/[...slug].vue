@@ -2423,6 +2423,8 @@ a.docs-hero-crumb:hover {
 
 
 :deep(.docs-prose) {
+  content-visibility: auto;
+  contain-intrinsic-size: 1200px;
   --tw-prose-body: var(--docs-ink);
   --tw-prose-headings: var(--docs-ink);
   --tw-prose-lead: var(--docs-muted);

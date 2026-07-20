@@ -88,9 +88,9 @@ code: |
 ---
 code: |
   import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
-  
+
   const flow = createFlowSDK(channel, 'my-plugin-id')
-  
+
   const result = await flow.dispatch(
     {
       type: 'text',
@@ -124,9 +124,9 @@ code: |
 ---
 code: |
   import { createFlowSDK } from '@talex-touch/utils/plugin/sdk'
-  
+
   const flow = createFlowSDK(channel, 'my-plugin-id')
-  
+
   flow.onFlowTransfer(async (payload, ctx) => {
     try {
       await handlePayload(payload)

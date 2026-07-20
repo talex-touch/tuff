@@ -260,22 +260,22 @@ code: |
   async invoke(capabilityId, payload, options) {
     // 1. Validate capability exists
     const capability = aiCapabilityRegistry.get(capabilityId)
-    
+
     // 2. Load capability routing config
     const routing = config.capabilities[capabilityId]
-    
+
     // 3. Merge runtime options with config
     const runtimeOptions = mergeOptions(options, routing)
-    
+
     // 4. Check cache (if enabled)
     if (enableCache && !stream) {
       const cached = getFromCache(cacheKey)
       if (cached) return cached
     }
-    
+
     // 5. Get enabled providers that support this capability
     const availableProviders = filterProviders(capability, runtimeOptions)
-    
+
     // 6. Select provider via strategy
     const { selectedProvider, fallbackProviders } = 
       await strategyManager.select({
@@ -283,17 +283,17 @@ code: |
         options: runtimeOptions,
         availableProviders
       })
-    
+
     // 7. Invoke provider
     const provider = providerManager.get(selectedProvider.id)
     const result = await provider[capability.type](payload, runtimeOptions)
-    
+
     // 8. Cache result (if enabled)
     if (enableCache) setToCache(cacheKey, result)
-    
+
     // 9. Audit log (if enabled)
     if (enableAudit) await logAudit(...)
-    
+
     return result
   }
 ---
@@ -320,9 +320,9 @@ code: |
       }),
       signal: options.timeout ? AbortSignal.timeout(options.timeout) : undefined
     })
-    
+
     const data = await response.json()
-    
+
     return {
       result: data.choices[0].message.content,
       usage: {
@@ -432,7 +432,7 @@ code: |
         maxTokens: 100
       }
     }
-    
+
     formatTestResult(result) {
       return {
         success: true,
@@ -454,21 +454,21 @@ code: |
   // Main process
   transport.on(intelligenceApiEvents.testCapability, async (data) => {
     const { capabilityId, providerId, userInput } = data
-    
+
     // Get tester
     const tester = capabilityTesterRegistry.get(capabilityId)
-    
+
     // Generate test payload
     const payload = await tester.generateTestPayload({ providerId, userInput })
-    
+
     // Execute test
     const result = await ai.invoke(capabilityId, payload, {
       allowedProviderIds: providerId ? [providerId] : undefined
     })
-    
+
     // Format result
     const formattedResult = tester.formatTestResult(result)
-    
+
     return { ok: true, result: formattedResult }
   })
 ---
@@ -535,10 +535,10 @@ code: |
 code: |
   // useIntelligence composable
   const { text, vision, code, analysis, embedding, rag, agent } = useIntelligence()
-  
+
   // Direct invocation
   await text.chat({ messages: [...] })
-  
+
   // With options
   await text.chat({ messages: [...] }, {
     preferredProviderId: 'openai-default',
@@ -591,14 +591,14 @@ code: |
     async chat(payload, options) {
       // Custom implementation
     }
-    
+
     async translate(payload, options) {
       // Custom implementation
     }
-    
+
     // ... other capabilities
   }
-  
+
   // Register factory
   providerManager.registerFactory('custom', (config) => {
     return new CustomProvider(config)
@@ -635,7 +635,7 @@ code: |
       // Custom selection logic
     }
   }
-  
+
   strategyManager.setDefaultStrategy('custom-strategy')
 ---
 :::

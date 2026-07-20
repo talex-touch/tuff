@@ -46,7 +46,7 @@ code: |
 
 Import `toast` from `@talex-touch/tuffex/utils`:
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   toast({
@@ -57,11 +57,11 @@ code: |
     duration?: number // default: 2600, 0 = no auto dismiss
   }): string
 ---
-::
+:::
 
 ### dismissToast / clearToasts
 
-::TuffCodeBlock{lang="ts"}
+:::TuffCodeBlock{lang="ts"}
 ---
 code: |
   import { clearToasts, dismissToast, toast } from '@talex-touch/tuffex/utils'
@@ -70,7 +70,7 @@ code: |
   dismissToast(id)
   clearToasts()
 ---
-::
+:::
 
 ### Events
 

@@ -25,7 +25,7 @@ code: |
   import vue from '@vitejs/plugin-vue'
   import UnoCSS from 'unocss/vite'
   import { defineConfig } from 'vite'
-  
+
   export default defineConfig({
     plugins: [
       vue(),
@@ -46,7 +46,7 @@ code: |
 code: |
   // webpack.config.js
   const TouchPluginExport = require('@talex-touch/unplugin-export-plugin/webpack')
-  
+
   module.exports = {
     plugins: [
       TouchPluginExport()
@@ -62,7 +62,7 @@ code: |
 code: |
   // rollup.config.js
   import TouchPluginExport from '@talex-touch/unplugin-export-plugin/rollup'
-  
+
   export default {
     plugins: [
       TouchPluginExport()
@@ -108,57 +108,57 @@ Exporter 将 `<outDir>/out`、`<outDir>/build` 与 `<outDir>` 顶层的 `*.tpex`
 ---
 code: |
   import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
-  
+
   // 使用 defineConfig 获得类型提示
   export default defineConfig({
     // 项目根目录
     root: process.cwd(),
-    
+
     // manifest.json 路径（相对于项目根目录）
     manifest: './manifest.json',
-    
+
     // 输出目录
     outDir: 'dist',
-    
+
     // 源码目录（用于资源加载）
     sourceDir: 'src',
-    
+
     // Widgets 目录
     widgetsDir: 'widgets',
-    
+
     // 公共资源目录
     publicDir: 'public',
-    
+
     // Index 脚本目录（Prelude 脚本）
     indexDir: 'index',
-    
+
     // 是否生成 source map
     sourcemap: false,
-    
+
     // 是否压缩输出
     minify: true,
-    
+
     // 外部依赖（不打包）
     external: ['electron'],
-    
+
     // 自定义资源处理
     assets: {
       // 额外复制的文件/目录（glob 模式）
       copy: ['./assets/**/*', './public/icons/*'],
-      
+
       // 排除的文件（glob 模式）
       exclude: ['**/*.test.ts', '**/*.spec.js']
     },
-    
+
     // 版本同步选项
     versionSync: {
       // 启用从 package.json 同步版本到 manifest.json
       enabled: true,
-      
+
       // 自动同步（不提示）
       auto: false
     },
-    
+
     // 最大插件体积（MB），超过此值会警告
     maxSizeMB: 10
   })
@@ -334,11 +334,11 @@ code: |
 code: |
   // src/main.ts
   import { useBox, useClipboard, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
   const clipboard = useClipboard()
   const storage = usePluginStorage()
-  
+
   // 插件逻辑...
 ---
 :::
@@ -381,7 +381,7 @@ code: |
 code: |
   // vite.config.ts
   import { resolve } from 'path'
-  
+
   export default defineConfig({
     resolve: {
       alias: {

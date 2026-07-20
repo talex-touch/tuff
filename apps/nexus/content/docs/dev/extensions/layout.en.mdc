@@ -20,7 +20,7 @@ code: |
     }
     sections?: TuffSection[]
   }
-  
+
   interface TuffSection {
     id: string
     title?: string

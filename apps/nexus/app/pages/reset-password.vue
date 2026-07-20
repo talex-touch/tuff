@@ -13,6 +13,13 @@ defineI18nRoute(false)
 const { t } = useI18n()
 const route = useRoute()
 
+const pageTitle = computed(() => t('auth.resetTitle', 'Set a new password'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('auth.resetSubtitle', 'Set a new password to sign in.')),
+})
+
 const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)

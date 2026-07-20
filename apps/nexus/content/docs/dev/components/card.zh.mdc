@@ -1716,7 +1716,7 @@ code: |
 
 `TxCard` 只在根节点暴露少量运行时变量。大部分视觉调整应优先使用 props；只有当包装层需要和插槽内容或底层 `TxBaseSurface` mask 颜色对齐时，才建议覆盖变量。
 
-::::TuffCodeBlock{lang="css"}
+:::TuffCodeBlock{lang="css"}
 ---
 code: |
   .custom-card {
@@ -1724,7 +1724,7 @@ code: |
     --tx-card-fake-background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent);
   }
 ---
-::::
+:::
 
 | 变量 | 写入方 | 用途 |
 |------|--------|------|
@@ -1766,9 +1766,9 @@ code: |
         <template #header>
           <h3>{{ item.title }}</h3>
         </template>
-        
+
         <p>{{ item.description }}</p>
-        
+
         <template #footer>
           <div class="card-actions">
             <TxButton size="small" variant="text">编辑</TxButton>
@@ -1778,7 +1778,7 @@ code: |
       </TxCard>
     </div>
   </template>
-  
+
   TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。
 ---
 :::

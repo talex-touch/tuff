@@ -25,7 +25,7 @@ code: |
   import vue from '@vitejs/plugin-vue'
   import UnoCSS from 'unocss/vite'
   import { defineConfig } from 'vite'
-  
+
   export default defineConfig({
     plugins: [
       vue(),
@@ -46,7 +46,7 @@ code: |
 code: |
   // webpack.config.js
   const TouchPluginExport = require('@talex-touch/unplugin-export-plugin/webpack')
-  
+
   module.exports = {
     plugins: [
       TouchPluginExport()
@@ -62,7 +62,7 @@ code: |
 code: |
   // rollup.config.js
   import TouchPluginExport from '@talex-touch/unplugin-export-plugin/rollup'
-  
+
   export default {
     plugins: [
       TouchPluginExport()
@@ -108,57 +108,57 @@ In development mode:
 ---
 code: |
   import { defineConfig } from '@talex-touch/unplugin-export-plugin/types'
-  
+
   // Use defineConfig for type hints
   export default defineConfig({
     // Project root directory
     root: process.cwd(),
-    
+
     // manifest.json path (relative to project root)
     manifest: './manifest.json',
-    
+
     // Output directory
     outDir: 'dist',
-    
+
     // Source directory (for resource loading)
     sourceDir: 'src',
-    
+
     // Widgets directory
     widgetsDir: 'widgets',
-    
+
     // Public assets directory
     publicDir: 'public',
-    
+
     // Index script directory (Prelude script)
     indexDir: 'index',
-    
+
     // Generate source maps
     sourcemap: false,
-    
+
     // Minify output
     minify: true,
-    
+
     // External dependencies (not bundled)
     external: ['electron'],
-    
+
     // Custom asset handling
     assets: {
       // Additional files/directories to copy (glob patterns)
       copy: ['./assets/**/*', './public/icons/*'],
-      
+
       // Excluded files (glob patterns)
       exclude: ['**/*.test.ts', '**/*.spec.js']
     },
-    
+
     // Version sync options
     versionSync: {
       // Enable syncing version from package.json to manifest.json
       enabled: true,
-      
+
       // Auto sync without prompting
       auto: false
     },
-    
+
     // Maximum plugin size (MB) before warning
     maxSizeMB: 10
   })
@@ -334,11 +334,11 @@ After building, use the SDK from `@talex-touch/utils`:
 code: |
   // src/main.ts
   import { useBox, useClipboard, usePluginStorage } from '@talex-touch/utils/plugin/sdk'
-  
+
   const box = useBox()
   const clipboard = useClipboard()
   const storage = usePluginStorage()
-  
+
   // Plugin logic...
 ---
 :::
@@ -381,7 +381,7 @@ Use relative paths or `@/` alias:
 code: |
   // vite.config.ts
   import { resolve } from 'path'
-  
+
   export default defineConfig({
     resolve: {
       alias: {
