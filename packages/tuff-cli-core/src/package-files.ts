@@ -25,4 +25,3 @@ export function collectPackageEntries(root: string): PluginPackageEntry[] {
     }
   })
 }
-

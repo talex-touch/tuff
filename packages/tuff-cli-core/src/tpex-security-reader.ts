@@ -3,6 +3,7 @@ import type {
   PluginPackagePolicyResult,
   PluginSecurityScanFile,
 } from '@talex-touch/utils/plugin'
+import type { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
 import {
   isPluginSecurityScanTextPath,
@@ -32,8 +33,10 @@ function readTarString(block: Buffer, start: number, length: number): string {
 
 function readTarOctal(block: Buffer, start: number, length: number): number {
   const value = readTarString(block, start, length).replace(/^0+/, '')
-  if (!value) return 0
-  if (!/^[0-7]+$/.test(value)) return -1
+  if (!value)
+    return 0
+  if (!/^[0-7]+$/.test(value))
+    return -1
   return Number.parseInt(value, 8)
 }
 
@@ -42,12 +45,18 @@ function normalizeArchivePath(rawPath: string): string {
 }
 
 function entryType(typeFlag: string): PluginPackageEntry['type'] {
-  if (!typeFlag || typeFlag === '0' || typeFlag === '7') return 'file'
-  if (typeFlag === '5') return 'directory'
-  if (typeFlag === '1') return 'hardlink'
-  if (typeFlag === '2') return 'symlink'
-  if (typeFlag === '3' || typeFlag === '4') return 'device'
-  if (typeFlag === '6') return 'fifo'
+  if (!typeFlag || typeFlag === '0' || typeFlag === '7')
+    return 'file'
+  if (typeFlag === '5')
+    return 'directory'
+  if (typeFlag === '1')
+    return 'hardlink'
+  if (typeFlag === '2')
+    return 'symlink'
+  if (typeFlag === '3' || typeFlag === '4')
+    return 'device'
+  if (typeFlag === '6')
+    return 'fifo'
   return 'other'
 }
 
@@ -75,18 +84,23 @@ function toScanFile(path: string, content: Buffer): PluginSecurityScanFile {
 }
 
 function verifyFileMap(manifest: unknown, files: Map<string, Buffer>): boolean {
-  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return false
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest))
+    return false
   const rawFileMap = (manifest as Record<string, unknown>)._files
-  if (!rawFileMap || typeof rawFileMap !== 'object' || Array.isArray(rawFileMap)) return false
+  if (!rawFileMap || typeof rawFileMap !== 'object' || Array.isArray(rawFileMap))
+    return false
   const expected = Object.entries(rawFileMap as Record<string, unknown>)
   const actualPaths = Array.from(files.keys())
     .filter(path => path !== 'manifest.json' && path !== 'key.talex')
     .sort()
   const expectedPaths = expected.map(([rawPath]) => normalizeArchivePath(rawPath)).sort()
-  if (actualPaths.length !== expectedPaths.length) return false
-  if (actualPaths.some((path, index) => path !== expectedPaths[index])) return false
+  if (actualPaths.length !== expectedPaths.length)
+    return false
+  if (actualPaths.some((path, index) => path !== expectedPaths[index]))
+    return false
   return expected.every(([rawPath, rawDigest]) => {
-    if (typeof rawDigest !== 'string' || !/^sha256-[a-f0-9]{64}$/.test(rawDigest)) return false
+    if (typeof rawDigest !== 'string' || !/^sha256-[a-f0-9]{64}$/.test(rawDigest))
+      return false
     const content = files.get(normalizeArchivePath(rawPath))
     return Boolean(content)
       && createHash('sha256').update(content!).digest('hex') === rawDigest.slice('sha256-'.length)
@@ -95,7 +109,8 @@ function verifyFileMap(manifest: unknown, files: Map<string, Buffer>): boolean {
 
 export function readTpexSecurityScanInput(packagePath: string): TpexSecurityScanInput {
   const stats = fs.statSync(packagePath)
-  if (!stats.isFile()) throw new Error('TPEX package path must be a regular file.')
+  if (!stats.isFile())
+    throw new Error('TPEX package path must be a regular file.')
   if (stats.size > PLUGIN_PACKAGE_MAX_ARCHIVE_BYTES) {
     throw new Error('TPEX package exceeds the package policy archive limit.')
   }
@@ -108,7 +123,8 @@ export function readTpexSecurityScanInput(packagePath: string): TpexSecurityScan
   for (let offset = 0; offset + TAR_BLOCK_SIZE <= buffer.length;) {
     const header = buffer.subarray(offset, offset + TAR_BLOCK_SIZE)
     offset += TAR_BLOCK_SIZE
-    if (isEmptyBlock(header)) break
+    if (isEmptyBlock(header))
+      break
 
     const name = readTarString(header, 0, TAR_NAME_BYTES)
     const prefix = readTarString(header, TAR_PREFIX_OFFSET, TAR_PREFIX_BYTES)
