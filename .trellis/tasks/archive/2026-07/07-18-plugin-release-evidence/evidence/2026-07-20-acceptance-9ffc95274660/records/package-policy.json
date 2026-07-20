@@ -1,0 +1,22 @@
+{
+  "contractVersion": "talex.plugin-release-evidence-record/v1",
+  "recordId": "package-policy",
+  "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+  "identity": {
+    "id": "com.tuffex.acceptance.9ffc95274660",
+    "name": "tuff-supply-acceptance-9ffc95274660",
+    "version": "0.0.0-beta.20260720.9ffc95274660",
+    "channel": "BETA"
+  },
+  "artifact": {
+    "sha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+    "size": 15360
+  },
+  "result": "passed",
+  "evidence": {
+    "policyVersion": "1",
+    "decision": "passed",
+    "violationCount": 0,
+    "profile": "publish"
+  }
+}

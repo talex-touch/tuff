@@ -1,0 +1,30 @@
+{
+  "contractVersion": "talex.plugin-release-evidence-record/v1",
+  "recordId": "source-build",
+  "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+  "identity": {
+    "id": "com.tuffex.acceptance.9ffc95274660",
+    "name": "tuff-supply-acceptance-9ffc95274660",
+    "version": "0.0.0-beta.20260720.9ffc95274660",
+    "channel": "BETA"
+  },
+  "artifact": {
+    "sha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+    "size": 15360
+  },
+  "result": "passed",
+  "evidence": {
+    "auditId": "source-build-9ffc95274660",
+    "baseSource": "plugins/touch-text-tools",
+    "sourceMode": "clean-export-with-declared-acceptance-identity",
+    "sourceTreeSha256": "8d59cce9c15aa690d90658200807da1057ffb185f32723a6a1e0daaa74b9721e",
+    "sourceFileCount": 5,
+    "cleanBuild": true,
+    "testsPassed": true,
+    "commands": [
+      "node --test index.test.cjs",
+      "tuff validate --strict",
+      "tuff build"
+    ]
+  }
+}

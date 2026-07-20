@@ -32,12 +32,12 @@
 
 ## Acceptance Criteria
 
-- [ ] 八个子任务均通过各自验收并标记完成，父任务树为 8/8。
-- [ ] 同一 `.tpex` SHA-256 贯穿构建报告、扫描报告、签名载荷、Nexus version 记录、下载响应和 CoreApp 安装证据。
-- [ ] 未通过 policy、scan、签名或人工审核的版本无法进入公开 Store 列表、详情、版本列表或下载接口。
-- [ ] 一次真实部署上传可从 CLI 请求追踪到 Nexus D1/R2 记录、公开/受控展示和 CoreApp 安装结果。
-- [ ] 旧 exporter/CLI shim 不再有运行时调用者、bin 入口或文档示例；Vite 插件能力不受影响。
-- [ ] 严格证据 verifier 退出 0，且报告明确区分 focused、local、preview/deployed 与真实发布证据。
+- [x] 八个子任务均通过各自验收并标记完成，父任务树为 8/8。
+- [x] 同一 `.tpex` SHA-256 贯穿构建报告、扫描报告、签名载荷、Nexus version 记录、下载响应和 CoreApp 安装证据。
+- [x] 未通过 policy、scan、签名或人工审核的版本无法进入公开 Store 列表、详情、版本列表或下载接口。
+- [x] 一次真实部署上传可从 CLI 请求追踪到 Nexus D1/R2 记录、公开/受控展示和 CoreApp 安装结果。
+- [x] 旧 exporter/CLI shim 不再有运行时调用者、bin 入口或文档示例；Vite 插件能力不受影响。
+- [x] 严格证据 verifier 退出 0，且报告明确区分 focused、local、preview/deployed 与真实发布证据。
 
 ## Out of Scope
 

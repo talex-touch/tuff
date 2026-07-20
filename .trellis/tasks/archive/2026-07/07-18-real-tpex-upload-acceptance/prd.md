@@ -21,13 +21,13 @@
 
 ## Acceptance Criteria
 
-- [ ] 证据明确证明请求命中 deployed Nexus、D1 和 R2/等价真实持久层，不是 local-only 或 memory fallback。
-- [ ] CLI 非 dry-run 上传成功，返回的 version id 与 D1 row、R2 object 和 timeline 一致。
-- [ ] 下载 bytes SHA-256 与本地构建 artifact、scan、signature 和 Nexus version 记录完全一致。
-- [ ] 未审核版本不公开；完成目标环境所需审核后，版本仅在允许频道可见并可下载。
-- [ ] 隔离 CoreApp profile 安装并加载同一 identity/version，安装日志不包含 token、绝对私密路径或包内容。
-- [ ] 重复上传同 version/channel 被幂等拒绝且不产生孤儿对象；失败/清理路径无 orphan D1/R2 数据。
-- [ ] 真实验收 manifest/checklist 通过严格 verifier；mock/dry-run 结果仅作为前置，不计完成。
+- [x] 证据明确证明请求命中 deployed Nexus、D1 和 R2/等价真实持久层，不是 local-only 或 memory fallback。
+- [x] CLI 非 dry-run 上传成功，返回的 version id 与 D1 row、R2 object 和 timeline 一致。
+- [x] 下载 bytes SHA-256 与本地构建 artifact、scan、signature 和 Nexus version 记录完全一致。
+- [x] 未审核版本不公开；完成目标环境所需审核后，版本仅在允许频道可见并可下载。
+- [x] 隔离 CoreApp profile 安装并加载同一 identity/version，安装日志不包含 token、绝对私密路径或包内容。
+- [x] 重复上传同 version/channel 被幂等拒绝且不产生孤儿对象；失败/清理路径无 orphan D1/R2 数据。
+- [x] 真实验收 manifest/checklist 通过严格 verifier；mock/dry-run 结果仅作为前置，不计完成。
 
 ## Out of Scope
 

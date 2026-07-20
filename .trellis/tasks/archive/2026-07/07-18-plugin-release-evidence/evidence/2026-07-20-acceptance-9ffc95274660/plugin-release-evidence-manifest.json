@@ -1,0 +1,366 @@
+{
+  "contractVersion": "talex.plugin-release-evidence/v1",
+  "generatedAt": "2026-07-20T03:41:03.779Z",
+  "environment": {
+    "kind": "production",
+    "deploymentId": "81c42e20-cbf3-401b-92a6-00a092c2f812",
+    "deploymentUrl": "https://81c42e20.tuff-dso.pages.dev",
+    "publicBaseUrl": "https://tuff.tagzxia.com",
+    "database": {
+      "kind": "d1",
+      "binding": "DB",
+      "databaseId": "ebdeb7fc-74a4-4963-9bca-310a9aa0e4d6",
+      "servedBy": "v3-prod",
+      "region": "APAC",
+      "colo": "NRT"
+    },
+    "objectStorage": {
+      "kind": "r2",
+      "binding": "R2",
+      "bucket": "tuff-nexus-imgable-prod",
+      "provider": "cloudflare-r2"
+    }
+  },
+  "source": {
+    "revision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+    "dirty": false,
+    "repository": "talex-touch",
+    "pluginSource": "plugins/touch-text-tools+acceptance-overlay:9ffc95274660"
+  },
+  "plugin": {
+    "id": "com.tuffex.acceptance.9ffc95274660",
+    "name": "tuff-supply-acceptance-9ffc95274660",
+    "version": "0.0.0-beta.20260720.9ffc95274660",
+    "channel": "BETA"
+  },
+  "artifact": {
+    "sha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+    "size": 15360,
+    "pathRef": "artifacts/tuff-supply-acceptance-9ffc95274660-0.0.0-beta.20260720.9ffc95274660.tpex"
+  },
+  "nexus": {
+    "pluginId": "ad86433c-900b-43fb-a5d0-bd5e7ee3bdfe",
+    "versionId": "84c3cc6f-9303-48d8-bd40-472d25a87b75",
+    "packageKey": "e6fd67a5-f4ae-42ea-b889-ac216e9f71ef.tpex",
+    "uploadAuditEventId": "33586413-613f-40d6-9066-f7731bf0e81b",
+    "reviewAuditEventId": "8a8da8ce-a2e5-413e-b771-fcfeb0167343"
+  },
+  "records": [
+    {
+      "id": "source-build",
+      "kind": "build",
+      "level": "packaged",
+      "status": "passed",
+      "startedAt": "2026-07-20T02:14:40.000Z",
+      "completedAt": "2026-07-20T02:14:44.110Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [],
+      "refs": [
+        "records/source-build.json"
+      ],
+      "facts": {
+        "auditId": "source-build-9ffc95274660",
+        "cleanBuild": true,
+        "testsPassed": true,
+        "sourceTreeSha256": "8d59cce9c15aa690d90658200807da1057ffb185f32723a6a1e0daaa74b9721e"
+      }
+    },
+    {
+      "id": "publisher-signature",
+      "kind": "publisher-signature",
+      "level": "packaged",
+      "status": "passed",
+      "startedAt": "2026-07-20T02:14:44.110Z",
+      "completedAt": "2026-07-20T02:14:44.110Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "source-build"
+      ],
+      "refs": [
+        "records/publisher-signature.json"
+      ],
+      "facts": {
+        "decision": "verified",
+        "algorithm": "Ed25519",
+        "keyId": "acceptance-publisher-9ffc95274660"
+      }
+    },
+    {
+      "id": "package-policy",
+      "kind": "policy",
+      "level": "packaged",
+      "status": "passed",
+      "startedAt": "2026-07-20T02:14:44.111Z",
+      "completedAt": "2026-07-20T02:14:47.445Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "publisher-signature"
+      ],
+      "refs": [
+        "records/package-policy.json"
+      ],
+      "facts": {
+        "decision": "passed",
+        "policyVersion": "1"
+      }
+    },
+    {
+      "id": "security-scan",
+      "kind": "scan",
+      "level": "packaged",
+      "status": "passed",
+      "startedAt": "2026-07-20T02:14:48.578Z",
+      "completedAt": "2026-07-20T02:14:48.705Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "package-policy"
+      ],
+      "refs": [
+        "records/security-scan.json"
+      ],
+      "facts": {
+        "decision": "passed",
+        "findingCount": 0,
+        "reportSha256": "a4b19acef5ea46dae4d491a87be7b1045ad56b93fcb840d3e75ae6f80fcc3ee8"
+      }
+    },
+    {
+      "id": "real-upload",
+      "kind": "upload",
+      "level": "real-upload",
+      "status": "passed",
+      "startedAt": "2026-07-20T02:14:48.706Z",
+      "completedAt": "2026-07-20T02:14:50.907Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "security-scan",
+        "publisher-signature"
+      ],
+      "refs": [
+        "records/real-upload.json"
+      ],
+      "facts": {
+        "dryRun": false,
+        "database": "d1",
+        "objectStorage": "r2",
+        "pluginId": "ad86433c-900b-43fb-a5d0-bd5e7ee3bdfe",
+        "versionId": "84c3cc6f-9303-48d8-bd40-472d25a87b75",
+        "packageKey": "e6fd67a5-f4ae-42ea-b889-ac216e9f71ef.tpex",
+        "requestAuditId": "59a8fb9d-23a0-4f7e-8715-d349cf361893"
+      }
+    },
+    {
+      "id": "nexus-attestation",
+      "kind": "nexus-attestation",
+      "level": "deployed",
+      "status": "passed",
+      "startedAt": "2026-07-20T02:31:08.438Z",
+      "completedAt": "2026-07-20T02:31:09.962Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "real-upload"
+      ],
+      "refs": [
+        "records/nexus-attestation.json"
+      ],
+      "facts": {
+        "decision": "verified",
+        "keyId": "nexus-plugin-attestation-2026-01",
+        "deploymentId": "81c42e20-cbf3-401b-92a6-00a092c2f812"
+      }
+    },
+    {
+      "id": "store-eligibility",
+      "kind": "eligibility",
+      "level": "deployed",
+      "status": "passed",
+      "startedAt": "2026-07-20T03:35:51.789Z",
+      "completedAt": "2026-07-20T03:37:00.000Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "nexus-attestation"
+      ],
+      "refs": [
+        "records/store-eligibility.json"
+      ],
+      "facts": {
+        "status": "approved",
+        "admission": "eligible",
+        "publicVisible": false,
+        "betaVisible": true
+      }
+    },
+    {
+      "id": "artifact-download",
+      "kind": "download",
+      "level": "real-upload",
+      "status": "passed",
+      "startedAt": "2026-07-20T03:38:48.122Z",
+      "completedAt": "2026-07-20T03:38:56.857Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "store-eligibility"
+      ],
+      "refs": [
+        "records/artifact-download.json"
+      ],
+      "facts": {
+        "statusCode": 200,
+        "sha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+        "size": 15360,
+        "objectStorage": "r2"
+      }
+    },
+    {
+      "id": "coreapp-install",
+      "kind": "install",
+      "level": "real-upload",
+      "status": "passed",
+      "startedAt": "2026-07-20T03:38:56.858Z",
+      "completedAt": "2026-07-20T03:38:57.010Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "artifact-download"
+      ],
+      "refs": [
+        "records/coreapp-install.json"
+      ],
+      "facts": {
+        "provider": "tpex",
+        "installed": true,
+        "featureResult": true,
+        "logsSanitized": true
+      }
+    },
+    {
+      "id": "duplicate-upload",
+      "kind": "duplicate-upload",
+      "level": "real-upload",
+      "status": "passed",
+      "startedAt": "2026-07-20T03:39:29.431Z",
+      "completedAt": "2026-07-20T03:39:33.645Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "coreapp-install"
+      ],
+      "refs": [
+        "records/duplicate-upload.json"
+      ],
+      "facts": {
+        "rejected": true,
+        "statusCode": 400,
+        "versionRowCount": 1,
+        "targetObjectCount": 1,
+        "orphanCount": 0
+      }
+    },
+    {
+      "id": "retention",
+      "kind": "retention",
+      "level": "deployed",
+      "status": "passed",
+      "startedAt": "2026-07-20T03:39:33.646Z",
+      "completedAt": "2026-07-20T03:41:03.779Z",
+      "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+      "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+      "identity": {
+        "id": "com.tuffex.acceptance.9ffc95274660",
+        "name": "tuff-supply-acceptance-9ffc95274660",
+        "version": "0.0.0-beta.20260720.9ffc95274660",
+        "channel": "BETA"
+      },
+      "dependencies": [
+        "duplicate-upload"
+      ],
+      "refs": [
+        "records/retention.json"
+      ],
+      "facts": {
+        "policy": "retained-beta-evidence",
+        "versionExists": true,
+        "objectExists": true
+      }
+    }
+  ],
+  "documents": {
+    "summaryRef": "README.md",
+    "checklistRef": "PLUGIN_RELEASE_EVIDENCE_CHECKLIST.md",
+    "strictOutputRef": "plugin-release-strict-output.json",
+    "exitCodeRef": "plugin-release-strict-exit-code.txt"
+  },
+  "gate": {
+    "passed": true,
+    "failures": [],
+    "checkedAt": "2026-07-20T03:41:03.779Z"
+  }
+}

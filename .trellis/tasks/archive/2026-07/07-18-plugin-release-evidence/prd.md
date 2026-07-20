@@ -15,13 +15,13 @@
 
 ## Acceptance Criteria
 
-- [ ] strict verifier 对完整真实链路退出 0，并输出每项 level、artifact digest 与验收映射。
-- [ ] 任一 digest、identity/version、Nexus object id、签名 key id、scan decision 或安装结果不一致时退出非 0。
-- [ ] 缺真实上传/下载/安装 artifact 时，focused 或 dry-run 证据不能关闭 real-upload 条目。
-- [ ] verifier 拒绝绝对用户路径、token/cookie/private key、完整源码/日志和未声明文件引用。
-- [ ] evidence manifest/checklist/summary 状态一致，所有引用文件存在且 JSON 可解析。
-- [ ] 报告明确记录目标环境及 `live/d1/r2/memory/local-only` 边界，memory fallback 不得标为 deployed。
-- [ ] focused verifier tests、证据自验证和 `git diff --check` 通过。
+- [x] strict verifier 对完整真实链路退出 0，并输出每项 level、artifact digest 与验收映射。
+- [x] 任一 digest、identity/version、Nexus object id、签名 key id、scan decision 或安装结果不一致时退出非 0。
+- [x] 缺真实上传/下载/安装 artifact 时，focused 或 dry-run 证据不能关闭 real-upload 条目。
+- [x] verifier 拒绝绝对用户路径、token/cookie/private key、完整源码/日志和未声明文件引用。
+- [x] evidence manifest/checklist/summary 状态一致，所有引用文件存在且 JSON 可解析。
+- [x] 报告明确记录目标环境及 `live/d1/r2/memory/local-only` 边界，memory fallback 不得标为 deployed。
+- [x] focused verifier tests、证据自验证和 `git diff --check` 通过。
 
 ## Out of Scope
 

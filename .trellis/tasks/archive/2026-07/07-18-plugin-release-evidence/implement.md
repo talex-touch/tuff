@@ -2,15 +2,15 @@
 
 ## Ordered Checklist
 
-1. [ ] Define evidence manifest/record/status/level schema and stable required record ids.
-2. [ ] Implement strict verifier with schema, path, digest, identity, chronology, level and sensitive-string checks.
-3. [ ] Add negative fixtures for missing real-upload records, digest mismatch, stale version, invalid level, missing files and secret/absolute-path leakage.
-4. [ ] Add safe collectors/projections for build audit, policy, scan, publisher signature, Nexus attestation, upload/storage, eligibility/download and CoreApp install.
-5. [ ] Create report template/checklist that maps each parent/child acceptance criterion to record ids and artifact refs.
-6. [ ] Run focused/controlled verification first; keep unsatisfied deployed/real-upload items blocked.
-7. [ ] Consume the completed real upload run and bind all records to one artifact SHA-256.
-8. [ ] Produce strict output/exit capture, bounded README and hygiene review.
-9. [ ] Re-run strict verifier from a clean checkout/report copy.
+1. [x] Define evidence manifest/record/status/level schema and stable required record ids.
+2. [x] Implement strict verifier with schema, path, digest, identity, chronology, level and sensitive-string checks.
+3. [x] Add negative fixtures for missing real-upload records, digest mismatch, stale version, invalid level, missing files and secret/absolute-path leakage.
+4. [x] Add safe collectors/projections for build audit, policy, scan, publisher signature, Nexus attestation, upload/storage, eligibility/download and CoreApp install.
+5. [x] Create report template/checklist that maps each parent/child acceptance criterion to record ids and artifact refs.
+6. [x] Run focused/controlled verification first; keep unsatisfied deployed/real-upload items blocked.
+7. [x] Consume the completed real upload run and bind all records to one artifact SHA-256.
+8. [x] Produce strict output/exit capture, bounded README and hygiene review.
+9. [x] Re-run strict verifier from a clean report-relative artifact set.
 
 ## Contract Tests
 
