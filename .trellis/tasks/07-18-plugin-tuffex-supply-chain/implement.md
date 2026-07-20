@@ -6,11 +6,11 @@
 
 ## Ordered Checklist
 
-1. [ ] 完成 `07-18-plugin-package-policy`，冻结 policy contract/version/violation codes。
-2. [ ] 完成 `07-18-plugin-security-scan`，让报告绑定 policy-normalized artifact digest。
-3. [ ] 完成 `07-18-plugin-signing-trust-chain`，冻结 signing payload、key id 和 attestation contract。
-4. [ ] 完成 `07-18-plugin-source-package-audit`，从 canonical source 生成 audited artifact。
-5. [ ] 完成 `07-18-nexus-plugin-display-gate`，统一所有公开 Store/download 入口。
+1. [x] 完成 `07-18-plugin-package-policy`，冻结 policy contract/version/violation codes。
+2. [x] 完成 `07-18-plugin-security-scan`，让报告绑定 policy-normalized artifact digest。
+3. [x] 完成 `07-18-plugin-signing-trust-chain`，冻结 signing payload、key id 和 attestation contract。
+4. [x] 完成 `07-18-plugin-source-package-audit`，从 canonical source 生成 audited artifact。
+5. [x] 完成 `07-18-nexus-plugin-display-gate`，统一所有公开 Store/download 入口。
 6. [ ] 完成 `07-18-real-tpex-upload-acceptance`，采集 deployed D1/R2 + CoreApp install 闭环。
 7. [ ] 完成 `07-18-plugin-release-evidence`，用 strict verifier 绑定完整链路。
 8. [ ] 完成 `07-18-plugin-cli-shim-retirement`，删除 bypass canonical CLI 的兼容面。
