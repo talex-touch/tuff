@@ -1,6 +1,6 @@
 # TalexTouch # PluginExporter
 
-> 📦 **TuffCLI**: 本包现已集成到 TuffCLI 工具链中，通过 `tuff` 命令进行插件的构建、发布和管理。
+> 📦 **Tuff CLI**: 本包现已集成到 Tuff CLI 工具链中，通过 `tuff` 命令进行插件的构建、发布和管理。
 >
 > ```bash
 > tuff dev      # 启动开发服务器

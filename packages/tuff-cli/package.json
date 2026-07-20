@@ -12,8 +12,7 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "tuff": "bin/tuff.js",
-    "tuffcli": "bin/tuffcli.js"
+    "tuff": "bin/tuff.js"
   },
   "files": [
     "bin",
@@ -30,7 +29,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vue/compiler-sfc": "^3.5.39",
+    "@vue/compiler-sfc": "3.5.39",
     "chalk": "^5.6.2",
     "cli-progress": "^3.12.0",
     "compressing": "^1.10.5",

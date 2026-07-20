@@ -16,7 +16,7 @@ import {
   resolvePreludeDir,
   toProjectRelative,
   type PreludeBuildConfig,
-} from './core/prelude'
+} from './prelude'
 
 let preludeBuildContext: any = null
 let preludeBuildPromise: Promise<string | null> | null = null

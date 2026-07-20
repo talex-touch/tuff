@@ -751,7 +751,7 @@ export default {
         },
         empty: {
           title: 'No API Keys',
-          description: 'Create an API key to use with tuffcli and other integrations.',
+          description: 'Create an API key to use with tuff and other integrations.',
           cta: 'Create Your First Key',
         },
         overlay: {

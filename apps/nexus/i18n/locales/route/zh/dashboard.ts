@@ -750,7 +750,7 @@ export default {
         },
         empty: {
           title: '暂无 API 密钥',
-          description: '创建一个 API 密钥，用于 tuffcli 与其他集成。',
+          description: '创建一个 API 密钥，用于 tuff 与其他集成。',
           cta: '创建第一个密钥',
         },
         overlay: {

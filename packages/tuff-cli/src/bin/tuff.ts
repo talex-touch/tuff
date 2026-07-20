@@ -76,7 +76,7 @@ const GITHUB_REPO_URL = 'https://github.com/talex-touch/tuff'
 const DEFAULT_LOCAL_BASE_URL = NEXUS_LOCAL_BASE_URL
 const DEVICE_AUTH_TIMEOUT_MS = 2 * 60 * 1000
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
-const CLI_COMMAND_NAME = resolveCliCommandName()
+const CLI_COMMAND_NAME = 'tuff'
 
 interface ViteBuildWatcherEvent {
   code: string
@@ -97,17 +97,6 @@ function isViteBuildWatcher(value: unknown): value is ViteBuildWatcher {
 
 let cliLocalMode = false
 let cliCustomBase = false
-
-function resolveCliCommandName(): string {
-  const fallback = 'tuffcli'
-  const entry = process.argv[1]
-  if (!entry)
-    return fallback
-
-  const base = path.basename(entry)
-  const normalized = base.replace(/\.(cmd|exe|js)$/i, '')
-  return normalized || fallback
-}
 
 function resolveLocalBaseUrl(): string {
   return normalizeBaseUrl(DEFAULT_LOCAL_BASE_URL)
@@ -440,27 +429,31 @@ async function runPublishWithTracking(): Promise<void> {
   if (!onboardingReady)
     return
 
-  const authenticated = await ensureAuthenticated({ reloginStrategy: 'oauth' })
-  if (!authenticated)
-    return
+  const publishModule = await loadPublishModule()
+  const publishConfig = await publishModule.resolvePublishConfig(
+    process.cwd(),
+    publishModule.parsePublishArgs(process.argv.slice(3)),
+  )
+
+  if (!publishConfig.dryRun) {
+    const authenticated = await ensureAuthenticated({ reloginStrategy: 'oauth' })
+    if (!authenticated)
+      return
+  }
 
   await trackRepository('publish')
-  const publishModule = await loadPublishModule()
-  await publishModule.publish(
-    await publishModule.resolvePublishConfig(process.cwd(), publishModule.parsePublishArgs(process.argv.slice(3))),
-    {
-      refreshAppJwt: async () => {
-        if (process.env.TUFF_NON_INTERACTIVE === '1')
-          return null
-        await clearAuthToken()
-        printInfo(t('notice.authCleared'))
-        const ok = await runDeviceAuthLogin()
-        if (!ok)
-          return null
-        return await getAuthToken()
-      },
+  await publishModule.publish(publishConfig, {
+    refreshAppJwt: async () => {
+      if (process.env.TUFF_NON_INTERACTIVE === '1')
+        return null
+      await clearAuthToken()
+      printInfo(t('notice.authCleared'))
+      const ok = await runDeviceAuthLogin()
+      if (!ok)
+        return null
+      return await getAuthToken()
     },
-  )
+  })
 }
 
 async function runBuilder() {
@@ -1316,7 +1309,7 @@ async function runSetupMcpCommand(): Promise<void> {
   printWarning('Persistent MCP profile installation is not enabled in this CLI MVP.')
   printList([
     'Core App already has a runtime MCP registry for workflow metadata profiles.',
-    'Use tuffcli doctor to inspect local tools and skills before enabling MCP profiles.',
+    'Use tuff doctor to inspect local tools and skills before enabling MCP profiles.',
     'Next implementation slice should add an auditable profile manifest with --dry-run and --yes.',
     `Codex installed: ${formatBoolean(Boolean(environment.tools.find(tool => tool.id === 'codex')?.installed))}`,
     `Codex skills root: ${environment.skillsRoot}`,
@@ -1678,7 +1671,6 @@ async function main() {
   if (nonInteractive) {
     process.env.TUFF_NON_INTERACTIVE = '1'
   }
-  process.env.TUFF_CLI_COMMAND = CLI_COMMAND_NAME
 
   const hasCustomBase = Boolean(apiBase) || local
   if (apiBase) {

@@ -37,11 +37,11 @@ function buildTuffCliProbeCommands(): TuffCliProbeCommand[] {
   }
 
   if (process.platform === 'win32') {
-    push('tuffcli.cmd')
-    push('tuffcli.exe')
-    push('tuffcli')
+    push('tuff.cmd')
+    push('tuff.exe')
+    push('tuff')
   } else {
-    push('tuffcli')
+    push('tuff')
   }
 
   if (!process.env.NODE_ENV || process.env.NODE_ENV === 'development') {
@@ -50,18 +50,16 @@ function buildTuffCliProbeCommands(): TuffCliProbeCommand[] {
         process.cwd(),
         'node_modules',
         '.bin',
-        process.platform === 'win32' ? 'tuffcli.cmd' : 'tuffcli'
+        process.platform === 'win32' ? 'tuff.cmd' : 'tuff'
       )
     )
-    push(process.execPath, [
-      path.resolve(process.cwd(), 'packages', 'tuff-cli', 'bin', 'tuffcli.js')
-    ])
+    push(process.execPath, [path.resolve(process.cwd(), 'packages', 'tuff-cli', 'bin', 'tuff.js')])
   }
 
   return entries
 }
 
-const TUFF_CLI_COMMAND_CANDIDATES = buildTuffCliProbeCommands()
+const TUFF_CLI_PROBE_CANDIDATES = buildTuffCliProbeCommands()
 
 function withLimitations(
   supportLevel: PlatformCapabilitySupportLevel,
@@ -272,7 +270,7 @@ export async function detectTuffCliAvailability(): Promise<boolean> {
     return tuffCliDetectionCache.available
   }
 
-  for (const candidate of TUFF_CLI_COMMAND_CANDIDATES) {
+  for (const candidate of TUFF_CLI_PROBE_CANDIDATES) {
     try {
       await execFileAsync(candidate.command, [...candidate.args, '--version'], {
         timeout: TUFF_CLI_DETECT_TIMEOUT_MS,
@@ -295,6 +293,6 @@ export async function getTuffCliCapabilityPatch(): Promise<PlatformCapabilityRun
     return withLimitations('supported')
   }
 
-  const reason = 'CLI binary `tuffcli` was not detected in PATH or known install locations.'
+  const reason = 'CLI binary `tuff` was not detected in PATH or known install locations.'
   return withLimitations('unsupported', reason, 'CLI_NOT_FOUND', [reason])
 }

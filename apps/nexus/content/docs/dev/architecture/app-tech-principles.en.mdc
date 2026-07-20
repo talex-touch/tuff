@@ -81,7 +81,7 @@ This repository is a pnpm workspace monorepo. The **desktop app** is the core, w
 - `package.json`, `tsconfig.json`, `eslint.config.js`.
 
 ### packages/unplugin-export-plugin (Build/Export Plugin)
-- `src/`: `core/`, `cli/`, `bin/`, `__tests__/`, build adapters (`vite.ts`, `rollup.ts`, `esbuild.ts`, `webpack.ts`, `nuxt.ts`).
+- `src/`: framework adapters (`vite.ts`, `rollup.ts`, `esbuild.ts`, `webpack.ts`, `nuxt.ts`), shared integration runtime (`index.ts`, `prelude.ts`, `types.ts`), and integration tests. CLI, package build, and publish logic live only in `packages/tuff-cli` and `packages/tuff-cli-core`.
 - `tsup.config.ts`, `package.json`, `README.md`.
 
 ### packages/help (Helpers)
