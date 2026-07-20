@@ -18,7 +18,6 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, getDeviceId, subscribeAuthState } from '../auth'
-import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import {
   getConfig as getMainStorageConfig,
@@ -109,6 +108,7 @@ let transport: ITuffTransportMain | null = null
 let syncEnabledWatcherCleanup: (() => void) | null = null
 let authStateCleanup: (() => void) | null = null
 let syncPayloadKeyRegistrationPromise: Promise<void> | null = null
+let syncPreferenceWriteDepth = 0
 
 function isSyncTestEnvironment(): boolean {
   return process.env.NODE_ENV === 'test' || process.env.VITEST === 'true'
@@ -244,9 +244,26 @@ function getSyncPreferenceState(): SyncPreferenceState {
 function updateSyncPreferenceState(patch: Partial<SyncPreferenceState>): SyncPreferenceState {
   const appSettings = getMainConfig(StorageList.APP_SETTING) as AppSetting
   const current = normalizeSyncPreference(appSettings.sync)
+  let changed = false
+  for (const key in patch) {
+    const typedKey = key as keyof SyncPreferenceState
+    if (!Object.is(current[typedKey], patch[typedKey])) {
+      changed = true
+      break
+    }
+  }
+  if (!changed) {
+    return current
+  }
+
   const next = { ...current, ...patch }
   appSettings.sync = next
-  saveMainConfig(StorageList.APP_SETTING, appSettings)
+  syncPreferenceWriteDepth += 1
+  try {
+    saveMainConfig(StorageList.APP_SETTING, appSettings)
+  } finally {
+    syncPreferenceWriteDepth -= 1
+  }
   return next
 }
 
@@ -268,13 +285,6 @@ function setNextPullAt(value: string): void {
 
 function setSyncCursor(cursor: number): void {
   updateSyncPreferenceState({ cursor: Math.max(0, Math.floor(cursor)) })
-}
-
-function nextSyncOpSeq(): number {
-  const sync = getSyncPreferenceState()
-  const next = Math.max(0, Math.floor(sync.opSeq || 0)) + 1
-  updateSyncPreferenceState({ opSeq: next })
-  return next
 }
 
 function markSyncPushSuccess(): void {
@@ -1113,6 +1123,9 @@ function markStorageDirty(qualifiedName: string): void {
   if (remoteApplyInFlight.has(normalized)) {
     return
   }
+  if (normalized === StorageList.APP_SETTING && syncPreferenceWriteDepth > 0) {
+    return
+  }
   if (!isSyncStorageKey(normalized) && !isPluginStorageQualifiedName(normalized)) {
     return
   }
@@ -1429,6 +1442,7 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       const items: SyncItemInput[] = []
       const processed = new Set<string>()
       const currentPluginQualifiedNames = new Set<string>()
+      let lastAllocatedOpSeq = Math.max(0, Math.floor(getSyncPreferenceState().opSeq || 0))
 
       for (const snapshot of snapshots) {
         if (isPluginStorageQualifiedName(snapshot.qualifiedName)) {
@@ -1443,7 +1457,8 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
         }
 
         const nowIso = new Date().toISOString()
-        const opSeq = nextSyncOpSeq()
+        lastAllocatedOpSeq += 1
+        const opSeq = lastAllocatedOpSeq
         if (isLarge) {
           const blob = new Blob([snapshot.payloadEnc], { type: 'text/plain;charset=utf-8' })
           const upload = await client.uploadBlob(blob, {
@@ -1464,10 +1479,11 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
       )
       for (const qualifiedName of deletedPluginQualifiedNames) {
         const nowIso = new Date().toISOString()
+        lastAllocatedOpSeq += 1
         items.push(
           buildDeletedSyncItem(
             qualifiedName,
-            nextSyncOpSeq(),
+            lastAllocatedOpSeq,
             nowIso,
             buildDeleteOpHash(qualifiedName, nowIso)
           )
@@ -1486,6 +1502,7 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
         return false
       }
 
+      updateSyncPreferenceState({ opSeq: lastAllocatedOpSeq })
       const result = await client.push(items)
       markSyncPushSuccess()
       clearSyncError()
@@ -1532,11 +1549,12 @@ async function performPush(reason: AutoPushReason, forceAll = false): Promise<bo
 }
 
 async function runStartupSync(): Promise<void> {
+  const requiresFullBootstrap = getSyncPreferenceState().cursor <= 0
   const pulled = await performPull('startup')
   if (!pulled) {
     return
   }
-  await performPush('startup', true)
+  await performPush('startup', requiresFullBootstrap)
 }
 
 async function triggerManualSync(reason: 'user' | 'focus' | 'online'): Promise<void> {
@@ -1548,7 +1566,7 @@ async function triggerManualSync(reason: 'user' | 'focus' | 'online'): Promise<v
   }
 
   await performPull(reason === 'online' ? 'online' : 'manual')
-  await performPush('manual', true)
+  await performPush('manual', reason === 'user')
 }
 
 async function startAutoSync(): Promise<void> {
@@ -1643,7 +1661,6 @@ export class SyncModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('SyncModule')
   name: ModuleKey = SyncModule.key
   private transportDisposers: Array<() => void> = []
-  private networkStatusCleanup: (() => void) | null = null
 
   constructor() {
     super(SyncModule.key)
@@ -1692,16 +1709,6 @@ export class SyncModule extends BaseModule<TalexEvents> {
       )
     }
 
-    if (!this.networkStatusCleanup) {
-      this.networkStatusCleanup = getNetworkService().onStatusChange((status) => {
-        if (!status.online) {
-          return
-        }
-        clearRetryTimer()
-        void triggerManualSync('online')
-      })
-    }
-
     if (!syncEnabledWatcherCleanup) {
       syncEnabledWatcherCleanup = subscribeMainConfig(StorageList.APP_SETTING, (data) => {
         handleSyncEnabledChange(data as AppSetting)
@@ -1723,8 +1730,6 @@ export class SyncModule extends BaseModule<TalexEvents> {
 
   onDestroy(): MaybePromise<void> {
     stopAutoSync('shutdown')
-    this.networkStatusCleanup?.()
-    this.networkStatusCleanup = null
     if (syncEnabledWatcherCleanup) {
       syncEnabledWatcherCleanup()
       syncEnabledWatcherCleanup = null

@@ -60,6 +60,13 @@ Do not make renderer state the source of truth for host data.
 - Plugin secrets belong in secure plugin secret capability / secure-store facade, not ordinary UI state or localStorage.
 - JSON is acceptable for plugin config, sync payloads, catalog downloads, and evidence artifacts, but not as a replacement business SoT.
 
+### CoreApp Cloud Sync Feedback Control
+
+- `APP_SETTING` participates in cloud sync, but its `sync` subtree also stores local runtime metadata (`status`, cursors, queue depth, timestamps, failure counters, and operation sequence). Runtime metadata writes must not mark `APP_SETTING` dirty or schedule another push.
+- Allocate `op_seq` values in memory for one push batch and persist only the final sequence before sending. Never persist the whole app setting once per sync item.
+- Full snapshot push is limited to first bootstrap (`cursor <= 0`) and an explicit user-triggered sync. Startup with an established cursor, focus recovery, and online recovery push only dirty storage.
+- Renderer online/status recovery owns deduplication for one network transition. The main sync module must not register a second independent online recovery trigger for the same lifecycle event.
+
 ### CoreApp Auth Credential Persistence
 
 #### 1. Scope / Trigger
