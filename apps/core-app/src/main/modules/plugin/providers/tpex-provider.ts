@@ -96,13 +96,21 @@ function parseTpexSource(source: string): { slug: string; version?: string } | n
  * TPEX Plugin Provider for core-app
  * Handles both .tpex files and tpex:slug format from official registry
  */
+export interface TpexPluginProviderOptions {
+  apiBase?: string
+  channel?: 'RELEASE' | 'BETA'
+  getRequestHeaders?: () => Record<string, string>
+}
+
 export class TpexPluginProvider implements PluginProvider {
   readonly type = PluginProviderType.TPEX
   private readonly log = tpexProviderLog
 
-  /** Get API base URL dynamically from user-configured sources */
+  constructor(private readonly options: TpexPluginProviderOptions = {}) {}
+
+  /** Get the primary tpexApi base URL from user-configured sources */
   private get apiBase(): string {
-    return getPrimaryApiBase()
+    return this.options.apiBase?.replace(/\/$/, '') ?? getPrimaryApiBase()
   }
 
   canHandle(request: PluginInstallRequest): boolean {
@@ -212,15 +220,17 @@ export class TpexPluginProvider implements PluginProvider {
       meta: { source: request.source, slug, version: version ?? 'latest' }
     })
 
-    // Fetch plugin details from API
-    const detailUrl = `${this.apiBase}/api/store/plugins/${slug}`
-    this.log.debug('Fetching plugin details', { meta: { url: detailUrl } })
+    const detailUrl = new URL(`/api/store/plugins/${encodeURIComponent(slug)}`, `${this.apiBase}/`)
+    if (this.options.channel === 'BETA') detailUrl.searchParams.set('channel', 'BETA')
+    const requestHeaders = this.options.getRequestHeaders?.() ?? {}
+    this.log.debug('Fetching plugin details', { meta: { url: detailUrl.toString() } })
 
     const detailRes = await getNetworkService().request<TpexDetailResponse>({
       method: 'GET',
-      url: detailUrl,
+      url: detailUrl.toString(),
       timeoutMs: 30_000,
       responseType: 'json',
+      headers: requestHeaders,
       validateStatus: [200, 404]
     })
     if (detailRes.status !== 200) {
@@ -256,7 +266,13 @@ export class TpexPluginProvider implements PluginProvider {
     })
 
     // Use Node.js stream download instead of fetch + arrayBuffer
-    const filePath = await downloadToTempFile(downloadUrl, '.tpex', context?.downloadOptions)
+    const filePath = await downloadToTempFile(downloadUrl, '.tpex', {
+      ...context?.downloadOptions,
+      headers: {
+        ...context?.downloadOptions?.headers,
+        ...requestHeaders
+      }
+    })
 
     // Peek manifest from downloaded file
     let manifest = await peekTpexManifest(filePath)

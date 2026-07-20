@@ -16,6 +16,8 @@ export interface IDownloadOptions {
    * Callback function for download progress, with progress value (0-100).
    */
   onProgress?: (progress: number) => void
+  /** Optional request headers for authenticated registry downloads. */
+  headers?: Record<string, string>
 }
 
 /**
