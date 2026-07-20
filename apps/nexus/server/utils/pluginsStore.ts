@@ -389,6 +389,7 @@ export interface StorePluginSearchOptions {
   category?: string
   limit?: number
   offset?: number
+  audience?: PluginReleaseAudience
 }
 
 export interface StorePluginSearchPlugin extends DashboardPlugin {
@@ -408,6 +409,7 @@ export interface StorePluginListOptions {
   compact?: boolean
   limit?: number
   offset?: number
+  audience?: PluginReleaseAudience
 }
 
 export interface StorePluginListResult {
@@ -1463,6 +1465,7 @@ export async function searchStorePlugins(
   const plugins = await listPlugins(event, {
     includeVersions: true,
     forStore: true,
+    audience: options.audience,
   })
 
   const filtered = plugins
@@ -1507,7 +1510,7 @@ export async function listStorePlugins(
 ): Promise<StorePluginListResult> {
   const limit = Math.min(Math.max(Math.floor(options.limit ?? 100), 1), 100)
   const offset = Math.max(Math.floor(options.offset ?? 0), 0)
-  return searchStorePlugins(event, { limit, offset })
+  return searchStorePlugins(event, { limit, offset, audience: options.audience })
 }
 
 export async function getPluginById(event: H3Event | undefined, id: string, options: PluginVisibilityOptions = {}) {
