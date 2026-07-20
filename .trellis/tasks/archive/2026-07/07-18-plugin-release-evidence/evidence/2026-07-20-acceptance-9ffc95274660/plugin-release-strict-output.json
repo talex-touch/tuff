@@ -1,0 +1,86 @@
+{
+  "contractVersion": "talex.plugin-release-evidence/v1",
+  "status": "passed",
+  "checkedAt": "2026-07-20T03:41:03.779Z",
+  "artifactSha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+  "plugin": {
+    "id": "com.tuffex.acceptance.9ffc95274660",
+    "name": "tuff-supply-acceptance-9ffc95274660",
+    "version": "0.0.0-beta.20260720.9ffc95274660",
+    "channel": "BETA"
+  },
+  "environment": {
+    "kind": "production",
+    "deploymentId": "81c42e20-cbf3-401b-92a6-00a092c2f812",
+    "database": "d1",
+    "objectStorage": "r2"
+  },
+  "records": [
+    {
+      "id": "source-build",
+      "kind": "build",
+      "level": "packaged",
+      "status": "passed"
+    },
+    {
+      "id": "package-policy",
+      "kind": "policy",
+      "level": "packaged",
+      "status": "passed"
+    },
+    {
+      "id": "security-scan",
+      "kind": "scan",
+      "level": "packaged",
+      "status": "passed"
+    },
+    {
+      "id": "publisher-signature",
+      "kind": "publisher-signature",
+      "level": "packaged",
+      "status": "passed"
+    },
+    {
+      "id": "real-upload",
+      "kind": "upload",
+      "level": "real-upload",
+      "status": "passed"
+    },
+    {
+      "id": "store-eligibility",
+      "kind": "eligibility",
+      "level": "deployed",
+      "status": "passed"
+    },
+    {
+      "id": "nexus-attestation",
+      "kind": "nexus-attestation",
+      "level": "deployed",
+      "status": "passed"
+    },
+    {
+      "id": "artifact-download",
+      "kind": "download",
+      "level": "real-upload",
+      "status": "passed"
+    },
+    {
+      "id": "coreapp-install",
+      "kind": "install",
+      "level": "real-upload",
+      "status": "passed"
+    },
+    {
+      "id": "duplicate-upload",
+      "kind": "duplicate-upload",
+      "level": "real-upload",
+      "status": "passed"
+    },
+    {
+      "id": "retention",
+      "kind": "retention",
+      "level": "deployed",
+      "status": "passed"
+    }
+  ]
+}

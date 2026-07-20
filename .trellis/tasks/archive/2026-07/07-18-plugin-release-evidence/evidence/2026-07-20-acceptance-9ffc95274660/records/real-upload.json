@@ -1,0 +1,28 @@
+{
+  "contractVersion": "talex.plugin-release-evidence-record/v1",
+  "recordId": "real-upload",
+  "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+  "identity": {
+    "id": "com.tuffex.acceptance.9ffc95274660",
+    "name": "tuff-supply-acceptance-9ffc95274660",
+    "version": "0.0.0-beta.20260720.9ffc95274660",
+    "channel": "BETA"
+  },
+  "artifact": {
+    "sha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+    "size": 15360
+  },
+  "result": "passed",
+  "evidence": {
+    "dryRun": false,
+    "requestAuditId": "59a8fb9d-23a0-4f7e-8715-d349cf361893",
+    "pluginId": "ad86433c-900b-43fb-a5d0-bd5e7ee3bdfe",
+    "versionId": "84c3cc6f-9303-48d8-bd40-472d25a87b75",
+    "packageKey": "e6fd67a5-f4ae-42ea-b889-ac216e9f71ef.tpex",
+    "database": "d1",
+    "objectStorage": "r2",
+    "storageProvider": "cloudflare-r2",
+    "storageWriteAt": "2026-07-20T02:14:50.643Z",
+    "d1CreatedAt": "2026-07-20T02:14:50.907Z"
+  }
+}

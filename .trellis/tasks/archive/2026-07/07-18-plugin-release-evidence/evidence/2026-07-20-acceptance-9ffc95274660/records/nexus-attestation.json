@@ -1,0 +1,25 @@
+{
+  "contractVersion": "talex.plugin-release-evidence-record/v1",
+  "recordId": "nexus-attestation",
+  "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+  "identity": {
+    "id": "com.tuffex.acceptance.9ffc95274660",
+    "name": "tuff-supply-acceptance-9ffc95274660",
+    "version": "0.0.0-beta.20260720.9ffc95274660",
+    "channel": "BETA"
+  },
+  "artifact": {
+    "sha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+    "size": 15360
+  },
+  "result": "passed",
+  "evidence": {
+    "decision": "verified",
+    "algorithm": "Ed25519",
+    "keyId": "nexus-plugin-attestation-2026-01",
+    "payloadSha256": "876cac1521efae94eebc6585eb447d3ad585e646319190aa3892f91f4a004843",
+    "issuedAt": "2026-07-20T02:31:09.962Z",
+    "verifiedByDeploymentId": "81c42e20-cbf3-401b-92a6-00a092c2f812",
+    "verifiedByRevision": "1bf13dce19a291dc05c04641295ce883a71dd6da"
+  }
+}

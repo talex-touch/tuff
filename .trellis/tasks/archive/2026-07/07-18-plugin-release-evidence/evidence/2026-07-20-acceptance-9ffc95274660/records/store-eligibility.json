@@ -1,0 +1,27 @@
+{
+  "contractVersion": "talex.plugin-release-evidence-record/v1",
+  "recordId": "store-eligibility",
+  "sourceRevision": "4cf18e4a6257e1e3d3bce9b8d2ed282c8bfaeab9",
+  "identity": {
+    "id": "com.tuffex.acceptance.9ffc95274660",
+    "name": "tuff-supply-acceptance-9ffc95274660",
+    "version": "0.0.0-beta.20260720.9ffc95274660",
+    "channel": "BETA"
+  },
+  "artifact": {
+    "sha256": "56acb408adfc26d30cd49aedf77dec6c272b77f5ed91f2367927f0180ee08aff",
+    "size": 15360
+  },
+  "result": "passed",
+  "evidence": {
+    "status": "approved",
+    "admission": "eligible",
+    "publicVisible": false,
+    "betaVisible": true,
+    "betaListStatus": 200,
+    "betaSearchStatus": 200,
+    "publicDetailStatus": 404,
+    "downloadPath": "/api/store/plugins/com.tuffex.acceptance.9ffc95274660/download.tpex?version=0.0.0-beta.20260720.9ffc95274660&channel=BETA",
+    "checkedAt": "2026-07-20T03:37:00.000Z"
+  }
+}

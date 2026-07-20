@@ -22,12 +22,12 @@
 
 ## Acceptance Criteria
 
-- [ ] workspace/lockfile/发布产物中不再有 `tuffcli` bin、legacy CLI forwarder 或重复 exporter 实现。
-- [ ] `unplugin-export-plugin/vite` 的现有 Vite dev/build 契约和插件 consumers 保持可用。
-- [ ] 所有官方插件脚本和文档只使用 `tuff validate/build/builder/publish`。
-- [ ] `tuff` clean install 后可执行 validate、builder、dry-run publish；命令输出不再显示 `tuffcli`。
-- [ ] 搜索无旧 bin/import/re-export/环境 fallback 调用者；必要的历史文档只可明确标注 obsolete，不可作为可执行指引。
-- [ ] CLI core、CLI entrypoint、Vite plugin、official plugin focused builds/tests、package pack inspection 和 lint/typecheck 通过。
+- [x] workspace/lockfile/发布产物中不再有 `tuffcli` bin、legacy CLI forwarder 或重复 exporter 实现。
+- [x] `unplugin-export-plugin/vite` 的现有 Vite dev/build 契约和插件 consumers 保持可用。
+- [x] 所有官方插件脚本和文档只使用 `tuff validate/build/builder/publish`。
+- [x] `tuff` clean install 后可执行 validate、builder、dry-run publish；命令输出不再显示 `tuffcli`。
+- [x] 搜索无旧 bin/import/re-export/环境 fallback 调用者；必要的历史文档只可明确标注 obsolete，不可作为可执行指引。
+- [x] CLI core、CLI entrypoint、Vite plugin、official plugin focused builds/tests、package pack inspection 和 lint/typecheck 通过。
 
 ## Out of Scope
 
