@@ -773,6 +773,10 @@ export default {
               label: 'Plugins',
               description: 'Manage plugin registry visibility and publishing',
             },
+            pluginModeration: {
+              label: 'Plugin Moderation',
+              description: 'Approve or reject plugin versions after security review',
+            },
             account: {
               label: 'Account',
               description: 'Read account level profile information',
@@ -794,6 +798,10 @@ export default {
             pluginPublish: {
               label: 'Publish Plugins',
               description: 'Upload and publish plugins to the store',
+            },
+            pluginModerate: {
+              label: 'Moderate Plugins',
+              description: 'Approve or reject audited plugin versions',
             },
             accountRead: {
               label: 'Read Account',

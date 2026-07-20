@@ -239,6 +239,20 @@ const scopeTree = computed<ApiKeyScopeGroup[]>(() => [
     ],
   },
   {
+    id: 'pluginModeration',
+    label: t('dashboard.sections.apiKeys.scopes.groups.pluginModeration.label'),
+    description: t('dashboard.sections.apiKeys.scopes.groups.pluginModeration.description'),
+    adminOnly: true,
+    children: [
+      {
+        id: 'plugin:moderate',
+        label: t('dashboard.sections.apiKeys.scopes.items.pluginModerate.label'),
+        description: t('dashboard.sections.apiKeys.scopes.items.pluginModerate.description'),
+        sensitive: true,
+      },
+    ],
+  },
+  {
     id: 'account',
     label: t('dashboard.sections.apiKeys.scopes.groups.account.label'),
     description: t('dashboard.sections.apiKeys.scopes.groups.account.description'),

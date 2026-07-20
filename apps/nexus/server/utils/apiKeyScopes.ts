@@ -1,6 +1,7 @@
 export const API_KEY_SCOPES = [
   'plugin:publish',
   'plugin:read',
+  'plugin:moderate',
   'account:read',
   'release:write',
   'release:publish',
@@ -17,7 +18,7 @@ export const DEFAULT_PLUGIN_API_KEY_SCOPES: ApiKeyScope[] = [
   'plugin:publish',
 ]
 
-const ADMIN_ONLY_SCOPE_PREFIXES = ['release:', 'maintenance:']
+const ADMIN_ONLY_SCOPE_PREFIXES = ['plugin:moderate', 'release:', 'maintenance:']
 
 const SCOPE_IMPLICATIONS: Partial<Record<ApiKeyScope, ApiKeyScope[]>> = {
   'plugin:publish': ['plugin:read'],

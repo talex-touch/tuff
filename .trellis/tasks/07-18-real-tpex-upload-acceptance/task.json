@@ -3,7 +3,7 @@
   "name": "real-tpex-upload-acceptance",
   "title": "验证真实 TPEX 上传",
   "description": "通过真实 CLI、部署 Nexus、D1/R2 下载和隔离 CoreApp 安装验证 TPEX 发布闭环。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": "feature",
   "scope": "real-tpex-upload",
   "package": null,
