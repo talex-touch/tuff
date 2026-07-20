@@ -25,11 +25,9 @@ function handleScroll() {
 const links = computed(() => [
   { to: '/store', label: t('nav.store') },
   { to: docsLink('/docs/guide/start'), label: t('nav.tutorial') },
-  { to: docsLink('/docs'), label: t('nav.doc') },
-  // { to: '/#developer', label: t('nav.developer') },
+  { to: docsLink('/docs/dev'), label: t('nav.developer') },
   { to: '/updates', label: t('nav.download') },
-  // { to: '/#blog', label: t('nav.blog') },
-  // { to: '/pricing', label: t('nav.pricing') },
+  { to: '/pricing', label: t('nav.pricing') },
 ])
 
 const fullPath = computed(() => route.fullPath || '/')
@@ -56,12 +54,18 @@ const normalizedPath = computed(() => {
 const isDocs = computed(() => normalizedPath.value.startsWith('/docs'))
 const isHome = computed(() => normalizedPath.value === '/')
 
+function normalizeNavPath(path: string) {
+  const trimmed = path.replace(/^\/(en|zh)(?=\/|$)/i, '')
+  return trimmed || '/'
+}
+
 function isActiveLink(link: { to: string }) {
   const path = normalizedPath.value
   const matches = (item: { to: string }) => {
-    if (item.to === '/')
+    const target = normalizeNavPath(item.to)
+    if (target === '/')
       return path === '/'
-    return path === item.to || path.startsWith(`${item.to}/`)
+    return path === target || path.startsWith(`${target}/`)
   }
 
   if (!matches(link))
@@ -70,7 +74,7 @@ function isActiveLink(link: { to: string }) {
   const bestMatch = links.value.reduce<{ to: string } | null>((best, item) => {
     if (!matches(item))
       return best
-    if (!best || item.to.length > best.to.length)
+    if (!best || normalizeNavPath(item.to).length > normalizeNavPath(best.to).length)
       return item
     return best
   }, null)
@@ -113,7 +117,8 @@ onUnmounted(() => {
             :key="link.to"
             :to="link.to"
             class="rounded-full px-2.5 py-1 text-black/65 font-medium no-underline transition-colors duration-200 hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
-            :class="isActiveLink(link) ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
+            :data-active="isActiveLink(link) || undefined"
+              :class="isActiveLink(link) ? 'is-active bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
           >
             {{ link.label }}
           </NuxtLink>
@@ -155,7 +160,14 @@ onUnmounted(() => {
   left: 0;
 
   width: 100%;
-  height: 64px;
+  /* Reserve the floating pill band (top offset + pill height). */
+  height: 88px;
+  pointer-events: none;
+}
+
+.TuffHeader-Main,
+.TuffHeader-Main * {
+  pointer-events: auto;
 }
 
 .TuffHeader-Main {
@@ -167,7 +179,10 @@ onUnmounted(() => {
   position: absolute;
 
   top: 1rem;
-  left: 50%;
+  /* Center with inset + margin so reveal animation can own transform safely. */
+  left: 0;
+  right: 0;
+  margin-inline: auto;
 
   width: min(1056px, calc(100vw - 2rem));
   max-width: calc(100vw - 2rem);
@@ -188,11 +203,8 @@ onUnmounted(() => {
   overflow: hidden;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  animation: tuff-header-quick-reveal 350ms cubic-bezier(0.7, 0, 1, 1) backwards;
-}
-
-.TuffHeader-Main {
-  transform: translate3d(calc(-50% + var(--wm-jitter-x1, 0px)), var(--wm-jitter-y1, 0px), 0);
+  transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
+  animation: tuff-header-quick-reveal 280ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 
 .TuffHeader-Main--scrolled {
@@ -235,14 +247,14 @@ nav :deep(a) {
 @keyframes tuff-header-quick-reveal {
   from {
     opacity: 0;
-    filter: blur(8px);
-    transform: translateY(-6px);
+    filter: blur(4px);
+    transform: translate3d(var(--wm-jitter-x1, 0px), calc(var(--wm-jitter-y1, 0px) - 6px), 0);
   }
 
   to {
     opacity: 1;
     filter: blur(0);
-    transform: translateY(0);
+    transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
   }
 }
 
@@ -258,6 +270,7 @@ nav :deep(a) {
     right: 1rem;
     width: auto;
     max-width: none;
+    margin-inline: 0;
     transform: translate3d(var(--wm-jitter-x1, 0px), var(--wm-jitter-y1, 0px), 0);
   }
 

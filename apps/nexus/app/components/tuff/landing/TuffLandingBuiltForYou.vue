@@ -221,4 +221,13 @@ const builtForYou = computed(() => ({
   background:
     radial-gradient(circle at 70% 70%, rgba(255, 255, 255, 0.16), transparent 55%);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 </style>

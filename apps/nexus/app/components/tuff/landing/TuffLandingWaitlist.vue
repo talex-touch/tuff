@@ -55,11 +55,11 @@ function goToSignIn() {
 <template>
   <TuffLandingSection
     id="download"
-    section-class="h-screen flex flex-col justify-center"
+    section-class="h-full min-h-0 flex flex-col justify-center"
     container-class="max-w-6xl w-full"
     :reveal-options="{
       from: {
-        opacity: 0,
+        opacity: 0.16,
         y: 48,
         duration: 1.05,
       },
@@ -87,10 +87,10 @@ function goToSignIn() {
     </template>
 
     <!-- Two-column layout -->
-    <div class="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+    <div class="waitlist-grid grid items-start gap-8 lg:grid-cols-2 lg:items-center lg:gap-12">
       <!-- Left: headline + CTA -->
-      <div class="flex flex-col gap-6">
-        <h2 class="pioneer-headline text-[2.75rem] font-bold leading-[1.08] tracking-tight sm:text-[3.5rem]">
+      <div class="flex flex-col gap-5">
+        <h2 class="pioneer-headline text-[clamp(2rem,4vw,3.25rem)] font-bold leading-[1.08] tracking-tight">
           {{ pioneer.headline }}
         </h2>
 
@@ -110,11 +110,11 @@ function goToSignIn() {
       </div>
 
       <!-- Right: benefit cards -->
-      <div class="flex flex-col gap-4" data-reveal>
+      <div class="flex flex-col gap-3 sm:gap-4" data-reveal>
         <article
           v-for="benefit in pioneer.benefits"
           :key="benefit.key"
-          class="group flex items-start gap-5 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-6 py-5 backdrop-blur-sm transition duration-300 hover:border-white/[0.12] hover:bg-white/[0.04]"
+          class="group flex items-start gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 backdrop-blur-sm transition duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] sm:gap-5 sm:px-6 sm:py-5"
         >
           <span class="size-10 mt-0.5 inline-flex flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.06] text-white/60">
             <span :class="benefit.icon" class="text-lg" aria-hidden="true" />
@@ -160,5 +160,19 @@ function goToSignIn() {
 
 .pioneer-aurora {
   container-type: size;
+}
+
+@media (max-height: 820px) {
+  .waitlist-grid {
+    gap: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 </style>

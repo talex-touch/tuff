@@ -17,7 +17,7 @@ Listen to CoreBox input changes.
 ---
 code: |
   import { onCoreBoxInputChange } from '@talex-touch/utils/plugin/sdk/hooks'
-  
+
   onCoreBoxInputChange(({ data, meta }) => {
     console.log('Input text:', data.query.text)
     console.log('Clipboard inputs:', data.query.inputs)
@@ -54,7 +54,7 @@ Listen to clipboard content changes.
 ---
 code: |
   import { onCoreBoxClipboardChange } from '@talex-touch/utils/plugin/sdk/hooks'
-  
+
   onCoreBoxClipboardChange(({ data, meta }) => {
     console.log('Clipboard item:', data.item)
     console.log('From cache:', meta.fromCache)
@@ -85,10 +85,10 @@ SDK automatically implements event caching:
 code: |
   Timeline:
   ────────────────────────────────────────────────────────►
-  
+
   Main Process:
       [dom-ready] ──► send input-change event
-  
+
   Plugin Renderer:
       [module load] ──► auto cache event
                               │
@@ -108,10 +108,10 @@ Manually clear event cache (usually not needed).
 ---
 code: |
   import { clearBridgeEventCache } from '@talex-touch/utils/plugin/sdk/hooks'
-  
+
   // Clear specific event type cache
   clearBridgeEventCache('core-box:input-change')
-  
+
   // Clear all cache
   clearBridgeEventCache()
 ---
@@ -143,7 +143,7 @@ code: |
     // Use meta.fromCache to detect if this is an initial cached event
     handleSearch(query)
   })
-  
+
   // ❌ Avoid: Register in async callback
   setTimeout(() => {
     onCoreBoxInputChange(handler) // May miss cache replay window

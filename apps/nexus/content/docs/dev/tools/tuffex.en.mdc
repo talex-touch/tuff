@@ -20,10 +20,10 @@ TuffEx (Chinese name: Ta Fu) is a modern Vue3 component library focused on tacti
 code: |
   # npm
   npm install @talex-touch/tuffex
-  
+
   # yarn
   yarn add @talex-touch/tuffex
-  
+
   # pnpm (recommended)
   pnpm add @talex-touch/tuffex
 ---
@@ -39,7 +39,7 @@ code: |
   import { createApp } from 'vue'
   import TuffUI from '@talex-touch/tuffex'
   import '@talex-touch/tuffex/style.css'
-  
+
   const app = createApp(App)
   app.use(TuffUI)
   app.mount('#app')
@@ -61,7 +61,7 @@ code: |
   import '@talex-touch/tuffex/button/style.css'
   import '@talex-touch/tuffex/switch/style.css'
   import '@talex-touch/tuffex/flat-button/style.css'
-  
+
   const app = createApp(App)
   app.use(TxButton)
   app.use(TxSwitch)
@@ -114,15 +114,15 @@ code: |
     /* Primary colors */
     --tx-color-primary: #409eff;
     --tx-color-primary-light-3: #79bbff;
-    
+
     /* Text colors */
     --tx-text-color-primary: #303133;
     --tx-text-color-secondary: #909399;
-    
+
     /* Border and radius */
     --tx-border-color: #dcdfe6;
     --tx-border-radius-base: 4px;
-    
+
     /* Transitions */
     --tx-transition-duration: 0.3s;
   }
@@ -146,7 +146,7 @@ code: |
 code: |
   # In monorepo root
   pnpm install
-  
+
   # Component source package
   pnpm -C packages/tuffex run build
   pnpm -C packages/tuffex run test

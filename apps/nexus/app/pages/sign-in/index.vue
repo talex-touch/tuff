@@ -63,6 +63,13 @@ const {
   handleHeaderBack,
 } = useSignIn()
 
+const pageTitle = computed(() => t('auth.signInTitle', 'Sign in'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('auth.signInDescription', 'Sign in to Tuff Nexus to manage devices, plugins, and updates.')),
+})
+
 const isCallbackBlocking = computed(() => step.value === 'oauth' && authLoading.value)
 
 function goTo(path: string) {

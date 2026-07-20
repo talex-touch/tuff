@@ -31,6 +31,13 @@ interface InvitationPreview {
 }
 
 const { t } = useI18n()
+const pageTitle = computed(() => t('team.join.title', 'Join team'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('team.join.description', 'Accept a team invitation and join your workspace.')),
+  robots: 'noindex, nofollow',
+})
 const route = useRoute()
 
 const invitationId = ref('')

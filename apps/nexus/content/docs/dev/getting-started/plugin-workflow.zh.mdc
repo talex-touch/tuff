@@ -12,7 +12,7 @@
 
 新插件优先使用 `main: "index.js"`，并声明最新 `sdkapi`、分类、权限和权限用途。
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -47,7 +47,7 @@ code: |
   ]
   }
 ---
-::
+:::
 
 检查点：
 
@@ -59,7 +59,7 @@ code: |
 
 `index.js` 是插件的先导脚本。它运行在 Node.js 沙箱中，通过 `globalThis` 获取插件上下文。
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const { clipboard, logger, box, TuffItemBuilder } = globalThis
@@ -102,9 +102,9 @@ code: |
         box?.hide?.()
       },
 
-  }
+  ## }
 ---
-::
+:::
 
 检查点：
 
@@ -131,7 +131,7 @@ code: |
 
 实现 Raycast 风格 AI Command 时，命令定义保留在插件内，provider 选择、审计、配额与 fallback 交给宿主：
 
-::TuffCodeBlock{lang="javascript"}
+:::TuffCodeBlock{lang="javascript"}
 ---
 code: |
   const { intelligence } = globalThis
@@ -148,9 +148,9 @@ code: |
         },
       )
 
-  }
+  ## }
 ---
-::
+:::
 
 命令、prompt variables、插件存储和日志都不得保存 provider credential。typed contract 见 [Intelligence SDK](../api/intelligence.zh.md)。
 
@@ -158,14 +158,14 @@ code: |
 
 发布前至少完成这些本地检查：
 
-::TuffCodeBlock{lang="bash"}
+:::TuffCodeBlock{lang="bash"}
 ---
 code: |
   tuff validate --strict
   tuff build
   tuff publish --dry-run
 ---
-::
+:::
 
 仓库内改动还应补最近路径验证，例如 focused Vitest、文件级 ESLint 和 `git diff --check`。不要把全仓历史 lint 噪声当作当前插件改动失败。
 
@@ -173,7 +173,7 @@ code: |
 
 常规发布路径：
 
-::TuffCodeBlock{lang="bash"}
+:::TuffCodeBlock{lang="bash"}
 ---
 code: |
   tuff login
@@ -182,7 +182,7 @@ code: |
   tuff publish --dry-run
   tuff publish --tag 0.1.0 --channel BETA
 ---
-::
+:::
 
 发布注意事项：
 

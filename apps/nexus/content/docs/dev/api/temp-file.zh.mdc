@@ -29,14 +29,14 @@ TempFile SDK 用于创建短生命周期的临时文件，适合缓存下载结�
 ---
 code: |
   import { useTempPluginFiles } from '@talex-touch/utils/plugin/sdk'
-  
+
   const temp = useTempPluginFiles()
   const result = await temp.create({
     ext: 'svg',
     text: '<svg></svg>',
     retentionMs: 24 * 60 * 60 * 1000
   })
-  
+
   // tfile://...
   console.log(result.url)
 ---
@@ -48,7 +48,7 @@ code: |
 ---
 code: |
   import { useTouchSDK } from '@talex-touch/utils/renderer'
-  
+
   const sdk = useTouchSDK()
   const result = await sdk.createTempFile({
     namespace: 'icons/svg',

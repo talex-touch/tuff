@@ -14,7 +14,7 @@ description: 用于构建和发布 Tuff 插件的命令行工具
 code: |
   # 全局安装
   pnpm add -g @talex-touch/tuff-cli
-  
+
   # 或通过 npx 使用
   npx @talex-touch/tuff-cli <command>
 ---
@@ -199,7 +199,7 @@ code: |
   // vite.config.ts
   import { defineConfig } from 'vite'
   import TuffExport from '@talex-touch/unplugin-export-plugin/vite'
-  
+
   export default defineConfig({
     plugins: [
       TuffExport({

@@ -12,9 +12,9 @@ The Feature SDK provides plugins with the ability to manage CoreBox search resul
 ---
 code: |
   import { useFeature } from '@talex-touch/utils/plugin/sdk'
-  
+
   const feature = useFeature()
-  
+
   // Push search results
   feature.pushItems([
     {
@@ -24,7 +24,7 @@ code: |
       source: { id: 'my-plugin', name: 'My Plugin' }
     }
   ])
-  
+
   // Listen to input changes
   feature.onInputChange((input) => {
     console.log('User typed:', input)
@@ -44,7 +44,7 @@ Get Feature SDK instance.
 ---
 code: |
   import { useFeature } from '@talex-touch/utils/plugin/sdk'
-  
+
   const feature = useFeature()
 ---
 :::
@@ -135,12 +135,12 @@ Listen to search input changes.
 code: |
   const unsubscribe = feature.onInputChange((input) => {
     console.log('User typed:', input)
-    
+
     // Perform real-time search
     const results = await search(input)
     feature.pushItems(results)
   })
-  
+
   // Stop listening
   unsubscribe()
 ---
@@ -159,26 +159,26 @@ code: |
 code: |
   interface TuffItem {
     id: string
-    
+
     title: {
       text: string
       highlight?: boolean
     }
-    
+
     subtitle?: {
       text: string
       highlight?: boolean
     }
-    
+
     source: {
       id: string
       name: string
     }
-    
+
     icon?: string
-    
+
     actions?: TuffAction[]
-    
+
     meta?: Record<string, any>
   }
 ---
@@ -199,7 +199,7 @@ code: |
     getItems(): TuffItem[]
     onInputChange(handler: InputChangeHandler): () => void
   }
-  
+
   type InputChangeHandler = (input: string) => void
 ---
 :::

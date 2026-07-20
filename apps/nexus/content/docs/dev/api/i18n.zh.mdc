@@ -21,7 +21,7 @@ Localization SDK 是插件读取主机语言、解析本地化值、创建可跨
 
 只声明插件实际使用的权限：
 
-::TuffCodeBlock{lang="json"}
+:::TuffCodeBlock{lang="json"}
 ---
 code: |
   {
@@ -37,7 +37,7 @@ code: |
   }
   }
 ---
-::
+:::
 
 | 权限               | 对应方法                       |
 | ------------------ | ------------------------------ |
@@ -51,7 +51,7 @@ code: |
 
 ## Runtime 用法
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   export default {
@@ -83,13 +83,13 @@ code: |
         )
       }
 
-  }
+  ## }
 ---
-::
+:::
 
 ## Renderer 用法
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   import {
@@ -110,7 +110,7 @@ code: |
   domain: 'capability'
   })
 ---
-::
+:::
 
 Renderer hooks 需要已建立的插件 renderer channel。不要在普通应用 renderer 中调用，也不要在插件 channel ready 前调用。
 
@@ -136,7 +136,7 @@ Renderer hooks 需要已建立的插件 renderer channel。不要在普通应用
 
 ## 注册插件私有词条
 
-::TuffCodeBlock{lang="typescript"}
+:::TuffCodeBlock{lang="typescript"}
 ---
 code: |
   const result = await context.utils.lexicon.register(
@@ -161,7 +161,7 @@ code: |
   // 宿主分配 plugin:<pluginId>:status.ready。
   console.log(result.ids[0])
 ---
-::
+:::
 
 注册边界：
 

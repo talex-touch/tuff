@@ -1716,7 +1716,7 @@ No public instance methods are exposed.
 
 `TxCard` exposes a small set of runtime variables on the root node. Most visual tuning should use props first; use variables only when a wrapper needs to coordinate with projected content or the underlying `TxBaseSurface` mask color.
 
-::::TuffCodeBlock{lang="css"}
+:::TuffCodeBlock{lang="css"}
 ---
 code: |
   .custom-card {
@@ -1724,7 +1724,7 @@ code: |
     --tx-card-fake-background: color-mix(in srgb, var(--tx-bg-color-overlay, #fff) 92%, transparent);
   }
 ---
-::::
+:::
 
 | Variable | Written by | Purpose |
 |----------|------------|---------|
@@ -1766,9 +1766,9 @@ code: |
         <template #header>
           <h3>{{ item.title }}</h3>
         </template>
-        
+
         <p>{{ item.description }}</p>
-        
+
         <template #footer>
           <div class="card-actions">
             <TxButton size="small" variant="text">Edit</TxButton>

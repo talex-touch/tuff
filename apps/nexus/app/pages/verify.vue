@@ -8,6 +8,13 @@ definePageMeta({
 
 defineI18nRoute(false)
 
+const pageTitle = computed(() => t('auth.verifyTitle', 'Verify email'))
+useSeoMeta({
+  title: pageTitle,
+  ogTitle: pageTitle,
+  description: computed(() => t('auth.verifyDescription', 'Confirm your email to continue.')),
+})
+
 const { t } = useI18n()
 const route = useRoute()
 
