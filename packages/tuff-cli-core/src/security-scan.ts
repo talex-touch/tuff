@@ -50,7 +50,8 @@ export function scanBuiltPluginPackage(
 }
 
 export function assertPluginSecurityScan(report: PluginSecurityScanReport): void {
-  if (report.decision === 'passed' || report.decision === 'review-required') return
+  if (report.decision === 'passed' || report.decision === 'review-required')
+    return
   const code = report.failure?.code
     ?? report.findings.find(finding => !finding.waiver)?.code
     ?? 'PLUGIN_SCAN_BLOCKED'
@@ -109,7 +110,8 @@ function printHumanReport(report: PluginSecurityScanReport): void {
     const waived = finding.waiver ? ` [waived by ${finding.waiver.owner}]` : ''
     console.log(`- ${finding.severity} ${finding.code} ${finding.location.path}${position}${waived}`)
   }
-  if (report.failure) console.log(`Failure: ${report.failure.code}`)
+  if (report.failure)
+    console.log(`Failure: ${report.failure.code}`)
 }
 
 export async function runSecurityScan(args: readonly string[]): Promise<PluginSecurityScanReport> {
@@ -119,7 +121,8 @@ export async function runSecurityScan(args: readonly string[]): Promise<PluginSe
     throw new Error('No .tpex package found. Build the plugin or pass --package <path>.')
   }
   const report = scanBuiltPluginPackage({ packagePath })
-  if (options.json) console.log(JSON.stringify(report))
+  if (options.json)
+    console.log(JSON.stringify(report))
   else printHumanReport(report)
   assertPluginSecurityScan(report)
   return report
