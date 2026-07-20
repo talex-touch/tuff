@@ -12,6 +12,10 @@ const pluginsStoreMocks = vi.hoisted(() => ({
   listStorePlugins: vi.fn(),
 }))
 
+const pluginStoreAccessMocks = vi.hoisted(() => ({
+  resolvePluginStoreAudience: vi.fn(),
+}))
+
 vi.hoisted(() => {
   Object.defineProperty(globalThis, 'defineEventHandler', {
     configurable: true,
@@ -28,6 +32,8 @@ vi.mock('h3', () => ({
 }))
 
 vi.mock('../../../server/utils/pluginsStore', () => pluginsStoreMocks)
+
+vi.mock('../../../server/utils/pluginStoreAccess', () => pluginStoreAccessMocks)
 
 // The handler only passes the event object to mocked h3/store boundaries in this focused route test.
 const event = { context: { requestId: 'store-list-test' } } as unknown as H3Event
@@ -160,6 +166,7 @@ const plugin = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  pluginStoreAccessMocks.resolvePluginStoreAudience.mockResolvedValue('public')
   h3Mocks.getQuery.mockReturnValue({ compact: '1', limit: '25', offset: '50' })
   pluginsStoreMocks.listStorePlugins.mockResolvedValue({
     plugins: [plugin],
@@ -177,6 +184,7 @@ describe('/api/store/plugins', () => {
       compact: true,
       limit: 25,
       offset: 50,
+      audience: 'public',
     })
     expect(pluginsStoreMocks.listPlugins).not.toHaveBeenCalled()
     expect(result).toEqual({
@@ -221,6 +229,46 @@ describe('/api/store/plugins', () => {
     expect(result.plugins[0].latestVersion).not.toHaveProperty('changelog')
   })
 
+  it('resolves BETA access, forwards the beta audience, and keeps its download channel', async () => {
+    const betaPlugin = {
+      ...plugin,
+      latestVersionId: 'version_1',
+      latestVersion: plugin.versions[0],
+      versions: [plugin.versions[0]],
+    }
+    h3Mocks.getQuery.mockReturnValue({ channel: 'BETA', compact: '1', limit: '25', offset: '50' })
+    pluginStoreAccessMocks.resolvePluginStoreAudience.mockResolvedValue('beta')
+    pluginsStoreMocks.listStorePlugins.mockResolvedValue({
+      plugins: [betaPlugin],
+      total: 1,
+      limit: 25,
+      offset: 50,
+    } satisfies StorePluginListResult)
+
+    const result = await handler(event)
+
+    expect(pluginStoreAccessMocks.resolvePluginStoreAudience).toHaveBeenCalledWith(event)
+    expect(pluginsStoreMocks.listStorePlugins).toHaveBeenCalledWith(event, {
+      compact: true,
+      limit: 25,
+      offset: 50,
+      audience: 'beta',
+    })
+    expect(result).toMatchObject({
+      plugins: [
+        {
+          slug: 'focus-flow',
+          latestVersion: {
+            channel: 'BETA',
+            version: '0.9.0',
+            packageUrl: '/api/store/plugins/focus-flow/download.tpex?version=0.9.0&channel=BETA',
+          },
+        },
+      ],
+      total: 1,
+    })
+  })
+
   it('clamps invalid pagination before reading the store slice', async () => {
     h3Mocks.getQuery.mockReturnValue({ compact: '1', limit: '1000', offset: '-10' })
     pluginsStoreMocks.listStorePlugins.mockResolvedValue({
@@ -236,6 +284,7 @@ describe('/api/store/plugins', () => {
       compact: true,
       limit: 100,
       offset: 0,
+      audience: 'public',
     })
     expect(pluginsStoreMocks.listPlugins).not.toHaveBeenCalled()
     expect(result).toEqual({

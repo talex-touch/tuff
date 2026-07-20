@@ -1,16 +1,25 @@
 import type { DashboardPluginVersion, StorePluginSearchPlugin } from '../../utils/pluginsStore'
+import type { PluginReleaseAudience } from '../../utils/pluginReleaseEligibility'
 import { searchStorePlugins } from '../../utils/pluginsStore'
+import { resolvePluginStoreAudience } from '../../utils/pluginStoreAccess'
 
 interface StoreSearchQuery {
   q?: string
   category?: string
+  channel?: string
   compact?: string | number | boolean
   limit?: string | number
   offset?: string | number
 }
 
-function buildStoreDownloadUrl(slug: string, version: string): string {
-  return `/api/store/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+function buildStoreDownloadUrl(
+  slug: string,
+  version: string,
+  audience: PluginReleaseAudience,
+): string {
+  const params = new URLSearchParams({ version })
+  if (audience === 'beta') params.set('channel', 'BETA')
+  return `/api/store/plugins/${slug}/download.tpex?${params.toString()}`
 }
 
 function isCompactEnabled(value: unknown): boolean {
@@ -34,7 +43,12 @@ function readBoundedInteger(value: unknown, fallback: number, min: number, max: 
   return Math.min(Math.max(Math.floor(parsed), min), max)
 }
 
-function cleanVersionForSearch(slug: string, version: DashboardPluginVersion, compact: boolean) {
+function cleanVersionForSearch(
+  slug: string,
+  version: DashboardPluginVersion,
+  compact: boolean,
+  audience: PluginReleaseAudience,
+) {
   const base = {
     id: version.id,
     pluginId: version.pluginId,
@@ -43,7 +57,7 @@ function cleanVersionForSearch(slug: string, version: DashboardPluginVersion, co
     artifactSha256: version.artifactSha256,
     nexusAttestation: version.nexusAttestation,
     availability: 'available' as const,
-    packageUrl: buildStoreDownloadUrl(slug, version.version),
+    packageUrl: buildStoreDownloadUrl(slug, version.version, audience),
     packageSize: version.packageSize,
     status: version.status,
     createdAt: version.createdAt,
@@ -60,7 +74,11 @@ function cleanVersionForSearch(slug: string, version: DashboardPluginVersion, co
   }
 }
 
-function cleanPluginForSearch(plugin: StorePluginSearchPlugin, compact: boolean) {
+function cleanPluginForSearch(
+  plugin: StorePluginSearchPlugin,
+  compact: boolean,
+  audience: PluginReleaseAudience,
+) {
   const latest = plugin.latestVersion ?? plugin.versions.find(version => version.id === plugin.latestVersionId) ?? plugin.versions[0]
   if (!latest)
     return null
@@ -79,7 +97,7 @@ function cleanPluginForSearch(plugin: StorePluginSearchPlugin, compact: boolean)
     iconUrl: plugin.iconUrl,
     createdAt: plugin.createdAt,
     updatedAt: plugin.updatedAt,
-    latestVersion: cleanVersionForSearch(plugin.slug, latest, compact),
+    latestVersion: cleanVersionForSearch(plugin.slug, latest, compact, audience),
     readmeUrl: plugin.readmeMarkdown ? `/api/store/plugins/${plugin.slug}/readme` : null,
   }
   if (compact)
@@ -88,7 +106,7 @@ function cleanPluginForSearch(plugin: StorePluginSearchPlugin, compact: boolean)
   return {
     ...base,
     readmeMarkdown: plugin.readmeMarkdown ?? null,
-    versions: plugin.versions.map(version => cleanVersionForSearch(plugin.slug, version, false)),
+    versions: plugin.versions.map(version => cleanVersionForSearch(plugin.slug, version, false, audience)),
   }
 }
 
@@ -99,16 +117,18 @@ export default defineEventHandler(async (event) => {
   const compact = isCompactEnabled(query.compact)
   const limit = readBoundedInteger(query.limit, 50, 1, 100)
   const offset = readBoundedInteger(query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+  const audience = await resolvePluginStoreAudience(event)
 
   const result = await searchStorePlugins(event, {
     keyword,
     category: category || undefined,
     limit,
     offset,
+    audience,
   })
 
   const plugins = result.plugins
-    .map(plugin => cleanPluginForSearch(plugin, compact))
+    .map(plugin => cleanPluginForSearch(plugin, compact, audience))
     .filter((value): value is NonNullable<typeof value> => Boolean(value))
   return {
     plugins,

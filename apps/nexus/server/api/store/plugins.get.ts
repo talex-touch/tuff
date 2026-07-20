@@ -1,12 +1,21 @@
 import type { DashboardPlugin, DashboardPluginVersion } from '../../utils/pluginsStore'
+import type { PluginReleaseAudience } from '../../utils/pluginReleaseEligibility'
 import { listStorePlugins } from '../../utils/pluginsStore'
+import { resolvePluginStoreAudience } from '../../utils/pluginStoreAccess'
 
-function buildStoreDownloadUrl(slug: string, version: string): string {
-  return `/api/store/plugins/${slug}/download.tpex?version=${encodeURIComponent(version)}`
+function buildStoreDownloadUrl(
+  slug: string,
+  version: string,
+  audience: PluginReleaseAudience,
+): string {
+  const params = new URLSearchParams({ version })
+  if (audience === 'beta') params.set('channel', 'BETA')
+  return `/api/store/plugins/${slug}/download.tpex?${params.toString()}`
 }
 
 interface StoreListQuery {
   compact?: string | number | boolean
+  channel?: string
   limit?: string | number
   offset?: string | number
 }
@@ -39,7 +48,7 @@ function readBoundedInteger(value: unknown, fallback: number, min: number, max: 
 function cleanVersionForStore(
   slug: string,
   version: DashboardPluginVersion,
-  options: { compact: boolean },
+  options: { compact: boolean, audience: PluginReleaseAudience },
 ) {
   const base = {
     id: version.id,
@@ -49,7 +58,7 @@ function cleanVersionForStore(
     artifactSha256: version.artifactSha256,
     nexusAttestation: version.nexusAttestation,
     availability: 'available' as const,
-    packageUrl: buildStoreDownloadUrl(slug, version.version),
+    packageUrl: buildStoreDownloadUrl(slug, version.version, options.audience),
     packageSize: version.packageSize,
     status: version.status,
     createdAt: version.createdAt,
@@ -70,7 +79,10 @@ function cleanVersionForStore(
 /**
  * Clean plugin object for store API response
  */
-function cleanPluginForStore(plugin: DashboardPlugin, options: { compact: boolean }) {
+function cleanPluginForStore(
+  plugin: DashboardPlugin,
+  options: { compact: boolean, audience: PluginReleaseAudience },
+) {
   const versions = plugin.versions ?? []
   const latest = versions.find(v => v.id === plugin.latestVersionId) ?? versions[0]
 
@@ -111,15 +123,17 @@ export default defineEventHandler(async (event) => {
   const compact = isCompactEnabled(query.compact)
   const limit = readBoundedInteger(query.limit, 100, 1, 100)
   const offset = readBoundedInteger(query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
+  const audience = await resolvePluginStoreAudience(event)
 
   const result = await listStorePlugins(event, {
     compact,
     limit,
     offset,
+    audience,
   })
 
   const enriched = result.plugins
-    .map(plugin => cleanPluginForStore(plugin, { compact }))
+    .map(plugin => cleanPluginForStore(plugin, { compact, audience }))
     .filter((value): value is NonNullable<typeof value> => Boolean(value))
 
   return {

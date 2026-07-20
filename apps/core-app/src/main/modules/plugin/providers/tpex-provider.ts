@@ -130,7 +130,7 @@ export class TpexPluginProvider implements PluginProvider {
     context?: PluginProviderContext
   ): Promise<PluginInstallResult> {
     this.log.info('Processing TPEX plugin resource', {
-      meta: { source: request.source }
+      meta: { sourceType: isTpexFile(request.source) ? 'package' : 'registry' }
     })
 
     // Handle tpex:slug format - fetch from registry using Node.js stream download
@@ -143,26 +143,20 @@ export class TpexPluginProvider implements PluginProvider {
       let filePath = request.source
 
       if (isRemote(request.source)) {
-        this.log.debug('Detected remote TPEX resource, starting download', {
-          meta: { url: request.source }
-        })
+        this.log.debug('Detected remote TPEX resource, starting download')
         filePath = await downloadToTempFile(request.source, '.tpex', context?.downloadOptions)
       } else {
         filePath = path.resolve(request.source)
         const exists = await fse.pathExists(filePath)
         if (!exists) {
-          this.log.error('Local TPEX file not found', {
-            meta: { filePath }
-          })
+          this.log.error('Local TPEX file not found')
           throw new Error('Specified TPEX file does not exist')
         }
       }
 
       const manifest = await peekTpexManifest(filePath)
       if (!manifest) {
-        this.log.warn('Failed to parse manifest from TPEX package', {
-          meta: { filePath }
-        })
+        this.log.warn('Failed to parse manifest from TPEX package')
       } else {
         this.log.debug('Successfully parsed TPEX manifest', {
           meta: {
@@ -175,10 +169,7 @@ export class TpexPluginProvider implements PluginProvider {
       const official = typeof manifest?.author === 'string' && /talex-touch/i.test(manifest.author)
 
       this.log.success('TPEX plugin prepared', {
-        meta: {
-          filePath,
-          official: official ? 'true' : 'false'
-        }
+        meta: { official: official ? 'true' : 'false' }
       })
 
       return {
@@ -194,10 +185,7 @@ export class TpexPluginProvider implements PluginProvider {
         }
       }
     } catch (error) {
-      this.log.error('TPEX plugin processing failed', {
-        meta: { source: request.source },
-        error
-      })
+      this.log.error('TPEX plugin processing failed', { error })
       throw error
     }
   }
@@ -217,13 +205,15 @@ export class TpexPluginProvider implements PluginProvider {
     const { slug, version } = parsed
 
     this.log.debug('Detected TPEX registry format, fetching from source', {
-      meta: { source: request.source, slug, version: version ?? 'latest' }
+      meta: { slug, version: version ?? 'latest' }
     })
 
     const detailUrl = new URL(`/api/store/plugins/${encodeURIComponent(slug)}`, `${this.apiBase}/`)
     if (this.options.channel === 'BETA') detailUrl.searchParams.set('channel', 'BETA')
     const requestHeaders = this.options.getRequestHeaders?.() ?? {}
-    this.log.debug('Fetching plugin details', { meta: { url: detailUrl.toString() } })
+    this.log.debug('Fetching plugin details', {
+      meta: { slug, channel: this.options.channel ?? 'RELEASE' }
+    })
 
     const detailRes = await getNetworkService().request<TpexDetailResponse>({
       method: 'GET',
@@ -259,7 +249,8 @@ export class TpexPluginProvider implements PluginProvider {
 
     this.log.debug('Starting plugin package download', {
       meta: {
-        url: downloadUrl,
+        slug,
+        channel: targetVersion.channel,
         version: targetVersion.version,
         size: targetVersion.packageSize
       }
@@ -293,7 +284,7 @@ export class TpexPluginProvider implements PluginProvider {
 
     this.log.success('TPEX plugin fetched from registry', {
       meta: {
-        filePath,
+        slug,
         official: plugin.isOfficial ? 'true' : 'false',
         version: targetVersion.version
       }
