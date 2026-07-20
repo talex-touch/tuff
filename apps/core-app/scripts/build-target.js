@@ -734,15 +734,33 @@ function build() {
 
   console.log(`Using electron-builder: ${builderBin}`);
 
+  const builderEnv = {
+    ...process.env,
+    BUILD_TYPE: buildType
+  };
+  if (normalizedTarget === 'mac') {
+    for (const key of [
+      'CSC_LINK',
+      'CSC_KEY_PASSWORD',
+      'APPLE_API_KEY',
+      'APPLE_API_KEY_ID',
+      'APPLE_API_ISSUER',
+      'APPLE_ID',
+      'APPLE_APP_SPECIFIC_PASSWORD',
+      'APPLE_TEAM_ID'
+    ]) {
+      if (typeof builderEnv[key] === 'string' && builderEnv[key].trim() === '') {
+        delete builderEnv[key];
+      }
+    }
+  }
+
   let builderExitCode = 0;
   try {
     console.time('build-target:electron-builder');
     execSync(builderCommand, {
       stdio: 'inherit',
-      env: {
-        ...process.env,
-        BUILD_TYPE: buildType
-      }
+      env: builderEnv
     });
     builderExitCode = 0;
     console.log('\n✓ electron-builder completed with exit code 0');
