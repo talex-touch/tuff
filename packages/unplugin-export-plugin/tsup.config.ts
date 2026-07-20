@@ -10,8 +10,6 @@ export default <Options>{
     'src/nuxt.ts',
     'src/types.ts',
     'src/preload.ts',
-    'src/bin/tuff.ts',
-    'src/cli/index.ts',
   ],
   clean: true,
   format: ['esm'],
@@ -23,14 +21,9 @@ export default <Options>{
     'unplugin',
     'fs-extra',
     'pathe',
-    'compressing',
     'chalk',
-    'cli-progress',
     'lightningcss',
     'rollup',
-  ],
-  noExternal: [
-    '@talex-touch/utils',
   ],
   banner: {
     js: 'import { createRequire as __createRequire } from \'node:module\'; const require = __createRequire(import.meta.url);',

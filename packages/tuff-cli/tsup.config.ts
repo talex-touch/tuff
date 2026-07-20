@@ -50,7 +50,6 @@ export default defineConfig({
   noExternal: [
     '@talex-touch/tuff-cli-core',
     '@talex-touch/utils',
-    '@talex-touch/unplugin-export-plugin',
     '@talex-touch/unplugin-export-plugin/vite',
   ],
   external: [

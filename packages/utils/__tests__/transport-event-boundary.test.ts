@@ -23,7 +23,6 @@ const RAW_SEND_ALLOWLIST = new Set([
   "apps/core-app/src/main/modules/division-box/state-sync.ts:division-box:state-changed",
   "apps/core-app/src/main/modules/plugin/dev-server-monitor.ts:tuff:dev-server-disconnected",
   "apps/core-app/src/main/modules/plugin/dev-server-monitor.ts:tuff:dev-server-reconnected",
-  "packages/unplugin-export-plugin/src/core/dev.ts:tuff:update",
   "packages/unplugin-export-plugin/src/index.ts:tuff:update",
   "packages/utils/account/account-sdk.ts:account:logout",
   "packages/utils/account/account-sdk.ts:account:open-billing",

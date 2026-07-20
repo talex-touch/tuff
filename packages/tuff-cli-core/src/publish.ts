@@ -16,7 +16,7 @@ import { ensureCliDeviceInfo } from './device'
 import { createPluginPublisherSignature } from './plugin-signer'
 
 const ALL_HTTP_STATUS = Array.from({ length: 500 }, (_, index) => index + 100)
-const CLI_COMMAND_NAME = process.env.TUFF_CLI_COMMAND || 'tuffcli'
+const CLI_COMMAND_NAME = 'tuff'
 
 interface PackageInfo {
   path: string

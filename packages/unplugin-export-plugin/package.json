@@ -48,58 +48,36 @@
     "./types": {
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
-    },
-    "./cli": {
-      "types": "./dist/cli/index.d.ts",
-      "import": "./dist/cli/index.js"
-    },
-    "./*": "./*"
+    }
   },
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {
-    "tuff": "dist/bin/tuff.js"
-  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
-    "tuff:builder": "tuff builder",
     "lint": "node ../../node_modules/eslint/bin/eslint.js --cache \"src/**/*.{ts,tsx}\"",
     "lint:fix": "node ../../node_modules/eslint/bin/eslint.js --cache --fix \"src/**/*.{ts,tsx}\"",
     "prepublishOnly": "npm run build",
-    "release": "bumpp && npm publish --access public",
-    "start": "esno src/index.ts"
+    "release": "bumpp && npm publish --access public"
   },
   "peerDependencies": {
     "chalk": "^5.6.0",
-    "cli-progress": "^3.12.0",
-    "compressing": "^1.10.5 || ^2.1.1",
     "debug": "^4.3.5",
     "esbuild": "^0.25.0 || ^0.28.0",
     "fs-extra": "^11.3.1",
     "pathe": "^1.1.2",
-    "unplugin": "^1.16.1"
-  },
-  "dependencies": {
-    "@talex-touch/utils": "workspace:*"
+    "unplugin": "^1.16.1 || ^2.0.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^5.4.1",
-    "@types/cli-progress": "^3.11.6",
     "@types/debug": "^4.1.13",
     "@types/fs-extra": "^11.0.4",
-    "@types/glob": "^8.1.0",
     "@types/node": "^18.19.130",
     "bumpp": "^9.11.1",
     "eslint": "^9.39.4",
-    "esno": "^4.8.0",
-    "find-up": "^7.0.0",
-    "glob": "^10.5.0",
-    "nodemon": "^2.0.22",
-    "rimraf": "^5.0.10",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.6",

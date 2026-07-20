@@ -85,7 +85,7 @@
 - `package.json`、`tsconfig.json`、`eslint.config.js`。
 
 ### packages/unplugin-export-plugin（打包/导出插件）
-- `src/`：`core/`、`cli/`、`bin/`、`__tests__/` 与多构建入口（`vite.ts`、`rollup.ts`、`esbuild.ts`、`webpack.ts`、`nuxt.ts`）。
+- `src/`：构建工具适配器（`vite.ts`、`rollup.ts`、`esbuild.ts`、`webpack.ts`、`nuxt.ts`）、共享集成运行时（`index.ts`、`prelude.ts`、`types.ts`）与集成测试。CLI、插件包构建与发布逻辑仅保留在 `packages/tuff-cli` 和 `packages/tuff-cli-core`。
 - `tsup.config.ts`、`package.json`、`README.md`。
 
 ### packages/help（工程辅助）

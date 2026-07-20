@@ -39,6 +39,8 @@ import {
 } from './security-scan'
 import { generateFilesSha256, generateSignature } from './security-util'
 
+type Chalk = (typeof import('chalk'))['default']
+
 // Default configuration
 const DEFAULT_OPTIONS: Required<
   Omit<Options, 'assets' | 'versionSync' | 'manifestPath'>
@@ -76,9 +78,10 @@ interface IndexBuildConfig {
   external?: string[]
   minify?: boolean
   sourcemap?: boolean
+  source: 'manifest-prelude' | 'manifest-index' | 'src-prelude' | 'legacy-index'
 }
 
-type IndexConfigOverride = Partial<IndexBuildConfig>
+type IndexConfigOverride = Partial<Omit<IndexBuildConfig, 'source'>>
 
 interface WidgetFeatureManifest {
   id: string
@@ -215,7 +218,7 @@ async function promptConfirm(
  */
 async function checkVersionSync(
   opts: ReturnType<typeof resolveOptions>,
-  chalk: any,
+  chalk: Chalk,
 ): Promise<{ synced: boolean, version?: string }> {
   const packageJsonPath = path.join(opts.root, 'package.json')
   const manifestPath = path.join(opts.root, opts.manifest)
@@ -295,7 +298,7 @@ async function checkVersionSync(
 function checkPluginSize(
   tpexPath: string,
   maxSizeMB: number,
-  chalk: any,
+  chalk: Chalk,
 ): void {
   const stats = fs.statSync(tpexPath)
   const sizeMB = stats.size / (1024 * 1024)
@@ -347,48 +350,68 @@ function findIndexEntry(indexDirPath: string): string | null {
 
 function resolveIndexBundleConfig(
   opts: ReturnType<typeof resolveOptions>,
+  manifestPreludeConfig: IndexConfigOverride | null,
   manifestIndexConfig: IndexConfigOverride | null,
 ): IndexBuildConfig | null {
   const rootIndexPath = path.resolve(opts.root, 'index.js')
+  const preludeDirPath = path.resolve(opts.root, opts.sourceDir, 'prelude')
   const indexDirPath = path.resolve(opts.root, opts.indexDir)
+  const override = manifestPreludeConfig ?? manifestIndexConfig
+  const overrideSource = manifestPreludeConfig ? 'manifest-prelude' : 'manifest-index'
 
-  if (manifestIndexConfig) {
-    const entryPath = manifestIndexConfig.entry
-      ? path.resolve(opts.root, manifestIndexConfig.entry)
-      : findIndexEntry(indexDirPath)
+  if (override) {
+    const defaultDir = manifestPreludeConfig ? preludeDirPath : indexDirPath
+    const entryPath = override.entry
+      ? path.resolve(opts.root, override.entry)
+      : findIndexEntry(defaultDir)
 
     if (!entryPath || !fs.existsSync(entryPath)) {
-      const displayPath
-        = manifestIndexConfig.entry || `${opts.indexDir}/(main|index).[jt]s`
-      throw new Error(`manifest.build.index.entry not found: ${displayPath}`)
+      const label = manifestPreludeConfig ? 'manifest.build.prelude' : 'manifest.build.index'
+      const defaultPath = manifestPreludeConfig
+        ? `${opts.sourceDir}/prelude/(main|index).[jt]s`
+        : `${opts.indexDir}/(main|index).[jt]s`
+      throw new Error(`${label}.entry not found: ${override.entry || defaultPath}`)
     }
 
     return {
       entry: entryPath,
-      format: manifestIndexConfig.format ?? 'cjs',
-      target: manifestIndexConfig.target ?? 'node24',
-      external: manifestIndexConfig.external ?? opts.external,
-      minify: manifestIndexConfig.minify ?? opts.minify,
-      sourcemap: manifestIndexConfig.sourcemap ?? opts.sourcemap,
+      format: override.format ?? 'cjs',
+      target: override.target ?? 'node24',
+      external: override.external ?? opts.external,
+      minify: override.minify ?? opts.minify,
+      sourcemap: override.sourcemap ?? opts.sourcemap,
+      source: overrideSource,
     }
   }
 
-  if (fs.existsSync(rootIndexPath)) {
+  if (fs.existsSync(rootIndexPath))
     return null
+
+  const preludeEntry = findIndexEntry(preludeDirPath)
+  if (preludeEntry) {
+    return {
+      entry: preludeEntry,
+      format: 'cjs',
+      target: 'node24',
+      external: opts.external,
+      minify: opts.minify,
+      sourcemap: opts.sourcemap,
+      source: 'src-prelude',
+    }
   }
 
-  const entryPath = findIndexEntry(indexDirPath)
-  if (!entryPath) {
+  const legacyEntry = findIndexEntry(indexDirPath)
+  if (!legacyEntry)
     return null
-  }
 
   return {
-    entry: entryPath,
+    entry: legacyEntry,
     format: 'cjs',
     target: 'node24',
     external: opts.external,
     minify: opts.minify,
     sourcemap: opts.sourcemap,
+    source: 'legacy-index',
   }
 }
 
@@ -883,7 +906,7 @@ async function compilePackageWidgets(
   manifest: IManifest,
   buildDir: string,
   opts: ReturnType<typeof resolveOptions>,
-  chalk: any,
+  chalk: Chalk,
 ): Promise<WidgetPrecompiledManifestEntry[]> {
   const features = Array.isArray(manifest.features) ? manifest.features : []
   const widgetFeatures = features.filter(
@@ -941,17 +964,20 @@ async function bundleIndexFolder(
   config: IndexBuildConfig,
   buildDir: string,
   manifest: { name: string, version: string },
-  chalk: any,
+  root: string,
+  chalk: Chalk,
 ): Promise<boolean> {
   try {
     const esbuild = await import('esbuild')
+    const sourcePath = path.relative(root, config.entry).replace(/\\/g, '/')
 
     console.info(
       chalk.bgBlack.white(' Talex-Touch ')
-      + chalk.blueBright(' Bundling index/ folder with esbuild...'),
+      + chalk.blueBright(` Bundling ${sourcePath} to index.js...`),
     )
 
     const startTime = Date.now()
+    const aliasRoot = path.dirname(config.entry)
     const result = await esbuild.build({
       entryPoints: [config.entry],
       bundle: true,
@@ -962,47 +988,44 @@ async function bundleIndexFolder(
       external: config.external || ['electron'],
       minify: config.minify ?? true,
       sourcemap: config.sourcemap ?? false,
+      banner: {
+        js: `/* Tuff Prelude bundle: ${config.source} -> index.js */`,
+      },
       define: {
         __PLUGIN_NAME__: JSON.stringify(manifest.name),
         __PLUGIN_VERSION__: JSON.stringify(manifest.version),
       },
       alias: {
-        '@': path.resolve('index'),
-        '~': path.resolve('index'),
+        '@': aliasRoot,
+        '~': aliasRoot,
       },
       logLevel: 'warning',
     })
 
     const duration = Date.now() - startTime
-
     if (result.errors.length > 0) {
       console.error(
         chalk.bgRed.white(' ERROR ')
-        + chalk.red(' Index folder bundling failed:'),
+        + chalk.red(' Prelude bundling failed:'),
       )
-      result.errors.forEach(err =>
-        console.error(chalk.red(`  - ${err.text}`)),
-      )
+      result.errors.forEach(err => console.error(chalk.red(`  - ${err.text}`)))
       return false
     }
 
     const outputPath = path.join(buildDir, 'index.js')
     const stats = fs.statSync(outputPath)
     const sizeKb = (stats.size / 1024).toFixed(1)
-
     console.info(
       chalk.bgBlack.white(' Talex-Touch ')
-      + chalk.greenBright(
-        ` Index folder bundled successfully (${sizeKb}kb) in ${duration}ms`,
-      ),
+      + chalk.greenBright(` Prelude bundled successfully (${sizeKb}kb) in ${duration}ms`),
     )
-
     return true
   }
-  catch (error: any) {
+  catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
     console.error(
       chalk.bgRed.white(' ERROR ')
-      + chalk.red(` Failed to bundle index folder: ${error.message}`),
+      + chalk.red(` Failed to bundle Prelude: ${message}`),
     )
     return false
   }
@@ -1140,24 +1163,32 @@ export async function build(userOptions?: Options) {
     }
   }
 
-  // 2.2.2 Handle index.js: deterministic precedence with optional manifest override
+  // 2.2.2 Handle index.js: root index wins unless manifest explicitly selects Prelude/index.
   const manifestData = sourceManifest
+  const manifestPreludeConfig = normalizeIndexConfig(
+    manifestData?.build?.prelude,
+    'manifest.build.prelude',
+  )
   const manifestIndexConfig = normalizeIndexConfig(
     manifestData?.build?.index,
     'manifest.build.index',
   )
-  const indexConfig = resolveIndexBundleConfig(opts, manifestIndexConfig)
+  const indexConfig = resolveIndexBundleConfig(
+    opts,
+    manifestPreludeConfig,
+    manifestIndexConfig,
+  )
 
   if (indexConfig) {
     const bundleSuccess = await bundleIndexFolder(
       indexConfig,
       buildDir,
       manifestData,
+      opts.root,
       chalk,
     )
-    if (!bundleSuccess) {
-      throw new Error('Failed to bundle index/ folder')
-    }
+    if (!bundleSuccess)
+      throw new Error('Failed to bundle Prelude')
   }
   else {
     // Fallback: copy existing index.js (root index.js has higher precedence by default)
@@ -1248,14 +1279,8 @@ interface IManifest {
   }
   build?: {
     files?: string[]
-    index?: {
-      entry?: string
-      format?: 'cjs' | 'esm'
-      target?: string
-      external?: string[]
-      minify?: boolean
-      sourcemap?: boolean
-    }
+    prelude?: IndexConfigOverride
+    index?: IndexConfigOverride
     widgets?: WidgetPrecompiledManifestEntry[]
     secret?: {
       pos: string
@@ -1273,7 +1298,7 @@ interface IManifest {
 }
 
 async function mergeAssets(
-  chalk: any,
+  chalk: Chalk,
   buildDir: string,
   opts: ReturnType<typeof resolveOptions>,
 ) {
@@ -1419,7 +1444,7 @@ async function compressPlugin(
   manifest: IManifest,
   buildDir: string,
   opts: ReturnType<typeof resolveOptions>,
-  chalk: any,
+  chalk: Chalk,
 ): Promise<string> {
   const buildConfig = manifest.build || {
     files: [],
