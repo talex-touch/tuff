@@ -1353,7 +1353,7 @@ jobs:
           nexus_headers=()
           create_nexus_headers nexus_headers
           rollback_from_version=$(jq -er '.release.rollbackFromVersion' /tmp/tuff-release-manifest.json)
-          rollback_compatible=$(jq -er '.release.rollbackCompatible' /tmp/tuff-release-manifest.json)
+          rollback_compatible=$(jq -r '.release.rollbackCompatible' /tmp/tuff-release-manifest.json)
 
 
           create_payload=$(jq -n \
