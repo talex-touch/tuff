@@ -785,3 +785,51 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: 发布 Tuff 2.4.13-beta.16
+
+**Date**: 2026-07-19
+**Task**: 发布 Tuff 2.4.13-beta.16
+**Branch**: `master`
+
+### Summary
+
+完成插件供应链收敛后的 beta.16 多平台发布；修复 macOS 空签名环境与 Nexus rollbackCompatible=false 同步，验证 GitHub Release、签名证据、下载路由和 Pages 生产部署。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `340a65fae` | (see git log) |
+| `6a1c8cd20` | (see git log) |
+| `ba74b5fbb` | (see git log) |
+| `a80716005` | (see git log) |
+| `7c4dc8c44` | (see git log) |
+| `1bf13dce1` | (see git log) |
+| `844a58a18` | (see git log) |
+| `44544d09a` | (see git log) |
+| `62873ee7e` | (see git log) |
+| `c2f375511` | (see git log) |
+| `f651fd7aa` | (see git log) |
+| `dab91a636` | (see git log) |
+| `5c2b28181` | (see git log) |
+| `d1696b52e` | (see git log) |
+| `80470e9b0` | (see git log) |
+| `ae41f2ae3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
