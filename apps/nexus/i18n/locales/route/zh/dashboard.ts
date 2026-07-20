@@ -772,6 +772,10 @@ export default {
               label: '插件',
               description: '管理插件可见性与发布能力',
             },
+            pluginModeration: {
+              label: '插件审核',
+              description: '在安全审核后批准或拒绝插件版本',
+            },
             account: {
               label: '账户',
               description: '读取账户级基础信息',
@@ -793,6 +797,10 @@ export default {
             pluginPublish: {
               label: '发布插件',
               description: '上传并发布插件到商店',
+            },
+            pluginModerate: {
+              label: '审核插件',
+              description: '批准或拒绝已审计的插件版本',
             },
             accountRead: {
               label: '读取账户',

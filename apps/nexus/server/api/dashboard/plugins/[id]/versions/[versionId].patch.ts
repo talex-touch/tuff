@@ -1,5 +1,5 @@
 import { createError, readBody } from 'h3'
-import { requireAuth } from '../../../../../utils/auth'
+import { requireAuthOrApiKey } from '../../../../../utils/auth'
 import { getUserById } from '../../../../../utils/authStore'
 import { dispatchNotificationEvent } from '../../../../../utils/notificationDispatcher'
 import { recordPlatformGovernanceEvent } from '../../../../../utils/platformGovernanceStore'
@@ -8,7 +8,7 @@ import { getPluginById, setPluginVersionStatus } from '../../../../../utils/plug
 const ALLOWED_VERSION_STATUSES = ['pending', 'approved', 'rejected'] as const
 
 export default defineEventHandler(async (event) => {
-  const { userId } = await requireAuth(event)
+  const { userId } = await requireAuthOrApiKey(event, ['plugin:moderate'])
   const id = event.context.params?.id
   const versionId = event.context.params?.versionId
 

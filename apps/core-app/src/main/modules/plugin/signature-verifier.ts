@@ -16,6 +16,7 @@ import {
   serializePluginSigningPayload
 } from '@talex-touch/utils/plugin'
 import fse from 'fs-extra'
+import pluginAttestationPublicKey from '../../../../resources/keys/plugin-attestation-public.pem?raw'
 
 export interface PluginPackageTrustMetadata {
   sourceType: 'registry'
@@ -39,6 +40,15 @@ export interface PluginPackageTrustOptions {
  * Uses SHA-256 hash of file content compared against expected signature
  */
 const SHA256_RE = /^[a-f0-9]{64}$/
+const BUILTIN_PLUGIN_TRUST_ROOTS: readonly PluginTrustRootV1[] = [
+  {
+    algorithm: PLUGIN_SIGNING_ALGORITHM,
+    keyId: 'nexus-plugin-attestation-2026-01',
+    publicKeyPem: pluginAttestationPublicKey,
+    validFrom: '2026-07-20T00:00:00.000Z',
+    validUntil: '2028-07-20T00:00:00.000Z'
+  }
+]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -57,11 +67,14 @@ function failure(
 
 function readConfiguredTrustRoots(): PluginTrustRootV1[] {
   const raw = process.env.TUFF_PLUGIN_TRUST_ROOTS_JSON?.trim()
-  if (!raw) return []
+  if (!raw) return [...BUILTIN_PLUGIN_TRUST_ROOTS]
   try {
-    return normalizePluginTrustRoots(JSON.parse(raw))
+    return normalizePluginTrustRoots([
+      ...BUILTIN_PLUGIN_TRUST_ROOTS,
+      ...normalizePluginTrustRoots(JSON.parse(raw))
+    ])
   } catch {
-    return []
+    return [...BUILTIN_PLUGIN_TRUST_ROOTS]
   }
 }
 
