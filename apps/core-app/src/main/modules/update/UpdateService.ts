@@ -37,6 +37,7 @@ import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getSentryService } from '../sentry'
+import { operationalErrorService } from '../observability'
 /**
  * Update service for checking application updates in main process
  */
@@ -1259,7 +1260,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       }
 
       updateLog.error('Update check failed', { error })
-      this.reportUpdateError('check', error, { channel: targetChannel })
+      const publicMessage = this.reportUpdateError('check', error, { channel: targetChannel })
       this.reportUpdateTelemetry('check_error', {
         channel: targetChannel,
         source: this.settings.source?.name ?? 'Unknown',
@@ -1268,7 +1269,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
 
       const errorResult = {
         hasUpdate: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: publicMessage,
         source: 'Unknown'
       }
 
@@ -1391,9 +1392,21 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     })
   }
 
-  private reportUpdateError(action: string, error: unknown, meta?: Record<string, unknown>): void {
-    const message = error instanceof Error ? error.message : String(error)
-    this.reportUpdateMessage('error', `Update ${action} failed`, message, meta)
+  private reportUpdateError(
+    action: string,
+    error: unknown,
+    meta?: Record<string, unknown>
+  ): string {
+    const report = operationalErrorService.report({
+      domain: 'update',
+      operation: action,
+      error,
+      code: 'UPDATE_OPERATION_FAILED',
+      retryable: action === 'check' || action === 'download',
+      userImpact: action === 'install' ? 'blocked' : 'degraded'
+    })
+    this.reportUpdateMessage('error', `Update ${action} failed`, report.publicMessage, meta)
+    return report.publicMessage
   }
 
   /**

@@ -1,18 +1,20 @@
+import { operationalErrorService } from '../../../observability'
+
 export interface AppScanError {
   platform: NodeJS.Platform
   path: string
   message: string
   timestamp: number
-}
-
-type AppScanErrorHandler = (error: AppScanError) => void
-
-let handler: AppScanErrorHandler | null = null
-
-export function setAppScanErrorHandler(nextHandler: AppScanErrorHandler | null): void {
-  handler = nextHandler
+  cause?: unknown
 }
 
 export function reportAppScanError(error: AppScanError): void {
-  handler?.(error)
+  operationalErrorService.report({
+    domain: 'app-index',
+    operation: 'platform-scan',
+    error: error.cause ?? new Error(error.message),
+    code: 'APP_SCAN_FAILED',
+    userImpact: 'degraded',
+    context: { platform: error.platform }
+  })
 }

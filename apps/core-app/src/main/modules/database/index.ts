@@ -18,8 +18,9 @@ import migrationsLocator from '../../../../resources/db/locator.json?commonjs-ex
 import * as schema from '../../db/schema'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { DB_AUX_ENABLED } from '../../db/runtime-flags'
-import { getSqliteBusyRetryCount } from '../../db/sqlite-retry'
+import { getSqliteBusyRetryCount, setSqliteRetryExhaustedListener } from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
+import { operationalErrorService } from '../observability'
 import { searchIndexWriter } from '../box-tool/search-engine/search-index-writer'
 import {
   planScanProgressSourceScopeMigration,
@@ -38,6 +39,11 @@ const DB_WAL_TRUNCATE_MAX_QUEUED_WRITES = 2
 const DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS = 5_000
 const DB_WAL_CHECKPOINT_SKIPPED_BUSY = 'DB_WAL_CHECKPOINT_SKIPPED_BUSY'
 const WAL_WARN_THRESHOLD_BYTES = 512 * 1024 * 1024
+const DB_BUSY_RETRY_WARN_DELTA = 10
+const DB_SCHEDULER_BUSY_FAILURE_WARN_DELTA = 3
+const DB_SCHEDULER_QUEUE_WARN_THRESHOLD = 20
+const DB_WRITER_PENDING_WARN_THRESHOLD = 20
+const DB_OPEN_FD_WARN_THRESHOLD = 256
 const AUX_COPY_TABLES = [
   'analytics_snapshots',
   'plugin_analytics',
@@ -64,6 +70,9 @@ export class DatabaseModule extends BaseModule {
   private destroying = false
   private walPeakBytes = 0
   private schedulerQueuePeak = 0
+  private lastHealthBusyRetryCount = 0
+  private lastHealthSchedulerBusyFailures = 0
+  private disposeRetryExhaustedListener: (() => void) | null = null
 
   static key: symbol = Symbol.for('Database')
   name: ModuleKey = DatabaseModule.key
@@ -400,8 +409,9 @@ export class DatabaseModule extends BaseModule {
   }
 
   private async reportDatabaseHealth(source: 'periodic' | 'threshold'): Promise<void> {
-    const queueDepth = dbWriteScheduler.getStats().queued
-    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, queueDepth)
+    const scheduler = dbWriteScheduler.getDetailedStats()
+    this.schedulerQueuePeak = Math.max(this.schedulerQueuePeak, scheduler.queued)
+    const writer = searchIndexWriter.getStatus()
 
     const [walSizeBytes, openFdCount] = await Promise.all([
       this.getWalSizeBytes(),
@@ -410,23 +420,55 @@ export class DatabaseModule extends BaseModule {
     this.walPeakBytes = Math.max(this.walPeakBytes, walSizeBytes)
 
     const busyRetryCount = getSqliteBusyRetryCount()
-    const level = walSizeBytes >= WAL_WARN_THRESHOLD_BYTES ? 'warn' : 'info'
+    const busyRetryDelta = Math.max(0, busyRetryCount - this.lastHealthBusyRetryCount)
+    this.lastHealthBusyRetryCount = busyRetryCount
+    const schedulerBusyFailureDelta = Math.max(
+      0,
+      scheduler.busyFailures - this.lastHealthSchedulerBusyFailures
+    )
+    this.lastHealthSchedulerBusyFailures = scheduler.busyFailures
+    const unhealthy =
+      walSizeBytes >= WAL_WARN_THRESHOLD_BYTES ||
+      busyRetryDelta >= DB_BUSY_RETRY_WARN_DELTA ||
+      schedulerBusyFailureDelta >= DB_SCHEDULER_BUSY_FAILURE_WARN_DELTA ||
+      scheduler.queued >= DB_SCHEDULER_QUEUE_WARN_THRESHOLD ||
+      writer.pending >= DB_WRITER_PENDING_WARN_THRESHOLD ||
+      (openFdCount !== null && openFdCount >= DB_OPEN_FD_WARN_THRESHOLD)
     const payload = {
       source,
       walSizeBytes,
       walPeakBytes: this.walPeakBytes,
       busyRetryCount,
-      schedulerQueueDepth: queueDepth,
+      busyRetryDelta,
+      schedulerBusyFailureDelta,
+      schedulerQueueDepth: scheduler.queued,
       schedulerQueuePeak: this.schedulerQueuePeak,
+      writerPending: writer.pending,
+      writerActive: writer.activeAdmissions,
+      writerAdmissionPaused: writer.admissionPaused,
       openFdCount: openFdCount ?? undefined
     }
+    this.schedulerQueuePeak = scheduler.queued
+    this.walPeakBytes = walSizeBytes
 
-    if (level === 'warn') {
-      dbLog.warn('Database health snapshot (WAL threshold exceeded)', { meta: payload })
+    if (!unhealthy) {
+      dbLog.info('Database health snapshot', { meta: payload })
       return
     }
 
-    dbLog.info('Database health snapshot', { meta: payload })
+    dbLog.warn('Database health snapshot exceeded contention threshold', { meta: payload })
+    operationalErrorService.report({
+      domain: 'database',
+      operation: 'health-window',
+      error: new Error('DATABASE_CONTENTION_THRESHOLD_EXCEEDED'),
+      code: 'DATABASE_CONTENTION',
+      severity: 'warning',
+      retryable: true,
+      userImpact: 'degraded',
+      captureDetail: false,
+      dedupeWindowMs: DB_HEALTH_REPORT_INTERVAL_MS,
+      context: payload
+    })
   }
 
   private registerWalMaintenanceTasks(): void {
@@ -735,6 +777,26 @@ export class DatabaseModule extends BaseModule {
   async onInit({ file }: ModuleInitContext<TalexEvents>): Promise<void> {
     const { dirPath } = file
     this.destroying = false
+    this.lastHealthBusyRetryCount = getSqliteBusyRetryCount()
+    this.lastHealthSchedulerBusyFailures = dbWriteScheduler.getDetailedStats().busyFailures
+    this.disposeRetryExhaustedListener?.()
+    this.disposeRetryExhaustedListener = setSqliteRetryExhaustedListener((event) => {
+      operationalErrorService.report({
+        domain: 'database',
+        operation: event.label,
+        error: event.error,
+        code: 'DATABASE_BUSY_RETRY_EXHAUSTED',
+        severity: 'warning',
+        retryable: true,
+        userImpact: 'degraded',
+        captureDetail: false,
+        context: {
+          attempts: event.attempts,
+          elapsedMs: event.elapsedMs,
+          rawCode: event.rawCode
+        }
+      })
+    })
     const dbPath = path.join(dirPath!, 'database.db')
     this.mainDbPath = dbPath
     this.client = createClient({ url: `file:${dbPath}` })
@@ -1060,6 +1122,8 @@ export class DatabaseModule extends BaseModule {
 
   async onDestroy(): Promise<void> {
     this.destroying = true
+    this.disposeRetryExhaustedListener?.()
+    this.disposeRetryExhaustedListener = null
     if (this.backgroundStartupPromise) {
       await this.backgroundStartupPromise
       this.backgroundStartupPromise = null

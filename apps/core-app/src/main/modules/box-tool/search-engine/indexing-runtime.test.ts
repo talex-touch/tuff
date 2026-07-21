@@ -15,7 +15,7 @@ import {
 } from '@talex-touch/utils/search'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IndexingRootPolicy } from './indexing-root-policy'
-import { IndexingRuntime } from './indexing-runtime'
+import { IndexingRuntime, type IndexingRuntimeSourceWriterRouter } from './indexing-runtime'
 import { IndexingSourceMutationGate } from './indexing-source-mutation-gate'
 
 const loggerMock = vi.hoisted(() => ({
@@ -2364,6 +2364,86 @@ describe('indexingRuntime', () => {
       summary: {
         clearedSearchIndexRows: 4
       }
+    })
+  })
+
+  it('resumes file writer admission before rebuilding the search snapshot', async () => {
+    const order: string[] = []
+    const fileDescriptor: IndexedSourceDescriptor = {
+      ...descriptor,
+      id: 'file-provider',
+      displayName: 'File Index'
+    }
+    let pauseInvocation: { sourceId: string; timeoutMs?: number } | null = null
+    const router: IndexingRuntimeSourceWriterRouter = {
+      getMode: vi.fn(() => 'runtime' as const),
+      setMode: vi.fn(),
+      drainSelected: vi.fn(async () => undefined),
+      async withPausedSelectedAdmission<T>(
+        sourceId: string,
+        operation: () => Promise<T>,
+        timeoutMs?: number
+      ): Promise<T> {
+        pauseInvocation = { sourceId, timeoutMs }
+        order.push('pause')
+        const result = await operation()
+        order.push('resume')
+        return result
+      }
+    }
+    runtime.setSourceWriterRouter(router)
+    store.beginSourceReplacement = vi.fn(async (sourceId) => {
+      order.push('begin-rebuild')
+      return { sourceId, replacementId: 'file-reset' }
+    })
+    store.stageSourceReplacement = vi.fn(async (_session, records) => {
+      order.push('stage-rebuild')
+      return records.length
+    })
+    store.commitSourceReplacement = vi.fn(async (session, totals) => {
+      order.push('commit-rebuild')
+      return { sourceId: session.sourceId, ...totals, removedIndexedItems: 0 }
+    })
+    const resetIndex = vi.fn(async () => {
+      order.push('local-reset')
+      return {
+        sourceId: 'file-provider',
+        reason: IndexedSourceResetReasons.UserClear,
+        clearedSearchIndex: false,
+        clearedScanProgress: true,
+        startedAt: 1700000000000,
+        completedAt: 1700000000100
+      }
+    })
+    runtime.registerSource(
+      buildSource({
+        descriptor: fileDescriptor,
+        resetIndex,
+        async *scan() {
+          yield { sourceId: 'file-provider', records: [], done: true }
+        }
+      })
+    )
+
+    const result = await runtime.resetSourceRuntimeState('file-provider', {
+      reason: IndexedSourceResetReasons.UserClear,
+      clearSearchIndex: true,
+      clearScanProgress: true
+    })
+
+    expect(pauseInvocation).toEqual({ sourceId: 'file-provider', timeoutMs: 10_000 })
+    expect(order).toEqual([
+      'pause',
+      'local-reset',
+      'resume',
+      'begin-rebuild',
+      'stage-rebuild',
+      'commit-rebuild'
+    ])
+    expect(result).toMatchObject({
+      sourceId: 'file-provider',
+      clearedScanProgress: true,
+      clearedSearchIndex: true
     })
   })
 

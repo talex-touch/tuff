@@ -7,7 +7,7 @@ import { useDropperResolver } from '~/modules/hooks/dropper-resolver'
 import { useGlobalBatteryOptimizer } from '~/modules/hooks/useBatteryOptimizer'
 import { setupLanguageSync, useLanguage } from '~/modules/lang'
 import { captureAppContext } from '~/modules/mention/dialog-mention'
-import { createRendererLogger } from '~/utils/renderer-log'
+import { reportRendererOperationalError } from '~/modules/observability'
 
 const emit = defineEmits<{
   beginnerRequired: []
@@ -15,7 +15,6 @@ const emit = defineEmits<{
 }>()
 
 const { initializeLanguage } = useLanguage()
-const runtimeLog = createRendererLogger('MainWindowRuntime')
 const { runAudit: runStartupPermissionAudit } = useStartupPermissionAudit()
 
 captureAppContext()
@@ -27,7 +26,13 @@ async function init(): Promise<void> {
     await initializeLanguage()
     setupLanguageSync()
   } catch (error) {
-    runtimeLog.error('Failed to initialize language', error)
+    reportRendererOperationalError({
+      domain: 'renderer-bootstrap',
+      operation: 'language-initialization',
+      error,
+      code: 'RENDERER_LANGUAGE_INITIALIZATION_FAILED',
+      userImpact: 'degraded'
+    })
   }
 
   useDropperResolver()

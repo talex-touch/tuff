@@ -403,12 +403,15 @@ export async function getAppInfo(appPath: string): Promise<ScannedAppInfo | null
         meta: { pathLength: appPath.length, message: errorMessage, code }
       })
     }
-    reportAppScanError({
-      platform: process.platform,
-      path: appPath,
-      message: errorMessage,
-      timestamp: Date.now()
-    })
+    if (code !== 'ENOENT') {
+      reportAppScanError({
+        platform: process.platform,
+        path: appPath,
+        message: errorMessage,
+        timestamp: Date.now(),
+        cause: error
+      })
+    }
     return null
   }
 }

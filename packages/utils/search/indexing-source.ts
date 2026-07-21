@@ -907,6 +907,9 @@ export interface IndexedSourceResetResult {
   startedAt: number;
   completedAt: number;
   error?: string;
+  errorCode?: string;
+  retryable?: boolean;
+  reportId?: string;
 }
 
 export interface IndexedSourceSearchQuery {

@@ -36,14 +36,7 @@ import type {
   AppIndexReindexRequest,
   AppIndexUpsertEntryRequest
 } from '@talex-touch/utils/transport/events/types'
-import {
-  completeTiming,
-  createRetrier,
-  sleep,
-  startTiming,
-  StorageList,
-  timingLogger
-} from '@talex-touch/utils'
+import { completeTiming, sleep, startTiming, StorageList, timingLogger } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
@@ -66,13 +59,14 @@ import type {
   FileUnlinkedEvent
 } from '../../../../core/eventbus/touch-event'
 import { config as configSchema, fileExtensions, files as filesSchema } from '../../../../db/schema'
-import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { dbWriteScheduler, type DbWritePriority } from '../../../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 
 import { createDbUtils, type DbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
+import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
 import searchEngineCore from '../../search-engine/search-core'
 import { appScanner, type AppScannerSourceScanResult } from './app-scanner'
@@ -191,6 +185,8 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
+type AppFileWriteDb = Pick<ReturnType<DbUtils['getDb']>, 'insert' | 'delete'>
+type AppFileMutationDb = Pick<ReturnType<DbUtils['getDb']>, 'insert' | 'update' | 'delete'>
 type AppIndexSyncStats = {
   added: number
   changed: number
@@ -297,33 +293,6 @@ function logAppDurationMs(
   )
 }
 
-function isSqliteBusyError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-  const { code, rawCode, message } = error as {
-    code?: string
-    rawCode?: number
-    message?: string
-  }
-  if (code === 'SQLITE_BUSY' || rawCode === 5) return true
-  return typeof message === 'string' && message.includes('SQLITE_BUSY')
-}
-
-const sqliteBusyRetrier = createRetrier({
-  maxRetries: 3,
-  timeoutMs: 2000,
-  shouldRetry: (error) => isSqliteBusyError(error),
-  onRetry: (attempt) =>
-    logApp(
-      `SQLITE_BUSY encountered while updating app display name, retrying attempt ${attempt + 1}`,
-      LogStyle.warning
-    )
-})
-
-function runWithSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
-  const wrapped = sqliteBusyRetrier(operation)
-  return wrapped() as Promise<T>
-}
-
 const MISSING_ICON_CONFIG_KEY = 'app_provider_missing_icon_apps'
 const PENDING_DELETION_CONFIG_KEY = 'app_provider_pending_deletion'
 const BACKFILL_LAST_RUN_CONFIG_KEY = 'app_provider_last_backfill'
@@ -360,6 +329,9 @@ export interface AppIndexRebuildResult {
   success: boolean
   message?: string
   error?: string
+  errorCode?: string
+  retryable?: boolean
+  reportId?: string
 }
 
 type AppIndexProcessPathResult = AppIndexAddPathResult & {
@@ -470,6 +442,35 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   constructor() {
     logApp('Initializing AppProvider service', LogStyle.info)
+  }
+
+  private async runDbMutation<T>(
+    label: string,
+    operation: () => Promise<T>,
+    priority: DbWritePriority = 'background'
+  ): Promise<T> {
+    return await dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
+      priority,
+      dropPolicy: 'none'
+    })
+  }
+
+  private async runAppTransaction<T>(
+    db: ReturnType<DbUtils['getDb']>,
+    operation: (
+      writer: AppFileMutationDb,
+      extensionWriter: AppFileWriteDb | undefined
+    ) => Promise<T>
+  ): Promise<T> {
+    if (typeof db.transaction === 'function') {
+      return await db.transaction(async (transaction) =>
+        operation(
+          transaction as unknown as AppFileMutationDb,
+          transaction as unknown as AppFileWriteDb
+        )
+      )
+    }
+    return await operation(db, undefined)
   }
 
   public setIndexedSourceRuntimeDelegate(delegate: AppIndexedSourceRuntimeDelegate | null): void {
@@ -1178,6 +1179,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
+  private async upsertAppExtensions(
+    writer: AppFileWriteDb | undefined,
+    extensions: Array<{ fileId: number; key: string; value: string }>
+  ): Promise<void> {
+    if (extensions.length === 0) return
+    if (!writer) {
+      await this.dbUtils!.addFileExtensions(extensions)
+      return
+    }
+    await writer
+      .insert(fileExtensions)
+      .values(extensions)
+      .onConflictDoUpdate({
+        target: [fileExtensions.fileId, fileExtensions.key],
+        set: { value: sql`excluded.value` }
+      })
+  }
+
   private async syncScannedAppExtensions(
     fileId: number,
     app: Pick<
@@ -1196,12 +1215,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       | 'identityKind'
       | 'displayNameSource'
       | 'displayNameQuality'
-    >
+    >,
+    writer?: AppFileWriteDb
   ): Promise<void> {
     const extensions = buildAppExtensions(fileId, app)
-    if (extensions.length > 0) {
-      await this.dbUtils!.addFileExtensions(extensions)
-    }
+    await this.upsertAppExtensions(writer, extensions)
 
     const staleExtensionKeys = resolveMissingScannedExtensionKeys(
       extensions,
@@ -1209,7 +1227,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     )
 
     if (staleExtensionKeys.length > 0) {
-      await this.dbUtils!.getDb()
+      const deleteWriter = writer ?? this.dbUtils!.getDb()
+      await deleteWriter
         .delete(fileExtensions)
         .where(
           and(eq(fileExtensions.fileId, fileId), inArray(fileExtensions.key, staleExtensionKeys))
@@ -1804,30 +1823,35 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         async (app, index) => {
           signal?.throwIfAborted()
           const cleanDisplayName = resolveScannedDisplayName(app)
-          const [insertedFile] = await this.dbUtils!.getDb()
-            .insert(filesSchema)
-            .values({
-              path: app.path,
-              name: app.name,
-              displayName: cleanDisplayName,
-              type: 'app' as const,
-              mtime: app.lastModified,
-              ctime: new Date()
-            })
-            .onConflictDoUpdate({
-              target: filesSchema.path,
-              set: {
-                name: sql`excluded.name`,
-                displayName: sql`excluded.display_name`,
-                mtime: sql`excluded.mtime`
+          await this.runDbMutation('app-provider.backfill-add', async () => {
+            const db = this.dbUtils!.getDb()
+            await this.runAppTransaction(db, async (tx, extensionWriter) => {
+              const [insertedFile] = await tx
+                .insert(filesSchema)
+                .values({
+                  path: app.path,
+                  name: app.name,
+                  displayName: cleanDisplayName,
+                  type: 'app' as const,
+                  mtime: app.lastModified,
+                  ctime: new Date()
+                })
+                .onConflictDoUpdate({
+                  target: filesSchema.path,
+                  set: {
+                    name: sql`excluded.name`,
+                    displayName: sql`excluded.display_name`,
+                    mtime: sql`excluded.mtime`
+                  }
+                })
+                .returning()
+
+              if (insertedFile) {
+                await this.syncScannedAppExtensions(insertedFile.id, app, extensionWriter)
               }
             })
-            .returning()
-
-          if (insertedFile) {
-            await this.syncScannedAppExtensions(insertedFile.id, app)
-            signal?.throwIfAborted()
-          }
+          })
+          signal?.throwIfAborted()
 
           if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
             logApp(
@@ -1867,19 +1891,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
 
           try {
-            if (
-              shouldUpdateDisplayName(existingDisplayName, nextDisplayName, {
-                currentQuality: existingDisplayNameQuality,
-                incomingQuality: app.displayNameQuality
-              })
-            ) {
-              await this.dbUtils!.getDb()
-                .update(filesSchema)
-                .set({ displayName: nextDisplayName })
-                .where(eq(filesSchema.id, fileId))
-            }
+            await this.runDbMutation('app-provider.backfill-update', async () => {
+              const db = this.dbUtils!.getDb()
+              await this.runAppTransaction(db, async (tx, extensionWriter) => {
+                if (
+                  shouldUpdateDisplayName(existingDisplayName, nextDisplayName, {
+                    currentQuality: existingDisplayNameQuality,
+                    incomingQuality: app.displayNameQuality
+                  })
+                ) {
+                  await tx
+                    .update(filesSchema)
+                    .set({ displayName: nextDisplayName })
+                    .where(eq(filesSchema.id, fileId))
+                }
 
-            await this.syncScannedAppExtensions(fileId, app)
+                await this.syncScannedAppExtensions(fileId, app, extensionWriter)
+              })
+            })
 
             updatedCount += 1
           } catch (error) {
@@ -2320,29 +2349,33 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         toAdd,
         async (app, index) => {
           const cleanDisplayName = resolveScannedDisplayName(app)
-          const [insertedFile] = await db
-            .insert(filesSchema)
-            .values({
-              path: app.path,
-              name: app.name,
-              displayName: cleanDisplayName,
-              type: 'app' as const,
-              mtime: app.lastModified,
-              ctime: new Date()
-            })
-            .onConflictDoUpdate({
-              target: filesSchema.path,
-              set: {
-                name: sql`excluded.name`,
-                displayName: sql`excluded.display_name`,
-                mtime: sql`excluded.mtime`
+          await this.runDbMutation('app-provider.batch-add', async () => {
+            await this.runAppTransaction(db, async (tx, extensionWriter) => {
+              const [insertedFile] = await tx
+                .insert(filesSchema)
+                .values({
+                  path: app.path,
+                  name: app.name,
+                  displayName: cleanDisplayName,
+                  type: 'app' as const,
+                  mtime: app.lastModified,
+                  ctime: new Date()
+                })
+                .onConflictDoUpdate({
+                  target: filesSchema.path,
+                  set: {
+                    name: sql`excluded.name`,
+                    displayName: sql`excluded.display_name`,
+                    mtime: sql`excluded.mtime`
+                  }
+                })
+                .returning()
+
+              if (insertedFile) {
+                await this.syncScannedAppExtensions(insertedFile.id, app, extensionWriter)
               }
             })
-            .returning()
-
-          if (insertedFile) {
-            await this.syncScannedAppExtensions(insertedFile.id, app)
-          }
+          })
 
           if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
             logApp(
@@ -2391,9 +2424,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             updateData.displayName = nextDisplayName
           }
 
-          await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
-
-          await this.syncScannedAppExtensions(fileId, app)
+          await this.runDbMutation('app-provider.batch-update', async () => {
+            await this.runAppTransaction(db, async (tx, extensionWriter) => {
+              await tx.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
+              await this.syncScannedAppExtensions(fileId, app, extensionWriter)
+            })
+          })
 
           // 改为每100个输出一次，但保持10个一组的处理
           if ((index + 1) % 100 === 0 || index === toUpdate.length - 1) {
@@ -2423,9 +2459,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp(`Deleting ${chalk.cyan(toDeleteIds.length)} apps...`, LogStyle.process)
 
       const deleteStart = startTiming()
-      await db.transaction(async (tx) => {
-        await tx.delete(filesSchema).where(inArray(filesSchema.id, toDeleteIds))
-        await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, toDeleteIds))
+      await this.runDbMutation('app-provider.batch-delete', async () => {
+        await this.runAppTransaction(db, async (tx) => {
+          await tx.delete(filesSchema).where(inArray(filesSchema.id, toDeleteIds))
+          await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, toDeleteIds))
+        })
       })
 
       logAppDuration('DeleteApps', deleteStart, {
@@ -2522,15 +2560,23 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         updateData.displayName = normalizedDisplayName
       }
 
-      await db.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
-
-      if (options.managedEntry === true) {
-        await this.dbUtils!.addFileExtensions(
-          buildManagedEntryExtensions(existingFile.id, appInfo, true)
-        )
-      } else {
-        await this.syncScannedAppExtensions(existingFile.id, appInfo)
-      }
+      await this.runDbMutation(
+        'app-provider.entry-update',
+        async () => {
+          await this.runAppTransaction(db, async (tx, extensionWriter) => {
+            await tx.update(filesSchema).set(updateData).where(eq(filesSchema.id, existingFile.id))
+            if (options.managedEntry === true) {
+              await this.upsertAppExtensions(
+                extensionWriter,
+                buildManagedEntryExtensions(existingFile.id, appInfo, true)
+              )
+            } else {
+              await this.syncScannedAppExtensions(existingFile.id, appInfo, extensionWriter)
+            }
+          })
+        },
+        options.managedEntry === true ? 'interactive' : 'background'
+      )
 
       logApp(`App ${chalk.cyan(appInfo.name)} updated successfully`, LogStyle.success)
       return 'updated'
@@ -2538,27 +2584,39 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     logApp(`Adding new app: ${chalk.cyan(appInfo.name)}`, LogStyle.process)
 
-    const [insertedFile] = await db
-      .insert(filesSchema)
-      .values({
-        path: appInfo.path,
-        name: appInfo.name,
-        displayName: resolveScannedDisplayName(appInfo),
-        type: 'app' as const,
-        mtime: appInfo.lastModified,
-        ctime: new Date()
-      })
-      .returning()
+    const insertedFile = await this.runDbMutation(
+      'app-provider.entry-add',
+      async () => {
+        return await this.runAppTransaction(db, async (tx, extensionWriter) => {
+          const [inserted] = await tx
+            .insert(filesSchema)
+            .values({
+              path: appInfo.path,
+              name: appInfo.name,
+              displayName: resolveScannedDisplayName(appInfo),
+              type: 'app' as const,
+              mtime: appInfo.lastModified,
+              ctime: new Date()
+            })
+            .returning()
+
+          if (inserted) {
+            if (options.managedEntry === true) {
+              await this.upsertAppExtensions(
+                extensionWriter,
+                buildManagedEntryExtensions(inserted.id, appInfo, true)
+              )
+            } else {
+              await this.syncScannedAppExtensions(inserted.id, appInfo, extensionWriter)
+            }
+          }
+          return inserted
+        })
+      },
+      options.managedEntry === true ? 'interactive' : 'background'
+    )
 
     if (insertedFile) {
-      if (options.managedEntry === true) {
-        await this.dbUtils!.addFileExtensions(
-          buildManagedEntryExtensions(insertedFile.id, appInfo, true)
-        )
-      } else {
-        await this.syncScannedAppExtensions(insertedFile.id, appInfo)
-      }
-
       logApp(`New app ${chalk.cyan(appInfo.name)} added successfully`, LogStyle.success)
     }
 
@@ -2595,9 +2653,14 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       const status = await this.upsertAppInfo(appInfo, options)
       return { success: true, status, path: appInfo.path, appInfo }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      logApp(`Error processing app change: ${chalk.red(message)}`, LogStyle.error)
-      return { success: false, status: 'error', reason: message }
+      const report = operationalErrorService.report({
+        domain: 'app-index',
+        operation: 'process-path',
+        error,
+        code: 'APP_INDEX_ENTRY_MUTATION_FAILED',
+        userImpact: 'degraded'
+      })
+      return { success: false, status: 'error', reason: report.publicMessage }
     } finally {
       this.processingPaths.delete(appPath)
     }
@@ -2636,9 +2699,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         ? resolveAppItemIds(this._mapDbAppToScannedInfo(storedApp))
         : resolveAppItemIds({ path: fileToDelete.path })
 
-      await this.dbUtils.getDb().transaction(async (tx) => {
-        await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
-        await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, fileToDelete.id))
+      await this.runDbMutation('app-provider.realtime-delete', async () => {
+        await this.runAppTransaction(this.dbUtils!.getDb(), async (tx) => {
+          await tx.delete(filesSchema).where(eq(filesSchema.id, fileToDelete.id))
+          await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, fileToDelete.id))
+        })
       })
 
       logApp(`App deleted from database: ${chalk.cyan(appPath)}`, LogStyle.success)
@@ -3290,15 +3355,34 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           clearSearchIndex: true,
           clearScanProgress: false
         })
-        if (result.error) return { success: false, error: result.error }
+        if (result.error) {
+          return {
+            success: false,
+            error: result.error,
+            errorCode: result.errorCode,
+            retryable: result.retryable,
+            reportId: result.reportId
+          }
+        }
         return {
           success: true,
           message: 'App index rebuild complete'
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        logApp('App index rebuild failed', LogStyle.error, { error: message })
-        return { success: false, error: message }
+        const report = operationalErrorService.report({
+          domain: 'app-index',
+          operation: 'manual-rebuild',
+          error,
+          code: 'APP_INDEX_REBUILD_FAILED',
+          userImpact: 'blocked'
+        })
+        return {
+          success: false,
+          error: report.publicMessage,
+          errorCode: report.code,
+          retryable: report.retryable,
+          reportId: report.id
+        }
       }
     })
   }
@@ -3322,10 +3406,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const appIds = this.partitionDbApps(appsWithExtensions).scannedApps.map((row) => row.id)
 
     if (appIds.length > 0) {
-      await db.transaction(async (tx) => {
-        await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, appIds))
-        await tx.delete(filesSchema).where(inArray(filesSchema.id, appIds))
-      })
+      await this.runDbMutation(
+        'app-provider.manual-rebuild-clear',
+        async () => {
+          await this.runAppTransaction(db, async (tx) => {
+            await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, appIds))
+            await tx.delete(filesSchema).where(inArray(filesSchema.id, appIds))
+          })
+        },
+        'interactive'
+      )
     }
 
     await this._clearPendingDeletions()
@@ -3599,23 +3689,24 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       appsWithDisplayName
     )
     const t3 = performance.now()
+    const db = dbUtils.getDb()
 
     if (updatedCount > 0 && updatedApps.length > 0) {
-      const db = dbUtils.getDb()
-
       for (const app of updatedApps) {
         const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
         if (!dbApp) {
           continue
         }
         const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
-        await this.syncScannedAppExtensions(dbApp.id, app)
-        await runWithSqliteBusyRetry(() =>
-          db
-            .update(filesSchema)
-            .set({ displayName: nextDisplayName })
-            .where(eq(filesSchema.id, dbApp.id))
-        )
+        await this.runDbMutation('app-provider.mdls-update', async () => {
+          await this.runAppTransaction(db, async (tx, extensionWriter) => {
+            await tx
+              .update(filesSchema)
+              .set({ displayName: nextDisplayName })
+              .where(eq(filesSchema.id, dbApp.id))
+            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter)
+          })
+        })
       }
     }
 
@@ -3629,13 +3720,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       for (const app of metadataOnlyApps) {
         const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
         if (!dbApp) continue
-        await this.syncScannedAppExtensions(dbApp.id, app)
+        await this.runDbMutation('app-provider.mdls-metadata', async () => {
+          await this.runAppTransaction(db, async (_tx, extensionWriter) => {
+            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter)
+          })
+        })
       }
     }
     const t4 = performance.now()
 
     if (deletedApps.length > 0) {
-      const db = dbUtils.getDb()
       logApp(
         `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
         LogStyle.process
@@ -3648,9 +3742,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             logApp(`App deletion target not found: ${chalk.yellow(app.path)}`, LogStyle.warning)
             continue
           }
-          await db.transaction(async (tx) => {
-            await tx.delete(filesSchema).where(eq(filesSchema.id, dbApp.id))
-            await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, dbApp.id))
+          await this.runDbMutation('app-provider.mdls-delete', async () => {
+            await this.runAppTransaction(db, async (tx) => {
+              await tx.delete(filesSchema).where(eq(filesSchema.id, dbApp.id))
+              await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, dbApp.id))
+            })
           })
 
           logApp(`App deleted from database: ${chalk.cyan(dbApp.path)}`, LogStyle.success)

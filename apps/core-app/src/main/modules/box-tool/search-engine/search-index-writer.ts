@@ -86,6 +86,11 @@ export interface SearchIndexPhysicalWriter {
   cleanupSource(sourceId: string): Promise<number>
   countSource(sourceId: string): Promise<number>
   drain(timeoutMs?: number): Promise<void>
+  withPausedAdmission?<T>(
+    reason: string,
+    operation: (status: SearchIndexWriterStatus) => Promise<T>,
+    timeoutMs?: number
+  ): Promise<T>
 }
 
 export interface SearchIndexMutationWriter {
@@ -318,7 +323,7 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
 
   private async withAdmission<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
-    if (this.admissionGate) await this.admissionGate
+    while (this.admissionGate) await this.admissionGate
     if (this.closed) throw new Error('SEARCH_INDEX_WRITER_CLOSED')
 
     this.activeAdmissions += 1
@@ -506,6 +511,23 @@ export class SourceScopedIndexWriterRouter implements SearchIndexMutationWriter 
 
   async drainSelected(sourceId: string, timeoutMs = 5_000): Promise<void> {
     await this.resolveWriter(sourceId).drain(timeoutMs)
+  }
+
+  async withPausedSelectedAdmission<T>(
+    sourceId: string,
+    operation: () => Promise<T>,
+    timeoutMs = 5_000
+  ): Promise<T> {
+    const writer = this.resolveWriter(sourceId)
+    if (writer.withPausedAdmission) {
+      return await writer.withPausedAdmission(
+        `indexed-source.reset.${sourceId}`,
+        async () => await operation(),
+        timeoutMs
+      )
+    }
+    await writer.drain(timeoutMs)
+    return await operation()
   }
 
   private resolveWriter(sourceId: string): SearchIndexPhysicalWriter {

@@ -21,6 +21,7 @@ import * as path from 'node:path'
 import process from 'node:process'
 import { moduleLog } from '../utils/logger'
 import { getSentryService } from '../modules/sentry/sentry-service'
+import { operationalErrorService } from '../modules/observability'
 
 type ModuleLifecyclePhase = 'created' | 'init' | 'start' | 'stop' | 'destroy'
 type ModuleLifecycleStatus = 'success' | 'failed'
@@ -333,6 +334,14 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
         moduleLog.error('Failed to construct module', {
           meta: { module: moduleName, error: errorMessage },
           error
+        })
+        operationalErrorService.report({
+          domain: 'module-lifecycle',
+          operation: 'created',
+          error,
+          code: 'MODULE_CONSTRUCTION_FAILED',
+          userImpact: 'blocked',
+          context: { moduleName }
         })
         this.queueModuleLifecycleTelemetry('created', 'failed', 0, {
           moduleKey: ctorKey,
@@ -713,6 +722,19 @@ export class ModuleManager implements TalexTouch.IModuleManager<TalexEvents> {
       moduleLog.error('Module lifecycle failed', {
         meta: logMeta,
         error
+      })
+      operationalErrorService.report({
+        domain: 'module-lifecycle',
+        operation: phase,
+        error,
+        code: 'MODULE_LIFECYCLE_FAILED',
+        userImpact: phase === 'init' || phase === 'start' ? 'blocked' : 'degraded',
+        context: {
+          moduleName: meta.moduleName,
+          durationMs,
+          rollbackStop: Boolean(meta.rollback?.stopAttempted),
+          rollbackDestroy: Boolean(meta.rollback?.destroyAttempted)
+        }
       })
       this.queueModuleLifecycleTelemetry(phase, 'failed', durationMs, {
         ...meta,

@@ -10,6 +10,7 @@ import { withPermission } from '../modules/permission/channel-guard'
 import { safeApiHandler, safeOpHandler, withPermissionSafeApi } from './safe-handler'
 
 const withPermissionMock = vi.mocked(withPermission)
+const SAFE_PUBLIC_ERROR = 'The operation failed. Please retry.'
 
 describe('safe-handler', () => {
   it('safeApiHandler returns ok response on success', async () => {
@@ -25,7 +26,7 @@ describe('safe-handler', () => {
     })
   })
 
-  it('safeApiHandler returns error response and calls onError', async () => {
+  it('safeApiHandler redacts thrown messages and calls onError', async () => {
     const onError = vi.fn()
     const handler = safeApiHandler(
       async () => {
@@ -36,7 +37,7 @@ describe('safe-handler', () => {
 
     const result = await handler({ q: 1 }, {} as never)
 
-    expect(result).toEqual({ ok: false, error: 'boom' })
+    expect(result).toEqual({ ok: false, error: SAFE_PUBLIC_ERROR })
     expect(onError).toHaveBeenCalledOnce()
   })
 
@@ -48,7 +49,7 @@ describe('safe-handler', () => {
     expect(result).toEqual({ success: true, taskId: 'task-1' })
   })
 
-  it('safeOpHandler returns failure response on throw', async () => {
+  it('safeOpHandler redacts thrown messages', async () => {
     const onError = vi.fn()
     const handler = safeOpHandler(
       async () => {
@@ -59,11 +60,11 @@ describe('safe-handler', () => {
 
     const result = await handler(undefined, {} as never)
 
-    expect(result).toEqual({ success: false, error: 'op failed' })
+    expect(result).toEqual({ success: false, error: SAFE_PUBLIC_ERROR })
     expect(onError).toHaveBeenCalledOnce()
   })
 
-  it('withPermissionSafeApi keeps permission wrapper and normalizes error', async () => {
+  it('withPermissionSafeApi keeps permission wrapper and redacts errors', async () => {
     withPermissionMock.mockImplementationOnce(() => {
       return async () => {
         throw new Error('permission denied')
@@ -75,6 +76,6 @@ describe('safe-handler', () => {
     const result = await handler({} as never, {} as never)
 
     expect(withPermissionMock).toHaveBeenCalledOnce()
-    expect(result).toEqual({ ok: false, error: 'permission denied' })
+    expect(result).toEqual({ ok: false, error: SAFE_PUBLIC_ERROR })
   })
 })

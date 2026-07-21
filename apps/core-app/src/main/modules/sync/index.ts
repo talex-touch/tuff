@@ -19,6 +19,7 @@ import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import { getAuthToken, getDeviceId, subscribeAuthState } from '../auth'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
+import { operationalErrorService } from '../observability'
 import {
   getConfig as getMainStorageConfig,
   getMainConfig,
@@ -1232,6 +1233,23 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutCode: string): P
   })
 }
 
+function normalizeSyncErrorCode(value: unknown): string {
+  if (typeof value !== 'string') return 'SYNC_RUNTIME_ERROR'
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_]/g, '_')
+    .slice(0, 96)
+  return normalized || 'SYNC_RUNTIME_ERROR'
+}
+
+function resolveSyncPublicMessage(blockedReason: SyncBlockedReason): string {
+  if (blockedReason === 'auth') return 'Authentication is required to continue syncing.'
+  if (blockedReason === 'quota') return 'Sync storage quota has been reached.'
+  if (blockedReason === 'device') return 'This device is not authorized for sync.'
+  return 'Sync failed. Please retry.'
+}
+
 function resolveBlockedReasonFromCode(code: string): SyncBlockedReason {
   if (code.startsWith('QUOTA_')) {
     return 'quota'
@@ -1251,31 +1269,28 @@ function resolveErrorInfo(error: unknown): {
   blockedReason: SyncBlockedReason
 } {
   if (error instanceof CloudSyncError) {
-    const code = typeof error.errorCode === 'string' ? error.errorCode : 'SYNC_RUNTIME_ERROR'
-    const payloadMessage =
-      error.data && typeof error.data === 'object' && 'message' in error.data
-        ? String((error.data as { message?: unknown }).message ?? '').trim()
-        : ''
-    const message = payloadMessage || error.message || code
+    const code = normalizeSyncErrorCode(error.errorCode)
+    const blockedReason = resolveBlockedReasonFromCode(code)
     return {
       code,
-      message,
-      blockedReason: resolveBlockedReasonFromCode(code)
+      message: resolveSyncPublicMessage(blockedReason),
+      blockedReason
     }
   }
 
   if (error instanceof Error) {
-    const code = error.message || 'SYNC_RUNTIME_ERROR'
+    const code = normalizeSyncErrorCode((error as Error & { code?: unknown }).code)
+    const blockedReason = resolveBlockedReasonFromCode(code)
     return {
       code,
-      message: error.message || 'Sync runtime error',
-      blockedReason: resolveBlockedReasonFromCode(code)
+      message: resolveSyncPublicMessage(blockedReason),
+      blockedReason
     }
   }
 
   return {
     code: 'SYNC_RUNTIME_ERROR',
-    message: 'Sync runtime error',
+    message: resolveSyncPublicMessage(''),
     blockedReason: ''
   }
 }
@@ -1322,13 +1337,30 @@ function reportSyncError(stage: 'pull' | 'push', error: unknown): void {
   const info = resolveErrorInfo(error)
   const blockedReason = info.blockedReason
   const status: SyncRuntimeStatus = blockedReason ? 'paused' : 'error'
-  const failures = markSyncError({
-    code: info.code,
-    message: info.message,
-    blockedReason,
-    status
-  })
+  let code = info.code
+  let message = info.message
 
+  if (blockedReason) {
+    syncLog.warn('Sync paused by an expected policy failure', {
+      error,
+      meta: { stage, code, blockedReason }
+    })
+  } else {
+    const dataRisk = /(APPLY|CORRUPT|DECRYPT|INTEGRITY)/.test(code)
+    const report = operationalErrorService.report({
+      domain: 'sync',
+      operation: stage,
+      error,
+      code,
+      retryable: !dataRisk,
+      userImpact: dataRisk ? 'data-risk' : 'degraded',
+      publicMessage: message
+    })
+    code = report.code
+    message = report.publicMessage
+  }
+
+  const failures = markSyncError({ code, message, blockedReason, status })
   scheduleRetry(stage, failures)
 }
 

@@ -90,6 +90,7 @@ import {
 import { buildSearchProviderRegistrySnapshot } from '../modules/box-tool/search-engine/search-provider-registry'
 import { buildVerificationModule } from '../modules/build-verification'
 import { databaseModule } from '../modules/database'
+import { operationalErrorService } from '../modules/observability'
 import { pluginModule } from '../modules/plugin/plugin-module'
 import { createDbUtils } from '../db/utils'
 import {
@@ -1222,8 +1223,13 @@ export class CommonChannelModule extends BaseModule {
         event,
         safeOpHandler(handler, {
           onError: (error) => {
-            log.warn(`Handler failed: ${event.toEventName()}`, {
-              error: toErrorMessage(error)
+            operationalErrorService.report({
+              domain: 'transport',
+              operation: event.toEventName(),
+              error,
+              code: 'TRANSPORT_HANDLER_FAILED',
+              userImpact: 'degraded',
+              context: { eventName: event.toEventName() }
             })
           }
         })
@@ -1482,8 +1488,20 @@ export class CommonChannelModule extends BaseModule {
         try {
           return await fileProvider.rebuildIndex(payload ?? undefined)
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          return { success: false, error: message }
+          const report = operationalErrorService.report({
+            domain: 'file-index',
+            operation: 'rebuild-handler',
+            error,
+            code: 'FILE_INDEX_REBUILD_HANDLER_FAILED',
+            userImpact: 'blocked'
+          })
+          return {
+            success: false,
+            error: report.publicMessage,
+            errorCode: report.code,
+            retryable: report.retryable,
+            reportId: report.id
+          }
         }
       }),
       transport.on<IndexedSourceDiagnosticsRequest | void, IndexedSourceDiagnosticsResponse>(

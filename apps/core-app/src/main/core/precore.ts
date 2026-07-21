@@ -13,6 +13,7 @@ import { resolveRuntimeRootPath } from '../utils/app-root-path'
 import { checkDirWithCreate } from '../utils/common-util'
 import { devProcessManager } from '../utils/dev-process-manager'
 import { mainLog } from '../utils/logger'
+import { operationalErrorService } from '../modules/observability'
 import {
   AppReadyEvent,
   AppQuitEvent,
@@ -37,10 +38,15 @@ function registerEarlyUnhandledRejectionHandler(): void {
   hasRegisteredEarlyUnhandledRejection = true
 
   process.on('unhandledRejection', (reason) => {
-    const error = reason instanceof Error ? reason : undefined
-    mainLog.error('Unhandled rejection detected during bootstrap', {
-      meta: { reason: String(reason) },
-      ...(error ? { error } : {})
+    operationalErrorService.report({
+      domain: 'runtime',
+      operation: 'bootstrap.unhandled-rejection',
+      error: reason,
+      code: 'UNHANDLED_REJECTION',
+      severity: 'error',
+      userImpact: 'degraded',
+      // Once Sentry owns the process hook, let its integration capture detail.
+      captureDetail: !operationalErrorService.hasDetailSink()
     })
   })
 }

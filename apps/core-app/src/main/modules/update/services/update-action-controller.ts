@@ -16,7 +16,7 @@ export interface UpdateActionControllerDeps {
     meta?: Record<string, unknown>
   ) => void
   reportUpdateTelemetry: (action: string, meta: UpdateTelemetryMeta) => void
-  reportUpdateError: (action: string, error: unknown, meta?: Record<string, unknown>) => void
+  reportUpdateError: (action: string, error: unknown, meta?: Record<string, unknown>) => string
   getSourceName: () => string
   logError: (message: string, error: unknown) => void
 }
@@ -44,7 +44,9 @@ export class UpdateActionController {
       this.deps.logError('Update check failed', error)
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: this.deps.reportUpdateError('check', error, {
+          channel: this.deps.getEffectiveChannel()
+        })
       }
     }
   }
@@ -68,7 +70,7 @@ export class UpdateActionController {
       return { success: true, data: { taskId } }
     } catch (error) {
       this.deps.logError('Failed to download update', error)
-      this.deps.reportUpdateError('download', error, {
+      const publicMessage = this.deps.reportUpdateError('download', error, {
         tag: release?.tag_name,
         channel: this.deps.getEffectiveChannel()
       })
@@ -78,20 +80,22 @@ export class UpdateActionController {
         tag: release?.tag_name,
         itemKind: 'manual'
       })
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      return { success: false, error: publicMessage }
     }
   }
 
   async handleInstall(payload?: {
     taskId?: string
   }): Promise<{ success: boolean; error?: string }> {
+    if (!payload?.taskId) {
+      this.deps.reportUpdateTelemetry('install_error', {
+        channel: this.deps.getEffectiveChannel(),
+        source: this.deps.getSourceName(),
+        itemKind: 'manual'
+      })
+      return { success: false, error: 'Missing update task id' }
+    }
     try {
-      if (!payload?.taskId) {
-        throw new Error('Missing update task id')
-      }
       await this.deps.withDownloadCenterInstall(payload.taskId)
       this.deps.reportUpdateMessage('info', 'Update install scheduled', payload.taskId, {
         channel: this.deps.getEffectiveChannel()
@@ -105,20 +109,17 @@ export class UpdateActionController {
       return { success: true }
     } catch (error) {
       this.deps.logError('Failed to install update', error)
-      this.deps.reportUpdateError('install', error, {
+      const publicMessage = this.deps.reportUpdateError('install', error, {
         channel: this.deps.getEffectiveChannel(),
-        taskId: payload?.taskId
+        taskId: payload.taskId
       })
       this.deps.reportUpdateTelemetry('install_error', {
         channel: this.deps.getEffectiveChannel(),
         source: this.deps.getSourceName(),
-        taskId: payload?.taskId,
+        taskId: payload.taskId,
         itemKind: 'manual'
       })
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      }
+      return { success: false, error: publicMessage }
     }
   }
 }

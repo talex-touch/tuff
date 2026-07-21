@@ -66,9 +66,10 @@ import {
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm'
 import { app, shell } from 'electron'
 import { notificationModule } from '../../../notification'
+import { operationalErrorService } from '../../../observability'
 import { t } from '../../../../utils/i18n-helper'
 import emptyOpenerSvg from '../../../../../renderer/src/assets/svg/EmptyAppPlaceholder.svg?raw'
-import { dbWriteScheduler } from '../../../../db/db-write-scheduler'
+import { dbWriteScheduler, type ScheduleOptions } from '../../../../db/db-write-scheduler'
 import {
   embeddings as embeddingsSchema,
   fileIndexProgress,
@@ -435,8 +436,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     stage: 'idle' as 'idle' | 'cleanup' | 'scanning' | 'indexing' | 'reconciliation' | 'completed'
   }
 
-  private async withDbWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
-    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }))
+  private async withDbWrite<T>(
+    label: string,
+    operation: () => Promise<T>,
+    options?: ScheduleOptions
+  ): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), options)
   }
 
   private async waitForCacheWriteCapacity(maxQueued: number, label: string): Promise<boolean> {
@@ -602,7 +607,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       getDbUtils: () => this.dbUtils,
       normalizePath: (rawPath) => this.normalizePath(rawPath),
       getScanProgressPaths: () => [...this.watchPaths],
-      withDbWrite: (label, operation) => this.withDbWrite(label, operation),
+      withDbWrite: (label, operation) =>
+        this.withDbWrite(label, operation, { priority: 'interactive', dropPolicy: 'none' }),
       logInfo: (message, meta) => this.logInfo(message, meta)
     })
     this.integrityService = new FileProviderIntegrityService({
@@ -2274,12 +2280,33 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           clearSearchIndex: true
         })
         if (resetResult.error) {
-          return { success: false, error: resetResult.error, battery: batteryStatus }
+          return {
+            success: false,
+            error: resetResult.error,
+            errorCode: resetResult.errorCode,
+            retryable: resetResult.retryable,
+            reportId: resetResult.reportId,
+            battery: batteryStatus
+          }
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        this.logWarn('Manual index rebuild reset failed', error)
-        return { success: false, error: message, battery: batteryStatus }
+        const busy = isSqliteBusyError(error)
+        const report = operationalErrorService.report({
+          domain: 'file-index',
+          operation: 'manual-rebuild',
+          error,
+          code: busy ? 'FILE_INDEX_DATABASE_BUSY' : 'FILE_INDEX_REBUILD_FAILED',
+          retryable: busy,
+          userImpact: 'blocked'
+        })
+        return {
+          success: false,
+          error: report.publicMessage,
+          errorCode: report.code,
+          retryable: report.retryable,
+          reportId: report.id,
+          battery: batteryStatus
+        }
       }
     }
 

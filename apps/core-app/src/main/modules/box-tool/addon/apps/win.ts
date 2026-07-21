@@ -1055,7 +1055,8 @@ export async function getAppInfo(filePath: string): Promise<AppInfo | null> {
       platform: process.platform,
       path: filePath,
       message,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      cause: error
     })
     return null
   }

@@ -4,6 +4,9 @@ export interface IndexRebuildResultLike {
   message?: string
   error?: string
   reason?: string
+  errorCode?: string
+  retryable?: boolean
+  reportId?: string
   battery?: { level: number; charging: boolean } | null
   threshold?: number
 }
@@ -15,7 +18,7 @@ export type IndexRebuildOutcome =
 
 export function resolveIndexRebuildOutcome(
   result: IndexRebuildResultLike | null | undefined,
-  messages: { success: string; failure: string }
+  messages: { success: string; failure: string; errors?: Record<string, string> }
 ): IndexRebuildOutcome {
   if (result?.requiresConfirm) {
     return { type: 'confirm', result }
@@ -28,8 +31,9 @@ export function resolveIndexRebuildOutcome(
     }
   }
 
+  const codeMessage = result?.errorCode ? messages.errors?.[result.errorCode] : undefined
   return {
     type: 'failure',
-    message: result?.error || result?.reason || messages.failure
+    message: codeMessage || result?.error || result?.reason || messages.failure
   }
 }
