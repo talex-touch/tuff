@@ -15,12 +15,24 @@ export interface SqliteRetryOptions {
   label?: string
 }
 
+export interface SqliteRetryExhaustedEvent {
+  label: string
+  attempts: number
+  elapsedMs: number
+  code?: string
+  rawCode?: number
+  error: unknown
+}
+
+export type SqliteRetryExhaustedListener = (event: SqliteRetryExhaustedEvent) => void
+
 interface RetryLogState {
   lastAt: number
   suppressed: number
 }
 
 const RETRY_LOG_STATE = new Map<string, RetryLogState>()
+let retryExhaustedListener: SqliteRetryExhaustedListener | null = null
 
 function nextRetryLogState(
   label: string,
@@ -96,6 +108,44 @@ export function getSqliteBusyRetryCount(): number {
   return SQLITE_BUSY_RETRY_COUNT
 }
 
+export function setSqliteRetryExhaustedListener(
+  listener: SqliteRetryExhaustedListener | null
+): () => void {
+  retryExhaustedListener = listener
+  return () => {
+    if (retryExhaustedListener === listener) retryExhaustedListener = null
+  }
+}
+
+function notifyRetryExhausted(event: SqliteRetryExhaustedEvent): void {
+  try {
+    retryExhaustedListener?.(event)
+  } catch (error) {
+    log.warn('SQLite retry exhaustion listener failed', { error })
+  }
+}
+
+function resolveSqliteErrorIdentity(error: unknown): { code?: string; rawCode?: number } {
+  const visited = new Set<unknown>()
+  let code: string | undefined
+  let rawCode: number | undefined
+  let current: unknown = error
+  while (current && typeof current === 'object' && !visited.has(current)) {
+    visited.add(current)
+    const record = current as {
+      code?: unknown
+      rawCode?: unknown
+      cause?: unknown
+      original?: unknown
+      error?: unknown
+    }
+    if (!code && typeof record.code === 'string') code = record.code
+    if (rawCode === undefined && typeof record.rawCode === 'number') rawCode = record.rawCode
+    current = record.cause ?? record.original ?? record.error
+  }
+  return { code, rawCode }
+}
+
 export async function withSqliteRetry<T>(
   operation: () => Promise<T>,
   options: SqliteRetryOptions = {}
@@ -106,6 +156,7 @@ export async function withSqliteRetry<T>(
   const jitterRatio = options.jitterRatio ?? 0.2
   const logThrottleMs = options.logThrottleMs ?? 30_000
   const label = options.label ?? 'sqlite'
+  const startedAt = Date.now()
 
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -113,7 +164,16 @@ export async function withSqliteRetry<T>(
       return await operation()
     } catch (error) {
       lastError = error
-      if (!isSqliteBusyError(error) || attempt >= retries) {
+      const busy = isSqliteBusyError(error)
+      if (!busy) throw error
+      if (attempt >= retries) {
+        notifyRetryExhausted({
+          label,
+          attempts: attempt + 1,
+          elapsedMs: Math.max(0, Date.now() - startedAt),
+          ...resolveSqliteErrorIdentity(error),
+          error
+        })
         throw error
       }
 

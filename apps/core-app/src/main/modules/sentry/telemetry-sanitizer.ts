@@ -101,6 +101,28 @@ const PERFORMANCE_NUMBER_FIELDS = new Set([
   'sampleLimit'
 ])
 
+const OPERATIONAL_ERROR_STRING_FIELDS = new Map([
+  ['domain', 64],
+  ['operation', 96],
+  ['code', 96],
+  ['userImpact', 24]
+])
+
+const OPERATIONAL_ERROR_NUMBER_FIELDS = new Map([
+  ['occurrenceCount', 1_000_000],
+  ['busyRetryDelta', 1_000_000],
+  ['schedulerBusyFailureDelta', 1_000_000],
+  ['schedulerQueueDepth', 1_000_000],
+  ['schedulerQueuePeak', 1_000_000],
+  ['writerPending', 1_000_000],
+  ['writerActive', 1_000_000],
+  ['walSizeBytes', 1024 ** 4],
+  ['openFdCount', 1_000_000],
+  ['attempts', 1_000],
+  ['elapsedMs', 60 * 60 * 1000],
+  ['rawCode', 1_000_000]
+])
+
 const SENSITIVE_KEY_PATTERN =
   /(query|text|keyword|path|file|folder|url|email|token|secret|password|credential|clipboard|content|prompt|response|html|image|screenshot|body|payload|stack|trace|meta|errorMessage|request|headers|cookie)/i
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -290,6 +312,26 @@ function sanitizePerformanceMetadata(
   return Object.keys(output).length ? output : undefined
 }
 
+function sanitizeErrorMetadata(
+  metadata: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!metadata) return undefined
+  const output = sanitizePerformanceMetadata(metadata) ?? {}
+  for (const [field, maxLength] of OPERATIONAL_ERROR_STRING_FIELDS) {
+    const normalized = normalizeString(metadata[field], maxLength)
+    if (normalized) output[field] = normalized
+  }
+  for (const [field, max] of OPERATIONAL_ERROR_NUMBER_FIELDS) {
+    const normalized = normalizeNumber(metadata[field], { min: 0, max })
+    if (normalized !== undefined) output[field] = normalized
+  }
+  if (typeof metadata.retryable === 'boolean') output.retryable = metadata.retryable
+  if (typeof metadata.writerAdmissionPaused === 'boolean') {
+    output.writerAdmissionPaused = metadata.writerAdmissionPaused
+  }
+  return Object.keys(output).length ? output : undefined
+}
+
 function sanitizeGenericMetadata(
   metadata: Record<string, unknown> | undefined
 ): Record<string, unknown> | undefined {
@@ -318,8 +360,8 @@ function sanitizeMetadata(
 ): Record<string, unknown> | undefined {
   if (eventType === 'search') return sanitizeSearchMetadata(metadata)
   if (eventType === 'feature_use') return sanitizeFeatureUseMetadata(metadata)
-  if (eventType === 'performance' || eventType === 'error')
-    return sanitizePerformanceMetadata(metadata)
+  if (eventType === 'performance') return sanitizePerformanceMetadata(metadata)
+  if (eventType === 'error') return sanitizeErrorMetadata(metadata)
   return sanitizeGenericMetadata(metadata)
 }
 
@@ -394,9 +436,12 @@ export function sanitizeSentryEvent<T extends Sentry.Event>(event: T): T {
 
   if (event.contexts) {
     const environment = sanitizeSentryContext(event.contexts.environment)
-    event.contexts = environment
-      ? { environment: environment as Record<string, unknown> }
-      : undefined
+    const operational = sanitizeSentryContext(event.contexts.operational)
+    event.contexts = {
+      ...(environment ? { environment: environment as Record<string, unknown> } : {}),
+      ...(operational ? { operational: operational as Record<string, unknown> } : {})
+    }
+    if (Object.keys(event.contexts).length === 0) event.contexts = undefined
   }
 
   for (const value of event.exception?.values ?? []) {

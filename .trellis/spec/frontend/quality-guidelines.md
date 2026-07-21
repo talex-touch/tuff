@@ -248,19 +248,19 @@ startModuleManager();
 
 ```ts
 // module.ts can execute during a cycle before Service is initialized.
-import { Service, setService } from './service'
-export const serviceModule = new Service()
-setService(serviceModule)
+import { Service, setService } from "./service";
+export const serviceModule = new Service();
+setService(serviceModule);
 ```
 
 #### Correct
 
 ```ts
 // service.ts, after the class and accessor declarations.
-export const serviceModule = getService()
+export const serviceModule = getService();
 
 // module.ts
-export { serviceModule } from './service'
+export { serviceModule } from "./service";
 ```
 
 ## Scenario: Opaque Intelligence Caller Aggregation
@@ -338,13 +338,13 @@ for (const { callerId, callerType, periodType, period, summary } of buckets) {
 #### Wrong
 
 ```ts
-if (nextEstimate > budget && selected.length > 0) continue
+if (nextEstimate > budget && selected.length > 0) continue;
 ```
 
 #### Correct
 
 ```ts
-if (nextEstimate > budget) continue
+if (nextEstimate > budget) continue;
 ```
 
 ## Scenario: Assistant Floating-Ball Display Restore
@@ -378,16 +378,16 @@ if (nextEstimate > budget) continue
 #### Wrong
 
 ```ts
-const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-const x = saved.x >= 0 ? saved.x : defaultX
+const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+const x = saved.x >= 0 ? saved.x : defaultX;
 ```
 
 #### Correct
 
 ```ts
-const hasSavedPosition = saved.x !== -1 || saved.y !== -1
-const anchor = hasSavedPosition ? saved : screen.getCursorScreenPoint()
-const display = screen.getDisplayNearestPoint(anchor)
+const hasSavedPosition = saved.x !== -1 || saved.y !== -1;
+const anchor = hasSavedPosition ? saved : screen.getCursorScreenPoint();
+const display = screen.getDisplayNearestPoint(anchor);
 ```
 
 ## Scenario: Mode-Isolated Renderer Surface Loading
@@ -416,15 +416,15 @@ const display = screen.getDisplayNearestPoint(anchor)
 #### Wrong
 
 ```ts
-import VoicePanel from './views/assistant/VoicePanel.vue'
+import VoicePanel from "./views/assistant/VoicePanel.vue";
 ```
 
 #### Correct
 
 ```ts
 const VoicePanel = defineAsyncComponent(
-  () => import('./views/assistant/VoicePanel.vue')
-)
+  () => import("./views/assistant/VoicePanel.vue"),
+);
 ```
 
 ## Scenario: Context Execution Degraded Secret Fallback
@@ -494,15 +494,16 @@ catch {
 #### Wrong
 
 ```ts
-const privacyLevel = input.privacyLevel ?? (containsSecret(input.input) ? 'secret' : 'normal')
+const privacyLevel =
+  input.privacyLevel ?? (containsSecret(input.input) ? "secret" : "normal");
 ```
 
 #### Correct
 
 ```ts
 const privacyLevel = containsSecret(input.input)
-  ? 'secret'
-  : (input.privacyLevel ?? 'normal')
+  ? "secret"
+  : (input.privacyLevel ?? "normal");
 ```
 
 ## Scenario: Ollama NDJSON Stream Integrity
@@ -533,13 +534,13 @@ const privacyLevel = containsSecret(input.input)
 #### Wrong
 
 ```ts
-buffer += chunk.toString('utf8')
+buffer += chunk.toString("utf8");
 ```
 
 #### Correct
 
 ```ts
-buffer += decoder.write(toStreamBuffer(chunk))
+buffer += decoder.write(toStreamBuffer(chunk));
 // EOF: buffer += decoder.end()
 ```
 
@@ -650,14 +651,14 @@ DbUtils.incrementUsageStats(
 #### Wrong
 
 ```ts
-const sourceId = usageLog.source // source type, not provider id
-executeCount = sql`${itemUsageStats.executeCount} + ${replayedCount}`
+const sourceId = usageLog.source; // source type, not provider id
+executeCount = sql`${itemUsageStats.executeCount} + ${replayedCount}`;
 ```
 
 #### Correct
 
 ```ts
-usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'execute')
+usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, "execute");
 // Periodic maintenance does not write item_usage_stats.
 ```
 
@@ -704,11 +705,11 @@ usageStatsQueue.enqueue(item.source.id, item.id, item.source.type, 'execute')
 ### 2. Signatures
 
 ```ts
-fileFilterService.getTraversalExclusionReason(path, options)
-fileFilterService.getIndexExclusionReason(target, options)
-fileFilterService.getManualIndexExclusionReason(target)
-fileFilterService.getSearchExclusionReason(target)
-fileFilterService.filterSearchItems(items)
+fileFilterService.getTraversalExclusionReason(path, options);
+fileFilterService.getIndexExclusionReason(target, options);
+fileFilterService.getManualIndexExclusionReason(target);
+fileFilterService.getSearchExclusionReason(target);
+fileFilterService.filterSearchItems(items);
 ```
 
 ### 3. Contracts
@@ -748,17 +749,17 @@ fileFilterService.filterSearchItems(items)
 #### Wrong
 
 ```ts
-const items = (await provider.onSearch(query, signal)).items
-publish(items.slice(0, 50)) // provider opt-in and late filtering
+const items = (await provider.onSearch(query, signal)).items;
+publish(items.slice(0, 50)); // provider opt-in and late filtering
 ```
 
 #### Correct
 
 ```ts
-const backendItems = filterEarly(await provider.onSearch(query, signal))
-const visibleItems = fileFilterService.filterSearchItems(backendItems)
-recordProviderCount(visibleItems.length)
-publish(visibleItems.slice(0, 50))
+const backendItems = filterEarly(await provider.onSearch(query, signal));
+const visibleItems = fileFilterService.filterSearchItems(backendItems);
+recordProviderCount(visibleItems.length);
+publish(visibleItems.slice(0, 50));
 ```
 
 ## Scenario: App/File Search Index Single-Writer Atomicity
@@ -843,32 +844,125 @@ IndexedSourceDelta.mutationLeaseId?: string
 #### Wrong
 
 ```ts
-await searchIndex.removeByProvider(sourceId)
-void worker.indexFiles(files)
-await searchIndex.indexItems(nextItems)
-return { success: true }
+await searchIndex.removeByProvider(sourceId);
+void worker.indexFiles(files);
+await searchIndex.indexItems(nextItems);
+return { success: true };
 ```
 
 #### Correct
 
 ```ts
 return sourceMutationGate.run(sourceId, async (lease) => {
-  await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease.id })
-  await source.drainMutations?.({ leaseId: lease.id, reason: 'scan' })
-})
+  await runtime.applySourceBatch({ ...batch, mutationLeaseId: lease.id });
+  await source.drainMutations?.({ leaseId: lease.id, reason: "scan" });
+});
 ```
 
 #### Wrong: Provider-owned shared DDL and unscoped evidence
 
 ```ts
-await providerDb.run(sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`)
-const parity = sourceIndexedRows === allFilesRows
+await providerDb.run(
+  sql`CREATE INDEX IF NOT EXISTS idx_keyword_mappings_keyword ON keyword_mappings(keyword)`,
+);
+const parity = sourceIndexedRows === allFilesRows;
 ```
 
 #### Correct: Writer-owned DDL and source-scoped evidence
 
 ```ts
-await searchIndexWriter.initialize(databasePath)
-const sourceFilesRows = await countFilesByType('file')
-const parity = sourceIndexedRows === sourceFilesRows
+await searchIndexWriter.initialize(databasePath);
+const sourceFilesRows = await countFilesByType("file");
+const parity = sourceIndexedRows === sourceFilesRows;
+```
+
+## Scenario: Operational Error Privacy and SQLite Rebuild Recovery
+
+### 1. Scope / Trigger
+
+- Apply when an Electron main/renderer/worker/plugin-host failure crosses transport, reaches UI, enters Sentry/Nexus, or exhausts SQLite retries.
+- The original `Error` is diagnostic state, not a transport payload. Every business boundary must choose a stable classification and an explicit public result.
+
+### 2. Signatures
+
+- Shared input: `OperationalErrorInput { domain, operation, error, code?, severity?, retryable?, userImpact?, context?, publicMessage?, dedupeWindowMs?, captureDetail? }`.
+- Shared result: `OperationalErrorReport { id, domain, operation, code, severity, retryable, userImpact, publicMessage, occurredAt, occurrenceCount, context }`.
+- Main facade: `operationalErrorService.report(input): OperationalErrorReport`.
+- SQLite observer: `setSqliteRetryExhaustedListener(listener | null): () => void`; `SqliteRetryExhaustedEvent` contains `label`, `attempts`, `elapsedMs`, optional `code/rawCode`, and the original `error`.
+- File rebuild transport: `FileIndexRebuildResult { success, message?, error?, errorCode?, retryable?, reportId?, requiresConfirm?, reason?, battery?, threshold? }`.
+
+### 3. Contracts
+
+- Main business code depends on the operational facade, never directly on the Sentry SDK. Detail and aggregate sinks are injected and best-effort.
+- Local logs keep reportId plus the complete Error stack and bounded `cause` chain. Transport/UI/Nexus never receive raw message, SQL, params, absolute paths, search text, clipboard content, or payload data.
+- Sentry receives a stable `operational/<domain>/<operation>/<code>` fingerprint, stable tags, allowlisted primitive context, and a sanitized stack. Nexus receives only category/count and safe numeric health fields.
+- `publicMessage` must be caller-provided safe copy or the facade's generic fallback; it must never fall back to `error.message`.
+- The dedupe key is stable `domain + operation + code`. Sink failure, disabled Sentry, or pre-init buffering must not alter the business result. Pre-init detail buffering and dedupe state stay bounded.
+- SQLite retry exhaustion is observed once below business code. The low-level observer emits local/aggregate evidence; a user-blocking boundary may separately emit one deduped detail event with a business code.
+- A file rebuild pauses writer admission, drains active/pending writes, performs only local progress reset inside the pause, resumes in `finally`, then runs writer-backed snapshot rebuild outside the pause. The local reset uses `interactive` priority and `dropPolicy:none`.
+
+### 4. Validation & Error Matrix
+
+- SQLite busy exhaustion during file rebuild -> `success=false`, `errorCode=FILE_INDEX_DATABASE_BUSY`, `retryable=true`, safe localized UI; local log retains the raw cause.
+- Writer admission/drain timeout -> `FILE_INDEX_WRITER_DRAIN_TIMEOUT`, `retryable=true`; admission still resumes in `finally`.
+- Unknown rebuild I/O failure -> stable generic rebuild code, `retryable=false` unless explicitly classified, no raw message in transport.
+- Battery, initialization, missing-context, cancel, permission denial, and offline expected outcomes -> explicit business result; no Sentry detail exception by default.
+- Sentry disabled/uninitialized/rejected -> same business result and local report; no recursive reporter call.
+- Sensitive or dynamic context key/value -> omit it from remote report rather than renaming or stringifying it.
+
+### 5. Good / Base / Bad Cases
+
+- Good: a real second SQLite connection holds `BEGIN IMMEDIATE`; packaged Electron returns the safe busy result, UI shows localized copy, local log correlates reportId to nested `SQLITE_BUSY`, and the same profile rebuilds after lock release.
+- Base: a transient busy retry recovers; retry metrics/log summary update, no user failure and no detail-event storm occur.
+- Bad: returning `error.message`, calling Sentry in every catch/retry, putting paths in `context`, or calling writer APIs from inside the paused-admission callback.
+
+### 6. Tests Required
+
+- Facade unit tests assert cause/code extraction, safe-message fallback, sensitive-context rejection, stable dedupe, bounded pre-init delivery, disabled detail delivery, and sync/async sink failure isolation.
+- Retry tests assert direct and scheduler-wrapped exhaustion notify exactly once with attempts/code/rawCode/error.
+- Writer/runtime tests assert pause -> drain -> local reset -> resume -> writer rebuild ordering, active/pending zero inside the barrier, and admission recovery on every throw/timeout path.
+- Transport/UI tests assert `FILE_INDEX_DATABASE_BUSY` maps to localized copy and serialized results contain no SQL, `params:`, absolute path, or stack.
+- App Provider tests assert add/update/delete/backfill/rebuild mutations use shared scheduler/retry and preserve file-row/extensions transaction behavior.
+- Final evidence requires node/web typecheck, scoped lint, production build, and packaged Electron with an isolated profile plus a real second-connection `BEGIN IMMEDIATE`; mocks do not prove this contract.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+try {
+  await resetIndex();
+} catch (error) {
+  Sentry.captureException(error);
+  return {
+    success: false,
+    error: error instanceof Error ? error.message : String(error),
+  };
+}
+```
+
+#### Correct
+
+```ts
+try {
+  return await resetIndexWithWriterBarrier();
+} catch (error) {
+  const report = operationalErrorService.report({
+    domain: "indexing",
+    operation: "indexed-source.reset.local",
+    error,
+    code: isSqliteBusyError(error)
+      ? "FILE_INDEX_DATABASE_BUSY"
+      : "FILE_INDEX_REBUILD_FAILED",
+    retryable: isSqliteBusyError(error),
+    userImpact: "blocked",
+  });
+  return {
+    success: false,
+    error: report.publicMessage,
+    errorCode: report.code,
+    retryable: report.retryable,
+    reportId: report.id,
+  };
+}
 ```

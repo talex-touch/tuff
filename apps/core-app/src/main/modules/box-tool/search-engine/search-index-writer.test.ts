@@ -166,3 +166,92 @@ describe('SearchIndexWriter shutdown recovery', () => {
     expect(client.shutdown).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('SearchIndexWriter admission quiescence', () => {
+  it('drains active work, blocks new admissions, and always resumes after the callback', async () => {
+    let releaseFirst!: () => void
+    let releasePause!: () => void
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const pauseGate = new Promise<void>((resolve) => {
+      releasePause = resolve
+    })
+    let applyCount = 0
+    const client: Pick<
+      SearchIndexWorkerClient,
+      'init' | 'applyProviderItems' | 'drain' | 'getPendingCount'
+    > = {
+      init: vi.fn(async () => undefined),
+      applyProviderItems: vi.fn(async () => {
+        applyCount += 1
+        if (applyCount === 1) await firstGate
+        return { removedItems: 0, indexedItems: 1 }
+      }),
+      drain: vi.fn(async () => undefined),
+      getPendingCount: vi.fn(() => 0)
+    }
+    const writer = new SearchIndexWriter({ client: client as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const firstWrite = writer.indexItems('file-provider', [indexedItem('file:/tmp/first.txt')])
+    await vi.waitFor(() => expect(writer.getStatus().activeAdmissions).toBe(1))
+
+    let pausedStatus: ReturnType<SearchIndexWriter['getStatus']> | null = null
+    let pauseStarted = false
+    const pausedOperation = writer.withPausedAdmission('test-reset', async (status) => {
+      pausedStatus = status
+      pauseStarted = true
+      await pauseGate
+      return 'reset-complete'
+    })
+    await vi.waitFor(() => expect(writer.getStatus().admissionPaused).toBe(true))
+
+    const blockedWrite = writer.indexItems('file-provider', [indexedItem('file:/tmp/blocked.txt')])
+    await Promise.resolve()
+    expect(client.applyProviderItems).toHaveBeenCalledTimes(1)
+    expect(pauseStarted).toBe(false)
+
+    releaseFirst()
+    await firstWrite
+    await vi.waitFor(() => expect(pauseStarted).toBe(true))
+    expect(pausedStatus).toMatchObject({
+      admissionPaused: true,
+      activeAdmissions: 0,
+      pending: 0
+    })
+    expect(client.drain).toHaveBeenCalledOnce()
+    expect(client.applyProviderItems).toHaveBeenCalledTimes(1)
+
+    releasePause()
+    await expect(pausedOperation).resolves.toBe('reset-complete')
+    await blockedWrite
+    expect(client.applyProviderItems).toHaveBeenCalledTimes(2)
+    expect(writer.getStatus().admissionPaused).toBe(false)
+  })
+
+  it('resumes admissions when the paused callback rejects', async () => {
+    const client: Pick<
+      SearchIndexWorkerClient,
+      'init' | 'applyProviderItems' | 'drain' | 'getPendingCount'
+    > = {
+      init: vi.fn(async () => undefined),
+      applyProviderItems: vi.fn(async () => ({ removedItems: 0, indexedItems: 1 })),
+      drain: vi.fn(async () => undefined),
+      getPendingCount: vi.fn(() => 0)
+    }
+    const writer = new SearchIndexWriter({ client: client as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    await expect(
+      writer.withPausedAdmission('failing-reset', async () => {
+        throw new Error('reset failed')
+      })
+    ).rejects.toThrow('reset failed')
+
+    expect(writer.getStatus().admissionPaused).toBe(false)
+    await expect(
+      writer.indexItems('file-provider', [indexedItem('file:/tmp/after-failure.txt')])
+    ).resolves.toBe(1)
+  })
+})

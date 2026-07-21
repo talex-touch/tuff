@@ -55,6 +55,8 @@ import {
   resolveIndexedSourceTaskRetryDecision,
   updateIndexedSourceTaskState
 } from '@talex-touch/utils/search'
+import { isSqliteBusyError } from '../../../db/sqlite-retry'
+import { operationalErrorService } from '../../observability'
 import { SourceDiagnosticsService } from './indexing-diagnostics-service'
 import { ReconcileEngine } from './indexing-reconcile-engine'
 import { ReconcileScheduler as DefaultReconcileScheduler } from './indexing-reconcile-scheduler'
@@ -66,6 +68,7 @@ import { IndexingSourceMutationGate } from './indexing-source-mutation-gate'
 import { MemoryIndexingTaskStateStore } from './indexing-task-state-store'
 import { WatchEventRouter } from './indexing-watch-router'
 
+const FILE_INDEX_SOURCE_ID = 'file-provider'
 const indexingRuntimeLog = getLogger('indexing-runtime')
 export interface IndexingRuntimeOptions {
   store?: IndexStoreAdapter
@@ -97,6 +100,11 @@ export interface IndexingRuntimeSourceWriterRouter {
   getMode(sourceId: string): SearchIndexWriterMode
   setMode(sourceId: string, mode: SearchIndexWriterMode): void
   drainSelected(sourceId: string, timeoutMs?: number): Promise<void>
+  withPausedSelectedAdmission?<T>(
+    sourceId: string,
+    operation: () => Promise<T>,
+    timeoutMs?: number
+  ): Promise<T>
 }
 
 export interface IndexingSourceWriterSwitchResult {
@@ -805,14 +813,9 @@ export class IndexingRuntime {
             error: 'reset-not-supported'
           }
         }
-        const localResult = source.resetIndex
-          ? await source.resetIndex({
-              ...request,
-              sourceId,
-              reason,
-              clearSearchIndex: false
-            })
-          : {
+        const resetLocalState = async (): Promise<IndexedSourceResetResult> => {
+          if (!source.resetIndex) {
+            return {
               sourceId,
               reason,
               clearedSearchIndex: false,
@@ -820,6 +823,21 @@ export class IndexingRuntime {
               startedAt,
               completedAt: Date.now()
             }
+          }
+          return await source.resetIndex({
+            ...request,
+            sourceId,
+            reason,
+            clearSearchIndex: false
+          })
+        }
+        const writerRouter = this.sourceWriterRouter
+        const localResult =
+          sourceId === FILE_INDEX_SOURCE_ID &&
+          shouldClearSearchIndex &&
+          writerRouter?.withPausedSelectedAdmission
+            ? await writerRouter.withPausedSelectedAdmission(sourceId, resetLocalState, 10_000)
+            : await resetLocalState()
         if (localResult.error || !shouldClearSearchIndex) {
           return localResult
         }
@@ -850,7 +868,12 @@ export class IndexingRuntime {
             clearedSearchIndexRows:
               clearedSearchIndexRows + (localResult.clearedSearchIndexRows ?? 0),
             completedAt: Date.now(),
-            error: error instanceof Error ? error.message : String(error)
+            ...reportIndexedSourceResetFailure(
+              sourceId,
+              reason,
+              error,
+              'indexed-source.reset.writer-rebuild'
+            )
           }
         }
       })
@@ -869,7 +892,7 @@ export class IndexingRuntime {
         clearedScanProgress: false,
         startedAt,
         completedAt: Date.now(),
-        error: error instanceof Error ? error.message : String(error)
+        ...reportIndexedSourceResetFailure(sourceId, reason, error, 'indexed-source.reset.local')
       }
       await this.recordResetResult(result, job, 'failed')
       return result
@@ -1481,6 +1504,43 @@ export class IndexingRuntime {
       taskState.value,
       taskState.historyEntry
     )
+  }
+}
+
+function reportIndexedSourceResetFailure(
+  sourceId: string,
+  reason: IndexedSourceResetResult['reason'],
+  error: unknown,
+  operation: string
+): Pick<IndexedSourceResetResult, 'error' | 'errorCode' | 'retryable' | 'reportId'> {
+  const busy = isSqliteBusyError(error)
+  const message = error instanceof Error ? error.message : String(error)
+  const writerDrainTimeout =
+    message === 'SEARCH_INDEX_WRITER_DRAIN_TIMEOUT' ||
+    message === 'SEARCH_INDEX_WRITER_ADMISSION_DRAIN_TIMEOUT'
+  const report = operationalErrorService.report({
+    domain: 'indexing',
+    operation,
+    error,
+    code: writerDrainTimeout
+      ? sourceId === FILE_INDEX_SOURCE_ID
+        ? 'FILE_INDEX_WRITER_DRAIN_TIMEOUT'
+        : 'INDEXED_SOURCE_WRITER_DRAIN_TIMEOUT'
+      : busy
+        ? sourceId === FILE_INDEX_SOURCE_ID
+          ? 'FILE_INDEX_DATABASE_BUSY'
+          : 'INDEXED_SOURCE_DATABASE_BUSY'
+        : 'INDEXED_SOURCE_RESET_FAILED',
+    retryable: busy || writerDrainTimeout,
+    publicMessage: writerDrainTimeout ? 'The index writer is busy. Please retry.' : undefined,
+    userImpact: 'blocked',
+    context: { sourceId, reason }
+  })
+  return {
+    error: report.publicMessage,
+    errorCode: report.code,
+    retryable: report.retryable,
+    reportId: report.id
   }
 }
 

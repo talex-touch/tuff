@@ -32,6 +32,7 @@ import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 import { TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
 import { sanitizeNexusTelemetryEvent, sanitizeSentryEvent } from './telemetry-sanitizer'
+import { operationalErrorService, type OperationalErrorSinkEvent } from '../observability'
 
 // User type from auth
 interface AuthUserSnapshot {
@@ -200,6 +201,8 @@ export class SentryServiceModule extends BaseModule {
   private readonly pollingService = PollingService.getInstance()
 
   private preInitAttempted = false
+  private disposeOperationalDetailSink: (() => void) | null = null
+  private disposeOperationalAggregateSink: (() => void) | null = null
 
   constructor() {
     super(SentryServiceModule.key)
@@ -235,6 +238,7 @@ export class SentryServiceModule extends BaseModule {
     }
 
     if (!this.config.enabled) {
+      operationalErrorService.disableDetailDelivery()
       return
     }
 
@@ -250,16 +254,21 @@ export class SentryServiceModule extends BaseModule {
     this.clientId = getOrCreateTelemetryClientId()
 
     this.scheduleTelemetryStatsHydration()
+    this.bindOperationalAggregateSink()
 
     // Initialize Sentry if enabled
     if (this.config.enabled) {
+      operationalErrorService.enableDetailDelivery()
       if (!this.isInitialized) {
         this.initializeSentry()
       } else {
         this.updateUserContext()
         Sentry.setContext('environment', getEnvironmentContext())
+        this.bindOperationalDetailSink()
       }
     } else {
+      if (this.isInitialized) this.shutdownSentry()
+      else operationalErrorService.disableDetailDelivery()
       sentryLog.info('Sentry is disabled by configuration')
     }
 
@@ -319,6 +328,7 @@ export class SentryServiceModule extends BaseModule {
       await this.waitForShutdownGrace(ctx?.appClosing === true)
     }
 
+    this.disposeOperationalErrorSinks()
     await this.stopNexusTelemetryTimer({ uploadOutbox: ctx?.appClosing !== true })
     this.stopPerformanceMonitors()
     await this.flushTelemetryStats()
@@ -756,6 +766,8 @@ export class SentryServiceModule extends BaseModule {
           : {})
         // Error handling is done by Sentry automatically
       })
+      this.isInitialized = true
+      this.bindOperationalDetailSink()
 
       // Set initial user context
       this.updateUserContext()
@@ -766,7 +778,6 @@ export class SentryServiceModule extends BaseModule {
       // Setup global error handlers
       this.setupErrorHandlers()
 
-      this.isInitialized = true
       sentryLog.success('Sentry initialized', {
         meta: {
           environment: process.env.BUILD_TYPE || (app.isPackaged ? 'production' : 'development'),
@@ -788,6 +799,9 @@ export class SentryServiceModule extends BaseModule {
     if (!this.isInitialized) {
       return
     }
+    this.disposeOperationalDetailSink?.()
+    this.disposeOperationalDetailSink = null
+    operationalErrorService.disableDetailDelivery()
 
     // Note: Sentry Electron main process doesn't have close method
     // Just mark as uninitialized
@@ -804,6 +818,62 @@ export class SentryServiceModule extends BaseModule {
 
     // Log that handlers are set up
     sentryLog.debug('Global error handlers setup complete')
+  }
+
+  private bindOperationalDetailSink(): void {
+    this.disposeOperationalDetailSink?.()
+    this.disposeOperationalDetailSink = operationalErrorService.attachDetailSink((event) => {
+      this.captureOperationalError(event)
+    })
+  }
+
+  private bindOperationalAggregateSink(): void {
+    this.disposeOperationalAggregateSink?.()
+    this.disposeOperationalAggregateSink = operationalErrorService.attachAggregateSink(
+      ({ report }) => {
+        this.queueNexusTelemetry({
+          eventType: 'error',
+          metadata: {
+            kind: 'operational-error',
+            domain: report.domain,
+            operation: report.operation,
+            code: report.code,
+            severity: report.severity,
+            userImpact: report.userImpact,
+            retryable: report.retryable,
+            ...report.context,
+            occurrenceCount: report.occurrenceCount
+          }
+        })
+      }
+    )
+  }
+
+  private disposeOperationalErrorSinks(): void {
+    this.disposeOperationalDetailSink?.()
+    this.disposeOperationalAggregateSink?.()
+    this.disposeOperationalDetailSink = null
+    this.disposeOperationalAggregateSink = null
+  }
+
+  private captureOperationalError({ report, error }: OperationalErrorSinkEvent): void {
+    if (!this.config.enabled || !this.isInitialized) return
+
+    Sentry.withScope((scope) => {
+      scope.setFingerprint(['operational', report.domain, report.operation, report.code])
+      scope.setTag('operational.domain', report.domain)
+      scope.setTag('operational.operation', report.operation)
+      scope.setTag('operational.code', report.code)
+      scope.setTag('operational.retryable', String(report.retryable))
+      scope.setTag('operational.user_impact', report.userImpact)
+      scope.setContext('operational', {
+        reportId: report.id,
+        occurrenceCount: report.occurrenceCount,
+        ...report.context
+      })
+      scope.setContext('environment', getEnvironmentContext())
+      Sentry.captureException(error)
+    })
   }
 
   /**

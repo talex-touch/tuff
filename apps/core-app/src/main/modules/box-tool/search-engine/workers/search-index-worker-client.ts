@@ -34,12 +34,18 @@ import {
 } from '../../addon/files/workers/idle-worker-shutdown'
 import { deserializeSearchIndexWorkerError } from './search-index-worker-error'
 import { normalizeScanProgressUpsert } from './search-index-worker-scan-progress'
+import { operationalErrorService } from '../../../observability'
 
 const log = getLogger('search-index-worker')
 const DEFAULT_COMMIT_RESPONSE_TIMEOUT_MS = 60_000
 const DEFAULT_OUTCOME_LOOKUP_TIMEOUT_MS = 5_000
 const DEFAULT_OUTCOME_LOOKUP_ATTEMPTS = 2
 const DEFAULT_TERMINATION_TIMEOUT_MS = 1_000
+
+function resolveTaskOperation(taskId: string): string {
+  const separator = taskId.indexOf('-')
+  return separator > 0 ? taskId.slice(0, separator) : 'unknown'
+}
 
 function positiveInteger(value: number | undefined, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -675,14 +681,21 @@ export class SearchIndexWorkerClient {
       if (pending.timeout) clearTimeout(pending.timeout)
       this.resolveDrainWaitersIfIdle()
       const remoteError = deserializeSearchIndexWorkerError(message.error)
-      const errorMessage = remoteError.message
-      this.lastError = errorMessage
+      const report = operationalErrorService.report({
+        domain: 'search-index-worker',
+        operation: resolveTaskOperation(message.taskId),
+        error: remoteError,
+        severity: 'error',
+        userImpact: 'degraded',
+        captureDetail: false
+      })
+      this.lastError = report.publicMessage
       this.lastTask = {
         id: message.taskId,
         startedAt: new Date(pending.startedAt).toISOString(),
         finishedAt: new Date().toISOString(),
         durationMs: Date.now() - pending.startedAt,
-        error: errorMessage
+        error: report.publicMessage
       }
       pending.reject(remoteError)
       this.scheduleIdleShutdown()
@@ -690,14 +703,21 @@ export class SearchIndexWorkerClient {
   }
 
   private async teardownAmbiguousWorker(error: Error): Promise<void> {
+    const report = operationalErrorService.report({
+      domain: 'search-index-worker',
+      operation: 'task-timeout',
+      error,
+      code: 'SEARCH_INDEX_WORKER_TIMEOUT',
+      retryable: true,
+      userImpact: 'degraded'
+    })
     this.rejectPendingTasks(error)
     this.resolvePendingMetrics()
     this.replacementSessions.clear()
-    this.lastError = error.message
+    this.lastError = report.publicMessage
     log.warn('[SearchIndexWorkerClient] Worker response timed out, restarting for recovery', {
       error
     })
-
     const termination = this.beginWorkerTermination({ keepInitState: true })
     await this.awaitWorkerTermination(termination)
   }
@@ -721,11 +741,18 @@ export class SearchIndexWorkerClient {
   }
 
   private handleWorkerError(error: Error): void {
+    const report = operationalErrorService.report({
+      domain: 'search-index-worker',
+      operation: 'runtime',
+      error,
+      code: 'SEARCH_INDEX_WORKER_CRASH',
+      userImpact: 'blocked'
+    })
     void this.beginWorkerTermination({ keepInitState: true }).catch(() => undefined)
     this.rejectPendingTasks(error)
     this.resolvePendingMetrics()
     this.replacementSessions.clear()
-    this.lastError = error.message
+    this.lastError = report.publicMessage
     log.warn('[SearchIndexWorkerClient] Worker failed, will restart on demand', { error })
   }
 

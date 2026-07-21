@@ -913,7 +913,13 @@ function toggleErrorPopover(): void {
 function getFileRebuildOutcomeMessages() {
   return {
     success: t('settings.settingFileIndex.alertRebuildStarted'),
-    failure: t('common.error')
+    failure: t('common.error'),
+    errors: {
+      FILE_INDEX_DATABASE_BUSY: t('settings.settingFileIndex.alertDatabaseBusy'),
+      FILE_INDEX_WRITER_DRAIN_TIMEOUT: t('settings.settingFileIndex.alertWriterBusy'),
+      FILE_INDEX_REBUILD_FAILED: t('settings.settingFileIndex.alertRebuildGenericFailed'),
+      FILE_INDEX_REBUILD_HANDLER_FAILED: t('settings.settingFileIndex.alertRebuildGenericFailed')
+    }
   }
 }
 

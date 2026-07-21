@@ -10,6 +10,7 @@ import process from 'node:process'
 import { app, BrowserWindow, nativeTheme } from 'electron'
 import { IS_WINDOWS_11, MicaBrowserWindow, useMicaElectron, WIN10 } from 'talex-mica-electron'
 import { createLogger } from '../utils/logger'
+import { operationalErrorService } from '../modules/observability'
 import { shouldApplyMicaFallback } from './window-effects'
 import { OpenExternalUrlEvent, TalexEvents, touchEventBus } from './eventbus/touch-event'
 
@@ -203,6 +204,25 @@ export class TouchWindow implements TalexTouch.ITouchWindow {
             error: details
           }
         )
+        operationalErrorService.report({
+          domain: 'renderer-process',
+          operation: 'process-gone',
+          error: new Error('RENDER_PROCESS_GONE'),
+          code:
+            details.reason === 'oom'
+              ? 'RENDER_PROCESS_OOM'
+              : details.reason === 'crashed'
+                ? 'RENDER_PROCESS_CRASH'
+                : 'RENDER_PROCESS_GONE',
+          severity:
+            details.reason === 'oom' ||
+            details.reason === 'crashed' ||
+            details.reason === 'integrity-failure'
+              ? 'fatal'
+              : 'error',
+          userImpact: 'blocked',
+          context: { reason: details.reason, exitCode: details.exitCode }
+        })
       }
     )
 

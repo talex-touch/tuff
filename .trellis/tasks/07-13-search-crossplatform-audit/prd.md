@@ -12,13 +12,13 @@
 
 `optimization-integration` 是一次**证据驱动的巨石拆分 + 跨平台适配统一**重构。核心文件已瘦身但**拆分只完成一半**：
 
-| 文件 | master | 现在 | 已拆出 |
-|---|---|---|---|
-| `app-provider.ts` | 4007 | 3598 | index-maintenance / record-sync / managed-entry |
-| `file-provider.ts` | 4045 | 3059 | asset-service / search-result-service |
-| `search-core.ts` | 2795 | 1880 | query-orchestrator / usage-service / provider-health / event-router |
-| `everything-provider.ts` | 2612 | 1854 | backend-service / install-service / parser |
-| `app-launcher.ts` | 343 | 108 | app-launch-adapter（审计 OS-02 建议已落地） |
+| 文件                     | master | 现在 | 已拆出                                                              |
+| ------------------------ | ------ | ---- | ------------------------------------------------------------------- |
+| `app-provider.ts`        | 4007   | 3598 | index-maintenance / record-sync / managed-entry                     |
+| `file-provider.ts`       | 4045   | 3059 | asset-service / search-result-service                               |
+| `search-core.ts`         | 2795   | 1880 | query-orchestrator / usage-service / provider-health / event-router |
+| `everything-provider.ts` | 2612   | 1854 | backend-service / install-service / parser                          |
+| `app-launcher.ts`        | 343    | 108  | app-launch-adapter（审计 OS-02 建议已落地）                         |
 
 跨平台核心抽象是 `withOSAdapter<R,T>`（`packages/utils/electron/env-tool.ts:79`），但采用度低：仅 6 文件 / 11 调用点，主进程仍有 141 处 / 40+ 文件裸用 `process.platform`（其中很多是合法 backend boundary，非债务）。
 
@@ -32,13 +32,13 @@
 
 **跨平台成熟度不对称**：
 
-| 功能 | Windows | macOS | Linux |
-|---|---|---|---|
-| 文件搜索 | Everything 三级回退+自动安装+自愈 ✅ | Spotlight mdfind ✅ | locate/tracker/baloo，缺失时无感知 ⚠️ |
-| 应用扫描 | 5 源并行（重依赖 PowerShell）✅ | mdfind+plist+mdls ✅ | 仅 .desktop（139 行）⚠️ |
-| OCR | WinRT ✅ | Apple Vision ✅ | stub 未实现 ❌ |
-| 截图 | Rust xcap 三平台统一（构建链存疑）| 同左 | 同左 |
-| 更新安装 | msiexec/NSIS ✅ | .app 替换脚本 ✅ | 仅 shell.openPath（打开≠安装）❌ |
+| 功能     | Windows                              | macOS                | Linux                                 |
+| -------- | ------------------------------------ | -------------------- | ------------------------------------- |
+| 文件搜索 | Everything 三级回退+自动安装+自愈 ✅ | Spotlight mdfind ✅  | locate/tracker/baloo，缺失时无感知 ⚠️ |
+| 应用扫描 | 5 源并行（重依赖 PowerShell）✅      | mdfind+plist+mdls ✅ | 仅 .desktop（139 行）⚠️               |
+| OCR      | WinRT ✅                             | Apple Vision ✅      | stub 未实现 ❌                        |
+| 截图     | Rust xcap 三平台统一（构建链存疑）   | 同左                 | 同左                                  |
+| 更新安装 | msiexec/NSIS ✅                      | .app 替换脚本 ✅     | 仅 shell.openPath（打开≠安装）❌      |
 
 ---
 
@@ -109,11 +109,13 @@
   - 位置：`addon/files/workers/file-scan-worker-client.ts:70`（getStatus 开头 cancel、结尾重排 60s 窗口）；任何 <60s 轮询 worker 状态的面板都会让空闲 worker 永不自杀，架空 `idle-worker-shutdown` 的内存回收。另：退出无 `will-quit` 优雅 drain，在途 FTS 写可能丢。
 
 - [ ] **R8 — Linux 全面二等公民**
-  - 应用扫描 139 行 / 图标暴力 360 次 stat 无缓存（`addon/apps/linux.ts:15`）/ 无 OCR / 更新只 openPath / Everything 无对等 / 无验收框架（仅 windows-acceptance-*）。
+  - 应用扫描 139 行 / 图标暴力 360 次 stat 无缓存（`addon/apps/linux.ts:15`）/ 无 OCR / 更新只 openPath / Everything 无对等 / 无验收框架（仅 windows-acceptance-\*）。
 
 - [ ] **R9 — SQLite 单写瓶颈缓解逻辑分散 5+ 处**
   - `dbWriteScheduler` + `withSqliteRetry` + worker `directMode` + `AdaptiveBatchScheduler` + `UsageStatsQueue` 采样丢弃；同一痛点各自处理，新人难判断某次写走哪条路。
-  - 2026-07-18 进展：文件持久化统一复用 `withSqliteRetry`，flush runtime 复用共享 retry decision/backoff，并对重复失败日志做节流；worker error 传输保留 `cause/code/rawCode`，避免 SQLite 原因丢失。R9 仍保持 open：其它写路径尚未统一到单一调度/诊断入口。
+  - 2026-07-18 进展：文件持久化统一复用 `withSqliteRetry`，flush runtime 复用共享 retry decision/backoff，并对重复失败日志做节流；worker error 传输保留 `cause/code/rawCode`，避免 SQLite 原因丢失。
+  - 2026-07-21 进展（`07-20-unify-operational-error-reporting`）：新增统一 retry exhaustion observer 和 busy/queue/writer/WAL/FD 健康快照；App Provider 删除私有 busy retrier，已确认 add/update/delete、backfill、mdls、rebuild mutation 进入共享 scheduler/retry，file row + extensions 在生产 adapter 支持时同 transaction；文件重建使用 writer admission barrier，并完成真实 `BEGIN IMMEDIATE` 失败→脱敏上报→释放锁恢复验收。
+  - R9 仍保持 open：App Provider 尚未迁入 search-index worker typed persistence port，`db/utils.ts` policy-free mutations、libSQL client/session owner registry 和 aux compatibility mirror 退场仍待后续收敛。
 
 ### 🟢 低危清理
 
@@ -128,14 +130,15 @@
 
 ## 子任务映射
 
-| 子任务 | 覆盖 | 状态 |
-|---|---|---|
-| `07-13-fix-ranking-dead-features` | B1 + B2 | ✅ done（typecheck 0 err，46 相关用例通过） |
-| `07-16-fix-usage-statistics-double-counting` | B3 | ✅ done（单写者 + 保守迁移，4 tests + smoke） |
-| `07-16-unify-file-filtering-service` | B4 | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
-| (待建) | R1 打包验证 / R2 mac 签名 / R3 流式落库 … | backlog |
+| 子任务                                       | 覆盖                                      | 状态                                                              |
+| -------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------- |
+| `07-13-fix-ranking-dead-features`            | B1 + B2                                   | ✅ done（typecheck 0 err，46 相关用例通过）                       |
+| `07-16-fix-usage-statistics-double-counting` | B3                                        | ✅ done（单写者 + 保守迁移，4 tests + smoke）                     |
+| `07-16-unify-file-filtering-service`         | B4                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
+| (待建)                                       | R1 打包验证 / R2 mac 签名 / R3 流式落库 … | backlog                                                           |
 
 ### 遗留 carve-out（B1 派生，未做）
+
 - [ ] **延迟语义"重排"已渲染项**：当前只做召回追加。要让语义分改变已渲染项顺序，需改渲染端 `useSearch.ts` 合并语义或加 replace-mid-session 事件——属受保护用户改动，暂缓。
 
 ## 验收标准

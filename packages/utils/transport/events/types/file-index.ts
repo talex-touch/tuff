@@ -3,107 +3,114 @@
  * @module @talex-touch/utils/transport/events/types/file-index
  */
 
-export type FileIndexStage
-  = | 'idle'
-    | 'cleanup'
-    | 'scanning'
-    | 'indexing'
-    | 'reconciliation'
-    | 'completed'
-    | string
+export type FileIndexStage =
+  | "idle"
+  | "cleanup"
+  | "scanning"
+  | "indexing"
+  | "reconciliation"
+  | "completed"
+  | string;
 
 export type FileIndexEstimateStatus =
-  | 'unknown'
-  | 'stabilizing'
-  | 'estimated'
-  | 'stalled'
-  | 'complete'
-  | string
+  | "unknown"
+  | "stabilizing"
+  | "estimated"
+  | "stalled"
+  | "complete"
+  | string;
 
 export type FileIndexEstimateBasis =
-  | 'none'
-  | 'stage-speed'
-  | 'elapsed-progress'
-  | 'stalled'
-  | 'complete'
-  | string
+  | "none"
+  | "stage-speed"
+  | "elapsed-progress"
+  | "stalled"
+  | "complete"
+  | string;
 
 export interface FileIndexProgress {
-  stage: FileIndexStage
-  current: number
-  total: number
-  progress: number
-  startTime: number | null
-  estimatedRemainingMs: number | null
-  averageItemsPerSecond: number
-  estimateStatus?: FileIndexEstimateStatus
-  speedSampleCount?: number
-  estimateBasis?: FileIndexEstimateBasis
+  stage: FileIndexStage;
+  current: number;
+  total: number;
+  progress: number;
+  startTime: number | null;
+  estimatedRemainingMs: number | null;
+  averageItemsPerSecond: number;
+  estimateStatus?: FileIndexEstimateStatus;
+  speedSampleCount?: number;
+  estimateBasis?: FileIndexEstimateBasis;
 }
 
 export interface FileIndexStatus {
-  isInitializing: boolean
-  initializationFailed: boolean
-  error: string | null
-  startupReady?: boolean
-  startupPending?: boolean
-  startupError?: string | null
+  isInitializing: boolean;
+  initializationFailed: boolean;
+  error: string | null;
+  startupReady?: boolean;
+  startupPending?: boolean;
+  startupError?: string | null;
   progress: {
-    stage: FileIndexStage | null
-    current: number
-    total: number
-  }
-  startTime: number | null
-  estimatedCompletion: number | null
-  estimatedRemainingMs: number | null
-  averageItemsPerSecond: number
-  estimateStatus?: FileIndexEstimateStatus
-  speedSampleCount?: number
-  estimateBasis?: FileIndexEstimateBasis
+    stage: FileIndexStage | null;
+    current: number;
+    total: number;
+  };
+  startTime: number | null;
+  estimatedCompletion: number | null;
+  estimatedRemainingMs: number | null;
+  averageItemsPerSecond: number;
+  estimateStatus?: FileIndexEstimateStatus;
+  speedSampleCount?: number;
+  estimateBasis?: FileIndexEstimateBasis;
 }
 
 export interface FileIndexStats {
-  totalFiles: number
-  failedFiles: number
-  skippedFiles: number
-  completedFiles: number
-  embeddingCompletedFiles: number
-  embeddingRows: number
+  totalFiles: number;
+  failedFiles: number;
+  skippedFiles: number;
+  completedFiles: number;
+  embeddingCompletedFiles: number;
+  embeddingRows: number;
 }
 
 export interface FileIndexAddPathRequest {
-  path: string
+  path: string;
 }
 
 export interface FileIndexAddPathResult {
-  success: boolean
-  status: 'added' | 'exists' | 'invalid' | 'error'
-  path?: string
-  reason?: string
+  success: boolean;
+  status: "added" | "exists" | "invalid" | "error";
+  path?: string;
+  reason?: string;
 }
 
 export interface FileIndexRebuildRequest {
-  force?: boolean
+  force?: boolean;
 }
 
 export interface FileIndexRebuildResult {
-  success: boolean
-  message?: string
-  error?: string
-  requiresConfirm?: boolean
-  reason?: 'battery-low' | 'initializing' | 'missing-context' | 'policy-blocked'
-  battery?: FileIndexBatteryStatus | null
-  threshold?: number
+  success: boolean;
+  message?: string;
+  error?: string;
+  errorCode?: string;
+  retryable?: boolean;
+  reportId?: string;
+  requiresConfirm?: boolean;
+  reason?:
+    | "battery-low"
+    | "initializing"
+    | "missing-context"
+    | "policy-blocked";
+  battery?: FileIndexBatteryStatus | null;
+  threshold?: number;
 }
 
 export interface FileIndexFailedFile {
-  fileId: number
-  path: string
-  lastError: string | null
-  updatedAt: string | null
+  fileId: number;
+  path: string;
+  lastError: string | null;
+  updatedAt: string | null;
 }
 
 export interface FileIndexBatteryStatus {
-  level: number
-  charging: boolean
+  level: number;
+  charging: boolean;
 }

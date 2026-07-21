@@ -2,6 +2,8 @@ import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import type { ProtectedChannelOptions, ProtectedHandler } from '../modules/permission/channel-guard'
 import { withPermission } from '../modules/permission/channel-guard'
 
+const SAFE_HANDLER_PUBLIC_ERROR = 'The operation failed. Please retry.'
+
 export type ApiResponse<T = undefined> = { ok: true; result?: T } | { ok: false; error: string }
 
 export type OpResponse<T extends Record<string, unknown> = Record<string, never>> =
@@ -31,7 +33,7 @@ export function safeApiHandler<TReq, TRes>(
       return { ok: true, result }
     } catch (error) {
       options.onError?.(error, payload, context)
-      return { ok: false, error: toErrorMessage(error) }
+      return { ok: false, error: SAFE_HANDLER_PUBLIC_ERROR }
     }
   }
 }
@@ -52,7 +54,7 @@ export function safeOpHandler<TReq, TExtra extends Record<string, unknown> = Rec
       return { success: true }
     } catch (error) {
       options.onError?.(error, payload, context)
-      return { success: false, error: toErrorMessage(error) }
+      return { success: false, error: SAFE_HANDLER_PUBLIC_ERROR }
     }
   }
 }

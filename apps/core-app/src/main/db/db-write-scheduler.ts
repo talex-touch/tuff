@@ -413,6 +413,7 @@ export class DbWriteScheduler {
     currentTaskLabel: string | null
     currentTaskPriority: DbWritePriority | null
     sqliteBusyRatio: number
+    busyFailures: number
     circuits: ReturnType<DbWriteScheduler['getCircuitStates']>
   } {
     const totals = Array.from(this.labelStats.values()).reduce(
@@ -430,6 +431,7 @@ export class DbWriteScheduler {
       processing: this.processing,
       currentTaskLabel: this.currentTaskLabel,
       currentTaskPriority: this.currentTaskPriority,
+      busyFailures: totals.busyFailed,
       sqliteBusyRatio:
         totals.failed > 0 ? Number((totals.busyFailed / totals.failed).toFixed(3)) : 0,
       circuits: this.getCircuitStates()

@@ -32,6 +32,7 @@ export interface LogOptions {
   meta?: Record<string, Primitive>
   error?: unknown
 }
+const MAX_ERROR_CAUSE_DEPTH = 6
 
 const namespacePalette = [
   chalk.cyanBright,
@@ -119,9 +120,15 @@ function ensureString(message: unknown): string {
   return String(message)
 }
 
-function serializeError(error: unknown): string {
+function serializeError(error: unknown, visited: Set<unknown> = new Set(), depth = 0): string {
   if (error instanceof Error) {
-    return error.stack || `${error.name}: ${error.message}`
+    const serialized = error.stack || `${error.name}: ${error.message}`
+    if (visited.has(error)) return serialized
+    visited.add(error)
+    if (depth >= MAX_ERROR_CAUSE_DEPTH || error.cause === undefined || visited.has(error.cause)) {
+      return serialized
+    }
+    return `${serialized}\nCaused by: ${serializeError(error.cause, visited, depth + 1)}`
   }
   if (typeof error === 'string') return error
   try {
