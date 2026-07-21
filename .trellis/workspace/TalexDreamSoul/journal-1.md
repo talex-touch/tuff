@@ -833,3 +833,36 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: 修复搜索流 MessagePort 交付
+
+**Date**: 2026-07-20
+**Task**: 修复搜索流 MessagePort 交付
+**Branch**: `master`
+
+### Summary
+
+通过 preload window.postMessage transfer list 向 CoreApp 与 trusted plugin renderer 交付真实 MessagePort，保留 channel fallback；补充回归覆盖、sandbox preload 独立打包与真实 Electron 搜索验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `478a8871c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
