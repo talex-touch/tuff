@@ -866,3 +866,36 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 21: 统一运行时错误上报与 SQLite 重建可靠性
+
+**Date**: 2026-07-21
+**Task**: 统一运行时错误上报与 SQLite 重建可靠性
+**Branch**: `master`
+
+### Summary
+
+建立 OperationalErrorService 与安全 transport/UI 契约，统一 SQLite retry/health 与 App Provider 写入治理，并通过隔离 Electron BEGIN IMMEDIATE 故障及释放锁恢复验收。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b6c7d8886` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
