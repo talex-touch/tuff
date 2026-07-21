@@ -72,6 +72,13 @@
   - 交付：新增 Worker-safe `FileFilterService` 单一规则源；扫描/Provider 提前过滤节省 I/O，索引提交与搜索聚合提交强制复核；旧索引、语义召回、推荐和缓存出站统一过滤；保留 `.zip` 与常规图片。
   - 验证：共享与 CoreApp 6 files / 83 tests、CoreApp node typecheck、两包 scoped ESLint、代表路径 smoke passed。
 
+- [x] **B5 — context isolation 下 MessagePort 搜索结果丢失** ✅ 已修（`07-20-fix-search-messageport-delivery`）
+  - 位置：`packages/utils/transport/port-handoff.ts:93`、`renderer-transport.ts:496`、`plugin-transport.ts:232`、`apps/core-app/src/preload/index.ts:31`、`plugin-view.ts:46`。
+  - 根因：main 将端口交给 preload isolated world，旧 renderer/plugin transport 却依赖 contextBridge 暴露的普通 IPC 回调读取 `event.ports[0]`；main 收到确认后走 port-only，而 main world 没有可靠端口所有者。
+  - 交付：共享 marker/guard/installer/subscriber 通过同窗口 `postMessage` transfer list 转交真实端口；两个 preload 与两个 transport 共用协议，保留 channel fallback，并清理失败、超时、销毁端口。
+  - 构建约束：Electron sandbox preload 必须为 standalone CJS；`standaloneSandboxedPreloadPlugin` 消除 multi-entry Rollup shared-chunk `preloadRequire` 失败。
+  - 验证：utils 4 files / 11 tests（真实 transfer、无 `openPort()` mock）、CoreBox 2 files / 23 tests、node/web typecheck、mac production build，以及默认 allowlist packaged Electron 中可见的已索引 TextEdit 结果。
+
 ### 🟠 高危工程风险
 
 - [ ] **R1 — Rust 截图模块疑似未接入 CI/安装构建链**
