@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
-- **Last Active**: 2026-07-20
+- **Total Sessions**: 21
+- **Last Active**: 2026-07-21
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~868 | Active |
+| `journal-1.md` | ~901 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-07-21 | 统一运行时错误上报与 SQLite 重建可靠性 | `b6c7d8886` | `master` |
 | 20 | 2026-07-20 | 修复搜索流 MessagePort 交付 | `478a8871c` | `master` |
 | 19 | 2026-07-19 | 发布 Tuff 2.4.13-beta.16 | `340a65fae`, `6a1c8cd20`, `ba74b5fbb`, `a80716005`, `7c4dc8c44`, `1bf13dce1`, `844a58a18`, `44544d09a`, `62873ee7e`, `c2f375511`, `f651fd7aa`, `dab91a636`, `5c2b28181`, `d1696b52e`, `80470e9b0`, `ae41f2ae3` | `master` |
 | 18 | 2026-07-18 | Plugin Security Scan | `9d2a4e5e1` | `master` |
