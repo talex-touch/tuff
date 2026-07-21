@@ -863,3 +863,87 @@ transport.broadcastToWindow(window.id, CoreBoxEvents.ui.trigger, {
   show: true,
 });
 ```
+
+## Scenario: Context-Isolated MessagePort Handoff
+
+### 1. Scope / Trigger
+
+- Trigger: adding or changing a MessagePort-capable typed transport event, a sandboxed Electron preload entry, or renderer/plugin stream startup.
+- Electron delivers transferred ports to the preload isolated world through `IpcRendererEvent.ports`; `contextBridge` callbacks are not a reliable ownership transfer into the renderer main world.
+
+### 2. Signatures
+
+```ts
+const TRANSPORT_PORT_HANDOFF_MARKER = 'talex-touch:transport-port-handoff:v1'
+
+installTransportPortHandoff(ipcRenderer, targetWindow?): () => void
+subscribeTransportPortHandoff(listener, targetWindow?): (() => void) | null
+
+type TransportPortHandoffListener = (
+  port: MessagePort,
+  payload: TransportPortConfirmPayload,
+) => void
+```
+
+`apps/core-app/electron.vite.config.ts` also owns `standaloneSandboxedPreloadPlugin()`, which rewrites every preload entry as a self-contained CJS bundle after Rollup output.
+
+### 3. Contracts
+
+- Preload owns the Electron event, extracts one valid port, and posts `{ marker, payload }` to the same window with `[port]` as the transfer list. It never exposes the Electron event, sender, or privileged objects.
+- The renderer subscriber accepts only `event.source === window`, the fixed marker, a valid `TransportPortConfirmPayload`, and exactly one transferred port.
+- CoreApp and trusted plugin-view preloads install the same bridge before renderer transport can request an upgrade and dispose it on `beforeunload`.
+- Renderer and plugin transports prefer the window handoff. Non-DOM/raw IPC adapters retain the direct `event.ports` fallback for tests and compatibility runtimes.
+- Port listeners are installed before stream start. `session -> snapshot -> update* -> complete/error` ordering, one terminal, and no mirrored channel delivery after a successful port send remain invariant.
+- Invalid, abandoned, queued, open, and pending ports are closed or resolved during timeout and transport destruction; the main registry receives typed close/error events.
+- Sandboxed preload entries must be standalone. A multi-entry CJS preload build may share Rollup chunks, but Electron's sandboxed `preloadRequire` cannot load `./chunks/*`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Foreign window source or wrong marker | Ignore without acknowledging |
+| Invalid payload, missing port, or multiple ports | Ignore and close every owned transferred port |
+| `window.postMessage` transfer throws | Close the preload-owned port |
+| Upgrade accepted but confirmation missing | Send typed close with `confirm_timeout`, then use channel fallback |
+| Port closes or emits `messageerror` | Evict the handle, notify main, and allow later channel fallback |
+| Duplicate confirmation for an owned port id | Close the duplicate; do not create a second delivery owner |
+| Preload output still requires `./chunks/*` | Packaged preload fails to load; the production smoke must fail |
+
+### 5. Good / Base / Bad Cases
+
+- Good: an isolated preload transfers the real port, renderer receives `session`, `snapshot`, and one terminal exactly once, and main receives the typed confirmation.
+- Base: a non-DOM adapter reads one raw IPC port, while an explicitly disabled or unavailable port uses the existing channel stream.
+- Bad: pass `IpcRendererEvent` through `contextBridge`, mock `openPort()` as the only regression proof, mirror successful port chunks onto the channel, or ship a sandboxed preload that requires a sibling chunk.
+
+### 6. Tests Required
+
+- Bridge tests use a native `MessageChannel` transfer list through installer and subscriber; assert marker/source/payload/port-count guards, disposer behavior, and failed-transfer closure.
+- Renderer and plugin stream tests must not mock `openPort()`. Assert upgrade, transferred confirmation, `__transportPortId`, first `session`/`snapshot`, one terminal, one delivery per chunk, and typed acknowledgement.
+- Fallback tests cover confirmation timeout and explicit port disablement.
+- Run focused main/CoreBox tests, CoreApp node/web type-checks, and a production build.
+- Launch the packaged app with an isolated indexed profile and default `TALEX_TRANSPORT_PORT_CHANNELS`; a visible indexed result is required proof.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+contextBridge.exposeInMainWorld('electron', {
+  onConfirm: (handler) => ipcRenderer.on(eventName, handler),
+})
+
+// Renderer assumes a transferred port survived contextBridge callback wrapping.
+electron.onConfirm((event, payload) => handlePort(event.ports[0], payload))
+```
+
+#### Correct
+
+```ts
+// Isolated preload owns the Electron event and transfers only the port.
+const disposeHandoff = installTransportPortHandoff(ipcRenderer, window)
+
+// Renderer main world validates the same-window message and receives ownership.
+const disposeSubscriber = subscribeTransportPortHandoff((port, payload) => {
+  handlePortConfirm(port, payload)
+})
+```

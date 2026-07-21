@@ -6,7 +6,7 @@ import { PRELOAD_LOADING_CHANNEL } from '@talex-touch/utils/preload'
 import { isCoreBox, isMainWindow } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import { parseWindowArgs, resolveRendererWindowMode } from '@talex-touch/utils/renderer/window-role'
 import { useInitialize } from '@talex-touch/utils/renderer/hooks/initialize'
-import { AppEvents } from '@talex-touch/utils/transport'
+import { AppEvents, installTransportPortHandoff } from '@talex-touch/utils/transport'
 import appLogoSvgRaw from '../../public/logo.svg?raw'
 import { contextBridge, ipcRenderer } from 'electron'
 
@@ -27,6 +27,9 @@ interface CoreAppPreloadAPI {
     versions: Partial<NodeJS.ProcessVersions>
   }
 }
+
+const disposeTransportPortHandoff = installTransportPortHandoff(ipcRenderer, window)
+window.addEventListener('beforeunload', disposeTransportPortHandoff, { once: true })
 
 /**
  * Request startup information from the main process before the renderer runs.

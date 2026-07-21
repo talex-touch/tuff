@@ -22,6 +22,10 @@ import { useChannel } from '../../renderer/hooks/use-channel'
 import { findCloneIssue, isCloneError, summarizeClonePayload } from '../../common/utils/clone-diagnostics'
 import { assertTuffEvent, isTuffEvent } from '../event/builder'
 import { TransportEvents } from '../events'
+import {
+  isTransportPortConfirmPayload,
+  subscribeTransportPortHandoff,
+} from '../port-handoff'
 import { isPortChannelEnabled } from './port-policy'
 import { startClientStream } from './stream/client-runtime'
 
@@ -194,7 +198,11 @@ export class TuffRendererTransport implements ITuffTransport {
   private portCache = new Map<string, TransportPortHandle>()
   private portEventSubscriptions = new Map<string, PortEventSubscription>()
   private portHandlesById = new Map<string, TransportPortHandle>()
-  private pendingPortConfirms = new Map<string, { resolve: (record: PortConfirmRecord) => void, timeout?: ReturnType<typeof setTimeout> }>()
+  private pendingPortConfirms = new Map<string, {
+    channel: string
+    resolve: (record: PortConfirmRecord | null) => void
+    timeout?: ReturnType<typeof setTimeout>
+  }>()
   private queuedPortConfirms = new Map<string, PortConfirmRecord>()
   private abandonedPorts = new Set<string>()
   private portListenerCleanup: (() => void) | null = null
@@ -485,14 +493,23 @@ export class TuffRendererTransport implements ITuffTransport {
       return true
     }
 
+    const handoffCleanup = subscribeTransportPortHandoff((port, payload) => {
+      this.handlePortConfirm(port, payload)
+    })
+    if (handoffCleanup) {
+      this.portListenerCleanup = handoffCleanup
+      return true
+    }
+
     const ipcRenderer = resolveIpcRenderer()
     if (!ipcRenderer?.on || !ipcRenderer.removeListener) {
       return false
     }
 
     const eventName = TransportEvents.port.confirm.toEventName()
-    const handler = (event: any, payload: TransportPortConfirmPayload) => {
-      this.handlePortConfirm(event, payload)
+    const handler = (event: any, payload: unknown) => {
+      const ports = event?.ports as readonly MessagePort[] | undefined
+      this.handlePortConfirm(ports?.length === 1 ? ports[0] : undefined, payload)
     }
 
     ipcRenderer.on(eventName, handler)
@@ -503,15 +520,20 @@ export class TuffRendererTransport implements ITuffTransport {
     return true
   }
 
-  private handlePortConfirm(event: any, payload: TransportPortConfirmPayload): void {
-    const portId = payload?.portId
-    const channel = payload?.channel
-    const port = event?.ports?.[0] as MessagePort | undefined
-    if (!portId || !channel || !port) {
-      this.logPortIssue(channel ?? 'unknown', 'confirm_payload_invalid')
+  private handlePortConfirm(port: MessagePort | undefined, payload: unknown): void {
+    const confirmPayload = isTransportPortConfirmPayload(payload) ? payload : null
+    if (!confirmPayload || !port) {
+      if (port) {
+        try {
+          port.close()
+        }
+        catch {}
+      }
+      this.logPortIssue(confirmPayload?.channel ?? 'unknown', 'confirm_payload_invalid')
       return
     }
 
+    const { portId, channel } = confirmPayload
     if (this.abandonedPorts.has(portId)) {
       this.abandonedPorts.delete(portId)
       try {
@@ -522,7 +544,15 @@ export class TuffRendererTransport implements ITuffTransport {
       return
     }
 
-    const record: PortConfirmRecord = { port, payload }
+    if (this.queuedPortConfirms.has(portId) || this.portHandlesById.has(portId)) {
+      try {
+        port.close()
+      }
+      catch {}
+      return
+    }
+
+    const record: PortConfirmRecord = { port, payload: confirmPayload }
     const pending = this.pendingPortConfirms.get(portId)
     if (pending) {
       this.pendingPortConfirms.delete(portId)
@@ -535,7 +565,7 @@ export class TuffRendererTransport implements ITuffTransport {
       this.queuedPortConfirms.set(portId, record)
     }
 
-    void this.send(TransportEvents.port.confirm, payload).catch(() => {})
+    void this.send(TransportEvents.port.confirm, confirmPayload).catch(() => {})
   }
 
   private async waitForPortConfirm(
@@ -550,6 +580,8 @@ export class TuffRendererTransport implements ITuffTransport {
     }
 
     if (timeoutMs <= 0) {
+      this.abandonedPorts.add(portId)
+      void this.send(TransportEvents.port.close, { channel, portId, reason: 'confirm_timeout' }).catch(() => {})
       return null
     }
 
@@ -561,7 +593,7 @@ export class TuffRendererTransport implements ITuffTransport {
         resolve(null)
       }, timeoutMs)
 
-      this.pendingPortConfirms.set(portId, { resolve, timeout })
+      this.pendingPortConfirms.set(portId, { channel, resolve, timeout })
     })
   }
 
@@ -1004,7 +1036,31 @@ export class TuffRendererTransport implements ITuffTransport {
     }
     this.portHandlesById.clear()
     this.portCache.clear()
+
+    for (const [portId, pending] of this.pendingPortConfirms) {
+      if (pending.timeout) {
+        clearTimeout(pending.timeout)
+      }
+      pending.resolve(null)
+      void this.send(TransportEvents.port.close, {
+        channel: pending.channel,
+        portId,
+        reason: 'transport_destroy',
+      }).catch(() => {})
+    }
     this.pendingPortConfirms.clear()
+
+    for (const [portId, record] of this.queuedPortConfirms) {
+      try {
+        record.port.close()
+      }
+      catch {}
+      void this.send(TransportEvents.port.close, {
+        channel: record.payload.channel,
+        portId,
+        reason: 'transport_destroy',
+      }).catch(() => {})
+    }
     this.queuedPortConfirms.clear()
     this.abandonedPorts.clear()
   }

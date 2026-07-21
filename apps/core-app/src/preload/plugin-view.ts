@@ -1,3 +1,4 @@
+import { installTransportPortHandoff } from '@talex-touch/utils/transport'
 import { contextBridge } from 'electron'
 import { pluginViewRendererIpcAdapter } from '../shared/ipc/plugin-view-renderer-adapter'
 import { parsePluginViewBootstrapArgument } from '../shared/plugin-view-bridge'
@@ -42,6 +43,10 @@ if (!process.contextIsolated) {
   throw new Error('Trusted plugin views require context isolation.')
 }
 
+const disposeTransportPortHandoff = installTransportPortHandoff(
+  pluginViewRendererIpcAdapter,
+  window
+)
 const bootstrap = parsePluginViewBootstrapArgument(process.argv)
 const channel = createPluginViewChannel(pluginViewRendererIpcAdapter, {
   uniqueKey: bootstrap.channelKey
@@ -61,4 +66,11 @@ contextBridge.exposeInMainWorld(
 contextBridge.exposeInMainWorld('$channel', publicChannel)
 
 applyTheme(bootstrap.config.themeStyle)
-window.addEventListener('beforeunload', () => channel.destroy(), { once: true })
+window.addEventListener(
+  'beforeunload',
+  () => {
+    disposeTransportPortHandoff()
+    channel.destroy()
+  },
+  { once: true }
+)

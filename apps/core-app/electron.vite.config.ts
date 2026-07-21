@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
@@ -6,6 +7,7 @@ import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import type { UserConfig } from 'electron-vite'
+import { build as esbuildBuild } from 'esbuild'
 import type { Plugin } from 'vite'
 import Unocss from 'unocss/vite'
 import AutoImport from 'unplugin-auto-import/vite'
@@ -104,6 +106,42 @@ const filteredVueSetupExtend: Plugin = {
       return hook.handler.call(this, code, id, options)
     }
     return null
+  }
+}
+
+function standaloneSandboxedPreloadPlugin(): Plugin {
+  return {
+    name: 'tuff:standalone-sandboxed-preloads',
+    apply: 'build',
+    async writeBundle(options, bundle) {
+      if (!options.dir) {
+        throw new Error('Sandboxed preload output directory is required.')
+      }
+
+      for (const output of Object.values(bundle)) {
+        if (output.type !== 'chunk' || !output.isEntry) continue
+
+        const entryPath = path.resolve(options.dir, output.fileName)
+        const standalonePath = `${entryPath}.standalone.js`
+        const result = await esbuildBuild({
+          entryPoints: [entryPath],
+          bundle: true,
+          external: ['electron'],
+          format: 'cjs',
+          logLevel: 'silent',
+          outfile: standalonePath,
+          platform: 'node',
+          sourcemap: enableSourcemap ? 'inline' : false,
+          target: 'node22',
+          write: false
+        })
+        const bundledEntry = result.outputFiles.find((file) => file.path === standalonePath)
+        if (!bundledEntry) {
+          throw new Error(`Failed to create standalone preload bundle for ${output.fileName}.`)
+        }
+        await writeFile(entryPath, bundledEntry.contents)
+      }
+    }
   }
 }
 
@@ -211,7 +249,8 @@ export default defineConfig({
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence'
         ]
-      })
+      }),
+      standaloneSandboxedPreloadPlugin()
     ],
     build: {
       sourcemap: enableSourcemap,
