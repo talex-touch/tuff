@@ -27,6 +27,7 @@ import type {
   RemoveFileExtensionsMessage,
   RemoveFileMessage,
   RemoveProviderItemsMessage,
+  ShutdownMessage,
   StageProviderReplacementItemsMessage,
   WorkerErrorMessage,
   WorkerResultMessage
@@ -38,7 +39,7 @@ import type {
 } from '../file-index-persistence-repository'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
-import { createClient } from '@libsql/client'
+import { type Client, createClient } from '@libsql/client'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
@@ -90,12 +91,14 @@ type WorkerRequest =
   | RemoveFileMessage
   | RemoveFileExtensionsMessage
   | CleanupOrphanKeywordsMessage
+  | ShutdownMessage
   | WorkerMetricsRequest
 
 // ---------- Worker State ----------
 
 let searchIndex: SearchIndexService | null = null
 let db: LibSQLDatabase<typeof schema> | null = null
+let client: Client | null = null
 let filePersistenceRepository: FileIndexPersistenceRepository | null = null
 let initialized = false
 
@@ -289,11 +292,38 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         break
       }
 
+      case 'shutdown':
+        await handleShutdown()
+        respond({ type: 'result', taskId })
+        break
+
       default:
         respond({ type: 'error', taskId, error: { message: `Unknown message type` } })
     }
   } catch (error) {
     respond({ type: 'error', taskId, error: serializeSearchIndexWorkerError(error) })
+  }
+}
+
+/**
+ * Finalize and close the worker's DB connection. Runs through the serial queue,
+ * so it executes after any in-flight write. Checkpointing (TRUNCATE) flushes the
+ * WAL into the main db and `close()` releases the connection cleanly before the
+ * parent terminates the thread — closing the abrupt-terminate corruption window.
+ */
+async function handleShutdown(): Promise<void> {
+  const closing = client
+  client = null
+  db = null
+  searchIndex = null
+  filePersistenceRepository = null
+  initialized = false
+  if (!closing) return
+  try {
+    await closing.execute('PRAGMA wal_checkpoint(TRUNCATE)').catch(() => undefined)
+    closing.close()
+  } catch (error) {
+    searchIndexWorkerLog.warn('Worker DB close during shutdown failed', { error })
   }
 }
 
@@ -305,16 +335,31 @@ async function handleInit(message: InitMessage): Promise<void> {
 
   const { dbPath } = message
 
-  const client = createClient({ url: `file:${dbPath}` })
+  const workerClient = createClient({ url: `file:${dbPath}` })
+  client = workerClient
 
   // Apply WAL mode and performance pragmas — same as main thread
-  await client.execute('PRAGMA journal_mode = WAL')
-  await client.execute('PRAGMA busy_timeout = 30000')
-  await client.execute('PRAGMA synchronous = NORMAL')
-  await client.execute('PRAGMA locking_mode = NORMAL')
-  await client.execute('PRAGMA mmap_size = 268435456')
+  const journalModeResult = await workerClient.execute('PRAGMA journal_mode = WAL')
+  const journalMode = String(
+    (journalModeResult.rows?.[0] as Record<string, unknown> | undefined)?.journal_mode ?? ''
+  ).toLowerCase()
+  if (journalMode !== 'wal') {
+    // This connection shares database.db with the main-thread connection.
+    // Mismatched journal modes across the two is a direct corruption path.
+    searchIndexWorkerLog.error('Worker DB did not enter WAL mode', {
+      meta: { journalMode }
+    })
+  }
+  await workerClient.execute('PRAGMA busy_timeout = 30000')
+  await workerClient.execute('PRAGMA synchronous = NORMAL')
+  await workerClient.execute('PRAGMA locking_mode = NORMAL')
+  // Disable mmap on the worker connection. The worker is force-terminated
+  // (worker.terminate(), no close) on idle/shutdown/error; tearing down a large
+  // memory-mapped write region mid-write is SQLite's classic corruption
+  // amplifier. This write-heavy indexing path gains little from mmap.
+  await workerClient.execute('PRAGMA mmap_size = 0')
 
-  const workerDb = drizzle(client, { schema })
+  const workerDb = drizzle(workerClient, { schema })
 
   db = workerDb
   filePersistenceRepository = new SqliteFileIndexPersistenceRepository(workerDb)
