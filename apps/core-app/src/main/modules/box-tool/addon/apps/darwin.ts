@@ -168,7 +168,10 @@ async function findAppIconSourcePath(
   }
 }
 
-const DARWIN_APP_ICON_CACHE_VERSION = 'native-v1'
+const DARWIN_APP_ICON_CACHE_VERSION = 'native-v2'
+// sips renders the bundle .icns at this size. Large enough to stay crisp in the
+// retina 36px result slot — the old 32px `getFileIcon('normal')` looked upscaled.
+const DARWIN_APP_ICON_TARGET_SIZE = 256
 
 function isTruthyPlistFlag(value: unknown): boolean {
   if (value === true || value === 1) return true
@@ -186,6 +189,61 @@ function isNonUserFacingCoreServiceApp(
   return isTruthyPlistFlag(plistData.LSBackgroundOnly) || isTruthyPlistFlag(plistData.LSUIElement)
 }
 
+/** Render a bundle .icns (or any sips-supported image) to a PNG at target size. */
+async function renderIconWithSips(
+  sourceIconPath: string,
+  cachedIconPath: string
+): Promise<boolean> {
+  try {
+    await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
+    await execFileSafe('sips', [
+      '-Z',
+      String(DARWIN_APP_ICON_TARGET_SIZE),
+      '-s',
+      'format',
+      'png',
+      sourceIconPath,
+      '--out',
+      cachedIconPath
+    ])
+    await fs.access(cachedIconPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Fallback: Electron's native icon at the largest available resolution. */
+async function renderNativeIcon(appPath: string, cachedIconPath: string): Promise<boolean> {
+  let temporaryIconPath = ''
+  try {
+    const nativeIcon = await app.getFileIcon(appPath, { size: 'large' })
+    if (nativeIcon.isEmpty()) return false
+    // scaleFactor: 2 pulls the retina (2x, up to 96px) representation when the
+    // NativeImage has one — much sharper than the previous 32px 1x PNG.
+    let png = nativeIcon.toPNG({ scaleFactor: 2 })
+    if (png.length === 0) png = nativeIcon.toPNG()
+    if (png.length === 0) return false
+
+    await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
+    temporaryIconPath = `${cachedIconPath}.${process.pid}.${Date.now()}.tmp`
+    await fs.writeFile(temporaryIconPath, png)
+    await fs.rename(temporaryIconPath, cachedIconPath)
+    return true
+  } catch (error) {
+    if (temporaryIconPath) {
+      await fs.rm(temporaryIconPath, { force: true }).catch(() => undefined)
+    }
+    darwinAppLog.debug('Native app icon extraction failed', {
+      meta: {
+        pathLength: appPath.length,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    })
+    return false
+  }
+}
+
 async function ensureCachedAppIcon(
   appPath: string,
   bundleId: string,
@@ -201,55 +259,21 @@ async function ensureCachedAppIcon(
     // Cache miss; generate it below.
   }
 
-  let temporaryIconPath = ''
-  try {
-    const nativeIcon = await app.getFileIcon(appPath, { size: 'normal' })
-    const png = nativeIcon.toPNG()
-    if (nativeIcon.isEmpty() || png.length === 0) {
-      throw new Error('Electron returned an empty app icon')
-    }
-
-    await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
-    temporaryIconPath = `${cachedIconPath}.${process.pid}.${Date.now()}.tmp`
-    await fs.writeFile(temporaryIconPath, png)
-    await fs.rename(temporaryIconPath, cachedIconPath)
+  // Prefer the app's real, high-resolution .icns. It is both sharper than the
+  // native icon and — critically for SIP `/System/Applications` apps — avoids
+  // the generic placeholder that `app.getFileIcon` returns while Launch Services
+  // is cold, which previously got cached as if it were the real icon.
+  const sourceIconPath = await findAppIconSourcePath(appPath, plistData)
+  if (sourceIconPath && (await renderIconWithSips(sourceIconPath, cachedIconPath))) {
     return cachedIconPath
-  } catch (nativeError) {
-    if (temporaryIconPath) {
-      await fs.rm(temporaryIconPath, { force: true }).catch(() => undefined)
-    }
-
-    const sourceIconPath = await findAppIconSourcePath(appPath, plistData)
-    if (!sourceIconPath) {
-      return ''
-    }
-
-    try {
-      await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
-      await execFileSafe('sips', [
-        '-Z',
-        '128',
-        '-s',
-        'format',
-        'png',
-        sourceIconPath,
-        '--out',
-        cachedIconPath
-      ])
-      await fs.access(cachedIconPath)
-      return cachedIconPath
-    } catch (fallbackError) {
-      darwinAppLog.warn('Failed to generate app icon cache', {
-        error: fallbackError,
-        meta: {
-          pathLength: appPath.length,
-          iconPathLength: sourceIconPath.length,
-          nativeError: nativeError instanceof Error ? nativeError.message : String(nativeError)
-        }
-      })
-      return ''
-    }
   }
+
+  // Fallback for asset-catalog-only apps that ship no standalone .icns.
+  if (await renderNativeIcon(appPath, cachedIconPath)) {
+    return cachedIconPath
+  }
+
+  return ''
 }
 
 // Helper to get localized display name from .lproj directories

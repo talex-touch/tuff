@@ -51,6 +51,11 @@ type DesktopAppDisplayNameMetadata = {
 }
 
 const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons-win')
+// Bumping this invalidates icons cached at the old 32px size. 48 = EXTRALARGE
+// (SHIL): sharper than 32 in the retina result slot, and unlike 256 (JUMBO) it
+// never pads a small legacy icon into a large transparent canvas.
+const WIN_APP_ICON_CACHE_VERSION = 'v2'
+const WIN_APP_ICON_TARGET_SIZE = 48
 const APPX_MANIFEST_NAME = 'AppxManifest.xml'
 export const START_MENU_PATHS = [
   path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'),
@@ -790,7 +795,10 @@ async function listAppPathRegistryApps(): Promise<AppInfo[]> {
 
 async function getAppIcon(targetPath: string, cacheKey: string): Promise<string> {
   await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
-  const iconPath = path.join(ICON_CACHE_DIR, `${buildIconCacheKey(cacheKey)}.png`)
+  const iconPath = path.join(
+    ICON_CACHE_DIR,
+    `${buildIconCacheKey(`${WIN_APP_ICON_CACHE_VERSION}:${cacheKey}`)}.png`
+  )
 
   try {
     await fs.access(iconPath)
@@ -800,7 +808,9 @@ async function getAppIcon(targetPath: string, cacheKey: string): Promise<string>
     try {
       const fileIcon = await loadExtractFileIcon()
       if (typeof fileIcon === 'function') {
-        const buffer = fileIcon(targetPath, 32)
+        // Extract a larger representation than the old 32px so the icon stays
+        // crisp in the retina result slot; fall back to 32px if unavailable.
+        const buffer = fileIcon(targetPath, WIN_APP_ICON_TARGET_SIZE) || fileIcon(targetPath, 32)
         if (buffer && buffer.length > 0) {
           const normalized = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
           await fs.writeFile(iconPath, normalized)
