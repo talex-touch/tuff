@@ -4,6 +4,7 @@ packages:
   - packages/tuffex/packages/components # Nested tuffex component package
   - 'apps/core-app' # Electron main product
   - 'apps/nexus' # Documentation & ecosystem site (Nuxt)
+  - 'apps/reverse-proxy-design' # Nexus trust-boundary design publication
   - 'apps/tuff-analyse' # Internal Vite analysis dashboard
   - 'plugins/*' # Official & example plugins
 
