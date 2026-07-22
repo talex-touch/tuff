@@ -15,6 +15,7 @@ import type {
   ClipboardReadImageResponse,
   ClipboardReadResponse,
   ClipboardSetFavoriteRequest,
+  ClipboardStatus,
   ClipboardWriteRequest
 } from '@talex-touch/utils/transport/events/types'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -65,7 +66,7 @@ import {
 } from './clipboard/clipboard-history-persistence'
 import { ClipboardImagePersistence } from './clipboard/clipboard-image-persistence'
 import { ClipboardAutopasteAutomation } from './clipboard/clipboard-autopaste-automation'
-import { ClipboardNativeWatcher } from './clipboard/clipboard-native-watcher'
+import { ClipboardService, type ClipboardServiceHealth } from './clipboard/clipboard-service'
 import {
   ClipboardMetaPersistence,
   type ClipboardMetaEntry
@@ -159,10 +160,13 @@ export class ClipboardModule extends BaseModule {
       clipboardLog.warn(message, data)
     }
   })
-  private readonly nativeWatcher = new ClipboardNativeWatcher({
+  private readonly clipboardService = new ClipboardService({
     isDestroyed: () => this.isDestroyed,
     scheduleMonitor: (options) => {
       void this.runClipboardMonitor(options)
+    },
+    onModeChange: (health) => {
+      this.handleWatcherModeChange(health)
     },
     logInfo: (message, data?: LogOptions) => {
       clipboardLog.info(message, data)
@@ -400,11 +404,55 @@ export class ClipboardModule extends BaseModule {
   }
 
   private async startNativeClipboardWatcher(): Promise<void> {
-    await this.nativeWatcher.start()
+    await this.clipboardService.start()
   }
 
   private stopNativeClipboardWatcher(): void {
-    this.nativeWatcher.stop()
+    this.clipboardService.stop()
+  }
+
+  /**
+   * Current clipboard capture-engine status (native watch vs polling fallback).
+   * Queryable by developers via `ClipboardEvents.getStatus` so a degraded /
+   * silent-fallback state is observable without a UI. Exposes engine health only.
+   */
+  public getStatus(): ClipboardStatus {
+    const health = this.clipboardService.getHealth()
+    return {
+      ...health,
+      pollIntervalMs: this.currentPollIntervalMs
+    }
+  }
+
+  /**
+   * Telemetry hook for watch-mode transitions. Emits a warn-level perf incident
+   * when the native watcher is enabled but unavailable (we silently fell back to
+   * polling), so the regression surfaces in the perf/diagnostics pipeline instead
+   * of only a log line.
+   */
+  private handleWatcherModeChange(health: ClipboardServiceHealth): void {
+    if (this.isDestroyed) return
+    if (health.degraded) {
+      perfMonitor.recordMainReport({
+        kind: 'clipboard.watcher.degraded',
+        eventName: health.lastError ?? 'native-watch-unavailable',
+        durationMs: 0,
+        level: 'warn',
+        meta: {
+          enabled: health.enabled,
+          nativeActive: health.nativeActive,
+          lastError: health.lastError,
+          lastErrorAt: health.lastErrorAt
+        }
+      })
+    } else if (health.mode === 'native') {
+      perfMonitor.recordMainReport({
+        kind: 'clipboard.watcher.native',
+        eventName: 'active',
+        durationMs: 0,
+        meta: { activatedAt: health.activatedAt }
+      })
+    }
   }
 
   private isCoreBoxWindowVisible(): boolean {
@@ -879,7 +927,7 @@ export class ClipboardModule extends BaseModule {
   private async runClipboardMonitor(options?: ClipboardMonitorOptions): Promise<void> {
     const source = options?.source
     if (
-      this.nativeWatcher.isRunning() &&
+      this.clipboardService.isNativeActive() &&
       (source === 'visible-poll' || source === 'background-poll')
     ) {
       return
@@ -968,10 +1016,10 @@ export class ClipboardModule extends BaseModule {
       return
     }
 
-    const nativeSnapshot = this.nativeWatcher.isRunning()
-      ? await this.nativeWatcher.readSnapshot()
-      : null
-    await this.capturePipeline.process(source, nativeSnapshot ?? undefined)
+    // Single reader: capture always reads via Electron's clipboard API. The native
+    // watcher is only a change signal (see ClipboardService), so there is no second
+    // reader that could disagree with Electron on edge cases.
+    await this.capturePipeline.process(source)
   }
 
   private extractPayloadSdkApi(payload: unknown): number | undefined {
@@ -1165,7 +1213,8 @@ export class ClipboardModule extends BaseModule {
       readClipboard: () => this.readClipboardSnapshot(),
       readImage: async (request) => await this.readClipboardImage(request),
       readFiles: () => this.clipboardHelper?.readClipboardFiles() ?? [],
-      buildChangePayload: () => this.buildTransportChangePayload()
+      buildChangePayload: () => this.buildTransportChangePayload(),
+      getStatus: () => this.getStatus()
     })
   }
 
@@ -1210,7 +1259,7 @@ export class ClipboardModule extends BaseModule {
     this.clipboardStageBGeneration = 0
     this.activeAppRefreshInFlight = false
     this.clipboardCheckCooldownUntil = 0
-    this.nativeWatcher.reset()
+    this.clipboardService.reset()
     this.historyPersistence.reset()
     this.lastLagSkipLogAt = 0
     this.lastSuccessfulClipboardScanAt = null

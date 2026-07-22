@@ -15,6 +15,7 @@ import type {
   ClipboardReadImageResponse,
   ClipboardReadResponse,
   ClipboardSetFavoriteRequest,
+  ClipboardStatus,
   ClipboardWriteRequest
 } from '@talex-touch/utils/transport/events/types'
 import type {
@@ -72,6 +73,7 @@ export interface ClipboardTransportHandlers {
   readImage: (request: ClipboardReadImageRequest) => Promise<ClipboardReadImageResponse | null>
   readFiles: () => string[]
   buildChangePayload: () => ClipboardChangePayload
+  getStatus: () => ClipboardStatus
 }
 
 export class ClipboardTransportHandlersRegistry {
@@ -268,7 +270,14 @@ export class ClipboardTransportHandlersRegistry {
       transport.on(ClipboardEvents.readFiles, async (_request: void, context: HandlerContext) => {
         handlers.enforcePermission(context.plugin?.name, 'clipboard:read', undefined)
         return handlers.readFiles()
-      })
+      }),
+      transport.on(
+        ClipboardEvents.getStatus,
+        async (_request: void, context: HandlerContext): Promise<ClipboardStatus> => {
+          handlers.enforcePermission(context.plugin?.name, 'clipboard:read', undefined)
+          return handlers.getStatus()
+        }
+      )
     )
   }
 
