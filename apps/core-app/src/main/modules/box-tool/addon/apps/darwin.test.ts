@@ -201,8 +201,7 @@ describe('darwin app info', () => {
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to bundle icon resources when native extraction fails', async () => {
-    getFileIconMock.mockRejectedValueOnce(new Error('native icon unavailable'))
+  it('prefers the bundle .icns resource for the app icon', async () => {
     const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp', {
       iconFile: 'AppIcon'
     })
@@ -224,7 +223,7 @@ describe('darwin app info', () => {
     )
   })
 
-  it('uses Electron native app icons at display size', async () => {
+  it('uses Electron native app icons when the bundle ships no .icns', async () => {
     const tempRoot = await createTempAppBundle('NativeIcon', 'NativeIcon')
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'NativeIcon.app')
@@ -232,7 +231,7 @@ describe('darwin app info', () => {
     const { getAppInfo } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
 
-    expect(getFileIconMock).toHaveBeenCalledWith(appPath, { size: 'normal' })
+    expect(getFileIconMock).toHaveBeenCalledWith(appPath, { size: 'large' })
     expect(await fs.readFile(appInfo?.icon ?? '', 'utf8')).toBe('native-png')
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
