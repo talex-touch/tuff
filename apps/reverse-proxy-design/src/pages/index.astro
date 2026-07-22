@@ -1,0 +1,649 @@
+---
+import '../styles/global.css'
+
+type ControlStatus = 'implemented' | 'partial' | 'disabled' | 'gap'
+
+interface ControlRow {
+  control: string
+  scope: string
+  status: ControlStatus
+  behavior: string
+  boundary: string
+  source: string
+}
+
+const statusMeta: Record<ControlStatus, { label: string, short: string }> = {
+  implemented: { label: '已实现', short: 'IMPLEMENTED' },
+  partial: { label: '部分实现', short: 'PARTIAL' },
+  disabled: { label: '生产配置关闭', short: 'DISABLED' },
+  gap: { label: '关键缺口', short: 'GAP' },
+}
+
+const controls: ControlRow[] = [
+  {
+    control: '规范域名重定向',
+    scope: 'HTML GET/HEAD',
+    status: 'implemented',
+    behavior: '非规范 Host 的 HTML 导航请求会被 307 重定向到 AUTH_ORIGIN。',
+    boundary: '只处理页面导航，不处理 API，也无法识别主动重写 Host 的服务端反代。',
+    source: 'apps/nexus/server/middleware/canonical-origin.ts:1-38',
+  },
+  {
+    control: '认证 Origin 固定',
+    scope: 'NextAuth / Passkey',
+    status: 'implemented',
+    behavior: '生产配置真实公网 AUTH_ORIGIN 后，认证回调和 WebAuthn RP ID 固定到官方来源。',
+    boundary: '配置缺失或生产值仍为 localhost 时，会重新信任转发 Host。',
+    source: 'apps/nexus/server/utils/authOrigin.ts:17-30',
+  },
+  {
+    control: '控制面 CORS',
+    scope: 'Admin / Intelligence',
+    status: 'partial',
+    behavior: '管理与 Intelligence 控制面只向完全匹配 AUTH_ORIGIN 的浏览器来源开放。',
+    boundary: '普通 API 仍返回通配 Origin，CORS 本身不限制服务端代理。',
+    source: 'apps/nexus/server/middleware/cors.ts:13-49',
+  },
+  {
+    control: '设备授权 IP 一致性',
+    scope: 'CLI / App 授权',
+    status: 'implemented',
+    behavior: '设备发起授权和浏览器确认授权的 IP 默认必须一致，不一致时拒绝并审计。',
+    boundary: 'CLI 可由用户临时允许跨 IP；同一代理出口仍会表现为一致。',
+    source: 'apps/nexus/server/api/app-auth/device/approve.post.ts:82-140',
+  },
+  {
+    control: '长期授权信任策略',
+    scope: 'Long grant',
+    status: 'implemented',
+    behavior: '长期授权要求设备已信任、地区命中最近成功登录记录、浏览器会话不超过 10 分钟。',
+    boundary: '地区数据仍依赖当前请求地理来源的可信度。',
+    source: 'apps/nexus/server/utils/authStore.ts:2840-2909',
+  },
+  {
+    control: '注册 Turnstile',
+    scope: 'Account signup',
+    status: 'implemented',
+    behavior: '服务端调用 Cloudflare Siteverify，绑定 remoteip，并校验 action 为 signup。',
+    boundary: '生产密钥是否注入不能从仓库配置直接确认。',
+    source: 'apps/nexus/server/utils/turnstile.ts:24-75',
+  },
+  {
+    control: '密码登录 Turnstile',
+    scope: 'Credentials signin',
+    status: 'gap',
+    behavior: '前端要求完成 Turnstile，并把 token 传入登录请求。',
+    boundary: '服务端 Credentials Provider 没有读取或验证 turnstileToken，直接调用接口可绕开。',
+    source: 'apps/nexus/server/api/auth/[...].ts:431-478',
+  },
+  {
+    control: 'Telemetry 自动封禁',
+    scope: 'Telemetry APIs',
+    status: 'partial',
+    behavior: '1 分钟加权事件数超过 1000 后自动封禁，10 分钟起指数退避，最长 24 小时。',
+    boundary: '只明确接入三个 Telemetry 接口，不是全局请求限流。',
+    source: 'apps/nexus/server/utils/ipSecurityStore.ts:86-213',
+  },
+  {
+    control: 'Docs Challenge / PoW',
+    scope: 'Docs analytics',
+    status: 'partial',
+    behavior: '按 IP + clientId 累积违规，风险 1 要求 Cookie 与 Proof，风险 2 额外要求 PoW。',
+    boundary: '独立于全局风险引擎，并明确留有可信 IP 边界 TODO。',
+    source: 'apps/nexus/server/api/docs/engagement.post.ts:148-217',
+  },
+  {
+    control: '人工 IP Ban',
+    scope: 'Intelligence ban store',
+    status: 'partial',
+    behavior: '支持启用、停用、过期和删除 IP Ban。',
+    boundary: '当前明确命中检查只出现在 Docs Assistant，不是全局中间件。',
+    source: 'apps/nexus/server/utils/intelligenceStore.ts:867-878',
+  },
+  {
+    control: '管理员控制面保护',
+    scope: 'A / B / C channels',
+    status: 'disabled',
+    behavior: '代码支持管理员 Passkey step-up、紧急令牌和 Cloudflare Access OOB 通道。',
+    boundary: '仓库声明的 production 配置将 control-plane protection 设为 false。',
+    source: 'wrangler.toml:23-36',
+  },
+  {
+    control: '防御模式',
+    scope: 'NORMAL / ELEVATED / EXTREME',
+    status: 'partial',
+    behavior: 'EXTREME 会限制普通控制面，同时保留紧急、风控和解封路径。',
+    boundary: 'ELEVATED 当前主要是持久化状态，没有看到请求层行为升级。',
+    source: 'apps/nexus/server/utils/defenseModeController.ts:75-140',
+  },
+  {
+    control: '双人复核',
+    scope: 'High-risk admin actions',
+    status: 'disabled',
+    behavior: '降级到 NORMAL、批量解封超过 50 个 Actor、永久 IP Ban 需要第二人确认。',
+    boundary: '代码存在，但仓库声明的 production 配置将 dual control 设为 false。',
+    source: 'apps/nexus/server/utils/adminRiskActions.ts:67-83',
+  },
+  {
+    control: '管理员审计哈希链',
+    scope: 'Break-glass audit',
+    status: 'implemented',
+    behavior: '每条审计记录串联上一条 Hash，并按小时发出最新 Hash 锚点。',
+    boundary: '依赖 D1 与消息记录链路可用，不能替代外部不可篡改日志。',
+    source: 'apps/nexus/server/utils/adminBreakglassAuditStore.ts:84-170',
+  },
+  {
+    control: '统一可信客户端 IP',
+    scope: 'All risk decisions',
+    status: 'gap',
+    behavior: '部分链路优先 Cloudflare Request，另一些链路优先 X-Forwarded-For。',
+    boundary: '没有统一可信代理跳点和头部清洗策略，代理头可能被客户端伪造。',
+    source: 'apps/nexus/server/utils/authStore.ts:2372-2380',
+  },
+]
+
+const counts = controls.reduce<Record<ControlStatus, number>>((result, item) => {
+  result[item.status] += 1
+  return result
+}, { implemented: 0, partial: 0, disabled: 0, gap: 0 })
+
+const threatScenarios = [
+  {
+    title: '简单 Host 透传反代',
+    status: 'partial' as const,
+    path: ['攻击者域名', '透传 Host', 'Nexus HTML', '307 官方域名'],
+    verdict: '可以打断最朴素的页面镜像，但不会阻止主动重写 Host 的反代。',
+  },
+  {
+    title: '伪造代理头',
+    status: 'gap' as const,
+    path: ['客户端', 'X-Forwarded-For', '风控 IP', '错误计数或绕过'],
+    verdict: '当前最大基础缺口。身份、限流和地理策略没有共享一个可信解析器。',
+  },
+  {
+    title: '同出口代理授权',
+    status: 'partial' as const,
+    path: ['CLI', '同一代理出口', '浏览器确认', 'IP 一致'],
+    verdict: '设备 IP 匹配可以发现来源变化，但无法证明代理后面的真实主体一致。',
+  },
+  {
+    title: '自动化密码尝试',
+    status: 'gap' as const,
+    path: ['脚本', 'Credentials API', '忽略前端 Turnstile', '密码校验'],
+    verdict: '注册入口服务端校验有效，密码登录仍可绕过前端挑战。',
+  },
+  {
+    title: '人工 Ban 覆盖不足',
+    status: 'partial' as const,
+    path: ['风险控制面', 'IP Ban 表', '单点业务检查', '其他 API 未命中'],
+    verdict: 'Ban 数据可维护，但执行点没有形成统一入口门禁。',
+  },
+]
+
+const roadmap = [
+  {
+    priority: 'P0',
+    title: '统一可信 IP 解析器',
+    outcome: '所有身份、限流、地理和审计决策只消费一个规范化结果。',
+    actions: [
+      '优先使用 Cloudflare runtime request context。',
+      '只有远端跳点在可信代理白名单内时才读取转发头。',
+      '记录来源类型和可信级别，不把 unknown 当作可信。',
+      '迁移 authStore、ipSecurityStore、requestGeo 和管理员 Actor 生成。',
+    ],
+  },
+  {
+    priority: 'P0',
+    title: '服务端强制登录挑战与限流',
+    outcome: '直接调用 Credentials API 不再绕过人机验证和失败速率控制。',
+    actions: [
+      'Credentials Provider 验证 Turnstile token 与 login action。',
+      '按 IP、账号标识和设备信号做组合限流。',
+      '统一覆盖密码登录、Magic Link 和邮箱探测入口。',
+      '挑战不可用时 fail-closed，并返回可诊断错误码。',
+    ],
+  },
+  {
+    priority: 'P1',
+    title: '统一 Ban 与防御模式执行点',
+    outcome: 'Telemetry、Docs 与 Intelligence 不再维护互相独立的执行语义。',
+    actions: [
+      '建立全局风险门禁，按路由类别应用 Ban、限流和挑战。',
+      '定义 NORMAL、ELEVATED、EXTREME 的具体读取与写入策略。',
+      '保留控制面恢复路径，并验证不会把管理员永久锁死。',
+      '迁移历史状态时保留原因、到期时间和审计来源。',
+    ],
+  },
+  {
+    priority: 'P1',
+    title: '启用生产控制面保护',
+    outcome: '高风险管理员操作恢复 step-up、双人复核和可审计紧急通道。',
+    actions: [
+      '先配置独立 emergency secret、pepper 和 Cloudflare Access token。',
+      '在 preview 验证 A/B/C 三个通道与 JTI 防重放。',
+      '再启用 protection、dual control 和 EXTREME preservation。',
+      'Break-glass 未完成演练前保持关闭。',
+    ],
+  },
+  {
+    priority: 'P2',
+    title: '边缘回源与可验证证据',
+    outcome: '代码控制与 Cloudflare 边缘策略形成可以持续验证的闭环。',
+    actions: [
+      '通过 Cloudflare Access、WAF 或等价策略限制敏感入口。',
+      '把边缘规则、Worker 版本和配置状态纳入部署证据。',
+      '建立真实反代、头部伪造、同出口授权和直接 API 自动化 smoke。',
+      '对外页面只发布可公开的结论，不暴露策略密钥和内部日志。',
+    ],
+  },
+]
+
+const sourceSnapshot = '当前工作区实现与仓库声明配置'
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0B0D10" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Nexus 防反代、风险控制、生产配置与整改路线的证据化安全设计。" />
+    <meta property="og:title" content="Tuff Trust Boundary" />
+    <meta property="og:description" content="Nexus 防反代与风控策略的当前状态、证据矩阵和整改路线。" />
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://tuff-reverse-proxy-design.tagzxia.com" />
+    <link rel="canonical" href="https://tuff-reverse-proxy-design.tagzxia.com" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Tuff Trust Boundary | Nexus 反代与风控设计</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到正文</a>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="返回页面顶部">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span class="brand-copy">
+          <strong>TUFF</strong>
+          <small>TRUST BOUNDARY</small>
+        </span>
+      </a>
+
+      <nav class="desktop-nav" aria-label="主要章节">
+        <a href="#verdict">结论</a>
+        <a href="#boundary">边界</a>
+        <a href="#evidence">证据</a>
+        <a href="#production">生产</a>
+        <a class="nav-action" href="#roadmap">整改路线</a>
+      </nav>
+
+      <details class="mobile-nav">
+        <summary>章节</summary>
+        <nav aria-label="移动端章节">
+          <a href="#verdict">结论</a>
+          <a href="#boundary">边界</a>
+          <a href="#evidence">证据</a>
+          <a href="#production">生产</a>
+          <a href="#roadmap">整改路线</a>
+        </nav>
+      </details>
+    </header>
+
+    <main id="main">
+      <section id="top" class="hero shell" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">NEXUS SECURITY DESIGN</p>
+          <h1 id="hero-title">信任边界，<br /><span>不是反代幻觉。</span></h1>
+          <p class="hero-lead">Nexus 已有多层控制，但可信代理边界仍未统一。</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#evidence">查看证据矩阵</a>
+            <a class="button button-secondary" href="#roadmap">进入整改路线</a>
+          </div>
+          <div class="hero-verdict" role="note">
+            <strong>当前判定</strong>
+            <span>规范域名治理已存在。真正的防镜像、可信 IP 与全局风险执行仍未闭环。</span>
+          </div>
+        </div>
+
+        <figure class="boundary-figure" aria-labelledby="boundary-figure-title">
+          <figcaption id="boundary-figure-title">当前请求信任边界</figcaption>
+          <div class="route route-allowed" aria-hidden="true"></div>
+          <div class="route route-partial" aria-hidden="true"></div>
+          <div class="route route-bypass" aria-hidden="true"></div>
+          <div class="boundary-ring boundary-ring-outer" aria-hidden="true"></div>
+          <div class="boundary-ring boundary-ring-middle" aria-hidden="true"></div>
+          <div class="boundary-core">
+            <span>AUTH_ORIGIN</span>
+            <strong>TRUST<br />BOUNDARY</strong>
+            <small>PARTIAL</small>
+          </div>
+          <div class="route-node node-internet"><span>01</span><strong>Internet</strong></div>
+          <div class="route-node node-edge"><span>02</span><strong>CF Edge</strong></div>
+          <div class="route-node node-api"><span>03</span><strong>API</strong></div>
+          <div class="route-node node-data"><span>04</span><strong>D1</strong></div>
+          <div class="bypass-label"><span>GAP</span> client-controlled forwarded headers</div>
+        </figure>
+      </section>
+
+      <section id="verdict" class="verdict-section shell" aria-labelledby="verdict-title">
+        <div class="section-heading compact-heading">
+          <h2 id="verdict-title">一句话结论</h2>
+          <p>Nexus 的策略是分层防护，不是统一风控引擎。</p>
+        </div>
+
+        <div class="verdict-layout">
+          <blockquote>
+            <p>能拦住朴素反代，能约束部分高风险链路，也能记录异常。但代理头、封禁执行和生产开关仍各自为政。</p>
+          </blockquote>
+          <div class="verdict-points">
+            <article>
+              <span class="status-token" data-status="implemented">已实现</span>
+              <h3>域名与身份固定</h3>
+              <p>Canonical Origin、认证回调、Passkey RP ID 和控制面 CORS 已形成第一层来源约束。</p>
+            </article>
+            <article>
+              <span class="status-token" data-status="partial">部分实现</span>
+              <h3>行为风控分散</h3>
+              <p>设备授权、Telemetry 和 Docs 各有自己的判断、限流、挑战或封禁逻辑。</p>
+            </article>
+            <article>
+              <span class="status-token" data-status="gap">关键缺口</span>
+              <h3>可信 IP 未统一</h3>
+              <p>不同模块对 Cloudflare 和转发头的优先级不同，风控身份可能被代理头污染。</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="boundary" class="architecture-section" aria-labelledby="boundary-title">
+        <div class="shell">
+          <div class="section-heading">
+            <h2 id="boundary-title">当前请求路径</h2>
+            <p>每个节点都做了一部分工作，但没有一个全局入口同时拥有可信来源、Ban、限流与挑战决策。</p>
+          </div>
+
+          <ol class="architecture-flow" aria-label="Nexus 当前请求处理路径">
+            <li>
+              <span class="flow-index">01</span>
+              <div><strong>Internet</strong><small>客户端或反代</small></div>
+              <span class="flow-state" data-status="gap">未证明</span>
+            </li>
+            <li>
+              <span class="flow-index">02</span>
+              <div><strong>Cloudflare Edge</strong><small>网络与地理上下文</small></div>
+              <span class="flow-state" data-status="partial">部分使用</span>
+            </li>
+            <li>
+              <span class="flow-index">03</span>
+              <div><strong>Canonical Origin</strong><small>HTML 导航 Host 纠正</small></div>
+              <span class="flow-state" data-status="implemented">有效</span>
+            </li>
+            <li>
+              <span class="flow-index">04</span>
+              <div><strong>Route Controls</strong><small>Auth / Docs / Telemetry / Admin</small></div>
+              <span class="flow-state" data-status="partial">分散</span>
+            </li>
+            <li>
+              <span class="flow-index">05</span>
+              <div><strong>D1 State</strong><small>审计、封禁、模式与历史</small></div>
+              <span class="flow-state" data-status="implemented">持久化</span>
+            </li>
+          </ol>
+
+          <div class="architecture-notes">
+            <article>
+              <h3>边界外</h3>
+              <p>来源 IP、代理链和 Cloudflare 上下文必须先被证明，才能进入风险决策。</p>
+              <code>resolveRequestIp()</code>
+            </article>
+            <article>
+              <h3>边界内</h3>
+              <p>身份、路由类型、设备状态和历史行为共同决定允许、挑战、限流或拒绝。</p>
+              <code>auth + route policy + D1</code>
+            </article>
+            <article>
+              <h3>当前断点</h3>
+              <p>多个模块自行解析 IP、维护风险状态和执行 Ban，没有共享的判定合同。</p>
+              <code>3 stores / multiple parsers</code>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="evidence" class="evidence-section shell" aria-labelledby="evidence-title">
+        <div class="section-heading">
+          <h2 id="evidence-title">证据矩阵</h2>
+          <p>状态来自当前代码与仓库声明配置。点击筛选不会改变结论，只缩小检查范围。</p>
+        </div>
+
+        <div class="evidence-toolbar" aria-label="证据状态筛选">
+          <div class="filter-group" role="group" aria-label="按状态筛选">
+            <button type="button" class="filter-button is-active" data-filter="all" aria-pressed="true">全部 <span>{controls.length}</span></button>
+            {(Object.keys(statusMeta) as ControlStatus[]).map(status => (
+              <button type="button" class="filter-button" data-filter={status} aria-pressed="false">
+                {statusMeta[status].label} <span>{counts[status]}</span>
+              </button>
+            ))}
+          </div>
+          <p id="filter-summary" class="filter-summary" aria-live="polite">显示全部 {controls.length} 项控制</p>
+        </div>
+
+        <div class="evidence-table-wrap">
+          <table class="evidence-table">
+            <caption>当前 Nexus 防反代与风险控制实现状态</caption>
+            <thead>
+              <tr>
+                <th scope="col">控制</th>
+                <th scope="col">范围</th>
+                <th scope="col">状态</th>
+                <th scope="col">实际行为</th>
+                <th scope="col">边界与缺口</th>
+                <th scope="col">源码证据</th>
+              </tr>
+            </thead>
+            <tbody>
+              {controls.map(item => (
+                <tr data-evidence-row data-status={item.status}>
+                  <th scope="row" data-label="控制">{item.control}</th>
+                  <td data-label="范围">{item.scope}</td>
+                  <td data-label="状态"><span class="status-token" data-status={item.status}>{statusMeta[item.status].label}</span></td>
+                  <td data-label="实际行为">{item.behavior}</td>
+                  <td data-label="边界与缺口">{item.boundary}</td>
+                  <td data-label="源码证据"><code>{item.source}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="threats" class="threat-section shell" aria-labelledby="threat-title">
+        <div class="section-heading compact-heading">
+          <h2 id="threat-title">五条真实攻击路径</h2>
+          <p>控制是否有效，取决于攻击者走哪条路径。</p>
+        </div>
+
+        <div class="threat-list">
+          {threatScenarios.map((scenario, index) => (
+            <details class="threat-item" open={index === 1}>
+              <summary>
+                <span class="threat-number">{String(index + 1).padStart(2, '0')}</span>
+                <strong>{scenario.title}</strong>
+                <span class="status-token" data-status={scenario.status}>{statusMeta[scenario.status].label}</span>
+                <span class="summary-action" aria-hidden="true">展开</span>
+              </summary>
+              <div class="threat-content">
+                <ol aria-label={`${scenario.title} 路径`}>
+                  {scenario.path.map(step => <li>{step}</li>)}
+                </ol>
+                <p>{scenario.verdict}</p>
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      <section id="controls" class="control-plane-section" aria-labelledby="controls-title">
+        <div class="shell">
+          <div class="section-heading">
+            <h2 id="controls-title">控制面不是单通道</h2>
+            <p>代码设计了 A、B、C 三条管理员路径。生产是否安全，取决于各通道的开关、密钥、身份和审计是否一起生效。</p>
+          </div>
+
+          <div class="channel-layout">
+            <article class="channel channel-a">
+              <div class="channel-label"><span>A</span><small>SESSION</small></div>
+              <h3>普通管理员</h3>
+              <p>管理员 Session，默认要求 Passkey step-up，再按管理员、IP 与 Actor 三个维度限流。</p>
+              <ul>
+                <li>20 次/分钟/管理员</li>
+                <li>60 次/分钟/IP</li>
+                <li>40 次/分钟/Actor</li>
+              </ul>
+              <code>adminControlPlaneGuard.ts:92-113</code>
+            </article>
+            <article class="channel channel-b">
+              <div class="channel-label"><span>B</span><small>BREAK-GLASS</small></div>
+              <h3>紧急通道</h3>
+              <p>10 分钟 HS256 紧急令牌，限定 Scope，绑定设备指纹，JTI 只能消费一次。</p>
+              <ul>
+                <li>Passkey 或恢复码验证</li>
+                <li>设备指纹绑定</li>
+                <li>一次性 JTI 防重放</li>
+              </ul>
+              <code>adminEmergencyToken.ts:77-141</code>
+            </article>
+            <article class="channel channel-c">
+              <div class="channel-label"><span>C</span><small>OUT-OF-BAND</small></div>
+              <h3>Cloudflare Access</h3>
+              <p>独立 Service Token 使用常量时间比较，可选 mTLS 和证书 SHA-256 指纹白名单。</p>
+              <ul>
+                <li>Access Client ID / Secret</li>
+                <li>可选 mTLS</li>
+                <li>独立 Actor 审计身份</li>
+              </ul>
+              <code>adminOobGuard.ts:89-133</code>
+            </article>
+          </div>
+
+          <div class="dual-control-band">
+            <div>
+              <span class="status-token" data-status="disabled">生产配置关闭</span>
+              <h3>高风险动作本应双人复核</h3>
+            </div>
+            <ul>
+              <li>防御模式降回 NORMAL</li>
+              <li>一次解封超过 50 个 Actor</li>
+              <li>创建永久 IP Ban</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="production" class="production-section shell" aria-labelledby="production-title">
+        <div class="section-heading">
+          <h2 id="production-title">仓库声明的生产姿态</h2>
+          <p>这里展示的是版本库中可验证的配置，不替代 Cloudflare Dashboard 实际环境检查。</p>
+        </div>
+
+        <div class="production-layout">
+          <div class="config-panel" aria-label="生产配置状态">
+            <div class="config-row"><code>ADMIN_BREAKGLASS_ENABLED</code><strong data-status="disabled">false</strong></div>
+            <div class="config-row"><code>ADMIN_CONTROL_PLANE_PROTECTED_ENABLED</code><strong data-status="disabled">false</strong></div>
+            <div class="config-row"><code>ADMIN_DUAL_CONTROL_ENABLED</code><strong data-status="disabled">false</strong></div>
+            <div class="config-row"><code>ADMIN_PRESERVE_IN_EXTREME_ENABLED</code><strong data-status="disabled">false</strong></div>
+            <div class="config-row"><code>ADMIN_OOB_MTLS_ENABLED</code><strong data-status="disabled">false</strong></div>
+            <div class="config-row"><code>ADMIN_DEFAULT_DEFENSE_MODE</code><strong data-status="partial">NORMAL</strong></div>
+            <div class="config-row"><code>NUXT_PUBLIC_RISK_CONTROL_ENABLED</code><strong data-status="gap">未声明</strong></div>
+          </div>
+
+          <aside class="inference-panel">
+            <span class="inference-label">INFERENCE</span>
+            <h3>若构建环境没有额外覆盖</h3>
+            <p>风险控制入口默认不会启用；即使入口被启用，仓库声明的控制面保护、双人复核与 EXTREME 保活仍处于关闭状态。</p>
+            <code>wrangler.toml:23-36</code>
+            <code>apps/nexus/nuxt.config.ts:123-125</code>
+          </aside>
+        </div>
+      </section>
+
+      <section id="roadmap" class="roadmap-section" aria-labelledby="roadmap-title">
+        <div class="shell">
+          <div class="section-heading roadmap-heading">
+            <h2 id="roadmap-title">整改顺序</h2>
+            <p>先修可信输入，再修挑战和执行点，最后启用控制面。顺序反过来会把不可信数据放大成更复杂的策略。</p>
+          </div>
+
+          <div class="roadmap-list">
+            {roadmap.map((item, index) => (
+              <article class="roadmap-item">
+                <div class="roadmap-priority">
+                  <span>{item.priority}</span>
+                  <small>{String(index + 1).padStart(2, '0')}</small>
+                </div>
+                <div class="roadmap-copy">
+                  <h3>{item.title}</h3>
+                  <p>{item.outcome}</p>
+                </div>
+                <ol>
+                  {item.actions.map(action => <li>{action}</li>)}
+                </ol>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="verification-section shell" aria-labelledby="verification-title">
+        <div>
+          <h2 id="verification-title">当前证据边界</h2>
+          <p>已聚焦验证认证 Origin、Turnstile、设备授权风险、紧急令牌、OOB、JTI 防重放和风险动作。7 个测试文件，23 个测试通过。</p>
+        </div>
+        <p>测试证明现有逻辑按设计运行，不证明可信代理边界、生产环境变量或 Cloudflare 边缘策略已经闭环。</p>
+      </section>
+    </main>
+
+    <footer class="site-footer shell">
+      <div>
+        <strong>TUFF TRUST BOUNDARY</strong>
+        <span>{sourceSnapshot}</span>
+      </div>
+      <div class="footer-links">
+        <a href="#top">返回顶部</a>
+        <a href="#evidence">证据矩阵</a>
+        <a href="#roadmap">整改路线</a>
+      </div>
+    </footer>
+
+    <script>
+      const filterButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-filter]'))
+      const evidenceRows = Array.from(document.querySelectorAll<HTMLTableRowElement>('[data-evidence-row]'))
+      const filterSummary = document.querySelector<HTMLElement>('#filter-summary')
+
+      for (const button of filterButtons) {
+        button.addEventListener('click', () => {
+          const filter = button.dataset.filter || 'all'
+          let visibleCount = 0
+
+          for (const item of filterButtons) {
+            const active = item === button
+            item.classList.toggle('is-active', active)
+            item.setAttribute('aria-pressed', active ? 'true' : 'false')
+          }
+
+          for (const row of evidenceRows) {
+            const visible = filter === 'all' || row.dataset.status === filter
+            row.hidden = !visible
+            if (visible)
+              visibleCount += 1
+          }
+
+          if (filterSummary) {
+            const filterLabel = button.childNodes[0]?.textContent?.trim() || '全部'
+            filterSummary.textContent = `显示 ${filterLabel} ${visibleCount} 项控制`
+          }
+        })
+      }
+    </script>
+  </body>
+</html>

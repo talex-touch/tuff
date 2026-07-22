@@ -1,0 +1,9 @@
+name = "tuff-reverse-proxy-design"
+compatibility_date = "2026-07-19"
+
+[assets]
+directory = "./dist"
+
+[[routes]]
+pattern = "tuff-reverse-proxy-design.tagzxia.com"
+custom_domain = true

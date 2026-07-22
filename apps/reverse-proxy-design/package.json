@@ -1,0 +1,21 @@
+{
+  "name": "@talex-touch/reverse-proxy-design",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.4",
+  "scripts": {
+    "dev": "astro dev --host 127.0.0.1 --port 4321",
+    "build": "astro check && astro build",
+    "preview": "astro preview --host 127.0.0.1 --port 4321",
+    "deploy": "pnpm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "astro": "^6.3.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.9",
+    "typescript": "catalog:dev",
+    "wrangler": "catalog:dev"
+  }
+}
