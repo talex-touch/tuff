@@ -84,18 +84,23 @@ const recommendationBadgeIcon = computed(() => {
   transition: 0.125s;
   position: relative;
   min-width: 0;
+  box-sizing: border-box;
 
   --fake-inner-opacity: 0;
-  border: 5px solid #0000;
+  // Keep the border width constant and only recolor it on hover/active. The
+  // previous 5px→1px swap changed the box size on every state change, which
+  // reflows the card (and, under content-box sizing, offsets its row
+  // neighbours — the misaligned recommend cards).
+  border: 1px solid transparent;
 
   &:hover {
     --fake-inner-opacity: 0.5;
-    border: 1px solid var(--tx-border-color);
+    border-color: var(--tx-border-color);
   }
 
   &.is-active {
     --fake-inner-opacity: 0.75;
-    border: 1px solid var(--tx-color-primary);
+    border-color: var(--tx-color-primary);
   }
 
   &.is-pinned .BoxGridItem-Icon::after {

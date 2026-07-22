@@ -72,9 +72,19 @@ function isPinnedSection(section: TuffSection): boolean {
   return section.meta?.pinned === true
 }
 
+// The fixed-width CoreBox fits ~5 result cards per row. Fill the first row
+// left-to-right up to this cap, then wrap — never split early via ceil(n/2).
+const MAX_GRID_COLUMNS = 5
+
 function getSectionColumnCount(sectionData: SectionData): number {
   if (!isIntelligenceSection(sectionData.section)) return gridConfig.value.columns
-  return Math.max(1, Math.ceil(sectionData.items.length / 2))
+  return Math.max(1, Math.min(sectionData.items.length, MAX_GRID_COLUMNS))
+}
+
+/** Intelligence tray shows at most two rows: a full first row, then the rest. */
+function getSectionVisibleItems(sectionData: SectionData): TuffItem[] {
+  if (!isIntelligenceSection(sectionData.section)) return sectionData.items
+  return sectionData.items.slice(0, getSectionColumnCount(sectionData) * 2)
 }
 </script>
 
@@ -103,7 +113,7 @@ function getSectionColumnCount(sectionData: SectionData): number {
           :class="`size-${gridConfig.itemSize}`"
         >
           <BoxGridItem
-            v-for="(item, localIndex) in sectionData.items"
+            v-for="(item, localIndex) in getSectionVisibleItems(sectionData)"
             :key="item.id"
             :item="item"
             :active="focus === sectionData.startIndex + localIndex"
@@ -225,6 +235,7 @@ function getSectionColumnCount(sectionData: SectionData): number {
   display: grid;
   // Use minmax to prevent items from stretching when fewer than columns
   grid-template-columns: repeat(var(--grid-cols), minmax(0, 108px));
+  // Left-align: items fill from the left edge, row by row.
   justify-content: start;
   gap: var(--grid-gap);
   overflow-x: hidden;
