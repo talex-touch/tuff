@@ -899,3 +899,36 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: Enable macOS signing and notarization
+
+**Date**: 2026-07-21
+**Task**: Enable macOS signing and notarization
+**Branch**: `master`
+
+### Summary
+
+Configured Developer ID and App Store Connect notarization for local and CI builds, retired CI waiver mode, fixed packaged workspace symlinks, and verified a notarized beta artifact.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ebf6330c19156da6e9d815fc0e116513f9e2bd1c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
