@@ -816,7 +816,17 @@ function copyModuleToResources(resourcesDir, moduleEntry, options = {}) {
 
   fs.mkdirSync(path.dirname(targetDir), { recursive: true })
   fs.rmSync(targetDir, { recursive: true, force: true })
-  fs.cpSync(normalizedEntry.sourceDir, targetDir, { recursive: true, dereference: true })
+  const excludeWorkspaceNodeModules = isWorkspaceModule(normalizedEntry.name)
+  fs.cpSync(normalizedEntry.sourceDir, targetDir, {
+    recursive: true,
+    dereference: true,
+    filter(sourcePath) {
+      if (!excludeWorkspaceNodeModules) return true
+
+      const relativePath = path.relative(normalizedEntry.sourceDir, sourcePath)
+      return relativePath !== 'node_modules' && !relativePath.startsWith(`node_modules${path.sep}`)
+    }
+  })
 }
 
 function syncPackagedResourceModules(searchRoot, options = {}) {

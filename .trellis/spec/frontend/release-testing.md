@@ -169,88 +169,101 @@ pnpm -C "apps/core-app" run visible:experience:indexing-diagnostics-probe -- \
   --outputDir "<task-evidence-dir>" --seedRecentTaskEvidence
 ```
 
-## Scenario: Deferred Apple Developer Signing
+## Scenario: Mandatory Apple Developer Signing and Notarization
 
 ### 1. Scope / Trigger
 
-- Trigger: every macOS release build until the repository owner explicitly states that Apple Developer signing and notarization credentials are configured.
-- This is a deliberate product-risk waiver, not evidence that ad-hoc signing passes Gatekeeper. Detached release signatures remain mandatory on every platform.
+- Trigger: every macOS beta, snapshot, and release distribution build, locally and in GitHub Actions.
+- The repository owner configured Developer ID and App Store Connect API-key notarization on 2026-07-21. The former `waived` publication mode is retired; a missing credential is now a release failure.
 
 ### 2. Signatures
 
 ```text
-TUFF_MAC_NATIVE_SIGNING_MODE := "waived" | "developer-id"
-verify-macos-release-signing.mjs --mode <mode> --app-bundle <path> --output <json>
+LocalNotarizationProfile := APPLE_KEYCHAIN_PROFILE ?? "tuff-notarization"
+TUFF_OFFICIAL_RELEASE_BUILD := "true" | "false"
+MacSigningMode := "developer-id"
 
-MacSigningEvidence := {
-  mode: "waived" | "developer-id",
-  status: "waived" | "pass" | "fail",
-  policyReason: "apple-developer-not-configured" | null,
-  signingKind: "developer-id" | "ad-hoc-or-missing",
-  teamIdentifier: string | null,
-  checks: { codesign: boolean, gatekeeper: boolean, notarization: boolean }
+RequiredGitHubSecrets := {
+  CSC_LINK,
+  CSC_KEY_PASSWORD,
+  APPLE_API_KEY_CONTENT,
+  APPLE_API_KEY_ID,
+  APPLE_API_ISSUER
 }
 
-ReleaseTestSummary.checks.macosNativeTrust := true | "waived"
+verify-macos-release-signing.mjs \
+  --mode developer-id \
+  --app-bundle <path.app> \
+  --output <json>
 ```
 
 ### 3. Contracts
 
-- No `CSC_*` and no Apple notarization secrets -> select `waived`, set `TUFF_OFFICIAL_RELEASE_BUILD=false`, retain ad-hoc postprocess, and publish explicit waived evidence.
-- Complete `CSC_LINK` / `CSC_KEY_PASSWORD` plus one complete notarization credential set -> select `developer-id`, set `TUFF_OFFICIAL_RELEASE_BUILD=true`, and enforce electron-builder signing/notarization.
-- Partial certificate or partial notarization configuration -> fail before build. Never hide misconfiguration behind the waiver.
-- `waived` evidence may let the release summary pass only when manifest, SHA-256, and every detached `.sig` pass. The summary and release asset must visibly retain `policyReason: apple-developer-not-configured` and `macosNativeTrust: waived`.
-- The waiver stays active until the owner explicitly announces Apple Developer setup; agents must not repeatedly request purchase/configuration before then.
+- On a Darwin host, `build:beta:mac`, `build:snapshot:mac`, and `build:release:mac` default to `TUFF_OFFICIAL_RELEASE_BUILD=true`; an explicit `false` is only a local non-distribution diagnostic escape hatch. `build:unpack` remains outside this distribution contract.
+- Local builds use the Developer ID identity in the login keychain. When no explicit Apple API/Apple ID/profile environment is present, the build passes `APPLE_KEYCHAIN_PROFILE=tuff-notarization` to Electron Builder.
+- CI requires a password-protected PKCS#12 plus the complete App Store Connect Team API-key set. All absent, any partial group, or an Apple-ID-only configuration fails before packaging; CI never publishes `waived` native-trust evidence.
+- `TUFF_OFFICIAL_RELEASE_BUILD=true` must reach both Electron Builder and macOS postprocess. Postprocess verifies the existing Developer ID signature and must never replace it with ad-hoc signing.
+- Workspace modules copied into packaged `Resources/node_modules` must exclude their source `node_modules` directory. The resource dependency closure copies runtime dependencies at the package root; absolute pnpm workspace symlinks are forbidden inside the app bundle.
+- Electron Builder performs Developer ID signing, hardened runtime, notarization, and stapling. The metadata-preserving ZIP is created only after Developer ID verification.
+- Upload is gated by deep strict codesign, TeamIdentifier, Gatekeeper source, and stapler validation. A host with Gatekeeper globally disabled may prove Developer ID and stapling, but its `spctl override=security disabled` result remains blocked evidence rather than a Gatekeeper pass.
 
 ### 4. Validation & Error Matrix
 
-| Condition                                             | Result                                          |
-| ----------------------------------------------------- | ----------------------------------------------- |
-| All Apple/CSC secrets absent                          | `waived`; build and release may continue        |
-| Only one of `CSC_LINK` / `CSC_KEY_PASSWORD` present   | `fail`; partial certificate configuration       |
-| Certificate complete, notarization absent             | `fail`; incomplete `developer-id` configuration |
-| Notarization fields partially populated               | `fail`; partial notarization configuration      |
-| `developer-id` checks all pass                        | `pass`; `macosNativeTrust: true`                |
-| Any `developer-id` check fails                        | `fail`; release blocked                         |
-| `waived` evidence has the wrong/missing policy reason | `fail`; malformed waiver evidence               |
-| Detached signature fails in either mode               | `fail`; Apple waiver does not apply             |
+| Condition                                                       | Result                                             |
+| --------------------------------------------------------------- | -------------------------------------------------- |
+| Local Developer ID identity + valid `tuff-notarization` profile | Sign, notarize, staple, then archive               |
+| Local profile missing/invalid                                   | Electron Builder fails; no distributable ZIP claim |
+| CI PKCS#12 or API-key group absent/partial                      | Fail in signing-mode preflight                     |
+| CI resolves Apple ID instead of API key                         | Fail; Team API key is required                     |
+| Workspace resource contains an absolute/out-of-bundle symlink   | Fail codesign/package gate                         |
+| Electron Builder notarizes, then postprocess ad-hoc re-signs    | Fail Developer ID / stapler checks                 |
+| Developer ID, timestamp, TeamIdentifier, and staple pass        | Native trust passes                                |
+| `spctl` reports `override=security disabled`                    | Blocked Gatekeeper evidence; never relabel as pass |
 
 ### 5. Good / Base / Bad Cases
 
-- **Good:** Apple credentials are complete, Developer ID/TeamIdentifier/Gatekeeper/notarization pass, and detached signatures pass.
-- **Base:** all Apple credentials are absent, evidence is explicitly `waived`, detached signatures pass, and the release summary preserves the accepted risk.
-- **Bad:** label ad-hoc signing as trusted, silently downgrade partially configured credentials, or waive detached signatures because Apple Developer is unavailable.
+- **Good:** complete credentials select `developer-id`; the built and ZIP-extracted app retain Team ID, hardened runtime, secure timestamp, and a stapled ticket; no bundle symlink escapes the app.
+- **Base:** local diagnostic build explicitly sets `TUFF_OFFICIAL_RELEASE_BUILD=false`; it may be ad-hoc but is not uploaded, published, or described as trusted.
+- **Bad:** treat `.cer` or CSR as containing a private key, publish when Secrets are absent, copy workspace `node_modules` symlinks into Resources, or re-sign a notarized app ad-hoc during postprocess.
 
 ### 6. Tests Required
 
-- Credential-mode resolver: all absent -> `waived`; complete certificate + either complete notarization set -> `developer-id`; every partial combination -> error.
-- macOS verifier: unsigned/ad-hoc fixture + `waived` -> status `waived`; same fixture + `developer-id` -> non-zero and status `fail`.
-- Release summary: valid waived evidence -> overall pass with `macosNativeTrust: "waived"`; wrong reason or failed detached signature -> non-zero fail summary.
-- Workflow YAML parse plus a focused assertion that only `developer-id` exports `TUFF_OFFICIAL_RELEASE_BUILD=true`.
+- Credential preflight: complete PKCS#12 + Team API key -> `developer-id`; absent/partial/Apple-ID-only CI configurations -> non-zero.
+- Runtime resource projection: copied workspace package omits nested `node_modules`; its declared runtime dependency remains in the root resource closure; no absolute/out-of-bundle symlink survives packaging.
+- Local distribution smoke: `pnpm build:beta:mac` logs signing/notarization, postprocess runs in `official` mode, and the command succeeds.
+- Artifact verification: run deep strict codesign, inspect Authority/TeamIdentifier/Timestamp/runtime, run stapler validation and `spctl`, then repeat codesign/stapler against an extracted distribution ZIP.
+- Workflow validation: actionlint passes and only complete API-key credentials can export `TUFF_OFFICIAL_RELEASE_BUILD=true`.
 
 ### 7. Wrong vs Correct
 
 #### Wrong
 
-```bash
-# Missing Apple credentials block every beta forever, or are mislabeled as trusted.
-test -n "$CSC_LINK" || exit 1
-echo 'macosNativeTrust=true'
+```js
+// A local variable enables Builder signing, but postprocess still reads an unset env flag
+// and replaces the notarized signature with ad-hoc signing.
+const officialMacBuild = true;
+postProcessMacArtifacts(distDir, version, arch);
+
+// Copying a pnpm workspace package also copies absolute node_modules symlinks.
+fs.cpSync(sourceDir, targetDir, { recursive: true, dereference: true });
 ```
 
 #### Correct
 
-```bash
-# Absence is an explicit accepted-risk mode; partial setup is still an error.
-if no_apple_credentials; then
-  export TUFF_MAC_NATIVE_SIGNING_MODE=waived
-  export TUFF_OFFICIAL_RELEASE_BUILD=false
-elif complete_developer_id_credentials; then
-  export TUFF_MAC_NATIVE_SIGNING_MODE=developer-id
-  export TUFF_OFFICIAL_RELEASE_BUILD=true
-else
-  exit 1
-fi
+```js
+process.env.TUFF_OFFICIAL_RELEASE_BUILD = "true";
+
+fs.cpSync(sourceDir, targetDir, {
+  recursive: true,
+  dereference: true,
+  filter(sourcePath) {
+    const relativePath = path.relative(sourceDir, sourcePath);
+    return (
+      relativePath !== "node_modules" &&
+      !relativePath.startsWith(`node_modules${path.sep}`)
+    );
+  },
+});
 ```
 
 ## Scenario: Runtime OTA Provider and Integrity Boundary
