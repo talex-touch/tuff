@@ -88,6 +88,7 @@ import type {
   ClipboardReadImageResponse,
   ClipboardReadResponse,
   ClipboardSetFavoriteRequest,
+  ClipboardStatus,
   ClipboardWriteRequest,
 } from "./types/clipboard";
 
@@ -3147,6 +3148,15 @@ export const ClipboardEvents = {
     .module("action")
     .event("copy-and-paste")
     .define<ClipboardCopyAndPasteRequest, ClipboardActionResult>(),
+
+  /**
+   * Query clipboard capture-engine status (native watch vs polling fallback).
+   * Diagnostic only — exposes engine health, never clipboard content.
+   */
+  getStatus: defineEvent("clipboard")
+    .module("monitor")
+    .event("status")
+    .define<void, ClipboardStatus>(),
 } as const;
 
 // ============================================================================

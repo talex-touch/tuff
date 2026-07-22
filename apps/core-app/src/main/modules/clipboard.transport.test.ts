@@ -449,6 +449,7 @@ describe('ClipboardModule transport registration', () => {
       ClipboardEvents.read.toString(),
       ClipboardEvents.readImage.toString(),
       ClipboardEvents.readFiles.toString(),
+      ClipboardEvents.getStatus.toString(),
       ClipboardEvents.change.toString()
     ])
     expect(ClipboardEvents.queryMeta.toString()).toBe('clipboard:history:query-meta')
@@ -514,12 +515,12 @@ describe('ClipboardModule startup tasks', () => {
     const nativeStart = vi.fn(async () => undefined)
     const module = new ClipboardModule() as unknown as {
       clipboardHelper: { bootstrap: ReturnType<typeof vi.fn> } | null
-      nativeWatcher: { start: typeof nativeStart }
+      clipboardService: { start: typeof nativeStart }
       startClipboardMonitoring: () => void
     }
 
     module.clipboardHelper = { bootstrap: vi.fn() }
-    module.nativeWatcher.start = nativeStart
+    module.clipboardService.start = nativeStart
 
     module.startClipboardMonitoring()
 
@@ -541,7 +542,7 @@ describe('ClipboardModule startup tasks', () => {
     const runClipboardMonitor = vi.fn(async () => undefined)
     const module = new ClipboardModule() as unknown as {
       clipboardHelper: { bootstrap: ReturnType<typeof vi.fn> } | null
-      nativeWatcher: { start: typeof nativeStart }
+      clipboardService: { start: typeof nativeStart }
       startClipboardMonitoring: () => void
       runClipboardMonitor: typeof runClipboardMonitor
       coreBoxVisible: boolean
@@ -549,7 +550,7 @@ describe('ClipboardModule startup tasks', () => {
 
     clipboardRuntimeMocks.coreBoxWindowVisible = true
     module.clipboardHelper = { bootstrap: vi.fn() }
-    module.nativeWatcher.start = nativeStart
+    module.clipboardService.start = nativeStart
     module.runClipboardMonitor = runClipboardMonitor
 
     module.startClipboardMonitoring()
