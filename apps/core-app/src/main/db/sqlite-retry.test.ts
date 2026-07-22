@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DbWriteScheduler } from './db-write-scheduler'
 import {
   getSqliteBusyRetryCount,
+  isSqliteCorruptionError,
   setSqliteRetryExhaustedListener,
   withSqliteRetry
 } from './sqlite-retry'
@@ -82,5 +83,46 @@ describe('SQLite retry exhaustion observer', () => {
       attempts: 1,
       code: 'SQLITE_BUSY'
     })
+  })
+})
+
+describe('isSqliteCorruptionError', () => {
+  it('detects SQLITE_CORRUPT by code', () => {
+    expect(
+      isSqliteCorruptionError(
+        Object.assign(new Error('database disk image is malformed'), {
+          code: 'SQLITE_CORRUPT',
+          rawCode: 11
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('detects extended corruption codes by rawCode (% 256 === 11)', () => {
+    // SQLITE_CORRUPT_INDEX = 779
+    expect(isSqliteCorruptionError(Object.assign(new Error('x'), { rawCode: 779 }))).toBe(true)
+  })
+
+  it('detects SQLITE_NOTADB (unreadable header)', () => {
+    expect(
+      isSqliteCorruptionError(Object.assign(new Error('file is not a database'), { rawCode: 26 }))
+    ).toBe(true)
+  })
+
+  it('detects corruption message without a code', () => {
+    expect(isSqliteCorruptionError(new Error('database disk image is malformed'))).toBe(true)
+  })
+
+  it('unwraps nested cause chains', () => {
+    const inner = Object.assign(new Error('malformed'), { code: 'SQLITE_CORRUPT' })
+    expect(isSqliteCorruptionError(new Error('wrapper', { cause: inner }))).toBe(true)
+  })
+
+  it('does not flag SQLITE_BUSY or generic errors as corruption', () => {
+    expect(
+      isSqliteCorruptionError(Object.assign(new Error('locked'), { code: 'SQLITE_BUSY' }))
+    ).toBe(false)
+    expect(isSqliteCorruptionError(new Error('some unrelated failure'))).toBe(false)
+    expect(isSqliteCorruptionError(null)).toBe(false)
   })
 })

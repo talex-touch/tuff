@@ -41,6 +41,9 @@ const DEFAULT_COMMIT_RESPONSE_TIMEOUT_MS = 60_000
 const DEFAULT_OUTCOME_LOOKUP_TIMEOUT_MS = 5_000
 const DEFAULT_OUTCOME_LOOKUP_ATTEMPTS = 2
 const DEFAULT_TERMINATION_TIMEOUT_MS = 1_000
+// Bound the wait for the worker to checkpoint + close its DB before we hard
+// terminate it. Always falls through to terminate() so teardown can't hang.
+const GRACEFUL_CLOSE_TIMEOUT_MS = 2_000
 
 function resolveTaskOperation(taskId: string): string {
   const separator = taskId.indexOf('-')
@@ -147,7 +150,9 @@ export class SearchIndexWorkerClient {
       this.replacementSessions.size === 0 &&
       this.activeCommitOperations === 0,
     shutdown: () => {
-      void this.beginWorkerTermination({ keepInitState: true }).catch(() => undefined)
+      void this.requestWorkerGracefulClose()
+        .then(() => this.beginWorkerTermination({ keepInitState: true }))
+        .catch(() => undefined)
     }
   })
 
@@ -535,6 +540,7 @@ export class SearchIndexWorkerClient {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true
+    await this.requestWorkerGracefulClose()
     const termination = this.beginWorkerTermination({ keepInitState: false })
     this.rejectPendingTasks(new Error('SEARCH_INDEX_WRITER_CLOSED'))
     this.resolvePendingMetrics()
@@ -848,6 +854,48 @@ export class SearchIndexWorkerClient {
     }
 
     this.idleShutdown.schedule()
+  }
+
+  /**
+   * Ask the worker to checkpoint + close its DB connection before we terminate
+   * the thread, so the shared database.db is never left mid-write (the confirmed
+   * corruption trigger). The request is queued behind any in-flight write in the
+   * worker. Always resolves within GRACEFUL_CLOSE_TIMEOUT_MS — a slow or already
+   * dead worker just falls through to the hard terminate() that follows. Uses a
+   * dedicated listener so it never disturbs the pending-task map.
+   */
+  private requestWorkerGracefulClose(): Promise<void> {
+    const worker = this.worker
+    if (!worker) return Promise.resolve()
+
+    return new Promise<void>((resolve) => {
+      const taskId = this.generateTaskId('shutdown')
+      let settled = false
+      const finish = (): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        worker.off('message', onMessage)
+        resolve()
+      }
+      const onMessage = (message: unknown): void => {
+        if (
+          message &&
+          typeof message === 'object' &&
+          (message as { taskId?: unknown }).taskId === taskId
+        ) {
+          finish()
+        }
+      }
+      const timer = setTimeout(finish, GRACEFUL_CLOSE_TIMEOUT_MS)
+      timer.unref?.()
+      worker.on('message', onMessage)
+      try {
+        worker.postMessage({ type: 'shutdown', taskId })
+      } catch {
+        finish()
+      }
+    })
   }
 
   private beginWorkerTermination(options: { keepInitState: boolean }): Promise<void> {

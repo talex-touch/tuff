@@ -22,8 +22,26 @@ const workerMock = vi.hoisted(() => {
       return this
     }
 
+    off(event: string, handler: Handler): this {
+      const handlers = this.handlers.get(event) ?? []
+      const index = handlers.indexOf(handler)
+      if (index >= 0) handlers.splice(index, 1)
+      this.handlers.set(event, handlers)
+      return this
+    }
+
     postMessage(message: unknown): void {
       this.messages.push(message)
+      // Model the real worker acking a graceful-shutdown request so teardown
+      // resolves promptly instead of waiting for the timeout fallback.
+      if (
+        message &&
+        typeof message === 'object' &&
+        (message as { type?: unknown }).type === 'shutdown'
+      ) {
+        const taskId = (message as { taskId?: unknown }).taskId
+        queueMicrotask(() => this.emit('message', { type: 'result', taskId }))
+      }
     }
 
     emit(event: string, payload: unknown): void {
@@ -257,7 +275,12 @@ describe('SearchIndexWorkerClient init gate', () => {
       )
     ).rejects.toThrow('SEARCH_INDEX_WORKER_TERMINATION_UNCONFIRMED:pending')
     expect(workerMock.workers).toHaveLength(1)
-    expect(retiringWorker.messages).toHaveLength(1)
+    // The retiring worker only received init + the graceful-close request — the
+    // pending write was rejected, never dispatched to it.
+    expect(retiringWorker.messages.map((message) => (message as { type: string }).type)).toEqual([
+      'init',
+      'shutdown'
+    ])
 
     termination.resolve(0)
     await vi.advanceTimersByTimeAsync(0)
@@ -400,6 +423,23 @@ describe('SearchIndexWorkerClient init gate', () => {
     await expect(pendingWrite).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
     await expect(drain).resolves.toBeUndefined()
     expect(client.hasPendingWork()).toBe(false)
+  })
+
+  it('gracefully closes the worker DB before terminating on shutdown', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    await client.shutdown()
+
+    // The worker must be asked to checkpoint + close its DB connection (the
+    // 'shutdown' message) before the thread is hard-terminated, so the shared
+    // database.db is never left mid-write.
+    const messageTypes = worker.messages.map((message) => (message as { type: string }).type)
+    expect(messageTypes).toContain('shutdown')
+    expect(worker.terminateCalls).toBe(1)
   })
 
   it('dispatches provider-scoped item removal and returns removed count', async () => {
