@@ -346,13 +346,23 @@ export class DatabaseModule extends BaseModule {
 
     await this.quarantineCorruptDatabaseFiles(dbPath)
 
+    // Assign the fresh handle BEFORE configuring it. A configuration failure
+    // (e.g. WAL unsupported on the filesystem) must never leave this.client
+    // pointing at the closed corrupt handle — migrations still run on the fresh,
+    // empty database, just without the optimal pragmas.
     const freshClient = createClient({ url: `file:${dbPath}` })
-    await this.configureSqliteClient(freshClient, label)
     if (label === 'primary') {
       this.client = freshClient
       this.db = drizzle(freshClient, { schema })
     } else {
       this.auxClient = freshClient
+    }
+    try {
+      await this.configureSqliteClient(freshClient, label)
+    } catch (error) {
+      dbLog.warn(`Failed to configure rebuilt ${label} database; continuing with defaults`, {
+        error
+      })
     }
     dbLog.warn(`Rebuilt empty ${label} database after corruption`, { meta: { dbPath } })
     return true
