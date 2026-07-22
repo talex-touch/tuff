@@ -150,9 +150,11 @@ export class SearchIndexWorkerClient {
       this.replacementSessions.size === 0 &&
       this.activeCommitOperations === 0,
     shutdown: () => {
-      void this.requestWorkerGracefulClose()
-        .then(() => this.beginWorkerTermination({ keepInitState: true }))
-        .catch(() => undefined)
+      // Graceful path detaches this.worker synchronously, so a write during idle
+      // teardown re-inits a fresh worker instead of failing on the closing one.
+      void this.beginWorkerTermination({ keepInitState: true, graceful: true }).catch(
+        () => undefined
+      )
     }
   })
 
@@ -540,7 +542,10 @@ export class SearchIndexWorkerClient {
 
   async shutdown(): Promise<void> {
     this.shuttingDown = true
-    await this.requestWorkerGracefulClose()
+    // shuttingDown blocks new work, so there is no race — close gracefully first,
+    // then terminate under the normal (short) termination deadline.
+    const worker = this.worker
+    if (worker) await this.requestWorkerGracefulClose(worker)
     const termination = this.beginWorkerTermination({ keepInitState: false })
     this.rejectPendingTasks(new Error('SEARCH_INDEX_WRITER_CLOSED'))
     this.resolvePendingMetrics()
@@ -864,10 +869,7 @@ export class SearchIndexWorkerClient {
    * dead worker just falls through to the hard terminate() that follows. Uses a
    * dedicated listener so it never disturbs the pending-task map.
    */
-  private requestWorkerGracefulClose(): Promise<void> {
-    const worker = this.worker
-    if (!worker) return Promise.resolve()
-
+  private requestWorkerGracefulClose(worker: Worker): Promise<void> {
     return new Promise<void>((resolve) => {
       const taskId = this.generateTaskId('shutdown')
       let settled = false
@@ -898,7 +900,10 @@ export class SearchIndexWorkerClient {
     })
   }
 
-  private beginWorkerTermination(options: { keepInitState: boolean }): Promise<void> {
+  private beginWorkerTermination(options: {
+    keepInitState: boolean
+    graceful?: boolean
+  }): Promise<void> {
     this.idleShutdown.cancel()
     if (!options.keepInitState) this.dbPath = null
     if (this.terminationFailure) return Promise.reject(this.terminationFailure)
@@ -911,7 +916,12 @@ export class SearchIndexWorkerClient {
     this.initPromise = null
     if (!worker) return Promise.resolve()
 
+    // Detaching this.worker/initPromise above is synchronous, so a write arriving
+    // during a graceful close spins a FRESH worker instead of hitting the one
+    // being torn down (which would reject with "Worker not initialized"). The
+    // captured `worker` is checkpointed + closed, then terminated.
     const termination = Promise.resolve()
+      .then(() => (options.graceful ? this.requestWorkerGracefulClose(worker) : undefined))
       .then(() => worker.terminate())
       .then(() => undefined)
     this.terminationBarrier = termination

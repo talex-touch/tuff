@@ -69,6 +69,8 @@ export class DatabaseModule extends BaseModule {
   private auxInitialized = false
   private mainDbPath = ''
   private auxDbPath = ''
+  private dbRunningMarkerPath = ''
+  private probeDbIntegrity = false
   private walMaintenanceRegistered = false
   private backgroundStartupPromise: Promise<void> | null = null
   private destroying = false
@@ -243,9 +245,19 @@ export class DatabaseModule extends BaseModule {
     try {
       const result = await client.execute('PRAGMA quick_check(1)')
       const row = result.rows?.[0] as Record<string, unknown> | undefined
-      const verdict = row ? String(row.quick_check ?? row[0] ?? '').trim() : ''
-      // A healthy database returns a single 'ok' row.
-      return verdict.toLowerCase() !== 'ok'
+      const verdict = row
+        ? String(row.quick_check ?? row[0] ?? '')
+            .trim()
+            .toLowerCase()
+        : ''
+      // A healthy database returns a single 'ok' row. If we can't read a verdict
+      // at all (empty/unexpected result), default to NOT corrupt — never destroy
+      // a database we merely failed to probe (mirrors the non-corruption catch).
+      if (!verdict) {
+        dbLog.warn('Database integrity probe returned no verdict; treating as healthy')
+        return false
+      }
+      return verdict !== 'ok'
     } catch (error) {
       if (isSqliteCorruptionError(error)) return true
       dbLog.warn('Database integrity probe failed (non-corruption)', { error })
@@ -300,10 +312,16 @@ export class DatabaseModule extends BaseModule {
    */
   private async ensureDatabaseIntegrity(
     dbPath: string,
-    label: 'primary' | 'aux'
+    label: 'primary' | 'aux',
+    shouldProbe: boolean
   ): Promise<boolean> {
     const client = label === 'primary' ? this.client : this.auxClient
     if (!client) return false
+
+    // `quick_check` reads every page of the file, so only probe when the previous
+    // run did not shut down cleanly (a crash/kill mid-write is what leaves real
+    // corruption). A clean prior shutdown skips the full-file scan on boot.
+    if (!shouldProbe) return false
 
     if (!(await this.detectDatabaseCorruption(client))) return false
 
@@ -857,7 +875,7 @@ export class DatabaseModule extends BaseModule {
       this.auxDbPath = path.join(databaseDirPath, 'database-aux.db')
       this.auxClient = createClient({ url: `file:${this.auxDbPath}` })
       await this.configureSqliteClient(this.auxClient, 'aux')
-      await this.ensureDatabaseIntegrity(this.auxDbPath, 'aux')
+      await this.ensureDatabaseIntegrity(this.auxDbPath, 'aux', this.probeDbIntegrity)
       const auxDb = drizzle(this.auxClient, { schema })
       await this.ensureAuxTables()
       await this.migrateHotTablesToAux()
@@ -930,6 +948,17 @@ export class DatabaseModule extends BaseModule {
     })
     const dbPath = path.join(dirPath!, 'database.db')
     this.mainDbPath = dbPath
+    // Unclean-shutdown marker: present on boot means the previous run crashed or
+    // was killed without a clean onDestroy — the only case that can leave real
+    // corruption — so we probe (quick_check) only then. Written now (in use),
+    // removed on clean shutdown.
+    this.dbRunningMarkerPath = `${dbPath}.running`
+    this.probeDbIntegrity = fse.existsSync(this.dbRunningMarkerPath)
+    try {
+      await fs.writeFile(this.dbRunningMarkerPath, String(Date.now()))
+    } catch (error) {
+      dbLog.warn('Failed to write database running marker', { error })
+    }
     this.client = createClient({ url: `file:${dbPath}` })
 
     this.db = drizzle(this.client, { schema })
@@ -941,10 +970,11 @@ export class DatabaseModule extends BaseModule {
       dbLog.warn('Failed to configure SQLite pragmas', { error })
     }
 
-    // Detect on-disk corruption and rebuild before migrations run. Safe here
-    // because no other connection (incl. the search-index worker) is open yet.
+    // Detect on-disk corruption and rebuild before migrations run — only after an
+    // unclean prior shutdown (see probeDbIntegrity). Safe here because no other
+    // connection (incl. the search-index worker) is open yet.
     try {
-      await this.ensureDatabaseIntegrity(dbPath, 'primary')
+      await this.ensureDatabaseIntegrity(dbPath, 'primary', this.probeDbIntegrity)
     } catch (error) {
       dbLog.error('Database integrity recovery failed', { error })
     }
@@ -1286,6 +1316,16 @@ export class DatabaseModule extends BaseModule {
     }
     this.client?.close()
     this.auxClient?.close()
+    // Clean shutdown reached: remove the running marker so the next boot skips
+    // the full-file quick_check. (If we crash before here, the marker persists
+    // and the next boot probes for corruption.)
+    if (this.dbRunningMarkerPath) {
+      try {
+        await fs.rm(this.dbRunningMarkerPath, { force: true })
+      } catch (error) {
+        dbLog.warn('Failed to clear database running marker', { error })
+      }
+    }
     this.db = null
     this.auxDb = null
     this.auxInitialized = false
