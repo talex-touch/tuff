@@ -75,7 +75,11 @@ vi.mock('../storage', () => ({
 import * as fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { PermissionChecker, PermissionStatus, PermissionType } from './permission-checker'
+import {
+  PermissionStatus,
+  PermissionType,
+  PlatformPermissionService
+} from './platform-permission-service'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const originalDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -132,12 +136,45 @@ function createMacFileAccessFixture() {
   }
 }
 
-describe('permission-checker', () => {
+describe('platform-permission-service', () => {
+  it('defers macOS TCC folders silently instead of probing when access is undetermined', () => {
+    // A real home-scoped TCC path (Documents) with no onboarding grant recorded.
+    const tccPath = path.join(os.homedir(), 'Documents')
+    getMainConfigMock.mockReturnValue({})
+    const opendirSpy = vi.spyOn(fs, 'opendirSync')
+
+    const status = withPlatform('darwin', () =>
+      PlatformPermissionService.getInstance().probeFileAccessStatus(tccPath)
+    )
+
+    // No dialog-triggering enumeration is performed for an undetermined TCC folder.
+    expect(opendirSpy).not.toHaveBeenCalled()
+    expect(status).toBe(PermissionStatus.NOT_DETERMINED)
+    opendirSpy.mockRestore()
+  })
+
+  it('reports DENIED when a directory probe hits an EPERM (TCC block)', () => {
+    // A non-TCC path so the determination gate never applies and we always probe.
+    const blockedPath = path.join(os.tmpdir(), 'tuff-blocked-probe')
+    const opendirSpy = vi.spyOn(fs, 'opendirSync').mockImplementationOnce(() => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+    })
+
+    const result = withPlatform('darwin', () =>
+      PlatformPermissionService.getInstance().checkFileAccess(blockedPath, { allowPrompt: true })
+    )
+
+    expect(opendirSpy).toHaveBeenCalledWith(blockedPath)
+    expect(result.status).toBe(PermissionStatus.DENIED)
+    expect(result.canRequest).toBe(true)
+    opendirSpy.mockRestore()
+  })
+
   it('lists macOS default and custom file access roots without probing silently', () => {
     const { pathMap, extraPath } = createMacFileAccessFixture()
 
     const result = withPlatform('darwin', () =>
-      PermissionChecker.getInstance().checkFileAccessRoots()
+      PlatformPermissionService.getInstance().checkFileAccessRoots()
     )
 
     expect(result.map((root) => root.path)).toEqual([
@@ -150,7 +187,14 @@ describe('permission-checker', () => {
       '/Applications',
       extraPath
     ])
-    expect(result.filter((root) => root.required)).toHaveLength(7)
+    // Only TCC-gated folders (Documents/Downloads/Desktop) + user extras are required.
+    expect(result.filter((root) => root.required).map((root) => root.path)).toEqual([
+      pathMap.documents,
+      pathMap.downloads,
+      pathMap.desktop,
+      extraPath
+    ])
+    expect(result.find((root) => root.path === pathMap.music)?.required).toBe(false)
     expect(result.every((root) => root.status === PermissionStatus.NOT_DETERMINED)).toBe(true)
     expect(accessSyncMock).not.toHaveBeenCalled()
   })
@@ -159,7 +203,7 @@ describe('permission-checker', () => {
     const { pathMap, extraPath } = createMacFileAccessFixture()
 
     const result = await withPlatform('darwin', () =>
-      PermissionChecker.getInstance().requestFileAccessRoots()
+      PlatformPermissionService.getInstance().requestFileAccessRoots()
     )
 
     expect(result.map((root) => root.path)).toEqual([
@@ -195,7 +239,7 @@ describe('permission-checker', () => {
     getMainConfigMock.mockReturnValue({ extraPaths: [extraPath] })
 
     const result = withPlatform('linux', () =>
-      PermissionChecker.getInstance().checkFileAccessRoots()
+      PlatformPermissionService.getInstance().checkFileAccessRoots()
     )
 
     expect(result).toEqual([
@@ -210,7 +254,7 @@ describe('permission-checker', () => {
     execFileSyncMock.mockReturnValue('True\n')
 
     const result = withPlatform('win32', () =>
-      PermissionChecker.getInstance().checkAdminPrivileges()
+      PlatformPermissionService.getInstance().checkAdminPrivileges()
     )
 
     expect(result.status).toBe(PermissionStatus.GRANTED)
@@ -223,9 +267,11 @@ describe('permission-checker', () => {
 
   it('returns unsupported for Windows and Linux notification status', () => {
     const windows = withPlatform('win32', () =>
-      PermissionChecker.getInstance().checkNotifications()
+      PlatformPermissionService.getInstance().checkNotifications()
     )
-    const linux = withPlatform('linux', () => PermissionChecker.getInstance().checkNotifications())
+    const linux = withPlatform('linux', () =>
+      PlatformPermissionService.getInstance().checkNotifications()
+    )
 
     expect(windows.status).toBe(PermissionStatus.UNSUPPORTED)
     expect(windows.canRequest).toBe(false)
@@ -237,7 +283,7 @@ describe('permission-checker', () => {
     notificationIsSupportedMock.mockReturnValue(true)
 
     const result = withPlatform('darwin', () =>
-      PermissionChecker.getInstance().checkNotifications()
+      PlatformPermissionService.getInstance().checkNotifications()
     )
 
     expect(result.status).toBe(PermissionStatus.UNVERIFIABLE)
@@ -250,7 +296,7 @@ describe('permission-checker', () => {
     notificationIsSupportedMock.mockReturnValue(false)
 
     const result = withPlatform('darwin', () =>
-      PermissionChecker.getInstance().checkNotifications()
+      PlatformPermissionService.getInstance().checkNotifications()
     )
 
     expect(result.status).toBe(PermissionStatus.UNSUPPORTED)
@@ -267,7 +313,7 @@ describe('permission-checker', () => {
     getMediaAccessStatusMock.mockReturnValue(mediaStatus)
 
     const result = withPlatform('darwin', () =>
-      PermissionChecker.getInstance().checkScreenRecording()
+      PlatformPermissionService.getInstance().checkScreenRecording()
     )
 
     expect(getMediaAccessStatusMock).toHaveBeenCalledWith('screen')
@@ -279,7 +325,7 @@ describe('permission-checker', () => {
 
   it('opens the macOS Screen Recording settings pane when requested', async () => {
     const opened = await withPlatform('darwin', () =>
-      PermissionChecker.getInstance().requestPermission(PermissionType.SCREEN_RECORDING)
+      PlatformPermissionService.getInstance().requestPermission(PermissionType.SCREEN_RECORDING)
     )
 
     expect(opened).toBe(true)
@@ -288,10 +334,23 @@ describe('permission-checker', () => {
     )
   })
 
+  it('opens the macOS Full Disk Access settings pane when requested', async () => {
+    const opened = await withPlatform('darwin', () =>
+      PlatformPermissionService.getInstance().requestPermission(PermissionType.FULL_DISK_ACCESS)
+    )
+
+    expect(opened).toBe(true)
+    expect(openExternalMock).toHaveBeenCalledWith(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
+    )
+  })
+
   it('maps denied macOS microphone status to a requestable denial', () => {
     getMediaAccessStatusMock.mockReturnValue('denied')
 
-    const result = withPlatform('darwin', () => PermissionChecker.getInstance().checkMicrophone())
+    const result = withPlatform('darwin', () =>
+      PlatformPermissionService.getInstance().checkMicrophone()
+    )
 
     expect(getMediaAccessStatusMock).toHaveBeenCalledWith('microphone')
     expect(result).toMatchObject({
@@ -304,7 +363,7 @@ describe('permission-checker', () => {
     getMediaAccessStatusMock.mockReturnValue('denied')
 
     const opened = await withPlatform('darwin', () =>
-      PermissionChecker.getInstance().requestPermission(PermissionType.MICROPHONE)
+      PlatformPermissionService.getInstance().requestPermission(PermissionType.MICROPHONE)
     )
 
     expect(opened).toBe(true)
@@ -319,7 +378,7 @@ describe('permission-checker', () => {
     askForMediaAccessMock.mockResolvedValue(true)
 
     const requested = await withPlatform('darwin', () =>
-      PermissionChecker.getInstance().requestPermission(PermissionType.MICROPHONE)
+      PlatformPermissionService.getInstance().requestPermission(PermissionType.MICROPHONE)
     )
 
     expect(requested).toBe(true)
@@ -336,7 +395,7 @@ describe('permission-checker', () => {
     })
 
     await expect(
-      PermissionChecker.getInstance().openSystemSettings('linux')
+      PlatformPermissionService.getInstance().openSystemSettings('linux')
     ).resolves.toBeUndefined()
     expect(spawnMock).toHaveBeenCalledWith(
       'xdg-open',
@@ -355,8 +414,8 @@ describe('permission-checker', () => {
       return child
     })
 
-    await expect(PermissionChecker.getInstance().openSystemSettings('linux')).rejects.toThrow(
-      'Linux system settings is unavailable'
-    )
+    await expect(
+      PlatformPermissionService.getInstance().openSystemSettings('linux')
+    ).rejects.toThrow('Linux system settings is unavailable')
   })
 })

@@ -44,6 +44,7 @@ import {
   waitForPermissionGrant
 } from '~/modules/system/system-permission-refresh'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { usePermissionAutoRefresh } from '~/composables/usePermissionAutoRefresh'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -245,6 +246,10 @@ onMounted(async () => {
   await loadSettings()
 })
 
+// Keep permission status live while the user is on this page — refresh silently on
+// window focus (e.g. returning from System Settings) and on a background interval.
+usePermissionAutoRefresh(() => checkAllPermissions({ silent: true }))
+
 onBeforeUnmount(() => {
   permissionRequestRevision += 1
 })
@@ -328,8 +333,10 @@ async function checkFileAccessRoots(): Promise<void> {
   applyFileAccessRoots(Array.isArray(roots) ? roots : [])
 }
 
-async function checkAllPermissions(): Promise<void> {
-  isLoading.value = true
+async function checkAllPermissions(options: { silent?: boolean } = {}): Promise<void> {
+  if (!options.silent) {
+    isLoading.value = true
+  }
   try {
     await checkFileAccessRoots()
 
@@ -353,9 +360,13 @@ async function checkAllPermissions(): Promise<void> {
     }
   } catch (error) {
     settingSetupLog.error('Failed to check permissions', error)
-    toast.error(t('setupPermissions.checkFailed'))
+    if (!options.silent) {
+      toast.error(t('setupPermissions.checkFailed'))
+    }
   } finally {
-    isLoading.value = false
+    if (!options.silent) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -619,7 +630,10 @@ function getFileAccessPurposeText(purpose: string): string {
 }
 
 function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): SystemPermissionStatus {
-  if (permissions.value.fileAccess.status === 'granted' && root.required) {
+  // When overall file access is granted, show individual roots as granted unless a
+  // specific one was explicitly denied (covers non-required, always-readable roots
+  // like Music/Pictures that report "not determined" on silent macOS checks).
+  if (permissions.value.fileAccess.status === 'granted' && root.status !== 'denied') {
     return 'granted'
   }
   return root.status
@@ -793,7 +807,7 @@ const permissionSummaryText = computed(() =>
           variant="flat"
           size="sm"
           :class="{ 'is-loading': isLoading }"
-          @click="checkAllPermissions"
+          @click="checkAllPermissions()"
         >
           <span v-if="isLoading" class="i-carbon-renew animate-spin" />
           {{ t('setupPermissions.recheck') }}
