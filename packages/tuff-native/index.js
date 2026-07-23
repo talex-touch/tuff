@@ -55,7 +55,37 @@ async function recognizeImageText(options) {
   return nativeBinding.recognizeImageText(options)
 }
 
+/**
+ * Reads the current process's macOS notification authorization status.
+ * Resolves to { status, reason? } where status is one of:
+ * 'granted' | 'denied' | 'notDetermined' | 'unverifiable' | 'unsupported'.
+ * Degrades to 'unsupported'/'unverifiable' instead of throwing when the native
+ * module (or the function) is unavailable, so callers can treat it as best-effort.
+ */
+async function getNotificationAuthorizationStatus() {
+  if (
+    !nativeBinding
+    || typeof nativeBinding.getNotificationAuthorizationStatus !== 'function'
+  ) {
+    return {
+      status: 'unsupported',
+      reason: loadError instanceof Error ? loadError.message : 'native-module-not-loaded',
+    }
+  }
+
+  try {
+    return await nativeBinding.getNotificationAuthorizationStatus()
+  }
+  catch (error) {
+    return {
+      status: 'unverifiable',
+      reason: error instanceof Error ? error.message : String(error),
+    }
+  }
+}
+
 module.exports = {
   getNativeOcrSupport,
   recognizeImageText,
+  getNotificationAuthorizationStatus,
 }

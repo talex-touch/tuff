@@ -4,7 +4,8 @@
       "target_name": "tuff_native_ocr",
       "sources": [
         "native/src/addon.cc",
-        "native/src/platform/stub/ocr_stub.cpp"
+        "native/src/platform/stub/ocr_stub.cpp",
+        "native/src/platform/stub/notification_stub.cpp"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
@@ -30,10 +31,12 @@
           "OS==\"mac\"",
           {
             "sources!": [
-              "native/src/platform/stub/ocr_stub.cpp"
+              "native/src/platform/stub/ocr_stub.cpp",
+              "native/src/platform/stub/notification_stub.cpp"
             ],
             "sources+": [
-              "native/src/platform/macos/vision_ocr.mm"
+              "native/src/platform/macos/vision_ocr.mm",
+              "native/src/platform/macos/notification_permission.mm"
             ],
             "xcode_settings": {
               "CLANG_CXX_LANGUAGE_STANDARD": "c++17",
@@ -51,7 +54,9 @@
                 "-framework",
                 "ImageIO",
                 "-framework",
-                "CoreGraphics"
+                "CoreGraphics",
+                "-framework",
+                "UserNotifications"
               ]
             }
           }

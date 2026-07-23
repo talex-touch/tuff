@@ -14,7 +14,7 @@ import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
-import { Notification, shell, systemPreferences } from 'electron'
+import { app, Notification, shell, systemPreferences } from 'electron'
 import { BaseModule } from '../abstract-base-module'
 import { getMainConfig } from '../storage'
 import { getFileAccessRootDescriptors, type FileAccessRootDescriptor } from './file-access-roots'
@@ -189,22 +189,36 @@ export class PlatformPermissionService {
   }
 
   /**
-   * Check notification permission
+   * Check notification permission.
+   *
+   * On macOS the authorization status is not exposed by Electron's JS API, so we
+   * read it via the native tuff-native binding (UNUserNotificationCenter). That
+   * call is only safe from a packaged, registered app bundle — from an unsigned dev
+   * bundle it can abort the process — so it is gated to packaged builds and falls
+   * back to UNVERIFIABLE everywhere else.
    */
-  public checkNotifications(): PermissionCheckResult {
+  public async checkNotifications(): Promise<PermissionCheckResult> {
     if (process.platform === 'darwin') {
-      if (Notification.isSupported()) {
+      if (!Notification.isSupported()) {
         return {
-          status: PermissionStatus.UNVERIFIABLE,
-          canRequest: true,
-          message:
-            'Native notifications are supported, but macOS notification permission is not readable from Electron. Please confirm it in System Settings.'
+          status: PermissionStatus.UNSUPPORTED,
+          canRequest: false,
+          message: 'Native notifications are not supported on this macOS build'
         }
       }
+
+      if (app.isPackaged) {
+        const native = await this.readNativeNotificationStatus()
+        if (native) {
+          return native
+        }
+      }
+
       return {
-        status: PermissionStatus.UNSUPPORTED,
-        canRequest: false,
-        message: 'Native notifications are not supported on this macOS build'
+        status: PermissionStatus.UNVERIFIABLE,
+        canRequest: true,
+        message:
+          'Native notifications are supported, but the permission state could not be read here. Please confirm it in System Settings.'
       }
     }
 
@@ -220,6 +234,56 @@ export class PlatformPermissionService {
       status: PermissionStatus.UNSUPPORTED,
       canRequest: false,
       message: 'Linux notification permission depends on desktop environment and is not verifiable'
+    }
+  }
+
+  /**
+   * Best-effort read of the macOS notification authorization status via the native
+   * binding. Returns null when the status is not readable so the caller can fall
+   * back to UNVERIFIABLE.
+   */
+  private async readNativeNotificationStatus(): Promise<PermissionCheckResult | null> {
+    try {
+      const nativeModule = (await import('@talex-touch/tuff-native')) as {
+        getNotificationAuthorizationStatus?: () => Promise<{ status: string; reason?: string }>
+        default?: {
+          getNotificationAuthorizationStatus?: () => Promise<{ status: string; reason?: string }>
+        }
+      }
+      const getStatus =
+        nativeModule.getNotificationAuthorizationStatus ??
+        nativeModule.default?.getNotificationAuthorizationStatus
+      if (typeof getStatus !== 'function') {
+        return null
+      }
+
+      const { status } = await getStatus()
+      switch (status) {
+        case 'granted':
+          return {
+            status: PermissionStatus.GRANTED,
+            canRequest: false,
+            message: 'Notification permission is granted'
+          }
+        case 'denied':
+          return {
+            status: PermissionStatus.DENIED,
+            canRequest: true,
+            message: 'Notification permission is denied'
+          }
+        case 'notDetermined':
+          return {
+            status: PermissionStatus.NOT_DETERMINED,
+            canRequest: true,
+            message: 'Notification permission has not been requested yet'
+          }
+        default:
+          // unsupported / unverifiable → let the caller fall back.
+          return null
+      }
+    } catch (error) {
+      platformPermissionLog.debug('Native notification status unavailable', { error })
+      return null
     }
   }
 
@@ -829,7 +893,7 @@ export class PlatformPermissionModule extends BaseModule {
     }
 
     // Check permission status
-    transport.on(systemPermissionCheckEvent, (permissionType) => {
+    transport.on(systemPermissionCheckEvent, async (permissionType) => {
       try {
         let result: PermissionCheckResult
 
@@ -840,7 +904,7 @@ export class PlatformPermissionModule extends BaseModule {
           permissionType === 'notifications' ||
           permissionType === PermissionType.NOTIFICATIONS
         ) {
-          result = this.service.checkNotifications()
+          result = await this.service.checkNotifications()
         } else if (
           permissionType === 'microphone' ||
           permissionType === PermissionType.MICROPHONE
