@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 22
-- **Last Active**: 2026-07-21
+- **Total Sessions**: 23
+- **Last Active**: 2026-07-22
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~934 | Active |
+| `journal-1.md` | ~967 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 23 | 2026-07-22 | Publish reverse proxy trust-boundary design | `a413da30c` | `master` |
 | 22 | 2026-07-21 | Enable macOS signing and notarization | `ebf6330c19156da6e9d815fc0e116513f9e2bd1c` | `master` |
 | 21 | 2026-07-21 | 统一运行时错误上报与 SQLite 重建可靠性 | `b6c7d8886` | `master` |
 | 20 | 2026-07-20 | 修复搜索流 MessagePort 交付 | `478a8871c` | `master` |

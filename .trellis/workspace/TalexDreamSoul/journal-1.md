@@ -932,3 +932,36 @@ Configured Developer ID and App Store Connect notarization for local and CI buil
 ### Next Steps
 
 - None - task complete
+
+
+## Session 23: Publish reverse proxy trust-boundary design
+
+**Date**: 2026-07-22
+**Task**: Publish reverse proxy trust-boundary design
+**Branch**: `master`
+
+### Summary
+
+Added and verified the standalone Astro trust-boundary design site; removed generated Astro type artifacts from version control.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a413da30c` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
