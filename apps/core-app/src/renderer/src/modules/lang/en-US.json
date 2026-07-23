@@ -3536,7 +3536,7 @@
         "installNow": "Restart to Update",
         "openInstaller": "Open Installer",
         "restartMac": "Restart to Update",
-        "restartMacDesc": "Restart macOS Tuff and hand the verified package to the updater. Native trust is currently waived, not passed.",
+        "restartMacDesc": "Restart macOS Tuff and hand the verified package to the updater. Native trust follows the current official-build verification result.",
         "startWindowsInstaller": "Start Installer",
         "startWindowsInstallerDesc": "Start the downloaded Windows installer and follow the Windows installation prompts.",
         "openLinuxPackage": "Open Package",
@@ -3564,7 +3564,7 @@
       "assetsCompatibilityNoUrl": "Missing download URL",
       "assetsCompatibilityMissingChecksum": "Missing checksum",
       "evidenceTitle": "Diagnostic Evidence",
-      "evidenceDesc": "Export the authoritative lifecycle snapshot, rollback/recovery metadata, cached release, platform handoff mode, and explicit macOS native-trust waiver risk.",
+      "evidenceDesc": "Export the authoritative lifecycle snapshot, rollback/recovery metadata, cached release, platform handoff mode, and explicit macOS native-trust verification status.",
       "copyEvidence": "Copy Evidence",
       "saveEvidence": "Save Evidence",
       "evidenceMissing": "Load update status first",
@@ -3572,8 +3572,22 @@
       "evidenceCopyFailed": "Failed to copy update diagnostic evidence",
       "evidenceSaved": "Update diagnostic evidence saved",
       "nativeTrust": {
-        "title": "macOS native trust is waived",
-        "waivedRisk": "Apple Developer signing is not configured. Gatekeeper/notarization trust has not passed, so this package still carries native execution risk."
+        "passedTitle": "macOS native trust passed",
+        "passedDescription": "This official build passed the Developer ID signing, Gatekeeper, and notarization release gates.",
+        "verifiedBadge": "Verified build",
+        "unverifiedTitle": "macOS native trust is unverified",
+        "unavailableRisk": "This installation has no verifiable official-build attestation, so Developer ID, Gatekeeper, and notarization trust cannot be confirmed.",
+        "verificationFailedRisk": "Official-build verification failed for this installation. Files may be damaged or modified, and the native trust chain cannot be confirmed.",
+        "securityWarning": "CRITICAL SECURITY WARNING",
+        "criticalTitle": "This macOS build has no established native trust",
+        "criticalDescription": "Do not ignore this warning: the current application process has no established official trust. Download verification cannot replace the Developer ID, Gatekeeper, and notarization trust chain of the current installation.",
+        "notApplicableTitle": "macOS native trust is not applicable",
+        "notApplicableDescription": "The current runtime platform is not macOS.",
+        "risks": {
+          "origin": "The current app.asar cannot be confirmed as an unmodified official release.",
+          "nativeChain": "Developer ID signing, Gatekeeper assessment, and the Apple notarization ticket cannot be confirmed.",
+          "reinstall": "Reinstall from the official release page. Until then, do not treat this installation as trusted."
+        }
       },
       "assets": {
         "download": "Download",
@@ -3603,6 +3617,8 @@
         "installStarted": "Restarting to apply update",
         "installPendingConfirmation": "Install request sent. Waiting for system handoff confirmation.",
         "installFailedWithReason": "Failed to start update install: {reason}",
+        "macSilentUpdateNotWritable": "Tuff cannot replace the current app without a password prompt. Move or reinstall Tuff in an Applications location managed by your user, then retry.",
+        "macSilentUpdateUntrusted": "Silent update is blocked because this Tuff build is not an officially verified macOS package.",
         "cacheCleared": "Update cache cleared",
         "cacheClearFailed": "Failed to clear cache"
       }
@@ -3612,7 +3628,7 @@
       "publishedAt": "Published at: {time}",
       "skip": "Skip this version",
       "remindLater": "Remind me later",
-      "updateNow": "Update now"
+      "updateNow": "Download update"
     },
     "download": {
       "title": "Download Settings",
@@ -3727,6 +3743,8 @@
     },
     "accessibility": "Accessibility Permission",
     "accessibilityDesc": "Used to scan apps and read foreground context. Auto paste also needs macOS Automation permission for Tuff to control System Events. (Optional)",
+    "fullDiskAccess": "Full Disk Access",
+    "fullDiskAccessDesc": "Lets Tuff index locations outside Documents/Downloads/Desktop (e.g. code folders or external drives) without a per-folder prompt. Grant in System Settings › Privacy & Security › Full Disk Access. (Optional)",
     "microphone": "Microphone Permission",
     "microphoneDesc": "Used for voice input, the voice panel, and future voice assistant features. Tuff does not record audio unless you use voice features. (Optional)",
     "adminPrivileges": "Administrator Privileges",
@@ -3887,7 +3905,12 @@
     "updateAvailable": "New Version Available",
     "updateAvailableBody": "Tuff {version} has been released\nClick to view details",
     "updateReady": "Update Ready",
-    "updateReadyBody": "Tuff {version} download complete\nClick to install now",
+    "updateReadyBodyMac": "Tuff {version} is ready. Click to restart and update silently.",
+    "updateReadyBodyWindows": "Tuff {version} is ready. Click to exit and start the installer.",
+    "updateReadyBodyLinux": "Tuff {version} is ready. Click to exit and open the update package.",
+    "updateBlocked": "Silent Update Blocked",
+    "updateBlockedUntrustedMac": "This Tuff build is not an officially verified macOS package. The prepared update remains available.",
+    "updateBlockedUnwritableMac": "Tuff cannot replace the current app without a password prompt. The prepared update remains available.",
     "syncBlockedTitle": "Sync Paused",
     "syncBlockedBody": "Sync is paused due to {reason}. Please resolve and try again.",
     "syncBlockedReasonQuota": "quota limit",
