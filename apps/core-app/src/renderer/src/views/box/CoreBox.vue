@@ -13,7 +13,6 @@ import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
-import ActionPanel from '~/components/render/ActionPanel.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
@@ -649,6 +648,7 @@ const actionPanel = useActionPanel({
   openFlowSelector: detach.openFlowSelector,
   refreshSearch: handleSearchImmediate,
   onActivationState: applyCoreBoxActivationState,
+  onPrimaryExecute: handleExecute,
   navigate: (path) => {
     void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     void router.push(path).catch(() => {})
@@ -988,15 +988,6 @@ const customCss = computed(() => {
     :payload="detach.flowPayload"
     @close="detach.closeFlowSelector"
     @select="detach.dispatchFlow"
-  />
-
-  <!-- Action Panel (⌘K) -->
-  <ActionPanel
-    :visible="actionPanel.visible"
-    :item="actionPanel.item"
-    :is-pinned="actionPanel.isPinned"
-    @close="actionPanel.close"
-    @action="actionPanel.handleAction"
   />
 </template>
 
