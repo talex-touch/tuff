@@ -1571,6 +1571,8 @@
         "createAction": "Create",
         "agreementAlertTitle": "Attention",
         "agreementAlertMessage": "You must agree with <i style='color: #4E94B0'>Touch Plugin Development</i> protocol.",
+        "createFailedTitle": "Creation Failed",
+        "createFailedMessage": "Failed to create the plugin. Please try again.",
         "fields": {
           "name": "Name",
           "icon": "Icon",

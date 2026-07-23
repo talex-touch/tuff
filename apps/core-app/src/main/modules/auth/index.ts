@@ -2,6 +2,7 @@ import type { AuthState, AuthUser } from '@talex-touch/utils/auth'
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { NetworkMethod } from '@talex-touch/utils/network'
+import type { PlanQuota, Subscription, UsageStats, UserProfile } from '@talex-touch/utils/account'
 import type {
   AuthAvatarUpdateRequest,
   AuthLoginRequest,
@@ -16,6 +17,12 @@ import type {
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
+import {
+  BillingCycle,
+  DEFAULT_PLAN_QUOTAS,
+  SubscriptionPlan,
+  SubscriptionStatus
+} from '@talex-touch/utils/account'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { AccountEvents, AuthEvents } from '@talex-touch/utils/transport/events'
@@ -1272,6 +1279,108 @@ async function performNexusUpload(
   )
 }
 
+function parseTimestampToMillis(value?: string | null): number {
+  if (!value) {
+    return 0
+  }
+  const parsed = Date.parse(value)
+  return Number.isNaN(parsed) ? 0 : parsed
+}
+
+function mapAuthUserToProfile(user: AuthUser): UserProfile {
+  const email = user.email
+  const emailName = email ? email.split('@')[0] : ''
+  return {
+    id: user.id,
+    displayName: user.name ?? emailName,
+    email,
+    emailVerified: user.emailVerified ?? false,
+    avatarUrl: user.avatar ?? undefined,
+    bio: user.bio ?? undefined,
+    locale: user.locale ?? undefined,
+    createdAt: parseTimestampToMillis(user.createdAt),
+    updatedAt: parseTimestampToMillis(user.updatedAt),
+    twoFactorEnabled: false,
+    socialConnections: []
+  }
+}
+
+function normalizeSubscriptionPlan(raw: unknown): SubscriptionPlan {
+  const normalized = String(raw ?? '').toLowerCase()
+  const values = Object.values(SubscriptionPlan) as string[]
+  return values.includes(normalized) ? (normalized as SubscriptionPlan) : SubscriptionPlan.FREE
+}
+
+function mapSubscriptionUsage(status: any): UsageStats {
+  const features = status?.features ?? {}
+  const aiRequestsUsed = features?.aiRequests?.used ?? 0
+  const aiTokensUsed = features?.aiTokens?.used ?? 0
+  return {
+    aiRequestsToday: aiRequestsUsed,
+    aiRequestsThisMonth: aiRequestsUsed,
+    aiTokensThisMonth: aiTokensUsed,
+    storageUsedBytes: 0,
+    pluginsInstalled: 0
+  }
+}
+
+async function fetchSubscriptionStatus(): Promise<any | null> {
+  try {
+    const response = await performNexusRequest({
+      method: 'GET',
+      path: '/api/subscription/status',
+      context: 'account-subscription-status'
+    })
+    if (!response || response.status >= 400) {
+      return null
+    }
+    const body: unknown = response.body
+    if (!body) {
+      return null
+    }
+    return typeof body === 'string' ? JSON.parse(body) : body
+  } catch (error) {
+    authLog.warn('Failed to fetch subscription status', { error })
+    return null
+  }
+}
+
+async function fetchAccountSubscription(): Promise<Subscription | null> {
+  const status = await fetchSubscriptionStatus()
+  if (!status) {
+    return null
+  }
+  const plan = normalizeSubscriptionPlan(status.plan)
+  const quota: PlanQuota = DEFAULT_PLAN_QUOTAS[plan]
+  return {
+    id: `sub_${plan}`,
+    plan,
+    status: status.isActive ? SubscriptionStatus.ACTIVE : SubscriptionStatus.EXPIRED,
+    billingCycle: BillingCycle.MONTHLY,
+    quota,
+    usage: mapSubscriptionUsage(status),
+    startedAt: parseTimestampToMillis(status.activatedAt),
+    currentPeriodEnd: parseTimestampToMillis(status.expiresAt),
+    cancelAtPeriodEnd: false,
+    autoRenew: false,
+    hasPaymentMethod: false
+  }
+}
+
+async function fetchAccountUsage(): Promise<UsageStats | null> {
+  const status = await fetchSubscriptionStatus()
+  if (!status) {
+    return null
+  }
+  return mapSubscriptionUsage(status)
+}
+
+async function openAccountDashboard(pathname: string): Promise<void> {
+  await openValidatedExternalUrl(new URL(pathname, resolveAuthBaseUrl()), {
+    opener: shell.openExternal
+  })
+}
+
 async function getOrInitMachineSeed(appSettings: AppSetting): Promise<string> {
   ensureSecuritySettings(appSettings)
   const secureSeed = (await getSecureValue(MACHINE_SEED_SECURE_KEY))?.trim() ?? ''
@@ -1615,7 +1724,39 @@ export class AuthModule extends BaseModule<TalexEvents> {
           }
           return recordSyncActivity(kind)
         }
-      )
+      ),
+      ...registerAuthHandler(AccountEvents.account.getProfile, async () =>
+        authState.user ? mapAuthUserToProfile(authState.user) : null
+      ),
+      ...registerAuthHandler(AccountEvents.account.getSubscription, async () =>
+        fetchAccountSubscription()
+      ),
+      ...registerAuthHandler(AccountEvents.account.getUsage, async () => fetchAccountUsage()),
+      ...registerAuthHandler(AccountEvents.account.getFeatures, async () => []),
+      ...registerAuthHandler(AccountEvents.account.getTeams, async () => []),
+      ...registerAuthHandler(AccountEvents.account.getSessions, async () => []),
+      ...registerAuthHandler(AccountEvents.account.getInfo, async () => null),
+      ...registerAuthHandler(AccountEvents.account.openUpgrade, async () =>
+        openAccountDashboard('/dashboard/billing')
+      ),
+      ...registerAuthHandler(AccountEvents.account.openBilling, async () =>
+        openAccountDashboard('/dashboard/billing')
+      ),
+      ...registerAuthHandler(AccountEvents.account.openSettings, async () =>
+        openAccountDashboard('/dashboard/settings')
+      ),
+      ...registerAuthHandler(AccountEvents.account.openProfile, async () =>
+        openAccountDashboard('/dashboard/profile')
+      ),
+      ...registerAuthHandler(AccountEvents.account.requestLogin, async () => {
+        await openLoginPage('sign-in')
+        return true
+      }),
+      ...registerAuthHandler(AccountEvents.account.logout, async () => {
+        await cancelActiveDeviceAuth()
+        await clearAuthToken()
+        updateAuthState(null)
+      })
     )
 
     if (!this.appSettingUnsubscribe) {

@@ -4,6 +4,7 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import path from 'node:path'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import { app, shell } from 'electron'
 import fse from 'fs-extra'
 import { getOfficialPlugins } from '../../../service/official-plugin.service'
@@ -931,6 +932,59 @@ export function registerPluginApiTransportHandlers(
       } catch (error) {
         logIpcHandlerError('plugin:api:get-runtime-stats', error)
         return { error: toErrorMessage(error) }
+      }
+    })
+  )
+
+  /**
+   * Open developer tools for every live webContents owned by a plugin
+   * (plugin windows + cached CoreBox UI views). Returns whether devtools were
+   * newly opened for at least one target.
+   */
+  disposers.push(
+    transport.on(defineRawEvent<string, boolean>('plugin:open-devtools'), async (pluginName) => {
+      try {
+        if (typeof pluginName !== 'string' || pluginName.length === 0) {
+          return false
+        }
+
+        const plugin = manager.getPluginByName(pluginName) as TouchPlugin | undefined
+        if (!plugin) {
+          return false
+        }
+
+        const webContentsList: Electron.WebContents[] = []
+
+        for (const win of plugin._windows.values()) {
+          const webContents = useAliveWebContents(win.window)
+          if (!webContents) continue
+          webContentsList.push(webContents)
+        }
+
+        for (const view of viewCacheManager.getCachedViewsByPlugin(pluginName)) {
+          const webContents = useAliveWebContents(
+            view as { webContents?: Electron.WebContents | null }
+          )
+          if (!webContents) continue
+          webContentsList.push(webContents)
+        }
+
+        if (webContentsList.length === 0) {
+          return false
+        }
+
+        let opened = false
+        for (const webContents of webContentsList) {
+          if (!webContents.isDevToolsOpened()) {
+            webContents.openDevTools({ mode: 'detach' })
+            opened = true
+          }
+        }
+
+        return opened
+      } catch (error) {
+        logIpcHandlerError('plugin:open-devtools', error)
+        return false
       }
     })
   )

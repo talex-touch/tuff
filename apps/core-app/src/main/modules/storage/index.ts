@@ -192,9 +192,6 @@ export class StorageModule extends BaseModule {
   private isDestroying = false
   private readonly readiness = new StorageReadinessController()
 
-  pluginConfigs = new Map<string, object>()
-  PLUGIN_CONFIG_MAX_SIZE = 10 * 1024 * 1024 // 10MB
-
   constructor() {
     super(StorageModule.key, {
       create: true,
@@ -290,7 +287,6 @@ export class StorageModule extends BaseModule {
     this.persistedContent.clear()
     this.deletedConfigs.clear()
     this.configRepository = null
-    this.pluginConfigs.clear()
     for (const stream of Array.from(this.updateStreams)) {
       if (!stream.isCancelled()) {
         stream.end()
@@ -397,9 +393,26 @@ export class StorageModule extends BaseModule {
   } {
     return {
       cachedConfigs: this.cache.size(),
-      pluginConfigs: this.pluginConfigs.size,
+      pluginConfigs: this.countPluginConfigs(),
       dirtyConfigs: this.cache.getDirtyConfigs().length,
       backend: this.configRepository?.getBackend() ?? 'uninitialized'
+    }
+  }
+
+  /**
+   * Count real plugin config directories under <config>/plugins/. Replaces the
+   * dead `pluginConfigs` map that was never populated (it always reported 0).
+   */
+  private countPluginConfigs(): number {
+    if (!pluginConfigPath) return 0
+    try {
+      if (!fse.existsSync(pluginConfigPath)) return 0
+      return fse
+        .readdirSync(pluginConfigPath, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory()).length
+    } catch (error) {
+      storageLog.warn('Failed to count plugin configs', { error })
+      return 0
     }
   }
 

@@ -1383,6 +1383,10 @@ export class CommonChannelModule extends BaseModule {
       transport.on(AppEvents.window.hide, () => touchApp.window.window.hide()),
       transport.on(AppEvents.window.minimize, () => touchApp.window.minimize()),
       transport.on(AppEvents.window.focus, () => touchApp.window.window.focus()),
+      transport.on(AppEvents.window.show, () => {
+        touchApp.window.window.show()
+        touchApp.window.window.focus()
+      }),
       transport.on(AppEvents.debug.openDevTools, (payload) => {
         const options =
           payload && typeof payload === 'object' ? (payload as OpenDevToolsOptions) : undefined

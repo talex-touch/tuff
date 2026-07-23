@@ -49,7 +49,7 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 - **Build Tools**: Electron-Vite 4.0.1, Vite 7.3.1, Electron-Builder 26.4.0
 - **UI**: Tuffex, UnoCSS 66.6.0, SASS 1.97.2
 - **Database**: Drizzle ORM 0.44.7 with LibSQL 0.15.15
-- **Utilities**: VueUse 14.1.0, Dayjs 1.11.19, Tesseract.js 6.0.1 (OCR), XTerm 5.3.0
+- **Utilities**: VueUse 14.1.0, Dayjs 1.11.19, @talex-touch/tuff-native (native OCR), XTerm 5.3.0
 - **Logging**: log4js 6.9.1
 
 ### Core Application Architecture (apps/core-app/)
@@ -66,8 +66,8 @@ This is a pnpm workspace monorepo with the main application in `apps/core-app/`,
 - **Storage** ([modules/storage/](apps/core-app/src/main/modules/storage/)): Configuration and data persistence with 10MB per-plugin limits
 - **Channel System** ([core/channel-core.ts](apps/core-app/src/main/core/channel-core.ts)): IPC communication between main/renderer/plugin processes
 - **Database** ([modules/database/](apps/core-app/src/main/modules/database/)): Drizzle ORM with LibSQL for structured data storage
-- **Terminal** ([modules/terminal/](apps/core-app/src/main/modules/terminal/)): XTerm.js-based terminal emulator
-- **OCR** ([modules/ocr/](apps/core-app/src/main/modules/ocr/)): Tesseract.js wrapper for optical character recognition
+- **Terminal** ([modules/terminal/](apps/core-app/src/main/modules/terminal/)): Piped-stdio command runner (XTerm.js renderer UI; not a full PTY — no TTY semantics)
+- **OCR** ([modules/ocr/](apps/core-app/src/main/modules/ocr/)): Native OCR via @talex-touch/tuff-native (Apple Vision / Windows OCR) with AI-provider fallback
 - **Clipboard** ([modules/clipboard/](apps/core-app/src/main/modules/clipboard/)): System clipboard operations
 
 **Module Loading Order** (sequential after Electron ready):
@@ -109,7 +109,7 @@ Plugins are loaded from the user data directory at runtime, not bundled with the
 
 **Extracted Plugins** (in `plugins/` directory):
 - `touch-browser-open` - Browser URL opening / URL system
-- `touch-browser-bookmarks` - Browser bookmarks search
+- `touch-browser-bookmarks` - Manual quick links (pinned / recent URLs; does not read browser bookmarks)
 - `touch-quick-actions` - Quick actions
 - `touch-window-presets` - Window presets
 - `touch-workspace-scripts` - Workspace scripts (split from dev toolbox)

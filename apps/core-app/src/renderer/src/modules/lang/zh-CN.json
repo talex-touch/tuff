@@ -1571,6 +1571,8 @@
         "createAction": "创建",
         "agreementAlertTitle": "注意",
         "agreementAlertMessage": "你必须同意 <i style='color: #4E94B0'>Touch Plugin Development</i> 协议。",
+        "createFailedTitle": "创建失败",
+        "createFailedMessage": "创建插件失败,请重试。",
         "fields": {
           "name": "名称",
           "icon": "图标",
