@@ -74,6 +74,7 @@ const systemPermissionRequest = defineEvent('system')
 const permissions = ref<{
   fileAccess: PermissionState
   accessibility: PermissionState
+  fullDiskAccess: PermissionState
   notifications: PermissionState
   microphone: PermissionState
   adminPrivileges: PermissionState
@@ -88,6 +89,12 @@ const permissions = ref<{
     status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     canRequest: false,
+    message: ''
+  },
+  fullDiskAccess: {
+    status: 'notDetermined' as SystemPermissionStatus,
+    checked: false,
+    canRequest: true,
     message: ''
   },
   notifications: {
@@ -289,6 +296,16 @@ function applyPermissionResult(type: string, result: SystemPermissionCheckResult
     return
   }
 
+  if (type === 'fullDiskAccess') {
+    permissions.value.fullDiskAccess = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
+    return
+  }
+
   if (type === 'notifications') {
     permissions.value.notifications = {
       status: result.status,
@@ -343,6 +360,7 @@ async function checkAllPermissions(options: { silent?: boolean } = {}): Promise<
     // Check accessibility permission (macOS)
     if (isMacOS.value) {
       await checkPermission('accessibility')
+      await checkPermission('fullDiskAccess')
     }
 
     if (isMacOS.value || isWindows.value) {
@@ -915,6 +933,41 @@ const permissionSummaryText = computed(() =>
               type="primary"
               size="sm"
               @click="requestPermission('accessibility')"
+            >
+              {{ t('setupPermissions.openSettings') }}
+            </TxButton>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            v-if="isMacOS"
+            :title="t('setupPermissions.fullDiskAccess')"
+            :description="t('setupPermissions.fullDiskAccessDesc')"
+            :active="permissions.fullDiskAccess.status === 'granted'"
+            :disabled="
+              permissions.fullDiskAccess.status === 'unsupported' &&
+              !permissions.fullDiskAccess.canRequest
+            "
+            default-icon="i-carbon-folder"
+            active-icon="i-carbon-folder-details"
+          >
+            <template #tags>
+              <TuffMacOSTag />
+            </template>
+            <TuffStatusBadge
+              size="md"
+              :status-key="permissions.fullDiskAccess.status"
+              :icon="getStatusIconClass(permissions.fullDiskAccess.status)"
+              :text="getStatusText(permissions.fullDiskAccess.status)"
+            />
+            <TxButton
+              v-if="
+                permissions.fullDiskAccess.status !== 'granted' &&
+                permissions.fullDiskAccess.canRequest
+              "
+              variant="flat"
+              type="primary"
+              size="sm"
+              @click="requestPermission('fullDiskAccess')"
             >
               {{ t('setupPermissions.openSettings') }}
             </TxButton>
