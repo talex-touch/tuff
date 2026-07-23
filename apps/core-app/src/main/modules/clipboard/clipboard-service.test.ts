@@ -153,4 +153,49 @@ describe('clipboard-service', () => {
     await service.start()
     expect(startWatch).toHaveBeenCalledTimes(2)
   })
+
+  it('exposes an off-thread reader only when the module has the async read API', async () => {
+    const startWatch = vi.fn(() => ({ stop: vi.fn(), isRunning: true }))
+    const service = new ClipboardService({
+      isDestroyed: () => false,
+      scheduleMonitor: vi.fn(),
+      importWatcherModule: vi.fn(async () => ({
+        startWatch,
+        getText: async () => 'native-text',
+        getHtml: async () => '',
+        getFiles: async () => [],
+        getImageBinary: async () => []
+      })),
+      logInfo: vi.fn(),
+      logWarn: vi.fn(),
+      logDebug: vi.fn()
+    })
+
+    expect(service.getReader()).toBeNull() // not started yet
+
+    await service.start()
+    const reader = service.getReader()
+    expect(reader?.kind).toBe('native')
+    await expect(reader?.readText()).resolves.toBe('native-text')
+    expect(service.getReader()).toBe(reader) // cached
+
+    service.stop()
+    expect(service.getReader()).toBeNull()
+  })
+
+  it('returns no reader when the native module lacks the read API', async () => {
+    const startWatch = vi.fn(() => ({ stop: vi.fn(), isRunning: true }))
+    const service = new ClipboardService({
+      isDestroyed: () => false,
+      scheduleMonitor: vi.fn(),
+      importWatcherModule: vi.fn(async () => ({ startWatch })),
+      logInfo: vi.fn(),
+      logWarn: vi.fn(),
+      logDebug: vi.fn()
+    })
+
+    await service.start()
+    expect(service.isNativeActive()).toBe(true)
+    expect(service.getReader()).toBeNull()
+  })
 })

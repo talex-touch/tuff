@@ -1,5 +1,7 @@
 import type { ClipboardCaptureSource } from '@talex-touch/utils/transport/events/types'
 import type { LogOptions } from '../../utils/logger'
+import type { ClipboardReader, NativeClipboardReaderModule } from './clipboard-reader'
+import { NativeClipboardReader, hasNativeReaderApi } from './clipboard-reader'
 
 /**
  * ClipboardService owns the single seam between the app and the OS clipboard's
@@ -22,10 +24,11 @@ export interface ClipboardWatcherHandle {
 }
 
 /**
- * Signal-only view of the native watcher module. We deliberately only depend on
- * `startWatch`; the package's read/write API is intentionally not used.
+ * Signal-and-read view of the native watcher module. We depend on `startWatch`
+ * for the change signal and, when present, the async off-thread readers so
+ * clipboard reads never block the main-process event loop.
  */
-export interface ClipboardWatcherModule {
+export interface ClipboardWatcherModule extends NativeClipboardReaderModule {
   startWatch?: (callback: () => void) => ClipboardWatcherHandle
 }
 
@@ -130,6 +133,8 @@ export function resolveClipboardWatcherModule(value: unknown): ClipboardWatcherM
 
 export class ClipboardService {
   private watcher: ClipboardWatcherHandle | null = null
+  private readerModule: ClipboardWatcherModule | null = null
+  private cachedReader: NativeClipboardReader | null = null
   private initTried = false
   private enabled = true
   private nativeChangeCount = 0
@@ -147,6 +152,30 @@ export class ClipboardService {
   /** Whether the native OS change-event watcher is currently active. */
   public isNativeActive(): boolean {
     return Boolean(this.watcher && this.watcher.isRunning !== false)
+  }
+
+  /**
+   * Monotonic count of native change events observed since activation. Paired
+   * with {@link isNativeActive}, an unchanged count means the OS clipboard has
+   * not changed since the last observation — callers can use it to skip a
+   * redundant (and expensive, main-thread-blocking) re-read of the clipboard.
+   */
+  public getNativeChangeCount(): number {
+    return this.nativeChangeCount
+  }
+
+  /**
+   * The off-main-thread clipboard reader, when the native module is active and
+   * exposes the async read API; otherwise `null` (callers fall back to Electron).
+   * Cached because the resolved module is stable for the watcher's lifetime.
+   */
+  public getReader(): ClipboardReader | null {
+    if (!this.isNativeActive()) return null
+    if (!hasNativeReaderApi(this.readerModule)) return null
+    if (!this.cachedReader) {
+      this.cachedReader = new NativeClipboardReader(this.readerModule)
+    }
+    return this.cachedReader
   }
 
   public getHealth(): ClipboardServiceHealth {
@@ -213,6 +242,11 @@ export class ClipboardService {
       })
 
       this.watcher = watcher
+      // Retain the resolved module so captures can read off its native thread
+      // (see getReader) instead of blocking the main loop on Electron's
+      // synchronous clipboard API.
+      this.readerModule = watcherModule
+      this.cachedReader = null
       this.activatedAt = this.now()
       this.lastError = null
       this.lastErrorAt = null
@@ -234,6 +268,8 @@ export class ClipboardService {
     if (!this.watcher) return
     const watcher = this.watcher
     this.watcher = null
+    this.readerModule = null
+    this.cachedReader = null
     this.activatedAt = null
     try {
       watcher.stop()

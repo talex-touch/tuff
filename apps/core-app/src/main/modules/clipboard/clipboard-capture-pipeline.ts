@@ -8,6 +8,7 @@ import type { ClipboardFreshnessState } from './clipboard-freshness'
 import type { ClipboardImagePersistence } from './clipboard-image-persistence'
 import type { ClipboardMetaEntry, ClipboardMetaPersistence } from './clipboard-meta-persistence'
 import type { IClipboardItem } from './clipboard-history-persistence'
+import type { ClipboardReader } from './clipboard-reader'
 import { performance } from 'node:perf_hooks'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { clipboard } from 'electron'
@@ -45,6 +46,12 @@ const CLIPBOARD_POLL_TASK_ID = 'clipboard.monitor'
 export interface ClipboardCapturePipelineOptions {
   getDatabase: () => LibSQLDatabase<typeof schema> | undefined
   getClipboardHelper: () => ClipboardHelper | undefined
+  /**
+   * Resolves the reader for a capture. A native reader reads off the main
+   * thread; when it is unavailable an Electron (synchronous) reader is returned.
+   * Called once per capture so every read within it uses one consistent source.
+   */
+  getReader: () => ClipboardReader
   getLastSuccessfulScanAt: () => number | null
   getLastImagePersistAt: () => number
   getTransport: () => ITuffTransportMain | null
@@ -135,56 +142,64 @@ export class ClipboardCapturePipeline {
     const hasImageFormats = includesAnyClipboardFormat(formats, CLIPBOARD_IMAGE_FORMATS)
     const hasTextFormats = includesAnyClipboardFormat(formats, CLIPBOARD_TEXT_FORMATS)
     const hasHtmlFormats = includesAnyClipboardFormat(formats, CLIPBOARD_HTML_FORMATS)
-    // Reads always go through Electron's clipboard API (single reader — see ClipboardService).
+    // One reader per capture keeps the single-reader invariant (no two readers
+    // disagreeing) while the reads run off the main thread when native — so a
+    // large clipboard image no longer freezes the main-process event loop.
+    const reader = this.options.getReader()
     let prefetchedText: string | undefined
     let prefetchedHtml: string | undefined
     let prefetchedFiles: string[] | undefined
     let prefetchedImage: NativeImage | null | undefined
 
-    const readPrefetchedText = (): string => {
+    const readPrefetchedText = async (): Promise<string> => {
       if (prefetchedText !== undefined) return prefetchedText
-      prefetchedText = trackPhase(phaseDurations, 'clipboard.readText', () => clipboard.readText())
+      prefetchedText = await trackPhaseAsync(phaseDurations, 'clipboard.readText', () =>
+        reader.readText()
+      )
       return prefetchedText
     }
 
-    const readPrefetchedHtml = (): string => {
+    const readPrefetchedHtml = async (): Promise<string> => {
       if (prefetchedHtml !== undefined) return prefetchedHtml
-      prefetchedHtml = trackPhase(phaseDurations, 'clipboard.readHTML', () => clipboard.readHTML())
+      prefetchedHtml = await trackPhaseAsync(phaseDurations, 'clipboard.readHTML', () =>
+        reader.readHtml()
+      )
       return prefetchedHtml
     }
 
-    const readPrefetchedFiles = (): string[] => {
+    const readPrefetchedFiles = async (): Promise<string[]> => {
       if (prefetchedFiles !== undefined) return prefetchedFiles
-      prefetchedFiles = trackPhase(phaseDurations, 'clipboard.readFiles', () =>
-        helper.readClipboardFiles()
+      prefetchedFiles = await trackPhaseAsync(phaseDurations, 'clipboard.readFiles', () =>
+        reader.readFiles()
       )
       return prefetchedFiles
     }
 
-    const readPrefetchedImage = (): NativeImage | null => {
+    const readPrefetchedImage = async (): Promise<NativeImage | null> => {
       if (prefetchedImage !== undefined) return prefetchedImage
       if (!hasImageFormats) {
         prefetchedImage = null
         return prefetchedImage
       }
-      const image = trackPhase(phaseDurations, 'clipboard.readImage', () => clipboard.readImage())
-      prefetchedImage = image.isEmpty() ? null : image
+      prefetchedImage = await trackPhaseAsync(phaseDurations, 'clipboard.readImage', () =>
+        reader.readImage()
+      )
       return prefetchedImage
     }
 
     const quickTextSignature = hasTextFormats
-      ? trackPhase(phaseDurations, 'signature.textQuick', () =>
-          helper.getTextQuickSignature(readPrefetchedText())
+      ? await trackPhaseAsync(phaseDurations, 'signature.textQuick', async () =>
+          helper.getTextQuickSignature(await readPrefetchedText())
         )
       : '0:0'
     const quickFilesSignature = hasFileFormats
-      ? trackPhase(phaseDurations, 'signature.filesQuick', () =>
-          helper.getFilesQuickSignature(readPrefetchedFiles())
+      ? await trackPhaseAsync(phaseDurations, 'signature.filesQuick', async () =>
+          helper.getFilesQuickSignature(await readPrefetchedFiles())
         )
       : '0:0'
     const quickImageSignature = hasImageFormats
-      ? trackPhase(phaseDurations, 'signature.imageQuick', () =>
-          helper.getImageQuickSignature(readPrefetchedImage())
+      ? await trackPhaseAsync(phaseDurations, 'signature.imageQuick', async () =>
+          helper.getImageQuickSignature(await readPrefetchedImage())
         )
       : ''
     const quickHash = trackPhase(phaseDurations, 'signature.hashBuild', () => {
@@ -195,7 +210,7 @@ export class ClipboardCapturePipeline {
       source === 'corebox-show-baseline' &&
       this.options.getLastImagePersistAt() === 0 &&
       hasImageFormats &&
-      readPrefetchedImage() !== null
+      (await readPrefetchedImage()) !== null
     const sameFormats = helper.lastFormats.length > 0 && helper.lastFormatsKey === formatsKey
     if (sameFormats && helper.lastChangeHash === quickHash && !shouldCaptureCoreBoxBaselineImage) {
       return
@@ -211,10 +226,10 @@ export class ClipboardCapturePipeline {
       { key: 'observed_at', value: observedAt }
     ]
     let item: PendingClipboardItem | null = null
-    let cachedImage: NativeImage | null = hasImageFormats ? readPrefetchedImage() : null
+    let cachedImage: NativeImage | null = hasImageFormats ? await readPrefetchedImage() : null
 
     if (hasFileFormats) {
-      const files = readPrefetchedFiles()
+      const files = await readPrefetchedFiles()
       item = this.tryBuildFilesItem({
         helper,
         files,
@@ -237,7 +252,7 @@ export class ClipboardCapturePipeline {
     }
 
     if (!item && hasTextFormats) {
-      item = this.tryBuildTextItem({
+      item = await this.tryBuildTextItem({
         helper,
         hasHtmlFormats,
         readPrefetchedText,
@@ -421,7 +436,7 @@ export class ClipboardCapturePipeline {
     }
   }
 
-  private tryBuildTextItem({
+  private async tryBuildTextItem({
     helper,
     hasHtmlFormats,
     readPrefetchedText,
@@ -431,17 +446,17 @@ export class ClipboardCapturePipeline {
   }: {
     helper: ClipboardHelper
     hasHtmlFormats: boolean
-    readPrefetchedText: () => string
-    readPrefetchedHtml: () => string
+    readPrefetchedText: () => Promise<string>
+    readPrefetchedHtml: () => Promise<string>
     phaseDurations: ClipboardPhaseDurations
     metaEntries: ClipboardMetaEntry[]
-  }): PendingClipboardItem | null {
-    const text = readPrefetchedText()
+  }): Promise<PendingClipboardItem | null> {
+    const text = await readPrefetchedText()
     if (!trackPhase(phaseDurations, 'diff.text', () => helper.didTextChange(text))) {
       return null
     }
 
-    const html = hasHtmlFormats ? readPrefetchedHtml() : ''
+    const html = hasHtmlFormats ? await readPrefetchedHtml() : ''
     metaEntries.push({ key: 'text_length', value: text.length })
     if (html) {
       metaEntries.push({ key: 'html_length', value: html.length })
