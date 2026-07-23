@@ -660,7 +660,13 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
 const permissionSummary = computed(() => {
   const items = [
     permissions.value.fileAccess,
-    ...(isMacOS.value ? [permissions.value.accessibility, permissions.value.notifications] : []),
+    ...(isMacOS.value
+      ? [
+          permissions.value.accessibility,
+          permissions.value.fullDiskAccess,
+          permissions.value.notifications
+        ]
+      : []),
     ...(isMacOS.value || isWindows.value ? [permissions.value.microphone] : []),
     ...(isWindows.value ? [permissions.value.adminPrivileges] : [])
   ]
@@ -685,6 +691,10 @@ const permissionSummaryStatus = computed<SystemPermissionStatus>(() => {
       permissions.value.adminPrivileges
     ].some((item) => item.status === 'denied')
   ) {
+    // Full Disk Access is intentionally excluded here: it reports "denied" until
+    // explicitly granted (which most users never do), so counting it would force a
+    // red summary badge for an optional permission. It still affects the granted
+    // count above, so granting it is reflected without penalizing those who skip it.
     return 'denied'
   }
   return 'notDetermined'
