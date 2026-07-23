@@ -44,6 +44,7 @@ import {
   waitForPermissionGrant
 } from '~/modules/system/system-permission-refresh'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { usePermissionAutoRefresh } from '~/composables/usePermissionAutoRefresh'
 
 const { t } = useI18n()
 const transport = useTuffTransport()
@@ -73,6 +74,7 @@ const systemPermissionRequest = defineEvent('system')
 const permissions = ref<{
   fileAccess: PermissionState
   accessibility: PermissionState
+  fullDiskAccess: PermissionState
   notifications: PermissionState
   microphone: PermissionState
   adminPrivileges: PermissionState
@@ -87,6 +89,12 @@ const permissions = ref<{
     status: 'notDetermined' as SystemPermissionStatus,
     checked: false,
     canRequest: false,
+    message: ''
+  },
+  fullDiskAccess: {
+    status: 'notDetermined' as SystemPermissionStatus,
+    checked: false,
+    canRequest: true,
     message: ''
   },
   notifications: {
@@ -245,6 +253,10 @@ onMounted(async () => {
   await loadSettings()
 })
 
+// Keep permission status live while the user is on this page — refresh silently on
+// window focus (e.g. returning from System Settings) and on a background interval.
+usePermissionAutoRefresh(() => checkAllPermissions({ silent: true }))
+
 onBeforeUnmount(() => {
   permissionRequestRevision += 1
 })
@@ -281,6 +293,16 @@ function applyPermissionResult(type: string, result: SystemPermissionCheckResult
       message: result.message ?? ''
     }
     appSetting.setup.accessibility = result.status === 'granted'
+    return
+  }
+
+  if (type === 'fullDiskAccess') {
+    permissions.value.fullDiskAccess = {
+      status: result.status,
+      checked: true,
+      canRequest: result.canRequest,
+      message: result.message ?? ''
+    }
     return
   }
 
@@ -328,14 +350,17 @@ async function checkFileAccessRoots(): Promise<void> {
   applyFileAccessRoots(Array.isArray(roots) ? roots : [])
 }
 
-async function checkAllPermissions(): Promise<void> {
-  isLoading.value = true
+async function checkAllPermissions(options: { silent?: boolean } = {}): Promise<void> {
+  if (!options.silent) {
+    isLoading.value = true
+  }
   try {
     await checkFileAccessRoots()
 
     // Check accessibility permission (macOS)
     if (isMacOS.value) {
       await checkPermission('accessibility')
+      await checkPermission('fullDiskAccess')
     }
 
     if (isMacOS.value || isWindows.value) {
@@ -353,9 +378,13 @@ async function checkAllPermissions(): Promise<void> {
     }
   } catch (error) {
     settingSetupLog.error('Failed to check permissions', error)
-    toast.error(t('setupPermissions.checkFailed'))
+    if (!options.silent) {
+      toast.error(t('setupPermissions.checkFailed'))
+    }
   } finally {
-    isLoading.value = false
+    if (!options.silent) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -619,7 +648,10 @@ function getFileAccessPurposeText(purpose: string): string {
 }
 
 function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): SystemPermissionStatus {
-  if (permissions.value.fileAccess.status === 'granted' && root.required) {
+  // When overall file access is granted, show individual roots as granted unless a
+  // specific one was explicitly denied (covers non-required, always-readable roots
+  // like Music/Pictures that report "not determined" on silent macOS checks).
+  if (permissions.value.fileAccess.status === 'granted' && root.status !== 'denied') {
     return 'granted'
   }
   return root.status
@@ -628,15 +660,27 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
 const permissionSummary = computed(() => {
   const items = [
     permissions.value.fileAccess,
-    ...(isMacOS.value ? [permissions.value.accessibility, permissions.value.notifications] : []),
+    ...(isMacOS.value
+      ? [
+          permissions.value.accessibility,
+          permissions.value.fullDiskAccess,
+          permissions.value.notifications
+        ]
+      : []),
     ...(isMacOS.value || isWindows.value ? [permissions.value.microphone] : []),
     ...(isWindows.value ? [permissions.value.adminPrivileges] : [])
   ]
-  const granted = items.filter((item) => item.status === 'granted').length
+  // Only count permissions whose state we can actually read. 'unverifiable' (e.g.
+  // macOS notifications without the native reader) and 'unsupported' are excluded
+  // so they don't perma-block a green badge; once readable they rejoin the count.
+  const trackable = items.filter(
+    (item) => item.status !== 'unverifiable' && item.status !== 'unsupported'
+  )
+  const granted = trackable.filter((item) => item.status === 'granted').length
   return {
     granted,
-    total: items.length,
-    hasMissing: granted < items.length
+    total: trackable.length,
+    hasMissing: granted < trackable.length
   }
 })
 
@@ -653,6 +697,10 @@ const permissionSummaryStatus = computed<SystemPermissionStatus>(() => {
       permissions.value.adminPrivileges
     ].some((item) => item.status === 'denied')
   ) {
+    // Full Disk Access is intentionally excluded here: it reports "denied" until
+    // explicitly granted (which most users never do), so counting it would force a
+    // red summary badge for an optional permission. It still affects the granted
+    // count above, so granting it is reflected without penalizing those who skip it.
     return 'denied'
   }
   return 'notDetermined'
@@ -793,7 +841,7 @@ const permissionSummaryText = computed(() =>
           variant="flat"
           size="sm"
           :class="{ 'is-loading': isLoading }"
-          @click="checkAllPermissions"
+          @click="checkAllPermissions()"
         >
           <span v-if="isLoading" class="i-carbon-renew animate-spin" />
           {{ t('setupPermissions.recheck') }}
@@ -901,6 +949,41 @@ const permissionSummaryText = computed(() =>
               type="primary"
               size="sm"
               @click="requestPermission('accessibility')"
+            >
+              {{ t('setupPermissions.openSettings') }}
+            </TxButton>
+          </TuffBlockSlot>
+
+          <TuffBlockSlot
+            v-if="isMacOS"
+            :title="t('setupPermissions.fullDiskAccess')"
+            :description="t('setupPermissions.fullDiskAccessDesc')"
+            :active="permissions.fullDiskAccess.status === 'granted'"
+            :disabled="
+              permissions.fullDiskAccess.status === 'unsupported' &&
+              !permissions.fullDiskAccess.canRequest
+            "
+            default-icon="i-carbon-folder"
+            active-icon="i-carbon-folder-details"
+          >
+            <template #tags>
+              <TuffMacOSTag />
+            </template>
+            <TuffStatusBadge
+              size="md"
+              :status-key="permissions.fullDiskAccess.status"
+              :icon="getStatusIconClass(permissions.fullDiskAccess.status)"
+              :text="getStatusText(permissions.fullDiskAccess.status)"
+            />
+            <TxButton
+              v-if="
+                permissions.fullDiskAccess.status !== 'granted' &&
+                permissions.fullDiskAccess.canRequest
+              "
+              variant="flat"
+              type="primary"
+              size="sm"
+              @click="requestPermission('fullDiskAccess')"
             >
               {{ t('setupPermissions.openSettings') }}
             </TxButton>

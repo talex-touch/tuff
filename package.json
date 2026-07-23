@@ -92,7 +92,6 @@
       "better-sqlite3",
       "core-js",
       "electron",
-      "electron-clipboard-ex",
       "electron-winstaller",
       "esbuild",
       "extract-file-icon",

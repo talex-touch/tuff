@@ -118,6 +118,16 @@ function createPipeline() {
   const pipeline = new ClipboardCapturePipeline({
     getDatabase: () => db as never,
     getClipboardHelper: () => helper,
+    getReader: () => ({
+      kind: 'electron',
+      readText: async () => mocks.readText(),
+      readHtml: async () => mocks.readHTML(),
+      readFiles: async () => [],
+      readImage: async () => {
+        const image = mocks.readImage()
+        return image.isEmpty() ? null : (image as never)
+      }
+    }),
     getLastSuccessfulScanAt: () => lastSuccessfulScanAt,
     getLastImagePersistAt: () => lastImagePersistAt,
     getTransport: () => ({ sendToPlugin: mocks.sendToPlugin }) as never,

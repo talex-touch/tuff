@@ -20,6 +20,7 @@ export interface ScannedAppInfo {
   name: string
   path: string
   icon: string
+  iconSourcePath?: string
   bundleId: string
   uniqueId: string
   stableId: string

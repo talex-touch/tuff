@@ -30,6 +30,7 @@ import {
   waitForPermissionGrant
 } from '~/modules/system/system-permission-refresh'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { usePermissionAutoRefresh } from '~/composables/usePermissionAutoRefresh'
 import Done from './Done.vue'
 
 type StepFunction = (
@@ -147,6 +148,10 @@ onMounted(async () => {
   await loadSettings()
 })
 
+// Keep permission status live while the user is on this step — refresh silently on
+// window focus (e.g. returning from System Settings) and on a background interval.
+usePermissionAutoRefresh(() => checkAllPermissions({ silent: true }))
+
 onBeforeUnmount(() => {
   permissionRequestRevision += 1
 })
@@ -241,13 +246,17 @@ async function checkFileAccessRoots(): Promise<void> {
   applyFileAccessRoots(Array.isArray(roots) ? roots : [])
 }
 
-async function checkAllPermissions(): Promise<void> {
-  if (isLoading.value) {
+let permissionCheckInFlight = false
+async function checkAllPermissions(options: { silent?: boolean } = {}): Promise<void> {
+  if (permissionCheckInFlight) {
     // Already checking, avoid duplicate requests
     return
   }
+  permissionCheckInFlight = true
 
-  isLoading.value = true
+  if (!options.silent) {
+    isLoading.value = true
+  }
   try {
     // Check file access permission (required)
     await checkFileAccessRoots()
@@ -288,9 +297,14 @@ async function checkAllPermissions(): Promise<void> {
     }
   } catch (error) {
     setupPermissionsLog.error('Failed to check permissions', error)
-    toast.error(t('setupPermissions.checkFailed'))
+    if (!options.silent) {
+      toast.error(t('setupPermissions.checkFailed'))
+    }
   } finally {
-    isLoading.value = false
+    permissionCheckInFlight = false
+    if (!options.silent) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -512,7 +526,10 @@ function getFileAccessPurposeText(purpose: string): string {
 }
 
 function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): SystemPermissionStatus {
-  if (permissions.value.fileAccess.status === 'granted' && root.required) {
+  // When overall file access is granted, show individual roots as granted unless a
+  // specific one was explicitly denied (covers non-required, always-readable roots
+  // like Music/Pictures that report "not determined" on silent macOS checks).
+  if (permissions.value.fileAccess.status === 'granted' && root.status !== 'denied') {
     return 'granted'
   }
   return root.status
@@ -611,7 +628,7 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
               v-if="permissions.adminPrivileges.status !== 'granted'"
               size="sm"
               type="warning"
-              @click.stop="checkAllPermissions"
+              @click.stop="checkAllPermissions()"
             >
               {{ t('setupPermissions.recheck') }}
             </TxButton>
@@ -706,7 +723,7 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
     </div>
 
     <div class="SetupPermissions-Actions">
-      <TxButton :loading="isLoading" @click="checkAllPermissions">
+      <TxButton :loading="isLoading" @click="checkAllPermissions()">
         {{ t('setupPermissions.recheck') }}
       </TxButton>
       <TxButton type="primary" :loading="isContinuing" @click="handleContinue">
@@ -738,7 +755,7 @@ function getFileAccessRootDisplayStatus(root: FileAccessRootCheckResult): System
           >
             {{ t('setupPermissions.requestFileAccess') }}
           </TxButton>
-          <TxButton size="sm" :loading="isLoading" @click="checkAllPermissions">
+          <TxButton size="sm" :loading="isLoading" @click="checkAllPermissions()">
             {{ t('setupPermissions.recheck') }}
           </TxButton>
         </div>

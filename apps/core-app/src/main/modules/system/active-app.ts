@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { withOSAdapter } from '@talex-touch/utils/electron/env-tool'
-import { app } from 'electron'
+import { iconService } from '../../service/icon-service'
 import { createLogger } from '../../utils/logger'
 import { ensureXdotoolAvailable, getXdotoolUnavailableReason } from './linux-desktop-tools'
 
@@ -494,7 +494,7 @@ try {
   private async resolveIcon(appPath: string | null): Promise<string | null> {
     if (!appPath) return null
     try {
-      const icon = await app.getFileIcon(appPath, { size: 'small' })
+      const icon = await iconService.getSystemFileIcon(appPath, { size: 'small' })
       if (!icon || icon.isEmpty()) return null
       return icon.toDataURL()
     } catch (error) {

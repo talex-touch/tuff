@@ -18,7 +18,9 @@ async function findIconPath(iconName: string): Promise<string> {
   }
 
   const themes = ['Yaru', 'hicolor', 'Adwaita', 'ubuntu-mono-dark', 'ubuntu-mono-light', 'Humanity']
-  const sizes = ['48x48', 'scalable', '256x256', '512x512', '64x64']
+  // Prefer the vector (scalable) icon, then the largest raster, down to 48px —
+  // the previous order picked 48px first and looked upscaled in the result slot.
+  const sizes = ['scalable', '512x512', '256x256', '128x128', '64x64', '48x48']
   const types = ['apps', 'categories', 'devices', 'mimetypes', 'places', 'status']
   const exts = ['.png', '.svg']
 

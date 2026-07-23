@@ -89,12 +89,13 @@ describe('asset worker clients idle shutdown', () => {
   it('terminates the idle icon worker after extraction and restarts on demand', async () => {
     vi.useFakeTimers()
     const client = new IconWorkerClient()
-    const firstExtract = client.extract('/tmp/first.txt')
+    const firstExtract = client.extract('/tmp/first.txt', 48)
     const firstWorker = workerMock.workers.at(-1)!
 
     expect(firstWorker.messages[0]).toMatchObject({
       type: 'extract',
-      filePath: '/tmp/first.txt'
+      filePath: '/tmp/first.txt',
+      size: 48
     })
 
     firstWorker.emit('message', {

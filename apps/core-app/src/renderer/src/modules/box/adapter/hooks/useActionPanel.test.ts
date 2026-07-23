@@ -1,6 +1,7 @@
 import type { TuffItem } from '@talex-touch/utils'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { COREBOX_PRIMARY_ACTION_ID } from '../../../../../../shared/events/corebox-scenes'
 import { useActionPanel } from './useActionPanel'
 
 const state = vi.hoisted(() => ({
@@ -284,5 +285,50 @@ describe('useActionPanel MetaOverlay item action bridge', () => {
     await flushAsyncAction()
 
     expect(onActivationState).toHaveBeenCalledWith(activationState.activeProviders)
+  })
+
+  it('runs the primary action through onPrimaryExecute instead of item.execute', async () => {
+    const onPrimaryExecute = vi.fn()
+    const actionPanel = useActionPanel({ onPrimaryExecute })
+    const item = createItem()
+
+    await actionPanel.executeAction(COREBOX_PRIMARY_ACTION_ID, item)
+
+    expect(onPrimaryExecute).toHaveBeenCalledWith(item)
+    expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
+  })
+
+  it('pastes clipboard-history items through the clipboard apply pipeline', async () => {
+    useActionPanel()
+    const item = createItem({
+      id: 'clipboard-42',
+      kind: 'text',
+      source: { id: 'clipboard-history', type: 'history', name: 'Clipboard History' },
+      actions: [{ id: 'paste', type: 'execute', label: 'Paste' }],
+      meta: { raw: { id: 42 } }
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'paste', item })
+    await flushAsyncAction()
+
+    expect(state.send).toHaveBeenCalledWith(ClipboardEvents.apply, { id: 42, autoPaste: true })
+    expect(state.send).not.toHaveBeenCalledWith(CoreBoxEvents.item.execute, expect.anything())
+  })
+
+  it('copies clipboard-history items without auto-paste', async () => {
+    useActionPanel()
+    const item = createItem({
+      id: 'clipboard-7',
+      kind: 'text',
+      source: { id: 'clipboard-history', type: 'history', name: 'Clipboard History' },
+      actions: [{ id: 'copy', type: 'copy', label: 'Copy' }],
+      meta: { raw: { id: 7 } }
+    })
+
+    getListener(CoreBoxEvents.metaOverlay.itemAction)({ actionId: 'copy', item })
+    await flushAsyncAction()
+
+    expect(state.send).toHaveBeenCalledWith(ClipboardEvents.apply, { id: 7, autoPaste: false })
+    expect(state.toastSuccess).toHaveBeenCalledWith('已复制')
   })
 })

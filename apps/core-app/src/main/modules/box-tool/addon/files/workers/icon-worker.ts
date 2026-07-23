@@ -8,12 +8,13 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
 
-type ExtractFileIcon = (filePath: string) => Buffer | null
+type ExtractFileIcon = (filePath: string, size?: number) => Buffer | null
 
 interface IconRequest {
   type: 'extract'
   taskId: string
   filePath: string
+  size?: number
 }
 
 interface IconResultMessage {
@@ -85,7 +86,7 @@ async function processQueue(): Promise<void> {
 
   try {
     const extractor = await loadExtractFileIcon()
-    const buffer = extractor ? extractor(next.filePath) : null
+    const buffer = extractor ? extractor(next.filePath, next.size) : null
     parentPort?.postMessage({
       type: 'done',
       taskId: next.taskId,

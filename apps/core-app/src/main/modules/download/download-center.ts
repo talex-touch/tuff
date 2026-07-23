@@ -1071,6 +1071,21 @@ export class DownloadCenterModule extends BaseModule {
       registerSafeHandler(DownloadEvents.temp.getStats, async () => {
         return { stats: await this.getTempFileStats() }
       }),
+      registerSafeHandler(DownloadEvents.stats.get, async () => {
+        const tasks = this.getAllTasks()
+        const active = tasks.filter((t) => t.status === DownloadStatus.DOWNLOADING)
+        return {
+          stats: {
+            totalTasks: tasks.length,
+            completedTasks: tasks.filter((t) => t.status === DownloadStatus.COMPLETED).length,
+            failedTasks: tasks.filter((t) => t.status === DownloadStatus.FAILED).length,
+            totalDownloaded: tasks.reduce((sum, t) => sum + (t.progress?.downloadedSize ?? 0), 0),
+            averageSpeed: active.length
+              ? active.reduce((sum, t) => sum + (t.progress?.speed ?? 0), 0) / active.length
+              : 0
+          }
+        }
+      }),
       registerSafeHandler(DownloadEvents.migration.checkNeeded, async () => {
         return { needed: false }
       }),

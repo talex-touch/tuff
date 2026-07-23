@@ -1,5 +1,8 @@
 import type { Worker as NodeWorker, WorkerOptions } from 'node:worker_threads'
 import { pluginRuntimeTracker } from './plugin-runtime-tracker'
+import * as utilsSafeShell from '@talex-touch/utils/common/utils/safe-shell'
+import * as utilsTransportEvents from '@talex-touch/utils/transport/events'
+import * as utilsPluginWidget from '@talex-touch/utils/plugin/widget'
 
 const WORKER_THREAD_MODULE_IDS = new Set(['worker_threads', 'node:worker_threads'])
 export const PLUGIN_RUNTIME_DENIED_MODULE = 'PLUGIN_RUNTIME_DENIED_MODULE'
@@ -119,6 +122,28 @@ function getInstrumentedWorkerThreadsModule(
   return module
 }
 
+// ---------------------------------------------------------------------------
+// Host-provided @talex-touch/utils subpaths
+//
+// The utils package ships as TypeScript SOURCE only (main: index.ts, no compiled
+// .js and no "exports" map). It resolves fine inside the electron-vite bundle at
+// BUILD time, but a Prelude's runtime `require('@talex-touch/utils/<subpath>')`
+// goes through Node's native resolver, which cannot load a .ts file → the require
+// throws MODULE_NOT_FOUND and the plugin silently degrades (e.g. safe-shell becomes
+// null and every shell action returns "unsupported"). We map the specifiers that
+// plugins actually require to the copies statically bundled into the main process,
+// so Preludes get the real, working modules instead of a broken require.
+const PROVIDED_UTILS_MODULES = new Map<string, unknown>([
+  ['@talex-touch/utils/common/utils/safe-shell', utilsSafeShell],
+  ['@talex-touch/utils/transport/events', utilsTransportEvents],
+  ['@talex-touch/utils/plugin/widget', utilsPluginWidget]
+])
+
+function resolveProvidedUtilsModule(moduleId: string): unknown | undefined {
+  const normalized = normalizeModuleId(moduleId).replace(/\.(?:c|m)?[jt]s$/i, '')
+  return PROVIDED_UTILS_MODULES.get(normalized)
+}
+
 export function createPluginRequire(pluginName: string): NodeRequire {
   const baseRequire = require as NodeRequire
 
@@ -126,11 +151,18 @@ export function createPluginRequire(pluginName: string): NodeRequire {
     if (WORKER_THREAD_MODULE_IDS.has(id)) {
       return getInstrumentedWorkerThreadsModule(pluginName)
     }
+    const provided = resolveProvidedUtilsModule(id)
+    if (provided !== undefined) {
+      return provided
+    }
     assertAllowedPluginModule(pluginName, id)
     return baseRequire(id)
   }) as unknown as NodeRequire
 
   const resolve = ((id: string, options?: { paths?: string[] }) => {
+    if (resolveProvidedUtilsModule(id) !== undefined) {
+      return normalizeModuleId(id)
+    }
     assertAllowedPluginModule(pluginName, id)
     const resolved = baseRequire.resolve(id, options)
     assertAllowedPluginModule(pluginName, resolved)

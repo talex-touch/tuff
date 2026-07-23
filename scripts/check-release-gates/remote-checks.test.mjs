@@ -201,10 +201,16 @@ function installReleaseFetchMock({
       }
       if (textUrl === manifestUrl)
         return createJsonResponse(manifest)
-      if (textUrl.startsWith(`${baseUrl}/api/releases/${tag}/signature/`)) {
+      if (
+        textUrl.startsWith(`${baseUrl}/api/releases/${tag}/signature/`)
+        || signatureResponses[textUrl]
+      ) {
         const path = new URL(textUrl).pathname
         const pair = path.split('/').slice(-2).join('/')
-        const override = signatureResponses[pair] ?? signatureResponses.default
+        const override
+          = signatureResponses[textUrl]
+            ?? signatureResponses[pair]
+            ?? signatureResponses.default
         if (override instanceof Response)
           return override
         if (override) {
@@ -346,22 +352,28 @@ describe('check-release-gates remote checks', () => {
       'pass',
     )
     assert.equal(
-      checks.find(item => item.name === 'remote-download-endpoint')?.status,
+      checks.find(item => item.name === 'remote-notes')?.status,
       'pass',
     )
+    const downloadCheck = checks.find(
+      item => item.name === 'remote-download-endpoint',
+    )
+    assert.equal(downloadCheck?.status, 'pass')
     assert.equal(
-      checks
-        .find(item => item.name === 'remote-download-endpoint')
-        ?.results
-        .every(
-          item =>
-            item.hasExp
-            && item.hasValidExp
-            && item.hasValidSig
-            && item.hasUnexpectedQuery === false,
-        ),
+      downloadCheck?.results.every(
+        item =>
+          item.hasExp
+          && item.hasValidExp
+          && item.hasValidSig
+          && item.hasUnexpectedQuery === false,
+      ),
       true,
     )
+    const downloadSummary = JSON.stringify(downloadCheck?.results)
+    assert.equal(downloadSummary.includes('requestUrl'), false)
+    assert.equal(downloadSummary.includes('1700000000'), false)
+    assert.equal(downloadSummary.includes(signedDownloadSig), false)
+    assert.equal(downloadSummary.includes('?exp='), false)
   })
 
   it('fails gate-e when the GitHub release manifest asset is not uploaded', async () => {
@@ -593,13 +605,54 @@ describe('check-release-gates remote checks', () => {
     )
 
     assert.equal(matrixCheck?.status, 'fail')
-    assert.deepEqual(
-      matrixCheck?.mismatches.map(item => item.reason),
-      ['signature-url-mismatch'],
+    assert.deepEqual(matrixCheck?.mismatches, [
+      {
+        key: 'win32/x64',
+        reason: 'signature-url-mismatch',
+        actual:
+          'https://cdn.example.test/tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig',
+        expectedCanonical: `/api/releases/${tag}/signature/win32/x64`,
+        expectedGithub: `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig`,
+      },
+    ])
+  })
+
+  it('accepts an exact GitHub manifest sidecar URL and probes that configured URL', async () => {
+    const signatureUrl = `https://github.example.test/${tag}/tuff-core-2.4.12-beta.8-win32-x64-setup.exe.sig`
+    installReleaseFetchMock({
+      assets: buildAssets({
+        win32: { signatureUrl },
+      }),
+      signatureResponses: {
+        [signatureUrl]: {
+          body: '-----BEGIN PGP SIGNATURE-----\nvalid\n-----END PGP SIGNATURE-----',
+          headers: { 'Content-Type': 'application/pgp-signature' },
+        },
+      },
+    })
+
+    const checks = await runCheck()
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
+    const signatureCheck = checks.find(
+      item => item.name === 'remote-signature-endpoint',
+    )
+
+    assert.equal(matrixCheck?.status, 'pass')
+    assert.equal(
+      matrixCheck?.nexusMatrix.find(item => item.platform === 'win32')
+        ?.signatureUrlSource,
+      'github',
+    )
+    assert.equal(signatureCheck?.status, 'pass')
+    assert.equal(
+      signatureCheck?.results.find(item => item.platform === 'win32')?.source,
+      'external',
     )
     assert.equal(
-      matrixCheck?.mismatches[0]?.expected,
-      `/api/releases/${tag}/signature/win32/x64`,
+      globalThis.fetch.mock.calls.some(([url]) => String(url) === signatureUrl),
+      true,
     )
   })
 
@@ -632,6 +685,32 @@ describe('check-release-gates remote checks', () => {
     })
   })
 
+  it('fails gate-e when a canonical signature URL includes a fragment', async () => {
+    const signatureUrl = `${baseUrl}/api/releases/${tag}/signature/win32/x64#sidecar`
+    installReleaseFetchMock({
+      assets: buildAssets({
+        win32: { signatureUrl },
+      }),
+    })
+
+    const checks = await runCheck()
+    const matrixCheck = checks.find(
+      item => item.name === 'remote-manifest-nexus-matrix',
+    )
+
+    assert.equal(matrixCheck?.status, 'fail')
+    assert.deepEqual(matrixCheck?.mismatches, [
+      {
+        key: 'win32/x64',
+        reason: 'signature-url-not-canonical',
+        actual: signatureUrl,
+        expected: `/api/releases/${tag}/signature/win32/x64`,
+        hasQuery: false,
+        hasHash: true,
+      },
+    ])
+  })
+
   it('fails gate-e when the signature endpoint returns an empty payload', async () => {
     installReleaseFetchMock({
       signatureResponses: {
@@ -656,6 +735,7 @@ describe('check-release-gates remote checks', () => {
         arch: 'x64',
         status: 200,
         validPayload: false,
+        source: 'nexus',
         valid: false,
         reason: 'empty-signature-body',
         byteLength: 0,
@@ -689,6 +769,48 @@ describe('check-release-gates remote checks', () => {
       )?.reason,
       'json-signature-body',
     )
+  })
+
+  it('fails gate-e when a signature endpoint returns an HTML payload', async () => {
+    installReleaseFetchMock({
+      signatureResponses: {
+        'linux/x64': {
+          body: '<html><body>signature missing</body></html>',
+          headers: { 'Content-Type': 'text/html' },
+        },
+      },
+    })
+
+    const checks = await runCheck()
+    const signatureCheck = checks.find(
+      item => item.name === 'remote-signature-endpoint',
+    )
+
+    assert.equal(signatureCheck?.status, 'fail')
+    assert.equal(
+      signatureCheck?.results.find(item => item.platform === 'linux')?.reason,
+      'html-signature-body',
+    )
+  })
+
+  it('fails gate-e when a signature endpoint does not return HTTP 200', async () => {
+    installReleaseFetchMock({
+      signatureResponses: {
+        'win32/x64': { status: 404, body: 'signature missing' },
+      },
+    })
+
+    const checks = await runCheck()
+    const signatureCheck = checks.find(
+      item => item.name === 'remote-signature-endpoint',
+    )
+    const result = signatureCheck?.results.find(
+      item => item.platform === 'win32',
+    )
+
+    assert.equal(signatureCheck?.status, 'fail')
+    assert.equal(result?.status, 404)
+    assert.equal(result?.validPayload, false)
   })
 
   it('fails gate-e when Nexus asset downloadUrl does not point at the signed release download endpoint', async () => {
@@ -894,7 +1016,7 @@ describe('check-release-gates remote checks', () => {
         platform: 'win32',
         arch: 'x64',
         status: 302,
-        url: `${baseUrl}/api/releases/${tag}/download/win32/x64?exp=1700000000&sig=${signedDownloadSig}`,
+        url: `${baseUrl}/api/releases/${tag}/download/win32/x64`,
         sameOrigin: true,
         path: `/api/releases/${tag}/download/win32/x64`,
         hasHash: false,
@@ -906,7 +1028,6 @@ describe('check-release-gates remote checks', () => {
         duplicateQueryKeys: [],
         hasUnexpectedQuery: false,
         unexpectedQueryKeys: [],
-        exp: '1700000000',
         validResponse: false,
         responseKind: 'redirect',
         location: null,
@@ -1448,6 +1569,132 @@ describe('check-release-gates remote checks', () => {
     assert.equal(inventoryCheck?.status, 'pass')
     assert.deepEqual(inventoryCheck?.issues, [])
     assert.deepEqual(inventoryCheck?.extraAssets, [])
+  })
+
+  it('allows an additional Linux DEB and its sidecar for a declared manifest pair', async () => {
+    const packageName = 'tuff-core-2.4.12-beta.8-linux-x64.deb'
+    installReleaseFetchMock({
+      githubAssets: [
+        ...buildGithubAssets(),
+        {
+          name: packageName,
+          browser_download_url: `https://github.example.test/${tag}/${packageName}`,
+          digest: `sha256:${'d'.repeat(64)}`,
+          state: 'uploaded',
+        },
+        {
+          name: `${packageName}.sig`,
+          browser_download_url: `https://github.example.test/${tag}/${packageName}.sig`,
+          state: 'uploaded',
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
+
+    assert.equal(inventoryCheck?.status, 'pass')
+    assert.deepEqual(inventoryCheck?.additionalPackages, [
+      {
+        platform: 'linux',
+        arch: 'x64',
+        name: packageName,
+        signature: `${packageName}.sig`,
+      },
+    ])
+  })
+
+  it('fails gate-e when an additional package for a declared pair lacks its sidecar', async () => {
+    const packageName = 'tuff-core-2.4.12-beta.8-linux-x64.deb'
+    installReleaseFetchMock({
+      githubAssets: [
+        ...buildGithubAssets(),
+        {
+          name: packageName,
+          browser_download_url: `https://github.example.test/${tag}/${packageName}`,
+          digest: `sha256:${'d'.repeat(64)}`,
+          state: 'uploaded',
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.missing, [
+      {
+        platform: 'linux',
+        arch: 'x64',
+        name: `${packageName}.sig`,
+        artifact: packageName,
+        kind: 'signature',
+        reason: 'missing-github-asset',
+      },
+    ])
+  })
+
+  it('fails gate-e when a declared-pair sidecar has no package', async () => {
+    const packageName = 'tuff-core-2.4.12-beta.8-linux-x64.deb'
+    installReleaseFetchMock({
+      githubAssets: [
+        ...buildGithubAssets(),
+        {
+          name: `${packageName}.sig`,
+          browser_download_url: `https://github.example.test/${tag}/${packageName}.sig`,
+          state: 'uploaded',
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(inventoryCheck?.extraAssets, [
+      {
+        name: `${packageName}.sig`,
+        index: 7,
+        reason: 'extra-github-release-asset',
+      },
+    ])
+  })
+
+  it('fails gate-e when a complete package pair targets no manifest pair', async () => {
+    const packageName = 'tuff-core-2.4.12-beta.8-linux-arm64.AppImage'
+    installReleaseFetchMock({
+      githubAssets: [
+        ...buildGithubAssets(),
+        {
+          name: packageName,
+          browser_download_url: `https://github.example.test/${tag}/${packageName}`,
+          digest: `sha256:${'d'.repeat(64)}`,
+          state: 'uploaded',
+        },
+        {
+          name: `${packageName}.sig`,
+          browser_download_url: `https://github.example.test/${tag}/${packageName}.sig`,
+          state: 'uploaded',
+        },
+      ],
+    })
+
+    const checks = await runCheck()
+    const inventoryCheck = checks.find(
+      item => item.name === 'remote-github-asset-inventory',
+    )
+
+    assert.equal(inventoryCheck?.status, 'fail')
+    assert.deepEqual(
+      inventoryCheck?.extraAssets.map(item => item.name),
+      [packageName, `${packageName}.sig`],
+    )
   })
 
   it('fails gate-e when GitHub release assets are missing manifest signature sidecars', async () => {

@@ -21,7 +21,11 @@ import type { DetachedDivisionConfig } from './detached-division'
 import type { IClipboardOptions } from './types'
 import { useTuffTransport, type StreamController } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { CoreBoxEvents, DivisionBoxEvents } from '@talex-touch/utils/transport/events'
+import {
+  CoreBoxEvents,
+  ClipboardEvents,
+  DivisionBoxEvents
+} from '@talex-touch/utils/transport/events'
 import { hasDocument, hasWindow } from '@talex-touch/utils/env'
 import { useDebounceFn } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
@@ -32,6 +36,10 @@ import { isDivisionBoxMode, windowState } from '~/modules/hooks/core-box'
 import { BoxMode } from '..'
 import { isDetachedDivisionItemMatch, parseDetachedDivisionConfig } from './detached-division'
 import { createCoreBoxInputTransport } from '../transport/input-transport'
+import {
+  CLIPBOARD_HISTORY_SOURCE_ID,
+  resolveClipboardHistoryRecordId
+} from './clipboard-history-item'
 import { isBackgroundAppLaunchItem } from './app-launch-item'
 import { buildClipboardQueryInputs } from './clipboard-query-inputs'
 import {
@@ -1247,6 +1255,24 @@ export function useSearch(
     const itemToExecute = item || activeItem.value
     if (!itemToExecute) {
       return
+    }
+
+    // Clipboard-history recommendation items have no execute provider in the
+    // search core. Route them through the clipboard apply pipeline (write +
+    // auto-paste), which hides CoreBox and pastes into the active app.
+    if (itemToExecute.source?.id === CLIPBOARD_HISTORY_SOURCE_ID) {
+      const recordId = resolveClipboardHistoryRecordId(itemToExecute)
+      if (recordId != null) {
+        searchVal.value = ''
+        searchResults.value = []
+        select.value = -1
+        await transport
+          .send(ClipboardEvents.apply, { id: recordId, autoPaste: true })
+          .catch((error) => {
+            devLog('Clipboard apply failed:', error)
+          })
+        return
+      }
     }
 
     const isPluginFeature =

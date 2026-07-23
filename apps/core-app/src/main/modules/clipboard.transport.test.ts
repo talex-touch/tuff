@@ -449,6 +449,7 @@ describe('ClipboardModule transport registration', () => {
       ClipboardEvents.read.toString(),
       ClipboardEvents.readImage.toString(),
       ClipboardEvents.readFiles.toString(),
+      ClipboardEvents.getStatus.toString(),
       ClipboardEvents.change.toString()
     ])
     expect(ClipboardEvents.queryMeta.toString()).toBe('clipboard:history:query-meta')
@@ -514,12 +515,12 @@ describe('ClipboardModule startup tasks', () => {
     const nativeStart = vi.fn(async () => undefined)
     const module = new ClipboardModule() as unknown as {
       clipboardHelper: { bootstrap: ReturnType<typeof vi.fn> } | null
-      nativeWatcher: { start: typeof nativeStart }
+      clipboardService: { start: typeof nativeStart }
       startClipboardMonitoring: () => void
     }
 
     module.clipboardHelper = { bootstrap: vi.fn() }
-    module.nativeWatcher.start = nativeStart
+    module.clipboardService.start = nativeStart
 
     module.startClipboardMonitoring()
 
@@ -541,7 +542,7 @@ describe('ClipboardModule startup tasks', () => {
     const runClipboardMonitor = vi.fn(async () => undefined)
     const module = new ClipboardModule() as unknown as {
       clipboardHelper: { bootstrap: ReturnType<typeof vi.fn> } | null
-      nativeWatcher: { start: typeof nativeStart }
+      clipboardService: { start: typeof nativeStart }
       startClipboardMonitoring: () => void
       runClipboardMonitor: typeof runClipboardMonitor
       coreBoxVisible: boolean
@@ -549,7 +550,7 @@ describe('ClipboardModule startup tasks', () => {
 
     clipboardRuntimeMocks.coreBoxWindowVisible = true
     module.clipboardHelper = { bootstrap: vi.fn() }
-    module.nativeWatcher.start = nativeStart
+    module.clipboardService.start = nativeStart
     module.runClipboardMonitor = runClipboardMonitor
 
     module.startClipboardMonitoring()
@@ -721,5 +722,74 @@ describe('ClipboardModule image transport payload', () => {
       image_content_kind: 'preview'
     })
     expect(item?.meta).not.toHaveProperty('image_original_url')
+  })
+})
+
+describe('ClipboardModule skips redundant captures while native watch is active', () => {
+  interface CheckHandle {
+    clipboardHelper: unknown
+    db: unknown
+    capturePipeline: { process: ReturnType<typeof vi.fn> }
+    clipboardService: {
+      isNativeActive: ReturnType<typeof vi.fn>
+      getNativeChangeCount: ReturnType<typeof vi.fn>
+    }
+    checkClipboard: (options: { bypassCooldown?: boolean; source: string }) => Promise<void>
+    lastCaptureChangeToken: number | null
+  }
+
+  function createModule(): CheckHandle {
+    const module = new ClipboardModule() as unknown as CheckHandle
+    module.clipboardHelper = { bootstrap: vi.fn() }
+    module.db = {}
+    module.capturePipeline = { process: vi.fn(async () => undefined) }
+    module.clipboardService = {
+      isNativeActive: vi.fn(() => true),
+      getNativeChangeCount: vi.fn(() => 0)
+    } as unknown as CheckHandle['clipboardService']
+    return module
+  }
+
+  it('runs the first baseline then skips an unchanged corebox-show baseline', async () => {
+    const module = createModule()
+
+    // First baseline has no prior capture token, so it must run and read the clipboard.
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+
+    // Second baseline with the native change-count unchanged is skipped — no
+    // main-thread clipboard.readImage() that would block the event loop.
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-runs the baseline after the native watcher observes a change', async () => {
+    const module = createModule()
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+
+    // OS clipboard changed → native change-count advanced → next baseline runs.
+    module.clipboardService.getNativeChangeCount.mockReturnValue(1)
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(2)
+  })
+
+  it('never skips the native-watch change signal itself', async () => {
+    const module = createModule()
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(1)
+
+    // Same change-count, but native-watch is the change signal and always runs.
+    await module.checkClipboard({ source: 'native-watch', bypassCooldown: true })
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not skip while the native watcher is inactive (polling fallback)', async () => {
+    const module = createModule()
+    module.clipboardService.isNativeActive.mockReturnValue(false)
+
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+    await module.checkClipboard({ source: 'corebox-show-baseline', bypassCooldown: true })
+    expect(module.capturePipeline.process).toHaveBeenCalledTimes(2)
   })
 })

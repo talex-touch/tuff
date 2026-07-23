@@ -6,6 +6,16 @@ import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 
 export const COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID = 'translate-image'
 export const COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID = 'translate-image-pin'
+
+/**
+ * Synthetic action id for the MetaOverlay (⌘K) "primary" action.
+ *
+ * The primary action mirrors what pressing Enter on the item in the main list
+ * does (provider default execute). It is injected at the top of the action list
+ * so the ⌘K panel's Enter target is the item's primary action rather than
+ * whatever `item.actions[0]` happens to be (historically a copy action).
+ */
+export const COREBOX_PRIMARY_ACTION_ID = '__corebox_primary__'
 export const COREBOX_SCREENSHOT_TRANSLATE_SCENE_ID = 'corebox.screenshot.translate'
 export const COREBOX_FX_LATEST_SCENE_ID = 'corebox.fx.latest'
 export const COREBOX_FX_CONVERT_SCENE_ID = 'corebox.fx.convert'

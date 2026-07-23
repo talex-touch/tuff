@@ -7,6 +7,7 @@ import type {
   ClipboardQueryResponse,
   ClipboardReadImageResponse,
   ClipboardReadResponse,
+  ClipboardStatus,
 } from '../../transport/events/types'
 import type {
   PluginClipboardHistoryResponse,
@@ -492,6 +493,14 @@ export function useClipboard() {
      */
     async readFiles(): Promise<string[]> {
       return await transport.send(ClipboardEvents.readFiles)
+    },
+
+    /**
+     * Queries clipboard capture-engine status (native watch vs polling fallback).
+     * Diagnostic only — returns engine health, never clipboard content.
+     */
+    async getStatus(): Promise<ClipboardStatus> {
+      return await transport.send(ClipboardEvents.getStatus)
     },
 
     /**

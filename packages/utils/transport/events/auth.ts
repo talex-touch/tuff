@@ -1,4 +1,14 @@
 import type { AuthState, AuthUser } from "../../auth";
+import type {
+  AccountInfo,
+  DeviceSession,
+  FeatureFlag,
+  Subscription,
+  SubscriptionPlan,
+  UsageStats,
+  UserProfile,
+  Team,
+} from "../../account/types";
 import { defineEvent } from "../event/builder";
 
 export interface AuthLoginRequest {
@@ -162,5 +172,59 @@ export const AccountEvents = {
       .module("sync")
       .event("record-activity")
       .define<AccountRecordSyncActivityRequest, boolean>(),
+  },
+  account: {
+    getProfile: defineEvent("account")
+      .module("profile")
+      .event("get")
+      .define<void, UserProfile | null>(),
+    getSubscription: defineEvent("account")
+      .module("subscription")
+      .event("get")
+      .define<void, Subscription | null>(),
+    getUsage: defineEvent("account")
+      .module("usage")
+      .event("get")
+      .define<void, UsageStats | null>(),
+    getFeatures: defineEvent("account")
+      .module("features")
+      .event("get")
+      .define<void, FeatureFlag[]>(),
+    getTeams: defineEvent("account")
+      .module("teams")
+      .event("get")
+      .define<void, Team[]>(),
+    getSessions: defineEvent("account")
+      .module("sessions")
+      .event("get")
+      .define<void, DeviceSession[]>(),
+    getInfo: defineEvent("account")
+      .module("info")
+      .event("get")
+      .define<void, AccountInfo | null>(),
+    openUpgrade: defineEvent("account")
+      .module("upgrade")
+      .event("open")
+      .define<{ plan?: SubscriptionPlan } | void, void>(),
+    openBilling: defineEvent("account")
+      .module("billing")
+      .event("open")
+      .define<void, void>(),
+    openSettings: defineEvent("account")
+      .module("settings")
+      .event("open")
+      .define<void, void>(),
+    openProfile: defineEvent("account")
+      .module("profile")
+      .event("open")
+      .define<void, void>(),
+    requestLogin: defineEvent("account")
+      .module("session")
+      .event("request-login")
+      .define<void, boolean>(),
+    logout: defineEvent("account")
+      .module("session")
+      .event("logout")
+      .define<void, void>(),
   },
 } as const;

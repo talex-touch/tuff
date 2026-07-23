@@ -3,8 +3,12 @@ import type { PreviousUpdateAsset } from './update-recovery-store'
 import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { buildPlatformInstallSpec, preparePlatformPackage } from './update-platform-adapter'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  assertPlatformInstallPreflight,
+  buildPlatformInstallSpec,
+  preparePlatformPackage
+} from './update-platform-adapter'
 
 const temporaryRoots: string[] = []
 
@@ -184,7 +188,7 @@ describe('update platform handoff adapter', () => {
     })
   })
 
-  it('builds AppImage and deb Linux handoffs and retains a compatible previous package', () => {
+  it('builds script-driven AppImage and deb Linux handoffs and retains a compatible previous package', () => {
     const appImage = buildPlatformInstallSpec(
       input({
         platform: 'linux',
@@ -198,17 +202,31 @@ describe('update platform handoff adapter', () => {
       input({ platform: 'linux', packagePath: '/updates/tuff_2.4.10.deb' })
     )
 
+    // AppImage is replaced in place via the bundled apply script (no longer a no-op launch).
     expect(appImage).toMatchObject({
-      handoff: { command: '/updates/tuff.AppImage', args: [], waitForExit: false },
+      handoff: {
+        command: '/bin/bash',
+        waitForExit: true,
+        args: expect.arrayContaining([
+          '--source',
+          '/updates/tuff.AppImage',
+          '--backup',
+          '/updates/attempts/attempt-1/linux-backup.AppImage'
+        ])
+      },
       recovery: { command: '/updates/tuff-2.4.9.AppImage', args: [], waitForExit: false },
       previousVersion: '2.4.9',
       recoveryAvailable: true
     })
-    expect(deb.handoff).toEqual({
-      command: 'xdg-open',
-      args: ['/updates/tuff_2.4.10.deb'],
-      waitForExit: false
+    expect((appImage.handoff.args ?? [])[0]).toMatch(/linux-apply-update\.sh$/)
+
+    // .deb is a real elevated install via pkexec inside the apply script (no longer xdg-open).
+    expect(deb.handoff).toMatchObject({
+      command: '/bin/bash',
+      waitForExit: true,
+      args: expect.arrayContaining(['--deb', '/updates/tuff_2.4.10.deb'])
     })
+    expect((deb.handoff.args ?? [])[0]).toMatch(/linux-apply-update\.sh$/)
   })
 
   it('fails closed for unsupported platforms and package formats', () => {
@@ -232,5 +250,50 @@ describe('update platform handoff adapter', () => {
     await preparePlatformPackage('linux', appImagePath)
 
     expect((await stat(appImagePath)).mode & 0o777).toBe(0o755)
+  })
+  it('allows a trusted macOS build only when the current app can be replaced directly', () => {
+    const access = vi.fn()
+
+    assertPlatformInstallPreflight(
+      {
+        platform: 'darwin',
+        executablePath: '/Applications/Tuff.app/Contents/MacOS/Tuff',
+        buildVerificationStatus: {
+          isVerified: true,
+          isOfficialBuild: true,
+          verificationFailed: false,
+          hasOfficialKey: true
+        }
+      },
+      access
+    )
+
+    expect(access).toHaveBeenCalledWith('/Applications/Tuff.app', expect.any(Number))
+    expect(access).toHaveBeenCalledWith('/Applications', expect.any(Number))
+  })
+
+  it('rejects untrusted or non-writable macOS installs without requesting elevation', () => {
+    const base = {
+      platform: 'darwin' as const,
+      executablePath: '/Applications/Tuff.app/Contents/MacOS/Tuff',
+      buildVerificationStatus: {
+        isVerified: true,
+        isOfficialBuild: true,
+        verificationFailed: false,
+        hasOfficialKey: true
+      }
+    }
+
+    expect(() =>
+      assertPlatformInstallPreflight({
+        ...base,
+        buildVerificationStatus: { ...base.buildVerificationStatus, isOfficialBuild: false }
+      })
+    ).toThrow(expect.objectContaining({ code: 'MAC_UPDATE_BUILD_UNTRUSTED' }))
+    expect(() =>
+      assertPlatformInstallPreflight(base, () => {
+        throw new Error('EACCES')
+      })
+    ).toThrow(expect.objectContaining({ code: 'MAC_UPDATE_DESTINATION_NOT_WRITABLE' }))
   })
 })

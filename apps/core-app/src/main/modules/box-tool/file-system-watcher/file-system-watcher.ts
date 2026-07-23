@@ -15,9 +15,12 @@ import {
   touchEventBus
 } from '../../../core/eventbus/touch-event'
 import { BaseModule } from '../../abstract-base-module'
+import {
+  PermissionStatus,
+  platformPermissionService
+} from '../../system/platform-permission-service'
 
 const isMac = process.platform === 'darwin'
-const isWindows = process.platform === 'win32'
 const MAC_PHOTOS_LIBRARY_MARKER = 'Photos Library.photoslibrary'
 const fileSystemWatcherLog = getLogger('file-system-watcher')
 
@@ -39,6 +42,9 @@ export class FileSystemWatcherModule extends BaseModule {
   private pendingPaths: Map<string, PendingPath> = new Map()
   private pendingAdditions: Set<string> = new Set()
 
+  // Bound so the same reference is used for both on() and off().
+  private readonly handlePermissionsRefreshed = (): Promise<string[]> => this.tryPendingPaths()
+
   constructor() {
     super(FileSystemWatcherModule.key, {
       create: false
@@ -46,20 +52,14 @@ export class FileSystemWatcherModule extends BaseModule {
   }
 
   private async hasAccess(p: string): Promise<boolean> {
-    try {
-      await fs.access(p, fs.constants.R_OK)
-      // On Windows, also try to read directory to ensure full access
-      if (isWindows) {
-        try {
-          await fs.readdir(p)
-        } catch {
-          return false
-        }
-      }
-      return true
-    } catch {
-      return false
-    }
+    // Honest, TCC-aware probe. On macOS, POSIX access(R_OK) returns success for
+    // user-owned-but-TCC-blocked folders (Documents/Downloads/Desktop), which
+    // previously caused blocked roots to be registered as dead watches that never
+    // recovered. probeFileAccessStatus enumerates the directory (what TCC gates),
+    // so a blocked root honestly reports non-GRANTED and gets queued as pending
+    // for the recovery poller. It also suppresses startup consent dialogs until
+    // the user has made an explicit file-access determination.
+    return platformPermissionService.probeFileAccessStatus(p) === PermissionStatus.GRANTED
   }
 
   /**
@@ -241,6 +241,11 @@ export class FileSystemWatcherModule extends BaseModule {
   async onInit(): Promise<void> {
     fileSystemWatcherLog.debug('Initializing... Watch paths will be added by consumer modules.')
 
+    // Reconcile pending (permission-blocked) roots as soon as permissions are
+    // re-checked — e.g. the user granted access in System Settings and the
+    // permission page refreshed — instead of waiting for the periodic poll.
+    touchEventBus.on(TalexEvents.PERMISSIONS_REFRESHED, this.handlePermissionsRefreshed)
+
     // Start periodic permission checking for pending paths
     // Check every 30 seconds for permission changes
     pollingService.register(
@@ -258,6 +263,8 @@ export class FileSystemWatcherModule extends BaseModule {
 
   onDestroy(): void {
     fileSystemWatcherLog.info('Destroying...')
+
+    touchEventBus.off(TalexEvents.PERMISSIONS_REFRESHED, this.handlePermissionsRefreshed)
 
     // Unregister polling task
     pollingService.unregister('filesystem-watcher-permission-check')

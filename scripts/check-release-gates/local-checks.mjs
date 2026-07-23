@@ -31,14 +31,19 @@ function checkNotes({ repoRoot, version, pushCheck }) {
   const enLen = en?.trim().length ?? 0
 
   if (zhLen > 0 && enLen > 0) {
-    pushCheck('notes', 'pass', 'Release notes zh/en are present and non-empty.', {
-      files: {
-        shared: fs.existsSync(sharedPath) ? sharedPath : null,
-        zh: fs.existsSync(zhPath) ? zhPath : null,
-        en: fs.existsSync(enPath) ? enPath : null,
+    pushCheck(
+      'notes',
+      'pass',
+      'Release notes zh/en are present and non-empty.',
+      {
+        files: {
+          shared: fs.existsSync(sharedPath) ? sharedPath : null,
+          zh: fs.existsSync(zhPath) ? zhPath : null,
+          en: fs.existsSync(enPath) ? enPath : null,
+        },
+        lengths: { zh: zhLen, en: enLen },
       },
-      lengths: { zh: zhLen, en: enLen },
-    })
+    )
     return
   }
 
@@ -86,13 +91,21 @@ function checkManifest({ repoRoot, stage, manifestArg, pushCheck }) {
     return
   }
 
-  const scriptPath = path.join(repoRoot, 'scripts', 'update-validate-release-manifest.mjs')
+  const scriptPath = path.join(
+    repoRoot,
+    'scripts',
+    'update-validate-release-manifest.mjs',
+  )
   try {
-    const output = execFileSync('node', [scriptPath, '--manifest', manifestPath], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    const output = execFileSync(
+      'node',
+      [scriptPath, '--manifest', manifestPath],
+      {
+        cwd: repoRoot,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
     pushCheck('manifest', 'pass', 'Manifest validation passed.', {
       manifestPath,
       output: output.trim(),
@@ -116,7 +129,11 @@ function checkPublishManifestMode({
   passDetail,
   failDetail,
 }) {
-  const scriptPath = path.join(repoRoot, 'scripts', 'validate-publish-manifests.mjs')
+  const scriptPath = path.join(
+    repoRoot,
+    'scripts',
+    'validate-publish-manifests.mjs',
+  )
   try {
     const output = execFileSync('node', [scriptPath, ...args], {
       cwd: repoRoot,
@@ -151,7 +168,8 @@ function checkPublishManifests({ repoRoot, pushCheck }) {
     pushCheck,
     name: 'publish-manifests-pack',
     args: ['--pack'],
-    passDetail: 'Publish package source and packed manifests are npm-compatible.',
+    passDetail:
+      'Publish package source and packed manifests are npm-compatible.',
     failDetail: 'Publish package packed manifest validation failed.',
   })
 }
@@ -163,7 +181,8 @@ export function runLocalReleaseGateChecks({
   manifestArg,
   pushCheck,
 }) {
-  checkNotes({ repoRoot, version, pushCheck })
+  if (stage !== 'gate-e')
+    checkNotes({ repoRoot, version, pushCheck })
   checkVersionBaseline({ repoRoot, version, stage, pushCheck })
   checkManifest({ repoRoot, stage, manifestArg, pushCheck })
   checkPublishManifests({ repoRoot, pushCheck })

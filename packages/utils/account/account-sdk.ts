@@ -278,7 +278,7 @@ export class AccountSDK {
       return cached
 
     try {
-      const profile = await this.send<UserProfile | null>('account:get-profile')
+      const profile = await this.send<UserProfile | null>(AccountEvents.account.getProfile.toEventName())
       if (profile) {
         this.setCache('profile', profile)
       }
@@ -346,7 +346,7 @@ export class AccountSDK {
       return cached
 
     try {
-      const subscription = await this.send<Subscription | null>('account:get-subscription')
+      const subscription = await this.send<Subscription | null>(AccountEvents.account.getSubscription.toEventName())
       if (subscription) {
         this.setCache('subscription', subscription)
       }
@@ -485,19 +485,23 @@ export class AccountSDK {
     if (cached)
       return cached
 
+    const emptyUsage: UsageStats = {
+      aiRequestsToday: 0,
+      aiRequestsThisMonth: 0,
+      aiTokensThisMonth: 0,
+      storageUsedBytes: 0,
+      pluginsInstalled: 0,
+    }
+
     try {
-      const usage = await this.send<UsageStats>('account:get-usage')
+      const usage = await this.send<UsageStats | null>(AccountEvents.account.getUsage.toEventName())
+      if (!usage)
+        return emptyUsage
       this.setCache('usage', usage)
       return usage
     }
     catch {
-      return {
-        aiRequestsToday: 0,
-        aiRequestsThisMonth: 0,
-        aiTokensThisMonth: 0,
-        storageUsedBytes: 0,
-        pluginsInstalled: 0,
-      }
+      return emptyUsage
     }
   }
 
@@ -633,7 +637,7 @@ export class AccountSDK {
    */
   async hasFeature(featureId: string): Promise<boolean> {
     try {
-      const features = await this.send<FeatureFlag[]>('account:get-features')
+      const features = await this.send<FeatureFlag[]>(AccountEvents.account.getFeatures.toEventName())
       const feature = features.find(f => f.id === featureId)
       return feature?.enabled ?? false
     }
@@ -647,7 +651,7 @@ export class AccountSDK {
    */
   async getFeatureValue<T = any>(featureId: string): Promise<T | null> {
     try {
-      const features = await this.send<FeatureFlag[]>('account:get-features')
+      const features = await this.send<FeatureFlag[]>(AccountEvents.account.getFeatures.toEventName())
       const feature = features.find(f => f.id === featureId)
       return (feature?.value as T) ?? null
     }
@@ -697,7 +701,7 @@ export class AccountSDK {
    */
   async getTeams(): Promise<Team[]> {
     try {
-      return await this.send<Team[]>('account:get-teams')
+      return await this.send<Team[]>(AccountEvents.account.getTeams.toEventName())
     }
     catch {
       return []
@@ -745,7 +749,7 @@ export class AccountSDK {
    */
   async getSessions(): Promise<DeviceSession[]> {
     try {
-      return await this.send<DeviceSession[]>('account:get-sessions')
+      return await this.send<DeviceSession[]>(AccountEvents.account.getSessions.toEventName())
     }
     catch {
       return []
@@ -773,7 +777,7 @@ export class AccountSDK {
       return cached
 
     try {
-      const info = await this.send<AccountInfo | null>('account:get-info')
+      const info = await this.send<AccountInfo | null>(AccountEvents.account.getInfo.toEventName())
       if (info) {
         this.setCache('accountInfo', info)
       }
@@ -841,14 +845,14 @@ export class AccountSDK {
    * Open upgrade page
    */
   async openUpgradePage(plan?: SubscriptionPlan): Promise<void> {
-    await this.send('account:open-upgrade', { plan })
+    await this.send(AccountEvents.account.openUpgrade.toEventName(), { plan })
   }
 
   /**
    * Open billing management page
    */
   async openBillingPage(): Promise<void> {
-    await this.send('account:open-billing')
+    await this.send(AccountEvents.account.openBilling.toEventName())
   }
 
   // ============================================================================
@@ -859,21 +863,21 @@ export class AccountSDK {
    * Open account settings
    */
   async openAccountSettings(): Promise<void> {
-    await this.send('account:open-settings')
+    await this.send(AccountEvents.account.openSettings.toEventName())
   }
 
   /**
    * Open profile editor
    */
   async openProfileEditor(): Promise<void> {
-    await this.send('account:open-profile')
+    await this.send(AccountEvents.account.openProfile.toEventName())
   }
 
   /**
    * Request login (opens login dialog)
    */
   async requestLogin(): Promise<boolean> {
-    return this.send<boolean>('account:request-login')
+    return this.send<boolean>(AccountEvents.account.requestLogin.toEventName())
   }
 
   /**
@@ -881,7 +885,7 @@ export class AccountSDK {
    */
   async logout(): Promise<void> {
     this.clearCache()
-    await this.send('account:logout')
+    await this.send(AccountEvents.account.logout.toEventName())
   }
 }
 

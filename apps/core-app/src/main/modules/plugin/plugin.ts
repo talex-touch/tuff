@@ -2626,6 +2626,31 @@ export class TouchPlugin implements ITouchPlugin {
     return this.pluginLifecycle
   }
 
+  /**
+   * Trigger the `onClose` lifecycle for the currently active CoreBox feature.
+   *
+   * Invoked when the user exits a plugin feature from the launcher. Runs both
+   * the plugin-level lifecycle hook and any per-feature listeners. Errors are
+   * routed through the standard runtime-error handler so a throwing `onClose`
+   * cannot break the feature-exit flow.
+   */
+  triggerFeatureExit(): void {
+    const feature = CoreBoxManager.getInstance().getCurrentFeature() ?? undefined
+    if (!feature) return
+
+    try {
+      this.pluginLifecycle?.onClose?.(feature)
+    } catch (error) {
+      this.handleRuntimeError('onClose', error)
+    }
+
+    try {
+      this._featureEvent.get(feature.id)?.forEach((fn) => fn.onClose?.(feature))
+    } catch (error) {
+      this.handleRuntimeError('onClose', error)
+    }
+  }
+
   // ==================== 存储相关方法 ====================
 
   /**

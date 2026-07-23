@@ -38,6 +38,10 @@ export enum TalexEvents {
   DIRECTORY_UNLINKED = 'file-system/directory-unlinked',
   FILE_WATCH_ROOT_RECOVERED = 'file-system/watch-root-recovered',
 
+  // System permission signal — emitted when permissions are (re)checked so the
+  // file-system watcher can reconcile roots that just became accessible.
+  PERMISSIONS_REFRESHED = 'system/permissions-refreshed',
+
   // Plugin Log Event
   PLUGIN_LOG_APPEND = 'plugin/log-append',
 
@@ -424,6 +428,10 @@ export class FileWatchRootRecoveredEvent implements ITouchEvent<TalexEvents> {
   constructor(filePath: string) {
     this.filePath = filePath
   }
+}
+
+export class PermissionsRefreshedEvent implements ITouchEvent<TalexEvents> {
+  name: TalexEvents = TalexEvents.PERMISSIONS_REFRESHED
 }
 
 export class PluginLogAppendEvent implements ITouchEvent<TalexEvents> {

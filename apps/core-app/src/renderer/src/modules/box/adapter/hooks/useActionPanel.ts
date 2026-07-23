@@ -2,14 +2,19 @@ import type { IProviderActivate, TuffItem } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { ClipboardEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import {
+  COREBOX_PRIMARY_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID,
   coreBoxImageTranslateEvent
 } from '../../../../../../shared/events/corebox-scenes'
+import {
+  CLIPBOARD_HISTORY_SOURCE_ID,
+  resolveClipboardHistoryRecordId
+} from './clipboard-history-item'
 import { devLog } from '~/utils/dev-log'
 
 function getActionPayloadString(payload: unknown, key: string): string {
@@ -29,28 +34,19 @@ interface UseActionPanelOptions {
   refreshSearch?: () => void
   navigate?: (path: string) => void
   onActivationState?: (activations: IProviderActivate[] | null) => void
+  /**
+   * Runs the item's primary action — the same path as pressing Enter on the
+   * item in the main list. Wired to `handleExecute` by the CoreBox view so the
+   * MetaOverlay (⌘K) Enter target stays consistent with the main list.
+   */
+  onPrimaryExecute?: (item: TuffItem) => void | Promise<void>
 }
 
 export function useActionPanel(options: UseActionPanelOptions = {}) {
-  const { openFlowSelector, refreshSearch, navigate, onActivationState } = options
+  const { openFlowSelector, refreshSearch, navigate, onActivationState, onPrimaryExecute } = options
   const { t } = useI18n()
   const transport = useTuffTransport()
   const appSdk = useAppSdk()
-
-  const visible = ref(false)
-  const item = ref<TuffItem | null>(null)
-  const isPinned = ref(false)
-
-  function open(targetItem: TuffItem): void {
-    item.value = targetItem
-    isPinned.value = Boolean(targetItem.meta?.pinned?.isPinned)
-    visible.value = true
-  }
-
-  function close(): void {
-    visible.value = false
-    item.value = null
-  }
 
   async function togglePin(targetItem: TuffItem): Promise<void> {
     try {
@@ -76,8 +72,49 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     }
   }
 
+  /**
+   * Routes a clipboard-history item through the clipboard apply pipeline.
+   * `autoPaste` true pastes into the active app (Enter/Paste); false only
+   * writes to the system clipboard (Copy). Correctly handles text/image/files
+   * unlike the generic copy-title fallback.
+   */
+  async function applyClipboardHistoryItem(
+    targetItem: TuffItem,
+    autoPaste: boolean
+  ): Promise<boolean> {
+    const recordId = resolveClipboardHistoryRecordId(targetItem)
+    if (recordId == null) return false
+
+    try {
+      await transport.send(ClipboardEvents.apply, { id: recordId, autoPaste })
+      if (!autoPaste) {
+        toast.success(t('corebox.copied', '已复制'))
+      }
+    } catch (error) {
+      devLog('[useActionPanel] Clipboard apply failed:', error)
+      toast.error(t('corebox.actionUnsupported', '暂不支持该操作'))
+    }
+    return true
+  }
+
   async function executeAction(actionId: string, targetItem: TuffItem): Promise<void> {
+    // Primary action mirrors pressing Enter on the item in the main list.
+    if (actionId === COREBOX_PRIMARY_ACTION_ID) {
+      await onPrimaryExecute?.(targetItem)
+      return
+    }
+
     const itemAction = targetItem.actions?.find((action) => action.id === actionId)
+
+    // Clipboard-history items have no execute provider; route their paste/copy
+    // actions through the clipboard apply pipeline instead.
+    if (
+      targetItem.source?.id === CLIPBOARD_HISTORY_SOURCE_ID &&
+      (itemAction?.type === 'copy' || itemAction?.type === 'execute')
+    ) {
+      const handled = await applyClipboardHistoryItem(targetItem, itemAction.type !== 'copy')
+      if (handled) return
+    }
 
     switch (actionId) {
       case 'toggle-pin':
@@ -228,55 +265,22 @@ export function useActionPanel(options: UseActionPanelOptions = {}) {
     return activations.length > 0 ? activations : null
   }
 
-  async function handleAction(actionId: string): Promise<void> {
-    const targetItem = item.value
-    if (!targetItem) return
-    close()
-    await executeAction(actionId, targetItem)
-  }
-
-  // Channel listener for action panel
-  const openActionPanelHandler = (data: { item?: TuffItem }) => {
-    if (data?.item) open(data.item)
-  }
+  // MetaOverlay (⌘K) routes built-in and item actions back to the CoreBox
+  // renderer through this channel.
   const metaOverlayActionHandler = (data: { actionId?: string; item?: TuffItem }) => {
     if (!data?.item || !data.actionId) return
     void executeAction(data.actionId, data.item)
   }
-  const unregOpen = transport.on(CoreBoxEvents.actionPanel.open, openActionPanelHandler)
   const unregMetaOverlayAction = transport.on(
     CoreBoxEvents.metaOverlay.itemAction,
     metaOverlayActionHandler
   )
 
-  // Window event listener for ⌘K - opens ActionPanel
-  function handleTogglePinEvent(event: Event): void {
-    devLog('[useActionPanel] ⌘K event received')
-    const detail = (event as CustomEvent).detail
-    if (detail?.item) {
-      devLog('[useActionPanel] opening action panel for item:', detail.item.id)
-      open(detail.item)
-    }
-  }
-
-  onMounted(() => {
-    window.addEventListener('corebox:toggle-pin', handleTogglePinEvent)
-  })
-
   onBeforeUnmount(() => {
-    unregOpen()
     unregMetaOverlayAction()
-    window.removeEventListener('corebox:toggle-pin', handleTogglePinEvent)
   })
 
-  return reactive({
-    visible,
-    item,
-    isPinned,
-    open,
-    close,
-    handleAction,
-    executeAction,
-    togglePin
-  })
+  return {
+    executeAction
+  }
 }

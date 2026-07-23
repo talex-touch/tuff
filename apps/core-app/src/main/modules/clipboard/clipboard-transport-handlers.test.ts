@@ -69,6 +69,18 @@ function createHandlers(
     readImage: vi.fn(async () => null),
     readFiles: vi.fn(() => []),
     buildChangePayload: vi.fn(() => ({ latest: null, history: [] })),
+    getStatus: vi.fn(() => ({
+      mode: 'native' as const,
+      nativeActive: true,
+      enabled: true,
+      degraded: false,
+      startAttempted: true,
+      nativeChangeCount: 0,
+      activatedAt: null,
+      lastError: null,
+      lastErrorAt: null,
+      pollIntervalMs: 3000
+    })),
     ...overrides
   }
 }
@@ -167,7 +179,7 @@ describe('clipboard-transport-handlers', () => {
     })
 
     registry.dispose()
-    expect(disposeCallbacks).toHaveLength(15)
+    expect(disposeCallbacks).toHaveLength(16)
     expect(disposeCallbacks.every((dispose) => vi.mocked(dispose).mock.calls.length === 1)).toBe(
       true
     )
