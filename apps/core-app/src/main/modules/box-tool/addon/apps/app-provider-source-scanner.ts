@@ -55,11 +55,17 @@ export class AppProviderSourceScanner {
     let missingIconConfigUpdated = false
 
     for (const app of scannedApps) {
-      if (app.icon) continue
-
       const uniqueId = this.options.resolveScannedAppKey(app)
-      if (!uniqueId || knownMissingIconApps.has(uniqueId)) continue
+      if (!uniqueId) continue
 
+      if (app.icon) {
+        if (knownMissingIconApps.delete(uniqueId)) {
+          missingIconConfigUpdated = true
+        }
+        continue
+      }
+
+      if (knownMissingIconApps.has(uniqueId)) continue
       this.options.logApp(`Icon not found for app: ${chalk.yellow(app.name)}`, LogStyle.warning)
       knownMissingIconApps.add(uniqueId)
       missingIconConfigUpdated = true
