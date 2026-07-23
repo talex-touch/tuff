@@ -3492,7 +3492,7 @@
         "installNow": "立即重启更新",
         "openInstaller": "打开安装包",
         "restartMac": "重启并更新",
-        "restartMacDesc": "重启 macOS 版 Tuff，并把已验证更新包交给更新程序；当前 native trust 是 waived，不是通过。",
+        "restartMacDesc": "重启 macOS 版 Tuff，并把已验证更新包交给更新程序；native trust 状态以当前官方构建验证结果为准。",
         "startWindowsInstaller": "启动安装器",
         "startWindowsInstallerDesc": "启动已下载的 Windows 安装器，并按照 Windows 安装提示继续。",
         "openLinuxPackage": "打开安装包",
@@ -3520,7 +3520,7 @@
       "assetsCompatibilityNoUrl": "缺少下载链接",
       "assetsCompatibilityMissingChecksum": "缺少校验信息",
       "evidenceTitle": "诊断证据",
-      "evidenceDesc": "导出权威生命周期快照、降级/恢复元数据、缓存版本、平台接管模式，以及明确的 macOS native trust 豁免风险。",
+      "evidenceDesc": "导出权威生命周期快照、降级/恢复元数据、缓存版本、平台接管模式，以及明确的 macOS native trust 验证状态。",
       "copyEvidence": "复制证据",
       "saveEvidence": "保存证据",
       "evidenceMissing": "请先加载更新状态",
@@ -3528,8 +3528,22 @@
       "evidenceCopyFailed": "复制更新诊断证据失败",
       "evidenceSaved": "更新诊断证据已保存",
       "nativeTrust": {
-        "title": "macOS native trust 已豁免",
-        "waivedRisk": "尚未配置 Apple Developer 签名，Gatekeeper/公证信任并未通过，因此该安装包仍有原生执行风险。"
+        "passedTitle": "macOS native trust 已通过",
+        "passedDescription": "当前官方构建已通过 Developer ID 签名、Gatekeeper 与公证发布门禁。",
+        "verifiedBadge": "官方认证",
+        "unverifiedTitle": "macOS native trust 未验证",
+        "unavailableRisk": "当前安装缺少可验证的官方构建证明，无法确认 Developer ID、Gatekeeper 与公证信任。",
+        "verificationFailedRisk": "当前安装的官方构建验证失败，文件可能已损坏或被修改，无法确认其原生可信链。",
+        "securityWarning": "严重安全警告",
+        "criticalTitle": "当前 macOS 构建无法建立原生信任",
+        "criticalDescription": "此警告不可忽略：当前应用进程本身未建立官方信任；更新包下载校验不能替代当前安装的 Developer ID、Gatekeeper 与公证可信链。",
+        "notApplicableTitle": "macOS native trust 不适用",
+        "notApplicableDescription": "当前运行平台不是 macOS。",
+        "risks": {
+          "origin": "无法确认当前 app.asar 来自官方发布且未被修改。",
+          "nativeChain": "无法确认 Developer ID 签名、Gatekeeper 评估和 Apple 公证票据。",
+          "reinstall": "请从官方发布页重新下载安装；完成前不要把当前安装视为可信。"
+        }
       },
       "assets": {
         "download": "下载",
@@ -3559,6 +3573,8 @@
         "installStarted": "正在重启并应用更新",
         "installPendingConfirmation": "安装请求已发送，正在等待系统接管确认",
         "installFailedWithReason": "启动更新失败：{reason}",
+        "macSilentUpdateNotWritable": "Tuff 无法在不弹出密码框的情况下替换当前应用。请将 Tuff 移动或重新安装到当前用户可管理的 Applications 位置后重试。",
+        "macSilentUpdateUntrusted": "当前 Tuff 不是经过官方验证的 macOS 构建，已阻止静默更新。",
         "cacheCleared": "更新缓存已清空",
         "cacheClearFailed": "清空更新缓存失败"
       }
@@ -3568,7 +3584,7 @@
       "publishedAt": "发布时间：{time}",
       "skip": "跳过当前版本",
       "remindLater": "下次提醒我",
-      "updateNow": "立即更新"
+      "updateNow": "下载更新"
     },
     "download": {
       "title": "下载设置",
@@ -3683,6 +3699,8 @@
     },
     "accessibility": "辅助功能权限",
     "accessibilityDesc": "用于扫描应用和读取前台上下文；自动粘贴还需要 macOS 自动化权限允许 Tuff 控制 System Events。（可选）",
+    "fullDiskAccess": "完全磁盘访问权限",
+    "fullDiskAccessDesc": "让 Tuff 无需逐个目录授权即可索引 文稿/下载/桌面 以外的位置（如代码目录或外置磁盘）。可在 系统设置 › 隐私与安全性 › 完全磁盘访问权限 中授予。（可选）",
     "microphone": "麦克风权限",
     "microphoneDesc": "用于语音输入、语音面板和后续语音助手能力；不启用语音功能时不会录音。（可选）",
     "adminPrivileges": "管理员权限",
@@ -3843,7 +3861,12 @@
     "updateAvailable": "新版本可用",
     "updateAvailableBody": "Tuff {version} 已发布\n点击查看详情",
     "updateReady": "更新已准备就绪",
-    "updateReadyBody": "Tuff {version} 已下载完成\n点击立即安装",
+    "updateReadyBodyMac": "Tuff {version} 已准备好，点击后将静默重启并完成更新。",
+    "updateReadyBodyWindows": "Tuff {version} 已准备好，点击后将退出并启动安装器。",
+    "updateReadyBodyLinux": "Tuff {version} 已准备好，点击后将退出并打开更新包。",
+    "updateBlocked": "静默更新已阻止",
+    "updateBlockedUntrustedMac": "当前 Tuff 不是经过官方验证的 macOS 构建，已准备的更新仍会保留。",
+    "updateBlockedUnwritableMac": "Tuff 无法在不弹出密码框的情况下替换当前应用，已准备的更新仍会保留。",
     "syncBlockedTitle": "同步已暂停",
     "syncBlockedBody": "由于{reason}，同步已暂停，请处理后重试。",
     "syncBlockedReasonQuota": "配额受限",
