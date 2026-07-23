@@ -10,7 +10,8 @@ const {
   askForMediaAccessMock,
   appGetPathMock,
   getMainConfigMock,
-  accessSyncMock
+  accessSyncMock,
+  notificationStatusMock
 } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
@@ -20,7 +21,12 @@ const {
   askForMediaAccessMock: vi.fn(async () => true),
   appGetPathMock: vi.fn(),
   getMainConfigMock: vi.fn(),
-  accessSyncMock: vi.fn(() => undefined)
+  accessSyncMock: vi.fn(() => undefined),
+  notificationStatusMock: vi.fn()
+}))
+
+vi.mock('@talex-touch/tuff-native', () => ({
+  getNotificationAuthorizationStatus: notificationStatusMock
 }))
 
 vi.mock('node:child_process', () => ({
@@ -265,11 +271,11 @@ describe('platform-permission-service', () => {
     )
   })
 
-  it('returns unsupported for Windows and Linux notification status', () => {
-    const windows = withPlatform('win32', () =>
+  it('returns unsupported for Windows and Linux notification status', async () => {
+    const windows = await withPlatform('win32', () =>
       PlatformPermissionService.getInstance().checkNotifications()
     )
-    const linux = withPlatform('linux', () =>
+    const linux = await withPlatform('linux', () =>
       PlatformPermissionService.getInstance().checkNotifications()
     )
 
@@ -279,28 +285,50 @@ describe('platform-permission-service', () => {
     expect(linux.canRequest).toBe(false)
   })
 
-  it('marks macOS notification permission as unverifiable when native notifications are supported', () => {
+  it('marks macOS notifications unverifiable in dev (native reader gated to packaged builds)', async () => {
     notificationIsSupportedMock.mockReturnValue(true)
 
-    const result = withPlatform('darwin', () =>
+    const result = await withPlatform('darwin', () =>
       PlatformPermissionService.getInstance().checkNotifications()
     )
 
     expect(result.status).toBe(PermissionStatus.UNVERIFIABLE)
     expect(result.canRequest).toBe(true)
-    expect(result.message).toContain('not readable')
+    expect(result.message).toContain('could not be read')
     expect(notificationIsSupportedMock).toHaveBeenCalled()
+    // Dev (app.isPackaged falsy) must not touch the native reader.
+    expect(notificationStatusMock).not.toHaveBeenCalled()
   })
 
-  it('returns unsupported when macOS native notifications are unavailable', () => {
+  it('returns unsupported when macOS native notifications are unavailable', async () => {
     notificationIsSupportedMock.mockReturnValue(false)
 
-    const result = withPlatform('darwin', () =>
+    const result = await withPlatform('darwin', () =>
       PlatformPermissionService.getInstance().checkNotifications()
     )
 
     expect(result.status).toBe(PermissionStatus.UNSUPPORTED)
     expect(result.canRequest).toBe(false)
+  })
+
+  it('maps the native macOS notification status in packaged builds', async () => {
+    notificationIsSupportedMock.mockReturnValue(true)
+    notificationStatusMock.mockResolvedValue({ status: 'denied' })
+    const electron = await import('electron')
+    const appRef = electron.app as unknown as { isPackaged: boolean }
+    appRef.isPackaged = true
+
+    try {
+      const result = await withPlatform('darwin', () =>
+        PlatformPermissionService.getInstance().checkNotifications()
+      )
+
+      expect(notificationStatusMock).toHaveBeenCalled()
+      expect(result.status).toBe(PermissionStatus.DENIED)
+      expect(result.canRequest).toBe(true)
+    } finally {
+      appRef.isPackaged = false
+    }
   })
 
   it.each([

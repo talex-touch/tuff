@@ -3,6 +3,7 @@
 
 #include <napi.h>
 
+#include "common/notification_types.h"
 #include "common/ocr_types.h"
 
 namespace tuff::native {
@@ -167,6 +168,61 @@ Napi::Value GetNativeOcrSupport(const Napi::CallbackInfo& info) {
   return support;
 }
 
+const char* NotificationStatusToString(NotificationAuthStatus status) {
+  switch (status) {
+    case NotificationAuthStatus::Granted:
+      return "granted";
+    case NotificationAuthStatus::Denied:
+      return "denied";
+    case NotificationAuthStatus::NotDetermined:
+      return "notDetermined";
+    case NotificationAuthStatus::Unsupported:
+      return "unsupported";
+    case NotificationAuthStatus::Unverifiable:
+    default:
+      return "unverifiable";
+  }
+}
+
+// Reads the notification authorization status off the main thread; the platform
+// call blocks briefly on an OS callback, so it runs on the libuv thread pool.
+class NotificationStatusWorker : public Napi::AsyncWorker {
+ public:
+  NotificationStatusWorker(Napi::Env env, Napi::Promise::Deferred deferred)
+      : Napi::AsyncWorker(env), deferred_(deferred) {}
+
+  void Execute() override {
+    status_ = GetNotificationAuthorizationStatusBlocking(error_);
+  }
+
+  void OnOK() override {
+    auto env = Env();
+    auto result = Napi::Object::New(env);
+    result.Set("status", Napi::String::New(env, NotificationStatusToString(status_)));
+    if (!error_.empty()) {
+      result.Set("reason", Napi::String::New(env, error_));
+    }
+    deferred_.Resolve(result);
+  }
+
+  void OnError(const Napi::Error& error) override {
+    deferred_.Reject(error.Value());
+  }
+
+ private:
+  NotificationAuthStatus status_ = NotificationAuthStatus::Unverifiable;
+  std::string error_;
+  Napi::Promise::Deferred deferred_;
+};
+
+Napi::Value GetNotificationAuthorizationStatus(const Napi::CallbackInfo& info) {
+  auto env = info.Env();
+  auto deferred = Napi::Promise::Deferred::New(env);
+  auto* worker = new NotificationStatusWorker(env, deferred);
+  worker->Queue();
+  return deferred.Promise();
+}
+
 }  // namespace
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
@@ -176,6 +232,10 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set(
       "getNativeOcrSupport",
       Napi::Function::New(env, GetNativeOcrSupport, "getNativeOcrSupport"));
+  exports.Set(
+      "getNotificationAuthorizationStatus",
+      Napi::Function::New(
+          env, GetNotificationAuthorizationStatus, "getNotificationAuthorizationStatus"));
   return exports;
 }
 
