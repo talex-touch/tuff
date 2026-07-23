@@ -1,14 +1,22 @@
 import type { ModuleDestroyContext, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { TalexEvents } from '../../core/eventbus/touch-event'
+import {
+  PermissionsRefreshedEvent,
+  TalexEvents,
+  touchEventBus
+} from '../../core/eventbus/touch-event'
 import { execFileSync, spawn } from 'node:child_process'
 import * as fs from 'node:fs'
 import { promises as fsp } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
+import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { Notification, shell, systemPreferences } from 'electron'
 import { BaseModule } from '../abstract-base-module'
+import { getMainConfig } from '../storage'
 import { getFileAccessRootDescriptors, type FileAccessRootDescriptor } from './file-access-roots'
 
 export enum PermissionType {
@@ -17,7 +25,8 @@ export enum PermissionType {
   MICROPHONE = 'microphone',
   SCREEN_RECORDING = 'screenRecording',
   ADMIN_PRIVILEGES = 'adminPrivileges',
-  FILE_ACCESS = 'fileAccess'
+  FILE_ACCESS = 'fileAccess',
+  FULL_DISK_ACCESS = 'fullDiskAccess'
 }
 
 export enum PermissionStatus {
@@ -48,9 +57,13 @@ const systemPermissionRequestFileAccessRootsEvent = defineEvent('system')
   .module('permission')
   .event('request-file-access-roots')
   .define<void, FileAccessRootCheckResult[]>()
+const systemPermissionFullDiskAccessEvent = defineEvent('system')
+  .module('permission')
+  .event('full-disk-access')
+  .define<void, PermissionCheckResult>()
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-const permissionCheckerLog = getLogger('permission-checker')
+const platformPermissionLog = getLogger('platform-permission')
 const PERMISSION_COMMAND_TIMEOUT_MS = 1500
 const LINUX_SETTINGS_CANDIDATES: Array<{ command: string; args: string[] }> = [
   { command: 'xdg-open', args: ['settings://'] },
@@ -62,6 +75,12 @@ const LINUX_SETTINGS_CANDIDATES: Array<{ command: string; args: string[] }> = [
   { command: 'kcmshell6', args: ['kcm_notifications'] },
   { command: 'kcmshell5', args: ['kcm_notifications'] }
 ]
+
+// macOS folders gated by TCC (Transparency, Consent & Control). Reading these via
+// opendir()/readdir() while access is "not determined" pops a blocking consent
+// dialog, so silent/background probes must avoid touching them until the user has
+// made an explicit determination.
+const MAC_TCC_PROTECTED_HOME_DIRS = ['Documents', 'Downloads', 'Desktop'] as const
 
 function toErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
@@ -93,7 +112,15 @@ interface PermissionCheckResult {
   message?: string
 }
 
-interface FileAccessRootCheckOptions {
+interface FileAccessProbeOptions {
+  /**
+   * When true, the probe is allowed to trigger the macOS TCC consent dialog.
+   * Silent/background checks pass false so they never surface a dialog on startup.
+   */
+  allowPrompt?: boolean
+}
+
+interface FileAccessRootCheckOptions extends FileAccessProbeOptions {
   probeAccess?: boolean
 }
 
@@ -103,16 +130,31 @@ export interface FileAccessRootCheckResult extends FileAccessRootDescriptor {
   message?: string
 }
 
-export class PermissionChecker {
-  private static instance: PermissionChecker
+/**
+ * Cross-platform system permission service.
+ *
+ * Replaces the previous access(R_OK)-based file checks, which lied on macOS:
+ * POSIX access() only inspects mode bits/ACLs and returns success for
+ * user-owned-but-TCC-blocked folders (Documents/Downloads/Desktop). This service
+ * probes with opendir()/readdir(), which is what TCC actually gates, so a blocked
+ * folder is honestly reported as DENIED instead of a false GRANTED.
+ */
+export class PlatformPermissionService {
+  private static instance: PlatformPermissionService
+
+  // Whether the user has actively requested file-access this session (via the
+  // onboarding/settings "grant" flow). Combined with the persisted onboarding
+  // grant, this tells silent probes whether it is safe to touch TCC folders
+  // without risking a startup dialog.
+  private fileAccessDeterminationRequested = false
 
   private constructor() {}
 
-  public static getInstance(): PermissionChecker {
-    if (!PermissionChecker.instance) {
-      PermissionChecker.instance = new PermissionChecker()
+  public static getInstance(): PlatformPermissionService {
+    if (!PlatformPermissionService.instance) {
+      PlatformPermissionService.instance = new PlatformPermissionService()
     }
-    return PermissionChecker.instance
+    return PlatformPermissionService.instance
   }
 
   /**
@@ -137,7 +179,7 @@ export class PermissionChecker {
           : 'Accessibility permission is required for app scanning features'
       }
     } catch (error) {
-      permissionCheckerLog.error('Failed to check accessibility permission', { error })
+      platformPermissionLog.error('Failed to check accessibility permission', { error })
       return {
         status: PermissionStatus.NOT_DETERMINED,
         canRequest: false,
@@ -209,7 +251,7 @@ export class PermissionChecker {
         message: `Microphone permission: ${status}`
       }
     } catch (error) {
-      permissionCheckerLog.error('Failed to check microphone permission', { error })
+      platformPermissionLog.error('Failed to check microphone permission', { error })
       return {
         status: PermissionStatus.NOT_DETERMINED,
         canRequest: false,
@@ -248,7 +290,7 @@ export class PermissionChecker {
         message: `Screen recording permission: ${status}`
       }
     } catch (error) {
-      permissionCheckerLog.error('Failed to check screen recording permission', { error })
+      platformPermissionLog.error('Failed to check screen recording permission', { error })
       return {
         status: PermissionStatus.NOT_DETERMINED,
         canRequest: true,
@@ -279,7 +321,7 @@ export class PermissionChecker {
             : 'Administrator privileges are not active for current process'
         }
       } catch (error) {
-        permissionCheckerLog.error('Failed to check admin privileges', { error })
+        platformPermissionLog.error('Failed to check admin privileges', { error })
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
@@ -306,10 +348,107 @@ export class PermissionChecker {
   }
 
   /**
-   * Check file access permission (cross-platform)
-   * Tests access to a specific path
+   * Whether `targetPath` lives inside a macOS TCC-protected user folder.
    */
-  public checkFileAccess(filePath?: string): PermissionCheckResult {
+  public isTccProtectedPath(targetPath: string): boolean {
+    if (process.platform !== 'darwin') return false
+
+    const normalized = path.resolve(targetPath).toLowerCase()
+    const home = os.homedir()
+    return MAC_TCC_PROTECTED_HOME_DIRS.some((dir) => {
+      const root = path.join(home, dir).toLowerCase()
+      return normalized === root || normalized.startsWith(`${root}${path.sep}`)
+    })
+  }
+
+  /**
+   * Record that the user has actively initiated a file-access request this
+   * session. After this, silent probes may safely touch TCC folders because a
+   * granted/denied determination will no longer surface a dialog.
+   */
+  public markFileAccessDeterminationRequested(): void {
+    this.fileAccessDeterminationRequested = true
+  }
+
+  private isFileAccessOnboardingGranted(): boolean {
+    try {
+      const setting = getMainConfig(StorageList.APP_SETTING) as
+        | { setup?: { fileAccess?: unknown } }
+        | undefined
+      return setting?.setup?.fileAccess === true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Whether the user has made an explicit file-access determination — either this
+   * session (request flow) or previously (persisted onboarding grant). Used to
+   * decide when a silent probe may touch TCC folders without risking a dialog.
+   */
+  public isFileAccessDeterminationSettled(): boolean {
+    return this.fileAccessDeterminationRequested || this.isFileAccessOnboardingGranted()
+  }
+
+  /**
+   * The honest, TCC-aware access probe. Enumerates a single directory entry,
+   * which is exactly what macOS TCC gates, so a blocked folder throws EPERM/EACCES
+   * and is reported as DENIED. Synchronous by design so callers that must stay
+   * synchronous (transport handlers, the file-access-roots check) keep working.
+   */
+  public probeFileAccessStatus(
+    targetPath: string,
+    options: FileAccessProbeOptions = {}
+  ): PermissionStatus {
+    // Silent probe of an unresolved TCC folder would pop a consent dialog — defer
+    // instead of prompting. Once the user has determined access, probing is safe:
+    // granted succeeds quietly and denied throws quietly (neither prompts again).
+    if (
+      !options.allowPrompt &&
+      this.isTccProtectedPath(targetPath) &&
+      !this.isFileAccessDeterminationSettled()
+    ) {
+      return PermissionStatus.NOT_DETERMINED
+    }
+
+    try {
+      const dir = fs.opendirSync(targetPath)
+      try {
+        dir.readSync()
+      } finally {
+        dir.closeSync()
+      }
+      return PermissionStatus.GRANTED
+    } catch (error) {
+      const code = toErrorCode(error)
+      if (code === 'EPERM' || code === 'EACCES') {
+        return PermissionStatus.DENIED
+      }
+      if (code === 'ENOTDIR') {
+        // Not a directory: fall back to a plain readability check for files.
+        try {
+          fs.accessSync(targetPath, fs.constants.R_OK)
+          return PermissionStatus.GRANTED
+        } catch (fileError) {
+          const fileCode = toErrorCode(fileError)
+          return fileCode === 'EPERM' || fileCode === 'EACCES'
+            ? PermissionStatus.DENIED
+            : PermissionStatus.NOT_DETERMINED
+        }
+      }
+      // ENOENT (missing path) and anything else are not determinable.
+      return PermissionStatus.NOT_DETERMINED
+    }
+  }
+
+  /**
+   * Check file access permission (cross-platform). Tests access to a specific path
+   * using the TCC-aware probe.
+   */
+  public checkFileAccess(
+    filePath?: string,
+    options: FileAccessProbeOptions = {}
+  ): PermissionCheckResult {
     const fallback = resolveDefaultFileAccessPath(process.platform)
     if (!filePath && !fallback.path) {
       return {
@@ -319,41 +458,82 @@ export class PermissionChecker {
       }
     }
     const testPath = filePath || fallback.path!
+    const status = this.probeFileAccessStatus(testPath, options)
 
+    switch (status) {
+      case PermissionStatus.GRANTED:
+        return {
+          status,
+          canRequest: false,
+          message: `File access to ${testPath} is granted`
+        }
+      case PermissionStatus.DENIED:
+        return {
+          status,
+          canRequest: true,
+          message: `File access to ${testPath} is denied. ${
+            process.platform === 'win32'
+              ? 'May require administrator privileges.'
+              : 'May require file access permissions.'
+          }`
+        }
+      default:
+        return {
+          status: PermissionStatus.NOT_DETERMINED,
+          canRequest: process.platform === 'darwin',
+          message: `File access to ${testPath} could not be determined`
+        }
+    }
+  }
+
+  /**
+   * Full Disk Access check (macOS only). Best-effort: the TCC database is only
+   * openable with Full Disk Access, so a successful open implies FDA is granted.
+   */
+  public checkFullDiskAccess(): PermissionCheckResult {
+    if (process.platform !== 'darwin') {
+      return {
+        status: PermissionStatus.UNSUPPORTED,
+        canRequest: false,
+        message: 'Full Disk Access is a macOS-only concept'
+      }
+    }
+
+    const probePath = path.join(
+      os.homedir(),
+      'Library',
+      'Application Support',
+      'com.apple.TCC',
+      'TCC.db'
+    )
     try {
-      // Try to read the directory
-      fs.accessSync(testPath, fs.constants.R_OK)
+      const fd = fs.openSync(probePath, 'r')
+      fs.closeSync(fd)
       return {
         status: PermissionStatus.GRANTED,
         canRequest: false,
-        message: `File access to ${testPath} is granted`
+        message: 'Full Disk Access is granted'
       }
-    } catch (error: unknown) {
-      const code =
-        typeof error === 'object' && error !== null && 'code' in error
-          ? (error as { code?: string }).code
-          : undefined
-      const message = error instanceof Error ? error.message : String(error)
-      if (code === 'EACCES' || code === 'EPERM') {
+    } catch (error) {
+      const code = toErrorCode(error)
+      if (code === 'EPERM' || code === 'EACCES') {
         return {
           status: PermissionStatus.DENIED,
           canRequest: true,
-          message: `File access to ${testPath} is denied. ${process.platform === 'win32' ? 'May require administrator privileges.' : 'May require file access permissions.'}`
-        }
-      } else if (code === 'ENOENT') {
-        return {
-          status: PermissionStatus.NOT_DETERMINED,
-          canRequest: false,
-          message: `Path ${testPath} does not exist`
-        }
-      } else {
-        return {
-          status: PermissionStatus.NOT_DETERMINED,
-          canRequest: false,
-          message: `Unable to check file access: ${message}`
+          message: 'Full Disk Access is not granted'
         }
       }
+      // ENOENT etc.: the probe file may not exist on this macOS build; we cannot tell.
+      return {
+        status: PermissionStatus.NOT_DETERMINED,
+        canRequest: true,
+        message: 'Full Disk Access status could not be determined'
+      }
     }
+  }
+
+  public hasFullDiskAccess(): boolean {
+    return this.checkFullDiskAccess().status === PermissionStatus.GRANTED
   }
 
   private createDeferredFileAccessResult(
@@ -372,6 +552,7 @@ export class PermissionChecker {
     options: FileAccessRootCheckOptions = {}
   ): FileAccessRootCheckResult[] {
     const probeAccess = options.probeAccess ?? process.platform !== 'darwin'
+    const allowPrompt = options.allowPrompt ?? false
 
     return getFileAccessRootDescriptors().map((root) => {
       if (!probeAccess) {
@@ -380,12 +561,15 @@ export class PermissionChecker {
 
       return {
         ...root,
-        ...this.checkFileAccess(root.path)
+        ...this.checkFileAccess(root.path, { allowPrompt })
       }
     })
   }
 
   public async requestFileAccessRoots(): Promise<FileAccessRootCheckResult[]> {
+    // A user-initiated request: safe to prompt from here on out.
+    this.markFileAccessDeterminationRequested()
+
     const roots = getFileAccessRootDescriptors()
     for (const root of roots) {
       if (process.platform !== 'darwin') break
@@ -397,7 +581,9 @@ export class PermissionChecker {
       }
     }
 
-    return this.checkFileAccessRoots({ probeAccess: true })
+    // Probe with prompting allowed so the reported status reflects the real
+    // outcome of the request (granted vs. denied) rather than a POSIX lie.
+    return this.checkFileAccessRoots({ probeAccess: true, allowPrompt: true })
   }
 
   /**
@@ -427,7 +613,7 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
     } catch (error) {
       const code = toErrorCode(error)
       if (code !== 'ENOENT') {
-        permissionCheckerLog.warn('Failed to verify Windows admin privileges', error)
+        platformPermissionLog.warn('Failed to verify Windows admin privileges', error)
       }
       return null
     }
@@ -498,6 +684,15 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
         }
         break
 
+      case PermissionType.FULL_DISK_ACCESS:
+        if (process.platform === 'darwin') {
+          await shell.openExternal(
+            'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
+          )
+          return true
+        }
+        break
+
       case PermissionType.ADMIN_PRIVILEGES:
         if (process.platform === 'win32') {
           // Show dialog explaining how to run as administrator
@@ -549,7 +744,7 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
         lastError = error
         const code = toErrorCode(error)
         if (code !== 'ENOENT') {
-          permissionCheckerLog.debug(
+          platformPermissionLog.debug(
             `Linux settings launcher failed: ${candidate.command} ${candidate.args.join(' ')}`,
             error
           )
@@ -592,39 +787,39 @@ $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
 }
 
 /**
- * Permission Checker Module
- * Provides system permission checking and requesting capabilities
+ * Platform Permission Module
+ * Provides system permission checking and requesting capabilities.
  */
-export class PermissionCheckerModule extends BaseModule {
-  static key: symbol = Symbol.for('PermissionChecker')
-  name: ModuleKey = PermissionCheckerModule.key
-  private checker: PermissionChecker
+export class PlatformPermissionModule extends BaseModule {
+  static key: symbol = Symbol.for('PlatformPermission')
+  name: ModuleKey = PlatformPermissionModule.key
+  private service: PlatformPermissionService
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
 
   constructor() {
-    super(PermissionCheckerModule.key, {
+    super(PlatformPermissionModule.key, {
       create: false
     })
-    this.checker = PermissionChecker.getInstance()
+    this.service = PlatformPermissionService.getInstance()
   }
 
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const channel =
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
     if (!channel) {
-      permissionCheckerLog.warn('Channel unavailable during permission checker init')
+      platformPermissionLog.warn('Channel unavailable during platform permission init')
       return
     }
 
     const keyManager = resolveKeyManager(channel)
     this.transport = getTuffTransportMain(channel, keyManager)
     this.setupChannels()
-    permissionCheckerLog.info('Permission checker module initialized')
+    platformPermissionLog.info('Platform permission module initialized')
   }
 
   async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     // Cleanup if needed
-    permissionCheckerLog.info('Permission checker module destroyed')
+    platformPermissionLog.info('Platform permission module destroyed')
   }
 
   private setupChannels(): void {
@@ -640,32 +835,37 @@ export class PermissionCheckerModule extends BaseModule {
 
         // Handle both enum and string values
         if (permissionType === 'accessibility' || permissionType === PermissionType.ACCESSIBILITY) {
-          result = this.checker.checkAccessibility()
+          result = this.service.checkAccessibility()
         } else if (
           permissionType === 'notifications' ||
           permissionType === PermissionType.NOTIFICATIONS
         ) {
-          result = this.checker.checkNotifications()
+          result = this.service.checkNotifications()
         } else if (
           permissionType === 'microphone' ||
           permissionType === PermissionType.MICROPHONE
         ) {
-          result = this.checker.checkMicrophone()
+          result = this.service.checkMicrophone()
         } else if (
           permissionType === 'screenRecording' ||
           permissionType === PermissionType.SCREEN_RECORDING
         ) {
-          result = this.checker.checkScreenRecording()
+          result = this.service.checkScreenRecording()
         } else if (
           permissionType === 'adminPrivileges' ||
           permissionType === PermissionType.ADMIN_PRIVILEGES
         ) {
-          result = this.checker.checkAdminPrivileges()
+          result = this.service.checkAdminPrivileges()
+        } else if (
+          permissionType === 'fullDiskAccess' ||
+          permissionType === PermissionType.FULL_DISK_ACCESS
+        ) {
+          result = this.service.checkFullDiskAccess()
         } else if (
           permissionType === 'fileAccess' ||
           permissionType === PermissionType.FILE_ACCESS
         ) {
-          result = this.checker.checkFileAccess()
+          result = this.service.checkFileAccess()
         } else {
           result = {
             status: PermissionStatus.NOT_DETERMINED,
@@ -677,7 +877,7 @@ export class PermissionCheckerModule extends BaseModule {
         // Return result directly - channel will auto-reply if handler doesn't use reply()
         return result
       } catch (error) {
-        permissionCheckerLog.error(`Failed to check permission ${permissionType}`, { error })
+        platformPermissionLog.error(`Failed to check permission ${permissionType}`, { error })
         return {
           status: PermissionStatus.NOT_DETERMINED,
           canRequest: false,
@@ -689,9 +889,9 @@ export class PermissionCheckerModule extends BaseModule {
     // Request permission (opens system settings)
     transport.on(systemPermissionRequestEvent, async (permissionType) => {
       try {
-        return await this.checker.requestPermission(permissionType)
+        return await this.service.requestPermission(permissionType)
       } catch (error) {
-        permissionCheckerLog.error(`Failed to request permission ${permissionType}`, { error })
+        platformPermissionLog.error(`Failed to request permission ${permissionType}`, { error })
         return false
       }
     })
@@ -699,32 +899,52 @@ export class PermissionCheckerModule extends BaseModule {
     // Open system settings
     transport.on(systemPermissionOpenSettingsEvent, async () => {
       try {
-        await this.checker.openSystemSettings()
+        await this.service.openSystemSettings()
         return true
       } catch (error) {
-        permissionCheckerLog.error('Failed to open system settings', { error })
+        platformPermissionLog.error('Failed to open system settings', { error })
         return false
       }
     })
 
     transport.on(systemPermissionFileAccessRootsEvent, () => {
       try {
-        return this.checker.checkFileAccessRoots()
+        const roots = this.service.checkFileAccessRoots()
+        // A status refresh is a good moment to let the watcher retry any roots
+        // that may have just become accessible (e.g. granted in System Settings).
+        touchEventBus.emit(TalexEvents.PERMISSIONS_REFRESHED, new PermissionsRefreshedEvent())
+        return roots
       } catch (error) {
-        permissionCheckerLog.error('Failed to check file access roots', { error })
+        platformPermissionLog.error('Failed to check file access roots', { error })
         return []
       }
     })
 
     transport.on(systemPermissionRequestFileAccessRootsEvent, async () => {
       try {
-        return await this.checker.requestFileAccessRoots()
+        const roots = await this.service.requestFileAccessRoots()
+        touchEventBus.emit(TalexEvents.PERMISSIONS_REFRESHED, new PermissionsRefreshedEvent())
+        return roots
       } catch (error) {
-        permissionCheckerLog.error('Failed to request file access roots', { error })
-        return this.checker.checkFileAccessRoots()
+        platformPermissionLog.error('Failed to request file access roots', { error })
+        return this.service.checkFileAccessRoots()
+      }
+    })
+
+    transport.on(systemPermissionFullDiskAccessEvent, () => {
+      try {
+        return this.service.checkFullDiskAccess()
+      } catch (error) {
+        platformPermissionLog.error('Failed to check full disk access', { error })
+        return {
+          status: PermissionStatus.NOT_DETERMINED,
+          canRequest: false,
+          message: `Error checking full disk access: ${error}`
+        }
       }
     })
   }
 }
 
-export const permissionCheckerModule = new PermissionCheckerModule()
+export const platformPermissionService = PlatformPermissionService.getInstance()
+export const platformPermissionModule = new PlatformPermissionModule()
