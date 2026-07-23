@@ -8,6 +8,7 @@ import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-over
 import { onBeforeUnmount } from 'vue'
 import { BoxMode } from '..'
 import {
+  COREBOX_PRIMARY_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_ACTION_ID,
   COREBOX_SCREENSHOT_TRANSLATE_PIN_ACTION_ID
 } from '../../../../../../shared/events/corebox-scenes'
@@ -207,9 +208,89 @@ const COREBOX_DETACH_EVENT = 'corebox:detach-item'
 // Helper functions for MetaOverlay
 const isMac = rendererPlatformState.isMac
 
+/**
+ * Resolves the label/subtitle/icon for the synthetic "primary" action shown at
+ * the top of the MetaOverlay (⌘K) panel. The primary action mirrors what
+ * pressing Enter on the item in the main list does, so its wording should match
+ * the provider's default execute behavior.
+ */
+function resolvePrimaryActionMeta(item: TuffItem): {
+  title: string
+  subtitle?: string
+  icon: { type: 'class'; value: string }
+} {
+  const title = item.render?.basic?.title
+  const withTarget = (verb: string): string | undefined =>
+    title ? `${verb} "${title}"` : undefined
+
+  if (item.source?.id === 'clipboard-history') {
+    return {
+      title: '粘贴',
+      subtitle: title ? withTarget('粘贴') : '粘贴到当前应用',
+      icon: { type: 'class', value: 'i-ri-clipboard-line' }
+    }
+  }
+
+  if (item.kind === 'preview') {
+    return {
+      title: '复制结果',
+      subtitle: title,
+      icon: { type: 'class', value: 'i-ri-file-copy-line' }
+    }
+  }
+
+  if (item.kind === 'app') {
+    return {
+      title: '打开',
+      subtitle: withTarget('打开'),
+      icon: { type: 'class', value: 'i-ri-play-line' }
+    }
+  }
+
+  if (item.kind === 'file') {
+    return {
+      title: '打开',
+      subtitle: withTarget('打开'),
+      icon: { type: 'class', value: 'i-ri-external-link-line' }
+    }
+  }
+
+  return {
+    title: '打开',
+    subtitle: title,
+    icon: { type: 'class', value: 'i-ri-corner-down-left-line' }
+  }
+}
+
+/**
+ * Builds the synthetic primary action injected at the top of the action list.
+ * It carries the Enter (↵) shortcut and the highest priority so the panel's
+ * Enter target is the item's primary action rather than its first copy action.
+ */
+function generatePrimaryAction(item: TuffItem): MetaAction {
+  const meta = resolvePrimaryActionMeta(item)
+  return {
+    id: COREBOX_PRIMARY_ACTION_ID,
+    render: {
+      basic: {
+        title: meta.title,
+        subtitle: meta.subtitle,
+        icon: meta.icon
+      },
+      shortcut: isMac ? '↵' : 'Enter',
+      group: '操作'
+    },
+    handler: 'builtin',
+    priority: 1000
+  }
+}
+
 function generateBuiltinActions(item: TuffItem): MetaAction[] {
   const actions: MetaAction[] = []
   const isPinned = Boolean(item.meta?.pinned?.isPinned)
+
+  // Primary action (Enter) — mirrors main-list execution, always first.
+  actions.push(generatePrimaryAction(item))
 
   // Pin/Unpin action
   actions.push({
@@ -220,7 +301,6 @@ function generateBuiltinActions(item: TuffItem): MetaAction[] {
         subtitle: isPinned ? '从推荐列表中移除' : '添加到推荐列表顶部',
         icon: { type: 'class', value: isPinned ? 'i-ri-unpin-line' : 'i-ri-pushpin-line' }
       },
-      shortcut: isMac ? '↵' : 'Enter',
       group: '操作'
     },
     handler: 'builtin',
