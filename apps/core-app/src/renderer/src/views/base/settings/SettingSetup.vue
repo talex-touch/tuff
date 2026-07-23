@@ -670,11 +670,17 @@ const permissionSummary = computed(() => {
     ...(isMacOS.value || isWindows.value ? [permissions.value.microphone] : []),
     ...(isWindows.value ? [permissions.value.adminPrivileges] : [])
   ]
-  const granted = items.filter((item) => item.status === 'granted').length
+  // Only count permissions whose state we can actually read. 'unverifiable' (e.g.
+  // macOS notifications without the native reader) and 'unsupported' are excluded
+  // so they don't perma-block a green badge; once readable they rejoin the count.
+  const trackable = items.filter(
+    (item) => item.status !== 'unverifiable' && item.status !== 'unsupported'
+  )
+  const granted = trackable.filter((item) => item.status === 'granted').length
   return {
     granted,
-    total: items.length,
-    hasMissing: granted < items.length
+    total: trackable.length,
+    hasMissing: granted < trackable.length
   }
 })
 
