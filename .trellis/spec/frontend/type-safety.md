@@ -290,6 +290,20 @@ type CoreBoxIconPayload = {
 };
 ```
 
+Main-process icon access uses one `IconService` boundary:
+
+```ts
+getSystemFileIcon(
+  filePath: string,
+  options?: Electron.FileIconOptions,
+): Promise<Electron.NativeImage | null>;
+extractFileIcon(filePath: string, size?: number): Promise<Buffer | null>;
+getCachedAppIcon(appPath: string, bundleId: string): Promise<string | null>;
+ensureAppIcon(appPath: string, bundleId: string): Promise<string | null>;
+```
+
+`IconService` owns the shared file-icon worker, guarded Electron access, versioned app-icon cache, extraction deduplication, and platform rendering. Providers own persistence into their domain stores; scanners do not perform native extraction.
+
 Recommendation badges use class icon names, not emoji text:
 
 ```ts
@@ -309,7 +323,9 @@ type RecommendationBadge = {
 - Plugin recommendation rebuilding must preserve supported icon metadata fields: `type`, `value`, `color`, `colorful`, `status`, and `error`.
 - Renderer badge components should only render class badge icons that start with `i-`; stale cached emoji badge values are ignored.
 - macOS app icon caches must resolve Electron paths through a bound `app.getPath(...)` call; detached Electron methods fail with `Illegal invocation` and must not silently route production data into test-temp fallbacks.
-- macOS app bundles use `app.getFileIcon(path, { size: 'normal' })` as the primary icon source and persist versioned, display-sized PNG caches; `.icns`/`sips` remains fallback-only.
+- macOS app bundles prefer versioned `.icns` caches rendered through `sips`. Every Electron-native lookup must go through `IconService.getSystemFileIcon`; Darwin 27 returns `null` without entering Electron because Electron 41.3–43.2 deterministically hard-crashes there with `EXC_BREAKPOINT / SIGTRAP` on `ThreadPoolForegroundWorker`. Asset-catalog-only apps then use the normal app fallback.
+- App scanners may only read an existing icon cache. A cache miss returns `icon: ''` immediately; `AppProvider` schedules background hydration after the app row exists, persists the resolved icon extension, publishes the runtime update, and keeps the normal internal empty fallback when hydration returns `null`.
+- Windows desktop scan records the native icon source separately from the launch path so shortcut/registry icons hydrate from the correct file. FileProvider and Everything extraction share the singleton `IconService` worker; providers must not instantiate parallel `IconWorkerClient`s.
 - `/System/Library/CoreServices` entries marked `LSBackgroundOnly` or `LSUIElement` are not user-facing applications and must be excluded before indexing; recommendation rebuilding also applies the shared CoreServices noise filter to stale rows.
 - Addressable `TxIcon` sources show a loading skeleton until `load`; an `error` event must switch to the caller-provided empty fallback instead of leaving a blank image.
 
@@ -322,7 +338,7 @@ type RecommendationBadge = {
 - Plugin icon with unsupported `type` or empty `value` -> recommendation fallback class icon.
 - Badge icon not starting with `i-` -> omit the visual badge icon and keep the label.
 - Electron cache path lookup throws or is called without its `app` receiver -> use the stable temporary fallback only in non-Electron/test contexts; production callers keep the Electron cache directory.
-- Native macOS icon extraction returns an empty image or throws -> try the bundle `.icns` fallback, then emit the normal app fallback icon.
+- Standalone `.icns` missing or `sips` render failure -> call the safe file-icon boundary; Darwin 27 returns `null` without invoking Electron, then emit the normal app fallback icon.
 - URL/tfile image load error -> render the `empty` slot or empty-image source and clear the loading skeleton.
 - CoreServices background/UIElement bundle -> omit it from scan and recommendation results.
 
@@ -338,7 +354,7 @@ type RecommendationBadge = {
 - Drift handling tests comparing local paths with equivalent `file://` values.
 - Plugin recommendation rebuild tests that assert optional icon metadata is preserved.
 - Renderer tests that assert list and grid badges use class icons and image icons keep color forwarding.
-- macOS extraction tests assert bound cache-path resolution, `app.getFileIcon(..., { size: 'normal' })`, versioned cache reuse, and `.icns` fallback behavior.
+- macOS extraction tests assert bound cache-path resolution, versioned `.icns` cache reuse, the Darwin 27 no-call guard, non-Darwin pass-through to `app.getFileIcon`, and normal fallback behavior when the safe boundary returns `null`.
 - TuffEx icon tests dispatch image `error` and assert that loading state is removed and the empty fallback is rendered.
 - Recommendation/filter checks cover hidden CoreServices apps so stale indexed rows cannot return to the recommendation surface.
 

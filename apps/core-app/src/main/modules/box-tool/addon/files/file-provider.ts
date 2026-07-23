@@ -98,7 +98,7 @@ import { FileIndexWorkerClient } from './workers/file-index-worker-client'
 import { FileReconcileWorkerClient } from './workers/file-reconcile-worker-client'
 import { FileScanWorkerClient } from './workers/file-scan-worker-client'
 import { EmbeddingService } from './embedding-service'
-import { IconWorkerClient } from './workers/icon-worker-client'
+import { iconService } from '../../../../service/icon-service'
 import { ThumbnailWorkerClient } from './workers/thumbnail-worker-client'
 import { AdaptiveBatchScheduler } from '../../search-engine/adaptive-batch-scheduler'
 import {
@@ -409,7 +409,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private readonly fileScanWorker = new FileScanWorkerClient()
   private readonly reconcileWorker = new FileReconcileWorkerClient()
   private readonly fileIndexWorker: FileIndexWorkerClient
-  private readonly iconWorker = new IconWorkerClient()
   private readonly thumbnailWorker = new ThumbnailWorkerClient()
 
   private filePersistencePort: FilePersistencePort | null = null
@@ -580,7 +579,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       isValidBase64DataUrl,
       logDebug: (message, meta) => this.logDebug(message, meta),
       logWarn: (message, error, meta) => this.logWarn(message, error, meta),
-      iconWorker: this.iconWorker,
+      iconService,
       thumbnailWorker: this.thumbnailWorker,
       enableIconExtraction: this.enableFileIconExtraction,
       iconWriteMaxQueue: FILE_ICON_WRITE_MAX_QUEUE

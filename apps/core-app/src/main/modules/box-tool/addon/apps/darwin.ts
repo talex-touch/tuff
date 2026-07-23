@@ -3,18 +3,16 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
-import { app } from 'electron'
+import { iconService } from '../../../../service/icon-service'
 import { readFile as readPlist } from 'simple-plist'
 import { reportAppScanError } from './app-error-reporter'
 import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
-import { getAppIconCacheDir, getAppIconCachePath } from './app-icon-cache'
 import { readLocalizedStringsFile } from './localized-strings-parser'
 import { createLogger } from '../../../../utils/logger'
 
 const darwinAppLog = createLogger('AppScanner').child('Darwin')
 
 export async function getApps(): Promise<ScannedAppInfo[]> {
-  await fs.mkdir(getAppIconCacheDir('darwin'), { recursive: true })
   // Switch to mdfind as the primary method for discovering applications for better coverage.
   return getAppsViaMdfind()
 }
@@ -126,53 +124,6 @@ function collectAlternateDisplayNames(
   return alternateNames
 }
 
-function normalizeIconFileName(rawValue: unknown): string | null {
-  if (typeof rawValue !== 'string') {
-    return null
-  }
-
-  const normalized = rawValue.trim()
-  if (!normalized || normalized === '(null)') {
-    return null
-  }
-
-  return normalized.endsWith('.icns') ? normalized : `${normalized}.icns`
-}
-
-async function findAppIconSourcePath(
-  appPath: string,
-  plistData: Record<string, unknown>
-): Promise<string | null> {
-  const resourcesPath = path.join(appPath, 'Contents', 'Resources')
-  const iconNames = [
-    normalizeIconFileName(plistData.CFBundleIconFile),
-    normalizeIconFileName(plistData.CFBundleIconName)
-  ].filter((value): value is string => Boolean(value))
-
-  for (const iconName of iconNames) {
-    const iconPath = path.join(resourcesPath, iconName)
-    try {
-      await fs.access(iconPath)
-      return iconPath
-    } catch {
-      // Continue to fallback directory scan.
-    }
-  }
-
-  try {
-    const entries = await fs.readdir(resourcesPath)
-    const fallbackIcon = entries.find((entry) => entry.toLowerCase().endsWith('.icns'))
-    return fallbackIcon ? path.join(resourcesPath, fallbackIcon) : null
-  } catch {
-    return null
-  }
-}
-
-const DARWIN_APP_ICON_CACHE_VERSION = 'native-v2'
-// sips renders the bundle .icns at this size. Large enough to stay crisp in the
-// retina 36px result slot — the old 32px `getFileIcon('normal')` looked upscaled.
-const DARWIN_APP_ICON_TARGET_SIZE = 256
-
 function isTruthyPlistFlag(value: unknown): boolean {
   if (value === true || value === 1) return true
   if (typeof value !== 'string') return false
@@ -187,93 +138,6 @@ function isNonUserFacingCoreServiceApp(
   if (!normalizedPath.startsWith('/system/library/coreservices/')) return false
 
   return isTruthyPlistFlag(plistData.LSBackgroundOnly) || isTruthyPlistFlag(plistData.LSUIElement)
-}
-
-/** Render a bundle .icns (or any sips-supported image) to a PNG at target size. */
-async function renderIconWithSips(
-  sourceIconPath: string,
-  cachedIconPath: string
-): Promise<boolean> {
-  try {
-    await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
-    await execFileSafe('sips', [
-      '-Z',
-      String(DARWIN_APP_ICON_TARGET_SIZE),
-      '-s',
-      'format',
-      'png',
-      sourceIconPath,
-      '--out',
-      cachedIconPath
-    ])
-    await fs.access(cachedIconPath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Fallback: Electron's native icon at the largest available resolution. */
-async function renderNativeIcon(appPath: string, cachedIconPath: string): Promise<boolean> {
-  let temporaryIconPath = ''
-  try {
-    const nativeIcon = await app.getFileIcon(appPath, { size: 'large' })
-    if (nativeIcon.isEmpty()) return false
-    // scaleFactor: 2 pulls the retina (2x, up to 96px) representation when the
-    // NativeImage has one — much sharper than the previous 32px 1x PNG.
-    let png = nativeIcon.toPNG({ scaleFactor: 2 })
-    if (png.length === 0) png = nativeIcon.toPNG()
-    if (png.length === 0) return false
-
-    await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
-    temporaryIconPath = `${cachedIconPath}.${process.pid}.${Date.now()}.tmp`
-    await fs.writeFile(temporaryIconPath, png)
-    await fs.rename(temporaryIconPath, cachedIconPath)
-    return true
-  } catch (error) {
-    if (temporaryIconPath) {
-      await fs.rm(temporaryIconPath, { force: true }).catch(() => undefined)
-    }
-    darwinAppLog.debug('Native app icon extraction failed', {
-      meta: {
-        pathLength: appPath.length,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    })
-    return false
-  }
-}
-
-async function ensureCachedAppIcon(
-  appPath: string,
-  bundleId: string,
-  plistData: Record<string, unknown>
-): Promise<string> {
-  const cacheKey = `${DARWIN_APP_ICON_CACHE_VERSION}:${bundleId || appPath}`
-  const cachedIconPath = getAppIconCachePath(cacheKey, 'darwin')
-
-  try {
-    await fs.access(cachedIconPath)
-    return cachedIconPath
-  } catch {
-    // Cache miss; generate it below.
-  }
-
-  // Prefer the app's real, high-resolution .icns. It is both sharper than the
-  // native icon and — critically for SIP `/System/Applications` apps — avoids
-  // the generic placeholder that `app.getFileIcon` returns while Launch Services
-  // is cold, which previously got cached as if it were the real icon.
-  const sourceIconPath = await findAppIconSourcePath(appPath, plistData)
-  if (sourceIconPath && (await renderIconWithSips(sourceIconPath, cachedIconPath))) {
-    return cachedIconPath
-  }
-
-  // Fallback for asset-catalog-only apps that ship no standalone .icns.
-  if (await renderNativeIcon(appPath, cachedIconPath)) {
-    return cachedIconPath
-  }
-
-  return ''
 }
 
 // Helper to get localized display name from .lproj directories
@@ -346,9 +210,6 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo | nul
     return null
   }
 
-  const plistIconFile = getValueFromPlist(plistContent, 'CFBundleIconFile')
-  const plistIconName = getValueFromPlist(plistContent, 'CFBundleIconName')
-
   // Get names from Info.plist
   const plistDisplayName = getValueFromPlist(plistContent, 'CFBundleDisplayName')
   const bundleName = getValueFromPlist(plistContent, 'CFBundleName')
@@ -376,11 +237,8 @@ async function getAppInfoUnstable(appPath: string): Promise<ScannedAppInfo | nul
   const name = fileName
 
   const bundleId = getValueFromPlist(plistContent, 'CFBundleIdentifier') || ''
-  const icon = await ensureCachedAppIcon(appPath, bundleId, {
-    ...plistData,
-    CFBundleIconFile: plistData.CFBundleIconFile ?? plistIconFile,
-    CFBundleIconName: plistData.CFBundleIconName ?? plistIconName
-  })
+  // Scans only read the cache. Missing icons hydrate after indexing completes.
+  const icon = (await iconService.getCachedAppIcon(appPath, bundleId)) ?? ''
 
   return {
     name,
