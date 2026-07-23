@@ -67,6 +67,7 @@ import {
 import { ClipboardImagePersistence } from './clipboard/clipboard-image-persistence'
 import { ClipboardAutopasteAutomation } from './clipboard/clipboard-autopaste-automation'
 import { ClipboardService, type ClipboardServiceHealth } from './clipboard/clipboard-service'
+import { ElectronClipboardReader, type ClipboardReader } from './clipboard/clipboard-reader'
 import {
   ClipboardMetaPersistence,
   type ClipboardMetaEntry
@@ -228,6 +229,7 @@ export class ClipboardModule extends BaseModule {
   private readonly capturePipeline = new ClipboardCapturePipeline({
     getDatabase: () => this.db,
     getClipboardHelper: () => this.clipboardHelper,
+    getReader: () => this.resolveClipboardReader(),
     getLastSuccessfulScanAt: () => this.lastSuccessfulClipboardScanAt,
     getLastImagePersistAt: () => this.lastImagePersistAt,
     getTransport: () => this.transport,
@@ -275,6 +277,13 @@ export class ClipboardModule extends BaseModule {
   private clipboardCheckPending = false
   private clipboardCheckPendingOptions: ClipboardMonitorOptions | null = null
   private clipboardCheckWaiters: Array<() => void> = []
+  // Native-watch change count sampled at our last capture. While the native
+  // watcher is active it fires on every OS clipboard change, so an unchanged
+  // count means nothing has changed since — letting us skip a redundant capture
+  // (and its synchronous, main-thread-blocking clipboard reads).
+  private lastCaptureChangeToken: number | null = null
+  // Fallback reader used when the native (off-thread) reader is unavailable.
+  private electronReader: ElectronClipboardReader | null = null
   private clipboardStageBJob: ClipboardStageBJob | null = null
   private clipboardStageBInFlight = false
   private clipboardStageBGeneration = 0
@@ -978,6 +987,17 @@ export class ClipboardModule extends BaseModule {
     if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
     }
+    // The native watcher fires on every OS clipboard change and, while it is
+    // active, background/visible polls are skipped entirely (see
+    // runClipboardMonitor). Extend that same trust to the CoreBox-show baseline:
+    // if nothing has changed since our last capture, skip it instead of running
+    // synchronous clipboard.readImage()/readText()/readFiles() on the main
+    // thread. Those reads can block the event loop for hundreds of ms to seconds
+    // on a large clipboard image, which stalls CoreBox from opening and the
+    // search results from rendering.
+    if (this.shouldSkipUnchangedCapture(options.source)) {
+      return
+    }
     if (appTaskGate.isActive()) {
       if (options.source !== 'corebox-show-baseline') {
         return
@@ -1011,15 +1031,55 @@ export class ClipboardModule extends BaseModule {
     await this.checkClipboardInternal(options.source)
   }
 
+  /**
+   * Whether a non-change-driven capture can be safely skipped because the OS
+   * clipboard has not changed since our last capture.
+   *
+   * Only applies while the native watcher is active (it fires on every real
+   * change, which is why polls are already skipped in that mode). `native-watch`
+   * itself is the change signal and is never skipped; the first capture
+   * (`lastCaptureChangeToken === null`) always runs so pre-existing clipboard
+   * content is still picked up.
+   */
+  private shouldSkipUnchangedCapture(source: ClipboardCaptureSource): boolean {
+    if (source === 'native-watch') return false
+    if (!this.clipboardService.isNativeActive()) return false
+    if (this.lastCaptureChangeToken === null) return false
+    return this.clipboardService.getNativeChangeCount() === this.lastCaptureChangeToken
+  }
+
+  /**
+   * Resolves the clipboard reader for a capture: the native off-main-thread
+   * reader when the watcher is active, else an Electron (synchronous) fallback.
+   * Returned per capture so all reads within it use one consistent source.
+   */
+  private resolveClipboardReader(): ClipboardReader {
+    const nativeReader = this.clipboardService.getReader()
+    if (nativeReader) return nativeReader
+    if (!this.electronReader) {
+      this.electronReader = new ElectronClipboardReader({
+        readFiles: () => this.clipboardHelper?.readClipboardFiles() ?? []
+      })
+    }
+    return this.electronReader
+  }
+
   private async checkClipboardInternal(source: ClipboardCaptureSource): Promise<void> {
     if (this.isDestroyed || !this.clipboardHelper || !this.db) {
       return
     }
 
+    // Sample the change token BEFORE the reads so that a native change arriving
+    // mid-capture leaves the recorded token behind the live count, forcing the
+    // next check to re-run rather than being wrongly skipped.
+    const tokenAtStart = this.clipboardService.getNativeChangeCount()
+
     // Single reader: capture always reads via Electron's clipboard API. The native
     // watcher is only a change signal (see ClipboardService), so there is no second
     // reader that could disagree with Electron on edge cases.
     await this.capturePipeline.process(source)
+
+    this.lastCaptureChangeToken = tokenAtStart
   }
 
   private extractPayloadSdkApi(payload: unknown): number | undefined {
@@ -1253,6 +1313,8 @@ export class ClipboardModule extends BaseModule {
     this.clipboardCheckInFlight = false
     this.clipboardCheckPending = false
     this.clipboardCheckPendingOptions = null
+    this.lastCaptureChangeToken = null
+    this.electronReader = null
     this.resolveClipboardCheckWaiters()
     this.clipboardStageBJob = null
     this.clipboardStageBInFlight = false
