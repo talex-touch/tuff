@@ -72,6 +72,10 @@ export interface PluginSystemSDK {
     includeIcon?: boolean
   }) => Promise<ActiveAppSnapshot | null>
   captureSelection: () => Promise<SelectionCaptureResult>
+  /**
+   * Show and focus the host application's main window.
+   */
+  showMainWindow: () => Promise<void>
 }
 
 export function createPluginSystemSDK(
@@ -88,6 +92,9 @@ export function createPluginSystemSDK(
     captureSelection: async () => {
       const result = await transport.send(AppEvents.system.captureSelection, {})
       return normalizeSelectionCaptureResult(result)
+    },
+    showMainWindow: async () => {
+      await transport.send(AppEvents.window.show, undefined)
     },
   }
 }
@@ -115,7 +122,12 @@ export async function captureSelectedText(): Promise<SelectionCaptureResult> {
   return await getRendererSystemSdk().captureSelection()
 }
 
+export async function showMainWindow(): Promise<void> {
+  await getRendererSystemSdk().showMainWindow()
+}
+
 export const system: PluginSystemSDK = {
   getActiveAppSnapshot,
   captureSelection: captureSelectedText,
+  showMainWindow,
 }

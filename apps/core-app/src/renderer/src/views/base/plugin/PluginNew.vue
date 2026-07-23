@@ -32,7 +32,10 @@ const { t } = useI18n()
 const installManager = useInstallManager()
 const transport = useTuffTransport()
 const pluginNewLog = createRendererLogger('PluginNew')
-const pluginCreateEvent = defineRawEvent<Record<string, unknown>, void>('plugin:new')
+const pluginCreateEvent = defineRawEvent<
+  Record<string, unknown>,
+  { success: boolean; pluginName?: string; error?: string }
+>('plugin:new')
 
 const installState = reactive({
   source: '',
@@ -373,7 +376,19 @@ async function createAction(ctx: ActionContext): Promise<void> {
 
   setLoading(true)
 
-  transport.send(pluginCreateEvent, plugin).catch(() => {})
+  try {
+    const res = await transport.send(pluginCreateEvent, plugin)
+    if (res?.success) {
+      emits('close')
+    } else {
+      await forTouchTip(
+        t('plugin.new.create.createFailedTitle'),
+        res?.error || t('plugin.new.create.createFailedMessage')
+      )
+    }
+  } finally {
+    setLoading(false)
+  }
 }
 
 /**

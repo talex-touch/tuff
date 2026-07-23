@@ -128,6 +128,14 @@ export const AppEvents = {
       .define<void, void>(),
 
     /**
+     * Show (and bring to front) the application window.
+     */
+    show: defineEvent("app")
+      .module("window")
+      .event("show")
+      .define<void, void>(),
+
+    /**
      * Focus the application window.
      */
     focus: defineEvent("app")

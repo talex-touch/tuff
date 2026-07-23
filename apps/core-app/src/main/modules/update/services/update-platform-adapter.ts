@@ -46,6 +46,69 @@ export function resolveCurrentMacAppBundlePath(executablePath: string): string |
   return appBundlePath.toLowerCase().endsWith('.app') ? appBundlePath : null
 }
 
+export type UpdateInstallPreflightErrorCode =
+  | 'MAC_UPDATE_DESTINATION_NOT_WRITABLE'
+  | 'MAC_UPDATE_BUILD_UNTRUSTED'
+
+export class UpdateInstallPreflightError extends Error {
+  constructor(
+    readonly code: UpdateInstallPreflightErrorCode,
+    message: string
+  ) {
+    super(message)
+    this.name = 'UpdateInstallPreflightError'
+  }
+}
+
+export interface PlatformInstallPreflightInput {
+  platform: NodeJS.Platform
+  executablePath: string
+  buildVerificationStatus: {
+    isVerified: boolean
+    isOfficialBuild: boolean
+    verificationFailed: boolean
+    hasOfficialKey: boolean
+  }
+}
+
+export function assertPlatformInstallPreflight(
+  input: PlatformInstallPreflightInput,
+  access: (targetPath: fs.PathLike, mode?: number) => void = fs.accessSync
+): void {
+  if (input.platform !== 'darwin') return
+
+  const status = input.buildVerificationStatus
+  if (
+    !status.isVerified ||
+    !status.isOfficialBuild ||
+    status.verificationFailed ||
+    !status.hasOfficialKey
+  ) {
+    throw new UpdateInstallPreflightError(
+      'MAC_UPDATE_BUILD_UNTRUSTED',
+      'Silent macOS updates require an official verified Tuff build'
+    )
+  }
+
+  const appBundlePath = resolveCurrentMacAppBundlePath(input.executablePath)
+  if (!appBundlePath) {
+    throw new UpdateInstallPreflightError(
+      'MAC_UPDATE_DESTINATION_NOT_WRITABLE',
+      'Unable to resolve the current macOS application bundle'
+    )
+  }
+
+  try {
+    access(appBundlePath, fs.constants.R_OK | fs.constants.X_OK)
+    access(path.dirname(appBundlePath), fs.constants.W_OK | fs.constants.X_OK)
+  } catch {
+    throw new UpdateInstallPreflightError(
+      'MAC_UPDATE_DESTINATION_NOT_WRITABLE',
+      'Tuff cannot replace the current app without requesting administrator permission'
+    )
+  }
+}
+
 function buildMacInstallSpec(input: PlatformInstallSpecInput): PlatformInstallSpec {
   if (!input.appBundlePath) {
     throw new Error('Unable to resolve the current macOS application bundle')
@@ -122,16 +185,74 @@ function buildWindowsInstallSpec(input: PlatformInstallSpecInput): PlatformInsta
 }
 
 function buildLinuxInstallSpec(input: PlatformInstallSpecInput): PlatformInstallSpec {
-  const target = resolveLinuxCommand(input.packagePath)
+  const extension = path.extname(input.packagePath).toLowerCase()
   const previous = hasExpectedPreviousAsset(input)
     ? resolvePreviousCommand('linux', input.previousAsset)
     : null
+  const previousVersion = previous ? input.previousAsset!.version : null
 
+  if (extension !== '.appimage' && extension !== '.deb') {
+    throw new Error('Unsupported Linux update package')
+  }
+
+  const applyScript = resolveBundledScript(
+    'linux-apply-update.sh',
+    input.resourcesPath,
+    input.appPath
+  )
+  const logPath = path.join(input.attemptRoot, 'linux-update.log')
+
+  if (extension === '.appimage') {
+    // Replace the *running* AppImage in place so the update actually lands. The
+    // AppImage runtime exposes its real path via $APPIMAGE; fall back to execPath.
+    const destAppImage = process.env.APPIMAGE || process.execPath
+    const backupPath = path.join(input.attemptRoot, 'linux-backup.AppImage')
+    return {
+      handoff: {
+        command: '/bin/bash',
+        args: [
+          applyScript,
+          '--source',
+          input.packagePath,
+          '--dest',
+          destAppImage,
+          '--backup',
+          backupPath,
+          '--pid',
+          String(process.pid),
+          '--log',
+          logPath
+        ],
+        waitForExit: true
+      },
+      recovery: previous,
+      cleanupPaths: [backupPath],
+      previousVersion,
+      recoveryAvailable: previous !== null
+    }
+  }
+
+  // .deb: a real install needs root; the script elevates via pkexec and relaunches
+  // the reinstalled binary. On failure it surfaces the package instead of faking success.
   return {
-    handoff: target,
+    handoff: {
+      command: '/bin/bash',
+      args: [
+        applyScript,
+        '--deb',
+        input.packagePath,
+        '--dest',
+        process.execPath,
+        '--pid',
+        String(process.pid),
+        '--log',
+        logPath
+      ],
+      waitForExit: true
+    },
     recovery: previous,
     cleanupPaths: [],
-    previousVersion: previous ? input.previousAsset!.version : null,
+    previousVersion,
     recoveryAvailable: previous !== null
   }
 }

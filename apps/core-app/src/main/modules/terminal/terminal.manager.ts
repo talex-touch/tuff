@@ -97,9 +97,10 @@ class TerminalModule extends BaseModule {
 
     const id = `proc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Use spawn to create a new process. The shell is determined by the OS.
-    // The '-c' flag is used for bash/sh to execute a command string.
-    // On Windows, cmd.exe will execute the command directly.
+    // spawnSafe runs `command` directly as an executable with `args` (shell: false —
+    // no shell interpretation, no `-c`, no cmd.exe). This is a piped-stdio command
+    // runner, NOT a PTY: there is no TTY, so interactive programs, ANSI colors and
+    // resize/job-control are unsupported. Caller must pre-split command + args.
     const proc: ChildProcess = spawnSafe(command, args, {
       stdio: ['pipe', 'pipe', 'pipe']
     })

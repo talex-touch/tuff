@@ -435,7 +435,7 @@ function createActions(platform = process.platform) {
         await runShellCommand('osascript -e \'set volume output volume (output volume of (get volume settings) + 10)\'')
       }
       else if (isWindows) {
-        await runShellCommand('powershell -Command "(New-Object -ComObject Shell.Application).NameSpace(17).ParseName(\'Volume Control\').InvokeVerb(\'properties\')"')
+        await runShellCommand('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]175)"')
       }
     },
   })
@@ -451,7 +451,7 @@ function createActions(platform = process.platform) {
         await runShellCommand('osascript -e \'set volume output volume (output volume of (get volume settings) - 10)\'')
       }
       else if (isWindows) {
-        await runShellCommand('powershell -Command "(New-Object -ComObject Shell.Application).NameSpace(17).ParseName(\'Volume Control\').InvokeVerb(\'properties\')"')
+        await runShellCommand('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]174)"')
       }
     },
   })
@@ -503,12 +503,7 @@ function createActions(platform = process.platform) {
     keywords: ['主窗口', '打开', 'main window', 'show window', '显示窗口', 'tuff', '窗口'],
     group: 'window',
     execute: async () => {
-      const mainWindow = globalThis.$app?.window?.window
-      if (!mainWindow) {
-        throw new Error('主窗口不可用')
-      }
-      mainWindow.show()
-      mainWindow.focus()
+      await plugin.system.showMainWindow()
     },
   })
 

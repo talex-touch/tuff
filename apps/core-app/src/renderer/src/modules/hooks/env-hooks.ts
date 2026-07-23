@@ -22,27 +22,11 @@ interface OSInfo {
   [key: string]: unknown
 }
 
-type CPUUsage = Electron.CPUUsage
-type MemoryUsage = NodeJS.MemoryUsage
-
 interface RendererProcessInfo {
   platform: string
   arch: string
   versions?: Partial<NodeJS.ProcessVersions>
   [key: string]: unknown
-}
-
-const EMPTY_CPU_USAGE: CPUUsage = {
-  percentCPUUsage: 0,
-  idleWakeupsPerSecond: 0
-}
-
-const EMPTY_MEMORY_USAGE: MemoryUsage = {
-  rss: 0,
-  heapTotal: 0,
-  heapUsed: 0,
-  external: 0,
-  arrayBuffers: 0
 }
 
 function resolveProcessInfo(): RendererProcessInfo {
@@ -79,36 +63,4 @@ export function useEnv() {
     })
 
   return { packageJson, os, processInfo }
-}
-
-export function useCPUUsage() {
-  const value = ref<CPUUsage>(EMPTY_CPU_USAGE)
-
-  let cancel = false
-
-  function running() {
-    value.value = EMPTY_CPU_USAGE
-
-    if (!cancel) setTimeout(running, 1000)
-  }
-
-  running()
-
-  return [value, () => (cancel = true)]
-}
-
-export function useMemoryUsage() {
-  const value = ref<MemoryUsage>(EMPTY_MEMORY_USAGE)
-
-  let cancel = false
-
-  function running() {
-    value.value = EMPTY_MEMORY_USAGE
-
-    if (!cancel) setTimeout(running, 1000)
-  }
-
-  running()
-
-  return [value, () => (cancel = true)]
 }

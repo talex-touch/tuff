@@ -13,7 +13,7 @@ describe('plugin window boundary contract', () => {
   const windowTransportSource = read(
     'src/main/modules/plugin/services/plugin-window-transport-service.ts'
   )
-  const coreBoxSource = read('src/main/modules/box-tool/core-box/window.ts')
+  const coreBoxSource = read('src/main/modules/box-tool/core-box/plugin-view-controller.ts')
   const divisionBoxSource = read('src/main/modules/division-box/session.ts')
   const preloadSource = read('src/preload/plugin-view.ts')
 
