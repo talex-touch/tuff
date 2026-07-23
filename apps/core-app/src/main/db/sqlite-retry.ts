@@ -104,6 +104,69 @@ export function isSqliteBusyError(error: unknown): boolean {
   return hasSqliteBusyError(error)
 }
 
+function isSqliteCorruptionErrorNode(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const { code, rawCode, message } = error as {
+    code?: string
+    rawCode?: number
+    message?: string
+  }
+
+  // SQLITE_CORRUPT (11) and its extended codes — SQLITE_CORRUPT_VTAB (267),
+  // SQLITE_CORRUPT_SEQUENCE (523), SQLITE_CORRUPT_INDEX (779) — all satisfy
+  // rawCode % 256 === 11. SQLITE_NOTADB (26) means the header is unreadable
+  // (truncated/foreign file); it is equally unrecoverable and must be rebuilt.
+  if (code === 'SQLITE_CORRUPT' || code === 'SQLITE_NOTADB') return true
+  if (typeof code === 'string' && code.startsWith('SQLITE_CORRUPT')) return true
+  if (rawCode === 11 || rawCode === 26) return true
+  if (typeof rawCode === 'number' && rawCode > 11 && rawCode % 256 === 11) return true
+
+  if (typeof message !== 'string') return false
+  return (
+    message.includes('SQLITE_CORRUPT') ||
+    message.includes('SQLITE_NOTADB') ||
+    message.includes('database disk image is malformed') ||
+    message.includes('file is not a database') ||
+    message.includes('malformed database schema')
+  )
+}
+
+function hasSqliteCorruptionError(error: unknown, visited = new Set<unknown>()): boolean {
+  if (!error || typeof error !== 'object') return false
+  if (visited.has(error)) return false
+  visited.add(error)
+
+  if (isSqliteCorruptionErrorNode(error)) return true
+
+  if (error instanceof AggregateError) {
+    for (const item of error.errors) {
+      if (hasSqliteCorruptionError(item, visited)) return true
+    }
+  }
+
+  const nextCandidates = [
+    (error as { cause?: unknown }).cause,
+    (error as { original?: unknown }).original,
+    (error as { error?: unknown }).error
+  ]
+
+  for (const next of nextCandidates) {
+    if (hasSqliteCorruptionError(next, visited)) return true
+  }
+
+  return false
+}
+
+/**
+ * True when the error (or any error in its cause chain) indicates on-disk
+ * database corruption — a structural failure that retrying cannot fix and that
+ * requires rebuilding the database file.
+ */
+export function isSqliteCorruptionError(error: unknown): boolean {
+  return hasSqliteCorruptionError(error)
+}
+
 export function getSqliteBusyRetryCount(): number {
   return SQLITE_BUSY_RETRY_COUNT
 }

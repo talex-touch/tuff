@@ -70,8 +70,19 @@ function sanitizePathSegment(value) {
   return value.replace(/[^a-zA-Z0-9._-]/g, '-')
 }
 
-function runElectronVite(env) {
-  const args = ['exec', 'electron-vite', 'dev', ...process.argv.slice(2)].map(assertCommandArg)
+function runElectronVite(env, extraElectronArgs = []) {
+  const userArgs = process.argv.slice(2)
+  // Forward extra flags to Electron itself via electron-vite's `--` passthrough
+  // (electron-vite turns everything after `--` into ELECTRON_CLI_ARGS, which it
+  // hands to the spawned Electron binary). If the caller already used `--`,
+  // append after it; otherwise open a new passthrough section.
+  const passthrough =
+    extraElectronArgs.length === 0
+      ? []
+      : userArgs.includes('--')
+        ? extraElectronArgs
+        : ['--', ...extraElectronArgs]
+  const args = ['exec', 'electron-vite', 'dev', ...userArgs, ...passthrough].map(assertCommandArg)
   const npmExecPath = readCommandPathEnv('npm_execpath')
   const command =
     process.platform === 'win32' && npmExecPath && isNodeScriptPath(npmExecPath)
@@ -333,4 +344,17 @@ if (process.env.TUFF_DEV_ELECTRON_PREPARE_ONLY === '1') {
   process.exit(0)
 }
 
-runElectronVite(env)
+// macOS 26/27 (Tahoe) can crash the Electron *browser* process with a V8
+// JIT-page fault (electron/electron#51351). app.commandLine (see precore.ts)
+// only reaches renderer/child V8 — the browser process's V8 is already
+// initialised before app code runs — so `--jitless` has to be on Electron's
+// own launch command line. TUFF_V8_JITLESS forwards it there. Off by default;
+// enable only on machines hitting that crash (it makes JS noticeably slower).
+const extraElectronArgs = isTruthyEnv('TUFF_V8_JITLESS') ? ['--js-flags=--jitless'] : []
+if (extraElectronArgs.length > 0) {
+  console.log(
+    '[dev] TUFF_V8_JITLESS=1 → launching Electron with --js-flags=--jitless (browser process)'
+  )
+}
+
+runElectronVite(env, extraElectronArgs)

@@ -32,3 +32,17 @@ export interface NativeOcrSupport {
 
 export declare function recognizeImageText(options: NativeOcrOptions): Promise<NativeOcrResult>
 export declare function getNativeOcrSupport(): NativeOcrSupport
+
+export type NativeNotificationAuthStatus
+  = 'granted'
+    | 'denied'
+    | 'notDetermined'
+    | 'unverifiable'
+    | 'unsupported'
+
+export interface NativeNotificationAuthResult {
+  status: NativeNotificationAuthStatus
+  reason?: string
+}
+
+export declare function getNotificationAuthorizationStatus(): Promise<NativeNotificationAuthResult>

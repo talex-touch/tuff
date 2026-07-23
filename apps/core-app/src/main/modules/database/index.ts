@@ -18,7 +18,11 @@ import migrationsLocator from '../../../../resources/db/locator.json?commonjs-ex
 import * as schema from '../../db/schema'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { DB_AUX_ENABLED } from '../../db/runtime-flags'
-import { getSqliteBusyRetryCount, setSqliteRetryExhaustedListener } from '../../db/sqlite-retry'
+import {
+  getSqliteBusyRetryCount,
+  isSqliteCorruptionError,
+  setSqliteRetryExhaustedListener
+} from '../../db/sqlite-retry'
 import { BaseModule } from '../abstract-base-module'
 import { operationalErrorService } from '../observability'
 import { searchIndexWriter } from '../box-tool/search-engine/search-index-writer'
@@ -65,6 +69,8 @@ export class DatabaseModule extends BaseModule {
   private auxInitialized = false
   private mainDbPath = ''
   private auxDbPath = ''
+  private dbRunningMarkerPath = ''
+  private probeDbIntegrity = false
   private walMaintenanceRegistered = false
   private backgroundStartupPromise: Promise<void> | null = null
   private destroying = false
@@ -199,7 +205,25 @@ export class DatabaseModule extends BaseModule {
   }
 
   private async configureSqliteClient(client: Client, label: 'primary' | 'aux'): Promise<void> {
-    await client.execute('PRAGMA journal_mode = WAL')
+    const journalModeResult = await client.execute('PRAGMA journal_mode = WAL')
+    const journalMode = String(
+      (journalModeResult.rows?.[0] as Record<string, unknown> | undefined)?.journal_mode ?? ''
+    ).toLowerCase()
+    if (journalMode !== 'wal') {
+      // The search-index worker opens a second connection to this same file.
+      // Two connections in different journal modes is a direct corruption path,
+      // so surface a failure to enter WAL loudly instead of writing regardless.
+      dbLog.error(`SQLite ${label} did not enter WAL mode`, { meta: { journalMode } })
+      operationalErrorService.report({
+        domain: 'database',
+        operation: `journal-mode.${label}`,
+        error: new Error(`journal_mode is '${journalMode}', expected 'wal'`),
+        code: 'DATABASE_JOURNAL_MODE',
+        severity: 'warning',
+        retryable: false,
+        userImpact: 'degraded'
+      })
+    }
     // Enforce declared foreign keys. SQLite defaults this OFF per-connection,
     // which silently disabled every onDelete: 'cascade' in the schema.
     await client.execute('PRAGMA foreign_keys = ON')
@@ -208,6 +232,140 @@ export class DatabaseModule extends BaseModule {
     await client.execute('PRAGMA locking_mode = NORMAL')
     await client.execute('PRAGMA mmap_size = 268435456')
     dbLog.info(`SQLite ${label} configured: WAL mode enabled, busy_timeout=30s`)
+  }
+
+  /**
+   * Probe a freshly-opened database for on-disk corruption via `PRAGMA
+   * quick_check`. Returns true when the file is corrupt (or a badly damaged
+   * header throws SQLITE_CORRUPT / SQLITE_NOTADB instead of returning rows).
+   * Non-corruption failures (locked / IO / permissions) return false so we
+   * never destroy a database we merely failed to read.
+   */
+  private async detectDatabaseCorruption(client: Client): Promise<boolean> {
+    try {
+      const result = await client.execute('PRAGMA quick_check(1)')
+      const row = result.rows?.[0] as Record<string, unknown> | undefined
+      const verdict = row
+        ? String(row.quick_check ?? row[0] ?? '')
+            .trim()
+            .toLowerCase()
+        : ''
+      // A healthy database returns a single 'ok' row. If we can't read a verdict
+      // at all (empty/unexpected result), default to NOT corrupt — never destroy
+      // a database we merely failed to probe (mirrors the non-corruption catch).
+      if (!verdict) {
+        dbLog.warn('Database integrity probe returned no verdict; treating as healthy')
+        return false
+      }
+      return verdict !== 'ok'
+    } catch (error) {
+      if (isSqliteCorruptionError(error)) return true
+      dbLog.warn('Database integrity probe failed (non-corruption)', { error })
+      return false
+    }
+  }
+
+  /**
+   * Move the corrupt database file (and its WAL/SHM/journal sidecars) aside so a
+   * clean file can be recreated. Exactly one quarantined copy is kept per file
+   * (fixed `.corrupt` suffix, overwritten) so a repeatedly-corrupt database can
+   * never fill the disk; the copy still lets support inspect the damage.
+   */
+  private async quarantineCorruptDatabaseFiles(dbPath: string): Promise<void> {
+    const targets = [dbPath, `${dbPath}-wal`, `${dbPath}-shm`, `${dbPath}-journal`]
+    for (const target of targets) {
+      try {
+        if (!fse.existsSync(target)) continue
+        const quarantinePath = `${target}.corrupt`
+        await fs.rm(quarantinePath, { force: true })
+        await fs.rename(target, quarantinePath)
+        dbLog.warn('Quarantined corrupt database file', {
+          meta: { from: target, to: quarantinePath }
+        })
+      } catch (error) {
+        // Rename can fail across devices or on locked files; delete as a last
+        // resort so a clean database can still be created on this launch.
+        try {
+          await fs.rm(target, { force: true })
+          dbLog.warn('Removed corrupt database file (quarantine failed)', {
+            meta: { target },
+            error
+          })
+        } catch (removeError) {
+          dbLog.error('Failed to quarantine or remove corrupt database file', {
+            meta: { target },
+            error: removeError
+          })
+        }
+      }
+    }
+  }
+
+  /**
+   * Detect and auto-recover from on-disk corruption before migrations run.
+   * DatabaseModule is the first module loaded, so no other connection (incl. the
+   * search-index worker) is open yet — quarantining the files here is safe. On
+   * corruption the damaged files are moved aside and a fresh, empty database is
+   * opened; the caller then rebuilds the schema (migrations / ensure* tables)
+   * and providers re-index their data on the next scan. Returns true when the
+   * database was rebuilt.
+   */
+  private async ensureDatabaseIntegrity(
+    dbPath: string,
+    label: 'primary' | 'aux',
+    shouldProbe: boolean
+  ): Promise<boolean> {
+    const client = label === 'primary' ? this.client : this.auxClient
+    if (!client) return false
+
+    // `quick_check` reads every page of the file, so only probe when the previous
+    // run did not shut down cleanly (a crash/kill mid-write is what leaves real
+    // corruption). A clean prior shutdown skips the full-file scan on boot.
+    if (!shouldProbe) return false
+
+    if (!(await this.detectDatabaseCorruption(client))) return false
+
+    operationalErrorService.report({
+      domain: 'database',
+      operation: `integrity.${label}`,
+      error: new Error(`Corrupt ${label} SQLite database detected at ${dbPath}`),
+      code: 'DATABASE_CORRUPT',
+      severity: 'error',
+      retryable: false,
+      userImpact: 'degraded'
+    })
+    dbLog.error(`Corrupt ${label} database detected; quarantining and rebuilding`, {
+      meta: { dbPath }
+    })
+
+    try {
+      client.close()
+    } catch {
+      // The handle is already unusable; ignore close failures.
+    }
+
+    await this.quarantineCorruptDatabaseFiles(dbPath)
+
+    // Assign the fresh handle BEFORE configuring it. A configuration failure
+    // (e.g. WAL unsupported on the filesystem) must never leave this.client
+    // pointing at the closed corrupt handle — migrations still run on the fresh,
+    // empty database, just without the optimal pragmas.
+    const freshClient = createClient({ url: `file:${dbPath}` })
+    if (label === 'primary') {
+      this.client = freshClient
+      this.db = drizzle(freshClient, { schema })
+    } else {
+      this.auxClient = freshClient
+    }
+    try {
+      await this.configureSqliteClient(freshClient, label)
+    } catch (error) {
+      dbLog.warn(`Failed to configure rebuilt ${label} database; continuing with defaults`, {
+        error
+      })
+    }
+    dbLog.warn(`Rebuilt empty ${label} database after corruption`, { meta: { dbPath } })
+    return true
   }
 
   private escapeSqlPath(filePath: string): string {
@@ -727,6 +885,7 @@ export class DatabaseModule extends BaseModule {
       this.auxDbPath = path.join(databaseDirPath, 'database-aux.db')
       this.auxClient = createClient({ url: `file:${this.auxDbPath}` })
       await this.configureSqliteClient(this.auxClient, 'aux')
+      await this.ensureDatabaseIntegrity(this.auxDbPath, 'aux', this.probeDbIntegrity)
       const auxDb = drizzle(this.auxClient, { schema })
       await this.ensureAuxTables()
       await this.migrateHotTablesToAux()
@@ -799,6 +958,17 @@ export class DatabaseModule extends BaseModule {
     })
     const dbPath = path.join(dirPath!, 'database.db')
     this.mainDbPath = dbPath
+    // Unclean-shutdown marker: present on boot means the previous run crashed or
+    // was killed without a clean onDestroy — the only case that can leave real
+    // corruption — so we probe (quick_check) only then. Written now (in use),
+    // removed on clean shutdown.
+    this.dbRunningMarkerPath = `${dbPath}.running`
+    this.probeDbIntegrity = fse.existsSync(this.dbRunningMarkerPath)
+    try {
+      await fs.writeFile(this.dbRunningMarkerPath, String(Date.now()))
+    } catch (error) {
+      dbLog.warn('Failed to write database running marker', { error })
+    }
     this.client = createClient({ url: `file:${dbPath}` })
 
     this.db = drizzle(this.client, { schema })
@@ -808,6 +978,15 @@ export class DatabaseModule extends BaseModule {
       await this.configureSqliteClient(this.client, 'primary')
     } catch (error) {
       dbLog.warn('Failed to configure SQLite pragmas', { error })
+    }
+
+    // Detect on-disk corruption and rebuild before migrations run — only after an
+    // unclean prior shutdown (see probeDbIntegrity). Safe here because no other
+    // connection (incl. the search-index worker) is open yet.
+    try {
+      await this.ensureDatabaseIntegrity(dbPath, 'primary', this.probeDbIntegrity)
+    } catch (error) {
+      dbLog.error('Database integrity recovery failed', { error })
     }
 
     const migrationsFolder = this.resolveMigrationsFolder()
@@ -1135,8 +1314,28 @@ export class DatabaseModule extends BaseModule {
       pollingService.unregister(DB_HEALTH_REPORT_TASK_ID)
       this.walMaintenanceRegistered = false
     }
+    // Flush the WAL back into the main db before closing. DatabaseModule is
+    // destroyed last (reverse load order), after the search-index worker has
+    // been terminated, so this connection is the final writer. Leaving a large
+    // uncheckpointed WAL for the next launch to recover is a known WAL-mode
+    // corruption origin; best-effort, never block quit on failure.
+    try {
+      await this.client?.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+    } catch (error) {
+      dbLog.warn('Final WAL checkpoint on shutdown failed', { error })
+    }
     this.client?.close()
     this.auxClient?.close()
+    // Clean shutdown reached: remove the running marker so the next boot skips
+    // the full-file quick_check. (If we crash before here, the marker persists
+    // and the next boot probes for corruption.)
+    if (this.dbRunningMarkerPath) {
+      try {
+        await fs.rm(this.dbRunningMarkerPath, { force: true })
+      } catch (error) {
+        dbLog.warn('Failed to clear database running marker', { error })
+      }
+    }
     this.db = null
     this.auxDb = null
     this.auxInitialized = false

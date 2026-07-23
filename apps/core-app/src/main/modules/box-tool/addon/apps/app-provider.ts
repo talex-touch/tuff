@@ -65,6 +65,7 @@ import { withSqliteRetry } from '../../../../db/sqlite-retry'
 import { createDbUtils, type DbUtils } from '../../../../db/utils'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
+import { iconService } from '../../../../service/icon-service'
 import { getMainConfig, saveMainConfig } from '../../../storage'
 import { operationalErrorService } from '../../../observability'
 import FileSystemWatcher from '../../file-system-watcher'
@@ -397,6 +398,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private semanticAliasCatalogTask: Promise<void> | null = null
   private readonly startupProducerAbort = new AbortController()
   private readonly externalMutationTasks = new Set<Promise<unknown>>()
+  private readonly appIconHydrationPending = new Set<string>()
   private shutdownPreparation: Promise<void> | null = null
   private readonly sourceScanner = new AppProviderSourceScanner({
     resolveScannedAppKey: (app) => this.resolveScannedAppKey(app),
@@ -1236,6 +1238,90 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private scheduleAppIconHydration(scannedApps: ScannedAppInfo[]): void {
+    if (!this.isMac && process.platform !== 'win32') {
+      void this._recordMissingIconApps(scannedApps).catch((error) => {
+        logApp('Failed to record missing app icons', LogStyle.warning, {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      })
+      return
+    }
+
+    const candidates = scannedApps.filter(
+      (app) =>
+        !app.icon &&
+        (this.isMac || Boolean(app.iconSourcePath)) &&
+        !this.appIconHydrationPending.has(app.path)
+    )
+    if (candidates.length === 0) {
+      void this._recordMissingIconApps(scannedApps).catch((error) => {
+        logApp('Failed to record missing app icons', LogStyle.warning, {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      })
+      return
+    }
+
+    for (const app of candidates) {
+      this.appIconHydrationPending.add(app.path)
+    }
+
+    const task = this.runExternalAppMutation(async () => {
+      let hydratedCount = 0
+
+      for (const appInfo of candidates) {
+        if (this.shuttingDown) break
+
+        try {
+          const icon = await iconService.ensureAppIcon(
+            appInfo.iconSourcePath ?? appInfo.path,
+            appInfo.bundleId
+          )
+          if (!icon || !this.dbUtils) continue
+
+          const existingFile = await this.dbUtils.getFileByPath(appInfo.path)
+          if (!existingFile) continue
+
+          await this.runDbMutation('app-provider.icon-hydrate', async () => {
+            const db = this.dbUtils!.getDb()
+            await this.runAppTransaction(db, async (_tx, extensionWriter) => {
+              await this.upsertAppExtensions(extensionWriter, [
+                { fileId: existingFile.id, key: 'icon', value: icon }
+              ])
+            })
+          })
+
+          appInfo.icon = icon
+          hydratedCount += 1
+          await this.publishAppRuntimeUpsert(appInfo, 'app-icon-hydrated')
+        } catch (error) {
+          logApp(`Failed to hydrate app icon for ${chalk.yellow(appInfo.path)}`, LogStyle.warning, {
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
+
+      if (!this.shuttingDown) {
+        await this._recordMissingIconApps(scannedApps)
+      }
+      if (hydratedCount > 0) {
+        logApp(`Hydrated ${chalk.green(hydratedCount)} app icons in background`, LogStyle.success)
+      }
+    }).finally(() => {
+      for (const app of candidates) {
+        this.appIconHydrationPending.delete(app.path)
+      }
+    })
+
+    void task.catch((error) => {
+      if (this.shuttingDown) return
+      logApp('Background app icon hydration failed', LogStyle.warning, {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    })
+  }
+
   private toExtensionMap(
     records: Array<{ key: string; value: string | null }>
   ): Record<string, string | null> {
@@ -1735,9 +1821,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       precision: 2
     })
 
-    await this._recordMissingIconApps(scannedApps)
-    signal?.throwIfAborted()
-
     const dbLoadStart = startTiming()
     const dbApps = await this.dbUtils!.getFilesByType('app')
     const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
@@ -1951,6 +2034,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     signal?.throwIfAborted()
+    this.scheduleAppIconHydration(scannedApps)
 
     logAppDuration('StartupBackfill', initStart, {
       label: 'Startup backfill complete',
@@ -2236,8 +2320,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     })
     const scannedAppsMap = this.buildScannedAppsMap(scannedApps)
 
-    await this._recordMissingIconApps(scannedApps)
-
     const dbLoadStart = startTiming()
     const dbApps = await this.dbUtils!.getFilesByType('app')
     const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
@@ -2474,6 +2556,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       })
     }
 
+    this.scheduleAppIconHydration(scannedApps)
+
     logAppDuration('Initialize', initStart, {
       label: 'App data initialization complete',
       style: 'success',
@@ -2651,6 +2735,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       }
 
       const status = await this.upsertAppInfo(appInfo, options)
+      this.scheduleAppIconHydration([appInfo])
       return { success: true, status, path: appInfo.path, appInfo }
     } catch (error) {
       const report = operationalErrorService.report({

@@ -42,7 +42,7 @@ import { syncModule } from './modules/sync'
 import { authModule } from './modules/auth'
 import { getMainConfig, storageModule, subscribeMainConfig } from './modules/storage'
 import { readStartupAppConfig } from './modules/storage/app-config-repository'
-import { permissionCheckerModule } from './modules/system/permission-checker'
+import { platformPermissionModule } from './modules/system/platform-permission-service'
 import { tuffDashboardModule } from './modules/system/tuff-dashboard'
 import { systemUpdateModule } from './modules/system-update'
 import { terminalModule } from './modules/terminal/terminal.manager'
@@ -174,7 +174,7 @@ const foregroundModulesToLoad = [
   networkModule,
   catalogModule,
   analyticsModule,
-  permissionCheckerModule,
+  platformPermissionModule,
   permissionModule, // Plugin permission management - before plugin module
   notificationModule,
   quickOpsModule,

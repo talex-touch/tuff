@@ -8,7 +8,7 @@ import {
   getThumbnailUnsupportedReason,
   isThumbnailCandidate
 } from '../thumbnail-config'
-import type { IconWorkerClient } from '../workers/icon-worker-client'
+import type { IconService } from '../../../../../service/icon-service'
 import type {
   ThumbnailWorkerClient,
   ThumbnailGenerationResult
@@ -40,7 +40,7 @@ type ThumbnailFileSnapshot = Pick<FileRecord, 'mtime' | 'size'>
 type LogMeta = Record<string, unknown>
 
 export interface FileProviderAssetServiceDeps {
-  iconWorker: Pick<IconWorkerClient, 'extract' | 'getStatus'>
+  iconService: Pick<IconService, 'extractFileIcon' | 'getFileIconWorkerStatus'>
   thumbnailWorker: Pick<ThumbnailWorkerClient, 'generate' | 'getStatus'>
   getDbUtils: () => DbUtils | null
   withDbWrite: <T>(label: string, operation: () => Promise<T>) => Promise<T>
@@ -67,7 +67,10 @@ export class FileProviderAssetService {
   }
 
   getWorkerStatuses() {
-    return [this.deps.iconWorker.getStatus(), this.deps.thumbnailWorker.getStatus()] as const
+    return [
+      this.deps.iconService.getFileIconWorkerStatus(),
+      this.deps.thumbnailWorker.getStatus()
+    ] as const
   }
 
   extractIconQueued(filePath: string): Promise<Buffer | null> {
@@ -77,7 +80,7 @@ export class FileProviderAssetService {
     const task = (async () => {
       await this.deps.waitForIdle()
       try {
-        return await this.deps.iconWorker.extract(filePath)
+        return await this.deps.iconService.extractFileIcon(filePath)
       } catch (error) {
         this.deps.logWarn('Icon worker extraction failed; skipping icon', error, { path: filePath })
         return null

@@ -25,6 +25,42 @@ export type ClipboardCaptureSource =
   | 'manual-write'
   | 'history-apply'
 
+/**
+ * Effective clipboard change-detection mode.
+ * - `native`: the OS change-event watcher is live (real-time capture).
+ * - `polling`: adaptive polling fallback.
+ */
+export type ClipboardWatchMode = 'native' | 'polling'
+
+/**
+ * Diagnostic snapshot of the clipboard capture engine, queryable by developers
+ * via `ClipboardEvents.getStatus`. Its main purpose is to detect a silent
+ * fallback from the native watcher to polling (e.g. a broken native binary).
+ * Exposes engine health only — never clipboard content.
+ */
+export interface ClipboardStatus {
+  /** Effective change-detection mode. */
+  mode: ClipboardWatchMode
+  /** The native OS change-event watcher is currently active. */
+  nativeActive: boolean
+  /** Native watcher enabled via env (`TUFF_CLIPBOARD_NATIVE_WATCH`). */
+  enabled: boolean
+  /** Enabled and start was attempted, but not active — i.e. it silently fell back to polling. */
+  degraded: boolean
+  /** A native watcher start attempt has been made. */
+  startAttempted: boolean
+  /** Number of native change events observed since activation. */
+  nativeChangeCount: number
+  /** When the native watcher last became active (epoch ms), or `null`. */
+  activatedAt: number | null
+  /** Last native watcher start failure message, or `null`. */
+  lastError: string | null
+  /** When the last failure happened (epoch ms), or `null`. */
+  lastErrorAt: number | null
+  /** Current adaptive poll interval in ms (`-1` when polling is disabled). */
+  pollIntervalMs: number
+}
+
 export interface ClipboardItem {
   id: number
   type: TuffInputType

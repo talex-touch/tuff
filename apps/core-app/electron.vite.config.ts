@@ -169,6 +169,13 @@ export default defineConfig({
     plugins: [
       // 只保留必要的workspace包，其他依赖尽可能外部化以减小包体
       externalizeDepsPlugin({
+        include: [
+          // 原生 NAPI-RS 模块，位于 optionalDependencies。externalizeDepsPlugin 默认只外部化
+          // dependencies，不外部化就会被 rollup 打包，进而把各平台 .node 摊平成顶层无条件 require
+          // （darwin 上会先误加载 win32 的 .node，报 "slice is not valid mach-o file" 而回退到轮询）。
+          // 外部化后交由 node_modules 里的运行时按平台加载正确的二进制。
+          '@crosscopy/clipboard'
+        ],
         exclude: [
           '@talex-touch/utils', // workspace 包必须打包
           '@talex-touch/tuff-intelligence', // 避免运行时直接加载 TS ESM 源码导致导入解析失败

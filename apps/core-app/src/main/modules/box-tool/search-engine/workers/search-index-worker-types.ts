@@ -133,6 +133,17 @@ export interface CleanupOrphanKeywordsMessage {
 }
 
 /**
+ * Graceful shutdown request: the worker finalizes its WAL
+ * (`wal_checkpoint(TRUNCATE)`) and closes its DB connection before the parent
+ * terminates the thread. Runs through the serial queue, so any in-flight write
+ * completes first — this is what prevents the abrupt-terminate corruption path.
+ */
+export interface ShutdownMessage {
+  type: 'shutdown'
+  taskId: string
+}
+
+/**
  * Union of all search-index-worker message types.
  */
 export type SearchIndexWorkerMessage =
@@ -150,6 +161,7 @@ export type SearchIndexWorkerMessage =
   | RemoveFileMessage
   | RemoveFileExtensionsMessage
   | CleanupOrphanKeywordsMessage
+  | ShutdownMessage
 
 // ============================================================================
 // Shared result types

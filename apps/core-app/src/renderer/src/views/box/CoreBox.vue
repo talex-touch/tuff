@@ -13,7 +13,6 @@ import { TxScroll } from '@talex-touch/tuffex/scroll'
 import { TxIcon as TuffIcon } from '@talex-touch/tuffex/icon'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import FlowSelector from '~/components/flow/FlowSelector.vue'
-import ActionPanel from '~/components/render/ActionPanel.vue'
 import TuffItemAddon from '~/components/render/addon/TuffItemAddon.vue'
 import BoxGrid from '~/components/render/BoxGrid.vue'
 import CoreBoxFooter from '~/components/render/CoreBoxFooter.vue'
@@ -489,7 +488,6 @@ type ItemRef = HTMLElement | ComponentPublicInstance
 const itemRefs = ref<ItemRef[]>([])
 
 // Track result batch changes for animation
-const resultBatchKey = ref(0)
 const renderedItemIds = ref<Set<string>>(new Set())
 const newItemIds = ref<Set<string>>(new Set())
 let lastResultIds: Set<string> = new Set()
@@ -528,19 +526,20 @@ watch(res, (newRes) => {
   const currentIds = new Set(newRes.map((item) => item.id))
   const overlapRatio = computeOverlapRatio(lastResultIds, currentIds)
 
-  const isMajorChange = overlapRatio < 0.3 && lastResultIds.size > 0
-  const isFromEmpty = lastResultIds.size === 0 && currentIds.size > 0
+  // A "full refresh" is the first results after an empty state, or a near-total
+  // swap (new query). Previously a major change bumped a batch key that re-keyed
+  // the whole list container, tearing down every BoxItem and repainting from
+  // blank through <Transition mode="out-in"> — the root cause of the switch
+  // flicker. Now the list stays mounted (stable key) and Vue patches items by
+  // id; the per-item stagger animates the new set in when enabled.
+  const isFullRefresh = (overlapRatio < 0.3 && lastResultIds.size > 0) || lastResultIds.size === 0
 
   if (resWatchTimerId !== null) {
     clearTimeout(resWatchTimerId)
     resWatchTimerId = null
   }
 
-  if (isMajorChange) {
-    resultBatchKey.value++
-    renderedItemIds.value = new Set(currentIds)
-    newItemIds.value = new Set()
-  } else if (isFromEmpty) {
+  if (isFullRefresh && currentIds.size > 0) {
     renderedItemIds.value = new Set(currentIds)
     newItemIds.value = new Set(currentIds)
     resWatchTimerId = setTimeout(() => {
@@ -649,6 +648,7 @@ const actionPanel = useActionPanel({
   openFlowSelector: detach.openFlowSelector,
   refreshSearch: handleSearchImmediate,
   onActivationState: applyCoreBoxActivationState,
+  onPrimaryExecute: handleExecute,
   navigate: (path) => {
     void transport.send(CoreBoxEvents.ui.hide, undefined).catch(() => {})
     void router.push(path).catch(() => {})
@@ -920,13 +920,13 @@ const customCss = computed(() => {
               <Transition :name="resultTransitionName" mode="out-in">
                 <BoxGrid
                   v-if="isGridMode"
-                  :key="`grid-${resultBatchKey}`"
+                  key="grid"
                   :items="res"
                   :layout="boxOptions.layout"
                   :focus="boxOptions.focus"
                   @select="handleGridSelect"
                 />
-                <div v-else :key="`list-${resultBatchKey}`" class="item-list">
+                <div v-else key="list" class="item-list">
                   <CoreBoxRender
                     v-for="(item, index) in res"
                     :key="item.id || index"
@@ -988,15 +988,6 @@ const customCss = computed(() => {
     :payload="detach.flowPayload"
     @close="detach.closeFlowSelector"
     @select="detach.dispatchFlow"
-  />
-
-  <!-- Action Panel (⌘K) -->
-  <ActionPanel
-    :visible="actionPanel.visible"
-    :item="actionPanel.item"
-    :is-pinned="actionPanel.isPinned"
-    @close="actionPanel.close"
-    @action="actionPanel.handleAction"
   />
 </template>
 

@@ -12,7 +12,6 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
-    ActionPanel: typeof import('./src/components/render/ActionPanel.vue')['default']
     ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
     AgentDetail: typeof import('./src/components/intelligence/agents/AgentDetail.vue')['default']
     AgentItem: typeof import('./src/components/intelligence/agents/AgentItem.vue')['default']
@@ -221,7 +220,6 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
-  const ActionPanel: typeof import('./src/components/render/ActionPanel.vue')['default']
   const ActionTemplate: typeof import('./src/components/base/template/ActionTemplate.vue')['default']
   const AgentDetail: typeof import('./src/components/intelligence/agents/AgentDetail.vue')['default']
   const AgentItem: typeof import('./src/components/intelligence/agents/AgentItem.vue')['default']

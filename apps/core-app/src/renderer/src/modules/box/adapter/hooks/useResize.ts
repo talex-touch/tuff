@@ -15,6 +15,7 @@ interface UseResizeOptions {
 }
 
 const SCROLLBAR_WIDTH_ESTIMATE = 12
+const HEIGHT_MEASUREMENT_PENDING = -1
 const HEIGHT_SAFETY_PADDING = 10
 const HEADER_HEIGHT = 56
 const MIN_HEIGHT = 56
@@ -90,7 +91,7 @@ function calculateDesiredHeight(resultCount: number): number {
       resultCount,
       headerHeight
     })
-    return MIN_HEIGHT
+    return HEIGHT_MEASUREMENT_PENDING
   }
 
   // Prefer measuring real result content first.
@@ -102,7 +103,7 @@ function calculateDesiredHeight(resultCount: number): number {
     if (Number.isFinite(contentHeight) && contentHeight > 0) {
       return clampHeight(contentHeight + headerHeight + HEIGHT_SAFETY_PADDING)
     }
-    return clampHeight(headerHeight)
+    return HEIGHT_MEASUREMENT_PENDING
   }
 
   const nativeWrap = scrollRoot.querySelector(
@@ -113,7 +114,7 @@ function calculateDesiredHeight(resultCount: number): number {
   const wrap = nativeWrap ?? txWrapper ?? txContent
   if (!wrap) {
     logResizeDebug('calculateDesiredHeight:wrapMissing', { resultCount, headerHeight })
-    return MIN_HEIGHT
+    return HEIGHT_MEASUREMENT_PENDING
   }
 
   const scrollHeight = txContent?.scrollHeight ?? wrap.scrollHeight
@@ -149,8 +150,22 @@ export function useResize(options: UseResizeOptions): void {
     const isRecommendationPending = recommendationEnabled
       ? (recommendationPending?.value ?? false)
       : false
-    const height = calculateDesiredHeight(resultCount)
     const forceMax = hasForceMaxActivation(activeActivations.value)
+    const measuredHeight = calculateDesiredHeight(resultCount)
+    // Results exist but the list DOM is transiently empty/unmeasurable (mid
+    // transition or progressive mount). Hold the last committed height instead
+    // of emitting a collapse, so the window never flickers down then back up.
+    // forceMax ignores height on the main side, so always let those through.
+    let height = measuredHeight
+    if (measuredHeight < 0) {
+      if (lastPayload) {
+        height = lastPayload.height
+      } else if (forceMax) {
+        height = MIN_HEIGHT
+      } else {
+        return
+      }
+    }
 
     const payload: CoreBoxLayoutUpdateRequest = {
       height,

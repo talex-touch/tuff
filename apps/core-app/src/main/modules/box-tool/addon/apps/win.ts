@@ -1,9 +1,9 @@
-import { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
+import { iconService } from '../../../../service/icon-service'
 import { shell } from 'electron'
 import type { AppDisplayNameQuality, ScannedAppInfo } from './app-types'
 import { reportAppScanError } from './app-error-reporter'
@@ -50,7 +50,6 @@ type DesktopAppDisplayNameMetadata = {
   displayNameQuality?: AppDisplayNameQuality
 }
 
-const ICON_CACHE_DIR = path.join(os.tmpdir(), 'talex-touch-app-icons-win')
 const APPX_MANIFEST_NAME = 'AppxManifest.xml'
 export const START_MENU_PATHS = [
   path.resolve('C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs'),
@@ -88,26 +87,6 @@ const UWP_LOGO_ATTRIBUTE_CANDIDATES = [
   'Logo'
 ]
 const windowsAppLog = createLogger('AppScanner').child('Windows')
-type ExtractFileIcon = (filePath: string, size?: number) => Buffer | null
-let extractFileIcon: ExtractFileIcon | null | undefined
-
-async function loadExtractFileIcon(): Promise<ExtractFileIcon | null> {
-  if (extractFileIcon !== undefined) {
-    return extractFileIcon
-  }
-
-  try {
-    const loaded = await import('extract-file-icon')
-    extractFileIcon = loaded.default as ExtractFileIcon
-  } catch (error) {
-    extractFileIcon = null
-    windowsAppLog.warn('Native app icon extractor unavailable', {
-      error: error instanceof Error ? error.message : String(error)
-    })
-  }
-
-  return extractFileIcon
-}
 
 function normalizeIdentityPart(value: string): string {
   return value.trim().toLowerCase()
@@ -206,10 +185,6 @@ function resolveStartAppDesktopPath(appId: string): string | null {
   if (!normalized) return null
   if (isWindowsAbsolutePath(normalized)) return path.win32.normalize(normalized)
   return resolveKnownFolderGuidPath(normalized)
-}
-
-function buildIconCacheKey(value: string): string {
-  return Buffer.from(value).toString('base64url')
 }
 
 function extractUwpAppId(raw: string | undefined): string | null {
@@ -667,7 +642,7 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
   if (!stats?.isFile()) return null
 
   const stableId = `registry:${buildPathStableId(targetPath)}`
-  const icon = await getAppIcon(targetPath, stableId)
+  const icon = (await iconService.getCachedAppIcon(targetPath, '')) ?? ''
   const fileName = path.basename(targetPath, path.extname(targetPath))
 
   return {
@@ -679,6 +654,7 @@ async function buildRegistryAppInfo(record: RegistryAppRecord): Promise<AppInfo 
     description: record.publisher?.trim() || undefined,
     path: targetPath,
     icon,
+    iconSourcePath: targetPath,
     bundleId: '',
     uniqueId: stableId,
     stableId,
@@ -756,7 +732,7 @@ async function buildAppPathRegistryAppInfo(record: AppPathRegistryRecord): Promi
   if (!displayName || shouldSkipRegistryAppName(displayName)) return null
 
   const stableId = `registry:${buildPathStableId(targetPath)}`
-  const icon = await getAppIcon(targetPath, stableId)
+  const icon = (await iconService.getCachedAppIcon(targetPath, '')) ?? ''
   const pathValue = parseAppPathRegistryField(record, ['pathValue', 'PathValue'])
 
   return {
@@ -768,6 +744,7 @@ async function buildAppPathRegistryAppInfo(record: AppPathRegistryRecord): Promi
     description: normalizeWindowsPathValue(pathValue) || undefined,
     path: targetPath,
     icon,
+    iconSourcePath: targetPath,
     bundleId: '',
     uniqueId: stableId,
     stableId,
@@ -786,35 +763,6 @@ async function listAppPathRegistryApps(): Promise<AppInfo[]> {
   const records = await getAppPathRegistryRecords()
   const apps = await Promise.all(records.map((record) => buildAppPathRegistryAppInfo(record)))
   return apps.filter(Boolean) as AppInfo[]
-}
-
-async function getAppIcon(targetPath: string, cacheKey: string): Promise<string> {
-  await fs.mkdir(ICON_CACHE_DIR, { recursive: true })
-  const iconPath = path.join(ICON_CACHE_DIR, `${buildIconCacheKey(cacheKey)}.png`)
-
-  try {
-    await fs.access(iconPath)
-    const buffer = await fs.readFile(iconPath)
-    return `data:image/png;base64,${buffer.toString('base64')}`
-  } catch {
-    try {
-      const fileIcon = await loadExtractFileIcon()
-      if (typeof fileIcon === 'function') {
-        const buffer = fileIcon(targetPath, 32)
-        if (buffer && buffer.length > 0) {
-          const normalized = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer)
-          await fs.writeFile(iconPath, normalized)
-          return `data:image/png;base64,${normalized.toString('base64')}`
-        }
-      }
-    } catch (error) {
-      windowsAppLog.warn('Failed to extract app icon', {
-        error: error instanceof Error ? error.message : String(error),
-        meta: { pathLength: targetPath.length }
-      })
-    }
-  }
-  return '' // Return empty string if icon extraction fails
 }
 
 async function buildDesktopAppInfo(
@@ -855,7 +803,7 @@ async function buildDesktopAppInfo(
       ? buildShortcutStableId(targetPath, launchArgs)
       : buildPathStableId(targetPath)
   const iconSource = shortcutDetails?.icon?.trim() || targetPath
-  const icon = await getAppIcon(iconSource, stableId)
+  const icon = (await iconService.getCachedAppIcon(iconSource, '')) ?? ''
   const sourceBaseName = path.basename(fileName, path.extname(fileName))
   const targetBaseName = path.basename(targetPath, path.extname(targetPath))
   const displayNameMeta = resolveWindowsDisplayName(
@@ -879,6 +827,7 @@ async function buildDesktopAppInfo(
     identityKind: launchKind === 'shortcut' ? 'windows-shortcut' : 'windows-path',
     path: isShortcut ? sourcePath : targetPath,
     icon,
+    iconSourcePath: iconSource,
     bundleId: '',
     uniqueId: stableId,
     stableId,

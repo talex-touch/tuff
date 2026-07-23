@@ -193,7 +193,18 @@ log4js.configure({
 mainLog.success('Talex Touch bootstrap started')
 
 // Increase renderer process V8 heap limit (main process uses NODE_OPTIONS)
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=512')
+const v8JsFlags = ['--max-old-space-size=512']
+
+// Opt-in escape hatch for the macOS 26/27 (Tahoe) V8 JIT-page crash
+// (electron/electron#51351): `--jitless` removes the executable MAP_JIT pages
+// that the OS revokes RX permission on, at the cost of slower JS. Off by
+// default; enable with TUFF_V8_JITLESS=1 only when hitting that crash.
+if (parseBooleanEnv(process.env.TUFF_V8_JITLESS)) {
+  v8JsFlags.push('--jitless')
+  mainLog.warn('V8 JIT disabled via TUFF_V8_JITLESS (slower JS; Tahoe crash workaround)')
+}
+
+app.commandLine.appendSwitch('js-flags', v8JsFlags.join(' '))
 
 // Disable GPU Acceleration for Windows 7
 if (release().startsWith('6.1')) app.disableHardwareAcceleration()

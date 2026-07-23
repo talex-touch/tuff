@@ -27,6 +27,7 @@ import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-t
 import { parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { CoreBoxEvents, StoreEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   PluginInstallCompletedEvent,
   TalexEvents,
@@ -1747,7 +1748,85 @@ export class PluginModule extends BaseModule {
         if (pluginIns instanceof TouchPlugin) {
           pluginIns.clearCoreBoxItems()
         }
-      })
+      }),
+      transport.on(
+        defineRawEvent<
+          Record<string, unknown>,
+          { success: boolean; pluginName?: string; error?: string }
+        >('plugin:new'),
+        async (payload) => {
+          try {
+            const form = isRecord(payload) ? payload : {}
+            const name = typeof form.name === 'string' ? form.name.trim() : ''
+            if (!name || /[\\/:*?"<>|]/.test(name)) {
+              return { success: false, error: 'Invalid plugin name' }
+            }
+
+            const pluginRootDir = path.resolve(manager.pluginPath, name)
+            if (await fse.pathExists(pluginRootDir)) {
+              return { success: false, error: 'Plugin already exists' }
+            }
+
+            const desc = typeof form.desc === 'string' ? form.desc : ''
+            const version =
+              typeof form.version === 'string' && form.version.trim().length > 0
+                ? form.version.trim()
+                : '0.0.1'
+            const icon =
+              isRecord(form.icon) &&
+              typeof form.icon.type === 'string' &&
+              typeof form.icon.value === 'string'
+                ? { type: form.icon.type, value: form.icon.value }
+                : { type: 'class', value: 'i-ri-remixicon-line' }
+            const devAddress =
+              isRecord(form.dev) && typeof form.dev.address === 'string'
+                ? form.dev.address.trim()
+                : ''
+            const readme = (typeof form.readme === 'string' ? form.readme : '') || `# ${name}`
+
+            const manifest = {
+              name,
+              version,
+              description: desc,
+              author: '',
+              main: 'index.js',
+              icon,
+              ...(devAddress ? { dev: { enable: true, address: devAddress, source: false } } : {}),
+              features: []
+            }
+
+            await fse.ensureDir(pluginRootDir)
+            await fse.writeJSON(path.resolve(pluginRootDir, 'manifest.json'), manifest, {
+              spaces: 2
+            })
+            await fse.writeFile(
+              path.resolve(pluginRootDir, 'index.js'),
+              'module.exports = {\n  onFeatureTriggered(featureId, query, feature) {\n    // TODO\n  }\n}\n'
+            )
+            await fse.writeFile(path.resolve(pluginRootDir, 'README.md'), readme)
+
+            await manager.loadPlugin(name)
+
+            return { success: true, pluginName: name }
+          } catch (error) {
+            logIpcHandlerError('plugin:new', error)
+            return { success: false, error: toErrorMessage(error) }
+          }
+        }
+      ),
+      transport.on(
+        defineRawEvent<{ plugin: string }, void>('trigger-plugin-feature-exit'),
+        async (payload) => {
+          const pluginName = payload?.plugin
+          if (!pluginName) {
+            return
+          }
+          const pluginIns = manager.getPluginByName(pluginName)
+          if (pluginIns instanceof TouchPlugin) {
+            pluginIns.triggerFeatureExit()
+          }
+        }
+      )
     )
     this.transportDisposers.push(
       ...registerPluginWindowTransportHandlers({

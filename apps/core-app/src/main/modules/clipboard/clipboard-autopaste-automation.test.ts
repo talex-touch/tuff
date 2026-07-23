@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
   app: {
     getPath: vi.fn(() => '/tmp'),
     getVersion: vi.fn(() => '0.0.0-test'),
+    whenReady: vi.fn(() => Promise.resolve()),
     isPackaged: false,
     commandLine: {
       appendSwitch: vi.fn()

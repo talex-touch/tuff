@@ -79,6 +79,12 @@
   - 构建约束：Electron sandbox preload 必须为 standalone CJS；`standaloneSandboxedPreloadPlugin` 消除 multi-entry Rollup shared-chunk `preloadRequire` 失败。
   - 验证：utils 4 files / 11 tests（真实 transfer、无 `openPort()` mock）、CoreBox 2 files / 23 tests、node/web typecheck、mac production build，以及默认 allowlist packaged Electron 中可见的已索引 TextEdit 结果。
 
+- [x] **B6 — Darwin 27 `app.getFileIcon` 硬崩溃** ✅ 已修（`fix/corebox-icons-db-hardening`）
+  - 位置：统一入口 `main/service/icon-service.ts`、应用扫描 `addon/apps/{darwin,win}.ts`、后台持久化 `addon/apps/app-provider.ts`、活动应用 `modules/system/active-app.ts`，以及文件/Everything 图标消费者。
+  - 根因：图标 cache 失效后，应用启动扫描同步进入 Electron 原生图标 fallback；在 Darwin 27 上，即使单次 `app.getFileIcon('/Applications/Safari.app')` 也会让 Electron 41.3/41.10/43.2 以 `EXC_BREAKPOINT / SIGTRAP` 崩在 `ThreadPoolForegroundWorker`。同时应用、活动窗口、FileProvider、Everything、Windows 扫描各自持有提取与缓存逻辑，导致同步扫描、重复 Worker 和不一致 fallback。
+  - 交付：新增全局 `IconService`，统一安全 Electron 入口、单例文件图标 Worker、版本化应用缓存和并发去重；macOS/Windows 扫描只读缓存，miss 立即返回空图，`AppProvider` 在索引落库后异步提取、持久化并发布更新；Darwin 27 原生 fallback 继续 fail-closed，无法解析时使用内部空图占位。
+  - 验证：真实 profile 完成 143 个应用扫描和 0.71s startup backfill，后台成功填充 131 个图标、仅 NetBird 保持空图，数据库确认 132 个非空应用图标；当前实例无 `EXC_BREAKPOINT`/`SIGTRAP`。8 个测试文件 / 164 个测试、Windows focused 18 tests、CoreApp node typecheck 与 scoped ESLint 通过。
+
 ### 🟠 高危工程风险
 
 - [ ] **R1 — Rust 截图模块疑似未接入 CI/安装构建链**

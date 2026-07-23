@@ -31,6 +31,15 @@ const DEFAULT_FILE_INDEX_PATHS = [
   'videos'
 ] as const
 
+// macOS TCC only gates Documents/Downloads/Desktop. Music/Pictures/Movies are not
+// permission-protected and are always readable, so only the TCC-gated folders (plus
+// user-added extras) should count toward the "file access granted" summary.
+const TCC_REQUIRED_FILE_INDEX_PATHS = new Set<(typeof DEFAULT_FILE_INDEX_PATHS)[number]>([
+  'documents',
+  'downloads',
+  'desktop'
+])
+
 function normalizePath(rawPath: string): string {
   return path.resolve(rawPath.trim())
 }
@@ -78,7 +87,7 @@ export function getFileAccessRootDescriptors(
 
   if (platform === 'darwin') {
     for (const pathName of DEFAULT_FILE_INDEX_PATHS) {
-      pushAppPath(roots, pathName, pathName, pathName, true)
+      pushAppPath(roots, pathName, pathName, pathName, TCC_REQUIRED_FILE_INDEX_PATHS.has(pathName))
     }
   }
 

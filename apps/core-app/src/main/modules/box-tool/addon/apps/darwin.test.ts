@@ -3,9 +3,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileSafeMock, getFileIconMock } = vi.hoisted(() => ({
+const { execFileSafeMock, getElectronFileIconMock } = vi.hoisted(() => ({
   execFileSafeMock: vi.fn(),
-  getFileIconMock: vi.fn()
+  getElectronFileIconMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -17,8 +17,12 @@ vi.mock('electron', () => ({
         name === 'cache' ? 'cache' : ''
       )
     ),
-    getFileIcon: getFileIconMock
+    getFileIcon: vi.fn()
   }
+}))
+
+vi.mock('../../../../utils/electron-file-icon', () => ({
+  getElectronFileIcon: getElectronFileIconMock
 }))
 
 vi.mock('@talex-touch/utils/common/utils/safe-shell', () => ({
@@ -30,7 +34,11 @@ vi.mock('./app-error-reporter', () => ({
 }))
 
 async function loadSubject() {
-  return await import('./darwin')
+  const [darwin, { iconService }] = await Promise.all([
+    import('./darwin'),
+    import('../../../../service/icon-service')
+  ])
+  return { ...darwin, iconService }
 }
 
 async function createTempAppBundle(
@@ -91,7 +99,7 @@ describe('darwin app info', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
-    getFileIconMock.mockResolvedValue({
+    getElectronFileIconMock.mockResolvedValue({
       isEmpty: () => false,
       toPNG: () => Buffer.from('native-png')
     })
@@ -201,60 +209,67 @@ describe('darwin app info', () => {
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to bundle icon resources when native extraction fails', async () => {
-    getFileIconMock.mockRejectedValueOnce(new Error('native icon unavailable'))
+  it('returns the empty fallback before hydrating the bundle icon asynchronously', async () => {
     const tempRoot = await createTempAppBundle('ChatApp', 'ChatApp', {
       iconFile: 'AppIcon'
     })
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'ChatApp.app')
 
-    const { getAppInfo } = await loadSubject()
+    const { getAppInfo, iconService } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
 
-    expect(appInfo?.icon).toMatch(/cache\/app-icons\/darwin\/[a-f0-9]{32}\.png$/)
-    expect(path.basename(appInfo?.icon ?? '')).not.toContain('ChatApp')
+    expect(appInfo?.icon).toBe('')
+    expect(execFileSafeMock).not.toHaveBeenCalled()
+
+    const hydratedIcon = await iconService.ensureAppIcon(appPath, appInfo?.bundleId ?? '')
+    expect(hydratedIcon).toMatch(/cache\/app-icons\/darwin\/[a-f0-9]{32}\.png$/)
+    expect(path.basename(hydratedIcon ?? '')).not.toContain('ChatApp')
     expect(execFileSafeMock).toHaveBeenCalledWith(
       'sips',
       expect.arrayContaining([
         path.join(appPath, 'Contents', 'Resources', 'AppIcon.icns'),
         '--out',
-        appInfo?.icon
+        hydratedIcon
       ])
     )
   })
 
-  it('uses Electron native app icons at display size', async () => {
+  it('hydrates through the guarded native fallback when the bundle ships no .icns', async () => {
     const tempRoot = await createTempAppBundle('NativeIcon', 'NativeIcon')
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'NativeIcon.app')
 
-    const { getAppInfo } = await loadSubject()
+    const { getAppInfo, iconService } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
+    const hydratedIcon = await iconService.ensureAppIcon(appPath, appInfo?.bundleId ?? '')
 
-    expect(getFileIconMock).toHaveBeenCalledWith(appPath, { size: 'normal' })
-    expect(await fs.readFile(appInfo?.icon ?? '', 'utf8')).toBe('native-png')
+    expect(appInfo?.icon).toBe('')
+    expect(getElectronFileIconMock).toHaveBeenCalledWith(appPath, { size: 'large' })
+    expect(await fs.readFile(hydratedIcon ?? '', 'utf8')).toBe('native-png')
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('reuses existing app icon cache without running sips again', async () => {
+  it('reuses a hydrated app icon cache during later scans', async () => {
     const tempRoot = await createTempAppBundle('Preview', 'Preview', {
       iconFile: 'PreviewIcon'
     })
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'Preview.app')
 
-    const { getAppInfo } = await loadSubject()
+    const { getAppInfo, iconService } = await loadSubject()
     const firstAppInfo = await getAppInfo(appPath)
+    const hydratedIcon = await iconService.ensureAppIcon(appPath, firstAppInfo?.bundleId ?? '')
     execFileSafeMock.mockClear()
     const secondAppInfo = await getAppInfo(appPath)
 
-    expect(secondAppInfo?.icon).toBe(firstAppInfo?.icon)
+    expect(firstAppInfo?.icon).toBe('')
+    expect(secondAppInfo?.icon).toBe(hydratedIcon)
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 
-  it('returns empty icon when app has no icon resources', async () => {
-    getFileIconMock.mockResolvedValueOnce({
+  it('keeps the empty fallback when asynchronous icon hydration cannot resolve an icon', async () => {
+    getElectronFileIconMock.mockResolvedValueOnce({
       isEmpty: () => true,
       toPNG: () => Buffer.alloc(0)
     })
@@ -262,10 +277,12 @@ describe('darwin app info', () => {
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'NoIcon.app')
 
-    const { getAppInfo } = await loadSubject()
+    const { getAppInfo, iconService } = await loadSubject()
     const appInfo = await getAppInfo(appPath)
+    const hydratedIcon = await iconService.ensureAppIcon(appPath, appInfo?.bundleId ?? '')
 
     expect(appInfo?.icon).toBe('')
+    expect(hydratedIcon).toBeNull()
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
 })

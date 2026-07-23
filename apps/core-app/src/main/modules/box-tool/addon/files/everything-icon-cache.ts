@@ -1,13 +1,12 @@
 import { Buffer } from 'node:buffer'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { appTaskGate } from '../../../../service/app-task-gate'
-import { IconWorkerClient } from './workers/icon-worker-client'
+import { iconService } from '../../../../service/icon-service'
 
 const fileProviderLog = getLogger('file-provider')
 const EVERYTHING_ICON_CACHE_LIMIT = 256
 
 export class EverythingIconCache {
-  private readonly iconWorker = new IconWorkerClient()
   private readonly iconCache = new Map<string, string>()
   private readonly iconExtractions = new Map<string, Promise<string | null>>()
 
@@ -83,7 +82,7 @@ export class EverythingIconCache {
   private async extract(filePath: string): Promise<string | null> {
     await appTaskGate.waitForIdle()
 
-    const icon = await this.iconWorker.extract(filePath)
+    const icon = await iconService.extractFileIcon(filePath)
     if (!icon || icon.length === 0) {
       return null
     }

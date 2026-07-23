@@ -43,7 +43,7 @@ export class IconWorkerClient {
     shutdown: () => this.terminateWorker()
   })
 
-  async extract(filePath: string): Promise<Buffer | null> {
+  async extract(filePath: string, size?: number): Promise<Buffer | null> {
     const taskId = `icon-${Date.now()}-${Math.random().toString(16).slice(2)}`
     const startedAt = Date.now()
     const worker = this.ensureWorker()
@@ -54,7 +54,8 @@ export class IconWorkerClient {
       worker.postMessage({
         type: 'extract',
         taskId,
-        filePath
+        filePath,
+        size
       })
     })
   }

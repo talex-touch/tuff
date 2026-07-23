@@ -1,5 +1,9 @@
 import { fetchWithTimeout, normalizeBaseUrl } from '../lib/http-utils.mjs'
-import { REQUIRED_CORE_PAIRS } from '../lib/release-artifacts.mjs'
+import {
+  inferCoreArtifactIdentity,
+  isCorePackageFileName,
+  REQUIRED_CORE_PAIRS,
+} from '../lib/release-artifacts.mjs'
 import { validateRollbackContract } from '../lib/update-rollback-contract.mjs'
 
 const sha256Pattern = /^[a-f0-9]{64}$/i
@@ -416,7 +420,7 @@ function inspectSignedDownloadUrl(value, baseUrl) {
   const parsed = resolveSameOriginUrl(value, baseUrl)
   if (!parsed) {
     return {
-      url: normalizeText(value) || null,
+      url: null,
       sameOrigin: false,
       path: null,
       hasHash: false,
@@ -448,7 +452,8 @@ function inspectSignedDownloadUrl(value, baseUrl) {
         ? 'download-url-has-unexpected-query'
         : null
   return {
-    url: parsed.href,
+    requestUrl: parsed.href,
+    url: `${parsed.origin}${normalizePathname(parsed.pathname)}`,
     sameOrigin: true,
     path: normalizePathname(parsed.pathname),
     hasHash,
@@ -461,7 +466,6 @@ function inspectSignedDownloadUrl(value, baseUrl) {
     hasUnexpectedQuery: unexpectedQueryKeys.length > 0,
     unexpectedQueryKeys,
     ...(reason ? { reason } : {}),
-    ...(exp ? { exp } : {}),
   }
 }
 
@@ -883,6 +887,7 @@ async function checkGithubFallbackManifest({ tag, timeoutMs, pushCheck }) {
 
 function compareNexusAssetsWithManifest({
   assets,
+  githubAssets,
   manifestPayload,
   remoteRelease,
   tag,
@@ -897,6 +902,11 @@ function compareNexusAssetsWithManifest({
   const mismatches = []
   const nexusMatrix = []
   const seenNexusKeys = new Map()
+  const githubAssetsByName = new Map(
+    githubAssets
+      .map(asset => [normalizeText(asset?.name), asset])
+      .filter(([name]) => name),
+  )
 
   const manifestTag = normalizeText(manifestRelease?.tag)
   if (manifestTag && manifestTag !== tag) {
@@ -987,6 +997,16 @@ function compareNexusAssetsWithManifest({
       platform,
       arch,
     )
+    const expectedGithubSignatureUrl = normalizeText(
+      githubAssetsByName.get(expected?.signature)?.browser_download_url,
+    )
+    const matchesCanonicalSignature
+      = actualSignaturePath === expectedSignaturePath
+        && actualSignatureInfo.canonical
+    const matchesGithubSignature = Boolean(
+      expectedGithubSignatureUrl
+      && actualSignatureUrl === expectedGithubSignatureUrl,
+    )
 
     nexusMatrix.push({
       key,
@@ -999,6 +1019,11 @@ function compareNexusAssetsWithManifest({
       hasSignatureUrl: Boolean(actualSignatureUrl),
       signatureUrlPath: actualSignaturePath || null,
       signatureUrlCanonical: actualSignatureInfo.canonical,
+      signatureUrlSource: matchesCanonicalSignature
+        ? 'nexus'
+        : matchesGithubSignature
+          ? 'github'
+          : null,
     })
 
     if (seenNexusKeys.has(key)) {
@@ -1048,23 +1073,29 @@ function compareNexusAssetsWithManifest({
       })
     }
 
-    if (!actualSignaturePath || actualSignaturePath !== expectedSignaturePath) {
-      mismatches.push({
-        key,
-        reason: 'signature-url-mismatch',
-        actual: actualSignatureUrl || null,
-        expected: expectedSignaturePath,
-      })
-    }
-    else if (!actualSignatureInfo.canonical) {
-      mismatches.push({
-        key,
-        reason: 'signature-url-not-canonical',
-        actual: actualSignatureUrl || null,
-        expected: expectedSignaturePath,
-        hasQuery: actualSignatureInfo.hasQuery,
-        hasHash: actualSignatureInfo.hasHash,
-      })
+    if (!matchesCanonicalSignature && !matchesGithubSignature) {
+      if (
+        actualSignaturePath === expectedSignaturePath
+        && !actualSignatureInfo.canonical
+      ) {
+        mismatches.push({
+          key,
+          reason: 'signature-url-not-canonical',
+          actual: actualSignatureUrl || null,
+          expected: expectedSignaturePath,
+          hasQuery: actualSignatureInfo.hasQuery,
+          hasHash: actualSignatureInfo.hasHash,
+        })
+      }
+      else {
+        mismatches.push({
+          key,
+          reason: 'signature-url-mismatch',
+          actual: actualSignatureUrl || null,
+          expectedCanonical: expectedSignaturePath,
+          expectedGithub: expectedGithubSignatureUrl || null,
+        })
+      }
     }
   }
 
@@ -1168,15 +1199,22 @@ function compareGithubAssetsWithManifest({
   const missing = []
   const expectedNames = new Set()
 
-  const addMissingAsset = ({ artifact, name, kind }) => {
+  const validateGithubAsset = ({
+    platform,
+    arch,
+    name,
+    kind,
+    artifactName,
+    expectedDigest,
+  }) => {
     expectedNames.add(name)
     const githubAsset = assetsByName.get(name)
     if (!githubAsset) {
       missing.push({
-        platform: artifact.platform,
-        arch: artifact.arch,
+        platform,
+        arch,
         name,
-        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        ...(kind === 'signature' ? { artifact: artifactName } : {}),
         kind,
         reason: 'missing-github-asset',
       })
@@ -1189,20 +1227,20 @@ function compareGithubAssetsWithManifest({
     )
     if (!downloadUrlInfo.url) {
       missing.push({
-        platform: artifact.platform,
-        arch: artifact.arch,
+        platform,
+        arch,
         name,
-        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        ...(kind === 'signature' ? { artifact: artifactName } : {}),
         kind,
         reason: 'missing-browser-download-url',
       })
     }
     else if (!downloadUrlInfo.valid) {
       missing.push({
-        platform: artifact.platform,
-        arch: artifact.arch,
+        platform,
+        arch,
         name,
-        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        ...(kind === 'signature' ? { artifact: artifactName } : {}),
         kind,
         url: downloadUrlInfo.url,
         path: downloadUrlInfo.path,
@@ -1218,14 +1256,17 @@ function compareGithubAssetsWithManifest({
       const githubDigest = normalizeSha(
         normalizeText(githubAsset?.digest).replace(/^sha256:/i, ''),
       )
-      if (!githubDigest || githubDigest !== artifact.sha256) {
+      if (
+        !githubDigest
+        || (expectedDigest && githubDigest !== expectedDigest)
+      ) {
         missing.push({
-          platform: artifact.platform,
-          arch: artifact.arch,
+          platform,
+          arch,
           name,
           kind,
           digest: githubDigest || null,
-          expectedDigest: artifact.sha256,
+          ...(expectedDigest ? { expectedDigest } : {}),
           reason: !githubDigest
             ? 'missing-github-sha256-digest'
             : 'github-sha256-digest-mismatch',
@@ -1236,10 +1277,10 @@ function compareGithubAssetsWithManifest({
     const state = normalizeText(githubAsset?.state)
     if (state && state !== 'uploaded') {
       missing.push({
-        platform: artifact.platform,
-        arch: artifact.arch,
+        platform,
+        arch,
         name,
-        ...(kind === 'signature' ? { artifact: artifact.name } : {}),
+        ...(kind === 'signature' ? { artifact: artifactName } : {}),
         kind,
         state,
         reason: 'github-asset-not-uploaded',
@@ -1248,14 +1289,59 @@ function compareGithubAssetsWithManifest({
   }
 
   for (const artifact of matrix.values()) {
-    addMissingAsset({ artifact, name: artifact.name, kind: 'artifact' })
+    validateGithubAsset({
+      platform: artifact.platform,
+      arch: artifact.arch,
+      name: artifact.name,
+      kind: 'artifact',
+      artifactName: artifact.name,
+      expectedDigest: artifact.sha256,
+    })
     if (artifact.signature) {
-      addMissingAsset({
-        artifact,
+      validateGithubAsset({
+        platform: artifact.platform,
+        arch: artifact.arch,
         name: artifact.signature,
         kind: 'signature',
+        artifactName: artifact.name,
       })
     }
+  }
+
+  const additionalPackages = []
+  for (const asset of githubAssets) {
+    const name = normalizeText(asset?.name)
+    if (!name || expectedNames.has(name) || !isCorePackageFileName(name))
+      continue
+
+    const identity = inferCoreArtifactIdentity(name)
+    const pair = identity
+      ? matrix.get(normalizePairKey(identity.platform, identity.arch))
+      : null
+    if (!identity || !pair)
+      continue
+
+    const signatureName = `${name}.sig`
+    validateGithubAsset({
+      platform: identity.platform,
+      arch: identity.arch,
+      name,
+      kind: 'artifact',
+      artifactName: name,
+    })
+    validateGithubAsset({
+      platform: identity.platform,
+      arch: identity.arch,
+      name: signatureName,
+      kind: 'signature',
+      artifactName: name,
+    })
+    additionalPackages.push({
+      platform: identity.platform,
+      arch: identity.arch,
+      name,
+      signature: signatureName,
+    })
   }
 
   const extraAssets = []
@@ -1288,6 +1374,7 @@ function compareGithubAssetsWithManifest({
     duplicateAssets,
     extraAssets,
     assetCount: githubAssets.length,
+    additionalPackages,
     manifestMatrix: Array.from(matrix.values()).map(item => ({
       platform: item.platform,
       arch: item.arch,
@@ -1299,7 +1386,7 @@ function compareGithubAssetsWithManifest({
 function isGateERelevantGithubAssetName(name) {
   const lower = name.toLowerCase()
   return (
-    lower.startsWith('tuff-core-')
+    isCorePackageFileName(name)
     || lower.endsWith('.sig')
     || lower.endsWith('.asc')
   )
@@ -1604,6 +1691,7 @@ export async function checkRemoteRelease({
 
     const comparison = compareNexusAssetsWithManifest({
       assets,
+      githubAssets,
       manifestPayload: githubManifestPayload,
       remoteRelease: release,
       tag,
@@ -1701,40 +1789,78 @@ export async function checkRemoteRelease({
   }
 
   for (const pair of matrixKeys.values()) {
-    const signatureUrl = `${baseUrl}/api/releases/${encodeURIComponent(tag)}/signature/${pair.platform}/${pair.arch}`
     const asset = assetsByPair.get(normalizePairKey(pair.platform, pair.arch))
-    const downloadUrl = normalizeText(asset?.downloadUrl)
-    const downloadUrlInfo = inspectSignedDownloadUrl(downloadUrl, baseUrl)
-    const probeDownloadUrl = downloadUrlInfo.url || downloadUrl
+    const configuredSignatureUrl = normalizeText(asset?.signatureUrl)
+    const sameOriginSignatureUrl = resolveSameOriginUrl(
+      configuredSignatureUrl,
+      baseUrl,
+    )
+    let probeSignatureUrl = sameOriginSignatureUrl?.href ?? ''
+    let signatureSource = sameOriginSignatureUrl ? 'nexus' : null
+    if (!probeSignatureUrl && configuredSignatureUrl) {
+      try {
+        const parsed = new URL(configuredSignatureUrl)
+        if (
+          parsed.protocol === 'https:'
+          && !parsed.username
+          && !parsed.password
+        ) {
+          probeSignatureUrl = parsed.href
+          signatureSource = 'external'
+        }
+      }
+      catch {
+        // The bounded result below records the invalid URL without echoing it.
+      }
+    }
 
-    try {
-      const signatureResp = await fetchWithTimeout(
-        signatureUrl,
-        { redirect: 'manual' },
-        timeoutMs,
-      )
-      const signaturePayload
-        = signatureResp.status === 200
-          ? classifySignaturePayload(
-              signatureResp,
-              new Uint8Array(await signatureResp.arrayBuffer()),
-            )
-          : null
+    const downloadUrl = normalizeText(asset?.downloadUrl)
+    const { requestUrl: inspectedDownloadUrl, ...downloadUrlInfo }
+      = inspectSignedDownloadUrl(downloadUrl, baseUrl)
+    const probeDownloadUrl = inspectedDownloadUrl || downloadUrl
+
+    if (!probeSignatureUrl) {
       signatureResults.push({
         platform: pair.platform,
         arch: pair.arch,
-        status: signatureResp.status,
-        validPayload: Boolean(signaturePayload?.valid),
-        ...(signaturePayload ?? {}),
+        status: 'invalid-url',
+        validPayload: false,
+        source: null,
+        reason: 'invalid-signature-url',
       })
     }
-    catch (error) {
-      signatureResults.push({
-        platform: pair.platform,
-        arch: pair.arch,
-        status: 'error',
-        error: createHttpErrorPayload(error),
-      })
+    else {
+      try {
+        const signatureResp = await fetchWithTimeout(
+          probeSignatureUrl,
+          {},
+          timeoutMs,
+        )
+        const signaturePayload
+          = signatureResp.status === 200
+            ? classifySignaturePayload(
+                signatureResp,
+                new Uint8Array(await signatureResp.arrayBuffer()),
+              )
+            : null
+        signatureResults.push({
+          platform: pair.platform,
+          arch: pair.arch,
+          status: signatureResp.status,
+          validPayload: Boolean(signaturePayload?.valid),
+          source: signatureSource,
+          ...(signaturePayload ?? {}),
+        })
+      }
+      catch (error) {
+        signatureResults.push({
+          platform: pair.platform,
+          arch: pair.arch,
+          status: 'error',
+          source: signatureSource,
+          error: createHttpErrorPayload(error),
+        })
+      }
     }
 
     try {
@@ -1777,8 +1903,8 @@ export async function checkRemoteRelease({
     'remote-signature-endpoint',
     allSignatureOk ? 'pass' : signatureStatus,
     allSignatureOk
-      ? 'Remote signature endpoint returns non-empty signature payloads for all matrix entries.'
-      : 'Remote signature endpoint is not ready for all matrix entries.',
+      ? 'Configured remote signature URLs return non-empty signature payloads for all matrix entries.'
+      : 'Configured remote signature URLs are not ready for all matrix entries.',
     { results: signatureResults },
   )
 
