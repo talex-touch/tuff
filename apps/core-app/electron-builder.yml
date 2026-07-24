@@ -43,8 +43,9 @@ files:
   - '!**/*.map'
   - '!patches/**'
   # Exclude Rust/Cargo build cache from @talex-touch/tuff-native (~498MB of .rlib/.rmeta intermediates).
-  # Runtime only loads build/Release/*.node (native-loader.js); native-screenshot/target/ is build-only output.
+  # Runtime only loads build/Release/*.node (native-loader.js); native-{screenshot,audio}/target/ is build-only output.
   - '!**/native-screenshot/target/**'
+  - '!**/native-audio/target/**'
   - '!**/*.rlib'
   - '!**/*.rmeta'
   # Keep js-tiktoken ESM runtime files: @langchain/core imports js-tiktoken/lite via ESM,
