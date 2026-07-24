@@ -63,6 +63,7 @@ import { dbWriteScheduler, type DbWritePriority } from '../../../../db/db-write-
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 
 import { createDbUtils, type DbUtils } from '../../../../db/utils'
+import { searchIndexWriter } from '../../search-engine/search-index-writer'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
 import { iconService } from '../../../../service/icon-service'
@@ -604,7 +605,11 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const loadStart = startTiming()
     logApp('Loading AppProvider service...', LogStyle.process)
     this.context = context
-    this.dbUtils = createDbUtils(context.databaseManager.getDb())
+    this.dbUtils = createDbUtils(context.databaseManager.getDb(), undefined, {
+      enabled: context.databaseManager.isSearchSplitEnabled(),
+      searchDb: context.databaseManager.getSearchDb(),
+      writer: searchIndexWriter
+    })
     this.searchIndex = context.searchIndex
 
     this.loadAppIndexSettings()
