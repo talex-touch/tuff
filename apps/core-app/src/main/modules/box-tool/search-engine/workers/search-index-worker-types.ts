@@ -143,6 +143,31 @@ export interface ShutdownMessage {
   taskId: string
 }
 
+export interface ExecWriteStatement {
+  sql: string
+  args: unknown[]
+}
+
+/**
+ * Generic write forwarding. Runs one or more prepared statements on the worker's
+ * connection — the sole writer of its DB file — so main-thread file-index writes
+ * can be routed through the worker when the DB split is enabled (issue #295),
+ * without a bespoke message per operation. `mode: 'transaction'` wraps the
+ * statements in one atomic BEGIN/COMMIT.
+ */
+export interface ExecWriteMessage {
+  type: 'execWrite'
+  taskId: string
+  statements: ExecWriteStatement[]
+  mode: 'single' | 'transaction'
+}
+
+export interface ExecWriteResult {
+  rowsAffected: number
+  lastInsertRowid: string | null
+  rows: Array<Record<string, unknown>>
+}
+
 /**
  * Union of all search-index-worker message types.
  */
@@ -162,6 +187,7 @@ export type SearchIndexWorkerMessage =
   | RemoveFileExtensionsMessage
   | CleanupOrphanKeywordsMessage
   | ShutdownMessage
+  | ExecWriteMessage
 
 // ============================================================================
 // Shared result types

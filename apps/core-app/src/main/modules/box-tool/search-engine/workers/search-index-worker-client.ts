@@ -20,6 +20,7 @@ import type {
 import type {
   FilePersistenceEntry,
   PersistEntriesSummary,
+  ExecWriteResult,
   ProviderReplacementOutcome,
   WorkerErrorMessage as SearchIndexWorkerErrorMessage,
   WorkerResultMessage
@@ -483,6 +484,29 @@ export class SearchIndexWorkerClient {
       sourceId
     })
     return result ?? 0
+  }
+
+  /**
+   * Generic write forwarding: run prepared statements on the worker's connection
+   * (the sole writer of its DB file). Used to route main-thread file-index writes
+   * through the worker when the DB split is enabled (issue #295). `mode:
+   * 'transaction'` runs them atomically. Returns per-statement affected-row
+   * counts + rows (for RETURNING).
+   */
+  async execWrite(
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode: 'single' | 'transaction' = 'single'
+  ): Promise<ExecWriteResult[]> {
+    if (statements.length === 0) return []
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('execWrite')
+    const result = await this.sendAndWaitWithResult<ExecWriteResult[]>(taskId, {
+      type: 'execWrite',
+      taskId,
+      statements,
+      mode
+    })
+    return result ?? []
   }
 
   async getStatus(): Promise<WorkerStatusSnapshot> {
