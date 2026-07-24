@@ -7,6 +7,11 @@ import process, { env, exit } from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { getArgValue, hasFlag } from './lib/argv-utils.mjs'
 
+// Fallback @-handle used when a PR's real author can't be resolved (no token,
+// a non-PR commit, or a GitHub API miss). Mentioning the maintainer is correct
+// and actionable; a literal `@unknown` pings a bogus/unrelated account.
+const FALLBACK_AUTHOR_LOGIN = 'TalexDreamSoul'
+
 const CATEGORY_DEFINITIONS = [
   {
     key: 'features',
@@ -336,7 +341,7 @@ async function fetchPullRequest(repo, number, token) {
       number,
       title: `Pull request #${number}`,
       body: '',
-      user: { login: 'unknown' },
+      user: { login: FALLBACK_AUTHOR_LOGIN },
       labels: [],
       html_url: `https://github.com/${repo || 'unknown/repo'}/pull/${number}`,
     }
@@ -351,7 +356,7 @@ async function fetchPullRequest(repo, number, token) {
     number,
     title: pull.title ?? issue.title ?? `Pull request #${number}`,
     body: pull.body ?? issue.body ?? '',
-    user: pull.user ?? issue.user ?? { login: 'unknown' },
+    user: pull.user ?? issue.user ?? { login: FALLBACK_AUTHOR_LOGIN },
     labels: issue.labels ?? pull.labels ?? [],
     html_url: pull.html_url ?? issue.html_url,
     merged_at: pull.merged_at,
@@ -380,7 +385,7 @@ function groupPullRequests(prs) {
 
 function formatPrLine(pr, locale) {
   const text = resolvePrDisplayText(pr, locale)
-  const author = pr.user?.login ? `@${pr.user.login}` : 'unknown'
+  const author = pr.user?.login ? `@${pr.user.login}` : `@${FALLBACK_AUTHOR_LOGIN}`
   return `- ${text} ([#${pr.number}](${pr.html_url}) by ${author})`
 }
 
@@ -701,7 +706,7 @@ async function resolvePullRequests({ repo, token, tag, previousTag, targetRef })
         number,
         title: `Pull request #${number}`,
         body: '',
-        user: { login: 'unknown' },
+        user: { login: FALLBACK_AUTHOR_LOGIN },
         labels: [],
         html_url: `https://github.com/${repo}/pull/${number}`,
       })
@@ -729,7 +734,7 @@ async function writePayload(payload, outputDir) {
       prs: payload.prs.map(pr => ({
         number: pr.number,
         title: pr.title,
-        author: pr.user?.login ?? 'unknown',
+        author: pr.user?.login ?? FALLBACK_AUTHOR_LOGIN,
         labels: (pr.labels ?? []).map(normalizeLabel),
         url: pr.html_url,
         category: categorizePullRequest(pr),
