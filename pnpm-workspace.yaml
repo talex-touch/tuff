@@ -89,7 +89,7 @@ catalogs:
     typescript: ^5.9.3
     vue-tsc: ^3.3.6
     webpack: ^5.108.4
-    wrangler: 4.107.1
+    wrangler: 4.113.0
   frontend:
     '@vueuse/core': ^14.3.0
     pinia: ^3.0.4
