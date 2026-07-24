@@ -4,7 +4,7 @@ import TuffShowcaseMockHeader from './TuffShowcaseMockHeader.vue'
 </script>
 
 <template>
-  <div class="tuff-showcase flex flex-col gap-12" aria-hidden="true">
+  <div class="tuff-showcase flex flex-col gap-6" aria-hidden="true">
     <TuffShowcaseMockHeader />
     <TuffShowcaseDisplayer />
   </div>
@@ -19,7 +19,9 @@ import TuffShowcaseMockHeader from './TuffShowcaseMockHeader.vue'
   padding: 1rem;
   width: var(--showcase-effective-width);
   max-width: 100%;
-  aspect-ratio: 16 / 9;
+  /* Height follows the mock content (menu bar + media + timeline). A forced
+     16:9 box padded the card with dead space below the timeline and pushed the
+     caption into the floating pill; let the card hug its content instead. */
   flex-shrink: 0;
   background: transparent;
 }

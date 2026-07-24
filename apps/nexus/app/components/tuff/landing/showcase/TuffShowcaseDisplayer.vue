@@ -626,7 +626,7 @@ watch(prefersReducedMotion, (enabled) => {
   margin: auto;
   display: flex;
   flex-direction: column;
-  gap: 1.4rem;
+  gap: clamp(0.75rem, 1.2vh, 1.2rem);
   width: min(100%, 880px);
   height: 100%;
 }
@@ -634,7 +634,10 @@ watch(prefersReducedMotion, (enabled) => {
 .tuff-showcase-displayer__viewport {
   position: relative;
   z-index: 1;
-  min-height: clamp(320px, 45vw, 480px);
+  /* Fill as much of the section as possible: track the available height so the
+     mock media grows on tall displays while still leaving room for the caption
+     and the floating pill below. The card hugs this (no fixed aspect box). */
+  min-height: clamp(240px, calc(93vh - 470px), 820px);
   display: grid;
   align-items: stretch;
   perspective: 1200px;

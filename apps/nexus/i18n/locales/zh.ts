@@ -12,6 +12,7 @@ export default {
     developer: '开发者',
     download: '更新',
     blog: '博客',
+    menu: '菜单',
   },
   ui: {
     languageToggle: {
