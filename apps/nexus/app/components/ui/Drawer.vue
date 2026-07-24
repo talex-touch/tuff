@@ -10,6 +10,7 @@ const props = withDefaults(
     showClose?: boolean
     closeOnClickMask?: boolean
     closeOnPressEscape?: boolean
+    mobileAdapt?: boolean
     zIndex?: number
   }>(),
   {
@@ -19,6 +20,7 @@ const props = withDefaults(
     showClose: true,
     closeOnClickMask: true,
     closeOnPressEscape: true,
+    mobileAdapt: true,
     zIndex: 1998,
   },
 )
@@ -39,6 +41,7 @@ const emit = defineEmits<{
     :show-close="showClose"
     :close-on-click-mask="closeOnClickMask"
     :close-on-press-escape="closeOnPressEscape"
+    :mobile-adapt="mobileAdapt"
     :z-index="zIndex"
     v-bind="$attrs"
     @update:visible="(v) => emit('update:visible', v)"

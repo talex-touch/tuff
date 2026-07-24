@@ -240,7 +240,7 @@ export class SearchEngineCore
       getTouchApp: () => this.touchApp,
       getSearchIndexService: () => this.searchIndexService,
       beforeProvidersLoad: async () => {
-        await searchIndexWriter.initialize(databaseModule.getDatabaseFilePath())
+        await searchIndexWriter.initialize(databaseModule.getSearchDatabaseFilePath())
         await this.searchIndexService?.warmup()
       },
       onProvidersReady: () => this.startRuntimeServicesOnce(),
@@ -1821,12 +1821,20 @@ export class SearchEngineCore
 
     const db = databaseModule.getDb()
     const auxDb = databaseModule.getAuxDb()
-    instance.dbUtils = createDbUtils(db, auxDb)
+    // When the search split is enabled, the reader-mode index service reads the
+    // FTS / keyword tables from search-index.db (the worker's file); falls back
+    // to the primary db when the split is off. See issue #295.
+    const searchDb = databaseModule.getSearchDb()
+    instance.dbUtils = createDbUtils(db, auxDb, {
+      enabled: databaseModule.isSearchSplitEnabled(),
+      searchDb,
+      writer: searchIndexWriter
+    })
     instance.indexCommitUnsubscribe?.()
     instance.indexCommitUnsubscribe = searchIndexCommitHub.subscribe((payload) => {
       instance.handleSearchIndexCommit(payload)
     })
-    instance.searchIndexService = new SearchIndexService(db, {
+    instance.searchIndexService = new SearchIndexService(searchDb, {
       logger: searchLogger,
       initializationMode: 'reader',
       readiness: searchIndexWriter

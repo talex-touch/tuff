@@ -322,7 +322,12 @@ vi.mock('../modules/clipboard', () => ({
 
 vi.mock('../modules/database', () => ({
   databaseModule: {
-    getDb: vi.fn()
+    getDb: vi.fn(),
+    getSearchDb: vi.fn(),
+    getSearchClient: vi.fn(),
+    getSearchDatabaseFilePath: vi.fn(() => ':memory:'),
+    isSearchSplitEnabled: vi.fn(() => false),
+    isSearchDbReady: vi.fn(() => false)
   }
 }))
 

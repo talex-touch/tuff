@@ -30,6 +30,11 @@
       "types": "./screenshot.d.ts",
       "require": "./screenshot.js",
       "default": "./screenshot.js"
+    },
+    "./audio": {
+      "types": "./audio.d.ts",
+      "require": "./audio.js",
+      "default": "./audio.js"
     }
   },
   "files": [
@@ -38,8 +43,10 @@
     "native-loader.js",
     "binding.gyp",
     "scripts/build-screenshot.js",
+    "scripts/build-audio.js",
     "native/src",
     "native-screenshot",
+    "native-audio",
     "build/Release/*.node",
     "everything.js",
     "everything.d.ts",
@@ -47,12 +54,15 @@
     "everything-resources.d.ts",
     "screenshot.js",
     "screenshot.d.ts",
+    "audio.js",
+    "audio.d.ts",
     "native/src/everything/addon.cc"
   ],
   "gypfile": true,
   "scripts": {
     "build": "node-gyp rebuild",
     "build:screenshot": "node scripts/build-screenshot.js",
+    "build:audio": "node scripts/build-audio.js",
     "rebuild": "node-gyp rebuild",
     "check:everything": "node scripts/everything-selfcheck.js"
   },

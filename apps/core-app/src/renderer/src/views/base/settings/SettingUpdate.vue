@@ -5,11 +5,15 @@ import type {
   DownloadTask,
   UpdateSettings
 } from '@talex-touch/utils'
+import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxModal as TModal } from '@talex-touch/tuffex/modal'
 import { TxSelectItem } from '@talex-touch/tuffex/select'
 import { AppPreviewChannel, DownloadModule } from '@talex-touch/utils'
 import { useDownloadSdk } from '@talex-touch/utils/renderer'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
+import { isBuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -31,12 +35,15 @@ import {
   buildUpdateDiagnosticEvidenceFilename,
   buildUpdateDiagnosticEvidencePayload,
   formatUpdateDiagnosticEvidenceJson,
+  resolveMacNativeTrust,
+  resolveMacNativeTrustDisplay,
   resolveUpdateLifecycleDisplay
 } from './update-diagnostic-evidence'
 
 const { t } = useI18n()
 const githubProvider = new GithubUpdateProvider()
 const downloadSdk = useDownloadSdk()
+const transport = useTuffTransport()
 const downloadStatusDisposers: Array<() => void> = []
 const { platform, isMac } = useRendererPlatform()
 const settingUpdateLog = createRendererLogger('SettingUpdate')
@@ -60,6 +67,8 @@ const autoDownloadEnabled = ref<boolean>(true)
 const installOnNormalQuitEnabled = ref(true)
 const rendererOverrideEnabled = ref(false)
 const cachedRelease = ref<CachedUpdateRecord | null>(null)
+const buildVerificationStatus = ref<BuildVerificationStatus | null>(null)
+let buildVerificationStatusDisposer: (() => void) | null = null
 const assetsDialogVisible = ref(false)
 
 const fetching = ref(false)
@@ -71,6 +80,10 @@ const rendererOverrideSaving = ref(false)
 const installingUpdate = ref(false)
 const manualChecking = ref(false)
 const isMacAutoInstallPlatform = computed(() => isMac.value)
+const nativeTrust = computed(() =>
+  resolveMacNativeTrust(platform.value, buildVerificationStatus.value)
+)
+const nativeTrustDisplay = computed(() => resolveMacNativeTrustDisplay(nativeTrust.value))
 
 const channelOptions = computed(() => {
   return [
@@ -93,6 +106,14 @@ const frequencySelectDisabled = computed(() => fetching.value || frequencySaving
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
 const lifecycleDisplay = computed(() => resolveUpdateLifecycleDisplay(lifecycleSnapshot.value))
+// Non-advanced mode keeps the status minimal; the full diagnostics grid only
+// expands for advanced users or whenever there is an error worth surfacing.
+const lifecycleExpanded = computed(
+  () => showAdvancedSettings.value || Boolean(lifecycleSnapshot.value?.error)
+)
+const showNativeTrustVerified = computed(
+  () => isMacAutoInstallPlatform.value && nativeTrust.value.status === 'pass'
+)
 const lifecycleStatusTitle = computed(() => {
   if (fetching.value && !lifecycleSnapshot.value) {
     return t('settings.settingUpdate.status.loading')
@@ -195,7 +216,8 @@ const installActionLabel = computed(() => {
 })
 
 onMounted(async () => {
-  await loadSettings()
+  setupBuildVerificationStatusListener()
+  await Promise.all([loadSettings(), refreshBuildVerificationStatus()])
   setupDownloadStatusListener()
 })
 
@@ -208,7 +230,28 @@ onUnmounted(() => {
     }
   }
   downloadStatusDisposers.length = 0
+  buildVerificationStatusDisposer?.()
+  buildVerificationStatusDisposer = null
 })
+
+function applyBuildVerificationStatus(value: unknown): void {
+  if (isBuildVerificationStatus(value)) buildVerificationStatus.value = value
+}
+
+function setupBuildVerificationStatusListener(): void {
+  if (buildVerificationStatusDisposer) return
+  buildVerificationStatusDisposer = transport.on(AppEvents.build.statusUpdated, (status) => {
+    applyBuildVerificationStatus(status)
+  })
+}
+
+async function refreshBuildVerificationStatus(): Promise<void> {
+  try {
+    applyBuildVerificationStatus(await transport.send(AppEvents.build.getVerificationStatus))
+  } catch (error) {
+    settingUpdateLog.warn('Failed to get build verification status', error)
+  }
+}
 
 function setupDownloadStatusListener(): void {
   if (downloadStatusDisposers.length > 0) {
@@ -477,6 +520,7 @@ function buildCurrentUpdateEvidence() {
     platform: platform.value,
     arch: getRuntimeArch(),
     isMacAutoInstallPlatform: isMacAutoInstallPlatform.value,
+    buildVerificationStatus: buildVerificationStatus.value,
     currentVersion: startupInfo.value?.version ?? null
   })
 }
@@ -614,6 +658,28 @@ function openAssetsDialog(): void {
     active-icon="i-carbon-upgrade"
     memory-name="setting-update"
   >
+    <div
+      v-if="nativeTrustDisplay.showCriticalAlert"
+      class="native-trust-alert"
+      role="alert"
+      aria-live="assertive"
+      aria-atomic="true"
+    >
+      <i class="native-trust-alert-icon i-carbon-warning-alt-filled" aria-hidden="true" />
+      <div class="native-trust-alert-body">
+        <div class="native-trust-alert-head">
+          <strong>{{ t(nativeTrustDisplay.titleKey) }}</strong>
+          <code>{{ nativeTrustDisplay.code }}</code>
+        </div>
+        <p>{{ t(nativeTrustDisplay.descriptionKey) }}</p>
+        <ul>
+          <li v-for="riskKey in nativeTrustDisplay.riskKeys" :key="riskKey">
+            {{ t(riskKey) }}
+          </li>
+        </ul>
+      </div>
+    </div>
+
     <template v-if="showAdvancedSettings">
       <TuffBlockSelect
         v-model="selectedChannel"
@@ -677,17 +743,30 @@ function openAssetsDialog(): void {
 
     <TuffBlockSlot
       class="lifecycle-status-slot"
+      :class="{ 'lifecycle-advanced': lifecycleExpanded }"
       :title="lifecycleStatusTitle"
       :description="lifecycleStatusDescription"
       default-icon="i-carbon-time"
       active-icon="i-carbon-time"
     >
       <div class="lifecycle-panel">
-        <div class="lifecycle-phase" :class="`tone-${lifecycleDisplay.tone}`">
-          <span>{{ lifecycleStatusTitle }}</span>
-          <code>{{ lifecycleDisplay.phase }}</code>
+        <div class="lifecycle-status-row">
+          <span class="lifecycle-badge" :class="`tone-${lifecycleDisplay.tone}`">
+            <span class="lifecycle-badge-dot" aria-hidden="true" />
+            {{ lifecycleStatusTitle }}
+          </span>
+          <code v-if="showAdvancedSettings" class="lifecycle-phase-code">{{
+            lifecycleDisplay.phase
+          }}</code>
+          <span v-if="showNativeTrustVerified" class="lifecycle-verified">
+            <i class="i-carbon-security" aria-hidden="true" />
+            {{ t('settings.settingUpdate.nativeTrust.verifiedBadge') }}
+          </span>
         </div>
-        <dl class="lifecycle-metadata">
+        <p v-if="!showAdvancedSettings && lifecycleSnapshot?.error" class="lifecycle-error-line">
+          {{ lifecycleSnapshot.error.message }}
+        </p>
+        <dl v-if="showAdvancedSettings" class="lifecycle-metadata">
           <div>
             <dt>{{ t('settings.settingUpdate.lifecycle.fields.targetVersion') }}</dt>
             <dd>{{ formatLifecycleValue(lifecycleSnapshot?.targetVersion) }}</dd>
@@ -725,7 +804,7 @@ function openAssetsDialog(): void {
             </dd>
           </div>
         </dl>
-        <div v-if="lifecycleSnapshot?.error" class="lifecycle-error">
+        <div v-if="showAdvancedSettings && lifecycleSnapshot?.error" class="lifecycle-error">
           <strong>{{ lifecycleSnapshot.error.code }}</strong>
           <span>{{ lifecycleSnapshot.error.message }}</span>
           <small>
@@ -736,10 +815,14 @@ function openAssetsDialog(): void {
             }}
           </small>
         </div>
-        <div v-if="isMacAutoInstallPlatform" class="native-trust-warning">
-          <strong>{{ t('settings.settingUpdate.nativeTrust.title') }}</strong>
-          <span>{{ t('settings.settingUpdate.nativeTrust.waivedRisk') }}</span>
-          <code>waived:apple-developer-not-configured</code>
+        <div
+          v-if="showAdvancedSettings && isMacAutoInstallPlatform"
+          class="native-trust-status"
+          :class="`is-${nativeTrustDisplay.tone}`"
+        >
+          <strong>{{ t(nativeTrustDisplay.titleKey) }}</strong>
+          <span>{{ t(nativeTrustDisplay.descriptionKey) }}</span>
+          <code>{{ nativeTrustDisplay.code }}</code>
         </div>
       </div>
     </TuffBlockSlot>
@@ -896,16 +979,84 @@ function openAssetsDialog(): void {
 </template>
 
 <style scoped>
-.status-message {
-  font-size: 13px;
-  color: var(--tx-color-info);
+.native-trust-alert {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--tx-color-danger) 30%, var(--tx-border-color-lighter));
+  background: color-mix(in srgb, var(--tx-color-danger) 8%, transparent);
+  color: var(--tx-color-danger);
 }
 
-.status-message.warning {
-  color: var(--tx-color-warning);
+.native-trust-alert-icon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  font-size: 18px;
 }
 
-:deep(.lifecycle-status-slot.TBlockSlot-Container) {
+.native-trust-alert-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.native-trust-alert-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.native-trust-alert-head strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.native-trust-alert-head code {
+  margin-left: auto;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.native-trust-alert p {
+  margin: 0;
+  color: var(--tx-text-color-primary);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.native-trust-alert ul {
+  display: grid;
+  gap: 4px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.native-trust-alert li {
+  position: relative;
+  padding-left: 14px;
+  color: var(--tx-text-color-regular);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.native-trust-alert li::before {
+  content: '';
+  position: absolute;
+  top: 7px;
+  left: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+:deep(.lifecycle-status-slot.lifecycle-advanced.TBlockSlot-Container) {
   min-height: 56px;
   height: auto;
   align-items: flex-start;
@@ -913,12 +1064,12 @@ function openAssetsDialog(): void {
   padding-bottom: 12px;
 }
 
-:deep(.lifecycle-status-slot .TBlockSlot-Content) {
+:deep(.lifecycle-status-slot.lifecycle-advanced .TBlockSlot-Content) {
   align-items: flex-start;
   padding-top: 4px;
 }
 
-:deep(.lifecycle-status-slot .TBlockSlot-Slot) {
+:deep(.lifecycle-status-slot.lifecycle-advanced .TBlockSlot-Slot) {
   flex: 1 1 60%;
   min-width: 0;
   justify-content: stretch;
@@ -932,39 +1083,73 @@ function openAssetsDialog(): void {
   gap: 8px;
 }
 
-.lifecycle-phase {
+.lifecycle-status-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
-  color: var(--tx-text-color-regular);
 }
 
-.lifecycle-phase > span {
-  font-size: 13px;
+.lifecycle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
   font-weight: 600;
+  color: var(--tx-text-color-regular);
+  background: var(--tx-fill-color);
 }
 
-.lifecycle-phase > code,
-.native-trust-warning > code {
-  font-size: 11px;
-  color: inherit;
+.lifecycle-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
-.lifecycle-phase.tone-info {
+.lifecycle-badge.tone-info {
   color: var(--tx-color-info);
+  background: color-mix(in srgb, var(--tx-color-info) 12%, transparent);
 }
 
-.lifecycle-phase.tone-success {
+.lifecycle-badge.tone-success {
+  color: var(--tx-color-success);
+  background: color-mix(in srgb, var(--tx-color-success) 12%, transparent);
+}
+
+.lifecycle-badge.tone-warning {
+  color: var(--tx-color-warning);
+  background: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
+}
+
+.lifecycle-badge.tone-danger {
+  color: var(--tx-color-danger);
+  background: color-mix(in srgb, var(--tx-color-danger) 12%, transparent);
+}
+
+.lifecycle-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--tx-color-success);
 }
 
-.lifecycle-phase.tone-warning {
-  color: var(--tx-color-warning);
+.lifecycle-error-line {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--tx-color-danger);
 }
 
-.lifecycle-phase.tone-danger {
-  color: var(--tx-color-danger);
+.lifecycle-phase-code,
+.native-trust-status > code {
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.75;
 }
 
 .lifecycle-metadata {
@@ -991,7 +1176,7 @@ function openAssetsDialog(): void {
 }
 
 .lifecycle-error,
-.native-trust-warning {
+.native-trust-status {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1006,10 +1191,16 @@ function openAssetsDialog(): void {
   color: var(--tx-color-danger);
 }
 
-.native-trust-warning {
-  border: 1px solid color-mix(in srgb, var(--tx-color-warning) 24%, transparent);
-  background: color-mix(in srgb, var(--tx-color-warning) 10%, transparent);
-  color: var(--tx-color-warning);
+.native-trust-status.is-success {
+  border: 1px solid color-mix(in srgb, var(--tx-color-success) 24%, transparent);
+  background: color-mix(in srgb, var(--tx-color-success) 10%, transparent);
+  color: var(--tx-color-success);
+}
+
+.native-trust-status.is-danger {
+  border: 1px solid color-mix(in srgb, var(--tx-color-danger) 42%, transparent);
+  background: color-mix(in srgb, var(--tx-color-danger) 14%, transparent);
+  color: var(--tx-color-danger);
 }
 
 .action-pending {
@@ -1138,12 +1329,12 @@ function openAssetsDialog(): void {
 }
 
 @media (max-width: 720px) {
-  :deep(.lifecycle-status-slot.TBlockSlot-Container) {
+  :deep(.lifecycle-status-slot.lifecycle-advanced.TBlockSlot-Container) {
     flex-direction: column;
     gap: 12px;
   }
 
-  :deep(.lifecycle-status-slot .TBlockSlot-Slot) {
+  :deep(.lifecycle-status-slot.lifecycle-advanced .TBlockSlot-Slot) {
     width: 100%;
   }
 

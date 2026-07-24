@@ -149,6 +149,16 @@ export const PERMISSIONS: PermissionDefinition[] = [
     icon: "Users",
   },
 
+  // Voice permissions
+  {
+    id: "voice.dictation",
+    category: PermissionCategory.MEDIA,
+    risk: PermissionRiskLevel.MEDIUM,
+    nameKey: "permission.voice.dictation.name",
+    descKey: "permission.voice.dictation.desc",
+    icon: "Mic",
+  },
+
   // Storage permissions
   {
     id: "storage.plugin",
@@ -350,6 +360,9 @@ export const PermissionIds = {
 
   // Media
   MEDIA_READ: "media.read",
+
+  // Voice
+  VOICE_DICTATION: "voice.dictation",
 
   // Search
   SEARCH_ROOT_RESULTS: "search.root-results",

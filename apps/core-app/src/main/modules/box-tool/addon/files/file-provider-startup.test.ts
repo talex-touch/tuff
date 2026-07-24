@@ -480,6 +480,8 @@ function createContext() {
     touchApp: { channel: {} },
     databaseManager: {
       getDb: () => ({}),
+      getSearchDb: () => ({}),
+      isSearchSplitEnabled: () => false,
       filePath: '/tmp/tuff-file-provider-db'
     },
     searchIndex: {}

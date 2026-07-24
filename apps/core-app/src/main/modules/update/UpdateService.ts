@@ -43,6 +43,7 @@ import { operationalErrorService } from '../observability'
  */
 import { BaseModule } from '../abstract-base-module'
 import { databaseModule } from '../database'
+import { buildVerificationModule } from '../build-verification'
 import {
   normalizeStoredUpdateChannel,
   normalizeSupportedUpdateChannel
@@ -58,6 +59,7 @@ import { UpdateInstallCoordinator } from './services/update-install-coordinator'
 import { UpdateDownloadAdapter } from './services/update-download-adapter'
 import { UpdateSystem } from './update-system'
 import type { DownloadCenterModule } from '../download/download-center'
+import type { NotificationService } from '../download/notification-service'
 
 const updateLog = createLogger('UpdateService')
 
@@ -97,6 +99,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private updateSystem?: UpdateSystem
   private updateRepository: UpdateRepository | null = null
   private updateAttemptRepository: UpdateAttemptRepository | null = null
+  private updateNotificationService: NotificationService | null = null
+  private readonly readyNotificationAttemptIds = new Set<string>()
   private releaseFetchService: ReleaseFetchService
   private releaseCacheLoadPromise: Promise<void> | null = null
   private startupBackgroundTimer: NodeJS.Timeout | null = null
@@ -148,7 +152,9 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       return false
     }
 
-    this.updateSystem = new UpdateSystem(downloadCenterModule as DownloadCenterModule, {
+    const typedDownloadCenter = downloadCenterModule as DownloadCenterModule
+    this.updateNotificationService = typedDownloadCenter.getNotificationService()
+    this.updateSystem = new UpdateSystem(typedDownloadCenter, {
       autoDownload: this.settings.autoDownload,
       autoCheck: this.settings.enabled,
       checkFrequency: this.mapFrequencyToCheckFrequency(this.settings.frequency),
@@ -170,6 +176,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       appPath: app.getAppPath(),
       executablePath: app.getPath('exe'),
       getInstallOnNormalQuit: () => this.settings.installOnNormalQuit,
+      getBuildVerificationStatus: () => buildVerificationModule.getVerificationStatus(),
       prepareInstallPackage: (taskId) => this.downloadAdapter.prepareInstallHandoff(taskId),
       requestQuit: () => app.quit(),
       log: {
@@ -250,7 +257,11 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     try {
       const db = databaseModule.getDb()
       this.updateRepository = new UpdateRepository(db)
-      this.updateAttemptRepository = new UpdateAttemptRepository(db)
+      this.updateAttemptRepository = new UpdateAttemptRepository(db, {
+        onCommitted: (snapshot) => this.publishLifecycleSnapshot(snapshot),
+        onObserverError: (error) =>
+          updateLog.warn('Failed to publish committed update lifecycle', { error })
+      })
       updateLog.success('Update repositories initialized')
     } catch (error) {
       updateLog.warn('Failed to initialize update repositories', { error })
@@ -342,6 +353,8 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
     this.transport = null
     this.actionController = null
+    this.updateNotificationService = null
+    this.readyNotificationAttemptIds.clear()
 
     // Clear cache if needed
     if (!this.settings.cacheEnabled) {
@@ -596,7 +609,12 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         const snapshot = await this.getLifecycleSnapshot()
         return response.success
           ? { ...response, snapshot }
-          : { ...response, errorCode: 'UPDATE_INSTALL_FAILED', retryable: false, snapshot }
+          : {
+              ...response,
+              errorCode: response.errorCode ?? 'UPDATE_INSTALL_FAILED',
+              retryable: false,
+              snapshot
+            }
       }),
 
       tx.on(UpdateEvents.ignoreVersion, async (payload) => {
@@ -663,14 +681,18 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     )
   }
 
+  private projectLifecycleSnapshot(snapshot: UpdateLifecycleSnapshot): UpdateLifecycleSnapshot {
+    return {
+      ...snapshot,
+      installOnNormalQuit: this.settings.installOnNormalQuit && snapshot.rollbackCompatible,
+      lastCheckAt: this.settings.lastCheckedAt
+    }
+  }
+
   private async getLifecycleSnapshot(): Promise<UpdateLifecycleSnapshot> {
     const persisted = await this.updateAttemptRepository?.getLatest()
     if (persisted) {
-      return {
-        ...persisted,
-        installOnNormalQuit: this.settings.installOnNormalQuit && persisted.rollbackCompatible,
-        lastCheckAt: this.settings.lastCheckedAt
-      }
+      return this.projectLifecycleSnapshot(persisted)
     }
 
     return {
@@ -1018,12 +1040,63 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     await this.installCoordinator.scheduleInstallNow(taskId)
   }
 
+  private publishLifecycleSnapshot(snapshot: UpdateLifecycleSnapshot): void {
+    const projected = this.projectLifecycleSnapshot(snapshot)
+    this.transport?.broadcast(UpdateEvents.lifecycleChanged, projected)
+    if (projected.phase === 'ready') {
+      this.maybeShowReadyNotification(projected)
+    }
+  }
+
+  private maybeShowReadyNotification(snapshot: UpdateLifecycleSnapshot): void {
+    if (
+      !snapshot.attemptId ||
+      !snapshot.taskId ||
+      !snapshot.targetVersion ||
+      this.readyNotificationAttemptIds.has(snapshot.attemptId)
+    ) {
+      return
+    }
+
+    const shown = this.updateNotificationService?.showUpdateReadyNotification({
+      version: snapshot.targetVersion,
+      platform: process.platform,
+      onClick: () => {
+        void this.installWithCenterLifecycle(snapshot.taskId!).catch((error) => {
+          updateLog.warn('Ready update notification install action was rejected', {
+            error,
+            meta: { attemptId: snapshot.attemptId, taskId: snapshot.taskId }
+          })
+          const errorCode =
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            typeof (error as { code?: unknown }).code === 'string'
+              ? (error as { code: string }).code
+              : 'UPDATE_INSTALL_FAILED'
+          if (errorCode.startsWith('MAC_UPDATE_')) {
+            this.updateNotificationService?.showUpdateInstallBlockedNotification(errorCode)
+          }
+          this.reportUpdateError('install', error, {
+            attemptId: snapshot.attemptId,
+            taskId: snapshot.taskId,
+            errorCode
+          })
+        })
+      }
+    })
+    if (shown) {
+      this.readyNotificationAttemptIds.add(snapshot.attemptId)
+    }
+  }
+
   private async restoreLifecycleState(): Promise<void> {
     await this.installCoordinator?.initialize()
     const active = await this.updateAttemptRepository?.getActive()
     if (!active) {
       return
     }
+    this.publishLifecycleSnapshot(active)
 
     if (active.phase === 'checking') {
       await this.failLifecycle(

@@ -111,6 +111,7 @@ import {
   IndexedWriteUpdateExecutorService
 } from '@talex-touch/utils/search'
 import type { FilePersistencePort, UpsertFileRecord } from '../../search-engine/search-index-writer'
+import { searchIndexWriter } from '../../search-engine/search-index-writer'
 import {
   getProgressStreamFlushDelayMs,
   shouldEmitProgressStreamImmediately
@@ -1819,7 +1820,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     const loadStart = performance.now()
 
-    this.dbUtils = createDbUtils(context.databaseManager.getDb())
+    this.dbUtils = createDbUtils(context.databaseManager.getDb(), undefined, {
+      enabled: context.databaseManager.isSearchSplitEnabled(),
+      searchDb: context.databaseManager.getSearchDb(),
+      writer: searchIndexWriter
+    })
     this.searchIndex = context.searchIndex
     this.touchApp = context.touchApp
 
@@ -2254,7 +2259,15 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     // 如果 onLoad 中途失败导致 dbUtils 为空，尝试用 initializationContext 重新初始化
     if (!this.dbUtils && this.initializationContext) {
       try {
-        this.dbUtils = createDbUtils(this.initializationContext.databaseManager.getDb())
+        this.dbUtils = createDbUtils(
+          this.initializationContext.databaseManager.getDb(),
+          undefined,
+          {
+            enabled: this.initializationContext.databaseManager.isSearchSplitEnabled(),
+            searchDb: this.initializationContext.databaseManager.getSearchDb(),
+            writer: searchIndexWriter
+          }
+        )
         this.searchIndex = this.initializationContext.searchIndex
         this.touchApp = this.initializationContext.touchApp
         this.logInfo('Re-initialized dbUtils from saved context')

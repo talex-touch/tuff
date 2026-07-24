@@ -9,6 +9,7 @@ import { AppPreviewChannel, UpdateProviderType } from '@talex-touch/utils'
 import { describe, expect, it } from 'vitest'
 import {
   buildUpdateDiagnosticEvidencePayload,
+  resolveMacNativeTrust,
   resolveUpdateLifecycleDisplay
 } from './update-diagnostic-evidence'
 
@@ -183,7 +184,140 @@ describe('update diagnostic evidence', () => {
     })
   })
 
-  it('records coordinated macOS handoff with the exact waived native-trust risk', () => {
+  it.each([
+    {
+      name: 'official attested macOS release',
+      platform: 'darwin',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: true,
+        verificationFailed: false
+      },
+      expected: { status: 'pass', reason: 'official-macos-release-attested', risk: false }
+    },
+    {
+      name: 'attestation verification failure',
+      platform: 'darwin',
+      verificationStatus: {
+        isOfficialBuild: false,
+        hasOfficialKey: false,
+        verificationFailed: true
+      },
+      expected: {
+        status: 'unverified',
+        reason: 'build-attestation-verification-failed',
+        risk: true
+      }
+    },
+    {
+      name: 'missing attestation status',
+      platform: 'darwin',
+      verificationStatus: null,
+      expected: {
+        status: 'unverified',
+        reason: 'official-build-attestation-unavailable',
+        risk: true
+      }
+    },
+    {
+      name: 'non-official attestation',
+      platform: 'darwin',
+      verificationStatus: {
+        isOfficialBuild: false,
+        hasOfficialKey: true,
+        verificationFailed: false
+      },
+      expected: {
+        status: 'unverified',
+        reason: 'official-build-attestation-unavailable',
+        risk: true
+      }
+    },
+    {
+      name: 'official build without the official key',
+      platform: 'darwin',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: false,
+        verificationFailed: false
+      },
+      expected: {
+        status: 'unverified',
+        reason: 'official-build-attestation-unavailable',
+        risk: true
+      }
+    },
+    {
+      name: 'non-macOS platform',
+      platform: 'win32',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: true,
+        verificationFailed: false
+      },
+      expected: { status: 'not-applicable', reason: null, risk: false }
+    }
+  ])('resolves macOS native trust for $name', ({ platform, verificationStatus, expected }) => {
+    expect(resolveMacNativeTrust(platform, verificationStatus)).toEqual(expected)
+  })
+
+  it.each([
+    {
+      name: 'official attested macOS release',
+      platform: 'darwin',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: true,
+        verificationFailed: false
+      },
+      expected: { status: 'pass', reason: 'official-macos-release-attested', risk: false }
+    },
+    {
+      name: 'failed macOS verification',
+      platform: 'darwin',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: true,
+        verificationFailed: true
+      },
+      expected: {
+        status: 'unverified',
+        reason: 'build-attestation-verification-failed',
+        risk: true
+      }
+    },
+    {
+      name: 'non-macOS platform even with an official attestation',
+      platform: 'linux',
+      verificationStatus: {
+        isOfficialBuild: true,
+        hasOfficialKey: true,
+        verificationFailed: false
+      },
+      expected: { status: 'not-applicable', reason: null, risk: false }
+    }
+  ])(
+    'uses the native trust resolver for $name evidence',
+    ({ platform, verificationStatus, expected }) => {
+      const payload = buildUpdateDiagnosticEvidencePayload({
+        settings: buildSettings(),
+        snapshot: buildSnapshot(),
+        cachedRelease: null,
+        cachedAssets: [],
+        platform,
+        arch: 'arm64',
+        isMacAutoInstallPlatform: platform === 'darwin',
+        buildVerificationStatus: verificationStatus,
+        createdAt: '2026-05-10T10:00:00.000Z'
+      })
+      const projection = resolveMacNativeTrust(platform, verificationStatus)
+
+      expect(projection).toEqual(expected)
+      expect(payload.runtimeTarget.nativeTrust).toEqual(projection)
+    }
+  )
+
+  it('records coordinated macOS handoff with official native-trust evidence', () => {
     const cachedAssets = [
       buildAsset({
         name: 'Tuff-2.4.10-arm64.zip',
@@ -191,6 +325,11 @@ describe('update diagnostic evidence', () => {
         arch: 'arm64'
       })
     ]
+    const buildVerificationStatus = {
+      isOfficialBuild: true,
+      hasOfficialKey: true,
+      verificationFailed: false
+    }
     const payload = buildUpdateDiagnosticEvidencePayload({
       settings: buildSettings({ installOnNormalQuit: true }),
       snapshot: buildSnapshot({
@@ -204,14 +343,13 @@ describe('update diagnostic evidence', () => {
       platform: 'darwin',
       arch: 'arm64',
       isMacAutoInstallPlatform: true,
+      buildVerificationStatus,
       createdAt: '2026-05-10T10:00:00.000Z'
     })
 
-    expect(payload.runtimeTarget.nativeTrust).toEqual({
-      status: 'waived',
-      reason: 'apple-developer-not-configured',
-      risk: true
-    })
+    expect(payload.runtimeTarget.nativeTrust).toEqual(
+      resolveMacNativeTrust('darwin', buildVerificationStatus)
+    )
     expect(payload.verdict).toMatchObject({
       readyToInstall: true,
       evidenceComplete: true,

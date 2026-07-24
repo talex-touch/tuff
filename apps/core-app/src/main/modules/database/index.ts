@@ -17,7 +17,7 @@ import fse from 'fs-extra'
 import migrationsLocator from '../../../../resources/db/locator.json?commonjs-external&asset'
 import * as schema from '../../db/schema'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
-import { DB_AUX_ENABLED } from '../../db/runtime-flags'
+import { DB_AUX_ENABLED, DB_SEARCH_SPLIT_ENABLED } from '../../db/runtime-flags'
 import {
   getSqliteBusyRetryCount,
   isSqliteCorruptionError,
@@ -43,6 +43,15 @@ const DB_WAL_TRUNCATE_MAX_QUEUED_WRITES = 2
 const DB_WAL_CHECKPOINT_MAX_QUEUE_WAIT_MS = 5_000
 const DB_WAL_CHECKPOINT_SKIPPED_BUSY = 'DB_WAL_CHECKPOINT_SKIPPED_BUSY'
 const WAL_WARN_THRESHOLD_BYTES = 512 * 1024 * 1024
+// The LibSQL local binding runs synchronously on the calling thread, so a write
+// that busy-waits for the single WAL writer lock freezes that thread for the
+// full busy_timeout. On the MAIN process that is a visible UI freeze, so the
+// main-thread connections (primary + aux) use a short busy_timeout and lean on
+// the async retry layer (withSqliteRetry / storage polling backoff) to absorb
+// contention without blocking the event loop. The search-index worker keeps its
+// long 30s timeout — it runs off the main thread, where a synchronous busy-wait
+// never blocks the UI. See issue #295.
+const MAIN_DB_BUSY_TIMEOUT_MS = 2_000
 const DB_BUSY_RETRY_WARN_DELTA = 10
 const DB_SCHEDULER_BUSY_FAILURE_WARN_DELTA = 3
 const DB_SCHEDULER_QUEUE_WARN_THRESHOLD = 20
@@ -69,6 +78,10 @@ export class DatabaseModule extends BaseModule {
   private auxInitialized = false
   private mainDbPath = ''
   private auxDbPath = ''
+  private searchClient: Client | null = null
+  private searchDb: LibSQLDatabase<typeof schema> | null = null
+  private searchInitialized = false
+  private searchDbPath = ''
   private dbRunningMarkerPath = ''
   private probeDbIntegrity = false
   private walMaintenanceRegistered = false
@@ -111,6 +124,38 @@ export class DatabaseModule extends BaseModule {
       return this.auxDb
     }
     return this.getDb()
+  }
+
+  public isSearchSplitEnabled(): boolean {
+    return DB_SEARCH_SPLIT_ENABLED
+  }
+
+  // The main-thread READ connection to the search file. Falls back to the
+  // primary client when the split is disabled or not yet ready, so callers never
+  // need to branch on the flag.
+  public getSearchClient(): Client | null {
+    return this.searchClient ?? this.client
+  }
+
+  public isSearchDbReady(): boolean {
+    return this.searchInitialized && !!this.searchDb
+  }
+
+  public getSearchDb(): LibSQLDatabase<typeof schema> {
+    if (this.searchDb) {
+      return this.searchDb
+    }
+    return this.getDb()
+  }
+
+  // The file the search-index worker should open as its sole writer. Falls back
+  // to `database.db` when the split is disabled, so the worker path is a single
+  // flag-agnostic call.
+  public getSearchDatabaseFilePath(): string {
+    if (this.searchDbPath) {
+      return this.searchDbPath
+    }
+    return this.getDatabaseFilePath()
   }
 
   private async showDatabaseErrorDialog(error: Error, details?: string): Promise<void> {
@@ -204,7 +249,10 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
-  private async configureSqliteClient(client: Client, label: 'primary' | 'aux'): Promise<void> {
+  private async configureSqliteClient(
+    client: Client,
+    label: 'primary' | 'aux' | 'search'
+  ): Promise<void> {
     const journalModeResult = await client.execute('PRAGMA journal_mode = WAL')
     const journalMode = String(
       (journalModeResult.rows?.[0] as Record<string, unknown> | undefined)?.journal_mode ?? ''
@@ -227,11 +275,13 @@ export class DatabaseModule extends BaseModule {
     // Enforce declared foreign keys. SQLite defaults this OFF per-connection,
     // which silently disabled every onDelete: 'cascade' in the schema.
     await client.execute('PRAGMA foreign_keys = ON')
-    await client.execute('PRAGMA busy_timeout = 30000')
+    await client.execute(`PRAGMA busy_timeout = ${MAIN_DB_BUSY_TIMEOUT_MS}`)
     await client.execute('PRAGMA synchronous = NORMAL')
     await client.execute('PRAGMA locking_mode = NORMAL')
     await client.execute('PRAGMA mmap_size = 268435456')
-    dbLog.info(`SQLite ${label} configured: WAL mode enabled, busy_timeout=30s`)
+    dbLog.info(
+      `SQLite ${label} configured: WAL mode enabled, busy_timeout=${MAIN_DB_BUSY_TIMEOUT_MS}ms`
+    )
   }
 
   /**
@@ -312,10 +362,11 @@ export class DatabaseModule extends BaseModule {
    */
   private async ensureDatabaseIntegrity(
     dbPath: string,
-    label: 'primary' | 'aux',
+    label: 'primary' | 'aux' | 'search',
     shouldProbe: boolean
   ): Promise<boolean> {
-    const client = label === 'primary' ? this.client : this.auxClient
+    const client =
+      label === 'primary' ? this.client : label === 'aux' ? this.auxClient : this.searchClient
     if (!client) return false
 
     // `quick_check` reads every page of the file, so only probe when the previous
@@ -354,8 +405,11 @@ export class DatabaseModule extends BaseModule {
     if (label === 'primary') {
       this.client = freshClient
       this.db = drizzle(freshClient, { schema })
-    } else {
+    } else if (label === 'aux') {
       this.auxClient = freshClient
+    } else {
+      this.searchClient = freshClient
+      this.searchDb = drizzle(freshClient, { schema })
     }
     try {
       await this.configureSqliteClient(freshClient, label)
@@ -875,6 +929,44 @@ export class DatabaseModule extends BaseModule {
     }
   }
 
+  private async initSearchDatabase(databaseDirPath: string): Promise<void> {
+    if (!DB_SEARCH_SPLIT_ENABLED) return
+
+    try {
+      this.searchDbPath = this.searchDbPath || path.join(databaseDirPath, 'search-index.db')
+      this.searchClient = createClient({ url: `file:${this.searchDbPath}` })
+      await this.configureSqliteClient(this.searchClient, 'search')
+      await this.ensureDatabaseIntegrity(this.searchDbPath, 'search', this.probeDbIntegrity)
+      // Search/file-index tables are rebuildable — no data migration. Apply the
+      // same drizzle migrations to the dedicated file so the search-owned tables
+      // (files, file_extensions, search_index_meta, scan_progress, …) match the
+      // primary schema exactly; providers re-index on the next scan. Redundant
+      // main-domain tables created here stay empty and are harmless.
+      const searchDb = drizzle(this.searchClient!, { schema })
+      const migrationsFolder = path.resolve(this.resolveMigrationsFolder())
+      if (fse.existsSync(migrationsFolder)) {
+        await migrate(searchDb, { migrationsFolder })
+      }
+      if (this.destroying) return
+      this.searchDb = searchDb
+      this.searchInitialized = true
+      dbLog.info('Search index database initialized', { meta: { path: this.searchDbPath } })
+    } catch (error) {
+      dbLog.warn('Search index database initialization failed; falling back to primary DB', {
+        error
+      })
+      this.searchInitialized = false
+      this.searchDb = null
+      try {
+        this.searchClient?.close()
+      } catch {
+        // ignore
+      }
+      this.searchClient = null
+      this.searchDbPath = ''
+    }
+  }
+
   private async initAuxDatabase(databaseDirPath: string): Promise<void> {
     if (!DB_AUX_ENABLED) {
       dbLog.info('Aux database disabled by TUFF_DB_AUX_ENABLED')
@@ -1109,6 +1201,11 @@ export class DatabaseModule extends BaseModule {
       }
     }
 
+    // Give the search-index worker its own file (search-index.db) before any
+    // later module (CoreBox / the worker) starts, so the worker opens the split
+    // file with its schema already present. No-op when the flag is off.
+    await this.initSearchDatabase(dirPath!)
+
     this.scheduleBackgroundStartupTasks(dirPath!)
   }
 
@@ -1326,6 +1423,14 @@ export class DatabaseModule extends BaseModule {
     }
     this.client?.close()
     this.auxClient?.close()
+    try {
+      this.searchClient?.close()
+    } catch {
+      // ignore
+    }
+    this.searchClient = null
+    this.searchDb = null
+    this.searchInitialized = false
     // Clean shutdown reached: remove the running marker so the next boot skips
     // the full-file quick_check. (If we crash before here, the marker persists
     // and the next boot probes for corruption.)

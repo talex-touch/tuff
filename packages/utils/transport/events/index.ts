@@ -565,6 +565,7 @@ import type {
   UpdateGetStatusResponse,
   UpdateIgnoreVersionRequest,
   UpdateInstallRequest,
+  UpdateLifecycleChangedPayload,
   UpdateOpResponse,
   UpdateRecordActionRequest,
   UpdateUpdateSettingsRequest,
@@ -893,6 +894,11 @@ export const UpdateEvents = {
     .module("push")
     .event("available")
     .define<UpdateAvailablePayload, void>(),
+
+  lifecycleChanged: defineEvent("update")
+    .module("push")
+    .event("lifecycle-changed")
+    .define<UpdateLifecycleChangedPayload, void>(),
 } as const;
 
 // ============================================================================

@@ -1,45 +1,12 @@
 import type { DbUtils } from '../../../db/utils'
-import { sleep } from '@talex-touch/utils'
 import { desc, eq } from 'drizzle-orm'
 import * as schema from '../../../db/schema'
+import { dbWriteScheduler } from '../../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 
 const log = createLogger('TimeStatsAggregator')
-
-const MAX_RETRIES = 5
-const RETRY_DELAY_MS = 200
-
-function isSqliteBusyError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-  const { code, rawCode, message } = error as {
-    code?: string
-    rawCode?: number
-    message?: string
-  }
-  if (code === 'SQLITE_BUSY' || rawCode === 5) return true
-  return typeof message === 'string' && message.includes('SQLITE_BUSY')
-}
-
-async function withRetry<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
-  let lastError: unknown
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      return await operation()
-    } catch (error) {
-      lastError = error
-      if (isSqliteBusyError(error) && attempt < retries) {
-        log.warn('SQLITE_BUSY, retrying aggregation query', {
-          meta: { attempt: attempt + 1, retries }
-        })
-        await sleep(RETRY_DELAY_MS * (attempt + 1))
-        continue
-      }
-      throw error
-    }
-  }
-  throw lastError
-}
 
 /**
  * 时间维度使用统计汇总器
@@ -113,12 +80,13 @@ export class TimeStatsAggregator {
         }
       }
 
-      // 3. 批量写入数据库（使用事务和重试）— 每 20 条 upsert 让出
+      // 3. 批量写入数据库 — 抽出事务体，通过统一的单写入队列 (dbWriteScheduler)
+      //    串行化，并用共享 withSqliteRetry 处理 SQLITE_BUSY（异步退避，不阻塞事件循环）。
       let updatedCount = 0
       const allStats = Array.from(statsMap.values())
 
-      await withRetry(async () => {
-        await db.transaction(async (tx) => {
+      const writeAggregatedStats = (): Promise<void> =>
+        db.transaction(async (tx) => {
           for (let i = 0; i < allStats.length; i++) {
             const stats = allStats[i]
             await tx
@@ -148,7 +116,12 @@ export class TimeStatsAggregator {
             }
           }
         })
-      })
+
+      await dbWriteScheduler.schedule(
+        'usage.time-stats.aggregate',
+        () => withSqliteRetry(writeAggregatedStats, { label: 'usage.time-stats.aggregate' }),
+        { priority: 'background', dropPolicy: 'none' }
+      )
 
       const duration = performance.now() - startTime
       log.debug(`Aggregation completed. Updated ${updatedCount} items in ${duration.toFixed(2)}ms`)
