@@ -21,7 +21,7 @@
 - 检查、可用、下载中、待安装、安装交接、失败与恢复必须共享同一状态模型。
 - 第一阶段采用“平台原生可靠交付”：统一检查、状态、安全、下载和提示，但不自研跨平台静默安装器。
 - Windows 交付已验证的 NSIS 并由系统安装器接管；Linux 打开已验证的 AppImage/deb 并提供明确引导；macOS 只在实际能力满足时展示“重启更新”。
-- 在 Apple native trust 仍为 `waived` 的阶段，macOS 继续采用 `macos-apply-update.sh` 自替换：只有 SHA-256 与 pinned detached signature 全部通过后才允许退出并替换 `.app`；UI 与诊断必须继续暴露 native trust 风险，不能标记为 Developer ID/Gatekeeper 通过。
+- macOS 继续采用 `macos-apply-update.sh` 自替换：只有 SHA-256 与 pinned detached signature 全部通过后才允许退出并替换 `.app`；UI 与诊断从 typed build verification status 投影 native trust，官方 attested package 为 `pass`，缺失/失败为 `unverified`。
 - 每个平台只能选择一条生效的安装路径；UI 必须按实际能力描述“重启更新”“启动安装器”或“打开安装包”，禁止虚假承诺。
 
 ### R2 — 发布契约与运行时安全一致
@@ -73,7 +73,7 @@
 ## Constraints
 
 - 不回退已落地的 Nexus manifest、SHA-256、detached signature 与包内固定信任根。
-- Apple Developer 尚未配置时，macOS native trust 继续明确标记为 `waived`；不得把 ad-hoc 签名描述为 Developer ID/Gatekeeper pass。
+- Apple Developer 已成为官方 macOS release 强制门禁；renderer 不得从平台硬编码 trust，非官方或 attestation 验证失败必须 fail closed 为 `unverified`。
 - SQLite 是 lifecycle 与恢复状态业务真源；helper marker 只承担跨进程协调，不得发展为第二状态库。
 - clean cutover 旧字段和旧路径，不保留 `autoInstallDownloadedUpdates`、网络公钥 fallback 或 macOS 双 updater 兼容层。
 

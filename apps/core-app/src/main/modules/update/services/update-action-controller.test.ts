@@ -48,7 +48,8 @@ describe('update-action-controller', () => {
 
     await expect(controller.handleInstall()).resolves.toEqual({
       success: false,
-      error: 'Missing update task id'
+      error: 'Missing update task id',
+      errorCode: 'UPDATE_TASK_REQUIRED'
     })
     expect(deps.withDownloadCenterInstall).not.toHaveBeenCalled()
     expect(deps.reportUpdateTelemetry).toHaveBeenCalledWith('install_error', {

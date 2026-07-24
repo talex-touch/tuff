@@ -115,7 +115,7 @@
 - 设置页增加默认开启的“正常退出时安装”，删除 Windows-only 自动接管描述。
 - `ready` 同时显示“立即安装”和退出安装状态。
 - verifying/handoff/awaiting-health/recovery/failed 使用准确文案；不得提前显示“安装成功”。
-- native trust waived 在详情与诊断中持续可见。
+- native trust 的 official-pass / unverified 状态在详情与诊断中持续可见，且共用同一 build verification projection。
 
 ### 5.2 Manifest 与发布门禁
 
