@@ -54,7 +54,8 @@
   "dependencies": {
     "@langchain/core": "^0.3.80",
     "@langchain/langgraph": "^0.4.9",
-    "@talex-touch/utils": "workspace:*"
+    "@talex-touch/utils": "workspace:*",
+    "zod": "3.25.76"
   },
   "peerDependencies": {
     "zod": "^3.25.32"
