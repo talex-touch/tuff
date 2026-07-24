@@ -141,7 +141,12 @@ vi.mock('../../../utils/perf-monitor', () => ({
 vi.mock('../../database', () => ({
   databaseModule: {
     getDb: vi.fn(() => ({})),
-    getAuxDb: vi.fn(() => ({}))
+    getAuxDb: vi.fn(() => ({})),
+    getSearchDb: vi.fn(() => ({})),
+    getSearchClient: vi.fn(() => ({})),
+    getSearchDatabaseFilePath: vi.fn(() => ':memory:'),
+    isSearchSplitEnabled: vi.fn(() => false),
+    isSearchDbReady: vi.fn(() => false)
   }
 }))
 

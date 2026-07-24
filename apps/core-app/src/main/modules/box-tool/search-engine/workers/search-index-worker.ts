@@ -20,6 +20,8 @@ import type {
   CleanupOrphanKeywordsMessage,
   CommitProviderReplacementMessage,
   CountByProviderMessage,
+  ExecWriteMessage,
+  ExecWriteResult,
   GetProviderReplacementOutcomeMessage,
   InitMessage,
   PersistEntriesMessage,
@@ -39,7 +41,7 @@ import type {
 } from '../file-index-persistence-repository'
 import process from 'node:process'
 import { parentPort } from 'node:worker_threads'
-import { type Client, createClient } from '@libsql/client'
+import { type Client, createClient, type InValue } from '@libsql/client'
 import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/libsql'
 import * as schema from '../../../../db/schema'
@@ -92,6 +94,7 @@ type WorkerRequest =
   | RemoveFileExtensionsMessage
   | CleanupOrphanKeywordsMessage
   | ShutdownMessage
+  | ExecWriteMessage
   | WorkerMetricsRequest
 
 // ---------- Worker State ----------
@@ -297,6 +300,10 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
         respond({ type: 'result', taskId })
         break
 
+      case 'execWrite':
+        respond({ type: 'result', taskId, result: await handleExecWrite(message) })
+        break
+
       default:
         respond({ type: 'error', taskId, error: { message: `Unknown message type` } })
     }
@@ -311,6 +318,49 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
  * WAL into the main db and `close()` releases the connection cleanly before the
  * parent terminates the thread — closing the abrupt-terminate corruption window.
  */
+async function handleExecWrite(message: ExecWriteMessage): Promise<ExecWriteResult[]> {
+  if (!client) throw new Error('Worker not initialized — send init first')
+
+  const statements = message.statements
+    .filter((statement) => typeof statement?.sql === 'string' && statement.sql.length > 0)
+    .map((statement) => ({
+      sql: statement.sql,
+      args: (statement.args ?? []) as InValue[]
+    }))
+  if (statements.length === 0) return []
+
+  const toResult = (resultSet: {
+    rowsAffected: number
+    lastInsertRowid?: bigint | null
+    columns: string[]
+    rows: unknown[]
+  }): ExecWriteResult => ({
+    rowsAffected: resultSet.rowsAffected,
+    lastInsertRowid: resultSet.lastInsertRowid != null ? String(resultSet.lastInsertRowid) : null,
+    rows: resultSet.rows.map((row) => {
+      const record: Record<string, unknown> = {}
+      resultSet.columns.forEach((column, index) => {
+        record[column] = (row as unknown as unknown[])[index]
+      })
+      return record
+    })
+  })
+
+  // 'transaction' wraps the statements in one atomic BEGIN/COMMIT so multi-table
+  // writes (e.g. a file row + its extensions) can't tear; 'single' autocommits
+  // each statement. Both run on the worker's connection — the sole writer.
+  if (message.mode === 'transaction' && statements.length > 1) {
+    const resultSets = await client.batch(statements, 'write')
+    return resultSets.map(toResult)
+  }
+
+  const results: ExecWriteResult[] = []
+  for (const statement of statements) {
+    results.push(toResult(await client.execute(statement)))
+  }
+  return results
+}
+
 async function handleShutdown(): Promise<void> {
   const closing = client
   client = null

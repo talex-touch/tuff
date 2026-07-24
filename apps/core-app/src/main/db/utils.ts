@@ -42,40 +42,73 @@ function sanitizeRecommendationCacheValue(value: unknown, seen: WeakSet<object>)
   return sanitized
 }
 
+export interface DbUtilsSplitContext {
+  enabled: boolean
+  searchDb: LibSQLDatabase<typeof schema>
+  writer: {
+    execWrite: (
+      statements: Array<{ sql: string; args: unknown[] }>,
+      mode?: 'single' | 'transaction'
+    ) => Promise<unknown>
+  }
+}
+
 function createDbUtilsInternal(
   db: LibSQLDatabase<typeof schema>,
-  auxDb: LibSQLDatabase<typeof schema>
+  auxDb: LibSQLDatabase<typeof schema>,
+  split?: DbUtilsSplitContext
 ) {
+  // When the search split is enabled, the file-index tables live in
+  // search-index.db: reads come from the worker's file (searchDb) and writes are
+  // forwarded to the worker — its sole writer — via execWrite. Off → everything
+  // on the primary db, byte-identical to before. See issue #295.
+  const readDb = split?.enabled ? split.searchDb : db
+  const runWrite = async (query: {
+    toSQL: () => { sql: string; params: unknown[] }
+  }): Promise<unknown> => {
+    if (split?.enabled) {
+      const compiled = query.toSQL()
+      return await split.writer.execWrite([{ sql: compiled.sql, args: compiled.params }], 'single')
+    }
+    return await (query as unknown as Promise<unknown>)
+  }
+
   return {
     getDb: () => db,
     getAuxDb: () => auxDb,
 
     // Keyword Mappings
     async addKeywordMapping(keyword: string, itemId: string, providerId: string, priority = 1.0) {
-      return db
-        .insert(schema.keywordMappings)
-        .values({ keyword, itemId, providerId, priority })
-        .returning()
+      return runWrite(
+        db
+          .insert(schema.keywordMappings)
+          .values({ keyword, itemId, providerId, priority })
+          .returning()
+      )
     },
     async getKeywordMapping(keyword: string) {
-      return db
+      return readDb
         .select()
         .from(schema.keywordMappings)
         .where(eq(schema.keywordMappings.keyword, keyword))
     },
     async removeKeywordMapping(keyword: string) {
-      return db.delete(schema.keywordMappings).where(eq(schema.keywordMappings.keyword, keyword))
+      return runWrite(
+        db.delete(schema.keywordMappings).where(eq(schema.keywordMappings.keyword, keyword))
+      )
     },
 
     // Files
     async addFile(file: typeof schema.files.$inferInsert) {
-      return db.insert(schema.files).values(file).returning()
+      return runWrite(db.insert(schema.files).values(file).returning())
     },
     async getFileByPath(path: string) {
-      return db.select().from(schema.files).where(eq(schema.files.path, path)).get()
+      return readDb.select().from(schema.files).where(eq(schema.files.path, path)).get()
     },
     async updateFile(path: string, data: Partial<typeof schema.files.$inferInsert>) {
-      return db.update(schema.files).set(data).where(eq(schema.files.path, path)).returning()
+      return runWrite(
+        db.update(schema.files).set(data).where(eq(schema.files.path, path)).returning()
+      )
     },
     /**
      * @deprecated Use SearchIndexWorkerClient.removeFile() instead.
@@ -89,23 +122,23 @@ function createDbUtilsInternal(
      * `searchIndexWorker.removeFile(path)`.
      */
     async removeFile(path: string) {
-      return db.delete(schema.files).where(eq(schema.files.path, path))
+      return runWrite(db.delete(schema.files).where(eq(schema.files.path, path)))
     },
     async getAllFiles() {
-      return db.select().from(schema.files)
+      return readDb.select().from(schema.files)
     },
     async getFilesByType(type: string) {
-      return db.select().from(schema.files).where(eq(schema.files.type, type))
+      return readDb.select().from(schema.files).where(eq(schema.files.type, type))
     },
     async getFilesByPaths(paths: string[]) {
       if (paths.length === 0) return []
-      return db.select().from(schema.files).where(inArray(schema.files.path, paths))
+      return readDb.select().from(schema.files).where(inArray(schema.files.path, paths))
     },
 
     async getFilesByBundleIds(bundleIds: string[]) {
       if (bundleIds.length === 0) return []
 
-      const extensionRecords = await db
+      const extensionRecords = await readDb
         .select()
         .from(schema.fileExtensions)
         .where(
@@ -118,31 +151,35 @@ function createDbUtilsInternal(
       if (extensionRecords.length === 0) return []
 
       const fileIds = extensionRecords.map((ext) => ext.fileId)
-      return db.select().from(schema.files).where(inArray(schema.files.id, fileIds))
+      return readDb.select().from(schema.files).where(inArray(schema.files.id, fileIds))
     },
     async clearFilesByType(type: string) {
-      return db.delete(schema.files).where(eq(schema.files.type, type))
+      return runWrite(db.delete(schema.files).where(eq(schema.files.type, type)))
     },
 
     // File Extensions
     async addFileExtension(fileId: number, key: string, value: string) {
-      return db
-        .insert(schema.fileExtensions)
-        .values({ fileId, key, value })
-        .onConflictDoUpdate({
-          target: [schema.fileExtensions.fileId, schema.fileExtensions.key],
-          set: { value }
-        })
+      return runWrite(
+        db
+          .insert(schema.fileExtensions)
+          .values({ fileId, key, value })
+          .onConflictDoUpdate({
+            target: [schema.fileExtensions.fileId, schema.fileExtensions.key],
+            set: { value }
+          })
+      )
     },
     async addFileExtensions(extensions: { fileId: number; key: string; value: string }[]) {
       if (extensions.length === 0) return
-      return db
-        .insert(schema.fileExtensions)
-        .values(extensions)
-        .onConflictDoUpdate({
-          target: [schema.fileExtensions.fileId, schema.fileExtensions.key],
-          set: { value: sql`excluded.value` }
-        })
+      return runWrite(
+        db
+          .insert(schema.fileExtensions)
+          .values(extensions)
+          .onConflictDoUpdate({
+            target: [schema.fileExtensions.fileId, schema.fileExtensions.key],
+            set: { value: sql`excluded.value` }
+          })
+      )
     },
     async getFileExtensionsByFileIds(fileIds: number[], keys?: string[]) {
       if (fileIds.length === 0) return []
@@ -151,7 +188,7 @@ function createDbUtilsInternal(
         filters.push(inArray(schema.fileExtensions.key, keys))
       }
       const condition = filters.length === 1 ? filters[0] : and(...filters)
-      return db
+      return readDb
         .select({
           fileId: schema.fileExtensions.fileId,
           key: schema.fileExtensions.key,
@@ -161,7 +198,10 @@ function createDbUtilsInternal(
         .where(condition)
     },
     async getFileExtensions(fileId: number) {
-      return db.select().from(schema.fileExtensions).where(eq(schema.fileExtensions.fileId, fileId))
+      return readDb
+        .select()
+        .from(schema.fileExtensions)
+        .where(eq(schema.fileExtensions.fileId, fileId))
     },
     /**
      * @deprecated Use SearchIndexWorkerClient.removeFileExtensions() instead.
@@ -175,11 +215,13 @@ function createDbUtilsInternal(
      */
     async removeFileExtensions(fileId: number, keys: string[]) {
       if (keys.length === 0) return
-      return db
-        .delete(schema.fileExtensions)
-        .where(
-          and(eq(schema.fileExtensions.fileId, fileId), inArray(schema.fileExtensions.key, keys))
-        )
+      return runWrite(
+        db
+          .delete(schema.fileExtensions)
+          .where(
+            and(eq(schema.fileExtensions.fileId, fileId), inArray(schema.fileExtensions.key, keys))
+          )
+      )
     },
 
     async setFileIndexProgress(
@@ -191,20 +233,22 @@ function createDbUtilsInternal(
         updatedAt: data.updatedAt ?? new Date()
       }
 
-      return db
-        .insert(schema.fileIndexProgress)
-        .values({ fileId, ...updatePayload })
-        .onConflictDoUpdate({
-          target: schema.fileIndexProgress.fileId,
-          set: {
-            ...updatePayload
-          }
-        })
+      return runWrite(
+        db
+          .insert(schema.fileIndexProgress)
+          .values({ fileId, ...updatePayload })
+          .onConflictDoUpdate({
+            target: schema.fileIndexProgress.fileId,
+            set: {
+              ...updatePayload
+            }
+          })
+      )
     },
 
     async getFileIndexProgressByFileIds(fileIds: number[]) {
       if (fileIds.length === 0) return []
-      return db
+      return readDb
         .select()
         .from(schema.fileIndexProgress)
         .where(inArray(schema.fileIndexProgress.fileId, fileIds))
@@ -212,7 +256,7 @@ function createDbUtilsInternal(
 
     async getFileIndexProgressByPaths(paths: string[]) {
       if (paths.length === 0) return []
-      return db
+      return readDb
         .select({
           path: schema.files.path,
           progress: schema.fileIndexProgress.progress,
@@ -255,7 +299,7 @@ function createDbUtilsInternal(
 
     // Embeddings
     async addEmbedding(embedding: typeof schema.embeddings.$inferInsert) {
-      return db.insert(schema.embeddings).values(embedding).returning()
+      return runWrite(db.insert(schema.embeddings).values(embedding).returning())
     },
 
     // Usage Logs
@@ -581,7 +625,8 @@ export type DbUtils = ReturnType<typeof createDbUtilsInternal>
 
 export function createDbUtils(
   db: LibSQLDatabase<typeof schema>,
-  auxDb?: LibSQLDatabase<typeof schema>
+  auxDb?: LibSQLDatabase<typeof schema>,
+  split?: DbUtilsSplitContext
 ): DbUtils {
-  return createDbUtilsInternal(db, auxDb ?? db)
+  return createDbUtilsInternal(db, auxDb ?? db, split)
 }

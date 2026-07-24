@@ -14,6 +14,7 @@ import type {
   PersistEntriesSummary,
   UpsertFileRecord
 } from './file-index-persistence-repository'
+import type { ExecWriteResult } from './workers/search-index-worker-types'
 import { SearchIndexWorkerClient } from './workers/search-index-worker-client'
 
 export type {
@@ -273,6 +274,19 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
 
   async countSource(sourceId: string): Promise<number> {
     return await this.withAdmission(async () => await this.client.countByProvider(sourceId))
+  }
+
+  /**
+   * Route raw prepared statements to the worker's connection (the sole writer of
+   * its DB file) through the admission gate. Used by the split-aware dbUtils to
+   * forward main-thread file-index writes when DB_SEARCH_SPLIT is enabled.
+   */
+  async execWrite(
+    statements: Array<{ sql: string; args: unknown[] }>,
+    mode: 'single' | 'transaction' = 'single'
+  ): Promise<ExecWriteResult[]> {
+    if (statements.length === 0) return []
+    return await this.withAdmission(async () => await this.client.execWrite(statements, mode))
   }
 
   async drain(timeoutMs = 5_000): Promise<void> {
