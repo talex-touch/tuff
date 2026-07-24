@@ -1242,6 +1242,12 @@
             "desc": "Invoke the agent system"
           }
         },
+        "voice": {
+          "dictation": {
+            "name": "Voice Dictation",
+            "desc": "Capture your microphone and transcribe speech to text"
+          }
+        },
         "storage": {
           "plugin": {
             "name": "Plugin Storage",

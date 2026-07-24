@@ -1242,6 +1242,12 @@
             "desc": "调用智能体系统"
           }
         },
+        "voice": {
+          "dictation": {
+            "name": "语音听写",
+            "desc": "采集麦克风并将语音转写为文本"
+          }
+        },
         "storage": {
           "plugin": {
             "name": "插件存储",

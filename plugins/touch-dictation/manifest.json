@@ -1,0 +1,72 @@
+{
+  "id": "com.tuffex.dictation",
+  "name": "touch-dictation",
+  "version": "1.0.0",
+  "author": "TalexTouch Team",
+  "sdkapi": 260428,
+  "category": "utilities",
+  "icon": {
+    "type": "file",
+    "value": "assets/logo.svg"
+  },
+  "description": "语音听写：说话即输入，自动清理口水词并润色后粘贴到当前应用",
+  "main": "index.js",
+  "permissions": {
+    "required": ["voice.dictation"],
+    "optional": ["clipboard.read"]
+  },
+  "permissionReasons": {
+    "voice.dictation": "采集麦克风、将语音转写为文本并用 AI 润色",
+    "clipboard.read": "读取剪贴板文字用于朗读"
+  },
+  "features": [
+    {
+      "id": "dictate",
+      "name": "语音听写",
+      "desc": "说话即输入，自动清理口水词并润色",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["say", "听写", "dictate", "语音", "voice", "speak", "口述"],
+      "push": true,
+      "priority": 6,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "contain",
+          "value": ["say", "听写", "dictate", "语音输入", "口述"]
+        }
+      ]
+    },
+    {
+      "id": "speak",
+      "name": "朗读文本",
+      "desc": "用 AI 语音朗读剪贴板中的文字",
+      "icon": {
+        "type": "file",
+        "value": "assets/logo.svg"
+      },
+      "keywords": ["read", "朗读", "念", "tts", "read aloud", "speak aloud"],
+      "push": true,
+      "priority": 6,
+      "acceptedInputTypes": ["text"],
+      "platform": {
+        "win32": true,
+        "darwin": true,
+        "linux": true
+      },
+      "commands": [
+        {
+          "type": "contain",
+          "value": ["朗读", "念", "read aloud", "speak aloud", "tts"]
+        }
+      ]
+    }
+  ]
+}
