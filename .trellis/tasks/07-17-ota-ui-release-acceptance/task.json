@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "07-21-07-20-align-published-release-gates"
+  ],
   "parent": "07-17-unify-ota-update-flow",
   "relatedFiles": [],
   "notes": "",

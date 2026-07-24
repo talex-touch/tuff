@@ -1,0 +1,19 @@
+[package]
+name = "tuff-native-audio"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+name = "tuff_native_audio"
+
+[dependencies]
+cpal = "0.18"
+enigo = "0.6"
+hound = "3.5"
+napi = { version = "3.8.6", default-features = false, features = ["napi4"] }
+napi-derive = "3.5.5"
+symphonia = { version = "0.5", features = ["mp3", "wav", "pcm"] }
+
+[build-dependencies]
+napi-build = "2.2.3"

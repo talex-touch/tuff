@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref } from 'vue'
 
 const { locale, t } = useI18n()
 const LazyLanguageToggleMenu = defineAsyncComponent(() => import('./LanguageToggleMenu.vue'))
@@ -16,7 +16,20 @@ const reference = ref<HTMLElement | null>(null)
 const isOpen = ref(false)
 const isMenuRequested = ref(false)
 
+// Hover-out is forgiving: keep the menu around for 600ms so the pointer can
+// travel into it (or come back) before it dissolves away.
+const CLOSE_DELAY = 600
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearCloseTimer() {
+  if (closeTimer != null) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
+}
+
 function openMenu() {
+  clearCloseTimer()
   isMenuRequested.value = true
   isOpen.value = true
 }
@@ -26,13 +39,25 @@ function requestMenu() {
 }
 
 function closeMenu() {
+  clearCloseTimer()
+  closeTimer = setTimeout(() => {
+    isOpen.value = false
+  }, CLOSE_DELAY)
+}
+
+// Selecting a language should dismiss immediately — no lingering delay.
+function closeMenuNow() {
+  clearCloseTimer()
   isOpen.value = false
 }
 
 function handleTriggerClick() {
+  clearCloseTimer()
   isMenuRequested.value = true
   isOpen.value = true
 }
+
+onBeforeUnmount(clearCloseTimer)
 </script>
 
 <template>
@@ -59,7 +84,7 @@ function handleTriggerClick() {
         :reference-el="reference"
         @open="openMenu"
         @close="closeMenu"
-        @selected="closeMenu"
+        @selected="closeMenuNow"
       />
     </ClientOnly>
   </div>

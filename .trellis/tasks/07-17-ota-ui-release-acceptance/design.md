@@ -38,7 +38,7 @@ interface UpdateReleaseManifest {
 - 状态块展示 phase、target、revision、previous、stable error code。
 - 只有 ready + taskId 可 install-now；进行中阶段不显示 check 按钮；failed/recovered/healthy 可检查。
 - macOS=`Restart to Update`，Windows=`Start Installer`，Linux=`Open Package`。
-- macOS 展示 native trust waived warning，并写入 diagnostic evidence。
+- macOS native trust 由 typed build verification status 投影：official attestation 通过时显示 compact `pass`；缺失/失败时同时显示 Settings 顶部 non-dismissible danger alert、三项明确风险、稳定原因码和 lifecycle 内 `unverified` 状态；`SettingHeader` 复用同一 projection，在 `unverified` 时隐藏 Chromium/Node.js/Vue 徽章并切换 danger 红色卡片边缘；diagnostic evidence 复用同一 projection。
 
 ## 4. Evidence contracts
 

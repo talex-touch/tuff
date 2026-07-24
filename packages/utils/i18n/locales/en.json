@@ -80,6 +80,9 @@
     "media": {
       "read": { "name": "Read Media", "desc": "Read media metadata and thumbnails" }
     },
+    "voice": {
+      "dictation": { "name": "Voice Dictation", "desc": "Capture your microphone and transcribe speech to text" }
+    },
     "search": {
       "rootResults": { "name": "Push Root Search Results", "desc": "Push or update items in the CoreBox root results list" }
     },

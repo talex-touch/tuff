@@ -45,6 +45,7 @@ export * from "./system";
 export * from "./temp-files";
 export * from "./touch-sdk";
 export * from "./types";
+export * from "./voice";
 export * from "./window/index";
 export { createPluginTuffTransport } from "../../transport";
 export { CoreBoxEvents, PluginEvents } from "../../transport/events";

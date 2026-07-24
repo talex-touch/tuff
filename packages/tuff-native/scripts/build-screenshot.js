@@ -1,6 +1,6 @@
 'use strict'
 
-const { spawnSync } = require('node:child_process')
+const { execFileSync, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 const process = require('node:process')
@@ -28,7 +28,15 @@ if (result.status !== 0) {
 }
 
 fs.mkdirSync(outDir, { recursive: true })
-fs.copyFileSync(
-  path.join(releaseDir, platformLibraryName),
-  path.join(outDir, 'tuff_native_screenshot.node'),
-)
+const outNodePath = path.join(outDir, 'tuff_native_screenshot.node')
+fs.copyFileSync(path.join(releaseDir, platformLibraryName), outNodePath)
+
+// macOS/Apple Silicon: cargo emits the dylib ad-hoc *linker-signed* (codesign
+// flags 0x20002). A byte-identical copy of a linker-signed Mach-O is SIGKILLed by
+// AMFI on load ("Killed: 9") from any path other than where it was built — which
+// breaks the pnpm-managed core-app copy of this package. Re-sign with a plain
+// ad-hoc signature (flags 0x2) so every copy loads from any path.
+if (process.platform === 'darwin') {
+  execFileSync('codesign', ['--force', '--sign', '-', outNodePath], { stdio: 'inherit' })
+}
+

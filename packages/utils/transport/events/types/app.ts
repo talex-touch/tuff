@@ -412,6 +412,17 @@ export interface BuildVerificationStatus {
   hasOfficialKey: boolean
 }
 
+export function isBuildVerificationStatus(value: unknown): value is BuildVerificationStatus {
+  if (!value || typeof value !== 'object')
+    return false
+  const candidate = value as Partial<Record<keyof BuildVerificationStatus, unknown>>
+  return (
+    typeof candidate.isOfficialBuild === 'boolean'
+    && typeof candidate.verificationFailed === 'boolean'
+    && typeof candidate.hasOfficialKey === 'boolean'
+  )
+}
+
 export interface BatteryStatusPayload {
   /**
    * Whether the device is on battery power.

@@ -12,6 +12,7 @@ export default {
     developer: 'Developer',
     download: 'Updates',
     blog: 'Blog',
+    menu: 'Menu',
   },
   ui: {
     languageToggle: {

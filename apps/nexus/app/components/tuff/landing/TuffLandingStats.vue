@@ -88,7 +88,7 @@ const aiSpotlight = computed(() => {
   >
     <div
       data-reveal
-      class="tuff-stats-body flex flex-col items-center gap-8 text-center"
+      class="tuff-stats-body flex flex-col items-center gap-4 text-center"
     >
       <div class="tuff-stats-showcase">
         <TuffShowcaseContainer>
@@ -117,14 +117,18 @@ const aiSpotlight = computed(() => {
 <style scoped>
 .tuff-stats-body {
   width: 100%;
-  height: 100%;
   min-height: 0;
   flex: 1;
+  justify-content: safe center;
+  /* Reserve the floating "AI Spotlight" pill's zone (fixed at bottom: 2.5vh,
+     ~54px tall) so the card + caption group always clears it — from short
+     laptops to tall displays — instead of colliding at the section bottom. */
+  padding-bottom: calc(2.5vh + 4rem);
 }
 
 .tuff-stats-showcase {
   width: 100%;
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   display: flex;
   align-items: center;

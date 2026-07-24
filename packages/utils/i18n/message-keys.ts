@@ -113,6 +113,10 @@ export const PermissionKeys = {
   INTELLIGENCE_AGENTS_NAME: 'permission.intelligence.agents.name',
   INTELLIGENCE_AGENTS_DESC: 'permission.intelligence.agents.desc',
 
+  // Voice permissions
+  VOICE_DICTATION_NAME: 'permission.voice.dictation.name',
+  VOICE_DICTATION_DESC: 'permission.voice.dictation.desc',
+
   // Storage permissions
   STORAGE_PLUGIN_NAME: 'permission.storage.plugin.name',
   STORAGE_PLUGIN_DESC: 'permission.storage.plugin.desc',

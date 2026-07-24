@@ -83,31 +83,49 @@ async function selectLocale(option: LanguageOption) {
 
 <style scoped>
 .LanguageToggle-Floating {
-  display: none;
   pointer-events: none;
   z-index: 10020;
 }
 
+/*
+ * Asymmetric motion: the menu appears instantly on hover, but on close it
+ * lingers (see the 600ms delay in LanguageToggle.vue) then scales down to 0.8
+ * and blurs out to 12px. The slow exit transition lives on the resting state;
+ * the fast "instant" enter transition lives on `.display`. Visibility is driven
+ * by opacity (not `display`) so the exit animation is actually painted.
+ */
 .LanguageToggle-Floating .LanguageToggle-List {
   opacity: 0;
-  filter: blur(10px);
-  transform: scale(0.96) translateY(-6px);
+  filter: blur(12px);
+  transform: scale(0.8);
   transform-origin: top left;
   transition:
-    opacity 160ms ease,
-    filter 180ms ease,
-    transform 180ms ease;
+    opacity 280ms ease,
+    filter 280ms ease,
+    transform 280ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .LanguageToggle-Floating.display {
-  display: block;
   pointer-events: auto;
 }
 
 .LanguageToggle-Floating.display .LanguageToggle-List {
   opacity: 1;
   filter: blur(0);
-  transform: scale(1) translateY(0);
+  transform: scale(1);
+  transition:
+    opacity 120ms ease,
+    filter 120ms ease,
+    transform 140ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .LanguageToggle-Floating .LanguageToggle-List,
+  .LanguageToggle-Floating.display .LanguageToggle-List {
+    filter: none;
+    transform: none;
+    transition-duration: 1ms;
+  }
 }
 
 .LanguageToggle-List {

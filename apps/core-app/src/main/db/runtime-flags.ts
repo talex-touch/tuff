@@ -14,6 +14,13 @@ function parseEnvBoolean(name: string, defaultValue: boolean): boolean {
 }
 
 export const DB_AUX_ENABLED = parseEnvBoolean('TUFF_DB_AUX_ENABLED', true)
+// When enabled, the search-index worker gets its OWN sqlite file
+// (`search-index.db`) instead of sharing `database.db` with the main process,
+// so each file has a single writer connection and the two never contend for the
+// WAL writer lock (issue #295). Default OFF — flipping it on triggers a one-time
+// full reindex on first launch (search data is rebuildable). Ships dark until
+// validated by an app-run.
+export const DB_SEARCH_SPLIT_ENABLED = parseEnvBoolean('TUFF_DB_SEARCH_SPLIT_ENABLED', false)
 export const DB_QOS_ENABLED = parseEnvBoolean('TUFF_DB_QOS_ENABLED', true)
 export const STARTUP_DEGRADE_ENABLED = parseEnvBoolean('TUFF_STARTUP_DEGRADE_ENABLED', true)
 export const STARTUP_DEGRADE_WINDOW_MS = 120_000

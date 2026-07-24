@@ -16,6 +16,7 @@ import { resolveThemeModeFromStyle } from '../shared/theme/theme-mode'
 import { AllModulesLoadedEvent, TalexEvents, touchEventBus } from './core/eventbus/touch-event'
 import { addonOpenerModule } from './modules/addon-opener'
 import { intelligenceModule } from './modules/ai/intelligence-module'
+import { voiceModule } from './modules/voice/voice-module'
 import { analyticsModule, getStartupAnalytics } from './modules/analytics'
 import { assistantModule } from './modules/assistant'
 import { coreBoxModule } from './modules/box-tool/core-box/index'
@@ -183,6 +184,7 @@ const foregroundModulesToLoad = [
   updateServiceModule,
   systemUpdateModule,
   intelligenceModule,
+  voiceModule,
   pluginModule,
   pluginLogModule,
   authModule,

@@ -422,6 +422,11 @@ export function useUpdateRuntime() {
         appStates.noUpdateAvailable = false
         clearUpdateErrorMessage()
 
+        const updateSettings = await getUpdateSettings()
+        if (updateSettings.autoDownload && !force) {
+          return result
+        }
+
         const suppressDialog = await shouldSuppressUpdateDialog(result.release, { force })
         if (suppressDialog) {
           return result
@@ -484,7 +489,13 @@ export function useUpdateRuntime() {
         acceptUpdateLifecycleSnapshot(response.snapshot)
       }
       if (!response.success) {
-        throw new Error(response.error || 'Failed to install update')
+        const reason =
+          response.errorCode === 'MAC_UPDATE_DESTINATION_NOT_WRITABLE'
+            ? t('settings.settingUpdate.messages.macSilentUpdateNotWritable')
+            : response.errorCode === 'MAC_UPDATE_BUILD_UNTRUSTED'
+              ? t('settings.settingUpdate.messages.macSilentUpdateUntrusted')
+              : response.error || 'Failed to install update'
+        throw new Error(reason)
       }
       toast.success(t('settings.settingUpdate.messages.installStarted'))
       return true
@@ -603,6 +614,9 @@ export function useUpdateRuntime() {
 
     try {
       updateListenerDisposers.push(
+        updateSdk.onLifecycleChanged((snapshot) => {
+          acceptUpdateLifecycleSnapshot(snapshot)
+        }),
         updateSdk.onAvailable((data) => {
           devLog('[useUpdateRuntime] Received update notification:', data)
           const snapshot = acceptUpdateLifecycleSnapshot(data.snapshot)
@@ -620,12 +634,15 @@ export function useUpdateRuntime() {
 
           appStates.hasUpdate = true
 
-          void shouldSuppressUpdateDialog(data.release).then((suppressDialog) => {
-            if (suppressDialog) {
+          void getUpdateSettings().then((settings) => {
+            if (settings.autoDownload) {
               return
             }
-
-            void presentUpdateDialog(data.release!)
+            return shouldSuppressUpdateDialog(data.release!).then((suppressDialog) => {
+              if (!suppressDialog) {
+                void presentUpdateDialog(data.release!)
+              }
+            })
           })
         })
       )

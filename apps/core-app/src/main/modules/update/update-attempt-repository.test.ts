@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { createClient } from '@libsql/client'
 import { AppPreviewChannel } from '@talex-touch/utils'
 import { drizzle } from 'drizzle-orm/libsql'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../db/schema'
 import { UpdateAttemptRepository } from './update-attempt-repository'
 
@@ -187,5 +187,35 @@ describe('updateAttemptRepository', () => {
 
     expect(next).toMatchObject({ attemptId: 'attempt-2', phase: 'checking', revision: 0 })
     await expect(repository.getActive()).resolves.toEqual(next)
+  })
+  it('publishes only committed lifecycle snapshots and ignores failed CAS writes', async () => {
+    const onCommitted = vi.fn()
+    const observedRepository = new UpdateAttemptRepository(db, { onCommitted })
+    const created = await observedRepository.createChecking({
+      id: 'attempt-observed',
+      currentVersion: '2.4.9',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: false,
+      now: 100
+    })
+    const available = await observedRepository.transition({
+      attemptId: created.attemptId!,
+      expectedRevision: created.revision,
+      expectedPhase: 'checking',
+      to: 'available',
+      patch: { targetVersion: '2.4.10', releaseTag: 'v2.4.10', source: 'nexus' },
+      now: 200
+    })
+
+    await expect(
+      observedRepository.transition({
+        attemptId: created.attemptId!,
+        expectedRevision: created.revision,
+        expectedPhase: 'checking',
+        to: 'failed',
+        now: 300
+      })
+    ).rejects.toMatchObject({ code: 'UPDATE_LIFECYCLE_CONFLICT' })
+    expect(onCommitted.mock.calls.map(([snapshot]) => snapshot)).toEqual([created, available])
   })
 })

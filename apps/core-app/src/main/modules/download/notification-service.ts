@@ -136,31 +136,59 @@ export class NotificationService {
    * Show update download complete notification
    * Requirement 11.5: Send special notification when update download completes
    */
-  showUpdateDownloadCompleteNotification(version: string, taskId: string): void {
-    // Check if notifications are enabled
-    if (!this.config.updateDownloadComplete) {
-      return
+  showUpdateReadyNotification(options: {
+    version: string
+    platform: NodeJS.Platform
+    onClick: () => void
+  }): boolean {
+    if (!this.config.updateDownloadComplete || !this.isSupported()) {
+      return false
     }
 
+    const bodyKey =
+      options.platform === 'darwin'
+        ? 'notifications.updateReadyBodyMac'
+        : options.platform === 'win32'
+          ? 'notifications.updateReadyBodyWindows'
+          : 'notifications.updateReadyBodyLinux'
     const notification = new Notification({
-      title: `🎉 ${t('notifications.updateReady')}`,
-      body: t('notifications.updateReadyBody', { version }),
+      title: t('notifications.updateReady'),
+      body: t(bodyKey, { version: options.version }),
       icon: this.getIconForModule(DownloadModule.APP_UPDATE),
       silent: false,
       urgency: 'critical',
       timeoutType: 'never'
     })
+    let handled = false
 
-    // Handle notification click
-    // Requirement 11.3: Navigate to install update when clicked
     notification.on('click', () => {
-      downloadNotificationLog.debug('Update download complete notification clicked', {
-        meta: { taskId, action: 'install-update' }
+      if (handled) return
+      handled = true
+      downloadNotificationLog.debug('Verified update ready notification clicked', {
+        meta: { version: options.version, action: 'install-update' }
       })
-      this.onNotificationClickCallback?.(taskId, 'install-update')
+      options.onClick()
     })
 
     notification.show()
+    return true
+  }
+
+  showUpdateInstallBlockedNotification(errorCode: string): void {
+    if (!this.config.updateDownloadComplete || !this.isSupported()) return
+
+    const bodyKey =
+      errorCode === 'MAC_UPDATE_BUILD_UNTRUSTED'
+        ? 'notifications.updateBlockedUntrustedMac'
+        : 'notifications.updateBlockedUnwritableMac'
+    new Notification({
+      title: t('notifications.updateBlocked'),
+      body: t(bodyKey),
+      icon: this.getIconForModule(DownloadModule.APP_UPDATE),
+      silent: false,
+      urgency: 'critical',
+      timeoutType: 'default'
+    }).show()
   }
 
   /**

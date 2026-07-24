@@ -10,7 +10,7 @@ LOG_FILE=""
 
 log() {
   if [ -n "$LOG_FILE" ]; then
-    printf '[self-update] %s\n' "$*" >> "$LOG_FILE"
+    printf '[self-update] %s %s\n' "$(/bin/date +%s)" "$*" >> "$LOG_FILE"
   fi
 }
 
@@ -69,21 +69,6 @@ cleanup_mount() {
   fi
 }
 
-quote_arg() {
-  printf "'"
-  printf '%s' "$1" | /usr/bin/sed "s/'/'\\\\''/g"
-  printf "'"
-}
-
-run_as_admin() {
-  local command="$1"
-  /usr/bin/osascript - "$command" <<'OSA'
-on run argv
-  set shellCommand to item 1 of argv
-  do shell script shellCommand with administrator privileges
-end run
-OSA
-}
 
 wait_for_app_exit() {
   local pid="$1"
@@ -187,26 +172,6 @@ install_direct() {
   return 1
 }
 
-install_with_admin() {
-  local work_quoted dest_quoted backup_quoted log_quoted
-  work_quoted="$(quote_arg "$WORK_APP")"
-  dest_quoted="$(quote_arg "$DEST_APP")"
-  backup_quoted="$(quote_arg "$BACKUP_APP")"
-  log_quoted="$(quote_arg "$LOG_FILE")"
-
-  local command="set -e
-rm -rf $backup_quoted >> $log_quoted 2>&1 || true
-if [ -d $dest_quoted ]; then /usr/bin/ditto $dest_quoted $backup_quoted >> $log_quoted 2>&1; fi
-if rm -rf $dest_quoted >> $log_quoted 2>&1 && /usr/bin/ditto $work_quoted $dest_quoted >> $log_quoted 2>&1; then
-  /usr/bin/xattr -dr com.apple.quarantine $dest_quoted >> $log_quoted 2>&1 || true
-else
-  rm -rf $dest_quoted >> $log_quoted 2>&1 || true
-  if [ -d $backup_quoted ]; then /usr/bin/ditto $backup_quoted $dest_quoted >> $log_quoted 2>&1 || true; fi
-  exit 1
-fi"
-
-  run_as_admin "$command"
-}
 
 main() {
   log "started"
@@ -220,16 +185,12 @@ main() {
     exit 1
   fi
 
-  if install_direct; then
-    log "installed without elevated privileges"
-  else
-    log "direct install failed, requesting administrator privileges"
-    if ! install_with_admin; then
-      log "administrator install failed"
-      open "$DEST_APP" >> "$LOG_FILE" 2>&1 || open "$SOURCE_PACKAGE" >> "$LOG_FILE" 2>&1 || true
-      exit 1
-    fi
+  if ! install_direct; then
+    log "direct install failed; refusing administrator prompt"
+    open "$DEST_APP" >> "$LOG_FILE" 2>&1 || open "$SOURCE_PACKAGE" >> "$LOG_FILE" 2>&1 || true
+    exit 1
   fi
+  log "installed without elevated privileges"
 
   open "$DEST_APP" >> "$LOG_FILE" 2>&1 || true
   rm -rf "$STAGE_ROOT" >/dev/null 2>&1 || true

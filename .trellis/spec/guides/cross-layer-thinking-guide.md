@@ -124,6 +124,19 @@ still reaches the typed boundary.
 
 ---
 
+### Mistake 7: Retiring A Policy In The Pipeline But Not Its UI Projection
+
+**Bad**: Release automation changes macOS native trust from an explicit waiver to mandatory Developer ID/notarization, while renderer copy and diagnostic JSON continue hard-coding `waived:apple-developer-not-configured` from `platform === 'darwin'`.
+
+**Good**: Trace the complete cutover:
+
+```text
+release policy -> post-package evidence -> signed build attestation
+               -> typed runtime status -> UI + diagnostic evidence + i18n
+```
+
+The renderer consumes one typed verification status and derives `pass | unverified | not-applicable` in one pure projection. A platform name is never trust evidence. After retiring a sentinel or policy mode, search production code, localized copy, diagnostic schemas, tests, task constraints, and packaged probes for the old value before declaring the cutover complete.
+
 ## Checklist for Cross-Layer Features
 
 Before implementation:

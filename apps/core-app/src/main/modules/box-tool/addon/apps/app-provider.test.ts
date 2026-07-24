@@ -199,7 +199,11 @@ describe('appProvider rebuild maintenance', () => {
       getWatchPathsMock.mockReturnValue(watchPaths)
 
       await appProvider.onLoad({
-        databaseManager: { getDb: vi.fn() },
+        databaseManager: {
+          getDb: vi.fn(),
+          getSearchDb: vi.fn(),
+          isSearchSplitEnabled: vi.fn(() => false)
+        },
         searchIndex: {}
       } as unknown as Parameters<typeof appProvider.onLoad>[0])
 

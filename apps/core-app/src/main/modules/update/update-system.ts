@@ -5,7 +5,6 @@ import type {
   UpdateArtifactComponent
 } from '@talex-touch/utils'
 import type { DownloadCenterModule } from '../download/download-center'
-import type { NotificationService } from '../download/notification-service'
 import * as crypto from 'node:crypto'
 import { createReadStream, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -139,7 +138,6 @@ export class UpdateSystem {
   private config: UpdateSystemConfig
   private currentVersion: VersionInfo
   private downloadCenterModule: DownloadCenterModule
-  private notificationService: NotificationService
   private readonly pollingService = PollingService.getInstance()
   private readonly signatureVerifier = new SignatureVerifier()
   private readonly storageRoot: string
@@ -153,7 +151,6 @@ export class UpdateSystem {
    */
   constructor(downloadCenterModule: DownloadCenterModule, config?: Partial<UpdateSystemConfig>) {
     this.downloadCenterModule = downloadCenterModule
-    this.notificationService = downloadCenterModule.getNotificationService()
     this.currentVersion = this.parseVersion(getAppVersionSafe())
     this.storageRoot = config?.storageRoot ?? app.getPath('userData')
     this.config = {
@@ -188,7 +185,6 @@ export class UpdateSystem {
 
       const reusableTaskId = await this.findReusableUpdateTaskId(resolvedRelease.tag_name)
       if (reusableTaskId) {
-        this.setupDownloadCompletionListener(reusableTaskId, resolvedRelease.tag_name)
         updateSystemLog.info('Reusing existing update task', {
           meta: {
             tag: resolvedRelease.tag_name,
@@ -221,7 +217,6 @@ export class UpdateSystem {
       }
 
       const taskId = await this.downloadCenterModule.addTask(request)
-      this.setupDownloadCompletionListener(taskId, resolvedRelease.tag_name)
 
       void this.maybeScheduleRendererOverrideDownload(resolvedRelease, candidate.manifest).catch(
         (error) => {
@@ -319,39 +314,6 @@ export class UpdateSystem {
    * Set up listener for download completion to show notification
    * @private
    */
-  private setupDownloadCompletionListener(taskId: string, version: string): void {
-    // Listen for download completion event
-    const pollTaskId = `update-system.download.${taskId}`
-    if (this.pollingService.isRegistered(pollTaskId)) {
-      this.pollingService.unregister(pollTaskId)
-    }
-
-    this.pollingService.register(
-      pollTaskId,
-      () => {
-        const task = this.downloadCenterModule.getTaskStatus(taskId)
-
-        if (!task) {
-          this.pollingService.unregister(pollTaskId)
-          return
-        }
-
-        if (task.status === 'completed') {
-          this.pollingService.unregister(pollTaskId)
-
-          // Show update download complete notification
-          if (this.notificationService) {
-            this.notificationService.showUpdateDownloadCompleteNotification(version, taskId)
-          }
-        } else if (task.status === 'failed' || task.status === 'cancelled') {
-          this.pollingService.unregister(pollTaskId)
-        }
-      },
-      { interval: 1, unit: 'seconds' }
-    )
-    this.pollingService.start()
-  }
-
   private async maybeScheduleRendererOverrideDownload(
     release: GitHubRelease,
     manifest: UpdateReleaseManifest | null

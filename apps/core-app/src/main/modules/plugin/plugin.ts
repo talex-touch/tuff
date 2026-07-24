@@ -71,6 +71,7 @@ import { clampBatteryPercent } from '@talex-touch/utils'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
 import { createIntelligenceClient } from '@talex-touch/utils/intelligence/client'
+import { createVoiceSdk } from '@talex-touch/utils/transport/sdk/domains/voice'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { PluginLogger, PluginLoggerManager } from '@talex-touch/utils/plugin/node'
 
@@ -85,6 +86,7 @@ import {
   createPluginScreenshotSDK,
   createPluginSystemSDK,
   createPluginTuffTransport,
+  createPluginVoiceFacade,
   createQuickActionsSDK
 } from '@talex-touch/utils/plugin/sdk'
 import { isSearchProviderEnabledByConfig } from '@talex-touch/utils/search'
@@ -1938,6 +1940,8 @@ export class TouchPlugin implements ITouchPlugin {
     }
     const baseIntelligence = createIntelligenceClient(pluginIntelligenceTransport)
     const intelligence = createPluginIntelligenceFacade(() => baseIntelligence)
+    const baseVoice = createVoiceSdk(pluginIntelligenceTransport)
+    const voice = createPluginVoiceFacade(() => baseVoice)
     const quickOps = {
       capabilities: (): Promise<QuickOpsCapabilityGetResponse> =>
         transport.invoke(QuickOpsEvents.capabilities.get, undefined, {
@@ -2522,6 +2526,7 @@ export class TouchPlugin implements ITouchPlugin {
       quickOps,
       flow,
       intelligence,
+      voice,
       screenshot,
       system,
       i18n: localization.i18n,
@@ -2543,6 +2548,7 @@ export class TouchPlugin implements ITouchPlugin {
       touchChannel,
       permission,
       intelligence,
+      voice,
       screenshot,
       system,
       i18n: localization.i18n,

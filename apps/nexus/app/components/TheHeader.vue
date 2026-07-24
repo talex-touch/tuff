@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { sanitizeRedirect } from '~/composables/useOauthContext'
 import { toLocalizedDocsPath } from '#shared/utils/docs-path'
 
@@ -15,6 +15,7 @@ const route = useRoute()
 const { status } = useNexusAuth()
 
 const scrolled = ref(false)
+const mobileMenuOpen = ref(false)
 const { locale, t } = useI18n()
 const docsLink = (path: string) => toLocalizedDocsPath(path, locale.value === 'zh' ? 'zh' : 'en')
 
@@ -82,6 +83,11 @@ function isActiveLink(link: { to: string }) {
   return bestMatch?.to === link.to
 }
 
+// Close the mobile drawer whenever navigation occurs.
+watch(() => route.fullPath, () => {
+  mobileMenuOpen.value = false
+})
+
 onMounted(() => {
   handleScroll()
   window.addEventListener('scroll', handleScroll, { passive: true })
@@ -125,6 +131,7 @@ onUnmounted(() => {
         </div>
 
         <HeaderControls
+          class="TuffHeader-BarControls"
           :show-search-button="isDocs || isHome"
           :show-language-toggle="!isAuthenticated"
           :show-dark-toggle="!isHome && !isAuthenticated"
@@ -146,8 +153,67 @@ onUnmounted(() => {
             <HeaderUserMenu />
           </template>
         </div>
+
+        <button
+          type="button"
+          class="TuffHeader-MenuButton"
+          :aria-label="t('nav.menu')"
+          :aria-expanded="mobileMenuOpen"
+          aria-haspopup="dialog"
+          @click="mobileMenuOpen = true"
+        >
+          <span class="i-carbon-menu" aria-hidden="true" />
+        </button>
       </nav>
     </div>
+
+    <ClientOnly>
+      <UiDrawer
+        v-model:visible="mobileMenuOpen"
+        :title="t('nav.menu')"
+        direction="right"
+        width="min(320px, 82vw)"
+        :mobile-adapt="false"
+        :z-index="10050"
+        class="TuffHeader-MobileMenu"
+      >
+        <div class="flex flex-col gap-1">
+          <NuxtLink
+            v-for="link in links"
+            :key="link.to"
+            :to="link.to"
+            class="block rounded-xl px-3.5 py-3 text-black/70 font-medium no-underline transition-colors duration-200 hover:bg-dark/5 dark:text-light/70 hover:text-black dark:hover:bg-light/10 dark:hover:text-light"
+            :class="isActiveLink(link) ? 'bg-dark/5 text-black dark:bg-light/15 dark:text-light' : ''"
+            @click="mobileMenuOpen = false"
+          >
+            {{ link.label }}
+          </NuxtLink>
+        </div>
+
+        <div class="mt-5 flex items-center justify-center gap-2 border-t border-black/10 pt-5 dark:border-white/10">
+          <HeaderControls
+            :show-search-button="false"
+            :show-language-toggle="!isAuthenticated"
+            :show-dark-toggle="true"
+            github-url="https://github.com/talex-touch/tuff"
+          />
+        </div>
+
+        <div class="mt-5">
+          <NuxtLink
+            v-if="!isAuthenticated"
+            :to="signInRoute"
+            class="block w-full whitespace-nowrap border border-primary/20 rounded-full bg-transparent px-4 py-2.5 text-center text-sm text-black font-medium leading-none transition dark:border-light/15 hover:border-primary/40 hover:bg-dark/5 dark:text-light dark:hover:bg-light/10"
+            @click="mobileMenuOpen = false"
+          >
+            {{ t('nav.login') }}
+          </NuxtLink>
+          <div v-else class="flex justify-center">
+            <HeaderUserMenu />
+          </div>
+        </div>
+      </UiDrawer>
+    </ClientOnly>
   </header>
 </template>
 
@@ -244,6 +310,43 @@ nav :deep(a) {
   background: rgba(255, 255, 255, 0.12);
 }
 
+/* Hamburger trigger: hidden on desktop, revealed once the bar collapses. */
+.TuffHeader-MenuButton {
+  display: none;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(20, 22, 24, 0.72);
+  cursor: pointer;
+  font-size: 1.35rem;
+  line-height: 1;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.TuffHeader-MenuButton:hover,
+.TuffHeader-MenuButton:focus-visible {
+  background: rgba(20, 22, 24, 0.06);
+  color: rgba(20, 22, 24, 0.92);
+  outline: none;
+}
+
+.dark .TuffHeader-MenuButton {
+  color: rgba(248, 250, 247, 0.72);
+}
+
+.dark .TuffHeader-MenuButton:hover,
+.dark .TuffHeader-MenuButton:focus-visible {
+  background: rgba(248, 250, 247, 0.09);
+  color: rgba(248, 250, 247, 0.92);
+}
+
 @keyframes tuff-header-quick-reveal {
   from {
     opacity: 0;
@@ -264,7 +367,7 @@ nav :deep(a) {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 960px) {
   .TuffHeader-Main {
     left: 1rem;
     right: 1rem;
@@ -283,8 +386,16 @@ nav :deep(a) {
     justify-content: flex-end;
   }
 
-  nav > div:first-child {
+  /* Collapse the desktop nav + controls; expose the hamburger drawer instead. */
+  .TuffHeader-NavLinks,
+  .TuffHeader-BarControls,
+  .header-auth-divider,
+  .TuffHeader-Auth {
     display: none;
+  }
+
+  .TuffHeader-MenuButton {
+    display: inline-flex;
   }
 }
 </style>

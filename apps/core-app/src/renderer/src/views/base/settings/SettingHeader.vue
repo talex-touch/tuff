@@ -1,11 +1,28 @@
 <script setup name="SettingHeader" lang="ts">
+import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { TxTag } from '@talex-touch/tuffex/tag'
+import { useTuffTransport } from '@talex-touch/utils/transport'
+import { AppEvents } from '@talex-touch/utils/transport/events'
+import { isBuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnv } from '~/modules/hooks/env-hooks'
+import { useRendererPlatform } from '~/modules/platform/renderer-platform'
+import { createRendererLogger } from '~/utils/renderer-log'
+import { resolveMacNativeTrust } from './update-diagnostic-evidence'
 
 const { t } = useI18n()
 const { packageJson, processInfo } = useEnv()
+const transport = useTuffTransport()
+const { platform } = useRendererPlatform()
+const settingHeaderLog = createRendererLogger('SettingHeader')
+const buildVerificationStatus = ref<BuildVerificationStatus | null>(null)
+let buildVerificationStatusDisposer: (() => void) | null = null
+
+const nativeTrust = computed(() =>
+  resolveMacNativeTrust(platform.value, buildVerificationStatus.value)
+)
+const isNativeTrustUnverified = computed(() => nativeTrust.value.status === 'unverified')
 
 type RGB = [number, number, number]
 type LightfallUniformLocations = Record<string, WebGLUniformLocation>
@@ -33,6 +50,22 @@ const footerTagStyle = {
   border: 'rgba(226, 232, 240, 0.18)',
   size: 'md' as const
 }
+
+function applyBuildVerificationStatus(value: unknown): void {
+  if (isBuildVerificationStatus(value)) buildVerificationStatus.value = value
+}
+
+onMounted(async () => {
+  buildVerificationStatusDisposer = transport.on(AppEvents.build.statusUpdated, (status) => {
+    applyBuildVerificationStatus(status)
+  })
+
+  try {
+    applyBuildVerificationStatus(await transport.send(AppEvents.build.getVerificationStatus))
+  } catch (error) {
+    settingHeaderLog.warn('Failed to get build verification status', error)
+  }
+})
 
 onMounted(() => {
   const canvas = canvasRef.value
@@ -429,12 +462,15 @@ onBeforeUnmount(() => {
   if (webglCleanupHandler) {
     webglCleanupHandler()
   }
+  buildVerificationStatusDisposer?.()
+  buildVerificationStatusDisposer = null
 })
 </script>
 
 <template>
   <div
     class="AboutApplication activate"
+    :class="{ 'is-native-trust-unverified': isNativeTrustUnverified }"
     :style="{ '--inactive-text': `'${t('settingHeader.inactive')}'` }"
   >
     <canvas ref="canvasRef" class="Header-Canvas" aria-hidden="true" />
@@ -452,7 +488,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <ul v-if="processInfo" class="About-Footer">
+      <ul v-if="processInfo && !isNativeTrustUnverified" class="About-Footer">
         <li>
           <TxTag
             v-bind="footerTagStyle"
@@ -653,6 +689,18 @@ onBeforeUnmount(() => {
     );
     background-size: 200% 200%;
     animation: header-flow 12s ease infinite;
+  }
+
+  &.is-native-trust-unverified {
+    border-color: var(--tx-color-danger);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--tx-color-danger) 64%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--tx-color-danger) 32%, transparent);
+
+    .Header-Status {
+      background: var(--tx-color-danger);
+      box-shadow: 0 0 12px color-mix(in srgb, var(--tx-color-danger) 72%, transparent);
+    }
   }
 
   :root:not(.dark) & {

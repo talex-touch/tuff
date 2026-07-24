@@ -66,6 +66,7 @@
     "@antfu/eslint-config": "catalog:dev",
     "@cloudflare/workers-types": "catalog:dev",
     "@iconify-json/carbon": "catalog:icons",
+    "@iconify-json/logos": "^1.2.11",
     "@iconify-json/twemoji": "catalog:icons",
     "@nuxt/content": "catalog:build",
     "@nuxt/devtools": "catalog:build",

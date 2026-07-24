@@ -22,7 +22,8 @@
     "07-17-unify-ota-provider-security",
     "07-17-persist-ota-lifecycle",
     "07-17-unify-ota-install-recovery",
-    "07-17-ota-ui-release-acceptance"
+    "07-17-ota-ui-release-acceptance",
+    "07-22-ota-one-click-background-update"
   ],
   "parent": null,
   "relatedFiles": [],

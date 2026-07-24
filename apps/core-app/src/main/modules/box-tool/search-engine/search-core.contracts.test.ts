@@ -104,7 +104,15 @@ vi.mock('../../../utils/perf-monitor', () => ({
 }))
 vi.mock('../../analytics', () => ({ analyticsModule: { recordSearchMetrics: vi.fn() } }))
 vi.mock('../../database', () => ({
-  databaseModule: { getAuxDb: vi.fn(() => ({})), getDb: vi.fn(() => ({})) }
+  databaseModule: {
+    getAuxDb: vi.fn(() => ({})),
+    getDb: vi.fn(() => ({})),
+    getSearchDb: vi.fn(() => ({})),
+    getSearchClient: vi.fn(() => ({})),
+    getSearchDatabaseFilePath: vi.fn(() => ':memory:'),
+    isSearchSplitEnabled: vi.fn(() => false),
+    isSearchDbReady: vi.fn(() => false)
+  }
 }))
 vi.mock('../../plugin/adapters/plugin-features-adapter', () => ({
   default: {

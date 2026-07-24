@@ -1,3 +1,4 @@
 build/
 node_modules/
 native-screenshot/target/
+native-audio/target/

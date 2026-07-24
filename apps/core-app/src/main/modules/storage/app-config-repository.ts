@@ -3,6 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { createClient } from '@libsql/client'
 import fse from 'fs-extra'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { createLogger } from '../../utils/logger'
 
 const configRepositoryLog = createLogger('Storage').child('ConfigRepository')
@@ -510,8 +511,18 @@ export class ApplicationConfigRepository {
   }
 
   private async persistSqlitePrimary(input: AppConfigPersistInput): Promise<void> {
-    const result = await this.requireClient().execute({
-      sql: `
+    // Route the config write through the shared single-writer queue so it no
+    // longer races the search-index worker / startup backfill for the WAL
+    // writer lock. BUSY is intentionally NOT retried inline here — the storage
+    // polling service already retries + quarantines on its next tick — so the
+    // scheduler slot stays short. 'interactive' priority keeps user settings
+    // ahead of background indexing. See issue #295.
+    const client = this.requireClient()
+    const result = await dbWriteScheduler.schedule(
+      'storage.config.persist',
+      () =>
+        client.execute({
+          sql: `
         INSERT INTO app_config_entries (key, value, revision, deleted, updated_at)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(key) DO UPDATE SET
@@ -521,14 +532,16 @@ export class ApplicationConfigRepository {
           updated_at = excluded.updated_at
         WHERE excluded.revision >= app_config_entries.revision
       `,
-      args: [
-        input.key,
-        input.serialized,
-        input.revision,
-        input.deleted ? 1 : 0,
-        input.updatedAt ?? this.now()
-      ]
-    })
+          args: [
+            input.key,
+            input.serialized,
+            input.revision,
+            input.deleted ? 1 : 0,
+            input.updatedAt ?? this.now()
+          ]
+        }),
+      { priority: 'interactive', dropPolicy: 'none' }
+    )
     if (result.rowsAffected === 0) return
     this.rememberPersisted(input)
 

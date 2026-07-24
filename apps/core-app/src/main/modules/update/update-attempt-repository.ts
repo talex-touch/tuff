@@ -38,13 +38,21 @@ export interface TransitionUpdateAttemptInput {
   now?: number
 }
 
+export interface UpdateAttemptRepositoryOptions {
+  onCommitted?: (snapshot: UpdateLifecycleSnapshot) => void
+  onObserverError?: (error: unknown) => void
+}
+
 export class UpdateAttemptRepository {
-  constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
+  constructor(
+    private readonly db: LibSQLDatabase<typeof schema>,
+    private readonly options: UpdateAttemptRepositoryOptions = {}
+  ) {}
 
   async createChecking(input: CreateUpdateAttemptInput): Promise<UpdateLifecycleSnapshot> {
     const now = input.now ?? Date.now()
 
-    return await this.db.transaction(async (tx) => {
+    const snapshot = await this.db.transaction(async (tx) => {
       const [active] = await tx
         .select({ id: schema.appUpdateAttempts.id })
         .from(schema.appUpdateAttempts)
@@ -73,6 +81,9 @@ export class UpdateAttemptRepository {
       }
       return rowToLifecycleSnapshot(created)
     })
+
+    this.notifyCommitted(snapshot)
+    return snapshot
   }
 
   async getActive(): Promise<UpdateLifecycleSnapshot | null> {
@@ -118,7 +129,7 @@ export class UpdateAttemptRepository {
   }
 
   async transition(input: TransitionUpdateAttemptInput): Promise<UpdateLifecycleSnapshot> {
-    return await this.db.transaction(async (tx) => {
+    const snapshot = await this.db.transaction(async (tx) => {
       const [row] = await tx
         .select()
         .from(schema.appUpdateAttempts)
@@ -176,6 +187,21 @@ export class UpdateAttemptRepository {
       }
       return rowToLifecycleSnapshot(updated)
     })
+
+    this.notifyCommitted(snapshot)
+    return snapshot
+  }
+
+  private notifyCommitted(snapshot: UpdateLifecycleSnapshot): void {
+    try {
+      this.options.onCommitted?.(snapshot)
+    } catch (error) {
+      try {
+        this.options.onObserverError?.(error)
+      } catch {
+        // A post-commit observer must never change the committed lifecycle result.
+      }
+    }
   }
 }
 
