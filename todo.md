@@ -16,7 +16,7 @@ WAL writer lock. Gated behind `DB_SEARCH_SPLIT_ENABLED`
 
 > **The flag must stay OFF until 2d + 2e land and are app-tested** — enabling it now writes provider data to `database.db` while reads come from `search-index.db` → silent data loss.
 
-## A — Remaining (the write-path "sole-writer" migration)
+## 2d — Remaining (the write-path "sole-writer" migration)
 
 Failure mode is **silent data loss**: any provider write left on the main-thread
 `db` lands in `database.db` while reads come from `search-index.db`. Every site
@@ -45,6 +45,34 @@ Sites: `app-provider.ts` lines **1288, 1911, 1979, 2435, 2510, 2545(del), 2650, 
 writes inside each to the worker (`filePersistencePort`): inserts/updates →
 `upsertFiles`/`persistEntries`; deletes → `removeFile`; scan-progress →
 `upsertScanProgress`. Sites: `file-provider.ts` **2619, 2638, 2697, 2817(del), 2828(del), 2851(del), 2938(ins), 3226(upd), 3330(ext upsert)** + the file-provider services (opener/icon-cache/asset scan-progress/runtime-reset) that call `dbUtils.addFileExtensions`/`removeFile*` (already routed once 2d.1 wires their split ctx).
+
+### 2d — IMPLEMENTATION NOTE (worker API gap — read before converting sites)
+`filePersistencePort.upsertFiles(records)` writes ONLY the `files` table with a
+FIXED conflict set (name/extension/size/mtime/ctime/lastIndexedAt/isDir/type) — it
+does NOT set `displayName` and does NOT write `file_extensions`. app-provider's
+writes are bespoke: they set `displayName`, use per-site `onConflictDoUpdate` sets,
+and write extensions via a dependent `syncScannedAppExtensions(insertedFile.id, app,
+extensionWriter)`. So `upsertFiles` is NOT a drop-in — a naive swap silently drops
+displayName + extensions.
+
+**Recommended approach — `execWrite` forwarding (correct-by-construction, same SQL):**
+route each raw write through the worker's generic `execWrite` (2a) so the EXACT
+drizzle query runs on the worker's connection. Two options:
+1. **Per-site branch** (explicit): `if (split) { const [row] = (await
+   searchIndexWriter.execWrite([{ sql, args }]))[0]?.rows ?? []; const id = row.id;
+   /* forward the extension inserts too */ } else { existing runAppTransaction }`.
+   `row.id` works (uncoerced int, column `id`). Loses per-app atomicity (file +
+   extensions become separate execWrites) — acceptable (re-indexable).
+2. **Forwarding proxy in `runAppTransaction`** (collapses all ~15 sites into ONE
+   change): when split, hand `operation(writer, extWriter)` a Proxy over
+   `db.insert/update/delete(table)` whose chainable methods forward to the real
+   builder and whose `.then` runs `execWrite([builder.toSQL()])`. Risk: must cover
+   every drizzle method the sites use (incl. any `.select()` reads inside a tx →
+   route to `searchDb`); fragile — verify method coverage, app-test hard.
+
+Do NOT put the forwarder in `db/utils` (tests widely `vi.mock` it — see the 2d.1
+lesson); keep it provider-local. Whichever option, gate on split-enabled and keep
+the flag-OFF path byte-identical.
 
 ### 2e — embeddings, first-launch reindex, orphan cleanup
 - **embeddings** — worker `persistChunk` already writes `files`+`embeddings`+`file_index_progress` atomically; `dbUtils.addEmbedding` is routed by 2c, but repoint the other main-thread embedding writer `embedding-service.ts:106` (and any `db/utils.addEmbedding` callers) through the worker so `embeddings` stays single-writer in `search-index.db`.
