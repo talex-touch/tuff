@@ -89,7 +89,18 @@ function createPlan(
 function createCoordinator(
   root: string,
   repository: ReturnType<typeof createRepository>,
-  options: { currentVersion?: string; installOnNormalQuit?: boolean } = {}
+  options: {
+    currentVersion?: string
+    installOnNormalQuit?: boolean
+    platform?: NodeJS.Platform
+    executablePath?: string
+    buildVerificationStatus?: {
+      isVerified: boolean
+      isOfficialBuild: boolean
+      verificationFailed: boolean
+      hasOfficialKey: boolean
+    }
+  } = {}
 ) {
   const requestQuit = vi.fn()
   const spawnProcess = vi.fn(() => ({ once: vi.fn(), unref: vi.fn() }))
@@ -98,11 +109,18 @@ function createCoordinator(
     repository: repository as never,
     storageRoot: root,
     currentVersion: options.currentVersion ?? '2.4.10',
-    platform: 'linux',
+    platform: options.platform ?? 'linux',
     resourcesPath: process.cwd(),
     appPath: process.cwd(),
-    executablePath: '/unused/tuff',
+    executablePath: options.executablePath ?? '/unused/tuff',
     getInstallOnNormalQuit: () => options.installOnNormalQuit ?? true,
+    getBuildVerificationStatus: () =>
+      options.buildVerificationStatus ?? {
+        isVerified: true,
+        isOfficialBuild: true,
+        verificationFailed: false,
+        hasOfficialKey: true
+      },
     prepareInstallPackage: async () => ({
       taskId: 'task-1',
       filePath: packagePath,
@@ -136,6 +154,27 @@ describe('UpdateInstallCoordinator', () => {
       installMode: 'install-now'
     })
     expect(requestQuit).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a macOS update ready when the current build cannot use silent install', async () => {
+    const root = await createRoot()
+    const repository = createRepository(lifecycle('ready'))
+    const { coordinator, requestQuit } = createCoordinator(root, repository, {
+      platform: 'darwin',
+      executablePath: '/Applications/Tuff.app/Contents/MacOS/Tuff',
+      buildVerificationStatus: {
+        isVerified: true,
+        isOfficialBuild: false,
+        verificationFailed: false,
+        hasOfficialKey: true
+      }
+    })
+
+    await expect(coordinator.scheduleInstallNow('task-1')).rejects.toMatchObject({
+      code: 'MAC_UPDATE_BUILD_UNTRUSTED'
+    })
+    expect(repository.current.phase).toBe('ready')
+    expect(requestQuit).not.toHaveBeenCalled()
   })
 
   it('schedules a compatible ready update on a user normal quit', async () => {

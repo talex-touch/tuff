@@ -86,14 +86,14 @@ export class UpdateActionController {
 
   async handleInstall(payload?: {
     taskId?: string
-  }): Promise<{ success: boolean; error?: string }> {
+  }): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     if (!payload?.taskId) {
       this.deps.reportUpdateTelemetry('install_error', {
         channel: this.deps.getEffectiveChannel(),
         source: this.deps.getSourceName(),
         itemKind: 'manual'
       })
-      return { success: false, error: 'Missing update task id' }
+      return { success: false, error: 'Missing update task id', errorCode: 'UPDATE_TASK_REQUIRED' }
     }
     try {
       await this.deps.withDownloadCenterInstall(payload.taskId)
@@ -113,13 +113,20 @@ export class UpdateActionController {
         channel: this.deps.getEffectiveChannel(),
         taskId: payload.taskId
       })
+      const errorCode =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        typeof (error as { code?: unknown }).code === 'string'
+          ? (error as { code: string }).code
+          : undefined
       this.deps.reportUpdateTelemetry('install_error', {
         channel: this.deps.getEffectiveChannel(),
         source: this.deps.getSourceName(),
         taskId: payload.taskId,
         itemKind: 'manual'
       })
-      return { success: false, error: publicMessage }
+      return { success: false, error: publicMessage, errorCode }
     }
   }
 }

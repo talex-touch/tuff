@@ -206,19 +206,27 @@ verify-macos-release-signing.mjs \
 - Workspace modules copied into packaged `Resources/node_modules` must exclude their source `node_modules` directory. The resource dependency closure copies runtime dependencies at the package root; absolute pnpm workspace symlinks are forbidden inside the app bundle.
 - Electron Builder performs Developer ID signing, hardened runtime, notarization, and stapling. The metadata-preserving ZIP is created only after Developer ID verification.
 - Upload is gated by deep strict codesign, TeamIdentifier, Gatekeeper source, and stapler validation. A host with Gatekeeper globally disabled may prove Developer ID and stapling, but its `spctl override=security disabled` result remains blocked evidence rather than a Gatekeeper pass.
+- Runtime/UI native trust is a read-only projection of typed `AppEvents.build.getVerificationStatus`; renderer code must not infer waiver or pass from `process.platform` alone.
+- A Darwin runtime reports `pass:official-macos-release-attested` only when the packaged build attestation is official, backed by the pinned release key, and has no verification failure. This runtime projection relies on the mandatory distribution gates above; it does not replace codesign/stapler/Gatekeeper release evidence.
+- Missing, unofficial, key-inconsistent, or failed build attestation reports `unverified` with an explicit reason and risk. Non-Darwin runtimes report `not-applicable`. The retired `waived:apple-developer-not-configured` sentinel must not appear in current renderer UI or diagnostic evidence.
+- `SettingHeader` and `SettingUpdate` must consume the same typed native-trust projection. On macOS `unverified`, Settings renders a non-dismissible `role=alert` danger block with stable reason/risk keys, hides the Chromium/Node.js/Vue runtime badges, and applies a danger-red header edge. `pass` and non-Darwin `not-applicable` must not receive this danger treatment.
+- Published packages are immutable: correcting the renderer projection changes the next release only; an already-published app containing the stale hard-coded waiver cannot be repaired in place without invalidating its attestation and native signature.
 
 ### 4. Validation & Error Matrix
 
-| Condition                                                       | Result                                             |
-| --------------------------------------------------------------- | -------------------------------------------------- |
-| Local Developer ID identity + valid `tuff-notarization` profile | Sign, notarize, staple, then archive               |
-| Local profile missing/invalid                                   | Electron Builder fails; no distributable ZIP claim |
-| CI PKCS#12 or API-key group absent/partial                      | Fail in signing-mode preflight                     |
-| CI resolves Apple ID instead of API key                         | Fail; Team API key is required                     |
-| Workspace resource contains an absolute/out-of-bundle symlink   | Fail codesign/package gate                         |
-| Electron Builder notarizes, then postprocess ad-hoc re-signs    | Fail Developer ID / stapler checks                 |
-| Developer ID, timestamp, TeamIdentifier, and staple pass        | Native trust passes                                |
-| `spctl` reports `override=security disabled`                    | Blocked Gatekeeper evidence; never relabel as pass |
+| Condition                                                         | Result                                             |
+| ----------------------------------------------------------------- | -------------------------------------------------- |
+| Local Developer ID identity + valid `tuff-notarization` profile   | Sign, notarize, staple, then archive               |
+| Local profile missing/invalid                                     | Electron Builder fails; no distributable ZIP claim |
+| CI PKCS#12 or API-key group absent/partial                        | Fail in signing-mode preflight                     |
+| CI resolves Apple ID instead of API key                           | Fail; Team API key is required                     |
+| Workspace resource contains an absolute/out-of-bundle symlink     | Fail codesign/package gate                         |
+| Electron Builder notarizes, then postprocess ad-hoc re-signs      | Fail Developer ID / stapler checks                 |
+| Developer ID, timestamp, TeamIdentifier, and staple pass          | Native trust passes                                |
+| `spctl` reports `override=security disabled`                      | Blocked Gatekeeper evidence; never relabel as pass |
+| Official macOS attestation + pinned key + no verification failure | Renderer/evidence native trust `pass`              |
+| Missing/unofficial/failed build attestation                       | Renderer/evidence `unverified`; retain risk        |
+| Renderer selects trust from `darwin` alone                        | Invalid projection; fail review                    |
 
 ### 5. Good / Base / Bad Cases
 
@@ -233,6 +241,7 @@ verify-macos-release-signing.mjs \
 - Local distribution smoke: `pnpm build:beta:mac` logs signing/notarization, postprocess runs in `official` mode, and the command succeeds.
 - Artifact verification: run deep strict codesign, inspect Authority/TeamIdentifier/Timestamp/runtime, run stapler validation and `spctl`, then repeat codesign/stapler against an extracted distribution ZIP.
 - Workflow validation: actionlint passes and only complete API-key credentials can export `TUFF_OFFICIAL_RELEASE_BUILD=true`.
+- Renderer projection: focused tests cover official pass, verification failure, unavailable/inconsistent attestation, and non-macOS not-applicable; packaged Settings smoke must contain no retired waiver sentinel.
 
 ### 7. Wrong vs Correct
 
@@ -544,6 +553,119 @@ await updateInstallCoordinator.scheduleInstallNow(taskId);
 // target startup readiness: CAS healthy, then write token-bound ack
 ```
 
+## Scenario: Ready Notification and Strict Silent macOS Update
+
+### 1. Scope / Trigger
+
+- Trigger: changing automatic update prompts, DownloadCenter completion handling, lifecycle broadcasts, native update notifications, install-now clicks, or macOS apply/restore scripts.
+- This contract prevents a byte-complete package from being presented as installable, prevents notification clicks from becoming dead ends, and prevents a macOS update from surprising the user with a password prompt after the app has already quit.
+
+### 2. Signatures
+
+```ts
+UpdateEvents.lifecycleChanged: UpdateLifecycleSnapshot -> void
+UpdateSdk.onLifecycleChanged(handler): () => void
+
+interface UpdateAttemptRepositoryOptions {
+  onCommitted?: (snapshot: UpdateLifecycleSnapshot) => void
+  onObserverError?: (error: unknown) => void
+}
+
+NotificationService.showUpdateReadyNotification({
+  version,
+  platform,
+  onClick,
+}): boolean
+
+assertPlatformInstallPreflight(input): void
+
+type UpdateInstallPreflightErrorCode =
+  | 'MAC_UPDATE_DESTINATION_NOT_WRITABLE'
+  | 'MAC_UPDATE_BUILD_UNTRUSTED'
+```
+
+### 3. Contracts
+
+- `DownloadCenter.completed` advances the attempt to `verifying`; it never emits an update-ready notification and never starts installation.
+- A committed `verifying -> ready` transition is the sole ready notification boundary. Repository observers run only after the SQLite transaction commits; observer failure cannot rewrite or reject the committed lifecycle.
+- Main broadcasts every committed snapshot through the typed lifecycle event. Renderer applies the existing revision guard and never rebuilds phase from download events.
+- With `autoDownload=true`, `available` starts or restores background preparation without a blocking release dialog. Manual-download mode may still show an explicit Download Update action.
+- A ready native notification owns a main-process callback. One click schedules the matching verified task through `UpdateInstallCoordinator`; it does not open Settings and does not require a second in-app confirmation.
+- macOS install-now requires an official verified build, pinned official key, no attestation failure, and direct read/execute access to the current app plus write/execute access to its parent directory.
+- macOS preflight failure leaves the attempt at `ready`, sets no update quit intent, and does not call `app.quit()`.
+- macOS apply and restore scripts must not call AppleScript, `sudo`, or any administrator-prompt fallback. A direct replacement failure restores the backup and reopens the old app; an unrecoverable restore preserves the marker/backup for diagnosis.
+- Windows NSIS/MSI and Linux AppImage/deb reuse the same ready-click lifecycle, but installer/UAC/package-manager interaction remains explicit and is not reported as healthy until startup health passes.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                       | Result                                                                               |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Download task reports completed but integrity verification is pending           | `verifying`; no ready notification                                                   |
+| Ready transition commits                                                        | typed lifecycle push; at most one ready notification per attempt/process             |
+| Duplicate notification click or concurrent Settings click                       | one `ready -> install-scheduled`; stale caller receives lifecycle conflict           |
+| Restored process starts with an active ready attempt                            | publish ready again and offer one notification in the new process; do not redownload |
+| macOS build is unofficial, unattested, key-inconsistent, or verification failed | `MAC_UPDATE_BUILD_UNTRUSTED`; remain ready; do not quit                              |
+| macOS app or parent directory is not directly writable                          | `MAC_UPDATE_DESTINATION_NOT_WRITABLE`; remain ready; no password prompt              |
+| macOS direct replacement fails after quit                                       | restore backup and reopen old app; helper records failure/recovery state             |
+| Windows/Linux handoff process starts                                            | `handoff-started`; not healthy until matching target startup ack                     |
+
+### 5. Good / Base / Bad Cases
+
+- Good: background download verifies to ready, one native notification appears, one click schedules typed quit, a trusted writable macOS app is replaced without UI or password prompts, and the new process reaches health.
+- Base: a trusted update is ready but the current macOS app is not writable; the app stays running and ready, shows a stable remediation reason, and preserves the verified package.
+- Bad: show “Update Ready” on raw download completion, route the notification click only to an unconsumed renderer event, call `app.quit()` before writability/trust preflight, or fall back to `osascript ... with administrator privileges`.
+
+### 6. Tests Required
+
+- Transport/SDK round-trip for `lifecycleChanged`; renderer rejects stale revisions.
+- Repository observer receives created/transitioned snapshots after commit and receives nothing for a failed CAS.
+- Update service suppresses the blocking available dialog in auto-download mode, notifies only on ready, dedupes by attempt id, and re-notifies a restored ready attempt in a new process.
+- Notification click callback is single-fire and schedules only the matching task.
+- macOS preflight covers trusted+writable, untrusted, unresolved bundle, and non-writable destination; failure asserts lifecycle remains ready and `requestQuit` is untouched.
+- Shell checks and temp-bundle smoke assert apply/restore contain no elevation path, preserve backup, replace directly, restore directly, relaunch, and write timestamped phase evidence.
+- Packaged macOS acceptance uses an official attested N+1 artifact and records ready, click, quit, helper, replacement, new-process, and health timestamps. Workspace or unsigned `--dir` builds cannot prove the silent-install trust gate.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (task.status === "completed") {
+  showUpdateReadyNotification(task.id);
+}
+notification.on("click", () => broadcast("install-update"));
+app.quit();
+```
+
+```bash
+osascript -e 'do shell script ... with administrator privileges'
+```
+
+#### Correct
+
+```ts
+const ready = await attempts.transition({
+  expectedPhase: "verifying",
+  to: "ready",
+});
+publishLifecycleSnapshot(ready);
+
+assertPlatformInstallPreflight({
+  platform,
+  executablePath,
+  buildVerificationStatus,
+});
+await updateInstallCoordinator.scheduleInstallNow(ready.taskId!);
+```
+
+```bash
+if ! install_direct; then
+  restore_backup
+  open "$DEST_APP" || true
+  exit 1
+fi
+```
+
 ## Scenario: Manifest v2 N-1 Rollback Compatibility
 
 ### 1. Scope / Trigger
@@ -595,7 +717,7 @@ node scripts/validate-update-downgrade-evidence.mjs --evidence <json>
 - SQLite persists compatibility on the attempt. `user-normal` handoff and automatic recovery require both attempt compatibility and the user setting. Explicit `install-now` remains allowed when compatibility is false.
 - Windows/Linux recovery additionally requires a cached previous package whose exact version equals `rollbackFromVersion`. macOS restore requires the current bundle version to equal that target.
 - Renderer state is a revision-guarded read-only lifecycle projection. Download completion is only a refresh trigger; it is never lifecycle truth.
-- On a macOS host, win32/x64 and linux/x64 evidence remains `static-only`. Apple Developer absence is exactly `waived:apple-developer-not-configured`, never native-trust `pass`.
+- On a macOS host, win32/x64 and linux/x64 evidence remains `static-only`. Current official macOS release evidence requires native-trust `pass`; runtime attestation gaps remain `unverified`, while `waived:apple-developer-not-configured` is historical evidence only.
 
 ### 4. Validation & Error Matrix
 

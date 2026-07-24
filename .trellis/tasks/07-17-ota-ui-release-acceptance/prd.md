@@ -11,7 +11,7 @@
 - `useUpdateRuntime` 暴露单一 revision-guarded snapshot；设置页不得再用 DownloadCenter completion/appState booleans推断 lifecycle。
 - available/downloading/verifying/ready/install-scheduled/handoff-started/awaiting-health/healthy/recovery-required/recovering/recovered/failed 均有准确状态、tone、动作门禁与诊断字段。
 - ready 仅显示立即安装；normal-quit 开关遵循 attempt 的 `installOnNormalQuit`/rollback compatibility。Windows、macOS、Linux 分别使用启动安装器、重启更新、打开安装包文案。
-- macOS native trust 仍为 `waived` 时，设置页与 evidence 显式显示风险，不得描述为 Developer ID/Gatekeeper pass。
+- macOS native trust 必须读取官方构建验证状态：通过签名 attestation 的官方包显示 `pass`；缺失或失败时显示 `unverified`，并在设置页顶部提供不可忽略的高对比安全警告、明确风险列表和稳定原因码；无信任时页头卡片必须使用 danger 红色边缘并隐藏 Chromium/Node.js/Vue 运行时徽章，不得继续硬编码已退役的 Apple Developer waiver。
 
 ### R2 — Manifest v2 rollback contract
 
@@ -39,7 +39,7 @@
 ## Acceptance Criteria
 
 - [x] 设置页和诊断只读 authoritative snapshot，所有 lifecycle phase 与 action gating 有 focused tests（renderer 15 tests）。
-- [x] 平台动作和 macOS waived 风险文案准确，packaged Settings smoke 显示 exact waiver 且未提前显示安装成功。
+- [x] 平台动作和 macOS native trust 文案准确；官方 attested package 显示通过态，非官方或验证失败包 fail closed 为 `unverified`；packaged Settings 实测同时展示 danger alert、三项原生信任风险和 lifecycle 内状态，页头为红色边缘且无运行时徽章。
 - [x] manifest v2 的 rollbackFromVersion/rollbackCompatible 从 generator 到 shared/CLI/remote gates/Nexus/CoreApp 单一传播。
 - [x] attempt 持久化 rollbackCompatible；false release 不能 normal-quit handoff 或 automatic recovery，但可显式 install-now（main 79 tests）。
 - [x] N/N-1 evidence gate 拒绝版本漂移、缺失步骤、伪 host runtime、static-only 冒充 pass 与临时 profile 冒充 real profile（release 97 tests）。
@@ -50,4 +50,4 @@
 
 - SQLite 是 attempt/compatibility 真源；manifest 是发布输入，renderer/evidence 都是只读投影。
 - `rollbackFromVersion` 由发布生成器解析同渠道 N-1；Nexus 与 Runtime 只消费，不重算。
-- 当前 Apple native trust policy 继续为 `waived: apple-developer-not-configured`。
+- 官方 macOS release 已强制 Developer ID 与公证；renderer 以 build verification transport 状态投影 native trust，绝不把平台本身等同于 waiver 或 pass。

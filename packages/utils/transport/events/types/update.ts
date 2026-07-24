@@ -5,7 +5,7 @@ import type {
   UpdateCheckResult,
   UpdateLifecycleSnapshot,
   UpdateSettings,
-  UpdateUserAction
+  UpdateUserAction,
 } from '../../../types/update'
 
 export interface UpdateOpResponse<T = void> {
@@ -64,7 +64,10 @@ export interface UpdateAvailablePayload {
   channel?: AppPreviewChannel
 }
 
-export type UpdateGetCachedReleaseResponse = UpdateOpResponse<CachedUpdateRecord | null>
+export type UpdateLifecycleChangedPayload = UpdateLifecycleSnapshot
+
+export type UpdateGetCachedReleaseResponse
+  = UpdateOpResponse<CachedUpdateRecord | null>
 
 export type UpdateCheckResponse = UpdateOpResponse<UpdateCheckResult>
 

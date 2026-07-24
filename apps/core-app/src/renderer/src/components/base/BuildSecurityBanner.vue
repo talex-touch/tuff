@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
-import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
+import { isBuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createRendererLogger } from '~/utils/renderer-log'
@@ -26,13 +27,13 @@ function handleVerificationStatus(status: BuildVerificationStatus) {
 onMounted(async () => {
   const verificationStatusEvent = AppEvents.build.statusUpdated
   transport.on(verificationStatusEvent, (status) => {
-    handleVerificationStatus(status)
+    if (isBuildVerificationStatus(status)) handleVerificationStatus(status)
   })
 
   try {
     const status = await transport.send(AppEvents.build.getVerificationStatus)
-    if (status) {
-      handleVerificationStatus(status as BuildVerificationStatus)
+    if (isBuildVerificationStatus(status)) {
+      handleVerificationStatus(status)
     }
   } catch (error) {
     buildSecurityLog.warn('Failed to get verification status:', error)

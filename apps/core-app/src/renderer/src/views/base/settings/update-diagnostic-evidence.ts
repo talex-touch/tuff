@@ -5,6 +5,7 @@ import type {
   UpdateLifecycleSnapshot,
   UpdateSettings
 } from '@talex-touch/utils'
+import type { BuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
 
 export type UpdateDiagnosticInstallMode =
   | 'coordinated-handoff'
@@ -12,6 +13,106 @@ export type UpdateDiagnosticInstallMode =
   | 'windows-auto-installer-handoff'
   | 'manual-installer'
   | 'not-ready'
+
+export type MacNativeTrustProjection =
+  | { status: 'pass'; reason: 'official-macos-release-attested'; risk: false }
+  | {
+      status: 'unverified'
+      reason: 'build-attestation-verification-failed' | 'official-build-attestation-unavailable'
+      risk: true
+    }
+  | { status: 'not-applicable'; reason: null; risk: false }
+
+export function resolveMacNativeTrust(
+  platform: string,
+  verificationStatus: BuildVerificationStatus | null
+): MacNativeTrustProjection {
+  if (platform !== 'darwin') {
+    return { status: 'not-applicable', reason: null, risk: false }
+  }
+
+  if (
+    verificationStatus?.isOfficialBuild === true &&
+    verificationStatus.hasOfficialKey === true &&
+    verificationStatus.verificationFailed === false
+  ) {
+    return {
+      status: 'pass',
+      reason: 'official-macos-release-attested',
+      risk: false
+    }
+  }
+
+  return {
+    status: 'unverified',
+    reason: verificationStatus?.verificationFailed
+      ? 'build-attestation-verification-failed'
+      : 'official-build-attestation-unavailable',
+    risk: true
+  }
+}
+
+export interface MacNativeTrustDisplay {
+  tone: 'success' | 'danger' | 'neutral'
+  titleKey: string
+  descriptionKey: string
+  code: string
+  showCriticalAlert: boolean
+  alertTitleKey: string
+  alertDescriptionKey: string
+  riskKeys: readonly string[]
+}
+
+const MAC_NATIVE_TRUST_RISK_KEYS = [
+  'settings.settingUpdate.nativeTrust.risks.origin',
+  'settings.settingUpdate.nativeTrust.risks.nativeChain',
+  'settings.settingUpdate.nativeTrust.risks.reinstall'
+] as const
+
+export function resolveMacNativeTrustDisplay(
+  trust: MacNativeTrustProjection
+): MacNativeTrustDisplay {
+  if (trust.status === 'pass') {
+    return {
+      tone: 'success',
+      titleKey: 'settings.settingUpdate.nativeTrust.passedTitle',
+      descriptionKey: 'settings.settingUpdate.nativeTrust.passedDescription',
+      code: `${trust.status}:${trust.reason}`,
+      showCriticalAlert: false,
+      alertTitleKey: 'settings.settingUpdate.nativeTrust.criticalTitle',
+      alertDescriptionKey: 'settings.settingUpdate.nativeTrust.criticalDescription',
+      riskKeys: []
+    }
+  }
+
+  if (trust.status === 'unverified') {
+    const descriptionKey =
+      trust.reason === 'build-attestation-verification-failed'
+        ? 'settings.settingUpdate.nativeTrust.verificationFailedRisk'
+        : 'settings.settingUpdate.nativeTrust.unavailableRisk'
+    return {
+      tone: 'danger',
+      titleKey: 'settings.settingUpdate.nativeTrust.unverifiedTitle',
+      descriptionKey,
+      code: `${trust.status}:${trust.reason}`,
+      showCriticalAlert: true,
+      alertTitleKey: 'settings.settingUpdate.nativeTrust.criticalTitle',
+      alertDescriptionKey: 'settings.settingUpdate.nativeTrust.criticalDescription',
+      riskKeys: MAC_NATIVE_TRUST_RISK_KEYS
+    }
+  }
+
+  return {
+    tone: 'neutral',
+    titleKey: 'settings.settingUpdate.nativeTrust.notApplicableTitle',
+    descriptionKey: 'settings.settingUpdate.nativeTrust.notApplicableDescription',
+    code: 'not-applicable',
+    showCriticalAlert: false,
+    alertTitleKey: 'settings.settingUpdate.nativeTrust.criticalTitle',
+    alertDescriptionKey: 'settings.settingUpdate.nativeTrust.criticalDescription',
+    riskKeys: []
+  }
+}
 
 export type UpdateDiagnosticBlocker =
   | 'lifecycle-not-ready'
@@ -111,9 +212,7 @@ export interface UpdateDiagnosticEvidencePayload {
     platform: string
     arch: string | null
     isMacAutoInstallPlatform: boolean
-    nativeTrust:
-      | { status: 'waived'; reason: 'apple-developer-not-configured'; risk: true }
-      | { status: 'not-applicable'; reason: null; risk: false }
+    nativeTrust: MacNativeTrustProjection
   }
   cachedRelease: {
     tag: string
@@ -170,6 +269,7 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
   platform: string
   arch: string | null
   isMacAutoInstallPlatform: boolean
+  buildVerificationStatus?: BuildVerificationStatus | null
   currentVersion?: string | null
   createdAt?: string
 }): UpdateDiagnosticEvidencePayload {
@@ -206,9 +306,7 @@ export function buildUpdateDiagnosticEvidencePayload(options: {
       platform: options.platform,
       arch: options.arch,
       isMacAutoInstallPlatform: options.isMacAutoInstallPlatform,
-      nativeTrust: options.isMacAutoInstallPlatform
-        ? { status: 'waived', reason: 'apple-developer-not-configured', risk: true }
-        : { status: 'not-applicable', reason: null, risk: false }
+      nativeTrust: resolveMacNativeTrust(options.platform, options.buildVerificationStatus ?? null)
     },
     cachedRelease: summarizeCachedRelease(options.cachedRelease, options.cachedAssets),
     verdict: {

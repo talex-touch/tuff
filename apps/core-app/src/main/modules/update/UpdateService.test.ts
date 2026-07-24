@@ -529,4 +529,47 @@ describe('UpdateServiceModule facade', () => {
       await service.onDestroy()
     }
   })
+  it('re-publishes a restored ready lifecycle and shows its notification once per process', async () => {
+    const service = await createService()
+    const showUpdateReadyNotification = vi.fn(() => true)
+    const internal = service as unknown as {
+      updateNotificationService: {
+        showUpdateReadyNotification: typeof showUpdateReadyNotification
+      }
+      restoreLifecycleState: () => Promise<void>
+    }
+    internal.updateNotificationService = { showUpdateReadyNotification }
+    const created = await mocks.lifecycleRepository.createChecking({
+      id: 'attempt-ready',
+      currentVersion: '1.0.0',
+      channel: AppPreviewChannel.RELEASE,
+      installOnNormalQuit: true,
+      now: 100
+    })
+    for (const [to, patch] of [
+      ['available', { targetVersion: '1.1.0', releaseTag: 'v1.1.0', source: 'nexus' }],
+      ['downloading', { taskId: 'task-ready' }],
+      ['verifying', undefined],
+      ['ready', undefined]
+    ] as const) {
+      await mocks.lifecycleRepository.transition({
+        attemptId: created.attemptId,
+        to,
+        patch
+      })
+    }
+
+    try {
+      await internal.restoreLifecycleState()
+      await internal.restoreLifecycleState()
+
+      expect(mocks.transport.broadcast).toHaveBeenCalledWith(
+        UpdateEvents.lifecycleChanged,
+        expect.objectContaining({ phase: 'ready', taskId: 'task-ready' })
+      )
+      expect(showUpdateReadyNotification).toHaveBeenCalledOnce()
+    } finally {
+      await service.onDestroy()
+    }
+  })
 })

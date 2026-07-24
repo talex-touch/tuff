@@ -64,7 +64,7 @@ function createDownloadCenterMock() {
     updatedAt: new Date()
   }
   const notificationService = {
-    showUpdateDownloadCompleteNotification: vi.fn(),
+    showUpdateReadyNotification: vi.fn(),
     showUpdateAvailableNotification: vi.fn()
   }
   return {
@@ -228,7 +228,7 @@ describe('UpdateSystem install handoff preparation', () => {
     })
   })
 
-  it('keeps download completion notification separate from install handoff preparation', async () => {
+  it('does not report a raw DownloadCenter completion as update ready', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const downloadCenter = createDownloadCenterMock()
     const updateSystem = new UpdateSystem(downloadCenter as never, {
@@ -239,8 +239,6 @@ describe('UpdateSystem install handoff preparation', () => {
     downloadCenter.task.status = DownloadStatus.COMPLETED
     await vi.runOnlyPendingTimersAsync()
 
-    expect(
-      downloadCenter.notificationService.showUpdateDownloadCompleteNotification
-    ).toHaveBeenCalledWith('v2.4.10', 'task-1')
+    expect(downloadCenter.notificationService.showUpdateReadyNotification).not.toHaveBeenCalled()
   })
 })

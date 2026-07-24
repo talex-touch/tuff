@@ -42,6 +42,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
     error: vi.fn(),
     info: vi.fn()
   }
+  const blowMention = vi.fn(async () => {})
   let availableListener:
     | ((data: {
         hasUpdate: boolean
@@ -49,6 +50,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
         snapshot: UpdateLifecycleSnapshot
       }) => void)
     | null = null
+  let lifecycleListener: ((snapshot: UpdateLifecycleSnapshot) => void) | null = null
   const updateSdk = {
     install: options.installImpl ?? vi.fn(async () => ({ success: true })),
     download: vi.fn(),
@@ -61,6 +63,10 @@ async function loadTarget(options: LoadTargetOptions = {}) {
     check: vi.fn(),
     onAvailable: vi.fn((listener) => {
       availableListener = listener
+      return () => {}
+    }),
+    onLifecycleChanged: vi.fn((listener) => {
+      lifecycleListener = listener
       return () => {}
     })
   }
@@ -121,7 +127,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
   }))
 
   vi.doMock('../mention/dialog-mention', () => ({
-    blowMention: vi.fn(async () => {})
+    blowMention
   }))
 
   vi.doMock('./useAppStates', () => ({
@@ -153,6 +159,7 @@ async function loadTarget(options: LoadTargetOptions = {}) {
   return {
     ...target,
     toast,
+    blowMention,
     updateSdk,
     logger,
     MockTimeoutError,
@@ -163,13 +170,17 @@ async function loadTarget(options: LoadTargetOptions = {}) {
     }): void {
       if (!availableListener) throw new Error('Update listener was not registered')
       availableListener(data)
+    },
+    emitLifecycle(snapshot: UpdateLifecycleSnapshot): void {
+      if (!lifecycleListener) throw new Error('Lifecycle listener was not registered')
+      lifecycleListener(snapshot)
     }
   }
 }
 
 describe('useUpdateRuntime', () => {
   it('shares revision-gated lifecycle snapshots across runtime consumers and rejects terminal resurrection', async () => {
-    const { useUpdateRuntime, updateSdk, emitAvailable } = await loadTarget()
+    const { useUpdateRuntime, updateSdk, emitLifecycle } = await loadTarget()
     const runtime = useUpdateRuntime()
     const anotherConsumer = useUpdateRuntime()
     const available = buildSnapshot({ phase: 'available', revision: 2 })
@@ -189,13 +200,10 @@ describe('useUpdateRuntime', () => {
     expect(anotherConsumer.lifecycleSnapshot.value).toEqual(ready)
 
     runtime.setupUpdateListener()
-    emitAvailable({ hasUpdate: false, snapshot: failed })
+    emitLifecycle(failed)
     expect(anotherConsumer.lifecycleSnapshot.value).toEqual(failed)
 
-    emitAvailable({
-      hasUpdate: false,
-      snapshot: buildSnapshot({ phase: 'ready', revision: 5, taskId: 'task-1' })
-    })
+    emitLifecycle(buildSnapshot({ phase: 'ready', revision: 5, taskId: 'task-1' }))
     expect(runtime.lifecycleSnapshot.value).toEqual(failed)
   })
 
@@ -229,6 +237,33 @@ describe('useUpdateRuntime', () => {
     expect(result).toBe(true)
     expect(updateSdk.install).toHaveBeenCalledWith({ taskId: 'task-2' })
     expect(toast.success).toHaveBeenCalledWith('settings.settingUpdate.messages.installStarted')
+  })
+
+  it('auto download 模式收到 available 时只同步状态而不弹阻塞对话框', async () => {
+    const { useUpdateRuntime, updateSdk, emitAvailable, blowMention } = await loadTarget()
+    const runtime = useUpdateRuntime()
+    updateSdk.getSettings.mockResolvedValue({
+      success: true,
+      data: {
+        enabled: true,
+        frequency: 'everyday',
+        updateChannel: AppPreviewChannel.RELEASE,
+        autoDownload: true,
+        installOnNormalQuit: true,
+        rendererOverrideEnabled: false
+      }
+    })
+    runtime.setupUpdateListener()
+
+    emitAvailable({
+      hasUpdate: true,
+      release: { tag_name: 'v2.4.10', body: '' } as GitHubRelease,
+      snapshot: buildSnapshot({ phase: 'available', revision: 2 })
+    })
+
+    await vi.waitFor(() => expect(updateSdk.getSettings).toHaveBeenCalledOnce())
+    expect(blowMention).not.toHaveBeenCalled()
+    expect(runtime.lifecycleSnapshot.value?.phase).toBe('available')
   })
 
   it('非主窗口不注册更新提示监听', async () => {

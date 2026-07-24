@@ -13,6 +13,7 @@ import process from 'node:process'
 import { setQuitIntent } from '../../../core/quit-intent'
 import { UpdateLifecycleConflictError } from '../update-lifecycle'
 import {
+  assertPlatformInstallPreflight,
   buildPlatformInstallSpec,
   preparePlatformPackage,
   resolveCurrentMacAppBundlePath
@@ -36,6 +37,12 @@ export interface UpdateInstallCoordinatorDeps {
   appPath: string
   executablePath: string
   getInstallOnNormalQuit: () => boolean
+  getBuildVerificationStatus: () => {
+    isVerified: boolean
+    isOfficialBuild: boolean
+    verificationFailed: boolean
+    hasOfficialKey: boolean
+  }
   prepareInstallPackage: (taskId: string) => Promise<VerifiedUpdatePackage>
   requestQuit: () => void
   spawnProcess?: SpawnProcess
@@ -78,6 +85,12 @@ export class UpdateInstallCoordinator {
       throw new UpdateLifecycleConflictError('Update task does not match the ready lifecycle')
     }
 
+    assertPlatformInstallPreflight({
+      platform: this.deps.platform,
+      executablePath: this.deps.executablePath,
+      buildVerificationStatus: this.deps.getBuildVerificationStatus()
+    })
+
     const scheduled = await this.deps.repository.transition({
       attemptId: ready.attemptId,
       expectedRevision: ready.revision,
@@ -100,6 +113,19 @@ export class UpdateInstallCoordinator {
         !lifecycle.rollbackCompatible ||
         !this.deps.getInstallOnNormalQuit()
       ) {
+        return
+      }
+      try {
+        assertPlatformInstallPreflight({
+          platform: this.deps.platform,
+          executablePath: this.deps.executablePath,
+          buildVerificationStatus: this.deps.getBuildVerificationStatus()
+        })
+      } catch (error) {
+        this.deps.log.warn('Skipped normal-quit update because silent install preflight failed', {
+          error,
+          meta: { attemptId: lifecycle.attemptId }
+        })
         return
       }
       lifecycle = await this.deps.repository.transition({
