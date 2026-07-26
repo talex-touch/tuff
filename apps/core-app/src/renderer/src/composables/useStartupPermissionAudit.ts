@@ -1,5 +1,4 @@
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { StorageEvents } from '@talex-touch/utils/transport/events'
 import { appSettings } from '@talex-touch/utils/renderer/storage'
 import { StorageList } from '@talex-touch/utils'
@@ -7,22 +6,16 @@ import { toast } from 'vue-sonner'
 import { useI18n } from 'vue-i18n'
 import { toRaw } from 'vue'
 import { appSetting } from '~/modules/storage/app-storage'
-import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import {
   createRequiredFileAccessRootKey,
   resolveRequiredFileAccessStatus,
   summarizeRequiredFileAccessStatus,
   systemPermissionFileAccessRoots
 } from '~/modules/system/system-permission-roots'
-import type { SystemPermissionCheckResult } from '~/modules/system/system-permission-refresh'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const STARTUP_PERMISSION_AUDIT_DELAY_MS = 6500
-const systemPermissionCheck = defineEvent('system')
-  .module('permission')
-  .event('check')
-  .define<string, SystemPermissionCheckResult>()
 
 const startupPermissionAuditLog = createRendererLogger('StartupPermissionAudit')
 let auditStarted = false
@@ -34,7 +27,6 @@ function delay(ms: number): Promise<void> {
 export function useStartupPermissionAudit() {
   const transport = useTuffTransport()
   const { t } = useI18n()
-  const { isMac, isWindows } = useRendererPlatform()
   const { startupInfo, ensureStartupInfo } = useStartupInfo()
 
   async function runAudit(): Promise<void> {
@@ -68,31 +60,9 @@ export function useStartupPermissionAudit() {
         appSetting.setup.fileAccessRootKey = ''
       }
 
-      if (isMac.value) {
-        const accessibility = await transport.send(systemPermissionCheck, 'accessibility')
-        if (accessibility.status !== 'granted') {
-          missing.push(t('setupPermissions.accessibility'))
-        }
-
-        const notifications = await transport.send(systemPermissionCheck, 'notifications')
-        if (notifications.status !== 'granted' && notifications.status !== 'unverifiable') {
-          missing.push(t('setupPermissions.notifications'))
-        }
-      }
-
-      if (isMac.value || isWindows.value) {
-        const microphone = await transport.send(systemPermissionCheck, 'microphone')
-        if (microphone.status !== 'granted') {
-          missing.push(t('setupPermissions.microphone'))
-        }
-      }
-
-      if (isWindows.value) {
-        const admin = await transport.send(systemPermissionCheck, 'adminPrivileges')
-        if (admin.status !== 'granted') {
-          missing.push(t('setupPermissions.adminPrivileges'))
-        }
-      }
+      // Accessibility, notifications, microphone and admin privileges are requested
+      // just-in-time by the features that use them. Auditing them here would nag about
+      // permissions the user was never asked for during onboarding.
 
       appSetting.setup = {
         ...(appSetting.setup ?? {}),
