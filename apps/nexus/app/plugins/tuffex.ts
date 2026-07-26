@@ -121,6 +121,7 @@ const fromTransition = () => import('@tuffex-components/transition')
 const fromTree = () => import('@tuffex-components/tree')
 const fromTreeSelect = () => import('@tuffex-components/tree-select')
 const fromTuffLogoStroke = () => import('@tuffex-components/tuff-logo-stroke')
+const fromVersionCapsule = () => import('@tuffex-components/version-capsule')
 const fromVirtualList = () => import('@tuffex-components/virtual-list')
 
 const GLOBAL_TUFFEX_COMPONENTS = {
@@ -262,6 +263,9 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxTreeSelect: asyncTuffexComponent(fromTreeSelect, 'TxTreeSelect'),
   TxTuffLogoStroke: asyncTuffexComponent(fromTuffLogoStroke, 'TxTuffLogoStroke'),
   TxTypingIndicator: asyncTuffexComponent(fromChat, 'TxTypingIndicator'),
+  TxVersionCapsule: asyncTuffexComponent(fromVersionCapsule, 'TxVersionCapsule'),
+  TxVersionDownloadPanel: asyncTuffexComponent(fromVersionCapsule, 'TxVersionDownloadPanel'),
+  TxVersionHistoryPanel: asyncTuffexComponent(fromVersionCapsule, 'TxVersionHistoryPanel'),
   TxVirtualList: asyncTuffexComponent(fromVirtualList, 'TxVirtualList'),
 } as const
 

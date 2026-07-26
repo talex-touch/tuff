@@ -19183,6 +19183,3809 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "dmTP7",
+      "x": 7180,
+      "y": 0,
+      "name": "Nexus — Version Capsule v2.5",
+      "clip": true,
+      "width": 1440,
+      "fill": "$nx-bg",
+      "layout": "vertical",
+      "gap": 60,
+      "padding": 72,
+      "children": [
+        {
+          "type": "frame",
+          "id": "bgj75",
+          "name": "Header",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 12,
+          "children": [
+            {
+              "type": "text",
+              "id": "f9wZt",
+              "name": "Eyebrow",
+              "fill": "$nx-beta",
+              "content": "NEXUS LANDING HERO · v2.5",
+              "fontFamily": "$nx-font",
+              "fontSize": 12,
+              "fontWeight": "700",
+              "letterSpacing": 1.6
+            },
+            {
+              "type": "text",
+              "id": "ZQjgP",
+              "name": "Title",
+              "fill": "$nx-ink",
+              "content": "Version capsule",
+              "fontFamily": "$nx-font",
+              "fontSize": 40,
+              "fontWeight": "680",
+              "letterSpacing": -0.8
+            },
+            {
+              "type": "text",
+              "id": "v7DYXK",
+              "name": "Sub",
+              "fill": "$nx-muted",
+              "textGrowth": "fixed-width",
+              "width": 760,
+              "content": "A split capsule replaces the single version pill. Left segment downloads the newest preview build, right segment opens release history. Both segments are click-driven — the hover trust card is gone.",
+              "lineHeight": 1.6,
+              "fontFamily": "$nx-font",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ATRut",
+          "name": "01 Anatomy",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 28,
+          "children": [
+            {
+              "type": "frame",
+              "id": "GiTqW",
+              "name": "Section Head",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "GNo04",
+                  "name": "Kicker",
+                  "fill": "$nx-beta",
+                  "content": "01 · ANATOMY",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.4
+                },
+                {
+                  "type": "text",
+                  "id": "BKZTL",
+                  "name": "Title",
+                  "fill": "$nx-ink",
+                  "content": "Two targets, one capsule",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 20,
+                  "fontWeight": "640"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rR6Ll",
+              "name": "Stage",
+              "width": "fill_container",
+              "height": 150,
+              "fill": "#0A0C15",
+              "cornerRadius": 20,
+              "stroke": "$nx-line",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "WOeMl",
+                  "name": "Capsule / Beta Default",
+                  "clip": true,
+                  "height": 52,
+                  "fill": "$nx-surface",
+                  "cornerRadius": 999,
+                  "stroke": "$nx-line",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "HAdQ7",
+                      "name": "Segment / Download",
+                      "height": "fill_container",
+                      "fill": "#00000000",
+                      "gap": 9,
+                      "padding": [
+                        0,
+                        20
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "b7Wcy",
+                          "name": "Channel Dot",
+                          "fill": "$nx-beta",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "sK3Wl",
+                          "name": "Channel",
+                          "fill": "$nx-beta",
+                          "content": "BETA",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "700",
+                          "letterSpacing": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "qNUgt",
+                          "name": "Version",
+                          "fill": "$nx-ink",
+                          "content": "v2.4.13-beta.19",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 17,
+                          "fontWeight": "680"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "J86AY",
+                          "name": "Download Icon",
+                          "width": 19,
+                          "height": 19,
+                          "icon": "download",
+                          "library": "lucide",
+                          "fill": "$nx-faint"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "ddLFj",
+                      "name": "Divider",
+                      "fill": "$nx-line",
+                      "width": 1,
+                      "height": "fill_container"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T6ffkC",
+                      "name": "Segment / History",
+                      "height": "fill_container",
+                      "fill": "#00000000",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        20
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "IHoDu",
+                          "name": "History Label",
+                          "fill": "$nx-lavender",
+                          "content": "History",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 17,
+                          "fontWeight": "620"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "JhoVt",
+                          "name": "Chevron",
+                          "width": 19,
+                          "height": 19,
+                          "icon": "chevron-down",
+                          "library": "lucide",
+                          "fill": "$nx-lavender"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Ml24m",
+          "name": "02 States",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "hpW5V",
+              "name": "Section Head",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "XEvVw",
+                  "name": "Kicker",
+                  "fill": "$nx-beta",
+                  "content": "02 · STATES",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.4
+                },
+                {
+                  "type": "text",
+                  "id": "X3zAOM",
+                  "name": "Title",
+                  "fill": "$nx-ink",
+                  "content": "Two independent click targets",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 20,
+                  "fontWeight": "640"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "oydV6",
+              "name": "State Row 1",
+              "width": "fill_container",
+              "gap": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "asBKy",
+                  "name": "State / Rest",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "D6kJ2A",
+                      "name": "Stage",
+                      "width": "fill_container",
+                      "height": 112,
+                      "fill": "#0A0C15",
+                      "cornerRadius": 16,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "njcA6",
+                          "name": "Capsule / Rest",
+                          "clip": true,
+                          "height": 44,
+                          "fill": "$nx-surface",
+                          "cornerRadius": 999,
+                          "stroke": "$nx-line",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "aWWhD",
+                              "name": "Segment / Download",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 9,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "IOl6F",
+                                  "name": "Channel Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 8,
+                                  "height": 8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "LNZOp",
+                                  "name": "Channel",
+                                  "fill": "$nx-beta",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "yjIYr",
+                                  "name": "Version",
+                                  "fill": "$nx-ink",
+                                  "content": "v2.4.13-beta.19",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "680"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "luRQa",
+                                  "name": "Download Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "upqc7",
+                              "name": "Divider",
+                              "fill": "$nx-line",
+                              "width": 1,
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "rupuz",
+                              "name": "Segment / History",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "oAhLX",
+                                  "name": "History Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "History",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "620"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "HXvjq",
+                                  "name": "Chevron",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "chevron-down",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "D7w6e",
+                      "name": "Caption",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "U29lB",
+                          "name": "Name",
+                          "fill": "$nx-ink",
+                          "content": "Rest",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "640"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Nqtb2",
+                          "name": "Desc",
+                          "fill": "$nx-faint",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Dot, channel and tag read as one unit. The download glyph sits at the boundary so the split is legible before any hover.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "GWMxG",
+                  "name": "State / Hover — left (download)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "N4HF9",
+                      "name": "Stage",
+                      "width": "fill_container",
+                      "height": 112,
+                      "fill": "#0A0C15",
+                      "cornerRadius": 16,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ZUG5o",
+                          "name": "Capsule / Hover — left (download)",
+                          "clip": true,
+                          "height": 44,
+                          "fill": "$nx-surface",
+                          "cornerRadius": 999,
+                          "stroke": "#7F6CFF8C",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "gTyRO",
+                              "name": "Segment / Download",
+                              "height": "fill_container",
+                              "fill": "#7F6CFF24",
+                              "gap": 9,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "xPSV4",
+                                  "name": "Channel Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 8,
+                                  "height": 8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "yYXyv",
+                                  "name": "Channel",
+                                  "fill": "$nx-beta",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "XrcCo",
+                                  "name": "Version",
+                                  "fill": "$nx-ink",
+                                  "content": "v2.4.13-beta.19",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "680"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "Hi5me",
+                                  "name": "Download Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "YxcY8",
+                              "name": "Divider",
+                              "fill": "$nx-line",
+                              "width": 1,
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "qonxj",
+                              "name": "Segment / History",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "v5FMft",
+                                  "name": "History Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "History",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "620"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "hUnhs",
+                                  "name": "Chevron",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "chevron-down",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XEZfa",
+                      "name": "Caption",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YxpdM",
+                          "name": "Name",
+                          "fill": "$nx-ink",
+                          "content": "Hover — left (download)",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "640"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y9Co2X",
+                          "name": "Desc",
+                          "fill": "$nx-faint",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Left half lifts and the glyph brightens. Border picks up the channel hue, so the target is unmistakable.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "dUFDk",
+              "name": "State Row 2",
+              "width": "fill_container",
+              "gap": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "K875uT",
+                  "name": "State / Hover — right (history)",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "awjWP",
+                      "name": "Stage",
+                      "width": "fill_container",
+                      "height": 112,
+                      "fill": "#0A0C15",
+                      "cornerRadius": 16,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ml6xw",
+                          "name": "Capsule / Hover — right (history)",
+                          "clip": true,
+                          "height": 44,
+                          "fill": "$nx-surface",
+                          "cornerRadius": 999,
+                          "stroke": "#CBB8FF66",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "S69W2A",
+                              "name": "Segment / Download",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 9,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "DbYGj",
+                                  "name": "Channel Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 8,
+                                  "height": 8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "n2Ruv",
+                                  "name": "Channel",
+                                  "fill": "$nx-beta",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Svydh",
+                                  "name": "Version",
+                                  "fill": "$nx-ink",
+                                  "content": "v2.4.13-beta.19",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "680"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "wm8jF",
+                                  "name": "Download Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "CDWas",
+                              "name": "Divider",
+                              "fill": "$nx-line",
+                              "width": 1,
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "m6s5H",
+                              "name": "Segment / History",
+                              "height": "fill_container",
+                              "fill": "#CBB8FF1F",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "vGzId",
+                                  "name": "History Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "History",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "620"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "s5cseY",
+                                  "name": "Chevron",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "chevron-down",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qI5BL",
+                      "name": "Caption",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BhZSK",
+                          "name": "Name",
+                          "fill": "$nx-ink",
+                          "content": "Hover — right (history)",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "640"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ulEip",
+                          "name": "Desc",
+                          "fill": "$nx-faint",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Right half lifts on its own. Nothing about the version text changes — it is not the target here.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "dJlmG",
+                  "name": "State / Active — history open",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "l988o4",
+                      "name": "Stage",
+                      "width": "fill_container",
+                      "height": 112,
+                      "fill": "#0A0C15",
+                      "cornerRadius": 16,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "DSYnp",
+                          "name": "Capsule / Active — history open",
+                          "clip": true,
+                          "height": 44,
+                          "fill": "$nx-surface",
+                          "cornerRadius": 999,
+                          "stroke": "#CBB8FF66",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "PmQ2f",
+                              "name": "Segment / Download",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 9,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "dpLq3",
+                                  "name": "Channel Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 8,
+                                  "height": 8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "a63DaS",
+                                  "name": "Channel",
+                                  "fill": "$nx-beta",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "jZJ7i",
+                                  "name": "Version",
+                                  "fill": "$nx-ink",
+                                  "content": "v2.4.13-beta.19",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "680"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "jwwb2",
+                                  "name": "Download Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "VDFZ8",
+                              "name": "Divider",
+                              "fill": "$nx-line",
+                              "width": 1,
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "F7Ets",
+                              "name": "Segment / History",
+                              "height": "fill_container",
+                              "fill": "#CBB8FF2E",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                16
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "gyCvU",
+                                  "name": "History Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "History",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 14,
+                                  "fontWeight": "620"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "G1dRV",
+                                  "name": "Chevron",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "chevron-up",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qGkrN",
+                      "name": "Caption",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "w65q0",
+                          "name": "Name",
+                          "fill": "$nx-ink",
+                          "content": "Active — history open",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "640"
+                        },
+                        {
+                          "type": "text",
+                          "id": "y6asrR",
+                          "name": "Desc",
+                          "fill": "$nx-faint",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Right half stays filled while the dropdown is mounted and the chevron flips. Left half is still clickable.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "NxaWW",
+          "name": "03 Click Left — Download",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "N5ySa",
+              "name": "Section Head",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Jkyge",
+                  "name": "Kicker",
+                  "fill": "$nx-beta",
+                  "content": "03 · CLICK LEFT",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.4
+                },
+                {
+                  "type": "text",
+                  "id": "HiAUn",
+                  "name": "Title",
+                  "fill": "$nx-ink",
+                  "content": "Download panel — the warning becomes consent",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 20,
+                  "fontWeight": "640"
+                },
+                {
+                  "type": "text",
+                  "id": "jjVK2",
+                  "name": "Note",
+                  "fill": "$nx-faint",
+                  "textGrowth": "fixed-width",
+                  "width": 820,
+                  "content": "The old hover card shouted a warning nobody agreed to. Now the caveat sits on the path to the download, and the user picks a concrete build — so the panel earns its space instead of just floating there.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$nx-font",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "QW9Tf",
+              "name": "Stage / Download Open",
+              "width": "fill_container",
+              "fill": "#0A0C15",
+              "cornerRadius": 20,
+              "stroke": "$nx-line",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "padding": [
+                36,
+                40
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "vW3ku",
+                  "name": "Capsule / Active — download open",
+                  "clip": true,
+                  "height": 44,
+                  "fill": "$nx-surface",
+                  "cornerRadius": 999,
+                  "stroke": "#7F6CFF8C",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "NsSSx",
+                      "name": "Segment / Download",
+                      "height": "fill_container",
+                      "fill": "#7F6CFF2E",
+                      "gap": 9,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "Ivm6I",
+                          "name": "Channel Dot",
+                          "fill": "$nx-beta",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "uZerB",
+                          "name": "Channel",
+                          "fill": "$nx-beta",
+                          "content": "BETA",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 11,
+                          "fontWeight": "700",
+                          "letterSpacing": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "wJOZk",
+                          "name": "Version",
+                          "fill": "$nx-ink",
+                          "content": "v2.4.13-beta.19",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "680"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "vPbUq",
+                          "name": "Download Icon",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "download",
+                          "library": "lucide",
+                          "fill": "$nx-lavender"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "pmj0Q",
+                      "name": "Divider",
+                      "fill": "$nx-line",
+                      "width": 1,
+                      "height": "fill_container"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YnJJ9",
+                      "name": "Segment / History",
+                      "height": "fill_container",
+                      "fill": "#00000000",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DQpzU",
+                          "name": "History Label",
+                          "fill": "$nx-lavender",
+                          "content": "History",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "620"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "r9GEv",
+                          "name": "Chevron",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "chevron-down",
+                          "library": "lucide",
+                          "fill": "$nx-lavender"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VjQdk",
+                  "name": "Arrow Rail",
+                  "width": "fill_container",
+                  "padding": [
+                    6,
+                    0,
+                    0,
+                    96
+                  ],
+                  "children": [
+                    {
+                      "type": "polygon",
+                      "polygonCount": 3,
+                      "id": "F9oEc",
+                      "name": "Arrow",
+                      "fill": "$nx-pop",
+                      "width": 14,
+                      "height": 8
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FyElg",
+                  "name": "Panel / Download",
+                  "clip": true,
+                  "width": 394,
+                  "fill": "$nx-pop",
+                  "cornerRadius": 16,
+                  "stroke": "$nx-line-strong",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#03040AA0",
+                    "offset": {
+                      "x": 0,
+                      "y": 24
+                    },
+                    "blur": 60
+                  },
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Fgibm",
+                      "name": "Warning Block",
+                      "width": "fill_container",
+                      "fill": "#FEBC2E0F",
+                      "layout": "vertical",
+                      "gap": 9,
+                      "padding": [
+                        16,
+                        18
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "LGeEu",
+                          "name": "Warn Head",
+                          "gap": 9,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Q1WUSt",
+                              "name": "Icon Chip",
+                              "width": 24,
+                              "height": 24,
+                              "fill": "$nx-warn-soft",
+                              "cornerRadius": 999,
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "VoZJ3",
+                                  "name": "Warn Icon",
+                                  "width": 14,
+                                  "height": 14,
+                                  "icon": "triangle-alert",
+                                  "library": "lucide",
+                                  "fill": "$nx-warn-ink"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "wq8EX",
+                              "name": "Warn Title",
+                              "fill": "$nx-ink",
+                              "content": "Preview channel build",
+                              "fontFamily": "$nx-font",
+                              "fontSize": 14,
+                              "fontWeight": "680"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "NYFJl",
+                          "name": "Warn Desc",
+                          "fill": "$nx-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Not yet promoted to the certified stable track:",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "pw1Am",
+                          "name": "Bullets",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 6,
+                          "padding": [
+                            2,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Tz48f",
+                              "name": "Bullet",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "u3vimy",
+                                  "name": "Dot Rail",
+                                  "width": 4,
+                                  "height": 18,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "ellipse",
+                                      "id": "W0znpf",
+                                      "name": "Dot",
+                                      "fill": "$nx-warn-ink",
+                                      "width": 4,
+                                      "height": 4
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "MKbM5",
+                                  "name": "Text",
+                                  "fill": "$nx-faint",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Pre-release — features and APIs may change at any time.",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "x9zFOv",
+                              "name": "Bullet",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "MDANn",
+                                  "name": "Dot Rail",
+                                  "width": 4,
+                                  "height": 18,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "ellipse",
+                                      "id": "b6DvxG",
+                                      "name": "Dot",
+                                      "fill": "$nx-warn-ink",
+                                      "width": 4,
+                                      "height": 4
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "vFK6j",
+                                  "name": "Text",
+                                  "fill": "$nx-faint",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Stability is not fully verified; not for production use.",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "pFrWl",
+                              "name": "Bullet",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "dCS7w",
+                                  "name": "Dot Rail",
+                                  "width": 4,
+                                  "height": 18,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "ellipse",
+                                      "id": "tfaPG",
+                                      "name": "Dot",
+                                      "fill": "$nx-warn-ink",
+                                      "width": 4,
+                                      "height": 4
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "p36XMW",
+                                  "name": "Text",
+                                  "fill": "$nx-faint",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "Auto-update keeps you on the preview channel.",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "YkiVj",
+                      "name": "Rule",
+                      "fill": "$nx-line",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kRqFh",
+                      "name": "Assets Block",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 14,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "mkBF6",
+                          "name": "Assets Label",
+                          "fill": "$nx-dim",
+                          "content": "CHOOSE A BUILD",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 10,
+                          "fontWeight": "700",
+                          "letterSpacing": 1.2
+                        },
+                        {
+                          "type": "frame",
+                          "id": "u64x2",
+                          "name": "Asset / macOS · Apple silicon",
+                          "width": "fill_container",
+                          "fill": "$nx-surface-2",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "wreV5",
+                              "name": "Left",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "m96gnz",
+                                  "name": "Platform Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "apple",
+                                  "library": "lucide",
+                                  "fill": "$nx-ink"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "tkzba",
+                                  "name": "Text",
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "HdUQC",
+                                      "name": "Name",
+                                      "fill": "$nx-ink",
+                                      "content": "macOS · Apple silicon",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 13,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "DHOah",
+                                      "name": "Meta",
+                                      "fill": "$nx-dim",
+                                      "content": ".dmg · 126 MB",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "M8dga",
+                              "name": "Download Button",
+                              "fill": "$nx-beta-soft",
+                              "cornerRadius": 999,
+                              "gap": 5,
+                              "padding": [
+                                6,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "h2Rph2",
+                                  "name": "Icon",
+                                  "width": 12,
+                                  "height": 12,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "H5OSZ",
+                                  "name": "Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "Download",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "700"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "YAURT",
+                          "name": "Asset / macOS · Intel",
+                          "width": "fill_container",
+                          "fill": "#00000000",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "fnWRP",
+                              "name": "Left",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "bauYl",
+                                  "name": "Platform Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "apple",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "UXPHw",
+                                  "name": "Text",
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "E0K0ir",
+                                      "name": "Name",
+                                      "fill": "$nx-muted",
+                                      "content": "macOS · Intel",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 13,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "wylqe",
+                                      "name": "Meta",
+                                      "fill": "$nx-dim",
+                                      "content": ".dmg · 131 MB",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon",
+                              "id": "xoMNL",
+                              "name": "Get",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "download",
+                              "library": "lucide",
+                              "fill": "$nx-dim"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "rkmWE",
+                          "name": "Asset / Windows · x64",
+                          "width": "fill_container",
+                          "fill": "#00000000",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "FR1ro",
+                              "name": "Left",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "hsCJL",
+                                  "name": "Platform Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "app-window",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "tlCou",
+                                  "name": "Text",
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "bDUDi",
+                                      "name": "Name",
+                                      "fill": "$nx-muted",
+                                      "content": "Windows · x64",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 13,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "DwvcK",
+                                      "name": "Meta",
+                                      "fill": "$nx-dim",
+                                      "content": ".exe · 118 MB",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon",
+                              "id": "OyZ5s",
+                              "name": "Get",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "download",
+                              "library": "lucide",
+                              "fill": "$nx-dim"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "zUkb6",
+                          "name": "Asset / Linux · x64",
+                          "width": "fill_container",
+                          "fill": "#00000000",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Ywlyu",
+                              "name": "Left",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "icon",
+                                  "id": "PgynG",
+                                  "name": "Platform Icon",
+                                  "width": 16,
+                                  "height": 16,
+                                  "icon": "terminal",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ODgIc",
+                                  "name": "Text",
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "OUUMn",
+                                      "name": "Name",
+                                      "fill": "$nx-muted",
+                                      "content": "Linux · x64",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 13,
+                                      "fontWeight": "600"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "q9L5gk",
+                                      "name": "Meta",
+                                      "fill": "$nx-dim",
+                                      "content": ".AppImage · 124 MB",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon",
+                              "id": "e3qfuP",
+                              "name": "Get",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "download",
+                              "library": "lucide",
+                              "fill": "$nx-dim"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zppmV",
+                      "name": "Footer",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF08",
+                      "gap": 6,
+                      "padding": [
+                        12,
+                        18
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "sw2el",
+                          "name": "Lead",
+                          "fill": "$nx-dim",
+                          "content": "Want the certified track?",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "y4a4Vb",
+                          "name": "Link",
+                          "fill": "$nx-stable-ink",
+                          "content": "Get stable v2.4.12",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 12,
+                          "fontWeight": "680"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "XdGuE",
+                          "name": "Arrow",
+                          "width": 13,
+                          "height": 13,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$nx-stable-ink"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "SWGTe",
+          "name": "04 Click Right — History",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "XmPWD",
+              "name": "Section Head",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bQ5F6",
+                  "name": "Kicker",
+                  "fill": "$nx-beta",
+                  "content": "04 · CLICK RIGHT",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.4
+                },
+                {
+                  "type": "text",
+                  "id": "yPwWi",
+                  "name": "Title",
+                  "fill": "$nx-ink",
+                  "content": "History dropdown — anchored, not a full-screen modal",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 20,
+                  "fontWeight": "640"
+                },
+                {
+                  "type": "text",
+                  "id": "iIjCk",
+                  "name": "Note",
+                  "fill": "$nx-faint",
+                  "textGrowth": "fixed-width",
+                  "width": 820,
+                  "content": "The current build teleports a full-screen overlay with a backdrop and a scroll lock. That is heavy for a list of six tags. Anchoring it to the segment keeps the hero visible and matches the left panel, so both halves behave the same way.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$nx-font",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "kFtrt",
+              "name": "Stage / History Open",
+              "width": "fill_container",
+              "fill": "#0A0C15",
+              "cornerRadius": 20,
+              "stroke": "$nx-line",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "padding": [
+                36,
+                40
+              ],
+              "alignItems": "end",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SbU4l",
+                  "name": "Capsule / Active — history open",
+                  "clip": true,
+                  "height": 44,
+                  "fill": "$nx-surface",
+                  "cornerRadius": 999,
+                  "stroke": "#CBB8FF66",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YnYlS",
+                      "name": "Segment / Download",
+                      "height": "fill_container",
+                      "fill": "#00000000",
+                      "gap": 9,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "Q7g22q",
+                          "name": "Channel Dot",
+                          "fill": "$nx-beta",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "BNbpW",
+                          "name": "Channel",
+                          "fill": "$nx-beta",
+                          "content": "BETA",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 11,
+                          "fontWeight": "700",
+                          "letterSpacing": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "d16ZT",
+                          "name": "Version",
+                          "fill": "$nx-ink",
+                          "content": "v2.4.13-beta.19",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "680"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "MhDOc",
+                          "name": "Download Icon",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "download",
+                          "library": "lucide",
+                          "fill": "$nx-faint"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "hdq9S",
+                      "name": "Divider",
+                      "fill": "$nx-line",
+                      "width": 1,
+                      "height": "fill_container"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "E0mt9",
+                      "name": "Segment / History",
+                      "height": "fill_container",
+                      "fill": "#CBB8FF2E",
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        16
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "sXImQ",
+                          "name": "History Label",
+                          "fill": "$nx-lavender",
+                          "content": "History",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "620"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "kFnLe",
+                          "name": "Chevron",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "chevron-up",
+                          "library": "lucide",
+                          "fill": "$nx-lavender"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "T4qFFz",
+                  "name": "Arrow Rail",
+                  "width": "fill_container",
+                  "padding": [
+                    6,
+                    54,
+                    0,
+                    0
+                  ],
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "polygon",
+                      "polygonCount": 3,
+                      "id": "xUxej",
+                      "name": "Arrow",
+                      "fill": "$nx-pop",
+                      "width": 14,
+                      "height": 8
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "eQCNg",
+                  "name": "Panel / History",
+                  "clip": true,
+                  "width": 394,
+                  "fill": "$nx-pop",
+                  "cornerRadius": 16,
+                  "stroke": "$nx-line-strong",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "effect": {
+                    "type": "shadow",
+                    "shadowType": "outer",
+                    "color": "#03040AA0",
+                    "offset": {
+                      "x": 0,
+                      "y": 24
+                    },
+                    "blur": 60
+                  },
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Q22skS",
+                      "name": "Panel Head",
+                      "width": "fill_container",
+                      "padding": [
+                        13,
+                        16
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "vbjfc",
+                          "name": "Left",
+                          "gap": 7,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "REDOz",
+                              "name": "Icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "history",
+                              "library": "lucide",
+                              "fill": "$nx-lavender"
+                            },
+                            {
+                              "type": "text",
+                              "id": "NqXWb",
+                              "name": "Title",
+                              "fill": "$nx-ink",
+                              "content": "Version history",
+                              "fontFamily": "$nx-font",
+                              "fontSize": 13.5,
+                              "fontWeight": "680"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "dp9re",
+                          "name": "Count",
+                          "fill": "$nx-dim",
+                          "content": "6 releases",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "W56LXB",
+                      "name": "Rule",
+                      "fill": "$nx-line",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "D2CFw",
+                      "name": "Body",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ktTvT",
+                          "name": "Latest Card",
+                          "width": "fill_container",
+                          "fill": "$nx-surface-2",
+                          "cornerRadius": 12,
+                          "stroke": "#7F6CFF3D",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "padding": 12,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "idTi2",
+                              "name": "Top",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "Vl1xT",
+                                  "name": "Left",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "f7fcgx",
+                                      "name": "Chip / BETA",
+                                      "fill": "$nx-beta-soft",
+                                      "cornerRadius": 6,
+                                      "padding": [
+                                        3,
+                                        7
+                                      ],
+                                      "children": [
+                                        {
+                                          "type": "text",
+                                          "id": "uEAfp",
+                                          "name": "Label",
+                                          "fill": "$nx-beta",
+                                          "content": "BETA",
+                                          "fontFamily": "$nx-font",
+                                          "fontSize": 9.5,
+                                          "fontWeight": "700",
+                                          "letterSpacing": 0.8
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "j979Z",
+                                      "name": "Tag",
+                                      "fill": "$nx-ink",
+                                      "content": "v2.4.13-beta.19",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 13.5,
+                                      "fontWeight": "680"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "F0n3q",
+                                  "name": "Latest Pill",
+                                  "fill": "#FFFFFF0F",
+                                  "cornerRadius": 999,
+                                  "gap": 4,
+                                  "padding": [
+                                    3,
+                                    7
+                                  ],
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "Jedor",
+                                      "name": "Star",
+                                      "width": 10,
+                                      "height": 10,
+                                      "icon": "star",
+                                      "library": "lucide",
+                                      "fill": "$nx-warn-ink"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "SOB87",
+                                      "name": "Label",
+                                      "fill": "$nx-warn-ink",
+                                      "content": "LATEST",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 9.5,
+                                      "fontWeight": "700",
+                                      "letterSpacing": 0.8
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "AfLMV",
+                              "name": "Note",
+                              "fill": "$nx-faint",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Harden app icon self-healing and unify zod across core-app.",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$nx-font",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "W3RjTa",
+                              "name": "Foot",
+                              "width": "fill_container",
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "JrBzC",
+                                  "name": "Date",
+                                  "fill": "$nx-dim",
+                                  "content": "Jul 21, 2026",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "BTf30",
+                                  "name": "Whats New",
+                                  "gap": 4,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "h9XWN",
+                                      "name": "Label",
+                                      "fill": "$nx-lavender",
+                                      "content": "What's new",
+                                      "fontFamily": "$nx-font",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "640"
+                                    },
+                                    {
+                                      "type": "icon",
+                                      "id": "lOYkN",
+                                      "name": "Arrow",
+                                      "width": 12,
+                                      "height": 12,
+                                      "icon": "arrow-right",
+                                      "library": "lucide",
+                                      "fill": "$nx-lavender"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "wtdyV",
+                          "name": "Row / v2.4.13-beta.18",
+                          "width": "fill_container",
+                          "fill": "#00000000",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "r4h6t",
+                              "name": "Left",
+                              "gap": 9,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "OkOub",
+                                  "name": "Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "pnaG0",
+                                  "name": "Tag",
+                                  "fill": "$nx-muted",
+                                  "content": "v2.4.13-beta.18",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "o8SGtn",
+                              "name": "Right",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "uriTv",
+                                  "name": "Channel",
+                                  "fill": "$nx-dim",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 9.5,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "R7fiwP",
+                                  "name": "Date",
+                                  "fill": "$nx-dim",
+                                  "content": "Jul 21",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BvIY9",
+                          "name": "Row / v2.4.13-beta.17",
+                          "width": "fill_container",
+                          "fill": "#00000000",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "w6VkR",
+                              "name": "Left",
+                              "gap": 9,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "JRFtu",
+                                  "name": "Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "fZiAP",
+                                  "name": "Tag",
+                                  "fill": "$nx-muted",
+                                  "content": "v2.4.13-beta.17",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "BjB3k",
+                              "name": "Right",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "K6fFJa",
+                                  "name": "Channel",
+                                  "fill": "$nx-dim",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 9.5,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "JgQBl",
+                                  "name": "Date",
+                                  "fill": "$nx-dim",
+                                  "content": "Jul 20",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "mkBAX",
+                          "name": "Row / v2.4.13-beta.16",
+                          "width": "fill_container",
+                          "fill": "#00000000",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "nPYIj",
+                              "name": "Left",
+                              "gap": 9,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "i6ibA",
+                                  "name": "Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "bVX9B",
+                                  "name": "Tag",
+                                  "fill": "$nx-muted",
+                                  "content": "v2.4.13-beta.16",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "YTTO7",
+                              "name": "Right",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "LbM5b",
+                                  "name": "Channel",
+                                  "fill": "$nx-dim",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 9.5,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "hOLKX",
+                                  "name": "Date",
+                                  "fill": "$nx-dim",
+                                  "content": "Jul 19",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Go6qV",
+                          "name": "Row / v2.4.12",
+                          "width": "fill_container",
+                          "fill": "#00000000",
+                          "cornerRadius": 10,
+                          "gap": 10,
+                          "padding": [
+                            8,
+                            10
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "sU6Bi",
+                              "name": "Left",
+                              "gap": 9,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "w7MhK",
+                                  "name": "Dot",
+                                  "fill": "$nx-stable",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "PCnxq",
+                                  "name": "Tag",
+                                  "fill": "$nx-muted",
+                                  "content": "v2.4.12",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "600"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Dl9BM",
+                              "name": "Right",
+                              "gap": 10,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "WSFcQ",
+                                  "name": "Channel",
+                                  "fill": "$nx-stable",
+                                  "content": "RELEASE",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 9.5,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 0.8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "otIOX",
+                                  "name": "Date",
+                                  "fill": "$nx-dim",
+                                  "content": "Jul 12",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "A65QH",
+                      "name": "Footer",
+                      "width": "fill_container",
+                      "fill": "#FFFFFF08",
+                      "gap": 6,
+                      "padding": [
+                        12,
+                        18
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "t3x6K",
+                          "name": "Lead",
+                          "fill": "$nx-dim",
+                          "content": "Full changelog and downloads",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "k6jtDs",
+                          "name": "Link",
+                          "gap": 5,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Q7RMeF",
+                              "name": "Label",
+                              "fill": "$nx-lavender",
+                              "content": "Updates",
+                              "fontFamily": "$nx-font",
+                              "fontSize": 12,
+                              "fontWeight": "680"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "Sa6Mv",
+                              "name": "Arrow",
+                              "width": 13,
+                              "height": 13,
+                              "icon": "arrow-right",
+                              "library": "lucide",
+                              "fill": "$nx-lavender"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "WEKZt",
+          "name": "05 Channel Variants",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "KZDVQ",
+              "name": "Section Head",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "UOz5N",
+                  "name": "Kicker",
+                  "fill": "$nx-beta",
+                  "content": "05 · CHANNELS",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.4
+                },
+                {
+                  "type": "text",
+                  "id": "ko6mP",
+                  "name": "Title",
+                  "fill": "$nx-ink",
+                  "content": "The capsule always names its channel",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 20,
+                  "fontWeight": "640"
+                },
+                {
+                  "type": "text",
+                  "id": "faK4C",
+                  "name": "Note",
+                  "fill": "$nx-faint",
+                  "textGrowth": "fixed-width",
+                  "width": 820,
+                  "content": "The old pill said LATEST, which collided with the primary CTA — both looked like the build you should install. Naming the channel is what separates them.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$nx-font",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "F9PdFP",
+              "name": "Variants Row",
+              "width": "fill_container",
+              "gap": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "m8DDi",
+                  "name": "Variant / BETA",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "xKmkW",
+                      "name": "Stage",
+                      "width": "fill_container",
+                      "height": 104,
+                      "fill": "#0A0C15",
+                      "cornerRadius": 16,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "SnBxe",
+                          "name": "Capsule / BETA",
+                          "clip": true,
+                          "height": 40,
+                          "fill": "$nx-surface",
+                          "cornerRadius": 999,
+                          "stroke": "$nx-line",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Gbpg7",
+                              "name": "Segment / Download",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 9,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "doH8V",
+                                  "name": "Channel Dot",
+                                  "fill": "$nx-beta",
+                                  "width": 8,
+                                  "height": 8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "uUsXt",
+                                  "name": "Channel",
+                                  "fill": "$nx-beta",
+                                  "content": "BETA",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "grTfh",
+                                  "name": "Version",
+                                  "fill": "$nx-ink",
+                                  "content": "v2.4.13-beta.19",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 13,
+                                  "fontWeight": "680"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "H2dtmn",
+                                  "name": "Download Icon",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "OjgOi",
+                              "name": "Divider",
+                              "fill": "$nx-line",
+                              "width": 1,
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "nE57D",
+                              "name": "Segment / History",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "K5Fs0",
+                                  "name": "History Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "History",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 13,
+                                  "fontWeight": "620"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "E3JT8v",
+                                  "name": "Chevron",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "chevron-down",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "N6xnc",
+                      "name": "Caption",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nQpqM",
+                          "name": "Name",
+                          "fill": "$nx-ink",
+                          "content": "Preview channel",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "640"
+                        },
+                        {
+                          "type": "text",
+                          "id": "TXZd9",
+                          "name": "Desc",
+                          "fill": "$nx-faint",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Default today. Download opens the consent panel first.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FAE95",
+                  "name": "Variant / STABLE",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hsKEU",
+                      "name": "Stage",
+                      "width": "fill_container",
+                      "height": 104,
+                      "fill": "#0A0C15",
+                      "cornerRadius": 16,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "heezx",
+                          "name": "Capsule / STABLE",
+                          "clip": true,
+                          "height": 40,
+                          "fill": "$nx-surface",
+                          "cornerRadius": 999,
+                          "stroke": "$nx-line",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "dhcxX",
+                              "name": "Segment / Download",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 9,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "uyJdC",
+                                  "name": "Channel Dot",
+                                  "fill": "$nx-stable",
+                                  "width": 8,
+                                  "height": 8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "i1IG0",
+                                  "name": "Channel",
+                                  "fill": "$nx-stable",
+                                  "content": "STABLE",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "WzZdh",
+                                  "name": "Version",
+                                  "fill": "$nx-ink",
+                                  "content": "v2.4.12",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 13,
+                                  "fontWeight": "680"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "ljMSn",
+                                  "name": "Download Icon",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "FSnin",
+                              "name": "Divider",
+                              "fill": "$nx-line",
+                              "width": 1,
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "NnhdY",
+                              "name": "Segment / History",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Afe9V",
+                                  "name": "History Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "History",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 13,
+                                  "fontWeight": "620"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "R6uJ54",
+                                  "name": "Chevron",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "chevron-down",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "aP3P8",
+                      "name": "Caption",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Q6SYtr",
+                          "name": "Name",
+                          "fill": "$nx-ink",
+                          "content": "Certified channel",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "640"
+                        },
+                        {
+                          "type": "text",
+                          "id": "g7o70",
+                          "name": "Desc",
+                          "fill": "$nx-faint",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "No warning block — the panel leads with the signed-build badge.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "IWn5Z",
+                  "name": "Variant / SNAPSHOT",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "muiOR",
+                      "name": "Stage",
+                      "width": "fill_container",
+                      "height": 104,
+                      "fill": "#0A0C15",
+                      "cornerRadius": 16,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "tWZsP",
+                          "name": "Capsule / SNAPSHOT",
+                          "clip": true,
+                          "height": 40,
+                          "fill": "$nx-surface",
+                          "cornerRadius": 999,
+                          "stroke": "$nx-line",
+                          "strokeWidth": 1,
+                          "strokeAlignment": "inner",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "kGR27",
+                              "name": "Segment / Download",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 9,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "c0Wxz",
+                                  "name": "Channel Dot",
+                                  "fill": "$nx-warn",
+                                  "width": 8,
+                                  "height": 8
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "lJ2wB",
+                                  "name": "Channel",
+                                  "fill": "$nx-warn",
+                                  "content": "SNAPSHOT",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 10,
+                                  "fontWeight": "700",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "BJgt3",
+                                  "name": "Version",
+                                  "fill": "$nx-ink",
+                                  "content": "v2.5.0-snapshot.4",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 13,
+                                  "fontWeight": "680"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "ywr2z",
+                                  "name": "Download Icon",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "download",
+                                  "library": "lucide",
+                                  "fill": "$nx-faint"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "rectangle",
+                              "id": "YdMQn",
+                              "name": "Divider",
+                              "fill": "$nx-line",
+                              "width": 1,
+                              "height": "fill_container"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "n148NX",
+                              "name": "Segment / History",
+                              "height": "fill_container",
+                              "fill": "#00000000",
+                              "gap": 6,
+                              "padding": [
+                                0,
+                                14
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "mRX5Q",
+                                  "name": "History Label",
+                                  "fill": "$nx-lavender",
+                                  "content": "History",
+                                  "fontFamily": "$nx-font",
+                                  "fontSize": 13,
+                                  "fontWeight": "620"
+                                },
+                                {
+                                  "type": "icon",
+                                  "id": "e12Xs",
+                                  "name": "Chevron",
+                                  "width": 15,
+                                  "height": 15,
+                                  "icon": "chevron-down",
+                                  "library": "lucide",
+                                  "fill": "$nx-lavender"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "cAgk8",
+                      "name": "Caption",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 5,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "eR5xx",
+                          "name": "Name",
+                          "fill": "$nx-ink",
+                          "content": "Nightly channel",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "640"
+                        },
+                        {
+                          "type": "text",
+                          "id": "waMYz",
+                          "name": "Desc",
+                          "fill": "$nx-faint",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Same consent path as beta, with sharper caveats.",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "aZscF",
+              "name": "Panel Header Variants",
+              "width": "fill_container",
+              "gap": 20,
+              "padding": [
+                8,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "RLzBS",
+                  "name": "Header / Preview channel build",
+                  "width": "fill_container",
+                  "fill": [
+                    "#12141E",
+                    "#FEBC2E1A"
+                  ],
+                  "cornerRadius": 14,
+                  "stroke": "$nx-line",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 9,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "vM7fq",
+                      "name": "Head",
+                      "gap": 9,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "O4ffx",
+                          "name": "Icon Chip",
+                          "width": 24,
+                          "height": 24,
+                          "fill": "$nx-warn-soft",
+                          "cornerRadius": 999,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "Hq9zJ",
+                              "name": "Icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "triangle-alert",
+                              "library": "lucide",
+                              "fill": "$nx-warn-ink"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "l0hgA",
+                          "name": "Title",
+                          "fill": "$nx-ink",
+                          "content": "Preview channel build",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "680"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "j9IcUT",
+                      "name": "Desc",
+                      "fill": "$nx-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Not yet promoted to the certified stable track:",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$nx-font",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "brBdr",
+                  "name": "Header / Official certified build",
+                  "width": "fill_container",
+                  "fill": [
+                    "#12141E",
+                    "#35C2A41A"
+                  ],
+                  "cornerRadius": 14,
+                  "stroke": "$nx-line",
+                  "strokeWidth": 1,
+                  "strokeAlignment": "inner",
+                  "layout": "vertical",
+                  "gap": 9,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ipJi7",
+                      "name": "Head",
+                      "gap": 9,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "QQpua",
+                          "name": "Icon Chip",
+                          "width": 24,
+                          "height": 24,
+                          "fill": "$nx-stable-soft",
+                          "cornerRadius": 999,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "JLlKd",
+                              "name": "Icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "badge-check",
+                              "library": "lucide",
+                              "fill": "$nx-stable-ink"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n2lNPU",
+                          "name": "Title",
+                          "fill": "$nx-ink",
+                          "content": "Official certified build",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "680"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "R5IDG",
+                      "name": "Desc",
+                      "fill": "$nx-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Signed and notarized — safe to download and install.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$nx-font",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "diZVD",
+          "name": "06 In Context",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "x9GuzT",
+              "name": "Section Head",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 6,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "evlgu",
+                  "name": "Kicker",
+                  "fill": "$nx-beta",
+                  "content": "06 · IN CONTEXT",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 11,
+                  "fontWeight": "700",
+                  "letterSpacing": 1.4
+                },
+                {
+                  "type": "text",
+                  "id": "XFuEK",
+                  "name": "Title",
+                  "fill": "$nx-ink",
+                  "content": "Stable is the button. Preview is the capsule.",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 20,
+                  "fontWeight": "640"
+                },
+                {
+                  "type": "text",
+                  "id": "Oi1vH",
+                  "name": "Note",
+                  "fill": "$nx-faint",
+                  "textGrowth": "fixed-width",
+                  "width": 820,
+                  "content": "Two channels, two affordances, never competing. The filled button ships the certified release; the outlined capsule below it is where preview builds live.",
+                  "lineHeight": 1.6,
+                  "fontFamily": "$nx-font",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xuyOd",
+              "name": "Stage / Hero",
+              "width": "fill_container",
+              "fill": "#080A11",
+              "cornerRadius": 20,
+              "stroke": "$nx-line",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "layout": "vertical",
+              "padding": [
+                56,
+                40
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Movcd",
+                  "name": "Hero Title",
+                  "fill": "$nx-ink",
+                  "content": "Your OS, programmable.",
+                  "fontFamily": "$nx-font",
+                  "fontSize": 38,
+                  "fontWeight": "680",
+                  "letterSpacing": -0.9
+                },
+                {
+                  "type": "frame",
+                  "id": "FI1Gb",
+                  "name": "Sub Wrap",
+                  "width": 560,
+                  "padding": [
+                    12,
+                    0,
+                    0,
+                    0
+                  ],
+                  "justifyContent": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gjSWy",
+                      "name": "Hero Sub",
+                      "fill": "$nx-muted",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "One input to search files, launch apps, and run agents — right on your desktop.",
+                      "lineHeight": 1.6,
+                      "textAlign": "center",
+                      "fontFamily": "$nx-font",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xX9X0",
+                  "name": "Actions",
+                  "gap": 12,
+                  "padding": [
+                    28,
+                    0,
+                    0,
+                    0
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "efq4b",
+                      "name": "Primary CTA",
+                      "fill": "$nx-ink",
+                      "cornerRadius": 999,
+                      "gap": 8,
+                      "padding": [
+                        12,
+                        22
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "eTfBS",
+                          "name": "Apple",
+                          "width": 15,
+                          "height": 15,
+                          "icon": "apple",
+                          "library": "lucide",
+                          "fill": "#07100D"
+                        },
+                        {
+                          "type": "text",
+                          "id": "fqyIO",
+                          "name": "Label",
+                          "fill": "#07100D",
+                          "content": "Get Tuff for macOS",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "680"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NzSSz",
+                      "name": "Secondary CTA",
+                      "fill": "#00000000",
+                      "cornerRadius": 999,
+                      "stroke": "$nx-line-strong",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "gap": 8,
+                      "padding": [
+                        12,
+                        22
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "BbGeM",
+                          "name": "Book",
+                          "width": 15,
+                          "height": 15,
+                          "icon": "book-open",
+                          "library": "lucide",
+                          "fill": "$nx-ink"
+                        },
+                        {
+                          "type": "text",
+                          "id": "kfRVZ",
+                          "name": "Label",
+                          "fill": "$nx-ink",
+                          "content": "View developer docs",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 14,
+                          "fontWeight": "620"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "iZXJC",
+                  "name": "Stable Line",
+                  "gap": 7,
+                  "padding": [
+                    14,
+                    0,
+                    0,
+                    0
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "R1VJN",
+                      "name": "Check",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "badge-check",
+                      "library": "lucide",
+                      "fill": "$nx-stable"
+                    },
+                    {
+                      "type": "text",
+                      "id": "m7TMpm",
+                      "name": "Text",
+                      "fill": "$nx-faint",
+                      "content": "Stable v2.4.12 · signed & notarized",
+                      "fontFamily": "$nx-font",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "c3GzT4",
+                  "name": "Capsule Wrap",
+                  "padding": [
+                    36,
+                    0,
+                    0,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "smBcP",
+                      "name": "Capsule / In Context",
+                      "clip": true,
+                      "height": 44,
+                      "fill": "$nx-surface",
+                      "cornerRadius": 999,
+                      "stroke": "$nx-line",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "CLT8Z",
+                          "name": "Segment / Download",
+                          "height": "fill_container",
+                          "fill": "#00000000",
+                          "gap": 9,
+                          "padding": [
+                            0,
+                            16
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "ellipse",
+                              "id": "QTEsg",
+                              "name": "Channel Dot",
+                              "fill": "$nx-beta",
+                              "width": 8,
+                              "height": 8
+                            },
+                            {
+                              "type": "text",
+                              "id": "E6mee",
+                              "name": "Channel",
+                              "fill": "$nx-beta",
+                              "content": "BETA",
+                              "fontFamily": "$nx-font",
+                              "fontSize": 11,
+                              "fontWeight": "700",
+                              "letterSpacing": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "dgdCr",
+                              "name": "Version",
+                              "fill": "$nx-ink",
+                              "content": "v2.4.13-beta.19",
+                              "fontFamily": "$nx-font",
+                              "fontSize": 14,
+                              "fontWeight": "680"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "JumgJ",
+                              "name": "Download Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "download",
+                              "library": "lucide",
+                              "fill": "$nx-faint"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "rectangle",
+                          "id": "Rq5pg",
+                          "name": "Divider",
+                          "fill": "$nx-line",
+                          "width": 1,
+                          "height": "fill_container"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MsfzP",
+                          "name": "Segment / History",
+                          "height": "fill_container",
+                          "fill": "#00000000",
+                          "gap": 6,
+                          "padding": [
+                            0,
+                            16
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "FF9OY",
+                              "name": "History Label",
+                              "fill": "$nx-lavender",
+                              "content": "History",
+                              "fontFamily": "$nx-font",
+                              "fontSize": 14,
+                              "fontWeight": "620"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "kML1x",
+                              "name": "Chevron",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$nx-lavender"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "acTpC",
+                  "name": "Trust Line",
+                  "gap": 12,
+                  "padding": [
+                    28,
+                    0,
+                    0,
+                    0
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "skj2P",
+                      "name": "Platforms",
+                      "fill": "$nx-dim",
+                      "content": "macOS · Windows · Linux",
+                      "fontFamily": "$nx-font",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "X8USN",
+                      "name": "Dot",
+                      "fill": "$nx-dim",
+                      "width": 3,
+                      "height": 3
+                    },
+                    {
+                      "type": "frame",
+                      "id": "aI57P",
+                      "name": "Open Source",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "hWsSd",
+                          "name": "Github",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "github",
+                          "library": "lucide",
+                          "fill": "$nx-dim"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y7mlX",
+                          "name": "Label",
+                          "fill": "$nx-dim",
+                          "content": "Free & open source",
+                          "fontFamily": "$nx-font",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "themes": {
@@ -19829,6 +23632,86 @@
           }
         }
       ]
+    },
+    "nx-bg": {
+      "type": "color",
+      "value": "#05070C"
+    },
+    "nx-ink": {
+      "type": "color",
+      "value": "#F6F7F4"
+    },
+    "nx-muted": {
+      "type": "color",
+      "value": "#F6F7F4B8"
+    },
+    "nx-faint": {
+      "type": "color",
+      "value": "#F6F7F47A"
+    },
+    "nx-dim": {
+      "type": "color",
+      "value": "#F6F7F452"
+    },
+    "nx-line": {
+      "type": "color",
+      "value": "#F6F7F424"
+    },
+    "nx-line-strong": {
+      "type": "color",
+      "value": "#F6F7F440"
+    },
+    "nx-surface": {
+      "type": "color",
+      "value": "#10121C"
+    },
+    "nx-surface-2": {
+      "type": "color",
+      "value": "#1A1D2B"
+    },
+    "nx-pop": {
+      "type": "color",
+      "value": "#12141E"
+    },
+    "nx-beta": {
+      "type": "color",
+      "value": "#7F6CFF"
+    },
+    "nx-beta-soft": {
+      "type": "color",
+      "value": "#7F6CFF2E"
+    },
+    "nx-lavender": {
+      "type": "color",
+      "value": "#CBB8FF"
+    },
+    "nx-stable": {
+      "type": "color",
+      "value": "#35C2A4"
+    },
+    "nx-stable-soft": {
+      "type": "color",
+      "value": "#35C2A42E"
+    },
+    "nx-stable-ink": {
+      "type": "color",
+      "value": "#7FF0D5"
+    },
+    "nx-warn": {
+      "type": "color",
+      "value": "#FEBC2E"
+    },
+    "nx-warn-soft": {
+      "type": "color",
+      "value": "#FEBC2E2E"
+    },
+    "nx-warn-ink": {
+      "type": "color",
+      "value": "#FFD98A"
+    },
+    "nx-font": {
+      "type": "string",
+      "value": "Inter"
     }
   },
   "fileToken": "8c2b2aae-406c-429c-a027-22e2648ee0b6"

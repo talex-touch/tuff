@@ -1,0 +1,247 @@
+---
+title: "VersionCapsule 版本胶囊"
+description: "分段式版本胶囊：左半下载构建，右半打开历史。"
+category: Navigation
+syncStatus: reviewed
+verified: true
+---
+# VersionCapsule 版本胶囊
+
+`TxVersionCapsule` 是一个分段式胶囊，包含两个相互独立的分段：左半下载当前构建，右半打开版本历史。每个分段会在自身正下方锚定一个面板——下载面板（`TxVersionDownloadPanel`）在构建列表上方先放一段信任提示，历史面板（`TxVersionHistoryPanel`）把最新版本作为卡片置于历史行之上。它取代了此前那个"点开即弹出全屏模态、并把警告藏在 hover 卡片里"的单一版本药丸。
+
+
+## 基础用法
+
+### VersionCapsule
+:::TuffDemoWrapper{demo="VersionCapsuleVersionCapsuleDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const panel = ref<'download' | 'history' | null>('download')
+
+  const notice = {
+    tone: 'warning',
+    title: '预发布通道构建',
+    description: '安装前请知悉：该版本尚未通过完整签名与回归验证。',
+    points: ['功能可能随时调整', '建议仅尝鲜用户使用'],
+  }
+  const builds = [
+    { id: 'mac-arm', name: 'macOS · Apple 芯片', meta: '.dmg · 126 MB', href: '#mac-arm', recommended: true },
+    { id: 'win', name: 'Windows · x64', meta: '.exe · 118 MB', href: '#win' },
+  ]
+  const latest = { id: '1', tag: 'v2.4.13-beta.19', channel: 'BETA', tone: 'preview', date: '7 月 21 日', note: '图标自愈' }
+  const entries = [
+    { id: '2', tag: 'v2.4.12', channel: 'RELEASE', tone: 'stable', date: '7 月 12 日', href: '#v2412' },
+  ]
+  </script>
+
+  <template>
+    <TxVersionCapsule v-model:panel="panel" version="v2.4.13-beta.19" channel="BETA" tone="preview">
+      <template #download="{ close }">
+        <TxVersionDownloadPanel :notice="notice" :builds="builds" @select="close" />
+      </template>
+      <template #history="{ close }">
+        <TxVersionHistoryPanel :latest="latest" :entries="entries" count-label="共 6 个版本" @select="close" />
+      </template>
+    </TxVersionCapsule>
+  </template>
+---
+:::
+
+## 通道色调
+
+胶囊始终标注自身通道，并按 `tone` 着色，因此不会和页面主稳定版下载 CTA 抢焦点。历史行按条目单独解析色调，让稳定版即使置于一串预览版中也能保持辨识度。
+
+:::TuffDemoWrapper{demo="VersionCapsuleChannelTonesDemo" code-lang="vue" title="通道色调" description="stable / preview / nightly / neutral，各自带匹配的状态点与通道颜色。"}
+---
+code: |
+  <script setup lang="ts">
+  const capsules = [
+    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: '稳定版' },
+    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: '测试版' },
+    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: '每日构建' },
+    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: '已归档' },
+  ]
+  </script>
+
+  <template>
+    <div style="display: flex; flex-direction: column; gap: 14px; align-items: flex-start;">
+      <TxVersionCapsule
+        v-for="item in capsules"
+        :key="item.key"
+        :version="item.version"
+        :channel="item.channel"
+        :tone="item.tone"
+      >
+        <template #history="{ close }">
+          <TxVersionHistoryPanel :title="item.channel" @select="close" />
+        </template>
+      </TxVersionCapsule>
+    </div>
+  </template>
+---
+:::
+
+## API
+
+### TxVersionCapsule Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `version` | `string` | — （必填） | 作为标题渲染的版本号，如 `v2.4.13-beta.19`。 |
+| `channel` | `string` | - | 状态点旁的通道标签，如 `BETA`；仅在设置时显示。 |
+| `tone` | `TxVersionChannelTone` | `'preview'` | 驱动状态点与通道颜色的语义色调。 |
+| `historyLabel` | `string` | `'History'` | 右侧（历史）分段的文案。 |
+| `downloadLabel` | `string` | `'Download this build'` | 左侧（下载）分段的可访问名称。 |
+| `panel` | `TxVersionCapsulePanel` | - | 受控的打开面板（`'download' \| 'history' \| null`）。省略即为非受控；支持 `v-model:panel`。 |
+| `disabled` | `boolean` | `false` | 禁用两个分段，并关闭已打开的面板。 |
+| `closeOnClickOutside` | `boolean` | `true` | 面板打开时，点击外部 `pointerdown` 关闭。 |
+| `closeOnEsc` | `boolean` | `true` | 面板打开时，按 `Escape` 关闭。 |
+
+### TxVersionDownloadPanel Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `notice` | `TxVersionNotice` | - | 构建列表上方的信任提示块。省略则只显示构建列表。 |
+| `builds` | `TxVersionBuild[]` | `[]` | 平台构建列表。 |
+| `buildsLabel` | `string` | `'Choose a build'` | 构建列表上方的小标题。 |
+| `downloadLabel` | `string` | `'Download'` | 推荐构建按钮上的文案。 |
+| `emptyText` | `string` | `'No builds published yet.'` | `builds` 为空时显示。 |
+
+### TxVersionHistoryPanel Props
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|------|------|---------|------|
+| `title` | `string` | `'Version history'` | 面板标题。 |
+| `latest` | `TxVersionHistoryEntry` | - | 作为卡片渲染在列表上方的精选条目。 |
+| `entries` | `TxVersionHistoryEntry[]` | `[]` | 精选卡片下方的历史版本行。 |
+| `latestLabel` | `string` | `'LATEST'` | 精选卡片上的徽标。 |
+| `countLabel` | `string` | - | 头部右侧文案，如 `6 releases`。 |
+| `notesLabel` | `string` | `"What's new"` | 精选卡片上的行动号召。 |
+| `emptyText` | `string` | `'No releases published yet.'` | 既无 `latest` 也无 `entries` 时显示。 |
+
+### Types
+
+`TxVersionChannelTone` 为 `'stable' \| 'preview' \| 'nightly' \| 'neutral'`，分别映射到 `success` / `primary`（默认） / `warning` / `secondary` 颜色。
+
+#### TxVersionBuild
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 作为列表 key 的稳定标识。 |
+| `name` | `string` | 标题，如 `macOS · Apple 芯片`。 |
+| `meta` | `string?` | 次要行，如 `.dmg · 126 MB`。 |
+| `href` | `string?` | 直链下载地址。存在时该行渲染为 `<a download>`，否则为 `<button>`。 |
+| `recommended` | `boolean?` | 标记访客所在平台的构建。仅**第一个**推荐构建会被高亮并获得带文案的下载按钮，其余回退为纯图标。 |
+| `icon` | `string?` | 渲染在名称前的图标 class——由使用方提供图标集。 |
+
+#### TxVersionNotice
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `tone` | `'warning' \| 'success'` | `warning`（默认）用于预发布提醒，`success` 用于已认证构建。 |
+| `title` | `string` | 提示标题。 |
+| `description` | `string?` | 补充说明句。 |
+| `points` | `string[]?` | 要点列表。 |
+
+#### TxVersionHistoryEntry
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | `string` | 作为列表 key 的稳定标识。 |
+| `tag` | `string` | 版本号。 |
+| `channel` | `string?` | 通道标签，如 `BETA`。 |
+| `tone` | `TxVersionChannelTone?` | 按条目单独解析的色调（默认 `preview`）。 |
+| `date` | `string?` | 发布日期文案。 |
+| `note` | `string?` | 单行更新摘要；仅在精选 `latest` 条目上渲染。 |
+| `href` | `string?` | 存在时该行/卡片渲染为链接。 |
+
+### TxVersionCapsule Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `update:panel` | `(value: TxVersionCapsulePanel)` | 打开的面板变化时触发；用于 `v-model:panel`。 |
+| `download` | - | 左侧（下载）分段被激活时触发。 |
+| `history` | - | 右侧（历史）分段被激活时触发。 |
+
+### TxVersionDownloadPanel Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | `(id: string)` | 选择某个构建行时，带该构建 `id` 触发。 |
+
+### TxVersionHistoryPanel Events
+
+| 事件名 | 参数 | 说明 |
+|------|------|------|
+| `select` | `(entry: TxVersionHistoryEntry)` | 选择某历史行或精选卡片时，带该条目触发。 |
+
+## Slots
+
+### TxVersionCapsule
+
+| 插槽 | 参数 | 说明 |
+|------|-------|-------------|
+| `download` | `{ close: () => void }` | 下载面板内容，锚定在左侧分段下方。 |
+| `history` | `{ close: () => void }` | 历史面板内容，锚定在右侧分段下方。 |
+
+不传某个插槽时，该分段退化为**纯触发器**：仍然抛出对应事件，但不弹出任何面板。
+当宿主已有自己的弹窗时使用这种方式 —— Nexus 落地页就省略了 `history`，让右半直接
+打开全屏的版本历史弹窗。
+
+### TxVersionDownloadPanel
+
+| 插槽 | 参数 | 说明 |
+|------|-------|-------------|
+| `footer` | - | 渲染在构建列表下方的可选页脚。 |
+
+### TxVersionHistoryPanel
+
+| 插槽 | 参数 | 说明 |
+|------|-------|-------------|
+| `footer` | - | 渲染在历史列表下方的可选页脚。 |
+
+## Exposed
+
+`TxVersionCapsule` 暴露：
+
+| 成员 | 类型 | 说明 |
+|------|------|------|
+| `close` | `() => void` | 关闭已打开的面板，并把焦点交还给打开它的分段。同时会传入两个面板插槽。 |
+| `downloadRef` | `Ref<HTMLButtonElement>` | 左侧（下载）分段按钮元素。 |
+| `historyRef` | `Ref<HTMLButtonElement>` | 右侧（历史）分段按钮元素。 |
+
+## 交互契约
+
+- 两个分段是**面向不同任务的独立触点**：左半下载构建，右半打开历史。它们是各自独立的点击目标——不要再把整个胶囊做成一个动作。
+- 同一时刻只打开一个面板。点击另一个分段会切换面板；再次点击当前分段则关闭。
+- 面板锚定在各自分段下方（下载 → 左对齐，历史 → 右对齐），刻意**不是**模态。
+- `panel` 是可选的。省略即为非受控，或用 `v-model:panel`（或 `:panel` + `@update:panel`）驱动。`undefined` 表示"未受控"；`null` 是有效的受控值，表示"全部关闭"。
+- `closeOnClickOutside` 与 `closeOnEsc` 控制关闭方式；`close()`（也会传入两个插槽）在关闭的同时把焦点还给触发的分段。
+- 设置 `disabled` 会关闭已打开的面板并阻断两个分段。
+- `notice` 位于下载面板内、构建列表之上：预发布警告是**下载路径上的知情同意**，而非被动的 hover 提示。
+- 下载面板只把带文案的按钮给到第一个 `recommended` 构建，让平台识别出的选择读起来像默认项，而不是若干等权动作之一。
+- 历史色调按行解析，因此稳定版即使在一串预览版中也能保持视觉区分。
+
+## 最佳实践
+
+- 始终标注通道（`BETA` / `STABLE` / `NIGHTLY`）而非"LATEST"，使胶囊永不与页面主稳定版下载 CTA 抢焦点。
+- 让胶囊**配合**而非取代主认证版按钮：按钮交付稳定构建，胶囊承载预览通道（下载 + 历史）。
+- 把预发布注意事项放进下载面板的 `notice`（tone `warning`），让用户在通往文件的路上读到；已认证构建用 tone `success`。
+- 给构建设置 `href`，让行以 `<a download>` 直接下载；仅在需要于 `select` 时再解析地址的流程里使用 `<button>` 回退。
+- 只标记一个构建 `recommended`（访客平台）——多余的推荐构建在高亮时会被忽略。
+- 历史面板用 `latest` 承载精选卡片、`entries` 承载历史行；仅在单行摘要有帮助时设置 `note`，因为它只在精选卡片上渲染。
+- 让每个条目的 `tone` 匹配其通道，使稳定版与预览版在同一列表中保持可区分。
+
+## 审阅说明
+
+- 组件源码：`packages/tuffex/packages/components/src/version-capsule/src/TxVersionCapsule.vue` 确认分段结构、受控/非受控 `panel`、外部点击 / Escape 关闭、`close()` 焦点交还，以及 `download` / `history` 插槽。
+- 组件源码：`packages/tuffex/packages/components/src/version-capsule/src/TxVersionDownloadPanel.vue` 确认 notice 色调、首个 `recommended` 高亮，以及链接与按钮两种构建行。
+- 组件源码：`packages/tuffex/packages/components/src/version-capsule/src/TxVersionHistoryPanel.vue` 确认精选最新卡片、按行色调解析，以及链接行。
+- 类型契约：`packages/tuffex/packages/components/src/version-capsule/src/types.ts` 导出 `TxVersionCapsuleProps`、`TxVersionDownloadPanelProps`、`TxVersionHistoryPanelProps`、`TxVersionBuild`、`TxVersionNotice`、`TxVersionHistoryEntry` 和 `TxVersionChannelTone`。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/version-capsule/__tests__/version-capsule.test.ts` 覆盖面板打开/切换/开合、Escape 与外部指针关闭、受控 `panel`、禁用行为、仅首个 `recommended` 的按钮、链接与按钮行、`select` 载荷，以及按行色调 class。
+
+## Source
+<TuffDocSourceLink />
