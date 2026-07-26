@@ -319,7 +319,7 @@ type RecommendationBadge = {
 - `file://` local file URLs are decoded with shared file-path helpers, checked as filesystem paths, then emitted as `tfile://` URL icons with `colorful: true`.
 - Existing `tfile://` values are preserved as URL icons with `colorful: true`.
 - Existing local filesystem paths are checked, converted to `tfile://`, and marked `colorful: true`.
-- Empty, missing, or nonexistent app icon inputs fall back to `{ type: 'class', value: 'i-ri-apps-line' }`.
+- Empty, missing, or nonexistent persisted app icon inputs first attempt filename migration and the current deterministic `appPath + bundleId` cache identity; only a missing identity cache falls back to `{ type: 'class', value: 'i-ri-apps-line' }`.
 - Plugin recommendation rebuilding must preserve supported icon metadata fields: `type`, `value`, `color`, `colorful`, `status`, and `error`.
 - Renderer badge components should only render class badge icons that start with `i-`; stale cached emoji badge values are ignored.
 - macOS app icon caches must resolve Electron paths through a bound `app.getPath(...)` call; detached Electron methods fail with `Illegal invocation` and must not silently route production data into test-temp fallbacks.
@@ -331,9 +331,9 @@ type RecommendationBadge = {
 
 ### 4. Validation & Error Matrix
 
-- Empty icon input -> app fallback class icon.
-- Missing local path -> app fallback class icon.
-- Invalid or malformed local file URL -> app fallback class icon.
+- Empty icon input with an existing identity cache -> checked `tfile://` URL icon.
+- Missing local path with an existing migrated-filename or identity cache -> checked `tfile://` URL icon.
+- Invalid or malformed local file URL without a recoverable cache -> app fallback class icon.
 - Valid `data:` / `file://` / `tfile://` / local path -> URL icon with source colors preserved.
 - Plugin icon with unsupported `type` or empty `value` -> recommendation fallback class icon.
 - Badge icon not starting with `i-` -> omit the visual badge icon and keep the label.
@@ -345,12 +345,12 @@ type RecommendationBadge = {
 ### 5. Good/Base/Bad Cases
 
 - Good: `file:///Applications/Foo.app/.../icon.icns` becomes a checked `tfile://...` URL icon with `colorful: true`.
-- Base: no icon value becomes `i-ri-apps-line`.
+- Base: no persisted icon value reuses the current identity cache when present; otherwise it becomes `i-ri-apps-line`.
 - Bad: passing `file://...` directly to `fs.existsSync()` or rendering badge emojis as text.
 
 ### 6. Tests Required
 
-- App icon normalization tests for `data:`, `file://`, `tfile://`, local path, empty input, and missing path.
+- App icon normalization tests cover `data:`, `file://`, `tfile://`, local path, empty input, missing path, stale-path filename migration, and current identity-cache recovery.
 - Drift handling tests comparing local paths with equivalent `file://` values.
 - Plugin recommendation rebuild tests that assert optional icon metadata is preserved.
 - Renderer tests that assert list and grid badges use class icons and image icons keep color forwarding.
@@ -378,7 +378,11 @@ if (localPath && existsSync(localPath)) {
   return { type: "url", value: toTfileUrl(localPath), colorful: true };
 }
 
-return { type: "class", value: "i-ri-apps-line" };
+const recovered = resolveExistingVersionedAppIconCachePath(appPath, bundleId);
+return recovered
+  ? { type: "url", value: toTfileUrl(recovered), colorful: true }
+  : { type: "class", value: "i-ri-apps-line" };
+
 ```
 
 ## Scenario: Plugin Widget Metadata Serialization

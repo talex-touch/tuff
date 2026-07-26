@@ -38,7 +38,6 @@ import type {
 } from '@talex-touch/utils/transport/events/types'
 import { completeTiming, sleep, startTiming, StorageList, timingLogger } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
-import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import { TuffInputType, TuffSearchResultBuilder } from '@talex-touch/utils/core-box'
 import {
@@ -62,7 +61,7 @@ import { config as configSchema, fileExtensions, files as filesSchema } from '..
 import { dbWriteScheduler, type DbWritePriority } from '../../../../db/db-write-scheduler'
 import { withSqliteRetry } from '../../../../db/sqlite-retry'
 
-import { createDbUtils, type DbUtils } from '../../../../db/utils'
+import { createDbUtils, type CoreDatabase, type DbUtils } from '../../../../db/utils'
 import { searchIndexWriter } from '../../search-engine/search-index-writer'
 import { appTaskGate } from '../../../../service/app-task-gate'
 import { deviceIdleService } from '../../../../service/device-idle-service'
@@ -107,6 +106,7 @@ import {
   shouldScanMdlsDisplayName
 } from './app-index-metadata'
 import { matchNoisySystemAppRule } from './app-noise-filter'
+import { resolveExistingVersionedAppIconCachePath } from './app-icon-cache'
 import { diagnoseAppSearch, reindexAppSearchTarget } from './app-provider-diagnostics'
 import {
   hasAppIconDrift,
@@ -187,8 +187,9 @@ const APP_TIMING_BASE_OPTIONS: TimingOptions = {
 
 type DbAppRecord = typeof filesSchema.$inferSelect
 type DbAppWithExtensions = DbAppRecord & { extensions: Record<string, string | null> }
-type AppFileWriteDb = Pick<ReturnType<DbUtils['getDb']>, 'insert' | 'delete'>
-type AppFileMutationDb = Pick<ReturnType<DbUtils['getDb']>, 'insert' | 'update' | 'delete'>
+type AppFileWriteDb = Pick<CoreDatabase, 'insert' | 'delete'>
+type AppFileMutationDb = Pick<CoreDatabase, 'insert' | 'update' | 'delete'>
+type AppDbBatchItem = Parameters<CoreDatabase['batch']>[0][number]
 type AppIndexSyncStats = {
   added: number
   changed: number
@@ -360,6 +361,7 @@ const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   fullSyncPersistRetry: 3
 }
 const APP_PROVIDER_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000
+const EMPTY_APP_EXTENSION_MAP: Readonly<Record<string, string | null>> = {}
 
 interface PendingDeletionEntry {
   id: number
@@ -367,6 +369,15 @@ interface PendingDeletionEntry {
   uniqueId: string
   firstMissedAt: number
   missCount: number
+}
+
+interface ScannedAppMetadataUpdate {
+  fileId: number
+  app: ScannedAppInfo
+  existingDisplayName: string | null
+  existingDisplayNameQuality?: ScannedAppInfo['displayNameQuality']
+  existingExtensions: Record<string, string | null>
+  existingName?: string
 }
 
 class AppProvider implements ISearchProvider<ProviderContext> {
@@ -459,7 +470,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async runAppTransaction<T>(
-    db: ReturnType<DbUtils['getDb']>,
+    db: CoreDatabase,
     operation: (
       writer: AppFileMutationDb,
       extensionWriter: AppFileWriteDb | undefined
@@ -474,6 +485,178 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       )
     }
     return await operation(db, undefined)
+  }
+
+  private async executeAppBatch(db: CoreDatabase, queries: AppDbBatchItem[]): Promise<void> {
+    const firstQuery = queries[0]
+    if (!firstQuery) return
+    const batch: [AppDbBatchItem, ...AppDbBatchItem[]] = [firstQuery, ...queries.slice(1)]
+    await db.batch(batch)
+  }
+
+  private async persistScannedAppAdditions(
+    label: string,
+    apps: readonly ScannedAppInfo[],
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (apps.length === 0 || !this.dbUtils) return
+    const db = this.dbUtils.getDb()
+
+    await this.runDbMutation(label, async () => {
+      await this.runAppTransaction(db, async (tx, extensionWriter) => {
+        for (let index = 0; index < apps.length; index += 1) {
+          signal?.throwIfAborted()
+          const appInfo = apps[index]
+          if (!appInfo) continue
+          const [insertedFile] = await tx
+            .insert(filesSchema)
+            .values({
+              path: appInfo.path,
+              name: appInfo.name,
+              displayName: resolveScannedDisplayName(appInfo),
+              type: 'app' as const,
+              mtime: appInfo.lastModified,
+              ctime: new Date()
+            })
+            .onConflictDoUpdate({
+              target: filesSchema.path,
+              set: {
+                name: sql`excluded.name`,
+                displayName: sql`excluded.display_name`,
+                mtime: sql`excluded.mtime`
+              }
+            })
+            .returning()
+
+          if (insertedFile) {
+            await this.syncScannedAppExtensions(
+              insertedFile.id,
+              appInfo,
+              extensionWriter,
+              EMPTY_APP_EXTENSION_MAP
+            )
+          }
+
+          if ((index + 1) % 50 === 0 || index === apps.length - 1) {
+            logApp(
+              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(apps.length)} app additions`,
+              LogStyle.info
+            )
+          }
+        }
+      })
+    })
+  }
+
+  private buildScannedAppUpdateData(
+    update: ScannedAppMetadataUpdate
+  ): Partial<typeof filesSchema.$inferInsert> {
+    const { app: appInfo, existingDisplayName, existingDisplayNameQuality } = update
+    const updateData: Partial<typeof filesSchema.$inferInsert> = {
+      path: appInfo.path,
+      mtime: appInfo.lastModified
+    }
+
+    if (update.existingName !== undefined) {
+      updateData.name = isProbablyCorruptedDisplayName(appInfo.name)
+        ? update.existingName
+        : appInfo.name
+    }
+
+    const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(appInfo))
+    if (
+      shouldUpdateDisplayName(existingDisplayName, nextDisplayName, {
+        currentQuality: existingDisplayNameQuality,
+        incomingQuality: appInfo.displayNameQuality
+      })
+    ) {
+      updateData.displayName = nextDisplayName
+    }
+    return updateData
+  }
+
+  private async persistScannedAppMetadataUpdates(
+    label: string,
+    updates: readonly ScannedAppMetadataUpdate[],
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (updates.length === 0 || !this.dbUtils) return
+    const db = this.dbUtils.getDb()
+
+    await this.runDbMutation(label, async () => {
+      if (typeof db.batch !== 'function') {
+        await this.runAppTransaction(db, async (tx, extensionWriter) => {
+          for (let index = 0; index < updates.length; index += 1) {
+            signal?.throwIfAborted()
+            const update = updates[index]
+            if (!update) continue
+            await tx
+              .update(filesSchema)
+              .set(this.buildScannedAppUpdateData(update))
+              .where(eq(filesSchema.id, update.fileId))
+            await this.syncScannedAppExtensions(
+              update.fileId,
+              update.app,
+              extensionWriter,
+              update.existingExtensions
+            )
+          }
+        })
+        return
+      }
+
+      const queries: AppDbBatchItem[] = []
+      for (let index = 0; index < updates.length; index += 1) {
+        signal?.throwIfAborted()
+        const update = updates[index]
+        if (!update) continue
+        const { fileId, app: appInfo } = update
+        queries.push(
+          db
+            .update(filesSchema)
+            .set(this.buildScannedAppUpdateData(update))
+            .where(eq(filesSchema.id, fileId))
+        )
+        const extensions = buildAppExtensions(fileId, appInfo)
+        if (extensions.length > 0) {
+          queries.push(
+            db
+              .insert(fileExtensions)
+              .values(extensions)
+              .onConflictDoUpdate({
+                target: [fileExtensions.fileId, fileExtensions.key],
+                set: { value: sql`excluded.value` }
+              })
+          )
+        }
+        const staleExtensionKeys = resolveMissingScannedExtensionKeys(
+          extensions,
+          APP_SCANNED_OPTIONAL_EXTENSION_KEYS
+        ).filter((key) => Object.hasOwn(update.existingExtensions, key))
+        if (staleExtensionKeys.length > 0) {
+          queries.push(
+            db
+              .delete(fileExtensions)
+              .where(
+                and(
+                  eq(fileExtensions.fileId, fileId),
+                  inArray(fileExtensions.key, staleExtensionKeys)
+                )
+              )
+          )
+        }
+
+        if ((index + 1) % 100 === 0 || index === updates.length - 1) {
+          logApp(
+            `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(updates.length)} app updates`,
+            LogStyle.info
+          )
+        }
+      }
+
+      signal?.throwIfAborted()
+      await this.executeAppBatch(db, queries)
+    })
   }
 
   public setIndexedSourceRuntimeDelegate(delegate: AppIndexedSourceRuntimeDelegate | null): void {
@@ -1223,15 +1406,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       | 'displayNameSource'
       | 'displayNameQuality'
     >,
-    writer?: AppFileWriteDb
+    writer?: AppFileWriteDb,
+    existingExtensions?: Readonly<Record<string, string | null>>
   ): Promise<void> {
     const extensions = buildAppExtensions(fileId, app)
     await this.upsertAppExtensions(writer, extensions)
 
-    const staleExtensionKeys = resolveMissingScannedExtensionKeys(
+    const missingExtensionKeys = resolveMissingScannedExtensionKeys(
       extensions,
       APP_SCANNED_OPTIONAL_EXTENSION_KEYS
     )
+    const staleExtensionKeys = existingExtensions
+      ? missingExtensionKeys.filter((key) => Object.hasOwn(existingExtensions, key))
+      : missingExtensionKeys
 
     if (staleExtensionKeys.length > 0) {
       const deleteWriter = writer ?? this.dbUtils!.getDb()
@@ -1241,6 +1428,123 @@ class AppProvider implements ISearchProvider<ProviderContext> {
           and(eq(fileExtensions.fileId, fileId), inArray(fileExtensions.key, staleExtensionKeys))
         )
     }
+  }
+
+  private async repairPersistedAppIconPointers(apps: DbAppWithExtensions[]): Promise<void> {
+    if ((!this.isMac && process.platform !== 'win32') || !this.dbUtils || apps.length === 0) {
+      return
+    }
+
+    const iconUpserts: Array<{ fileId: number; key: string; value: string }> = []
+    const staleIconFileIds: number[] = []
+    for (const dbApp of apps) {
+      const persistedIcon = dbApp.extensions.icon?.trim() || ''
+      const cachedIcon = resolveExistingVersionedAppIconCachePath(
+        dbApp.path,
+        dbApp.extensions.bundleId || ''
+      )
+
+      if (cachedIcon) {
+        if (persistedIcon !== cachedIcon) {
+          iconUpserts.push({ fileId: dbApp.id, key: 'icon', value: cachedIcon })
+          dbApp.extensions.icon = cachedIcon
+        }
+      } else if (hasAppIconDrift(persistedIcon, undefined)) {
+        staleIconFileIds.push(dbApp.id)
+        dbApp.extensions.icon = null
+      }
+    }
+
+    if (iconUpserts.length === 0 && staleIconFileIds.length === 0) return
+
+    await this.runDbMutation('app-provider.icon-pointer-repair', async () => {
+      const db = this.dbUtils!.getDb()
+      if (typeof db.batch !== 'function') {
+        await this.runAppTransaction(db, async (tx, extensionWriter) => {
+          const writer = extensionWriter ?? tx
+          await this.upsertAppExtensions(writer, iconUpserts)
+          if (staleIconFileIds.length > 0) {
+            await writer
+              .delete(fileExtensions)
+              .where(
+                and(
+                  eq(fileExtensions.key, 'icon'),
+                  inArray(fileExtensions.fileId, staleIconFileIds)
+                )
+              )
+          }
+        })
+        return
+      }
+
+      const queries: AppDbBatchItem[] = []
+      if (iconUpserts.length > 0) {
+        queries.push(
+          db
+            .insert(fileExtensions)
+            .values(iconUpserts)
+            .onConflictDoUpdate({
+              target: [fileExtensions.fileId, fileExtensions.key],
+              set: { value: sql`excluded.value` }
+            })
+        )
+      }
+      if (staleIconFileIds.length > 0) {
+        queries.push(
+          db
+            .delete(fileExtensions)
+            .where(
+              and(eq(fileExtensions.key, 'icon'), inArray(fileExtensions.fileId, staleIconFileIds))
+            )
+        )
+      }
+      await this.executeAppBatch(db, queries)
+    })
+
+    logApp(
+      `Repaired ${chalk.green(iconUpserts.length)} cached and cleared ${chalk.yellow(staleIconFileIds.length)} stale app icon pointers`,
+      LogStyle.success
+    )
+  }
+
+  private async persistHydratedAppIcons(
+    entries: ReadonlyArray<{ appInfo: ScannedAppInfo; icon: string }>
+  ): Promise<Set<string>> {
+    if (!this.dbUtils || entries.length === 0) return new Set()
+
+    const entriesByPath = new Map(entries.map((entry) => [entry.appInfo.path, entry]))
+    const rows = await this.dbUtils
+      .getDb()
+      .select({ id: filesSchema.id, path: filesSchema.path })
+      .from(filesSchema)
+      .where(inArray(filesSchema.path, [...entriesByPath.keys()]))
+    const extensions = rows.flatMap((row) => {
+      const entry = entriesByPath.get(row.path)
+      return entry ? [{ fileId: row.id, key: 'icon', value: entry.icon }] : []
+    })
+    if (extensions.length === 0) return new Set()
+
+    await this.runDbMutation('app-provider.icon-hydrate-batch', async () => {
+      const db = this.dbUtils!.getDb()
+      if (typeof db.batch !== 'function') {
+        await this.runAppTransaction(db, async (tx, extensionWriter) => {
+          await this.upsertAppExtensions(extensionWriter ?? tx, extensions)
+        })
+        return
+      }
+
+      await db.batch([
+        db
+          .insert(fileExtensions)
+          .values(extensions)
+          .onConflictDoUpdate({
+            target: [fileExtensions.fileId, fileExtensions.key],
+            set: { value: sql`excluded.value` }
+          })
+      ])
+    })
+
+    return new Set(rows.map((row) => row.path))
   }
 
   private scheduleAppIconHydration(scannedApps: ScannedAppInfo[]): void {
@@ -1254,10 +1558,10 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     const candidates = scannedApps.filter(
-      (app) =>
-        !app.icon &&
-        (this.isMac || Boolean(app.iconSourcePath)) &&
-        !this.appIconHydrationPending.has(app.path)
+      (appInfo) =>
+        !appInfo.icon &&
+        (this.isMac || Boolean(appInfo.iconSourcePath)) &&
+        !this.appIconHydrationPending.has(appInfo.path)
     )
     if (candidates.length === 0) {
       void this._recordMissingIconApps(scannedApps).catch((error) => {
@@ -1268,12 +1572,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       return
     }
 
-    for (const app of candidates) {
-      this.appIconHydrationPending.add(app.path)
+    for (const appInfo of candidates) {
+      this.appIconHydrationPending.add(appInfo.path)
     }
 
     const task = this.runExternalAppMutation(async () => {
-      let hydratedCount = 0
+      const hydratedEntries: Array<{ appInfo: ScannedAppInfo; icon: string }> = []
 
       for (const appInfo of candidates) {
         if (this.shuttingDown) break
@@ -1283,23 +1587,17 @@ class AppProvider implements ISearchProvider<ProviderContext> {
             appInfo.iconSourcePath ?? appInfo.path,
             appInfo.bundleId
           )
-          if (!icon || !this.dbUtils) continue
-
-          const existingFile = await this.dbUtils.getFileByPath(appInfo.path)
-          if (!existingFile) continue
-
-          await this.runDbMutation('app-provider.icon-hydrate', async () => {
-            const db = this.dbUtils!.getDb()
-            await this.runAppTransaction(db, async (_tx, extensionWriter) => {
-              await this.upsertAppExtensions(extensionWriter, [
-                { fileId: existingFile.id, key: 'icon', value: icon }
-              ])
-            })
-          })
+          if (!icon) continue
 
           appInfo.icon = icon
-          hydratedCount += 1
-          await this.publishAppRuntimeUpsert(appInfo, 'app-icon-hydrated')
+          hydratedEntries.push({ appInfo, icon })
+          await this.publishAppRuntimeUpsert(appInfo, 'app-icon-hydrated').catch((error) => {
+            logApp(
+              `Failed to publish hydrated icon for ${chalk.yellow(appInfo.path)}`,
+              LogStyle.warning,
+              { error: error instanceof Error ? error.message : String(error) }
+            )
+          })
         } catch (error) {
           logApp(`Failed to hydrate app icon for ${chalk.yellow(appInfo.path)}`, LogStyle.warning, {
             error: error instanceof Error ? error.message : String(error)
@@ -1307,15 +1605,54 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         }
       }
 
+      let pendingPersistence = hydratedEntries
+      let lastPersistenceError: unknown
+      const maxAttempts = 3
+      for (let attempt = 1; attempt <= maxAttempts && pendingPersistence.length > 0; attempt += 1) {
+        if (this.shuttingDown) break
+
+        try {
+          const persistedPaths = await this.persistHydratedAppIcons(pendingPersistence)
+          pendingPersistence = pendingPersistence.filter(
+            ({ appInfo }) => !persistedPaths.has(appInfo.path)
+          )
+          lastPersistenceError = undefined
+        } catch (error) {
+          lastPersistenceError = error
+        }
+
+        if (pendingPersistence.length > 0 && attempt < maxAttempts) {
+          await this.waitForStartupProducerDelay(500 * 2 ** (attempt - 1))
+        }
+      }
+
+      if (!this.shuttingDown && pendingPersistence.length > 0) {
+        logApp(
+          `Deferred persistence for ${chalk.yellow(pendingPersistence.length)} hydrated app icons`,
+          LogStyle.warning,
+          lastPersistenceError
+            ? {
+                error:
+                  lastPersistenceError instanceof Error
+                    ? lastPersistenceError.message
+                    : String(lastPersistenceError)
+              }
+            : undefined
+        )
+      }
+
       if (!this.shuttingDown) {
         await this._recordMissingIconApps(scannedApps)
       }
-      if (hydratedCount > 0) {
-        logApp(`Hydrated ${chalk.green(hydratedCount)} app icons in background`, LogStyle.success)
+      if (hydratedEntries.length > 0) {
+        logApp(
+          `Hydrated ${chalk.green(hydratedEntries.length)} app icons in background`,
+          LogStyle.success
+        )
       }
     }).finally(() => {
-      for (const app of candidates) {
-        this.appIconHydrationPending.delete(app.path)
+      for (const appInfo of candidates) {
+        this.appIconHydrationPending.delete(appInfo.path)
       }
     })
 
@@ -1819,6 +2156,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const scanStart = startTiming()
     const scannedApps = await this.loadScannedApps({ forceRefresh: true })
     signal?.throwIfAborted()
+    this.scheduleAppIconHydration(scannedApps)
     logAppDuration('BackfillScanApps', scanStart, {
       label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
       style: 'info',
@@ -1832,6 +2170,8 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     signal?.throwIfAborted()
     const { scannedApps: dbScannedAppsWithExtensions, managedEntries } =
       this.partitionDbApps(dbAppsWithExtensions)
+    await this.repairPersistedAppIconPointers(dbScannedAppsWithExtensions)
+    signal?.throwIfAborted()
     logAppDuration('BackfillLoadDbApps', dbLoadStart, {
       label: `Loaded ${chalk.cyan(dbScannedAppsWithExtensions.length)} scanned and ${chalk.cyan(
         managedEntries.length
@@ -1906,53 +2246,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp(`Adding ${chalk.cyan(toAdd.length)} missing apps...`, LogStyle.process)
       const addStartTime = startTiming()
 
-      await runAdaptiveTaskQueue(
-        toAdd,
-        async (app, index) => {
-          signal?.throwIfAborted()
-          const cleanDisplayName = resolveScannedDisplayName(app)
-          await this.runDbMutation('app-provider.backfill-add', async () => {
-            const db = this.dbUtils!.getDb()
-            await this.runAppTransaction(db, async (tx, extensionWriter) => {
-              const [insertedFile] = await tx
-                .insert(filesSchema)
-                .values({
-                  path: app.path,
-                  name: app.name,
-                  displayName: cleanDisplayName,
-                  type: 'app' as const,
-                  mtime: app.lastModified,
-                  ctime: new Date()
-                })
-                .onConflictDoUpdate({
-                  target: filesSchema.path,
-                  set: {
-                    name: sql`excluded.name`,
-                    displayName: sql`excluded.display_name`,
-                    mtime: sql`excluded.mtime`
-                  }
-                })
-                .returning()
-
-              if (insertedFile) {
-                await this.syncScannedAppExtensions(insertedFile.id, app, extensionWriter)
-              }
-            })
-          })
-          signal?.throwIfAborted()
-
-          if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
-            logApp(
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
-              LogStyle.info
-            )
-          }
-        },
-        {
-          estimatedTaskTimeMs: 12,
-          label: 'AppProvider::backfillAddApps'
-        }
-      )
+      await this.persistScannedAppAdditions('app-provider.backfill-add', toAdd, signal)
       signal?.throwIfAborted()
 
       logAppDuration('BackfillAddApps', addStartTime, {
@@ -1969,77 +2263,28 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         LogStyle.process
       )
       const updateStartTime = startTiming()
-      let updatedCount = 0
-      let failedCount = 0
 
-      await runAdaptiveTaskQueue(
+      await this.persistScannedAppMetadataUpdates(
+        'app-provider.backfill-update',
         toUpdateMetadata,
-        async ({ fileId, app, existingDisplayName, existingDisplayNameQuality }, index) => {
-          signal?.throwIfAborted()
-          const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
-
-          try {
-            await this.runDbMutation('app-provider.backfill-update', async () => {
-              const db = this.dbUtils!.getDb()
-              await this.runAppTransaction(db, async (tx, extensionWriter) => {
-                if (
-                  shouldUpdateDisplayName(existingDisplayName, nextDisplayName, {
-                    currentQuality: existingDisplayNameQuality,
-                    incomingQuality: app.displayNameQuality
-                  })
-                ) {
-                  await tx
-                    .update(filesSchema)
-                    .set({ displayName: nextDisplayName })
-                    .where(eq(filesSchema.id, fileId))
-                }
-
-                await this.syncScannedAppExtensions(fileId, app, extensionWriter)
-              })
-            })
-
-            updatedCount += 1
-          } catch (error) {
-            failedCount += 1
-            logApp(
-              `Failed to correct app metadata for ${chalk.yellow(app.path)}: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              LogStyle.warning
-            )
-          }
-          signal?.throwIfAborted()
-
-          if ((index + 1) % 50 === 0 || index === toUpdateMetadata.length - 1) {
-            logApp(
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdateMetadata.length)} metadata corrections`,
-              LogStyle.info
-            )
-          }
-        },
-        {
-          estimatedTaskTimeMs: 10,
-          label: 'AppProvider::backfillUpdateDisplayName'
-        }
+        signal
       )
       signal?.throwIfAborted()
 
-      const correctionStyle = failedCount > 0 ? LogStyle.warning : LogStyle.success
       logApp(
-        `DisplayName correction summary: updated ${chalk.green(updatedCount)}, failed ${chalk.yellow(failedCount)}`,
-        correctionStyle
+        `DisplayName correction summary: updated ${chalk.green(toUpdateMetadata.length)}, failed ${chalk.yellow(0)}`,
+        LogStyle.success
       )
       logAppDuration('BackfillFixDisplayName', updateStartTime, {
         label: 'App metadata correction complete',
-        style: failedCount > 0 ? 'warning' : 'success',
+        style: 'success',
         unit: 's',
         precision: 1,
-        suffix: `(updated=${chalk.green(updatedCount)}, failed=${chalk.yellow(failedCount)})`
+        suffix: `(updated=${chalk.green(toUpdateMetadata.length)}, failed=${chalk.yellow(0)})`
       })
     }
 
     signal?.throwIfAborted()
-    this.scheduleAppIconHydration(scannedApps)
 
     logAppDuration('StartupBackfill', initStart, {
       label: 'Startup backfill complete',
@@ -2317,6 +2562,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
     const scanStart = startTiming()
     const scannedApps = await this.loadScannedApps({ forceRefresh: options?.forceRefresh === true })
+    this.scheduleAppIconHydration(scannedApps)
     logAppDuration('ScanApps', scanStart, {
       label: `Scanned ${chalk.cyan(scannedApps.length)} apps`,
       style: 'info',
@@ -2330,6 +2576,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const dbAppsWithExtensions = await this.fetchExtensionsForFiles(dbApps)
     const { scannedApps: dbScannedAppsWithExtensions, managedEntries } =
       this.partitionDbApps(dbAppsWithExtensions)
+    await this.repairPersistedAppIconPointers(dbScannedAppsWithExtensions)
     logAppDuration('LoadDbApps', dbLoadStart, {
       label: `Loaded ${chalk.cyan(dbScannedAppsWithExtensions.length)} scanned and ${chalk.cyan(
         managedEntries.length
@@ -2432,50 +2679,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp(`Adding ${chalk.cyan(toAdd.length)} new apps...`, LogStyle.process)
       const addStartTime = startTiming()
 
-      await runAdaptiveTaskQueue(
-        toAdd,
-        async (app, index) => {
-          const cleanDisplayName = resolveScannedDisplayName(app)
-          await this.runDbMutation('app-provider.batch-add', async () => {
-            await this.runAppTransaction(db, async (tx, extensionWriter) => {
-              const [insertedFile] = await tx
-                .insert(filesSchema)
-                .values({
-                  path: app.path,
-                  name: app.name,
-                  displayName: cleanDisplayName,
-                  type: 'app' as const,
-                  mtime: app.lastModified,
-                  ctime: new Date()
-                })
-                .onConflictDoUpdate({
-                  target: filesSchema.path,
-                  set: {
-                    name: sql`excluded.name`,
-                    displayName: sql`excluded.display_name`,
-                    mtime: sql`excluded.mtime`
-                  }
-                })
-                .returning()
-
-              if (insertedFile) {
-                await this.syncScannedAppExtensions(insertedFile.id, app, extensionWriter)
-              }
-            })
-          })
-
-          if ((index + 1) % 50 === 0 || index === toAdd.length - 1) {
-            logApp(
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toAdd.length)} app additions`,
-              LogStyle.info
-            )
-          }
-        },
-        {
-          estimatedTaskTimeMs: 12,
-          label: 'AppProvider::addApps'
-        }
-      )
+      await this.persistScannedAppAdditions('app-provider.batch-add', toAdd)
 
       logAppDuration('AddApps', addStartTime, {
         label: 'New apps added',
@@ -2489,50 +2693,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
       logApp(`Updating ${chalk.cyan(toUpdate.length)} apps...`, LogStyle.process)
       const updateStartTime = startTiming()
 
-      await runAdaptiveTaskQueue(
-        toUpdate,
-        async (
-          { fileId, app, existingDisplayName, existingDisplayNameQuality, existingName },
-          index
-        ) => {
-          const nextName = isProbablyCorruptedDisplayName(app.name) ? existingName : app.name
-          const updateData: Partial<typeof filesSchema.$inferInsert> = {
-            name: nextName,
-            path: app.path,
-            mtime: app.lastModified
-          }
-          const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
-          if (
-            shouldUpdateDisplayName(existingDisplayName, nextDisplayName, {
-              currentQuality: existingDisplayNameQuality,
-              incomingQuality: app.displayNameQuality
-            })
-          ) {
-            updateData.displayName = nextDisplayName
-          }
-
-          await this.runDbMutation('app-provider.batch-update', async () => {
-            await this.runAppTransaction(db, async (tx, extensionWriter) => {
-              await tx.update(filesSchema).set(updateData).where(eq(filesSchema.id, fileId))
-              await this.syncScannedAppExtensions(fileId, app, extensionWriter)
-            })
-          })
-
-          // 改为每100个输出一次，但保持10个一组的处理
-          if ((index + 1) % 100 === 0 || index === toUpdate.length - 1) {
-            logApp(
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(toUpdate.length)} app updates`,
-              LogStyle.info
-            )
-          }
-        },
-        {
-          estimatedTaskTimeMs: 10,
-          yieldIntervalMs: 10, // 每10ms让出控制权，避免阻塞
-          maxBatchSize: 10, // 保持10个一组的批处理
-          label: 'AppProvider::updateApps'
-        }
-      )
+      await this.persistScannedAppMetadataUpdates('app-provider.batch-update', toUpdate)
 
       logAppDuration('UpdateApps', updateStartTime, {
         label: 'Apps updated',
@@ -2560,8 +2721,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         precision: 1
       })
     }
-
-    this.scheduleAppIconHydration(scannedApps)
 
     logAppDuration('Initialize', initStart, {
       label: 'App data initialization complete',
@@ -2660,7 +2819,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
                 buildManagedEntryExtensions(existingFile.id, appInfo, true)
               )
             } else {
-              await this.syncScannedAppExtensions(existingFile.id, appInfo, extensionWriter)
+              await this.syncScannedAppExtensions(
+                existingFile.id,
+                appInfo,
+                extensionWriter,
+                existingExtensions
+              )
             }
           })
         },
@@ -2696,7 +2860,12 @@ class AppProvider implements ISearchProvider<ProviderContext> {
                 buildManagedEntryExtensions(inserted.id, appInfo, true)
               )
             } else {
-              await this.syncScannedAppExtensions(inserted.id, appInfo, extensionWriter)
+              await this.syncScannedAppExtensions(
+                inserted.id,
+                appInfo,
+                extensionWriter,
+                EMPTY_APP_EXTENSION_MAP
+              )
             }
           }
           return inserted
@@ -3794,7 +3963,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
               .update(filesSchema)
               .set({ displayName: nextDisplayName })
               .where(eq(filesSchema.id, dbApp.id))
-            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter)
+            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter, dbApp.extensions)
           })
         })
       }
@@ -3812,7 +3981,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
         if (!dbApp) continue
         await this.runDbMutation('app-provider.mdls-metadata', async () => {
           await this.runAppTransaction(db, async (_tx, extensionWriter) => {
-            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter)
+            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter, dbApp.extensions)
           })
         })
       }

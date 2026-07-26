@@ -4,6 +4,8 @@ import { dbWriteScheduler } from './db-write-scheduler'
 import * as schema from './schema'
 import { withSqliteRetry } from './sqlite-retry'
 
+export type CoreDatabase = LibSQLDatabase<typeof schema>
+
 function sanitizeRecommendationCacheValue(value: unknown, seen: WeakSet<object>): unknown {
   if (typeof value === 'string') {
     if (value.startsWith('data:image/') && value.length > 512) {
