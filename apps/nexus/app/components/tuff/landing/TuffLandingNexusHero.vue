@@ -1,24 +1,41 @@
 <script setup lang="ts">
-import type { AppRelease, ReleaseChannel } from '~/composables/useReleases'
+import type { TxVersionBuild, TxVersionChannelTone } from '@talex-touch/tuffex/version-capsule'
+import type { AppRelease, AssetArch, AssetPlatform, ReleaseAsset, ReleaseChannel } from '~/composables/useReleases'
+import { TxVersionCapsule, TxVersionDownloadPanel } from '@talex-touch/tuffex/version-capsule'
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import StarField from '~/components/landing/StarField.vue'
 import DarkVeil from '~/components/tuff/background/DarkVeil.vue'
 import TuffLandingLineShadowText from '~/components/tuff/landing/TuffLandingLineShadowText.vue'
-import { resolveReleaseNotes, useReleases } from '~/composables/useReleases'
+import {
+  detectArch,
+  findAssetForPlatform,
+  formatFileSize,
+  getArchLabel,
+  getPlatformLabel,
+  resolveReleaseNotes,
+  useReleases,
+} from '~/composables/useReleases'
 
-// Nexus landing hero — product-first CoreBox surface with live app search,────────────────────────
+// Nexus landing hero — product-first CoreBox surface with live app search.
 // Clean atmospheric hero: the homepage DarkVeil aurora over pure black. Title
-// keeps the signature line-shadow "OS". The version is a clickable pill that
-// flips open an overlay with the release history (live API + static fallback).
+// keeps the signature line-shadow "OS".
+//
+// Two download channels, two affordances that must never compete: the primary
+// CTA ships the certified RELEASE build, while the split capsule below it owns
+// the preview channel. The capsule's left half opens the download panel; the
+// right half is a plain trigger for the full-screen release-history overlay.
 
 type HeroPlatform = 'darwin' | 'win32' | 'linux'
 
 interface ReleaseItem {
+  id: string
   tag: string
   channel: ReleaseChannel
   date: string
   note?: string
+  /** Kept on the item so the capsule can offer a real download without a second fetch. */
+  assets?: ReleaseAsset[]
 }
 
 const { t, locale } = useI18n()
@@ -28,7 +45,7 @@ const heroPlatform = ref<HeroPlatform>('darwin')
 const ready = ref(false)
 const enableMotion = ref(false)
 
-const triggerRef = ref<HTMLButtonElement | null>(null)
+const triggerRef = ref<InstanceType<typeof TxVersionCapsule> | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
 let revealFrame: number | null = null
 
@@ -57,6 +74,12 @@ const copy = computed(() => ({
   whatsNew: t('landing.nexus.hero.releases.whatsNew'),
   viewAll: t('landing.nexus.hero.releases.viewAll'),
   close: t('landing.nexus.hero.releases.close'),
+  downloadBuild: t('landing.nexus.hero.releases.downloadBuild'),
+  chooseBuild: t('landing.nexus.hero.releases.chooseBuild'),
+  download: t('landing.nexus.hero.releases.download'),
+  noBuilds: t('landing.nexus.hero.releases.noBuilds'),
+  certifiedTrack: t('landing.nexus.hero.releases.certifiedTrack'),
+  getStable: t('landing.nexus.hero.releases.getStable'),
   kApp: t('landing.nexus.hero.results.app'),
   kWeb: t('landing.nexus.hero.results.web'),
   kRecent: t('landing.nexus.hero.results.recent'),
@@ -66,31 +89,37 @@ const copy = computed(() => ({
 }))
 
 // ── Releases (live API, static fallback from real recent tags) ───────────────
+// The tail entry is the real latest stable tag — without it the primary CTA has
+// no certified build to point at whenever the releases API is unreachable.
 const FALLBACK_RELEASES: ReleaseItem[] = [
-  { tag: 'v2.4.13-beta.19', channel: 'BETA', date: '2026-07-21' },
-  { tag: 'v2.4.13-beta.18', channel: 'BETA', date: '2026-07-21' },
-  { tag: 'v2.4.13-beta.17', channel: 'BETA', date: '2026-07-20' },
-  { tag: 'v2.4.13-beta.16', channel: 'BETA', date: '2026-07-19' },
-  { tag: 'v2.4.13-beta.15', channel: 'BETA', date: '2026-07-19' },
-  { tag: 'v2.4.13-beta.14', channel: 'BETA', date: '2026-07-16' },
+  { id: 'v2.4.13-beta.19', tag: 'v2.4.13-beta.19', channel: 'BETA', date: '2026-07-21' },
+  { id: 'v2.4.13-beta.18', tag: 'v2.4.13-beta.18', channel: 'BETA', date: '2026-07-21' },
+  { id: 'v2.4.13-beta.17', tag: 'v2.4.13-beta.17', channel: 'BETA', date: '2026-07-20' },
+  { id: 'v2.4.13-beta.16', tag: 'v2.4.13-beta.16', channel: 'BETA', date: '2026-07-19' },
+  { id: 'v2.4.13-beta.15', tag: 'v2.4.13-beta.15', channel: 'BETA', date: '2026-07-19' },
+  { id: 'v2.4.12', tag: 'v2.4.12', channel: 'RELEASE', date: '2026-06-23' },
 ]
 
 const releaseList = ref<ReleaseItem[]>(FALLBACK_RELEASES)
-const { fetchReleases } = useReleases()
+const stableRelease = ref<ReleaseItem | null>(
+  FALLBACK_RELEASES.find(item => item.channel === 'RELEASE') ?? null,
+)
+const { fetchLatestRelease, fetchReleases } = useReleases()
 
 const latestRelease = computed(() => releaseList.value[0])
 const olderReleases = computed(() => releaseList.value.slice(1))
 
-// Version-pill trust popover: RELEASE builds are officially certified; preview
-// channels (Beta/Snapshot) surface concrete caveats instead of a trust claim.
-const latestTrust = computed(() => {
+// The capsule's download panel leads with a trust statement: RELEASE builds are
+// officially certified, preview channels surface concrete caveats instead. The
+// caveats sit on the path to the download so they read as consent, not decor.
+const capsuleNotice = computed(() => {
   const verified = (latestRelease.value?.channel ?? 'RELEASE') === 'RELEASE'
   return {
-    verified,
+    tone: verified ? ('success' as const) : ('warning' as const),
     title: verified
       ? t('landing.nexus.hero.trust.verifiedTitle')
       : t('landing.nexus.hero.trust.previewTitle'),
-    desc: verified
+    description: verified
       ? t('landing.nexus.hero.trust.verifiedDesc')
       : t('landing.nexus.hero.trust.previewDesc'),
     points: verified
@@ -136,7 +165,7 @@ const resultsVisible = ref(false)
 const currentRows = computed<ResultRow[]>(() => {
   if (!resultsVisible.value)
     return []
-  const app = APPS[activeIndex.value]
+  const app = APPS[activeIndex.value]!
   const c = copy.value
   return [
     { icon: app.logo, title: app.app, sub: c.kApp, action: c.aOpen, mark: true },
@@ -166,7 +195,7 @@ async function runSearchLoop(): Promise<void> {
   for (;;) {
     if (ccCancelled)
       return
-    const app = APPS[activeIndex.value]
+    const app = APPS[activeIndex.value]!
 
     // Type the query
     for (let i = 1; i <= app.query.length; i++) {
@@ -215,10 +244,15 @@ function startSearchDemo() {
   }
 }
 
-const CHANNEL_META: Record<ReleaseChannel, { label: string, cls: string }> = {
-  RELEASE: { label: 'Stable', cls: 'is-release' },
-  BETA: { label: 'Beta', cls: 'is-beta' },
-  SNAPSHOT: { label: 'Snapshot', cls: 'is-snapshot' },
+// `code` is what the capsule shows: naming the channel is what keeps it from
+// competing with the primary CTA, which always ships the certified build.
+const CHANNEL_META: Record<
+  ReleaseChannel,
+  { label: string, code: string, cls: string, tone: TxVersionChannelTone }
+> = {
+  RELEASE: { label: 'Stable', code: 'STABLE', cls: 'is-release', tone: 'stable' },
+  BETA: { label: 'Beta', code: 'BETA', cls: 'is-beta', tone: 'preview' },
+  SNAPSHOT: { label: 'Snapshot', code: 'SNAPSHOT', cls: 'is-snapshot', tone: 'nightly' },
 }
 
 function channelMeta(channel: ReleaseChannel) {
@@ -244,28 +278,84 @@ function toReleaseItem(release: AppRelease): ReleaseItem {
     .map(line => line.replace(/^[#>*\-\s]+/, '').trim())
     .find(Boolean)
   return {
+    id: release.id || release.tag,
     tag: release.tag,
     channel: release.channel ?? 'RELEASE',
     date: release.publishedAt ?? release.createdAt ?? '',
     note: note ? note.slice(0, 120) : undefined,
+    assets: release.assets,
   }
 }
 
 async function loadReleases() {
-  try {
-    const live = await fetchReleases({ limit: 12 })
-    if (live?.length) {
-      const sorted = [...live].sort((a, b) =>
-        (b.publishedAt ?? b.createdAt ?? '').localeCompare(a.publishedAt ?? a.createdAt ?? ''))
-      releaseList.value = sorted.map(toReleaseItem)
-    }
+  // Assets ride along so the capsule can hand out a real download URL, and the
+  // stable build is fetched on its own because the mixed list may not hold one.
+  const [live, stable] = await Promise.all([
+    fetchReleases({ limit: 12, includeAssets: true }),
+    fetchLatestRelease('RELEASE'),
+  ])
+
+  if (live?.length) {
+    const sorted = [...live].sort((a, b) =>
+      (b.publishedAt ?? b.createdAt ?? '').localeCompare(a.publishedAt ?? a.createdAt ?? ''))
+    releaseList.value = sorted.map(toReleaseItem)
   }
-  catch {
-    // Keep the fallback list — the demo always shows meaningful versions.
-  }
+
+  // Both lookups can come back empty; the seeded fallback stays in place then.
+  stableRelease.value
+    = (stable ? toReleaseItem(stable) : null)
+      ?? releaseList.value.find(item => item.channel === 'RELEASE')
+      ?? stableRelease.value
 }
 
+// ── Version capsule ──────────────────────────────────────────────────────────
+const userArch = computed<AssetArch>(() => detectArch())
+
+const capsuleMeta = computed(() => channelMeta(latestRelease.value?.channel ?? 'RELEASE'))
+
+/**
+ * `getArchLabel` speaks Apple's language — "Intel" and "Apple Silicon" — which
+ * only means anything on macOS. A Windows x64 build is not an "Intel" build.
+ */
+function archLabel(platform: AssetPlatform, arch: AssetArch): string {
+  if (platform === 'darwin')
+    return getArchLabel(arch)
+  if (arch === 'universal')
+    return 'Universal'
+  return arch === 'arm64' ? 'ARM64' : 'x64'
+}
+
+/** Ordered so the visitor's own platform leads and carries the primary button. */
+function toBuilds(assets: ReleaseAsset[] | undefined): TxVersionBuild[] {
+  if (!assets?.length)
+    return []
+
+  const recommended = findAssetForPlatform(assets, heroPlatform.value, userArch.value)
+
+  return [...assets]
+    .sort((a, b) => Number(b.id === recommended?.id) - Number(a.id === recommended?.id))
+    .map((asset) => {
+      const ext = asset.filename.includes('.') ? `.${asset.filename.split('.').pop()}` : ''
+      return {
+        id: asset.id,
+        name: `${getPlatformLabel(asset.platform)} · ${archLabel(asset.platform, asset.arch)}`,
+        meta: [ext, formatFileSize(asset.size)].filter(Boolean).join(' · '),
+        href: asset.downloadUrl,
+        recommended: asset.id === recommended?.id,
+      }
+    })
+}
+
+const capsuleBuilds = computed(() => toBuilds(latestRelease.value?.assets))
+
+const stableAsset = computed(() =>
+  findAssetForPlatform(stableRelease.value?.assets, heroPlatform.value, userArch.value))
+
+/** Falls back to the Updates page whenever there is no directly linkable asset. */
+const primaryHref = computed(() => stableAsset.value?.downloadUrl ?? '/updates')
+
 // ── Flip-overlay (version history) ───────────────────────────────────────────
+// The capsule's right half only triggers this; it renders no anchored panel.
 const overlayOpen = ref(false)
 
 function onKeydown(event: KeyboardEvent) {
@@ -290,7 +380,7 @@ function closeOverlay() {
     return
   document.documentElement.style.overflow = ''
   window.removeEventListener('keydown', onKeydown)
-  triggerRef.value?.focus()
+  triggerRef.value?.historyRef?.focus()
 }
 
 function detectHeroPlatform(): HeroPlatform {
@@ -375,7 +465,7 @@ onBeforeUnmount(() => {
       </p>
 
       <div class="ExpHero-Actions reveal" style="--d: 140ms">
-        <NuxtLink class="NexusButton is-primary" to="/updates">
+        <NuxtLink class="NexusButton is-primary" :to="primaryHref">
           <TxOsIcon :platform="heroPlatform" />
           <span>{{ copy.primary }}</span>
         </NuxtLink>
@@ -385,45 +475,35 @@ onBeforeUnmount(() => {
         </NuxtLink>
       </div>
 
-      <div v-if="latestRelease" class="ExpHero-VersionWrap reveal" style="--d: 200ms">
-        <button
+      <div v-if="latestRelease" class="ExpHero-VersionWrap reveal" style="--d: 220ms">
+        <TxVersionCapsule
           ref="triggerRef"
-          type="button"
-          class="ExpHero-VersionPill"
-          aria-haspopup="dialog"
-          :aria-expanded="overlayOpen"
-          @click="openOverlay"
+          class="ExpHero-Capsule"
+          :version="latestRelease.tag"
+          :channel="capsuleMeta.code"
+          :tone="capsuleMeta.tone"
+          :history-label="copy.history"
+          :download-label="copy.downloadBuild"
+          @history="openOverlay"
         >
-          <span class="ExpHero-VersionDot" :class="channelMeta(latestRelease.channel).cls" aria-hidden="true" />
-          <span class="ExpHero-VersionLabel">{{ copy.latest }}</span>
-          <span class="ExpHero-VersionTag">{{ latestRelease.tag }}</span>
-          <span class="ExpHero-VersionSep" aria-hidden="true" />
-          <span class="ExpHero-VersionHistory">{{ copy.history }}</span>
-          <span class="i-carbon-chevron-down ExpHero-VersionChevron" aria-hidden="true" />
-        </button>
-
-        <div
-          class="ExpHero-VersionPop"
-          :class="latestTrust.verified ? 'is-verified' : 'is-preview'"
-          role="tooltip"
-        >
-          <div class="ExpHero-VersionPopHead">
-            <span class="ExpHero-VersionPopIcon" aria-hidden="true">
-              <span
-                :class="latestTrust.verified ? 'i-carbon-checkmark-filled' : 'i-carbon-warning-alt-filled'"
-              />
-            </span>
-            <span class="ExpHero-VersionPopTitle">{{ latestTrust.title }}</span>
-          </div>
-          <p class="ExpHero-VersionPopDesc">
-            {{ latestTrust.desc }}
-          </p>
-          <ul v-if="latestTrust.points.length" class="ExpHero-VersionPopList">
-            <li v-for="point in latestTrust.points" :key="point">
-              {{ point }}
-            </li>
-          </ul>
-        </div>
+          <template #download>
+            <TxVersionDownloadPanel
+              :notice="capsuleNotice"
+              :builds="capsuleBuilds"
+              :builds-label="copy.chooseBuild"
+              :download-label="copy.download"
+              :empty-text="copy.noBuilds"
+            >
+              <template #footer>
+                <span class="ExpHero-PanelFootLead">{{ copy.certifiedTrack }}</span>
+                <NuxtLink class="ExpHero-PanelFootLink" :to="primaryHref">
+                  {{ copy.getStable }}
+                  <span class="i-carbon-arrow-right" aria-hidden="true" />
+                </NuxtLink>
+              </template>
+            </TxVersionDownloadPanel>
+          </template>
+        </TxVersionCapsule>
       </div>
 
       <div class="ExpHero-Trust reveal" style="--d: 260ms">
@@ -531,8 +611,8 @@ onBeforeUnmount(() => {
                   </span>
                 </div>
                 <p class="VersionOverlay-Note">
-{{ latestRelease.note || copy.whatsNew }}
-</p>
+                  {{ latestRelease.note || copy.whatsNew }}
+                </p>
                 <div class="VersionOverlay-LatestFoot">
                   <span class="VersionOverlay-Date">{{ formatDate(latestRelease.date) }}</span>
                   <span class="VersionOverlay-Whats">
@@ -615,9 +695,11 @@ onBeforeUnmount(() => {
     linear-gradient(180deg, rgba(3, 3, 5, 0.3) 0%, rgba(3, 3, 5, 0) 38%, rgba(3, 3, 5, 0.78) 100%);
 }
 
+/* Above .ExpHero-Product: this block is a stacking context, so an open capsule
+   panel cannot escape it — without this the product card paints over the panel. */
 .ExpHero-Content {
   position: relative;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -748,216 +830,65 @@ onBeforeUnmount(() => {
   background: rgba(246, 247, 244, 0.88);
 }
 
-/* ── Version pill (opens flip overlay, hover reveals trust popover) ──────── */
+/* ── Version capsule (preview channel) ──────────────────────────────────── */
 .ExpHero-VersionWrap {
   position: relative;
+  z-index: 5;
   display: inline-flex;
-  margin-top: 1.2rem;
+  margin-top: 1.5rem;
 }
 
-.ExpHero-VersionPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  border: 1px solid rgba(246, 247, 244, 0.14);
-  border-radius: 999px;
-  background: rgba(16, 18, 28, 0.55);
-  padding: 0.42rem 0.85rem;
-  color: rgba(246, 247, 244, 0.75);
-  font: inherit;
-  font-size: 0.84rem;
-  font-weight: 560;
-  cursor: pointer;
+/* The hero is always dark, so the capsule's tokens are pinned to the aurora
+   palette rather than following the app-wide light/dark theme. */
+.ExpHero-Capsule {
+  --tx-version-capsule-bg: rgba(16, 18, 28, 0.55);
+  --tx-version-capsule-border-color: rgba(246, 247, 244, 0.14);
+  --tx-version-capsule-accent: #cbb8ff;
+
+  /* `preview` tone resolves through --tx-color-primary; the aurora wants purple. */
+  --tx-color-primary: #7f6cff;
+  --tx-text-color-primary: #fff;
+  --tx-text-color-secondary: rgba(246, 247, 244, 0.48);
+
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition:
-    border-color 180ms ease,
-    background-color 180ms ease,
-    transform 180ms ease;
 }
 
-.ExpHero-VersionPill:hover {
-  border-color: rgba(127, 108, 255, 0.55);
-  background: rgba(30, 28, 52, 0.6);
-  transform: translateY(-1px);
-}
+.ExpHero-Capsule :deep(.tx-version-download-panel),
+.ExpHero-Capsule :deep(.tx-version-history-panel) {
+  --tx-version-panel-bg: rgba(18, 20, 30, 0.94);
+  --tx-version-panel-border-color: rgba(246, 247, 244, 0.14);
+  --tx-version-panel-accent: #cbb8ff;
+  --tx-color-primary: #7f6cff;
+  --tx-text-color-primary: #fff;
+  --tx-text-color-regular: rgba(246, 247, 244, 0.72);
+  --tx-text-color-secondary: rgba(246, 247, 244, 0.66);
+  --tx-text-color-placeholder: rgba(246, 247, 244, 0.42);
+  --tx-fill-color: rgba(246, 247, 244, 0.07);
+  --tx-fill-color-light: rgba(246, 247, 244, 0.05);
+  --tx-fill-color-lighter: rgba(246, 247, 244, 0.03);
+  --tx-color-warning: #febc2e;
+  --tx-color-success: #35c2a4;
 
-.ExpHero-VersionPill:focus-visible {
-  outline: 2px solid rgba(146, 132, 255, 0.8);
-  outline-offset: 3px;
-}
-
-.ExpHero-VersionDot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 999px;
-  background: rgba(246, 247, 244, 0.4);
-}
-
-.ExpHero-VersionDot.is-release {
-  background: #35c2a4;
-  box-shadow: 0 0 10px rgba(53, 194, 164, 0.7);
-}
-
-.ExpHero-VersionDot.is-beta {
-  background: #7f6cff;
-  box-shadow: 0 0 10px rgba(127, 108, 255, 0.7);
-}
-
-.ExpHero-VersionDot.is-snapshot {
-  background: #febc2e;
-  box-shadow: 0 0 10px rgba(254, 188, 46, 0.7);
-}
-
-.ExpHero-VersionLabel {
-  color: rgba(246, 247, 244, 0.48);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.72rem;
-}
-
-.ExpHero-VersionTag {
-  color: #fff;
-  font-weight: 680;
-}
-
-.ExpHero-VersionSep {
-  width: 1px;
-  height: 0.9rem;
-  background: rgba(246, 247, 244, 0.16);
-}
-
-.ExpHero-VersionHistory {
-  color: #cbb8ff;
-  font-weight: 620;
-}
-
-.ExpHero-VersionChevron {
-  color: rgba(203, 184, 255, 0.8);
-  font-size: 0.9rem;
-}
-
-/* ── Version trust popover (hover / keyboard-focus) ──────────────────────── */
-.ExpHero-VersionPop {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 50%;
-  z-index: 30;
-  width: max-content;
-  max-width: min(21rem, 82vw);
-  padding: 0.85rem 0.95rem;
-  border: 1px solid rgba(246, 247, 244, 0.14);
-  border-radius: 14px;
-  background: rgba(18, 20, 30, 0.94);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 24px 60px rgba(3, 4, 10, 0.62);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  text-align: left;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translate(-50%, 6px);
-  transition:
-    opacity 200ms ease,
-    transform 200ms ease,
-    visibility 200ms;
 }
 
-/* Arrow + a transparent bridge so the cursor can cross the gap without closing */
-.ExpHero-VersionPop::before {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-bottom-color: rgba(18, 20, 30, 0.94);
+.ExpHero-PanelFootLead {
+  color: rgba(246, 247, 244, 0.42);
 }
 
-.ExpHero-VersionPop::after {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  right: 0;
-  height: 16px;
-}
-
-.ExpHero-VersionWrap:hover .ExpHero-VersionPop,
-.ExpHero-VersionWrap:focus-within .ExpHero-VersionPop {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translate(-50%, 0);
-}
-
-.ExpHero-VersionPopHead {
-  display: flex;
+.ExpHero-PanelFootLink {
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.45rem;
-}
-
-.ExpHero-VersionPopIcon {
-  display: grid;
-  place-items: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 999px;
-  font-size: 0.9rem;
-}
-
-.ExpHero-VersionPop.is-verified .ExpHero-VersionPopIcon {
-  color: #7ff0d5;
-  background: rgba(53, 194, 164, 0.18);
-}
-
-.ExpHero-VersionPop.is-preview .ExpHero-VersionPopIcon {
-  color: #ffd98a;
-  background: rgba(254, 188, 46, 0.18);
-}
-
-.ExpHero-VersionPopTitle {
-  color: #fff;
-  font-size: 0.9rem;
+  gap: 0.3rem;
+  color: #cbb8ff;
   font-weight: 680;
+  text-decoration: none;
 }
 
-.ExpHero-VersionPopDesc {
-  margin: 0;
-  color: rgba(246, 247, 244, 0.72);
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
-
-.ExpHero-VersionPopList {
-  display: grid;
-  gap: 0.34rem;
-  margin: 0.55rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.ExpHero-VersionPopList li {
-  position: relative;
-  padding-left: 0.9rem;
-  color: rgba(246, 247, 244, 0.66);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
-.ExpHero-VersionPopList li::before {
-  content: '';
-  position: absolute;
-  top: 0.5rem;
-  left: 0.12rem;
-  width: 4px;
-  height: 4px;
-  border-radius: 999px;
-  background: #ffd98a;
-  opacity: 0.8;
+.ExpHero-PanelFootLink:hover {
+  text-decoration: underline;
 }
 
 /* ── Trust row ──────────────────────────────────────────────────────────── */
@@ -1255,11 +1186,6 @@ onBeforeUnmount(() => {
 
   .cc-row-enter-active,
   .cc-row-leave-active {
-    transition: none;
-  }
-
-  .ExpHero-VersionPop {
-    transform: translate(-50%, 0);
     transition: none;
   }
 }
