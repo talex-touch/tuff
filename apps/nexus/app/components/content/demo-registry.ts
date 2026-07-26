@@ -303,5 +303,7 @@ export const demoLoaders: Record<string, DemoLoader> = {
   TuffLogoStrokePaletteDemo: () => import('./demos/TuffLogoStrokePaletteDemo.vue'),
   TypingIndicatorTypingIndicatorDemo: () => import('./demos/TypingIndicatorTypingIndicatorDemo.vue'),
   TypingIndicatorTypingIndicatorVariantsDemo: () => import('./demos/TypingIndicatorTypingIndicatorVariantsDemo.vue'),
+  VersionCapsuleChannelTonesDemo: () => import('./demos/VersionCapsuleChannelTonesDemo.vue'),
+  VersionCapsuleVersionCapsuleDemo: () => import('./demos/VersionCapsuleVersionCapsuleDemo.vue'),
   VirtualListVirtualListDemo: () => import('./demos/VirtualListVirtualListDemo.vue'),
 }
