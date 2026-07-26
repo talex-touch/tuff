@@ -5,12 +5,10 @@ import type { FileIconOptions, NativeImage } from 'electron'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { getElectronFileIcon } from '../utils/electron-file-icon'
 import { createLogger } from '../utils/logger'
-import { getAppIconCachePath } from '../modules/box-tool/addon/apps/app-icon-cache'
+import { resolveVersionedAppIconCachePath } from '../modules/box-tool/addon/apps/app-icon-cache'
 import { IconWorkerClient } from '../modules/box-tool/addon/files/workers/icon-worker-client'
 
-const DARWIN_APP_ICON_CACHE_VERSION = 'native-v3'
 const DARWIN_APP_ICON_TARGET_SIZE = 256
-const WINDOWS_APP_ICON_CACHE_VERSION = 'native-v3'
 const WINDOWS_APP_ICON_TARGET_SIZE = 48
 const iconServiceLog = createLogger('IconService')
 
@@ -45,7 +43,8 @@ export class IconService {
   async getCachedAppIcon(appPath: string, bundleId: string): Promise<string | null> {
     if (process.platform !== 'darwin' && process.platform !== 'win32') return null
 
-    const cachedIconPath = this.getAppIconCachePath(appPath, bundleId)
+    const cachedIconPath = resolveVersionedAppIconCachePath(appPath, bundleId, process.platform)
+    if (!cachedIconPath) return null
     try {
       if (process.platform === 'win32') {
         const buffer = await fs.readFile(cachedIconPath)
@@ -64,7 +63,8 @@ export class IconService {
       return Promise.resolve(null)
     }
 
-    const cachePath = this.getAppIconCachePath(appPath, bundleId)
+    const cachePath = resolveVersionedAppIconCachePath(appPath, bundleId, process.platform)
+    if (!cachePath) return Promise.resolve(null)
     const pending = this.appIconExtractions.get(cachePath)
     if (pending) return pending
 
@@ -86,12 +86,6 @@ export class IconService {
 
     this.appIconExtractions.set(cachePath, task)
     return task
-  }
-
-  private getAppIconCachePath(appPath: string, bundleId: string): string {
-    const version =
-      process.platform === 'win32' ? WINDOWS_APP_ICON_CACHE_VERSION : DARWIN_APP_ICON_CACHE_VERSION
-    return getAppIconCachePath(`${version}:${bundleId || appPath}`, process.platform)
   }
 
   private async renderWindowsAppIcon(

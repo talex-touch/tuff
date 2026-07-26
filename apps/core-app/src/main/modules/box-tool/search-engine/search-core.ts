@@ -116,6 +116,9 @@ const resolveKeyManager = (channel: { keyManager?: unknown }): unknown =>
   channel.keyManager ?? channel
 const SEARCH_MAINTENANCE_INTERVAL_MS = 24 * 60 * 60 * 1000
 const SEARCH_MAINTENANCE_JITTER_MS = 10 * 60 * 1000
+const INITIAL_APP_SCAN_MAX_ATTEMPTS = 3
+const INITIAL_APP_SCAN_RETRY_BASE_MS = 1_000
+const INITIAL_APP_SCAN_RETRY_MAX_MS = 5_000
 
 function hasConcreteActivationFeature(activation: IProviderActivate): boolean {
   const meta = activation.meta
@@ -297,6 +300,51 @@ export class SearchEngineCore
     this.registerProvider(previewProvider)
   }
 
+  private async waitForInitialAppScanRetry(signal: AbortSignal, delayMs: number): Promise<void> {
+    if (signal.aborted) return
+
+    await new Promise<void>((resolve) => {
+      const finish = (): void => {
+        clearTimeout(timer)
+        signal.removeEventListener('abort', finish)
+        resolve()
+      }
+      const timer = setTimeout(finish, delayMs)
+      signal.addEventListener('abort', finish, { once: true })
+    })
+  }
+
+  private async runInitialAppScan(controller: AbortController): Promise<void> {
+    const runtime = this.indexingRuntime
+    if (!runtime) return
+
+    for (let attempt = 1; attempt <= INITIAL_APP_SCAN_MAX_ATTEMPTS; attempt += 1) {
+      if (controller.signal.aborted || this.destroying) return
+
+      try {
+        await runtime.scanSource(APP_INDEXED_SOURCE_ID, IndexedSourceScanReasons.Startup, {
+          signal: controller.signal
+        })
+        return
+      } catch (error) {
+        if (controller.signal.aborted || this.destroying) return
+
+        const retryScheduled = attempt < INITIAL_APP_SCAN_MAX_ATTEMPTS
+        searchEngineLog.error('Initial App indexed-source scan failed', {
+          error,
+          meta: { attempt, maxAttempts: INITIAL_APP_SCAN_MAX_ATTEMPTS, retryScheduled }
+        })
+        if (!retryScheduled) return
+
+        const delayMs = Math.min(
+          INITIAL_APP_SCAN_RETRY_MAX_MS,
+          INITIAL_APP_SCAN_RETRY_BASE_MS * 2 ** (attempt - 1)
+        )
+        await this.waitForInitialAppScanRetry(controller.signal, delayMs)
+      }
+    }
+  }
+
   private startRuntimeServicesOnce(): void {
     if (this.destroying) return
     if (this.startupServicesStarted) return
@@ -305,20 +353,10 @@ export class SearchEngineCore
     if (this.indexingRuntime) {
       const controller = new AbortController()
       this.initialAppScanController = controller
-      const scanPromise = this.indexingRuntime
-        .scanSource(APP_INDEXED_SOURCE_ID, IndexedSourceScanReasons.Startup, {
-          signal: controller.signal
-        })
-        .then(() => undefined)
-        .catch((error) => {
-          if (!controller.signal.aborted) {
-            searchEngineLog.error('Initial App indexed-source scan failed', { error })
-          }
-        })
-        .finally(() => {
-          if (this.initialAppScanPromise === scanPromise) this.initialAppScanPromise = null
-          if (this.initialAppScanController === controller) this.initialAppScanController = null
-        })
+      const scanPromise = this.runInitialAppScan(controller).finally(() => {
+        if (this.initialAppScanPromise === scanPromise) this.initialAppScanPromise = null
+        if (this.initialAppScanController === controller) this.initialAppScanController = null
+      })
       this.initialAppScanPromise = scanPromise
     }
     this.startMaintenance()
@@ -2061,6 +2099,7 @@ export class SearchEngineCore
       drainFailures.push(error instanceof Error ? error : new Error(String(error)))
     }
     const appProducerDrain = appProvider.prepareForSearchIndexShutdown()
+    const initialAppScanDrain = this.initialAppScanPromise
     this.initialAppScanController?.abort(new Error('SEARCH_CORE_DESTROYED'))
     const appRuntimeDrain = runtime?.abortAndDrainSourceScans(APP_INDEXED_SOURCE_ID)
     const fileRuntimeDrain = runtime?.abortAndDrainSourceScans(FILE_INDEXED_SOURCE_ID)
@@ -2071,6 +2110,9 @@ export class SearchEngineCore
     })
     await appRuntimeDrain?.catch((error) => {
       recordDrainFailure('Failed to drain active Runtime AppProvider scans', error)
+    })
+    await initialAppScanDrain?.catch((error) => {
+      recordDrainFailure('Failed to drain initial AppProvider scan retry', error)
     })
     await fileRuntimeDrain?.catch((error) => {
       recordDrainFailure('Failed to drain active Runtime FileProvider scans', error)

@@ -21,7 +21,7 @@ import { formatLog, LogStyle, parseStringList } from './app-utils'
 import { resolveDisplayName } from './display-name-sync-utils'
 import { createLogger } from '../../../../utils/logger'
 import { isAppEntryEnabledExtensionMap } from './app-index-metadata'
-import { getAppIconCacheDirs } from './app-icon-cache'
+import { getAppIconCacheDirs, resolveExistingVersionedAppIconCachePath } from './app-icon-cache'
 import { resolveAppSemanticAliases } from './app-semantic-catalog'
 import { resolveAppToolSourceIds } from './app-tool-source-catalog'
 
@@ -60,7 +60,7 @@ function buildProcessedAppItem(app: AppSearchRow, match: AppMatchState): Process
   const launchKind = (app.extensions.launchKind as AppLaunchKind | null) || 'path'
   const description = app.extensions.description || ''
   const alternateNames = parseStringList(app.extensions[ALTERNATE_NAMES_EXTENSION_KEY])
-  const icon = resolveAppIcon(rawIconValue)
+  const icon = resolveAppIcon(rawIconValue, app.path, app.extensions.bundleId || '')
 
   const tuffItem = new TuffItemBuilder(uniqueId, 'application', 'app-provider')
     .setKind('app')
@@ -144,9 +144,8 @@ function isAddressableIconUrl(value: string): boolean {
   }
 }
 
-function resolveAppIcon(rawIconValue: string): ResolvedAppIcon {
+function resolveAppIcon(rawIconValue: string, appPath: string, bundleId: string): ResolvedAppIcon {
   const iconValue = rawIconValue.trim()
-  if (!iconValue) return { type: 'class', value: APP_FALLBACK_ICON }
 
   if (iconValue.startsWith('data:')) {
     return { type: 'url', value: iconValue, colorful: true }
@@ -162,17 +161,22 @@ function resolveAppIcon(rawIconValue: string): ResolvedAppIcon {
       return { type: 'url', value: toTfileUrl(localPath), colorful: true }
     }
 
-    const migratedIconPath = resolveMigratedAppIconCachePath(localPath)
-    return migratedIconPath
-      ? { type: 'url', value: toTfileUrl(migratedIconPath), colorful: true }
+    const recoveredIconPath =
+      resolveMigratedAppIconCachePath(localPath) ??
+      resolveExistingVersionedAppIconCachePath(appPath, bundleId)
+    return recoveredIconPath
+      ? { type: 'url', value: toTfileUrl(recoveredIconPath), colorful: true }
       : { type: 'class', value: APP_FALLBACK_ICON }
   }
 
-  if (isAddressableIconUrl(iconValue)) {
+  if (iconValue && isAddressableIconUrl(iconValue)) {
     return { type: 'url', value: iconValue, colorful: true }
   }
 
-  return { type: 'class', value: APP_FALLBACK_ICON }
+  const recoveredIconPath = resolveExistingVersionedAppIconCachePath(appPath, bundleId)
+  return recoveredIconPath
+    ? { type: 'url', value: toTfileUrl(recoveredIconPath), colorful: true }
+    : { type: 'class', value: APP_FALLBACK_ICON }
 }
 
 function getPinyinSyllables(text: string): string[] {

@@ -1,10 +1,16 @@
 import crypto from 'node:crypto'
+import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { app } from 'electron'
 
 const APP_ICON_CACHE_SUBDIR = ['cache', 'app-icons'] as const
 const APP_ICON_CACHE_DIRNAME = ['Cache', 'app-icons'] as const
+
+const APP_ICON_CACHE_VERSION: Readonly<Record<string, string>> = {
+  darwin: 'native-v3',
+  win32: 'native-v3'
+}
 
 function hashCacheKey(cacheKey: string): string {
   return crypto.createHash('sha256').update(cacheKey).digest('hex').slice(0, 32)
@@ -56,6 +62,31 @@ export function getAppIconCacheDirs(platform: string = process.platform): string
 
 export function getAppIconCachePath(cacheKey: string, platform: string = process.platform): string {
   return path.join(getAppIconCacheDir(platform), `${hashCacheKey(cacheKey)}.png`)
+}
+
+export function resolveVersionedAppIconCachePath(
+  appPath: string,
+  bundleId: string,
+  platform: string = process.platform
+): string | null {
+  const version = APP_ICON_CACHE_VERSION[platform]
+  if (!version) return null
+  return getAppIconCachePath(`${version}:${bundleId || appPath}`, platform)
+}
+
+export function resolveExistingVersionedAppIconCachePath(
+  appPath: string,
+  bundleId: string,
+  platform: string = process.platform
+): string | null {
+  const cachePath = resolveVersionedAppIconCachePath(appPath, bundleId, platform)
+  if (!cachePath) return null
+
+  try {
+    return existsSync(cachePath) ? cachePath : null
+  } catch {
+    return null
+  }
 }
 
 export const __test__ = {
