@@ -25,6 +25,12 @@ export default {
           whatsNew: '更新内容',
           viewAll: '在「更新」中查看全部',
           close: '关闭',
+          downloadBuild: '下载此版本',
+          chooseBuild: '选择构建',
+          download: '下载',
+          noBuilds: '该版本暂未发布构建产物。',
+          certifiedTrack: '想要认证通道？',
+          getStable: '获取稳定版',
         },
         trust: {
           verifiedTitle: '官方认证版本',

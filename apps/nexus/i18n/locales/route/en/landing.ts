@@ -25,6 +25,12 @@ export default {
           whatsNew: 'What’s new',
           viewAll: 'View all in Updates',
           close: 'Close',
+          downloadBuild: 'Download this build',
+          chooseBuild: 'Choose a build',
+          download: 'Download',
+          noBuilds: 'No builds published for this release yet.',
+          certifiedTrack: 'Want the certified track?',
+          getStable: 'Get stable',
         },
         trust: {
           verifiedTitle: 'Official certified build',
