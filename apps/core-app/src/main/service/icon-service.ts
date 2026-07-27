@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 import type { FileIconOptions, NativeImage } from 'electron'
+import { writeDarwinAppIcon } from '@talex-touch/tuff-native'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { getElectronFileIcon } from '../utils/electron-file-icon'
 import { createLogger } from '../utils/logger'
@@ -27,6 +28,7 @@ function normalizeIconFileName(rawValue: string | null): string | null {
 export class IconService {
   private readonly fileIconWorker = new IconWorkerClient()
   private readonly appIconExtractions = new Map<string, Promise<string | null>>()
+  private darwinAppIconQueue: Promise<void> = Promise.resolve()
 
   getFileIconWorkerStatus() {
     return this.fileIconWorker.getStatus()
@@ -135,7 +137,7 @@ export class IconService {
       return cachedIconPath
     }
 
-    if (await this.renderNativeIcon(appPath, cachedIconPath)) {
+    if (await this.renderDarwinNativeIcon(appPath, cachedIconPath)) {
       return cachedIconPath
     }
 
@@ -193,33 +195,39 @@ export class IconService {
     }
   }
 
-  private async renderNativeIcon(appPath: string, cachedIconPath: string): Promise<boolean> {
-    let temporaryIconPath = ''
-    try {
-      const nativeIcon = await this.getSystemFileIcon(appPath, { size: 'large' })
-      if (!nativeIcon || nativeIcon.isEmpty()) return false
-
-      let png = nativeIcon.toPNG({ scaleFactor: 2 })
-      if (png.length === 0) png = nativeIcon.toPNG()
-      if (png.length === 0) return false
-
-      await fs.mkdir(path.dirname(cachedIconPath), { recursive: true })
-      temporaryIconPath = `${cachedIconPath}.${process.pid}.${Date.now()}.tmp`
-      await fs.writeFile(temporaryIconPath, png)
-      await fs.rename(temporaryIconPath, cachedIconPath)
-      return true
-    } catch (error) {
-      if (temporaryIconPath) {
-        await fs.rm(temporaryIconPath, { force: true }).catch(() => undefined)
-      }
-      iconServiceLog.debug('Native app icon extraction failed', {
-        meta: {
-          pathLength: appPath.length,
-          error: error instanceof Error ? error.message : String(error)
+  private renderDarwinNativeIcon(appPath: string, cachedIconPath: string): Promise<boolean> {
+    const extraction = this.darwinAppIconQueue.then(async () => {
+      try {
+        const result = await writeDarwinAppIcon({
+          sourcePath: appPath,
+          outputPath: cachedIconPath,
+          size: DARWIN_APP_ICON_TARGET_SIZE
+        })
+        if (path.resolve(result.path) !== path.resolve(cachedIconPath)) {
+          iconServiceLog.warn('Native app icon writer returned an unexpected cache path', {
+            meta: { pathLength: appPath.length }
+          })
+          return false
         }
-      })
-      return false
-    }
+
+        await fs.access(cachedIconPath)
+        return true
+      } catch (error) {
+        iconServiceLog.debug('Native app icon extraction failed', {
+          meta: {
+            pathLength: appPath.length,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        })
+        return false
+      }
+    })
+
+    this.darwinAppIconQueue = extraction.then(
+      () => undefined,
+      () => undefined
+    )
+    return extraction
   }
 }
 
