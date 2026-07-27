@@ -464,13 +464,14 @@ export class StorageModule extends BaseModule {
     )
 
     this.transportDisposers.push(
-      this.transport.on(StorageEvents.app.save, (request: StorageSaveRequest, context) => {
+      this.transport.on(StorageEvents.app.save, async (request: StorageSaveRequest, context) => {
         if (!request?.key || typeof request.key !== 'string') {
           return { success: false, version: 0 }
         }
         const payload = typeof request.content === 'string' ? request.content : request.value
 
-        return this.saveConfig(
+        const previousValue = request.persist === true ? this.getConfig(request.key) : null
+        const result = this.saveConfig(
           request.key,
           payload,
           request.clear,
@@ -478,6 +479,26 @@ export class StorageModule extends BaseModule {
           context?.sender?.id,
           request.version
         )
+        if (result.success && request.persist === true) {
+          try {
+            await this.persistConfigNow(request.key)
+          } catch (error) {
+            // Keep the gate closed when the durable write fails. A newer concurrent write owns
+            // the cache and must not be overwritten by this request's rollback.
+            if (previousValue && this.cache.getVersion(request.key) === result.version) {
+              this.saveConfig(
+                request.key,
+                previousValue,
+                false,
+                true,
+                context?.sender?.id,
+                undefined
+              )
+            }
+            throw error
+          }
+        }
+        return result
       })
     )
 
@@ -768,7 +789,9 @@ export class StorageModule extends BaseModule {
       })
     }
 
-    const data = this.cache.getRaw(name)
+    // Persistence is internal maintenance, not user demand. Touching the LRU timestamp here
+    // would make every dirty flush indistinguishable from a concurrent external read.
+    const data = this.cache.peekRaw(name)
     if (data === undefined) {
       storageLog.warn(`Attempted to save non-existent config: ${name}`)
       return this.cache.getVersion(name)

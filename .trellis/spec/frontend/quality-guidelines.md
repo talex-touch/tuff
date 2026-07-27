@@ -1045,3 +1045,86 @@ await db.batch(statements as [AppDbBatchItem, ...AppDbBatchItem[]]);
 ```
 
 Use one addition transaction only when returned file IDs are required for atomic extension writes.
+
+## Scenario: Durable Storage Save Before Lifecycle Admission
+
+### 1. Scope / Trigger
+
+- Trigger: changing `StorageEvents.app.save`, `StorageSaveRequest`, immediate storage flush behavior, onboarding completion, or another renderer action that opens a main-process lifecycle gate.
+- A cache update is not durable completion. The main process must acknowledge the gate only after the active storage backend has persisted the accepted value.
+
+### 2. Signatures
+
+```ts
+interface StorageSaveRequest {
+  key: string;
+  value?: unknown;
+  content?: string;
+  clear?: boolean;
+  force?: boolean;
+  persist?: boolean;
+  version?: number;
+}
+
+StorageEvents.app.save: TuffEvent<StorageSaveRequest, StorageSaveResponse>;
+```
+
+`persist: true` means the handler persists the accepted cache version before replying. Ordinary debounced saves keep `persist` omitted or `false`.
+
+### 3. Contracts
+
+- The renderer sends a detached, clone-safe snapshot. It must not mutate the reactive gate state before the durable request succeeds.
+- Main applies normal conflict/version checks first. If the save is rejected, it does not flush or open the gate.
+- With `persist: true`, main flushes the accepted version before returning success. Persistence failure rejects the request and keeps the lifecycle gate closed.
+- Persistence-internal cache reads use a non-touching accessor. Maintenance must not make a dirty entry look externally hot or hide a concurrent read from eviction checks.
+- On persistence failure, main may restore the previous cache value only while the cache version still equals the failed request's accepted version. A newer concurrent write always wins and must never be overwritten by rollback.
+- Onboarding marks `beginner.init`, closes the guide, hides the primary window, and optionally summons CoreBox only after durable success. Failure leaves the guide available and shows localized recovery feedback.
+
+### 4. Validation & Error Matrix
+
+- Missing/invalid key -> `{ success: false }`; no cache mutation or persistence.
+- Version conflict -> conflict response; no durable flush.
+- Accepted ordinary save -> update cache and use the existing debounce path.
+- Accepted `persist: true` save -> flush the exact accepted version, then return success.
+- Flush fails and no newer write exists -> restore the previous cache value and reject.
+- Flush fails after a newer write -> reject without rollback; preserve the newer version.
+- Renderer request rejects or returns unsuccessful -> keep onboarding visible and keep the main-process admission gate closed.
+
+### 5. Good/Base/Bad Cases
+
+- Good: onboarding sends a detached completed settings snapshot with `persist: true`; main persists it, replies, and only then the renderer closes the guide and summons CoreBox.
+- Base: a normal setting edit updates cache and uses debounced persistence without blocking the UI.
+- Bad: mutate `appSetting.beginner.init` first and race its debounce against an immediate save, treat cache acceptance as durable success, or roll back over a newer concurrent write.
+
+### 6. Tests Required
+
+- Storage handler tests assert ordinary save behavior, durable success ordering, persistence failure rollback, and newer-write preservation.
+- Renderer tests assert the reactive beginner state and window lifecycle stay unchanged while persistence is pending and after failure.
+- Onboarding flow tests assert success order: durable save -> beginner state -> guide close -> primary-window hide -> optional CoreBox summon.
+- Run focused storage/onboarding tests, CoreApp node/web type-checks, and `git diff --check`. An isolated Electron profile is still required before claiming the complete window-lifecycle experience.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+appSetting.beginner.init = true;
+await transport.send(StorageEvents.app.save, {
+  key: StorageList.APP_SETTING,
+  value: appSetting,
+});
+closeGuide();
+```
+
+#### Correct
+
+```ts
+const result = await transport.send(StorageEvents.app.save, {
+  key: StorageList.APP_SETTING,
+  value: structuredClone(completedSettings),
+  persist: true,
+});
+if (!result.success) return keepGuideOpen();
+appSetting.beginner.init = true;
+closeGuide();
+```
