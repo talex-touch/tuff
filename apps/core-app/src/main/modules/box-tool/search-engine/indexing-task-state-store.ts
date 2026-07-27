@@ -62,6 +62,8 @@ export class MemoryIndexingTaskStateStore implements IndexingTaskStateStore {
 }
 
 export class SqliteIndexingTaskStateStore implements IndexingTaskStateStore {
+  private schemaReady: Promise<void> | null = null
+
   constructor(private readonly db: LibSQLDatabase<typeof schema>) {}
 
   async load(sourceId: string): Promise<IndexedSourceRuntimeTaskState | undefined> {
@@ -142,7 +144,21 @@ export class SqliteIndexingTaskStateStore implements IndexingTaskStateStore {
     )
   }
 
-  private async ensureReady(): Promise<void> {
+  // `CREATE ... IF NOT EXISTS` still takes the SQLite write lock even when it changes nothing, so
+  // running it per save contends with the indexing writers. Share one readiness promise between
+  // concurrent callers and drop it on failure so a transient error stays retryable.
+  private ensureReady(): Promise<void> {
+    if (this.schemaReady) return this.schemaReady
+
+    const ready = this.initializeSchema().catch((error) => {
+      if (this.schemaReady === ready) this.schemaReady = null
+      throw error
+    })
+    this.schemaReady = ready
+    return ready
+  }
+
+  private async initializeSchema(): Promise<void> {
     await this.db.run(sql`
       CREATE TABLE IF NOT EXISTS indexed_source_task_state (
         source_id text PRIMARY KEY NOT NULL,

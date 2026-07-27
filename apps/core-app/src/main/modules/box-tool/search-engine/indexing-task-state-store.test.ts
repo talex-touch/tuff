@@ -276,6 +276,67 @@ describe('IndexingTaskStateStore', () => {
     expect(db.insert).toHaveBeenCalled()
   })
 
+  it('runs the sqlite task state schema DDL once across repeated and concurrent saves', async () => {
+    const db = {
+      run: vi.fn(async () => {}),
+      select: vi.fn(),
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          onConflictDoUpdate: vi.fn(async () => {})
+        }))
+      })),
+      delete: vi.fn()
+    }
+    const store = new SqliteIndexingTaskStateStore(db as never)
+    const state: IndexedSourceRuntimeTaskState = {
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          completedAt: 5
+        }
+      ]
+    }
+
+    await Promise.all([store.save('file-provider', state), store.save('app-provider', state)])
+    await store.save('file-provider', state)
+    await store.save('file-provider', state)
+
+    // CREATE TABLE + CREATE INDEX, once per store instance instead of once per save.
+    expect(db.run).toHaveBeenCalledTimes(2)
+    expect(db.insert).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps the sqlite task state store usable after a failed schema initialization', async () => {
+    const db = {
+      run: vi.fn(async () => {}),
+      select: vi.fn(),
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          onConflictDoUpdate: vi.fn(async () => {})
+        }))
+      })),
+      delete: vi.fn()
+    }
+    db.run.mockRejectedValueOnce(new Error('SQLITE_BUSY: database is locked'))
+    const store = new SqliteIndexingTaskStateStore(db as never)
+    const state: IndexedSourceRuntimeTaskState = {
+      recentTasks: [
+        {
+          kind: 'scan',
+          status: 'succeeded',
+          completedAt: 5
+        }
+      ]
+    }
+
+    await expect(store.save('file-provider', state)).rejects.toThrow('SQLITE_BUSY')
+    expect(db.insert).not.toHaveBeenCalled()
+
+    await expect(store.save('file-provider', state)).resolves.toBeUndefined()
+    expect(db.insert).toHaveBeenCalledTimes(1)
+  })
+
   it('sanitizes sqlite task states before persisting them', async () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     let persisted: { stateJson: string } | undefined
