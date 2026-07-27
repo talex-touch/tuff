@@ -1197,7 +1197,7 @@ importers:
         specifier: workspace:^
         version: link:../../packages/utils
       vue:
-        specifier: ^3.5.33
+        specifier: catalog:frontend
         version: 3.5.39(typescript@5.9.3)
 
   plugins/touch-music:

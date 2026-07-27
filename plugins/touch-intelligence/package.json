@@ -11,6 +11,6 @@
     "@talex-touch/tuff-intelligence": "workspace:^",
     "@talex-touch/tuffex": "workspace:^",
     "@talex-touch/utils": "workspace:^",
-    "vue": "^3.5.33"
+    "vue": "catalog:frontend"
   }
 }
