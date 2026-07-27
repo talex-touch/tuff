@@ -23,6 +23,7 @@ import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffBlockSwitch from '~/components/tuff/TuffBlockSwitch.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
 import ShortcutDialog from '~/views/base/settings/components/ShortcutDialog.vue'
+import { useBeginnerGuide } from '~/composables/useBeginnerGuide'
 import { shortconApi } from '~/modules/channel/main/shortcon'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -33,6 +34,7 @@ const { t } = useI18n()
 const transport = useTuffTransport()
 const { isMac } = useRendererPlatform()
 const settingToolsLog = createRendererLogger('SettingTools')
+const { rerun: rerunBeginnerGuide } = useBeginnerGuide()
 
 const shortcuts = ref<ShortcutWithStatus[] | null>(null)
 const systemShortcuts = computed(() =>
@@ -773,14 +775,21 @@ watch(shortcutsDialogVisible, (visible) => {
       </template>
     </TuffBlockInput>
 
-    <!-- Beginner usage guide switch -->
-    <TuffBlockSwitch
-      v-model="appSetting.beginner.init"
+    <!--
+      Rerunning the guide, not a raw `beginner.init` switch: that flag also admits CoreBox and
+      search in the main process, so exposing it as a toggle let a user disable the launcher
+      entirely while believing they were only turning off a tutorial.
+    -->
+    <TuffBlockSlot
       :title="t('settingTools.usage')"
       :description="t('settingTools.usageDesc')"
       default-icon="i-carbon-book"
       active-icon="i-carbon-book"
-    />
+    >
+      <TxButton variant="flat" type="primary" @click.stop="rerunBeginnerGuide">
+        {{ t('settingTools.usageAction') }}
+      </TxButton>
+    </TuffBlockSlot>
 
     <!-- Shortcut manager -->
     <TuffBlockSlot
