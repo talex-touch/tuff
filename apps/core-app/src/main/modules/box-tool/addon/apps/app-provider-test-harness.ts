@@ -37,6 +37,7 @@ const appProviderMocks = vi.hoisted(() => {
     getAppsMock: vi.fn(),
     getAppsBySourceMock: vi.fn(),
     getAppInfoByPathMock: vi.fn(),
+    ensureAppIconMock: vi.fn<() => Promise<string | null>>(async () => null),
     getLoggerMock: vi.fn((namespace: string) => resolveLogger(namespace)),
     getMainConfigMock: vi.fn(),
     getWatchPathsMock: vi.fn((): string[] => []),
@@ -81,6 +82,7 @@ export const addWatchPathMock = appProviderMocks.addWatchPathMock
 export const getAppsMock = appProviderMocks.getAppsMock
 export const getAppsBySourceMock = appProviderMocks.getAppsBySourceMock
 export const getAppInfoByPathMock = appProviderMocks.getAppInfoByPathMock
+export const ensureAppIconMock = appProviderMocks.ensureAppIconMock
 export const getLoggerMock = appProviderMocks.getLoggerMock
 export const getMainConfigMock = appProviderMocks.getMainConfigMock
 export const getWatchPathsMock = appProviderMocks.getWatchPathsMock
@@ -112,6 +114,8 @@ export function resetAppRuntimeDelegateMocks(): void {
   appRuntimeReconcileMock.mockReset()
   appRuntimeApplyDeltaMock.mockReset()
   appRuntimeResetMock.mockReset()
+  ensureAppIconMock.mockReset()
+  ensureAppIconMock.mockResolvedValue(null)
   appRuntimeScanMock.mockResolvedValue(undefined)
   appRuntimeReconcileMock.mockResolvedValue(undefined)
   appRuntimeApplyDeltaMock.mockResolvedValue(undefined)
@@ -214,6 +218,12 @@ vi.mock('../../../../db/sqlite-retry', () => ({
 
 vi.mock('../../../../db/utils', () => ({
   createDbUtils: vi.fn(() => null)
+}))
+
+vi.mock('../../../../service/icon-service', () => ({
+  iconService: {
+    ensureAppIcon: ensureAppIconMock
+  }
 }))
 
 vi.mock('../../../../service/app-task-gate', () => ({
@@ -461,6 +471,23 @@ export function upsertExtensionRows(
 }
 
 export type AppProviderPrivate = {
+  externalMutationTasks: Set<Promise<unknown>>
+  scheduleAppIconHydration: (
+    scannedApps: Array<{
+      name: string
+      displayName: string
+      path: string
+      icon: string
+      bundleId: string
+      launchKind: 'bundle'
+      launchTarget: string
+      lastModified: Date
+      iconSourcePath?: string
+    }>
+  ) => void
+  persistHydratedAppIcons: (
+    entries: ReadonlyArray<{ appInfo: { path: string }; icon: string }>
+  ) => Promise<Set<string>>
   buildAppExtensions: (
     fileId: number,
     app: {

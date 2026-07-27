@@ -1592,13 +1592,6 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
           appInfo.icon = icon
           hydratedEntries.push({ appInfo, icon })
-          await this.publishAppRuntimeUpsert(appInfo, 'app-icon-hydrated').catch((error) => {
-            logApp(
-              `Failed to publish hydrated icon for ${chalk.yellow(appInfo.path)}`,
-              LogStyle.warning,
-              { error: error instanceof Error ? error.message : String(error) }
-            )
-          })
         } catch (error) {
           logApp(`Failed to hydrate app icon for ${chalk.yellow(appInfo.path)}`, LogStyle.warning, {
             error: error instanceof Error ? error.message : String(error)

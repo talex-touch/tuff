@@ -13,6 +13,7 @@ import {
   createDeferred,
   flushPromises,
   getAppInfoByPathMock,
+  ensureAppIconMock,
   getAppsBySourceMock,
   getAppsMock,
   getHarnessLogger,
@@ -3090,6 +3091,50 @@ describe('appProvider rebuild maintenance', () => {
 
     expect(appRuntimeScanMock).not.toHaveBeenCalled()
     expect(emptyIndexWarnings()).toEqual([])
+  })
+
+  it('persists hydrated icons without publishing an icon-only search delta', async () => {
+    await withPlatform('darwin', async () => {
+      const { appProvider } = await loadSubject()
+      const privateProvider = asPrivateProvider(appProvider)
+      const appPath = '/Applications/AssetCatalog.app'
+      const cachePath = '/tmp/tuff-app-icons/asset-catalog.png'
+      const persistHydratedAppIcons = vi.fn(
+        async (
+          entries: ReadonlyArray<{ appInfo: { path: string }; icon: string }>
+        ): Promise<Set<string>> => new Set(entries.map(({ appInfo }) => appInfo.path))
+      )
+      privateProvider.persistHydratedAppIcons = persistHydratedAppIcons
+      privateProvider._recordMissingIconApps = vi.fn(async () => undefined)
+      ensureAppIconMock.mockResolvedValue(cachePath)
+      appRuntimeApplyDeltaMock.mockClear()
+
+      privateProvider.scheduleAppIconHydration([
+        {
+          name: 'AssetCatalog',
+          displayName: 'AssetCatalog',
+          path: appPath,
+          icon: '',
+          bundleId: 'com.example.asset-catalog',
+          launchKind: 'bundle',
+          launchTarget: appPath,
+          lastModified: new Date('2026-07-27T00:00:00.000Z')
+        }
+      ])
+
+      const hydrationTasks = [...privateProvider.externalMutationTasks]
+      expect(hydrationTasks).toHaveLength(1)
+      await withTimeout(Promise.all(hydrationTasks), 'app icon hydration')
+
+      expect(ensureAppIconMock).toHaveBeenCalledWith(appPath, 'com.example.asset-catalog')
+      expect(persistHydratedAppIcons).toHaveBeenCalledWith([
+        expect.objectContaining({
+          icon: cachePath,
+          appInfo: expect.objectContaining({ path: appPath, icon: cachePath })
+        })
+      ])
+      expect(appRuntimeApplyDeltaMock).not.toHaveBeenCalled()
+    })
   })
 
   it('aborts an in-flight startup backfill retry sleep and waits for its tracked producer', async () => {
