@@ -2,7 +2,7 @@
   "name": "@talex-touch/tuff-native",
   "version": "1.0.0",
   "private": true,
-  "description": "Native OCR bindings for Talex Touch",
+  "description": "Native platform bindings for Talex Touch",
   "main": "index.js",
   "types": "index.d.ts",
   "exports": {

@@ -1,18 +1,18 @@
-'use strict'
+"use strict";
 
-const process = require('node:process')
-const { loadNativeBinding } = require('./native-loader')
+const process = require("node:process");
+const { loadNativeBinding } = require("./native-loader");
 
 const { nativeBinding, loadError } = loadNativeBinding({
   baseDir: __dirname,
-  moduleName: 'tuff_native_ocr',
-  expectedExports: ['getNativeOcrSupport', 'recognizeImageText'],
-})
+  moduleName: "tuff_native_ocr",
+  expectedExports: ["getNativeOcrSupport", "recognizeImageText"],
+});
 
-const DISABLE_FLAG = 'TUFF_DISABLE_NATIVE_OCR'
+const DISABLE_FLAG = "TUFF_DISABLE_NATIVE_OCR";
 
 function isDisabledByEnv() {
-  return process.env[DISABLE_FLAG] === '1'
+  return process.env[DISABLE_FLAG] === "1";
 }
 
 function getNativeOcrSupport() {
@@ -20,39 +20,68 @@ function getNativeOcrSupport() {
     return {
       supported: false,
       platform: process.platform,
-      reason: 'disabled-by-env',
-    }
+      reason: "disabled-by-env",
+    };
   }
 
-  if (!nativeBinding || typeof nativeBinding.getNativeOcrSupport !== 'function') {
+  if (
+    !nativeBinding ||
+    typeof nativeBinding.getNativeOcrSupport !== "function"
+  ) {
     return {
       supported: false,
       platform: process.platform,
-      reason: loadError instanceof Error ? loadError.message : 'native-module-not-loaded',
-    }
+      reason:
+        loadError instanceof Error
+          ? loadError.message
+          : "native-module-not-loaded",
+    };
   }
 
-  return nativeBinding.getNativeOcrSupport()
+  return nativeBinding.getNativeOcrSupport();
 }
 
 async function recognizeImageText(options) {
   if (isDisabledByEnv()) {
-    const error = new Error('Native OCR is disabled by TUFF_DISABLE_NATIVE_OCR=1')
-    error.code = 'ERR_OCR_DISABLED'
-    throw error
+    const error = new Error(
+      "Native OCR is disabled by TUFF_DISABLE_NATIVE_OCR=1",
+    );
+    error.code = "ERR_OCR_DISABLED";
+    throw error;
   }
 
-  if (!nativeBinding || typeof nativeBinding.recognizeImageText !== 'function') {
+  if (
+    !nativeBinding ||
+    typeof nativeBinding.recognizeImageText !== "function"
+  ) {
     const error = new Error(
       loadError instanceof Error
         ? `Native OCR module is unavailable: ${loadError.message}`
-        : 'Native OCR module is unavailable',
-    )
-    error.code = 'ERR_OCR_ENGINE_UNAVAILABLE'
-    throw error
+        : "Native OCR module is unavailable",
+    );
+    error.code = "ERR_OCR_ENGINE_UNAVAILABLE";
+    throw error;
   }
 
-  return nativeBinding.recognizeImageText(options)
+  return nativeBinding.recognizeImageText(options);
+}
+
+async function writeDarwinAppIcon(options) {
+  if (
+    !nativeBinding ||
+    typeof nativeBinding.writeDarwinAppIconSync !== "function"
+  ) {
+    const error = new Error(
+      loadError instanceof Error
+        ? `Native Darwin app icon module is unavailable: ${loadError.message}`
+        : "Native Darwin app icon module is unavailable",
+    );
+    error.code = "ERR_DARWIN_APP_ICON_UNAVAILABLE";
+    throw error;
+  }
+
+  await new Promise((resolve) => setImmediate(resolve));
+  return nativeBinding.writeDarwinAppIconSync(options);
 }
 
 /**
@@ -64,28 +93,31 @@ async function recognizeImageText(options) {
  */
 async function getNotificationAuthorizationStatus() {
   if (
-    !nativeBinding
-    || typeof nativeBinding.getNotificationAuthorizationStatus !== 'function'
+    !nativeBinding ||
+    typeof nativeBinding.getNotificationAuthorizationStatus !== "function"
   ) {
     return {
-      status: 'unsupported',
-      reason: loadError instanceof Error ? loadError.message : 'native-module-not-loaded',
-    }
+      status: "unsupported",
+      reason:
+        loadError instanceof Error
+          ? loadError.message
+          : "native-module-not-loaded",
+    };
   }
 
   try {
-    return await nativeBinding.getNotificationAuthorizationStatus()
-  }
-  catch (error) {
+    return await nativeBinding.getNotificationAuthorizationStatus();
+  } catch (error) {
     return {
-      status: 'unverifiable',
+      status: "unverifiable",
       reason: error instanceof Error ? error.message : String(error),
-    }
+    };
   }
 }
 
 module.exports = {
   getNativeOcrSupport,
   recognizeImageText,
+  writeDarwinAppIcon,
   getNotificationAuthorizationStatus,
-}
+};
