@@ -3,9 +3,10 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileSafeMock, getElectronFileIconMock } = vi.hoisted(() => ({
+const { execFileSafeMock, getElectronFileIconMock, writeDarwinAppIconMock } = vi.hoisted(() => ({
   execFileSafeMock: vi.fn(),
-  getElectronFileIconMock: vi.fn()
+  getElectronFileIconMock: vi.fn(),
+  writeDarwinAppIconMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -19,6 +20,10 @@ vi.mock('electron', () => ({
     ),
     getFileIcon: vi.fn()
   }
+}))
+
+vi.mock('@talex-touch/tuff-native', () => ({
+  writeDarwinAppIcon: writeDarwinAppIconMock
 }))
 
 vi.mock('../../../../utils/electron-file-icon', () => ({
@@ -99,10 +104,14 @@ describe('darwin app info', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
-    getElectronFileIconMock.mockResolvedValue({
-      isEmpty: () => false,
-      toPNG: () => Buffer.from('native-png')
-    })
+    getElectronFileIconMock.mockRejectedValue(new Error('Darwin app icons must not use Electron'))
+    writeDarwinAppIconMock.mockImplementation(
+      async ({ outputPath, size }: { outputPath: string; size: number }) => {
+        await fs.mkdir(path.dirname(outputPath), { recursive: true })
+        await fs.writeFile(outputPath, 'native-png')
+        return { path: outputPath, width: size, height: size }
+      }
+    )
     execFileSafeMock.mockImplementation(async (_command: string, args: string[]) => {
       const outputIndex = args.indexOf('--out')
       if (outputIndex >= 0 && args[outputIndex + 1]) {
@@ -235,7 +244,7 @@ describe('darwin app info', () => {
     )
   })
 
-  it('hydrates through the guarded native fallback when the bundle ships no .icns', async () => {
+  it('hydrates through the AppKit path writer when the bundle ships no .icns', async () => {
     const tempRoot = await createTempAppBundle('NativeIcon', 'NativeIcon')
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'NativeIcon.app')
@@ -245,7 +254,12 @@ describe('darwin app info', () => {
     const hydratedIcon = await iconService.ensureAppIcon(appPath, appInfo?.bundleId ?? '')
 
     expect(appInfo?.icon).toBe('')
-    expect(getElectronFileIconMock).toHaveBeenCalledWith(appPath, { size: 'large' })
+    expect(writeDarwinAppIconMock).toHaveBeenCalledWith({
+      sourcePath: appPath,
+      outputPath: hydratedIcon,
+      size: 256
+    })
+    expect(getElectronFileIconMock).not.toHaveBeenCalled()
     expect(await fs.readFile(hydratedIcon ?? '', 'utf8')).toBe('native-png')
     expect(execFileSafeMock).not.toHaveBeenCalled()
   })
@@ -269,10 +283,9 @@ describe('darwin app info', () => {
   })
 
   it('keeps the empty fallback when asynchronous icon hydration cannot resolve an icon', async () => {
-    getElectronFileIconMock.mockResolvedValueOnce({
-      isEmpty: () => true,
-      toPNG: () => Buffer.alloc(0)
-    })
+    writeDarwinAppIconMock.mockRejectedValueOnce(
+      Object.assign(new Error('No native app icon'), { code: 'ERR_DARWIN_APP_ICON_UNAVAILABLE' })
+    )
     const tempRoot = await createTempAppBundle('NoIcon', 'NoIcon')
     tempRoots.push(tempRoot)
     const appPath = path.join(tempRoot, 'NoIcon.app')

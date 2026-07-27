@@ -8,7 +8,7 @@ const APP_ICON_CACHE_SUBDIR = ['cache', 'app-icons'] as const
 const APP_ICON_CACHE_DIRNAME = ['Cache', 'app-icons'] as const
 
 const APP_ICON_CACHE_VERSION: Readonly<Record<string, string>> = {
-  darwin: 'native-v3',
+  darwin: 'native-v4',
   win32: 'native-v3'
 }
 
