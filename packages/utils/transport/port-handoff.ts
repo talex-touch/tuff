@@ -107,6 +107,11 @@ export function installTransportPortHandoff(
     }
 
     const port = ports[0]
+    if (!port) {
+      closeTransferredPorts(ports)
+      return
+    }
+
     try {
       targetWindow.postMessage(
         { marker: TRANSPORT_PORT_HANDOFF_MARKER, payload } satisfies TransportPortHandoffMessage,
@@ -150,7 +155,13 @@ export function subscribeTransportPortHandoff(
       return
     }
 
-    listener(event.ports[0], event.data.payload)
+    const port = event.ports[0]
+    if (!port) {
+      closeTransferredPorts(event.ports)
+      return
+    }
+
+    listener(port, event.data.payload)
   }
 
   targetWindow.addEventListener('message', handler)
