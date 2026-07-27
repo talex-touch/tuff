@@ -4,6 +4,7 @@ import { until } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import TouchMenu from '~/components/menu/TouchMenu.vue'
 import TouchMenuItem from '~/components/menu/TouchMenuItem.vue'
+import { useBeginnerGuide } from '~/composables/useBeginnerGuide'
 import { appSetting } from '~/modules/storage/app-storage'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import Beginner from '~/views/base/begin/Beginner.vue'
@@ -17,7 +18,7 @@ const { t } = useI18n()
 useStartupInfo()
 const isLightweightWindow = isCoreBox() || isAssistantWindow()
 
-const beginner = ref(false)
+const { visible: beginner, open: openBeginner } = useBeginnerGuide()
 const mainRuntimeReady = ref(isLightweightWindow)
 
 /**
@@ -37,7 +38,7 @@ async function init(): Promise<void> {
 <template>
   <MainWindowRuntimeServices
     v-if="!isLightweightWindow"
-    @beginner-required="beginner = true"
+    @beginner-required="openBeginner"
     @ready="mainRuntimeReady = true"
   />
   <AppEntrance v-if="mainRuntimeReady" :on-ready="init">
