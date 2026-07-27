@@ -1305,13 +1305,24 @@ function mapAuthUserToProfile(user: AuthUser): UserProfile {
   }
 }
 
+interface SubscriptionStatusPayload {
+  plan?: unknown
+  expiresAt?: string | null
+  activatedAt?: string | null
+  isActive?: boolean
+  features?: {
+    aiRequests?: { used?: number }
+    aiTokens?: { used?: number }
+  }
+}
+
 function normalizeSubscriptionPlan(raw: unknown): SubscriptionPlan {
   const normalized = String(raw ?? '').toLowerCase()
   const values = Object.values(SubscriptionPlan) as string[]
   return values.includes(normalized) ? (normalized as SubscriptionPlan) : SubscriptionPlan.FREE
 }
 
-function mapSubscriptionUsage(status: any): UsageStats {
+function mapSubscriptionUsage(status: SubscriptionStatusPayload): UsageStats {
   const features = status?.features ?? {}
   const aiRequestsUsed = features?.aiRequests?.used ?? 0
   const aiTokensUsed = features?.aiTokens?.used ?? 0
@@ -1324,7 +1335,7 @@ function mapSubscriptionUsage(status: any): UsageStats {
   }
 }
 
-async function fetchSubscriptionStatus(): Promise<any | null> {
+async function fetchSubscriptionStatus(): Promise<SubscriptionStatusPayload | null> {
   try {
     const response = await performNexusRequest({
       method: 'GET',
@@ -1338,7 +1349,11 @@ async function fetchSubscriptionStatus(): Promise<any | null> {
     if (!body) {
       return null
     }
-    return typeof body === 'string' ? JSON.parse(body) : body
+    const parsed: unknown = typeof body === 'string' ? JSON.parse(body) : body
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return null
+    }
+    return parsed as SubscriptionStatusPayload
   } catch (error) {
     authLog.warn('Failed to fetch subscription status', { error })
     return null
