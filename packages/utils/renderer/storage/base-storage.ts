@@ -655,6 +655,41 @@ export class TouchStorage<T extends object> {
   }, 300)
 
   /**
+   * Durably persists a detached snapshot, for callers gating a lifecycle step on the write.
+   *
+   * Such callers must not mutate the reactive state first — its 300 ms debounce would race
+   * the write they are waiting on — so they pass the intended snapshot here and apply it
+   * locally only after this resolves successfully. Going through the store rather than a raw
+   * transport send is what keeps `#currentVersion` in step with the server; a direct send
+   * advances the server version behind the store's back and makes the next autosave conflict.
+   *
+   * @param snapshot Value to persist. Not applied to `data`; the caller owns that.
+   * @returns The save result. `success: false` means the caller must keep its gate closed.
+   */
+  async saveDurable(snapshot: T): Promise<SaveResult> {
+    const value = toPlainStorageValue(snapshot)
+    const result = await this.#saveRemote({
+      key: this.#qualifiedName,
+      value,
+      clear: false,
+      persist: true,
+      // An unhydrated store has no trustworthy baseline, and version 0 would read as a stale
+      // write and come back as a conflict. Let the server accept it unconditionally instead.
+      version: this.#hydrated ? this.#currentVersion : undefined,
+    })
+
+    if (result.success) {
+      this.#currentVersion = result.version
+      // The caller applies this snapshot to `data` next. Recording it as synced keeps that
+      // mutation from triggering a redundant autosave of a value the server already holds.
+      this.#lastSyncedSnapshot = cloneValue(value as T) as T
+      this.#localDirty = false
+    }
+
+    return result
+  }
+
+  /**
    * Enables or disables auto-saving.
    *
    * @param autoSave Whether to enable auto-saving

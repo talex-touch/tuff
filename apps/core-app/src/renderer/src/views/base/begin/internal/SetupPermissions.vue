@@ -4,11 +4,15 @@ import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
-import { inject, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
+import FileAccessCard from '~/components/permission/FileAccessCard.vue'
 import { appSetting } from '~/modules/storage/app-storage'
+import { createRequiredFileAccessRootKey } from '~/modules/system/system-permission-roots'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { useFileAccessPermission } from '~/composables/useFileAccessPermission'
+import { usePermissionAutoRefresh } from '~/composables/usePermissionAutoRefresh'
 import Done from './Done.vue'
 
 type StepFunction = (
@@ -21,6 +25,14 @@ const step: StepFunction = inject('step')!
 const transport = useTuffTransport()
 const setupPermissionsLog = createRendererLogger('SetupPermissions')
 
+/**
+ * File access is the only permission this step asks for. Microphone, notifications and
+ * accessibility are requested just-in-time by the features that consume them, so surfacing them
+ * here would only stack up OS prompts the user has no context for yet.
+ */
+const { roots, isGranted, isDenied, isChecking, isRequesting, check, request, openSettings } =
+  useFileAccessPermission()
+
 const settings = ref({
   autoStart: false,
   showTray: true,
@@ -28,6 +40,12 @@ const settings = ref({
 })
 const traySettingsAvailable = ref(false)
 const isContinuing = ref(false)
+
+const primaryActionLabel = computed(() => {
+  if (isGranted.value) return t('setupPermissions.continue')
+  if (isDenied.value) return t('setupPermissions.openSettings')
+  return t('setupPermissions.grantFileAccess')
+})
 
 function createDefaultPermissionAudit() {
   return {
@@ -65,7 +83,14 @@ if (appSetting.setup.fileAccessRootKey === undefined) {
   appSetting.setup.fileAccessRootKey = ''
 }
 
-onMounted(loadSettings)
+onMounted(async () => {
+  await check()
+  await loadSettings()
+})
+
+// The grant happens in OS dialogs outside our window, so refresh silently on focus and on a
+// background interval instead of making the user press a re-check button.
+usePermissionAutoRefresh(() => check({ silent: true }))
 
 async function loadSettings(): Promise<void> {
   if (appSetting.setup) {
@@ -126,6 +151,12 @@ async function updateShowTray(value: boolean): Promise<void> {
   }
 }
 
+/**
+ * Advancing must never depend on the permission being granted. File access is denied terminally
+ * on macOS — TCC stops prompting once the user says no — so gating the wizard's only exit on it
+ * would strand the user on this screen forever, and `beginner.init` (which admits CoreBox and
+ * search) is written one step later in Done. Skipping is therefore a first-class outcome.
+ */
 function advance(): void {
   if (isContinuing.value) return
   isContinuing.value = true
@@ -136,9 +167,14 @@ function advance(): void {
         comp: Done
       },
       () => {
-        // This screen no longer owns file access, so preserve its existing permission metadata.
+        // Preserve the just-in-time permissions instead of stamping them false: this step no
+        // longer probes them, so it has nothing authoritative to write. File access is recorded
+        // as actually observed, never assumed, or a skipped grant would masquerade as granted
+        // and suppress the settings page's remediation prompt.
         appSetting.setup = {
           ...appSetting.setup,
+          fileAccess: isGranted.value,
+          fileAccessRootKey: isGranted.value ? createRequiredFileAccessRootKey(roots.value) : '',
           autoStart: settings.value.autoStart,
           showTray: settings.value.showTray,
           hideDock: settings.value.hideDock ?? false,
@@ -151,12 +187,29 @@ function advance(): void {
     isContinuing.value = false
   }
 }
+
+/** One primary action per screen: it resolves the permission while blocked, then advances. */
+async function handlePrimaryAction(): Promise<void> {
+  if (isGranted.value) {
+    advance()
+    return
+  }
+
+  if (isDenied.value) {
+    await openSettings()
+    return
+  }
+
+  await request()
+}
 </script>
 
 <template>
   <div class="SetupPermissions">
     <div class="SetupPermissions-Body">
       <h1>{{ t('setupPermissions.title') }}</h1>
+
+      <FileAccessCard :show-action="false" />
 
       <div class="StartupOptions">
         <label class="StartupOptions-Row">
@@ -177,8 +230,20 @@ function advance(): void {
     </div>
 
     <div class="SetupPermissions-Actions">
-      <TxButton type="primary" :loading="isContinuing" @click="advance">
-        {{ t('setupPermissions.continue') }}
+      <TxButton
+        v-if="!isGranted"
+        type="text"
+        :disabled="isChecking || isRequesting || isContinuing"
+        @click="advance"
+      >
+        {{ t('setupPermissions.skipForNow') }}
+      </TxButton>
+      <TxButton
+        type="primary"
+        :loading="isRequesting || isChecking || isContinuing"
+        @click="handlePrimaryAction"
+      >
+        {{ primaryActionLabel }}
       </TxButton>
     </div>
   </div>

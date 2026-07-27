@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn(),
+  saveDurable: vi.fn(),
   hide: vi.fn(),
   step: vi.fn(),
   toastError: vi.fn(),
@@ -51,7 +52,8 @@ vi.mock('~/components/icon/lotties/LottieFrame.vue', () => ({
   default: { template: '<div />' }
 }))
 vi.mock('~/modules/storage/app-storage', () => ({
-  appSetting: mocks.appSetting
+  appSetting: mocks.appSetting,
+  appSettingStore: { saveDurable: mocks.saveDurable }
 }))
 vi.mock('~/modules/platform/renderer-platform', () => ({
   useRendererPlatform: () => ({ isMac: { value: false } })
@@ -80,20 +82,18 @@ describe('onboarding completion', () => {
   }
 
   it('persists completion before closing the guide', async () => {
-    mocks.send.mockResolvedValue({ success: true, version: 1 })
+    mocks.saveDurable.mockResolvedValue({ success: true, version: 1 })
     const wrapper = mountDone()
 
     wrapper.findComponent({ name: 'TxButton' }).vm.$emit('click')
     await vi.waitFor(() => expect(mocks.hide).toHaveBeenCalledOnce())
 
     expect(mocks.appSetting.beginner.init).toBe(true)
-    expect(mocks.send).toHaveBeenCalledWith(
-      expect.anything(),
+    // Routed through the store, not a raw transport send, so the store's version stays in
+    // step with the server and the next autosave does not open with a stale version.
+    expect(mocks.saveDurable).toHaveBeenCalledWith(
       expect.objectContaining({
-        persist: true,
-        value: expect.objectContaining({
-          beginner: expect.objectContaining({ init: true, shortcutArmed: false })
-        })
+        beginner: expect.objectContaining({ init: true, shortcutArmed: false })
       })
     )
     expect(mocks.step).toHaveBeenCalledWith({ comp: null })
@@ -102,7 +102,7 @@ describe('onboarding completion', () => {
 
   it('does not mutate the admission flag before durable persistence settles', async () => {
     let resolveSave!: (result: { success: boolean; version: number }) => void
-    mocks.send.mockImplementation(
+    mocks.saveDurable.mockImplementation(
       () =>
         new Promise((resolve) => {
           resolveSave = resolve
@@ -111,7 +111,7 @@ describe('onboarding completion', () => {
     const wrapper = mountDone()
 
     wrapper.findComponent({ name: 'TxButton' }).vm.$emit('click')
-    await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(mocks.saveDurable).toHaveBeenCalledOnce())
 
     expect(mocks.appSetting.beginner.init).toBe(false)
     expect(mocks.hide).not.toHaveBeenCalled()
@@ -122,7 +122,7 @@ describe('onboarding completion', () => {
   })
 
   it('keeps onboarding open and restores state when persistence is rejected', async () => {
-    mocks.send.mockResolvedValue({ success: false, version: 0 })
+    mocks.saveDurable.mockResolvedValue({ success: false, version: 0 })
     const wrapper = mountDone()
 
     wrapper.findComponent({ name: 'TxButton' }).vm.$emit('click')
