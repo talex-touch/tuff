@@ -2905,6 +2905,73 @@ describe('appProvider rebuild maintenance', () => {
     }
   })
 
+  it('commits scanned app additions in bounded chunks', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    let insertedId = 0
+    const returning = vi.fn(async () => [{ id: ++insertedId }])
+    const insert = vi.fn(() => ({
+      values: vi.fn(() => ({
+        onConflictDoUpdate: vi.fn(() => ({ returning }))
+      }))
+    }))
+    const transaction = vi.fn(async (run: (tx: { insert: typeof insert }) => Promise<void>) => {
+      await run({ insert })
+    })
+    privateProvider.dbUtils = { getDb: () => ({ transaction }) }
+    privateProvider.syncScannedAppExtensions = vi.fn(async () => undefined)
+    const apps = Array.from({ length: 101 }, (_, index) => ({
+      name: `App ${index}`,
+      displayName: `App ${index}`,
+      path: `/Applications/App-${index}.app`,
+      launchKind: 'bundle',
+      launchTarget: `/Applications/App-${index}.app`,
+      lastModified: new Date(1_700_000_000_000 + index)
+    }))
+
+    await privateProvider.persistScannedAppAdditions('app-provider.test-add', apps)
+
+    expect(transaction).toHaveBeenCalledTimes(3)
+    expect(insert).toHaveBeenCalledTimes(101)
+    expect(privateProvider.syncScannedAppExtensions).toHaveBeenCalledTimes(101)
+  })
+
+  it('preserves completed addition chunks when a later chunk fails', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    let insertedId = 0
+    const returning = vi.fn(async () => [{ id: ++insertedId }])
+    const insert = vi.fn(() => ({
+      values: vi.fn(() => ({
+        onConflictDoUpdate: vi.fn(() => ({ returning }))
+      }))
+    }))
+    const transaction = vi
+      .fn()
+      .mockImplementationOnce(async (run: (tx: { insert: typeof insert }) => Promise<void>) => {
+        await run({ insert })
+      })
+      .mockRejectedValueOnce(new Error('SQLITE_BUSY: second chunk failed'))
+    privateProvider.dbUtils = { getDb: () => ({ transaction }) }
+    privateProvider.syncScannedAppExtensions = vi.fn(async () => undefined)
+    const apps = Array.from({ length: 101 }, (_, index) => ({
+      name: `App ${index}`,
+      displayName: `App ${index}`,
+      path: `/Applications/App-${index}.app`,
+      launchKind: 'bundle',
+      launchTarget: `/Applications/App-${index}.app`,
+      lastModified: new Date(1_700_000_000_000 + index)
+    }))
+
+    await expect(
+      privateProvider.persistScannedAppAdditions('app-provider.test-add', apps)
+    ).rejects.toThrow('second chunk failed')
+
+    expect(transaction).toHaveBeenCalledTimes(2)
+    expect(insert).toHaveBeenCalledTimes(50)
+    expect(privateProvider.syncScannedAppExtensions).toHaveBeenCalledTimes(50)
+  })
+
   it('holds the startup index health verdict while an app scan is still in flight', async () => {
     const { appProvider } = await loadSubject()
     const privateProvider = asPrivateProvider(appProvider)

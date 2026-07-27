@@ -361,6 +361,7 @@ const DEFAULT_APP_INDEX_SETTINGS: AppIndexSettings = {
   fullSyncPersistRetry: 3
 }
 const APP_PROVIDER_SHUTDOWN_DRAIN_TIMEOUT_MS = 30_000
+const APP_ADDITION_COMMIT_CHUNK_SIZE = 50
 const EMPTY_APP_EXTENSION_MAP: Readonly<Record<string, string | null>> = {}
 
 interface PendingDeletionEntry {
@@ -503,50 +504,56 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (apps.length === 0 || !this.dbUtils) return
     const db = this.dbUtils.getDb()
 
-    await this.runDbMutation(label, async () => {
-      await this.runAppTransaction(db, async (tx, extensionWriter) => {
-        for (let index = 0; index < apps.length; index += 1) {
-          signal?.throwIfAborted()
-          const appInfo = apps[index]
-          if (!appInfo) continue
-          const [insertedFile] = await tx
-            .insert(filesSchema)
-            .values({
-              path: appInfo.path,
-              name: appInfo.name,
-              displayName: resolveScannedDisplayName(appInfo),
-              type: 'app' as const,
-              mtime: appInfo.lastModified,
-              ctime: new Date()
-            })
-            .onConflictDoUpdate({
-              target: filesSchema.path,
-              set: {
-                name: sql`excluded.name`,
-                displayName: sql`excluded.display_name`,
-                mtime: sql`excluded.mtime`
-              }
-            })
-            .returning()
+    // One transaction for the whole backfill keeps the WAL writer lock for its full duration and
+    // starves every other writer, so commit per chunk and hand the lock back in between. Each row is
+    // an upsert keyed by the unique `files.path`, so a chunk that fails leaves the already committed
+    // apps intact and the next backfill diffs the DB against the scan and re-adds what is missing.
+    for (let offset = 0; offset < apps.length; offset += APP_ADDITION_COMMIT_CHUNK_SIZE) {
+      signal?.throwIfAborted()
+      const chunk = apps.slice(offset, offset + APP_ADDITION_COMMIT_CHUNK_SIZE)
 
-          if (insertedFile) {
-            await this.syncScannedAppExtensions(
-              insertedFile.id,
-              appInfo,
-              extensionWriter,
-              EMPTY_APP_EXTENSION_MAP
-            )
-          }
+      await this.runDbMutation(label, async () => {
+        await this.runAppTransaction(db, async (tx, extensionWriter) => {
+          for (const appInfo of chunk) {
+            signal?.throwIfAborted()
+            if (!appInfo) continue
+            const [insertedFile] = await tx
+              .insert(filesSchema)
+              .values({
+                path: appInfo.path,
+                name: appInfo.name,
+                displayName: resolveScannedDisplayName(appInfo),
+                type: 'app' as const,
+                mtime: appInfo.lastModified,
+                ctime: new Date()
+              })
+              .onConflictDoUpdate({
+                target: filesSchema.path,
+                set: {
+                  name: sql`excluded.name`,
+                  displayName: sql`excluded.display_name`,
+                  mtime: sql`excluded.mtime`
+                }
+              })
+              .returning()
 
-          if ((index + 1) % 50 === 0 || index === apps.length - 1) {
-            logApp(
-              `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(apps.length)} app additions`,
-              LogStyle.info
-            )
+            if (insertedFile) {
+              await this.syncScannedAppExtensions(
+                insertedFile.id,
+                appInfo,
+                extensionWriter,
+                EMPTY_APP_EXTENSION_MAP
+              )
+            }
           }
-        }
+        })
       })
-    })
+
+      logApp(
+        `Processed ${chalk.cyan(offset + chunk.length)}/${chalk.cyan(apps.length)} app additions`,
+        LogStyle.info
+      )
+    }
   }
 
   private buildScannedAppUpdateData(
