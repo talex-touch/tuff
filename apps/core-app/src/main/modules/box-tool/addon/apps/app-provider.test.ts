@@ -15,6 +15,7 @@ import {
   getAppInfoByPathMock,
   getAppsBySourceMock,
   getAppsMock,
+  getHarnessLogger,
   getMainConfigMock,
   loadSubject,
   getWatchPathsMock,
@@ -23,7 +24,8 @@ import {
   runMdlsUpdateScanMock,
   searchRecordExecuteMock,
   upsertExtensionRows,
-  withPlatform
+  withPlatform,
+  withTimeout
 } from './app-provider-test-harness'
 import { buildAppExtensions } from './app-index-metadata'
 
@@ -163,6 +165,12 @@ function createAppSearchDb(options: {
   })
 
   return { db: { select: selectMock }, selectMock, whereMock }
+}
+
+function emptyIndexWarnings(): string[] {
+  return getHarnessLogger('app-provider')
+    .warn.mock.calls.map((call) => String(call[0]))
+    .filter((message) => message.includes('App search index is empty or incomplete'))
 }
 
 describe('appProvider rebuild maintenance', () => {
@@ -2894,6 +2902,194 @@ describe('appProvider rebuild maintenance', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('holds the startup index health verdict while an app scan is still in flight', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const scan = createDeferred<void>()
+    privateProvider.dbUtils = {}
+    privateProvider.searchIndex = {}
+    privateProvider.isInitializing = scan.promise
+    privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
+      healthy: false,
+      appCount: 228,
+      indexedItemCount: 0
+    }))
+    privateProvider._getLastBackfillTime = vi.fn(async () => 1_700_000_000_000)
+    privateProvider.waitForMainRendererReady = vi.fn(async () => undefined)
+
+    const healthTask = privateProvider._ensureStartupIndexHealth()
+    await flushPromises()
+
+    expect(appRuntimeScanMock).not.toHaveBeenCalled()
+    expect(emptyIndexWarnings()).toEqual([])
+
+    privateProvider.isInitializing = null
+    scan.resolve()
+    await withTimeout(healthTask, 'startup index health check')
+
+    expect(appRuntimeScanMock).toHaveBeenCalledWith('startup')
+    expect(emptyIndexWarnings()).toHaveLength(1)
+  })
+
+  it('skips the startup index backfill until the first app index commit lands', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.dbUtils = {}
+    privateProvider.searchIndex = {}
+    privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
+      healthy: false,
+      appCount: 228,
+      indexedItemCount: 0
+    }))
+    privateProvider._getLastBackfillTime = vi.fn(async () => null)
+    privateProvider.waitForMainRendererReady = vi.fn(async () => undefined)
+
+    await withTimeout(privateProvider._ensureStartupIndexHealth(), 'startup index health check')
+
+    expect(appRuntimeScanMock).not.toHaveBeenCalled()
+    expect(emptyIndexWarnings()).toEqual([])
+  })
+
+  it('reports app index health as warming before the first commit and degraded once it landed', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.dbUtils = {}
+    privateProvider.searchIndex = {}
+    privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
+      healthy: false,
+      appCount: 228,
+      indexedItemCount: 0
+    }))
+
+    privateProvider._getLastBackfillTime = vi.fn(async () => null)
+    await expect(appProvider.getIndexedSourceHealth()).resolves.toMatchObject({
+      status: 'warming'
+    })
+
+    privateProvider._getLastBackfillTime = vi.fn(async () => 1_700_000_000_000)
+    await expect(appProvider.getIndexedSourceHealth()).resolves.toMatchObject({
+      status: 'degraded'
+    })
+  })
+
+  it('does not report a disabled startup pipeline as warming', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider.dbUtils = {}
+    privateProvider.searchIndex = {}
+    privateProvider.appIndexSettings.startupBackfillEnabled = false
+    privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
+      healthy: false,
+      appCount: 228,
+      indexedItemCount: 0
+    }))
+    privateProvider._getLastBackfillTime = vi.fn(async () => null)
+
+    await expect(appProvider.getIndexedSourceHealth()).resolves.toMatchObject({
+      status: 'degraded'
+    })
+  })
+
+  it('retains an in-process backfill marker when timestamp persistence fails', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    privateProvider._setConfigTimestamp = vi.fn(async () => false)
+    privateProvider._getConfigTimestamp = vi.fn(async () => null)
+
+    await privateProvider._setLastBackfillTime(1_700_000_000_000)
+
+    await expect(privateProvider._getLastBackfillTime()).resolves.toBe(1_700_000_000_000)
+  })
+
+  it('settles the app index pipeline wait after the startup backfill task resolves', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const backfill = createDeferred<void>()
+    const task = backfill.promise.then(() => undefined)
+    privateProvider.startupBackfillTask = task
+    // Mirrors _scheduleStartupBackfill: the field is cleared from a derived chain, so the wait can
+    // observe an already settled task before the clearing callback has run.
+    void task
+      .catch(() => undefined)
+      .finally(() => {
+        if (privateProvider.startupBackfillTask === task) privateProvider.startupBackfillTask = null
+      })
+
+    const wait = privateProvider.waitForAppIndexPipelineIdle()
+    backfill.resolve()
+
+    await expect(withTimeout(wait, 'app index pipeline wait')).resolves.toBeUndefined()
+    expect(privateProvider.startupBackfillTask).toBeNull()
+  })
+
+  it('waits for every distinct app index producer that is already active', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const backfill = createDeferred<void>()
+    const scan = createDeferred<void>()
+    privateProvider.startupBackfillTask = backfill.promise
+    privateProvider.isInitializing = scan.promise
+
+    let settled = false
+    const wait = privateProvider.waitForAppIndexPipelineIdle().then(() => {
+      settled = true
+    })
+
+    backfill.resolve()
+    await flushPromises()
+    expect(settled).toBe(false)
+
+    scan.resolve()
+    await expect(withTimeout(wait, 'app index pipeline wait')).resolves.toBeUndefined()
+  })
+
+  it('stops re-reading the app index pipeline once the settled scan task repeats', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    const settledScan = Promise.resolve()
+    let reads = 0
+    // Keeps handing back the same settled task, as a producer does until its clearing callback
+    // runs. The null escape hatch bounds a spinning wait so it fails this assertion instead of
+    // starving the event loop and hanging the suite.
+    Object.defineProperty(privateProvider, 'isInitializing', {
+      configurable: true,
+      get: () => (reads++ < 50 ? settledScan : null),
+      set: () => undefined
+    })
+
+    await expect(
+      withTimeout(privateProvider.waitForAppIndexPipelineIdle(), 'app index pipeline wait')
+    ).resolves.toBeUndefined()
+
+    expect(reads).toBeLessThanOrEqual(3)
+  })
+
+  it('stops the app index pipeline wait when shutdown begins mid-wait', async () => {
+    const { appProvider } = await loadSubject()
+    const privateProvider = asPrivateProvider(appProvider)
+    // Never settles: only the shutdown abort can release the wait.
+    const stalledScan = createDeferred<void>()
+    privateProvider.dbUtils = {}
+    privateProvider.searchIndex = {}
+    privateProvider.isInitializing = stalledScan.promise
+    privateProvider.getAppSearchIndexHealth = vi.fn(async () => ({
+      healthy: false,
+      appCount: 228,
+      indexedItemCount: 0
+    }))
+    privateProvider._getLastBackfillTime = vi.fn(async () => 1_700_000_000_000)
+    privateProvider.waitForMainRendererReady = vi.fn(async () => undefined)
+
+    const healthTask = privateProvider._ensureStartupIndexHealth()
+    await flushPromises()
+    await appProvider.prepareForSearchIndexShutdown()
+
+    await withTimeout(healthTask, 'startup index health check')
+
+    expect(appRuntimeScanMock).not.toHaveBeenCalled()
+    expect(emptyIndexWarnings()).toEqual([])
   })
 
   it('aborts an in-flight startup backfill retry sleep and waits for its tracked producer', async () => {

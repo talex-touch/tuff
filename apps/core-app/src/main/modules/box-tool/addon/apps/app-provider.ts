@@ -398,6 +398,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   private appIndexSettings: AppIndexSettings = { ...DEFAULT_APP_INDEX_SETTINGS }
   private startupBackfillStarted = false
   private startupIndexHealthCheckStarted = false
+  private volatileLastBackfillTime: number | null = null
   private volatileLastFullSyncTime: number | null = null
   private indexedSourceRuntimeDelegate: AppIndexedSourceRuntimeDelegate | null = null
   private shuttingDown = false
@@ -951,7 +952,7 @@ class AppProvider implements ISearchProvider<ProviderContext> {
 
   public async getIndexedSourceHealth(): Promise<IndexedSourceHealth> {
     const health = await this.getAppSearchIndexHealth()
-    const isWarming = this.isInitializing !== null || this.startupBackfillStarted
+    const isWarming = await this.isAppIndexWarming()
 
     return {
       status: health.healthy ? 'ready' : isWarming ? 'warming' : 'degraded',
@@ -1718,6 +1719,57 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
   }
 
+  private isAppIndexPipelineBusy(): boolean {
+    return (
+      this.isInitializing !== null ||
+      this.startupBackfillTimer !== null ||
+      this.startupBackfillTask !== null
+    )
+  }
+
+  // A scan writes `files` rows while it runs but its `search_index` rows are only committed once the
+  // producer finishes, so an empty index is expected until the first commit lands. A Runtime scan
+  // reaches `isInitializing` only when its generator is pulled, so the persisted backfill timestamp
+  // is what tells apart "first pass still pending" from "index really is broken".
+  private async isAppIndexWarming(): Promise<boolean> {
+    if (this.isAppIndexPipelineBusy()) return true
+    if (!this.appIndexSettings.startupBackfillEnabled) return false
+    return (await this._getLastBackfillTime()) === null
+  }
+
+  private async waitForAppIndexPipelineIdle(): Promise<void> {
+    const signal = this.startupProducerAbort.signal
+    let onAbort: (() => void) | undefined
+    const aborted = new Promise<void>((resolve) => {
+      if (signal.aborted) {
+        resolve()
+        return
+      }
+      onAbort = () => resolve()
+      signal.addEventListener('abort', onAbort, { once: true })
+    })
+    // Owners clear their task field from a derived promise chain, so a re-read can still hand back
+    // the promise that just settled. Awaiting each promise at most once keeps that from spinning on
+    // microtasks while still following the pipeline onto a genuinely new task.
+    const awaited = new Set<Promise<void>>()
+
+    try {
+      while (!this.shuttingDown && !signal.aborted) {
+        const pending = [this.startupBackfillTask, this.isInitializing].find(
+          (task): task is Promise<void> => task !== null && !awaited.has(task)
+        )
+        if (!pending) return
+        awaited.add(pending)
+        // Producers report their own failures; here a rejection only means the wait is over. The
+        // abort race matters because shutdown drains this probe but not the Runtime scan it waits
+        // on, so a scan that never settles must not pin the drain.
+        await Promise.race([pending.catch(() => undefined), aborted])
+      }
+    } finally {
+      if (onAbort) signal.removeEventListener('abort', onAbort)
+    }
+  }
+
   private async getIndexedAppRecordEvidence(): Promise<IndexedSourceEvidence[]> {
     const scannerEvidence = await this.getScannerAppSourceEvidence()
     if (scannerEvidence) {
@@ -1939,9 +1991,19 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     }
 
     try {
+      await this.waitForAppIndexPipelineIdle()
+      if (this.shuttingDown) return
+
       const health = await this.getAppSearchIndexHealth()
       if (health.healthy) {
         appProviderLog.debug('App search index health check passed', { meta: health })
+        return
+      }
+
+      if (await this.isAppIndexWarming()) {
+        appProviderLog.debug('App search index is warming, deferring to the scan owner', {
+          meta: health
+        })
         return
       }
 
@@ -3738,11 +3800,16 @@ class AppProvider implements ISearchProvider<ProviderContext> {
   }
 
   private async _setLastBackfillTime(timestamp: number): Promise<void> {
+    this.volatileLastBackfillTime = timestamp
     await this._setConfigTimestamp(BACKFILL_LAST_RUN_CONFIG_KEY, timestamp)
   }
 
   private async _getLastBackfillTime(): Promise<number | null> {
-    return this._getConfigTimestamp(BACKFILL_LAST_RUN_CONFIG_KEY)
+    const persisted = await this._getConfigTimestamp(BACKFILL_LAST_RUN_CONFIG_KEY)
+    if (persisted && this.volatileLastBackfillTime) {
+      return Math.max(persisted, this.volatileLastBackfillTime)
+    }
+    return persisted ?? this.volatileLastBackfillTime
   }
 
   private async _getLastFullSyncTime(): Promise<number | null> {

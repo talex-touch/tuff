@@ -3,54 +3,79 @@ import type {
   IndexedSourceResetRequest,
   IndexedSourceResetResult
 } from '@talex-touch/utils/search'
+import type { Mock } from 'vitest'
 import { vi } from 'vitest'
 
-const appProviderMocks = vi.hoisted(() => ({
-  addWatchPathMock: vi.fn(),
-  getAppsMock: vi.fn(),
-  getAppsBySourceMock: vi.fn(),
-  getAppInfoByPathMock: vi.fn(),
-  getLoggerMock: vi.fn(() => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn()
-  })),
-  getMainConfigMock: vi.fn(),
-  getWatchPathsMock: vi.fn((): string[] => []),
-  registerPollingMock: vi.fn(),
-  runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
-    for (let index = 0; index < items.length; index += 1) {
-      await handler(items[index], index)
+type HarnessLogger = {
+  info: Mock
+  warn: Mock
+  error: Mock
+  debug: Mock
+}
+
+const appProviderMocks = vi.hoisted(() => {
+  // Loggers are memoized per namespace so a test can assert on the very instance the subject
+  // captured at import time, which the `vi.resetModules()` reload between tests would otherwise
+  // replace with a fresh object.
+  const loggersByNamespace = new Map<string, HarnessLogger>()
+  const resolveLogger = (namespace: string): HarnessLogger => {
+    const existing = loggersByNamespace.get(namespace)
+    if (existing) return existing
+    const created: HarnessLogger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn()
     }
-  }),
-  runAppTaskMock: vi.fn(async (task: () => Promise<unknown>) => await task()),
-  runMdlsUpdateScanMock: vi.fn(),
-  saveMainConfigMock: vi.fn(),
-  scheduleDbWriteMock: vi.fn(async (_label: string, task: () => Promise<unknown>) => await task()),
-  searchRecordExecuteMock: vi.fn(),
-  shellOpenPathMock: vi.fn(),
-  showInternalSystemNotificationMock: vi.fn(),
-  pinyinMock: vi.fn(),
-  spawnSafeMock: vi.fn(),
-  unregisterPollingMock: vi.fn(),
-  withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task()),
-  runtimeDelegate: {
-    scan: vi.fn(async () => undefined),
-    reconcile: vi.fn(async () => undefined),
-    applyDelta: vi.fn(async (_delta: IndexedSourceDelta) => undefined),
-    reset: vi.fn(
-      async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => ({
-        sourceId: request.sourceId,
-        reason: request.reason,
-        clearedSearchIndex: true,
-        clearedScanProgress: false,
-        startedAt: 0,
-        completedAt: 0
-      })
-    )
+    loggersByNamespace.set(namespace, created)
+    return created
   }
-}))
+
+  return {
+    resolveLogger,
+    addWatchPathMock: vi.fn(),
+    getAppsMock: vi.fn(),
+    getAppsBySourceMock: vi.fn(),
+    getAppInfoByPathMock: vi.fn(),
+    getLoggerMock: vi.fn((namespace: string) => resolveLogger(namespace)),
+    getMainConfigMock: vi.fn(),
+    getWatchPathsMock: vi.fn((): string[] => []),
+    registerPollingMock: vi.fn(),
+    runAdaptiveTaskQueueMock: vi.fn(async (items, handler) => {
+      for (let index = 0; index < items.length; index += 1) {
+        await handler(items[index], index)
+      }
+    }),
+    runAppTaskMock: vi.fn(async (task: () => Promise<unknown>) => await task()),
+    runMdlsUpdateScanMock: vi.fn(),
+    saveMainConfigMock: vi.fn(),
+    scheduleDbWriteMock: vi.fn(
+      async (_label: string, task: () => Promise<unknown>) => await task()
+    ),
+    searchRecordExecuteMock: vi.fn(),
+    shellOpenPathMock: vi.fn(),
+    showInternalSystemNotificationMock: vi.fn(),
+    pinyinMock: vi.fn(),
+    spawnSafeMock: vi.fn(),
+    unregisterPollingMock: vi.fn(),
+    withSqliteRetryMock: vi.fn(async (task: () => Promise<unknown>) => await task()),
+    runtimeDelegate: {
+      scan: vi.fn(async () => undefined),
+      reconcile: vi.fn(async () => undefined),
+      applyDelta: vi.fn(async (_delta: IndexedSourceDelta) => undefined),
+      reset: vi.fn(
+        async (request: IndexedSourceResetRequest): Promise<IndexedSourceResetResult> => ({
+          sourceId: request.sourceId,
+          reason: request.reason,
+          clearedSearchIndex: true,
+          clearedScanProgress: false,
+          startedAt: 0,
+          completedAt: 0
+        })
+      )
+    }
+  }
+})
 
 export const addWatchPathMock = appProviderMocks.addWatchPathMock
 export const getAppsMock = appProviderMocks.getAppsMock
@@ -77,6 +102,10 @@ export const appRuntimeScanMock = appProviderMocks.runtimeDelegate.scan
 export const appRuntimeReconcileMock = appProviderMocks.runtimeDelegate.reconcile
 export const appRuntimeApplyDeltaMock = appProviderMocks.runtimeDelegate.applyDelta
 export const appRuntimeResetMock = appProviderMocks.runtimeDelegate.reset
+
+export function getHarnessLogger(namespace: string): HarnessLogger {
+  return appProviderMocks.resolveLogger(namespace)
+}
 
 export function resetAppRuntimeDelegateMocks(): void {
   appRuntimeScanMock.mockReset()
@@ -363,6 +392,28 @@ export async function flushPromises(): Promise<void> {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
+// Fails the assertion instead of hanging the suite when a producer wait never settles.
+export async function withTimeout<T>(
+  promise: Promise<T>,
+  label: string,
+  timeoutMs = 1000
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${label} did not settle in ${timeoutMs}ms`)),
+          timeoutMs
+        )
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function loadSubject() {
   const subject = await import('./app-provider')
   subject.appProvider.setIndexedSourceRuntimeDelegate({
@@ -444,7 +495,21 @@ export type AppProviderPrivate = {
       identityKind?: string
       displayNameSource?: string
       displayNameQuality?: string
-    }
+    },
+    writer?: unknown,
+    existingExtensions?: Readonly<Record<string, string | null>>
+  ) => Promise<void>
+  persistScannedAppAdditions: (
+    label: string,
+    apps: ReadonlyArray<{
+      name: string
+      displayName: string
+      path: string
+      launchKind: string
+      launchTarget: string
+      lastModified: Date
+    }>,
+    signal?: AbortSignal
   ) => Promise<void>
   context: unknown
   dbUtils: unknown
@@ -581,6 +646,7 @@ export type AppProviderPrivate = {
   _runStartupBackfillWithRetry: () => Promise<void>
   _scheduleStartupBackfill: () => void
   _scheduleStartupIndexHealthCheck: () => void
+  _ensureStartupIndexHealth: () => Promise<void>
   _runFullSyncIfDue: () => Promise<void>
   _shouldRunStartupBackfill: () => Promise<{ allowed: boolean; reason?: string }>
   getAppSearchIndexHealth: () => Promise<{
@@ -588,8 +654,15 @@ export type AppProviderPrivate = {
     appCount: number
     indexedItemCount: number
   }>
+  waitForAppIndexPipelineIdle: () => Promise<void>
   waitForStartupProducerDelay: (delayMs: number) => Promise<void>
   waitForMainRendererReady: () => Promise<void>
+  _getConfigTimestamp: (key: string) => Promise<number | null>
+  _setConfigTimestamp: (key: string, timestamp: number) => Promise<boolean>
+  _getLastBackfillTime: () => Promise<number | null>
+  _setLastBackfillTime: (timestamp: number) => Promise<void>
+  isInitializing: Promise<void> | null
+  shuttingDown: boolean
   startupBackfillTask: Promise<void> | null
   appIndexSettings: Partial<{
     startupBackfillEnabled: boolean
