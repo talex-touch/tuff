@@ -4,7 +4,7 @@ import { TxSwitch } from '@talex-touch/tuffex/switch'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
-import { inject, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import FileAccessCard from '~/components/permission/FileAccessCard.vue'
@@ -30,7 +30,8 @@ const setupPermissionsLog = createRendererLogger('SetupPermissions')
  * accessibility are requested just-in-time by the features that consume them, so surfacing them
  * here would only stack up OS prompts the user has no context for yet.
  */
-const { roots, isGranted, isChecking, isRequesting, check, request } = useFileAccessPermission()
+const { roots, isGranted, isDenied, isChecking, isRequesting, check, request, openSettings } =
+  useFileAccessPermission()
 
 const settings = ref({
   autoStart: false,
@@ -39,6 +40,12 @@ const settings = ref({
 })
 const traySettingsAvailable = ref(false)
 const isContinuing = ref(false)
+
+const primaryActionLabel = computed(() => {
+  if (isGranted.value) return t('setupPermissions.continue')
+  if (isDenied.value) return t('setupPermissions.openSettings')
+  return t('setupPermissions.grantFileAccess')
+})
 
 function createDefaultPermissionAudit() {
   return {
@@ -144,13 +151,13 @@ async function updateShowTray(value: boolean): Promise<void> {
   }
 }
 
-/** One primary action per screen: it grants while blocked, then becomes the wizard's next step. */
-async function handlePrimaryAction(): Promise<void> {
-  if (!isGranted.value) {
-    await request()
-    return
-  }
-
+/**
+ * Advancing must never depend on the permission being granted. File access is denied terminally
+ * on macOS — TCC stops prompting once the user says no — so gating the wizard's only exit on it
+ * would strand the user on this screen forever, and `beginner.init` (which admits CoreBox and
+ * search) is written one step later in Done. Skipping is therefore a first-class outcome.
+ */
+function advance(): void {
   if (isContinuing.value) return
   isContinuing.value = true
 
@@ -161,11 +168,13 @@ async function handlePrimaryAction(): Promise<void> {
       },
       () => {
         // Preserve the just-in-time permissions instead of stamping them false: this step no
-        // longer probes them, so it has nothing authoritative to write.
+        // longer probes them, so it has nothing authoritative to write. File access is recorded
+        // as actually observed, never assumed, or a skipped grant would masquerade as granted
+        // and suppress the settings page's remediation prompt.
         appSetting.setup = {
           ...appSetting.setup,
-          fileAccess: true,
-          fileAccessRootKey: createRequiredFileAccessRootKey(roots.value),
+          fileAccess: isGranted.value,
+          fileAccessRootKey: isGranted.value ? createRequiredFileAccessRootKey(roots.value) : '',
           autoStart: settings.value.autoStart,
           showTray: settings.value.showTray,
           hideDock: settings.value.hideDock ?? false,
@@ -177,6 +186,21 @@ async function handlePrimaryAction(): Promise<void> {
   } finally {
     isContinuing.value = false
   }
+}
+
+/** One primary action per screen: it resolves the permission while blocked, then advances. */
+async function handlePrimaryAction(): Promise<void> {
+  if (isGranted.value) {
+    advance()
+    return
+  }
+
+  if (isDenied.value) {
+    await openSettings()
+    return
+  }
+
+  await request()
 }
 </script>
 
@@ -207,11 +231,19 @@ async function handlePrimaryAction(): Promise<void> {
 
     <div class="SetupPermissions-Actions">
       <TxButton
+        v-if="!isGranted"
+        type="text"
+        :disabled="isChecking || isRequesting || isContinuing"
+        @click="advance"
+      >
+        {{ t('setupPermissions.skipForNow') }}
+      </TxButton>
+      <TxButton
         type="primary"
         :loading="isRequesting || isChecking || isContinuing"
         @click="handlePrimaryAction"
       >
-        {{ isGranted ? t('setupPermissions.continue') : t('setupPermissions.grantFileAccess') }}
+        {{ primaryActionLabel }}
       </TxButton>
     </div>
   </div>
@@ -250,7 +282,9 @@ async function handlePrimaryAction(): Promise<void> {
 
   &-Actions {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
+    gap: 0.5rem;
     padding-top: 0.9rem;
     border-top: 1px solid var(--tx-border-color-lighter);
     flex-shrink: 0;

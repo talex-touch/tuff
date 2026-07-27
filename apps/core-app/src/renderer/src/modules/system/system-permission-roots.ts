@@ -14,6 +14,11 @@ export interface FileAccessRootCheckResult {
   message?: string
 }
 
+export const systemPermissionOpenSettings = defineEvent('system')
+  .module('permission')
+  .event('open-settings')
+  .define<void, boolean>()
+
 export const systemPermissionFileAccessRoots = defineEvent('system')
   .module('permission')
   .event('file-access-roots')

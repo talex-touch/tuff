@@ -11,6 +11,7 @@ import {
   resolveRequiredFileAccessStatus,
   summarizeRequiredFileAccessStatus,
   systemPermissionFileAccessRoots,
+  systemPermissionOpenSettings,
   systemPermissionRequestFileAccessRoots
 } from '~/modules/system/system-permission-roots'
 import type { SystemPermissionStatus } from '~/modules/system/system-permission-refresh'
@@ -34,6 +35,13 @@ export function useFileAccessPermission() {
   const { t } = useI18n()
 
   const isGranted = computed(() => status.value === 'granted')
+
+  /**
+   * Terminal on macOS: once TCC records a denial it stops raising the consent dialog, so
+   * `request()` can never recover from here. Callers must route the user to System Settings
+   * instead of re-prompting, and must not treat this as a state the user can retry out of.
+   */
+  const isDenied = computed(() => status.value === 'denied')
 
   /** Only TCC-gated roots are actionable; the rest are readable without a prompt. */
   const requiredRoots = computed(() => roots.value.filter((root) => root.required))
@@ -125,6 +133,20 @@ export function useFileAccessPermission() {
     }
   }
 
+  /** The only way out of a `denied` status, since TCC will not prompt again. */
+  async function openSettings(): Promise<void> {
+    try {
+      const opened = await transport.send(systemPermissionOpenSettings)
+      if (!opened) {
+        fileAccessLog.warn('System settings did not open')
+        toast.error(t('setupPermissions.requestFailed'))
+      }
+    } catch (error) {
+      fileAccessLog.error('Failed to open system settings', error)
+      toast.error(t('setupPermissions.requestFailed'))
+    }
+  }
+
   return {
     status,
     roots,
@@ -133,7 +155,9 @@ export function useFileAccessPermission() {
     isChecking,
     isRequesting,
     isGranted,
+    isDenied,
     check,
-    request
+    request,
+    openSettings
   }
 }

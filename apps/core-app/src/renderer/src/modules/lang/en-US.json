@@ -3726,6 +3726,8 @@
     "fileAccessDesc": "Used to build the local file index, search filenames and paths, watch file changes, and open CoreBox results.",
     "fileAccessShortDesc": "Index and search files on this device. Read locally only, never uploaded.",
     "grantFileAccess": "Allow access",
+    "deniedHint": "The system recorded a denial. Enable it in System Settings › Privacy & Security › Files and Folders.",
+    "skipForNow": "Skip for now",
     "grantingHint": "Click \"Allow\" in the system dialogs",
     "grantedRoots": "Granted",
     "jitNotice": "Microphone, notifications and accessibility are requested the first time you use them.",
