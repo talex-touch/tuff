@@ -7,6 +7,7 @@
 -->
 <script setup lang="ts" name="FileAccessCard">
 import { TxButton } from '@talex-touch/tuffex/button'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFileAccessPermission } from '~/composables/useFileAccessPermission'
 
@@ -22,13 +23,20 @@ withDefaults(
 )
 
 const { t } = useI18n()
-const { isGranted, isRequesting, requiredRootLabels, request } = useFileAccessPermission()
+const { isGranted, isDenied, isRequesting, requiredRootLabels, request, openSettings } =
+  useFileAccessPermission()
+
+const statusIcon = computed(() => {
+  if (isGranted.value) return 'i-carbon-checkmark-outline'
+  if (isDenied.value) return 'i-carbon-warning-alt'
+  return 'i-carbon-folder-open'
+})
 </script>
 
 <template>
-  <div class="FileAccessCard" :class="{ granted: isGranted }">
+  <div class="FileAccessCard" :class="{ granted: isGranted, denied: isDenied }">
     <span class="FileAccessCard-Icon">
-      <i :class="isGranted ? 'i-carbon-checkmark-outline' : 'i-carbon-folder-open'" />
+      <i :class="statusIcon" />
     </span>
 
     <div class="FileAccessCard-Meta">
@@ -40,6 +48,9 @@ const { isGranted, isRequesting, requiredRootLabels, request } = useFileAccessPe
       <small v-else-if="isGranted" class="granted">
         {{ t('setupPermissions.grantedRoots') }}&#12288;{{ requiredRootLabels.join(' · ') }}
       </small>
+      <small v-else-if="isDenied" class="denied">
+        {{ t('setupPermissions.deniedHint') }}
+      </small>
       <small v-else>{{ requiredRootLabels.join(' · ') }}</small>
     </div>
 
@@ -48,9 +59,9 @@ const { isGranted, isRequesting, requiredRootLabels, request } = useFileAccessPe
       type="primary"
       size="sm"
       :loading="isRequesting"
-      @click="request"
+      @click="isDenied ? openSettings() : request()"
     >
-      {{ t('setupPermissions.grantFileAccess') }}
+      {{ isDenied ? t('setupPermissions.openSettings') : t('setupPermissions.grantFileAccess') }}
     </TxButton>
   </div>
 </template>
@@ -83,6 +94,11 @@ const { isGranted, isRequesting, requiredRootLabels, request } = useFileAccessPe
     color: var(--tx-color-success);
   }
 
+  &.denied &-Icon {
+    background-color: color-mix(in srgb, var(--tx-color-warning) 12%, transparent);
+    color: var(--tx-color-warning);
+  }
+
   &-Meta {
     display: flex;
     flex-direction: column;
@@ -109,6 +125,10 @@ const { isGranted, isRequesting, requiredRootLabels, request } = useFileAccessPe
 
       &.granted {
         color: var(--tx-color-success);
+      }
+
+      &.denied {
+        color: var(--tx-color-warning);
       }
 
       &.granting {

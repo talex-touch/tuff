@@ -3682,6 +3682,8 @@
     "fileAccessDesc": "用于建立本地文件索引、搜索文件名/路径、监听文件变化并在 CoreBox 中打开结果。",
     "fileAccessShortDesc": "索引并搜索本机文件，只在本地读取，不会上传。",
     "grantFileAccess": "允许访问",
+    "deniedHint": "系统已记录拒绝，需前往「系统设置 › 隐私与安全性 › 文件与文件夹」手动开启。",
+    "skipForNow": "稍后再说",
     "grantingHint": "请在系统弹窗中点击「允许」",
     "grantedRoots": "已授权",
     "jitNotice": "麦克风、通知、辅助功能会在首次使用时单独询问。",
