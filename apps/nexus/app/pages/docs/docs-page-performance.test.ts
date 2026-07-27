@@ -443,7 +443,7 @@ describe('docs page performance boundaries', () => {
     expect(tuffDemoWrapper).not.toContain('<TxButton')
     expect(tuffDemoWrapper).toContain('class="tuff-demo__reset-btn"')
     expect(tuffDemoWrapper).toContain('class="tuff-demo__toggle-btn"')
-    expect(tuffDemoWrapper).toContain('class="tuff-demo__run-btn"')
+    expect(tuffDemoWrapper).not.toContain('class="tuff-demo__run-btn"')
     expect(tuffDemoWrapper).toContain('<LazyTuffDemoClientRenderer')
     expect(tuffDemoWrapper).not.toContain('<TuffDemoClientRenderer')
     expect(tuffDemoWrapper).toContain("const LazyEmbeddedCodeBlock = defineAsyncComponent(() => import('./TuffCodeBlock.vue'))")
@@ -451,7 +451,7 @@ describe('docs page performance boundaries', () => {
     expect(tuffDemoWrapper).toContain('v-if="hasCode && showCode"')
     expect(tuffDemoWrapper).not.toContain('<LazyTuffCodeBlock')
     expect(tuffDemoWrapper).not.toContain('<TuffCodeBlock')
-    expect(tuffDemoWrapper).not.toContain('IntersectionObserver')
+    expect(tuffDemoWrapper).toContain('new IntersectionObserver')
     expect(tuffDemoWrapper).not.toContain('scheduleDemoActivation')
 
     expect(tuffCodeBlock).not.toContain("from '~/utils/highlight'")

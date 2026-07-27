@@ -29,16 +29,15 @@ describe('Tuff demo client boundary', () => {
     expect(renderer).toContain("import('./demo-registry')")
   })
 
-  it('keeps the client renderer behind active demo state', () => {
+  it('keeps the client renderer behind viewport-driven demo activation', () => {
     const wrapper = readComponent('./TuffDemoWrapper.vue')
 
     expect(wrapper).toContain('v-if="isDemoActive"')
     expect(wrapper).toContain('<LazyTuffDemoClientRenderer')
-    expect(wrapper).toContain('if (!props.demo || isDemoActive.value)')
-    expect(wrapper).not.toContain("from './demo-lazy'")
-    expect(wrapper).toContain('class="tuff-demo__run-btn"')
-    expect(wrapper).not.toContain('IntersectionObserver')
-    expect(wrapper).not.toContain('scheduleDemoActivation')
+    expect(wrapper).toContain("from './demo-lazy'")
+    expect(wrapper).toContain('new IntersectionObserver')
+    expect(wrapper).toContain('DEMO_LAZY_ROOT_MARGIN')
+    expect(wrapper).not.toContain('class="tuff-demo__run-btn"')
   })
 
   it('keeps embedded code blocks behind the code toggle', () => {

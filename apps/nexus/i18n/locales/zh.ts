@@ -535,8 +535,6 @@ export default {
       showCode: '展开代码',
       hideCode: '隐藏代码',
       reset: '重置',
-      run: '运行示例',
-      paused: '交互预览已暂停。',
       loading: '示例加载中...',
       loadFailed: '示例加载失败。',
       notFound: '未找到示例组件。',
