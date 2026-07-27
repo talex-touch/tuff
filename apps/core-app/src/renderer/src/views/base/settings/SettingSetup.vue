@@ -13,7 +13,6 @@ import { defineEvent } from '@talex-touch/utils/transport/event/builder'
 import { useI18n } from 'vue-i18n'
 
 import { toast } from 'vue-sonner'
-import FileAccessCard from '~/components/permission/FileAccessCard.vue'
 import TuffBetaTag from '~/components/tuff/tags/TuffBetaTag.vue'
 import TuffLinuxTag from '~/components/tuff/tags/TuffLinuxTag.vue'
 import TuffMacOSTag from '~/components/tuff/tags/TuffMacOSTag.vue'
@@ -43,8 +42,7 @@ const notificationSdk = useNotificationSdk()
 const { isMac: isMacOS, isWindows, isLinux } = useRendererPlatform()
 const settingSetupLog = createRendererLogger('SettingSetup')
 
-// File access lives in a shared composable so this page and the onboarding step observe the
-// same status — a grant in either place is immediately reflected in the other.
+// Keep file-access metadata fresh for diagnostics even though this page no longer renders a card.
 const { check: checkFileAccess } = useFileAccessPermission()
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
@@ -577,8 +575,6 @@ function getStatusIconClass(status: string): string {
     memory-name="setting-setup"
   >
     <!-- Permissions Section -->
-    <FileAccessCard class="SettingSetup-FileAccess" />
-
     <TuffBlockSlot
       v-if="isMacOS"
       :title="t('settings.setup.accessibility')"
@@ -815,9 +811,3 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSwitch>
   </TuffGroupBlock>
 </template>
-
-<style lang="scss" scoped>
-.SettingSetup-FileAccess {
-  margin: 0 0 8px;
-}
-</style>
