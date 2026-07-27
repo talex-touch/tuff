@@ -384,6 +384,7 @@ export default {
           preview: {
             label: 'Quick Preview',
             copyResult: 'Copy Result',
+            poweredBy: 'Powered by TuffIntelligence',
             types: {
               expression: 'Quick Expression',
               currency: 'Currency Conversion',
