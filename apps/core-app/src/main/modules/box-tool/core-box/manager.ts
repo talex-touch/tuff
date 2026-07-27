@@ -133,22 +133,36 @@ export class CoreBoxManager {
     }
   }
 
-  private routeAdmissionFailure(
+  /**
+   * Showing the main window IS the recovery path: it renders the onboarding wizard whenever
+   * `beginner.init` is unset, which is the only way the user can lift the gate. When no window
+   * exists to show (tray-only launch, main window closed) the block is completely invisible to
+   * the user, so that case is escalated instead of silently returning.
+   */
+  public routeAdmissionFailure(
     decision: Exclude<OnboardingGateDecision, { state: 'allowed' }>
   ): void {
+    const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
+    const surfaced = Boolean(mainWindow && !mainWindow.isDestroyed())
+
     coreBoxManagerLog.warn('CoreBox activation blocked by onboarding gate', {
       meta: {
         state: decision.state,
         reason: decision.reason,
-        recoverable: decision.recoverable
+        recoverable: decision.recoverable,
+        surfaced
       }
     })
 
-    const mainWindow = getCoreBoxRuntimeOrNull()?.app.window.window
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show()
-      mainWindow.focus()
+    if (!surfaced) {
+      coreBoxManagerLog.error('Onboarding gate blocked with no window to surface it', {
+        meta: { reason: decision.reason }
+      })
+      return
     }
+
+    mainWindow!.show()
+    mainWindow!.focus()
   }
 
   private buildBlockedSearchResult(query: TuffQuery): TuffSearchResult {
