@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   shrink: vi.fn(),
   expand: vi.fn(),
   search: vi.fn(),
+  routeAdmissionFailure: vi.fn(),
   markExpanded: vi.fn(),
   enterUIMode: vi.fn(),
   exitUIMode: vi.fn(),
@@ -132,6 +133,7 @@ vi.mock('./manager', () => ({
     shrink: mocks.shrink,
     expand: mocks.expand,
     search: mocks.search,
+    routeAdmissionFailure: mocks.routeAdmissionFailure,
     markExpanded: mocks.markExpanded,
     enterUIMode: mocks.enterUIMode,
     exitUIMode: mocks.exitUIMode,
@@ -178,6 +180,7 @@ vi.mock('../../../../shared/events/corebox-scenes', () => ({
 }))
 
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { OnboardingGateError } from '../../storage'
 import { ipcManager } from './ipc'
 
 describe('CoreBox IPC hide transport', () => {
@@ -200,6 +203,60 @@ describe('CoreBox IPC hide transport', () => {
     handler?.(undefined, context)
 
     expect(mocks.searchEngineCore.registerIndexCommitStream).toHaveBeenCalledWith(context)
+  })
+
+  it('surfaces the onboarding wizard instead of failing the search stream', async () => {
+    const streamHandler = mocks.streamHandlers.get(
+      CoreBoxEvents.search.session.toEventName()
+    ) as unknown as
+      | ((payload: unknown, context: Record<string, unknown>) => Promise<void>)
+      | undefined
+    const decision = {
+      state: 'blocked' as const,
+      reason: 'onboarding-incomplete' as const,
+      recoverable: true as const
+    }
+    const context = {
+      sender: { id: 7 },
+      signal: new AbortController().signal,
+      emit: vi.fn(),
+      end: vi.fn(),
+      error: vi.fn()
+    }
+
+    mocks.searchEngineCore.startSearch.mockImplementation(() => {
+      throw new OnboardingGateError(decision)
+    })
+
+    // Letting this reject would reach the user as an opaque stream error and an empty result
+    // list, hiding the fact that onboarding is what is blocking them.
+    await expect(streamHandler?.({ query: { text: 'blocked' } }, context)).resolves.toBeUndefined()
+    expect(mocks.routeAdmissionFailure).toHaveBeenCalledWith(decision)
+    expect(context.error).not.toHaveBeenCalled()
+  })
+
+  it('propagates non-gate search failures as stream errors', async () => {
+    const streamHandler = mocks.streamHandlers.get(
+      CoreBoxEvents.search.session.toEventName()
+    ) as unknown as
+      | ((payload: unknown, context: Record<string, unknown>) => Promise<void>)
+      | undefined
+    const context = {
+      sender: { id: 8 },
+      signal: new AbortController().signal,
+      emit: vi.fn(),
+      end: vi.fn(),
+      error: vi.fn()
+    }
+
+    mocks.searchEngineCore.startSearch.mockImplementation(() => {
+      throw new Error('provider exploded')
+    })
+
+    await expect(streamHandler?.({ query: { text: 'boom' } }, context)).rejects.toThrow(
+      'provider exploded'
+    )
+    expect(mocks.routeAdmissionFailure).not.toHaveBeenCalled()
   })
 
   it('keeps search session streams and raw cancellation scoped to their sender', async () => {

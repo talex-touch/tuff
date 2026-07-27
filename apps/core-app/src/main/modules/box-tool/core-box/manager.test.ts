@@ -8,6 +8,17 @@ const mocks = vi.hoisted(() => ({
   hide: vi.fn(),
   shrink: vi.fn(),
   expand: vi.fn(),
+  mainRuntime: null as null | {
+    app: {
+      window: {
+        window: {
+          isDestroyed: () => boolean
+          show: () => void
+          focus: () => void
+        }
+      }
+    }
+  },
   currentWindow: null as null | {
     window: {
       isDestroyed: () => boolean
@@ -48,7 +59,7 @@ vi.mock('../../../core/eventbus/touch-event', () => ({
 }))
 
 vi.mock('../../../core/runtime-accessor', () => ({
-  maybeGetRegisteredMainRuntime: vi.fn(() => null)
+  maybeGetRegisteredMainRuntime: vi.fn(() => mocks.mainRuntime)
 }))
 
 vi.mock('../../../utils/logger', () => ({
@@ -125,6 +136,7 @@ describe('CoreBoxManager polling pressure', () => {
     vi.resetModules()
     vi.clearAllMocks()
     mocks.getMainConfig.mockReturnValue({ beginner: { init: true } })
+    mocks.mainRuntime = null
     mocks.currentWindow = null
   })
 
@@ -173,6 +185,58 @@ describe('CoreBoxManager polling pressure', () => {
     coreBoxManager.trigger(false, { immediate: true })
 
     expect(mocks.hide).toHaveBeenCalledWith({ immediate: true })
+  })
+
+  it('surfaces onboarding admission failures through a live main window', async () => {
+    const show = vi.fn()
+    const focus = vi.fn()
+    mocks.mainRuntime = {
+      app: {
+        window: {
+          window: {
+            isDestroyed: () => false,
+            show,
+            focus
+          }
+        }
+      }
+    }
+    const { coreBoxManager } = await import('./manager')
+
+    coreBoxManager.routeAdmissionFailure({
+      state: 'blocked',
+      reason: 'onboarding-incomplete',
+      recoverable: true
+    })
+
+    expect(show).toHaveBeenCalledOnce()
+    expect(focus).toHaveBeenCalledOnce()
+  })
+
+  it('does not touch a destroyed main window while surfacing admission failure', async () => {
+    const show = vi.fn()
+    const focus = vi.fn()
+    mocks.mainRuntime = {
+      app: {
+        window: {
+          window: {
+            isDestroyed: () => true,
+            show,
+            focus
+          }
+        }
+      }
+    }
+    const { coreBoxManager } = await import('./manager')
+
+    coreBoxManager.routeAdmissionFailure({
+      state: 'blocked',
+      reason: 'onboarding-incomplete',
+      recoverable: true
+    })
+
+    expect(show).not.toHaveBeenCalled()
+    expect(focus).not.toHaveBeenCalled()
   })
 
   it('retries showing when manager state is visible but the native window is hidden', async () => {

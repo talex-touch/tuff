@@ -29,6 +29,7 @@ import { getRegisteredMainRuntime } from '../../../core/runtime-accessor'
 import { createLogger } from '../../../utils/logger'
 import { coreBoxImageTranslateEvent } from '../../../../shared/events/corebox-scenes'
 import { pluginModule } from '../../plugin/plugin-module'
+import { OnboardingGateError } from '../../storage'
 import { getBoxItemManager } from '../item-sdk'
 import searchEngineCore from '../search-engine/search-core'
 import { searchLogger } from '../search-engine/search-logger'
@@ -329,11 +330,26 @@ export class IpcManager {
           return
         }
 
-        const execution = searchEngineCore.startSearch(request.query, {
-          caller: resolveSearchCaller(request.surface, senderId),
-          activations: request.activations,
-          sink: createStreamSearchSink(context)
-        })
+        // A pre-onboarding search is a modeled state, not a fault. `startSearch` signals it by
+        // throwing, and letting that escape the stream handler reports it to the user as a
+        // generic stream error (an empty result list with no explanation) while spamming the
+        // transport's console.error. Route it exactly like the non-streaming path does: surface
+        // the wizard, then end the stream cleanly with no results.
+        let execution: ReturnType<typeof searchEngineCore.startSearch>
+        try {
+          execution = searchEngineCore.startSearch(request.query, {
+            caller: resolveSearchCaller(request.surface, senderId),
+            activations: request.activations,
+            sink: createStreamSearchSink(context)
+          })
+        } catch (error) {
+          if (error instanceof OnboardingGateError) {
+            coreBoxManager.routeAdmissionFailure(error.decision)
+            return
+          }
+          throw error
+        }
+
         const cancel = (): void => {
           execution.cancel()
         }
