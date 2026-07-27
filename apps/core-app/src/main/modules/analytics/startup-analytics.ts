@@ -15,7 +15,7 @@ import type {
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import process from 'node:process'
-import { StorageList } from '@talex-touch/utils'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { getBooleanEnv } from '@talex-touch/utils/env'
 import { app } from 'electron'
@@ -98,10 +98,7 @@ export class StartupAnalytics {
   setMainProcessMetrics(metrics: MainProcessMetrics): void {
     this.currentMetrics.mainProcess = metrics
 
-    if (this.currentMetrics.renderer) {
-      this.currentMetrics.totalStartupTime =
-        this.currentMetrics.renderer.readyTime - metrics.processCreationTime
-    }
+    this.resolveTotalStartupTime()
 
     analyticsLog.debug('Main process metrics recorded', {
       meta: { modulesLoadTime: metrics.modulesLoadTime }
@@ -114,13 +111,24 @@ export class StartupAnalytics {
    * Record renderer process metrics
    */
   setRendererProcessMetrics(metrics: RendererProcessMetrics): void {
+    // This service is a main-process singleton, but the renderer handshake replays on
+    // every page load (HMR full reload, window recreation). Only the first handshake
+    // belongs to the startup we are measuring - a later one would restate main process
+    // uptime as the startup duration and rewrite already finalized metrics in place.
+    if (this.currentMetrics.renderer) {
+      analyticsLog.debug('Ignored renderer handshake after startup was recorded', {
+        meta: {
+          sessionId: this.currentMetrics.sessionId,
+          finalized: this.autoFinalizePromise !== null,
+          readyTime: metrics.readyTime - metrics.startTime
+        }
+      })
+      return
+    }
+
     this.currentMetrics.renderer = metrics
 
-    // Calculate total startup time
-    if (this.currentMetrics.mainProcess) {
-      this.currentMetrics.totalStartupTime =
-        metrics.readyTime - this.currentMetrics.mainProcess.processCreationTime
-    }
+    this.resolveTotalStartupTime()
 
     analyticsLog.success('Renderer process metrics recorded', {
       meta: {
@@ -130,6 +138,31 @@ export class StartupAnalytics {
     })
 
     this.tryAutoFinalize()
+  }
+
+  /**
+   * Resolve cold start duration: process creation -> first renderer ready.
+   *
+   * Only computed once, whichever side arrives last, so the value stays pinned to the
+   * cold start even if the collection order changes.
+   */
+  private resolveTotalStartupTime(): void {
+    const { mainProcess, renderer } = this.currentMetrics
+    if (!mainProcess || !renderer || typeof this.currentMetrics.totalStartupTime === 'number') {
+      return
+    }
+
+    // process.getCreationTime() returns null on some platforms and the caller then falls
+    // back to Date.now() sampled after modules finished loading - later than the renderer
+    // handshake, which would produce a negative duration. Our construction time is the
+    // earliest in-process marker that is always trustworthy.
+    const creationTime = mainProcess.processCreationTime
+    const baseline =
+      Number.isFinite(creationTime) && creationTime > 0
+        ? Math.min(creationTime, this.startTime)
+        : this.startTime
+
+    this.currentMetrics.totalStartupTime = Math.max(0, renderer.readyTime - baseline)
   }
 
   /**

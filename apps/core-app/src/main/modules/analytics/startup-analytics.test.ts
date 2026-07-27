@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { StartupMetrics } from './types'
-import { StorageList } from '@talex-touch/utils'
+import { StorageList } from '@talex-touch/utils/common/storage/constants'
 
 vi.mock('electron', () => ({
   app: {
@@ -49,6 +49,12 @@ vi.mock('@talex-touch/utils/env', async (importOriginal) => {
     getEnvOrDefault: (_key: string, fallback: string) => fallback
   }
 })
+
+vi.mock('../network', () => ({
+  getNetworkService: () => ({
+    request: vi.fn().mockRejectedValue(new Error('network unavailable'))
+  })
+}))
 
 vi.mock('../nexus/runtime-base', () => ({
   getRuntimeNexusBaseUrl: () => 'http://example.test'
@@ -227,5 +233,86 @@ describe('StartupAnalytics averages', () => {
     expect(registerMock).toHaveBeenCalledTimes(1)
     expect(startMock).toHaveBeenCalledTimes(1)
     expect(analytics.startupReportEndpoint).toBe('http://example.test/b')
+  })
+})
+
+interface AnalyticsInternals {
+  startTime: number
+  autoFinalizePromise: Promise<void> | null
+  ensureOutboxFlushTask: (endpoint: string) => void
+}
+
+describe('StartupAnalytics total startup time', () => {
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const createAnalytics = (): {
+    analytics: import('./startup-analytics').StartupAnalytics
+    internals: AnalyticsInternals
+  } => {
+    const analytics = new StartupAnalytics({ enabled: true, maxHistory: 5 })
+    const internals = analytics as unknown as AnalyticsInternals
+    internals.ensureOutboxFlushTask = vi.fn()
+    return { analytics, internals }
+  }
+
+  const mainProcessMetrics = (processCreationTime: number) => ({
+    processCreationTime,
+    electronReadyTime: processCreationTime + 50,
+    modulesLoadTime: 300,
+    totalModules: 1,
+    moduleDetails: [{ name: 'module-a', loadTime: 100, order: 0 }]
+  })
+
+  it('measures cold start once and ignores renderer handshakes after finalize', async () => {
+    const { analytics, internals } = createAnalytics()
+    const processCreationTime = internals.startTime - 200
+
+    analytics.setMainProcessMetrics(mainProcessMetrics(processCreationTime))
+    analytics.setRendererProcessMetrics({
+      startTime: processCreationTime + 100,
+      readyTime: processCreationTime + 900
+    })
+
+    expect(analytics.getCurrentMetrics()?.totalStartupTime).toBe(900)
+    await internals.autoFinalizePromise
+
+    // A renderer reload replays the handshake against the same main-process singleton
+    analytics.setRendererProcessMetrics({
+      startTime: processCreationTime + 8_000_000,
+      readyTime: processCreationTime + 8_000_200
+    })
+
+    const metrics = analytics.getCurrentMetrics()
+    expect(metrics?.totalStartupTime).toBe(900)
+    expect(metrics?.renderer.readyTime).toBe(processCreationTime + 900)
+    expect(analytics.getPerformanceSummary()?.rating).toBe('excellent')
+  })
+
+  it('clamps startup duration when the wall clock moves backwards', async () => {
+    const { analytics, internals } = createAnalytics()
+
+    analytics.setMainProcessMetrics(mainProcessMetrics(internals.startTime))
+    analytics.setRendererProcessMetrics({
+      startTime: internals.startTime - 200,
+      readyTime: internals.startTime - 100
+    })
+
+    expect(analytics.getCurrentMetrics()?.totalStartupTime).toBe(0)
+    await internals.autoFinalizePromise
+  })
+
+  it('falls back to the analytics start time when process creation time is unusable', async () => {
+    const { analytics, internals } = createAnalytics()
+
+    analytics.setRendererProcessMetrics({
+      startTime: internals.startTime + 100,
+      readyTime: internals.startTime + 500
+    })
+    analytics.setMainProcessMetrics(mainProcessMetrics(0))
+
+    expect(analytics.getCurrentMetrics()?.totalStartupTime).toBe(500)
+    await internals.autoFinalizePromise
   })
 })
