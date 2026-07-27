@@ -315,10 +315,17 @@ describe('user identity presentation', () => {
 
     for (const wrapper of [compact, editor, settings]) {
       expect(wrapper.text()).toContain('orbit.user')
-      expect(wrapper.text()).toContain('orbit.user@example.test')
       expect(wrapper.find('img').exists()).toBe(false)
       expect(wrapper.text()).toContain('O')
     }
+
+    // The profile surfaces have room for the address as typed; the settings row is a single
+    // truncating line, so it shows the shared compact form its title already uses.
+    expect(compact.text()).toContain('orbit.user@example.test')
+    expect(editor.text()).toContain('orbit.user@example.test')
+    expect(settings.getComponent({ name: 'TuffBlockSlot' }).props('description')).toBe(
+      'orbit...@example.test'
+    )
 
     authMock.user.value = {}
     await nextTick()

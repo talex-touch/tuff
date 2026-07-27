@@ -1,7 +1,7 @@
 <script setup lang="ts" name="SettingUser">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxModal as TModal } from '@talex-touch/tuffex/modal'
-import { formatCompactAccountLabel } from '@talex-touch/utils/account'
+import { formatCompactAccountLabel, formatCompactEmail } from '@talex-touch/utils/account'
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { isDevEnv } from '@talex-touch/utils/env'
@@ -373,7 +373,7 @@ onMounted(() => {
     <TuffBlockSlot
       v-if="isLoggedIn"
       :title="formatCompactAccountLabel(displayName) || t('settingUser.defaultName')"
-      :description="displayEmail || t('settingUser.loggedIn')"
+      :description="formatCompactEmail(displayEmail) || t('settingUser.loggedIn')"
       default-icon="i-carbon-face-satisfied"
       active-icon="i-carbon-face-satisfied"
       @click="openProfileEditor"
