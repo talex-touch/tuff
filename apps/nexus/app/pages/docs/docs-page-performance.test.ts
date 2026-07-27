@@ -110,9 +110,10 @@ describe('docs page performance boundaries', () => {
     expect(docHero).not.toContain('ResizeObserver')
     expect(docHero).not.toContain('IntersectionObserver')
     expect(docHero).not.toContain('requestAnimationFrame')
-    expect(docHero).toContain('.docs-hero::before')
-    expect(docHero).toContain('.docs-hero::after')
-    expect(docHero).toContain('radial-gradient(circle at center')
+    expect(docHero).not.toContain('.docs-hero__glow')
+    expect(docHero).not.toContain('radial-gradient')
+    expect(docHero).toContain('font-size: 3.5rem')
+    expect(docHero).toContain('font-size: 2.35rem')
   })
 
   it('keeps code block copy headers out of the SSR Vue render graph', () => {
@@ -400,6 +401,11 @@ describe('docs page performance boundaries', () => {
     expect(docsAsideCardsShell).not.toContain('docs-meta')
     expect(docsAsideCardsShell).toContain('class="docs-aside-assistant"')
     expect(docsAsideCardsShell).toContain('emit(\'openAssistant\', assistantTriggerRef.value)')
+    expect(docsAsideCardsShell).toContain("t('docs.aside.askAi')")
+    expect(docsAsideCardsShell).toContain("t('docs.aside.resources')")
+    expect(docsAsideCardsShell).not.toContain("locale.value === 'zh'")
+    expect(i18nEn).toContain("askAi: 'Ask AI about this page'")
+    expect(i18nZh).toContain("askAi: '用 AI 解读本页'")
 
     expect(theHeader).toContain("const HeaderUserMenu = defineAsyncComponent(() => import('./HeaderUserMenu.vue'))")
     expect(theHeader).not.toContain("import HeaderUserMenu from './HeaderUserMenu.vue'")

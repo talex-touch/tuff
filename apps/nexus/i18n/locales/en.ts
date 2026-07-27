@@ -502,10 +502,17 @@ export default {
     redirecting: 'Redirecting to the docs landing…',
     redirectingDeveloper: 'Redirecting to Developer Docs…',
     redirectingGuide: 'Redirecting to User Guide…',
-    outlineLabel: 'Outline',
+    outlineLabel: 'On this page',
     sidebarLabel: 'Navigation',
     assistant: {
       open: 'Open Tuff Assistant',
+    },
+    aside: {
+      askAi: 'Ask AI about this page',
+      resources: 'Resources',
+      reportIssue: 'Report an issue',
+      requestFeature: 'Request a feature',
+      viewGitHub: 'View on GitHub',
     },
     aiNotice: {
       title: 'AI Generated',

@@ -502,10 +502,17 @@ export default {
     redirecting: '正在跳转到文档入口…',
     redirectingDeveloper: '正在跳转到开发者文档…',
     redirectingGuide: '正在跳转到用户指南…',
-    outlineLabel: '大纲',
+    outlineLabel: '本页目录',
     sidebarLabel: '导航',
     assistant: {
       open: '打开 Tuff Assistant',
+    },
+    aside: {
+      askAi: '用 AI 解读本页',
+      resources: '资源',
+      reportIssue: '反馈问题',
+      requestFeature: '功能建议',
+      viewGitHub: '在 GitHub 查看',
     },
     aiNotice: {
       title: 'AI Generated',

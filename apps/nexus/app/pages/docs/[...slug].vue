@@ -1885,7 +1885,7 @@ watch(
 
         <div
           v-else-if="viewState === 'content'"
-          class="docs-surface px-8 py-10 space-y-10"
+          class="docs-surface"
           :class="{ 'docs-surface--hero': showDocHero }"
         >
           <div v-if="showDocHero" class="docs-hero-block">
@@ -2230,9 +2230,12 @@ watch(
   }
 }
 
+/* Flat reading column — the page is type on the background, not a card on a page. */
 .docs-surface {
   position: relative;
-  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2.75rem;
   background: transparent;
   isolation: isolate;
 }
@@ -2240,7 +2243,11 @@ watch(
 .docs-hero-block {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+
+.docs-surface--hero .docs-hero-block {
+  padding-bottom: 0.5rem;
 }
 
 .docs-sync-banner {
@@ -2357,18 +2364,19 @@ watch(
   }
 }
 
+/* Eyebrow above the title — locates the page without competing with it. */
 .docs-hero-breadcrumb {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 0;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  font-weight: 500;
+  letter-spacing: 0;
   text-transform: none;
-  color: var(--docs-muted);
+  color: var(--tx-text-color-placeholder, var(--docs-muted));
 }
 
 .docs-hero-crumb {
@@ -2421,34 +2429,65 @@ a.docs-hero-crumb:hover {
 }
 
 :deep(.docs-prose h1) {
-  font-size: 2.25rem;
-  font-weight: 700;
+  font-size: 2.5rem;
+  font-weight: 600;
   margin-bottom: 1.5rem;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+  line-height: 1.08;
   color: var(--docs-ink);
 }
 
+/* Sections breathe: a wide gap above each h2 is what creates the reading rhythm. */
 :deep(.docs-prose h2) {
-  font-size: 1.75rem;
+  font-size: 1.875rem;
   font-weight: 600;
-  margin-top: 2rem;
-  margin-bottom: 0.8rem;
-  letter-spacing: -0.01em;
-  padding-bottom: 0.25rem;
+  margin-top: 3.75rem;
+  margin-bottom: 0.875rem;
+  letter-spacing: 0;
+  line-height: 1.15;
+  padding-bottom: 0;
+}
+
+/* Whitespace separates sections here, so drop the github-markdown heading rules. */
+:deep(.docs-prose :is(h1, h2)) {
+  border-bottom: 0;
+}
+
+:deep(.docs-prose > h2:first-child) {
+  margin-top: 0;
 }
 
 :deep(.docs-prose h3) {
-  font-size: 1.25rem;
+  font-size: 1.3125rem;
   font-weight: 600;
-  margin-top: 1.5rem;
+  margin-top: 2.25rem;
   margin-bottom: 0.6rem;
+  letter-spacing: 0;
   color: var(--docs-ink);
+}
+
+/*
+ * Headings wrap their text in an anchor for deep links. That anchor is a handle,
+ * not a link to read — it must not inherit the accent-coloured link treatment.
+ */
+:deep(.docs-prose :is(h1, h2, h3, h4, h5, h6) a) {
+  color: inherit;
+  font: inherit;
+  letter-spacing: 0;
+  text-decoration: none;
+  border-bottom: 0;
+  transition: color 0.16s ease;
+}
+
+:deep(.docs-prose :is(h1, h2, h3, h4, h5, h6) a:hover) {
+  color: var(--docs-accent);
 }
 
 :deep(.docs-prose p),
 :deep(.docs-prose ul),
 :deep(.docs-prose ol),
 :deep(.docs-prose li) {
+  font-size: 1.0625rem;
   line-height: 1.7;
   margin-bottom: 0.9rem;
   color: var(--docs-ink);
@@ -2587,12 +2626,26 @@ a.docs-hero-crumb:hover {
   height: auto;
 }
 
+/* Callout: a filled note block rather than a quote bar. */
 :deep(.docs-prose blockquote) {
-  border-left: 3px solid var(--docs-accent);
-  padding-left: 1rem;
-  margin: 1.2rem 0;
-  font-style: italic;
+  border: 0;
+  border-radius: 12px;
+  background: var(--docs-code-bg);
+  padding: 18px;
+  margin: 1.75rem 0;
+  font-style: normal;
+  font-size: 0.9375rem;
+  line-height: 1.6;
   color: var(--docs-muted);
+}
+
+:deep(.docs-prose blockquote > :last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.docs-prose blockquote p) {
+  font-size: inherit;
+  line-height: inherit;
 }
 
 :deep(.docs-prose ul),
