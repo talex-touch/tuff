@@ -996,10 +996,10 @@ The lifecycle invariant is `transaction count = O(write phases)`, never `O(scann
 
 - One shared cache utility owns platform cache versioning and the `bundleId || appPath` key. IconService, scanners, AppProvider repair, and recommendation mapping import it instead of duplicating hashes or version constants.
 - Recommendation mapping checks a valid persisted path, then legacy filename migration, then the current identity cache. Mapping is local and bounded; it never invokes native extraction.
-- Scanners only read caches. AppProvider hydrates misses outside SQLite work, publishes cache-backed runtime upserts, persists one icon batch, and owns bounded delayed retries plus shutdown draining.
+- Scanners only read caches. AppProvider hydrates misses outside SQLite work, persists one icon batch, and owns bounded delayed retries plus shutdown draining. Icon-only completion does not publish `IndexedSourceDelta`; any immediate refresh is metadata-only while `tfile` carries the resource bytes.
 - Local `@libsql/client` interactive transactions detach a native connection; prepared statements can retain that connection until V8 collection after commit. AppProvider must not open one transaction per app and must not depend on `global.gc()` or an incomplete dependency patch.
-- Metadata updates, icon-pointer repair, and hydrated-icon persistence use module-client `db.batch()`, whose statements execute atomically in one transaction. Additions use one phase transaction because extension rows require returned file IDs.
-- Database-wide failure rejects and retries the whole phase. Scanner-level record failures are isolated before persistence; file rows and extension rows never commit partially.
+- Metadata updates, icon-pointer repair, and hydrated-icon persistence use module-client `db.batch()`, whose statements execute atomically in one transaction. Additions use bounded phase transactions because extension rows require returned file IDs: each chunk is atomic, completed chunks remain committed if a later chunk fails, and the next idempotent scan fills the missing paths.
+- Database-wide failure rejects the active phase and retries through the next scan. Scanner-level record failures are isolated before persistence; file rows and extension rows never commit partially within a chunk.
 - SearchCore owns one initial App scan promise. It retries a failed scan at most three times with bounded backoff and stops immediately on shutdown abort.
 
 ### 4. Validation & Error Matrix
@@ -1010,7 +1010,7 @@ The lifecycle invariant is `transaction count = O(write phases)`, never `O(scann
 - Hydration persistence exhausts retries -> retain the usable filesystem cache and log deferred persistence; a later scan can repair the pointer.
 - Scanner rejects one malformed application -> omit/count that record without constructing a partial batch for it.
 - Shutdown during hydration/backoff/initial scan -> abort or drain owned work; no orphan timer or parallel scan remains.
-- Darwin 27 native icon lookup -> remain fail-closed; cache self-healing must not reintroduce `app.getFileIcon` there.
+- Darwin native fallback -> `.icns -> sips` first, then the AppKit main-queue path writer. Reject unsupported `large`, native/worker image-byte payloads, and Electron/Chromium fallback; helper failure uses the normal class icon.
 
 ### 5. Good/Base/Bad Cases
 
@@ -1021,7 +1021,8 @@ The lifecycle invariant is `transaction count = O(write phases)`, never `O(scann
 ### 6. Tests Required
 
 - Cache tests assert deterministic versioned keys and existing-cache lookup for empty and stale persisted values.
-- AppProvider tests assert add/update/icon operations preserve file-extension atomicity and phase count does not scale with application count.
+- AppProvider tests assert add/update/icon operations preserve file-extension atomicity, addition transaction count scales with bounded chunks rather than individual applications, completed chunks survive a later chunk failure, and icon-only hydration produces zero search-index mutations.
+- Native/protocol tests assert AppKit main-queue atomic path writing, descriptor-only completion, tfile allowlist enforcement, built-in file forwarding, and streaming response bodies without IPC/worker image bytes.
 - Retry/lifecycle tests assert hydration stays usable during `SQLITE_BUSY`, persistence retries are bounded, initial scan is single-flight, and shutdown cancels backoff.
 - Controlled libSQL evidence measures handle count before/after a high-cardinality AppProvider pass without `global.gc()`.
 - Packaged Electron evidence uses an isolated profile before a real-profile smoke; it verifies real `tfile://` icons, repeated cold-start RSS/handle bounds, and absence of `EXC_BREAKPOINT`/`SIGTRAP`.
@@ -1040,7 +1041,9 @@ for (const app of scannedApps) {
 #### Correct
 
 ```ts
-const statements = updates.flatMap((update) => buildAppUpdateStatements(db, update));
+const statements = updates.flatMap((update) =>
+  buildAppUpdateStatements(db, update),
+);
 await db.batch(statements as [AppDbBatchItem, ...AppDbBatchItem[]]);
 ```
 
