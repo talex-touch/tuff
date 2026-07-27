@@ -110,6 +110,7 @@ const highlights = computed(() => ([
 ]))
 
 const copyLabel = computed(() => t('landing.os.aiOverview.demo.preview.copyResult'))
+const poweredByLabel = computed(() => t('landing.os.aiOverview.demo.preview.poweredBy'))
 
 function resolveTypeLabel(type: string) {
   return t(`landing.os.aiOverview.demo.preview.types.${type}`)
@@ -146,16 +147,26 @@ function resolveTypeLabel(type: string) {
             :depth="widget.depth"
             class="InstantPreview-CardSlot"
             :class="`is-${widget.id}`"
+            :style="{ zIndex: Math.round(widget.depth * 100) }"
           >
             <div class="ai-preview-demo__card">
               <div class="ai-preview-demo__card-header">
-                <div class="ai-preview-demo__card-type">
-                  <span v-if="widget.icon" :class="widget.icon" class="mr-2" />
-                  {{ resolveTypeLabel(widget.type) }}
+                <div class="ai-preview-demo__card-head-left">
+                  <div class="ai-preview-demo__card-badge">
+                    <span v-if="widget.icon" :class="widget.icon" class="mr-1" />
+                    {{ resolveTypeLabel(widget.type) }}
+                  </div>
+                  <span class="ai-preview-demo__card-ability">instant.{{ widget.type }}</span>
                 </div>
-                <div class="ai-preview-demo__card-badge">
-                  instant.{{ widget.type }}
-                </div>
+                <TxButton
+                  variant="bare"
+                  size="small"
+                  native-type="button"
+                  class="ai-preview-demo__card-hint"
+                >
+                  <span class="ai-preview-demo__card-hint-key">↵</span>
+                  <span>{{ copyLabel }}</span>
+                </TxButton>
               </div>
 
               <div class="InstantPreview-CardInput">
@@ -195,19 +206,8 @@ function resolveTypeLabel(type: string) {
                 </div>
               </div>
 
-              <div class="ai-preview-demo__card-footer">
-                <TxButton
-                  variant="bare"
-                  size="small"
-                  native-type="button"
-                  class="ai-preview-demo__card-action-btn"
-                >
-                  <span class="i-carbon-copy" />
-                  <span>{{ copyLabel }}</span>
-                </TxButton>
-                <div class="ai-preview-demo__card-powered">
-                  TuffIntelligence
-                </div>
+              <div class="ai-preview-demo__card-powered">
+                {{ poweredByLabel }}
               </div>
             </div>
           </TxFloatingElement>
@@ -251,15 +251,22 @@ function resolveTypeLabel(type: string) {
   position: relative;
   width: 100%;
   flex: 1;
-  min-height: clamp(860px, 105vh, 1120px);
+  /*
+   * The vertical rhythm below is expressed in percentages of this box, so the
+   * floor has to stay tall enough for a card to fit in each step. Left column
+   * cards are 260px and sit 26% apart, so anything under ~1000px overlaps.
+   */
+  min-height: clamp(1060px, 105vh, 1120px);
   border: none;
   background: transparent;
   isolation: isolate;
   overflow: hidden;
-  --instant-preview-card-scale: 1;
+  /* Scales the whole composition — cards and their offsets together. */
+  --instant-preview-stage-scale: 0.9;
   --instant-preview-right-top: 1%;
   --instant-preview-right-gap: 0.5%;
-  --instant-preview-card-block: clamp(240px, 28vh, 320px);
+  /* Step between right-column cards — must clear their 294px detail layout. */
+  --instant-preview-card-block: clamp(300px, 28vh, 320px);
 }
 
 .InstantPreview-SectionBackdrop {
@@ -278,9 +285,21 @@ function resolveTypeLabel(type: string) {
   pointer-events: none;
 }
 
-.InstantPreview-FloatLayer {
+/*
+ * Scoped to the stage so it outranks Tuffex's own `.tx-floating` rule, which
+ * ships `position: relative; height: 100%` at the same specificity. When that
+ * rule wins on load order the layer falls back into flow, resolves its height
+ * against the stage's `auto` height, and collapses to 0 — which silently turns
+ * every percentage `top` below into 0 and stacks all cards on the top edge.
+ * `inset: 0` with an auto height keeps the layer glued to the stage instead.
+ */
+.InstantPreview-Stage .InstantPreview-FloatLayer {
   position: absolute;
   inset: 0;
+  width: auto;
+  height: auto;
+  transform: scale(var(--instant-preview-stage-scale));
+  transform-origin: center;
 }
 
 .InstantPreview-CardSlot {
@@ -473,28 +492,59 @@ function resolveTypeLabel(type: string) {
   padding: 1.25rem;
   background: rgba(30, 30, 35, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
+  /* Matches PreviewResultCard's 25px so the silhouette reads as the same card. */
+  border-radius: 25px;
   backdrop-filter: blur(20px);
   position: relative;
   overflow: hidden;
   box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
-  transform: scale(var(--instant-preview-card-scale));
-  transform-origin: top left;
+}
+
+/*
+ * Mirrors the app's GradientBorder effect: a blurred, slowly rotating four-stop
+ * border rather than the static diagonal wash this mock used. Deliberately much
+ * thinner than the app's 5px — six small cards on a near-black hero read as
+ * neon at that weight, where a single full-width card in the app does not.
+ */
+@property --instant-preview-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
 }
 
 .ai-preview-demo__card::before {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 14px;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(59, 130, 246, 0.25), transparent);
+  border-radius: 25px;
+  padding: 2px;
+  background: linear-gradient(
+    var(--instant-preview-angle),
+    #0894ff 0%,
+    #c959dd 34%,
+    #ff2e54 68%,
+    #ff9004 100%
+  );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask-composite: exclude;
+  opacity: 0.4;
+  filter: blur(3px);
   pointer-events: none;
+  animation: instant-preview-rotate-angle 4s linear infinite;
+}
+
+@keyframes instant-preview-rotate-angle {
+  from {
+    --instant-preview-angle: 0deg;
+  }
+
+  to {
+    --instant-preview-angle: 360deg;
+  }
 }
 
 .ai-preview-demo__card-header {
@@ -502,25 +552,30 @@ function resolveTypeLabel(type: string) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.75rem;
+  font-size: 12px;
+  color: #a3a6ad;
 }
 
-.ai-preview-demo__card-type {
+.ai-preview-demo__card-head-left {
   display: flex;
   align-items: center;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.5);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  gap: 8px;
 }
 
+/* Primary-tinted pill on the left, as in PreviewResultCard's `.badge`. */
 .ai-preview-demo__card-badge {
-  font-size: 0.6rem;
-  color: rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #18222c;
+  color: #409eff;
+}
+
+.ai-preview-demo__card-ability {
+  font-size: 12px;
   font-family: 'JetBrains Mono', ui-monospace, monospace;
-  padding: 0.2rem 0.5rem;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 4px;
+  opacity: 0.35;
 }
 
 .ai-preview-demo__card-body {
@@ -589,42 +644,43 @@ function resolveTypeLabel(type: string) {
   font-family: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-.ai-preview-demo__card-footer {
+/*
+ * A bare text link with a key chip, living in the header — the real card has no
+ * footer and offers copy as a keyboard hint rather than a button.
+ */
+.ai-preview-demo__card-hint {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  margin-top: auto;
-}
-
-.ai-preview-demo__card-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 0.72rem;
-  font-weight: 500;
+  gap: 4px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.ai-preview-demo__card-action-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+.ai-preview-demo__card-hint-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #303030;
+  font-size: 11px;
+  font-weight: 500;
+  color: #e5eaf3;
 }
 
 .ai-preview-demo__card-powered {
-  font-size: 0.65rem;
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  font-size: 10px;
   color: rgba(255, 255, 255, 0.2);
-  font-weight: 500;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1140px) {
   .InstantPreview-Layout {
     min-height: auto;
   }
@@ -633,7 +689,8 @@ function resolveTypeLabel(type: string) {
     height: auto;
     min-height: auto;
     padding: 24px;
-    --instant-preview-card-scale: 1;
+    /* Stacked grid at compact desktop widths where the two-column stage would collide. */
+    --instant-preview-stage-scale: 1;
   }
 
   .InstantPreview-FloatLayer {
@@ -656,6 +713,14 @@ function resolveTypeLabel(type: string) {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /*
+   * Scoped `*` compiles to `*[data-v-x]`, which never matches a pseudo-element,
+   * so the rotating border needs stopping by name.
+   */
+  .ai-preview-demo__card::before {
+    animation: none;
   }
 }
 

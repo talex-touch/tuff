@@ -383,6 +383,7 @@ export default {
           preview: {
             label: 'Quick Preview',
             copyResult: '复制结果',
+            poweredBy: '由 TuffIntelligence 提供支持',
             types: {
               expression: '快速算式',
               currency: '汇率换算',
