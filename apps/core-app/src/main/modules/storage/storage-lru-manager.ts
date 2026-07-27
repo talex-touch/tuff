@@ -90,9 +90,9 @@ export class StorageLRUManager {
 
       if (lastAccess && now - lastAccess > this.EVICTION_TIMEOUT) {
         try {
-          await this.onEvict(name)
-          this.cache.evict(name)
-          evicted.push(name)
+          if (await this.flushAndEvict(name, true)) {
+            evicted.push(name)
+          }
         } catch (error) {
           storageLruLog.error('Failed to evict config', {
             error,
@@ -110,6 +110,47 @@ export class StorageLRUManager {
   }
 
   /**
+   * Flush pending writes, then drop the config from cache.
+   *
+   * `onEvict` yields (it waits on the app task gate and the shared write scheduler), so a
+   * save can land while we are suspended. Dropping the entry then would discard both the
+   * newer value and its dirty flag with no error, so re-validate and leave live entries
+   * to the next sweep.
+   *
+   * @param name Configuration name
+   * @param requireIdle Whether an access during the flush should cancel the eviction
+   * @returns Whether the config was evicted
+   */
+  private async flushAndEvict(name: string, requireIdle: boolean): Promise<boolean> {
+    const versionBefore = this.cache.getVersion(name)
+    const accessVersionBefore = this.cache.getAccessVersion(name)
+
+    await this.onEvict(name)
+
+    if (!this.cache.has(name)) {
+      return false
+    }
+
+    const version = this.cache.getVersion(name)
+    if (version !== versionBefore || this.cache.isDirty(name)) {
+      storageLruLog.debug('Skipped eviction, config changed during flush', {
+        meta: { configName: name, versionBefore, version }
+      })
+      return false
+    }
+
+    if (requireIdle && this.cache.getAccessVersion(name) !== accessVersionBefore) {
+      storageLruLog.debug('Skipped eviction, config accessed during flush', {
+        meta: { configName: name }
+      })
+      return false
+    }
+
+    this.cache.evict(name)
+    return true
+  }
+
+  /**
    * Manually trigger eviction
    * @returns Evicted config names
    */
@@ -119,13 +160,18 @@ export class StorageLRUManager {
     const evicted: string[] = []
 
     for (const name of names) {
+      // Skip hot configs - they should never be evicted
+      if (this.hotConfigs.has(name)) {
+        continue
+      }
+
       const lastAccess = this.cache.getLastAccessTime(name)
 
       if (lastAccess && now - lastAccess > this.EVICTION_TIMEOUT) {
         try {
-          await this.onEvict(name)
-          this.cache.evict(name)
-          evicted.push(name)
+          if (await this.flushAndEvict(name, true)) {
+            evicted.push(name)
+          }
         } catch (error) {
           storageLruLog.error('Manual evict failed', {
             error,
@@ -146,9 +192,17 @@ export class StorageLRUManager {
       return
     }
 
+    // Hot configs carry state the app reads on demand (onboarding gate in app-setting.ini),
+    // so "force" only lifts the idle requirement, never the hot-config protection.
+    if (this.hotConfigs.has(name)) {
+      storageLruLog.debug('Skipped force evict for hot config', {
+        meta: { configName: name }
+      })
+      return
+    }
+
     try {
-      await this.onEvict(name)
-      this.cache.evict(name)
+      await this.flushAndEvict(name, false)
     } catch (error) {
       storageLruLog.error('Force evict failed', {
         error,

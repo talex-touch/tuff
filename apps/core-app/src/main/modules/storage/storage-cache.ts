@@ -18,8 +18,14 @@ export class StorageCache {
   private cache = new Map<string, VersionedData>()
   private dirtySet = new Set<string>()
   private lastAccessTime = new Map<string, number>()
+  private accessVersions = new Map<string, number>()
   private invalidatedSet = new Set<string>()
   private serializedCache = new Map<string, string>()
+
+  private recordAccess(name: string): void {
+    this.lastAccessTime.set(name, Date.now())
+    this.accessVersions.set(name, (this.accessVersions.get(name) ?? 0) + 1)
+  }
 
   /**
    * Get configuration from cache
@@ -30,7 +36,7 @@ export class StorageCache {
   get(name: string): object | undefined {
     const entry = this.cache.get(name)
     if (entry) {
-      this.lastAccessTime.set(name, Date.now())
+      this.recordAccess(name)
       // Return deep copy to prevent external code from mutating cache
       const disposeClone = enterPerfContext(`Storage.clone:${name}`, { mode: 'get' })
       try {
@@ -48,10 +54,18 @@ export class StorageCache {
   getRaw(name: string): object | undefined {
     const entry = this.cache.get(name)
     if (entry) {
-      this.lastAccessTime.set(name, Date.now())
+      this.recordAccess(name)
       return entry.data
     }
     return undefined
+  }
+
+  /**
+   * Read the internal value without making an LRU entry look recently used.
+   * Persistence uses this while flushing an already-idle entry before eviction.
+   */
+  peekRaw(name: string): object | undefined {
+    return this.cache.get(name)?.data
   }
 
   /**
@@ -62,7 +76,7 @@ export class StorageCache {
   getWithVersion(name: string): VersionedData | undefined {
     const entry = this.cache.get(name)
     if (entry) {
-      this.lastAccessTime.set(name, Date.now())
+      this.recordAccess(name)
       const disposeClone = enterPerfContext(`Storage.clone:${name}`, { mode: 'getWithVersion' })
       try {
         return {
@@ -104,7 +118,7 @@ export class StorageCache {
     const newVersion = incrementVersion ? currentVersion + 1 : currentVersion
     this.cache.set(name, { data, version: newVersion })
     this.dirtySet.add(name)
-    this.lastAccessTime.set(name, Date.now())
+    this.recordAccess(name)
     if (serialized !== undefined) {
       this.serializedCache.set(name, serialized)
     } else {
@@ -121,7 +135,7 @@ export class StorageCache {
    */
   setWithVersion(name: string, data: object, version: number, serialized?: string): void {
     this.cache.set(name, { data, version })
-    this.lastAccessTime.set(name, Date.now())
+    this.recordAccess(name)
     if (serialized !== undefined) {
       this.serializedCache.set(name, serialized)
     } else {
@@ -141,7 +155,7 @@ export class StorageCache {
     if (version > currentVersion) {
       this.cache.set(name, { data, version })
       this.dirtySet.add(name)
-      this.lastAccessTime.set(name, Date.now())
+      this.recordAccess(name)
       if (serialized !== undefined) {
         this.serializedCache.set(name, serialized)
       } else {
@@ -205,6 +219,7 @@ export class StorageCache {
     this.cache.delete(name)
     this.dirtySet.delete(name)
     this.lastAccessTime.delete(name)
+    this.accessVersions.delete(name)
     this.serializedCache.delete(name)
   }
 
@@ -213,6 +228,11 @@ export class StorageCache {
    */
   getLastAccessTime(name: string): number | undefined {
     return this.lastAccessTime.get(name)
+  }
+
+  /** Monotonic access identity, including reads that happen within the same millisecond. */
+  getAccessVersion(name: string): number {
+    return this.accessVersions.get(name) ?? 0
   }
 
   /**
@@ -229,6 +249,7 @@ export class StorageCache {
     this.cache.clear()
     this.dirtySet.clear()
     this.lastAccessTime.clear()
+    this.accessVersions.clear()
     this.serializedCache.clear()
   }
 
