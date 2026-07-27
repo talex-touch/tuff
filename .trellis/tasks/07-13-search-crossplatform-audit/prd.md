@@ -79,11 +79,12 @@
   - 构建约束：Electron sandbox preload 必须为 standalone CJS；`standaloneSandboxedPreloadPlugin` 消除 multi-entry Rollup shared-chunk `preloadRequire` 失败。
   - 验证：utils 4 files / 11 tests（真实 transfer、无 `openPort()` mock）、CoreBox 2 files / 23 tests、node/web typecheck、mac production build，以及默认 allowlist packaged Electron 中可见的已索引 TextEdit 结果。
 
-- [x] **B6 — Darwin 27 `app.getFileIcon` 硬崩溃** ✅ 已修（`fix/corebox-icons-db-hardening`）
-  - 位置：统一入口 `main/service/icon-service.ts`、应用扫描 `addon/apps/{darwin,win}.ts`、后台持久化 `addon/apps/app-provider.ts`、活动应用 `modules/system/active-app.ts`，以及文件/Everything 图标消费者。
-  - 根因：图标 cache 失效后，应用启动扫描同步进入 Electron 原生图标 fallback；在 Darwin 27 上，即使单次 `app.getFileIcon('/Applications/Safari.app')` 也会让 Electron 41.3/41.10/43.2 以 `EXC_BREAKPOINT / SIGTRAP` 崩在 `ThreadPoolForegroundWorker`。同时应用、活动窗口、FileProvider、Everything、Windows 扫描各自持有提取与缓存逻辑，导致同步扫描、重复 Worker 和不一致 fallback。
-  - 交付：新增全局 `IconService`，统一安全 Electron 入口、单例文件图标 Worker、版本化应用缓存和并发去重；macOS/Windows 扫描只读缓存，miss 立即返回空图，`AppProvider` 在索引落库后异步提取、持久化并发布更新；Darwin 27 原生 fallback 继续 fail-closed，无法解析时使用内部空图占位。
-  - 验证：真实 profile 完成 143 个应用扫描和 0.71s startup backfill，后台成功填充 131 个图标、仅 NetBird 保持空图，数据库确认 132 个非空应用图标；当前实例无 `EXC_BREAKPOINT`/`SIGTRAP`。8 个测试文件 / 164 个测试、Windows focused 18 tests、CoreApp node typecheck 与 scoped ESLint 通过。
+- [x] **B6 — macOS 应用图标 unsupported enum / 资源字节边界** ✅ 已修（`07-24-harden-app-icon-self-healing`）
+  - 旧结论失效：问题不是 Darwin 27 本身。commit `48be2d946` 将可工作的 `app.getFileIcon(..., { size: 'normal' })` 改为 macOS 不支持的 `large`；`c0e6045d7` 随后把 cache-miss hydration 移到后台，批量放大触发频率。
+  - 崩溃证据：Electron 41.10.2 的 Chromium Mac IconLoader 在 ThreadPool 只处理 SMALL/NORMAL，unsupported enum 命中 `NOTREACHED()`，与三份 `ThreadPoolForegroundWorker + NSImage + EXC_BREAKPOINT/SIGTRAP` `.ips` 一致。最后一条 `SQLITE_BUSY` 是独立的已捕获缺陷，不是硬崩根因。
+  - 架构修复：Darwin `.icns -> sips` 后使用 tuff-native AppKit main-thread helper；公开 Promise 先 `setImmediate` 让出事件循环，私有同步 N-API 断言主线程，在 `@autoreleasepool` 内调用 `NSWorkspace iconForFile:` 并原子写 PNG。completion 仅返回 path/尺寸；图片字节不经过 Node worker、IPC、MessagePort 或 preload。
+  - 协议约束：`tfile` 是新本地资源的规范 data plane，并在 allowlist 后用 `bypassCustomProtocolHandlers` 流式转发 built-in `file:`；`atom` 仅 legacy；当前无 handler 的 `stream` scheme 不得成为隐式 blob tunnel。typed transport stream 只承载有界结构化 control/chunk metadata。
+  - 验收：隔离 Electron profile 实际水合 227 icons 并存活 2m29s，无新 `.ips`；5 个独立 native 进程各处理 125 个真实 app（625/625）；descriptor 非 Buffer；107 focused tests、native build、node typecheck、scoped ESLint 通过；icon-only hydration 的 search-index delta=0。
 
 ### 🟠 高危工程风险
 
@@ -122,6 +123,7 @@
   - `dbWriteScheduler` + `withSqliteRetry` + worker `directMode` + `AdaptiveBatchScheduler` + `UsageStatsQueue` 采样丢弃；同一痛点各自处理，新人难判断某次写走哪条路。
   - 2026-07-18 进展：文件持久化统一复用 `withSqliteRetry`，flush runtime 复用共享 retry decision/backoff，并对重复失败日志做节流；worker error 传输保留 `cause/code/rawCode`，避免 SQLite 原因丢失。
   - 2026-07-21 进展（`07-20-unify-operational-error-reporting`）：新增统一 retry exhaustion observer 和 busy/queue/writer/WAL/FD 健康快照；App Provider 删除私有 busy retrier，已确认 add/update/delete、backfill、mdls、rebuild mutation 进入共享 scheduler/retry，file row + extensions 在生产 adapter 支持时同 transaction；文件重建使用 writer admission barrier，并完成真实 `BEGIN IMMEDIATE` 失败→脱敏上报→释放锁恢复验收。
+  - 2026-07-26 复核：移除 icon-only FTS upsert 后，隔离首启仍出现 `app-provider.icon-hydrate-batch` / `Storage:Polling database is locked`。这不再造成图标硬崩，filesystem identity cache 仍成功生成 227 icons，但证明共享 `database.db` 的 writer 争用尚未闭环；后续必须单独验证 search split 默认开启与 statement-lifecycle batch，不能靠增加 retry/busy timeout。
   - R9 仍保持 open：App Provider 尚未迁入 search-index worker typed persistence port，`db/utils.ts` policy-free mutations、libSQL client/session owner registry 和 aux compatibility mirror 退场仍待后续收敛。
 
 ### 🟢 低危清理

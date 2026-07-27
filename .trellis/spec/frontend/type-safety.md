@@ -290,7 +290,7 @@ type CoreBoxIconPayload = {
 };
 ```
 
-Main-process icon access uses one `IconService` boundary:
+Main-process icon access uses one `IconService` boundary. Darwin app fallback delegates to the path-only native contract defined in [Native Resource Protocols](./native-resource-protocols.md):
 
 ```ts
 getSystemFileIcon(
@@ -300,9 +300,14 @@ getSystemFileIcon(
 extractFileIcon(filePath: string, size?: number): Promise<Buffer | null>;
 getCachedAppIcon(appPath: string, bundleId: string): Promise<string | null>;
 ensureAppIcon(appPath: string, bundleId: string): Promise<string | null>;
+writeDarwinAppIcon(options: {
+  sourcePath: string;
+  outputPath: string;
+  size: number;
+}): Promise<{ path: string; width: number; height: number }>;
 ```
 
-`IconService` owns the shared file-icon worker, guarded Electron access, versioned app-icon cache, extraction deduplication, and platform rendering. Providers own persistence into their domain stores; scanners do not perform native extraction.
+`IconService` owns cache identity, extraction deduplication, Darwin serialization, and platform rendering. The Buffer-returning worker remains a Windows/file-resource compatibility boundary; it must not carry Darwin app icons or cross IPC/MessagePort/preload. Providers own persistence into their domain stores; scanners do not perform native extraction.
 
 Recommendation badges use class icon names, not emoji text:
 
@@ -323,9 +328,9 @@ type RecommendationBadge = {
 - Plugin recommendation rebuilding must preserve supported icon metadata fields: `type`, `value`, `color`, `colorful`, `status`, and `error`.
 - Renderer badge components should only render class badge icons that start with `i-`; stale cached emoji badge values are ignored.
 - macOS app icon caches must resolve Electron paths through a bound `app.getPath(...)` call; detached Electron methods fail with `Illegal invocation` and must not silently route production data into test-temp fallbacks.
-- macOS app bundles prefer versioned `.icns` caches rendered through `sips`. Every Electron-native lookup must go through `IconService.getSystemFileIcon`; Darwin 27 returns `null` without entering Electron because Electron 41.3–43.2 deterministically hard-crashes there with `EXC_BREAKPOINT / SIGTRAP` on `ThreadPoolForegroundWorker`. Asset-catalog-only apps then use the normal app fallback.
-- App scanners may only read an existing icon cache. A cache miss returns `icon: ''` immediately; `AppProvider` schedules background hydration after the app row exists, persists the resolved icon extension, publishes the runtime update, and keeps the normal internal empty fallback when hydration returns `null`.
-- Windows desktop scan records the native icon source separately from the launch path so shortcut/registry icons hydrate from the correct file. FileProvider and Everything extraction share the singleton `IconService` worker; providers must not instantiate parallel `IconWorkerClient`s.
+- macOS app bundles prefer versioned `.icns` caches rendered through `sips`. Unresolved bundles use `writeDarwinAppIcon`: `NSWorkspace iconForFile:` runs on the AppKit main queue, writes PNG atomically, and completes with path/dimension metadata only. Darwin app hydration must not pass Electron `size: 'large'` or return image bytes through a worker/IPC boundary.
+- App scanners may only read an existing icon cache. A cache miss returns `icon: ''` immediately; `AppProvider` schedules background hydration, persists resolved icon extensions in a bounded batch, and does not publish icon-only `IndexedSourceDelta` mutations because the search-index projection has no icon field.
+- Windows desktop scan records the native icon source separately from the launch path so shortcut/registry icons hydrate from the correct file. FileProvider and Everything extraction share the singleton `IconService` worker; providers must not instantiate parallel `IconWorkerClient`s. New resource-byte consumers still use the protocol data-plane contract rather than adding IPC.
 - `/System/Library/CoreServices` entries marked `LSBackgroundOnly` or `LSUIElement` are not user-facing applications and must be excluded before indexing; recommendation rebuilding also applies the shared CoreServices noise filter to stale rows.
 - Addressable `TxIcon` sources show a loading skeleton until `load`; an `error` event must switch to the caller-provided empty fallback instead of leaving a blank image.
 
@@ -338,7 +343,7 @@ type RecommendationBadge = {
 - Plugin icon with unsupported `type` or empty `value` -> recommendation fallback class icon.
 - Badge icon not starting with `i-` -> omit the visual badge icon and keep the label.
 - Electron cache path lookup throws or is called without its `app` receiver -> use the stable temporary fallback only in non-Electron/test contexts; production callers keep the Electron cache directory.
-- Standalone `.icns` missing or `sips` render failure -> call the safe file-icon boundary; Darwin 27 returns `null` without invoking Electron, then emit the normal app fallback icon.
+- Standalone `.icns` missing or `sips` render failure -> invoke the AppKit path writer; helper failure emits the normal app fallback without Electron `large`, Buffer IPC, or retry storm.
 - URL/tfile image load error -> render the `empty` slot or empty-image source and clear the loading skeleton.
 - CoreServices background/UIElement bundle -> omit it from scan and recommendation results.
 
@@ -354,7 +359,7 @@ type RecommendationBadge = {
 - Drift handling tests comparing local paths with equivalent `file://` values.
 - Plugin recommendation rebuild tests that assert optional icon metadata is preserved.
 - Renderer tests that assert list and grid badges use class icons and image icons keep color forwarding.
-- macOS extraction tests assert bound cache-path resolution, versioned `.icns` cache reuse, the Darwin 27 no-call guard, non-Darwin pass-through to `app.getFileIcon`, and normal fallback behavior when the safe boundary returns `null`.
+- macOS extraction tests assert bound cache-path resolution, versioned `.icns` cache reuse, AppKit-main-queue path writing, descriptor-only completion, native failure fallback, serial/single-flight extraction, and absence of Darwin Electron `large` calls or worker byte payloads.
 - TuffEx icon tests dispatch image `error` and assert that loading state is removed and the empty fallback is rendered.
 - Recommendation/filter checks cover hidden CoreServices apps so stale indexed rows cannot return to the recommendation surface.
 
@@ -382,7 +387,6 @@ const recovered = resolveExistingVersionedAppIconCachePath(appPath, bundleId);
 return recovered
   ? { type: "url", value: toTfileUrl(recovered), colorful: true }
   : { type: "class", value: "i-ri-apps-line" };
-
 ```
 
 ## Scenario: Plugin Widget Metadata Serialization
@@ -919,15 +923,15 @@ type TransportPortHandoffListener = (
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Foreign window source or wrong marker | Ignore without acknowledging |
-| Invalid payload, missing port, or multiple ports | Ignore and close every owned transferred port |
-| `window.postMessage` transfer throws | Close the preload-owned port |
-| Upgrade accepted but confirmation missing | Send typed close with `confirm_timeout`, then use channel fallback |
-| Port closes or emits `messageerror` | Evict the handle, notify main, and allow later channel fallback |
-| Duplicate confirmation for an owned port id | Close the duplicate; do not create a second delivery owner |
-| Preload output still requires `./chunks/*` | Packaged preload fails to load; the production smoke must fail |
+| Condition                                        | Required result                                                    |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| Foreign window source or wrong marker            | Ignore without acknowledging                                       |
+| Invalid payload, missing port, or multiple ports | Ignore and close every owned transferred port                      |
+| `window.postMessage` transfer throws             | Close the preload-owned port                                       |
+| Upgrade accepted but confirmation missing        | Send typed close with `confirm_timeout`, then use channel fallback |
+| Port closes or emits `messageerror`              | Evict the handle, notify main, and allow later channel fallback    |
+| Duplicate confirmation for an owned port id      | Close the duplicate; do not create a second delivery owner         |
+| Preload output still requires `./chunks/*`       | Packaged preload fails to load; the production smoke must fail     |
 
 ### 5. Good / Base / Bad Cases
 
@@ -948,22 +952,22 @@ type TransportPortHandoffListener = (
 #### Wrong
 
 ```ts
-contextBridge.exposeInMainWorld('electron', {
+contextBridge.exposeInMainWorld("electron", {
   onConfirm: (handler) => ipcRenderer.on(eventName, handler),
-})
+});
 
 // Renderer assumes a transferred port survived contextBridge callback wrapping.
-electron.onConfirm((event, payload) => handlePort(event.ports[0], payload))
+electron.onConfirm((event, payload) => handlePort(event.ports[0], payload));
 ```
 
 #### Correct
 
 ```ts
 // Isolated preload owns the Electron event and transfers only the port.
-const disposeHandoff = installTransportPortHandoff(ipcRenderer, window)
+const disposeHandoff = installTransportPortHandoff(ipcRenderer, window);
 
 // Renderer main world validates the same-window message and receives ownership.
 const disposeSubscriber = subscribeTransportPortHandoff((port, payload) => {
-  handlePortConfirm(port, payload)
-})
+  handlePortConfirm(port, payload);
+});
 ```
