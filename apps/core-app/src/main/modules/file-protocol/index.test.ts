@@ -1,22 +1,54 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { fetchMock, handleMock, unhandleMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+  handleMock: vi.fn(),
+  unhandleMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   net: {
-    fetch: vi.fn()
+    fetch: fetchMock
   },
   session: {
     defaultSession: {
       protocol: {
-        handle: vi.fn(),
-        unhandle: vi.fn()
+        handle: handleMock,
+        unhandle: unhandleMock
       }
     }
   }
 }))
 
-import { __test__ } from './index'
+vi.mock('../../utils/local-file-policy', () => ({
+  getAllowedLocalFileRoots: () => ['/allowed'],
+  isAllowedLocalFilePath: (filePath: string) => filePath.startsWith('/allowed/'),
+  normalizeDarwinUsersPath: (filePath: string) => filePath
+}))
+
+import { __test__, fileProtocolModule } from './index'
 
 describe('file-protocol canonical tfile parsing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  it('forwards allowlisted files through Electron built-in streaming fetch', async () => {
+    const response = new Response('icon-bytes')
+    fetchMock.mockResolvedValue(response)
+    fileProtocolModule.onInit()
+
+    const handler = handleMock.mock.calls.at(-1)?.[1] as
+      | ((request: { url: string }) => Promise<Response>)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+
+    await expect(handler?.({ url: 'tfile:///allowed/icon.png' })).resolves.toBe(response)
+    expect(fetchMock).toHaveBeenCalledWith('file:///allowed/icon.png', {
+      bypassCustomProtocolHandlers: true
+    })
+    expect(response.body).toBeInstanceOf(ReadableStream)
+  })
+
   it('accepts host-style darwin paths emitted by renderer requests', () => {
     expect(__test__.extractAbsolutePath('tfile://users/demo/report.txt')).toBe(
       '/users/demo/report.txt'

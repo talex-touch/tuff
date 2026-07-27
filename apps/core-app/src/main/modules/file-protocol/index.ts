@@ -117,7 +117,7 @@ class FileProtocolModule extends BaseModule {
       const fileUrl = url.pathToFileURL(normalizedPath).toString()
 
       try {
-        return await net.fetch(fileUrl)
+        return await net.fetch(fileUrl, { bypassCustomProtocolHandlers: true })
       } catch (error) {
         if (!loggedErrorPaths.has(normalizedPath)) {
           loggedErrorPaths.add(normalizedPath)
