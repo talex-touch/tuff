@@ -159,6 +159,7 @@
     "done": {
       "description": "一切就绪，开始使用吧。",
       "action": "开始使用",
+      "persistFailed": "无法保存引导完成状态，请重试后再关闭引导。",
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",

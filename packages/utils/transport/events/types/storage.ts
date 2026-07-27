@@ -77,6 +77,12 @@ export interface StorageSaveRequest {
   force?: boolean
 
   /**
+   * Persist the accepted value to the active storage backend before replying.
+   * Use for lifecycle gates that must survive an immediate process exit.
+   */
+  persist?: boolean
+
+  /**
    * Client version for conflict detection.
    */
   version?: number

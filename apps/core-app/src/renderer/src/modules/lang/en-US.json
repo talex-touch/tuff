@@ -159,6 +159,7 @@
     "done": {
       "description": "You're all set. Let's get started.",
       "action": "Get Started",
+      "persistFailed": "Could not save onboarding completion. Try again before closing this guide.",
       "shortcut": {
         "command": "command",
         "ctrl": "ctrl",
