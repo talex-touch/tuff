@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, ref } from 'vue'
+import { type ComponentPublicInstance, computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { DEMO_LAZY_ROOT_MARGIN, shouldActivateDemo } from './demo-lazy'
 
 interface DemoWrapperProps {
   demo: string
@@ -62,8 +63,7 @@ const toggleLabel = computed(() => {
 })
 
 const resetLabel = computed(() => t('docs.demo.reset'))
-const runLabel = computed(() => t('docs.demo.run'))
-const inactiveLabel = computed(() => t('docs.demo.paused'))
+const inactiveLabel = computed(() => t('docs.demo.loading'))
 const loadingLabel = computed(() => t('docs.demo.loading'))
 const errorLabel = computed(() => t('docs.demo.loadFailed'))
 const notFoundLabel = computed(() => t('docs.demo.notFound'))
@@ -112,12 +112,42 @@ function handleDemoInstanceChange(instance: DemoResetController | null) {
   demoInstanceRef.value = instance
 }
 
+let visibilityObserver: IntersectionObserver | null = null
+
+function disconnectVisibilityObserver() {
+  visibilityObserver?.disconnect()
+  visibilityObserver = null
+}
+
 function activateDemo() {
-  if (!props.demo || isDemoActive.value)
+  if (!shouldActivateDemo({ demo: props.demo, isActive: isDemoActive.value }))
     return
 
   isDemoActive.value = true
+  disconnectVisibilityObserver()
 }
+
+onMounted(() => {
+  if (!props.demo)
+    return
+
+  const target = wrapperRef.value
+  if (!target || !('IntersectionObserver' in window)) {
+    activateDemo()
+    return
+  }
+
+  visibilityObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some(entry => entry.isIntersecting))
+        activateDemo()
+    },
+    { rootMargin: DEMO_LAZY_ROOT_MARGIN },
+  )
+  visibilityObserver.observe(target)
+})
+
+onBeforeUnmount(disconnectVisibilityObserver)
 
 </script>
 
@@ -165,12 +195,8 @@ function activateDemo() {
               :not-found-label="notFoundLabel"
               @instance-change="handleDemoInstanceChange"
             />
-            <div v-else class="tuff-demo__placeholder tuff-demo__placeholder--manual">
+            <div v-else class="tuff-demo__placeholder">
               <span class="tuff-demo__placeholder-text">{{ inactiveLabel }}</span>
-              <button type="button" class="tuff-demo__run-btn" @click="activateDemo">
-                <span class="tuff-demo__run-icon i-carbon-play" aria-hidden="true" />
-                {{ runLabel }}
-              </button>
             </div>
             <template #fallback>
               <div class="tuff-demo__placeholder">
@@ -345,33 +371,6 @@ function activateDemo() {
 
 .tuff-demo__placeholder-text {
   line-height: 1.5;
-}
-
-.tuff-demo__run-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  border: 1px solid color-mix(in srgb, var(--tx-color-primary) 32%, var(--tx-border-color));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--tx-color-primary) 8%, transparent);
-  color: var(--tx-color-primary);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 8px 14px;
-  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
-}
-
-.tuff-demo__run-btn:hover {
-  border-color: color-mix(in srgb, var(--tx-color-primary) 56%, var(--tx-border-color));
-  background: color-mix(in srgb, var(--tx-color-primary) 14%, transparent);
-  transform: translateY(-1px);
-}
-
-.tuff-demo__run-icon {
-  font-size: 12px;
 }
 
 .tuff-demo__code {

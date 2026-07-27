@@ -535,8 +535,6 @@ export default {
       showCode: 'Show code',
       hideCode: 'Hide code',
       reset: 'Reset',
-      run: 'Run demo',
-      paused: 'Interactive preview paused.',
       loading: 'Loading demo...',
       loadFailed: 'Failed to load demo.',
       notFound: 'Demo component not found.',
