@@ -18,8 +18,93 @@ interface DocsPageRequestCacheEntry {
 
 const DOCS_PAGE_REQUEST_CACHE_LIMIT = 48
 const DOCS_PAGE_REQUEST_CACHE_TTL_MS = 30_000
+const DOCS_FULL_BODY_CACHE_LIMIT = 24
 const docsPageRequestCache = new Map<string, DocsPageRequestCacheEntry>()
 const docsPageRequestPending = new Map<string, Promise<DocsPageRecord>>()
+
+/**
+ * Rendered docs bodies, keyed by `doc-full:<path>:<locale>`. This lives at module
+ * scope on purpose: the docs page remounts on every navigation, so an in-component
+ * cache would be thrown away exactly when it is most useful.
+ */
+const docsFullBodyCache = new Map<string, DocsPageRecord>()
+
+export function resolveDocsFullBodyCacheKey(path: string, locale: DocsPageLocale) {
+  return `doc-full:${normalizeDocsPagePath(path)}:${locale}`
+}
+
+export function isDocsPageRecordForRoute(
+  value: DocsPageRecord,
+  path: string,
+  locale: DocsPageLocale,
+) {
+  const rawPath = typeof value?.path === 'string'
+    ? value.path
+    : typeof value?._path === 'string'
+      ? value._path
+      : ''
+  if (!rawPath)
+    return false
+
+  const localeMatch = rawPath.match(/\.(en|zh)$/)
+  if (localeMatch?.[1] && localeMatch[1] !== locale)
+    return false
+
+  return normalizeDocsPagePath(rawPath.replace(/\.(en|zh)$/, ''))
+    === normalizeDocsPagePath(path)
+}
+
+function resolveDocsFullBodyCacheKeyFromDoc(value: DocsPageRecord) {
+  const rawPath = typeof value?.path === 'string'
+    ? value.path
+    : typeof value?._path === 'string'
+      ? value._path
+      : ''
+  if (!rawPath)
+    return null
+
+  const locale = rawPath.match(/\.(en|zh)$/)?.[1] as DocsPageLocale | undefined
+  if (!locale)
+    return null
+
+  return resolveDocsFullBodyCacheKey(rawPath.replace(/\.(en|zh)$/, ''), locale)
+}
+
+export function readCachedDocsFullBody(cacheKey: string) {
+  if (!import.meta.client)
+    return undefined
+  return docsFullBodyCache.get(cacheKey)
+}
+
+export function hasCachedDocsFullBody(cacheKey: string) {
+  return import.meta.client && docsFullBodyCache.has(cacheKey)
+}
+
+export function cacheDocsFullBody(value: DocsPageRecord) {
+  if (!import.meta.client || value == null)
+    return value
+
+  const cacheKey = resolveDocsFullBodyCacheKeyFromDoc(value)
+  if (!cacheKey)
+    return value
+
+  if (docsFullBodyCache.has(cacheKey))
+    docsFullBodyCache.delete(cacheKey)
+  docsFullBodyCache.set(cacheKey, value)
+
+  const [, path, locale] = cacheKey.match(/^doc-full:(.*):(en|zh)$/) ?? []
+  if (path && locale)
+    primeDocsPageRequestCache({ path, locale: locale as DocsPageLocale, body: '1' }, value)
+
+  while (docsFullBodyCache.size > DOCS_FULL_BODY_CACHE_LIMIT) {
+    const oldestKey = docsFullBodyCache.keys().next().value
+    if (!oldestKey)
+      break
+    docsFullBodyCache.delete(oldestKey)
+  }
+
+  return value
+}
 
 export function resolveDocsPageRequestCacheKey(input: DocsPageRequestInput) {
   return `docs-page:${normalizeDocsPagePath(input.path)}:${input.locale}:${input.body}`

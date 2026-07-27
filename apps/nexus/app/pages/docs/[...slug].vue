@@ -4,13 +4,12 @@ import DocHero from '~/components/docs/DocHero.vue'
 import DocsProseHeading from '~/components/docs/DocsProseHeading.vue'
 import { appDescription, appName } from '~/constants'
 import { coerceJsonArray, coerceJsonRecord } from '~/utils/docs-api'
-import { primeDocsPageRequestCache, requestDocsPage } from '~/utils/docs-page-client-cache'
+import { cacheDocsFullBody, hasCachedDocsFullBody, isDocsPageRecordForRoute, readCachedDocsFullBody, requestDocsPage, resolveDocsFullBodyCacheKey } from '~/utils/docs-page-client-cache'
 import { buildDocOutlineFromBody, buildDocOutlineTree, type DocTocEntry } from '~/utils/docs-outline'
 import { buildDocsSeoHead, normalizeDocsSeoCanonicalPath } from '~/utils/docs-seo'
 import { useTypedFetch } from '~/utils/request'
 import { normalizeDocsPagePath, resolveDocsLocaleFromRoute, toLocalizedDocsPath } from '#shared/utils/docs-path'
 
-const DOCS_FULL_BODY_CACHE_LIMIT = 24
 const DOCS_FULL_BODY_IDLE_DELAY_MS = 180
 const DOCS_FULL_BODY_IDLE_TIMEOUT_MS = 1200
 const DOCS_PAGER_FULL_BODY_PREFETCH_DELAY_MS = 900
@@ -18,7 +17,6 @@ const DOCS_PAGER_FULL_BODY_PREFETCH_IDLE_TIMEOUT_MS = 2400
 const DOCS_DEFERRED_BODY_IDLE_TIMEOUT_MS = 3200
 const DOCS_DEFERRED_BODY_INTENT_EVENTS = ['scroll', 'wheel', 'keydown', 'touchstart'] as const
 const DOCS_CURRENT_PAGE_FETCH_KEY_PREFIX = 'docs-current-page'
-const docsFullBodyCache = new Map<string, Record<string, any> | null>()
 const prefetchedDocMetadataTargets = new Set<string>()
 const prefetchedDocFullBodyTargets = new Set<string>()
 const pendingPagerFullBodyPrefetchTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -32,61 +30,6 @@ const RELATIVE_TIME_UNITS = [
   { unit: 'minute', ms: 60 * 1000 },
   { unit: 'second', ms: 1000 },
 ] as const
-
-function resolveFullDocCacheKey(value: Record<string, any> | null) {
-  const rawPath = typeof value?.path === 'string'
-    ? value.path
-    : typeof value?._path === 'string'
-      ? value._path
-      : ''
-  if (!rawPath)
-    return null
-
-  const localeMatch = rawPath.match(/\.(en|zh)$/)
-  const locale = localeMatch?.[1]
-  if (!locale)
-    return null
-
-  const normalizedPath = normalizeDocsPagePath(rawPath.replace(/\.(en|zh)$/, ''))
-  return `doc-full:${normalizedPath}:${locale}`
-}
-
-function readCachedFullDoc(key: string) {
-  if (!import.meta.client)
-    return undefined
-  return docsFullBodyCache.get(key)
-}
-
-function hasCachedFullDoc(key: string) {
-  return import.meta.client && docsFullBodyCache.has(key)
-}
-
-function cacheFullDoc(value: Record<string, any> | null) {
-  if (!import.meta.client || value == null)
-    return value
-
-  const key = resolveFullDocCacheKey(value)
-  if (!key)
-    return value
-
-  if (docsFullBodyCache.has(key))
-    docsFullBodyCache.delete(key)
-  docsFullBodyCache.set(key, value)
-  primeDocsPageRequestCache({
-    path: key.slice('doc-full:'.length).replace(/:(en|zh)$/, ''),
-    locale: key.endsWith(':zh') ? 'zh' : 'en',
-    body: '1',
-  }, value)
-
-  while (docsFullBodyCache.size > DOCS_FULL_BODY_CACHE_LIMIT) {
-    const oldestKey = docsFullBodyCache.keys().next().value
-    if (!oldestKey)
-      break
-    docsFullBodyCache.delete(oldestKey)
-  }
-
-  return value
-}
 
 definePageMeta({
   layout: 'docs',
@@ -217,7 +160,7 @@ function resolveDocMeta(record: Record<string, any> | null | undefined) {
   }
 }
 
-const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
+const { data: docPayload, status } = await useTypedFetch<Record<string, any> | null>(
   '/api/docs/page',
   {
     key: currentDocsPageFetchKey,
@@ -231,14 +174,25 @@ const { data: doc, status } = await useTypedFetch<Record<string, any> | null>(
     watch: false,
   },
 )
-const fullDocCacheKey = computed(() => `doc-full:${docPath.value}:${docsLocale.value}`)
+
+/**
+ * The docs page remounts on every navigation, and Nuxt seeds a newly keyed
+ * `useAsyncData` entry with the previous key's data. Own the document locally so
+ * a page that is on its way out can never write into the incoming page's state.
+ */
+const doc = shallowRef<Record<string, any> | null>(
+  isDocsPageRecordForRoute(docPayload.value, docPath.value, docsLocale.value)
+    ? docPayload.value
+    : null,
+)
+const fullDocCacheKey = computed(() => resolveDocsFullBodyCacheKey(docPath.value, docsLocale.value))
 const fullDoc = shallowRef<Record<string, any> | null>(null)
 const fullDocLoading = ref(false)
 
 const docMeta = computed(() => resolveDocMeta((doc.value ?? null) as Record<string, any> | null))
 const renderDoc = computed(() => (shouldSplitDocBody.value ? fullDoc.value ?? doc.value : doc.value))
 
-const isLoading = ref(status.value === 'pending' || status.value === 'idle')
+const isLoading = ref(!doc.value)
 const outlineLoadingState = useState<boolean>('docs-outline-loading', () => isLoading.value)
 let activeDocFetchId = 0
 let fullDocIdleId: number | null = null
@@ -258,13 +212,26 @@ function clearFullDocFetchSchedule() {
   }
 }
 
+function isStaleDocFetch(fetchId: number, path: string, locale: 'en' | 'zh') {
+  return fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value
+}
+
+/** Adopt a resolved document as the rendered body and leave the loading state. */
+function settleFullDoc(value: Record<string, any> | null) {
+  fullDoc.value = value
+  // Upgrade a metadata-only stub to the full record so titles and meta come from it too.
+  if (value && !doc.value?.body)
+    doc.value = value
+  isLoading.value = false
+}
+
 async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' | 'zh') {
   if (import.meta.server || !shouldSplitDocBody.value)
     return
 
-  const cacheKey = `doc-full:${path}:${locale}`
-  if (hasCachedFullDoc(cacheKey)) {
-    fullDoc.value = readCachedFullDoc(cacheKey) ?? null
+  const cacheKey = resolveDocsFullBodyCacheKey(path, locale)
+  if (hasCachedDocsFullBody(cacheKey)) {
+    settleFullDoc(readCachedDocsFullBody(cacheKey) ?? null)
     return
   }
 
@@ -273,23 +240,21 @@ async function loadFullDocForRoute(fetchId: number, path: string, locale: 'en' |
   try {
     const nextFullDoc = await requestDocsPage({ path, locale, body: '1' })
 
-    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
+    if (isStaleDocFetch(fetchId, path, locale))
       return
 
-    const cachedFullDoc = cacheFullDoc(nextFullDoc)
-    fullDoc.value = cachedFullDoc
-    if (!doc.value) {
-      doc.value = cachedFullDoc
-      isLoading.value = false
-    }
+    settleFullDoc(cacheDocsFullBody(nextFullDoc))
   }
   catch {
-    if (fetchId === activeDocFetchId && path === docPath.value && locale === docsLocale.value)
+    if (!isStaleDocFetch(fetchId, path, locale))
       fullDoc.value = null
   }
   finally {
-    if (fetchId === activeDocFetchId && path === docPath.value && locale === docsLocale.value)
+    // Never leave the spinner up: every exit from the body fetch resolves the view.
+    if (!isStaleDocFetch(fetchId, path, locale)) {
       fullDocLoading.value = false
+      isLoading.value = false
+    }
   }
 }
 
@@ -303,7 +268,7 @@ function scheduleFullDocFetchForRoute(fetchId: number, path: string, locale: 'en
     fullDocIdleId = null
     fullDocTimer = null
 
-    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
+    if (isStaleDocFetch(fetchId, path, locale))
       return
 
     void loadFullDocForRoute(fetchId, path, locale)
@@ -324,7 +289,7 @@ function seedFullDocFromCurrentDoc() {
   if (!shouldSplitDocBody.value || !doc.value?.body)
     return false
 
-  fullDoc.value = cacheFullDoc(doc.value as Record<string, any>)
+  settleFullDoc(cacheDocsFullBody(doc.value as Record<string, any>))
   return true
 }
 
@@ -377,10 +342,10 @@ function schedulePagerFullDocPrefetch(normalized: string, locale: 'en' | 'zh') {
   if (import.meta.server)
     return
 
-  const cacheKey = `doc-full:${normalized}:${locale}`
+  const cacheKey = resolveDocsFullBodyCacheKey(normalized, locale)
   const prefetchKey = `${normalized}:${locale}`
   if (
-    hasCachedFullDoc(cacheKey)
+    hasCachedDocsFullBody(cacheKey)
     || prefetchedDocFullBodyTargets.has(prefetchKey)
     || pendingPagerFullBodyPrefetchTimers.has(prefetchKey)
   ) {
@@ -389,12 +354,12 @@ function schedulePagerFullDocPrefetch(normalized: string, locale: 'en' | 'zh') {
 
   const prefetchFullDoc = () => {
     clearPagerFullBodyPrefetchSchedule(prefetchKey)
-    if (hasCachedFullDoc(cacheKey) || prefetchedDocFullBodyTargets.has(prefetchKey))
+    if (hasCachedDocsFullBody(cacheKey) || prefetchedDocFullBodyTargets.has(prefetchKey))
       return
 
     prefetchedDocFullBodyTargets.add(prefetchKey)
     void requestDocsPage({ path: normalized, locale, body: '1' }).then((nextFullDoc) => {
-      cacheFullDoc(nextFullDoc)
+      cacheDocsFullBody(nextFullDoc)
     }).catch(() => {})
   }
 
@@ -438,34 +403,42 @@ async function loadActiveDocForRoute() {
   const path = docPath.value
   const locale = docsLocale.value
   const splitBody = shouldSplitDocBody.value
-  const cachedFullDoc = splitBody ? readCachedFullDoc(fullDocCacheKey.value) : null
-  const hasCachedBody = splitBody && cachedFullDoc !== undefined
 
   clearFullDocFetchSchedule()
-  doc.value = hasCachedBody ? cachedFullDoc : null
-  fullDoc.value = hasCachedBody ? cachedFullDoc : null
-  isLoading.value = !hasCachedBody
   fullDocLoading.value = false
 
+  const cachedFullDoc = splitBody ? readCachedDocsFullBody(fullDocCacheKey.value) : undefined
+  if (cachedFullDoc !== undefined) {
+    settleFullDoc(cachedFullDoc)
+    return
+  }
+
+  // A document handed over by SSR stays on screen while the body streams in.
+  const hasResolvedDoc = isDocsPageRecordForRoute(doc.value, path, locale)
+  if (!hasResolvedDoc) {
+    doc.value = null
+    fullDoc.value = null
+  }
+  isLoading.value = !hasResolvedDoc
+
   try {
-    const nextDoc = await requestDocsPage({ path, locale, body: splitBody ? '0' : '1' })
+    if (!hasResolvedDoc) {
+      const nextDoc = await requestDocsPage({ path, locale, body: splitBody ? '0' : '1' })
 
-    if (fetchId !== activeDocFetchId || path !== docPath.value || locale !== docsLocale.value)
-      return
+      if (isStaleDocFetch(fetchId, path, locale))
+        return
 
-    doc.value = nextDoc
+      doc.value = nextDoc
+    }
     isLoading.value = false
 
-    if (!splitBody)
-      return
-
-    if (hasCachedBody)
+    if (!splitBody || seedFullDocFromCurrentDoc())
       return
 
     scheduleFullDocFetchForRoute(fetchId, path, locale)
   }
   catch {
-    if (fetchId === activeDocFetchId) {
+    if (!isStaleDocFetch(fetchId, path, locale)) {
       isLoading.value = false
       fullDocLoading.value = false
       clearFullDocFetchSchedule()
@@ -473,8 +446,9 @@ async function loadActiveDocForRoute() {
   }
 }
 
+// Each navigation mounts a fresh page instance, so the incoming instance owns its load.
 if (import.meta.client)
-  startFullDocFetchForRoute()
+  void loadActiveDocForRoute()
 
 watch(requestKey, () => {
   clearCodeEnhanceSchedule()
@@ -502,10 +476,12 @@ watch(
 )
 
 const viewState = computed(() => {
+  // Holding a document always wins over the loading flag, so a stale flag can never
+  // strand the reader on a spinner while the content is sitting right there.
+  if (doc.value || renderDoc.value)
+    return 'content'
   if (isLoading.value)
     return 'loading'
-  if (doc.value)
-    return 'content'
   return 'not-found'
 })
 
