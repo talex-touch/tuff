@@ -39,4 +39,3 @@ fs.copyFileSync(path.join(releaseDir, platformLibraryName), outNodePath)
 if (process.platform === 'darwin') {
   execFileSync('codesign', ['--force', '--sign', '-', outNodePath], { stdio: 'inherit' })
 }
-
