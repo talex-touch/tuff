@@ -14,7 +14,9 @@ import {
   unwrapChannelPayload,
 } from "./protocol";
 
-const DEFAULT_STREAM_PORT_TIMEOUT_MS = 1500;
+// Mirrors the renderer transport budget: the confirm handshake blocks stream start,
+// so this has to clear startup contention without stalling the caller for long.
+const DEFAULT_STREAM_PORT_TIMEOUT_MS = 3000;
 
 export interface ClientStreamRuntimeAdapter {
   streamControllers: Map<string, StreamController>;
@@ -86,6 +88,10 @@ export async function startClientStream<TReq, TChunk>(
       ? {
           channel: eventName,
           ...options.port,
+          // Each stream owns its port outright: cleanup and fallback below close the
+          // handle unconditionally, and the channel-keyed cache is shared with
+          // `transport.on` subscriptions, so a reused handle would be torn down by
+          // whichever consumer finishes first.
           force: true,
           timeoutMs:
             options.port?.timeoutMs ??
