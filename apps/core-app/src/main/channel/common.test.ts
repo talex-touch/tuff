@@ -520,7 +520,7 @@ afterEach(() => {
 })
 
 describe('CommonChannelModule private helpers', () => {
-  it('createSafeOperationHandler wraps failures as { success: false, error }', async () => {
+  it('createSafeOperationHandler redacts failures as a safe public error', async () => {
     const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
     let registeredHandler: ((payload: unknown, context: unknown) => Promise<unknown>) | null = null
 
@@ -539,8 +539,10 @@ describe('CommonChannelModule private helpers', () => {
     expect(registeredHandler).toBeTypeOf('function')
     const result = await registeredHandler!({}, {})
 
-    expect(result).toEqual({ success: false, error: 'command failed' })
-    expect(loggerWarnMock).toHaveBeenCalled()
+    expect(result).toEqual({
+      success: false,
+      error: 'The operation failed. Please retry.'
+    })
   })
 
   it('readSystemFile reuses inflight promise and caches successful reads', async () => {
