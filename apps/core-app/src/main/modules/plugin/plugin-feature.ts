@@ -2,17 +2,12 @@ import type { ITuffIcon } from '@talex-touch/utils'
 import type {
   IFeatureCommand,
   IFeatureInteraction,
-  IFeatureLifeCycle,
   IPlatform,
   IPluginDev,
-  IPluginFeature,
-  ITouchPlugin
+  IPluginFeature
 } from '@talex-touch/utils/plugin'
-import vm from 'node:vm'
 import { TuffItemBuilder } from '@talex-touch/utils/core-box'
-import fse from 'fs-extra'
 import { TuffIconImpl } from '../../core/tuff-icon'
-import { createPluginRequire } from './runtime/plugin-require'
 
 /**
  * Create TuffItemBuilder with plugin context
@@ -26,94 +21,6 @@ export function createBuilderWithPluginContext(pluginName: string): typeof TuffI
       this.setMeta({ pluginName })
     }
   }
-}
-
-/**
- * Load plugin feature lifecycle from script content
- * @param plugin - Plugin instance
- * @param scriptContent - JavaScript code to execute
- * @param context - Execution context
- * @returns Feature lifecycle implementation
- */
-export function loadPluginFeatureContextFromContent(
-  plugin: ITouchPlugin,
-  scriptContent: string,
-  context: Record<string, unknown>
-): IFeatureLifeCycle {
-  const sandbox = {
-    exports: {},
-    module: { exports: {} },
-    require: createPluginRequire(plugin.name),
-    __dirname: plugin.pluginPath,
-    __filename: 'index.js',
-    AbortController: globalThis.AbortController,
-    AbortSignal: globalThis.AbortSignal,
-    setTimeout: globalThis.setTimeout,
-    clearTimeout: globalThis.clearTimeout,
-    setInterval: globalThis.setInterval,
-    clearInterval: globalThis.clearInterval,
-    setImmediate: globalThis.setImmediate,
-    clearImmediate: globalThis.clearImmediate,
-    queueMicrotask: globalThis.queueMicrotask,
-    console: globalThis.console,
-    fetch: globalThis.fetch,
-    Headers: globalThis.Headers,
-    Request: globalThis.Request,
-    Response: globalThis.Response,
-    URL: globalThis.URL,
-    URLSearchParams: globalThis.URLSearchParams,
-    crypto: globalThis.crypto,
-    performance: globalThis.performance,
-    btoa: globalThis.btoa,
-    atob: globalThis.atob,
-    TextEncoder: globalThis.TextEncoder,
-    TextDecoder: globalThis.TextDecoder,
-    FormData: globalThis.FormData,
-    Blob: globalThis.Blob,
-    ...context
-  }
-
-  vm.createContext(sandbox)
-  try {
-    vm.runInContext(scriptContent, sandbox)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    const wrapped = new Error(`Plugin script execution failed for ${plugin.name}: ${message}`, {
-      cause: err
-    }) as Error & { code?: string; moduleId?: string; pluginName?: string }
-    if (err && typeof err === 'object') {
-      const cause = err as { code?: unknown; moduleId?: unknown; pluginName?: unknown }
-      if (typeof cause.code === 'string') wrapped.code = cause.code
-      if (typeof cause.moduleId === 'string') wrapped.moduleId = cause.moduleId
-      if (typeof cause.pluginName === 'string') wrapped.pluginName = cause.pluginName
-    }
-    throw wrapped
-  }
-
-  const exported = sandbox.module.exports
-  const lifecycle =
-    typeof exported === 'object' && exported ? (exported as Partial<IFeatureLifeCycle>) : {}
-
-  return {
-    onFeatureTriggered: lifecycle.onFeatureTriggered ?? (() => undefined),
-    ...lifecycle
-  }
-}
-
-/**
- * Load plugin feature lifecycle from file
- * @param plugin - Plugin instance
- * @param featureIndex - Path to feature script
- * @param context - Execution context
- * @returns Feature lifecycle implementation
- */
-export function loadPluginFeatureContext(
-  plugin: ITouchPlugin,
-  featureIndex: string,
-  context: Record<string, unknown>
-): IFeatureLifeCycle {
-  const scriptContent = fse.readFileSync(featureIndex, 'utf-8')
-  return loadPluginFeatureContextFromContent(plugin, scriptContent, context)
 }
 
 /**

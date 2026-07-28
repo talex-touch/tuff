@@ -1,146 +1,123 @@
-import { beforeEach, describe, expect, it } from 'vitest'
 import { SdkApi } from '@talex-touch/utils/plugin'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   getPluginViewSecurityDiagnostics,
+  PluginViewCompatibilityError,
   resetPluginViewSecurityDiagnostics,
   resolvePluginViewSecurityProfile
 } from './plugin-view-security-profile'
 
 function createPlugin(overrides: { sdkapi?: number; webViewInit?: boolean } = {}) {
   const hasSdkapi = Object.prototype.hasOwnProperty.call(overrides, 'sdkapi')
-
   return {
     name: 'touch-test',
     sdkapi: hasSdkapi ? overrides.sdkapi : SdkApi.V260615,
-    webViewInit: overrides.webViewInit ?? false,
-    __getInjections__: () => ({
-      _: {
-        isWebviewInit: overrides.webViewInit ?? false
-      },
-      attrs: {},
-      styles: '',
-      js: ''
-    })
+    webViewInit: overrides.webViewInit ?? false
   }
+}
+
+function expectLegacyGate(
+  run: () => unknown,
+  reason: PluginViewCompatibilityError['reason']
+): void {
+  expect(run).toThrowError(
+    expect.objectContaining({
+      code: 'PLUGIN_WINDOW_LEGACY_RUNTIME_UNSUPPORTED',
+      reason,
+      minimumSdkApi: SdkApi.V260615
+    })
+  )
 }
 
 describe('resolvePluginViewSecurityProfile', () => {
   beforeEach(() => {
     resetPluginViewSecurityDiagnostics()
+    delete process.env.TUFF_PLUGIN_SECURE_VIEWS
   })
 
-  it('activates the trusted profile for supported plugins without legacy needs', () => {
-    const profile = resolvePluginViewSecurityProfile(createPlugin(), {
-      source: 'test'
-    })
-
-    expect(profile).toEqual({
+  it('returns only the trusted profile for supported plugins', () => {
+    expect(resolvePluginViewSecurityProfile(createPlugin(), { source: 'test' })).toEqual({
       candidateProfile: 'trusted-plugin-view',
       effectiveProfile: 'trusted-plugin-view',
       reason: 'trusted-candidate'
     })
   })
 
-  it('keeps candidate and effective profiles aligned', () => {
-    const profile = resolvePluginViewSecurityProfile(createPlugin(), {
-      source: 'test'
-    })
-
-    expect(profile.candidateProfile).toBe('trusted-plugin-view')
-    expect(profile.effectiveProfile).toBe('trusted-plugin-view')
+  it.each([
+    [undefined, 'sdkapi-before-trusted-marker'],
+    [SdkApi.V260428, 'sdkapi-before-trusted-marker'],
+    [251211, 'sdkapi-before-trusted-marker'],
+    [260701, 'sdkapi-before-trusted-marker']
+  ] as const)('rejects unsupported SDK %s before surface creation', (sdkapi, reason) => {
+    expectLegacyGate(
+      () => resolvePluginViewSecurityProfile(createPlugin({ sdkapi }), { source: 'test' }),
+      reason
+    )
   })
 
-  it('retains 260428 plugins on the compatibility candidate path', () => {
-    const profile = resolvePluginViewSecurityProfile(createPlugin({ sdkapi: SdkApi.V260428 }), {
-      source: 'test'
-    })
-
-    expect(profile).toEqual({
-      candidateProfile: 'compat-plugin-view',
-      effectiveProfile: 'compat-plugin-view',
-      reason: 'sdkapi-before-trusted-marker'
-    })
+  it('rejects a custom preload before surface creation', () => {
+    expectLegacyGate(
+      () =>
+        resolvePluginViewSecurityProfile(createPlugin(), {
+          source: 'test',
+          injections: { _: { preload: '/tmp/preload.js', isWebviewInit: false } }
+        }),
+      'legacy-preload'
+    )
   })
 
-  it('keeps missing, lower or unsupported future sdkapi values compatible', () => {
-    const missing = resolvePluginViewSecurityProfile(createPlugin({ sdkapi: undefined }), {
-      source: 'test'
-    })
-    const low = resolvePluginViewSecurityProfile(createPlugin({ sdkapi: 251211 }), {
-      source: 'test'
-    })
-    const future = resolvePluginViewSecurityProfile(createPlugin({ sdkapi: 260701 }), {
-      source: 'test'
-    })
-
-    expect(missing.reason).toBe('sdkapi-before-trusted-marker')
-    expect(low.reason).toBe('sdkapi-before-trusted-marker')
-    expect(future.reason).toBe('sdkapi-before-trusted-marker')
-    expect(missing.effectiveProfile).toBe('compat-plugin-view')
-    expect(low.effectiveProfile).toBe('compat-plugin-view')
-    expect(future.effectiveProfile).toBe('compat-plugin-view')
+  it('rejects webview and explicit legacy runtime requirements', () => {
+    expectLegacyGate(
+      () =>
+        resolvePluginViewSecurityProfile(createPlugin({ webViewInit: true }), {
+          source: 'test',
+          injections: { _: { isWebviewInit: true } }
+        }),
+      'legacy-webview'
+    )
+    expectLegacyGate(
+      () =>
+        resolvePluginViewSecurityProfile(createPlugin(), {
+          source: 'test',
+          requiresLegacyRuntime: true
+        }),
+      'explicit-legacy-runtime'
+    )
   })
 
-  it('downgrades plugins with legacy preload needs to compat candidate', () => {
-    const profile = resolvePluginViewSecurityProfile(createPlugin(), {
-      source: 'test',
-      injections: {
-        _: {
-          preload: '/tmp/preload.js',
-          isWebviewInit: false
-        }
-      }
-    })
-
-    expect(profile).toMatchObject({
-      candidateProfile: 'compat-plugin-view',
-      effectiveProfile: 'compat-plugin-view',
-      reason: 'legacy-preload'
-    })
+  it('does not restore legacy execution through the former environment switch', () => {
+    process.env.TUFF_PLUGIN_SECURE_VIEWS = '0'
+    expectLegacyGate(
+      () =>
+        resolvePluginViewSecurityProfile(createPlugin({ sdkapi: SdkApi.V260428 }), {
+          source: 'test'
+        }),
+      'sdkapi-before-trusted-marker'
+    )
   })
 
-  it('downgrades legacy webview plugins to compat candidate', () => {
-    const profile = resolvePluginViewSecurityProfile(createPlugin({ webViewInit: true }), {
-      source: 'test',
-      injections: {
-        _: {
-          isWebviewInit: true
-        }
-      }
-    })
-
-    expect(profile.reason).toBe('legacy-webview')
-    expect(profile.candidateProfile).toBe('compat-plugin-view')
-  })
-
-  it('keeps explicit legacy runtime requests on compat candidate', () => {
-    const profile = resolvePluginViewSecurityProfile(createPlugin(), {
-      source: 'test',
-      requiresLegacyRuntime: true
-    })
-
-    expect(profile.reason).toBe('explicit-legacy-runtime')
-    expect(profile.candidateProfile).toBe('compat-plugin-view')
-  })
-
-  it('reports per-surface profile state and deduplicated compatibility blockers', () => {
+  it('records blocked diagnostics without retaining paths or injected source', () => {
     const plugin = createPlugin()
     resolvePluginViewSecurityProfile(plugin, { source: 'core-box' })
-    resolvePluginViewSecurityProfile(plugin, {
-      source: 'division-box',
-      injections: { _: { preload: '/tmp/legacy.js', isWebviewInit: false } }
-    })
-    resolvePluginViewSecurityProfile(plugin, {
-      source: 'division-box',
-      injections: { _: { preload: '/tmp/legacy.js', isWebviewInit: false } }
-    })
+    expect(() =>
+      resolvePluginViewSecurityProfile(plugin, {
+        source: 'division-box',
+        injections: { _: { preload: '/private/sensitive/preload.js', isWebviewInit: false } }
+      })
+    ).toThrow(PluginViewCompatibilityError)
 
-    expect(getPluginViewSecurityDiagnostics()).toEqual({
+    const snapshot = getPluginViewSecurityDiagnostics()
+    expect(snapshot).toEqual({
       surfaces: expect.arrayContaining([
         expect.objectContaining({ source: 'core-box', effectiveProfile: 'trusted-plugin-view' }),
-        expect.objectContaining({ source: 'division-box', reason: 'legacy-preload' })
+        expect.objectContaining({
+          source: 'division-box',
+          effectiveProfile: 'blocked',
+          reason: 'legacy-preload'
+        })
       ]),
       compatibilityBlockers: { 'legacy-preload': 1 }
     })
+    expect(JSON.stringify(snapshot)).not.toContain('/private/sensitive')
   })
 })

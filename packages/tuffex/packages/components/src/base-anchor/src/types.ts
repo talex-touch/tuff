@@ -8,7 +8,7 @@ export type BaseAnchorPlacement
 
 export type BaseAnchorSurfaceMotionAdaptation = 'auto' | 'manual' | 'off'
 
-export type BaseAnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
+export type BaseAnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none' | 'drip' | 'bead'
 
 export interface BaseAnchorAnimationOptions {
   type?: BaseAnchorAnimationType
@@ -20,6 +20,35 @@ export interface BaseAnchorAnimationOptions {
   scale?: number
   blur?: number
   opacity?: number
+
+  /**
+   * `drip` / `bead` only: Gaussian blur radius of the goo filter (feGaussianBlur stdDeviation).
+   * Together with `gooThreshold` this decides how wide a gap the neck survives.
+   */
+  gooBlur?: number
+  /** `drip` / `bead` only: alpha slope of the threshold colour matrix. */
+  gooThreshold?: number
+  /** `drip` / `bead` only: alpha offset of the threshold colour matrix. */
+  gooThresholdOffset?: number
+  /**
+   * `drip` / `bead` only: colour of the outline ring flooded from the merged silhouette.
+   * Defaults to the resolved `--tx-border-color` token so dark mode follows.
+   */
+  outlineColor?: string
+  /** `drip` / `bead` only: corner radius of the trigger ghost. Measured from the reference when omitted. */
+  triggerRadius?: number
+  /** `drip` / `bead` only: panel height at p=0 — the seed the drop is torn from. */
+  seedHeight?: number
+  /** `drip` / `bead` only: selector for items faded in against the panel's own growth. */
+  itemSelector?: string
+
+  /**
+   * `bead` only: how far each side of the sheet may be drawn in at peak speed (px).
+   * The pinch reports the drop's velocity, so it decays to 0 as the motion settles.
+   */
+  beadPinch?: number
+  /** `bead` only: speed at which the pinch saturates, in `p` per unit of normalised time. */
+  beadVelocityRef?: number
 }
 
 export type BaseAnchorPanelCardProps = Partial<Pick<

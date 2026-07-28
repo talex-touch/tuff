@@ -1,7 +1,7 @@
 ---
 title: "GradientBorder 渐变边框"
 description: "用于强调卡片、Hero 面板和提示容器的动态渐变边框包装器。"
-category: Basic
+category: Effects
 status: beta
 since: 1.0.0
 tags: [border, gradient, highlight]

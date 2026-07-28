@@ -1,7 +1,7 @@
 ---
 title: "ContextMenu"
 description: "General menu surface for right-click, controlled coordinates, and Popover composition."
-category: Feedback
+category: Navigation
 syncStatus: reviewed
 verified: true
 ---

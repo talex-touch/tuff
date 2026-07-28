@@ -1,7 +1,7 @@
 ---
 title: Floating
 description: Pointer-aware parallax container with registered absolute-positioned depth layers.
-category: Design
+category: Primitives
 status: beta
 since: 1.0.0
 tags: [floating, parallax, motion]

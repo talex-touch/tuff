@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "apps/nexus/AGENTS.md", "reason": "nexus 包级约定：server/ 目录结构、导入风格、测试放置位置"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "本任务核心是把四处重复策略收敛成一个共享模块，需要按此指南判断抽象边界"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "cacheDocsContent 是泛型工具，返回值与 isEmpty 谓词需要严格类型，不允许 any 逃逸"}

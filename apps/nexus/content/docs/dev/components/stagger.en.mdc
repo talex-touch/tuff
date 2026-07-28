@@ -1,7 +1,7 @@
 ---
 title: "Stagger"
 description: "TransitionGroup wrapper for index-based staggered enter and leave animations."
-category: Layout
+category: Effects
 status: beta
 since: 1.0.0
 tags: [transition, animation, stagger]

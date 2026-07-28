@@ -175,7 +175,6 @@ onUnmounted(() => {
         width="min(320px, 82vw)"
         :mobile-adapt="false"
         :z-index="10050"
-        class="TuffHeader-MobileMenu"
       >
         <div class="flex flex-col gap-1">
           <NuxtLink

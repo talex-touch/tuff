@@ -1,12 +1,14 @@
 <script setup lang="ts">
+import type { StyleValue } from 'vue'
 import type { TxCardProps } from '../../card/src/types'
+import type { LiquidMetrics } from './base-anchor-liquid'
 import type { BaseAnchorClassValue, BaseAnchorProps, BaseAnchorVirtualReference } from './types'
 import { arrow, autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
-import type { StyleValue } from 'vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, watch } from 'vue'
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 import TxCard from '../../card/src/TxCard.vue'
+import { beadPinchRatio, beadSpanAt, createLiquidMetrics, geometryAt, itemOpacityAt, LIQUID_DEFAULTS } from './base-anchor-liquid'
 import { useBaseAnchorMotion } from './base-anchor-motion'
 
 defineOptions({ name: 'TxBaseAnchor', inheritAttrs: false })
@@ -79,6 +81,32 @@ const contentRef = ref<HTMLElement | null>(null)
 const arrowRef = ref<HTMLElement | null>(null)
 const outlineW = ref(0)
 const outlineH = ref(0)
+
+/* ─── liquid stage ─── */
+const liquidStageRef = ref<HTMLElement | null>(null)
+const liquidPanelShapeRef = ref<SVGRectElement | null>(null)
+const liquidShadowRef = ref<HTMLElement | null>(null)
+const liquidRegion = ref({ x: 0, y: 0, w: 0, h: 0 })
+const liquidTrigger = ref({ x: 0, y: 0, w: 0, h: 0, r: 0 })
+const liquidPanelWidth = ref(0)
+const liquidOutlineColor = ref<string>(LIQUID_DEFAULTS.outlineColor)
+const liquidSurfaceColor = ref('#fafafa')
+
+// Per-frame writes go straight to the DOM; keeping these out of reactivity avoids
+// a re-render on every animation frame.
+let liquidMetrics: LiquidMetrics | null = null
+let liquidItems: Array<{ el: HTMLElement, hold: number }> = []
+let liquidProgress = 0
+let liquidVelocity = 0
+let liquidSignature = ''
+let motionQuery: MediaQueryList | null = null
+let reducedMotion = false
+
+const uid = getCurrentInstance()?.uid ?? 0
+const liquidShapesId = `tx-ba-liquid-shapes-${uid}`
+const liquidGooId = `tx-ba-liquid-goo-${uid}`
+const liquidOutlineId = `tx-ba-liquid-outline-${uid}`
+const liquidMaskId = `tx-ba-liquid-mask-${uid}`
 
 const zIndex = ref(getZIndex())
 const mounted = ref(false)
@@ -224,6 +252,19 @@ function syncOutlineSize() {
   outlineH.value = Math.max(0, el.offsetHeight)
 }
 
+/**
+ * `useFloating().update()` returns `void`, so `await update()` guarantees nothing: positioning
+ * — and in particular the `size` middleware that writes `elements.floating.style.width` — lands
+ * asynchronously afterwards. A `syncOutlineSize()` called right after `update()` can therefore
+ * read a stale width. Re-measure once the frame has landed; `outlineW/outlineH` are reactive, so
+ * the outline self-corrects without delaying the open animation.
+ */
+function scheduleOutlineRemeasure() {
+  if (!hasWindow() || typeof window.requestAnimationFrame !== 'function')
+    return
+  window.requestAnimationFrame(() => syncOutlineSize())
+}
+
 function scheduleResizeUpdate() {
   if (!hasWindow())
     return
@@ -233,6 +274,7 @@ function scheduleResizeUpdate() {
     resizeUpdateFrame = null
     syncOutlineSize()
     void update()
+    refreshLiquidStage()
   })
 }
 
@@ -332,7 +374,10 @@ const {
   bouncePad,
   clearTimeline,
   hasActiveTimeline,
+  resolvedAnimation,
   settleOpenVisualStateForFollow,
+  usesBeadMotion,
+  usesLiquidMotion: motionUsesLiquid,
 } = useBaseAnchorMotion({
   clipRef,
   contentRef,
@@ -352,7 +397,266 @@ const {
   setMounted: value => (mounted.value = value),
   setPanelSurfaceMoving,
   pulsePanelSurfaceMoving,
+  prepareLiquid,
+  applyLiquidFrame,
+  settleLiquid,
 })
+
+/* ─── liquid drop ─── */
+
+/** The panel height cannot be measured when it is unbounded, so the drop cannot run. */
+const usesLiquidMotion = computed(() => motionUsesLiquid.value && !isUnlimitedHeight.value)
+
+const liquidGoo = computed(() => {
+  const animation = resolvedAnimation.value
+  return {
+    blur: animation.gooBlur,
+    // Blur, then slam the alpha through a hard threshold. Everything above the
+    // knee becomes opaque, so two nearby shapes read as one body of water.
+    matrix: `1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 ${animation.gooThreshold} ${animation.gooThresholdOffset}`,
+  }
+})
+
+const liquidViewBox = computed(() => {
+  const region = liquidRegion.value
+  return `${region.x} ${region.y} ${region.w} ${region.h}`
+})
+
+const liquidStageStyle = computed<Record<string, string>>(() => {
+  const region = liquidRegion.value
+  return {
+    left: `${region.x}px`,
+    top: `${region.y}px`,
+    width: `${region.w}px`,
+    height: `${region.h}px`,
+  }
+})
+
+const liquidShadowStyle = computed<Record<string, string>>(() => ({
+  borderRadius: `${props.panelRadius}px`,
+}))
+
+const liquidPanelStyle = computed<Record<string, string>>(() => ({
+  padding: `${props.panelPadding}px`,
+  borderRadius: `${props.panelRadius}px`,
+}))
+
+/** `feFlood` takes no `var()`, so theme tokens have to be resolved to literals. */
+function readColorToken(token: string, fallback: string): string {
+  if (!hasWindow())
+    return fallback
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(token).trim()
+  return value || fallback
+}
+
+function resolveTriggerRadius(override: number | undefined, triggerHeight: number): number {
+  if (typeof override === 'number' && Number.isFinite(override))
+    return Math.max(0, override)
+
+  // The slot wrapper is a bare div; the radius lives on whatever the consumer rendered.
+  const host = (referenceRef.value?.firstElementChild ?? referenceRef.value) as HTMLElement | null
+  if (!host || !hasWindow())
+    return 0
+
+  const parsed = Number.parseFloat(window.getComputedStyle(host).borderTopLeftRadius)
+  if (!Number.isFinite(parsed))
+    return 0
+  return Math.min(Math.max(0, parsed), triggerHeight / 2)
+}
+
+function measureLiquidItems(content: HTMLElement, selector: string, panelHeight: number) {
+  const tagged = Array.from(content.querySelectorAll<HTMLElement>(selector))
+  // Hold on the item's BOTTOM, not its mid-line: keyed to the mid-line an item
+  // starts fading in while its lower half is still outside the silhouette.
+  if (tagged.length)
+    return tagged.map(el => ({ el, hold: el.offsetTop + el.offsetHeight }))
+
+  // Without opted-in items there is nothing to stagger, so the panel body reveals
+  // as a single unit — still keyed to growth, never to the clock.
+  return [{ el: content, hold: panelHeight * 0.5 }]
+}
+
+function prefersReducedMotion(): boolean {
+  return reducedMotion
+}
+
+/**
+ * Re-derive the stage geometry from live layout.
+ *
+ * This has to be re-runnable on every frame rather than measured once up front:
+ * `@floating-ui/vue`'s `update()` returns void, so there is no point at which the
+ * panel is guaranteed to have been positioned and sized. Measuring once would
+ * bake in the pre-positioned rect. The signature check keeps the common
+ * unchanged case down to one rect read.
+ */
+function measureLiquid(): boolean {
+  if (!hasWindow() || !usesLiquidMotion.value)
+    return false
+
+  const content = contentRef.value
+  const floating = floatingRef.value
+  if (!content || !floating)
+    return false
+
+  const referenceRect = readReferenceRect()
+  if (!referenceRect)
+    return false
+
+  const panelWidth = Math.max(0, content.offsetWidth)
+  const panelHeight = Math.max(0, content.offsetHeight)
+  if (panelWidth <= 0 || panelHeight <= 0)
+    return false
+
+  const floatingRect = floating.getBoundingClientRect()
+  const signature = [
+    referenceRect.x,
+    referenceRect.y,
+    referenceRect.width,
+    referenceRect.height,
+    floatingRect.left,
+    floatingRect.top,
+    panelWidth,
+    panelHeight,
+  ].join(',')
+  if (signature === liquidSignature && liquidMetrics)
+    return true
+  liquidSignature = signature
+
+  const animation = resolvedAnimation.value
+  // floating-ui positions the layer at the panel's top-left, so local (0, 0) is
+  // exactly where the panel belongs — flip/shift relocations need no compensation.
+  const triggerX = referenceRect.x - floatingRect.left
+  const triggerY = referenceRect.y - floatingRect.top
+
+  liquidTrigger.value = {
+    x: triggerX,
+    y: triggerY,
+    w: referenceRect.width,
+    h: referenceRect.height,
+    r: resolveTriggerRadius(animation.triggerRadius, referenceRect.height),
+  }
+  liquidPanelWidth.value = panelWidth
+  liquidOutlineColor.value = animation.outlineColor
+    ?? readColorToken('--tx-border-color', LIQUID_DEFAULTS.outlineColor)
+  liquidSurfaceColor.value = readColorToken('--tx-fill-color-lighter', '#fafafa')
+
+  liquidMetrics = createLiquidMetrics({
+    triggerTop: triggerY,
+    triggerHeight: referenceRect.height,
+    panelHeight,
+    seedHeight: animation.seedHeight,
+  })
+
+  // The goo blur bleeds well past the shapes; a tight region would cut the neck off square.
+  const pad = Math.ceil(animation.gooBlur * 3) + 2
+  const minX = Math.min(0, triggerX) - pad
+  const minY = Math.min(0, triggerY) - pad
+  const maxX = Math.max(panelWidth, triggerX + referenceRect.width) + pad
+  const maxY = Math.max(panelHeight, triggerY + referenceRect.height) + pad
+  liquidRegion.value = { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+
+  return true
+}
+
+function prepareLiquid(_direction: 'open' | 'close'): boolean {
+  if (!measureLiquid())
+    return false
+
+  const content = contentRef.value!
+  liquidItems = measureLiquidItems(content, resolvedAnimation.value.itemSelector, content.offsetHeight)
+  // Zero the items before the first paint; the stage stays hidden until the first
+  // frame has been written against settled layout.
+  for (const item of liquidItems)
+    item.el.style.opacity = '0'
+
+  return !prefersReducedMotion()
+}
+
+function applyLiquidFrame(p: number, velocity = 0) {
+  measureLiquid()
+  const metrics = liquidMetrics
+  if (!metrics)
+    return
+
+  liquidProgress = p
+  liquidVelocity = velocity
+  const geometry = geometryAt(p, metrics)
+
+  // `bead` lets the sheet report its own speed: the faster the drop falls, the
+  // harder surface tension draws its sides in. The pinch decays to 0 as the
+  // motion settles, so `drip` is just this with the pinch pinned at zero.
+  const animation = resolvedAnimation.value
+  const span = usesBeadMotion.value
+    ? beadSpanAt(liquidPanelWidth.value, animation.beadPinch, beadPinchRatio(velocity, animation.beadVelocityRef))
+    : { x: 0, width: liquidPanelWidth.value }
+
+  const shape = liquidPanelShapeRef.value
+  if (shape) {
+    shape.setAttribute('y', String(geometry.top))
+    shape.setAttribute('height', String(geometry.height))
+    shape.setAttribute('x', String(span.x))
+    shape.setAttribute('width', String(span.width))
+  }
+
+  const shadow = liquidShadowRef.value
+  if (shadow) {
+    const trigger = liquidTrigger.value
+    shadow.style.top = `${geometry.top - liquidRegion.value.y}px`
+    shadow.style.height = `${geometry.height}px`
+    shadow.style.left = `${span.x - liquidRegion.value.x}px`
+    shadow.style.width = `${span.width}px`
+    // No shadow while the drop is still part of the trigger body; it fades in
+    // exactly as the panel clears it.
+    const cleared = (geometry.top - (trigger.y + trigger.h)) / 6
+    shadow.style.opacity = String(Math.min(1, Math.max(0, cleared)))
+  }
+
+  for (const item of liquidItems)
+    item.el.style.opacity = String(itemOpacityAt(geometry.bottom, item.hold))
+
+  const stage = liquidStageRef.value
+  if (stage)
+    stage.style.visibility = 'visible'
+}
+
+function settleLiquid(isOpen: boolean) {
+  for (const item of liquidItems)
+    item.el.style.opacity = ''
+  liquidItems = []
+
+  const stage = liquidStageRef.value
+  if (stage)
+    stage.style.visibility = isOpen ? 'visible' : 'hidden'
+
+  if (!isOpen) {
+    liquidMetrics = null
+    liquidSignature = ''
+  }
+}
+
+/** Keep the goo silhouette glued to the reference while the anchor sits open. */
+function refreshLiquidStage() {
+  if (!usesLiquidMotion.value || !liquidMetrics)
+    return
+  applyLiquidFrame(liquidProgress, liquidVelocity)
+}
+
+function handleMotionPreferenceChange(event: MediaQueryListEvent) {
+  reducedMotion = event.matches
+}
+
+function setupMotionPreference() {
+  if (!hasWindow() || typeof window.matchMedia !== 'function')
+    return
+  motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  reducedMotion = motionQuery.matches
+  motionQuery.addEventListener('change', handleMotionPreferenceChange)
+}
+
+function teardownMotionPreference() {
+  motionQuery?.removeEventListener('change', handleMotionPreferenceChange)
+  motionQuery = null
+}
 
 function normalizeRect(rect: DOMRect | ClientRect): RectSnapshot {
   const domRect = rect as DOMRect
@@ -474,15 +778,19 @@ watch(
     lastOpenedAt.value = performance.now()
 
     await nextTick()
-    await update()
+    update()
     syncOutlineSize()
+    scheduleOutlineRemeasure()
     setupResizeObserver()
 
     const reference = floatingReference.value
     if (reference && floatingRef.value) {
       cleanupAutoUpdate.value?.()
       if (props.virtualReference) {
-        const updatePosition = () => update()
+        const updatePosition = () => {
+          update()
+          refreshLiquidStage()
+        }
         window.addEventListener('resize', updatePosition, { passive: true })
         window.addEventListener('scroll', updatePosition, { passive: true, capture: true })
         cleanupAutoUpdate.value = () => {
@@ -502,6 +810,7 @@ watch(
             }
             if (referenceMoved && hasActiveTimeline() && open.value)
               settleOpenVisualStateForFollow()
+            refreshLiquidStage()
           },
           { animationFrame: true },
         )
@@ -529,11 +838,13 @@ watch(
 onMounted(async () => {
   document.addEventListener('pointerdown', handleOutside, true)
   document.addEventListener('keydown', handleEsc)
+  setupMotionPreference()
 
   await nextTick()
   if (referenceRef.value) {
-    await update()
+    update()
     syncOutlineSize()
+    scheduleOutlineRemeasure()
     setupResizeObserver()
   }
 })
@@ -546,6 +857,7 @@ onBeforeUnmount(() => {
   cleanupResizeObserver.value?.()
   cleanupResizeObserver.value = null
   setPanelSurfaceMoving(false)
+  teardownMotionPreference()
   clearTimeline()
 })
 </script>
@@ -566,11 +878,11 @@ onBeforeUnmount(() => {
       ref="floatingRef"
       v-bind="floatingAttrs"
       class="tx-base-anchor"
-      :class="[floatingClass, { 'is-open': open, 'is-unlimited-height': isUnlimitedHeight }]"
+      :class="[floatingClass, { 'is-open': open, 'is-unlimited-height': isUnlimitedHeight, 'is-liquid': usesLiquidMotion }]"
       :style="[floatingStyle, floatingStyles, { zIndex, '--tx-ba-max-height': isUnlimitedHeight ? 'none' : undefined }]"
     >
       <span
-        v-if="props.showArrow"
+        v-if="props.showArrow && !usesLiquidMotion"
         ref="arrowRef"
         class="tx-base-anchor__arrow"
         :data-side="side"
@@ -579,6 +891,135 @@ onBeforeUnmount(() => {
         aria-hidden="true"
       />
 
+      <!--
+        The trigger body and the panel share one goo filter so they read as a
+        single body of water: the panel is torn off through a neck that thins and
+        pinches, never slid out from behind. The trigger's own fill and text stay
+        opaque in the document, untouched — this only draws its silhouette.
+      -->
+      <div
+        v-if="usesLiquidMotion"
+        ref="liquidStageRef"
+        class="tx-base-anchor__liquid"
+        :style="liquidStageStyle"
+        aria-hidden="true"
+      >
+        <!--
+          The shadow rides a twin outside the filter: a box-shadow fed through
+          the goo would threshold into a hard black slab.
+        -->
+        <div
+          ref="liquidShadowRef"
+          class="tx-base-anchor__liquid-shadow"
+          :style="liquidShadowStyle"
+        />
+
+        <svg
+          class="tx-base-anchor__liquid-goo"
+          :viewBox="liquidViewBox"
+          :width="liquidRegion.w"
+          :height="liquidRegion.h"
+        >
+          <defs>
+            <g :id="liquidShapesId">
+              <!--
+                Inflated by 1px: the real trigger sits opaque on top, so a ghost
+                matching it exactly would hide the ring under its own body.
+              -->
+              <rect
+                :x="liquidTrigger.x - 1"
+                :y="liquidTrigger.y - 1"
+                :width="liquidTrigger.w + 2"
+                :height="liquidTrigger.h + 2"
+                :rx="liquidTrigger.r + 1"
+                :ry="liquidTrigger.r + 1"
+              />
+              <rect
+                ref="liquidPanelShapeRef"
+                :rx="props.panelRadius"
+                :ry="props.panelRadius"
+              />
+            </g>
+
+            <!--
+              The goo layer is teleported to <body>, so it paints over the
+              trigger whenever an ancestor stacking context (isolation, z-index,
+              transform) keeps the trigger from being raised above it. Punching
+              the trigger's interior out of the FILL makes the trigger's own
+              opaque fill and text show through regardless of stacking. The
+              outline `use` is left unmasked so the derived ring still wraps it.
+            -->
+            <mask
+              :id="liquidMaskId"
+              maskUnits="userSpaceOnUse"
+              :x="liquidRegion.x"
+              :y="liquidRegion.y"
+              :width="liquidRegion.w"
+              :height="liquidRegion.h"
+            >
+              <rect
+                :x="liquidRegion.x"
+                :y="liquidRegion.y"
+                :width="liquidRegion.w"
+                :height="liquidRegion.h"
+                fill="#fff"
+              />
+              <rect
+                :x="liquidTrigger.x"
+                :y="liquidTrigger.y"
+                :width="liquidTrigger.w"
+                :height="liquidTrigger.h"
+                :rx="liquidTrigger.r"
+                :ry="liquidTrigger.r"
+                fill="#000"
+              />
+            </mask>
+
+            <filter
+              :id="liquidGooId"
+              filterUnits="userSpaceOnUse"
+              :x="liquidRegion.x"
+              :y="liquidRegion.y"
+              :width="liquidRegion.w"
+              :height="liquidRegion.h"
+              color-interpolation-filters="sRGB"
+            >
+              <feGaussianBlur in="SourceGraphic" :stdDeviation="liquidGoo.blur" result="blur" />
+              <feColorMatrix in="blur" type="matrix" :values="liquidGoo.matrix" result="goo" />
+              <!-- Flood the surface colour rather than keeping the blurred RGB, which haloes at the edges. -->
+              <feFlood :flood-color="liquidSurfaceColor" result="paint" />
+              <feComposite in="paint" in2="goo" operator="in" />
+            </filter>
+
+            <!--
+              The outline is derived from the MERGED silhouette: erode the
+              thresholded shape by 1px and flood the difference, so one continuous
+              ring wraps the trigger, stretches down the neck, and closes around
+              the panel. It is never drawn on either element.
+            -->
+            <filter
+              :id="liquidOutlineId"
+              filterUnits="userSpaceOnUse"
+              :x="liquidRegion.x"
+              :y="liquidRegion.y"
+              :width="liquidRegion.w"
+              :height="liquidRegion.h"
+              color-interpolation-filters="sRGB"
+            >
+              <feGaussianBlur in="SourceGraphic" :stdDeviation="liquidGoo.blur" result="blur" />
+              <feColorMatrix in="blur" type="matrix" :values="liquidGoo.matrix" result="goo" />
+              <feMorphology in="goo" operator="erode" radius="1" result="eroded" />
+              <feComposite in="goo" in2="eroded" operator="out" result="ring" />
+              <feFlood :flood-color="liquidOutlineColor" result="ink" />
+              <feComposite in="ink" in2="ring" operator="in" />
+            </filter>
+          </defs>
+
+          <use :href="`#${liquidShapesId}`" :filter="`url(#${liquidGooId})`" :mask="`url(#${liquidMaskId})`" />
+          <use :href="`#${liquidShapesId}`" :filter="`url(#${liquidOutlineId})`" />
+        </svg>
+      </div>
+
       <div
         ref="clipRef"
         class="tx-base-anchor__clip"
@@ -586,8 +1027,16 @@ onBeforeUnmount(() => {
         :style="bouncePad"
       >
         <div ref="contentRef" class="tx-base-anchor__content">
+          <!-- liquid paints its own surface through the goo, so the card would double it up. -->
+          <div
+            v-if="usesLiquidMotion"
+            class="tx-base-anchor__liquid-panel"
+            :style="liquidPanelStyle"
+          >
+            <slot :side="side" />
+          </div>
           <TxCard
-            v-if="props.useCard"
+            v-else-if="props.useCard"
             class="tx-base-anchor__card"
             v-bind="panelCardProps"
           >
@@ -595,7 +1044,7 @@ onBeforeUnmount(() => {
           </TxCard>
           <slot v-else :side="side" />
           <svg
-            v-if="props.useCard && outlinePath"
+            v-if="props.useCard && outlinePath && !usesLiquidMotion"
             class="tx-base-anchor__outline"
             :viewBox="`0 0 ${outlineW} ${outlineH}`"
             aria-hidden="true"
@@ -761,5 +1210,39 @@ onBeforeUnmount(() => {
 .tx-base-anchor.is-unlimited-height .tx-base-anchor__content,
 .tx-base-anchor.is-unlimited-height .tx-base-anchor__card {
   max-height: none;
+}
+
+/* ─── liquid drop ─── */
+
+.tx-base-anchor__liquid {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.tx-base-anchor__liquid-goo {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.tx-base-anchor__liquid-shadow {
+  position: absolute;
+  opacity: 0;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.14);
+}
+
+.tx-base-anchor__liquid-panel {
+  position: relative;
+  width: 100%;
+  max-height: var(--tx-ba-max-height, 420px);
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+/* The goo blur has to bleed past the panel box; clipping it cuts the neck off square. */
+.tx-base-anchor.is-liquid .tx-base-anchor__clip {
+  overflow: visible;
 }
 </style>

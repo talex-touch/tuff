@@ -1,7 +1,7 @@
 ---
 title: "CornerOverlay"
 description: "Absolute-positioned corner badge layer for avatars, thumbnails, and small status marks."
-category: Layout
+category: Effects
 status: beta
 since: 1.0.0
 tags: [overlay, badge, corner]
