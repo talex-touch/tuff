@@ -11,9 +11,15 @@ import {
   PermissionRiskLevel
 } from '@talex-touch/utils/permission'
 import { getTuffTransportMain, PermissionEvents } from '@talex-touch/utils/transport/main'
-import { PermissionGrantedEvent, TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import {
+  PermissionGrantedEvent,
+  PermissionRevokedEvent,
+  TalexEvents,
+  touchEventBus
+} from '../../core/eventbus/touch-event'
 import { createLogger } from '../../utils/logger'
 import { BaseModule } from '../abstract-base-module'
+import { teardownPluginStorage } from '../plugin/runtime/plugin-storage-lifecycle'
 import { PermissionGuard } from './permission-guard'
 import { PermissionStore } from './permission-store'
 
@@ -138,8 +144,8 @@ export class PermissionModule extends BaseModule {
     transport.on(PermissionEvents.api.revoke, async (payload) => {
       if (!payload?.pluginId || !payload?.permissionId) return { success: false }
       try {
-        await this.store.revoke(payload.pluginId, payload.permissionId)
-        this.broadcastUpdate(payload.pluginId)
+        const revokedPermissionIds = await this.store.revoke(payload.pluginId, payload.permissionId)
+        await this.publishRevocation(payload.pluginId, revokedPermissionIds, false)
         return { success: true, backendState: this.store.getBackendStatus() }
       } catch (error) {
         return this.buildMutationFailure(error)
@@ -190,8 +196,8 @@ export class PermissionModule extends BaseModule {
     transport.on(PermissionEvents.api.revokeAll, async (payload) => {
       if (!payload?.pluginId) return { success: false }
       try {
-        await this.store.revokeAll(payload.pluginId)
-        this.broadcastUpdate(payload.pluginId)
+        const revokedPermissionIds = await this.store.revokeAll(payload.pluginId)
+        await this.publishRevocation(payload.pluginId, revokedPermissionIds, true)
         return { success: true, backendState: this.store.getBackendStatus() }
       } catch (error) {
         return this.buildMutationFailure(error)
@@ -248,6 +254,26 @@ export class PermissionModule extends BaseModule {
       this.guard.resetPerformanceStats()
       return { success: true }
     })
+  }
+
+  /**
+   * Publish committed revocation before notifying renderer projections.
+   */
+  private async publishRevocation(
+    pluginId: string,
+    permissionIds: readonly string[],
+    all: boolean
+  ): Promise<void> {
+    if (all || permissionIds.includes('storage.sqlite')) {
+      await teardownPluginStorage(pluginId)
+    }
+    if (permissionIds.length > 0) {
+      touchEventBus.emit(
+        TalexEvents.PERMISSION_REVOKED,
+        new PermissionRevokedEvent(pluginId, permissionIds, all)
+      )
+    }
+    this.broadcastUpdate(pluginId)
   }
 
   /**
