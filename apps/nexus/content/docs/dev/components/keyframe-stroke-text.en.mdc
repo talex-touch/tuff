@@ -1,7 +1,7 @@
 ---
 title: "KeyframeStrokeText"
 description: "SVG text effect that draws the stroke first, reveals the fill later, and recalculates text metrics when typography inputs change."
-category: Basic
+category: Effects
 status: beta
 since: 1.0.0
 tags: [text, svg, animation]

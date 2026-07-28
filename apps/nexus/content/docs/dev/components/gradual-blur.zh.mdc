@@ -1,7 +1,7 @@
 ---
 title: "GradualBlur 渐变模糊"
 description: "用于父容器或页面边缘的分层 backdrop-filter 渐变模糊，覆盖预设、hover 强度、滚动触发、响应式尺寸与 GPU 提示。"
-category: Layout
+category: Effects
 tags: [blur, edge-fade, overlay, backdrop-filter]
 syncStatus: reviewed
 verified: true

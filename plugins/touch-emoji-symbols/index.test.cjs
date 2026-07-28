@@ -1,18 +1,7 @@
 const assert = require('node:assert/strict')
 const test = require('node:test')
 
-function loadFreshPluginModule() {
-  delete require.cache[require.resolve('./index.js')]
-  const pluginModule = require('./index.js')
-  delete require.cache[require.resolve('./index.js')]
-  return pluginModule
-}
-
-globalThis.plugin = { feature: { clearItems() {}, pushItems() {} } }
-globalThis.clipboard = {}
-globalThis.logger = {}
-globalThis.permission = {}
-globalThis.TuffItemBuilder = class {
+class FakeBuilder {
   constructor(id) {
     this.item = { id, meta: {}, actions: [] }
   }
@@ -42,8 +31,8 @@ globalThis.TuffItemBuilder = class {
     return this
   }
 
-  createAndAddAction(id, type, title, payload) {
-    this.item.actions.push({ id, type, title, payload })
+  createAndAddAction(id, type, label, payload) {
+    this.item.actions.push({ id, type, label, primary: this.item.actions.length === 0, payload })
     return this
   }
 
@@ -52,227 +41,195 @@ globalThis.TuffItemBuilder = class {
   }
 }
 
-const {
-  buildResultItems,
-  parseSearchQuery,
-  searchEmojiSymbols,
-} = loadFreshPluginModule().__test
-const emojiPlugin = loadFreshPluginModule()
+function loadFreshPluginModule({ feature, clipboard = {}, logger = {} }) {
+  globalThis.plugin = { feature }
+  globalThis.clipboard = clipboard
+  globalThis.logger = logger
+  globalThis.TuffItemBuilder = FakeBuilder
+  delete require.cache[require.resolve('./index.js')]
+  const pluginModule = require('./index.js')
+  delete require.cache[require.resolve('./index.js')]
+  return pluginModule
+}
 
-test('parseSearchQuery strips emoji and symbol command prefixes', () => {
-  assert.equal(parseSearchQuery('emoji check'), 'check')
-  assert.equal(parseSearchQuery('symbol: arrow'), 'arrow')
-  assert.equal(parseSearchQuery('符号 货币'), '货币')
-  assert.equal(parseSearchQuery('check'), 'check')
-})
-
-test('searchEmojiSymbols matches english and chinese keywords', () => {
-  const checks = searchEmojiSymbols('check')
-  const arrows = searchEmojiSymbols('右箭头')
-  const currencies = searchEmojiSymbols('人民币')
-
-  assert.equal(checks[0].value, '✅')
-  assert.equal(arrows[0].value, '→')
-  assert.equal(currencies[0].value, '¥')
-})
-
-test('buildResultItems creates copy items with plugin copy action', () => {
-  const items = buildResultItems('emoji-symbols', 'emoji rocket')
-
-  assert.equal(items[0].title, '🚀 Rocket')
-  assert.equal(items[0].meta.pluginName, 'touch-emoji-symbols')
-  assert.equal(items[0].meta.defaultAction, 'copy')
-  assert.deepEqual(items[0].actions[0], {
-    id: 'copy',
-    type: 'plugin',
-    title: '复制',
-    payload: { text: '🚀' },
-  })
-})
-
-test('buildResultItems returns empty state for missing query', () => {
-  const items = buildResultItems('emoji-symbols', 'not-a-symbol-value')
-
-  assert.equal(items.length, 1)
-  assert.equal(items[0].id, 'emoji-symbols-empty')
-})
-
-test('onItemAction blocks copy when clipboard.write permission is denied', async () => {
-  const writes = []
-  const requested = []
-  const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
-
-  globalThis.clipboard.writeText = value => writes.push(value)
-  globalThis.permission.check = async () => false
-  globalThis.permission.request = async (permissionId, reason) => {
-    requested.push({ permissionId, reason })
-    return false
-  }
-
-  try {
-    const result = await emojiPlugin.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: '✨' }],
-    })
-
-    assert.deepEqual(requested, [
-      {
-        permissionId: 'clipboard.write',
-        reason: '需要剪贴板写入权限以复制 Emoji 或符号',
+function createFeatureHarness() {
+  const state = { items: [] }
+  return {
+    state,
+    feature: {
+      async clearItems() {
+        state.items = []
       },
-    ])
-    assert.deepEqual(writes, [])
-    assert.equal(result.externalAction, true)
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-denied')
+      async pushItems(items) {
+        state.items = items
+      },
+    },
   }
-  finally {
-    globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
-  }
+}
+
+test('onFeatureTriggered matches command prefixes and chinese keywords', async () => {
+  const harness = createFeatureHarness()
+  const emojiPlugin = loadFreshPluginModule({ feature: harness.feature })
+
+  await emojiPlugin.onFeatureTriggered('emoji-symbols', { text: 'emoji check' })
+  assert.equal(harness.state.items[0].title, '✅ Check Mark')
+
+  await emojiPlugin.onFeatureTriggered('emoji-symbols', { text: '符号 人民币' })
+  assert.equal(harness.state.items[0].title, '¥ Yen / Yuan Sign')
 })
 
-test('onItemAction blocks copy when permission sdk is unavailable', async () => {
+test('onFeatureTriggered creates deterministic empty state', async () => {
+  const harness = createFeatureHarness()
+  const emojiPlugin = loadFreshPluginModule({ feature: harness.feature })
+
+  await emojiPlugin.onFeatureTriggered('emoji-symbols', { text: 'not-a-symbol-value' })
+
+  assert.equal(harness.state.items.length, 1)
+  assert.equal(harness.state.items[0].id, 'emoji-symbols-empty')
+})
+
+test('onFeatureTriggered awaits clear before publishing items', async () => {
+  let releaseClear
+  let pushed = false
+  const clearBarrier = new Promise(resolve => {
+    releaseClear = resolve
+  })
+  const emojiPlugin = loadFreshPluginModule({
+    feature: {
+      clearItems: () => clearBarrier,
+      async pushItems() {
+        pushed = true
+      },
+    },
+  })
+
+  const trigger = emojiPlugin.onFeatureTriggered('emoji-symbols', { text: 'rocket' })
+  await Promise.resolve()
+  assert.equal(pushed, false)
+  releaseClear()
+  await trigger
+  assert.equal(pushed, true)
+})
+
+test('onFeatureTriggered publishes a stable fallback after the first capability failure', async () => {
+  let clearCalls = 0
+  const published = []
+  const logs = []
+  const emojiPlugin = loadFreshPluginModule({
+    feature: {
+      async clearItems() {
+        clearCalls += 1
+        if (clearCalls === 1) throw new Error('/private/first-capability-failure')
+      },
+      async pushItems(items) {
+        published.push(items)
+      },
+    },
+    logger: {
+      error(message) {
+        logs.push(message)
+      },
+    },
+  })
+
+  const result = await emojiPlugin.onFeatureTriggered('emoji-symbols', { text: 'rocket' })
+
+  assert.equal(result, true)
+  assert.equal(clearCalls, 2)
+  assert.equal(published.length, 1)
+  assert.equal(published[0][0].id, 'emoji-symbols-error')
+  assert.deepEqual(logs, ['[touch-emoji-symbols] feature failed'])
+  assert.doesNotMatch(JSON.stringify(published), /private|first-capability/)
+})
+
+test('onFeatureTriggered contains a failed fallback without leaking host errors', async () => {
+  const logs = []
+  const emojiPlugin = loadFreshPluginModule({
+    feature: {
+      async clearItems() {
+        throw new Error('/private/persistent-capability-failure')
+      },
+      async pushItems() {
+        throw new Error('/private/fallback-push-failure')
+      },
+    },
+    logger: {
+      error(message) {
+        logs.push(message)
+      },
+    },
+  })
+
+  const result = await emojiPlugin.onFeatureTriggered('emoji-symbols', { text: 'rocket' })
+
+  assert.equal(result, false)
+  assert.deepEqual(logs, [
+    '[touch-emoji-symbols] feature failed',
+    '[touch-emoji-symbols] fallback failed',
+  ])
+})
+
+test('onItemAction copies without a child-side permission request', async () => {
   const writes = []
-  const originalPermission = globalThis.permission
-  const originalWriteText = globalThis.clipboard.writeText
-  delete globalThis.permission
-  globalThis.clipboard.writeText = value => writes.push(value)
+  const emojiPlugin = loadFreshPluginModule({
+    feature: createFeatureHarness().feature,
+    clipboard: {
+      async writeText(value) {
+        writes.push(value)
+      },
+    },
+  })
 
-  try {
-    const pluginWithoutPermission = loadFreshPluginModule()
-    const result = await pluginWithoutPermission.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: '✨' }],
-    })
+  const result = await emojiPlugin.onItemAction({
+    meta: { defaultAction: 'copy' },
+    actions: [{ id: 'copy', type: 'plugin', payload: { text: '🚀' } }],
+  })
 
-    assert.deepEqual(writes, [])
-    assert.equal(result.externalAction, true)
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-sdk-unavailable')
-  }
-  finally {
-    globalThis.permission = originalPermission
-    globalThis.clipboard.writeText = originalWriteText
-  }
+  assert.deepEqual(writes, ['🚀'])
+  assert.deepEqual(result, { externalAction: true, status: 'started' })
 })
 
-test('onItemAction blocks copy when clipboard sdk is unavailable', async () => {
-  const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
+test('onItemAction fails closed when clipboard capability is undeclared', async () => {
+  const emojiPlugin = loadFreshPluginModule({ feature: createFeatureHarness().feature })
 
-  delete globalThis.clipboard.writeText
-  globalThis.permission.check = async () => true
-  globalThis.permission.request = async () => true
+  const result = await emojiPlugin.onItemAction({
+    meta: { defaultAction: 'copy' },
+    actions: [{ id: 'copy', type: 'plugin', payload: { text: '✨' } }],
+  })
 
-  try {
-    const result = await emojiPlugin.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: '✨' }],
-    })
-
-    assert.equal(result.externalAction, true)
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'clipboard-unavailable')
-  }
-  finally {
-    globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
-  }
+  assert.equal(result.externalAction, true)
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'clipboard-unavailable')
 })
 
-test('onItemAction blocks copy when permission request fails', async () => {
-  const writes = []
-  const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
+test('onItemAction returns a stable redacted failure when host write rejects', async () => {
+  const logs = []
+  const emojiPlugin = loadFreshPluginModule({
+    feature: createFeatureHarness().feature,
+    clipboard: {
+      async writeText() {
+        throw new Error('/private/native clipboard detail')
+      },
+    },
+    logger: {
+      error(message) {
+        logs.push(message)
+      },
+    },
+  })
 
-  globalThis.clipboard.writeText = value => writes.push(value)
-  globalThis.permission.check = async () => {
-    throw new Error('permission down')
-  }
-  globalThis.permission.request = async () => true
+  const result = await emojiPlugin.onItemAction({
+    meta: { defaultAction: 'copy' },
+    actions: [{ id: 'copy', type: 'plugin', payload: { text: '✨' } }],
+  })
 
-  try {
-    const result = await emojiPlugin.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: '✨' }],
-    })
-
-    assert.deepEqual(writes, [])
-    assert.equal(result.externalAction, true)
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-request-failed')
-  }
-  finally {
-    globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
-  }
-})
-
-test('onItemAction returns explicit failure when clipboard write fails', async () => {
-  const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
-
-  globalThis.clipboard.writeText = async () => {
-    throw new Error('clipboard down')
-  }
-  globalThis.permission.check = async () => true
-  globalThis.permission.request = async () => true
-
-  try {
-    const result = await emojiPlugin.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: '✨' }],
-    })
-
-    assert.equal(result.externalAction, true)
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'clipboard-write-failed')
-    assert.equal(result.message, 'clipboard down')
-  }
-  finally {
-    globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
-  }
-})
-
-test('onItemAction copies emoji after clipboard.write permission is granted', async () => {
-  const writes = []
-  const requested = []
-  const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
-
-  globalThis.clipboard.writeText = value => writes.push(value)
-  globalThis.permission.check = async () => true
-  globalThis.permission.request = async (permissionId) => {
-    requested.push(permissionId)
-    return true
-  }
-
-  try {
-    const result = await emojiPlugin.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: '✅' }],
-    })
-
-    assert.deepEqual(requested, [])
-    assert.deepEqual(writes, ['✅'])
-    assert.equal(result.externalAction, true)
-    assert.equal(result.status, 'started')
-  }
-  finally {
-    globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
-  }
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'clipboard-write-failed',
+    message: '复制失败',
+  })
+  assert.deepEqual(logs, ['[touch-emoji-symbols] clipboard write failed'])
+  assert.doesNotMatch(JSON.stringify(result), /private|native clipboard/)
 })

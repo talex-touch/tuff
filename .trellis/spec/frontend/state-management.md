@@ -145,6 +145,17 @@ Avoid hydration mismatches.
 - Browser-only state belongs behind `import.meta.client`, `ClientOnly`, or a client-only component.
 - Route-local i18n/chunk state should follow the existing route locale helpers.
 
+### Nexus Server Content Cache
+
+Cached Nexus content endpoints must fail loudly rather than serve a successful empty payload — a client cannot tell an outage apart from real data, so an empty list renders as "this section has no pages".
+
+- Put the cache **inside** the success path with `defineCachedFunction`, not around the whole handler with `defineCachedEventHandler`. nitro stores a value only after the wrapped function resolves, so throwing is the entire mechanism that keeps degraded payloads out of the cache.
+- A data-source outage responds 5xx (503), never 200 with an empty body.
+- Grade emptiness: collection-wide reads (navigation, search, component index) are never legitimately empty and must not be cached; single-item reads (one page) may legitimately be empty and stay cacheable, unless the shared degraded window is open.
+- Endpoint-local "the content database is down" knowledge must be shared, not private. `docsContentAvailability` in `apps/nexus/server/utils/docsContentCache.ts` owns that window; without it one endpoint knows about an outage while the others keep caching its empty results.
+- Route new content endpoints through `cacheDocsContent` instead of re-implementing try/catch, cache constants, and 503 construction per file.
+- Silent degradation needs an alarm: `server/plugins/docs-content-health.ts` probes the collection once on the first dev request. The usual cause of a total content outage is a missing better-sqlite3 native binding (`pnpm rebuild -r better-sqlite3`).
+
 ---
 
 ## Derived State
@@ -176,6 +187,7 @@ Keep state local when it is only view form state, animation state, open/closed U
 - Storing secrets, provider keys, prompt/response content, or raw paths in ordinary UI state that can leak into logs or sync payloads.
 - Updating several local branches from raw `kind` / `action` fields instead of normalizing the payload once.
 - Letting Nexus client-only state influence SSR markup before hydration.
+- Caching a degraded or empty server response, so one transient outage keeps being served for the whole `staleMaxAge` window.
 
 ## Scenario: CoreBox Trusted One-Shot Query Context
 

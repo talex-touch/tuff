@@ -1,7 +1,7 @@
 ---
 title: "Transition"
 description: "Preset transition wrapper for keyed content switches, list motion, and smooth size changes."
-category: Layout
+category: Effects
 tags: [transition, motion, list, auto-size]
 syncStatus: reviewed
 verified: true

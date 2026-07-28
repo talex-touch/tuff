@@ -1,7 +1,7 @@
 ---
 title: "TabBar 底部导航"
 description: "移动端底部 Tab 导航，支持图标、badge、fixed 定位和安全区占位。"
-category: Layout
+category: Navigation
 tags: [navigation, tabs, mobile]
 syncStatus: reviewed
 verified: true

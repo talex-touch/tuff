@@ -14,6 +14,7 @@ import type {
   ITuffTransportMain,
   StreamContext
 } from '@talex-touch/utils/transport/main'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { NativeEvents } from '@talex-touch/utils/transport/events'
 import { performance } from 'node:perf_hooks'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
@@ -57,7 +58,7 @@ function enforceNativePermission(
   const plugin = context.plugin
   if (!plugin) return
 
-  if (!plugin.verified || !plugin.uniqueKey) {
+  if (!isAuthoritativePluginContext(plugin)) {
     const error = new Error('Verified plugin context is required') as CodedError
     error.code = 'ERR_NATIVE_PLUGIN_UNVERIFIED'
     throw error
@@ -79,7 +80,7 @@ function toPermissionState(
 ): NativeCapabilityStatus['permission'] {
   const plugin = context.plugin
   if (!plugin) return 'not-required'
-  if (!plugin.verified || !plugin.uniqueKey) return 'denied'
+  if (!isAuthoritativePluginContext(plugin)) return 'denied'
   const permissionModule = getPermissionModule()
   if (!permissionModule) return 'unknown'
   return permissionModule.checkPermission(plugin.name, apiName, plugin.sdkapi).allowed

@@ -1,7 +1,7 @@
 ---
 title: Badge
 description: Inline count, status, and dot indicators for compact UI surfaces.
-category: Feedback
+category: Basic
 status: beta
 since: 1.0.0
 tags: [badge, count, status]

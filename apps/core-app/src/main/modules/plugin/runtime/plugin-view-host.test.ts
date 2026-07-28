@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parsePluginViewBootstrapArgument } from '../../../../shared/plugin-view-bridge'
+import {
+  parsePluginViewBootstrapArgument,
+  PLUGIN_VIEW_BRIDGE_VERSION
+} from '../../../../shared/plugin-view-bridge'
 import { buildPluginViewWebPreferences, buildPublicPluginWindowOptions } from './plugin-view-host'
 
 const plugin = {
@@ -15,7 +18,6 @@ describe('plugin view host', () => {
       plugin,
       themeStyle: { dark: true },
       source: 'core-box',
-      legacyPreload: '/tmp/plugin-preload.js',
       overrides: { scrollBounce: true }
     })
 
@@ -34,24 +36,50 @@ describe('plugin view host', () => {
 
     const bootstrap = parsePluginViewBootstrapArgument(preferences.additionalArguments ?? [])
     expect(bootstrap).toEqual({
+      bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
       channelKey: 'owner-key',
       plugin: { name: 'touch-test', version: '1.2.3', sdkapi: 260615 },
       config: { themeStyle: { dark: true } }
     })
   })
 
-  it('keeps explicit compatibility preload local to the compatibility profile', () => {
-    const preferences = buildPluginViewWebPreferences('compat-plugin-view', {
+  it('cannot select a legacy preload through an obsolete profile value', () => {
+    const preferences = buildPluginViewWebPreferences(
+      'compat-plugin-view' as never,
+      {
+        plugin,
+        themeStyle: {},
+        source: 'division-box',
+        legacyPreload: '/tmp/plugin-preload.js'
+      } as never
+    )
+
+    expect(preferences.preload).toMatch(/[/\\]preload[/\\]plugin-view\.js$/)
+    expect(preferences.preload).not.toBe('/tmp/plugin-preload.js')
+    expect(preferences.additionalArguments).toEqual([
+      expect.stringContaining('--tuff-plugin-view-bootstrap=')
+    ])
+    expect(preferences.nodeIntegration).toBe(false)
+    expect(preferences.contextIsolation).toBe(true)
+    expect(preferences.sandbox).toBe(true)
+  })
+
+  it('uses a unique ephemeral partition for each plugin surface', () => {
+    const first = buildPluginViewWebPreferences('trusted-plugin-view', {
       plugin,
       themeStyle: {},
-      source: 'division-box',
-      legacyPreload: '/tmp/plugin-preload.js'
+      source: 'shared-source'
+    })
+    const second = buildPluginViewWebPreferences('trusted-plugin-view', {
+      plugin,
+      themeStyle: {},
+      source: 'shared-source'
     })
 
-    expect(preferences.preload).toBe('/tmp/plugin-preload.js')
-    expect(preferences.additionalArguments).toBeUndefined()
-    expect(preferences.nodeIntegration).toBe(true)
-    expect(preferences.contextIsolation).toBe(false)
+    expect(first.partition).toMatch(/^tuff-plugin-view-/)
+    expect(second.partition).toMatch(/^tuff-plugin-view-/)
+    expect(first.partition).not.toBe(second.partition)
+    expect(first.partition).not.toMatch(/^persist:/)
   })
 
   it('maps the closed public options contract without accepting Electron preferences', () => {

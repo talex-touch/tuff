@@ -1,0 +1,33 @@
+{
+  "id": "isolate-plugin-prelude-297",
+  "name": "isolate-plugin-prelude-297",
+  "title": "完成插件 Prelude 进程隔离 #297",
+  "description": "默认通过 utilityProcess 运行 Prelude，补齐 typed capability RPC、生命周期与资源限制。",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-resolve-open-github-issues",
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire-codec.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire.test.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire-codec.test.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-capabilities.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-capabilities.test.ts"
+  ],
+  "notes": "V2 capability wire, bounded hostile-value codec, and immutable authoritative capability registry core complete (47 tests; final reviews no P0/P1/P2). Business adapters, lifecycle/callback protocol, dedicated process host, official-plugin migration, and production hard cut remain.",
+  "meta": {}
+}

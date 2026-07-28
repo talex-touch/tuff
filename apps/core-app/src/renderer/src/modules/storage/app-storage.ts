@@ -1,6 +1,6 @@
 import { StorageList } from '@talex-touch/utils'
 import { storages, useStorageSdk } from '@talex-touch/utils/renderer'
-import { appSettingsData, openersData } from '@talex-touch/utils/renderer/storage'
+import { appSettings, appSettingsData, openersData } from '@talex-touch/utils/renderer/storage'
 import { reactive, toRaw, unref } from 'vue'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { AccountStorage } from './account-storage'
@@ -60,3 +60,11 @@ window.onbeforeunload = () => {
 export const storageManager = new StorageManager()
 export const appSetting = appSettingsData
 export const openers = openersData
+
+/**
+ * The settings store behind {@link appSetting}.
+ *
+ * Reach for this only when the reactive data alone is not enough — durable saves and version
+ * bookkeeping live here. Everyday reads and writes should go through {@link appSetting}.
+ */
+export const appSettingStore = appSettings

@@ -1,7 +1,7 @@
 ---
 title: 设计基础
 description: 与 Tuffex variables 对齐的字体与颜色体系
-category: 基础
+category: Foundations
 status: beta
 since: 1.0.0
 tags: [design, tokens, typography, color]

@@ -536,6 +536,30 @@ export class NetworkService {
     })
   }
 
+  async requestNoRedirect<T = unknown>(
+    options: NetworkRequestOptions
+  ): Promise<NetworkResponse<T>> {
+    const responseType = options.responseType ?? 'json'
+    if (responseType === 'stream') {
+      throw new Error('NETWORK_STREAM_NOT_SUPPORTED_FOR_TYPED_RESPONSE')
+    }
+
+    return await this.executeWithPolicies(options, async () => {
+      const response = await this.executeFetch(options, 'error')
+      const headers = normalizeHeaders(response.headers)
+      const data = (await this.parseResponseBody(response, responseType)) as T
+
+      return {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+        data,
+        url: response.url,
+        ok: response.ok
+      }
+    })
+  }
+
   async fetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init.method ?? 'GET').toUpperCase() as NetworkRequestOptions['method']
@@ -735,7 +759,10 @@ export class NetworkService {
     return Math.min(Math.max(0, Math.floor(delay)), Math.max(0, maxDelay))
   }
 
-  private async executeFetch(options: NetworkRequestOptions): Promise<Response> {
+  private async executeFetch(
+    options: NetworkRequestOptions,
+    redirect: RequestRedirect = 'follow'
+  ): Promise<Response> {
     const config = this.getConfigFromSettings()
     const proxyConfig = mergeProxyConfig(config.proxy, options.proxyOverride)
     const targetUrl = appendQuery(options.url, options.query)
@@ -755,6 +782,7 @@ export class NetworkService {
         method,
         headers,
         body,
+        redirect,
         signal: options.signal ?? AbortSignal.timeout(timeoutMs)
       })
     } catch (error) {

@@ -23,6 +23,7 @@ let getQueryMock: ReturnType<typeof vi.fn>
 let setHeaderMock: ReturnType<typeof vi.fn>
 let warnSpy: ReturnType<typeof vi.spyOn>
 let requestedPaths: string[]
+const cacheStore = new Map<string, unknown>()
 
 const previousNodeEnv = process.env.NODE_ENV
 
@@ -45,11 +46,22 @@ function mockDocsCollection(results: Map<string, unknown>) {
 
 async function importHandler() {
   vi.resetModules()
+  cacheStore.clear()
   ;(globalThis as any).defineEventHandler = (fn: any) => fn
-  ;(globalThis as any).defineCachedEventHandler = (fn: any, options: any) => {
+  // Mirrors nitro: a value is stored only after the wrapped function resolves.
+  ;(globalThis as any).defineCachedFunction = (fn: any, options: any) => {
     cachedOptions = options
-    return fn
+    return async (...args: any[]) => {
+      const key = options.getKey(...args)
+      if (cacheStore.has(key))
+        return cacheStore.get(key)
+      const result = await fn(...args)
+      cacheStore.set(key, result)
+      return result
+    }
   }
+  ;(globalThis as any).createError = (input: any) =>
+    Object.assign(new Error(input.message ?? input.statusMessage), input)
   getQueryMock = vi.fn()
   setHeaderMock = vi.fn()
   ;(globalThis as any).getQuery = getQueryMock
@@ -90,18 +102,52 @@ describe('/api/docs/page', () => {
   })
 
   it('caches docs page responses by normalized path, locale, and body mode', async () => {
-    getQueryMock.mockReturnValue({ path: '/en/docs/dev/components/tabs.en.mdc', locale: 'en', body: '0' })
-
     expect(cachedOptions).toMatchObject({
       maxAge: 300,
       staleMaxAge: 3600,
       name: 'docs-page',
     })
-    expect(cachedOptions.getKey({})).toBe('/docs/dev/components/tabs:en:meta')
+    expect(cachedOptions.getKey({}, '/docs/dev/components/tabs', 'en', false)).toBe('/docs/dev/components/tabs:en:meta')
+    expect(cachedOptions.getKey({}, '/docs/dev/components/tabs', 'zh', true)).toBe('/docs/dev/components/tabs:zh:body')
+  })
 
-    getQueryMock.mockReturnValue({ path: '/docs/dev/components/tabs', locale: 'zh', body: '1' })
+  it('normalizes messy request paths before looking a page up', async () => {
+    getQueryMock.mockReturnValue({ path: '/en/docs/dev/components/tabs.en.mdc', locale: 'en', body: '0' })
+    mockDocsCollection(new Map())
 
-    expect(cachedOptions.getKey({})).toBe('/docs/dev/components/tabs:zh:body')
+    await handler({})
+
+    expect(requestedPaths[0]).toBe('/docs/dev/components/tabs.en')
+  })
+
+  it('caches a page that genuinely does not exist', async () => {
+    getQueryMock.mockReturnValue({ path: '/docs/dev/components/ghost', locale: 'en', body: '1' })
+    mockDocsCollection(new Map())
+
+    await expect(handler({})).resolves.toBeNull()
+    await expect(handler({})).resolves.toBeNull()
+
+    expect(contentMocks.queryCollection).toHaveBeenCalledTimes(4)
+    expect(setHeaderMock).toHaveBeenCalledWith({}, 'cache-control', 'public, max-age=300, stale-while-revalidate=3600')
+  })
+
+  it('never caches the development Markdown fallback', async () => {
+    process.env.NODE_ENV = 'development'
+    const error = new Error('no such table: _content_docs')
+    getQueryMock.mockReturnValue({ path: '/docs/guide/start', locale: 'en', body: '0' })
+    mockDocsCollection(new Map([['/docs/guide/start.en', error]]))
+    fsMocks.stat.mockResolvedValue({ mtimeMs: 321 })
+    fsMocks.readFile.mockResolvedValue('---\ntitle: Start\n---\n# Start')
+
+    await expect(handler({})).resolves.toMatchObject({ title: 'Start' })
+    await expect(handler({})).resolves.toMatchObject({ title: 'Start' })
+
+    // Re-statting proves the resolver ran again, i.e. the degraded response was
+    // never stored; readFile stays at one call because the mtime-keyed file
+    // cache inside the endpoint is still doing its job.
+    expect(fsMocks.stat).toHaveBeenCalledTimes(2)
+    expect(fsMocks.readFile).toHaveBeenCalledTimes(1)
+    expect(setHeaderMock).not.toHaveBeenCalled()
   })
 
   it('renders local Markdown in development when the docs content table is missing', async () => {
@@ -285,14 +331,15 @@ describe('/api/docs/page', () => {
     )
   })
 
-  it('throws missing docs content table errors in production', async () => {
+  it('reports a missing docs content table as unavailable in production', async () => {
     process.env.NODE_ENV = 'production'
     const error = new Error('no such table: _content_docs')
     getQueryMock.mockReturnValue({ path: '/docs/dev/components/tabs', locale: 'en', body: '1' })
     mockDocsCollection(new Map([['/docs/dev/components/tabs.en', error]]))
 
-    await expect(handler({})).rejects.toThrow('no such table: _content_docs')
+    await expect(handler({})).rejects.toMatchObject({ statusCode: 503 })
     expect(fsMocks.readFile).not.toHaveBeenCalled()
+    expect(setHeaderMock).not.toHaveBeenCalled()
   })
 
   it('does not swallow unrelated docs query errors', async () => {

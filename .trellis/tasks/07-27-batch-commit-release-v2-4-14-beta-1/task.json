@@ -1,0 +1,29 @@
+{
+  "id": "batch-commit-release-v2-4-14-beta-1",
+  "name": "batch-commit-release-v2-4-14-beta-1",
+  "title": "分批提交并发布 v2.4.14-beta.1",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-27-batch-commit-current-worktree",
+    "07-27-release-v2-4-14-beta-1"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

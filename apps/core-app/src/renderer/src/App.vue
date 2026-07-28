@@ -61,7 +61,7 @@ async function init(): Promise<void> {
             :name="t('flatNavBar.intelligence')"
             icon="i-carbon-ibm-webmethods-integration-server"
           />
-          <TouchMenuItem route="/store" :name="t('flatNavBar.store')" icon="i-ri-quill-pen-line" />
+          <TouchMenuItem route="/store" :name="t('flatNavBar.plugin')" icon="i-ri-quill-pen-line" />
           <TouchMenuItem
             v-if="appSetting.dashboard.enable"
             route="/details"
