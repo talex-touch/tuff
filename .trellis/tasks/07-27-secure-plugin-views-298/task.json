@@ -22,5 +22,9 @@
   "parent": "07-27-resolve-open-github-issues",
   "relatedFiles": [],
   "notes": "Secure plugin view hard cut implemented. Unsafe compat/env fallback and historical webview host removed; bridge v1 bundled preload, stable legacy error, authoritative DivisionBox owner binding, unique ephemeral partition, sender-bound resource policy, and navigation/subframe/popup/webview/download/permission/protocol denial are enforced. Core 81 tests, Utils 13, node/web typecheck, 24/24 plugin validation, production build, real Electron smoke, scoped lint and diff-check pass. Independent review found no P0/P1/P2. No commit/push or GitHub close performed.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete independent review of the secure plugin-view hard cut before closing #298.",
+    "blocker": "The task remains in review; no additional compatibility fallback may be introduced to bypass the hard cut.",
+    "evidence": "task.json notes, prd.md, focused tests, production build, and Electron smoke provide the review evidence."
+  }
 }

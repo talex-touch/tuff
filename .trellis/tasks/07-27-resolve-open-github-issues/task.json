@@ -32,5 +32,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete evidence review for each open-issue child and close only the issues whose scoped acceptance and regression evidence are complete.",
+    "blocker": "Several child tasks remain in planning, implementation, or review; issue closure is gated on each child disposition.",
+    "evidence": "prd.md, child-task map, and each child task's focused evidence are the issue-closure source of truth."
+  }
 }
