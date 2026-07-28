@@ -63,9 +63,19 @@ import type {
   QuickOpsSystemProxyGetResponse,
   SecureStoreHealthResponse
 } from '@talex-touch/utils/transport/events/types'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type {
+  ITuffTransportMain,
+  MainInvokeContext,
+  PluginActivationIdentity
+} from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../core/touch-window'
 import type { PluginInjections } from './runtime/plugin-injections'
+import type {
+  PluginRuntimeService,
+  PluginRuntimeSnapshot,
+  PluginRuntimeSnapshotValue
+} from './host/plugin-runtime-service'
+import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
 import { resolveSafePath } from '@talex-touch/utils/common/utils/safe-path'
@@ -97,7 +107,7 @@ import {
   PluginEvents,
   QuickOpsEvents
 } from '@talex-touch/utils/transport/events'
-import { app, BrowserWindow, clipboard, dialog, shell } from 'electron'
+import { app, clipboard, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import {
   PluginLogAppendEvent,
@@ -106,12 +116,11 @@ import {
   touchEventBus
 } from '../../core/eventbus/touch-event'
 import { TuffIconImpl } from '../../core/tuff-icon'
-import { useSafeUserAgent } from '../../hooks/use-electron-guard'
 import { deviceIdleService } from '../../service/device-idle-service'
 import { validateExternalUrl } from '../../utils/external-url-policy'
 import { t as translate } from '../../utils/i18n-helper'
 import { createLogger } from '../../utils/logger'
-import { getJs, getStyles } from '../../utils/plugin-injection'
+import { getStyles } from '../../utils/plugin-injection'
 import { getCoreBoxWindow } from '../box-tool/core-box'
 import { CoreBoxManager } from '../box-tool/core-box/manager'
 import { viewCacheManager } from '../box-tool/core-box/view-cache'
@@ -120,11 +129,7 @@ import { getSearchProviderUserConfigs } from '../box-tool/search-engine/search-p
 import { getNetworkService } from '../network'
 import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
-import {
-  loadPluginFeatureContext,
-  loadPluginFeatureContextFromContent,
-  PluginFeature
-} from './plugin-feature'
+import { PluginFeature } from './plugin-feature'
 import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
@@ -422,9 +427,14 @@ function createPluginHttpClient(): PluginHttpClient {
  */
 export class TouchPlugin implements ITouchPlugin {
   private static _transport: ITuffTransportMain | null = null
+  private static _runtimeService: PluginRuntimeService | null = null
 
   static setTransport(transport: ITuffTransportMain | null): void {
     TouchPlugin._transport = transport
+  }
+
+  static setRuntimeService(runtimeService: PluginRuntimeService | null): void {
+    TouchPlugin._runtimeService = runtimeService
   }
 
   private get transport(): ITuffTransportMain | null {
@@ -436,6 +446,26 @@ export class TouchPlugin implements ITouchPlugin {
       return this.transport
     }
     throw new Error(`[Plugin ${this.name}] Transport runtime is not initialized`)
+  }
+
+  getActivationIdentity(): PluginActivationIdentity {
+    return {
+      name: this.name,
+      pluginInstanceId: this._runtimeInstanceId,
+      activationGeneration: this._activationGeneration,
+      key: this._uniqueChannelKey
+    }
+  }
+
+  private getTransportInvokeContext(pluginName = this.name): MainInvokeContext {
+    const plugin: NonNullable<MainInvokeContext['plugin']> = {
+      name: pluginName,
+      uniqueKey: this._uniqueChannelKey
+    }
+    if (typeof this.sdkapi === 'number') {
+      plugin.sdkapi = this.sdkapi
+    }
+    return { plugin }
   }
 
   private notifyWidgetLoadFailure(feature: IPluginFeature): void {
@@ -478,6 +508,8 @@ export class TouchPlugin implements ITouchPlugin {
   features: PluginFeature[]
   issues: PluginIssue[]
   _uniqueChannelKey: string
+  readonly _runtimeInstanceId: string
+  _activationGeneration: number
   /**
    * SDK API version declared by the plugin.
    * Used for hard-cut runtime gating and permission enforcement.
@@ -757,7 +789,7 @@ export class TouchPlugin implements ITouchPlugin {
           durationMs: Date.now() - executeStart,
           errorCode: getRuntimeErrorCode(error)
         })
-        this.handleRuntimeError('loadPluginView', error)
+        await this.handleRuntimeError('loadPluginView', error)
         return false
       }
       return true
@@ -792,7 +824,7 @@ export class TouchPlugin implements ITouchPlugin {
             durationMs: Date.now() - executeStart,
             errorCode: getRuntimeErrorCode(error)
           })
-          this.handleRuntimeError('registerWidget', error)
+          await this.handleRuntimeError('registerWidget', error)
           this.notifyWidgetLoadFailure(feature)
           return false
         }
@@ -829,7 +861,7 @@ export class TouchPlugin implements ITouchPlugin {
         durationMs: Date.now() - executeStart,
         errorCode: getRuntimeErrorCode(error)
       })
-      this.handleRuntimeError('onFeatureTriggered', error)
+      await this.handleRuntimeError('onFeatureTriggered', error)
     }
     try {
       this._featureEvent.get(feature.id)?.forEach((fn) => fn.onLaunch?.(feature))
@@ -838,7 +870,7 @@ export class TouchPlugin implements ITouchPlugin {
         durationMs: Date.now() - executeStart,
         errorCode: getRuntimeErrorCode(error)
       })
-      this.handleRuntimeError('onLaunch', error)
+      await this.handleRuntimeError('onLaunch', error)
     }
     logFeatureBreadcrumb('complete', { durationMs: Date.now() - executeStart })
     return result
@@ -855,13 +887,13 @@ export class TouchPlugin implements ITouchPlugin {
         await result
       }
     } catch (error) {
-      this.handleRuntimeError('onFeatureTriggered', error)
+      await this.handleRuntimeError('onFeatureTriggered', error)
     }
 
     try {
       this._featureEvent.get(feature.id)?.forEach((fn) => fn.onInputChanged?.(query?.text ?? ''))
     } catch (error) {
-      this.handleRuntimeError('onInputChanged', error)
+      await this.handleRuntimeError('onInputChanged', error)
     }
   }
 
@@ -1048,6 +1080,8 @@ export class TouchPlugin implements ITouchPlugin {
     this.features = []
     this.issues = []
     this._uniqueChannelKey = ''
+    this._runtimeInstanceId = randomUUID()
+    this._activationGeneration = 0
     this.loadState = 'ready'
     this.loadError = undefined
 
@@ -1140,7 +1174,7 @@ export class TouchPlugin implements ITouchPlugin {
    * Logs the error, pushes a PluginIssue, tracks error frequency,
    * and auto-disables the plugin if errors exceed threshold (>10 in 60s).
    */
-  private handleRuntimeError(source: string, error: unknown): void {
+  private async handleRuntimeError(source: string, error: unknown): Promise<void> {
     const err = error instanceof Error ? error : new Error(String(error))
     const errorCode = getRuntimeErrorCode(error) ?? 'RUNTIME_ERROR'
 
@@ -1179,7 +1213,7 @@ export class TouchPlugin implements ITouchPlugin {
         timestamp: Date.now()
       })
       this.status = PluginStatus.CRASHED
-      this.pluginLifecycle = null
+      await this.disable()
     }
   }
 
@@ -1220,6 +1254,129 @@ export class TouchPlugin implements ITouchPlugin {
     })
   }
 
+  private createRuntimeSnapshot(): PluginRuntimeSnapshot {
+    const manifest = JSON.parse(JSON.stringify(this.toJSONObject())) as Record<
+      string,
+      PluginRuntimeSnapshotValue
+    >
+    return Object.freeze({
+      platform: process.platform,
+      arch: process.arch,
+      manifest: Object.freeze(manifest)
+    })
+  }
+
+  private matchesActivation(activation: PluginActivationIdentity): boolean {
+    const current = this.getActivationIdentity()
+    return (
+      current.name === activation.name &&
+      current.pluginInstanceId === activation.pluginInstanceId &&
+      current.activationGeneration === activation.activationGeneration &&
+      current.key === activation.key
+    )
+  }
+
+  private revokeActivationAuthority(activation: PluginActivationIdentity): void {
+    if (activation.key) {
+      try {
+        this.transport?.keyManager.revokeKey(activation.key)
+      } catch {
+        // Runtime teardown must continue after authority is locally invalidated.
+      }
+    }
+    if (this.matchesActivation(activation)) this._uniqueChannelKey = ''
+  }
+
+  private recordActivationFailure(error: unknown): void {
+    const runtimeCode = getRuntimeErrorCode(error)
+    const code =
+      runtimeCode?.startsWith('PLUGIN_RUNTIME_') === true
+        ? runtimeCode
+        : 'PLUGIN_RUNTIME_ACTIVATION_FAILED'
+    const message = `Plugin runtime activation failed (${code}).`
+    this.logger.error(`[Lifecycle] activation failed (${code})`)
+    this.setLoadState('load_failed', { code, message })
+    this.issues.push({
+      type: 'error',
+      message,
+      source: 'runtime:activation',
+      code,
+      meta: { code },
+      timestamp: Date.now()
+    })
+  }
+
+  private handleRuntimeCrash(
+    activation: PluginActivationIdentity,
+    diagnostic: { code: string }
+  ): void {
+    if (!this.matchesActivation(activation)) return
+    this.revokeActivationAuthority(activation)
+    this.pluginLifecycle = null
+    this.abortFeatureControllers()
+
+    if (this.status === PluginStatus.LOADING) return
+    if (this.status !== PluginStatus.ENABLED && this.status !== PluginStatus.ACTIVE) return
+
+    this.issues.push({
+      type: 'error',
+      message: `Plugin runtime terminated (${diagnostic.code}).`,
+      source: 'runtime:crash',
+      code: diagnostic.code,
+      meta: { code: diagnostic.code },
+      timestamp: Date.now()
+    })
+    this.status = PluginStatus.CRASHED
+  }
+
+  private async loadPreludeScript(): Promise<string> {
+    const shouldBundlePrelude = this.dev.enable
+    if (this.dev.enable && this.dev.source && this.dev.address) {
+      const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
+      this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
+      const response = await getNetworkService().request<string>({
+        method: 'GET',
+        url: remoteIndexUrl,
+        timeoutMs: 5000,
+        responseType: 'text',
+        retryPolicy: { maxRetries: 0 },
+        cooldownPolicy: {
+          key: `plugin-dev-prelude:${this.name}:${remoteIndexUrl}`,
+          failureThreshold: 1,
+          cooldownMs: 3000,
+          autoResetOnSuccess: true
+        }
+      })
+      if (!shouldBundlePrelude) return response.data
+      const bundledContent = await bundlePluginPreludeFromContent(
+        this.name,
+        this.pluginPath,
+        this.getTempPath(),
+        response.data,
+        this.logger
+      )
+      return bundledContent ?? response.data
+    }
+
+    const featureIndex = path.resolve(this.pluginPath, 'index.js')
+    if (!fse.existsSync(featureIndex)) {
+      this.logger.info(`No index.js found for plugin '${this.name}', using an empty Prelude.`)
+      return 'module.exports = {}'
+    }
+
+    if (shouldBundlePrelude) {
+      const bundledContent = await bundlePluginPreludeFromFile(
+        this.name,
+        this.pluginPath,
+        this.getTempPath(),
+        featureIndex,
+        this.logger
+      )
+      if (bundledContent) return bundledContent
+    }
+    return fse.readFile(featureIndex, 'utf8')
+  }
+
   async enable(): Promise<boolean> {
     const blockedSdkIssue = this.issues.find((issue) => issue.code === 'SDKAPI_BLOCKED')
     if (this.loadError?.code === 'SDKAPI_BLOCKED' || blockedSdkIssue) {
@@ -1250,163 +1407,108 @@ export class TouchPlugin implements ITouchPlugin {
 
     this.status = PluginStatus.LOADING
     this.logger.info('[Lifecycle] enable start')
-
     this.issues = this.issues.filter((issue) => {
-      if (issue.code && TRANSIENT_ISSUE_CODES.has(issue.code)) {
-        return false
-      }
-
+      if (issue.code && TRANSIENT_ISSUE_CODES.has(issue.code)) return false
       return !(issue.source && issue.source.startsWith('runtime:'))
     })
     this._runtimeStats.errorCount = 0
     this._runtimeStats.errorTimestamps = []
 
+    let activation: PluginActivationIdentity | null = null
+    let runtimeService: PluginRuntimeService | null = null
     try {
-      const shouldBundlePrelude = this.dev.enable
+      const transport = this.resolveTransport()
+      runtimeService = this.resolveRuntimeService()
+      this._activationGeneration += 1
+      this._uniqueChannelKey = transport.keyManager.requestKey(this.name, {
+        pluginInstanceId: this._runtimeInstanceId,
+        activationGeneration: this._activationGeneration
+      })
+      activation = this.getActivationIdentity()
+      const currentActivation = activation
 
-      if (this.dev.enable && this.dev.source && this.dev.address) {
-        // Dev mode: load from remote
-        const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
-        this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
-        const response = await getNetworkService().request<string>({
-          method: 'GET',
-          url: remoteIndexUrl,
-          timeoutMs: 5000,
-          responseType: 'text',
-          retryPolicy: { maxRetries: 0 },
-          cooldownPolicy: {
-            key: `plugin-dev-prelude:${this.name}:${remoteIndexUrl}`,
-            failureThreshold: 1,
-            cooldownMs: 3000,
-            autoResetOnSuccess: true
-          }
+      const scriptContent = await this.loadPreludeScript()
+      const runtimeActivation = await runtimeService.startActivation({
+        activation: currentActivation,
+        scriptContent,
+        snapshot: this.createRuntimeSnapshot(),
+        onCrash: (diagnostic) => this.handleRuntimeCrash(currentActivation, diagnostic)
+      })
+
+      if (this.status !== PluginStatus.LOADING || !this.matchesActivation(currentActivation)) {
+        await runtimeService.stopActivation(currentActivation, { runDestroy: true })
+        throw Object.assign(new Error('PLUGIN_RUNTIME_ACTIVATION_STALE'), {
+          code: 'PLUGIN_RUNTIME_ACTIVATION_STALE'
         })
-        const scriptContent = response.data
-        const bundledContent = shouldBundlePrelude
-          ? await bundlePluginPreludeFromContent(
-              this.name,
-              this.pluginPath,
-              this.getTempPath(),
-              scriptContent,
-              this.logger
-            )
-          : null
-        const executableContent = bundledContent ?? scriptContent
-        this.pluginLifecycle = loadPluginFeatureContextFromContent(
-          this,
-          executableContent,
-          this.getFeatureUtil()
-        ) as IFeatureLifeCycle
-        if (bundledContent) {
-          this.logger.info('[Dev] Prelude bundled successfully.')
-        }
-        this.logger.info(`[Dev] Remote script executed successfully.`)
-      } else {
-        // Prod mode: load from local file
-        const featureIndex = path.resolve(this.pluginPath, 'index.js')
-        pluginSystemLog.debug(`[Plugin ${this.name}] Loading index.js from: ${featureIndex}`)
-        if (fse.existsSync(featureIndex)) {
-          if (shouldBundlePrelude) {
-            const bundledContent = await bundlePluginPreludeFromFile(
-              this.name,
-              this.pluginPath,
-              this.getTempPath(),
-              featureIndex,
-              this.logger
-            )
-            if (bundledContent) {
-              this.pluginLifecycle = loadPluginFeatureContextFromContent(
-                this,
-                bundledContent,
-                this.getFeatureUtil()
-              ) as IFeatureLifeCycle
-            } else {
-              this.pluginLifecycle = loadPluginFeatureContext(
-                this,
-                featureIndex,
-                this.getFeatureUtil()
-              ) as IFeatureLifeCycle
-            }
-          } else {
-            this.pluginLifecycle = loadPluginFeatureContext(
-              this,
-              featureIndex,
-              this.getFeatureUtil()
-            ) as IFeatureLifeCycle
-          }
-        } else {
-          this.logger.info(
-            `No index.js found for plugin '${this.name}', running without lifecycle.`
-          )
+      }
+
+      this.pluginLifecycle = runtimeActivation.lifecycle as unknown as IFeatureLifeCycle
+      const now = Date.now()
+      this._runtimeStats.startedAt = now
+      this._runtimeStats.requestCount = 0
+      this._runtimeStats.lastActiveAt = now
+      this.setLoadState('ready')
+      this.status = PluginStatus.ENABLED
+
+      transport
+        .sendToPlugin(this.name, PluginEvents.lifecycleSignal.enabled, this.toJSONObject())
+        .catch(() => {})
+      this.logger.info('[Lifecycle] enabled')
+      pluginSystemLog.debug(
+        `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`
+      )
+      pluginSystemLog.debug(`[Plugin] Plugin ${this.name} is enabled.`)
+      return true
+    } catch (error) {
+      if (activation) {
+        this.revokeActivationAuthority(activation)
+        try {
+          await runtimeService?.stopActivation(activation, { runDestroy: false })
+        } catch {
+          // The failed activation remains failed even if final cleanup already completed.
         }
       }
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Unknown error'
-      const stack = e instanceof Error ? e.stack : undefined
-      this.logger.error('[Lifecycle] enable failed', e as Error)
-      this.issues.push({
-        type: 'error',
-        message: `Failed to execute index.js: ${message}`,
-        source: 'index.js',
-        code: 'LIFECYCLE_SCRIPT_FAILED',
-        meta: { error: stack },
-        timestamp: Date.now()
-      })
+      this.pluginLifecycle = null
+      this._runtimeStats.startedAt = 0
+      this.recordActivationFailure(error)
       this.status = PluginStatus.CRASHED
       return false
     }
-
-    this.status = PluginStatus.ENABLED
-    const transport = this.resolveTransport()
-    this._uniqueChannelKey = transport.keyManager.requestKey(this.name)
-
-    const now = Date.now()
-    this._runtimeStats.startedAt = now
-    this._runtimeStats.requestCount = 0
-    this._runtimeStats.lastActiveAt = now
-
-    try {
-      const initResult = this.pluginLifecycle?.onInit?.()
-      if (isPromiseLike(initResult)) {
-        Promise.resolve(initResult).catch((error) => this.handleRuntimeError('onInit', error))
-      }
-    } catch (error) {
-      this.handleRuntimeError('onInit', error)
-    }
-    transport
-      .sendToPlugin(this.name, PluginEvents.lifecycleSignal.enabled, this.toJSONObject())
-      .catch(() => {})
-
-    this.logger.info('[Lifecycle] enabled')
-    pluginSystemLog.debug(
-      `[Plugin] Plugin ${this.name} with ${this.features.length} features is enabled.`
-    )
-    pluginSystemLog.debug(`[Plugin] Plugin ${this.name} is enabled.`)
-
-    return true
   }
 
   async disable(): Promise<boolean> {
-    this.pluginLifecycle = null
-
     const stoppableStates = [
+      PluginStatus.LOADING,
       PluginStatus.ENABLED,
       PluginStatus.ACTIVE,
       PluginStatus.CRASHED,
       PluginStatus.LOAD_FAILED
     ]
-    if (!stoppableStates.includes(this.status)) {
-      return Promise.resolve(false)
-    }
+    if (!stoppableStates.includes(this.status)) return false
 
-    this.abortFeatureControllers()
-    this.clearCoreBoxItems()
-
-    await widgetManager.releasePlugin(this.name)
-
+    const activation = this.getActivationIdentity()
     this.logger.info('[Lifecycle] disable start')
     this.status = PluginStatus.DISABLING
     this.logger.debug('Disabling plugin')
+    this.pluginLifecycle = null
+    this.abortFeatureControllers()
+
+    try {
+      await TouchPlugin._runtimeService?.stopActivation(activation, { runDestroy: true })
+    } catch {
+      this.issues.push({
+        type: 'error',
+        message: 'Plugin runtime termination failed (PLUGIN_RUNTIME_HOST_STOP_FAILED).',
+        source: 'runtime:teardown',
+        code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED',
+        meta: { code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED' },
+        timestamp: Date.now()
+      })
+    }
+    this.revokeActivationAuthority(activation)
+
+    this.clearCoreBoxItems()
+    await widgetManager.releasePlugin(this.name)
 
     const transport = this.resolveTransport()
     transport
@@ -1422,9 +1524,7 @@ export class TouchPlugin implements ITouchPlugin {
             )
             win.window.hide()
             setTimeout(() => {
-              if (!win.window.isDestroyed()) {
-                win.close()
-              }
+              if (!win.window.isDestroyed()) win.close()
             }, 50)
           } else {
             win.close()
@@ -1439,7 +1539,6 @@ export class TouchPlugin implements ITouchPlugin {
       }
     })
 
-    // Ensure that if this plugin had an active UI view, it is unattached.
     this.logger.debug('disable() called. Checking if UI mode needs to be exited.')
     CoreBoxManager.getInstance().exitUIMode()
     this.logger.debug('exitUIMode() called during disable().')
@@ -1452,13 +1551,7 @@ export class TouchPlugin implements ITouchPlugin {
       })
     }
 
-    if (this._uniqueChannelKey) {
-      transport.keyManager.revokeKey(this._uniqueChannelKey)
-    }
-
     this._runtimeStats.startedAt = 0
-
-    // Clean up any registered recommendation providers
     try {
       const { SearchEngineCore } =
         require('../box-tool/search-engine/search-core') as typeof import('../box-tool/search-engine/search-core')
@@ -1471,8 +1564,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.status = PluginStatus.DISABLED
     this.logger.debug('Plugin disable lifecycle completed.')
     this.logger.info('[Lifecycle] disabled')
-
-    return Promise.resolve(true)
+    return true
   }
 
   getFeatureEventUtil(): FeatureEventUtil {
@@ -1546,13 +1638,11 @@ export class TouchPlugin implements ITouchPlugin {
       const threshold = normalizeLowPowerThreshold(options.threshold)
 
       try {
-        const battery = await transport.invoke(AppEvents.fileIndex.batteryLevel, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        })
+        const battery = await transport.invoke(
+          AppEvents.fileIndex.batteryLevel,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        )
         const levelRaw = (battery as { level?: unknown } | null | undefined)?.level
         const chargingRaw = (battery as { charging?: unknown } | null | undefined)?.charging
 
@@ -1650,21 +1740,30 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private createSecretSDK(pluginName: string, transport: ITuffTransportMain) {
-    const createPluginContext = () => ({
-      plugin: {
-        name: pluginName,
-        uniqueKey: this._uniqueChannelKey ?? '',
-        verified: Boolean(this._uniqueChannelKey)
-      }
-    })
+    const createPluginContext = () => this.getTransportInvokeContext(pluginName)
+    const throwSecretFailure = (response: unknown): never => {
+      const failure =
+        response && typeof response === 'object'
+          ? (response as { code?: unknown; error?: unknown })
+          : {}
+      throw Object.assign(
+        new Error(
+          typeof failure.error === 'string' ? failure.error : 'Plugin secret access failed.'
+        ),
+        { code: typeof failure.code === 'string' ? failure.code : 'PLUGIN_SECRET_UNAVAILABLE' }
+      )
+    }
 
     return {
-      get: (key: string): Promise<string | null> =>
-        transport.invoke(
+      get: async (key: string): Promise<string | null> => {
+        const response = await transport.invoke(
           PluginEvents.storage.getSecret,
           { pluginName, key },
           createPluginContext()
-        ) as Promise<string | null>,
+        )
+        if (response && typeof response === 'object') return throwSecretFailure(response)
+        return typeof response === 'string' ? response : null
+      },
 
       set: (key: string, value: string | null): Promise<{ success: boolean; error?: string }> =>
         transport.invoke(
@@ -1680,12 +1779,16 @@ export class TouchPlugin implements ITouchPlugin {
           createPluginContext()
         ) as Promise<{ success: boolean; error?: string }>,
 
-      health: (): Promise<SecureStoreHealthResponse> =>
-        transport.invoke(
+      health: async (): Promise<SecureStoreHealthResponse> => {
+        const response = await transport.invoke(
           PluginEvents.storage.getSecretHealth,
           undefined,
           createPluginContext()
-        ) as Promise<SecureStoreHealthResponse>
+        )
+        if (!response || typeof response !== 'object' || !('backend' in response))
+          return throwSecretFailure(response)
+        return response as SecureStoreHealthResponse
+      }
     }
   }
 
@@ -1815,14 +1918,7 @@ export class TouchPlugin implements ITouchPlugin {
         const result = (await transport.invoke(
           ClipboardEvents.copyAndPaste,
           { ...options, _sdkapi: this.sdkapi },
-          {
-            plugin: {
-              name: pluginName,
-              uniqueKey: this._uniqueChannelKey ?? '',
-              verified: Boolean(this._uniqueChannelKey),
-              sdkapi: this.sdkapi
-            }
-          }
+          this.getTransportInvokeContext(pluginName)
         )) as ClipboardActionResult
         if (result?.success) return true
 
@@ -1893,14 +1989,11 @@ export class TouchPlugin implements ITouchPlugin {
 
     const touchChannel = {
       send: async (eventName: string, payload?: unknown) => {
-        return transport.invoke(defineRawEvent(eventName), payload, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey),
-            sdkapi: this.sdkapi
-          }
-        })
+        return transport.invoke(
+          defineRawEvent(eventName),
+          payload,
+          this.getTransportInvokeContext(pluginName)
+        )
       },
       onMain: (eventName: string, handler: (data: unknown) => unknown) =>
         channelBridge.onMain(eventName, handler)
@@ -1944,181 +2037,139 @@ export class TouchPlugin implements ITouchPlugin {
     const voice = createPluginVoiceFacade(() => baseVoice)
     const quickOps = {
       capabilities: (): Promise<QuickOpsCapabilityGetResponse> =>
-        transport.invoke(QuickOpsEvents.capabilities.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsCapabilityGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.capabilities.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsCapabilityGetResponse>,
       sessions: (): Promise<QuickOpsSessionsGetResponse> =>
-        transport.invoke(QuickOpsEvents.sessions.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsSessionsGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.sessions.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsSessionsGetResponse>,
       auditRecent: (request?: QuickOpsAuditGetRequest): Promise<QuickOpsAuditGetResponse> =>
-        transport.invoke(QuickOpsEvents.audit.get, request ?? {}, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsAuditGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.audit.get,
+          request ?? {},
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsAuditGetResponse>,
       systemInfo: (): Promise<QuickOpsSystemInfoGetResponse> =>
-        transport.invoke(QuickOpsEvents.systemInfo.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsSystemInfoGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.systemInfo.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsSystemInfoGetResponse>,
       tuffDiagnostics: (): Promise<QuickOpsDiagnosticsGetResponse> =>
-        transport.invoke(QuickOpsEvents.tuffDiagnostics.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsDiagnosticsGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.tuffDiagnostics.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsDiagnosticsGetResponse>,
       diskSpace: (): Promise<QuickOpsDiskSpaceGetResponse> =>
-        transport.invoke(QuickOpsEvents.diskSpace.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsDiskSpaceGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.diskSpace.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsDiskSpaceGetResponse>,
       directoryUsage: (
         request?: QuickOpsDirectoryUsageGetRequest
       ): Promise<QuickOpsDirectoryUsageGetResponse> =>
-        transport.invoke(QuickOpsEvents.directoryUsage.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsDirectoryUsageGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.directoryUsage.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsDirectoryUsageGetResponse>,
       queryLocalIp: (): Promise<QuickOpsQueryLocalIpGetResponse> =>
-        transport.invoke(QuickOpsEvents.queryLocalIp.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsQueryLocalIpGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.queryLocalIp.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsQueryLocalIpGetResponse>,
       portStatus: (request: QuickOpsPortStatusGetRequest): Promise<QuickOpsPortStatusGetResponse> =>
-        transport.invoke(QuickOpsEvents.portStatus.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsPortStatusGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.portStatus.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsPortStatusGetResponse>,
       dnsQuery: (request: QuickOpsDnsQueryGetRequest): Promise<QuickOpsDnsQueryGetResponse> =>
-        transport.invoke(QuickOpsEvents.dnsQuery.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsDnsQueryGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.dnsQuery.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsDnsQueryGetResponse>,
       fileHash: (request: QuickOpsFileHashGetRequest): Promise<QuickOpsFileHashGetResponse> =>
-        transport.invoke(QuickOpsEvents.fileHash.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsFileHashGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.fileHash.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsFileHashGetResponse>,
       fileBase64: (request: QuickOpsFileBase64GetRequest): Promise<QuickOpsFileBase64GetResponse> =>
-        transport.invoke(QuickOpsEvents.fileBase64.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsFileBase64GetResponse>,
+        transport.invoke(
+          QuickOpsEvents.fileBase64.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsFileBase64GetResponse>,
       recentDownload: (): Promise<QuickOpsRecentDownloadGetResponse> =>
-        transport.invoke(QuickOpsEvents.recentDownload.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsRecentDownloadGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.recentDownload.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsRecentDownloadGetResponse>,
       commonDirectory: (
         request?: QuickOpsCommonDirectoryGetRequest
       ): Promise<QuickOpsCommonDirectoryGetResponse> =>
-        transport.invoke(QuickOpsEvents.commonDirectory.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsCommonDirectoryGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.commonDirectory.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsCommonDirectoryGetResponse>,
       pathFormat: (request: QuickOpsPathFormatGetRequest): Promise<QuickOpsPathFormatGetResponse> =>
-        transport.invoke(QuickOpsEvents.pathFormat.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsPathFormatGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.pathFormat.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsPathFormatGetResponse>,
       formatText: (request: QuickOpsFormatTextGetRequest): Promise<QuickOpsFormatTextGetResponse> =>
-        transport.invoke(QuickOpsEvents.formatText.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsFormatTextGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.formatText.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsFormatTextGetResponse>,
       networkStatus: (): Promise<QuickOpsNetworkStatusGetResponse> =>
-        transport.invoke(QuickOpsEvents.networkStatus.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsNetworkStatusGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.networkStatus.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsNetworkStatusGetResponse>,
       batteryStatus: (): Promise<QuickOpsBatteryStatusGetResponse> =>
-        transport.invoke(QuickOpsEvents.batteryStatus.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsBatteryStatusGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.batteryStatus.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsBatteryStatusGetResponse>,
       systemProxy: (): Promise<QuickOpsSystemProxyGetResponse> =>
-        transport.invoke(QuickOpsEvents.systemProxy.get, undefined, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsSystemProxyGetResponse>,
+        transport.invoke(
+          QuickOpsEvents.systemProxy.get,
+          undefined,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsSystemProxyGetResponse>,
       developerPreview: (
         request: QuickOpsDeveloperPreviewRequest
       ): Promise<QuickOpsDeveloperPreviewResponse> =>
-        transport.invoke(QuickOpsEvents.developerPreview.get, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsDeveloperPreviewResponse>,
+        transport.invoke(
+          QuickOpsEvents.developerPreview.get,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsDeveloperPreviewResponse>,
       saveDeveloperPreview: (
         request: QuickOpsDeveloperPreviewSaveRequest
       ): Promise<QuickOpsDeveloperPreviewSaveResponse> =>
-        transport.invoke(QuickOpsEvents.developerPreview.save, request, {
-          plugin: {
-            name: pluginName,
-            uniqueKey: this._uniqueChannelKey ?? '',
-            verified: Boolean(this._uniqueChannelKey)
-          }
-        }) as Promise<QuickOpsDeveloperPreviewSaveResponse>
+        transport.invoke(
+          QuickOpsEvents.developerPreview.save,
+          request,
+          this.getTransportInvokeContext(pluginName)
+        ) as Promise<QuickOpsDeveloperPreviewSaveResponse>
     }
 
     type BoxChannelHandler = (data: PluginStandardChannelData) => unknown
@@ -2585,42 +2636,15 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   __getInjections__(): PluginInjections {
-    const indexPath = this.__index__()
-    const preload = this.__preload__()
-    const runtimeContext = this.getRuntimeContext('__getInjections__')
-
-    const _path = {
-      relative: path.relative(runtimeContext.rootPath, this.pluginPath),
-      root: runtimeContext.rootPath,
-      app: app.getAppPath?.(),
-      plugin: this.pluginPath
-    }
-
-    const pluginUa = `TalexTouch/${$pkg.version} (Plugins,like ${this.name})`
-    const mainWindow =
-      typeof runtimeContext.mainWindowId === 'number'
-        ? (BrowserWindow.fromId(runtimeContext.mainWindowId) ?? undefined)
-        : undefined
-    const mainUserAgent = useSafeUserAgent(mainWindow) ?? app.userAgentFallback ?? ''
-    const userAgent = mainUserAgent ? `${mainUserAgent} ${pluginUa}` : pluginUa
-
     return {
       _: {
-        indexPath,
-        preload,
+        indexPath: this.__index__(),
+        preload: this.__preload__(),
         isWebviewInit: this.webViewInit
       },
-      attrs: {
-        enableRemoteModule: 'false',
-        nodeintegration: 'true',
-        webpreferences: 'contextIsolation=false',
-        // httpreferrer: `https://plugin.touch.talex.com/${this.name}`,
-        websecurity: 'false',
-        useragent: userAgent
-        // partition: `persist:touch/${this.name}`,
-      },
+      attrs: {},
       styles: `${getStyles()}`,
-      js: `${getJs([this.name, JSON.stringify(_path), this.sdkapi, this.version])}`
+      js: ''
     }
   }
 
@@ -2647,13 +2671,13 @@ export class TouchPlugin implements ITouchPlugin {
     try {
       this.pluginLifecycle?.onClose?.(feature)
     } catch (error) {
-      this.handleRuntimeError('onClose', error)
+      void this.handleRuntimeError('onClose', error)
     }
 
     try {
       this._featureEvent.get(feature.id)?.forEach((fn) => fn.onClose?.(feature))
     } catch (error) {
-      this.handleRuntimeError('onClose', error)
+      void this.handleRuntimeError('onClose', error)
     }
   }
 

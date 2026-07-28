@@ -27,6 +27,8 @@ export interface HostLoad {
   type: 'load'
   requestId: number
   pluginName: string
+  pluginHandle: string
+  hostGeneration: number
   pluginPath: string
   scriptContent: string
   contextKeys: string[]
@@ -55,7 +57,8 @@ export interface HostLifecycleResult {
 export interface HostSdkCall {
   type: 'sdk-call'
   requestId: number
-  pluginName: string
+  pluginHandle: string
+  hostGeneration: number
   chain: string[]
   args: unknown[]
 }
