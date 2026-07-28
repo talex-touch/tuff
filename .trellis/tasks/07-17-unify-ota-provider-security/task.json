@@ -22,5 +22,9 @@
   "parent": "07-17-unify-ota-update-flow",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Resolve the concurrent search-index typecheck interference and record the final OTA integration disposition.",
+    "blocker": "The full node typecheck is blocked by concurrent uncommitted search-index/file-provider interface changes outside this task.",
+    "evidence": "prd.md Verification records focused utils/CoreApp tests and renderer typecheck; it identifies the unrelated node-typecheck failures."
+  }
 }

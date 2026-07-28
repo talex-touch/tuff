@@ -1,7 +1,7 @@
 {
-  "id": "transport-wave-a",
-  "name": "transport-wave-a",
-  "title": "Transport Wave A",
+  "id": "transport-legacy-cutover-evidence",
+  "name": "transport-legacy-cutover-evidence",
+  "title": "Transport Legacy Cutover Evidence",
   "description": "",
   "status": "completed",
   "dev_type": null,
@@ -11,19 +11,15 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-17",
-  "completedAt": "2026-07-17",
+  "completedAt": "2026-07-28",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "07-17-transport-messageport-lanes",
-    "07-17-transport-typed-event-hard-cut",
-    "07-17-transport-legacy-cutover-evidence"
-  ],
-  "parent": null,
+  "children": [],
+  "parent": "07-17-transport-wave-a",
   "relatedFiles": [],
   "notes": "",
   "meta": {}

@@ -1,7 +1,7 @@
 {
-  "id": "transport-legacy-cutover-evidence",
-  "name": "transport-legacy-cutover-evidence",
-  "title": "Transport Legacy Cutover Evidence",
+  "id": "configuration-sqlite-sot",
+  "name": "configuration-sqlite-sot",
+  "title": "Configuration SQLite Source of Truth",
   "description": "",
   "status": "completed",
   "dev_type": null,
@@ -11,7 +11,7 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-17",
-  "completedAt": "2026-07-17",
+  "completedAt": "2026-07-28",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
@@ -19,7 +19,7 @@
   "pr_url": null,
   "subtasks": [],
   "children": [],
-  "parent": "07-17-transport-wave-a",
+  "parent": null,
   "relatedFiles": [],
   "notes": "",
   "meta": {}

@@ -1,0 +1,2 @@
+{"file":"todo.md","reason":"Authoritative pre-migration write-path inventory, default-off flag, silent-data-loss warning, exact sites, runtime acceptance, and rollback contract."}
+{"file":".trellis/tasks/07-13-search-crossplatform-audit/prd.md","reason":"Parent audit backlog and child-task ownership boundary for the search-index split migration."}

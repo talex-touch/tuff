@@ -24,5 +24,9 @@
   "parent": "07-17-unify-ota-update-flow",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Obtain the official-attested N+1 package evidence for the remaining cross-platform OTA runtime acceptance.",
+    "blocker": "An official-attested N+1 release artifact and corresponding host/runtime evidence are not yet available.",
+    "evidence": "prd.md acceptance criteria and focused renderer, main, release-gate, and packaged Settings evidence."
+  }
 }
