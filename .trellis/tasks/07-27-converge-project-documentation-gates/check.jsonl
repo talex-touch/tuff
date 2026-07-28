@@ -1,0 +1,5 @@
+{"file":".trellis/workflow.md","reason":"Check the five tasks against Trellis planning and parent/child requirements."}
+{"file":"docs/plan-prd/TODO.md","reason":"Verify the parent and child acceptance criteria preserve the sole global ordering contract."}
+{"file":"docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md","reason":"Review the program-wide historical versus current evidence boundary."}
+{"file":"docs/plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md","reason":"Review release evidence and Gate E terminology used by the roadmap/release child."}
+{"file":".github/workflows/ci.yml","reason":"Review the current Markdown CI limitation and ensure the gate child owns its replacement."}

@@ -1,0 +1,34 @@
+{
+  "id": "docs-sot-convergence",
+  "name": "docs-sot-convergence",
+  "title": "Converge documentation source of truth",
+  "description": "Make TODO and active Trellis state truthful, migrate the root search-index plan into an owned child task, archive only proven completions, and normalize retained-task metadata.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": "documentation",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": null,
+  "branch": "TalexDreamSoul/docs-sot-convergence",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-converge-project-documentation-gates",
+  "relatedFiles": [
+    "docs/plan-prd/TODO.md",
+    "todo.md",
+    ".trellis/tasks/07-13-search-crossplatform-audit/task.json"
+  ],
+  "notes": "Batch A. Existing task moves and metadata edits require an exact candidate inventory; the bilingual task and OTA parent task.json are hard exclusions.",
+  "meta": {
+    "nextAction": "After the planning PR is available, inventory active Trellis state and prepare the exact TODO migration, archive, and metadata change set.",
+    "blocker": "The planning PR must be available as the branch base; archive candidates must be proven complete before any move.",
+    "evidence": "prd.md acceptance criteria, task.py list/validate output, the preserved root todo warning, and the final scoped diff."
+  }
+}

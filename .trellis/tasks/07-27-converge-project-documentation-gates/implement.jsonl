@@ -1,0 +1,5 @@
+{"file":".trellis/workflow.md","reason":"Defines the Phase 1 planning artifact contract, parent/child semantics, and validation gates."}
+{"file":"docs/plan-prd/TODO.md","reason":"Current global execution-order source that Batch A must converge without creating a competing priority list."}
+{"file":"docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md","reason":"Active roadmap surface whose ownership and evidence terminology must align with Batch B."}
+{"file":"docs/plan-prd/01-project/CHANGES.md","reason":"Historical change record used to keep completed evidence separate from live priority and current-version claims."}
+{"file":".trellis/tasks/archive/2026-07/07-16-converge-trellis-task-doc-state/design.md","reason":"Prior task-state convergence design provides the archive, metadata, and rollback precedent for this program."}

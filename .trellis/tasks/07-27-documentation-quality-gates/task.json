@@ -1,0 +1,37 @@
+{
+  "id": "documentation-quality-gates",
+  "name": "documentation-quality-gates",
+  "title": "Add documentation quality gates",
+  "description": "Add one deterministic read-only local and CI entrypoint for recursive Markdown, tracked relative links, Trellis state, current release notes, AI evidence, and active PRD placeholder contracts.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": "documentation",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": null,
+  "branch": "TalexDreamSoul/documentation-quality-gates",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-converge-project-documentation-gates",
+  "relatedFiles": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/ai-docs.yml",
+    ".github/workflows/README.md",
+    "mise.toml",
+    "scripts/ai-docs/verify-ai-docs.mjs",
+    "notes/RELEASE_NOTES_GUIDE.md"
+  ],
+  "notes": "Batch D is a stacked integration gate after A, B, C, and the bilingual What's Changed contract. It reads prerequisite documentation but does not rewrite prose, including README.md or README.zh-CN.md, to make the gate pass.",
+  "meta": {
+    "nextAction": "After all four prerequisite documentation contracts are available, create the stacked integration branch and record their exact PR URLs and commits before implementing the verifier.",
+    "blocker": "The docs-sot, roadmap/release, peripheral-docs, and concurrent bilingual What's Changed PRs must all be available on the integration branch.",
+    "evidence": "prd.md acceptance criteria, deterministic fixture results, repeated read-only repository runs, CI parity, and the final prerequisite/owned-path diff."
+  }
+}
