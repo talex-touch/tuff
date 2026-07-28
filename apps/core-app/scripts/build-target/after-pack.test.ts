@@ -18,6 +18,9 @@ const { verifyPackagedEverythingNative, verifyPackagedOfficialPluginSeeds } =
   }
 
 const officialPlugins = [
+  { pluginName: 'clipboard-history', version: '1.1.10' },
+  { pluginName: 'touch-quickops', version: '0.1.0' },
+  { pluginName: 'touch-snippets', version: '1.0.0' },
   { pluginName: 'touch-translation', version: '1.0.11' },
   { pluginName: 'touch-intelligence', version: '1.2.0' }
 ] as const
@@ -105,7 +108,7 @@ afterEach(async () => {
 })
 
 describe('verifyPackagedOfficialPluginSeeds', () => {
-  it('accepts both canonical official plugin seeds in packaged Resources', async () => {
+  it('accepts every canonical official plugin seed in packaged Resources', async () => {
     const { context, resourcesDir } = await createPackagedSeedFixture()
 
     expect(() => verifyPackagedOfficialPluginSeeds(context)).not.toThrow()

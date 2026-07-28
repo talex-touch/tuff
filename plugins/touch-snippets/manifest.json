@@ -12,13 +12,15 @@
   "description": "统一片段库：搜索、保存并复制文本、代码与提示词模板",
   "main": "index.js",
   "permissions": {
-    "required": ["clipboard.write", "search.root-results"],
-    "optional": ["clipboard.read"]
+    "required": ["clipboard.write", "search.root-results", "storage.plugin"],
+    "optional": ["clipboard.read", "network.internet"]
   },
   "permissionReasons": {
     "search.root-results": "将片段搜索、保存与管理入口推送到 CoreBox 根搜索结果",
     "clipboard.write": "复制片段内容到剪贴板",
-    "clipboard.read": "支持 {{clipboard}} 占位符与从剪贴板保存片段"
+    "clipboard.read": "支持 {{clipboard}} 占位符与从剪贴板保存片段",
+    "storage.plugin": "保存片段库与本地管理状态",
+    "network.internet": "通过宿主代理浏览、发布和安装 CloudShare 片段包"
   },
   "searchProviders": [
     {

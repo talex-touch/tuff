@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
@@ -11,11 +12,13 @@ interface OfficialPluginBuildTarget {
 
 interface OfficialPluginSyncResult {
   bundledPluginRoot?: string
+  canonicalBuildRoot?: string
   canonicalVersion?: string
   pluginName: string
   reason?: string
   skipped: boolean
   synced: boolean
+  syncedRuntimePluginRoots?: string[]
 }
 
 interface OfficialPluginSyncOptions {
@@ -56,7 +59,10 @@ const {
 
 const fixtureRoots: string[] = []
 const pluginVersions: Record<string, string> = {
+  'clipboard-history': '1.1.10',
   'touch-intelligence': '1.2.0',
+  'touch-quickops': '0.1.0',
+  'touch-snippets': '1.0.0',
   'touch-translation': '1.0.11'
 }
 
@@ -109,6 +115,9 @@ describe('official plugin build delivery', () => {
       '@talex-touch/unplugin-export-plugin',
       '@talex-touch/tuff-cli',
       '@talex-touch/tuffex',
+      '@talex-touch/clipboard-history-plugin',
+      '@talex-touch/touch-quickops-plugin',
+      '@talex-touch/touch-snippets-plugin',
       '@talex-touch/touch-translation-plugin',
       '@talex-touch/touch-intelligence-plugin'
     ]
@@ -159,7 +168,7 @@ describe('official plugin build delivery', () => {
 
     const results = syncOfficialPluginBundledRuntimes({ projectRoot, workspaceRoot })
 
-    expect(results).toHaveLength(2)
+    expect(results).toHaveLength(5)
     for (const result of results) {
       const expectedVersion = pluginVersions[result.pluginName]
       const bundledRoot = path.join(projectRoot, 'resources', 'bundled-plugins', result.pluginName)
@@ -178,6 +187,40 @@ describe('official plugin build delivery', () => {
       await expect(fs.pathExists(path.join(bundledRoot, 'index.js'))).resolves.toBe(true)
     }
   })
+
+  it.each(['clipboard-history', 'touch-quickops', 'touch-snippets'])(
+    'copies %s canonical output byte-for-byte to packaged and runtime projections',
+    async (pluginName) => {
+      const { projectRoot, workspaceRoot } = await createSyncFixture()
+      const runtimeRoot = path.join(workspaceRoot, 'runtime', 'modules', 'plugins', pluginName)
+
+      const result = syncOfficialPluginBundledRuntime(pluginName, {
+        projectRoot,
+        workspaceRoot,
+        runtimePluginRoots: [runtimeRoot]
+      })
+      expect(result).toMatchObject({
+        canonicalBuildRoot: path.join(workspaceRoot, 'plugins', pluginName, 'dist', 'build'),
+        bundledPluginRoot: path.join(projectRoot, 'resources', 'bundled-plugins', pluginName),
+        syncedRuntimePluginRoots: [runtimeRoot],
+        synced: true
+      })
+
+      const artifactPaths = [
+        path.join(result.canonicalBuildRoot!, 'index.js'),
+        path.join(result.bundledPluginRoot!, 'index.js'),
+        path.join(runtimeRoot, 'index.js')
+      ]
+      const hashes = await Promise.all(
+        artifactPaths.map(async (artifactPath) =>
+          createHash('sha256')
+            .update(await fs.readFile(artifactPath))
+            .digest('hex')
+        )
+      )
+      expect(new Set(hashes)).toHaveLength(1)
+    }
+  )
 
   it('fails before replacing a bundled seed when canonical versions disagree', async () => {
     const { projectRoot, workspaceRoot } = await createSyncFixture()

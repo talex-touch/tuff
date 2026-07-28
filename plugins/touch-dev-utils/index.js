@@ -1,11 +1,10 @@
-const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis
-const { Buffer } = require('node:buffer')
-const { randomUUID } = require('node:crypto')
+const { plugin, clipboard, logger, TuffItemBuilder } = globalThis
 
 const PLUGIN_NAME = 'touch-dev-utils'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
+const ICON = { type: 'class', value: 'i-ri-code-line' }
 const COPY_ACTION_ID = 'copy'
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
 function normalizeText(value) {
   return String(value ?? '').trim()
@@ -29,34 +28,29 @@ function getQueryText(query) {
   return query?.text ?? ''
 }
 
-async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
+function decodeBase64Url(segment) {
+  const normalized = String(segment)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+  if (normalized.length % 4 === 1)
+    throw new Error('JWT 格式无效')
+  const padded = normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), '=')
+  const bytes = []
+  for (let index = 0; index < padded.length; index += 4) {
+    const a = BASE64_ALPHABET.indexOf(padded[index])
+    const b = BASE64_ALPHABET.indexOf(padded[index + 1])
+    const c = padded[index + 2] === '=' ? 0 : BASE64_ALPHABET.indexOf(padded[index + 2])
+    const d = padded[index + 3] === '=' ? 0 : BASE64_ALPHABET.indexOf(padded[index + 3])
+    if (a < 0 || b < 0 || c < 0 || d < 0)
+      throw new Error('JWT 格式无效')
+    const value = (a << 18) | (b << 12) | (c << 6) | d
+    bytes.push((value >>> 16) & 0xFF)
+    if (padded[index + 2] !== '=')
+      bytes.push((value >>> 8) & 0xFF)
+    if (padded[index + 3] !== '=')
+      bytes.push(value & 0xFF)
   }
-
-  try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission) {
-      return { granted: true }
-    }
-    const granted = await permission.request(permissionId, reason)
-    return granted
-      ? { granted: true }
-      : {
-          granted: false,
-          reason: 'permission-denied',
-        }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-dev-utils] Failed to request permission', error)
-    return {
-      granted: false,
-      reason: 'permission-request-failed',
-    }
-  }
+  return new TextDecoder().decode(Uint8Array.from(bytes))
 }
 
 function buildCopyItem({ id, featureId, title, subtitle, output }) {
@@ -134,15 +128,6 @@ function toSnakeCase(value) {
 
 function toKebabCase(value) {
   return splitWords(value).join('-')
-}
-
-function decodeBase64Url(segment) {
-  const normalized = String(segment)
-    .replace(/-/g, '+')
-    .replace(/_/g, '/')
-  const padding = normalized.length % 4
-  const padded = padding === 0 ? normalized : normalized.padEnd(normalized.length + (4 - padding), '=')
-  return Buffer.from(padded, 'base64').toString('utf8')
 }
 
 function parseJwt(token) {
@@ -270,7 +255,7 @@ function addNowItems(items, seen, featureId) {
     featureId,
     title: 'UUID v4',
     subtitle: '复制随机 UUID',
-    output: randomUUID(),
+    output: crypto.randomUUID(),
   })
   addCopyItem(items, seen, {
     id: `${featureId}-now-seconds`,
@@ -498,8 +483,8 @@ const pluginLifecycle = {
           title: '输入文本开始解析',
           subtitle: '支持 JWT、时间戳、命名转换、Query String 和字符串转义',
         }))
-        plugin.feature.clearItems()
-        plugin.feature.pushItems(items)
+        await plugin.feature.clearItems()
+        await plugin.feature.pushItems(items)
         return true
       }
 
@@ -518,22 +503,28 @@ const pluginLifecycle = {
         }))
       }
 
-      plugin.feature.clearItems()
-      plugin.feature.pushItems(items)
+      await plugin.feature.clearItems()
+      await plugin.feature.pushItems(items)
       return true
     }
-    catch (error) {
-      logger?.error?.('[touch-dev-utils] Failed to process feature', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          id: `${featureId}-error`,
-          featureId,
-          title: '加载失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
-        }),
-      ])
-      return true
+    catch {
+      logger?.error?.('[touch-dev-utils] Failed to handle feature')
+      try {
+        await plugin.feature.clearItems()
+        await plugin.feature.pushItems([
+          buildInfoItem({
+            id: `${featureId}-error`,
+            featureId,
+            title: '加载失败',
+            subtitle: '插件运行失败',
+          }),
+        ])
+        return true
+      }
+      catch {
+        logger?.error?.('[touch-dev-utils] Failed to publish fallback')
+        return false
+      }
     }
   },
 
@@ -548,16 +539,6 @@ const pluginLifecycle = {
         : null
 
       if (copyAction?.payload) {
-        const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制开发工具结果')
-        if (!permissionResult.granted) {
-          return {
-            externalAction: true,
-            success: false,
-            status: 'blocked',
-            reason: permissionResult.reason || 'permission-denied',
-            message: '缺少 clipboard.write 权限',
-          }
-        }
         const payloadText = typeof copyAction.payload === 'string' ? copyAction.payload : copyAction.payload.text
         if (typeof payloadText !== 'string') {
           return
@@ -578,30 +559,17 @@ const pluginLifecycle = {
       }
     }
     catch (error) {
-      logger?.error?.('[touch-dev-utils] Action failed', error)
+      logger?.error?.('[touch-dev-utils] Action failed')
+      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
       return {
         externalAction: true,
         success: false,
         status: 'blocked',
-        reason: 'clipboard-write-failed',
-        message: error?.message || '复制失败',
+        reason: permissionDenied ? 'permission-denied' : 'clipboard-write-failed',
+        message: permissionDenied ? '缺少 clipboard.write 权限' : '复制失败',
       }
     }
   },
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    buildQueryString,
-    escapeStringLiteral,
-    formatTimestampDetails,
-    parseJwt,
-    parseQueryString,
-    toCamelCase,
-    toKebabCase,
-    toPascalCase,
-    toSnakeCase,
-    unescapeStringLiteral,
-  },
-}
+module.exports = pluginLifecycle

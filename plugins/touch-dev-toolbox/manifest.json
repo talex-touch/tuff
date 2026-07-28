@@ -12,11 +12,12 @@
   "description": "开发工具箱：常用链接导航",
   "main": "index.js",
   "permissions": {
-    "required": ["search.root-results"],
+    "required": ["search.root-results", "storage.plugin"],
     "optional": ["network.internet"]
   },
   "permissionReasons": {
     "search.root-results": "将开发工具箱入口推送到 CoreBox 根搜索结果",
+    "storage.plugin": "保存开发工具箱配置",
     "network.internet": "使用默认浏览器打开开发工具箱链接"
   },
   "searchProviders": [

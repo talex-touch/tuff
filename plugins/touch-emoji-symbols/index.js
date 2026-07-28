@@ -162,20 +162,25 @@ function normalizeText(value) {
 }
 
 function getQueryText(query) {
-  if (typeof query === 'string') return query
+  if (typeof query === 'string')
+    return query
   return query?.text ?? ''
 }
 
 function parseSearchQuery(query) {
   const normalized = normalizeText(getQueryText(query)).replace(/\s+/g, ' ')
-  if (!normalized) return ''
+  if (!normalized)
+    return ''
 
   const lower = normalized.toLowerCase()
   for (const prefix of QUERY_PREFIXES) {
     const normalizedPrefix = prefix.toLowerCase()
-    if (lower === normalizedPrefix) return ''
-    if (lower.startsWith(`${normalizedPrefix} `)) return normalized.slice(prefix.length).trim()
-    if (lower.startsWith(`${normalizedPrefix}:`)) return normalized.slice(prefix.length + 1).trim()
+    if (lower === normalizedPrefix)
+      return ''
+    if (lower.startsWith(`${normalizedPrefix} `))
+      return normalized.slice(prefix.length).trim()
+    if (lower.startsWith(`${normalizedPrefix}:`))
+      return normalized.slice(prefix.length + 1).trim()
   }
 
   return normalized
@@ -189,12 +194,18 @@ function getSearchableText(entry) {
 
 function rankEntry(entry, query) {
   const lower = query.toLowerCase()
-  if (!lower) return 10
-  if (entry.value === query) return 100
-  if (entry.title.toLowerCase().startsWith(lower)) return 80
-  if (entry.category.toLowerCase() === lower) return 70
-  if ((entry.keywords || []).some(keyword => keyword.toLowerCase() === lower)) return 65
-  if (getSearchableText(entry).includes(lower)) return 40
+  if (!lower)
+    return 10
+  if (entry.value === query)
+    return 100
+  if (entry.title.toLowerCase().startsWith(lower))
+    return 80
+  if (entry.category.toLowerCase() === lower)
+    return 70
+  if ((entry.keywords || []).some(keyword => keyword.toLowerCase() === lower))
+    return 65
+  if (getSearchableText(entry).includes(lower))
+    return 40
   return 0
 }
 
@@ -257,7 +268,8 @@ const pluginLifecycle = {
       await plugin.feature.clearItems()
       await plugin.feature.pushItems(buildResultItems(featureId, query))
       return true
-    } catch {
+    }
+    catch {
       logger?.error?.('[touch-emoji-symbols] feature failed')
       try {
         await plugin.feature.clearItems()
@@ -270,7 +282,8 @@ const pluginLifecycle = {
           }),
         ])
         return true
-      } catch {
+      }
+      catch {
         logger?.error?.('[touch-emoji-symbols] fallback failed')
         return false
       }
@@ -279,13 +292,15 @@ const pluginLifecycle = {
 
   async onItemAction(item) {
     try {
-      if (item?.meta?.defaultAction !== COPY_ACTION_ID) return
+      if (item?.meta?.defaultAction !== COPY_ACTION_ID)
+        return
 
       const copyAction = Array.isArray(item.actions)
         ? item.actions.find(action => action.id === COPY_ACTION_ID || action.type === COPY_ACTION_ID)
         : null
       const output = typeof copyAction?.payload === 'string' ? copyAction.payload : copyAction?.payload?.text
-      if (typeof output !== 'string') return
+      if (typeof output !== 'string')
+        return
 
       if (typeof clipboard?.writeText !== 'function') {
         return {
@@ -299,14 +314,16 @@ const pluginLifecycle = {
 
       await clipboard.writeText(output)
       return { externalAction: true, status: 'started' }
-    } catch {
+    }
+    catch (error) {
       logger?.error?.('[touch-emoji-symbols] clipboard write failed')
+      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
       return {
         externalAction: true,
         success: false,
         status: 'blocked',
-        reason: 'clipboard-write-failed',
-        message: '复制失败',
+        reason: permissionDenied ? 'permission-denied' : 'clipboard-write-failed',
+        message: permissionDenied ? '缺少 clipboard.write 权限' : '复制失败',
       }
     }
   },
