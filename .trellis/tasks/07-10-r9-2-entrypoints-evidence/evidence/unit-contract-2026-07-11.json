@@ -1,0 +1,20 @@
+{
+  "schema": "tuff.context-entrypoint-unit-evidence.v1",
+  "capturedAt": "2026-07-12T04:44:35.000Z",
+  "source": "focused-vitest",
+  "buildVersion": "2.4.13-beta.4",
+  "runtimeVersion": "vitest-3.2.4",
+  "suiteCount": 8,
+  "testCount": 117,
+  "failedCount": 0,
+  "checks": {
+    "hostAssembler": true,
+    "ownerBoundary": true,
+    "workflowRunIsolation": true,
+    "omniPanelLightPolicy": true,
+    "assistantHistoryIsolation": true,
+    "oneShotQueryContext": true,
+    "evidencePrivacyVerifier": true,
+    "sdkAdapter": true
+  }
+}

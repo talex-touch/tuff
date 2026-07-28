@@ -1,0 +1,67 @@
+{
+  "schema": "tuff.context-entrypoint-omnipanel-packaged-evidence.v1",
+  "capturedAt": "2026-07-13T08:19:24.679Z",
+  "source": "packaged-electron",
+  "buildVersion": "2.4.13-beta.4",
+  "runtimeVersion": "electron-41.3.0",
+  "environment": {
+    "platform": "darwin-arm64",
+    "profile": "isolated-controlled",
+    "providerKind": "local-ollama-compatible",
+    "providerModel": "context-evidence-model"
+  },
+  "observations": {
+    "omniPanel": {
+      "entrypointId": "omni-panel.ai-action",
+      "featureId": "builtin.ai.explain",
+      "owner": "omni-panel",
+      "scope": "light",
+      "contextMode": "new",
+      "boundaryLabel": "new / light",
+      "contextActorType": "host",
+      "contextSource": "command",
+      "desktopContextKinds": [
+        "clipboard"
+      ],
+      "sessionCount": 1,
+      "distinctContextSessionCount": 1,
+      "packageLogCount": 1,
+      "packageSessionCount": 1,
+      "continuationMetadataCount": 0,
+      "packageItemCount": 1,
+      "packageItemSourceTypes": [
+        "current_input"
+      ],
+      "crossEntrypointHistoryItemCount": 0,
+      "turnsPerSessionMin": 2,
+      "turnsPerSessionMax": 2,
+      "userTurnCount": 1,
+      "assistantTurnCount": 1,
+      "tokenBudgetMin": 1600,
+      "tokenBudgetMax": 1600,
+      "tokenEstimateMin": 14,
+      "tokenEstimateMax": 14,
+      "providerCallCount": 1,
+      "providerCallsPerAction": 1,
+      "providerRequestEntryCountMin": 1,
+      "providerRequestEntryCountMax": 1,
+      "providerRoles": [
+        "user"
+      ],
+      "providerStream": false,
+      "provider": "local",
+      "model": "context-evidence-model",
+      "visibleExecution": true,
+      "visibleProvider": true,
+      "visibleResult": true,
+      "visibleStatus": "ready"
+    }
+  },
+  "privacy": {
+    "rawInteractionFieldsStored": 0,
+    "rawSecretFieldsStored": 0,
+    "rawPathFieldsStored": 0,
+    "packageItemRawFieldsStored": 0,
+    "providerRequestPayloadStored": false
+  }
+}
