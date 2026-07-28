@@ -48,7 +48,7 @@ defineExpose({ replayDemo })
       <TxBaseAnchor
         v-model="open"
         placement="bottom-start"
-        :offset="8"
+        :offset="16"
         :width="200"
         :panel-radius="14"
         :panel-padding="10"
@@ -106,7 +106,7 @@ defineExpose({ replayDemo })
 .base-anchor-drip-demo__stage {
   display: flex;
   justify-content: center;
-  padding: 24px 0 190px;
+  padding: 24px 0 200px;
 }
 
 /* The goo draws the silhouette underneath; the trigger only supplies its own

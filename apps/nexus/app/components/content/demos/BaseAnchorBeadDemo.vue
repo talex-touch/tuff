@@ -8,20 +8,20 @@ const labels = computed(() => {
   if (locale.value.startsWith('zh')) {
     return {
       title: 'Bead 张力收腰',
-      desc: '与 drip 同一套引擎与几何，唯一的区别是宽度：面板两侧被下落的速度拉细，最快的那一刻收得最紧，速度衰减到 0 时回到全宽。水滴报告的是自己的速度，而不是进度。',
+      desc: '与 drip 同一套引擎与几何，唯一的区别是宽度：面板两侧被运动的速度拉细，最快的那一刻收得最紧，速度衰减到 0 时回到全宽。水滴报告的是自己的速度，而不是进度。',
       trigger: '选择工作区',
       items: ['个人空间', '团队协作', '归档项目', '新建工作区'],
-      note: '收腰量由 |dp/dt| 驱动：线性匀速读作 1.0，达到 beadVelocityRef（默认 4）时收到最紧（每侧 beadPinch，默认 14px）。因为打开曲线只会减速，收腰必然单调衰减到 0。',
+      note: '水滴报告的是它两种运动里当前更快的那一个：顶边的下坠在 45% 处停死，身体的填充却一直涨到终点，所以收腰跨过断颈继续衰减，而不是在动画过半时弹回全宽。两条斜率都是 t 的解析解而非帧间差分 —— 首帧就报告真实的出发速度，不会弹跳，也不随刷新率变化。最深处每侧 beadPinch（默认 60px），此时菜单项被裁到水滴宽度，随颈部松开而显露。',
       replay: '重播',
     }
   }
 
   return {
     title: 'Bead',
-    desc: 'Same engine and geometry as drip; only the width differs. The sheet is drawn in by how fast it is falling — tightest at peak speed, back to full width once the motion settles. The drop reports its own speed rather than its progress.',
+    desc: 'Same engine and geometry as drip; only the width differs. The sheet is drawn in by how fast it is moving — tightest at peak speed, back to full width once the motion settles. The drop reports its own speed rather than its progress.',
     trigger: 'Select workspace',
     items: ['Personal space', 'Team collaboration', 'Archived projects', 'New workspace'],
-    note: 'The pinch is driven by |dp/dt|: a linear ramp reads as 1.0 and beadVelocityRef (default 4) squeezes it fully — beadPinch per side, 14px by default. Because the open curve only ever decelerates, the pinch decays monotonically to nothing.',
+    note: 'The drop reports whichever of its two motions is currently faster: the top edge stops dead at 45%, but the body keeps filling to the end, so the pinch decays across the neck snapping rather than springing back to full width halfway through. Both slopes are closed forms of t rather than differences between frames — the seed frame reports the speed the drop actually leaves at, so the pinch never pops and does not vary with the refresh rate. At its deepest it draws in beadPinch per side, 60px by default, and the rows are clipped to the sheet so the neck reveals them as it relaxes.',
     replay: 'Replay',
   }
 })
@@ -48,7 +48,7 @@ defineExpose({ replayDemo })
       <TxBaseAnchor
         v-model="open"
         placement="bottom-start"
-        :offset="8"
+        :offset="16"
         :width="200"
         :panel-radius="14"
         :panel-padding="10"
@@ -106,7 +106,7 @@ defineExpose({ replayDemo })
 .base-anchor-bead-demo__stage {
   display: flex;
   justify-content: center;
-  padding: 24px 0 190px;
+  padding: 24px 0 200px;
 }
 
 /* The goo draws the silhouette underneath; the trigger only supplies its own

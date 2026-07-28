@@ -206,11 +206,13 @@ Tag menu items with `data-liquid-item` to opt into per-item reveal: each item's 
 
 `animation.type='bead'` shares one engine, one geometry, and one timing table with `drip`. The only difference is **width**.
 
-`drip` keeps the sheet at a constant width. `bead` draws its sides in by how fast the **top edge is falling**, relaxing back to full width as that fall decays to nothing. The shape reports the drop's own **speed** rather than its progress.
+`drip` keeps the sheet at a constant width. `bead` draws its sides in by how fast it is **moving**, relaxing back to full width as that motion decays to nothing. The shape reports the drop's own **speed** rather than its progress.
 
-The speed is measured on the peel, not on `p`. `p` advances linearly, so its derivative is a constant and carries no speed at all — reading it would pin the pinch open forever. The peel runs ease-out-quad and decelerates to a dead stop at the detach, which is exactly the fall the bead is reporting, so the pinch decays monotonically to zero with no separate decay term.
+The speed is not measured on `p`. `p` advances linearly, so its derivative is a constant and carries no speed at all — reading it would pin the pinch open forever. The drop has two motions and reports whichever is currently faster: the **peel** runs ease-out-quad and decelerates to a dead stop at the detach, while the **fill** runs ease-out-cubic and is still growing at the very end. Reading the peel alone cut the pinch off at 45% of the timeline — the silhouette sprang back to full width while the panel was still visibly filling. A sheet is under tension for as long as either end of it is still moving.
 
-It is normalised against elapsed timeline fraction, so the pinch is identical at any duration or refresh rate, and applied symmetrically about the sheet's own centre line, so the bead necks instead of sliding sideways.
+Both slopes are **closed forms** of `t` rather than differences between frames. Differencing has no sample before `t = 0` and falls back to zero, so the seed frame reported a standing start the drop never has and the silhouette teleported from full width to full pinch. A closed form has a value at `t = 0` like it has one anywhere else, so the pinch never pops and does not vary with the refresh rate — 60Hz and 120Hz derive the same pinch for the same `t`.
+
+The pinch is applied symmetrically about the sheet's own centre line, so the bead necks instead of sliding sideways. Because it can draw in past the panel's own padding, the rows are clipped to the sheet with `clip-path` and are revealed as the neck relaxes — rather than faded, which can only make an overhang faint instead of impossible.
 
 ### Bead
 :::TuffDemoWrapper{demo="BaseAnchorBeadDemo" code-lang="vue"}
@@ -230,7 +232,7 @@ code: |
       :offset="8"
       :width="200"
       :panel-radius="14"
-      :animation="{ type: 'bead', beadPinch: 14 }"
+      :animation="{ type: 'bead', beadPinch: 60 }"
     >
       <template #reference>
         <button style="width: 200px; height: 40px; border: none; border-radius: 11px;">
@@ -248,7 +250,7 @@ code: |
 ---
 :::
 
-`beadPinch` sets the peak draw-in per side (px, default 14) and `beadVelocityRef` sets what counts as "fastest" (default 4). The pinch can never close the sheet to zero width — a zero-width rect drops out of the Gaussian field entirely and the neck would snap early.
+`beadPinch` sets the peak draw-in per side (px, default 60 — a 200px panel necks to 80px) and `beadVelocityRef` sets what counts as "fastest" (default 4). The pinch can never close the sheet to zero width — a zero-width rect drops out of the Gaussian field entirely and the neck would snap early.
 
 ## Custom Animation
 
@@ -353,8 +355,8 @@ code: |
 | `triggerRadius` | `number` | measured | `drip` / `bead` only. Corner radius of the trigger ghost; read from the reference when omitted. |
 | `seedHeight` | `number` | `12` | `drip` / `bead` only. Panel height at p=0 — the seed the drop is torn from. |
 | `itemSelector` | `string` | `'[data-liquid-item]'` | `drip` / `bead` only. Items faded in against the panel's own growth. |
-| `beadPinch` | `number` | `14` | `bead` only. Peak draw-in per side (px). Reports the drop's velocity, so it decays to 0 as the motion settles. |
-| `beadVelocityRef` | `number` | `4` | `bead` only. Speed at which the pinch saturates, measured on the falling edge per unit of normalised time. |
+| `beadPinch` | `number` | `60` | `bead` only. Peak draw-in per side (px). Reports the drop's velocity, so it decays to 0 as the motion settles. Where it draws in past the panel padding the rows are clipped to the sheet. |
+| `beadVelocityRef` | `number` | `4` | `bead` only. Speed at which the pinch saturates — the larger of the peel and fill slopes, per unit of normalised time. |
 
 When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`, `closeDuration` is `150` (markedly faster, and on its own curve rather than the open reversed), `ease` is `linear` and `closeEase` is `cubic-bezier(0.25, 0.46, 0.45, 0.94)`.
 
