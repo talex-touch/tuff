@@ -1,7 +1,7 @@
 ---
 title: "BaseAnchor"
 description: "Floating UI + GSAP anchored popover with configurable animation modes."
-category: Feedback
+category: Primitives
 status: beta
 since: 2.5.0
 tags: [popover, overlay, floating, gsap, animation]
@@ -156,6 +156,98 @@ code: |
 ---
 :::
 
+## Drip
+
+`animation.type='drip'` opens the menu like a drop of liquid falling out of its own trigger. The trigger **body** and the panel live inside one SVG goo filter (`feGaussianBlur` plus a hard alpha threshold via `feColorMatrix`), so they start out completely merged; as the panel's top edge falls, the neck between them thins, pinches, and finally snaps.
+
+The neck is not drawn geometry — it is what is left when the Gaussian field drops below the threshold, which is exactly why both shapes have to share one filter. The grey outline is likewise never drawn on either element: it is derived from the **merged silhouette** by eroding the thresholded shape 1px and flooding the difference, so one continuous ring wraps the trigger, stretches down the neck, and closes around the panel. The shadow rides a twin **outside** the filter, because a box-shadow fed through the goo would threshold into a hard black slab.
+
+The panel is described by its **two falling edges**, not as a box that grows: the top edge peels from the trigger's mid-line to its final position and stops, while the height keeps filling through the detach and past it. At the moment the neck snaps the panel is already about **83%** of its body and still filling.
+
+### Liquid drop
+:::TuffDemoWrapper{demo="BaseAnchorDripDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const items = ['Personal space', 'Team collaboration', 'Archived projects', 'New workspace']
+  </script>
+
+  <template>
+    <TxBaseAnchor
+      v-model="open"
+      placement="bottom-start"
+      :offset="8"
+      :width="200"
+      :panel-radius="14"
+      :animation="{ type: 'drip' }"
+    >
+      <template #reference>
+        <button style="width: 200px; height: 40px; border: none; border-radius: 11px;">
+          Select workspace
+        </button>
+      </template>
+
+      <div style="display: grid; gap: 2px;">
+        <button v-for="item in items" :key="item" data-liquid-item style="height: 30px;">
+          {{ item }}
+        </button>
+      </div>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+Tag menu items with `data-liquid-item` to opt into per-item reveal: each item's opacity is keyed to the panel's current height, so an item can never appear before the panel has grown to hold it. Without the attribute the whole panel body reveals as a single unit — still keyed to growth rather than to the clock.
+
+## Bead
+
+`animation.type='bead'` shares one engine, one geometry, and one timing table with `drip`. The only difference is **width**.
+
+`drip` keeps the sheet at a constant width. `bead` draws its sides in by how fast the drop is **falling**: the larger `|dp/dt|`, the tighter the pinch, relaxing back to full width as the speed decays to nothing. The shape reports the drop's own **speed** rather than its progress.
+
+Velocity is normalised against elapsed timeline fraction — a linear ramp reads exactly `1.0` — so the pinch is identical at any duration or refresh rate. It is applied symmetrically about the sheet's own centre line, so the bead necks instead of sliding sideways. And because the open curve only ever decelerates, the pinch decays monotonically to zero without needing a separate decay term.
+
+### Bead
+:::TuffDemoWrapper{demo="BaseAnchorBeadDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const open = ref(false)
+  const items = ['Personal space', 'Team collaboration', 'Archived projects', 'New workspace']
+  </script>
+
+  <template>
+    <TxBaseAnchor
+      v-model="open"
+      placement="bottom-start"
+      :offset="8"
+      :width="200"
+      :panel-radius="14"
+      :animation="{ type: 'bead', beadPinch: 14 }"
+    >
+      <template #reference>
+        <button style="width: 200px; height: 40px; border: none; border-radius: 11px;">
+          Select workspace
+        </button>
+      </template>
+
+      <div style="display: grid; gap: 2px;">
+        <button v-for="item in items" :key="item" data-liquid-item style="height: 30px;">
+          {{ item }}
+        </button>
+      </div>
+    </TxBaseAnchor>
+  </template>
+---
+:::
+
+`beadPinch` sets the peak draw-in per side (px, default 14) and `beadVelocityRef` sets what counts as "fastest" (default 4). The pinch can never close the sheet to zero width — a zero-width rect drops out of the Gaussian field entirely and the neck would snap early.
+
 ## Custom Animation
 
 Prefer the `animation` object for type, duration, and GSAP easing. `duration` / `ease` remain as compatibility fallbacks.
@@ -243,7 +335,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `type` | `'transfer' \| 'boom' \| 'opacity' \| 'none'` | `'transfer'` | Animation type. |
+| `type` | `'transfer' \| 'boom' \| 'opacity' \| 'none' \| 'drip' \| 'bead'` | `'transfer'` | Animation type. `drip` and `bead` share one engine and bring their own timing table, ignoring the legacy `duration` / `ease` props. |
 | `duration` | `number` | `432` | Enter duration in ms. |
 | `closeDuration` | `number` | `duration * 0.45` | Leave duration in ms. |
 | `ease` | `string` | `'back.out(2)'` | GSAP ease string for enter motion. |
@@ -252,6 +344,17 @@ code: |
 | `scale` | `number` | `1.08` | Boom enter initial / leave target scale. |
 | `blur` | `number` | `12` | Boom enter initial / leave target blur radius in px. |
 | `opacity` | `number` | `0` | Boom / opacity enter initial and leave target opacity. |
+| `gooBlur` | `number` | `4.5` | `drip` / `bead` only. Goo `feGaussianBlur` stdDeviation. With `gooThreshold` this decides how wide a gap the neck survives. |
+| `gooThreshold` | `number` | `20` | `drip` / `bead` only. Alpha slope of the threshold colour matrix. |
+| `gooThresholdOffset` | `number` | `-9` | `drip` / `bead` only. Alpha offset of the threshold colour matrix. |
+| `outlineColor` | `string` | `--tx-border-color` | `drip` / `bead` only. Colour flooded into the ring derived from the merged silhouette. Resolved from the token so dark mode follows. |
+| `triggerRadius` | `number` | measured | `drip` / `bead` only. Corner radius of the trigger ghost; read from the reference when omitted. |
+| `seedHeight` | `number` | `12` | `drip` / `bead` only. Panel height at p=0 — the seed the drop is torn from. |
+| `itemSelector` | `string` | `'[data-liquid-item]'` | `drip` / `bead` only. Items faded in against the panel's own growth. |
+| `beadPinch` | `number` | `14` | `bead` only. Peak draw-in per side (px). Reports the drop's velocity, so it decays to 0 as the motion settles. |
+| `beadVelocityRef` | `number` | `4` | `bead` only. Speed at which the pinch saturates, in `p` per unit of normalised time — a linear ramp is `1.0`. |
+
+When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`, `closeDuration` is `150` (markedly faster, and on its own curve rather than the open reversed), `ease` is `cubic-bezier(0.23, 1, 0.32, 1)` and `closeEase` is `cubic-bezier(0.25, 0.46, 0.45, 0.94)`. Both are CSS cubic-beziers, not GSAP ease strings — a GSAP string or any spring formulation falls back to the built-in curve.
 
 ### Events
 
@@ -288,6 +391,12 @@ code: |
 - `surfaceMotionAdaptation` is an active hard-cut strategy: `auto` uses anchor motion state, `manual` forwards `panelCard.surfaceMoving`, and `off` forces `surfaceMoving=false`.
 - Prefer `animation` for new motion config. `duration` / `ease` are only compatibility fallbacks merged into animation defaults.
 - `eager` mounts before first open; `keepAliveContent` preserves content after close. Use them for measured/stateful panels, not static copy.
+- `drip` / `bead` is defined on the vertical axis only. A `left*` / `right*` placement — including one produced by `flip` — degrades to the opacity path, keeping the same timings.
+- `drip` / `bead` paints its own opaque surface through the goo filter, so `TxCard` is not rendered and `panelBackground` / `panelShadow` / `panelVariant` do not apply. The four non-`pure` backgrounds all rely on `backdrop-filter`, which does not survive inside an SVG filter and would threshold into hard edges.
+- `drip` / `bead` suppresses `showArrow`: an arrow contradicts the neck. It also replaces the rounded-rect outline with the ring derived from the merged silhouette, so there is never a double border.
+- `drip` / `bead` punches the trigger's interior out of the goo fill so the trigger's own fill and text always show through, whatever the page's stacking contexts are. The outline `use` is left unmasked, so the derived ring still wraps the trigger. Because of this the trigger must supply its own opaque background — a transparent trigger will show the page through the punched hole.
+- `drip` / `bead` needs a measurable panel height; `unlimitedHeight` (or `maxHeight <= 0`) falls back to the instant show/hide path.
+- Under `prefers-reduced-motion: reduce`, `liquid` snaps to its end state instead of animating.
 
 ## Best Practices
 
@@ -301,6 +410,9 @@ code: |
 - Reviewed against `packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue`, `base-anchor-motion.ts`, `types.ts`, and `base-anchor.test.ts`.
 - Existing tests cover uncontrolled toggling, controlled outside/Escape close paths, disabled blocking, close/toggle switches, floating attrs and reference classes, animation variants with legacy duration/ease fallbacks, and surface-motion adaptation strategies.
 - Accessibility note: `TxBaseAnchor` is positioning infrastructure only. The built primitive must provide menu/dialog/listbox roles, focus handling, and keyboard traversal appropriate to its content.
+- `drip` / `bead` coverage lives in `base-anchor-liquid.test.ts` (cubic-bezier solver, spring rejection, spec geometry at p=0 / 0.45 / 1, height-edge independence, item reveal) and in `base-anchor.test.ts` (single merged goo filter, erode-derived outline ring, shadow twin outside the filter, arrow/outline/card suppression, horizontal degradation, no gsap path).
+- `drip` / `bead` is driven by a rAF loop rather than GSAP: the motion is specified as two CSS cubic-beziers, and every frame derives SVG geometry, the shadow twin, and per-item opacity from one progress scalar.
+- Browser support: `liquid` uses `filter: url(#…)`, which Safari and Firefox both support. Only `backdrop-filter: url(#…)` is restricted, and `liquid` does not use it — no fallback ladder is needed.
 
 ## Source
 

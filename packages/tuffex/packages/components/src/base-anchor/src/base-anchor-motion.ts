@@ -2,15 +2,25 @@ import type { ComputedRef, Ref } from 'vue'
 import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType } from './types'
 import { computed } from 'vue'
 import { hasWindow } from '../../../../utils/env'
+import { clamp01, LIQUID_DEFAULTS, normalizedVelocity, resolveLiquidEase } from './base-anchor-liquid'
 
 type BaseAnchorSide = 'top' | 'bottom' | 'left' | 'right'
 
-type GsapTimeline = {
+/**
+ * `outlineColor` and `triggerRadius` stay optional after resolution: an unset
+ * outline colour means "read the border token", an unset radius means "measure
+ * the reference". Both are resolved against the DOM, which this module cannot see.
+ */
+export type ResolvedBaseAnchorAnimation
+  = Required<Omit<BaseAnchorAnimationOptions, 'outlineColor' | 'triggerRadius'>>
+    & { outlineColor?: string, triggerRadius?: number }
+
+interface GsapTimeline {
   to: (target: unknown, vars: Record<string, unknown>, position?: number) => GsapTimeline
   kill: () => void
 }
 
-type GsapRuntime = {
+interface GsapRuntime {
   set: (target: unknown, vars: Record<string, unknown>) => void
   timeline: (options?: { onComplete?: () => void }) => GsapTimeline
 }
@@ -34,9 +44,33 @@ interface BaseAnchorMotionOptions {
   setMounted: (value: boolean) => void
   setPanelSurfaceMoving: (value: boolean) => void
   pulsePanelSurfaceMoving: (duration?: number) => void
+
+  /**
+   * Measure the liquid stage and show it. Returning false means the drop cannot
+   * be animated here (no layout, reduced motion, missing nodes) and the caller
+   * should snap to the end state instead.
+   */
+  prepareLiquid: (direction: 'open' | 'close') => boolean
+  /**
+   * Write one frame of goo geometry for progress `p` (0 closed, 1 open).
+   * `velocity` is |dp| per unit of normalised time — 1.0 is a linear ramp —
+   * and drives the `bead` pinch.
+   */
+  applyLiquidFrame: (p: number, velocity?: number) => void
+  /** Clear per-item inline opacity; hide the stage when the anchor ends up closed. */
+  settleLiquid: (open: boolean) => void
 }
 
-const DEFAULT_ANIMATION: Required<BaseAnchorAnimationOptions> = {
+/** `drip` and `bead` share one engine; only the sheet's width behaviour differs. */
+export function isLiquidType(type: BaseAnchorAnimationType): boolean {
+  return type === 'drip' || type === 'bead'
+}
+
+/** Shared defaults for the gsap-driven types. liquid brings its own table (LIQUID_DEFAULTS). */
+const DEFAULT_ANIMATION: Required<Pick<
+  BaseAnchorAnimationOptions,
+  'type' | 'duration' | 'closeDuration' | 'ease' | 'closeEase' | 'distance' | 'scale' | 'blur' | 'opacity'
+>> = {
   type: 'transfer',
   duration: 432,
   closeDuration: 194.4,
@@ -66,27 +100,68 @@ function loadGsap() {
 export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
   let tl: GsapTimeline | null = null
   let closePrepareTimer: ReturnType<typeof setTimeout> | null = null
+  let liquidFrame: number | null = null
 
-  const resolvedAnimation = computed<Required<BaseAnchorAnimationOptions>>(() => {
+  const resolvedAnimation = computed<ResolvedBaseAnchorAnimation>(() => {
     const animation = options.animation.value ?? {}
-    const duration = Math.max(0, animation.duration ?? options.duration.value ?? DEFAULT_ANIMATION.duration)
-    const closeDuration = Math.max(0, animation.closeDuration ?? duration * LEGACY_CLOSE_DURATION_RATIO)
     const type = animation.type ?? DEFAULT_ANIMATION.type
+    // The legacy `duration` / `ease` props carry transfer-era defaults (432ms,
+    // back.out(2)) and are never undefined, so liquid has to bypass them entirely
+    // or it would inherit a timing spec it explicitly rejects.
+    const isLiquid = isLiquidType(type)
+
+    const duration = isLiquid
+      ? Math.max(0, animation.duration ?? LIQUID_DEFAULTS.duration)
+      : Math.max(0, animation.duration ?? options.duration.value ?? DEFAULT_ANIMATION.duration)
+    const closeDuration = isLiquid
+      ? Math.max(0, animation.closeDuration ?? LIQUID_DEFAULTS.closeDuration)
+      : Math.max(0, animation.closeDuration ?? duration * LEGACY_CLOSE_DURATION_RATIO)
 
     return {
       type,
       duration,
       closeDuration,
-      ease: animation.ease ?? options.ease.value ?? DEFAULT_ANIMATION.ease,
-      closeEase: animation.closeEase ?? DEFAULT_ANIMATION.closeEase,
+      ease: isLiquid
+        ? (animation.ease ?? LIQUID_DEFAULTS.ease)
+        : (animation.ease ?? options.ease.value ?? DEFAULT_ANIMATION.ease),
+      closeEase: isLiquid
+        ? (animation.closeEase ?? LIQUID_DEFAULTS.closeEase)
+        : (animation.closeEase ?? DEFAULT_ANIMATION.closeEase),
       distance: Math.max(0, animation.distance ?? DEFAULT_ANIMATION.distance),
       scale: Math.max(0.01, animation.scale ?? DEFAULT_ANIMATION.scale),
       blur: Math.max(0, animation.blur ?? DEFAULT_ANIMATION.blur),
       opacity: Math.min(1, Math.max(0, animation.opacity ?? DEFAULT_ANIMATION.opacity)),
+      gooBlur: Math.max(0.01, animation.gooBlur ?? LIQUID_DEFAULTS.gooBlur),
+      gooThreshold: animation.gooThreshold ?? LIQUID_DEFAULTS.gooThreshold,
+      gooThresholdOffset: animation.gooThresholdOffset ?? LIQUID_DEFAULTS.gooThresholdOffset,
+      seedHeight: Math.max(0, animation.seedHeight ?? LIQUID_DEFAULTS.seedHeight),
+      beadPinch: Math.max(0, animation.beadPinch ?? LIQUID_DEFAULTS.beadPinch),
+      beadVelocityRef: Math.max(0.01, animation.beadVelocityRef ?? LIQUID_DEFAULTS.beadVelocityRef),
+      itemSelector: animation.itemSelector || LIQUID_DEFAULTS.itemSelector,
+      outlineColor: animation.outlineColor,
+      triggerRadius: animation.triggerRadius,
     }
   })
 
   const animationType = computed<BaseAnchorAnimationType>(() => resolvedAnimation.value.type)
+
+  /**
+   * A drop falls. The liquid motion is only defined on the vertical axis, so a
+   * left/right placement degrades to the opacity path rather than rendering a
+   * neck that would have to pinch sideways.
+   */
+  const effectiveAnimationType = computed<BaseAnchorAnimationType>(() => {
+    if (!isLiquidType(animationType.value))
+      return animationType.value
+    const side = options.side.value
+    return side === 'top' || side === 'bottom' ? animationType.value : 'opacity'
+  })
+
+  const usesLiquidMotion = computed(() => isLiquidType(effectiveAnimationType.value))
+  const usesBeadMotion = computed(() => effectiveAnimationType.value === 'bead')
+  const isLiquidFallback = computed(
+    () => isLiquidType(animationType.value) && !isLiquidType(effectiveAnimationType.value),
+  )
   const usesTransferMotion = computed(() => animationType.value === 'transfer')
 
   const bouncePad = computed(() => {
@@ -168,11 +243,20 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     arrowEl.style.willChange = 'auto'
   }
 
+  function stopLiquidLoop() {
+    if (liquidFrame == null)
+      return
+    if (hasWindow())
+      window.cancelAnimationFrame(liquidFrame)
+    liquidFrame = null
+  }
+
   function clearTimeline() {
     if (closePrepareTimer != null) {
       clearTimeout(closePrepareTimer)
       closePrepareTimer = null
     }
+    stopLiquidLoop()
     if (tl) {
       tl.kill()
       tl = null
@@ -180,7 +264,87 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
   }
 
   function shouldAdaptSurfaceFor(type: BaseAnchorAnimationType) {
+    // liquid already renders on an opaque `pure` surface — there is no
+    // backdrop-filter left to degrade.
     return type === 'transfer' || type === 'boom'
+  }
+
+  /**
+   * Drive the liquid drop off a single progress scalar.
+   *
+   * This deliberately does not go through GSAP: the motion is specified as two
+   * CSS cubic-bezier curves (GSAP core has no equivalent) and every frame has to
+   * derive SVG geometry, the shadow twin, and per-item opacity from `p` rather
+   * than tween properties. Owning the scalar also makes a spring structurally
+   * impossible.
+   */
+  function runLiquid(currentRunId: number, direction: 'open' | 'close') {
+    const isOpening = direction === 'open'
+    const animation = resolvedAnimation.value
+    const durMs = isOpening ? animation.duration : animation.closeDuration
+    const endP = isOpening ? 1 : 0
+
+    const finish = () => {
+      options.settleLiquid(isOpening)
+      if (isOpening)
+        finishOpen(currentRunId)
+      else
+        finishClose(currentRunId)
+    }
+
+    stopLiquidLoop()
+
+    const ready = options.prepareLiquid(direction)
+    if (!ready || durMs <= 0 || !hasWindow()) {
+      options.applyLiquidFrame(endP)
+      finish()
+      return
+    }
+
+    const ease = isOpening
+      ? resolveLiquidEase(animation.ease, LIQUID_DEFAULTS.ease)
+      : resolveLiquidEase(animation.closeEase, LIQUID_DEFAULTS.closeEase)
+
+    const startedAt = performance.now()
+    let previousP = isOpening ? 0 : 1
+    let previousT = 0
+    let liquidVelocity = 0
+    options.applyLiquidFrame(previousP, 0)
+
+    const step = () => {
+      liquidFrame = null
+      if (!options.isCurrentRun(currentRunId))
+        return
+
+      const t = clamp01((performance.now() - startedAt) / durMs)
+      // Closing runs its own shorter ease-out curve consumed in reverse position,
+      // never the open curve played backwards.
+      const eased = ease(t)
+      const p = isOpening ? eased : 1 - eased
+
+      // Normalised against elapsed *timeline fraction*, so the pinch is identical
+      // at any duration or refresh rate. Two frames can land inside one clock
+      // tick; carrying the last reading keeps that from flashing the sheet back
+      // to full width for a frame.
+      const dt = t - previousT
+      if (dt > 0) {
+        liquidVelocity = normalizedVelocity(p - previousP, dt)
+        previousP = p
+        previousT = t
+      }
+
+      const settled = t >= 1
+      // The motion has stopped, so the drop is no longer reporting any speed.
+      options.applyLiquidFrame(p, settled ? 0 : liquidVelocity)
+
+      if (settled) {
+        finish()
+        return
+      }
+      liquidFrame = window.requestAnimationFrame(step)
+    }
+
+    liquidFrame = window.requestAnimationFrame(step)
   }
 
   function settleOpenVisualStateForFollow() {
@@ -192,6 +356,14 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     clearTimeline()
     if (options.panelBackground.value !== 'refraction')
       options.pulsePanelSurfaceMoving(120)
+
+    if (usesLiquidMotion.value) {
+      // clearTimeline killed the frame loop; land the drop on its open state
+      // rather than leaving the silhouette frozen mid-fall.
+      options.prepareLiquid('open')
+      options.applyLiquidFrame(1)
+      options.settleLiquid(true)
+    }
 
     resetClipElement(true, 'visible')
     resetContentElement()
@@ -309,7 +481,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     clearTimeline()
 
     const animation = resolvedAnimation.value
-    const type = animation.type
+    const type = effectiveAnimationType.value
     const durMs = animation.duration
     options.setPanelSurfaceMoving(shouldAdaptSurfaceFor(type))
 
@@ -318,11 +490,24 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       return
     }
 
+    if (isLiquidType(type)) {
+      clip.style.visibility = 'visible'
+      // The goo blur has to bleed past the panel box; clipping it would cut the
+      // neck off square.
+      clip.style.overflow = 'visible'
+      clip.style.clipPath = 'none'
+      runLiquid(currentRunId, 'open')
+      return
+    }
+
     const gsap = await loadGsap()
     if (!options.isCurrentRun(currentRunId))
       return
 
     const dur = durMs / 1000
+    // A liquid config that degraded to the opacity path still carries CSS
+    // cubic-bezier strings, which GSAP cannot parse.
+    const openEase = isLiquidFallback.value ? 'power2.out' : animation.ease
     clip.style.visibility = 'visible'
     clip.style.overflow = type === 'transfer' ? 'hidden' : 'visible'
     clip.style.clipPath = type === 'transfer' ? getClipPath(0) : 'none'
@@ -352,7 +537,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         x: 0,
         y: 0,
         duration: dur,
-        ease: animation.ease,
+        ease: openEase,
       }, 0)
     }
     else if (type === 'boom') {
@@ -368,7 +553,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         opacity: 1,
         filter: 'blur(0px)',
         duration: dur,
-        ease: animation.ease,
+        ease: openEase,
       }, 0)
     }
     else if (type === 'opacity') {
@@ -377,7 +562,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       tl.to(content, {
         opacity: 1,
         duration: dur,
-        ease: animation.ease,
+        ease: openEase,
       }, 0)
     }
 
@@ -406,12 +591,20 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     clearTimeline()
 
     const animation = resolvedAnimation.value
-    const type = animation.type
+    const type = effectiveAnimationType.value
     const durMs = animation.closeDuration
     options.setPanelSurfaceMoving(shouldAdaptSurfaceFor(type))
 
     if (durMs <= 0 || type === 'none') {
       finishClose(currentRunId)
+      return
+    }
+
+    if (isLiquidType(type)) {
+      clip.style.visibility = 'visible'
+      clip.style.overflow = 'visible'
+      clip.style.clipPath = 'none'
+      runLiquid(currentRunId, 'close')
       return
     }
 
@@ -424,6 +617,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         return
 
       const dur = durMs / 1000
+      const resolvedCloseEase = isLiquidFallback.value ? 'power2.in' : animation.closeEase
       clip.style.visibility = 'visible'
       clip.style.overflow = type === 'transfer' ? 'hidden' : 'visible'
       clip.style.clipPath = type === 'transfer' ? getClipPath(1) : 'none'
@@ -444,13 +638,13 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
           x: hiddenT.x,
           y: hiddenT.y,
           duration: dur,
-          ease: animation.closeEase,
+          ease: resolvedCloseEase,
         }, motionStart)
 
         tl.to(clipState, {
           progress: 0,
           duration: dur,
-          ease: animation.closeEase,
+          ease: resolvedCloseEase,
           onUpdate() {
             clip.style.clipPath = getClipPath(clipState.progress)
           },
@@ -464,7 +658,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
           opacity: animation.opacity,
           filter: `blur(${animation.blur}px)`,
           duration: dur,
-          ease: animation.closeEase,
+          ease: resolvedCloseEase,
         }, motionStart)
       }
       else if (type === 'opacity') {
@@ -472,7 +666,7 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         tl.to(content, {
           opacity: animation.opacity,
           duration: dur,
-          ease: animation.closeEase,
+          ease: resolvedCloseEase,
         }, motionStart)
       }
     }
@@ -493,7 +687,11 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     animateOpen,
     bouncePad,
     clearTimeline,
-    hasActiveTimeline: () => tl !== null,
+    effectiveAnimationType,
+    hasActiveTimeline: () => tl !== null || liquidFrame !== null,
+    resolvedAnimation,
     settleOpenVisualStateForFollow,
+    usesBeadMotion,
+    usesLiquidMotion,
   }
 }
