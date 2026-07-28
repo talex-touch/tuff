@@ -1,7 +1,7 @@
 ---
 title: "OutlineBorder"
 description: "Border and ring wrapper with optional clipping for avatars, thumbnails, badges, and custom slot content."
-category: Basic
+category: Effects
 tags: [border, ring, clip, mask]
 syncStatus: reviewed
 verified: true

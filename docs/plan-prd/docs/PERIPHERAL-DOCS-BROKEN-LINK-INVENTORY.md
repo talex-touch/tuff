@@ -751,21 +751,21 @@ packages/tuffex/CONTRIBUTING.md	380	86	link	CODE_OF_CONDUCT.md	packages/tuffex/C
 
 ## After verification
 
-- Tracked Markdown/MDC documents: 1055
-- In-scope source documents: 584
-- Inspected relative links/images: 839
+- Tracked Markdown/MDC documents: 1121
+- In-scope source documents: 586
+- Inspected relative links/images: 841
 - Skipped external/absolute/fragment/query-only links: 106
 - Broken in-scope targets: 0
 - Repository-escape targets: 0
-- Newly selected relative URLs: 670
-- Unique newly selected Git-tracked file targets: 423
+- Newly selected relative URLs: 674
+- Unique newly selected Git-tracked file targets: 427
 - Newly selected directory aliases: 0
 - Default `markdownlint-cli` passed for the nine fully rewritten/new core
   documents, including this inventory.
-- For 65 mechanically touched legacy documents, a HEAD baseline comparison
-  moved from 3153 to 3147 unique file/line/rule diagnostics, with zero added and
-  six removed. Existing unrelated MDC parser/style debt was not expanded into
-  this repair.
+- For 66 mechanically touched legacy documents, a latest stacked-base
+  comparison moved from 3171 to 3165 unique file/line/rule diagnostics, with
+  zero added and six removed. Existing unrelated MDC parser/style debt was not
+  expanded into this repair.
 - `git diff --check`, `git diff --cached --check`, and the stacked branch-range
   check passed; excluded sibling/concurrent paths had no diff.
 

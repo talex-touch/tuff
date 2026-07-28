@@ -3,6 +3,7 @@
  */
 import type { TuffEvent } from '@talex-touch/utils/transport'
 import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { CAPABILITY_AUTH_MIN_VERSION } from '@talex-touch/utils/plugin'
 import { getPermissionModule } from './index'
 
@@ -96,7 +97,7 @@ export function withPermission<TReq = unknown, TRes = unknown>(
 
   return async (payload: TReq, context: HandlerContext) => {
     const pluginId = context.plugin?.name
-    if (requireVerifiedPlugin && (!pluginId || context.plugin?.verified !== true)) {
+    if (requireVerifiedPlugin && !isAuthoritativePluginContext(context.plugin)) {
       throw createSerializablePermissionError(
         `Verified plugin context is required for '${permissionId}'`,
         deniedCode ?? 'PERMISSION_DENIED',

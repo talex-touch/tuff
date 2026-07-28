@@ -4,6 +4,7 @@ import type {
   TuffEvent
 } from '@talex-touch/utils/transport/main'
 import { AppEvents } from '@talex-touch/utils/transport/events'
+import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { setPermissionModule } from '../modules/permission'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,6 +12,15 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   checkPermission: vi.fn(),
   getPluginByName: vi.fn()
+}))
+
+vi.mock('electron', () => ({
+  ipcMain: { handle: vi.fn() },
+  MessageChannelMain: class {},
+  BrowserWindow: {
+    getFocusedWindow: vi.fn(() => null),
+    getAllWindows: vi.fn(() => [])
+  }
 }))
 
 vi.mock('../modules/plugin/plugin-module', () => ({
@@ -32,7 +42,11 @@ import { registerSystemSelectionCaptureHandlers } from './system-selection-captu
 type RegisteredHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
 
 const verifiedPluginContext = {
-  plugin: { name: 'selection-plugin', verified: true, uniqueKey: 'selection-plugin-key' }
+  plugin: createTrustedTestPluginContext({
+    name: 'selection-plugin',
+    pluginInstanceId: 'selection-plugin-instance',
+    uniqueKey: 'selection-plugin-key'
+  })
 } as HandlerContext
 
 function createTransport() {

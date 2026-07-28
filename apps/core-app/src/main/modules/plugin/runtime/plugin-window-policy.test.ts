@@ -2,10 +2,11 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPluginViewNavigationPolicy,
   executePluginWindowCommand,
+  installPluginViewNavigationPolicy,
   isPluginViewNavigationAllowed,
   isPluginViewResourceAllowed,
   normalizePluginWindowCommand,
@@ -160,9 +161,7 @@ describe('plugin window policy', () => {
     const entry = await fs.realpath(path.join(root, 'index.html'))
     const policy = await createPluginViewNavigationPolicy({
       pluginRoot: root,
-      targetUrl: pathToFileURL(entry).href,
-      securityProfile: 'trusted-plugin-view',
-      allowLegacyWebview: false
+      targetUrl: pathToFileURL(entry).href
     })
 
     expect(isPluginViewNavigationAllowed(policy, `${policy.entryUrl}#route`)).toBe(true)
@@ -180,12 +179,10 @@ describe('plugin window policy', () => {
     const policy = await createPluginViewNavigationPolicy({
       pluginRoot: root,
       targetUrl: 'http://127.0.0.1:5173/view',
-      securityProfile: 'trusted-plugin-view',
       devAddress: 'http://127.0.0.1:5173/',
       appIsPackaged: false,
       pluginDevEnabled: true,
-      pluginDevSource: true,
-      allowLegacyWebview: false
+      pluginDevSource: true
     })
 
     expect(isPluginViewNavigationAllowed(policy, 'http://127.0.0.1:5173/other')).toBe(true)
@@ -194,19 +191,94 @@ describe('plugin window policy', () => {
     expect(isPluginViewResourceAllowed(policy, 'https://example.test/app.js')).toBe(false)
   })
 
-  it('keeps compatibility views local-only even in plugin development mode', async () => {
+  it('rejects custom protocols and binds session requests to the owner WebContents', async () => {
+    const root = await createPluginRoot()
+    const entry = await fs.realpath(path.join(root, 'index.html'))
+    const assetPath = path.join(root, 'asset.js')
+    await fs.writeFile(assetPath, 'export {}')
+    const policy = await createPluginViewNavigationPolicy({
+      pluginRoot: root,
+      targetUrl: pathToFileURL(entry).href
+    })
+
+    for (const target of [
+      'atom:///tmp/secret',
+      'tfile:///tmp/secret',
+      'javascript:alert(1)',
+      'https://example.test/resource'
+    ]) {
+      expect(isPluginViewResourceAllowed(policy, target)).toBe(false)
+    }
+
+    const listeners = new Map<string, (...args: any[]) => void>()
+    const sessionListeners = new Map<string, (...args: any[]) => void>()
+    let beforeRequest:
+      | ((
+          details: { url: string; webContentsId?: number },
+          callback: (result: { cancel: boolean }) => void
+        ) => void)
+      | undefined
+    const webContents = {
+      id: 42,
+      on: vi.fn((event: string, handler: (...args: any[]) => void) =>
+        listeners.set(event, handler)
+      ),
+      once: vi.fn((event: string, handler: (...args: any[]) => void) =>
+        listeners.set(event, handler)
+      ),
+      setWindowOpenHandler: vi.fn(),
+      session: {
+        on: vi.fn((event: string, handler: (...args: any[]) => void) =>
+          sessionListeners.set(event, handler)
+        ),
+        setPermissionCheckHandler: vi.fn(),
+        setPermissionRequestHandler: vi.fn(),
+        webRequest: {
+          onBeforeRequest: vi.fn((_filter: unknown, handler: typeof beforeRequest) => {
+            beforeRequest = handler
+          })
+        }
+      }
+    }
+
+    installPluginViewNavigationPolicy(webContents as never, policy)
+
+    const attachEvent = { preventDefault: vi.fn() }
+    listeners.get('will-attach-webview')?.(attachEvent, {}, { src: pathToFileURL(entry).href })
+    expect(attachEvent.preventDefault).toHaveBeenCalledOnce()
+
+    const frameEvent = { preventDefault: vi.fn() }
+    listeners.get('will-frame-navigate')?.({
+      url: 'https://example.test/frame',
+      isMainFrame: false,
+      preventDefault: frameEvent.preventDefault
+    })
+    expect(frameEvent.preventDefault).toHaveBeenCalledOnce()
+
+    const downloadEvent = { preventDefault: vi.fn() }
+    sessionListeners.get('will-download')?.(downloadEvent, {}, { id: 42 })
+    expect(downloadEvent.preventDefault).toHaveBeenCalledOnce()
+
+    const ownerResult = vi.fn()
+    beforeRequest?.({ url: pathToFileURL(assetPath).href, webContentsId: 42 }, ownerResult)
+    expect(ownerResult).toHaveBeenCalledWith({ cancel: false })
+
+    const foreignResult = vi.fn()
+    beforeRequest?.({ url: pathToFileURL(assetPath).href, webContentsId: 99 }, foreignResult)
+    expect(foreignResult).toHaveBeenCalledWith({ cancel: true })
+  })
+
+  it('rejects non-loopback development origins', async () => {
     const root = await createPluginRoot()
 
     await expect(
       createPluginViewNavigationPolicy({
         pluginRoot: root,
-        targetUrl: 'http://127.0.0.1:5173/view',
-        securityProfile: 'compat-plugin-view',
-        devAddress: 'http://127.0.0.1:5173/',
+        targetUrl: 'https://example.test/view',
+        devAddress: 'https://example.test/',
         appIsPackaged: false,
         pluginDevEnabled: true,
-        pluginDevSource: true,
-        allowLegacyWebview: true
+        pluginDevSource: true
       })
     ).rejects.toMatchObject({ code: 'PLUGIN_WINDOW_REMOTE_URL_DENIED' })
   })

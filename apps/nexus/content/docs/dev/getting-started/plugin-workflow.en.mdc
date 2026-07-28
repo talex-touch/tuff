@@ -154,7 +154,13 @@ code: |
 
 Do not store provider credentials in the command, prompt variables, plugin storage, or logs. See [Intelligence SDK](../api/intelligence.en.mdc) for the typed contract.
 
-## 4. Validate
+## 4. Secure Plugin Views
+
+Plugin BrowserWindow and WebContentsView surfaces require `sdkapi >= 260615` and always run with the bundled Tuff preload. The renderer receives only frozen `$plugin`, `$config`, and `$channel` globals; use `$plugin.bridgeVersion` for bridge capability detection.
+
+Custom preload scripts, `<webview>`, renderer `require` / `process` / Electron access, production remote URLs, popups, and downloads are unsupported. Remove those dependencies before raising the SDK marker. Incompatible surfaces fail before window creation with `PLUGIN_WINDOW_LEGACY_RUNTIME_UNSUPPORTED`; there is no environment compatibility override.
+
+## 5. Validate
 
 Run these local checks before publishing:
 
@@ -169,7 +175,7 @@ code: |
 
 Repository changes should also include nearest-path validation such as focused Vitest, file-level ESLint, and `git diff --check`. Do not report unrelated historical lint noise as a failure of the current plugin change.
 
-## 5. Build And Publish
+## 6. Build And Publish
 
 Standard publish path:
 
@@ -191,7 +197,7 @@ Publishing notes:
 - Nexus API keys need at least `plugin:publish`; publisher preflight validates publisher access, and the publish scope covers the plugin read needed before upload.
 - If Nexus rejects the CLI token, run `tuff login` to refresh browser auth, or check API key scopes.
 
-## 6. Plugin Packages Vs Content Packages
+## 7. Plugin Packages Vs Content Packages
 
 Plugin package publishing and plugin content package publishing are separate:
 

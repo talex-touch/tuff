@@ -372,6 +372,7 @@ code: |
 - [Select](./select.en.mdc)
 - [MarkdownEditor](./markdown-editor.en.mdc)
 - [FlatRadio](./flat-radio.en.mdc)
+- [FlatDropdown](./flat-dropdown.en.mdc)
 - [FlatSelect](./flat-select.en.mdc)
 - [SearchInput](./search-input.en.mdc)
 - [SearchSelect](./search-select.en.mdc)

@@ -1,7 +1,7 @@
 ---
 title: "NoData"
 description: "Shortcut empty-state component for empty datasets, tables, charts, and metrics panels."
-category: Feedback
+category: Status
 status: beta
 since: 1.0.0
 tags: [empty, data, table]

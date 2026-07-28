@@ -13,6 +13,7 @@ import path from 'node:path'
 import { app, MessageChannelMain, utilityProcess } from 'electron'
 import { createLogger } from '../../../utils/logger'
 import type { HostMessage, HostSdkCall } from './plugin-host-protocol'
+import { PluginHostContextRegistry } from './plugin-host-identity'
 
 const pluginHostLog = createLogger('PluginHost')
 
@@ -70,8 +71,8 @@ class PluginHostBridge {
   private readonly pingPending = new Map<number, (ok: boolean) => void>()
   private readonly loadPending = new Map<number, Pending<string[]>>()
   private readonly lifecyclePending = new Map<number, Pending<unknown>>()
-  // Real SDK objects kept in main, keyed by plugin, resolved for child SDK calls.
-  private readonly contexts = new Map<string, Record<string, unknown>>()
+  // Real SDK objects remain in main and are addressed only by host-issued handles.
+  private readonly contexts = new PluginHostContextRegistry()
 
   isReady(): boolean {
     return this.ready
@@ -167,8 +168,8 @@ class PluginHostBridge {
   }
 
   private async handleSdkCall(data: HostSdkCall): Promise<void> {
-    const context = this.contexts.get(data.pluginName)
-    const resolved = context ? resolveChain(context, data.chain) : null
+    const entry = this.contexts.resolve(data.pluginHandle, data.hostGeneration)
+    const resolved = entry ? resolveChain(entry.context, data.chain) : null
     if (!resolved) {
       this.controlPort?.postMessage({
         type: 'sdk-result',
@@ -209,25 +210,37 @@ class PluginHostBridge {
     if (!this.controlPort) {
       throw new Error('Plugin host is not started')
     }
-    this.contexts.set(pluginName, context)
+    const registration = this.contexts.register(pluginName, this.generation, context)
     const requestId = ++this.seq
-    const methods = await new Promise<string[]>((resolve, reject) => {
-      this.loadPending.set(requestId, { resolve, reject })
-      this.controlPort!.postMessage({
-        type: 'load',
-        requestId,
-        pluginName,
-        pluginPath,
-        scriptContent,
-        contextKeys: Object.keys(context)
+    let methods: string[]
+    try {
+      methods = await new Promise<string[]>((resolve, reject) => {
+        this.loadPending.set(requestId, { resolve, reject })
+        this.controlPort!.postMessage({
+          type: 'load',
+          requestId,
+          pluginName,
+          pluginHandle: registration.pluginHandle,
+          hostGeneration: registration.hostGeneration,
+          pluginPath,
+          scriptContent,
+          contextKeys: Object.keys(context)
+        })
       })
-    })
+    } catch (error) {
+      this.contexts.unregisterPlugin(pluginName, registration.pluginHandle)
+      throw error
+    }
 
     const proxy: LifecycleProxy = {}
     for (const method of methods) {
       proxy[method] = (...args: unknown[]) => this.callLifecycle(pluginName, method, args)
     }
     return proxy
+  }
+
+  unregisterPlugin(pluginName: string): boolean {
+    return this.contexts.unregisterPlugin(pluginName)
   }
 
   private callLifecycle(pluginName: string, method: string, args: unknown[]): Promise<unknown> {

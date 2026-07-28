@@ -1,7 +1,7 @@
 ---
 title: "OutlineBorder 描边容器"
 description: "为头像、缩略图、徽标和自定义 slot 内容提供 border / ring 描边与可选裁切。"
-category: Basic
+category: Effects
 tags: [border, ring, clip, mask]
 syncStatus: reviewed
 verified: true

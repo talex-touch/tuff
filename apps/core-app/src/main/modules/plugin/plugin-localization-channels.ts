@@ -19,6 +19,7 @@ import { LOCALIZATION_FACADE_MIN_VERSION } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { getLocale } from '../../utils/i18n-helper'
 import { createProtectedRegister } from '../permission/channel-guard'
 
@@ -128,7 +129,7 @@ function resolveSupportedPlugin(
   resolvePlugin: RegisterPluginLocalizationChannelsOptions['resolvePlugin']
 ): string {
   const pluginId = context.plugin?.name
-  if (!pluginId || context.plugin?.verified !== true) {
+  if (!pluginId || !isAuthoritativePluginContext(context.plugin)) {
     throw createLocalizationError(
       'Verified plugin context is required',
       PLUGIN_LOCALIZATION_ERROR_CODES.permissionDenied,

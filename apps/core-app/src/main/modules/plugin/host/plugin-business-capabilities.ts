@@ -1,0 +1,2016 @@
+import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { NetworkRequestOptions, NetworkResponse } from '@talex-touch/utils/network'
+import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
+import { BlockList, isIP } from 'node:net'
+import { types as utilTypes } from 'node:util'
+import {
+  normalizePluginSqlForExecution,
+  validatePluginSql,
+  validatePluginSqlParams,
+  validatePluginTransactionStatements
+} from '../runtime/plugin-sql-policy'
+import type {
+  PluginSqliteOwnerIdentity,
+  PluginSqliteResourceClient
+} from '../runtime/plugin-sqlite-resource-owner'
+import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
+
+export type PluginBusinessItemScope = 'active-feature' | 'root-results'
+export type PluginBusinessDto =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly PluginBusinessDto[]
+  | { readonly [key: string]: PluginBusinessDto }
+export type PluginBusinessItemDto = Readonly<Record<string, PluginBusinessDto>>
+
+export type PluginBusinessClipboardReadRequest =
+  | { readonly op: 'text' }
+  | { readonly op: 'snapshot' }
+export type PluginBusinessClipboardReadResult =
+  | { readonly op: 'text'; readonly text: string }
+  | {
+      readonly op: 'snapshot'
+      readonly text: string
+      readonly html: string
+      readonly hasImage: boolean
+      readonly hasFiles: boolean
+      readonly formats: readonly string[]
+    }
+export type PluginBusinessClipboardWriteRequest =
+  | {
+      readonly op: 'write'
+      readonly content: {
+        readonly text?: string
+        readonly html?: string
+        readonly image?: string
+        readonly files?: readonly string[]
+      }
+    }
+  | { readonly op: 'clear' }
+export interface PluginBusinessClipboardCopyRequest {
+  readonly text?: string
+  readonly html?: string
+  readonly image?: string
+  readonly files?: readonly string[]
+  readonly delayMs?: number
+  readonly hideCoreBox?: boolean
+}
+export interface PluginBusinessClipboardCopyResult {
+  readonly success: boolean
+  readonly code?: string
+}
+
+export interface PluginBusinessFeatureHost {
+  pushItems(
+    scope: PluginBusinessItemScope,
+    items: readonly PluginBusinessItemDto[],
+    signal: AbortSignal
+  ): void | Promise<void>
+  updateItem(
+    scope: PluginBusinessItemScope,
+    id: string,
+    patch: PluginBusinessItemDto,
+    signal: AbortSignal
+  ): boolean | Promise<boolean>
+  removeItem(id: string, signal: AbortSignal): boolean | Promise<boolean>
+  clearItems(signal: AbortSignal): number | Promise<number>
+  listItems(
+    signal: AbortSignal
+  ): readonly PluginBusinessItemDto[] | Promise<readonly PluginBusinessItemDto[]>
+}
+
+export interface PluginBusinessRuntimeInfoDto {
+  readonly name: string
+  readonly displayName: string
+  readonly version: string
+  readonly description: string
+  readonly status: string
+  readonly sdkapi: number
+  readonly category?: string
+}
+
+export interface PluginBusinessPlugin {
+  readonly name: string
+  readonly sdkapi?: number
+  getActivationIdentity(): PluginActivationIdentity
+  getBusinessRuntimeInfo(): PluginBusinessRuntimeInfoDto
+  getDataPath(): string
+  createBusinessFeatureHost(activation: PluginActivationIdentity): PluginBusinessFeatureHost
+  addBusinessFeature(feature: IPluginFeature): boolean | Promise<boolean>
+  removeBusinessFeature(featureId: string): boolean | Promise<boolean>
+  listBusinessFeatures(): readonly IPluginFeature[]
+  readBusinessFile(
+    name: string
+  ):
+    | { readonly found: false }
+    | { readonly found: true; readonly value: PluginBusinessDto }
+    | Promise<
+        { readonly found: false } | { readonly found: true; readonly value: PluginBusinessDto }
+      >
+  writeBusinessFile(name: string, value: PluginBusinessDto): void | Promise<void>
+  removeBusinessFile(name: string): boolean | Promise<boolean>
+  listBusinessFiles(): readonly string[] | Promise<readonly string[]>
+  cleanupBusinessItems(
+    activation: PluginActivationIdentity,
+    ids: readonly string[]
+  ): void | Promise<void>
+}
+
+export interface PluginBusinessClipboardHostService {
+  read(
+    request: PluginBusinessClipboardReadRequest,
+    context: PluginSecurityContext,
+    signal: AbortSignal
+  ): PluginBusinessClipboardReadResult | Promise<PluginBusinessClipboardReadResult>
+  write(
+    request: PluginBusinessClipboardWriteRequest,
+    context: PluginSecurityContext,
+    signal: AbortSignal
+  ): void | Promise<void>
+  copyAndPaste(
+    request: PluginBusinessClipboardCopyRequest,
+    context: PluginSecurityContext,
+    signal: AbortSignal
+  ): PluginBusinessClipboardCopyResult | Promise<PluginBusinessClipboardCopyResult>
+}
+
+export interface PluginBusinessSqliteOwners {
+  acquire(
+    identity: PluginSqliteOwnerIdentity,
+    dataPath: string
+  ): Promise<PluginSqliteResourceClient>
+  closeActivation(identity: PluginSqliteOwnerIdentity): Promise<boolean>
+}
+
+export interface PluginBusinessSecureStore {
+  get(rootPath: string, key: string): Promise<string | null>
+  set(rootPath: string, key: string, value: string | null): Promise<boolean>
+}
+
+export interface PluginBusinessNetworkService {
+  request(options: NetworkRequestOptions): Promise<NetworkResponse>
+  resolveAddresses(hostname: string): Promise<readonly string[]>
+}
+
+export interface PluginBusinessExternalUrlDecision {
+  readonly allowed: boolean
+  readonly protocol?: string
+}
+
+export interface PluginBusinessCapabilityOptions {
+  resolvePlugin(pluginName: string): PluginBusinessPlugin | undefined
+  resolveHostGeneration(activation: PluginActivationIdentity): number | undefined
+  sqliteOwners: PluginBusinessSqliteOwners
+  secureStoreRootPath: string
+  secureStore: PluginBusinessSecureStore
+  clipboard: PluginBusinessClipboardHostService
+  openUrl(url: string): Promise<PluginBusinessExternalUrlDecision>
+  network: PluginBusinessNetworkService
+}
+
+export interface PluginBusinessCapabilities {
+  readonly definitions: readonly PluginHostCapabilityDefinition[]
+  closeActivation(activation: PluginActivationIdentity): Promise<void>
+  closeAll(): Promise<void>
+}
+
+interface BusinessActor {
+  readonly activation: PluginActivationIdentity
+  readonly hostGeneration: number
+  readonly plugin: PluginBusinessPlugin
+  readonly context: PluginSecurityContext
+  readonly record: ActivationRecord
+}
+
+interface ActivationRecord {
+  readonly activation: PluginActivationIdentity
+  readonly hostGeneration: number
+  readonly plugin: PluginBusinessPlugin
+  readonly featureHost: PluginBusinessFeatureHost
+  readonly featureIds: Set<string>
+  readonly itemIds: Set<string>
+  closed: boolean
+}
+
+const MAX_ITEMS_PER_PUSH = 100
+const MAX_ITEMS_PER_LIST = 1_000
+const MAX_ITEM_DEPTH = 12
+const MAX_ITEM_MEMBERS = 1_024
+const MAX_ITEM_STRING_BYTES = 64 * 1024
+const MAX_TEXT_BYTES = 64 * 1024
+const MAX_HTML_BYTES = 256 * 1024
+const MAX_IMAGE_BYTES = 512 * 1024
+const MAX_FILES = 64
+const MAX_FILE_BYTES = 4_096
+const MAX_FORMATS = 128
+const MAX_IDENTIFIER_BYTES = 256
+const MAX_FILE_NAME_BYTES = 128
+const MAX_FILE_JSON_BYTES = 1024 * 1024
+const MAX_SECRET_BYTES = 64 * 1024
+const MAX_HTTP_URL_BYTES = 4_096
+const MAX_HTTP_HEADERS = 64
+const MAX_HTTP_HEADER_BYTES = 8 * 1024
+const MAX_HTTP_QUERY = 64
+const MAX_HTTP_BODY_BYTES = 256 * 1024
+const MAX_HTTP_RESULT_BYTES = 1024 * 1024
+const MAX_FEATURES = 256
+const MAX_FEATURE_COMMANDS = 64
+const MAX_FEATURE_KEYWORDS = 64
+const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor', '__tuffHostWire'])
+const ITEM_KEYS = new Set(['id', 'source', 'kind', 'actions', 'meta', 'render', 'scoring'])
+const ITEM_PATCH_KEYS = new Set([...ITEM_KEYS].filter((key) => key !== 'id'))
+const ITEM_SOURCE_KEYS = ['type', 'id', 'name', 'version', 'permission'] as const
+const ITEM_RENDER_KEYS = ['mode', 'basic'] as const
+const ITEM_BASIC_KEYS = ['title', 'subtitle', 'description', 'icon', 'tags', 'accessory'] as const
+const ITEM_ICON_KEYS = ['type', 'value', 'color', 'colorful'] as const
+const ITEM_ACTION_KEYS = [
+  'id',
+  'type',
+  'label',
+  'description',
+  'icon',
+  'shortcut',
+  'payload',
+  'primary'
+] as const
+const ITEM_META_KEYS = [
+  'pluginName',
+  'featureId',
+  'searchProviderId',
+  'defaultAction',
+  'priority'
+] as const
+const ITEM_SCORING_KEYS = [
+  'base',
+  'match',
+  'frequency',
+  'recency',
+  'ai',
+  'final',
+  'priority'
+] as const
+const FEATURE_KEYS = [
+  'id',
+  'name',
+  'desc',
+  'icon',
+  'keywords',
+  'push',
+  'platform',
+  'commands',
+  'interaction',
+  'priority',
+  'experimental',
+  'acceptedInputTypes',
+  'omniTransfer',
+  'footerHints'
+] as const
+const FEATURE_COMMAND_TYPES = new Set([
+  'match',
+  'contain',
+  'regex',
+  'over',
+  'image',
+  'files',
+  'directory',
+  'window'
+])
+const FEATURE_INPUT_TYPES = new Set(['text', 'image', 'files', 'html'])
+const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'])
+const HTTP_RESPONSE_TYPES = new Set(['json', 'text', 'bytes'])
+const HTTP_STATUSES = Object.freeze(Array.from({ length: 500 }, (_, index) => index + 100))
+const PRIVATE_NETWORKS = new BlockList()
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['224.0.0.0', 4],
+  ['240.0.0.0', 4]
+] as const) {
+  PRIVATE_NETWORKS.addSubnet(network, prefix, 'ipv4')
+}
+for (const [network, prefix] of [
+  ['::', 128],
+  ['::1', 128],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['ff00::', 8]
+] as const) {
+  PRIVATE_NETWORKS.addSubnet(network, prefix, 'ipv6')
+}
+const STABLE_CODE = /^[A-Z][A-Z0-9_]{0,127}$/
+const SECRET_KEY = /^[a-z0-9._-]{1,48}$/i
+const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
+function invalid(): never {
+  throw new TypeError('PLUGIN_BUSINESS_CAPABILITY_INVALID')
+}
+
+function authorityInvalid(): never {
+  throw new Error('PLUGIN_BUSINESS_CAPABILITY_AUTHORITY_INVALID')
+}
+
+function unavailable(): never {
+  throw new Error('PLUGIN_BUSINESS_CAPABILITY_UNAVAILABLE')
+}
+
+function utf8Bytes(value: string): number {
+  return Buffer.byteLength(value, 'utf8')
+}
+
+function boundedString(value: unknown, maximumBytes: number, allowEmpty = false): string {
+  if (
+    typeof value !== 'string' ||
+    (!allowEmpty && value.length === 0) ||
+    utf8Bytes(value) > maximumBytes
+  ) {
+    invalid()
+  }
+  return value
+}
+
+function exactRecord(value: unknown, keys: readonly string[]): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || utilTypes.isProxy(value)) {
+    invalid()
+  }
+  let prototype: object | null
+  let descriptors: PropertyDescriptorMap
+  try {
+    prototype = Object.getPrototypeOf(value)
+    descriptors = Object.getOwnPropertyDescriptors(value)
+  } catch {
+    invalid()
+  }
+  if (prototype !== Object.prototype && prototype !== null) invalid()
+  const allowed = new Set(keys)
+  if (Reflect.ownKeys(descriptors).some((key) => typeof key !== 'string' || !allowed.has(key))) {
+    invalid()
+  }
+  const output: Record<string, unknown> = Object.create(null)
+  for (const key of keys) {
+    const descriptor = descriptors[key]
+    if (!descriptor) continue
+    if (!descriptor.enumerable || !('value' in descriptor)) invalid()
+    output[key] = descriptor.value
+  }
+  return output
+}
+
+function requiredField(record: Record<string, unknown>, key: string): unknown {
+  if (!Object.hasOwn(record, key)) invalid()
+  return record[key]
+}
+
+function snapshotArray(value: unknown, maximum: number): unknown[] {
+  if (!Array.isArray(value) || utilTypes.isProxy(value)) invalid()
+  let descriptors: PropertyDescriptorMap
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value) as unknown as PropertyDescriptorMap
+  } catch {
+    invalid()
+  }
+  const lengthDescriptor = descriptors.length
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
+  if (!Number.isSafeInteger(length) || Number(length) < 0 || Number(length) > maximum) invalid()
+  const allowedKeys = new Set<PropertyKey>(['length'])
+  const output: unknown[] = []
+  for (let index = 0; index < Number(length); index += 1) {
+    const key = String(index)
+    allowedKeys.add(key)
+    const descriptor = descriptors[key]
+    if (!descriptor?.enumerable || !('value' in descriptor)) invalid()
+    output.push(descriptor.value)
+  }
+  if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) invalid()
+  return output
+}
+
+interface CloneBudget {
+  members: number
+  stringBytes: number
+}
+
+interface CloneOptions {
+  readonly maxDepth: number
+  readonly maxMembers: number
+  readonly maxStringBytes: number
+  readonly allowedTopLevelKeys?: ReadonlySet<string>
+  readonly requireItemId?: boolean
+}
+
+function cloneDto(
+  value: unknown,
+  options: CloneOptions,
+  ancestors = new WeakSet<object>(),
+  budget: CloneBudget = { members: 0, stringBytes: 0 },
+  depth = 0
+): PluginBusinessDto {
+  if (depth > options.maxDepth) invalid()
+  if (value === null || typeof value === 'boolean') return value
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) invalid()
+    return value
+  }
+  if (typeof value === 'string') {
+    budget.stringBytes += utf8Bytes(value)
+    if (budget.stringBytes > options.maxStringBytes) invalid()
+    return value
+  }
+  if (!value || typeof value !== 'object' || utilTypes.isProxy(value)) invalid()
+  if (ancestors.has(value)) invalid()
+  if (
+    value instanceof Date ||
+    value instanceof Map ||
+    value instanceof Set ||
+    value instanceof WeakMap ||
+    value instanceof WeakSet ||
+    ArrayBuffer.isView(value) ||
+    value instanceof ArrayBuffer
+  ) {
+    invalid()
+  }
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) {
+      const entries = snapshotArray(value, options.maxMembers)
+      budget.members += entries.length
+      if (budget.members > options.maxMembers) invalid()
+      return entries.map((entry) => cloneDto(entry, options, ancestors, budget, depth + 1))
+    }
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) invalid()
+    const descriptors = Object.getOwnPropertyDescriptors(value)
+    const output: Record<string, PluginBusinessDto> = Object.create(null)
+    const keys = Reflect.ownKeys(descriptors)
+    budget.members += keys.length
+    if (budget.members > options.maxMembers) invalid()
+    for (const key of keys) {
+      if (
+        typeof key !== 'string' ||
+        FORBIDDEN_KEYS.has(key) ||
+        (depth === 0 && options.allowedTopLevelKeys && !options.allowedTopLevelKeys.has(key))
+      ) {
+        invalid()
+      }
+      const descriptor = descriptors[key]
+      if (!descriptor?.enumerable || !('value' in descriptor)) invalid()
+      budget.stringBytes += utf8Bytes(key)
+      if (budget.stringBytes > options.maxStringBytes) invalid()
+      output[key] = cloneDto(descriptor.value, options, ancestors, budget, depth + 1)
+    }
+    if (depth === 0 && options.requireItemId) {
+      boundedString(output.id, MAX_IDENTIFIER_BYTES)
+    }
+    return output
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
+function validateOptionalItemString(
+  record: Record<string, unknown>,
+  key: string,
+  maximumBytes = 4_096
+): void {
+  if (Object.hasOwn(record, key)) boundedString(record[key], maximumBytes, true)
+}
+
+function validateItemIcon(value: unknown): void {
+  const icon = exactRecord(value, ITEM_ICON_KEYS)
+  const type = requiredField(icon, 'type')
+  if (type !== 'class' && type !== 'emoji') invalid()
+  boundedString(requiredField(icon, 'value'), 4_096)
+  validateOptionalItemString(icon, 'color', 128)
+  if (Object.hasOwn(icon, 'colorful') && typeof icon.colorful !== 'boolean') invalid()
+}
+
+function validateItemShape(item: PluginBusinessItemDto, patch: boolean): void {
+  const record = exactRecord(item, patch ? [...ITEM_PATCH_KEYS] : [...ITEM_KEYS])
+  if (!patch) boundedString(requiredField(record, 'id'), MAX_IDENTIFIER_BYTES)
+  if (!patch || Object.hasOwn(record, 'source')) {
+    const source = exactRecord(requiredField(record, 'source'), ITEM_SOURCE_KEYS)
+    if (requiredField(source, 'type') !== 'plugin') invalid()
+    boundedString(requiredField(source, 'id'), MAX_IDENTIFIER_BYTES)
+    validateOptionalItemString(source, 'name', MAX_IDENTIFIER_BYTES)
+    validateOptionalItemString(source, 'version', MAX_IDENTIFIER_BYTES)
+    if (
+      Object.hasOwn(source, 'permission') &&
+      !['safe', 'trusted', 'elevated', 'system'].includes(String(source.permission))
+    ) {
+      invalid()
+    }
+  }
+  if (Object.hasOwn(record, 'kind')) boundedString(record.kind, MAX_IDENTIFIER_BYTES)
+  if (Object.hasOwn(record, 'actions')) {
+    const actionIds = new Set<string>()
+    for (const value of snapshotArray(record.actions, 16)) {
+      const action = exactRecord(value, ITEM_ACTION_KEYS)
+      const id = boundedString(requiredField(action, 'id'), MAX_IDENTIFIER_BYTES)
+      if (actionIds.has(id) || requiredField(action, 'type') !== 'plugin') invalid()
+      actionIds.add(id)
+      validateOptionalItemString(action, 'label')
+      validateOptionalItemString(action, 'description')
+      validateOptionalItemString(action, 'shortcut', 256)
+      if (Object.hasOwn(action, 'icon')) validateItemIcon(action.icon)
+      if (Object.hasOwn(action, 'primary') && typeof action.primary !== 'boolean') invalid()
+    }
+  }
+  if (Object.hasOwn(record, 'meta')) {
+    const meta = exactRecord(record.meta, ITEM_META_KEYS)
+    for (const key of ['pluginName', 'featureId', 'searchProviderId', 'defaultAction']) {
+      validateOptionalItemString(meta, key, MAX_IDENTIFIER_BYTES)
+    }
+    if (
+      Object.hasOwn(meta, 'priority') &&
+      (typeof meta.priority !== 'number' || !Number.isFinite(meta.priority))
+    ) {
+      invalid()
+    }
+  }
+  if (!patch || Object.hasOwn(record, 'render')) {
+    const render = exactRecord(requiredField(record, 'render'), ITEM_RENDER_KEYS)
+    if (!patch || Object.hasOwn(render, 'mode')) {
+      if (requiredField(render, 'mode') !== 'default') invalid()
+    }
+    if (!patch || Object.hasOwn(render, 'basic')) {
+      const basic = exactRecord(requiredField(render, 'basic'), ITEM_BASIC_KEYS)
+      if (!patch || Object.hasOwn(basic, 'title')) {
+        boundedString(requiredField(basic, 'title'), 4_096)
+      }
+      validateOptionalItemString(basic, 'subtitle')
+      validateOptionalItemString(basic, 'description')
+      validateOptionalItemString(basic, 'accessory')
+      if (Object.hasOwn(basic, 'icon')) validateItemIcon(basic.icon)
+      if (Object.hasOwn(basic, 'tags')) {
+        for (const value of snapshotArray(basic.tags, 16)) {
+          const tag = exactRecord(value, ['text', 'color', 'variant'])
+          boundedString(requiredField(tag, 'text'), 1_024)
+          validateOptionalItemString(tag, 'color', 128)
+          if (
+            Object.hasOwn(tag, 'variant') &&
+            tag.variant !== 'filled' &&
+            tag.variant !== 'outlined' &&
+            tag.variant !== 'ghost'
+          ) {
+            invalid()
+          }
+        }
+      }
+    }
+  }
+  if (Object.hasOwn(record, 'scoring')) {
+    const scoring = exactRecord(record.scoring, ITEM_SCORING_KEYS)
+    for (const key of ITEM_SCORING_KEYS) {
+      if (!Object.hasOwn(scoring, key)) continue
+      const score = scoring[key]
+      if (typeof score !== 'number' || !Number.isFinite(score)) invalid()
+      if (key !== 'priority' && (score < 0 || score > 1)) invalid()
+    }
+  }
+}
+
+function cloneItem(value: unknown, patch = false): PluginBusinessItemDto {
+  const item = cloneDto(value, {
+    maxDepth: MAX_ITEM_DEPTH,
+    maxMembers: MAX_ITEM_MEMBERS,
+    maxStringBytes: MAX_ITEM_STRING_BYTES,
+    allowedTopLevelKeys: patch ? ITEM_PATCH_KEYS : ITEM_KEYS,
+    requireItemId: !patch
+  }) as PluginBusinessItemDto
+  validateItemShape(item, patch)
+  return item
+}
+
+function cloneFileJson(value: unknown): PluginBusinessDto {
+  const cloned = cloneDto(value, {
+    maxDepth: 24,
+    maxMembers: 10_000,
+    maxStringBytes: MAX_FILE_JSON_BYTES
+  })
+  let serialized: string
+  try {
+    serialized = JSON.stringify(cloned)
+  } catch {
+    invalid()
+  }
+  if (utf8Bytes(serialized) > MAX_FILE_JSON_BYTES) invalid()
+  return cloned
+}
+
+function snapshotActivation(input: unknown): PluginActivationIdentity {
+  const record = exactRecord(input, ['name', 'pluginInstanceId', 'activationGeneration', 'key'])
+  const activationGeneration = requiredField(record, 'activationGeneration')
+  if (!Number.isSafeInteger(activationGeneration) || Number(activationGeneration) < 1) invalid()
+  return Object.freeze({
+    name: boundedString(requiredField(record, 'name'), MAX_IDENTIFIER_BYTES),
+    pluginInstanceId: boundedString(
+      requiredField(record, 'pluginInstanceId'),
+      MAX_IDENTIFIER_BYTES
+    ),
+    activationGeneration: Number(activationGeneration),
+    key: boundedString(requiredField(record, 'key'), MAX_IDENTIFIER_BYTES)
+  })
+}
+
+function sameActivation(left: PluginActivationIdentity, right: PluginActivationIdentity): boolean {
+  return (
+    left.name === right.name &&
+    left.pluginInstanceId === right.pluginInstanceId &&
+    left.activationGeneration === right.activationGeneration &&
+    left.key === right.key
+  )
+}
+
+function activationRecordKey(activation: PluginActivationIdentity): string {
+  return `${activation.name}\u0000${activation.pluginInstanceId}\u0000${activation.activationGeneration}`
+}
+
+function ownerItemKey(pluginName: string, id: string): string {
+  return `${pluginName}\u0000${id}`
+}
+
+function readMethod(input: unknown, key: string): (...args: unknown[]) => unknown {
+  if (
+    !input ||
+    (typeof input !== 'object' && typeof input !== 'function') ||
+    utilTypes.isProxy(input)
+  ) {
+    invalid()
+  }
+  let cursor: object | null = input as object
+  const visited = new Set<object>()
+  try {
+    while (cursor) {
+      if (visited.has(cursor) || utilTypes.isProxy(cursor)) invalid()
+      visited.add(cursor)
+      const descriptor = Object.getOwnPropertyDescriptor(cursor, key)
+      if (descriptor) {
+        if (
+          !('value' in descriptor) ||
+          typeof descriptor.value !== 'function' ||
+          utilTypes.isProxy(descriptor.value) ||
+          /^class\s/.test(Function.prototype.toString.call(descriptor.value))
+        ) {
+          invalid()
+        }
+        return descriptor.value as (...args: unknown[]) => unknown
+      }
+      cursor = Object.getPrototypeOf(cursor)
+    }
+  } catch {
+    invalid()
+  }
+  invalid()
+}
+
+function snapshotFeatureHost(input: unknown): PluginBusinessFeatureHost {
+  const pushItems = readMethod(input, 'pushItems')
+  const updateItem = readMethod(input, 'updateItem')
+  const removeItem = readMethod(input, 'removeItem')
+  const clearItems = readMethod(input, 'clearItems')
+  const listItems = readMethod(input, 'listItems')
+  return Object.freeze({
+    pushItems: (scope, items, signal) => pushItems.call(input, scope, items, signal) as never,
+    updateItem: (scope, id, patch, signal) =>
+      updateItem.call(input, scope, id, patch, signal) as never,
+    removeItem: (id, signal) => removeItem.call(input, id, signal) as never,
+    clearItems: (signal) => clearItems.call(input, signal) as never,
+    listItems: (signal) => listItems.call(input, signal) as never
+  })
+}
+
+function validateNull(value: unknown): null {
+  if (value !== null) invalid()
+  return null
+}
+
+function validateOk(value: unknown): { ok: true } {
+  const record = exactRecord(value, ['ok'])
+  if (requiredField(record, 'ok') !== true) invalid()
+  return Object.freeze({ ok: true })
+}
+
+function validateBooleanResult(value: unknown, key: 'added' | 'updated' | 'removed') {
+  const record = exactRecord(value, [key])
+  const result = requiredField(record, key)
+  if (typeof result !== 'boolean') invalid()
+  return Object.freeze({ [key]: result })
+}
+
+function validateCountResult(value: unknown): { removed: number } {
+  const record = exactRecord(value, ['removed'])
+  const removed = requiredField(record, 'removed')
+  if (!Number.isSafeInteger(removed) || Number(removed) < 0) invalid()
+  return Object.freeze({ removed: Number(removed) })
+}
+
+function validateId(value: unknown, key: 'id' | 'featureId' = 'id'): Record<string, string> {
+  const record = exactRecord(value, [key])
+  return Object.freeze({
+    [key]: boundedString(requiredField(record, key), MAX_IDENTIFIER_BYTES)
+  })
+}
+
+function validateScope(value: unknown): PluginBusinessItemScope {
+  if (value !== 'active-feature' && value !== 'root-results') invalid()
+  return value
+}
+
+function validatePush(value: unknown): {
+  readonly scope: PluginBusinessItemScope
+  readonly items: readonly PluginBusinessItemDto[]
+} {
+  const record = exactRecord(value, ['scope', 'items'])
+  return Object.freeze({
+    scope: validateScope(requiredField(record, 'scope')),
+    items: Object.freeze(
+      snapshotArray(requiredField(record, 'items'), MAX_ITEMS_PER_PUSH).map((item) =>
+        cloneItem(item)
+      )
+    )
+  })
+}
+
+function validateUpdate(value: unknown): {
+  readonly scope: PluginBusinessItemScope
+  readonly id: string
+  readonly patch: PluginBusinessItemDto
+} {
+  const record = exactRecord(value, ['scope', 'id', 'patch'])
+  const patch = cloneItem(requiredField(record, 'patch'), true)
+  if (Reflect.ownKeys(patch).length === 0) invalid()
+  return Object.freeze({
+    scope: validateScope(requiredField(record, 'scope')),
+    id: boundedString(requiredField(record, 'id'), MAX_IDENTIFIER_BYTES),
+    patch
+  })
+}
+
+function validateItemList(value: unknown): { readonly items: readonly PluginBusinessItemDto[] } {
+  const record = exactRecord(value, ['items'])
+  return Object.freeze({
+    items: Object.freeze(
+      snapshotArray(requiredField(record, 'items'), MAX_ITEMS_PER_LIST).map((item) =>
+        cloneItem(item)
+      )
+    )
+  })
+}
+
+function validateIcon(value: unknown): IPluginFeature['icon'] {
+  const record = exactRecord(value, ['type', 'value', 'color', 'colorful'])
+  const type = boundedString(requiredField(record, 'type'), 32)
+  const iconValue = boundedString(requiredField(record, 'value'), 4_096)
+  const output: Record<string, unknown> = { type, value: iconValue }
+  if (Object.hasOwn(record, 'color')) output.color = boundedString(record.color, 128, true)
+  if (Object.hasOwn(record, 'colorful')) {
+    if (typeof record.colorful !== 'boolean') invalid()
+    output.colorful = record.colorful
+  }
+  return Object.freeze(output) as unknown as IPluginFeature['icon']
+}
+
+function validateStringArray(value: unknown, maximum: number, maximumBytes: number): string[] {
+  return snapshotArray(value, maximum).map((entry) => boundedString(entry, maximumBytes))
+}
+
+function validateFeature(value: unknown): IPluginFeature {
+  const record = exactRecord(value, FEATURE_KEYS)
+  const commands = snapshotArray(requiredField(record, 'commands'), MAX_FEATURE_COMMANDS).map(
+    (entry) => {
+      const command = exactRecord(entry, ['type', 'value'])
+      const type = boundedString(requiredField(command, 'type'), 32)
+      if (!FEATURE_COMMAND_TYPES.has(type)) invalid()
+      const rawValue = requiredField(command, 'value')
+      const commandValue = Array.isArray(rawValue)
+        ? Object.freeze(validateStringArray(rawValue, 32, 512))
+        : boundedString(rawValue, 2_048)
+      return Object.freeze({ type, value: commandValue })
+    }
+  )
+  if (commands.length === 0) invalid()
+  const platformRecord = exactRecord(requiredField(record, 'platform'), ['win', 'darwin', 'linux'])
+  const platform: Record<string, unknown> = Object.create(null)
+  for (const key of ['win', 'darwin', 'linux']) {
+    if (!Object.hasOwn(platformRecord, key)) continue
+    const info = exactRecord(platformRecord[key], ['enable', 'arch', 'os'])
+    if (typeof requiredField(info, 'enable') !== 'boolean') invalid()
+    platform[key] = Object.freeze({
+      enable: info.enable,
+      arch: Object.freeze(validateStringArray(requiredField(info, 'arch'), 16, 32)),
+      os: Object.freeze(validateStringArray(requiredField(info, 'os'), 16, 32))
+    })
+  }
+  const output: Record<string, unknown> = {
+    id: boundedString(requiredField(record, 'id'), MAX_IDENTIFIER_BYTES),
+    name: boundedString(requiredField(record, 'name'), 512),
+    desc: boundedString(requiredField(record, 'desc'), 4_096, true),
+    icon: validateIcon(requiredField(record, 'icon')),
+    push: requiredField(record, 'push'),
+    platform: Object.freeze(platform),
+    commands: Object.freeze(commands)
+  }
+  if (typeof output.push !== 'boolean') invalid()
+  if (Object.hasOwn(record, 'keywords')) {
+    output.keywords = Object.freeze(validateStringArray(record.keywords, MAX_FEATURE_KEYWORDS, 256))
+  }
+  if (Object.hasOwn(record, 'interaction')) {
+    const interaction = exactRecord(record.interaction, [
+      'type',
+      'runtime',
+      'path',
+      'rendererFeatureId',
+      'showInput',
+      'allowInput',
+      'sendMode',
+      'forceMax'
+    ])
+    const type = requiredField(interaction, 'type')
+    if (type !== 'webcontent' && type !== 'widget') invalid()
+    const projected: Record<string, unknown> = { type }
+    for (const key of ['runtime', 'path', 'rendererFeatureId']) {
+      if (Object.hasOwn(interaction, key)) projected[key] = boundedString(interaction[key], 1_024)
+    }
+    for (const key of ['showInput', 'allowInput', 'sendMode', 'forceMax']) {
+      if (!Object.hasOwn(interaction, key)) continue
+      if (typeof interaction[key] !== 'boolean') invalid()
+      projected[key] = interaction[key]
+    }
+    output.interaction = Object.freeze(projected)
+  }
+  if (Object.hasOwn(record, 'priority')) {
+    if (!Number.isSafeInteger(record.priority) || Math.abs(Number(record.priority)) > 1_000_000) {
+      invalid()
+    }
+    output.priority = Number(record.priority)
+  }
+  if (Object.hasOwn(record, 'experimental')) {
+    if (typeof record.experimental !== 'boolean') invalid()
+    output.experimental = record.experimental
+  }
+  if (Object.hasOwn(record, 'acceptedInputTypes')) {
+    const accepted = validateStringArray(record.acceptedInputTypes, 4, 16)
+    if (accepted.some((entry) => !FEATURE_INPUT_TYPES.has(entry))) invalid()
+    output.acceptedInputTypes = Object.freeze(accepted)
+  }
+  if (Object.hasOwn(record, 'omniTransfer')) {
+    output.omniTransfer = cloneDto(record.omniTransfer, {
+      maxDepth: 6,
+      maxMembers: 64,
+      maxStringBytes: 16 * 1024
+    })
+  }
+  if (Object.hasOwn(record, 'footerHints')) {
+    output.footerHints = cloneDto(record.footerHints, {
+      maxDepth: 6,
+      maxMembers: 128,
+      maxStringBytes: 16 * 1024
+    })
+  }
+  return Object.freeze(output) as unknown as IPluginFeature
+}
+
+function projectFeature(feature: IPluginFeature): IPluginFeature {
+  const raw = feature as unknown as Record<string, unknown>
+  const projection: Record<string, unknown> = {
+    id: raw.id,
+    name: raw.name,
+    desc: raw.desc,
+    icon: raw.icon,
+    push: raw.push,
+    platform: raw.platform,
+    commands: raw.commands
+  }
+  for (const key of FEATURE_KEYS) {
+    if (!Object.hasOwn(projection, key) && raw[key] !== undefined) projection[key] = raw[key]
+  }
+  return validateFeature(projection)
+}
+
+function validateFeatureAdd(value: unknown): { readonly feature: IPluginFeature } {
+  const record = exactRecord(value, ['feature'])
+  return Object.freeze({ feature: validateFeature(requiredField(record, 'feature')) })
+}
+
+function validateFeatureList(value: unknown): { readonly features: readonly IPluginFeature[] } {
+  const record = exactRecord(value, ['features'])
+  return Object.freeze({
+    features: Object.freeze(
+      snapshotArray(requiredField(record, 'features'), MAX_FEATURES).map((entry) =>
+        validateFeature(entry)
+      )
+    )
+  })
+}
+
+function validateRuntimeInfo(value: unknown): PluginBusinessRuntimeInfoDto {
+  const record = exactRecord(value, [
+    'name',
+    'displayName',
+    'version',
+    'description',
+    'status',
+    'sdkapi',
+    'category'
+  ])
+  const sdkapi = requiredField(record, 'sdkapi')
+  if (!Number.isSafeInteger(sdkapi) || Number(sdkapi) < 0) invalid()
+  return Object.freeze({
+    name: boundedString(requiredField(record, 'name'), MAX_IDENTIFIER_BYTES),
+    displayName: boundedString(requiredField(record, 'displayName'), 512),
+    version: boundedString(requiredField(record, 'version'), 128),
+    description: boundedString(requiredField(record, 'description'), 4_096, true),
+    status: boundedString(requiredField(record, 'status'), 64),
+    sdkapi: Number(sdkapi),
+    ...(Object.hasOwn(record, 'category')
+      ? { category: boundedString(record.category, 128, true) }
+      : {})
+  })
+}
+
+function validateFileName(value: unknown): string {
+  const name = boundedString(value, MAX_FILE_NAME_BYTES)
+  if (!FILE_NAME.test(name) || name === '.' || name === '..') invalid()
+  return name
+}
+
+function validateFileRequest(value: unknown): { readonly name: string } {
+  const record = exactRecord(value, ['name'])
+  return Object.freeze({ name: validateFileName(requiredField(record, 'name')) })
+}
+
+function validateFileWrite(value: unknown): {
+  readonly name: string
+  readonly value: PluginBusinessDto
+} {
+  const record = exactRecord(value, ['name', 'value'])
+  return Object.freeze({
+    name: validateFileName(requiredField(record, 'name')),
+    value: cloneFileJson(requiredField(record, 'value'))
+  })
+}
+
+function validateFileReadResult(
+  value: unknown
+): { readonly found: false } | { readonly found: true; readonly value: PluginBusinessDto } {
+  const record = exactRecord(value, ['found', 'value'])
+  const found = requiredField(record, 'found')
+  if (found === false) {
+    if (Object.hasOwn(record, 'value')) invalid()
+    return Object.freeze({ found: false })
+  }
+  if (found !== true || !Object.hasOwn(record, 'value')) invalid()
+  return Object.freeze({ found: true, value: cloneFileJson(record.value) })
+}
+
+function validateFileList(value: unknown): { readonly names: readonly string[] } {
+  const record = exactRecord(value, ['names'])
+  return Object.freeze({
+    names: Object.freeze(
+      snapshotArray(requiredField(record, 'names'), 1_000).map((entry) => validateFileName(entry))
+    )
+  })
+}
+
+function validateSqlExecute(value: unknown): {
+  readonly op: 'query' | 'execute'
+  readonly sql: string
+  readonly params: readonly unknown[]
+} {
+  const record = exactRecord(value, ['op', 'sql', 'params'])
+  const op = requiredField(record, 'op')
+  if (op !== 'query' && op !== 'execute') invalid()
+  const sql = boundedString(requiredField(record, 'sql'), 64 * 1024)
+  const params = Object.hasOwn(record, 'params') ? validatePluginSqlParams(record.params) : []
+  return Object.freeze({ op, sql, params: Object.freeze([...params]) })
+}
+
+function validateSqlBatch(value: unknown): {
+  readonly statements: readonly { readonly sql: string; readonly params: readonly unknown[] }[]
+} {
+  const record = exactRecord(value, ['statements'])
+  const entries = snapshotArray(requiredField(record, 'statements'), 64).map((entry) => {
+    const statement = exactRecord(entry, ['sql', 'params'])
+    const sql = boundedString(requiredField(statement, 'sql'), 64 * 1024)
+    const params = Object.hasOwn(statement, 'params')
+      ? validatePluginSqlParams(statement.params)
+      : []
+    return { sql, params }
+  })
+  if (entries.length === 0) invalid()
+  const validated = validatePluginTransactionStatements(entries)
+  return Object.freeze({
+    statements: Object.freeze(
+      validated.map((entry) =>
+        Object.freeze({ sql: entry.sql, params: Object.freeze([...(entry.params ?? [])]) })
+      )
+    )
+  })
+}
+
+function validateSqlExecuteResult(value: unknown):
+  | {
+      readonly op: 'query'
+      readonly rows: readonly Record<string, PluginBusinessDto>[]
+      readonly columns: readonly string[]
+    }
+  | {
+      readonly op: 'execute'
+      readonly rowsAffected: number
+      readonly lastInsertRowId: number | null
+    } {
+  if (!value || typeof value !== 'object') invalid()
+  const opDescriptor = Object.getOwnPropertyDescriptor(value, 'op')
+  const op = opDescriptor && 'value' in opDescriptor ? opDescriptor.value : undefined
+  if (op === 'query') {
+    const record = exactRecord(value, ['op', 'rows', 'columns'])
+    const rows = snapshotArray(requiredField(record, 'rows'), 1_000).map((row) =>
+      cloneFileJson(row)
+    )
+    if (rows.some((row) => !row || typeof row !== 'object' || Array.isArray(row))) invalid()
+    return Object.freeze({
+      op,
+      rows: Object.freeze(rows as Record<string, PluginBusinessDto>[]),
+      columns: Object.freeze(validateStringArray(requiredField(record, 'columns'), 1_000, 256))
+    })
+  }
+  if (op !== 'execute') invalid()
+  const record = exactRecord(value, ['op', 'rowsAffected', 'lastInsertRowId'])
+  const rowsAffected = requiredField(record, 'rowsAffected')
+  const lastInsertRowId = requiredField(record, 'lastInsertRowId')
+  if (!Number.isSafeInteger(rowsAffected) || Number(rowsAffected) < 0) invalid()
+  if (lastInsertRowId !== null && !Number.isSafeInteger(lastInsertRowId)) invalid()
+  return Object.freeze({
+    op,
+    rowsAffected: Number(rowsAffected),
+    lastInsertRowId: lastInsertRowId === null ? null : Number(lastInsertRowId)
+  })
+}
+
+function validateSqlBatchResult(value: unknown): {
+  readonly results: readonly {
+    readonly rowsAffected: number
+    readonly lastInsertRowId: number | null
+  }[]
+} {
+  const record = exactRecord(value, ['results'])
+  const results = snapshotArray(requiredField(record, 'results'), 64).map((entry) => {
+    const result = exactRecord(entry, ['rowsAffected', 'lastInsertRowId'])
+    const rowsAffected = requiredField(result, 'rowsAffected')
+    const lastInsertRowId = requiredField(result, 'lastInsertRowId')
+    if (!Number.isSafeInteger(rowsAffected) || Number(rowsAffected) < 0) invalid()
+    if (lastInsertRowId !== null && !Number.isSafeInteger(lastInsertRowId)) invalid()
+    return Object.freeze({
+      rowsAffected: Number(rowsAffected),
+      lastInsertRowId: lastInsertRowId === null ? null : Number(lastInsertRowId)
+    })
+  })
+  return Object.freeze({ results: Object.freeze(results) })
+}
+
+function validateSecretKey(value: unknown): string {
+  const key = boundedString(value, 48)
+  if (!SECRET_KEY.test(key)) invalid()
+  return key
+}
+
+function validateSecretRequest(value: unknown): { readonly key: string } {
+  const record = exactRecord(value, ['key'])
+  return Object.freeze({ key: validateSecretKey(requiredField(record, 'key')) })
+}
+
+function validateSecretSet(value: unknown): { readonly key: string; readonly value: string } {
+  const record = exactRecord(value, ['key', 'value'])
+  return Object.freeze({
+    key: validateSecretKey(requiredField(record, 'key')),
+    value: boundedString(requiredField(record, 'value'), MAX_SECRET_BYTES)
+  })
+}
+
+function validateSecretGetResult(
+  value: unknown
+): { readonly found: false } | { readonly found: true; readonly value: string } {
+  const record = exactRecord(value, ['found', 'value'])
+  const found = requiredField(record, 'found')
+  if (found === false) {
+    if (Object.hasOwn(record, 'value')) invalid()
+    return Object.freeze({ found: false })
+  }
+  if (found !== true || !Object.hasOwn(record, 'value')) invalid()
+  return Object.freeze({
+    found: true,
+    value: boundedString(record.value, MAX_SECRET_BYTES, true)
+  })
+}
+
+function validateClipboardRead(value: unknown): PluginBusinessClipboardReadRequest {
+  const record = exactRecord(value, ['op'])
+  const op = requiredField(record, 'op')
+  if (op !== 'text' && op !== 'snapshot') invalid()
+  return Object.freeze({ op })
+}
+
+function validateClipboardReadResult(value: unknown): PluginBusinessClipboardReadResult {
+  if (!value || typeof value !== 'object') invalid()
+  const opDescriptor = Object.getOwnPropertyDescriptor(value, 'op')
+  const op = opDescriptor && 'value' in opDescriptor ? opDescriptor.value : undefined
+  if (op === 'text') {
+    const record = exactRecord(value, ['op', 'text'])
+    return Object.freeze({
+      op,
+      text: boundedString(requiredField(record, 'text'), MAX_TEXT_BYTES, true)
+    })
+  }
+  if (op !== 'snapshot') invalid()
+  const record = exactRecord(value, ['op', 'text', 'html', 'hasImage', 'hasFiles', 'formats'])
+  const hasImage = requiredField(record, 'hasImage')
+  const hasFiles = requiredField(record, 'hasFiles')
+  if (typeof hasImage !== 'boolean' || typeof hasFiles !== 'boolean') invalid()
+  return Object.freeze({
+    op,
+    text: boundedString(requiredField(record, 'text'), MAX_TEXT_BYTES, true),
+    html: boundedString(requiredField(record, 'html'), MAX_HTML_BYTES, true),
+    hasImage,
+    hasFiles,
+    formats: Object.freeze(validateStringArray(requiredField(record, 'formats'), MAX_FORMATS, 256))
+  })
+}
+
+function validateClipboardWrite(value: unknown): PluginBusinessClipboardWriteRequest {
+  if (!value || typeof value !== 'object') invalid()
+  const opDescriptor = Object.getOwnPropertyDescriptor(value, 'op')
+  const op = opDescriptor && 'value' in opDescriptor ? opDescriptor.value : undefined
+  if (op === 'clear') {
+    exactRecord(value, ['op'])
+    return Object.freeze({ op })
+  }
+  if (op !== 'write') invalid()
+  const record = exactRecord(value, ['op', 'content'])
+  const content = exactRecord(requiredField(record, 'content'), ['text', 'html', 'image', 'files'])
+  const output: { text?: string; html?: string; image?: string; files?: readonly string[] } = {}
+  if (Object.hasOwn(content, 'text'))
+    output.text = boundedString(content.text, MAX_TEXT_BYTES, true)
+  if (Object.hasOwn(content, 'html'))
+    output.html = boundedString(content.html, MAX_HTML_BYTES, true)
+  if (Object.hasOwn(content, 'image')) output.image = boundedString(content.image, MAX_IMAGE_BYTES)
+  if (Object.hasOwn(content, 'files')) {
+    output.files = Object.freeze(
+      snapshotArray(content.files, MAX_FILES).map((entry) => boundedString(entry, MAX_FILE_BYTES))
+    )
+  }
+  if (Reflect.ownKeys(output).length === 0) invalid()
+  return Object.freeze({ op, content: Object.freeze(output) })
+}
+
+function validateClipboardCopy(value: unknown): PluginBusinessClipboardCopyRequest {
+  const record = exactRecord(value, ['text', 'html', 'image', 'files', 'delayMs', 'hideCoreBox'])
+  const output: {
+    text?: string
+    html?: string
+    image?: string
+    files?: readonly string[]
+    delayMs?: number
+    hideCoreBox?: boolean
+  } = {}
+  if (Object.hasOwn(record, 'text')) output.text = boundedString(record.text, MAX_TEXT_BYTES, true)
+  if (Object.hasOwn(record, 'html')) output.html = boundedString(record.html, MAX_HTML_BYTES, true)
+  if (Object.hasOwn(record, 'image')) output.image = boundedString(record.image, MAX_IMAGE_BYTES)
+  if (Object.hasOwn(record, 'files')) {
+    output.files = Object.freeze(
+      snapshotArray(record.files, MAX_FILES).map((entry) => boundedString(entry, MAX_FILE_BYTES))
+    )
+  }
+  if (Object.hasOwn(record, 'delayMs')) {
+    if (
+      !Number.isSafeInteger(record.delayMs) ||
+      Number(record.delayMs) < 0 ||
+      Number(record.delayMs) > 5_000
+    ) {
+      invalid()
+    }
+    output.delayMs = Number(record.delayMs)
+  }
+  if (Object.hasOwn(record, 'hideCoreBox')) {
+    if (typeof record.hideCoreBox !== 'boolean') invalid()
+    output.hideCoreBox = record.hideCoreBox
+  }
+  if (!output.text && !output.html && !output.image && !output.files?.length) invalid()
+  return Object.freeze(output)
+}
+
+function validateClipboardCopyResult(value: unknown): PluginBusinessClipboardCopyResult {
+  const record = exactRecord(value, ['success', 'code'])
+  const success = requiredField(record, 'success')
+  if (typeof success !== 'boolean') invalid()
+  if (Object.hasOwn(record, 'code') && !STABLE_CODE.test(boundedString(record.code, 128))) {
+    invalid()
+  }
+  return Object.freeze({
+    success,
+    ...(Object.hasOwn(record, 'code') ? { code: String(record.code) } : {})
+  })
+}
+
+function validateOpenUrl(value: unknown): { readonly url: string } {
+  const record = exactRecord(value, ['url'])
+  return Object.freeze({
+    url: boundedString(requiredField(record, 'url'), MAX_HTTP_URL_BYTES)
+  })
+}
+
+function validateOpenUrlResult(value: unknown): {
+  readonly opened: true
+  readonly protocol: string
+} {
+  const record = exactRecord(value, ['opened', 'protocol'])
+  if (requiredField(record, 'opened') !== true) invalid()
+  return Object.freeze({
+    opened: true,
+    protocol: boundedString(requiredField(record, 'protocol'), 32)
+  })
+}
+
+function validateHeaders(value: unknown): Readonly<Record<string, string>> {
+  const record = exactRecord(
+    value,
+    Reflect.ownKeys(Object.getOwnPropertyDescriptors(value as object)).map(String)
+  )
+  const keys = Object.keys(record)
+  if (keys.length > MAX_HTTP_HEADERS) invalid()
+  const output: Record<string, string> = Object.create(null)
+  for (const key of keys) {
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$/.test(key)) invalid()
+    output[key] = boundedString(record[key], MAX_HTTP_HEADER_BYTES, true)
+  }
+  return Object.freeze(output)
+}
+
+function validateQuery(value: unknown): Readonly<Record<string, string | number | boolean | null>> {
+  const record = exactRecord(
+    value,
+    Reflect.ownKeys(Object.getOwnPropertyDescriptors(value as object)).map(String)
+  )
+  const keys = Object.keys(record)
+  if (keys.length > MAX_HTTP_QUERY) invalid()
+  const output: Record<string, string | number | boolean | null> = Object.create(null)
+  for (const key of keys) {
+    boundedString(key, 256)
+    const entry = record[key]
+    if (
+      entry !== null &&
+      typeof entry !== 'string' &&
+      typeof entry !== 'boolean' &&
+      !(typeof entry === 'number' && Number.isFinite(entry))
+    ) {
+      invalid()
+    }
+    if (typeof entry === 'string') boundedString(entry, 4_096, true)
+    output[key] = entry as string | number | boolean | null
+  }
+  return Object.freeze(output)
+}
+
+interface HttpRequestDto {
+  readonly method: NetworkRequestOptions['method']
+  readonly url: string
+  readonly headers?: Readonly<Record<string, string>>
+  readonly query?: Readonly<Record<string, string | number | boolean | null>>
+  readonly body?: PluginBusinessDto
+  readonly responseType: 'json' | 'text' | 'bytes'
+  readonly timeoutMs: number
+}
+
+function validateHttpRequest(value: unknown): HttpRequestDto {
+  const record = exactRecord(value, [
+    'method',
+    'url',
+    'headers',
+    'query',
+    'body',
+    'responseType',
+    'timeoutMs'
+  ])
+  const method = boundedString(requiredField(record, 'method'), 16).toUpperCase()
+  const responseType = requiredField(record, 'responseType')
+  if (
+    !HTTP_METHODS.has(method) ||
+    typeof responseType !== 'string' ||
+    !HTTP_RESPONSE_TYPES.has(responseType)
+  ) {
+    invalid()
+  }
+  const output: Record<string, unknown> = {
+    method,
+    url: boundedString(requiredField(record, 'url'), MAX_HTTP_URL_BYTES),
+    responseType,
+    timeoutMs: 30_000
+  }
+  if (Object.hasOwn(record, 'headers')) output.headers = validateHeaders(record.headers)
+  if (Object.hasOwn(record, 'query')) output.query = validateQuery(record.query)
+  if (Object.hasOwn(record, 'body')) {
+    const body = cloneDto(record.body, {
+      maxDepth: 16,
+      maxMembers: 2_048,
+      maxStringBytes: MAX_HTTP_BODY_BYTES
+    })
+    if (utf8Bytes(JSON.stringify(body)) > MAX_HTTP_BODY_BYTES) invalid()
+    output.body = body
+  }
+  if (Object.hasOwn(record, 'timeoutMs')) {
+    if (
+      !Number.isSafeInteger(record.timeoutMs) ||
+      Number(record.timeoutMs) < 100 ||
+      Number(record.timeoutMs) > 30_000
+    ) {
+      invalid()
+    }
+    output.timeoutMs = Number(record.timeoutMs)
+  }
+  return Object.freeze(output) as unknown as HttpRequestDto
+}
+
+function validateHttpResult(value: unknown): Readonly<Record<string, unknown>> {
+  const record = exactRecord(value, ['status', 'statusText', 'headers', 'data', 'url', 'ok'])
+  const status = requiredField(record, 'status')
+  const ok = requiredField(record, 'ok')
+  if (
+    !Number.isSafeInteger(status) ||
+    Number(status) < 100 ||
+    Number(status) > 599 ||
+    typeof ok !== 'boolean'
+  ) {
+    invalid()
+  }
+  const data = cloneDto(requiredField(record, 'data'), {
+    maxDepth: 24,
+    maxMembers: 10_000,
+    maxStringBytes: MAX_HTTP_RESULT_BYTES
+  })
+  const output = Object.freeze({
+    status: Number(status),
+    statusText: boundedString(requiredField(record, 'statusText'), 512, true),
+    headers: validateHeaders(requiredField(record, 'headers')),
+    data,
+    url: boundedString(requiredField(record, 'url'), MAX_HTTP_URL_BYTES),
+    ok
+  })
+  if (utf8Bytes(JSON.stringify(output)) > MAX_HTTP_RESULT_BYTES) invalid()
+  return output
+}
+
+function isPrivateAddress(address: string): boolean {
+  const normalized = address.toLowerCase().split('%')[0]
+  const version = isIP(normalized)
+  if (version === 4) return PRIVATE_NETWORKS.check(normalized, 'ipv4')
+  if (version === 6) return PRIVATE_NETWORKS.check(normalized, 'ipv6')
+  return true
+}
+
+async function assertPublicHttpUrl(
+  rawUrl: string,
+  resolveAddresses: (hostname: string) => Promise<readonly string[]>
+): Promise<URL> {
+  let parsed: URL
+  try {
+    parsed = new URL(rawUrl)
+  } catch {
+    throw new Error('PLUGIN_BUSINESS_HTTP_URL_INVALID')
+  }
+  if (
+    (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+    parsed.username.length > 0 ||
+    parsed.password.length > 0
+  ) {
+    throw new Error('PLUGIN_BUSINESS_HTTP_URL_INVALID')
+  }
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (!hostname || hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    throw new Error('PLUGIN_BUSINESS_HTTP_PRIVATE_ADDRESS')
+  }
+  if (isIP(hostname) && isPrivateAddress(hostname)) {
+    throw new Error('PLUGIN_BUSINESS_HTTP_PRIVATE_ADDRESS')
+  }
+  let addresses: readonly string[]
+  try {
+    addresses = await resolveAddresses(hostname)
+  } catch {
+    throw new Error('PLUGIN_BUSINESS_HTTP_DNS_FAILED')
+  }
+  if (
+    !Array.isArray(addresses) ||
+    addresses.length < 1 ||
+    addresses.length > 16 ||
+    addresses.some((address) => typeof address !== 'string' || isPrivateAddress(address))
+  ) {
+    throw new Error('PLUGIN_BUSINESS_HTTP_PRIVATE_ADDRESS')
+  }
+  return parsed
+}
+
+function freezeDefinition(
+  definition: PluginHostCapabilityDefinition
+): PluginHostCapabilityDefinition {
+  return Object.freeze(definition)
+}
+
+export function createPluginBusinessCapabilities(
+  options: PluginBusinessCapabilityOptions
+): PluginBusinessCapabilities {
+  const resolvePlugin = readMethod(options, 'resolvePlugin')
+  const resolveHostGeneration = readMethod(options, 'resolveHostGeneration')
+  const sqliteOwnersInput = options.sqliteOwners
+  const sqliteAcquire = readMethod(sqliteOwnersInput, 'acquire')
+  const sqliteCloseActivation = readMethod(sqliteOwnersInput, 'closeActivation')
+  const secureStoreInput = exactRecord(options.secureStore, ['get', 'set'])
+  const secureGet = readMethod(secureStoreInput, 'get')
+  const secureSet = readMethod(secureStoreInput, 'set')
+  const clipboardInput = exactRecord(options.clipboard, ['read', 'write', 'copyAndPaste'])
+  const clipboardRead = readMethod(clipboardInput, 'read')
+  const clipboardWrite = readMethod(clipboardInput, 'write')
+  const clipboardCopyAndPaste = readMethod(clipboardInput, 'copyAndPaste')
+  const networkInput = exactRecord(options.network, ['request', 'resolveAddresses'])
+  const networkRequest = readMethod(networkInput, 'request')
+  const resolveAddressesMethod = readMethod(networkInput, 'resolveAddresses')
+  const openUrlMethod = readMethod(options, 'openUrl')
+  const secureStoreRootPath = boundedString(options.secureStoreRootPath, 4_096)
+  const resolveAddresses = (hostname: string): Promise<readonly string[]> =>
+    Promise.resolve(resolveAddressesMethod.call(networkInput, hostname) as readonly string[])
+  const records = new Map<string, ActivationRecord>()
+  const itemOwners = new Map<string, ActivationRecord>()
+  const featureOwners = new Map<string, ActivationRecord>()
+
+  const resolveActor = (context: PluginSecurityContext): BusinessActor => {
+    if (!isAuthoritativePluginContext(context)) authorityInvalid()
+    const identity = context.identity
+    const hostGeneration = identity.hostGeneration
+    if (
+      identity.authority !== 'plugin-host' ||
+      !Number.isSafeInteger(hostGeneration) ||
+      Number(hostGeneration) < 1 ||
+      context.name !== identity.pluginName
+    ) {
+      authorityInvalid()
+    }
+    let plugin: PluginBusinessPlugin | undefined
+    try {
+      plugin = resolvePlugin.call(options, identity.pluginName) as PluginBusinessPlugin | undefined
+    } catch {
+      authorityInvalid()
+    }
+    if (!plugin || typeof plugin !== 'object') authorityInvalid()
+    const getActivationIdentity = readMethod(plugin, 'getActivationIdentity')
+    let current: PluginActivationIdentity
+    let currentHostGeneration: unknown
+    try {
+      current = snapshotActivation(getActivationIdentity.call(plugin))
+      currentHostGeneration = resolveHostGeneration.call(options, current)
+    } catch {
+      authorityInvalid()
+    }
+    if (
+      current.name !== identity.pluginName ||
+      current.pluginInstanceId !== identity.pluginInstanceId ||
+      current.activationGeneration !== identity.activationGeneration ||
+      current.key !== context.uniqueKey ||
+      currentHostGeneration !== identity.hostGeneration
+    ) {
+      authorityInvalid()
+    }
+    const key = activationRecordKey(current)
+    let record = records.get(key)
+    if (record) {
+      if (
+        record.closed ||
+        !sameActivation(record.activation, current) ||
+        record.hostGeneration !== hostGeneration ||
+        record.plugin !== plugin
+      ) {
+        authorityInvalid()
+      }
+    } else {
+      const createFeatureHost = readMethod(plugin, 'createBusinessFeatureHost')
+      const featureHost = snapshotFeatureHost(createFeatureHost.call(plugin, current))
+      record = {
+        activation: current,
+        hostGeneration: Number(hostGeneration),
+        plugin,
+        featureHost,
+        featureIds: new Set(),
+        itemIds: new Set(),
+        closed: false
+      }
+      records.set(key, record)
+    }
+    if (!record) authorityInvalid()
+    return Object.freeze({
+      activation: current,
+      hostGeneration: Number(hostGeneration),
+      plugin,
+      context,
+      record
+    })
+  }
+
+  const sqliteClientFor = async (actor: BusinessActor): Promise<PluginSqliteResourceClient> => {
+    const getDataPath = readMethod(actor.plugin, 'getDataPath')
+    const dataPath = getDataPath.call(actor.plugin)
+    if (typeof dataPath !== 'string' || dataPath.length === 0) unavailable()
+    return (await sqliteAcquire.call(
+      sqliteOwnersInput,
+      {
+        pluginName: actor.activation.name,
+        pluginInstanceId: actor.activation.pluginInstanceId,
+        activationGeneration: actor.activation.activationGeneration
+      },
+      dataPath
+    )) as PluginSqliteResourceClient
+  }
+
+  const releaseOwnedItems = async (record: ActivationRecord): Promise<void> => {
+    const ids = [...record.itemIds].filter(
+      (id) => itemOwners.get(ownerItemKey(record.activation.name, id)) === record
+    )
+    for (const id of ids) {
+      itemOwners.delete(ownerItemKey(record.activation.name, id))
+      record.itemIds.delete(id)
+    }
+    if (ids.length === 0) return
+    const cleanup = readMethod(record.plugin, 'cleanupBusinessItems')
+    await cleanup.call(record.plugin, record.activation, Object.freeze(ids))
+  }
+
+  const definitions: PluginHostCapabilityDefinition[] = [
+    freezeDefinition({
+      id: 'plugin.info.get',
+      timeoutMs: 5_000,
+      maxConcurrency: 8,
+      validateRequest: validateNull,
+      validateResult: validateRuntimeInfo,
+      async invoke(context) {
+        const actor = resolveActor(context)
+        const method = readMethod(actor.plugin, 'getBusinessRuntimeInfo')
+        return validateRuntimeInfo(method.call(actor.plugin))
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.registry.add',
+      timeoutMs: 10_000,
+      maxConcurrency: 1,
+      validateRequest: validateFeatureAdd,
+      validateResult: (value) => validateBooleanResult(value, 'added'),
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validateFeatureAdd>
+        const ownerKey = ownerItemKey(actor.activation.name, normalized.feature.id)
+        if (featureOwners.has(ownerKey)) return { added: false }
+        const add = readMethod(actor.plugin, 'addBusinessFeature')
+        const added = (await add.call(actor.plugin, normalized.feature)) === true
+        if (added) {
+          actor.record.featureIds.add(normalized.feature.id)
+          featureOwners.set(ownerKey, actor.record)
+        }
+        return { added }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.registry.remove',
+      timeoutMs: 5_000,
+      maxConcurrency: 1,
+      validateRequest: (value) => validateId(value, 'featureId'),
+      validateResult: (value) => validateBooleanResult(value, 'removed'),
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const featureId = (request as { featureId: string }).featureId
+        const ownerKey = ownerItemKey(actor.activation.name, featureId)
+        if (featureOwners.get(ownerKey) !== actor.record) return { removed: false }
+        const remove = readMethod(actor.plugin, 'removeBusinessFeature')
+        const removed = (await remove.call(actor.plugin, featureId)) === true
+        if (removed) {
+          actor.record.featureIds.delete(featureId)
+          featureOwners.delete(ownerKey)
+        }
+        return { removed }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.registry.list',
+      timeoutMs: 5_000,
+      maxConcurrency: 8,
+      validateRequest: validateNull,
+      validateResult: validateFeatureList,
+      invoke(context) {
+        const actor = resolveActor(context)
+        const list = readMethod(actor.plugin, 'listBusinessFeatures')
+        const features = snapshotArray(list.call(actor.plugin), MAX_FEATURES).map((entry) =>
+          projectFeature(entry as IPluginFeature)
+        )
+        return { features }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.items.push',
+      permission: 'search.root-results',
+      timeoutMs: 30_000,
+      maxConcurrency: 1,
+      validateRequest: validatePush,
+      validateResult: validateOk,
+      async invoke(context, request, signal) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validatePush>
+        const priorOwners = new Set<ActivationRecord>()
+        for (const item of normalized.items) {
+          const prior = itemOwners.get(ownerItemKey(actor.activation.name, String(item.id)))
+          if (prior && prior !== actor.record) priorOwners.add(prior)
+        }
+        for (const prior of priorOwners) await releaseOwnedItems(prior)
+        await actor.record.featureHost.pushItems(normalized.scope, normalized.items, signal)
+        if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+        for (const item of normalized.items) {
+          const id = String(item.id)
+          actor.record.itemIds.add(id)
+          itemOwners.set(ownerItemKey(actor.activation.name, id), actor.record)
+        }
+        return { ok: true }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.items.update',
+      permission: 'search.root-results',
+      timeoutMs: 30_000,
+      maxConcurrency: 1,
+      validateRequest: validateUpdate,
+      validateResult: (value) => validateBooleanResult(value, 'updated'),
+      async invoke(context, request, signal) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validateUpdate>
+        if (itemOwners.get(ownerItemKey(actor.activation.name, normalized.id)) !== actor.record) {
+          return { updated: false }
+        }
+        return {
+          updated:
+            (await actor.record.featureHost.updateItem(
+              normalized.scope,
+              normalized.id,
+              normalized.patch,
+              signal
+            )) === true
+        }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.items.remove',
+      timeoutMs: 5_000,
+      maxConcurrency: 1,
+      validateRequest: validateId,
+      validateResult: (value) => validateBooleanResult(value, 'removed'),
+      async invoke(context, request, signal) {
+        const actor = resolveActor(context)
+        const id = (request as { id: string }).id
+        const ownerKey = ownerItemKey(actor.activation.name, id)
+        if (itemOwners.get(ownerKey) !== actor.record) return { removed: false }
+        const removed = (await actor.record.featureHost.removeItem(id, signal)) === true
+        if (removed) {
+          actor.record.itemIds.delete(id)
+          itemOwners.delete(ownerKey)
+        }
+        return { removed }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.items.clear',
+      timeoutMs: 5_000,
+      maxConcurrency: 1,
+      validateRequest: validateNull,
+      validateResult: validateCountResult,
+      async invoke(context, _request, signal) {
+        const actor = resolveActor(context)
+        let removed = 0
+        for (const id of [...actor.record.itemIds]) {
+          const ownerKey = ownerItemKey(actor.activation.name, id)
+          if (itemOwners.get(ownerKey) !== actor.record) continue
+          if ((await actor.record.featureHost.removeItem(id, signal)) === true) removed += 1
+          actor.record.itemIds.delete(id)
+          itemOwners.delete(ownerKey)
+        }
+        return { removed }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.items.list',
+      timeoutMs: 5_000,
+      maxConcurrency: 8,
+      validateRequest: validateNull,
+      validateResult: validateItemList,
+      async invoke(context, _request, signal) {
+        const actor = resolveActor(context)
+        const owned = new Set(
+          [...actor.record.itemIds].filter(
+            (id) => itemOwners.get(ownerItemKey(actor.activation.name, id)) === actor.record
+          )
+        )
+        const items = (await actor.record.featureHost.listItems(signal))
+          .filter((item) => owned.has(String(item.id)))
+          .slice(0, MAX_ITEMS_PER_LIST)
+          .map((item) => cloneItem(item))
+        return { items }
+      }
+    }),
+    freezeDefinition({
+      id: 'storage.file.read',
+      permission: 'storage.plugin',
+      timeoutMs: 30_000,
+      maxConcurrency: 8,
+      validateRequest: validateFileRequest,
+      validateResult: validateFileReadResult,
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const method = readMethod(actor.plugin, 'readBusinessFile')
+        return await method.call(actor.plugin, (request as { name: string }).name)
+      }
+    }),
+    freezeDefinition({
+      id: 'storage.file.write',
+      permission: 'storage.plugin',
+      timeoutMs: 30_000,
+      maxConcurrency: 1,
+      validateRequest: validateFileWrite,
+      validateResult: validateOk,
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validateFileWrite>
+        const method = readMethod(actor.plugin, 'writeBusinessFile')
+        await method.call(actor.plugin, normalized.name, normalized.value)
+        return { ok: true }
+      }
+    }),
+    freezeDefinition({
+      id: 'storage.file.remove',
+      permission: 'storage.plugin',
+      timeoutMs: 30_000,
+      maxConcurrency: 1,
+      validateRequest: validateFileRequest,
+      validateResult: (value) => validateBooleanResult(value, 'removed'),
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const method = readMethod(actor.plugin, 'removeBusinessFile')
+        return {
+          removed: (await method.call(actor.plugin, (request as { name: string }).name)) === true
+        }
+      }
+    }),
+    freezeDefinition({
+      id: 'storage.file.list',
+      permission: 'storage.plugin',
+      timeoutMs: 30_000,
+      maxConcurrency: 8,
+      validateRequest: validateNull,
+      validateResult: validateFileList,
+      async invoke(context) {
+        const actor = resolveActor(context)
+        const method = readMethod(actor.plugin, 'listBusinessFiles')
+        const names = snapshotArray(await method.call(actor.plugin), 1_000).map((entry) =>
+          validateFileName(entry)
+        )
+        return { names: names.sort() }
+      }
+    }),
+    freezeDefinition({
+      id: 'storage.sqlite.execute',
+      permission: 'storage.sqlite',
+      timeoutMs: 30_000,
+      maxConcurrency: 8,
+      validateRequest: validateSqlExecute,
+      validateResult: validateSqlExecuteResult,
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validateSqlExecute>
+        const client = await sqliteClientFor(actor)
+        if (normalized.op === 'query') {
+          validatePluginSql(normalized.sql, 'query')
+          const result = await client.query(normalizePluginSqlForExecution(normalized.sql), [
+            ...normalized.params
+          ])
+          return { op: 'query', rows: result.rows, columns: result.columns }
+        }
+        validatePluginSql(normalized.sql, 'execute')
+        const result = await client.execute(normalizePluginSqlForExecution(normalized.sql), [
+          ...normalized.params
+        ])
+        return { op: 'execute', ...result }
+      }
+    }),
+    freezeDefinition({
+      id: 'storage.sqlite.batch',
+      permission: 'storage.sqlite',
+      timeoutMs: 30_000,
+      maxConcurrency: 8,
+      validateRequest: validateSqlBatch,
+      validateResult: validateSqlBatchResult,
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validateSqlBatch>
+        const client = await sqliteClientFor(actor)
+        const result = await client.transaction(
+          normalized.statements.map((statement) => ({
+            sql: normalizePluginSqlForExecution(statement.sql),
+            params: [...statement.params]
+          }))
+        )
+        return { results: result.results }
+      }
+    }),
+    freezeDefinition({
+      id: 'secret.get',
+      permission: 'storage.plugin',
+      timeoutMs: 30_000,
+      maxConcurrency: 8,
+      validateRequest: validateSecretRequest,
+      validateResult: validateSecretGetResult,
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const key = (request as { key: string }).key
+        const value = (await secureGet.call(
+          secureStoreInput,
+          secureStoreRootPath,
+          `plugin.${actor.activation.name}.${key}`
+        )) as string | null
+        return value === null ? { found: false } : { found: true, value }
+      }
+    }),
+    freezeDefinition({
+      id: 'secret.set',
+      permission: 'storage.plugin',
+      timeoutMs: 30_000,
+      maxConcurrency: 4,
+      validateRequest: validateSecretSet,
+      validateResult: validateOk,
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validateSecretSet>
+        const persisted = await secureSet.call(
+          secureStoreInput,
+          secureStoreRootPath,
+          `plugin.${actor.activation.name}.${normalized.key}`,
+          normalized.value
+        )
+        if (persisted !== true) unavailable()
+        return { ok: true }
+      }
+    }),
+    freezeDefinition({
+      id: 'secret.delete',
+      permission: 'storage.plugin',
+      timeoutMs: 30_000,
+      maxConcurrency: 4,
+      validateRequest: validateSecretRequest,
+      validateResult: validateOk,
+      async invoke(context, request) {
+        const actor = resolveActor(context)
+        const key = (request as { key: string }).key
+        const persisted = await secureSet.call(
+          secureStoreInput,
+          secureStoreRootPath,
+          `plugin.${actor.activation.name}.${key}`,
+          null
+        )
+        if (persisted !== true) unavailable()
+        return { ok: true }
+      }
+    }),
+    freezeDefinition({
+      id: 'clipboard.read',
+      permission: 'clipboard.read',
+      timeoutMs: 5_000,
+      maxConcurrency: 4,
+      validateRequest: validateClipboardRead,
+      validateResult: validateClipboardReadResult,
+      async invoke(context, request, signal) {
+        resolveActor(context)
+        return await clipboardRead.call(clipboardInput, request, context, signal)
+      }
+    }),
+    freezeDefinition({
+      id: 'clipboard.write',
+      permission: 'clipboard.write',
+      timeoutMs: 5_000,
+      maxConcurrency: 2,
+      validateRequest: validateClipboardWrite,
+      validateResult: validateOk,
+      async invoke(context, request, signal) {
+        resolveActor(context)
+        await clipboardWrite.call(clipboardInput, request, context, signal)
+        return { ok: true }
+      }
+    }),
+    freezeDefinition({
+      id: 'clipboard.copy-and-paste',
+      permission: 'clipboard.write',
+      timeoutMs: 30_000,
+      maxConcurrency: 1,
+      validateRequest: validateClipboardCopy,
+      validateResult: validateClipboardCopyResult,
+      async invoke(context, request, signal) {
+        resolveActor(context)
+        return await clipboardCopyAndPaste.call(clipboardInput, request, context, signal)
+      }
+    }),
+    freezeDefinition({
+      id: 'open-url',
+      timeoutMs: 5_000,
+      maxConcurrency: 4,
+      validateRequest: validateOpenUrl,
+      validateResult: validateOpenUrlResult,
+      async invoke(context, request) {
+        resolveActor(context)
+        const decision = (await openUrlMethod.call(
+          options,
+          (request as { url: string }).url
+        )) as PluginBusinessExternalUrlDecision
+        if (decision?.allowed !== true || typeof decision.protocol !== 'string') unavailable()
+        return { opened: true, protocol: decision.protocol }
+      }
+    }),
+    freezeDefinition({
+      id: 'http.request',
+      permission: 'network.internet',
+      timeoutMs: 30_000,
+      maxConcurrency: 8,
+      validateRequest: validateHttpRequest,
+      validateResult: validateHttpResult,
+      async invoke(context, request, signal) {
+        resolveActor(context)
+        const normalized = request as HttpRequestDto
+        await assertPublicHttpUrl(normalized.url, resolveAddresses)
+        const response = (await networkRequest.call(networkInput, {
+          method: normalized.method,
+          url: normalized.url,
+          ...(normalized.headers ? { headers: { ...normalized.headers } } : {}),
+          ...(normalized.query ? { query: { ...normalized.query } } : {}),
+          ...(Object.hasOwn(normalized, 'body') ? { body: normalized.body } : {}),
+          timeoutMs: normalized.timeoutMs,
+          signal,
+          responseType:
+            normalized.responseType === 'bytes' ? 'arrayBuffer' : normalized.responseType,
+          validateStatus: HTTP_STATUSES
+        })) as NetworkResponse
+        await assertPublicHttpUrl(response.url, resolveAddresses)
+        const data =
+          normalized.responseType === 'bytes'
+            ? Buffer.from(response.data as ArrayBuffer).toString('base64')
+            : response.data
+        return {
+          status: response.status,
+          statusText: response.statusText,
+          headers: { ...response.headers },
+          data,
+          url: response.url,
+          ok: response.ok
+        }
+      }
+    })
+  ]
+
+  const closeActivation = async (activationInput: PluginActivationIdentity): Promise<void> => {
+    const activation = snapshotActivation(activationInput)
+    const record = records.get(activationRecordKey(activation))
+    if (record && sameActivation(record.activation, activation) && !record.closed) {
+      record.closed = true
+      records.delete(activationRecordKey(activation))
+      await releaseOwnedItems(record)
+      const removeFeature = readMethod(record.plugin, 'removeBusinessFeature')
+      for (const featureId of [...record.featureIds]) {
+        const ownerKey = ownerItemKey(activation.name, featureId)
+        if (featureOwners.get(ownerKey) !== record) continue
+        featureOwners.delete(ownerKey)
+        await removeFeature.call(record.plugin, featureId)
+      }
+      record.itemIds.clear()
+      record.featureIds.clear()
+    }
+    await sqliteCloseActivation.call(sqliteOwnersInput, {
+      pluginName: activation.name,
+      pluginInstanceId: activation.pluginInstanceId,
+      activationGeneration: activation.activationGeneration
+    })
+  }
+
+  const closeAll = async (): Promise<void> => {
+    for (const record of [...records.values()]) await closeActivation(record.activation)
+  }
+
+  return Object.freeze({
+    definitions: Object.freeze(definitions),
+    closeActivation,
+    closeAll
+  })
+}

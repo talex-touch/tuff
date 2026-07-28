@@ -19,7 +19,10 @@ import type {
   HandlerContext,
   ITuffTransportMain,
   MainInvokeContext,
+  PluginActivationIdentity,
+  PluginInvokeContext,
   PluginKeyManager,
+  PluginSecurityContext,
   StreamContext,
 } from "../types";
 import { randomUUID } from "node:crypto";
@@ -28,6 +31,10 @@ import { assertTuffEvent } from "../event/builder";
 import { TransportEvents } from "../events";
 import { isPortChannelEnabled } from "./port-policy";
 import { createServerStreamRuntime } from "./stream/server-runtime";
+import {
+  isAuthoritativePluginContext,
+  issuePluginSecurityContext,
+} from "../security/plugin-identity";
 
 const { ipcMain, MessageChannelMain } = electron;
 const BRIDGE_CHANNEL = {
@@ -171,6 +178,7 @@ interface PortRecord {
   scope: TransportPortScope;
   windowId?: number;
   plugin?: string;
+  pluginContext?: PluginSecurityContext;
   permissions?: string[];
   confirmed: boolean;
   createdAt: number;
@@ -188,12 +196,32 @@ interface PortLookup {
   record: PortRecord;
 }
 
+function isSamePluginCaller(
+  left: PluginSecurityContext | undefined,
+  right: PluginSecurityContext | undefined,
+): boolean {
+  if (
+    !isAuthoritativePluginContext(left) ||
+    !isAuthoritativePluginContext(right)
+  ) {
+    return false;
+  }
+  return (
+    left.identity.pluginName === right.identity.pluginName &&
+    left.identity.pluginInstanceId === right.identity.pluginInstanceId &&
+    left.identity.activationGeneration ===
+      right.identity.activationGeneration &&
+    left.uniqueKey === right.uniqueKey
+  );
+}
+
 function resolvePortRecord(
   channel: string,
   sender: WebContents,
   scope?: TransportPortScope,
   plugin?: string,
   requestedPortId?: string,
+  pluginContext?: PluginSecurityContext,
 ): PortLookup | null {
   const portIds = portsBySenderId.get(sender.id);
   if (!portIds) return null;
@@ -214,6 +242,11 @@ function resolvePortRecord(
       plugin &&
       record.plugin &&
       record.plugin !== plugin
+    )
+      return null;
+    if (
+      scope === "plugin" &&
+      !isSamePluginCaller(record.pluginContext, pluginContext)
     )
       return null;
     return { portId, record };
@@ -368,6 +401,18 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       } satisfies TransportPortUpgradeResponse;
     }
 
+    if (scope === "plugin" && !isAuthoritativePluginContext(context.plugin)) {
+      return {
+        accepted: false,
+        channel,
+        scope,
+        error: buildError(
+          "plugin_identity_required",
+          "Authoritative plugin identity is required for plugin scope",
+        ),
+      } satisfies TransportPortUpgradeResponse;
+    }
+
     if (context.plugin?.name && plugin && plugin !== context.plugin.name) {
       return {
         accepted: false,
@@ -389,6 +434,10 @@ function registerPortHandlers(transport: TuffMainTransport): void {
       scope,
       windowId,
       plugin: plugin || undefined,
+      pluginContext:
+        scope === "plugin" && isAuthoritativePluginContext(context.plugin)
+          ? context.plugin
+          : undefined,
       permissions: payload?.permissions,
       confirmed: false,
       createdAt: Date.now(),
@@ -455,6 +504,12 @@ function registerPortHandlers(transport: TuffMainTransport): void {
     ) {
       return;
     }
+    if (
+      record.scope === "plugin" &&
+      !isSamePluginCaller(record.pluginContext, context.plugin)
+    ) {
+      return;
+    }
     record.confirmed = true;
     if (record.confirmTimeout) {
       clearTimeout(record.confirmTimeout);
@@ -496,6 +551,18 @@ function registerPortHandlers(transport: TuffMainTransport): void {
   });
 }
 
+function isSameActivation(
+  left: PluginActivationIdentity,
+  right: PluginActivationIdentity,
+): boolean {
+  return (
+    left.name === right.name &&
+    left.pluginInstanceId === right.pluginInstanceId &&
+    left.activationGeneration === right.activationGeneration &&
+    left.key === right.key
+  );
+}
+
 /**
  * Main process transport implementation.
  * Adapts the current TouchChannel bridge to the TuffTransportMain interface.
@@ -506,6 +573,91 @@ export class TuffMainTransport implements ITuffTransportMain {
     public readonly keyManager: PluginKeyManager,
   ) {
     registerPortHandlers(this);
+  }
+
+  private resolveActivation(
+    candidate: PluginActivationIdentity | undefined,
+  ): PluginActivationIdentity | undefined {
+    if (!candidate || !this.keyManager.resolveIdentity) {
+      return undefined;
+    }
+    const current = this.keyManager.resolveIdentity(candidate.key);
+    if (!current || !isSameActivation(current, candidate)) {
+      return undefined;
+    }
+    return current;
+  }
+
+  private resolveChannelPluginContext(
+    data: any,
+  ): PluginSecurityContext | undefined {
+    const pluginName =
+      typeof data?.plugin === "string" ? data.plugin : undefined;
+    if (!pluginName) {
+      return undefined;
+    }
+
+    const uniqueKey =
+      typeof data?.header?.uniqueKey === "string" ? data.header.uniqueKey : "";
+    const candidate = data?.pluginIdentity as
+      | PluginActivationIdentity
+      | undefined;
+    const activation = this.resolveActivation(candidate);
+    const sender = data?.header?.event?.sender as WebContents | undefined;
+    if (
+      activation &&
+      activation.name === pluginName &&
+      (!uniqueKey || uniqueKey === activation.key) &&
+      sender &&
+      !sender.isDestroyed?.()
+    ) {
+      return issuePluginSecurityContext(activation, "web-contents", {
+        senderId: sender.id,
+      });
+    }
+
+    return { name: pluginName, uniqueKey };
+  }
+
+  private resolveSenderPluginContext(
+    sender: WebContents,
+  ): PluginSecurityContext | undefined {
+    if (!this.keyManager.resolveSenderIdentity) {
+      return undefined;
+    }
+    const candidate = this.keyManager.resolveSenderIdentity(sender);
+    if (!candidate) {
+      return undefined;
+    }
+    if (sender.isDestroyed?.()) {
+      return { name: candidate.name, uniqueKey: candidate.key };
+    }
+    const activation = this.resolveActivation(candidate);
+    if (!activation) {
+      return { name: candidate.name, uniqueKey: candidate.key };
+    }
+    return issuePluginSecurityContext(activation, "web-contents", {
+      senderId: sender.id,
+    });
+  }
+
+  private resolveLocalPluginContext(
+    plugin: PluginInvokeContext | undefined,
+  ): PluginSecurityContext | undefined {
+    if (!plugin) {
+      return undefined;
+    }
+    const candidate = this.keyManager.resolveIdentity?.(plugin.uniqueKey);
+    const activation = this.resolveActivation(candidate);
+    if (activation && activation.name === plugin.name) {
+      const context = issuePluginSecurityContext(activation, "local-host");
+      context.sdkapi = plugin.sdkapi;
+      return context;
+    }
+    return {
+      name: plugin.name,
+      uniqueKey: plugin.uniqueKey,
+    };
   }
 
   /**
@@ -540,13 +692,7 @@ export class TuffMainTransport implements ITuffTransportMain {
       const context: HandlerContext = {
         sender: data.header?.event?.sender as any,
         eventName,
-        plugin: data.plugin
-          ? {
-              name: data.plugin,
-              uniqueKey: data.header?.uniqueKey || "",
-              verified: Boolean(data.header?.uniqueKey),
-            }
-          : undefined,
+        plugin: this.resolveChannelPluginContext(data),
       };
 
       return baseHandler(data.data as TReq, context);
@@ -556,6 +702,7 @@ export class TuffMainTransport implements ITuffTransportMain {
       const context: HandlerContext = {
         sender: event.sender as any,
         eventName,
+        plugin: this.resolveSenderPluginContext(event.sender),
       };
       return baseHandler(payload, context);
     };
@@ -624,10 +771,28 @@ export class TuffMainTransport implements ITuffTransportMain {
           scope,
           request.plugin?.name,
           request.portId,
+          request.plugin,
         );
 
         if (!portLookup) {
           return null;
+        }
+
+        if (request.plugin && portLookup.record.pluginContext?.identity) {
+          const identity = portLookup.record.pluginContext.identity;
+          request.plugin = issuePluginSecurityContext(
+            {
+              name: identity.pluginName,
+              pluginInstanceId: identity.pluginInstanceId,
+              activationGeneration: identity.activationGeneration,
+              key: portLookup.record.pluginContext.uniqueKey,
+            },
+            "message-port",
+            {
+              senderId: request.sender.id,
+              portId: portLookup.portId,
+            },
+          );
         }
 
         return {
@@ -693,13 +858,7 @@ export class TuffMainTransport implements ITuffTransportMain {
         portId,
         payload: payload as TReq,
         sender,
-        plugin: data.plugin
-          ? {
-              name: data.plugin,
-              uniqueKey: data.header?.uniqueKey || "",
-              verified: Boolean(data.header?.uniqueKey),
-            }
-          : undefined,
+        plugin: this.resolveChannelPluginContext(data),
       });
     };
 
@@ -762,7 +921,7 @@ export class TuffMainTransport implements ITuffTransportMain {
     const handlerContext: HandlerContext = {
       sender,
       eventName,
-      plugin: context.plugin,
+      plugin: this.resolveLocalPluginContext(context.plugin),
     };
 
     let result: unknown;
