@@ -13,7 +13,7 @@ run = "git diff --check -- mise.toml scripts/ai-docs docs/plan-prd/04-implementa
 
 [tasks."docs:verify"]
 description = "Deterministic read-only documentation verification"
-run = "corepack pnpm exec vitest run scripts/docs.test.mjs && node scripts/docs/verify-docs.mjs"
+run = "node scripts/docs/run-docs-verify.mjs"
 
 [tasks."intelligence:dev"]
 description = "Fast deterministic intelligence validation"

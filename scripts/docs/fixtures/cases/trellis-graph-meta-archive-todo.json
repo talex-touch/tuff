@@ -1,0 +1,27 @@
+{
+  "base": "valid-aggregate",
+  "files": {
+    ".trellis/archive/tasks/incomplete-task/task.json": "{\n  \"id\": \"incomplete-task\",\n  \"title\": \"Incomplete archived task\",\n  \"status\": \"in_progress\",\n  \"assignee\": \"docs-owner\",\n  \"assignees\": [\"docs-owner\"],\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Archived incorrectly.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Archive fixture.\"\n  }\n}\n",
+    ".trellis/tasks/active-doc-task/task.json": "{\n  \"id\": \"duplicate-task\",\n  \"title\": \"Active task missing required metadata\",\n  \"status\": \"in_progress\",\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"\",\n    \"blocker\": \"\",\n    \"evidence\": \"\"\n  }\n}\n",
+    ".trellis/tasks/child/prd.md": "# Child PRD\n\n## Goal\n\nExercise graph validation.\n",
+    ".trellis/tasks/child/task.json": "{\n  \"id\": \"child\",\n  \"title\": \"Child task\",\n  \"status\": \"in_progress\",\n  \"assignee\": \"docs-owner\",\n  \"assignees\": [\"docs-owner\"],\n  \"parent\": \"wrong-parent\",\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Fix graph.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Graph fixture.\"\n  }\n}\n",
+    ".trellis/tasks/completed-active/prd.md": "# Completed Active PRD\n\n## Goal\n\nThis task should have been archived.\n",
+    ".trellis/tasks/completed-active/task.json": "{\n  \"id\": \"completed-active\",\n  \"title\": \"Completed task left active\",\n  \"status\": \"completed\",\n  \"assignee\": \"docs-owner\",\n  \"assignees\": [\"docs-owner\"],\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Archive this task.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Completion fixture.\"\n  }\n}\n",
+    ".trellis/tasks/duplicate/task.json": "{\n  \"id\": \"duplicate-task\",\n  \"title\": \"Duplicate task identity\",\n  \"status\": \"in_progress\",\n  \"assignee\": \"docs-owner\",\n  \"assignees\": [\"docs-owner\"],\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Resolve duplicate identity.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Duplicate fixture.\"\n  }\n}\n",
+    ".trellis/tasks/invalid-json/task.json": "{ invalid json\n",
+    ".trellis/tasks/parent/prd.md": "# Parent PRD\n\n## Goal\n\nExercise graph validation.\n",
+    ".trellis/tasks/parent/task.json": "{\n  \"id\": \"parent\",\n  \"title\": \"Parent task\",\n  \"status\": \"in_progress\",\n  \"assignee\": \"docs-owner\",\n  \"assignees\": [\"docs-owner\"],\n  \"children\": [\"child\", \"missing-child\"],\n  \"meta\": {\n    \"nextAction\": \"Fix children.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Graph fixture.\"\n  }\n}\n",
+    "docs/plan-prd/TODO.md": "# TODO\n\n- Active task reference: [.trellis/tasks/active-doc-task/prd.md](../../.trellis/tasks/active-doc-task/prd.md)\n- Completed task must not be listed as active: [.trellis/tasks/completed-active/prd.md](../../.trellis/tasks/completed-active/prd.md)\n- Missing task reference: [.trellis/tasks/missing-task/prd.md](../../.trellis/tasks/missing-task/prd.md)\n"
+  },
+  "trackedAdd": [
+    ".trellis/archive/tasks/incomplete-task/task.json",
+    ".trellis/tasks/child/prd.md",
+    ".trellis/tasks/child/task.json",
+    ".trellis/tasks/completed-active/prd.md",
+    ".trellis/tasks/completed-active/task.json",
+    ".trellis/tasks/duplicate/task.json",
+    ".trellis/tasks/invalid-json/task.json",
+    ".trellis/tasks/parent/prd.md",
+    ".trellis/tasks/parent/task.json"
+  ]
+}

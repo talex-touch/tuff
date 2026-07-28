@@ -2,6 +2,7 @@
   "id": "active-doc-task",
   "title": "Active documentation task",
   "status": "in_progress",
+  "parent": null,
   "assignee": "docs-owner",
   "assignees": ["docs-owner"],
   "children": [],

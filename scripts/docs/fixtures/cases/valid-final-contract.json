@@ -1,0 +1,11 @@
+{
+  "base": "valid-aggregate",
+  "files": {
+    ".trellis/archive/tasks/completed-doc-task/task.json": "{\n  \"id\": \"completed-doc-task\",\n  \"title\": \"Completed documentation task\",\n  \"status\": \"completed\",\n  \"parent\": null,\n  \"completedAt\": \"2026-07-27T00:00:00.000Z\",\n  \"assignee\": \"docs-owner\",\n  \"assignees\": [\"docs-owner\"],\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Archived.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Completed fixture metadata.\"\n  }\n}\n",
+    ".trellis/tasks/07-17-unify-ota-update-flow/task.json": "{\n  \"id\": \"unify-ota-update-flow\",\n  \"title\": \"OTA update flow\",\n  \"status\": \"in_progress\",\n  \"parent\": null,\n  \"children\": [],\n  \"meta\": {}\n}\n",
+    ".trellis/tasks/active-doc-task/task.json": "{\n  \"id\": \"active-doc-task\",\n  \"title\": \"Active documentation task\",\n  \"status\": \"in_progress\",\n  \"parent\": null,\n  \"assignee\": \"docs-owner\",\n  \"assignees\": [\"docs-owner\"],\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Run the canonical docs verifier.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Fixture regression coverage.\"\n  }\n}\n"
+  },
+  "trackedAdd": [
+    ".trellis/tasks/07-17-unify-ota-update-flow/task.json"
+  ]
+}
