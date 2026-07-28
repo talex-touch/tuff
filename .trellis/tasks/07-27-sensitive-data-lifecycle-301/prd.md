@@ -6,11 +6,13 @@
 
 ## Requirements
 
-- TBD
+- Define the lifecycle contract for retained sensitive data, export, deletion, remote processing, backup recovery, and uninstall behavior; the parent issue audit confirms that these controls are not yet unified.
+- Confirm product decisions for default retention periods and uninstall deletion behavior before implementation; do not assume permanent retention or immediate deletion.
 
 ## Acceptance Criteria
 
-- [ ] TBD
+- [ ] The approved lifecycle contract covers retention, export, deletion, remote processing, backup recovery, and uninstall semantics without claiming implementation or verification that has not occurred.
+- [ ] The task's acceptance aligns with the #301 issue mapping and the #302 tracker dependency recorded by `07-27-resolve-open-github-issues`.
 
 ## Notes
 
