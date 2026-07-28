@@ -1,7 +1,7 @@
 ---
 title: "FlatInput 扁平输入框"
 description: "低强调文本、密码与多行输入框，支持前缀内容和 Caps Lock 提示。"
-category: Basic
+category: Form
 status: beta
 since: 1.0.0
 tags: [input, form, flat]

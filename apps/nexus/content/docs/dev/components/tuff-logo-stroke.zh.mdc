@@ -1,7 +1,7 @@
 ---
 title: "TuffLogoStroke Logo 描边"
 description: "Tuff Logo 的 SVG 描边动画组件，支持 once、breathe、hover 和 loop 模式。"
-category: Basic
+category: Effects
 tags: [logo, svg, animation]
 syncStatus: reviewed
 verified: true

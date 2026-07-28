@@ -1,7 +1,7 @@
 ---
 title: "BaseSurface"
 description: "Unified background rendering component supporting pure/mask/blur/glass/refraction modes with motion-degradation fallback for backdrop-filter + transform issues."
-category: Layout
+category: Primitives
 status: beta
 since: 2.5.0
 tags: [surface, background, blur, glass, backdrop-filter, fallback]

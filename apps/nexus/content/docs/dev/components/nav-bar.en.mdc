@@ -1,7 +1,7 @@
 ---
 title: "NavBar"
 description: "Compact top navigation bar with title, action slots, safe-area padding, and back events."
-category: Layout
+category: Navigation
 status: beta
 since: 1.0.0
 tags: [navigation, mobile, layout]

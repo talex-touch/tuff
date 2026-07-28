@@ -13,6 +13,8 @@ export default {
     download: 'Updates',
     blog: 'Blog',
     menu: 'Menu',
+    privacy: 'Privacy',
+    license: 'License',
   },
   ui: {
     languageToggle: {
@@ -557,9 +559,13 @@ export default {
     categories: {
       basic: 'Basic',
       form: 'Form',
-      feedback: 'Feedback',
       layout: 'Layout',
-      data: 'Data',
+      navigation: 'Navigation',
+      data: 'Data Display',
+      feedback: 'Feedback',
+      status: 'Status & Empty',
+      effects: 'Effects',
+      primitives: 'Primitives',
       misc: 'Misc',
     },
   },

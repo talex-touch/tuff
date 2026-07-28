@@ -13,6 +13,8 @@ export default {
     download: '更新',
     blog: '博客',
     menu: '菜单',
+    privacy: '隐私政策',
+    license: '许可协议',
   },
   ui: {
     languageToggle: {
@@ -557,9 +559,13 @@ export default {
     categories: {
       basic: '基础',
       form: '表单',
-      feedback: '反馈',
       layout: '布局',
-      data: '数据',
+      navigation: '导航',
+      data: '数据展示',
+      feedback: '反馈',
+      status: '状态占位',
+      effects: '视觉效果',
+      primitives: '底层原语',
       misc: '其他',
     },
   },
