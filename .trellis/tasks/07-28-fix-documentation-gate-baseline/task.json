@@ -8,19 +8,23 @@
   "scope": "docs",
   "package": null,
   "priority": "P1",
-  "creator": "--help",
+  "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-28",
   "completedAt": null,
   "branch": "TalexDreamSoul/docs-gate-baseline-fixes",
   "base_branch": "TalexDreamSoul/docs-remediation-integration",
-  "worktree_path": null,
-  "commit": null,
-  "pr_url": null,
+  "worktree_path": "/Users/tagzixian/orca/workspaces/talex-touch/docs-gate-baseline-fixes",
+  "commit": "26dea2ee419f56e2660d3bc7a2eef7ab24a1c8a3",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/360",
   "subtasks": [],
   "children": [],
   "parent": null,
   "relatedFiles": [],
-  "notes": "",
-  "meta": {}
+  "notes": "PR #360 is open against TalexDreamSoul/docs-remediation-integration; the PR #359 strict verifier rerun reports zero diagnostics after the canonical-link and metadata repairs.",
+  "meta": {
+    "nextAction": "Await review of PR #360; rerun the strict verifier after any review-driven documentation change before merge.",
+    "blocker": "No documentation-gate diagnostic remains; PR #360 is open and awaits reviewer approval rather than a technical fix.",
+    "evidence": "`node /private/tmp/docs-verify-pr359.mjs` run from this worktree exited 0 with `docs:verify passed`; PR #360 contains baseline commit 26dea2ee419f56e2660d3bc7a2eef7ab24a1c8a3."
+  }
 }
