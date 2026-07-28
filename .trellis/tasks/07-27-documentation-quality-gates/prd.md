@@ -95,16 +95,16 @@ The draft PR must name each prerequisite PR URL and commit. Missing or supersede
 
 ## Acceptance Criteria
 
-- [ ] A single `mise run docs:verify` command runs all fixtures and the complete repository gate locally and in CI without dynamic downloads.
-- [ ] Two unchanged runs have byte-identical diagnostics and exit codes, and Git tracked/untracked state is unchanged before and after.
-- [ ] Recursive tracked product Markdown/MDC lint and AST-based relative-link validation pass with the documented scope and zero repository-escape targets.
-- [ ] Active/archived Trellis hierarchy, owner/meta, TODO reference, and completed-state checks pass without mutating task files.
-- [ ] Root/CoreApp versions match; a legacy current version is accepted without notes, while an above-baseline version requires exact current bilingual notes satisfying the guide's version, section, and bullet-shape contract.
-- [ ] AI active documents distinguish historical, current source, packaged, and production evidence; the historical 13/13 snapshot is not promoted.
-- [ ] Active PRDs contain no unresolved placeholder under the explicit rules and reviewed allowlist.
-- [ ] Every rule family has a stable failing fixture, the valid and excluded-scope fixtures pass, and output-cap summaries retain total counts.
-- [ ] CI contains one invocation of the canonical docs command and no duplicated changed-only Markdown or AI rule implementation.
-- [ ] The draft PR records all four prerequisite PRs/commits, owned files, commands/output, and leaves prerequisite prose plus concurrent bilingual/OTA paths untouched.
+- [x] A single `mise run docs:verify` command runs all fixtures and the complete repository gate locally and in CI without dynamic downloads.
+- [x] Two unchanged runs have byte-identical diagnostics and exit codes, and Git tracked/untracked state is unchanged before and after.
+- [x] Recursive tracked product Markdown/MDC lint and AST-based relative-link validation pass with the documented scope and zero repository-escape targets.
+- [x] Active/archived Trellis hierarchy, owner/meta, TODO reference, and completed-state checks pass without mutating task files.
+- [x] Root/CoreApp versions match; a legacy current version is accepted without notes, while an above-baseline version requires exact current bilingual notes satisfying the guide's version, section, and bullet-shape contract.
+- [x] AI active documents distinguish historical, current source, packaged, and production evidence; the historical 13/13 snapshot is not promoted.
+- [x] Active PRDs contain no unresolved placeholder under the explicit rules and reviewed allowlist.
+- [x] Every rule family has a stable failing fixture, the valid and excluded-scope fixtures pass, and output-cap summaries retain total counts.
+- [x] CI contains one invocation of the canonical docs command and no duplicated changed-only Markdown or AI rule implementation.
+- [x] The draft PR records all four prerequisite PRs/commits, owned files, commands/output, and leaves prerequisite prose plus concurrent bilingual/OTA paths untouched.
 
 ## Out of Scope
 
