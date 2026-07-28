@@ -1,0 +1,40 @@
+{
+  "id": "converge-project-documentation-gates",
+  "name": "converge-project-documentation-gates",
+  "title": "Converge project documentation and gates",
+  "description": "Coordinate source-of-truth convergence, roadmap and release refresh, peripheral documentation repair, and final documentation quality gates through four independently verifiable child tasks.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": "documentation",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": null,
+  "branch": "TalexDreamSoul/docs-remediation-plan",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-27-docs-sot-convergence",
+    "07-27-roadmap-release-docs",
+    "07-27-peripheral-docs-cleanup",
+    "07-27-documentation-quality-gates"
+  ],
+  "parent": null,
+  "relatedFiles": [
+    "docs/plan-prd/TODO.md",
+    "docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md",
+    "docs/plan-prd/01-project/CHANGES.md",
+    ".github/workflows/ci.yml"
+  ],
+  "notes": "Planning container only. Product documentation and quality-gate implementation belong to the four child tasks and their dedicated PRs.",
+  "meta": {
+    "nextAction": "Review and merge the planning PR, then start the SoT, roadmap/release, and peripheral documentation children in independent worktrees.",
+    "blocker": "none",
+    "evidence": "prd.md cross-child acceptance criteria plus each child prd.md, design.md, implement.md, and curated context manifests."
+  }
+}

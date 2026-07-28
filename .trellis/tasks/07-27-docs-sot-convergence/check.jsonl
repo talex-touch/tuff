@@ -1,0 +1,5 @@
+{"file":"docs/plan-prd/TODO.md","reason":"Check that one global execution order remains after the batch."}
+{"file":"todo.md","reason":"Check that the replacement child preserves every safety warning and acceptance step before deletion."}
+{"file":".trellis/tasks/07-13-search-crossplatform-audit/task.json","reason":"Check bidirectional linkage for the new search-index child without changing unrelated backlog semantics."}
+{"file":".trellis/tasks/archive/2026-07/07-16-converge-trellis-task-doc-state/prd.md","reason":"Check archive and retained-task acceptance against the prior proven contract."}
+{"file":"docs/INDEX.md","reason":"Check navigation points to the authoritative TODO without introducing competing live-state claims."}

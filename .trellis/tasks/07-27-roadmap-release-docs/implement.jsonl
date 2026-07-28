@@ -1,0 +1,6 @@
+{"file":"docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md","reason":"Primary active roadmap whose evidence status and R6 labels need local scoping."}
+{"file":"docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md","reason":"Authoritative active mapping for historical 13/13 versus current-version recapture."}
+{"file":"docs/plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md","reason":"R1 Gate E matrix that must incorporate exact beta.19 evidence without closing OTA."}
+{"file":"docs/plan-prd/01-project/CHANGES.md","reason":"Chronological completed-fact record for high-signal Everything, icon, release, and OTA updates."}
+{"file":"README.md","reason":"English root product entrypoint owned by this child."}
+{"file":"README.zh-CN.md","reason":"Chinese root product entrypoint containing stale hand-maintained dependency versions."}
