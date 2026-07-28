@@ -44,6 +44,13 @@ export default {
     cancel: 'Cancel',
     close: 'Close',
   },
+  notFound: {
+    title: 'Page not found',
+    description: 'The page you are looking for doesn\'t exist, or has drifted past the event horizon.',
+    seoDescription: 'The page {path} does not exist or has been moved.',
+    backHome: 'Back to Home',
+    goBack: 'Go Back',
+  },
   search: {
     open: 'Search',
     openAria: 'Open global search',
