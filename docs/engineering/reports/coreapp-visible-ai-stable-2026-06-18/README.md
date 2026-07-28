@@ -46,7 +46,7 @@
 
 ## R2 evidence artifact inventory
 
-2026-06-24 inventory 校验 `coreapp-visible-experience-manifest.json` 当前引用：13 个 surfaces 全部 `passed`，manifest artifact 总引用 72 次，去重后 72 个唯一文件。所有 manifest 引用文件均存在、非空，JSON artifact 均可解析，`evidenceTagArtifacts` 没有指向 unknown artifact。
+2026-06-24 earlier inventory checkpoint 曾记录 72 个引用；同日后续 broader-surface evidence 合入后，final historical manifest 为 13 个 `passed` surfaces、77 个 artifact refs，且 77 个路径均唯一。所有 manifest 引用文件均存在、非空，JSON artifact 均可解析，`evidenceTagArtifacts` 没有指向 unknown artifact。
 
 | Passed surface                    | Unique artifacts | 类型分布                   |
 | --------------------------------- | ---------------: | -------------------------- |

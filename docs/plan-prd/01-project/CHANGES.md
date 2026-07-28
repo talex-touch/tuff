@@ -1,7 +1,33 @@
 # 变更日志
 
-> 更新时间：2026-07-16
+> 更新时间：2026-07-27
 > 定位：只保留当前阶段的高信号变更索引。早期流水记录已从文档树移除，可从 Git 历史追溯。
+
+## 2026-07-27
+
+### search: record Windows Everything packaged backend evidence
+
+- Hosted Windows run `29628880312` passed the SDK, CLI fallback, unavailable-state, package/native, focused-test, artifact-upload, and cleanup gates. Redacted evidence records 200 non-empty samples per backend: SDK P50/P95 `2/3ms` and CLI P50/P95 `8/9ms`.
+- The packaged self-check resolved Everything `1.4.1.1032` through `sdk-napi`; wrapper, resource manifest, and native addon identity were verified without storing queries or paths.
+- Packaged CoreBox result/empty/degraded UI captures, attachment to the Windows acceptance manifest, and the strict UI gate remain open; backend/package evidence does not close interactive acceptance.
+
+### coreapp: harden application-icon self-healing and resource boundaries
+
+- Identity-based cache recovery, bounded AppProvider batches, and retryable icon persistence restored real-profile icons without using icon-only FTS mutations; the final profile reduced stale temp pointers from 41 to 0 and held 11 main database descriptors instead of the captured 486.
+- Darwin extraction now uses the main-thread AppKit path writer and returns only `{ path, width, height }`; renderer bytes stay on the allowlisted `tfile` data plane. An isolated profile hydrated 227 misses, and five native processes completed 625/625 writes without a new `SIGTRAP` or `EXC_BREAKPOINT` report.
+- This is real-profile/local packaged evidence. An official-attested N+1 release with native trust `pass` remains open and is required before claiming release closure.
+
+### release: close exact beta.19 Gate E integrity evidence
+
+- Published `v2.4.13-beta.19` passed formal `gate-e --strict` with `result: pass` and exit code `0`; the exact source is the [published release gate contract](../../../.trellis/tasks/07-21-07-20-align-published-release-gates/prd.md).
+- The gate observed remote bilingual notes, the three-platform preferred manifest/Nexus matrix, full GitHub inventory, download URLs, SHA-256, rollback/latest status, and the assets' configured `signatureUrl` payloads. The additional Linux DEB and its `.deb.sig` remained inventory-only rather than a second preferred artifact.
+- This production result is scoped to beta.19. Stable `v2.4.13`, CoreApp install-time pinned-key verification, and OTA lifecycle acceptance require their own evidence.
+
+### ota: land the governed lifecycle and keep host acceptance open
+
+- OTA discovery/security, SQLite `app_update_attempts`, revisioned lifecycle snapshots, typed quit/install coordination, manifest v2 rollback metadata, native-trust projection, and ready-only notification/click contracts now share one fail-closed path.
+- Focused suites and isolated packaged macOS Settings/check smoke cover the source and unsigned-package behavior; Windows/Linux remain static-only where no real host runtime was executed.
+- Official-attested N+1 macOS ready→click→replace→health/recovery timing, exact N/N-1 compatibility, Windows/Linux real-host handoff, and profile compatibility remain open. Gate E or local packaging does not close them.
 
 ## 2026-07-17
 
@@ -326,13 +352,13 @@
 
 - `TxGroupBlock` 不再把整段 header `div` 直接绑定 click；collapsible 模式新增全幅原生 `button type="button"`，提供 `aria-expanded`、`aria-controls`、可见 focus ring 与浏览器原生 Enter/Space 激活，静态 group 不渲染交互入口。
 - toggle button 与 `header-extra` 成为 sibling 层，标题/图标区域继续把 pointer 交给全幅 toggle，但 extra 中的 `TxButton` / 原生按钮不再嵌套在 toggle 内，也不会因冒泡意外折叠分组；既有 header/label/toggle class 与存储、动画、emit contract 保持不变。
-- GroupBlock focused 5/5，连同 Tree/TreeSelect 相关回归共 14/14；focused ESLint、TuffEx 全包 `vue-tsc` 与本切片 scoped `git diff --check` 已通过。R6 继续保留其他非语义交互、legacy Menu 与 visual smoke 长尾。
+- GroupBlock focused 5/5，连同 Tree/TreeSelect 相关回归共 14/14；focused ESLint、TuffEx 全包 `vue-tsc` 与本切片 scoped `git diff --check` 已通过。Roadmap R6 (UI / TuffEx) 继续保留其他非语义交互、legacy Menu 与 visual smoke 长尾。
 
 ### tuffex: add Tree roving focus and keyboard navigation
 
 - `TxTree` 现在只保留一个可 Tab 进入的 enabled `treeitem`，disabled item 会被跳过；Enter/Space 执行选择，ArrowUp/ArrowDown/Home/End 移动焦点，ArrowRight/ArrowLeft 完成展开、进入子级、折叠与返回父级。
 - 内置 caret/checkbox 保留 pointer 操作但退出行内 Tab 序列；`TxTreeSelect` 自定义 `TxCardItem` 同样把键盘入口交给外层 treeitem，并移除内外两层同时处理同一次 click 导致的重复 selection emit。
-- Tree/TreeSelect focused 9/9，Checkbox/Transfer/Cascader 相关消费回归合计 25/25；focused ESLint、TuffEx 全包 `vue-tsc` 与本切片 scoped `git diff --check` 已通过。R6 仍保持 partial，其他主路径非语义交互、legacy Menu 与 visual smoke 继续开放。
+- Tree/TreeSelect focused 9/9，Checkbox/Transfer/Cascader 相关消费回归合计 25/25；focused ESLint、TuffEx 全包 `vue-tsc` 与本切片 scoped `git diff --check` 已通过。Roadmap R6 (UI / TuffEx) 仍保持 partial，其他主路径非语义交互、legacy Menu 与 visual smoke 继续开放。
 
 ### touch-translation: prove network provider fail-closed boundary
 
@@ -404,7 +430,7 @@
 
 - `TxCheckbox` 根节点从 `div role="checkbox"` 收为原生 `button type="button" role="checkbox"`，使用原生 disabled 与 Enter/Space 激活语义，移除手写 tabindex / keydown，并保留 `aria-checked`、label/slot、`update:modelValue` / `change` 和现有 class contract。
 - 组件补最小 button reset，避免在表单中触发 submit 或继承浏览器默认边框、字体和背景。
-- Checkbox focused 7 tests、DataTable / Tree / TreeSelect / Transfer / Cascader 直接消费者 19 tests、ESLint、TuffEx 全包 `vue-tsc`、静态语义扫描与 `git diff --check` 已通过；R6 仍保持 partial。
+- Checkbox focused 7 tests、DataTable / Tree / TreeSelect / Transfer / Cascader 直接消费者 19 tests、ESLint、TuffEx 全包 `vue-tsc`、静态语义扫描与 `git diff --check` 已通过；Roadmap R6 (UI / TuffEx) 仍保持 partial。
 
 ### quickops: expose advanced Pomodoro loop capability accurately
 
@@ -416,7 +442,7 @@
 
 - `TxStep` 原生 button 切片已通过仓库本地 Vitest 5/5、focused ESLint、静态语义扫描与 `git diff --check`；此前 pnpm non-TTY module-dir 清理提示不再作为验证阻塞。
 - `TxSwitch` 根节点从 `div role="switch"` 收为原生 `button type="button" role="switch"`，使用原生 disabled 与 Enter/Space 激活语义，移除手写 tabindex / keydown，并保留 `aria-checked`、`update:modelValue` / `change` 和现有 class contract。
-- Switch 样式补最小 button reset；focused Vitest 3/3、ESLint、TuffEx 全包 `vue-tsc`、静态语义扫描与 `git diff --check` 已通过。R6 仍保持 partial，继续收 legacy Menu/Drawer、剩余非语义交互与 visual smoke。
+- Switch 样式补最小 button reset；focused Vitest 3/3、ESLint、TuffEx 全包 `vue-tsc`、静态语义扫描与 `git diff --check` 已通过。Roadmap R6 (UI / TuffEx) 仍保持 partial，继续收 legacy Menu/Drawer、剩余非语义交互与 visual smoke。
 
 ### touch-window-presets: prove shell permission fail-closed boundary
 
@@ -500,12 +526,12 @@
 - 记录两项当前真实缺口：CoreBox 仅把 ContextPackage 安全摘要写入 metadata，retrieval/memory 尚未由宿主统一进入 provider messages；workspace/project memory 缺稳定 `scopeRef`，在迁移确认前必须 fail-closed。
 - 同步 `TODO.md`、R8/R9 execution plan、2.5.4 PRD/details 与 Quality Baseline；自动长期记忆、R9.3 本地模型和 R9.4 ASR runtime 继续后置，SQLite schema/data migration 保留单独确认门禁。
 
-### goal: snapshot R4-R6 small-slice progress
+### goal: snapshot Roadmap R4-R6 small-slice progress
 
-- 当前 Goal `R4-R6小切片并行QuickOps、Plugin Trust Boundary、UI/TuffEx，不抢当前稳定化窗口。` 记录为 `paused / partial`；本次只同步日期进度，不修改 scope，后续单独讨论是否拆分或收窄。
-- R4 已完成并验证 safe Flow `statefulRuntime` / cleanup marker、clean-screen visual contract marker 与 Pomodoro 默认只读模板 contract；真实 visual evidence、高级循环 runtime 与 app quit cleanup 仍开放。
-- R5 已完成并验证五个官方插件的 clipboard SDK / permission fail-closed 小切片，不回退 `navigator.clipboard`；shell / OS / network / fs 权限缺失路径和 Widget sandbox 仍开放。
-- R6 已完成并验证 `touch-music` 与七个 TuffEx 语义清理切片；`TxCardItem` 默认非交互语义已收敛。`TxStep` 原生 button 源码与 focused test 调整已落，但 Vitest / ESLint 验证受 pnpm `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` 阻塞，因此不计为已验证闭环。
+- 当前 Goal `Roadmap R4-R6 小切片并行 QuickOps、Plugin Trust Boundary、UI/TuffEx，不抢当前稳定化窗口。` 记录为 `paused / partial`；本次只同步日期进度，不修改 scope，后续单独讨论是否拆分或收窄。
+- Roadmap R4 (QuickOps) 已完成并验证 safe Flow `statefulRuntime` / cleanup marker、clean-screen visual contract marker 与 Pomodoro 默认只读模板 contract；真实 visual evidence、高级循环 runtime 与 app quit cleanup 仍开放。
+- Roadmap R5 (Plugin Trust Boundary) 已完成并验证五个官方插件的 clipboard SDK / permission fail-closed 小切片，不回退 `navigator.clipboard`；shell / OS / network / fs 权限缺失路径和 Widget sandbox 仍开放。
+- Roadmap R6 (UI / TuffEx) 已完成并验证 `touch-music` 与七个 TuffEx 语义清理切片；`TxCardItem` 默认非交互语义已收敛。`TxStep` 原生 button 源码与 focused test 调整已落，但 Vitest / ESLint 验证受 pnpm `ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY` 阻塞，因此不计为已验证闭环。
 - 下一次 Goal 复盘重点：评估是否按 QuickOps runtime/evidence、Plugin permission matrix、TuffEx semantics/visual smoke 拆为三个更短、可独立关账的目标。
 
 ## 2026-07-07

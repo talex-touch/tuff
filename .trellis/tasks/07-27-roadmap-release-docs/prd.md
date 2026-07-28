@@ -64,12 +64,12 @@ CHANGES records completed facts and remaining caveats. It must not become a seco
 
 ## Acceptance Criteria
 
-- [ ] Active AI documents consistently label historical 13/13 and current-version recapture-open states without contradiction.
-- [ ] The R1 matrix records exact beta.19 Gate E evidence and leaves OTA open wherever separate acceptance remains unmet.
-- [ ] CHANGES contains high-signal Everything, icon, release, and OTA facts with accurate caveats and no competing priority list.
-- [ ] Both root READMEs agree on stable `2.4.13`, contain no stale hand-maintained dependency versions, and avoid unproven release claims.
-- [ ] Ambiguous active R6 labels are locally scoped without renumbering requirements or history.
-- [ ] What's Changed, stable release-note files, the bilingual task, and the OTA parent `task.json` have no diff.
+- [x] Active AI documents consistently label historical 13/13 and current-version recapture-open states without contradiction.
+- [x] The R1 matrix records exact beta.19 Gate E evidence and leaves OTA open wherever separate acceptance remains unmet.
+- [x] CHANGES contains high-signal Everything, icon, release, and OTA facts with accurate caveats and no competing priority list.
+- [x] Both root READMEs agree on stable `2.4.13`, contain no stale hand-maintained dependency versions, and avoid unproven release claims.
+- [x] Ambiguous active R6 labels are locally scoped without renumbering requirements or history.
+- [x] What's Changed, stable release-note files, the bilingual task, and the OTA parent `task.json` have no diff.
 - [ ] `mise run ai-docs:dev`, focused changed-Markdown/link checks, and `git diff --check` pass.
 - [ ] A dedicated PR is open with branch, commit, validation output, owned files, exclusions, and planning-PR dependency.
 
