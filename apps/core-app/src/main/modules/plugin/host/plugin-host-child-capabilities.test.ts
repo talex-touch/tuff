@@ -54,7 +54,10 @@ function createClient(overrides: { timeoutMs?: number } = {}) {
   const client = new PluginHostChildCapabilityClient({
     owner,
     session,
-    capabilityManifest: ['plugin.info.get', 'storage.file.read'],
+    capabilityManifest: [
+      { id: 'plugin.info.get', callbackLifetime: 'transient', callbackFields: [] },
+      { id: 'storage.file.read', callbackLifetime: 'transient', callbackFields: [] }
+    ],
     timeoutMs: overrides.timeoutMs,
     allocateRequestId: () => ++nextRequestId,
     postMessage(message) {
@@ -157,6 +160,46 @@ describe('PluginHostChildCapabilityClient', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('cancels only capability calls owned by one lifecycle scope', async () => {
+    const harness = createClient()
+    const first = harness.client.invoke('plugin.info.get', { sequence: 1 }, 101)
+    const second = harness.client.invoke('storage.file.read', { sequence: 2 }, 202)
+    const [firstCall, secondCall] = harness.sent
+
+    harness.client.cancelScope(101)
+
+    await expect(first).rejects.toEqual(
+      new PluginHostChildCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_CANCELLED')
+    )
+    expect(harness.sent.at(-1)).toMatchObject({
+      type: 'cancel',
+      targetRequestId: firstCall.requestId
+    })
+    expect(harness.client.pendingCount).toBe(1)
+
+    harness.client.acceptResult(
+      harness.session.accept('main-to-child', {
+        ...owner,
+        type: 'capability-result',
+        requestId: firstCall.requestId,
+        ok: false,
+        error: { code: 'PLUGIN_HOST_CAPABILITY_CANCELLED' }
+      })
+    )
+    harness.client.acceptResult(
+      harness.session.accept('main-to-child', {
+        ...owner,
+        type: 'capability-result',
+        requestId: secondCall.requestId,
+        ok: true,
+        result: 'second-result'
+      })
+    )
+    await expect(second).resolves.toBe('second-result')
+    expect(harness.client.pendingCount).toBe(0)
+    expect(harness.onFatalViolation).not.toHaveBeenCalled()
   })
 
   it('does not preempt main-owned IO deadlines with the transport fallback', async () => {

@@ -4,7 +4,13 @@ import {
   PluginHostCapabilityError,
   type PluginHostCapabilityErrorCode
 } from './plugin-host-capabilities'
-import { encodeHostWireValue, type HostWireLimits } from './plugin-host-wire-codec'
+import { PluginHostCallbackError, PluginHostCallbackRegistry } from './plugin-host-callbacks'
+import { PluginHostResourceError, type PluginHostResourceDispatcher } from './plugin-host-resources'
+import {
+  encodeHostWireValue,
+  type HostWireLimits,
+  type HostWireResourceDescriptor
+} from './plugin-host-wire-codec'
 import {
   PluginHostSession,
   type PluginHostPendingRequest,
@@ -15,6 +21,7 @@ import {
   HOST_PROTOCOL_VERSION,
   type HostMessageOwner,
   type HostWireMessage,
+  type PluginHostCallbackLifetime,
   type PluginHostCapability,
   type PluginHostLifecycleMethod,
   type StableHostError
@@ -42,6 +49,11 @@ export type PluginRuntimeHostErrorCode =
   | 'PLUGIN_RUNTIME_HOST_CRASHED'
   | 'PLUGIN_RUNTIME_HOST_CLOSED'
 
+export type PluginRuntimeTerminationCode = Extract<
+  PluginRuntimeHostErrorCode,
+  'PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION' | 'PLUGIN_RUNTIME_HOST_TIMEOUT'
+>
+
 export class PluginRuntimeHostError extends Error {
   constructor(readonly code: PluginRuntimeHostErrorCode) {
     super(code)
@@ -58,6 +70,10 @@ export interface PluginRuntimeHostResourceLimits extends HostWireLimits {
   lifecycleTimeoutMs: number
   shutdownTimeoutMs: number
   cancelGraceMs: number
+  callbackTimeoutMs: number
+  maxCallbacks: number
+  maxConcurrentCallbacks: number
+  maxResources: number
 }
 
 export const DEFAULT_PLUGIN_RUNTIME_HOST_LIMITS: Readonly<PluginRuntimeHostResourceLimits> =
@@ -72,7 +88,11 @@ export const DEFAULT_PLUGIN_RUNTIME_HOST_LIMITS: Readonly<PluginRuntimeHostResou
     loadTimeoutMs: 10_000,
     lifecycleTimeoutMs: 60_000,
     shutdownTimeoutMs: 2_000,
-    cancelGraceMs: 500
+    cancelGraceMs: 500,
+    callbackTimeoutMs: 5_000,
+    maxCallbacks: 64,
+    maxConcurrentCallbacks: 16,
+    maxResources: 64
   })
 
 export interface PluginRuntimeControlPortAdapter {
@@ -110,6 +130,12 @@ export interface PluginRuntimeCrashDiagnostic {
   activationGeneration: number
 }
 
+export interface PluginRuntimeTerminationDiagnostic {
+  code: PluginRuntimeTerminationCode
+  pluginName: string
+  activationGeneration: number
+}
+
 export interface PluginRuntimeCapabilityDispatcher {
   readonly owner: HostMessageOwner
   readonly activation: PluginActivationIdentity
@@ -118,6 +144,7 @@ export interface PluginRuntimeCapabilityDispatcher {
     payload: unknown,
     signal: AbortSignal
   ): Promise<unknown>
+  getCallbackLifetime?(capability: PluginHostCapability): PluginHostCallbackLifetime
   close?(): void | Promise<void>
 }
 
@@ -130,9 +157,13 @@ export interface PluginRuntimeHostOptions {
   resourceLimits?: Partial<PluginRuntimeHostResourceLimits>
   invalidateAuthority: () => void | Promise<void>
   closeResources: () => void | Promise<void>
+  resolveCurrentActivation?: (pluginName: string) => PluginActivationIdentity | undefined
   capabilityDispatcher?: PluginRuntimeCapabilityDispatcher
   ownsCapabilityDispatcher?: boolean
+  resourceDispatcher?: PluginHostResourceDispatcher
+  ownsResourceDispatcher?: boolean
   onCrash?: (diagnostic: PluginRuntimeCrashDiagnostic) => void
+  onTerminated?: (diagnostic: PluginRuntimeTerminationDiagnostic) => void
   createNonce?: () => string
 }
 
@@ -151,50 +182,120 @@ interface RuntimePendingRequest {
   signal: AbortSignal | undefined
   abortListener: (() => void) | null
   posted: boolean
-  queuedCancellation: PluginRuntimeHostErrorCode | null
+  queuedCancellation: RuntimeCancellationGrace['code'] | null
 }
 
 interface RuntimeInboundCapability {
   readonly requestId: number
   readonly controller: AbortController
+  readonly callbackLifetime: PluginHostCallbackLifetime
+  cancelled: boolean
+}
+
+interface RuntimeCancellationGrace {
+  readonly code: Extract<
+    PluginRuntimeHostErrorCode,
+    'PLUGIN_RUNTIME_HOST_TIMEOUT' | 'PLUGIN_RUNTIME_HOST_CANCELLED'
+  >
+  readonly timer: NodeJS.Timeout
+}
+
+export class PluginRuntimeCallbackError extends Error {
+  constructor(readonly code: string) {
+    super(code)
+    this.name = 'PluginRuntimeCallbackError'
+  }
 }
 
 interface CleanupOptions {
   finalState: Extract<PluginRuntimeHostState, 'closed' | 'failed' | 'crashed'>
   graceful: boolean
   reportCrash?: boolean
+  terminationCode?: PluginRuntimeTerminationCode
 }
 
 const MAX_LIMIT = 2 ** 31 - 1
 
 function snapshotActivation(input: PluginActivationIdentity): PluginActivationIdentity {
+  let descriptors: PropertyDescriptorMap
+  try {
+    if (!input || typeof input !== 'object') {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
+    descriptors = Object.getOwnPropertyDescriptors(input)
+  } catch {
+    throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+  }
+  const read = (key: keyof PluginActivationIdentity): unknown => {
+    const descriptor = descriptors[key]
+    if (!descriptor?.enumerable || !('value' in descriptor)) {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
+    return descriptor.value
+  }
+  const name = read('name')
+  const pluginInstanceId = read('pluginInstanceId')
+  const activationGeneration = read('activationGeneration')
+  const key = read('key')
   if (
-    !input ||
-    typeof input !== 'object' ||
-    typeof input.name !== 'string' ||
-    input.name.length < 1 ||
-    typeof input.pluginInstanceId !== 'string' ||
-    input.pluginInstanceId.length < 1 ||
-    !Number.isSafeInteger(input.activationGeneration) ||
-    input.activationGeneration < 1 ||
-    typeof input.key !== 'string' ||
-    input.key.length < 1
+    typeof name !== 'string' ||
+    name.length < 1 ||
+    typeof pluginInstanceId !== 'string' ||
+    pluginInstanceId.length < 1 ||
+    !Number.isSafeInteger(activationGeneration) ||
+    Number(activationGeneration) < 1 ||
+    typeof key !== 'string' ||
+    key.length < 1
   ) {
     throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
   }
-  return Object.freeze({ ...input })
+  return Object.freeze({
+    name,
+    pluginInstanceId,
+    activationGeneration: Number(activationGeneration),
+    key
+  })
 }
 
 export function resolvePluginRuntimeHostResourceLimits(
   partial: Partial<PluginRuntimeHostResourceLimits> | undefined
 ): Readonly<PluginRuntimeHostResourceLimits> {
-  const limits = { ...DEFAULT_PLUGIN_RUNTIME_HOST_LIMITS, ...partial }
+  const limits = { ...DEFAULT_PLUGIN_RUNTIME_HOST_LIMITS }
+  if (partial !== undefined) {
+    let descriptors: PropertyDescriptorMap
+    try {
+      if (!partial || typeof partial !== 'object' || Array.isArray(partial)) {
+        throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+      }
+      descriptors = Object.getOwnPropertyDescriptors(partial)
+    } catch {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
+    for (const key of Reflect.ownKeys(descriptors)) {
+      const descriptor = descriptors[key]
+      if (
+        typeof key !== 'string' ||
+        !Object.hasOwn(DEFAULT_PLUGIN_RUNTIME_HOST_LIMITS, key) ||
+        !descriptor?.enumerable ||
+        !('value' in descriptor)
+      ) {
+        throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+      }
+      Object.assign(limits, { [key]: descriptor.value })
+    }
+  }
   for (const value of Object.values(limits)) {
     if (!Number.isSafeInteger(value) || value < 1 || value > MAX_LIMIT) {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
     }
   }
-  if (limits.maxPendingRequests > 32 || limits.maxTrackedRequestIds > 65_536) {
+  if (
+    limits.maxPendingRequests > 32 ||
+    limits.maxTrackedRequestIds > 65_536 ||
+    limits.maxCallbacks > 64 ||
+    limits.maxConcurrentCallbacks > 16 ||
+    limits.maxResources > 64
+  ) {
     throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
   }
   return Object.freeze(limits)
@@ -246,11 +347,13 @@ function snapshotCapabilityDispatcher(
     }) as HostMessageOwner
     const activation = snapshotActivation(dispatcher.activation)
     const dispatch = dispatcher.dispatch
+    const getCallbackLifetime = dispatcher.getCallbackLifetime
     const close = dispatcher.close
     if (
       !sameOwner(owner, expectedOwner) ||
       !sameActivation(activation, expectedActivation) ||
       typeof dispatch !== 'function' ||
+      (getCallbackLifetime !== undefined && typeof getCallbackLifetime !== 'function') ||
       (close !== undefined && typeof close !== 'function')
     ) {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
@@ -260,7 +363,64 @@ function snapshotCapabilityDispatcher(
       activation: expectedActivation,
       dispatch: (capability, payload, signal) =>
         Promise.resolve(dispatch.call(dispatcher, capability, payload, signal)),
+      ...(getCallbackLifetime
+        ? {
+            getCallbackLifetime: (capability: PluginHostCapability) => {
+              const lifetime = getCallbackLifetime.call(dispatcher, capability)
+              return lifetime === 'resource' ? 'resource' : 'transient'
+            }
+          }
+        : {}),
       ...(close ? { close: () => Promise.resolve(close.call(dispatcher)) } : {})
+    })
+  } catch {
+    throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+  }
+}
+
+function snapshotResourceDispatcher(
+  value: unknown,
+  expectedOwner: HostMessageOwner,
+  expectedActivation: PluginActivationIdentity
+): PluginHostResourceDispatcher | null {
+  if (value === undefined) return null
+  try {
+    if (!value || (typeof value !== 'object' && typeof value !== 'function')) {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
+    const dispatcher = value as PluginHostResourceDispatcher
+    const owner = Object.freeze({
+      protocolVersion: dispatcher.owner.protocolVersion,
+      activationHandle: dispatcher.owner.activationHandle,
+      hostGeneration: dispatcher.owner.hostGeneration
+    }) as HostMessageOwner
+    const activation = snapshotActivation(dispatcher.activation)
+    const beginInvocation = dispatcher.beginInvocation
+    const dispose = dispatcher.dispose
+    const inspect = dispatcher.inspect
+    const retainCallbacks = dispatcher.retainCallbacks
+    const close = dispatcher.close
+    if (
+      !sameOwner(owner, expectedOwner) ||
+      !sameActivation(activation, expectedActivation) ||
+      typeof beginInvocation !== 'function' ||
+      typeof dispose !== 'function' ||
+      typeof inspect !== 'function' ||
+      typeof retainCallbacks !== 'function' ||
+      typeof close !== 'function'
+    ) {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
+    return Object.freeze({
+      owner: expectedOwner,
+      activation: expectedActivation,
+      beginInvocation: (options) => beginInvocation.call(dispatcher, options),
+      dispose: (id, kind, releaseCallbacks) =>
+        Promise.resolve(dispose.call(dispatcher, id, kind, releaseCallbacks)),
+      inspect: (input) => inspect.call(dispatcher, input),
+      retainCallbacks: (handle, callbackIds) =>
+        retainCallbacks.call(dispatcher, handle, callbackIds),
+      close: (releaseCallbacks) => Promise.resolve(close.call(dispatcher, releaseCallbacks))
     })
   } catch {
     throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
@@ -356,6 +516,58 @@ function safeInvoke(callback: () => void | Promise<void>): Promise<void> {
   }
 }
 
+function snapshotHostConstructorOptions(input: PluginRuntimeHostOptions): PluginRuntimeHostOptions {
+  let descriptors: PropertyDescriptorMap
+  try {
+    if (!input || (typeof input !== 'object' && typeof input !== 'function')) {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
+    descriptors = Object.getOwnPropertyDescriptors(input)
+  } catch {
+    throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+  }
+  const read = (key: keyof PluginRuntimeHostOptions, required = true): unknown => {
+    const descriptor = descriptors[key]
+    if (!descriptor) {
+      if (required) throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+      return undefined
+    }
+    if (!descriptor.enumerable || !('value' in descriptor)) {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
+    return descriptor.value
+  }
+  return Object.freeze({
+    activation: read('activation') as PluginActivationIdentity,
+    activationHandle: read('activationHandle') as string,
+    hostGeneration: read('hostGeneration') as number,
+    artifactPath: read('artifactPath') as string,
+    factory: read('factory') as PluginRuntimeProcessFactory,
+    resourceLimits: read('resourceLimits', false) as
+      | Partial<PluginRuntimeHostResourceLimits>
+      | undefined,
+    invalidateAuthority: read(
+      'invalidateAuthority'
+    ) as PluginRuntimeHostOptions['invalidateAuthority'],
+    closeResources: read('closeResources') as PluginRuntimeHostOptions['closeResources'],
+    resolveCurrentActivation: read(
+      'resolveCurrentActivation',
+      false
+    ) as PluginRuntimeHostOptions['resolveCurrentActivation'],
+    capabilityDispatcher: read('capabilityDispatcher', false) as
+      | PluginRuntimeCapabilityDispatcher
+      | undefined,
+    ownsCapabilityDispatcher: read('ownsCapabilityDispatcher', false) as boolean | undefined,
+    resourceDispatcher: read('resourceDispatcher', false) as
+      | PluginHostResourceDispatcher
+      | undefined,
+    ownsResourceDispatcher: read('ownsResourceDispatcher', false) as boolean | undefined,
+    onCrash: read('onCrash', false) as PluginRuntimeHostOptions['onCrash'],
+    onTerminated: read('onTerminated', false) as PluginRuntimeHostOptions['onTerminated'],
+    createNonce: read('createNonce', false) as PluginRuntimeHostOptions['createNonce']
+  })
+}
+
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, milliseconds)
@@ -374,7 +586,12 @@ export class PluginRuntimeHost {
   private readonly closeResources: PluginRuntimeHostOptions['closeResources']
   private readonly capabilityDispatcher: PluginRuntimeCapabilityDispatcher | null
   private readonly ownsCapabilityDispatcher: boolean
+  private readonly resourceDispatcher: PluginHostResourceDispatcher | null
+  private readonly ownsResourceDispatcher: boolean
+  private readonly callbackRegistry: PluginHostCallbackRegistry
+  private readonly retainedCallbackResources = new Map<string, HostWireResourceDescriptor['kind']>()
   private readonly onCrash?: PluginRuntimeHostOptions['onCrash']
+  private readonly onTerminated?: PluginRuntimeHostOptions['onTerminated']
   private readonly createNonce: () => string
   private readonly session: PluginHostSession
   private readonly pending = new Map<number, RuntimePendingRequest>()
@@ -391,23 +608,29 @@ export class PluginRuntimeHost {
   private startupAcquisition: Promise<void> | null = null
   private resolveStartupAcquisition: (() => void) | null = null
   private cleanupPromise: Promise<void> | null = null
-  private fatalGraceTimer: NodeJS.Timeout | null = null
+  private readonly cancellationGrace = new Map<number, RuntimeCancellationGrace>()
   private nextRequestId = 0
   private currentState: PluginRuntimeHostState = 'created'
   private terminalCode: PluginRuntimeHostErrorCode = 'PLUGIN_RUNTIME_HOST_CLOSED'
   private childExited = false
   private capabilityDispatcherClosed = false
+  private resourceDispatcherClosed = false
+  private hasActivated = false
+  private terminalNotificationSent = false
   private resolveChildExit!: () => void
   private readonly childExit = new Promise<void>((resolve) => {
     this.resolveChildExit = resolve
   })
 
-  constructor(options: PluginRuntimeHostOptions) {
+  constructor(input: PluginRuntimeHostOptions) {
+    const options = snapshotHostConstructorOptions(input)
     this.activation = snapshotActivation(options.activation)
     this.resourceLimits = resolvePluginRuntimeHostResourceLimits(options.resourceLimits)
     const ownsCapabilityDispatcher = options.ownsCapabilityDispatcher ?? false
+    const ownsResourceDispatcher = options.ownsResourceDispatcher ?? false
     if (
       typeof ownsCapabilityDispatcher !== 'boolean' ||
+      typeof ownsResourceDispatcher !== 'boolean' ||
       typeof options.activationHandle !== 'string' ||
       options.activationHandle.length < 1 ||
       options.activationHandle.length > 128 ||
@@ -417,7 +640,10 @@ export class PluginRuntimeHost {
       options.artifactPath.length < 1 ||
       typeof options.invalidateAuthority !== 'function' ||
       typeof options.closeResources !== 'function' ||
+      (options.resolveCurrentActivation !== undefined &&
+        typeof options.resolveCurrentActivation !== 'function') ||
       (options.onCrash !== undefined && typeof options.onCrash !== 'function') ||
+      (options.onTerminated !== undefined && typeof options.onTerminated !== 'function') ||
       (options.createNonce !== undefined && typeof options.createNonce !== 'function')
     ) {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
@@ -435,19 +661,51 @@ export class PluginRuntimeHost {
     if (ownsCapabilityDispatcher && (!capabilityDispatcher || !capabilityDispatcher.close)) {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
     }
+    const resourceDispatcher = snapshotResourceDispatcher(
+      options.resourceDispatcher,
+      this.owner,
+      this.activation
+    )
+    if (ownsResourceDispatcher && !resourceDispatcher) {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    }
     this.artifactPath = options.artifactPath
     this.factory = snapshotProcessFactory(options.factory)
     this.invalidateAuthority = options.invalidateAuthority
     this.closeResources = options.closeResources
     this.capabilityDispatcher = capabilityDispatcher
     this.ownsCapabilityDispatcher = ownsCapabilityDispatcher
+    this.resourceDispatcher = resourceDispatcher
+    this.ownsResourceDispatcher = ownsResourceDispatcher
+    this.callbackRegistry = new PluginHostCallbackRegistry({
+      owner: this.owner,
+      activation: this.activation,
+      resolveCurrentActivation: options.resolveCurrentActivation ?? (() => this.activation),
+      isActive: () =>
+        !this.cleanupPromise &&
+        (this.currentState === 'starting' || this.currentState === 'active'),
+      maxCallbacks: this.resourceLimits.maxCallbacks,
+      maxConcurrent: this.resourceLimits.maxConcurrentCallbacks,
+      invokeRemote: (id, args) => this.invokeChildCallback(id, args),
+      onRetainedCallbackFailure: (resourceId) => this.disposeFailedCallbackResource(resourceId)
+    })
     this.onCrash = options.onCrash
+    this.onTerminated = options.onTerminated
     this.createNonce = options.createNonce ?? randomUUID
     this.session = new PluginHostSession({
       owner: this.owner,
       maxPendingRequests: this.resourceLimits.maxPendingRequests,
       maxTrackedRequestIds: this.resourceLimits.maxTrackedRequestIds,
-      codec: { limits: this.resourceLimits },
+      codec: {
+        limits: this.resourceLimits,
+        resolveCallback: (_owner, id, context) => {
+          if (context.messageType !== 'capability-call') return undefined
+          return this.callbackRegistry.resolve(id, context.requestId, this.owner)
+        },
+        releaseCallback: (_owner, id, callback, context) => {
+          this.callbackRegistry.rollback(id, callback, context.requestId)
+        }
+      },
       onPendingRejected: (pending, error) => this.rejectSessionPending(pending, error)
     })
   }
@@ -506,6 +764,33 @@ export class PluginRuntimeHost {
     }
     if (!response.ok) {
       throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_LIFECYCLE_FAILED')
+    }
+    return response.result
+  }
+
+  private async invokeChildCallback(id: string, args: unknown[]): Promise<unknown> {
+    if (this.currentState !== 'starting' && this.currentState !== 'active') {
+      throw new PluginHostCallbackError('PLUGIN_HOST_CALLBACK_CLOSED')
+    }
+    const response = await this.request(
+      'callback-result',
+      (requestId) => ({
+        ...this.owner,
+        type: 'callback-call',
+        requestId,
+        callbackId: id,
+        payload: args
+      }),
+      this.resourceLimits.callbackTimeoutMs
+    )
+    if (response.type !== 'callback-result') {
+      throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION')
+    }
+    if (!response.ok) {
+      const code = /^[A-Z][A-Z0-9_]{0,127}$/.test(response.error.code)
+        ? response.error.code
+        : 'PLUGIN_HOST_CALLBACK_FAILED'
+      throw new PluginRuntimeCallbackError(code)
     }
     return response.result
   }
@@ -671,6 +956,7 @@ export class PluginRuntimeHost {
         throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_CLOSED')
       }
       this.currentState = 'active'
+      this.hasActivated = true
     } catch (error) {
       const stable =
         error instanceof PluginRuntimeHostError
@@ -755,13 +1041,16 @@ export class PluginRuntimeHost {
         case 'load-result':
         case 'lifecycle-result':
         case 'callback-result':
+          this.acknowledgeCancellation(message.requestId)
           this.settlePending(message.requestId, message)
           return
         case 'capability-call':
           this.handleCapabilityCall(message)
           return
         case 'cancel':
+          return
         case 'resource-dispose':
+          this.handleResourceDispose(message)
           return
         case 'violation':
           void this.failProtocol()
@@ -772,6 +1061,58 @@ export class PluginRuntimeHost {
     } catch {
       void this.failProtocol()
     }
+  }
+
+  private disposeFailedCallbackResource(resourceId: string): void {
+    const kind = this.retainedCallbackResources.get(resourceId)
+    if (!kind || !this.resourceDispatcher) return
+    void this.resourceDispatcher
+      .dispose(resourceId, kind, (releasedId) => {
+        this.releaseRetainedCallbackResource(releasedId, kind, true)
+      })
+      .catch(() => void this.failProtocol())
+  }
+
+  private releaseRetainedCallbackResource(
+    resourceId: string,
+    kind: HostWireResourceDescriptor['kind'],
+    notifyChild: boolean
+  ): void {
+    this.retainedCallbackResources.delete(resourceId)
+    this.callbackRegistry.releaseResource(resourceId)
+    if (!notifyChild || !this.controlPort || this.childExited) return
+    const message: HostWireMessage = {
+      ...this.owner,
+      type: 'resource-dispose',
+      requestId: this.allocateRequestId(),
+      resourceId,
+      resourceKind: kind
+    }
+    try {
+      const wireMessage = this.session.accept('main-to-child', message)
+      this.controlPort.postMessage(wireMessage)
+    } catch {
+      if (!this.cleanupPromise) void this.failProtocol()
+    }
+  }
+
+  private handleResourceDispose(
+    message: Extract<HostWireMessage, { type: 'resource-dispose' }>
+  ): void {
+    const resourceKind = message.resourceKind
+    if (
+      !this.resourceDispatcher ||
+      resourceKind === 'callback' ||
+      (this.currentState !== 'starting' && this.currentState !== 'active')
+    ) {
+      void this.failProtocol()
+      return
+    }
+    void this.resourceDispatcher
+      .dispose(message.resourceId, resourceKind, (resourceId) => {
+        this.releaseRetainedCallbackResource(resourceId, resourceKind, false)
+      })
+      .catch(() => void this.failProtocol())
   }
 
   private handleCapabilityCall(
@@ -788,7 +1129,10 @@ export class PluginRuntimeHost {
 
     const active: RuntimeInboundCapability = {
       requestId: message.requestId,
-      controller: new AbortController()
+      controller: new AbortController(),
+      callbackLifetime:
+        this.capabilityDispatcher?.getCallbackLifetime?.(message.capability) ?? 'transient',
+      cancelled: false
     }
     this.inboundCapabilities.set(message.requestId, active)
     const operation = Promise.resolve().then(() => {
@@ -803,16 +1147,22 @@ export class PluginRuntimeHost {
     })
 
     void operation.then(
-      (result) => this.completeCapabilityCall(active, { ok: true, result }),
-      (error: unknown) =>
-        this.completeCapabilityCall(active, { ok: false, error: stableCapabilityError(error) })
+      (result) => {
+        void this.completeCapabilityCall(active, { ok: true, result })
+      },
+      (error: unknown) => {
+        void this.completeCapabilityCall(active, {
+          ok: false,
+          error: stableCapabilityError(error)
+        })
+      }
     )
   }
 
-  private completeCapabilityCall(
+  private async completeCapabilityCall(
     active: RuntimeInboundCapability,
     outcome: { ok: true; result: unknown } | { ok: false; error: StableHostError }
-  ): void {
+  ): Promise<void> {
     if (
       this.cleanupPromise ||
       this.inboundCapabilities.get(active.requestId) !== active ||
@@ -822,16 +1172,58 @@ export class PluginRuntimeHost {
     }
     this.inboundCapabilities.delete(active.requestId)
 
-    let normalized = outcome
-    if (outcome.ok) {
+    if (active.cancelled && outcome.ok && this.resourceDispatcher) {
+      const lateResource = this.resourceDispatcher.inspect(outcome.result)
+      if (lateResource) {
+        try {
+          await this.resourceDispatcher.dispose(lateResource.id, lateResource.kind, (resourceId) =>
+            this.callbackRegistry.releaseResource(resourceId)
+          )
+        } catch {
+          void this.failProtocol()
+          return
+        }
+      }
+    }
+
+    let normalized = active.cancelled
+      ? ({
+          ok: false,
+          error: { code: 'PLUGIN_HOST_CAPABILITY_CANCELLED' }
+        } as const)
+      : outcome
+    let retainedResource: HostWireResourceDescriptor | null = null
+    if (normalized.ok) {
+      const successful = normalized
       try {
-        encodeHostWireValue(outcome.result, { limits: this.resourceLimits })
+        encodeHostWireValue(successful.result, { limits: this.resourceLimits })
+        if (active.callbackLifetime === 'resource') {
+          const resource = this.resourceDispatcher?.inspect(successful.result)
+          if (!resource) throw new PluginHostResourceError('PLUGIN_HOST_RESOURCE_UNKNOWN')
+          retainedResource = resource
+          this.retainedCallbackResources.set(resource.id, resource.kind)
+          const callbackIds = this.callbackRegistry.retainRequest(active.requestId, resource.id)
+          this.resourceDispatcher!.retainCallbacks(successful.result, callbackIds)
+        } else {
+          this.callbackRegistry.releaseRequest(active.requestId)
+        }
       } catch {
+        this.callbackRegistry.releaseRequest(active.requestId)
+        if (retainedResource && this.resourceDispatcher) {
+          this.retainedCallbackResources.delete(retainedResource.id)
+          this.callbackRegistry.releaseResource(retainedResource.id)
+          await this.resourceDispatcher
+            .dispose(retainedResource.id, retainedResource.kind)
+            .catch(() => undefined)
+          retainedResource = null
+        }
         normalized = {
           ok: false,
           error: { code: 'PLUGIN_HOST_CAPABILITY_INVALID_RESULT' }
         }
       }
+    } else {
+      this.callbackRegistry.releaseRequest(active.requestId)
     }
     const response: HostWireMessage = normalized.ok
       ? {
@@ -852,6 +1244,13 @@ export class PluginRuntimeHost {
       const wireMessage = this.session.accept('main-to-child', response)
       this.controlPort.postMessage(wireMessage)
     } catch {
+      if (retainedResource && this.resourceDispatcher) {
+        this.retainedCallbackResources.delete(retainedResource.id)
+        this.callbackRegistry.releaseResource(retainedResource.id)
+        await this.resourceDispatcher
+          .dispose(retainedResource.id, retainedResource.kind)
+          .catch(() => undefined)
+      }
       void this.failProtocol()
     }
   }
@@ -878,7 +1277,7 @@ export class PluginRuntimeHost {
 
   private requestCancellation(
     pending: RuntimePendingRequest,
-    code: PluginRuntimeHostErrorCode
+    code: RuntimeCancellationGrace['code']
   ): void {
     if (!this.pending.has(pending.requestId)) return
     if (!pending.posted) {
@@ -888,8 +1287,8 @@ export class PluginRuntimeHost {
     this.cancelRequest(pending.requestId, code)
   }
 
-  private cancelRequest(requestId: number, code: PluginRuntimeHostErrorCode): void {
-    if (!this.pending.has(requestId) || !this.controlPort) return
+  private cancelRequest(requestId: number, code: RuntimeCancellationGrace['code']): void {
+    if (!this.pending.has(requestId) || !this.controlPort || this.cleanupPromise) return
     this.cancellationCodes.set(requestId, code)
     const message: HostWireMessage = {
       ...this.owner,
@@ -897,6 +1296,20 @@ export class PluginRuntimeHost {
       requestId: this.allocateRequestId(),
       targetRequestId: requestId
     }
+    let grace!: RuntimeCancellationGrace
+    const timer = setTimeout(() => {
+      if (this.cancellationGrace.get(requestId) !== grace) return
+      this.cancellationGrace.delete(requestId)
+      void this.cleanup(code, {
+        finalState: 'failed',
+        graceful: true,
+        terminationCode:
+          code === 'PLUGIN_RUNTIME_HOST_TIMEOUT' && this.hasActivated ? code : undefined
+      })
+    }, this.resourceLimits.cancelGraceMs)
+    timer.unref?.()
+    grace = Object.freeze({ code, timer })
+    this.cancellationGrace.set(requestId, grace)
     try {
       this.session.accept('main-to-child', message)
       this.controlPort.postMessage(message)
@@ -906,25 +1319,27 @@ export class PluginRuntimeHost {
       return
     }
     this.cancellationCodes.delete(requestId)
-    if (
-      (code === 'PLUGIN_RUNTIME_HOST_TIMEOUT' || code === 'PLUGIN_RUNTIME_HOST_CANCELLED') &&
-      !this.cleanupPromise
-    ) {
-      if (this.currentState === 'active') this.currentState = 'stopping'
-      if (!this.fatalGraceTimer) {
-        this.fatalGraceTimer = setTimeout(() => {
-          this.fatalGraceTimer = null
-          void this.cleanup(code, { finalState: 'failed', graceful: true })
-        }, this.resourceLimits.cancelGraceMs)
-        this.fatalGraceTimer.unref?.()
-      }
-    }
+  }
+
+  private acknowledgeCancellation(requestId: number): void {
+    const grace = this.cancellationGrace.get(requestId)
+    if (!grace) return
+    clearTimeout(grace.timer)
+    this.cancellationGrace.delete(requestId)
   }
 
   private rejectSessionPending(
     pending: PluginHostPendingRequest,
     error: PluginHostSessionError
   ): void {
+    if (pending.direction === 'child-to-main' && pending.requestType === 'capability-call') {
+      const active = this.inboundCapabilities.get(pending.requestId)
+      if (active) {
+        active.cancelled = true
+        active.controller.abort()
+      }
+      return
+    }
     const code =
       this.cancellationCodes.get(pending.requestId) ??
       (error.code === 'PLUGIN_HOST_SESSION_VIOLATED'
@@ -966,6 +1381,19 @@ export class PluginRuntimeHost {
     this.resolveChildExit()
     if (this.cleanupPromise || this.currentState === 'closed' || this.currentState === 'failed')
       return
+    const cancelled = this.cancellationGrace.values().next().value
+    if (cancelled) {
+      this.currentState = 'stopping'
+      void this.cleanup(cancelled.code, {
+        finalState: 'failed',
+        graceful: false,
+        terminationCode:
+          cancelled.code === 'PLUGIN_RUNTIME_HOST_TIMEOUT' && this.hasActivated
+            ? cancelled.code
+            : undefined
+      })
+      return
+    }
     this.currentState = 'crashed'
     void this.cleanup('PLUGIN_RUNTIME_HOST_CRASHED', {
       finalState: 'crashed',
@@ -976,9 +1404,21 @@ export class PluginRuntimeHost {
 
   private failProtocol(): Promise<void> {
     if (!this.cleanupPromise) this.currentState = 'stopping'
+    const cancelled = this.cancellationGrace.values().next().value
+    if (cancelled) {
+      return this.cleanup(cancelled.code, {
+        finalState: 'failed',
+        graceful: true,
+        terminationCode:
+          cancelled.code === 'PLUGIN_RUNTIME_HOST_TIMEOUT' && this.hasActivated
+            ? cancelled.code
+            : undefined
+      })
+    }
     return this.cleanup('PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION', {
       finalState: 'failed',
-      graceful: false
+      graceful: false,
+      terminationCode: this.hasActivated ? 'PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION' : undefined
     })
   }
 
@@ -986,10 +1426,8 @@ export class PluginRuntimeHost {
     if (this.cleanupPromise) return this.cleanupPromise
     this.terminalCode = code
     this.cleanupPromise = Promise.resolve().then(async () => {
-      if (this.fatalGraceTimer) {
-        clearTimeout(this.fatalGraceTimer)
-        this.fatalGraceTimer = null
-      }
+      for (const grace of this.cancellationGrace.values()) clearTimeout(grace.timer)
+      this.cancellationGrace.clear()
 
       await safeInvoke(this.invalidateAuthority)
       if (
@@ -1000,6 +1438,22 @@ export class PluginRuntimeHost {
         this.capabilityDispatcherClosed = true
         await safeInvoke(() => this.capabilityDispatcher!.close!())
       }
+      if (
+        this.ownsResourceDispatcher &&
+        this.resourceDispatcher &&
+        !this.resourceDispatcherClosed
+      ) {
+        this.resourceDispatcherClosed = true
+        await safeInvoke(() =>
+          this.resourceDispatcher!.close((resourceId) => {
+            const kind = this.retainedCallbackResources.get(resourceId)
+            if (kind) this.releaseRetainedCallbackResource(resourceId, kind, true)
+            else this.callbackRegistry.releaseResource(resourceId)
+          })
+        )
+      }
+      this.retainedCallbackResources.clear()
+      this.callbackRegistry.close()
       await safeInvoke(this.closeResources)
       await this.startupAcquisition
 
@@ -1082,6 +1536,21 @@ export class PluginRuntimeHost {
       this.controlPortTransferred = false
       this.child = null
       this.currentState = options.finalState
+
+      if (options.terminationCode && !this.terminalNotificationSent) {
+        this.terminalNotificationSent = true
+        try {
+          this.onTerminated?.(
+            Object.freeze({
+              code: options.terminationCode,
+              pluginName: this.activation.name,
+              activationGeneration: this.activation.activationGeneration
+            })
+          )
+        } catch {
+          // Terminal observers run after cleanup and cannot weaken the barrier.
+        }
+      }
     })
     for (const active of this.inboundCapabilities.values()) active.controller.abort()
     this.inboundCapabilities.clear()

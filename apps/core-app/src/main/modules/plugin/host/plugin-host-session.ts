@@ -54,14 +54,42 @@ export interface PluginHostPendingRequest {
 
 export interface PluginHostSessionCodecOptions {
   limits?: Partial<HostWireLimits>
-  registerCallback?: (owner: HostMessageOwner, callback: (...args: unknown[]) => unknown) => string
-  unregisterCallback?: (owner: HostMessageOwner, id: string) => void
+  registerCallback?: (
+    owner: HostMessageOwner,
+    callback: (...args: unknown[]) => unknown,
+    context: PluginHostWireValueContext
+  ) => string
+  unregisterCallback?: (
+    owner: HostMessageOwner,
+    id: string,
+    context: PluginHostWireValueContext
+  ) => void
   resolveCallback?: (
     owner: HostMessageOwner,
-    id: string
+    id: string,
+    context: PluginHostWireValueContext
   ) => ((...args: unknown[]) => unknown) | undefined
+  releaseCallback?: (
+    owner: HostMessageOwner,
+    id: string,
+    callback: (...args: unknown[]) => unknown,
+    context: PluginHostWireValueContext
+  ) => void
   resolveCancel?: (owner: HostMessageOwner, id: string) => unknown
   resolveResource?: (owner: HostMessageOwner, id: string, kind: PluginHostResourceKind) => unknown
+  releaseResource?: (
+    owner: HostMessageOwner,
+    id: string,
+    kind: PluginHostResourceKind,
+    resource: unknown,
+    context: PluginHostWireValueContext
+  ) => void
+}
+
+export interface PluginHostWireValueContext {
+  readonly direction: HostMessageDirection
+  readonly messageType: HostWireMessage['type']
+  readonly requestId: number
 }
 
 export interface PluginHostSessionOptions {
@@ -189,6 +217,23 @@ function codeOf(error: unknown): string {
     : 'PLUGIN_HOST_SESSION_VIOLATED'
 }
 
+function isCanonicalCancellationResponse(
+  pending: InternalPendingRequest,
+  message: Extract<HostWireMessage, { type: ResponseMessageType }>
+): boolean {
+  if (!('ok' in message) || message.ok !== false) return false
+  switch (pending.expectedResponse) {
+    case 'load-result':
+    case 'lifecycle-result':
+    case 'callback-result':
+      return message.error.code === 'PLUGIN_HOST_CHILD_CANCELLED'
+    case 'capability-result':
+      return message.error.code === 'PLUGIN_HOST_CAPABILITY_CANCELLED'
+    case 'host-ready':
+      return false
+  }
+}
+
 export class PluginHostSession {
   readonly owner: HostMessageOwner
 
@@ -228,8 +273,10 @@ export class PluginHostSession {
       (codec.registerCallback !== undefined && typeof codec.registerCallback !== 'function') ||
       (codec.unregisterCallback !== undefined && typeof codec.unregisterCallback !== 'function') ||
       (codec.resolveCallback !== undefined && typeof codec.resolveCallback !== 'function') ||
+      (codec.releaseCallback !== undefined && typeof codec.releaseCallback !== 'function') ||
       (codec.resolveCancel !== undefined && typeof codec.resolveCancel !== 'function') ||
       (codec.resolveResource !== undefined && typeof codec.resolveResource !== 'function') ||
+      (codec.releaseResource !== undefined && typeof codec.releaseResource !== 'function') ||
       (codec.registerCallback !== undefined && !codec.unregisterCallback)
     ) {
       throw new PluginHostSessionError('PLUGIN_HOST_SESSION_INVALID_OPTIONS')
@@ -280,10 +327,8 @@ export class PluginHostSession {
       if (!LEGAL_MESSAGES[this.currentState].has(parsed.type)) {
         throw new PluginHostSessionError('PLUGIN_HOST_SESSION_ILLEGAL_STATE')
       }
-      if (direction === 'child-to-main') {
-        if (isRequestMessage(parsed)) this.assertRequestAdmissible(direction, parsed)
-        if (isResponseMessage(parsed)) this.getPendingForResponse(direction, parsed)
-      }
+      if (isRequestMessage(parsed)) this.assertRequestAdmissible(direction, parsed)
+      if (isResponseMessage(parsed)) this.getPendingForResponse(direction, parsed)
       const inboundDirection = this.endpoint === 'main' ? 'child-to-main' : 'main-to-child'
       const message =
         direction === inboundDirection ? this.transformWireValues(direction, parsed) : parsed
@@ -324,28 +369,45 @@ export class PluginHostSession {
     const key = 'payload' in message ? 'payload' : 'result' in message ? 'result' : undefined
     if (!key) return message
     const value = message[key]
+    const context: PluginHostWireValueContext = Object.freeze({
+      direction,
+      messageType: message.type,
+      requestId: message.requestId
+    })
     const encodeDirection = this.endpoint === 'main' ? 'main-to-child' : 'child-to-main'
+    const callbacksAllowed = message.type === 'capability-call' && key === 'payload'
     const transformed =
       direction === encodeDirection
         ? encodeHostWireValue(value, {
             limits: this.codec.limits,
-            registerCallback: this.codec.registerCallback
-              ? (callback) => this.codec.registerCallback!(this.owner, callback)
-              : undefined,
-            unregisterCallback: this.codec.unregisterCallback
-              ? (id) => this.codec.unregisterCallback!(this.owner, id)
-              : undefined
+            registerCallback:
+              callbacksAllowed && this.codec.registerCallback
+                ? (callback) => this.codec.registerCallback!(this.owner, callback, context)
+                : undefined,
+            unregisterCallback:
+              callbacksAllowed && this.codec.unregisterCallback
+                ? (id) => this.codec.unregisterCallback!(this.owner, id, context)
+                : undefined
           })
         : decodeHostWireValue(value, {
             limits: this.codec.limits,
-            resolveCallback: this.codec.resolveCallback
-              ? (id) => this.codec.resolveCallback!(this.owner, id)
-              : undefined,
+            resolveCallback:
+              callbacksAllowed && this.codec.resolveCallback
+                ? (id) => this.codec.resolveCallback!(this.owner, id, context)
+                : undefined,
+            releaseCallback:
+              callbacksAllowed && this.codec.releaseCallback
+                ? (id, callback) => this.codec.releaseCallback!(this.owner, id, callback, context)
+                : undefined,
             resolveCancel: this.codec.resolveCancel
               ? (id) => this.codec.resolveCancel!(this.owner, id)
               : undefined,
             resolveResource: this.codec.resolveResource
               ? (id, kind) => this.codec.resolveResource!(this.owner, id, kind)
+              : undefined,
+            releaseResource: this.codec.releaseResource
+              ? (id, kind, resource) =>
+                  this.codec.releaseResource!(this.owner, id, kind, resource, context)
               : undefined
           })
     return { ...message, [key]: transformed } as HostWireMessage
@@ -433,10 +495,17 @@ export class PluginHostSession {
     message: Extract<HostWireMessage, { type: ResponseMessageType }>
   ): InternalPendingRequest {
     const requestDirection = oppositeDirection(direction)
-    if (this.cancelledRequestIds.get(requestDirection)!.has(message.requestId)) {
-      throw new PluginHostSessionError('PLUGIN_HOST_SESSION_LATE_RESPONSE')
-    }
     const pending = this.pending.get(requestDirection)!.get(message.requestId)
+    if (this.cancelledRequestIds.get(requestDirection)!.has(message.requestId)) {
+      if (
+        !pending ||
+        pending.expectedResponse !== message.type ||
+        !isCanonicalCancellationResponse(pending, message)
+      ) {
+        throw new PluginHostSessionError('PLUGIN_HOST_SESSION_LATE_RESPONSE')
+      }
+      return pending
+    }
     if (!pending) {
       if (this.seenRequestIds.get(requestDirection)!.has(message.requestId)) {
         throw new PluginHostSessionError('PLUGIN_HOST_SESSION_LATE_RESPONSE')
@@ -460,6 +529,7 @@ export class PluginHostSession {
     const pending = this.getPendingForResponse(direction, message)
 
     this.pending.get(requestDirection)!.delete(pending.requestId)
+    this.cancelledRequestIds.get(requestDirection)!.delete(pending.requestId)
     switch (message.type) {
       case 'host-ready':
         this.currentState = 'ready'
@@ -477,10 +547,9 @@ export class PluginHostSession {
   ): void {
     this.trackRequestId(direction, requestId)
     const pending = this.pending.get(direction)!.get(targetRequestId)
-    if (!pending) {
+    if (!pending || this.cancelledRequestIds.get(direction)!.has(targetRequestId)) {
       throw new PluginHostSessionError('PLUGIN_HOST_SESSION_INVALID_CANCEL')
     }
-    this.pending.get(direction)!.delete(targetRequestId)
     this.cancelledRequestIds.get(direction)!.add(targetRequestId)
     this.notifyRejected(pending, 'PLUGIN_HOST_SESSION_REQUEST_CANCELLED')
   }
@@ -529,7 +598,10 @@ export class PluginHostSession {
 
   private rejectAll(code: PluginHostSessionErrorCode): void {
     const pending = DIRECTIONS.flatMap((direction) => [...this.pending.get(direction)!.values()])
-    for (const direction of DIRECTIONS) this.pending.get(direction)!.clear()
+    for (const direction of DIRECTIONS) {
+      this.pending.get(direction)!.clear()
+      this.cancelledRequestIds.get(direction)!.clear()
+    }
     for (const request of pending) this.notifyRejected(request, code)
   }
 

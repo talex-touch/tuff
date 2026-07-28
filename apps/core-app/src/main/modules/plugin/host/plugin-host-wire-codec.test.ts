@@ -106,6 +106,24 @@ describe('plugin host wire codec', () => {
     )
   })
 
+  it('rolls back resolved resources when a later handle fails', () => {
+    const resource = Object.freeze({ id: 'resource-first' })
+    const released = vi.fn()
+    expect(() =>
+      decodeHostWireValue(
+        [
+          { __tuffHostWire: 'resource', id: 'resource-first', kind: 'stream' },
+          { __tuffHostWire: 'resource', id: 'resource-unknown', kind: 'stream' }
+        ],
+        {
+          resolveResource: (id) => (id === 'resource-first' ? resource : undefined),
+          releaseResource: released
+        }
+      )
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_WIRE_UNKNOWN_HANDLE' }))
+    expect(released).toHaveBeenCalledWith('resource-first', 'stream', resource)
+  })
+
   it('redacts owner resolver failures behind a stable wire error', () => {
     const secret = '/private/plugin/path'
     let failure: unknown

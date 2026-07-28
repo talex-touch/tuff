@@ -74,7 +74,8 @@ export enum TalexEvents {
   PROVIDER_DEACTIVATED = 'search-engine/provider-deactivated',
 
   // Permission Events
-  PERMISSION_GRANTED = 'permission/granted'
+  PERMISSION_GRANTED = 'permission/granted',
+  PERMISSION_REVOKED = 'permission/revoked'
 }
 
 export class TouchEventHandlerWrapper implements EventHandlerWrapper {
@@ -567,6 +568,20 @@ export class PermissionGrantedEvent implements ITouchEvent<TalexEvents> {
 
   constructor(pluginId: string) {
     this.pluginId = pluginId
+  }
+}
+
+export class PermissionRevokedEvent implements ITouchEvent<TalexEvents> {
+  readonly name: TalexEvents = TalexEvents.PERMISSION_REVOKED
+  readonly pluginId: string
+  readonly permissionIds: readonly string[]
+  readonly all: boolean
+
+  constructor(pluginId: string, permissionIds: readonly string[], all: boolean) {
+    this.pluginId = pluginId
+    this.permissionIds = Object.freeze([...permissionIds])
+    this.all = all
+    Object.freeze(this)
   }
 }
 

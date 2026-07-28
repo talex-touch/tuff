@@ -47,6 +47,9 @@ const mocks = vi.hoisted(() => {
       healthMonitor
     })),
     checkPermission: vi.fn(),
+    permissionHasPermission: vi.fn(),
+    permissionGetStore: vi.fn(),
+    runtimeOptions: null as Record<string, unknown> | null,
     databaseGetDb: vi.fn(),
     createClient: vi.fn(),
     disposers,
@@ -101,7 +104,7 @@ vi.mock('electron', () => ({
       start: vi.fn()
     }
   },
-  shell: { openPath: vi.fn(), showItemInFolder: vi.fn() }
+  shell: { openExternal: vi.fn(), openPath: vi.fn(), showItemInFolder: vi.fn() }
 }))
 
 vi.mock('@libsql/client', () => ({ createClient: mocks.createClient }))
@@ -163,8 +166,10 @@ vi.mock('../../utils/logger', () => ({
   })
 }))
 vi.mock('../../utils/secure-store', () => ({
+  deleteSecureStoreValuesByPrefix: vi.fn(),
   getSecureStoreHealth: vi.fn(),
   getSecureStoreValue: vi.fn(),
+  getSecureStoreValueStrict: vi.fn(),
   isSecureStoreAvailable: mocks.isSecureStoreAvailable,
   setSecureStoreValue: mocks.setSecureStoreValue
 }))
@@ -181,7 +186,10 @@ vi.mock('../permission', () => ({
       callback: (payload: unknown, context: unknown) => unknown
     ) =>
       transport.on(event, callback),
-  getPermissionModule: () => ({ checkPermission: mocks.checkPermission })
+  getPermissionModule: () => ({
+    checkPermission: mocks.checkPermission,
+    getStore: mocks.permissionGetStore
+  })
 }))
 vi.mock('./dev-server-monitor', () => ({ DevServerHealthMonitor: class {} }))
 vi.mock('./host/plugin-runtime-electron-process', () => ({
@@ -189,7 +197,12 @@ vi.mock('./host/plugin-runtime-electron-process', () => ({
 }))
 vi.mock('./host/plugin-runtime-service', () => ({
   PluginRuntimeService: class {
+    constructor(options: Record<string, unknown>) {
+      mocks.runtimeOptions = options
+    }
+
     dispose = mocks.runtimeDispose
+    resolve = vi.fn()
   },
   resolvePluginRuntimeArtifactPath: () => '/fixture/plugin-host.js'
 }))
@@ -264,6 +277,10 @@ describe('PluginModule facade', () => {
     mocks.healthMonitor.destroy.mockReset()
     mocks.plugin.disable.mockReset()
     mocks.checkPermission.mockReset()
+    mocks.permissionHasPermission.mockReset()
+    mocks.permissionGetStore.mockReset()
+    mocks.permissionGetStore.mockReturnValue({ hasPermission: mocks.permissionHasPermission })
+    mocks.runtimeOptions = null
     mocks.createClient.mockReset()
     mocks.isSecureStoreAvailable.mockReset()
     mocks.setSecureStoreValue.mockReset()
@@ -312,6 +329,41 @@ describe('PluginModule facade', () => {
     expect(mocks.manager.enablePlugin).toHaveBeenCalledWith('calendar')
     expect(pendingPermissionPlugins.has('calendar')).toBe(false)
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
+  })
+
+  it('wires the immutable 23-ID business manifest and canonical permissions', async () => {
+    const module = new PluginModule()
+    mocks.manager.getPluginByName.mockImplementation((name) =>
+      name === 'calendar' ? mocks.plugin : undefined
+    )
+    mocks.permissionHasPermission.mockReturnValue(true)
+
+    await initializeModule(module)
+
+    const runtimeOptions = mocks.runtimeOptions
+    expect(runtimeOptions).not.toBeNull()
+    const definitions = runtimeOptions?.capabilityDefinitions as
+      | ReadonlyArray<{ id: string }>
+      | undefined
+    expect(definitions).toHaveLength(23)
+    expect(definitions?.map((definition) => definition.id)).toContain('plugin.info.get')
+    expect(definitions?.map((definition) => definition.id)).toContain('http.request')
+    expect(Object.isFrozen(definitions)).toBe(true)
+
+    const authorize = runtimeOptions?.authorizeCapability as
+      | ((pluginName: string, permissionId: string) => boolean)
+      | undefined
+    expect(authorize?.('calendar', 'clipboard.read')).toBe(true)
+    expect(mocks.permissionHasPermission).toHaveBeenCalledWith('calendar', 'clipboard.read', 260215)
+    expect(mocks.checkPermission).not.toHaveBeenCalled()
+
+    mocks.permissionHasPermission.mockReturnValue(false)
+    expect(authorize?.('calendar', 'search.root-results')).toBe(false)
+    mocks.permissionGetStore.mockReturnValue(null)
+    expect(authorize?.('calendar', 'clipboard.write')).toBe(false)
+    expect(authorize?.('missing', 'clipboard.read')).toBe(false)
+
+    await module.onDestroy()
   })
 
   it('rejects secret writes without permission, permits approved writes, and disposes transport handlers', async () => {
