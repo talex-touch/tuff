@@ -1,1 +1,6 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Clipboard History Vue 组件、语义控件、键盘与可访问性约束。"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"搜索 query、分页、请求代次和 SDK 数据状态的单一所有权。"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Clipboard SDK 查询/响应类型与边界规范。"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"插件权限与 Clipboard SDK 信任边界。"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"搜索相关改动和插件验证门禁。"}
+{"file":".trellis/tasks/07-27-optimize-core-utility-plugins/research/plugin-audit.md","reason":"Clipboard 当前功能、风险与基线测试证据。"}

@@ -1,0 +1,15 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "packages/utils/transport/types.ts", "reason": "定义 caller identity、activation metadata 与 local invoke contract"}
+{"file": "packages/utils/transport/sdk/main-transport.ts", "reason": "统一 IPC、invoke、stream 与 MessagePort identity 签发/校验"}
+{"file": "apps/core-app/src/main/core/channel-core.ts", "reason": "从真实 sender 与 current activation registry 解析 caller candidate"}
+{"file": "apps/core-app/src/main/modules/plugin/runtime/plugin-view-registry.ts", "reason": "保存 webContents 绑定的 plugin instance 与 activation generation"}
+{"file": "apps/core-app/src/main/modules/plugin/plugin.ts", "reason": "维护 plugin instance/generation 并收口 main-local invoke context"}
+{"file": "apps/core-app/src/main/modules/plugin/host/plugin-host-protocol.ts", "reason": "将 child 自报 pluginName 改为宿主 opaque handle/generation contract"}
+{"file": "apps/core-app/src/main/modules/plugin/host/plugin-host-bridge.ts", "reason": "绑定 control port generation 与 main-side plugin context handle"}
+{"file": "apps/core-app/src/main/modules/plugin/host/plugin-host-process.ts", "reason": "让 sandbox SDK proxy 只回传宿主签发 handle/generation"}
+{"file": "apps/core-app/src/main/modules/permission/channel-guard.ts", "reason": "privileged handlers 改用 authoritative identity verifier"}
+{"file": "packages/utils/transport/security/plugin-identity.ts", "reason": "runtime brand 签发、verifier 与 test-only authority"}
+{"file": "apps/core-app/src/main/core/channel-caller-identity.ts", "reason": "pure sender/registration/current activation fail-closed resolver"}
+{"file": "apps/core-app/src/main/modules/plugin/host/plugin-host-identity.ts", "reason": "opaque plugin handle 与 host generation registry"}
+{"file": "apps/core-app/src/main/modules/plugin/services/plugin-window-transport-service.ts", "reason": "public plugin window 在首次 load 前注册 sender activation"}
+{"file": "apps/core-app/src/main/modules/native-capabilities/index.ts", "reason": "native privileged surface 改用 authoritative verifier"}

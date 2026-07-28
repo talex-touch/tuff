@@ -1,71 +1,55 @@
 # Clipboard History Technical Design
 
-## Product Shape
+## Direction
 
-Clipboard History remains one independent plugin. Its surface gains two views over one shared state model:
-
-- **Quick**: search-first list optimized for keyboard selection, copy, and paste.
-- **Detail**: current split inspector with preview, metadata, text tokens, colors, and OCR.
-
-A compact segmented control switches views. First launch uses Quick; later launches restore the last view using view-scoped local preference storage, without adding a new privileged permission. Query, filter, selected id, candidate progress, and action state are shared.
+Keep Clipboard History as one focused history manager. Add database-backed search to the existing surface without introducing a generic SearchSDK, a second UI mode, or client-side full-history ranking.
 
 ## Data Flow
 
 ```text
-Clipboard SDK pages (100/page, no keyword prefilter)
-  -> generation guard + filter request
-  -> plugin SearchSDK session.add(page)
-  -> bounded, stable Top-K + match ranges + progress
-  -> shared view model
-  -> Quick list / Detail inspector
+search input + existing filter
+  -> debounce
+  -> request generation increment
+  -> clipboard.history.searchHistory({
+       keyword, type/isFavorite, page, pageSize: 50, sortOrder: 'desc'
+     })
+  -> ignore stale generation
+  -> replace page 1 or merge later pages by id
+  -> preserve/select nearest valid item
 ```
 
-Empty query keeps the existing paginated recent-history flow. Non-empty query starts a new generation and progressively scans all pages for the active filter. Results from recent pages appear immediately while remaining pages continue in the background.
+SQLite remains the source of truth. Existing host behavior performs `LIKE` filtering over content, raw HTML, and metadata, then orders by timestamp descending. The plugin does not fetch all rows or re-rank them.
 
-## Search Lifecycle
+## UI Changes
 
-- Increment `searchGeneration` whenever query or filter changes.
-- Debounce text input briefly; create a fresh AbortController and SearchSDK session.
-- Fetch page size 100 sequentially to avoid request bursts and preserve deterministic first-seen order.
-- After each page, publish current Top-K and `{ processed, total, complete }`.
-- Ignore responses whose generation is stale, even if transport cancellation arrives late.
-- Clipboard history updates invalidate the active generation and restart from page 1 while preserving query/filter/mode.
-- Search result limit is bounded; the UI states that ranking covers all N records once complete, even though only Top-K is rendered.
+- Add one search input near the existing type/favorite filters.
+- Keep the current list/detail split and action bar.
+- Search and filters are one query control group; changing either resets pagination.
+- Show compact loading feedback without blurring the whole populated interface.
+- Show a query-specific empty state and a retry action for failed reads.
+- Do not label the capability fuzzy, intelligent, semantic, or exhaustive beyond the database contract.
 
-## Candidate Fields
+## State And Concurrency
 
-- Text/HTML: normalized visible content, plain text derived from HTML, source app, selected metadata labels.
-- Files: file names and display paths; do not index raw serialized list punctuation as meaningful tokens.
-- Images: OCR text, OCR keywords, source app, and safe metadata labels; binary/data URLs are excluded.
-- Field weights prioritize visible content/file name/OCR text over metadata and source app.
+- Add `searchQuery`, `debouncedQuery`, and monotonically increasing `requestGeneration` to the view orchestration.
+- One function owns request construction for initial load, pagination, filter change, search change, retry, and history refresh.
+- Each request captures its generation and only commits if still current.
+- A history-change event restarts page 1 with the active query/filter.
+- Later pages merge by id and retain timestamp-desc order.
 
-## UI Structure
+## Matching Boundary
 
-- Top toolbar: shared search input, type/favorite filter, Quick/Detail segmented control, truthful coverage status.
-- Quick mode: one dense list with highlighted matches, source/type/time metadata, arrow navigation, Enter paste, Cmd/Ctrl+Enter copy.
-- Detail mode: existing list + inspector, with the same highlighted result ordering and current selection.
-- Bottom action area contains item commands only; filters move out of the footer.
-- Loading uses stable list placeholders/progress, not whole-page blur. Errors preserve current results and expose retry.
-- All controls have semantic buttons/inputs, focus-visible states, dark theme support, and reduced-motion behavior.
-
-## State Ownership
-
-Extract a focused composable for history/search orchestration instead of expanding `ClipboardManagerView.vue`. Components receive typed projections and emit commands; they do not call SDKs independently.
+- Text and raw HTML can match through existing columns.
+- Image OCR text/keywords may match when present in metadata.
+- File records match their persisted content/metadata representation.
+- No client-side typo tolerance or custom scoring is added.
 
 ## Compatibility And Security
 
-- Keep existing Clipboard permissions and SDK domain boundaries.
-- No Search transport or new permission.
-- SearchSDK receives only data already returned to this plugin.
-- Existing copy/paste/favorite/delete behavior and manifest feature identity remain compatible.
-
-## Risks And Mitigations
-
-- Large histories: sequential pages, bounded Top-K, cancellation, and visible progress.
-- Rapid mutation: generation guard plus restart prevents stale overwrite.
-- Heavy image payloads: search fields exclude data URLs and resolved image bytes.
-- Unicode highlights: SearchSDK owns ranges and tests.
+- No new permissions, transport events, database schema, or SDK contract.
+- Existing Clipboard SDK is the only data boundary.
+- Existing copy/paste/favorite/delete and image URL resolution remain intact.
 
 ## Rollback
 
-Clipboard adoption is UI/state-only and stores one harmless view preference. Reverting restores existing pagination and layout; no database migration is required.
+The change is isolated to plugin state, UI, and tests. Removing the search control and keyword request field restores current behavior; no persisted migration exists.

@@ -1,0 +1,10 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": "packages/utils/__tests__/main-transport-stream.test.ts", "reason": "验证 stream fallback、cancel 与 plugin port identity binding"}
+{"file": "apps/core-app/src/main/modules/permission/channel-guard.test.ts", "reason": "证明 privileged guard 拒绝 forged/stale boolean context"}
+{"file": "apps/core-app/src/main/modules/plugin/plugin-localization-channels.test.ts", "reason": "验证 localization privileged surface 消费统一 verifier"}
+{"file": ".trellis/spec/frontend/plugin-runtime-security.md", "reason": "核对并更新插件 runtime identity 安全规范"}
+{"file": ".trellis/tasks/07-27-audit-plugin-privileged-security/research/isolation-transport.md", "reason": "修复后回填 F7 resolution 与证据"}
+{"file": "packages/utils/__tests__/main-transport-identity.test.ts", "reason": "raw/invoke/local/test authority regression"}
+{"file": "packages/utils/__tests__/main-transport-port-identity.test.ts", "reason": "plugin port sender/instance/generation/provenance regression"}
+{"file": "apps/core-app/src/main/modules/plugin/runtime/plugin-window-boundary-contract.test.ts", "reason": "所有 plugin WebContents 首次 load 前 sender registration contract"}
+{"file": "apps/core-app/src/main/modules/plugin/host/plugin-host-identity.test.ts", "reason": "current/reload/unload/stale/cross-plugin handle regression"}

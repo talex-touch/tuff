@@ -1,1 +1,6 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"复核语义控件、focus、键盘和响应式行为。"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"复核 stale request、分页合并与历史更新状态。"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"复核 SDK 查询参数和响应映射无私有 cast。"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"复核无新增权限、raw channel 或越界数据访问。"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"执行插件测试、类型检查、构建和搜索边界质量门禁。"}
+{"file":".trellis/tasks/07-27-optimize-core-utility-plugins/research/plugin-audit.md","reason":"对照基线和已确认风险，避免扩大范围。"}
