@@ -390,6 +390,108 @@ const bytes = copyByBoundedIndex(view, byteLength);
 Reflect.apply(capturedUint8ArraySet, target, [childRealmBytes]);
 ```
 
+## Scenario: Owner-Bound Voice Capability
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated Prelude invokes dictation, streaming ASR, or speech synthesis
+  through `voice.invoke` or `voice.stream`.
+- This contract spans child facades, callback/resource transport, activation authority,
+  permission revoke, native capture, intelligence STT/polish/TTS, and teardown barriers.
+
+### 2. Signatures
+
+```ts
+interface IsolatedVoiceHostService {
+  dictate(payload: VoiceDictatePayload, signal: AbortSignal): Promise<VoiceDictateResult>;
+  speak(payload: VoiceSpeakPayload, signal: AbortSignal): Promise<VoiceSpeakResult>;
+  streamDictation(
+    payload: VoiceAsrStreamPayload,
+    signal: AbortSignal,
+  ): AsyncIterable<VoiceAsrStreamEvent>;
+}
+
+type VoiceStreamRequest = {
+  operation: "asr-stream";
+  language?: string;
+  onEvent(event: VoiceAsrStreamEvent): Promise<void>;
+};
+```
+
+### 3. Contracts
+
+- Require manifest declaration and a current grant for `voice.dictation` on every
+  invoke and stream start. Bind the returned stream resource and retained callback
+  to the current activation owner and generation.
+- Deliver stream events one at a time and await `onEvent` before reading the next
+  event. `final`, `error`, and `end` are terminal and automatically dispose the
+  resource; explicit `cancel()` and repeated disposal are idempotent.
+- Propagate the capability `AbortSignal` through the production VoiceService. Abort
+  cancels native microphone capture immediately and releases waits for STT, polish,
+  and TTS without waiting for a provider promise that cannot be physically aborted.
+- A provider promise that settles after abort is observed only to contain rejection;
+  its value is discarded and cannot emit events, play audio, publish items, or settle
+  a newer generation's request.
+- TTS audio stays in main. The child receives bounded metadata only. Check abort
+  after synthesis and immediately before playback so cancelled work never starts
+  speaker output.
+- Permission revoke and activation teardown abort the signal, dispose the resource,
+  release the callback, and await native capture cancellation before the host stop
+  barrier resolves.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| `voice.*` capability or method undeclared | Facade/method absent or stable undeclared-capability failure |
+| `voice.dictation` missing or revoked | Reject before new native capture; close current stream resource |
+| Signal aborts during capture | `cancelCapture(sessionId)` and `VOICE_OPERATION_CANCELLED` |
+| Signal aborts during STT/polish/TTS | Release awaiting caller; discard late result and side effects |
+| Signal aborts before TTS playback | No `playAudio` call |
+| Callback rejects or exceeds deadline | Stable redacted callback failure and resource disposal |
+| Duplicate cancel/dispose | No-op after the first completed cleanup |
+| Old generation emits a late event | Reject/ignore; no callback or host side effect |
+
+### 5. Good / Base / Bad Cases
+
+- Good: Dictation starts an owner-bound stream, awaits each partial/final callback,
+  auto-disposes on terminal delivery, and permission revoke cancels native capture.
+- Base: one-shot STT/TTS completes normally; only bounded text/status metadata crosses
+  to the child and no native audio bytes cross the capability boundary.
+- Bad: remove the child iterator while leaving capture or provider work awaited in
+  main, or race a TTS promise without checking abort before playback.
+
+### 6. Tests Required
+
+- VoiceService unit tests abort dictate, stream, and speak while work is pending;
+  assert native cancel, stable cancellation, no STT after capture abort, and no audio
+  playback after synthesis abort.
+- Capability tests cover manifest/grant checks, owner/generation binding, per-event
+  backpressure, terminal auto-dispose, callback failure, explicit cancel, repeated
+  dispose, permission revoke, and activation cleanup.
+- Child VM tests cover declaration-gated frozen facades, terminal auto-dispose,
+  idempotent cancel, callback error redaction, and absence when undeclared.
+- Real Electron smoke runs the actual Dictation Prelude in two generations and proves
+  permission deny/grant, partial/final delivery, clipboard action, resource count
+  returning to zero, PID/handle/generation rotation, and stale-port rejection.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const result = await Promise.race([voiceService.speak(payload), timeout]);
+// The provider can finish later and still play audio.
+```
+
+#### Correct
+
+```ts
+const result = await voiceService.speak(payload, signal);
+signal.throwIfAborted();
+// VoiceService also checks abort immediately before native playback.
+```
+
 ## Scenario: Plugin-Owned Runtime Overlay
 
 ### 1. Scope / Trigger

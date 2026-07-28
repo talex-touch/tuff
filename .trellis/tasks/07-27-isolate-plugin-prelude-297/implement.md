@@ -290,6 +290,65 @@ This section supersedes the earlier rollout count for the final reviewed Batch C
 - The 12 explicitly unmigrated official Preludes, production runtime default enablement, legacy bridge removal, and the complete #297 hard cut remain pending.
 - No commit, push, merge, renderer migration, unsupported plugin migration, or unrelated cleanup was performed for Batch C.
 
+## Batch D Dictation Voice Migration
+
+This section supersedes the earlier rollout count for the reviewed Dictation worktree.
+It does not claim the #297 production hard cut.
+
+### Implemented Contracts
+
+- `touch-dictation` now uses only the declaration-gated `plugin.voice`, feature, and
+  clipboard facades. Its production Prelude has no `__test`, top-level `require`, raw
+  network, `process`, Electron, filesystem, SQLite, child-process, worker-thread, or
+  reflective host surface.
+- `voice.invoke` and `voice.stream` are fixed, permission-checked capability IDs.
+  Streaming uses one owner/generation-bound retained callback and resource, awaits
+  every event for backpressure, auto-disposes on terminal events, and treats explicit
+  cancel/dispose as idempotent.
+- Capability cancellation now reaches production `VoiceService`: native capture is
+  cancelled immediately; pending STT, polish, and TTS awaits release with the stable
+  `VOICE_OPERATION_CANCELLED` result; late provider values are discarded; and abort
+  before playback guarantees no native audio playback.
+- TTS audio never crosses to the child. Dictation publishes standard bounded plugin
+  actions rather than broad metadata, and awaits feature and clipboard side effects.
+- The compatible rollout inventory is now **11 of 22** manifested activations, adding
+  `touch-dictation`. `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains `false` with no
+  environment bypass; 11 official Prelude migrations remain.
+
+### Real Electron Evidence
+
+- The production-built host runs the actual Dictation Prelude in two complete plugin
+  rounds with a dedicated utility process for every activation.
+- The smoke proves permission deny/grant, partial/final stream delivery, clipboard
+  paste, owner resource count returning to zero, awaited stop, distinct PIDs/handles,
+  activation and host generation rotation, stale-port rejection, and continued
+  isolation of unrelated activations.
+- Final result against commit `8ceb8f4dd`: `PLUGIN_HOST_ISOLATION_SMOKE_OK`.
+
+### Final Validation
+
+- Git-tracked host/rollout/module/VoiceService suite: **23 files, 438/438 tests passed**.
+- VoiceService cancellation suite: **21/21 passed**, covering dictate, stream, and
+  speak abort behavior; focused host Voice/module/Prelude suite also passed.
+- CoreApp Node and Web typechecks passed. Scoped ESLint passed with zero warnings.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Final-source production `build:vite`, real Electron smoke, and `git diff --check`
+  passed. Existing Vite chunking and third-party warnings remain non-blocking.
+- Code commits: `30551c39a feat(plugins): isolate dictation voice runtime [task 297]`
+  and `8ceb8f4dd fix(plugin): cancel isolated voice host work [task 297]`.
+
+### Remaining Scope
+
+- Eleven official Preludes remain, beginning with Intelligence/Translation stream and
+  credential migration followed by filesystem/process/system/window plugins.
+- Production default enablement, heartbeat/restart budget, legacy bridge removal,
+  22/22 regression, final independent security review, and the complete hard cut
+  remain release blockers.
+- An unrelated concurrent Batch Rename test/source pair was present as untracked work
+  during validation and was excluded by enumerating Git-tracked host tests; it was not
+  modified or included in this batch.
+
 ## Release Gate
 
 Do not mark review, commit, publish or close #297 until every real plugin Prelude uses a dedicated utilityProcess, all privileged access is typed and per-call authorized, official plugins pass isolated regression, and real Electron smoke proves crash/hang/resource violations cannot block main or cross activation boundaries.
