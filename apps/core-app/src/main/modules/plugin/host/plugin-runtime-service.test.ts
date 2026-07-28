@@ -6,7 +6,11 @@ import type {
   PluginRuntimeProcessFactory
 } from './plugin-runtime-host'
 import { PluginRuntimeHostError } from './plugin-runtime-host'
-import { PluginRuntimeService, type PluginRuntimeActivationOptions } from './plugin-runtime-service'
+import {
+  PluginRuntimeService,
+  type PluginRuntimeActivationOptions
+} from './plugin-runtime-service'
+import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 import type { HostWireMessage } from './plugin-host-wire'
 
 function deferred<T>() {
@@ -137,7 +141,12 @@ class FakePort implements PluginRuntimeControlPortAdapter {
   }
 }
 
-function createHarness(options: { artifactExists?: boolean } = {}) {
+function createHarness(
+  options: {
+    artifactExists?: boolean
+    capabilityDefinitions?: readonly PluginHostCapabilityDefinition[]
+  } = {}
+) {
   const children: FakeChild[] = []
   const ports: FakePort[] = []
   let nextInitBarrier: ReturnType<typeof deferred<void>> | null = null
@@ -176,7 +185,7 @@ function createHarness(options: { artifactExists?: boolean } = {}) {
       isValidKey: vi.fn(),
       resolveCurrentIdentity: (pluginName) => currentByPlugin.get(pluginName)
     },
-    capabilityDefinitions: [],
+    capabilityDefinitions: options.capabilityDefinitions ?? [],
     authorizeCapability: () => false,
     watchPermissionRevoked: () => () => undefined,
     closeResources,
@@ -220,7 +229,154 @@ function createHarness(options: { artifactExists?: boolean } = {}) {
   }
 }
 
+function stringCapabilityDefinition(
+  overrides: Partial<PluginHostCapabilityDefinition<string, string>> = {}
+): PluginHostCapabilityDefinition<string, string> {
+  return {
+    id: 'storage.file.read',
+    timeoutMs: 1_000,
+    maxConcurrency: 1,
+    validateRequest: (value) => {
+      if (typeof value !== 'string') throw new Error('invalid request')
+      return value
+    },
+    validateResult: (value) => {
+      if (typeof value !== 'string') throw new Error('invalid result')
+      return value
+    },
+    invoke: async (_context, request) => request,
+    ...overrides
+  }
+}
+
+function constructorOptions(
+  overrides: Partial<PluginRuntimeServiceOptions> = {}
+): PluginRuntimeServiceOptions {
+  return {
+    artifactPath: '/built/plugin-host.js',
+    factory: {
+      artifactExists: () => true,
+      spawn: () => {
+        throw new Error('not used')
+      }
+    },
+    keyManager: {
+      requestKey: vi.fn(),
+      revokeKey: vi.fn(() => true),
+      resolveKey: vi.fn(),
+      isValidKey: vi.fn(),
+      resolveCurrentIdentity: vi.fn()
+    },
+    capabilityDefinitions: [],
+    authorizeCapability: () => false,
+    watchPermissionRevoked: () => () => undefined,
+    closeResources: vi.fn(),
+    ...overrides
+  }
+}
+
+function expectInvalidServiceOptions(options: unknown): void {
+  expect(() => new PluginRuntimeService(options as PluginRuntimeServiceOptions)).toThrowError(
+    new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS')
+  )
+}
+
 describe('PluginRuntimeService', () => {
+  it('rejects malformed constructor options without invoking accessors or leaking native errors', () => {
+    expectInvalidServiceOptions(undefined)
+    expectInvalidServiceOptions(constructorOptions({ teardownTimeoutMs: 0 }))
+    expectInvalidServiceOptions(
+      constructorOptions({
+        keyManager: {
+          requestKey: vi.fn(),
+          revokeKey: vi.fn(() => true),
+          resolveKey: vi.fn(),
+          isValidKey: vi.fn()
+        }
+      })
+    )
+
+    const hostile = constructorOptions() as PluginRuntimeServiceOptions & Record<string, unknown>
+    let getterCalled = false
+    Object.defineProperty(hostile, 'factory', {
+      enumerable: true,
+      get() {
+        getterCalled = true
+        throw new Error('/private/native/factory-error')
+      }
+    })
+
+    expectInvalidServiceOptions(hostile)
+    expect(getterCalled).toBe(false)
+  })
+
+  it('snapshots definitions and rejects accessors or duplicate capability ids', async () => {
+    let getterCalled = false
+    const hostileDefinition = {
+      timeoutMs: 1_000,
+      maxConcurrency: 1,
+      validateRequest: (value: unknown) => value,
+      validateResult: (value: unknown) => value,
+      invoke: async () => null
+    }
+    Object.defineProperty(hostileDefinition, 'id', {
+      enumerable: true,
+      get() {
+        getterCalled = true
+        throw new Error('secret-definition-error')
+      }
+    })
+
+    expectInvalidServiceOptions(
+      constructorOptions({
+        capabilityDefinitions: [
+          hostileDefinition as unknown as PluginHostCapabilityDefinition
+        ]
+      })
+    )
+    expect(getterCalled).toBe(false)
+
+    expectInvalidServiceOptions(
+      constructorOptions({
+        capabilityDefinitions: [stringCapabilityDefinition(), stringCapabilityDefinition()]
+      })
+    )
+
+    const definition = stringCapabilityDefinition()
+    const harness = createHarness({ capabilityDefinitions: [definition] })
+    definition.id = 'storage.file.write'
+    definition.invoke = async () => 'mutated'
+    await harness.start(activation())
+
+    expect(harness.ports[0].loadPayloads).toEqual([
+      expect.objectContaining({ capabilityManifest: ['storage.file.read'] })
+    ])
+    await harness.service.dispose()
+  })
+
+  it('rejects hostile activation options without evaluating accessors', async () => {
+    const harness = createHarness()
+    let getterCalled = false
+    const options = {
+      scriptContent: 'module.exports = {}',
+      snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
+    }
+    Object.defineProperty(options, 'activation', {
+      enumerable: true,
+      get() {
+        getterCalled = true
+        throw new Error('activation-key-secret')
+      }
+    })
+
+    await expect(
+      harness.service.startActivation(options as unknown as PluginRuntimeActivationOptions)
+    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
+    expect(getterCalled).toBe(false)
+    expect(harness.spawn).not.toHaveBeenCalled()
+    await harness.service.dispose()
+  })
+
   it('creates one dedicated host per activation with rotated owner identity', async () => {
     const harness = createHarness()
     const alpha = activation('plugin.alpha', 1)
@@ -351,6 +507,119 @@ describe('PluginRuntimeService', () => {
     expect(harness.service.resolve(secondIdentity)).toBe(second.host)
 
     await harness.service.dispose()
+  })
+
+  it('rejects stale activation identities before spawning or disturbing current authority', async () => {
+    const harness = createHarness()
+    const stale = activation('plugin.alpha', 1, 'stale-key')
+    const current = activation('plugin.alpha', 2, 'current-key')
+    harness.setCurrent(current)
+
+    await expect(
+      harness.service.startActivation({
+        activation: stale,
+        scriptContent: 'module.exports = {}',
+        snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
+      })
+    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_ACTIVATION_STALE'))
+
+    expect(harness.spawn).not.toHaveBeenCalled()
+    expect(harness.revokeKey).not.toHaveBeenCalled()
+    expect(harness.closeResources).not.toHaveBeenCalled()
+    await harness.service.dispose()
+  })
+
+  it('serializes a same-plugin stop behind startup and closes resources exactly once', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    const initBarrier = deferred<void>()
+    harness.setNextInitBarrier(initBarrier)
+    const starting = harness.start(identity)
+    await vi.waitFor(() => expect(harness.ports).toHaveLength(1))
+
+    let stopped = false
+    const stopping = harness.service.stopActivation(identity).then(() => {
+      stopped = true
+    })
+    await flush()
+    expect(stopped).toBe(false)
+
+    initBarrier.resolve()
+    await starting
+    await stopping
+
+    expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(harness.revokeKey).toHaveBeenCalledTimes(1)
+    expect(harness.closeResources).toHaveBeenCalledTimes(1)
+    expect(harness.children[0].exited).toBe(true)
+    await harness.service.dispose()
+  })
+
+  it('makes stopAll a terminal barrier for an activation still starting', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    const initBarrier = deferred<void>()
+    harness.setNextInitBarrier(initBarrier)
+    const starting = harness.start(identity)
+    await vi.waitFor(() => expect(harness.ports).toHaveLength(1))
+
+    const startResult = expect(starting).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED')
+    )
+    const stopping = harness.service.stopAll()
+    initBarrier.resolve()
+
+    await startResult
+    await stopping
+    expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(harness.revokeKey).toHaveBeenCalledTimes(1)
+    expect(harness.closeResources).toHaveBeenCalledTimes(1)
+    expect(harness.children[0].exited).toBe(true)
+    await expect(harness.service.startActivation({
+      activation: identity,
+      scriptContent: 'module.exports = {}',
+      snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
+    })).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED'))
+  })
+
+  it('completes crash cleanup even when the observer throws', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    const onCrash = vi.fn(() => {
+      throw new Error('/private/native/crash-detail')
+    })
+    await harness.start(identity, { onCrash })
+
+    harness.children[0].emitExit()
+    await vi.waitFor(() => expect(harness.closeResources).toHaveBeenCalledTimes(1))
+
+    expect(onCrash).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_CRASHED',
+      pluginName: identity.name,
+      activationGeneration: identity.activationGeneration
+    })
+    expect(harness.revokeKey).toHaveBeenCalledTimes(1)
+    expect(harness.service.resolve(identity)).toBeUndefined()
+    await harness.service.dispose()
+    expect(harness.closeResources).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps repeated stop and dispose idempotent', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    await harness.start(identity)
+
+    await Promise.all([
+      harness.service.stopActivation(identity),
+      harness.service.stopActivation(identity),
+      harness.service.stopPlugin(identity.name)
+    ])
+    await Promise.all([harness.service.dispose(), harness.service.dispose()])
+
+    expect(harness.revokeKey).toHaveBeenCalledTimes(1)
+    expect(harness.closeResources).toHaveBeenCalledTimes(1)
+    expect(harness.children[0].exited).toBe(true)
+    expect(harness.service.resolve(identity)).toBeUndefined()
   })
 
   it('never routes an old lifecycle proxy into a replacement generation', async () => {
