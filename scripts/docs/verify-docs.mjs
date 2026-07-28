@@ -7,13 +7,13 @@ import { lint } from 'markdownlint/sync'
 import remarkMdc from 'remark-mdc'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
-import { AI_DOC_CHECKS, verifyAiDocs } from '../ai-docs/verify-ai-docs.mjs'
+import { verifyAiDocs } from '../ai-docs/verify-ai-docs.mjs'
 import { validateReleaseNotesAtRepo } from '../lib/release-notes-contract.mjs'
 import { MARKDOWNLINT_CONFIG, MARKDOWNLINT_CUSTOM_RULES } from './markdownlint-config.mjs'
 
 const DEFAULT_CAP = 100
 const POSIX = value => value.split(path.sep).join('/')
-const TASK_JSON = /^\.trellis\/(?:tasks\/archive\/[^/]+|archive\/tasks|tasks)\/([^/]+)\/task\.json$/
+const TASK_JSON = /^\.trellis\/(?:tasks\/archive\/\d{4}-\d{2}|tasks)\/([^/]+)\/task\.json$/
 const MARKDOWN = /\.(?:md|mdc)$/i
 const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Z-]+(?:\.[0-9A-Z-]+)*)?(?:\+[0-9A-Z-]+(?:\.[0-9A-Z-]+)*)?$/i
 
@@ -21,8 +21,8 @@ const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Z-]+(?:
 export const MARKDOWN_SCOPE_EXCLUSIONS = Object.freeze([
   { reason: 'agent-or-platform-instructions', test: file => /(?:^|\/)(?:AGENTS|CLAUDE|GEMINI|COPILOT|CODEX)\.md$/i.test(file) || /^\.(?:agents|codex|github)\//.test(file) },
   { reason: 'trellis-prose', test: file => /^\.trellis\//.test(file) },
-  { reason: 'raw-evidence-or-report', test: file => /(?:^|\/)(?:evidence|reports?|raw)(?:\/|$)/i.test(file) || /^docs\/report\//.test(file) },
-  { reason: 'generated-build-cache-dependency-runtime', test: file => /(?:^|\/)(?:dist|build|coverage|\.cache|cache|node_modules|vendor|runtime|generated)(?:\/|$)/.test(file) },
+  { reason: 'raw-evidence-or-report', test: file => /^(?:evidence|reports?|raw)(?:\/|$)/i.test(file) || /^docs\/(?:report|engineering\/reports)\//.test(file) },
+  { reason: 'generated-build-cache-dependency-runtime', test: file => /^(?:dist|build|coverage|\.cache|cache|node_modules|vendor|runtime|generated)(?:\/|$)/.test(file) },
   { reason: 'design-fixture', test: file => /\.pen$/i.test(file) || /^scripts\/docs\/fixtures\//.test(file) || /^apps\/nexus\/examples\//.test(file) },
 ])
 
@@ -64,24 +64,24 @@ export function scopeRegistry(repoRoot, tracked = trackedFiles(repoRoot)) {
     markdownFiles: files.filter(file => MARKDOWN.test(file)),
     lintDocuments: files.filter(file => MARKDOWN.test(file) && !excludedMarkdownScope(file)),
     excludedMarkdown: files.filter(file => MARKDOWN.test(file) && excludedMarkdownScope(file)),
-    activeTasks: taskFiles.filter(file => !file.startsWith('.trellis/tasks/archive/') && !file.startsWith('.trellis/archive/tasks/')),
-    archivedTasks: taskFiles.filter(file => file.startsWith('.trellis/tasks/archive/') || file.startsWith('.trellis/archive/tasks/')),
+    activeTasks: taskFiles.filter(file => !file.startsWith('.trellis/tasks/archive/')),
+    archivedTasks: taskFiles.filter(file => file.startsWith('.trellis/tasks/archive/')),
     activePrds: files.filter(file => /^\.trellis\/tasks\/[^/]+\/prd\.md$/.test(file)),
   }
 }
 
 function resolveRelative(source, rawUrl) {
+  const rawPath = rawUrl.split(/[?#]/, 1)[0]
   let decoded
   try {
-    decoded = decodeURIComponent(rawUrl)
+    decoded = decodeURIComponent(rawPath)
   }
   catch {
     return { error: 'invalid URL encoding' }
   }
-  const raw = decoded.split(/[?#]/, 1)[0]
-  if (!raw || raw.startsWith('#') || raw.startsWith('/') || raw.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(raw))
+  if (!decoded || decoded.startsWith('#') || decoded.startsWith('/') || decoded.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(decoded))
     return null
-  const target = path.posix.normalize(path.posix.join(path.posix.dirname(source), raw)).replace(/\/$/, '')
+  const target = path.posix.normalize(path.posix.join(path.posix.dirname(source), decoded)).replace(/\/$/, '')
   return target === '..' || target.startsWith('../') ? { error: 'repository escape', target } : { target }
 }
 
@@ -177,6 +177,12 @@ function taskLocation(file) {
 function taskReference(file) {
   return TASK_JSON.exec(file)?.[1] ?? ''
 }
+function nonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0
+}
+function plainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
 function readTask(repoRoot, file, diagnostics) {
   try {
     return JSON.parse(fs.readFileSync(path.join(repoRoot, file), 'utf8'))
@@ -186,8 +192,24 @@ function readTask(repoRoot, file, diagnostics) {
     return null
   }
 }
-function nonEmptyString(value) {
-  return typeof value === 'string' && value.trim().length > 0
+function validTaskShape(task, file, archive, diagnostics) {
+  if (!plainObject(task)) {
+    diagnostics.push(diagnostic('DOC-TASK-TYPE', file, null, 'task JSON root must be an object'))
+    return false
+  }
+  const valid = [
+    ['id', typeof task.id === 'string'],
+    ['status', typeof task.status === 'string'],
+    ['assignee', typeof task.assignee === 'string'],
+    ['children', Array.isArray(task.children) && task.children.every(child => typeof child === 'string')],
+    ['meta', archive ? task.meta == null || plainObject(task.meta) : plainObject(task.meta)],
+    ['completedAt', !archive || typeof task.completedAt === 'string'],
+  ]
+  for (const [field, validField] of valid) {
+    if (!validField)
+      diagnostics.push(diagnostic('DOC-TASK-TYPE', file, null, `${field} has an invalid type`))
+  }
+  return valid.every(([, validField]) => validField)
 }
 function taskRuleAllowed(file, ruleId) {
   return TASK_RULE_ALLOWLIST.some(entry => entry.path === file && entry.rule === ruleId && nonEmptyString(entry.rationale))
@@ -198,8 +220,9 @@ export function checkTasks(repoRoot, scope) {
   const records = []
   for (const file of [...scope.activeTasks, ...scope.archivedTasks].sort()) {
     const task = readTask(repoRoot, file, diagnostics)
-    if (task)
-      records.push({ file, archive: scope.archivedTasks.includes(file), task, pathRef: taskReference(file), pathId: taskLocation(file) })
+    const archive = scope.archivedTasks.includes(file)
+    if (task !== null && validTaskShape(task, file, archive, diagnostics))
+      records.push({ file, archive, task, pathRef: taskReference(file), pathId: taskLocation(file) })
   }
   const aliases = record => [record.task.id, record.pathRef, record.pathId].filter(nonEmptyString)
   const byReference = new Map()
@@ -224,12 +247,10 @@ export function checkTasks(repoRoot, scope) {
       if (!nonEmptyString(task.assignee))
         diagnostics.push(diagnostic('DOC-TASK-META', file, null, 'assignee must be a non-empty string'))
       for (const key of ['nextAction', 'blocker', 'evidence']) {
-        if (!nonEmptyString(task.meta?.[key]))
+        if (!nonEmptyString(task.meta[key]))
           diagnostics.push(diagnostic('DOC-TASK-META', file, null, `meta.${key} must be a non-empty string`))
       }
     }
-    if (task.parent != null && !nonEmptyString(task.parent))
-      diagnostics.push(diagnostic('DOC-TASK-PARENT', file, null, 'parent must be null or a non-empty string'))
   }
   for (const record of records) {
     const { file, task } = record
@@ -237,10 +258,10 @@ export function checkTasks(repoRoot, scope) {
       const parent = byReference.get(task.parent)
       if (!parent)
         diagnostics.push(diagnostic('DOC-TASK-PARENT', file, null, `parent ${task.parent} does not exist`))
-      else if (!parent.task.children?.some(child => aliases(record).includes(child)))
+      else if (!parent.task.children.some(child => aliases(record).includes(child)))
         diagnostics.push(diagnostic('DOC-TASK-GRAPH', file, null, `parent ${task.parent} does not list child ${task.id}`))
     }
-    for (const childId of task.children ?? []) {
+    for (const childId of task.children) {
       const child = byReference.get(childId)
       if (!child)
         diagnostics.push(diagnostic('DOC-TASK-CHILDREN', file, null, `child ${childId} does not exist`))
@@ -250,7 +271,7 @@ export function checkTasks(repoRoot, scope) {
   }
   for (const entry of TASK_RULE_ALLOWLIST) {
     const record = records.find(candidate => candidate.file === entry.path)
-    const hasMissingMeta = record && (!nonEmptyString(record.task.assignee) || ['nextAction', 'blocker', 'evidence'].some(key => !nonEmptyString(record.task.meta?.[key])))
+    const hasMissingMeta = record && (!nonEmptyString(record.task.assignee) || ['nextAction', 'blocker', 'evidence'].some(key => !nonEmptyString(record.task.meta[key])))
     if (!scope.tracked.has(entry.path) || entry.rule !== 'DOC-TASK-META' || !nonEmptyString(entry.rationale) || !hasMissingMeta)
       diagnostics.push(diagnostic('DOC-TASK-ALLOWLIST', entry.path ?? 'scripts/docs/verify-docs.mjs', null, 'allowlist entry must be exact, supported, justified, and match a current metadata violation'))
   }
@@ -270,15 +291,44 @@ export function checkTasks(repoRoot, scope) {
           diagnostics.push(diagnostic('DOC-TODO-TASK-REFERENCE', todo, node.position?.start, `${node.url} does not reference an active non-completed task`))
       })
     }
-    catch (error) { diagnostics.push(diagnostic('DOC-TODO-TASK-REFERENCE', todo, null, error.message)) }
+    catch (error) {
+      diagnostics.push(diagnostic('DOC-TODO-TASK-REFERENCE', todo, null, error.message))
+    }
   }
   return diagnostics
 }
 
+const PLACEHOLDER = /\b(?:TBD|TODO\s*:\s*(?:fill|complete|determine)|to be determined|\[placeholder\])\b|<evidence>|待定|待填写|待补充|占位符|请填写/gi
+const REQUIRED_PRD_SECTION = /^(?:goal|objective|acceptance criteria|evidence|目标|验收标准|证据)$/i
+function sectionHasSubstantiveContent(nodes) {
+  return nodes.some((node) => {
+    if (node.type === 'code' || node.type === 'inlineCode')
+      return false
+    let substantive = false
+    walk(node, (child) => {
+      if (child.type === 'text' && /[\p{L}\p{N}]/u.test(child.value) && !PLACEHOLDER.test(child.value))
+        substantive = true
+    })
+    return substantive
+  })
+}
+function emptyRequiredSections(tree) {
+  const diagnostics = []
+  const nodes = tree.children ?? []
+  for (let index = 0; index < nodes.length; index += 1) {
+    const heading = nodes[index]
+    if (heading.type !== 'heading' || !REQUIRED_PRD_SECTION.test(heading.children?.map(child => child.value ?? '').join('')))
+      continue
+    let end = index + 1
+    while (end < nodes.length && (nodes[end].type !== 'heading' || nodes[end].depth > heading.depth)) end += 1
+    if (!sectionHasSubstantiveContent(nodes.slice(index + 1, end)))
+      diagnostics.push(heading)
+  }
+  return diagnostics
+}
 function placeholderAllowed(file, token) {
   return PLACEHOLDER_ALLOWLIST.some(entry => entry.path === file && entry.rule === 'DOC-PRD-PLACEHOLDER' && entry.token === token && nonEmptyString(entry.rationale))
 }
-const PLACEHOLDER = /\b(?:TBD|TODO\s*:\s*(?:fill|complete|determine)|to be determined|\[placeholder\])\b|<evidence>|待定|待填写|待补充|占位符|请填写/gi
 
 export function checkPlaceholders(repoRoot, scope) {
   const diagnostics = []
@@ -291,6 +341,7 @@ export function checkPlaceholders(repoRoot, scope) {
     catch {
       continue
     }
+    for (const heading of emptyRequiredSections(tree)) diagnostics.push(diagnostic('DOC-PRD-EMPTY-SECTION', file, heading.position?.start, 'required template section has no substantive content'))
     walk(tree, (node) => {
       if (node.type !== 'text' && node.type !== 'html')
         return
@@ -307,8 +358,8 @@ export function checkPlaceholders(repoRoot, scope) {
   }
   return diagnostics
 }
-export function checkAiDocs(repoRoot, scope) {
-  if (scope && !AI_DOC_CHECKS.every(check => scope.tracked.has(check.file)))
+export function checkAiDocs(repoRoot, scope, options = {}) {
+  if (options.skipAiDocs === true)
     return []
   return verifyAiDocs(repoRoot).map(failure => diagnostic('DOC-AI-CONTRACT', failure.file, null, failure.message))
 }

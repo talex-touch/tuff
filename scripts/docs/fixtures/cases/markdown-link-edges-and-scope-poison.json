@@ -1,5 +1,5 @@
 {
-  "base": "valid-aggregate",
+  "caseBase": "valid-final-contract",
   "files": {
     "AGENTS.md": "# Poison\n\n[Agent instructions must stay out of product-doc parsing](missing-agent-target.md).\n",
     ".github/poison.md": "# Poison\n\n[Workflow prose must stay out of product-doc parsing](missing-workflow-target.md).\n",

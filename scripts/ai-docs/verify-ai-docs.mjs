@@ -14,6 +14,10 @@ export const AI_DOC_CHECKS = Object.freeze([
   { file: 'docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md', needles: ['2.5.0 可见体验证据', '2.5.3 Context Builder 基座', '2.5.4 ContextHygiene', '2.5.5 / 2.5.8 非当前抢占范围', '验证门禁', '后续切片'] },
 ])
 
+const CURRENT_PROMOTION = /(?:current|当前)[\s\S]{0,80}?(?:CoreApp\s*)?(\d+\.\d+\.\d+(?:-[\w.]+)?)[\s\S]{0,100}?(?:passed|complete|完成|已闭合)/i
+const CURRENT_PROMOTION_NEGATION = /(?:current|当前)[\s\S]{0,120}?(?:fail-closed|不再称为|not\s+(?:passed|complete))/i
+const CURRENT_COMPLETION_WITHOUT_VERSION = /(?:current|当前)[\s\S]{0,80}?(?:strict visible gate|packaged evidence|体验证据)[\s\S]{0,80}?(?:passed|complete|完成|已闭合)/i
+
 function readRepoFile(repoRoot, file) {
   try {
     return readFileSync(new URL(file, repoRoot), 'utf8')
@@ -25,11 +29,36 @@ function readRepoFile(repoRoot, file) {
   }
 }
 
+function currentCoreAppVersion(repoRoot) {
+  const content = readRepoFile(repoRoot, 'apps/core-app/package.json')
+  if (content === null)
+    return null
+  const version = JSON.parse(content).version
+  return typeof version === 'string' ? version : null
+}
+
+function promotionFailures(file, content, currentVersion) {
+  if (CURRENT_PROMOTION_NEGATION.test(content))
+    return []
+  const failures = []
+  const match = CURRENT_PROMOTION.exec(content)
+  if (match && match[1] !== currentVersion) {
+    failures.push({ file, message: `current evidence promotion names ${match[1]}, not CoreApp ${currentVersion}` })
+  }
+  else if (CURRENT_COMPLETION_WITHOUT_VERSION.test(content)) {
+    failures.push({ file, message: `current evidence completion must name exact CoreApp ${currentVersion}` })
+  }
+  return failures
+}
+
 export function verifyAiDocs(repoRoot = new URL('../../', import.meta.url)) {
   const root = typeof repoRoot === 'string'
     ? new URL(`file://${repoRoot.endsWith('/') ? repoRoot : `${repoRoot}/`}`)
     : repoRoot
+  const currentVersion = currentCoreAppVersion(root)
   const failures = []
+  if (!currentVersion)
+    failures.push({ file: 'apps/core-app/package.json', message: 'CoreApp version is missing' })
   for (const check of AI_DOC_CHECKS) {
     const content = readRepoFile(root, check.file)
     if (content === null) {
@@ -39,6 +68,9 @@ export function verifyAiDocs(repoRoot = new URL('../../', import.meta.url)) {
     for (const needle of check.needles) {
       if (!content.includes(needle))
         failures.push({ file: check.file, message: `missing ${JSON.stringify(needle)}` })
+    }
+    if (currentVersion && (check.file.includes('ai-2.5.0') || check.file.includes('AI-2.5x-Execution-Plan'))) {
+      failures.push(...promotionFailures(check.file, content, currentVersion))
     }
   }
   return failures

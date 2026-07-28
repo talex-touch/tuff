@@ -1,0 +1,13 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    ".trellis/tasks/array-root/task.json": "[\"not\", \"an\", \"object\"]\n",
+    ".trellis/tasks/bad-field-types/task.json": "{\n  \"id\": 42,\n  \"title\": \"Bad field types\",\n  \"status\": false,\n  \"parent\": null,\n  \"assignee\": null,\n  \"children\": \"not an array\",\n  \"meta\": null\n}\n",
+    ".trellis/tasks/string-root/task.json": "\"not an object\"\n"
+  },
+  "trackedAdd": [
+    ".trellis/tasks/array-root/task.json",
+    ".trellis/tasks/bad-field-types/task.json",
+    ".trellis/tasks/string-root/task.json"
+  ]
+}

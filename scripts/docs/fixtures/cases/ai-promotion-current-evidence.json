@@ -1,6 +1,6 @@
 {
-  "base": "valid-aggregate",
-  "includeAiDocs": true,
+  "caseBase": "valid-final-contract",
+  "skipAiDocs": false,
   "files": {
     "docs/plan-prd/03-features/ai-2.5.0-plan-prd.md": "# AI 2.5.0 Plan\n\nCurrent CoreApp 2.4.14 packaged evidence is complete because the historical 13/13 visible AI snapshot passed on 2026-06-18.\n",
     "docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md": "# AI 2.5.3 Local Knowledge Retrieval\n\nSQLite / FTS5 / metadata\n\nContext Builder\n\n不把 embeddings 或向量数据库作为第一优先级\n",

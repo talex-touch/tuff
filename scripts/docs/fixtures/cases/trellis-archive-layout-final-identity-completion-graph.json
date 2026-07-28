@@ -1,0 +1,13 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    ".trellis/tasks/archive/2026-07/final-child/task.json": "{\n  \"id\": \"07-28-final-child\",\n  \"title\": \"Archived child with dated id\",\n  \"status\": \"in_progress\",\n  \"parent\": \"wrong-final-parent\",\n  \"completedAt\": \"\",\n  \"assignee\": \"docs-owner\",\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Should be archived as completed.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Archive fixture.\"\n  }\n}\n",
+    ".trellis/tasks/archive/2026-07/final-parent/task.json": "{\n  \"id\": \"final-parent\",\n  \"title\": \"Archived parent with stale child link\",\n  \"status\": \"completed\",\n  \"parent\": null,\n  \"completedAt\": \"2026-07-28T00:00:00.000Z\",\n  \"assignee\": \"docs-owner\",\n  \"children\": [\"07-28-final-child\"],\n  \"meta\": {\n    \"nextAction\": \"Archived.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Archive fixture.\"\n  }\n}\n",
+    ".trellis/tasks/archive/2026-07/final-layout/task.json": "{\n  \"id\": \"wrong-final-layout\",\n  \"title\": \"Archived task in final layout with wrong id\",\n  \"status\": \"completed\",\n  \"parent\": null,\n  \"completedAt\": \"\",\n  \"assignee\": \"\",\n  \"children\": [],\n  \"meta\": {\n    \"nextAction\": \"Archived.\",\n    \"blocker\": \"None.\",\n    \"evidence\": \"Archive fixture.\"\n  }\n}\n"
+  },
+  "trackedAdd": [
+    ".trellis/tasks/archive/2026-07/final-child/task.json",
+    ".trellis/tasks/archive/2026-07/final-layout/task.json",
+    ".trellis/tasks/archive/2026-07/final-parent/task.json"
+  ]
+}
