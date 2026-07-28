@@ -1,28 +1,28 @@
 # Download SDK
 
-<div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #f59e0b, #ef4444);"></div>
-
 ## 概述
 
-Download SDK 提供统一的下载任务管理能力，适用于应用更新、资源预取、插件安装等场景。
+Download SDK 是 renderer 创建和管理 Download Center 任务的类型化入口。
+它覆盖应用更新、资源预取、插件下载、任务历史、维护操作与进度订阅，
+不暴露 raw IPC。
 
-## 介绍
+## 运行时契约
 
-Download SDK 提供统一的下载任务管理能力，适用于应用更新、资源预取、插件安装等场景。
+- `useDownloadSdk()` 基于 TuffTransport 创建类型化 SDK。
+- 主进程 Download Center 负责任务调度和真实状态。
+- renderer 只发送命令并订阅推送事件，不维护第二份任务真源。
+- `metadata.hidden` 用于标记内部任务，普通下载视图和通知可隐藏这些任务；
+  开发者模式仍可展示。
 
-## 技术原理
+## 可用操作
 
-- 下载任务由主进程 DownloadCenter 统一调度。
-- 通过 TuffTransport 事件完成任务创建与状态推送。
-- 支持队列、优先级、切片下载与重试。
+当前 SDK 包含任务新增/暂停/继续/取消/重试/删除、批量暂停/继续/取消、
+任务与历史查询、文件操作、通知设置、维护、统计、迁移状态和任务生命周期
+订阅。
 
-## 如何实现的
+## 使用方法
 
-- SDK 仅封装事件调用与订阅逻辑。
-- 任务真实状态由主进程维护并广播。
-- 可通过 `metadata.hidden` 标记内部任务（默认隐藏且不触发通知），仅在开发者模式下可见。
-
-## 如何使用
+<!-- markdownlint-disable MD003 MD022 MD023 MD034 -->
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -30,7 +30,7 @@ code: |
   import { useDownloadSdk } from '@talex-touch/utils/renderer'
 
   const download = useDownloadSdk()
-  const res = await download.addTask({
+  const result = await download.addTask({
     url: 'https://example.com/file.zip',
     destination: '/path/to/save',
     filename: 'file.zip',
@@ -39,27 +39,30 @@ code: |
     metadata: { hidden: true }
   })
 
-  if (!res.success) {
-    throw new Error(res.error || 'Download failed')
+  if (!result.success) {
+    throw new Error(result.error || 'Download failed')
   }
 ---
 :::
 
-## 常见例子
+<!-- markdownlint-enable MD003 MD022 MD023 MD034 -->
 
-1. 预下载远程 SVG 到 tempfile，并通过 `tfile://` 引用。
-2. 应用更新包下载后触发更新提示。
-
-## 常见问题
-
-**Q: 如何订阅进度？**  
-A: 使用 `onTaskProgress` 监听推送事件即可。
-
-**Q: 下载任务如何隐藏？**  
-A: 传入 `metadata.hidden: true`，任务默认不展示且不触发通知；仅在开发者模式下可见。
+订阅方法会返回清理函数。应在所属 Vue 生命周期中注册清理函数，适用时也可
+使用 scoped helper。
 
 ## 最佳实践
 
-- 为任务设置合理的 `priority` 与 `module`，便于调度与排查。
-- 避免频繁创建大量任务，必要时进行合并或节流。
-- 对失败任务做好错误提示与重试策略。
+- 设置有意义的 `priority` 和 `module`，便于调度与诊断。
+- 合并或节流任务创建，避免短时间向队列写入大量任务。
+- 处理操作失败响应，并提供与场景匹配的重试路径。
+- 所属视图或 composable 销毁时取消任务事件订阅。
+- 发布/下载服务端路由应通过更新服务契约消费，不要从 renderer 绕过
+  Download Center。
+
+## 相关文档
+
+- [Download API 索引](./index.zh.mdc)
+- [发布与下载路由](../release/index.zh.md)
+- [CoreApp Download Center](../../../../../core-app/src/main/modules/download/README.md)
+- [Release Assets 核对清单](../../../../../../docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)
+- [English version](./download.en.mdc)

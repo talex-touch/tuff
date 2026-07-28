@@ -152,7 +152,7 @@ code: |
 ---
 :::
 
-命令、prompt variables、插件存储和日志都不得保存 provider credential。typed contract 见 [Intelligence SDK](../api/intelligence.zh.md)。
+命令、prompt variables、插件存储和日志都不得保存 provider credential。typed contract 见 [Intelligence SDK](../api/intelligence.zh.mdc)。
 
 ## 4. 安全插件视图
 
@@ -210,9 +210,9 @@ code: |
 
 ## 相关文档
 
-- [快速上手](./quickstart.zh.md)
-- [Manifest 参考](../reference/manifest.zh.md)
-- [Plugin Context](../api/plugin-context.zh.md)
-- [Storage API](../api/storage.zh.md)
-- [Cloud Sync SDK](../extensions/cloud-sync.zh.md)
-- [发布流程](../release/publish.zh.md)
+- [快速上手](./quickstart.zh.mdc)
+- [Manifest 参考](../reference/manifest.zh.mdc)
+- [Plugin Context](../api/plugin-context.zh.mdc)
+- [Storage API](../api/storage.zh.mdc)
+- [Cloud Sync SDK](../extensions/cloud-sync.zh.mdc)
+- [发布与下载](../release/index.zh.md)

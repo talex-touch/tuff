@@ -76,19 +76,19 @@ code: |
 `context` 还包含 `pluginPath` 与插件 `config`。secret 必须写入 `context.utils.secret`，不能进入普通 storage 或日志。
 
 ## Capability 分组
-
-| Context field                    | 用途                                      | 主要文档                                                             |
-| -------------------------------- | ----------------------------------------- | -------------------------------------------------------------------- |
-| `box`, `feature`                 | CoreBox 窗口与 result item lifecycle      | [Box](./box.zh.md)、[Feature](./feature.zh.md)                       |
-| `clipboard`, `storage`, `secret` | 剪贴板、插件数据与受保护凭据              | [Clipboard](./clipboard.zh.md)、[Storage](./storage.zh.md)           |
-| `intelligence`                   | AI capability discovery、invoke 与 stream | [Intelligence](./intelligence.zh.md)                                 |
-| `screenshot`                     | 权限门禁下的显示器、指针屏幕与区域截图    | [Screenshot](./screenshot.zh.md)                                     |
-| `system`                         | 前台应用与 permission-gated 选中文本        | [Clipboard](./clipboard.zh.md)                                       |
-| `i18n`, `lexicon`                | 主机语言与插件隔离 Domain Lexicon         | [Localization](./i18n.zh.md)                                         |
-| `quickActions`, `quickOps`       | 全局动作与 bounded built-in tools         | [Quick Actions](./quick-actions.zh.md)、[QuickOps](./quickops.zh.md) |
-| `divisionBox`, `channel`         | 独立窗口与插件 transport                  | [DivisionBox](./division-box.zh.md)、[Channel](./channel.zh.md)      |
-| `power`, `recommend`             | 低电量适配与 recommendation provider      | [Power](./power.zh.md)、[Recommend](./recommend.zh.md)               |
-
+<!-- markdownlint-disable MD060 -->
+| Context field                    | 用途                                      | 主要文档                                                                  |
+| -------------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
+| `box`, `feature`                 | CoreBox 窗口与 result item lifecycle       | [Box](./box.zh.mdc)、[Feature](./feature.zh.mdc)                       |
+| `clipboard`, `storage`, `secret` | 剪贴板、插件数据与受保护凭据                          | [Clipboard](./clipboard.zh.mdc)、[Storage](./storage.zh.mdc)           |
+| `intelligence`                   | AI capability discovery、invoke 与 stream | [Intelligence](./intelligence.zh.mdc)                                 |
+| `screenshot`                     | 权限门禁下的显示器、指针屏幕与区域截图                     | [Screenshot](./screenshot.zh.mdc)                                     |
+| `system`                         | 前台应用与 permission-gated 选中文本             | [Clipboard](./clipboard.zh.mdc)                                       |
+| `i18n`, `lexicon`                | 主机语言与插件隔离 Domain Lexicon                | [Localization](./i18n.zh.mdc)                                         |
+| `quickActions`, `quickOps`       | 全局动作与 bounded built-in tools            | [Quick Actions](./quick-actions.zh.mdc)、[QuickOps](./quickops.zh.mdc) |
+| `divisionBox`, `channel`         | 独立窗口与插件 transport                       | [DivisionBox](./division-box.zh.mdc)、[Channel](./channel.zh.mdc)      |
+| `power`, `recommend`             | 低电量适配与 recommendation provider          | [Power](./power.zh.mdc)、[Recommend](./recommend.zh.mdc)               |
+<!-- markdownlint-enable MD060 -->
 受保护 capability 仍要求 `manifest.json` 声明对应 permission，且当前 grant 有效。字段存在于 `context.utils` 不代表每个操作都已获授权。
 
 ## Legacy global 兼容
@@ -250,7 +250,7 @@ code: |
 ---
 :::
 
-> 详见 [RecommendSDK API](./recommend.zh.md)
+> 详见 [RecommendSDK API](./recommend.zh.mdc)
 
 ---
 
@@ -378,7 +378,7 @@ code: |
 | `createSharePayloadFromItem(item, options?)` | 将 CoreBox item 转成 Flow payload          |
 | `shareItem(item, options?)`                  | 一步完成 item payload 构造、目标解析和分享 |
 
-> 详见 [QuickActions SDK](./quick-actions.zh.md)
+> 详见 [QuickActions SDK](./quick-actions.zh.mdc)
 
 ---
 
@@ -691,9 +691,9 @@ code: |
 
 ## 相关文档
 
-- [Feature SDK](./feature-sdk.zh.md) - Feature 详细 API
-- [DivisionBox API](./division-box.zh.md) - 独立窗口系统
-- [QuickActions SDK](./quick-actions.zh.md) - MetaK 全局动作与原生分享
-- [PowerSDK](./power.zh.md) - 低电量适配能力
-- [RecommendSDK](./recommend.zh.md) - 自定义推荐提供者
-- [Flow Transfer API](./flow-transfer.zh.md) - 插件间数据流转
+- [Feature SDK](./feature.zh.mdc) - Feature 详细 API
+- [DivisionBox API](./division-box.zh.mdc) - 独立窗口系统
+- [QuickActions SDK](./quick-actions.zh.mdc) - MetaK 全局动作与原生分享
+- [PowerSDK](./power.zh.mdc) - 低电量适配能力
+- [RecommendSDK](./recommend.zh.mdc) - 自定义推荐提供者
+- [Flow Transfer API](./flow-transfer.zh.mdc) - 插件间数据流转

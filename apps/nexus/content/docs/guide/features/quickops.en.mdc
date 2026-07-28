@@ -81,7 +81,7 @@ QuickOps stateful runtime is still backed by CoreApp today, but the official `to
 
 For normal plugins, treat QuickOps as a read-only system capability to compose with. Only repository contributors should change the official `touch-quickops` plugin, QuickOps host capabilities, Flow targets, typed transport events, and SDK facade.
 
-See [QuickOps Developer API](../../dev/api/quickops.en.md) for the SDKs, Flow target catalog, and built-in contribution checklist.
+See [QuickOps Developer API](../../dev/api/quickops.en.mdc) for the SDKs, Flow target catalog, and built-in contribution checklist.
 
 ### When To Build A Plugin
 
@@ -102,6 +102,6 @@ Do not treat these as finished capabilities:
 
 ## Related Documentation
 
-- [Quick Preview](./preview.en.md)
-- [CoreBox Capability Status](./corebox-workflow.en.md)
-- [QuickOps Developer API](../../dev/api/quickops.en.md)
+- [Quick Preview](./preview.en.mdc)
+- [CoreBox Capability Status](./corebox-workflow.en.mdc)
+- [QuickOps Developer API](../../dev/api/quickops.en.mdc)

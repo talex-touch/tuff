@@ -1,28 +1,30 @@
 # Download SDK
 
-<div style="height: 160px; border-radius: 16px; background: linear-gradient(135deg, #f59e0b, #ef4444);"></div>
-
 ## Overview
 
-The Download SDK provides a unified task manager for downloads such as updates, resource prefetching, and plugin installs.
+The Download SDK is the typed renderer entrypoint for Download Center tasks. It
+supports application updates, resource prefetching, plugin downloads, task
+history, maintenance, and progress subscriptions without exposing raw IPC.
 
-## Introduction
+## Runtime contract
 
-Use this SDK when you need progress-aware downloads in the renderer without managing low-level IPC.
+- `useDownloadSdk()` creates a typed SDK over TuffTransport.
+- Download Center in the main process owns scheduling and task state.
+- The renderer sends commands and subscribes to push events; it does not own a
+  duplicate task store.
+- `metadata.hidden` marks internal tasks so ordinary download views and
+  notifications can suppress them; Developer Mode may still expose them.
 
-## How it works
+## Operations
 
-- DownloadCenter in the main process owns task scheduling.
-- TuffTransport events are used for requests and push updates.
-- Supports queueing, priority, chunked downloads, and retries.
-
-## Technical Notes
-
-- The SDK only wraps event calls and subscriptions.
-- The main process holds the task state and broadcasts updates.
-- Use `metadata.hidden` to mark internal tasks (hidden by default and notifications suppressed); only visible in Developer Mode.
+The current SDK includes task add/pause/resume/cancel/retry/remove operations,
+bulk pause/resume/cancel, task and history queries, file actions, notification
+settings, maintenance, statistics, migration status, and lifecycle
+subscriptions.
 
 ## Usage
+
+<!-- markdownlint-disable MD003 MD022 MD023 MD034 -->
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -30,7 +32,7 @@ code: |
   import { useDownloadSdk } from '@talex-touch/utils/renderer'
 
   const download = useDownloadSdk()
-  const res = await download.addTask({
+  const result = await download.addTask({
     url: 'https://example.com/file.zip',
     destination: '/path/to/save',
     filename: 'file.zip',
@@ -39,27 +41,30 @@ code: |
     metadata: { hidden: true }
   })
 
-  if (!res.success) {
-    throw new Error(res.error || 'Download failed')
+  if (!result.success) {
+    throw new Error(result.error || 'Download failed')
   }
 ---
 :::
 
-## Examples
+<!-- markdownlint-enable MD003 MD022 MD023 MD034 -->
 
-1. Prefetch remote SVGs into temp files and load them via `tfile://`.
-2. Download update packages and trigger update prompts.
+Subscriptions return cleanup functions. Register them with the owning Vue
+lifecycle, or use the scoped helper where appropriate.
 
-## FAQ
+## Best practices
 
-**Q: How do I subscribe to progress updates?**  
-A: Use `onTaskProgress` to listen to push events.
+- Set meaningful `priority` and `module` values for scheduling and diagnostics.
+- Batch or debounce task creation instead of flooding the queue.
+- Handle failed operation responses and expose an appropriate retry path.
+- Unsubscribe from task events when the owning view or composable is disposed.
+- Use release/download routes through the update service contract; do not
+  bypass Download Center from the renderer.
 
-**Q: How do I hide download tasks?**  
-A: Set `metadata.hidden: true`. The task is hidden and notifications are suppressed; only visible in Developer Mode.
+## Related documentation
 
-## Best Practices
-
-- Set meaningful `priority` and `module` values for scheduling and troubleshooting.
-- Avoid flooding the queue; batch or debounce task creation.
-- Provide clear error feedback and a retry strategy for failures.
+- [Download API index](./index.en.mdc)
+- [Release and download routes](../release/index.en.md)
+- [CoreApp Download Center](../../../../../core-app/src/main/modules/download/README.md)
+- [Release-assets checklist](../../../../../../docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)
+- [Chinese version](./download.zh.mdc)

@@ -321,7 +321,7 @@ Built-in capability checklist:
 
 ## Related Documentation
 
-- [TuffTransport](./transport.en.md)
-- [Flow SDK](./flow-transfer.en.md)
-- [Permission SDK](./permission.en.md)
-- [Tuff QuickOps User Guide](../../guide/features/quickops.en.md)
+- [TuffTransport](./transport.en.mdc)
+- [Flow SDK](./flow-transfer.en.mdc)
+- [Permission SDK](./permission.en.mdc)
+- [Tuff QuickOps User Guide](../../guide/features/quickops.en.mdc)
