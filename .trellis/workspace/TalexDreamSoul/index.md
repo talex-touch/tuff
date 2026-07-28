@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 24
-- **Last Active**: 2026-07-27
+- **Total Sessions**: 25
+- **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1000 | Active |
+| `journal-1.md` | ~1041 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 25 | 2026-07-28 | 分批提交并推送工作区代码 | `ad8c54944`, `6bee9f5f3`, `d0caa9073`, `3030bcee5`, `b584ef96b`, `1a118b73e`, `e8cb3d393`, `0474cdb5a`, `21484fd3f` | `master` |
 | 24 | 2026-07-27 | 修复 Nexus 文档侧边栏空白与 Hero 中文断行 | `a7a6daad8` | `master` |
 | 23 | 2026-07-22 | Publish reverse proxy trust-boundary design | `a413da30c` | `master` |
 | 22 | 2026-07-21 | Enable macOS signing and notarization | `ebf6330c19156da6e9d815fc0e116513f9e2bd1c` | `master` |

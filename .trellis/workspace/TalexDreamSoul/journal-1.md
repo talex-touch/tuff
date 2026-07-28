@@ -998,3 +998,44 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: 分批提交并推送工作区代码
+
+**Date**: 2026-07-28
+**Task**: 分批提交并推送工作区代码
+**Branch**: `master`
+
+### Summary
+
+将 workspace、CoreApp 安全与插件目录、#297 隔离 capability、Nexus 界面和 Trellis 证据拆为九笔提交；focused tests、typecheck、build、Electron smoke 和插件校验通过，并普通推送 master。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad8c54944` | (see git log) |
+| `6bee9f5f3` | (see git log) |
+| `d0caa9073` | (see git log) |
+| `3030bcee5` | (see git log) |
+| `b584ef96b` | (see git log) |
+| `1a118b73e` | (see git log) |
+| `e8cb3d393` | (see git log) |
+| `0474cdb5a` | (see git log) |
+| `21484fd3f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
