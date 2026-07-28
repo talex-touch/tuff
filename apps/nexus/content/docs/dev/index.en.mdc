@@ -10,10 +10,10 @@
 5. **[Release and Download](./release/index.en.md)** — find maintained release routes, desktop download guidance, and plugin publishing links.
 
 ## Deep Dive
-- **[API Reference](./api/)** — typed interfaces for storage, channels, and UI.
+- **[API Reference](./api/index.en.mdc)** — typed interfaces for storage, channels, and UI.
 - **[Search Matching API / SemanticAliasSDK](./api/search.en.mdc)** — integrate semantic aliases with the `App Semantic Alias Catalog / 应用语义别名目录` marker and `sdkapi: 260626`.
 - **[QuickOps SDK](./api/quickops.en.mdc)** — read built-in local tool capabilities, sessions, and recent audit summaries, then compose through Flow.
-- **[Extensions](./extensions/)** — advanced patterns for complex integrations.
+- **[Extensions](./extensions/unplugin-export-plugin.en.mdc)** — advanced patterns for complex integrations.
 - **[Plugin Packages vs Content Packages](./getting-started/plugin-workflow.en.mdc#plugin-packages-vs-content-packages)** — separate `.tpex`, CloudShare content packages, and CloudSync private sync.
 - **[Core App startup and runtime env](./reference/runtime-startup-env.en.mdc)** — startup gates, dev.source fallback, env inventory, cleanup candidates.
 - **[Examples](./reference/examples.en.mdc)** — entry point backed by `apps/nexus/examples/`.
