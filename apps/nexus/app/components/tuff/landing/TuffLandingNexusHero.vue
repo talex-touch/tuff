@@ -3,9 +3,7 @@ import type { TxVersionBuild, TxVersionChannelTone } from '@talex-touch/tuffex/v
 import type { AppRelease, AssetArch, AssetPlatform, ReleaseAsset, ReleaseChannel } from '~/composables/useReleases'
 import { TxVersionCapsule, TxVersionDownloadPanel } from '@talex-touch/tuffex/version-capsule'
 import { hasNavigator, hasWindow } from '@talex-touch/utils/env'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import StarField from '~/components/landing/StarField.vue'
-import DarkVeil from '~/components/tuff/background/DarkVeil.vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import TuffLandingLineShadowText from '~/components/tuff/landing/TuffLandingLineShadowText.vue'
 import {
   detectArch,
@@ -18,8 +16,11 @@ import {
 } from '~/composables/useReleases'
 
 // Nexus landing hero — product-first CoreBox surface with live app search.
-// Clean atmospheric hero: the homepage DarkVeil aurora over pure black. Title
-// keeps the signature line-shadow "OS".
+// Clean atmospheric hero: the 404 page's event-horizon field (nebula +
+// starfield, no singularity) over pure black, revealed on load by a centered
+// water-ripple wavefront. Title keeps the signature line-shadow "OS".
+
+const LazyEventHorizon = defineAsyncComponent(() => import('~/components/tuff/background/EventHorizon.vue'))
 //
 // Two download channels, two affordances that must never compete: the primary
 // CTA ships the certified RELEASE build, while the split capsule below it owns
@@ -430,23 +431,13 @@ onBeforeUnmount(() => {
     :class="{ 'is-visible': ready }"
     aria-labelledby="exp-hero1-title"
   >
-    <!-- Background: homepage aurora over pure black -->
-    <div class="ExpHero-Veil" aria-hidden="true">
+    <!-- Background: event-horizon nebula + starfield over pure black, revealed
+         by a centered water-ripple wavefront on load -->
+    <div class="ExpHero-Sky" aria-hidden="true">
       <ClientOnly>
-        <DarkVeil
-          :hue-shift="354"
-          :noise-intensity="0.07"
-          :scanline-intensity="0.85"
-          :scanline-frequency="4.6"
-          :speed="1.4"
-          :warp-amount="1.15"
-          :resolution-scale="0.72"
-        />
-      </ClientOnly>
-    </div>
-    <div v-if="enableMotion" class="ExpHero-Stars" aria-hidden="true">
-      <ClientOnly>
-        <StarField />
+        <div class="ExpHero-SkyCanvas">
+          <LazyEventHorizon ripple-in :resolution-scale="0.75" />
+        </div>
       </ClientOnly>
     </div>
     <div class="ExpHero-Scrim" aria-hidden="true" />
@@ -663,28 +654,45 @@ onBeforeUnmount(() => {
   background: #030305;
 }
 
-.ExpHero-Veil,
-.ExpHero-Stars,
+.ExpHero-Sky,
 .ExpHero-Scrim {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-/* Pure-black base; the DarkVeil canvas paints the aurora on top */
-.ExpHero-Veil {
+/* Static fallback (SSR first paint & no-WebGL): soft cyan/violet orbs echoing
+   the shader palette; the canvas paints over them once it is live. */
+.ExpHero-Sky {
   z-index: 0;
-  background: #030305;
+  background:
+    radial-gradient(34% 42% at 30% 34%, rgba(27, 181, 244, 0.07), transparent 70%),
+    radial-gradient(30% 38% at 72% 62%, rgba(124, 92, 255, 0.07), transparent 70%),
+    #030305;
 }
 
-.ExpHero-Veil :deep(canvas) {
+/* Short blend only — the shader's ripple wavefront owns the real entrance */
+.ExpHero-SkyCanvas {
+  position: absolute;
+  inset: 0;
+  animation: ExpHeroSkyFade 0.55s ease both;
+}
+
+/* OGL's setSize writes a 0.75-scaled inline size on the canvas; stretch it
+   back over the full layer. */
+.ExpHero-SkyCanvas :deep(canvas) {
   width: 100% !important;
   height: 100% !important;
 }
 
-.ExpHero-Stars {
-  z-index: 0;
-  opacity: 0.8;
+@keyframes ExpHeroSkyFade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 /* Vignette only — darkens toward the edges, keeps text legible */

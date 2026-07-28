@@ -44,6 +44,13 @@ export default {
     cancel: '取消',
     close: '关闭',
   },
+  notFound: {
+    title: '页面未找到',
+    description: '你要访问的页面不存在，或已坠入事件视界。',
+    seoDescription: '页面 {path} 不存在或已被移动。',
+    backHome: '返回首页',
+    goBack: '返回上页',
+  },
   search: {
     open: '搜索',
     openAria: '打开全局搜索',
