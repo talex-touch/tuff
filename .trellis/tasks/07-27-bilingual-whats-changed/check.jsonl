@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Quality check must verify focused tests, typed boundaries, i18n, UI semantics, and evidence limits."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Review shared payload ownership, guards, transport events, and absence of local casts."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Review SQLite/local catalog/cache ownership and prevent renderer state becoming durable truth."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Review semantic controls, focus, keyboard behavior, TuffEx reuse, and localized copy."}
+{"file":".trellis/spec/frontend/release-testing.md","reason":"Review release gate integrity, packaged catalog proof, and Nexus/GitHub compatibility."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Audit full data flow and ensure one validated localized contract survives every boundary."}

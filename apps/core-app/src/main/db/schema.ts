@@ -1140,6 +1140,12 @@ export const appUpdateRecords = sqliteTable(
   })
 )
 
+export const appReleaseNotesState = sqliteTable('app_release_notes_state', {
+  id: integer('id').primaryKey(),
+  lastAcknowledgedVersion: text('last_acknowledged_version').notNull(),
+  updatedAt: integer('updated_at').notNull()
+})
+
 export const appUpdateAttempts = sqliteTable(
   'app_update_attempts',
   {

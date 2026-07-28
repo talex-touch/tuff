@@ -142,6 +142,7 @@ declare module 'vue' {
     PreviewResultCard: typeof import('./src/components/render/custom/PreviewResultCard.vue')['default']
     ProviderList: typeof import('./src/components/intelligence/capabilities/ProviderList.vue')['default']
     ProviderSkeleton: typeof import('./src/components/intelligence/skeleton/ProviderSkeleton.vue')['default']
+    ReleaseNotesHistory: typeof import('./src/components/update/ReleaseNotesHistory.vue')['default']
     RemixAnimateIcon: typeof import('./src/components/icon/RemixAnimateIcon.vue')['default']
     RemixIcon: typeof import('./src/components/icon/RemixIcon.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
@@ -214,6 +215,7 @@ declare module 'vue' {
     VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
     ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
     VirtualTaskList: typeof import('./src/components/download/VirtualTaskList.vue')['default']
+    WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
     WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
   }
 }
@@ -350,6 +352,7 @@ declare global {
   const PreviewResultCard: typeof import('./src/components/render/custom/PreviewResultCard.vue')['default']
   const ProviderList: typeof import('./src/components/intelligence/capabilities/ProviderList.vue')['default']
   const ProviderSkeleton: typeof import('./src/components/intelligence/skeleton/ProviderSkeleton.vue')['default']
+  const ReleaseNotesHistory: typeof import('./src/components/update/ReleaseNotesHistory.vue')['default']
   const RemixAnimateIcon: typeof import('./src/components/icon/RemixAnimateIcon.vue')['default']
   const RemixIcon: typeof import('./src/components/icon/RemixIcon.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
@@ -422,5 +425,6 @@ declare global {
   const VideoPreview: typeof import('./src/components/render/addon/preview/VideoPreview.vue')['default']
   const ViewTemplate: typeof import('./src/components/base/template/ViewTemplate.vue')['default']
   const VirtualTaskList: typeof import('./src/components/download/VirtualTaskList.vue')['default']
+  const WhatsChangedDialog: typeof import('./src/components/update/WhatsChangedDialog.vue')['default']
   const WidgetFrame: typeof import('./src/components/render/WidgetFrame.vue')['default']
 }
