@@ -668,6 +668,8 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const arrayFrom = Array.from
   const arrayMap = Array.prototype.map
   const arrayPush = Array.prototype.push
+  const arrayJoin = Array.prototype.join
+  const arrayIterator = Array.prototype[Symbol.iterator]
   const arrayBufferIsView = ArrayBuffer.isView
   const arrayBufferByteLengthGetter = objectGetOwnPropertyDescriptor(
     ArrayBuffer.prototype,
@@ -706,8 +708,13 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const numberIsFinite = Number.isFinite
   const numberIsSafeInteger = Number.isSafeInteger
   const stringConstructor = String
+  const stringIndexOf = String.prototype.indexOf
+  const stringReplaceAll = String.prototype.replaceAll
   const stringSlice = String.prototype.slice
   const stringToUpperCase = String.prototype.toUpperCase
+  const encodeUriComponent = encodeURIComponent
+  const decodeUriComponent = decodeURIComponent
+  const symbolIterator = Symbol.iterator
   const jsonParse = JSON.parse
   const jsonStringify = JSON.stringify
   const parseJson = (value) => reflectApply(jsonParse, undefined, [value])
@@ -994,23 +1001,189 @@ const CONTEXT_BOOTSTRAP = String.raw`
     abort(reason) { this.signal._abort(reason) }
   }
 
+  const searchParamsInternalToken = objectFreeze(objectCreate(null))
+  const maxSearchParamPairs = Math.floor(snapshot.wireLimits.maxMembers / 3)
+  const assertSearchParamPairs = (pairs) => {
+    if (!arrayIsArray(pairs) || pairs.length > maxSearchParamPairs) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    let bytes = 0
+    for (let index = 0; index < pairs.length; index += 1) {
+      const pair = pairs[index]
+      if (
+        !arrayIsArray(pair) ||
+        pair.length !== 2 ||
+        typeof pair[0] !== 'string' ||
+        typeof pair[1] !== 'string'
+      ) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      bytes += bridge.utf8ByteLength(pair[0]) + bridge.utf8ByteLength(pair[1]) + 40
+      if (bytes > snapshot.wireLimits.maxBytes) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+    }
+    return pairs
+  }
+  const decodeSearchParamPart = (value) => {
+    try {
+      let cursor = 0
+      let withSpaces = ''
+      while (cursor <= value.length) {
+        const plus = reflectApply(stringIndexOf, value, ['+', cursor])
+        if (plus < 0) {
+          withSpaces += reflectApply(stringSlice, value, [cursor])
+          break
+        }
+        withSpaces += reflectApply(stringSlice, value, [cursor, plus]) + ' '
+        cursor = plus + 1
+      }
+      return reflectApply(decodeUriComponent, undefined, [withSpaces])
+    } catch {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+  }
+  const parseSearchParamString = (input) => {
+    let normalized = stringConstructor(input)
+    if (bridge.utf8ByteLength(normalized) > snapshot.wireLimits.maxBytes) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    if (normalized[0] === '?') normalized = reflectApply(stringSlice, normalized, [1])
+    if (!normalized) return []
+    const pairs = []
+    let cursor = 0
+    while (cursor <= normalized.length) {
+      const delimiter = reflectApply(stringIndexOf, normalized, ['&', cursor])
+      const end = delimiter < 0 ? normalized.length : delimiter
+      const segment = reflectApply(stringSlice, normalized, [cursor, end])
+      if (segment.length > 0) {
+        if (pairs.length >= maxSearchParamPairs) {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        const separator = reflectApply(stringIndexOf, segment, ['='])
+        const rawKey = separator < 0 ? segment : reflectApply(stringSlice, segment, [0, separator])
+        const rawValue = separator < 0 ? '' : reflectApply(stringSlice, segment, [separator + 1])
+        reflectApply(arrayPush, pairs, [[
+          decodeSearchParamPart(rawKey),
+          decodeSearchParamPart(rawValue)
+        ]])
+      }
+      if (delimiter < 0) break
+      cursor = end + 1
+    }
+    return assertSearchParamPairs(pairs)
+  }
+  const encodeSearchParamPart = (value) => {
+    let encoded = reflectApply(encodeUriComponent, undefined, [value])
+    encoded = reflectApply(stringReplaceAll, encoded, ['%20', '+'])
+    encoded = reflectApply(stringReplaceAll, encoded, ['!', '%21'])
+    encoded = reflectApply(stringReplaceAll, encoded, ["'", '%27'])
+    encoded = reflectApply(stringReplaceAll, encoded, ['(', '%28'])
+    encoded = reflectApply(stringReplaceAll, encoded, [')', '%29'])
+    return reflectApply(stringReplaceAll, encoded, ['~', '%7E'])
+  }
+
   class TuffURLSearchParams {
     #pairs
-    constructor(pairs) { this.#pairs = pairs.map(([key, value]) => [String(key), String(value)]) }
-    get(name) { const pair = this.#pairs.find(([key]) => key === String(name)); return pair ? pair[1] : null }
-    getAll(name) { return this.#pairs.filter(([key]) => key === String(name)).map(([, value]) => value) }
-    has(name) { return this.#pairs.some(([key]) => key === String(name)) }
-    toString() { return this.#pairs.map(([key, value]) => encodeURIComponent(key) + '=' + encodeURIComponent(value)).join('&') }
-    entries() { return this.#pairs[Symbol.iterator]() }
-    [Symbol.iterator]() { return this.entries() }
+    constructor(input = '', token) {
+      if (token === searchParamsInternalToken) {
+        const pairs = []
+        if (!arrayIsArray(input) || input.length > maxSearchParamPairs) {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        for (let index = 0; index < input.length; index += 1) {
+          const pair = input[index]
+          if (!arrayIsArray(pair) || pair.length !== 2) {
+            throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+          }
+          reflectApply(arrayPush, pairs, [[stringConstructor(pair[0]), stringConstructor(pair[1])]])
+        }
+        this.#pairs = assertSearchParamPairs(pairs)
+        return
+      }
+      if (input === undefined || typeof input === 'string') {
+        this.#pairs = parseSearchParamString(input === undefined ? '' : input)
+        return
+      }
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    append(name, value) {
+      const pairs = []
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        reflectApply(arrayPush, pairs, [[pair[0], pair[1]]])
+      }
+      reflectApply(arrayPush, pairs, [[stringConstructor(name), stringConstructor(value)]])
+      this.#pairs = assertSearchParamPairs(pairs)
+    }
+    get(name) {
+      const expected = stringConstructor(name)
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        if (pair[0] === expected) return pair[1]
+      }
+      return null
+    }
+    getAll(name) {
+      const expected = stringConstructor(name)
+      const values = []
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        if (pair[0] === expected) reflectApply(arrayPush, values, [pair[1]])
+      }
+      return values
+    }
+    has(name) {
+      const expected = stringConstructor(name)
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        if (this.#pairs[index][0] === expected) return true
+      }
+      return false
+    }
+    toString() {
+      const encoded = []
+      let maximumEncodedBytes = 0
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        maximumEncodedBytes +=
+          (bridge.utf8ByteLength(pair[0]) + bridge.utf8ByteLength(pair[1])) * 3 +
+          1 +
+          (index === 0 ? 0 : 1)
+        if (maximumEncodedBytes > snapshot.wireLimits.maxBytes) {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        reflectApply(arrayPush, encoded, [
+          encodeSearchParamPart(pair[0]) + '=' + encodeSearchParamPart(pair[1])
+        ])
+      }
+      return reflectApply(arrayJoin, encoded, ['&'])
+    }
+    entries() {
+      const entries = []
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        reflectApply(arrayPush, entries, [[pair[0], pair[1]]])
+      }
+      return reflectApply(arrayIterator, entries, [])
+    }
+    [symbolIterator]() { return this.entries() }
   }
   class TuffURL {
     #data
     constructor(input, base) {
-      const parsed = parseJson(bridge.parseUrl(stringConstructor(input), base === undefined ? undefined : stringConstructor(base)))
-      if (!parsed.ok) throw new TypeError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      const normalizedInput = stringConstructor(input)
+      const normalizedBase = base === undefined ? undefined : stringConstructor(base)
+      if (
+        bridge.utf8ByteLength(normalizedInput) > snapshot.wireLimits.maxBytes ||
+        (normalizedBase !== undefined &&
+          bridge.utf8ByteLength(normalizedBase) > snapshot.wireLimits.maxBytes)
+      ) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      const parsed = parseJson(bridge.parseUrl(normalizedInput, normalizedBase))
+      if (!parsed.ok) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
       this.#data = parsed.value
-      this.searchParams = new TuffURLSearchParams(this.#data.searchParams)
+      this.searchParams = new TuffURLSearchParams(this.#data.searchParams, searchParamsInternalToken)
     }
     get href() { return this.#data.href }
     get origin() { return this.#data.origin }
@@ -1040,6 +1213,14 @@ const CONTEXT_BOOTSTRAP = String.raw`
       return bridge.decodeUtf8(copyByteView(value))
     }
   }
+  objectFreeze(TuffURLSearchParams.prototype)
+  objectFreeze(TuffURLSearchParams)
+  objectFreeze(TuffURL.prototype)
+  objectFreeze(TuffURL)
+  objectFreeze(TuffTextEncoder.prototype)
+  objectFreeze(TuffTextEncoder)
+  objectFreeze(TuffTextDecoder.prototype)
+  objectFreeze(TuffTextDecoder)
 
   const subtleCrypto = objectCreate(null)
   const digest = (algorithm, value) => {
@@ -1172,6 +1353,9 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasChannelFacade = hasDeclaredCapability('channel.invoke')
   const hasQuickOpsFacade = hasDeclaredCapability('quick-ops.invoke')
   const hasFlowFacade = hasDeclaredCapability('flow.invoke')
+  const hasVoiceInvokeFacade = hasDeclaredCapability('voice.invoke')
+  const hasVoiceStreamFacade = hasDeclaredCapability('voice.stream')
+  const hasVoiceFacade = hasVoiceInvokeFacade || hasVoiceStreamFacade
   const fixedChannelOperations = new setConstructor(${JSON.stringify(PLUGIN_CHANNEL_OPERATION_IDS)})
   const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
   const fixedFlowOperations = new setConstructor(${JSON.stringify(PLUGIN_FLOW_OPERATION_IDS)})
@@ -1263,6 +1447,125 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(storageFacade)
 
+  const voiceFacade = objectCreate(null)
+  if (hasVoiceInvokeFacade) {
+    defineFacadeMethod(voiceFacade, 'dictate', (payload = {}) =>
+      mapCapabilityResult(
+        invokeCapability('voice.invoke', { operation: 'dictate', payload }),
+        (result) => {
+          if (!result || result.operation !== 'dictate') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.data)
+        }
+      )
+    )
+    defineFacadeMethod(voiceFacade, 'speak', (payload) =>
+      mapCapabilityResult(
+        invokeCapability('voice.invoke', { operation: 'speak', payload }),
+        (result) => {
+          if (!result || result.operation !== 'speak') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.data)
+        }
+      )
+    )
+  }
+  if (hasVoiceStreamFacade) {
+    defineFacadeMethod(voiceFacade, 'asrStream', (payload = {}, options = {}) => {
+      const onData = typeof options?.onData === 'function' ? options.onData : undefined
+      const onError = typeof options?.onError === 'function' ? options.onError : undefined
+      const onEnd = typeof options?.onEnd === 'function' ? options.onEnd : undefined
+      let resource = null
+      let terminal = false
+      let cancelled = false
+      let disposePromise = null
+      const disposeCurrent = () => {
+        if (disposePromise) return disposePromise
+        if (!resource) return resolvePromise()
+        disposePromise = thenPromise(resolvePromise(), () => resource.dispose())
+        return disposePromise
+      }
+      const reportCallbackFailure = async () => {
+        terminal = true
+        if (onError) {
+          try { await onError(createCapabilityError('VOICE_STREAM_CALLBACK_FAILED')) } catch {}
+        }
+        await disposeCurrent()
+      }
+      const onEvent = async (rawEvent) => {
+        if (terminal || cancelled) return
+        let event
+        try {
+          event = cloneLocalDto(rawEvent)
+          if (!event || typeof event !== 'object' || typeof event.type !== 'string') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          if (event.type === 'partial' || event.type === 'final') {
+            if (typeof event.text !== 'string') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (event.language !== undefined && typeof event.language !== 'string') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (onData) await onData(event)
+            return
+          }
+          if (event.type === 'end') {
+            if (onData) await onData(event)
+            terminal = true
+            if (onEnd) await onEnd()
+            await disposeCurrent()
+            return
+          }
+          if (event.type === 'error' && event.code === 'VOICE_STREAM_FAILED') {
+            terminal = true
+            if (onError) await onError(createCapabilityError('VOICE_STREAM_FAILED'))
+            await disposeCurrent()
+            return
+          }
+          throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+        } catch {
+          await reportCallbackFailure()
+        }
+      }
+      objectFreeze(onEvent)
+      return mapCapabilityResult(
+        invokeCapability('voice.stream', { payload, onEvent }),
+        (streamResource) => {
+          if (
+            !streamResource ||
+            streamResource.kind !== 'stream' ||
+            typeof streamResource.id !== 'string' ||
+            typeof streamResource.dispose !== 'function'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          resource = streamResource
+          const controller = objectCreate(null)
+          objectDefineProperty(controller, 'id', { value: streamResource.id, enumerable: true })
+          objectDefineProperty(controller, 'cancelled', {
+            get: objectFreeze(() => cancelled),
+            enumerable: true
+          })
+          const cancel = () => {
+            cancelled = true
+            terminal = true
+            return disposeCurrent()
+          }
+          objectDefineProperty(controller, 'cancel', {
+            value: objectFreeze(cancel),
+            enumerable: true
+          })
+          if (terminal) void disposeCurrent()
+          return objectFreeze(controller)
+        }
+      )
+    })
+  }
+  objectFreeze(voiceFacade)
+
   const pluginFacade = objectCreate(null)
   defineFacadeMethod(pluginFacade, 'getLocale', () => snapshot.locale)
   if (hasFeatureFacade) {
@@ -1270,6 +1573,9 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   if (hasStorageFacade) {
     objectDefineProperty(pluginFacade, 'storage', { value: storageFacade, enumerable: true })
+  }
+  if (hasVoiceFacade) {
+    objectDefineProperty(pluginFacade, 'voice', { value: voiceFacade, enumerable: true })
   }
   objectFreeze(pluginFacade)
 
@@ -1691,8 +1997,25 @@ function createContextBridge(
     decodeUtf8: (value) => Buffer.from(value).toString('utf8'),
     parseUrl: (input, base) => {
       try {
+        if (
+          Buffer.byteLength(input, 'utf8') > limits.maxBytes ||
+          (base !== undefined && Buffer.byteLength(base, 'utf8') > limits.maxBytes)
+        ) {
+          return '{"ok":false}'
+        }
         const parsed = new URL(input, base)
-        return JSON.stringify({
+        const searchParams: string[][] = []
+        let searchParamBytes = 0
+        let searchParamMembers = 0
+        for (const [key, value] of parsed.searchParams) {
+          searchParamMembers += 3
+          searchParamBytes += Buffer.byteLength(key, 'utf8') + Buffer.byteLength(value, 'utf8') + 40
+          if (searchParamMembers > limits.maxMembers || searchParamBytes > limits.maxBytes) {
+            return '{"ok":false}'
+          }
+          searchParams.push([key, value])
+        }
+        const serialized = JSON.stringify({
           ok: true,
           value: {
             href: parsed.href,
@@ -1706,9 +2029,12 @@ function createContextBridge(
             pathname: parsed.pathname,
             search: parsed.search,
             hash: parsed.hash,
-            searchParams: [...parsed.searchParams.entries()]
+            searchParams
           }
         })
+        return Buffer.byteLength(serialized, 'utf8') <= limits.maxBytes * MAX_CONTEXT_JSON_EXPANSION
+          ? serialized
+          : '{"ok":false}'
       } catch {
         return '{"ok":false}'
       }

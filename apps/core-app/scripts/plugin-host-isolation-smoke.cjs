@@ -145,6 +145,7 @@ async function run() {
           export { PluginHostCapabilityRegistry } from '../src/main/modules/plugin/host/plugin-host-capabilities'
           export { createPluginBusinessCapabilities } from '../src/main/modules/plugin/host/plugin-business-capabilities'
           export { createPluginRequestReplyCapabilities } from '../src/main/modules/plugin/host/plugin-host-request-reply'
+          export { createPluginVoiceCapabilities } from '../src/main/modules/plugin/host/plugin-voice-capabilities'
           export { PluginHostResourceRegistry } from '../src/main/modules/plugin/host/plugin-host-resources'
           export { ElectronPluginRuntimeProcessFactory } from '../src/main/modules/plugin/host/plugin-runtime-electron-process'
         `,
@@ -163,6 +164,7 @@ async function run() {
     const {
       createPluginBusinessCapabilities,
       createPluginRequestReplyCapabilities,
+      createPluginVoiceCapabilities,
       ElectronPluginRuntimeProcessFactory,
       PluginHostCapabilityRegistry,
       PluginHostResourceRegistry,
@@ -418,7 +420,8 @@ async function run() {
         deniedPermissions: new Set(),
         nexusCalls: [],
         quickOpsCalls: [],
-        flowCalls: []
+        flowCalls: [],
+        voiceCalls: []
       }
       const featureHost = {
         async pushItems(_scope, items) {
@@ -614,19 +617,67 @@ async function run() {
           }
         }
       })
+      const voice = createPluginVoiceCapabilities({
+        resolveCurrentActivation: () => activationIdentity,
+        resolveHostGeneration: () => generation,
+        service: {
+          async dictate(payload, signal) {
+            assert(signal.aborted === false)
+            state.voiceCalls.push({ operation: 'dictate', payload })
+            return {
+              text: 'smoke dictated words',
+              raw: 'smoke dictated words',
+              source: 'electron-smoke',
+              polished: false
+            }
+          },
+          async speak(payload, signal) {
+            assert(signal.aborted === false)
+            state.voiceCalls.push({ operation: 'speak', payload })
+            return {
+              audio: 'data:audio/wav;base64,aG9zdC1vbmx5',
+              format: 'wav',
+              played: true
+            }
+          },
+          async *stream(payload, signal) {
+            assert(signal.aborted === false)
+            state.voiceCalls.push({ operation: 'stream', payload })
+            yield { type: 'partial', text: 'smoke partial' }
+            if (signal.aborted) return
+            yield { type: 'final', text: 'smoke isolated final', language: 'en-US' }
+            if (signal.aborted) return
+            yield { type: 'end' }
+          }
+        }
+      })
       const definitions = [
         ...business.definitions.filter((definition) =>
           simpleFeatureCapabilityIds.has(definition.id)
         ),
-        ...requestReply.definitions
+        ...requestReply.definitions,
+        ...voice.definitions
       ]
       let featureHostRuntime
+      const resourceRegistry = new PluginHostResourceRegistry({
+        owner: runtimeOwner,
+        activation: activationIdentity,
+        resolveCurrentActivation: () => activationIdentity,
+        isActive: () =>
+          !featureHostRuntime ||
+          featureHostRuntime.state === 'starting' ||
+          featureHostRuntime.state === 'active',
+        createResourceId: () => `${name}-feature-resource-${generation}`,
+        watchPermissionRevoked: () => () => undefined,
+        onFatalViolation() {}
+      })
       const registry = new PluginHostCapabilityRegistry({
         owner: runtimeOwner,
         activation: activationIdentity,
         resolveCurrentActivation: () => activationIdentity,
         authorize: (_pluginName, permissionId) => !state.deniedPermissions.has(permissionId),
         watchPermissionRevoked: () => () => undefined,
+        resources: resourceRegistry,
         isActive: () =>
           !featureHostRuntime ||
           featureHostRuntime.state === 'starting' ||
@@ -642,12 +693,15 @@ async function run() {
         resourceLimits: limits,
         capabilityDispatcher: registry,
         ownsCapabilityDispatcher: true,
+        resourceDispatcher: resourceRegistry,
+        ownsResourceDispatcher: true,
         invalidateAuthority() {},
         closeResources: () => business.closeActivation(activationIdentity)
       })
       return {
         host: featureHostRuntime,
         state,
+        resources: resourceRegistry,
         capabilityManifest: definitions.map((definition) => ({
           id: definition.id,
           callbackLifetime: definition.callbackLifetime || 'transient',
@@ -734,6 +788,10 @@ async function run() {
         readFileSync(path.join(officialPluginRoot, 'touch-dev-toolbox', 'index.js'), 'utf8')
       ],
       ['touch-dev-utils', devUtilsScript],
+      [
+        'touch-dictation',
+        readFileSync(path.join(officialPluginRoot, 'touch-dictation', 'index.js'), 'utf8')
+      ],
       ['touch-emoji-symbols', emojiScript],
       [
         'touch-quickops',
@@ -780,6 +838,7 @@ async function run() {
       'touch-browser-bookmarks',
       'touch-dev-toolbox',
       'touch-dev-utils',
+      'touch-dictation',
       'touch-emoji-symbols',
       'touch-quickops',
       'touch-snippets',
@@ -847,15 +906,45 @@ async function run() {
     )
     await firstBatchDevUtils.host.callLifecycle('onFeatureTriggered', [
       'dev-utils',
-      { text: 'camel case' },
+      { text: 'https://example.test/search?tag=alpha&tag=beta&space=hello%20world' },
       { id: 'dev-utils' }
     ])
     const firstDevUtilsItem = firstBatchDevUtils.state.items.find(
-      (item) => item.render.basic.title === 'camelCase'
+      (item) => item.id === 'dev-utils-query-parse'
     )
     assert(firstDevUtilsItem)
     await firstBatchDevUtils.host.callLifecycle('onItemAction', [firstDevUtilsItem])
-    assert(firstBatchDevUtils.state.clipboardWrites.includes('camelCase'))
+    assert(
+      firstBatchDevUtils.state.clipboardWrites.includes(
+        '{\n  "tag": [\n    "alpha",\n    "beta"\n  ],\n  "space": "hello world"\n}'
+      )
+    )
+
+    const firstBatchDictation = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-dictation'
+    )
+    await firstBatchDictation.host.callLifecycle('onFeatureTriggered', [
+      'dictate',
+      { text: '' },
+      { id: 'dictate' }
+    ])
+    const firstDictationItem = firstBatchDictation.state.items[0]
+    assert(firstDictationItem?.actions?.some((action) => action.id === 'start'))
+    firstBatchDictation.state.deniedPermissions.add('voice.dictation')
+    const deniedDictation = await firstBatchDictation.host.callLifecycle('onItemAction', [
+      firstDictationItem
+    ])
+    assert(deniedDictation?.success === false)
+    assert(firstBatchDictation.state.voiceCalls.length === 0)
+    assert(firstBatchDictation.state.clipboardWrites.length === 0)
+    firstBatchDictation.state.deniedPermissions.delete('voice.dictation')
+    const acceptedDictation = await firstBatchDictation.host.callLifecycle('onItemAction', [
+      firstDictationItem
+    ])
+    assert(acceptedDictation?.success === true)
+    assert(firstBatchDictation.state.clipboardWrites.includes('smoke isolated final'))
+    assert(firstBatchDictation.state.voiceCalls.some((call) => call.operation === 'stream'))
+    await waitFor(() => firstBatchDictation.resources.size === 0, 1000)
 
     const firstBatchBookmarks = firstBatch.find(
       (runtime) => runtime.host.activation.name === 'touch-browser-bookmarks'
@@ -1033,7 +1122,7 @@ async function run() {
     const secondBatchDevUtils = secondBatch[secondBatchDevUtilsIndex]
     const currentDevUtilsCall = secondBatchDevUtils.host.callLifecycle('onFeatureTriggered', [
       'dev-utils',
-      { text: 'second generation' },
+      { text: '{"tag":["alpha","beta"],"space":"hello world"}' },
       { id: 'dev-utils' }
     ])
     const currentDevUtilsObserver =
@@ -1054,11 +1143,29 @@ async function run() {
     })
     await currentDevUtilsCall
     const secondDevUtilsItem = secondBatchDevUtils.state.items.find(
-      (item) => item.render.basic.title === 'camelCase'
+      (item) => item.id === 'dev-utils-query-build'
     )
     assert(secondDevUtilsItem)
     await secondBatchDevUtils.host.callLifecycle('onItemAction', [secondDevUtilsItem])
-    assert(secondBatchDevUtils.state.clipboardWrites.includes('secondGeneration'))
+    assert(
+      secondBatchDevUtils.state.clipboardWrites.includes('tag=alpha&tag=beta&space=hello+world'),
+      JSON.stringify(secondBatchDevUtils.state.clipboardWrites)
+    )
+
+    const secondBatchDictation = secondBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-dictation'
+    )
+    await secondBatchDictation.host.callLifecycle('onFeatureTriggered', [
+      'dictate',
+      { text: '' },
+      { id: 'dictate' }
+    ])
+    const secondDictationResult = await secondBatchDictation.host.callLifecycle('onItemAction', [
+      secondBatchDictation.state.items[0]
+    ])
+    assert(secondDictationResult?.success === true)
+    assert(secondBatchDictation.state.clipboardWrites.includes('smoke isolated final'))
+    await waitFor(() => secondBatchDictation.resources.size === 0, 1000)
 
     for (const pluginName of ['touch-quickops', 'touch-snippets']) {
       const index = secondBatch.findIndex((runtime) => runtime.host.activation.name === pluginName)

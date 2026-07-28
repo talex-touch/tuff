@@ -4,6 +4,7 @@ export const PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'touch-code-snippets',
   'touch-dev-toolbox',
   'touch-dev-utils',
+  'touch-dictation',
   'touch-emoji-symbols',
   'touch-quickops',
   'touch-snippets',

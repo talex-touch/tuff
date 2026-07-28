@@ -12,13 +12,45 @@
   "description": "语音听写：说话即输入，自动清理口水词并润色后粘贴到当前应用",
   "main": "index.js",
   "permissions": {
-    "required": ["voice.dictation"],
-    "optional": ["clipboard.read"]
+    "required": ["voice.dictation", "search.root-results"],
+    "optional": ["clipboard.read", "clipboard.write"]
   },
   "permissionReasons": {
     "voice.dictation": "采集麦克风、将语音转写为文本并用 AI 润色",
-    "clipboard.read": "读取剪贴板文字用于朗读"
+    "search.root-results": "在 CoreBox 根搜索结果中显示听写和朗读操作",
+    "clipboard.read": "读取剪贴板文字用于朗读",
+    "clipboard.write": "将听写结果写入并粘贴到当前应用"
   },
+  "searchProviders": [
+    {
+      "id": "touch-dictation.dictate",
+      "displayName": "语音听写",
+      "featureId": "dictate",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 108,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    },
+    {
+      "id": "touch-dictation.speak",
+      "displayName": "朗读文本",
+      "featureId": "speak",
+      "kind": "plugin",
+      "owner": "official-plugin",
+      "mode": "push",
+      "priority": "fast",
+      "defaultOrder": 109,
+      "permissionScopes": ["root-results"],
+      "defaultState": "ask",
+      "requiresUserConsent": true,
+      "pushesToRootResults": true
+    }
+  ],
   "features": [
     {
       "id": "dictate",
