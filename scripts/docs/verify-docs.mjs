@@ -4,11 +4,12 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
+import remarkMdc from 'remark-mdc'
 import { validateReleaseNotesAtRepo } from '../lib/release-notes-contract.mjs'
 
 const DEFAULT_CAP = 100
 const POSIX = value => value.split(path.sep).join('/')
-const productDocument = file => /\.(?:md|mdc)$/i.test(file) && !(/^(?:\.trellis\/|node_modules\/|dist\/|coverage\/|\.github\/|CLAUDE\.md$|apps\/nexus\/examples\/|docs\/engineering\/reports\/)/.test(file))
+const productDocument = file => /\.(?:md|mdc)$/i.test(file) && !(/^(?:\.trellis\/|node_modules\/|dist\/|coverage\/|\.github\/|CLAUDE\.md$|apps\/nexus\/examples\/|docs\/engineering\/reports\/|scripts\/docs\/fixtures\/)/.test(file))
 
 export function trackedFiles(repoRoot) {
   return execFileSync('git', ['ls-files', '-z'], { cwd: repoRoot, encoding: 'buffer' })
@@ -35,7 +36,7 @@ export function checkMarkdownAndLinks(repoRoot, scope) {
   for (const file of scope.productDocs) {
     const text = fs.readFileSync(path.join(repoRoot, file), 'utf8')
     let tree
-    try { tree = unified().use(remarkParse).parse(text) } catch (error) { diagnostics.push(diagnostic('DOC-MARKDOWN-PARSE', file, null, error.message)); continue }
+    try { tree = unified().use(remarkParse).use(remarkMdc).parse(text) } catch (error) { diagnostics.push(diagnostic('DOC-MARKDOWN-PARSE', file, null, error.message)); continue }
     const visit = node => {
       if (node.type === 'link' || node.type === 'image') {
         const result = resolveRelative(file, node.url)
