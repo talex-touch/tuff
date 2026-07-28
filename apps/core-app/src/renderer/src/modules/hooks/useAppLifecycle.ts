@@ -12,6 +12,7 @@ import { createRendererLogger } from '~/utils/renderer-log'
 import { useCoreBox } from './core-box'
 import { useStartupInfo } from './useStartupInfo'
 import { useUpdateRuntime } from './useUpdateRuntime'
+import { useReleaseNotesRuntime } from './useReleaseNotesRuntime'
 import { useUrlProcessor } from './useUrlProcessor'
 
 const lifecycleLog = createRendererLogger('useAppLifecycle')
@@ -28,8 +29,10 @@ export function useAppLifecycle() {
   async function executeMainTask(): Promise<void> {
     useUrlProcessor()
     const { checkApplicationUpgrade, setupUpdateListener } = useUpdateRuntime()
+    const { evaluateStartup } = useReleaseNotesRuntime()
 
     setupUpdateListener()
+    await evaluateStartup(Boolean(appSetting?.beginner?.init))
 
     if (!appSetting?.beginner?.init) {
       devLog('[useAppLifecycle] Skipping update check - beginner.init is false')

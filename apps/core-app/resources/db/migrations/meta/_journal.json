@@ -232,6 +232,13 @@
       "when": 1784592000000,
       "tag": "0032_ai_orchestrator_policy",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1785283200000,
+      "tag": "0033_app_release_notes_state",
+      "breakpoints": true
     }
   ]
 }
