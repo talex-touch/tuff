@@ -3,7 +3,7 @@
   "name": "docs-sot-convergence",
   "title": "Converge documentation source of truth",
   "description": "Make TODO and active Trellis state truthful, migrate the root search-index plan into an owned child task, archive only proven completions, and normalize retained-task metadata.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": "documentation",
   "package": null,
@@ -27,8 +27,8 @@
   ],
   "notes": "Batch A. Existing task moves and metadata edits require an exact candidate inventory; the bilingual task and OTA parent task.json are hard exclusions.",
   "meta": {
-    "nextAction": "After the planning PR is available, inventory active Trellis state and prepare the exact TODO migration, archive, and metadata change set.",
-    "blocker": "The planning PR must be available as the branch base; archive candidates must be proven complete before any move.",
-    "evidence": "prd.md acceptance criteria, task.py list/validate output, the preserved root todo warning, and the final scoped diff."
+    "nextAction": "Open the dedicated stacked Batch A PR with the archive inventory, validation evidence, replacement search task, and concurrent ownership exclusions.",
+    "blocker": "No implementation blocker remains; the dedicated PR must remain unmerged and retain TalexDreamSoul/docs-remediation-plan as its stacked base.",
+    "evidence": "evidence/batch-a-archive-inventory.md, task.py list/validate output, ai-docs:dev, the preserved search migration task, and the final scoped diff."
   }
 }

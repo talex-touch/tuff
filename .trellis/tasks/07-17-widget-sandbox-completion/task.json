@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Implement and verify the widget host-API containment, expression-parser replacement, and bounded audit contracts in the PRD.",
+    "blocker": "The PRD acceptance criteria remain unchecked; no completion evidence exists for the required sandbox boundary.",
+    "evidence": "prd.md defines the fail-closed capability, quota, audit, dynamic-execution, and expression-parser acceptance contract."
+  }
 }

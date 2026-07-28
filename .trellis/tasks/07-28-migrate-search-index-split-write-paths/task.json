@@ -1,0 +1,30 @@
+{
+  "id": "migrate-search-index-split-write-paths",
+  "name": "migrate-search-index-split-write-paths",
+  "title": "Migrate search-index split write paths",
+  "description": "Move every remaining search-index write path to the worker-owned database and prove flag-on app behavior before enabling the split.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-28",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "TalexDreamSoul/docs-sot-convergence",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-13-search-crossplatform-audit",
+  "relatedFiles": [],
+  "notes": "Migrated from root todo.md; the original default-off and silent-data-loss safety contract is now owned by this task.",
+  "meta": {
+    "nextAction": "Inventory every named 2d/2e writer and map it to an exact worker-owned persistence path before changing implementation code.",
+    "blocker": "DB_SEARCH_SPLIT_ENABLED must remain off until every writer and first-launch behavior has direct flag-on application evidence.",
+    "evidence": "prd.md and design.md preserve the root migration inventory, worker API constraints, flag-on application acceptance, and rollback contract."
+  }
+}
