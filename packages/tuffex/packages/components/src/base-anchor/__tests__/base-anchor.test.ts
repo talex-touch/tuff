@@ -326,7 +326,7 @@ describe('txBaseAnchor drip / bead motion', () => {
     expect(createMotion({ type: 'drip' }).resolvedAnimation.value).toMatchObject({
       duration: 260,
       closeDuration: 150,
-      ease: 'cubic-bezier(0.23, 1, 0.32, 1)',
+      ease: 'linear',
       closeEase: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
     })
 
@@ -346,8 +346,8 @@ describe('txBaseAnchor drip / bead motion', () => {
     expect(closeDuration).toBeLessThan(duration)
     expect(closeDuration / duration).toBeLessThan(0.85)
     expect(closeEase).not.toBe(ease)
-    // No springs anywhere: both curves are plain cubic-beziers.
-    expect(ease).toMatch(/^cubic-bezier\(/)
+    // No springs anywhere: p advances linearly and the close rides a plain cubic-bezier.
+    expect(ease).toBe('linear')
     expect(closeEase).toMatch(/^cubic-bezier\(/)
   })
 

@@ -12,6 +12,7 @@ import {
   LIQUID_DEFAULTS,
   normalizedVelocity,
   parseCubicBezier,
+  peelAt,
   resolveLiquidEase,
 } from '../src/base-anchor-liquid'
 
@@ -73,11 +74,19 @@ describe('baseAnchorLiquid: cubic-bezier', () => {
     expect(parseCubicBezier('cubic-bezier(1.5, 0, 0.5, 1)')).toBeNull()
   })
 
-  it('falls back to the built-in curve when handed a gsap ease', () => {
-    const resolved = resolveLiquidEase('back.out(2)', LIQUID_DEFAULTS.ease)
-    const expected = createCubicBezier(0.23, 1, 0.32, 1)
+  it('treats linear as a first-class value, not a fallback', () => {
+    // p is meant to advance linearly: the two per-edge easings are the only
+    // shaping, and a master curve on top of them compounds into ~8th-order
+    // ease-out that collapses the whole drop into about two frames at 60Hz.
+    const linear = resolveLiquidEase('linear', LIQUID_DEFAULTS.ease)
+    for (const t of [0, 0.25, 0.5, 0.75, 1])
+      expect(linear(t)).toBeCloseTo(t, 10)
 
-    expect(resolved(0.5)).toBeCloseTo(expected(0.5), 6)
+    // A gsap ease is rejected and falls back to the default, which is linear.
+    expect(resolveLiquidEase('back.out(2)', LIQUID_DEFAULTS.ease)(0.5)).toBeCloseTo(0.5, 10)
+    // An explicit curve is still honoured.
+    const curved = resolveLiquidEase('cubic-bezier(0.23, 1, 0.32, 1)', LIQUID_DEFAULTS.ease)
+    expect(curved(0.5)).toBeCloseTo(createCubicBezier(0.23, 1, 0.32, 1)(0.5), 10)
   })
 })
 
@@ -203,7 +212,7 @@ describe('baseAnchorLiquid: defaults', () => {
     expect(LIQUID_DEFAULTS.closeDuration).toBe(150)
     expect(LIQUID_DEFAULTS.closeDuration / LIQUID_DEFAULTS.duration).toBeLessThan(0.85)
 
-    expect(LIQUID_DEFAULTS.ease).toBe('cubic-bezier(0.23, 1, 0.32, 1)')
+    expect(LIQUID_DEFAULTS.ease).toBe('linear')
     expect(LIQUID_DEFAULTS.closeEase).toBe('cubic-bezier(0.25, 0.46, 0.45, 0.94)')
     expect(LIQUID_DEFAULTS.closeEase).not.toBe(LIQUID_DEFAULTS.ease)
   })
@@ -252,22 +261,35 @@ describe('baseAnchorLiquid: bead pinch', () => {
     expect(beadSpanAt(0, 14, 1).width).toBeGreaterThanOrEqual(1)
   })
 
-  it('drives the pinch off the drop\'s own velocity profile', () => {
-    const ease = createCubicBezier(0.23, 1, 0.32, 1)
+  it('rides the falling edge rather than p, which is linear and carries no speed', () => {
     const step = 1 / 16
     const ratios: number[] = []
     let previous = 0
     for (let i = 1; i <= 16; i += 1) {
-      const p = ease(i * step)
-      ratios.push(beadPinchRatio(normalizedVelocity(p - previous, step)))
+      const p = i * step // p advances linearly
+      ratios.push(beadPinchRatio(normalizedVelocity(peelAt(p) - peelAt(previous), step)))
       previous = p
     }
 
-    // Fastest at the very start, and fully relaxed by the time it settles.
+    // Fastest as the drop breaks away, dead still once the peel has stopped.
     expect(ratios[0]).toBe(1)
-    expect(ratios.at(-1)).toBeLessThan(0.05)
-    // Monotonic decay: the pinch reports speed, and this curve only decelerates.
+    expect(ratios.at(-1)).toBe(0)
+    // Monotonic decay: easeOutQuad only ever decelerates.
     for (let i = 1; i < ratios.length; i += 1)
       expect(ratios[i]!).toBeLessThanOrEqual(ratios[i - 1]! + 1e-9)
+
+    // Reading p directly would pin the pinch open forever: a linear ramp has a
+    // constant derivative, so it never decays.
+    let flat = 0
+    for (let i = 1; i <= 16; i += 1)
+      flat = Math.max(flat, beadPinchRatio(normalizedVelocity(i * step - (i - 1) * step, step)))
+    expect(flat).toBeCloseTo(beadPinchRatio(1), 10)
+    expect(flat).toBeGreaterThan(0)
+  })
+
+  it('stops reporting speed once the peel has finished', () => {
+    // Past the detach the top edge is parked, so there is nothing left to report.
+    expect(peelAt(DETACH_AT)).toBe(1)
+    expect(normalizedVelocity(peelAt(0.9) - peelAt(0.8), 0.1)).toBe(0)
   })
 })

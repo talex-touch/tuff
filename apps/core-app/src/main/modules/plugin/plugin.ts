@@ -129,11 +129,7 @@ import { getSearchProviderUserConfigs } from '../box-tool/search-engine/search-p
 import { getNetworkService } from '../network'
 import { notificationModule } from '../notification'
 import { getPermissionModule } from '../permission'
-import {
-  loadPluginFeatureContext,
-  loadPluginFeatureContextFromContent,
-  PluginFeature
-} from './plugin-feature'
+import { PluginFeature } from './plugin-feature'
 import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
@@ -432,7 +428,6 @@ function createPluginHttpClient(): PluginHttpClient {
 export class TouchPlugin implements ITouchPlugin {
   private static _transport: ITuffTransportMain | null = null
   private static _runtimeService: PluginRuntimeService | null = null
-  private static _resourceCleanup: ((pluginName: string) => void | Promise<void>) | null = null
 
   static setTransport(transport: ITuffTransportMain | null): void {
     TouchPlugin._transport = transport
@@ -440,10 +435,6 @@ export class TouchPlugin implements ITouchPlugin {
 
   static setRuntimeService(runtimeService: PluginRuntimeService | null): void {
     TouchPlugin._runtimeService = runtimeService
-  }
-
-  static setResourceCleanup(cleanup: ((pluginName: string) => void | Promise<void>) | null): void {
-    TouchPlugin._resourceCleanup = cleanup
   }
 
   private get transport(): ITuffTransportMain | null {
@@ -548,7 +539,6 @@ export class TouchPlugin implements ITouchPlugin {
   >()
 
   private featureControllers: Map<string, AbortController> = new Map()
-  private readonly resourceCleanupByGeneration = new Map<number, Promise<void>>()
 
   _status: PluginStatus = PluginStatus.DISABLED
   webViewInit: boolean = false
@@ -1264,33 +1254,6 @@ export class TouchPlugin implements ITouchPlugin {
     })
   }
 
-  private cleanupActivationResources(activation: PluginActivationIdentity): Promise<void> {
-    if (
-      activation.name !== this.name ||
-      activation.pluginInstanceId !== this._runtimeInstanceId ||
-      !Number.isSafeInteger(activation.activationGeneration) ||
-      activation.activationGeneration < 1
-    ) {
-      return Promise.resolve()
-    }
-    const existing = this.resourceCleanupByGeneration.get(activation.activationGeneration)
-    if (existing) return existing
-
-    const cleanup = TouchPlugin._resourceCleanup
-    const operation = (async () => {
-      if (!cleanup) return
-      try {
-        await cleanup(this.name)
-      } catch {
-        this.logger.warn('[Lifecycle] activation resource cleanup failed', {
-          code: 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED'
-        })
-      }
-    })()
-    this.resourceCleanupByGeneration.set(activation.activationGeneration, operation)
-    return operation
-  }
-
   private resolveRuntimeService(): PluginRuntimeService {
     if (TouchPlugin._runtimeService) return TouchPlugin._runtimeService
     throw Object.assign(new Error('PLUGIN_RUNTIME_SERVICE_CLOSED'), {
@@ -1356,7 +1319,6 @@ export class TouchPlugin implements ITouchPlugin {
   ): void {
     if (!this.matchesActivation(activation)) return
     this.revokeActivationAuthority(activation)
-    void this.cleanupActivationResources(activation)
     this.pluginLifecycle = null
     this.abortFeatureControllers()
 
@@ -1420,75 +1382,6 @@ export class TouchPlugin implements ITouchPlugin {
       if (bundledContent) return bundledContent
     }
     return fse.readFile(featureIndex, 'utf8')
-  }
-
-  // Temporary rollout branch. Remove with the production hard cut once official Preludes migrate.
-  private async loadLegacyPreludeInMain(): Promise<void> {
-    const shouldBundlePrelude = this.dev.enable
-    if (this.dev.enable && this.dev.source && this.dev.address) {
-      const remoteIndexUrl = new URL('index.js', this.dev.address).toString()
-      this.logger.info(`[Dev] Fetching remote script from ${remoteIndexUrl}`)
-      const response = await getNetworkService().request<string>({
-        method: 'GET',
-        url: remoteIndexUrl,
-        timeoutMs: 5000,
-        responseType: 'text',
-        retryPolicy: { maxRetries: 0 },
-        cooldownPolicy: {
-          key: `plugin-dev-prelude:${this.name}:${remoteIndexUrl}`,
-          failureThreshold: 1,
-          cooldownMs: 3000,
-          autoResetOnSuccess: true
-        }
-      })
-      const bundledContent = shouldBundlePrelude
-        ? await bundlePluginPreludeFromContent(
-            this.name,
-            this.pluginPath,
-            this.getTempPath(),
-            response.data,
-            this.logger
-          )
-        : null
-      this.pluginLifecycle = loadPluginFeatureContextFromContent(
-        this,
-        bundledContent ?? response.data,
-        this.getFeatureUtil()
-      ) as IFeatureLifeCycle
-      if (bundledContent) this.logger.info('[Dev] Prelude bundled successfully.')
-      this.logger.info('[Dev] Remote script executed successfully.')
-      return
-    }
-
-    const featureIndex = path.resolve(this.pluginPath, 'index.js')
-    pluginSystemLog.debug(`[Plugin ${this.name}] Loading legacy index.js from: ${featureIndex}`)
-    if (!fse.existsSync(featureIndex)) {
-      this.logger.info(`No index.js found for plugin '${this.name}', running without lifecycle.`)
-      return
-    }
-
-    if (shouldBundlePrelude) {
-      const bundledContent = await bundlePluginPreludeFromFile(
-        this.name,
-        this.pluginPath,
-        this.getTempPath(),
-        featureIndex,
-        this.logger
-      )
-      if (bundledContent) {
-        this.pluginLifecycle = loadPluginFeatureContextFromContent(
-          this,
-          bundledContent,
-          this.getFeatureUtil()
-        ) as IFeatureLifeCycle
-        return
-      }
-    }
-    this.pluginLifecycle = loadPluginFeatureContext(
-      this,
-      featureIndex,
-      this.getFeatureUtil()
-    ) as IFeatureLifeCycle
   }
 
   async enable(): Promise<boolean> {
