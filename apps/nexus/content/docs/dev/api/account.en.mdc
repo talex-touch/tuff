@@ -764,6 +764,6 @@ code: |
 
 ## Related Documentation
 
-- [Intelligence API](./intelligence.en.md) - AI capabilities
-- [Storage API](./storage.en.md) - Plugin data persistence
-- [Plugin Context](./plugin-context.en.md) - Plugin global context
+- [Intelligence API](./intelligence.en.mdc) - AI capabilities
+- [Storage API](./storage.en.mdc) - Plugin data persistence
+- [Plugin Context](./plugin-context.en.mdc) - Plugin global context

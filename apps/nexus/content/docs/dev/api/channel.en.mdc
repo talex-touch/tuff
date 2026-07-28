@@ -1,7 +1,7 @@
 # Channel API (Retired)
 
 ::alert{type="warning"}
-**Retired for new development:** This page exists only to identify old Channel code during migration. Current plugins must use [TuffTransport](./transport.en.md) and domain SDKs such as [Box SDK](./box.en.md), [Clipboard SDK](./clipboard.en.md), and [Bridge Hooks](./bridge-hooks.en.md).
+**Retired for new development:** This page exists only to identify old Channel code during migration. Current plugins must use [TuffTransport](./transport.en.mdc) and domain SDKs such as [Box SDK](./box.en.mdc), [Clipboard SDK](./clipboard.en.mdc), and [Bridge Hooks](./bridge-hooks.en.mdc).
 ::
 
 ## Current Contract

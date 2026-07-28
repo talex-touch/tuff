@@ -224,5 +224,5 @@ code: |
 - The SDK wraps IPC events and normalizes lifecycle updates.
 
 ## Related Docs
-- [Flow Transfer API](./flow-transfer.en.md)
-- [Plugin Manifest](../reference/manifest.en.md)
+- [Flow Transfer API](./flow-transfer.en.mdc)
+- [Plugin Manifest](../reference/manifest.en.mdc)

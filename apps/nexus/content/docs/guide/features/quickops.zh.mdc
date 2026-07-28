@@ -81,7 +81,7 @@ QuickOps 当前状态型 runtime 仍由 CoreApp 承载，但官方 `touch-quicko
 
 如果你只是安装或编写普通插件，应该把 QuickOps 当成只读系统能力来组合。只有参与仓库开发时，才需要修改官方 `touch-quickops` 插件、QuickOps host capability、Flow target、typed transport 和 SDK facade。
 
-开发者可查看 [QuickOps 开发者 API](../../dev/api/quickops.zh.md) 了解可用 SDK、Flow target 目录和内置能力修改 checklist。
+开发者可查看 [QuickOps 开发者 API](../../dev/api/quickops.zh.mdc) 了解可用 SDK、Flow target 目录和内置能力修改 checklist。
 
 ### 什么时候写插件
 
@@ -102,6 +102,6 @@ QuickOps 当前状态型 runtime 仍由 CoreApp 承载，但官方 `touch-quicko
 
 ## 相关文档
 
-- [快速预览](./preview.zh.md)
-- [CoreBox 工作流现状](./corebox-workflow.zh.md)
-- [QuickOps 开发者 API](../../dev/api/quickops.zh.md)
+- [快速预览](./preview.zh.mdc)
+- [CoreBox 工作流现状](./corebox-workflow.zh.mdc)
+- [QuickOps 开发者 API](../../dev/api/quickops.zh.mdc)

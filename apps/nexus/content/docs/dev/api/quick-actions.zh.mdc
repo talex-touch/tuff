@@ -206,6 +206,6 @@ code: |
 
 ## 相关文档
 
-- [Plugin Context](./plugin-context.zh.md)
-- [Flow Transfer API](./flow-transfer.zh.md)
-- [Platform Capabilities SDK](./platform-capabilities.zh.md)
+- [Plugin Context](./plugin-context.zh.mdc)
+- [Flow Transfer API](./flow-transfer.zh.mdc)
+- [Platform Capabilities SDK](./platform-capabilities.zh.mdc)

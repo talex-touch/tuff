@@ -20,15 +20,41 @@
 
 Rerun the exact read-only tracked-link audit used in inventory and require zero in-scope missing or repository-escape targets. Preserve the command or script invocation and summarized output in PR evidence so Batch D can reproduce it.
 
+The validation selection must work both before commit (staged/unstaged files) and after commit (the stacked branch range):
+
 ```bash
-changed_docs=$(git diff --name-only --diff-filter=ACMR "$(git merge-base HEAD master)"..HEAD -- '*.md' '*.mdc')
-if test -n "$changed_docs"; then
-  npx markdownlint-cli $changed_docs --ignore node_modules
-fi
+base_ref="${DOCS_BASE_REF:-TalexDreamSoul/docs-remediation-plan}"
+base_commit=$(git merge-base HEAD "$base_ref")
+changed_docs=$(
+  {
+    git diff --name-only --diff-filter=ACMR "$base_commit"...HEAD -- '*.md' '*.mdc'
+    git diff --cached --name-only --diff-filter=ACMR -- '*.md' '*.mdc'
+    git diff --name-only --diff-filter=ACMR -- '*.md' '*.mdc'
+    git ls-files --others --exclude-standard -- '*.md' '*.mdc'
+  } | sed '/^$/d' | sort -u
+)
+printf '%s\n' "$changed_docs"
 
 git diff --check
-git diff --name-only "$(git merge-base HEAD master)"..HEAD
+git diff --cached --check
+git diff --check "$base_commit"...HEAD
+
+untracked_docs=$(git ls-files --others --exclude-standard -- '*.md' '*.mdc')
+if test -n "$untracked_docs"; then
+  while IFS= read -r file; do
+    check_output=$(git diff --no-index --check /dev/null "$file" 2>&1)
+    check_status=$?
+    if test "$check_status" -gt 1 || test -n "$check_output"; then
+      printf '%s\n' "$check_output"
+      exit 1
+    fi
+  done <<EOF
+$untracked_docs
+EOF
+fi
 ```
+
+Default-lint every fully rewritten/new document. For link-only legacy MDC files, compare `markdownlint-cli` diagnostics against the same file at `base_commit` and require zero added `file:line:rule` keys; the permanent MDC-aware policy belongs to Batch D. Record both commands and counts in the inventory/PR evidence.
 
 Also verify every new relative target with `git ls-files --error-unmatch -- <target>`. Do not run external-link network checks, formatters, project-wide lint, typecheck, build, or product suites.
 

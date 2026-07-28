@@ -49,7 +49,7 @@ code: |
 
 ## API
 
-`TxGuideState` accepts `GuideStateProps`, defined as `Omit<EmptyStateProps, 'variant'>`. It forwards those props to `TxEmptyState` and injects `variant="guide"`. For the complete base contract, see [EmptyState](./empty-state.en.md).
+`TxGuideState` accepts `GuideStateProps`, defined as `Omit<EmptyStateProps, 'variant'>`. It forwards those props to `TxEmptyState` and injects `variant="guide"`. For the complete base contract, see [EmptyState](./empty-state.en.mdc).
 
 ### Props
 

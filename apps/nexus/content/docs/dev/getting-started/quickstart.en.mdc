@@ -113,4 +113,4 @@ code: |
 :::
 `tuff build` creates `dist/build/` and a `.tpex` package. Before publishing, run `tuff publish --dry-run` to preview the upload.
 
-Continue with [Plugin Development Workflow](./plugin-workflow.en.md).
+Continue with [Plugin Development Workflow](./plugin-workflow.en.mdc).

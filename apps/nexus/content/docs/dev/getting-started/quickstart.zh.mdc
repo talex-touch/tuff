@@ -113,4 +113,4 @@ code: |
 :::
 `tuff build` 会输出 `dist/build/` 和 `.tpex` 插件包。发布前继续执行 `tuff publish --dry-run` 预览上传内容。
 
-继续阅读：[插件开发任务流](./plugin-workflow.zh.md)。
+继续阅读：[插件开发任务流](./plugin-workflow.zh.mdc)。
