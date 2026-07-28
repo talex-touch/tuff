@@ -1053,7 +1053,8 @@ Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Ne
 
 ### Main Changes
 
-(Add details)
+- Repaired 663 broken product-documentation relative links across CoreApp, Search, Download, bilingual Nexus API/component/guide/release navigation, DivisionBox, and TuffEx; stale `.md` destinations now resolve to their tracked canonical `.mdc` files or exact maintained documentation.
+- Added the reviewed AST inventory and reproducible audit helper, refreshed the owned product guidance, and removed no unrelated content, placeholders, redirect-only, or empty documents.
 
 ### Git Commits
 
@@ -1063,7 +1064,10 @@ Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Ne
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] AST audit: 1121 tracked Markdown/MDC documents, 586 in-scope sources, 841 inspected relative links/images, and 0 broken or repository-escape findings.
+- [OK] Repair selection: 674 newly selected URLs resolve to 427 unique tracked files; no directory aliases were selected.
+- [OK] Default `markdownlint-cli` passed on the nine rewritten/new core documents; baseline-aware legacy diagnostics changed from 3171 to 3165 (added=0, removed=6).
+- [OK] `git diff --check`, `git diff --cached --check`, stacked branch-range, and ownership/excluded-path checks passed.
 
 ### Status
 
