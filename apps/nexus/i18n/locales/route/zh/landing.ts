@@ -8,7 +8,7 @@ export default {
         titleAccent: '可 随心创作',
         title: '你的 OS，可 随心创作',
         copy: 'Nexus 是 Tuff 的公开入口：承载可信发布、插件生态和开发文档，让桌面端保持轻、快、可扩展。',
-        subtitle: '一个入口，搜索文件、启动应用、驱动 Agent —— 就在你的桌面。',
+        subtitle: '一个入口，搜索文件、启动应用、驱动 Agent。',
         primaryCta: '获取当前版本',
         getPlatformVersion: '获取 {platform} 版本',
         secondaryCta: '查看开发文档',

@@ -8,7 +8,7 @@ export default {
         titleAccent: 'programmable.',
         title: 'Your OS, programmable.',
         copy: 'Nexus is the public entry for Tuff: trusted releases, plugin ecosystem, and developer docs while the desktop app stays light, fast, and extensible.',
-        subtitle: 'One input to search files, launch apps, and run agents — right on your desktop.',
+        subtitle: 'One entry point to search files, launch apps, and drive agents.',
         primaryCta: 'Get the current build',
         getPlatformVersion: 'Get {platform} version',
         secondaryCta: 'View developer docs',
