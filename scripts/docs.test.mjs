@@ -442,10 +442,15 @@ describe('canonical documentation verifier fixtures', () => {
       ruleIds: ['DOC-TASK-TYPE'],
       paths: [
         '.trellis/tasks/array-root/task.json',
-        '.trellis/tasks/bad-field-types/task.json',
-        '.trellis/tasks/string-root/task.json',
+        '.trellis/tasks/bad-status-parent-types/task.json',
+        '.trellis/tasks/null-root/task.json',
+        '.trellis/tasks/scalar-root/task.json',
       ],
-      messages: ['task JSON root must be an object'],
+      messages: [
+        'task JSON root must be an object',
+        'status must be one of completed, in_progress, planning, review',
+        'parent has an invalid type',
+      ],
     },
     {
       name: 'prd-empty-sections-excluding-code',
@@ -484,8 +489,8 @@ describe('canonical documentation verifier fixtures', () => {
       ruleIds: ['DOC-AI-CONTRACT'],
       paths: [
         'docs/plan-prd/03-features/ai-2.5.0-plan-prd.md',
-        'docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md',
       ],
+      absentMessages: ['missing '],
     },
     {
       name: 'prd-placeholders-and-allowlist',
