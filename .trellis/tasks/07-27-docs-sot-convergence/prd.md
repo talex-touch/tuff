@@ -53,14 +53,14 @@ A task may be archived only when:
 
 ## Acceptance Criteria
 
-- [ ] `docs/plan-prd/TODO.md` is the sole global execution-order source and contains no stale repository-state snapshot.
-- [ ] Root `todo.md` is removed only after a linked search-index child task preserves the full default-off, silent-data-loss, migration, app-test, and rollback contract.
-- [ ] Every archived task satisfies the classification rule, children move before parents, and the PR lists all moves.
-- [ ] Every retained task in scope has one assignee and non-empty next-action, blocker, and evidence metadata.
-- [ ] Parent/child links remain bidirectionally consistent and all context manifests validate.
-- [ ] The bilingual task and OTA parent `task.json` have no diff, stage, revert, or metadata change.
-- [ ] Focused Trellis/context/document checks and `git diff --check` pass.
-- [ ] A dedicated PR is open with its branch, commit, archive inventory, validation output, and dependency on the planning PR.
+- [x] `docs/plan-prd/TODO.md` is the sole global execution-order source and contains no stale repository-state snapshot.
+- [x] Root `todo.md` is removed only after a linked search-index child task preserves the full default-off, silent-data-loss, migration, app-test, and rollback contract.
+- [x] Every archived task satisfies the classification rule, children move before parents, and the PR lists all moves.
+- [x] Every retained task in scope has one assignee and non-empty next-action, blocker, and evidence metadata.
+- [x] Parent/child links remain bidirectionally consistent and all context manifests validate.
+- [x] The bilingual task and OTA parent `task.json` have no diff, stage, revert, or metadata change.
+- [x] Focused Trellis/context/document checks and `git diff --check` pass.
+- [x] A dedicated PR is open with its branch, commit, archive inventory, validation output, and dependency on the planning PR.
 
 ## Out of Scope
 
