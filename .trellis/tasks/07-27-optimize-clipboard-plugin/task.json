@@ -18,9 +18,7 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [
-    "07-27-expose-plugin-search-sdk"
-  ],
+  "children": [],
   "parent": "07-27-optimize-core-utility-plugins",
   "relatedFiles": [],
   "notes": "",
