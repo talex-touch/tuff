@@ -3,7 +3,7 @@
   "name": "converge-project-documentation-gates",
   "title": "Converge project documentation and gates",
   "description": "Coordinate source-of-truth convergence, roadmap and release refresh, peripheral documentation repair, and final documentation quality gates through four independently verifiable child tasks.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": "documentation",
   "package": null,
@@ -14,9 +14,9 @@
   "completedAt": null,
   "branch": "TalexDreamSoul/docs-remediation-plan",
   "base_branch": "master",
-  "worktree_path": null,
-  "commit": null,
-  "pr_url": null,
+  "worktree_path": "/Users/tagzixian/orca/workspaces/talex-touch/docs-remediation-plan",
+  "commit": "5e7ff2e6b",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/355",
   "subtasks": [],
   "children": [
     "07-27-docs-sot-convergence",
@@ -33,8 +33,8 @@
   ],
   "notes": "Planning container only. Product documentation and quality-gate implementation belong to the four child tasks and their dedicated PRs.",
   "meta": {
-    "nextAction": "Review and merge the planning PR, then start the SoT, roadmap/release, and peripheral documentation children in independent worktrees.",
-    "blocker": "none",
-    "evidence": "prd.md cross-child acceptance criteria plus each child prd.md, design.md, implement.md, and curated context manifests."
+    "nextAction": "Merge planning PR #355, then retarget reviewed child PRs #357, #358, and #356; keep draft gate PR #359 stacked for the final master rebuild.",
+    "blocker": "Cloudflare Pages has an external failure, and the stacked dependency requires #355 to merge before the reviewed children can be retargeted; draft #359 remains pending the final master rebuild.",
+    "evidence": "Planning PR #355; reviewed implementation PRs #356, #357, and #358; draft gate PR #359; merged support PRs #360 and #361; integration commit a3874d4a; gate commit db0f62bd7."
   }
 }
