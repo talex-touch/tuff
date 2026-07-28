@@ -178,6 +178,13 @@ vi.mock('../../utils/secure-store', () => ({
   setSecureStoreValue: mocks.setSecureStoreValue
 }))
 vi.mock('../database', () => ({ databaseModule: { getDb: mocks.databaseGetDb } }))
+vi.mock('../voice/voice-service', () => ({
+  voiceService: {
+    dictate: vi.fn(),
+    speak: vi.fn(),
+    streamDictation: vi.fn()
+  }
+}))
 vi.mock('../network', () => ({ getNetworkService: mocks.getNetworkService }))
 vi.mock('../permission', () => ({
   createProtectedRegister:
@@ -339,7 +346,7 @@ describe('PluginModule facade', () => {
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
   })
 
-  it('wires the immutable 27-ID business and request/reply manifest with canonical permissions', async () => {
+  it('wires the immutable 29-ID business, request/reply and voice manifest', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockImplementation((name) =>
       name === 'calendar' ? mocks.plugin : undefined
@@ -353,13 +360,15 @@ describe('PluginModule facade', () => {
     const definitions = runtimeOptions?.capabilityDefinitions as
       | ReadonlyArray<{ id: string }>
       | undefined
-    expect(definitions).toHaveLength(27)
+    expect(definitions).toHaveLength(29)
     expect(definitions?.map((definition) => definition.id)).toContain('plugin.info.get')
     expect(definitions?.map((definition) => definition.id)).toContain('permission.check')
     expect(definitions?.map((definition) => definition.id)).toContain('http.request')
     expect(definitions?.map((definition) => definition.id)).toContain('channel.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('quick-ops.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('flow.invoke')
+    expect(definitions?.map((definition) => definition.id)).toContain('voice.invoke')
+    expect(definitions?.map((definition) => definition.id)).toContain('voice.stream')
     expect(Object.isFrozen(definitions)).toBe(true)
     expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
 

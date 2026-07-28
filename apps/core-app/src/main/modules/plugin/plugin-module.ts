@@ -65,6 +65,7 @@ import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
+import { voiceService } from '../voice/voice-service'
 import {
   clearPluginLocalizationEntries,
   registerPluginLocalizationChannels
@@ -82,6 +83,7 @@ import {
   createPluginRequestReplyCapabilities,
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
+import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
 import { ElectronPluginRuntimeProcessFactory } from './host/plugin-runtime-electron-process'
 import {
   PluginRuntimeService,
@@ -1789,13 +1791,40 @@ export class PluginModule extends BaseModule {
           )
       })
     })
+    const voiceCapabilities = createPluginVoiceCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      service: Object.freeze({
+        dictate: async (payload, signal) => {
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          const result = await voiceService.dictate(payload)
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          return result
+        },
+        speak: async (payload, signal) => {
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          const result = await voiceService.speak(payload)
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          return result
+        },
+        stream: (payload, signal) => {
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          return voiceService.streamDictation({
+            ...(payload.language ? { language: payload.language } : {})
+          })
+        }
+      })
+    })
     this.runtimeService = new PluginRuntimeService({
       artifactPath: resolvePluginRuntimeArtifactPath(),
       factory: new ElectronPluginRuntimeProcessFactory(),
       keyManager: ioRuntime.transport.keyManager,
       capabilityDefinitions: Object.freeze([
         ...this.pluginBusinessCapabilities.definitions,
-        ...requestReplyCapabilities.definitions
+        ...requestReplyCapabilities.definitions,
+        ...voiceCapabilities.definitions
       ]),
       authorizeCapability: (pluginName, permissionId) => {
         try {
