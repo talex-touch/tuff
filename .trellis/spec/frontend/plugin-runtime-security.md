@@ -515,6 +515,120 @@ signal.throwIfAborted();
 // VoiceService also checks abort immediately before native playback.
 ```
 
+## Scenario: Bounded Intelligence Invoke Capability
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated Prelude needs non-streaming `text.chat`, `vision.ocr`, or
+  public text-model discovery through the host Intelligence runtime.
+- This foundation does not authorize context execution, streams, memory evaluation,
+  agent sessions, provider configuration, or production rollout.
+
+### 2. Signatures
+
+```ts
+type PluginIntelligenceRequest =
+  | {
+      operation: "capability.invoke";
+      capabilityId: "text.chat";
+      payload: { messages: Array<{ role: "system" | "user" | "assistant"; content: string }> };
+      options?: SafePluginIntelligenceOptions;
+    }
+  | {
+      operation: "capability.invoke";
+      capabilityId: "vision.ocr";
+      payload: {
+        source: { type: "data-url"; dataUrl: string };
+        language?: string;
+        includeLayout?: boolean;
+        includeKeywords?: boolean;
+      };
+      options?: SafePluginIntelligenceOptions;
+    }
+  | { operation: "provider-models.list"; capabilityId: "text.chat" };
+
+interface PluginIntelligenceHostProjection {
+  invoke(request: ProjectedInvoke, signal: AbortSignal, caller: string): Promise<ProjectedResult>;
+  listProviderModels(signal: AbortSignal, caller: string): Promise<ProjectedProvider[]>;
+}
+```
+
+### 3. Contracts
+
+- Register exactly `intelligence.invoke` with permission `intelligence.basic`. Recheck
+  branded plugin-host authority, current activation identity, and host generation on
+  every call; main derives `plugin:<manifest id>` after those checks.
+- Child requests cannot supply caller, plugin identity, key, quota scope, provider
+  endpoint, credentials, authorization, cookies, or tokens. Options are limited to
+  bounded provider/model preference, prompt template/variables, and exact diagnostic
+  metadata. Metadata capability/provider/model values must agree with the request.
+- Chat accepts at most 64 exact role/content messages within the aggregate byte budget.
+  OCR accepts only canonical base64 PNG/JPEG/WebP data URLs with matching magic and a
+  decoded limit of 640 KiB; the maximum valid request must fit the shared 1 MiB wire
+  envelope. Remote URLs and file paths are never accepted.
+- The injected host service is a projection adapter, not the raw Intelligence SDK.
+  Before returning, it drops usage, reasoning, provider configuration, raw OCR blocks,
+  credentials, native errors, and stacks. Capability validation rejects an unprojected
+  service result instead of silently copying unknown fields.
+- Service methods are snapshotted at capability creation. Permission revoke, caller
+  abort, activation rotation, and host-generation mismatch reject the invocation and
+  discard late results. Until the underlying Intelligence SDK has a real cancellation
+  contract, this foundation must not be described as stopping provider computation.
+- Context invoke/stream, memory, and handoff/session require separate owner-bound
+  contracts. Never add them as generic operations or expose host-only session IDs.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Unknown operation or capability ID | Invalid request before service work |
+| Child supplies caller, identity, endpoint, or credential field | Invalid request before service work |
+| Metadata capability/provider/model disagrees with options | Invalid request |
+| OCR MIME is remote, non-image, malformed base64, wrong magic, or over 640 KiB | Invalid request |
+| Permission denied or revoked | Stable permission error; late result discarded |
+| Activation or host generation is stale | Stable stale/handler failure; no service work |
+| Service returns usage, reasoning, raw data, credential, or stack fields | Fail closed as unprojected handler result |
+| Native service throws | Stable redacted handler failure |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a current plugin sends bounded chat messages; main derives its caller, invokes
+  a projected host adapter, and returns only text/provider/model/trace/latency fields.
+- Base: model discovery returns bounded public provider labels and model IDs, with no
+  endpoint, key, account, quota, or routing configuration.
+- Bad: pass the raw Prelude options with `metadata.caller`, accept a 5 MiB screenshot
+  despite a 1 MiB wire limit, or expose `agent-session.update` under a child-selected ID.
+
+### 6. Tests Required
+
+- Authority tests cover forged context, stale activation, host-generation mismatch,
+  permission denial/revoke, caller abort, and late success after revoke.
+- DTO tests cover extra keys, proxies, accessors, sparse arrays, cycles, classes,
+  prototype keys, message/byte bounds, metadata consistency, and caller spoofing.
+- OCR tests cover PNG/JPEG/WebP magic, MIME mismatch, canonical base64, remote/file
+  denial, the 640 KiB boundary, and successful encoding within host wire limits.
+- Projection tests reject raw SDK usage/reasoning/OCR/provider/credential fields and
+  prove native failures remain redacted.
+- Before production wiring, add real host-adapter tests, child facade tests, provider
+  cancellation decisions, and real Electron enable/trigger/disable/revoke smoke.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+return tuffIntelligence.invoke(request.capabilityId, request.payload, request.options);
+```
+
+#### Correct
+
+```ts
+const activation = assertAuthoritativeActivation(context);
+const caller = `plugin:${activation.name}`;
+const projected = await intelligenceAdapter.invoke(request, signal, caller);
+return validateProjectedIntelligenceResult(projected);
+```
+
 ## Scenario: Plugin-Owned Runtime Overlay
 
 ### 1. Scope / Trigger
