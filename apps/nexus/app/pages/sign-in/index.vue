@@ -107,7 +107,7 @@ function goTo(path: string) {
               <h1 class="auth-title m-0">
                 {{ stepTitle }}
               </h1>
-              <p class="auth-subtitle">
+              <p v-if="stepSubtitle" class="auth-subtitle">
                 {{ stepSubtitle }}
               </p>
             </div>

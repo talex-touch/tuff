@@ -1,7 +1,7 @@
 ---
 title: "Tabs"
 description: "Composable tab navigation with placement, grouped items, animated indicators, and measured content panels."
-category: Layout
+category: Navigation
 syncStatus: reviewed
 verified: true
 ---

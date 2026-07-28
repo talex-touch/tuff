@@ -1,4 +1,5 @@
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -21,7 +22,11 @@ vi.mock('../plugin/plugin-module', () => ({
 import { withPermission } from './channel-guard'
 
 const pluginContext = {
-  plugin: { name: 'touch-test', verified: true, uniqueKey: 'owner-key' }
+  plugin: createTrustedTestPluginContext({
+    name: 'touch-test',
+    pluginInstanceId: 'touch-test-instance',
+    uniqueKey: 'owner-key'
+  })
 } as HandlerContext
 
 describe('withPermission privileged plugin mode', () => {
@@ -102,6 +107,30 @@ describe('withPermission privileged plugin mode', () => {
 
     await expect(handler({}, {} as HandlerContext)).resolves.toBe('ok')
     expect(callback).toHaveBeenCalledOnce()
+  })
+
+  it('rejects caller-authored verification flags', async () => {
+    mocks.getPermissionModule.mockReturnValue({
+      checkPermission: vi.fn(() => ({ allowed: true }))
+    })
+    const callback = vi.fn()
+    const handler = withPermission(
+      {
+        permissionId: 'window.create',
+        requireVerifiedPlugin: true,
+        deniedCode: 'PLUGIN_WINDOW_PERMISSION_DENIED'
+      },
+      callback
+    )
+    const forged = {
+      plugin: { name: 'touch-test', uniqueKey: 'forged-key', verified: true }
+    } as HandlerContext
+
+    await expect(handler({}, forged)).rejects.toMatchObject({
+      code: 'PLUGIN_WINDOW_PERMISSION_DENIED',
+      pluginId: 'touch-test'
+    })
+    expect(callback).not.toHaveBeenCalled()
   })
 
   it('blocks public privileged handlers without a verified plugin context', async () => {

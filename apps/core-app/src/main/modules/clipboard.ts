@@ -77,6 +77,7 @@ import {
   resolveClipboardTargetPollingIntervalMs,
   type ClipboardPollingSettings
 } from './clipboard/clipboard-polling-policy'
+import { registerClipboardHostService } from './clipboard/clipboard-host-service'
 import {
   ClipboardStageBEnrichment,
   type ClipboardStageBJob
@@ -122,6 +123,7 @@ const CLIPBOARD_STAGE_B_LOG_THROTTLE_MS = 5_000
 
 export class ClipboardModule extends BaseModule {
   private transport: ITuffTransportMain | null = null
+  private clipboardHostServiceDisposer: (() => void) | null = null
   private readonly transportHandlers = new ClipboardTransportHandlersRegistry()
   private clipboardFreshness = new ClipboardFreshnessStore()
   private readonly autopasteAutomation = new ClipboardAutopasteAutomation({
@@ -1185,6 +1187,47 @@ export class ClipboardModule extends BaseModule {
     return await this.autopasteAutomation.handleCopyAndPasteRequest(request, context)
   }
 
+  private installClipboardHostService(): void {
+    this.clipboardHostServiceDisposer?.()
+    this.clipboardHostServiceDisposer = registerClipboardHostService(
+      Object.freeze({
+        read: async (request, _context, signal) => {
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          if (request.op === 'text') {
+            return { op: 'text' as const, text: this.readClipboardSnapshot().text }
+          }
+          return { op: 'snapshot' as const, ...this.readClipboardSnapshot() }
+        },
+        write: async (request, _context, signal) => {
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          if (request.op === 'clear') clipboard.clear()
+          else {
+            await this.write({
+              ...request.content,
+              ...(request.content.files ? { files: [...request.content.files] } : {})
+            })
+          }
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+        },
+        copyAndPaste: async (request, context, signal) => {
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          const result = await this.handleCopyAndPasteRequest(
+            {
+              ...request,
+              ...(request.files ? { files: [...request.files] } : {})
+            },
+            { plugin: context } as HandlerContext
+          )
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          return {
+            success: result.success,
+            ...(result.code ? { code: result.code } : {})
+          }
+        }
+      })
+    )
+  }
+
   public async write(request: ClipboardWriteRequest): Promise<void> {
     const payload = normalizeClipboardWritePayload(request)
     if (!payload) return
@@ -1279,6 +1322,8 @@ export class ClipboardModule extends BaseModule {
   }
 
   public destroy(): void {
+    this.clipboardHostServiceDisposer?.()
+    this.clipboardHostServiceDisposer = null
     this.isDestroyed = true
     pollingService.unregister(CLIPBOARD_POLL_TASK_ID)
     pollingService.unregister(CLIPBOARD_ACTIVE_APP_REFRESH_TASK_ID)
@@ -1337,6 +1382,7 @@ export class ClipboardModule extends BaseModule {
       ctx.runtime?.channel ?? (ctx.app as { channel?: unknown } | null | undefined)?.channel
     ocrService.setTransportChannel(this.transportChannel)
     this.clipboardHelper = new ClipboardHelper()
+    this.installClipboardHostService()
     this.setupPollingSubscriptions()
     this.setupPowerListeners()
     this.registerTransportHandlers()
@@ -1354,6 +1400,8 @@ export class ClipboardModule extends BaseModule {
   }
 
   onDestroy(): MaybePromise<void> {
+    this.clipboardHostServiceDisposer?.()
+    this.clipboardHostServiceDisposer = null
     this?.destroy()
   }
 }

@@ -323,38 +323,66 @@ export interface MainInvokeContext {
   sender?: ElectronWebContents;
 
   /**
-   * Optional plugin context for in-process invocation.
+   * Plugin lookup input for in-process invocation.
+   *
+   * @remarks
+   * The transport ignores caller-supplied verification fields and resolves the
+   * current activation from PluginKeyManager before issuing a handler context.
    */
-  plugin?: PluginSecurityContext;
+  plugin?: PluginInvokeContext;
 }
 
 // ============================================================================
 // Plugin Security
 // ============================================================================
 
+export interface PluginActivationIdentity {
+  name: string;
+  pluginInstanceId: string;
+  activationGeneration: number;
+  key: string;
+}
+
+export type PluginCallerAuthority =
+  | "web-contents"
+  | "message-port"
+  | "plugin-host"
+  | "local-host"
+  | "test";
+
+export interface PluginCallerIdentity {
+  pluginName: string;
+  pluginInstanceId: string;
+  activationGeneration: number;
+  authority: PluginCallerAuthority;
+  senderId?: number;
+  portId?: string;
+  hostGeneration?: number;
+}
+
+export interface PluginInvokeContext {
+  name: string;
+  uniqueKey: string;
+  sdkapi?: number;
+  /** @deprecated Caller-supplied booleans are ignored by the main transport. */
+  verified?: boolean;
+}
+
 /**
  * Security context for plugin communication.
  *
  * @remarks
- * This maintains compatibility with the existing plugin key mechanism.
- * Each plugin is assigned a unique key that must be included in messages.
+ * `uniqueKey` is retained for bridge compatibility. Privileged handlers must
+ * call `isAuthoritativePluginContext`; neither this key nor `verified` is an
+ * authorization proof.
  */
 export interface PluginSecurityContext {
-  /**
-   * Plugin name.
-   */
   name: string;
-
-  /**
-   * Encrypted unique key for this plugin session.
-   * This key is generated when the plugin UI view is attached.
-   */
   uniqueKey: string;
+  identity?: PluginCallerIdentity;
 
-  /**
-   * Whether this is a verified plugin context.
-   */
-  verified: boolean;
+  /** @deprecated This compatibility field is never an authorization proof. */
+  verified?: boolean;
 
   /**
    * Host-resolved SDK API marker for permission enforcement.
@@ -363,43 +391,33 @@ export interface PluginSecurityContext {
 }
 
 /**
- * Manager for plugin security keys.
- *
- * @remarks
- * This interface maintains compatibility with the existing requestKey/revokeKey mechanism.
+ * Manager for plugin activation identities.
  */
 export interface PluginKeyManager {
-  /**
-   * Requests a new encrypted key for a plugin.
-   *
-   * @param pluginName - Name of the plugin
-   * @returns The encrypted key
-   */
-  requestKey: (pluginName: string) => string;
+  requestKey: (
+    pluginName: string,
+    activation?: Pick<
+      PluginActivationIdentity,
+      "pluginInstanceId" | "activationGeneration"
+    >,
+  ) => string;
 
-  /**
-   * Revokes a previously issued key.
-   *
-   * @param key - The key to revoke
-   * @returns `true` if successfully revoked
-   */
   revokeKey: (key: string) => boolean;
-
-  /**
-   * Resolves a key to its plugin name.
-   *
-   * @param key - The encrypted key
-   * @returns Plugin name or `undefined` if invalid
-   */
   resolveKey: (key: string) => string | undefined;
-
-  /**
-   * Checks if a key is valid.
-   *
-   * @param key - The key to validate
-   * @returns `true` if valid
-   */
   isValidKey: (key: string) => boolean;
+
+  /** Resolves only current, host-issued activation metadata. */
+  resolveIdentity?: (key: string) => PluginActivationIdentity | undefined;
+
+  /** Resolves the current activation for a plugin name. */
+  resolveCurrentIdentity?: (
+    pluginName: string,
+  ) => PluginActivationIdentity | undefined;
+
+  /** Resolves a plugin activation from the real Electron sender. */
+  resolveSenderIdentity?: (
+    sender: ElectronWebContents,
+  ) => PluginActivationIdentity | undefined;
 }
 
 // ============================================================================

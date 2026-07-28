@@ -79,6 +79,19 @@ describe('DivisionBoxManager memory pressure polling', () => {
     vi.resetModules()
   })
 
+  it('rejects attached UI without a plugin owner before creating a session', async () => {
+    const { DivisionBoxManager } = await import('./manager')
+    const manager = DivisionBoxManager.getInstance()
+
+    await expect(
+      manager.createSession({
+        url: 'file:///tmp/plugin-view.html',
+        title: 'Unowned View'
+      })
+    ).rejects.toMatchObject({ code: 'CONFIG_ERROR' })
+    expect(pollingMocks.register).not.toHaveBeenCalled()
+  })
+
   it('registers memory polling only while sessions exist', async () => {
     const { DivisionBoxManager } = await import('./manager')
     const manager = DivisionBoxManager.getInstance()

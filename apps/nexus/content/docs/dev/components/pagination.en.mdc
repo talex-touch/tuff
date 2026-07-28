@@ -1,7 +1,7 @@
 ---
 title: Pagination
 description: Page navigation for long lists
-category: Data
+category: Navigation
 status: beta
 since: 1.0.0
 tags: [pagination, pages, navigation]

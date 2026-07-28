@@ -5,14 +5,10 @@ import type { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TouchWindow } from '../../../core/touch-window'
 import type { TouchPlugin } from '../../plugin/plugin'
 import type { CoreBoxKeyEvent } from './key-event'
-import os from 'node:os'
-import path from 'node:path'
 import { StorageList } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils/plugin'
 import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
-import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { app, WebContentsView } from 'electron'
-import fse from 'fs-extra'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 import { useAliveWebContents } from '../../../hooks/use-electron-guard'
 import { createLogger } from '../../../utils/logger'
@@ -159,6 +155,19 @@ export class PluginViewController {
     }
 
     const transport = this.options.getTransport()
+    const injections = usePluginInjections(plugin, 'core-box:attachUIView')
+    const securityProfile = resolvePluginViewSecurityProfile(plugin, {
+      source: 'core-box:attachUIView',
+      injections
+    })
+    pluginViewLog.info('Resolved plugin UI view security profile', {
+      meta: {
+        plugin: plugin?.name,
+        candidateProfile: securityProfile.candidateProfile,
+        effectiveProfile: securityProfile.effectiveProfile,
+        reason: securityProfile.reason
+      }
+    })
 
     pluginViewLog.debug(`AttachUIView - loading ${url}`)
 
@@ -219,84 +228,6 @@ export class PluginViewController {
       }
     }
 
-    const injections = usePluginInjections(plugin, 'core-box:attachUIView')
-    const securityProfile = resolvePluginViewSecurityProfile(plugin, {
-      source: 'core-box:attachUIView',
-      injections
-    })
-    pluginViewLog.info('Resolved plugin UI view security profile', {
-      meta: {
-        plugin: plugin?.name,
-        candidateProfile: securityProfile.candidateProfile,
-        effectiveProfile: securityProfile.effectiveProfile,
-        reason: securityProfile.reason
-      }
-    })
-
-    let preloadPath = injections?._.preload
-    if (securityProfile.effectiveProfile === 'compat-plugin-view' && plugin && injections?.js) {
-      const tempPreloadPath = path.resolve(
-        os.tmpdir(),
-        `talex-plugin-preload-${plugin.name}-${Date.now()}.js`
-      )
-
-      let originalPreloadContent = ''
-      if (injections._.preload && fse.existsSync(injections._.preload)) {
-        try {
-          originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
-        } catch (error) {
-          pluginViewLog.warn(`Failed to read original preload: ${injections._.preload}`, {
-            error
-          })
-        }
-      }
-
-      const channelScript = getPluginChannelPreludeCode({
-        uniqueKey: plugin._uniqueChannelKey,
-        initialData: { theme: { dark: this.options.isCurrentThemeDark() } }
-      })
-
-      const hasOriginalPreload = originalPreloadContent && originalPreloadContent.trim().length > 0
-      const pluginInjectionCode = injections.js.trim()
-
-      const combinedPreload = `
-// Auto-generated preload script for plugin initialization
-(function() {
-  try {
-    ${pluginInjectionCode};
-  } catch (error) {
-    console.error('[CoreBox] Failed to inject window.$plugin:', error);
-  }
-
-  try {
-    ${channelScript}
-  } catch (error) {
-    console.error('[CoreBox] Failed to inject touch channel bridge:', error);
-  }
-
-  ${
-    hasOriginalPreload
-      ? `try {
-    ${originalPreloadContent};
-  } catch (error) {
-    console.error('[CoreBox] Failed to execute original preload:', error);
-  }`
-      : '// No original preload script'
-  }
-})();
-`
-      try {
-        fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
-        preloadPath = path.resolve(tempPreloadPath)
-        pluginViewLog.debug(`Created dynamic preload script: ${preloadPath}`)
-      } catch (error) {
-        pluginViewLog.error(`Failed to create preload script: ${tempPreloadPath}`, {
-          error
-        })
-        preloadPath = injections._.preload
-      }
-    }
-
     metrics.preload = performance.now() - startTime
 
     const webPreferenceOverrides: Electron.WebPreferences = {
@@ -308,7 +239,6 @@ export class PluginViewController {
           plugin,
           themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
           source: `core-box:${url}`,
-          legacyPreload: preloadPath,
           overrides: webPreferenceOverrides
         })
       : buildWindowWebPreferences('app', webPreferenceOverrides)
@@ -316,12 +246,10 @@ export class PluginViewController {
       ? await createPluginViewNavigationPolicy({
           pluginRoot: plugin.pluginPath,
           targetUrl: url,
-          securityProfile: securityProfile.effectiveProfile,
           devAddress: plugin.dev.address,
           appIsPackaged: app.isPackaged,
           pluginDevEnabled: plugin.dev.enable,
-          pluginDevSource: Boolean(plugin.dev.source),
-          allowLegacyWebview: securityProfile.reason === 'legacy-webview'
+          pluginDevSource: Boolean(plugin.dev.source)
         })
       : null
 
@@ -332,9 +260,12 @@ export class PluginViewController {
     }
     if (plugin) {
       const pluginViewWebContentsId = view.webContents.id
-      registerPluginWebContents(pluginViewWebContentsId, plugin.name)
+      const registrationToken = registerPluginWebContents(
+        pluginViewWebContentsId,
+        plugin.getActivationIdentity()
+      )
       view.webContents.once('destroyed', () => {
-        unregisterPluginWebContents(pluginViewWebContentsId)
+        unregisterPluginWebContents(pluginViewWebContentsId, registrationToken)
       })
     }
     metrics.viewCreate = performance.now() - viewCreateStart

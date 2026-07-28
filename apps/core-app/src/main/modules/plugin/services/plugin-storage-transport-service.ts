@@ -1,22 +1,34 @@
-import type { Client, InValue } from '@libsql/client'
 import type { IPluginManager } from '@talex-touch/utils/plugin'
+import type { PluginSecurityContext } from '@talex-touch/utils/transport'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { PluginStorageErrorCode } from '@talex-touch/utils/transport/events/types'
 import type { Logger } from '../../../utils/logger'
-import path from 'node:path'
 import { execFileSafe } from '@talex-touch/utils/common/utils/safe-shell'
-import { createClient } from '@libsql/client'
-import { SdkApi } from '@talex-touch/utils/plugin'
+import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { PLUGIN_STORAGE_ERROR_CODES } from '@talex-touch/utils/transport/events/types'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { shell } from 'electron'
-import fse from 'fs-extra'
 import { getPermissionModule } from '../../permission'
 import {
   getSecureStoreHealth,
-  getSecureStoreValue,
+  getSecureStoreValueStrict,
   isSecureStoreAvailable,
   setSecureStoreValue
 } from '../../../utils/secure-store'
 import { TouchPlugin } from '../plugin'
+import {
+  normalizePluginSqlForExecution,
+  PluginSqlPolicyError,
+  validatePluginSql,
+  validatePluginSqlParams,
+  validatePluginTransactionStatements
+} from '../runtime/plugin-sql-policy'
+import {
+  PluginSqliteResourceError,
+  PluginSqliteResourceOwnerRegistry
+} from '../runtime/plugin-sqlite-resource-owner'
+import { PluginSqliteWorkerError } from '../runtime/plugin-sqlite-worker-client'
 
 type TransportDisposer = () => void
 
@@ -24,7 +36,7 @@ export interface PluginStorageTransportContext {
   manager: IPluginManager
   transport: ITuffTransportMain
   secureStoreRootPath: string
-  pluginSqliteClients: Map<string, Client>
+  pluginSqliteResources: PluginSqliteResourceOwnerRegistry
   isRecord: (value: unknown) => value is Record<string, unknown>
   ipcLog: Pick<Logger, 'warn'>
   logHandlerError: (handler: string, error: unknown) => void
@@ -39,7 +51,7 @@ export function registerPluginStorageTransportHandlers(
     manager,
     transport,
     secureStoreRootPath,
-    pluginSqliteClients,
+    pluginSqliteResources,
     isRecord,
     ipcLog: pluginIpcLog,
     logHandlerError: logIpcHandlerError,
@@ -95,125 +107,148 @@ export function registerPluginStorageTransportHandlers(
     }
   }
 
-  const normalizeSqlParams = (params: unknown): InValue[] => {
-    if (!Array.isArray(params)) {
-      return []
-    }
-    return params.map((value) => {
-      if (value === undefined) {
-        return null
-      }
-      if (value instanceof Date) {
-        return value.toISOString()
-      }
-      if (typeof value === 'bigint') {
-        return Number(value)
-      }
-      if (typeof value === 'object' && value !== null) {
-        return JSON.stringify(value)
-      }
-      if (
-        typeof value === 'string' ||
-        typeof value === 'number' ||
-        typeof value === 'boolean' ||
-        value === null ||
-        value instanceof ArrayBuffer ||
-        value instanceof Uint8Array
-      ) {
-        return value
-      }
-      return String(value)
-    })
-  }
-
-  const normalizeSqlValue = (value: unknown): unknown => {
-    if (typeof value === 'bigint') {
-      return Number(value)
-    }
-    if (value instanceof Uint8Array) {
-      return Array.from(value)
-    }
-    return value
-  }
-
-  const normalizeLastInsertRowId = (value: unknown): number | null => {
-    if (typeof value === 'bigint') {
-      return Number(value)
-    }
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return Math.trunc(value)
-    }
-    return null
-  }
-
-  const getPluginSqliteClient = (plugin: TouchPlugin): Client => {
-    const existing = pluginSqliteClients.get(plugin.name)
-    if (existing) {
-      return existing
-    }
-
-    const sqlitePath = path.join(plugin.getDataPath(), 'plugin-sdk.sqlite')
-    fse.ensureDirSync(path.dirname(sqlitePath))
-    const client = createClient({ url: `file:${sqlitePath}` })
-    pluginSqliteClients.set(plugin.name, client)
-    return client
-  }
-
-  const resolveSqliteVersionError = (plugin: TouchPlugin): string | null => {
-    const sdkapi = typeof plugin.sdkapi === 'number' ? plugin.sdkapi : 0
-    if (sdkapi >= SdkApi.V260215) {
-      return null
-    }
-    return `plugin sqlite sdk requires sdkapi >= ${SdkApi.V260215}`
-  }
-
-  const resolveSqlitePermissionError = (plugin: TouchPlugin): string | null => {
-    const permissionModule = getPermissionModule()
-    if (!permissionModule) {
-      return null
-    }
-
-    const result = permissionModule.checkPermission(
-      plugin.name,
-      'storage:sqlite:query',
-      plugin.sdkapi
-    )
-    if (result.allowed) {
-      return null
-    }
-
-    return result.reason ?? `Permission '${result.permissionId}' not granted`
-  }
-
   const normalizePluginSecretKey = (pluginName: string, rawKey: unknown): string => {
     const key = typeof rawKey === 'string' ? rawKey.trim() : ''
     if (!/^[a-z0-9._-]{1,48}$/i.test(key)) {
-      throw new Error('INVALID_PLUGIN_SECRET_KEY')
+      throw new PluginStorageServiceError(
+        PLUGIN_STORAGE_ERROR_CODES.SECRET_KEY_INVALID,
+        'Plugin secret key is invalid.'
+      )
     }
     return `plugin.${pluginName}.${key}`
   }
 
-  const ensurePluginSecretPermission = (
-    plugin: TouchPlugin
-  ): { success: true } | { success: false; error: string } => {
+  class PluginStorageServiceError extends Error {
+    constructor(
+      readonly code: PluginStorageErrorCode,
+      message: string
+    ) {
+      super(message)
+      this.name = 'PluginStorageServiceError'
+    }
+  }
+
+  const resolvePrivilegedPlugin = (payload: unknown, handlerContext: unknown): TouchPlugin => {
+    const securityContext = (
+      isRecord(handlerContext) && isRecord(handlerContext.plugin)
+        ? handlerContext.plugin
+        : undefined
+    ) as PluginSecurityContext | undefined
+    if (!isAuthoritativePluginContext(securityContext)) {
+      throw new PluginStorageServiceError(
+        PLUGIN_STORAGE_ERROR_CODES.CALLER_UNVERIFIED,
+        'Authoritative plugin caller identity is required.'
+      )
+    }
+
+    const identity = securityContext.identity
+    const plugin = manager.getPluginByName(identity.pluginName) as TouchPlugin | undefined
+    const current = plugin?.getActivationIdentity()
+    if (
+      !plugin ||
+      !current ||
+      (plugin.status !== PluginStatus.ENABLED && plugin.status !== PluginStatus.ACTIVE) ||
+      current.pluginInstanceId !== identity.pluginInstanceId ||
+      current.activationGeneration !== identity.activationGeneration
+    ) {
+      throw new PluginStorageServiceError(
+        PLUGIN_STORAGE_ERROR_CODES.PLUGIN_UNAVAILABLE,
+        'Current plugin activation is unavailable.'
+      )
+    }
+
+    const payloadPluginName =
+      isRecord(payload) && typeof payload.pluginName === 'string' ? payload.pluginName.trim() : ''
+    if (payloadPluginName && payloadPluginName !== identity.pluginName) {
+      throw new PluginStorageServiceError(
+        PLUGIN_STORAGE_ERROR_CODES.CALLER_UNVERIFIED,
+        'Plugin caller identity does not match the request.'
+      )
+    }
+    return plugin
+  }
+
+  const ensureStoragePermission = (plugin: TouchPlugin, apiName: string): void => {
     const permissionModule = getPermissionModule()
     if (!permissionModule) {
-      return { success: true }
+      throw new PluginStorageServiceError(
+        PLUGIN_STORAGE_ERROR_CODES.PERMISSION_UNAVAILABLE,
+        'Plugin storage permission runtime is unavailable.'
+      )
     }
+    const result = permissionModule.checkPermission(plugin.name, apiName, plugin.sdkapi)
+    if (!result.allowed) {
+      throw new PluginStorageServiceError(
+        PLUGIN_STORAGE_ERROR_CODES.PERMISSION_DENIED,
+        'Plugin storage permission is denied.'
+      )
+    }
+  }
 
-    const result = permissionModule.checkPermission(
-      plugin.name,
-      'storage:plugin:secret',
-      plugin.sdkapi
+  const ensureSqliteAccess = (payload: unknown, handlerContext: unknown): TouchPlugin => {
+    const plugin = resolvePrivilegedPlugin(payload, handlerContext)
+    const sdkapi = typeof plugin.sdkapi === 'number' ? plugin.sdkapi : 0
+    if (sdkapi < SdkApi.V260215) {
+      throw new PluginStorageServiceError(
+        PLUGIN_STORAGE_ERROR_CODES.SDKAPI_MISMATCH,
+        `Plugin SQLite requires sdkapi >= ${SdkApi.V260215}.`
+      )
+    }
+    ensureStoragePermission(plugin, 'storage:sqlite:query')
+    return plugin
+  }
+
+  const ensureSecretAccess = (payload: unknown, handlerContext: unknown): TouchPlugin => {
+    const plugin = resolvePrivilegedPlugin(payload, handlerContext)
+    ensureStoragePermission(plugin, 'storage:plugin:secret')
+    return plugin
+  }
+
+  const getSqliteResource = async (plugin: TouchPlugin) => {
+    const activation = plugin.getActivationIdentity()
+    return pluginSqliteResources.acquire(
+      {
+        pluginName: activation.name,
+        pluginInstanceId: activation.pluginInstanceId,
+        activationGeneration: activation.activationGeneration
+      },
+      plugin.getDataPath()
     )
-    if (result.allowed) {
-      return { success: true }
-    }
+  }
 
-    return {
-      success: false,
-      error: result.reason ?? `Permission '${result.permissionId}' not granted`
+  const toStorageFailure = (error: unknown) => {
+    if (
+      error instanceof PluginStorageServiceError ||
+      error instanceof PluginSqlPolicyError ||
+      error instanceof PluginSqliteResourceError ||
+      error instanceof PluginSqliteWorkerError
+    ) {
+      return { success: false as const, code: error.code, error: error.message }
     }
+    return {
+      success: false as const,
+      code: PLUGIN_STORAGE_ERROR_CODES.SQLITE_UNAVAILABLE,
+      error: 'Plugin SQLite operation failed.'
+    }
+  }
+
+  const toSecretFailure = (error: unknown) => {
+    if (error instanceof PluginStorageServiceError) {
+      return { success: false as const, code: error.code, error: error.message }
+    }
+    return {
+      success: false as const,
+      code: PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE,
+      error: 'Plugin secret storage is unavailable.'
+    }
+  }
+
+  const logSecretFailure = (handler: string, error: unknown): void => {
+    const code =
+      error instanceof PluginStorageServiceError
+        ? error.code
+        : PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE
+    logIpcHandlerError(handler, new Error(code))
   }
 
   // Plugin Storage Channel Handlers
@@ -277,44 +312,39 @@ export function registerPluginStorageTransportHandlers(
   disposers.push(
     transport.on(PluginEvents.storage.getSecret, async (payload, context) => {
       try {
-        const resolved = resolveTouchPlugin(payload, context)
-        if ('error' in resolved) {
-          return null
+        const plugin = ensureSecretAccess(payload, context)
+        const secureKey = normalizePluginSecretKey(plugin.name, payload?.key)
+        if (!isSecureStoreAvailable(secureStoreRootPath)) {
+          throw new PluginStorageServiceError(
+            PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE,
+            'Plugin secret storage is unavailable.'
+          )
         }
 
-        const permission = ensurePluginSecretPermission(resolved.plugin)
-        if (!permission.success) {
-          return null
-        }
-
-        const secureKey = normalizePluginSecretKey(resolved.pluginName, payload?.key)
-        const rootPath = secureStoreRootPath
-        if (!isSecureStoreAvailable(rootPath)) {
-          return null
-        }
-
-        return await getSecureStoreValue(rootPath, secureKey, 'plugin-secret', (message, error) =>
-          pluginIpcLog.warn(message, { error: toErrorMessage(error) })
+        return await getSecureStoreValueStrict(
+          secureStoreRootPath,
+          secureKey,
+          'plugin-secret',
+          (message) =>
+            pluginIpcLog.warn(message, {
+              error: PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE
+            })
         )
       } catch (error) {
-        logIpcHandlerError('plugin:storage:get-secret', error)
-        return null
+        logSecretFailure('plugin:storage:get-secret', error)
+        return toSecretFailure(error)
       }
     })
   )
 
   disposers.push(
-    transport.on(PluginEvents.storage.getSecretHealth, async () => {
+    transport.on(PluginEvents.storage.getSecretHealth, async (payload, context) => {
       try {
+        ensureSecretAccess(payload, context)
         return await getSecureStoreHealth(secureStoreRootPath)
       } catch (error) {
-        logIpcHandlerError('plugin:storage:get-secret-health', error)
-        return {
-          backend: 'unavailable',
-          available: false,
-          degraded: true,
-          reason: toErrorMessage(error)
-        }
+        logSecretFailure('plugin:storage:get-secret-health', error)
+        return toSecretFailure(error)
       }
     })
   )
@@ -322,35 +352,35 @@ export function registerPluginStorageTransportHandlers(
   disposers.push(
     transport.on(PluginEvents.storage.setSecret, async (payload, context) => {
       try {
-        const resolved = resolveTouchPlugin(payload, context)
-        if ('error' in resolved) {
-          return { success: false, error: resolved.error }
-        }
-
-        const permission = ensurePluginSecretPermission(resolved.plugin)
-        if (!permission.success) {
-          return permission
-        }
-
-        const secureKey = normalizePluginSecretKey(resolved.pluginName, payload?.key)
-        const rootPath = secureStoreRootPath
-        if (!isSecureStoreAvailable(rootPath)) {
-          return { success: false, error: 'Secure storage is unavailable' }
+        const plugin = ensureSecretAccess(payload, context)
+        const secureKey = normalizePluginSecretKey(plugin.name, payload?.key)
+        if (!isSecureStoreAvailable(secureStoreRootPath)) {
+          throw new PluginStorageServiceError(
+            PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE,
+            'Plugin secret storage is unavailable.'
+          )
         }
 
         const persisted = await setSecureStoreValue(
-          rootPath,
+          secureStoreRootPath,
           secureKey,
           typeof payload?.value === 'string' && payload.value.trim() ? payload.value : null,
           'plugin-secret',
-          (message, error) => pluginIpcLog.warn(message, { error: toErrorMessage(error) })
+          (message) =>
+            pluginIpcLog.warn(message, {
+              error: PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE
+            })
         )
-        return persisted
-          ? { success: true }
-          : { success: false, error: 'Secure storage is unavailable' }
+        if (!persisted) {
+          throw new PluginStorageServiceError(
+            PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE,
+            'Plugin secret storage is unavailable.'
+          )
+        }
+        return { success: true }
       } catch (error) {
-        logIpcHandlerError('plugin:storage:set-secret', error)
-        return { success: false, error: toErrorMessage(error) }
+        logSecretFailure('plugin:storage:set-secret', error)
+        return toSecretFailure(error)
       }
     })
   )
@@ -358,35 +388,35 @@ export function registerPluginStorageTransportHandlers(
   disposers.push(
     transport.on(PluginEvents.storage.deleteSecret, async (payload, context) => {
       try {
-        const resolved = resolveTouchPlugin(payload, context)
-        if ('error' in resolved) {
-          return { success: false, error: resolved.error }
-        }
-
-        const permission = ensurePluginSecretPermission(resolved.plugin)
-        if (!permission.success) {
-          return permission
-        }
-
-        const secureKey = normalizePluginSecretKey(resolved.pluginName, payload?.key)
-        const rootPath = secureStoreRootPath
-        if (!isSecureStoreAvailable(rootPath)) {
-          return { success: false, error: 'Secure storage is unavailable' }
+        const plugin = ensureSecretAccess(payload, context)
+        const secureKey = normalizePluginSecretKey(plugin.name, payload?.key)
+        if (!isSecureStoreAvailable(secureStoreRootPath)) {
+          throw new PluginStorageServiceError(
+            PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE,
+            'Plugin secret storage is unavailable.'
+          )
         }
 
         const removed = await setSecureStoreValue(
-          rootPath,
+          secureStoreRootPath,
           secureKey,
           null,
           'plugin-secret',
-          (message, error) => pluginIpcLog.warn(message, { error: toErrorMessage(error) })
+          (message) =>
+            pluginIpcLog.warn(message, {
+              error: PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE
+            })
         )
-        return removed
-          ? { success: true }
-          : { success: false, error: 'Secure storage is unavailable' }
+        if (!removed) {
+          throw new PluginStorageServiceError(
+            PLUGIN_STORAGE_ERROR_CODES.SECRET_UNAVAILABLE,
+            'Plugin secret storage is unavailable.'
+          )
+        }
+        return { success: true }
       } catch (error) {
-        logIpcHandlerError('plugin:storage:delete-secret', error)
-        return { success: false, error: toErrorMessage(error) }
+        logSecretFailure('plugin:storage:delete-secret', error)
+        return toSecretFailure(error)
       }
     })
   )
@@ -641,38 +671,15 @@ export function registerPluginStorageTransportHandlers(
   disposers.push(
     transport.on(PluginEvents.sqlite.execute, async (payload, context) => {
       try {
-        const sql = typeof payload?.sql === 'string' ? payload.sql.trim() : ''
-        if (!sql) {
-          return { success: false, error: 'sql is required' }
-        }
-
-        const resolved = resolveTouchPlugin(payload, context)
-        if ('error' in resolved) {
-          return { success: false, error: resolved.error }
-        }
-        const sqliteVersionError = resolveSqliteVersionError(resolved.plugin)
-        if (sqliteVersionError) {
-          return { success: false, error: sqliteVersionError }
-        }
-        const sqlitePermissionError = resolveSqlitePermissionError(resolved.plugin)
-        if (sqlitePermissionError) {
-          return { success: false, error: sqlitePermissionError }
-        }
-
-        const client = getPluginSqliteClient(resolved.plugin)
-        const result = await client.execute({
-          sql,
-          args: normalizeSqlParams(payload?.params)
-        })
-
-        return {
-          success: true,
-          rowsAffected: Number(result.rowsAffected ?? 0),
-          lastInsertRowId: normalizeLastInsertRowId(result.lastInsertRowid)
-        }
+        const plugin = ensureSqliteAccess(payload, context)
+        validatePluginSql(payload?.sql, 'execute')
+        const params = validatePluginSqlParams(payload?.params)
+        const client = await getSqliteResource(plugin)
+        const result = await client.execute(normalizePluginSqlForExecution(payload.sql), params)
+        return { success: true, ...result }
       } catch (error) {
         logIpcHandlerError('plugin:sqlite:execute', error)
-        return { success: false, error: toErrorMessage(error) }
+        return toStorageFailure(error)
       }
     })
   )
@@ -680,66 +687,15 @@ export function registerPluginStorageTransportHandlers(
   disposers.push(
     transport.on(PluginEvents.sqlite.query, async (payload, context) => {
       try {
-        const sql = typeof payload?.sql === 'string' ? payload.sql.trim() : ''
-        if (!sql) {
-          return {
-            success: false,
-            error: 'sql is required',
-            rows: [] as Array<Record<string, unknown>>
-          }
-        }
-
-        const resolved = resolveTouchPlugin(payload, context)
-        if ('error' in resolved) {
-          return {
-            success: false,
-            error: resolved.error,
-            rows: [] as Array<Record<string, unknown>>
-          }
-        }
-        const sqliteVersionError = resolveSqliteVersionError(resolved.plugin)
-        if (sqliteVersionError) {
-          return {
-            success: false,
-            error: sqliteVersionError,
-            rows: [] as Array<Record<string, unknown>>
-          }
-        }
-        const sqlitePermissionError = resolveSqlitePermissionError(resolved.plugin)
-        if (sqlitePermissionError) {
-          return {
-            success: false,
-            error: sqlitePermissionError,
-            rows: [] as Array<Record<string, unknown>>
-          }
-        }
-
-        const client = getPluginSqliteClient(resolved.plugin)
-        const result = await client.execute({
-          sql,
-          args: normalizeSqlParams(payload?.params)
-        })
-
-        const rows = (result.rows ?? []).map((row) => {
-          const normalized: Record<string, unknown> = {}
-          for (const [key, value] of Object.entries(row as Record<string, unknown>)) {
-            normalized[key] = normalizeSqlValue(value)
-          }
-          return normalized
-        })
-
-        return {
-          success: true,
-          rows,
-          columns: Array.isArray(result.columns) ? result.columns : []
-        }
+        const plugin = ensureSqliteAccess(payload, context)
+        validatePluginSql(payload?.sql, 'query')
+        const params = validatePluginSqlParams(payload?.params)
+        const client = await getSqliteResource(plugin)
+        const result = await client.query(normalizePluginSqlForExecution(payload.sql), params)
+        return { success: true, ...result }
       } catch (error) {
         logIpcHandlerError('plugin:sqlite:query', error)
-        return {
-          success: false,
-          error: toErrorMessage(error),
-          rows: [] as Array<Record<string, unknown>>
-        }
+        return { ...toStorageFailure(error), rows: [] as Array<Record<string, unknown>> }
       }
     })
   )
@@ -747,71 +703,20 @@ export function registerPluginStorageTransportHandlers(
   disposers.push(
     transport.on(PluginEvents.sqlite.transaction, async (payload, context) => {
       try {
-        const statements = Array.isArray(payload?.statements) ? payload.statements : []
-        if (!statements.length) {
-          return {
-            success: false,
-            error: 'statements are required',
-            results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
-          }
-        }
-
-        const resolved = resolveTouchPlugin(payload, context)
-        if ('error' in resolved) {
-          return {
-            success: false,
-            error: resolved.error,
-            results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
-          }
-        }
-        const sqliteVersionError = resolveSqliteVersionError(resolved.plugin)
-        if (sqliteVersionError) {
-          return {
-            success: false,
-            error: sqliteVersionError,
-            results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
-          }
-        }
-        const sqlitePermissionError = resolveSqlitePermissionError(resolved.plugin)
-        if (sqlitePermissionError) {
-          return {
-            success: false,
-            error: sqlitePermissionError,
-            results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
-          }
-        }
-
-        const client = getPluginSqliteClient(resolved.plugin)
-        const results: Array<{ rowsAffected: number; lastInsertRowId: number | null }> = []
-
-        await client.execute('BEGIN IMMEDIATE')
-        try {
-          for (const statement of statements) {
-            const sql = typeof statement?.sql === 'string' ? statement.sql.trim() : ''
-            if (!sql) {
-              throw new Error('sql is required in transaction statement')
-            }
-            const result = await client.execute({
-              sql,
-              args: normalizeSqlParams(statement?.params)
-            })
-            results.push({
-              rowsAffected: Number(result.rowsAffected ?? 0),
-              lastInsertRowId: normalizeLastInsertRowId(result.lastInsertRowid)
-            })
-          }
-          await client.execute('COMMIT')
-        } catch (error) {
-          await client.execute('ROLLBACK')
-          throw error
-        }
-
-        return { success: true, results }
+        const plugin = ensureSqliteAccess(payload, context)
+        const statements = validatePluginTransactionStatements(payload?.statements)
+        const client = await getSqliteResource(plugin)
+        const result = await client.transaction(
+          statements.map((statement) => ({
+            sql: normalizePluginSqlForExecution(statement.sql),
+            params: validatePluginSqlParams(statement.params)
+          }))
+        )
+        return { success: true, ...result }
       } catch (error) {
         logIpcHandlerError('plugin:sqlite:transaction', error)
         return {
-          success: false,
-          error: toErrorMessage(error),
+          ...toStorageFailure(error),
           results: [] as Array<{ rowsAffected: number; lastInsertRowId: number | null }>
         }
       }

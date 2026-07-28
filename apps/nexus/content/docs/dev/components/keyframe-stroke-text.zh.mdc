@@ -1,7 +1,7 @@
 ---
 title: "KeyframeStrokeText 关键帧描边"
 description: "SVG 文本特效：先绘制描边，再显示填充，并在文字或字体输入变化后重新测量文本尺寸。"
-category: Basic
+category: Effects
 status: beta
 since: 1.0.0
 tags: [text, svg, animation]

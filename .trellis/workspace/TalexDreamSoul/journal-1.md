@@ -965,3 +965,77 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: 修复 Nexus 文档侧边栏空白与 Hero 中文断行
+
+**Date**: 2026-07-27
+**Task**: 修复 Nexus 文档侧边栏空白与 Hero 中文断行
+**Branch**: `master`
+
+### Summary
+
+侧边栏空白的根因是 better-sqlite3 原生模块从未编译（Node v24 ABI，build/ 目录缺失），所有 Nuxt Content 查询 500；navigation 端点在 dev 下把错误吞成 [] 并被 defineCachedEventHandler 缓存 300s/stale 3600s，故障恢复后侧边栏仍空一小时。pnpm rebuild -r better-sqlite3 修复环境后，把四个 docs 端点的缓存策略收敛到 server/utils/docsContentCache.ts：缓存改放在成功路径内侧（defineCachedFunction 抛错即不写入），内容库不可用返回 503 而非成功的空载荷，空结果分级（集合级永不缓存 / 单页 404 仍可缓存，除非共享降级窗口打开），并新增 dev 首请求健康探针。Hero 标题用 word-break: keep-all + accent white-space: nowrap 阻止 CJK 词中断行。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a7a6daad8` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+
+## Session 25: 分批提交并推送工作区代码
+
+**Date**: 2026-07-28
+**Task**: 分批提交并推送工作区代码
+**Branch**: `master`
+
+### Summary
+
+将 workspace、CoreApp 安全与插件目录、#297 隔离 capability、Nexus 界面和 Trellis 证据拆为九笔提交；focused tests、typecheck、build、Electron smoke 和插件校验通过，并普通推送 master。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ad8c54944` | (see git log) |
+| `6bee9f5f3` | (see git log) |
+| `d0caa9073` | (see git log) |
+| `3030bcee5` | (see git log) |
+| `b584ef96b` | (see git log) |
+| `1a118b73e` | (see git log) |
+| `e8cb3d393` | (see git log) |
+| `0474cdb5a` | (see git log) |
+| `21484fd3f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

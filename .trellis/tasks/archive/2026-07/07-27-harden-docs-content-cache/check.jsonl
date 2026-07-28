@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "代码标准与禁止模式，用于复查共享模块与四个端点改造"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "复查抽象是否真的消除了重复，而不是在端点里留下特例补丁"}

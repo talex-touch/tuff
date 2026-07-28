@@ -62,7 +62,7 @@ const lastUsedLabel = computed(() => props.t('auth.lastUsed', '上次使用'))
     <div class="auth-method auth-method--full">
       <TxButton variant="ghost" class="auth-button auth-button--passkey" size="lg" block :loading="passkeyLoading" :disabled="!supportsPasskey" @click="emit('passkey')">
         <span class="i-ri-fingerprint-2-line text-base" />
-        {{ t('auth.passkeyLogin', 'Login with Passkey') }}
+        {{ t('auth.passkeyLogin', 'Passkey') }}
       </TxButton>
       <TxBadge v-if="lastMethod === 'passkey'" class="auth-last-badge">
         {{ lastUsedLabel }}
