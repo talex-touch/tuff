@@ -7,7 +7,7 @@ Coordinate the ordered v2.4.14-beta.1 release batch after its child release work
 ## Requirements
 
 - Keep this parent limited to the batch order and child release gate; it does not authorize publishing while the release child has unresolved acceptance criteria.
-- Use the repository release workflow as the publication mechanism: beta tags are pre-releases, and the workflow builds platform artifacts, creates the release manifest, and synchronizes release metadata only on tag push.
+- Use the repository release workflow as the publication mechanism: beta tags are pre-releases, and the workflow synchronizes release metadata for normal tag pushes or through `workflow_dispatch.sync_tag` when an existing tag needs recovery or resynchronization.
 
 ## Acceptance Criteria
 
