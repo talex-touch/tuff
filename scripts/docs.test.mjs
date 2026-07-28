@@ -333,6 +333,22 @@ describe('canonical documentation verifier fixtures', () => {
       ],
     },
     {
+      name: 'markdownlint-integrity-nul-byte',
+      ruleIds: ['DOC-MARKDOWN-MD900'],
+      paths: ['docs/nul-byte.md', 'docs/nul-byte.mdc'],
+      absentPaths: [
+        '.github/nul-poison.md',
+        '.trellis/internal/nul-poison.md',
+        'AGENTS.md',
+        'coverage/nul-poison.md',
+        'dist/nul-poison.md',
+        'docs/engineering/reports/nul-poison.md',
+        'generated/nul-poison.md',
+        'node_modules/nul-poison.md',
+      ],
+      messages: ['Markdown must not contain NUL bytes'],
+    },
+    {
       name: 'trellis-graph-meta-archive-todo',
       ruleIds: [
         'DOC-TASK-ACTIVE-COMPLETED',
