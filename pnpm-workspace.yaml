@@ -35,6 +35,7 @@ catalog:
   '@auth/core': ^0.34.3
   '@floating-ui/vue': ^1.1.11
   '@iconify-json/cib': ^1.2.3
+  '@iconify-json/logos': ^1.2.11
   '@langchain/anthropic': ^0.3.34
   '@langchain/core': ^0.3.80
   '@langchain/langgraph': ^0.2.74
@@ -42,6 +43,7 @@ catalog:
   '@sentry/nuxt': ^10.64.0
   '@sidebase/nuxt-auth': ^0.9.4
   ai-elements-vue: ^1.5.0
+  better-sqlite3: ^12.11.1
   echarts: ^6.1.0
   fighting-design: 0.25.1
   gsap: ^3.15.0
@@ -99,3 +101,7 @@ catalogs:
     '@iconify-json/twemoji': ^1.2.5
   conflicts_next-auth_t4_24_14:
     next-auth: ~4.24.14
+  conflicts_@langchain/langgraph_h0_4_9:
+    '@langchain/langgraph': ^0.4.9
+  conflicts_@langchain/openai_h0_4_9:
+    '@langchain/openai': ^0.4.9
