@@ -565,6 +565,7 @@ export async function listReleases(
     status?: ReleaseStatus
     includeAssets?: boolean
     limit?: number
+    offset?: number
   } = {},
 ): Promise<AppRelease[]> {
   const db = getD1Database(event)
@@ -590,11 +591,15 @@ export async function listReleases(
       bindings.push(options.status)
     }
 
-    query += ` ORDER BY datetime(created_at) DESC`
+    query += ` ORDER BY datetime(COALESCE(published_at, created_at)) DESC, datetime(created_at) DESC, id DESC`
 
     if (options.limit) {
       query += ` LIMIT ?${bindIndex++}`
       bindings.push(options.limit)
+      if (options.offset) {
+        query += ` OFFSET ?${bindIndex++}`
+        bindings.push(options.offset)
+      }
     }
 
     const stmt = db.prepare(query)
@@ -648,9 +653,10 @@ export async function listReleases(
   if (options.status)
     releases = releases.filter(r => r.status === options.status)
 
-  releases = releases.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  )
+  releases = releases.sort(compareReleaseHistory)
+
+  if (options.offset)
+    releases = releases.slice(options.offset)
 
   if (options.limit)
     releases = releases.slice(0, options.limit)
@@ -672,6 +678,24 @@ export async function listReleases(
   }
 
   return releases
+}
+
+function compareReleaseHistory(left: AppRelease, right: AppRelease): number {
+  const publishedDelta = releaseTimestamp(right.publishedAt ?? right.createdAt)
+    - releaseTimestamp(left.publishedAt ?? left.createdAt)
+  if (publishedDelta !== 0)
+    return publishedDelta
+
+  const createdDelta = releaseTimestamp(right.createdAt) - releaseTimestamp(left.createdAt)
+  if (createdDelta !== 0)
+    return createdDelta
+
+  return right.id.localeCompare(left.id)
+}
+
+function releaseTimestamp(value: string): number {
+  const timestamp = Date.parse(value)
+  return Number.isFinite(timestamp) ? timestamp : 0
 }
 
 export async function getLatestRelease(
