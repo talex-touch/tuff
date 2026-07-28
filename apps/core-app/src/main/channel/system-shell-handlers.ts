@@ -15,6 +15,10 @@ export const systemShellCapabilities: SystemShellCapabilities = {
   openExternal: async (url) => await shell.openExternal(url)
 }
 
+const SYSTEM_SHELL_PATH_REQUIRED = 'SYSTEM_SHELL_PATH_REQUIRED'
+const SYSTEM_SHELL_PATH_UNAVAILABLE = 'SYSTEM_SHELL_PATH_UNAVAILABLE'
+const SYSTEM_SHELL_OPEN_PATH_FAILED = 'SYSTEM_SHELL_OPEN_PATH_FAILED'
+
 export interface SystemShellHandlerOptions {
   configRootPath: () => string | null | undefined
   logger: { warn: (message: unknown, options?: LogOptions) => void }
@@ -42,11 +46,33 @@ export function registerSystemShellHandlers(
       }
       return systemShellCapabilities.openExternal(decision.url)
     }),
-    transport.on(AppEvents.system.showInFolder, (payload) => {
+    transport.on(AppEvents.system.showInFolder, async (payload) => {
       const target = typeof payload?.path === 'string' ? payload.path : ''
-      if (target) {
-        shell.showItemInFolder(target)
+      if (!target.trim()) {
+        throw new Error(SYSTEM_SHELL_PATH_REQUIRED)
       }
+
+      let stats: Awaited<ReturnType<typeof fs.stat>>
+      try {
+        stats = await fs.stat(target)
+      } catch {
+        throw new Error(SYSTEM_SHELL_PATH_UNAVAILABLE)
+      }
+
+      if (stats.isDirectory()) {
+        let error: string
+        try {
+          error = await shell.openPath(target)
+        } catch {
+          throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
+        }
+        if (error) {
+          throw new Error(SYSTEM_SHELL_OPEN_PATH_FAILED)
+        }
+        return
+      }
+
+      shell.showItemInFolder(target)
     }),
     transport.on(AppEvents.system.openApp, (payload) => {
       const target = payload?.appName || payload?.path
