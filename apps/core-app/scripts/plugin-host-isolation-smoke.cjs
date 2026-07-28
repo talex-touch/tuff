@@ -1,4 +1,4 @@
-const { existsSync, mkdtempSync, readFileSync, rmSync } = require('node:fs')
+const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
 const { tmpdir } = require('node:os')
 const path = require('node:path')
 const { app } = require('electron')
@@ -144,6 +144,7 @@ async function run() {
           export { PluginRuntimeHost } from '../src/main/modules/plugin/host/plugin-runtime-host'
           export { PluginHostCapabilityRegistry } from '../src/main/modules/plugin/host/plugin-host-capabilities'
           export { createPluginBusinessCapabilities } from '../src/main/modules/plugin/host/plugin-business-capabilities'
+          export { createPluginBatchRenameFilesystemCapability } from '../src/main/modules/plugin/host/plugin-filesystem-capabilities'
           export { createPluginRequestReplyCapabilities } from '../src/main/modules/plugin/host/plugin-host-request-reply'
           export { createPluginVoiceCapabilities } from '../src/main/modules/plugin/host/plugin-voice-capabilities'
           export { PluginHostResourceRegistry } from '../src/main/modules/plugin/host/plugin-host-resources'
@@ -163,6 +164,7 @@ async function run() {
 
     const {
       createPluginBusinessCapabilities,
+      createPluginBatchRenameFilesystemCapability,
       createPluginRequestReplyCapabilities,
       createPluginVoiceCapabilities,
       ElectronPluginRuntimeProcessFactory,
@@ -525,6 +527,16 @@ async function run() {
           }
         }
       })
+      const filesystemCapability =
+        name === 'touch-batch-rename'
+          ? createPluginBatchRenameFilesystemCapability({
+              activation: activationIdentity,
+              platform: process.platform,
+              resolveCurrentActivation: () => activationIdentity,
+              hasPermission: (_pluginName, permissionId) =>
+                !state.deniedPermissions.has(permissionId)
+            })
+          : null
       const snippetPack = {
         format: 'tuff.snippet-pack+json',
         version: 1,
@@ -655,6 +667,7 @@ async function run() {
         ...business.definitions.filter((definition) =>
           simpleFeatureCapabilityIds.has(definition.id)
         ),
+        ...(filesystemCapability ? filesystemCapability.definitions : []),
         ...requestReply.definitions,
         ...voice.definitions
       ]
@@ -696,12 +709,16 @@ async function run() {
         resourceDispatcher: resourceRegistry,
         ownsResourceDispatcher: true,
         invalidateAuthority() {},
-        closeResources: () => business.closeActivation(activationIdentity)
+        closeResources: async () => {
+          await business.closeActivation(activationIdentity)
+          await filesystemCapability?.close()
+        }
       })
       return {
         host: featureHostRuntime,
         state,
         resources: resourceRegistry,
+        filesystemCapability,
         capabilityManifest: definitions.map((definition) => ({
           id: definition.id,
           callbackLifetime: definition.callbackLifetime || 'transient',
@@ -776,6 +793,10 @@ async function run() {
     const batchScripts = new Map([
       ['clipboard-history', readFileSync(clipboardPreludePath, 'utf8')],
       [
+        'touch-batch-rename',
+        readFileSync(path.join(officialPluginRoot, 'touch-batch-rename', 'index.js'), 'utf8')
+      ],
+      [
         'touch-browser-bookmarks',
         readFileSync(path.join(officialPluginRoot, 'touch-browser-bookmarks', 'index.js'), 'utf8')
       ],
@@ -835,6 +856,7 @@ async function run() {
       return { host, state: null, capabilityManifest: [] }
     }
     const featureRuntimeNames = new Set([
+      'touch-batch-rename',
       'touch-browser-bookmarks',
       'touch-dev-toolbox',
       'touch-dev-utils',
@@ -892,6 +914,60 @@ async function run() {
         .filter((runtime) => runtime.state === null)
         .map((runtime) => runtime.host.callLifecycle('onMessage', []))
     )
+    const firstBatchRename = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-batch-rename'
+    )
+    const firstRenamePaths = [
+      path.join(bundleRoot, 'batch-first-alpha.txt'),
+      path.join(bundleRoot, 'batch-first-beta.md')
+    ]
+    writeFileSync(firstRenamePaths[0], 'alpha')
+    writeFileSync(firstRenamePaths[1], 'beta')
+    const firstRenameQuery = {
+      text: 'prefix:renamed-',
+      inputs: [{ type: 'files', content: JSON.stringify(firstRenamePaths) }]
+    }
+    assert(
+      (await firstBatchRename.filesystemCapability.approveLifecycleFileInputs(firstRenameQuery)) ===
+        2
+    )
+    await firstBatchRename.host.callLifecycle('onFeatureTriggered', [
+      'batch-rename',
+      firstRenameQuery,
+      { id: 'batch-rename' }
+    ])
+    const firstRenameApply = firstBatchRename.state.items.find(
+      (item) => item.meta?.actionId === 'apply'
+    )
+    const firstRenameUndo = firstBatchRename.state.items.find(
+      (item) => item.meta?.actionId === 'undo'
+    )
+    assert(firstRenameApply && firstRenameUndo)
+    firstBatchRename.state.deniedPermissions.add('fs.write')
+    const deniedRename = await firstBatchRename.host.callLifecycle('onItemAction', [
+      firstRenameApply
+    ])
+    assert(deniedRename?.status === 'blocked' && existsSync(firstRenamePaths[0]))
+    firstBatchRename.state.deniedPermissions.delete('fs.write')
+    const appliedRename = await firstBatchRename.host.callLifecycle('onItemAction', [
+      firstRenameApply
+    ])
+    const firstRenamedPaths = [
+      path.join(bundleRoot, 'renamed-batch-first-alpha.txt'),
+      path.join(bundleRoot, 'renamed-batch-first-beta.md')
+    ]
+    assert(appliedRename?.success === true)
+    assert(
+      firstRenamedPaths.every(existsSync) && firstRenamePaths.every((entry) => !existsSync(entry))
+    )
+    const undoneRename = await firstBatchRename.host.callLifecycle('onItemAction', [
+      firstRenameUndo
+    ])
+    assert(undoneRename?.success === true)
+    assert(
+      firstRenamePaths.every(existsSync) && firstRenamedPaths.every((entry) => !existsSync(entry))
+    )
+
     const firstBatchEmoji = firstBatch.find(
       (runtime) => runtime.host.activation.name === 'touch-emoji-symbols'
     )
@@ -1087,6 +1163,38 @@ async function run() {
       assert(previous.owner.hostGeneration !== current.owner.hostGeneration)
       assert(previous.activation.activationGeneration !== current.activation.activationGeneration)
     }
+
+    const secondBatchRename = secondBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-batch-rename'
+    )
+    const secondRenamePath = path.join(bundleRoot, 'batch-second.txt')
+    writeFileSync(secondRenamePath, 'second')
+    const secondRenameQuery = {
+      text: 'suffix:-done',
+      inputs: [{ type: 'files', content: JSON.stringify([secondRenamePath]) }]
+    }
+    assert(
+      (await secondBatchRename.filesystemCapability.approveLifecycleFileInputs(
+        secondRenameQuery
+      )) === 1
+    )
+    await secondBatchRename.host.callLifecycle('onFeatureTriggered', [
+      'batch-rename',
+      secondRenameQuery,
+      { id: 'batch-rename' }
+    ])
+    const secondRenameApply = secondBatchRename.state.items.find(
+      (item) => item.meta?.actionId === 'apply'
+    )
+    const secondRenameUndo = secondBatchRename.state.items.find(
+      (item) => item.meta?.actionId === 'undo'
+    )
+    assert(secondRenameApply && secondRenameUndo)
+    await secondBatchRename.host.callLifecycle('onItemAction', [secondRenameApply])
+    const secondRenamedPath = path.join(bundleRoot, 'batch-second-done.txt')
+    assert(existsSync(secondRenamedPath) && !existsSync(secondRenamePath))
+    await secondBatchRename.host.callLifecycle('onItemAction', [secondRenameUndo])
+    assert(existsSync(secondRenamePath) && !existsSync(secondRenamedPath))
 
     const secondBatchEmojiIndex = secondBatch.findIndex(
       (runtime) => runtime.host.activation.name === 'touch-emoji-symbols'

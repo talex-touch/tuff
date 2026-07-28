@@ -25,6 +25,10 @@ import { TouchPlugin } from './plugin'
 import { widgetManager } from './widget/widget-manager'
 
 const permissionModuleMock = vi.hoisted(() => ({
+  hasPermission: vi.fn(() => true),
+  getStore() {
+    return { hasPermission: permissionModuleMock.hasPermission }
+  },
   checkPermission: vi.fn<
     (
       pluginId: string,
@@ -226,6 +230,8 @@ function clearBoxItemMocks(): void {
   boxItemManagerMock.getBySource.mockReset()
   boxItemManagerMock.getBySource.mockReturnValue([])
   permissionModuleMock.checkPermission.mockReset()
+  permissionModuleMock.hasPermission.mockReset()
+  permissionModuleMock.hasPermission.mockReturnValue(true)
   permissionModuleMock.checkPermission.mockReturnValue({
     allowed: true,
     permissionId: 'search.root-results',
@@ -2218,6 +2224,70 @@ describe('touchPlugin.enable', () => {
     await expect(enabling).resolves.toBe(true)
     expect(plugin.status).toBe(PluginStatus.ENABLED)
     expect(plugin.pluginLifecycle).not.toBeNull()
+  })
+
+  it('injects a batch-rename-only filesystem definition and approves lifecycle file inputs', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-batch-rename-activation-'))
+    try {
+      const sourcePath = path.join(root, 'alpha.txt')
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      fse.writeFileSync(sourcePath, 'alpha')
+      const runtime = createRuntimeServiceMock()
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'batch-rename-activation-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const plugin = new TouchPlugin(
+        'touch-batch-rename',
+        { type: 'class', value: 'i-ri-file-edit-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.sdkapi = SdkApi.V260713
+      plugin.declaredPermissions = {
+        required: ['fs.read', 'fs.write', 'search.root-results', 'storage.plugin'],
+        optional: [],
+        reasons: {}
+      }
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const startOptions = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(startOptions.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'filesystem.write'
+      ])
+      expect(startOptions.capabilityDefinitions?.[0]?.permission).toBe('fs.write')
+      expect(startOptions.closeResources).toEqual(expect.any(Function))
+
+      await plugin.triggerFeature(
+        { id: 'batch-rename' } as IPluginFeature,
+        {
+          text: 'prefix:renamed-',
+          inputs: [{ type: 'files', content: JSON.stringify([sourcePath]) }]
+        } as never
+      )
+      expect(permissionModuleMock.hasPermission).toHaveBeenCalledWith(
+        'touch-batch-rename',
+        'fs.read',
+        SdkApi.V260713
+      )
+      expect(runtime.lifecycle.onFeatureTriggered).toHaveBeenCalledOnce()
+      await expect(startOptions.closeResources?.()).resolves.toBeUndefined()
+    } finally {
+      fse.removeSync(root)
+    }
   })
 
   it('loads a declared canonical build artifact instead of a stale root projection', async () => {
