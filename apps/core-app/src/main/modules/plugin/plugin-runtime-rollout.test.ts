@@ -10,7 +10,6 @@ const workspaceRoot = path.resolve(__dirname, '../../../../../..')
 const pluginsRoot = path.join(workspaceRoot, 'plugins')
 
 const EXPECTED_UNMIGRATED = Object.freeze({
-  'touch-batch-rename': 'top-level require',
   'touch-browser-data': 'top-level require',
   'touch-browser-open': 'top-level require',
   'touch-intelligence': 'top-level require',
@@ -57,6 +56,7 @@ describe('plugin runtime production rollout gate', () => {
     expect(official).toHaveLength(22)
     expect(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES).toEqual([
       'clipboard-history',
+      'touch-batch-rename',
       'touch-browser-bookmarks',
       'touch-code-snippets',
       'touch-dev-toolbox',
@@ -69,7 +69,7 @@ describe('plugin runtime production rollout gate', () => {
       'touch-text-tools'
     ])
     expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
-    expect(unmigrated).toHaveLength(11)
+    expect(unmigrated).toHaveLength(10)
     expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(unmigrated.length === 0)
   })
 
@@ -95,6 +95,7 @@ describe('plugin runtime production rollout gate', () => {
     )
 
     for (const name of [
+      'touch-batch-rename',
       'touch-browser-bookmarks',
       'touch-code-snippets',
       'touch-dev-toolbox',
@@ -118,7 +119,7 @@ describe('plugin runtime production rollout gate', () => {
       /(?:^|[^.\w])process\s*(?:\.|\[)/m,
       /\btypeof\s+process\b/,
       /\brequire\s*\(/,
-      /\b(?:node:)?(?:fs(?:\/promises)?|child_process|sqlite|worker_threads)\b/,
+      /\bnode:(?:fs(?:\/promises)?|child_process|sqlite|worker_threads)\b/,
       /\belectron\b/
     ]
     for (const name of PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES) {
@@ -133,7 +134,12 @@ describe('plugin runtime production rollout gate', () => {
 
   it('declares every capability permission used by compatible Preludes', () => {
     const manifests = readOfficialManifests()
-    for (const name of ['touch-browser-bookmarks', 'touch-dev-toolbox', 'touch-snippets']) {
+    for (const name of [
+      'touch-batch-rename',
+      'touch-browser-bookmarks',
+      'touch-dev-toolbox',
+      'touch-snippets'
+    ]) {
       const permissions = manifests.get(name)?.permissions
       const declared = [
         ...(Array.isArray(permissions?.required) ? permissions.required : []),

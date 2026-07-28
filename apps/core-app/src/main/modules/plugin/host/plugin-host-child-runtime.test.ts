@@ -804,6 +804,62 @@ describe('plugin Prelude child VM', () => {
     runtime.shutdown()
   })
 
+  it('projects only a frozen fixed batch-rename filesystem facade', async () => {
+    const invokeCapability = vi.fn(async (_capability: string, _payload: unknown) => ({
+      operation: 'rename-batch',
+      entries: [{ index: 0, status: 'renamed' }]
+    }))
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              const entries = await filesystem.renameBatch([
+                { source: '/approved/alpha.txt', targetName: 'renamed.txt' }
+              ])
+              let escape = false
+              try { filesystem.renameBatch.constructor('return process')() } catch { escape = true }
+              return {
+                entries,
+                keys: Object.keys(filesystem),
+                frozen: Object.isFrozen(filesystem) && Object.isFrozen(filesystem.renameBatch),
+                nullPrototype: Object.getPrototypeOf(filesystem) === null,
+                readType: typeof filesystem.read,
+                writeType: typeof filesystem.write,
+                statType: typeof filesystem.stat,
+                constructorType: typeof filesystem.constructor,
+                escape
+              }
+            }
+          }
+        `,
+        { capabilityManifest: ['filesystem.write'] }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      entries: [{ index: 0, status: 'renamed' }],
+      keys: ['renameBatch'],
+      frozen: true,
+      nullPrototype: true,
+      readType: 'undefined',
+      writeType: 'undefined',
+      statType: 'undefined',
+      constructorType: 'undefined',
+      escape: true
+    })
+    expect(invokeCapability).toHaveBeenCalledWith(
+      'filesystem.write',
+      {
+        operation: 'rename-batch',
+        entries: [{ source: '/approved/alpha.txt', targetName: 'renamed.txt' }]
+      },
+      expect.any(Number)
+    )
+    runtime.shutdown()
+  })
+
   it('exposes a child-local bounded digest facade without direct plugin require', async () => {
     const result = await call(`
       module.exports = {

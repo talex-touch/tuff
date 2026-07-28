@@ -84,6 +84,8 @@ import {
   removePluginBusinessFile,
   writePluginBusinessFile
 } from './host/plugin-business-file-storage'
+import type { PluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
+import { createPluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
 import type {
   PluginRuntimeService,
   PluginRuntimeSnapshot,
@@ -507,6 +509,7 @@ export class TouchPlugin implements ITouchPlugin {
 
   private runtimeContext: TouchPluginRuntimeContext | null = null
   private preludeContract: PluginPreludeManifestContract = Object.freeze({})
+  private batchRenameFilesystemCapability: PluginBatchRenameFilesystemCapability | null = null
 
   dev: IPluginDev
   name: string
@@ -876,6 +879,7 @@ export class TouchPlugin implements ITouchPlugin {
 
     let result: boolean | void = void 0
     try {
+      await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
       result = this.pluginLifecycle?.onFeatureTriggered(
         feature.id,
         query,
@@ -911,6 +915,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.markActive()
 
     try {
+      await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
       const result = this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
       if (isPromiseLike(result)) {
         await result
@@ -1902,6 +1907,34 @@ export class TouchPlugin implements ITouchPlugin {
     return resolvedPrelude.scriptContent
   }
 
+  private createBatchRenameFilesystemCapability(
+    activation: PluginActivationIdentity
+  ): PluginBatchRenameFilesystemCapability | null {
+    if (this.name !== 'touch-batch-rename') return null
+    return createPluginBatchRenameFilesystemCapability({
+      activation,
+      platform: process.platform,
+      resolveCurrentActivation: () => this.getActivationIdentity(),
+      hasPermission: (_pluginName, permissionId) => {
+        if (typeof this.sdkapi !== 'number') return false
+        const declared = [
+          ...(this.declaredPermissions?.required ?? []),
+          ...(this.declaredPermissions?.optional ?? [])
+        ].includes(permissionId)
+        if (!declared) return false
+        try {
+          return (
+            getPermissionModule()
+              ?.getStore()
+              .hasPermission(this.name, permissionId, this.sdkapi) === true
+          )
+        } catch {
+          return false
+        }
+      }
+    })
+  }
+
   async enable(): Promise<boolean> {
     const blockedSdkIssue = this.issues.find((issue) => issue.code === 'SDKAPI_BLOCKED')
     if (this.loadError?.code === 'SDKAPI_BLOCKED' || blockedSdkIssue) {
@@ -1954,10 +1987,26 @@ export class TouchPlugin implements ITouchPlugin {
       const currentActivation = activation
 
       const scriptContent = await this.loadPreludeScript()
+      const filesystemCapability = this.createBatchRenameFilesystemCapability(currentActivation)
+      this.batchRenameFilesystemCapability = filesystemCapability
+      const closeFilesystemResources = filesystemCapability
+        ? async (): Promise<void> => {
+            await filesystemCapability.close()
+            if (this.batchRenameFilesystemCapability === filesystemCapability) {
+              this.batchRenameFilesystemCapability = null
+            }
+          }
+        : undefined
       const runtimeActivation = await activeRuntime.startActivation({
         activation: currentActivation,
         scriptContent,
         snapshot: this.createRuntimeSnapshot(),
+        ...(filesystemCapability
+          ? {
+              capabilityDefinitions: filesystemCapability.definitions,
+              closeResources: closeFilesystemResources
+            }
+          : {}),
         onCrash: (diagnostic) => this.handleRuntimeCrash(currentActivation, diagnostic)
       })
 
@@ -1995,6 +2044,8 @@ export class TouchPlugin implements ITouchPlugin {
         }
       }
       this.pluginLifecycle = null
+      await this.batchRenameFilesystemCapability?.close().catch(() => undefined)
+      this.batchRenameFilesystemCapability = null
       this._runtimeStats.startedAt = 0
       this.recordActivationFailure(error)
       this.status = PluginStatus.CRASHED
@@ -2035,6 +2086,8 @@ export class TouchPlugin implements ITouchPlugin {
       }
     }
 
+    await this.batchRenameFilesystemCapability?.close().catch(() => undefined)
+    this.batchRenameFilesystemCapability = null
     this.clearCoreBoxItems()
     await widgetManager.releasePlugin(this.name)
 

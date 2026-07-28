@@ -1349,6 +1349,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
     hasDeclaredCapability('clipboard.write') ||
     hasDeclaredCapability('clipboard.copy-and-paste')
   const hasHttpFacade = hasDeclaredCapability('http.request')
+  const hasFilesystemFacade = hasDeclaredCapability('filesystem.write')
   const hasPermissionFacade = hasDeclaredCapability('permission.check')
   const hasChannelFacade = hasDeclaredCapability('channel.invoke')
   const hasQuickOpsFacade = hasDeclaredCapability('quick-ops.invoke')
@@ -1446,6 +1447,17 @@ const CONTEXT_BOOTSTRAP = String.raw`
     )
   }
   objectFreeze(storageFacade)
+
+  const filesystemFacade = objectCreate(null)
+  if (hasFilesystemFacade) {
+    defineFacadeMethod(filesystemFacade, 'renameBatch', (entries) =>
+      mapCapabilityResult(
+        invokeCapability('filesystem.write', { operation: 'rename-batch', entries }),
+        (result) => cloneLocalDto(result.entries)
+      )
+    )
+  }
+  objectFreeze(filesystemFacade)
 
   const voiceFacade = objectCreate(null)
   if (hasVoiceInvokeFacade) {
@@ -1928,6 +1940,10 @@ const CONTEXT_BOOTSTRAP = String.raw`
     clipboard: { value: hasClipboardFacade ? clipboardFacade : undefined, configurable: true },
     openUrl: { value: openUrlFacade, configurable: true },
     http: { value: hasHttpFacade ? httpFacade : undefined, configurable: true },
+    filesystem: {
+      value: hasFilesystemFacade ? filesystemFacade : undefined,
+      configurable: true
+    },
     touchChannel: {
       value: hasChannelFacade ? touchChannelFacade : undefined,
       configurable: true
