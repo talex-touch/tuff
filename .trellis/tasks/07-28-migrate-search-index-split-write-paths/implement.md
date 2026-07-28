@@ -13,13 +13,15 @@
 3. Convert file-provider scheduled writes to the typed worker persistence API only where its write contract is exact.
 4. Route embeddings and remaining direct helper callers to the worker.
 5. Ensure an empty split database triggers the required first-launch rescan/reindex.
+6. Add focused startup-order evidence that a split-enabled provider write waits or fails closed before `searchIndexWriter` readiness and never reaches the primary database as a fallback.
 
 ## 3. Focused verification before runtime evidence
 
 1. Run focused provider/worker/persistence tests for each changed contract.
 2. Confirm the flag-off paths preserve their prior SQL and behavior.
 3. Verify each split-on path awaits worker completion before dependent reads.
-4. Do not infer runtime correctness from typecheck alone.
+4. Exercise the provider-before-writer-ready startup path and prove it cannot write `database.db`; include the result with the writer admission evidence.
+5. Do not infer runtime correctness from typecheck alone.
 
 ## 4. Flag-on application acceptance
 

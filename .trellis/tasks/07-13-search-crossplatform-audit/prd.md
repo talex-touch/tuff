@@ -125,6 +125,7 @@
   - 2026-07-21 进展（`07-20-unify-operational-error-reporting`）：新增统一 retry exhaustion observer 和 busy/queue/writer/WAL/FD 健康快照；App Provider 删除私有 busy retrier，已确认 add/update/delete、backfill、mdls、rebuild mutation 进入共享 scheduler/retry，file row + extensions 在生产 adapter 支持时同 transaction；文件重建使用 writer admission barrier，并完成真实 `BEGIN IMMEDIATE` 失败→脱敏上报→释放锁恢复验收。
   - 2026-07-26 复核：移除 icon-only FTS upsert 后，隔离首启仍出现 `app-provider.icon-hydrate-batch` / `Storage:Polling database is locked`。这不再造成图标硬崩，filesystem identity cache 仍成功生成 227 icons，但证明共享 `database.db` 的 writer 争用尚未闭环；后续必须单独验证 search split 默认开启与 statement-lifecycle batch，不能靠增加 retry/busy timeout。
   - R9 仍保持 open：App Provider 尚未迁入 search-index worker typed persistence port，`db/utils.ts` policy-free mutations、libSQL client/session owner registry 和 aux compatibility mirror 退场仍待后续收敛。
+  - Remaining R9 search-index split write migration is owned by `07-28-migrate-search-index-split-write-paths`: the flag remains default-off until every 2d/2e writer and provider-before-`searchIndexWriter` readiness ordering have focused plus flag-on app evidence.
 
 ### 🟢 低危清理
 
@@ -144,6 +145,7 @@
 | `07-13-fix-ranking-dead-features`            | B1 + B2                                   | ✅ done（typecheck 0 err，46 相关用例通过）                       |
 | `07-16-fix-usage-statistics-double-counting` | B3                                        | ✅ done（单写者 + 保守迁移，4 tests + smoke）                     |
 | `07-16-unify-file-filtering-service`         | B4                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
+| `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-off, readiness-order, and flag-on app gates | planning |
 | (待建)                                       | R1 打包验证 / R2 mac 签名 / R3 流式落库 … | backlog                                                           |
 
 ### 遗留 carve-out（B1 派生，未做）

@@ -21,10 +21,5 @@
   "children": [],
   "parent": "07-17-unify-ota-update-flow",
   "relatedFiles": [],
-  "notes": "",
-  "meta": {
-    "nextAction": "Coordinate the installed helper and recovery contract with the remaining OTA runtime acceptance work.",
-    "blocker": "The OTA parent integration and release-evidence acceptance remain open.",
-    "evidence": "prd.md acceptance criteria cover coordinator, helper, platform adapter, startup health, focused tests, and typecheck."
-  }
+  "notes": ""
 }
