@@ -20,7 +20,7 @@
 - [x] 运行 CoreApp focused tests、Node/Web typecheck、插件 validation、build 与 Electron smoke。
 - [x] 运行 Nexus focused tests 与 typecheck。
 - [x] 确认提交序列合理且相对远端仅 ahead。
-- [ ] 普通推送 `master` 到 `origin/master`，并验证远端引用等于本地 `HEAD`。
+- [x] 普通推送 `master` 到 `origin/master`，并验证远端引用等于本地 `HEAD`。
 
 ## Validation Evidence
 
@@ -31,6 +31,7 @@
 - Emoji plugin: 8 tests passed; plugin package validation: 24/24 passed.
 - Nexus overlay: 4 tests passed; scoped ESLint and Nuxt typecheck passed.
 - `git diff --check` passed before batching; every staged batch passed `git diff --cached --check` and repository pre-commit hooks.
+- Initial push verified local and remote `master` at `21484fd3f873bfff5f0d92c1c31cfcee48462317`.
 
 ## Rollback Points
 
