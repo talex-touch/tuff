@@ -1,7 +1,7 @@
 ---
 title: "GradualBlur"
 description: "Layered backdrop-filter edge fade for parent or page overlays, presets, hover intensity, scroll reveal, responsive sizing, and GPU hints."
-category: Layout
+category: Effects
 tags: [blur, edge-fade, overlay, backdrop-filter]
 syncStatus: reviewed
 verified: true

@@ -1,7 +1,7 @@
 ---
 title: "Tabs 标签页"
 description: "支持多方向布局、分组导航、动态指示器和内容尺寸测量的组合式标签页。"
-category: Layout
+category: Navigation
 syncStatus: reviewed
 verified: true
 ---

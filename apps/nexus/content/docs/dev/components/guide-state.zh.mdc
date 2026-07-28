@@ -1,7 +1,7 @@
 ---
 title: "GuideState 引导状态"
 description: "基于 TxEmptyState 的引导态快捷组件，固定 guide 变体，并透传文案、操作、布局、表面和命名插槽。"
-category: Feedback
+category: Status
 status: beta
 since: 2.4.7
 tags: [empty, state, guide, onboarding]

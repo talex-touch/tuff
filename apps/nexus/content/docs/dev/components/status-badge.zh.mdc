@@ -1,7 +1,7 @@
 ---
 title: StatusBadge 状态徽标
 description: 状态信号与平台感知的系统反馈徽标。
-category: Feedback
+category: Basic
 status: beta
 since: 1.0.0
 tags: [badge, status, signal]
