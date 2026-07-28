@@ -372,6 +372,7 @@ code: |
 - [Select 选择器](./select.zh.md)
 - [MarkdownEditor Markdown 编辑器](./markdown-editor.zh.md)
 - [FlatRadio 平铺单选](./flat-radio.zh.md)
+- [FlatDropdown 扁平下拉](./flat-dropdown.zh.md)
 - [FlatSelect 扁平选择](./flat-select.zh.md)
 - [SearchInput 搜索输入框](./search-input.zh.md)
 - [SearchSelect 搜索选择器](./search-select.zh.md)

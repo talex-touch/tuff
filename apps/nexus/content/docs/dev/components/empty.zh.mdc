@@ -1,7 +1,7 @@
 ---
 title: "Empty 空状态"
 description: "用于面板、筛选结果和基础占位的紧凑空状态封装。"
-category: Feedback
+category: Status
 status: beta
 since: 1.0.0
 tags: [empty, state, placeholder]

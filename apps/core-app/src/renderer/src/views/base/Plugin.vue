@@ -4,6 +4,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { toast } from 'vue-sonner'
 import FlipDialog from '~/components/base/dialog/FlipDialog.vue'
 import PluginEmptyState from '~/components/plugin/layout/PluginEmptyState.vue'
 import PluginListModule from '~/components/plugin/layout/PluginListModule.vue'
@@ -85,13 +86,14 @@ async function handleOpenPluginFolder(): Promise<void> {
   loadingStates.value.openFolder = true
   try {
     const info = await ensureStartupInfo()
-    const pluginPath = info?.path?.pluginPath || info?.path?.modulePath
+    const pluginPath = info?.path?.pluginPath
     if (!pluginPath) {
       throw new Error('Plugin path unavailable')
     }
     await appSdk.showInFolder(pluginPath)
-  } catch (error) {
-    pluginViewLog.error('Failed to open plugin folder:', error)
+  } catch {
+    pluginViewLog.error('Failed to open plugin folder')
+    toast.error(t('plugin.folderOpenFailed'))
   } finally {
     loadingStates.value.openFolder = false
   }
@@ -135,6 +137,7 @@ async function handleOpenPluginFolder(): Promise<void> {
         <TxButton
           variant="flat"
           class="action-btn folder-btn"
+          :aria-label="t('plugin.openFolder')"
           :disabled="loadingStates.openFolder"
           @click="handleOpenPluginFolder"
         >

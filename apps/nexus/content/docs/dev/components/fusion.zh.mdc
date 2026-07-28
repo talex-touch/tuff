@@ -1,7 +1,7 @@
 ---
 title: "Fusion 交融"
 description: "两个插槽的 gooey 交融动效，支持 hover、click 或手动受控状态。"
-category: Basic
+category: Effects
 status: beta
 since: 1.0.0
 tags: [fusion, gooey, motion]

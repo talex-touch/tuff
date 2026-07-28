@@ -9,8 +9,6 @@
 import type { DivisionBoxConfig, SessionMeta, StateChangeEvent } from '@talex-touch/utils'
 import type { TouchWindow } from '../../core/touch-window'
 import type { TouchPlugin } from '../plugin/plugin'
-import os from 'node:os'
-import path from 'node:path'
 import {
   DivisionBoxError,
   DivisionBoxErrorCode,
@@ -18,9 +16,7 @@ import {
   StorageList
 } from '@talex-touch/utils'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
-import { getPluginChannelPreludeCode } from '@talex-touch/utils/transport/prelude'
 import { app, nativeTheme, WebContentsView } from 'electron'
-import fse from 'fs-extra'
 import { resolveThemeStateFromStyle } from '../../../shared/theme/theme-mode'
 import { getRegisteredMainRuntime } from '../../core/runtime-accessor'
 import { buildWindowWebPreferences } from '../../core/window-security-profile'
@@ -502,42 +498,6 @@ export class DivisionBoxSession {
       }
     })
 
-    let preloadPath = injections?._.preload
-
-    // Compatibility views retain the legacy composed preload until migration.
-    if (securityProfile.effectiveProfile === 'compat-plugin-view' && plugin && injections?.js) {
-      const tempPreloadPath = path.resolve(
-        os.tmpdir(),
-        `tuff-division-preload-${plugin.name}-${Date.now()}.js`
-      )
-
-      const channelScript = this.generateChannelScript(plugin._uniqueChannelKey)
-      const pluginInjectionCode = injections.js.trim()
-      let originalPreloadContent = ''
-      if (injections._.preload && fse.existsSync(injections._.preload)) {
-        try {
-          originalPreloadContent = fse.readFileSync(injections._.preload, 'utf-8')
-        } catch (error) {
-          divisionBoxSessionLog.warn('Failed to read legacy DivisionBox preload', { error })
-        }
-      }
-
-      const combinedPreload = `
-// DivisionBox preload for ${plugin.name}
-(function() {
-  try { ${pluginInjectionCode}; } catch(e) { console.error('[DivisionBox] Plugin inject failed:', e); }
-  try { ${channelScript} } catch(e) { console.error('[DivisionBox] Channel inject failed:', e); }
-  ${originalPreloadContent.trim() ? `try { ${originalPreloadContent} } catch {}` : ''}
-})();
-`
-      try {
-        fse.writeFileSync(tempPreloadPath, combinedPreload, 'utf-8')
-        preloadPath = tempPreloadPath
-      } catch (error) {
-        divisionBoxSessionLog.error('Failed to create DivisionBox preload', { error })
-      }
-    }
-
     metrics.preload = performance.now() - startTime
 
     const webPreferenceOverrides: Electron.WebPreferences = {
@@ -549,7 +509,6 @@ export class DivisionBoxSession {
           plugin,
           themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
           source: `division-box:${url}`,
-          legacyPreload: preloadPath,
           overrides: webPreferenceOverrides
         })
       : buildWindowWebPreferences('app', webPreferenceOverrides)
@@ -557,12 +516,10 @@ export class DivisionBoxSession {
       ? await createPluginViewNavigationPolicy({
           pluginRoot: plugin.pluginPath,
           targetUrl: url,
-          securityProfile: securityProfile.effectiveProfile,
           devAddress: plugin.dev.address,
           appIsPackaged: app.isPackaged,
           pluginDevEnabled: plugin.dev.enable,
-          pluginDevSource: Boolean(plugin.dev.source),
-          allowLegacyWebview: securityProfile.reason === 'legacy-webview'
+          pluginDevSource: Boolean(plugin.dev.source)
         })
       : null
 
@@ -574,9 +531,12 @@ export class DivisionBoxSession {
     if (plugin) {
       // Register this plugin surface so the channel layer can verify its origin.
       const pluginViewWebContentsId = this.uiView.webContents.id
-      registerPluginWebContents(pluginViewWebContentsId, plugin.name)
+      const registrationToken = registerPluginWebContents(
+        pluginViewWebContentsId,
+        plugin.getActivationIdentity()
+      )
       this.uiView.webContents.once('destroyed', () => {
-        unregisterPluginWebContents(pluginViewWebContentsId)
+        unregisterPluginWebContents(pluginViewWebContentsId, registrationToken)
       })
     }
     metrics.viewCreate = performance.now() - viewCreateStart
@@ -625,13 +585,6 @@ export class DivisionBoxSession {
     divisionBoxSessionLog.debug(
       `UI view attached: ${this.sessionId} | preload=${metrics.preload.toFixed(1)}ms viewCreate=${metrics.viewCreate.toFixed(1)}ms loadUrl=${metrics.loadUrl.toFixed(1)}ms total=${metrics.total.toFixed(1)}ms`
     )
-  }
-
-  /**
-   * Generate plugin channel script for preload injection
-   */
-  private generateChannelScript(uniqueKey: string): string {
-    return getPluginChannelPreludeCode({ uniqueKey, initialData: {} })
   }
 
   /**

@@ -1,7 +1,7 @@
 ---
 title: Pagination 分页
 description: 大数据列表的分页导航
-category: Data
+category: Navigation
 status: beta
 since: 1.0.0
 tags: [pagination, pages, navigation]

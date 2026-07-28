@@ -1,12 +1,11 @@
-import { queryCollection } from '@nuxt/content/server'
 import type { SidebarComponentItem } from '#shared/types/content-api'
+import type { H3Event } from 'h3'
+import { queryCollection } from '@nuxt/content/server'
+import { cacheDocsContent } from '../../utils/docsContentCache'
 
 type SyncStatusKey = 'not_started' | 'in_progress' | 'migrated' | 'verified'
 
 const COMPONENT_DOC_PREFIX = '/docs/dev/components/'
-const SIDEBAR_COMPONENTS_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
-const SIDEBAR_COMPONENTS_CACHE_MAX_AGE_SECONDS = 300
-const SIDEBAR_COMPONENTS_CACHE_STALE_MAX_AGE_SECONDS = 3600
 const STATUS_ALIASES: Record<string, SyncStatusKey> = {
   未迁移: 'not_started',
   迁移中: 'in_progress',
@@ -84,13 +83,7 @@ function resolveSidebarComponentsLocale(event: any) {
   return normalizeLocale(event?.context?.params?.locale ?? getQuery(event).locale)
 }
 
-function resolveSidebarComponentsCacheKey(event: any) {
-  const locale = resolveSidebarComponentsLocale(event)
-  return locale ? `locale:${locale}` : 'locale:all'
-}
-
-export default defineCachedEventHandler(async (event) => {
-  const locale = resolveSidebarComponentsLocale(event)
+const resolveSidebarComponents = cacheDocsContent(async (event: H3Event, locale: 'en' | 'zh' | null) => {
   const docs = await queryCollection(event, 'docs')
     .where('path', 'LIKE', buildComponentDocsPathPattern(locale))
     .all()
@@ -122,12 +115,14 @@ export default defineCachedEventHandler(async (event) => {
     .filter(item => !locale || item.locale === locale)
     .sort((a, b) => a.title.localeCompare(b.title, a.locale === 'zh' ? 'zh-CN' : 'en'))
 
-  setHeader(event, 'cache-control', SIDEBAR_COMPONENTS_CACHE_CONTROL)
-
   return rows
 }, {
-  maxAge: SIDEBAR_COMPONENTS_CACHE_MAX_AGE_SECONDS,
-  staleMaxAge: SIDEBAR_COMPONENTS_CACHE_STALE_MAX_AGE_SECONDS,
   name: 'docs-sidebar-components',
-  getKey: resolveSidebarComponentsCacheKey,
+  getKey: locale => locale ? `locale:${locale}` : 'locale:all',
+  // The component docs collection is never legitimately empty.
+  treatEmptyAsUnavailable: true,
+})
+
+export default defineEventHandler(async (event) => {
+  return resolveSidebarComponents(event, resolveSidebarComponentsLocale(event))
 })

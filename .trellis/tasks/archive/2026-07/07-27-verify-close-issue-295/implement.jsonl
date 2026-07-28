@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/07-24-harden-app-icon-self-healing/prd.md", "reason": "Real-profile icon crash, DB handles, and SQLITE_BUSY acceptance evidence"}
+{"file": ".trellis/tasks/07-13-search-crossplatform-audit/prd.md", "reason": "Cross-platform audit separates icon crash from SQLITE_BUSY"}

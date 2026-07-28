@@ -1,7 +1,7 @@
 ---
 title: Design Foundations
 description: Typography and color tokens aligned with Tuffex variables
-category: Foundation
+category: Foundations
 status: beta
 since: 1.0.0
 tags: [design, tokens, typography, color]

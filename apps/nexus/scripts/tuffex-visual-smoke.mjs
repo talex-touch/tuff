@@ -12,7 +12,7 @@ import {
   screenshot,
   setViewport,
   waitFor,
-} from '../../../packages/tuffex/scripts/audit-cdp-client.mjs'
+} from './audit-cdp-client.mjs'
 
 const nexusBaseUrl = process.env.NEXUS_VISUAL_SMOKE_URL || 'http://127.0.0.1:3200'
 const auditDate = process.env.NEXUS_VISUAL_SMOKE_DATE

@@ -1,4 +1,5 @@
 import { hasWindow } from '@talex-touch/utils/env'
+import { reserveOverlayLayer } from '~/utils/layers'
 
 export type SearchSource = 'docs' | 'feature' | 'page'
 
@@ -67,10 +68,19 @@ export function useGlobalSearchState() {
     anchorRect.value = null
   }
 
+  /**
+   * Claim a layer before the palette mounts. TxCommandPalette allocates its own
+   * z-index synchronously when `open` flips, so the floor has to be raised first.
+   */
+  function markSearchOpen() {
+    reserveOverlayLayer('nexus-global-search')
+    open.value = true
+  }
+
   function openSearch(anchor?: HTMLElement | null) {
     resetSearchState()
     setSearchAnchor(anchor)
-    open.value = true
+    markSearchOpen()
   }
 
   async function summonSearch(anchor?: HTMLElement | null) {
@@ -79,12 +89,12 @@ export function useGlobalSearchState() {
     resetSearchState()
     setSearchAnchor(anchor)
     if (!anchor || !hasWindow() || prefersReducedMotion()) {
-      open.value = true
+      markSearchOpen()
       return
     }
     const rect = anchor.getBoundingClientRect()
     if (!rect.width || !rect.height) {
-      open.value = true
+      markSearchOpen()
       return
     }
     const { gsap } = await import('gsap')
@@ -105,7 +115,7 @@ export function useGlobalSearchState() {
         ease: 'power2.out',
       })
       .add(() => {
-        open.value = true
+        markSearchOpen()
       }, 0.12)
       .to(anchor, {
         scale: 1,

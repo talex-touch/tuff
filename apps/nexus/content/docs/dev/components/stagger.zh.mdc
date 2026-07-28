@@ -1,7 +1,7 @@
 ---
 title: "Stagger 依次进入"
 description: "基于子节点 index 的 TransitionGroup enter/leave 依次动画包装器。"
-category: Layout
+category: Effects
 status: beta
 since: 1.0.0
 tags: [transition, animation, stagger]

@@ -26,13 +26,13 @@ The detailed EARS contract is `.spec-workflow/specs/catalog-service-mvp/requirem
 
 ## Acceptance Criteria
 
-- [ ] First initialization seeds and activates the built-in pack; repeated initialization preserves active/previous state and works offline.
-- [ ] Manifest, signature, hash, schema, SDK, locale coverage, byte/entry bounds, and Domain Lexicon entry failures produce stable fail-closed errors before mutation.
-- [ ] Import is serialized, transactional, idempotent for identical bytes, and rejects ID/version hash conflicts without partial rows.
-- [ ] Activation and rollback are transactional, failure-atomic, and rebuild the runtime registry only after committed state changes.
-- [ ] Nexus manifest/download requests use NetworkService and content-addressed paths; no update, invalid response, and download failure leave SQLite and active registry unchanged.
-- [ ] Plugin SDK official resolve/search/collision checks follow the active registry dynamically while existing plugin overlays remain intact and isolated.
-- [ ] Diagnostics report the required low-sensitive state and degraded baseline fallback.
+- [x] First initialization seeds and activates the built-in pack; repeated initialization preserves active/previous state and works offline.
+- [x] Manifest, signature, hash, schema, SDK, locale coverage, byte/entry bounds, and Domain Lexicon entry failures produce stable fail-closed errors before mutation.
+- [x] Import is serialized, transactional, idempotent for identical bytes, and rejects ID/version hash conflicts without partial rows.
+- [x] Activation and rollback are transactional, failure-atomic, and rebuild the runtime registry only after committed state changes.
+- [x] Nexus manifest/download requests use NetworkService and content-addressed paths; no update, invalid response, and download failure leave SQLite and active registry unchanged.
+- [x] Plugin SDK official resolve/search/collision checks follow the active registry dynamically while existing plugin overlays remain intact and isolated.
+- [x] Diagnostics report the required low-sensitive state and degraded baseline fallback.
 - [ ] Focused shared contract, SQLite lifecycle, remote flow, plugin integration, lint, and CoreApp node/web typechecks pass.
 - [ ] R8 PRD, execution plan, quality baseline, changelog, task artifacts, and developer documentation state the exact completed/open boundary.
 

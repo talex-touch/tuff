@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "TxBaseAnchor SFC 结构、props/slots 契约、可访问性与动效约束。"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "BaseAnchorAnimationType 联合扩展与新增可选字段的类型边界，禁止 any/私有 cast。"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "tuffex 组件单测与 nexus 文档校验的质量门禁。"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "liquid 分支必须复用既有 runId/clearTimeline/finishOpen 生命周期与 readReferenceRect，不另起一套。"}

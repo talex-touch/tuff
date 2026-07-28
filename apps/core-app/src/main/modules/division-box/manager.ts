@@ -10,9 +10,11 @@ import type { TouchPlugin } from '../plugin/plugin'
 // app import removed - not currently used
 import { DivisionBoxError, DivisionBoxErrorCode, DivisionBoxState } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
+import { DivisionBoxSession } from './session'
 import { LRUCache } from './lru-cache'
 import { divisionBoxManagerLog } from './logger'
-import { DivisionBoxSession } from './session'
+import { usePluginInjections } from '../plugin/runtime/plugin-injections'
+import { resolvePluginViewSecurityProfile } from '../plugin/runtime/plugin-view-security-profile'
 
 /**
  * Resource limits for DivisionBox system
@@ -210,8 +212,31 @@ export class DivisionBoxManager {
       )
     }
 
-    // Validate and apply defaults to configuration
+    // Validate and resolve the plugin owner before constructing any window.
     const validatedConfig = this.validateAndApplyDefaults(config)
+    let attachedPlugin: TouchPlugin | undefined
+    if (shouldAttachUIView(validatedConfig)) {
+      if (!validatedConfig.pluginId) {
+        throw new DivisionBoxError(
+          DivisionBoxErrorCode.CONFIG_ERROR,
+          'DivisionBox UI views require an owning plugin.'
+        )
+      }
+      const { pluginModule } = await import('../plugin/plugin-module')
+      attachedPlugin = pluginModule.pluginManager?.getPluginByName(validatedConfig.pluginId) as
+        | TouchPlugin
+        | undefined
+      if (!attachedPlugin) {
+        throw new DivisionBoxError(
+          DivisionBoxErrorCode.CONFIG_ERROR,
+          'DivisionBox UI view owner is unavailable.'
+        )
+      }
+      resolvePluginViewSecurityProfile(attachedPlugin, {
+        source: 'division-box:create-session',
+        injections: usePluginInjections(attachedPlugin, 'division-box:create-session')
+      })
+    }
 
     // Generate unique session ID
     const sessionId = this.generateSessionId()
@@ -251,15 +276,7 @@ export class DivisionBoxManager {
 
       // Attach UI view with plugin URL if provided
       if (shouldAttachUIView(validatedConfig)) {
-        // Get plugin reference if pluginId is provided
-        const { pluginModule } = await import('../plugin/plugin-module')
-        const plugin = validatedConfig.pluginId
-          ? (pluginModule.pluginManager?.getPluginByName(validatedConfig.pluginId) as
-              | TouchPlugin
-              | undefined)
-          : undefined
-
-        await session.attachUIView(validatedConfig.url, plugin)
+        await session.attachUIView(validatedConfig.url, attachedPlugin)
       } else {
         await session.setState(DivisionBoxState.ACTIVE)
       }

@@ -38,6 +38,32 @@ interface ResolvedSecureStoreBackend {
   secret: Buffer
 }
 
+const secureStoreMutationTails = new Map<string, Promise<void>>()
+
+async function runSecureStoreMutation<T>(
+  rootPath: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const queueKey = path.resolve(rootPath)
+  const previous = secureStoreMutationTails.get(queueKey) ?? Promise.resolve()
+  let release: (() => void) | undefined
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const queued = previous.catch(() => undefined).then(() => gate)
+  secureStoreMutationTails.set(queueKey, queued)
+
+  await previous.catch(() => undefined)
+  try {
+    return await operation()
+  } finally {
+    release?.()
+    if (secureStoreMutationTails.get(queueKey) === queued) {
+      secureStoreMutationTails.delete(queueKey)
+    }
+  }
+}
+
 const AES_256_KEY_BYTES = 32
 const AES_GCM_NONCE_BYTES = 12
 const AES_GCM_TAG_BYTES = 16
@@ -105,17 +131,23 @@ function getLocalSecretPath(rootPath: string): string {
 
 async function readSecureStoreFile(
   rootPath: string,
-  warn?: WarnHandler
+  warn?: WarnHandler,
+  failOnCorrupt = false
 ): Promise<Record<string, string>> {
   const storePath = getSecureStorePath(rootPath)
   try {
     const raw = await fs.readFile(storePath, 'utf-8')
     const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('SECURE_STORE_INVALID_DOCUMENT')
+    }
     const store: Record<string, string> = {}
     for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === 'string') {
-        store[key] = value
+      if (typeof value !== 'string') {
+        if (failOnCorrupt) throw new Error('SECURE_STORE_INVALID_ENTRY')
+        continue
       }
+      store[key] = value
     }
     return store
   } catch (error) {
@@ -123,6 +155,7 @@ async function readSecureStoreFile(
       return {}
     }
     warn?.('Failed to read secure store file', error)
+    if (failOnCorrupt) throw error
     return {}
   }
 }
@@ -132,10 +165,29 @@ async function writeSecureStoreFile(
   store: Record<string, string>
 ): Promise<void> {
   const storePath = getSecureStorePath(rootPath)
-  await fs.mkdir(path.dirname(storePath), { recursive: true })
-  await fs.writeFile(storePath, JSON.stringify(store), 'utf-8')
-  if (process.platform !== 'win32') {
-    await fs.chmod(storePath, 0o600).catch(() => undefined)
+  const directoryPath = path.dirname(storePath)
+  const temporaryPath = `${storePath}.tmp-${process.pid}-${randomBytes(6).toString('hex')}`
+  await fs.mkdir(directoryPath, { recursive: true })
+
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+  try {
+    handle = await fs.open(temporaryPath, 'wx', 0o600)
+    await handle.writeFile(JSON.stringify(store), 'utf-8')
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+    await fs.rename(temporaryPath, storePath)
+    if (process.platform !== 'win32') {
+      await fs.chmod(storePath, 0o600).catch(() => undefined)
+      const directoryHandle = await fs.open(directoryPath, 'r').catch(() => null)
+      if (directoryHandle) {
+        await directoryHandle.sync().catch(() => undefined)
+        await directoryHandle.close().catch(() => undefined)
+      }
+    }
+  } finally {
+    await handle?.close().catch(() => undefined)
+    await fs.unlink(temporaryPath).catch(() => undefined)
   }
 }
 
@@ -209,9 +261,10 @@ async function requireLocalSecret(rootPath: string): Promise<Buffer> {
 
 async function assertReadableExistingEnvelopeBackends(
   rootPath: string,
-  warn?: WarnHandler
+  warn?: WarnHandler,
+  strict = false
 ): Promise<void> {
-  const store = await readSecureStoreFile(rootPath, warn)
+  const store = await readSecureStoreFile(rootPath, warn, strict)
   const needsLocalSecret = Object.values(store).some(
     (value) => tryParseEnvelope(value)?.backend === 'local-secret'
   )
@@ -347,7 +400,7 @@ export async function getSecureStoreHealth(rootPath?: string): Promise<SecureSto
   }
 
   try {
-    await assertReadableExistingEnvelopeBackends(rootPath)
+    await assertReadableExistingEnvelopeBackends(rootPath, undefined, true)
     await getOrCreateLocalSecret(rootPath)
     return {
       backend: 'local-secret',
@@ -355,12 +408,12 @@ export async function getSecureStoreHealth(rootPath?: string): Promise<SecureSto
       degraded: false,
       reason: 'Using local encrypted root secret; system credential storage is disabled'
     }
-  } catch (error) {
+  } catch {
     return {
       backend: 'unavailable',
       available: false,
       degraded: true,
-      reason: error instanceof Error ? error.message : 'Local encrypted storage unavailable'
+      reason: 'Local encrypted storage is unavailable'
     }
   }
 }
@@ -397,16 +450,17 @@ export async function wrapSecureStoreValue(
   }
 }
 
-export async function getSecureStoreValue(
+async function getSecureStoreValueInternal(
   rootPath: string,
   rawKey: string,
-  purposeOrWarn?: SecureStorePurpose | WarnHandler,
-  maybeWarn?: WarnHandler
+  purposeOrWarn: SecureStorePurpose | WarnHandler | undefined,
+  maybeWarn: WarnHandler | undefined,
+  strict: boolean
 ): Promise<string | null> {
   const key = normalizeSecureStoreKey(rawKey)
   const purpose = typeof purposeOrWarn === 'function' ? undefined : purposeOrWarn
   const warn = typeof purposeOrWarn === 'function' ? purposeOrWarn : maybeWarn
-  const store = await readSecureStoreFile(rootPath, warn)
+  const store = await readSecureStoreFile(rootPath, warn, strict)
   const encrypted = store[key]
   if (!encrypted) {
     return null
@@ -414,6 +468,7 @@ export async function getSecureStoreValue(
 
   const envelope = tryParseEnvelope(encrypted)
   if (!envelope) {
+    if (strict) throw new Error('SECURE_STORE_ENVELOPE_INVALID')
     return null
   }
 
@@ -421,8 +476,27 @@ export async function getSecureStoreValue(
     return await decryptEnvelope(rootPath, key, envelope, purpose)
   } catch (error) {
     warn?.('Failed to decrypt secure store envelope', error)
+    if (strict) throw error
     return null
   }
+}
+
+export async function getSecureStoreValue(
+  rootPath: string,
+  rawKey: string,
+  purposeOrWarn?: SecureStorePurpose | WarnHandler,
+  maybeWarn?: WarnHandler
+): Promise<string | null> {
+  return getSecureStoreValueInternal(rootPath, rawKey, purposeOrWarn, maybeWarn, false)
+}
+
+export async function getSecureStoreValueStrict(
+  rootPath: string,
+  rawKey: string,
+  purposeOrWarn?: SecureStorePurpose | WarnHandler,
+  maybeWarn?: WarnHandler
+): Promise<string | null> {
+  return getSecureStoreValueInternal(rootPath, rawKey, purposeOrWarn, maybeWarn, true)
 }
 
 export async function setSecureStoreValue(
@@ -435,20 +509,39 @@ export async function setSecureStoreValue(
   const key = normalizeSecureStoreKey(rawKey)
   const purpose = typeof purposeOrWarn === 'function' ? undefined : purposeOrWarn
   const warn = typeof purposeOrWarn === 'function' ? purposeOrWarn : maybeWarn
-  const store = await readSecureStoreFile(rootPath, warn)
-  if (!value) {
-    delete store[key]
-    await writeSecureStoreFile(rootPath, store)
-    return true
-  }
 
-  try {
-    const backend = await resolveSecureStoreBackend(rootPath, warn)
-    store[key] = encodeEnvelope(backend.backend, backend.secret, key, value, purpose)
+  return runSecureStoreMutation(rootPath, async () => {
+    try {
+      const store = await readSecureStoreFile(rootPath, warn, true)
+      if (!value) {
+        delete store[key]
+        await writeSecureStoreFile(rootPath, store)
+        return true
+      }
+
+      const backend = await resolveSecureStoreBackend(rootPath, warn)
+      store[key] = encodeEnvelope(backend.backend, backend.secret, key, value, purpose)
+      await writeSecureStoreFile(rootPath, store)
+      return true
+    } catch (error) {
+      warn?.('Failed to write secure store value', error)
+      return false
+    }
+  })
+}
+
+export async function deleteSecureStoreValuesByPrefix(
+  rootPath: string,
+  rawPrefix: string,
+  warn?: WarnHandler
+): Promise<number> {
+  const prefix = normalizeSecureStoreKey(rawPrefix)
+  return runSecureStoreMutation(rootPath, async () => {
+    const store = await readSecureStoreFile(rootPath, warn, true)
+    const matchingKeys = Object.keys(store).filter((key) => key.startsWith(prefix))
+    if (matchingKeys.length === 0) return 0
+    for (const key of matchingKeys) delete store[key]
     await writeSecureStoreFile(rootPath, store)
-    return true
-  } catch (error) {
-    warn?.('Failed to write secure store value', error)
-    return false
-  }
+    return matchingKeys.length
+  })
 }

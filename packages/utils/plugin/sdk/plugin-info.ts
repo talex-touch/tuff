@@ -4,6 +4,7 @@ import { hasWindow } from '../../env'
 export interface PluginRuntimeInfo {
   name?: string
   sdkapi?: number
+  bridgeVersion?: number
   [key: string]: unknown
 }
 
