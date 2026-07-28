@@ -13,9 +13,11 @@
   [English](./README.md) | 简体中文
 </div>
 
-## 📌 公告
+## 📌 发布与平台状态
 
-Tuff 2.4.x 正在持续进行 Beta 发布与稳定化。当前优先关闭数据正确性、同步一致性、插件隔离和原生打包风险；新功能不抢稳定化窗口。预发布版本可从 GitHub Releases 获取。
+仓库当前稳定基线为 `2.4.13`，由一致的[根目录 package manifest](./package.json)与 [CoreApp package manifest](./apps/core-app/package.json)确定。已发布制品以 [GitHub Releases](https://github.com/talex-touch/tuff/releases) 为准。
+
+当前提供 macOS、Windows 和 Linux 预发布构建。稳定源码版本不代表三端能力成熟度一致，也不代表 OTA 验收已经完成；不支持或降级路径必须明确说明并保持 fail-closed。详情见[当前稳定化计划](./docs/plan-prd/TODO.md)与[跨平台审计](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。
 
 ## 🔷 项目简介
 
@@ -27,7 +29,7 @@ Tuff (原 TalexTouch) 是一个基于 Electron, TypeScript 和 Vue.js 构建的�
 
 ## 🖇️ 跨平台支持
 
-当前提供 macOS、Windows 和 Linux 预发布构建，但三端能力成熟度并不完全一致。平台不支持或降级路径必须明确展示原因并保持 fail-closed；详情见[当前稳定化计划](./docs/plan-prd/TODO.md)与[跨平台审计](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md)。
+macOS、Windows 和 Linux 的平台能力与降级边界以各自验收证据为准；仓库版本或单平台测试不会自动升级其他平台的支持状态。
 
 ## 🦋 精美的 UI 设计
 
@@ -68,6 +70,7 @@ Tuff 集成了多种实用功能，让您的桌面更智能、更高效。
 - **可扩展性:** 支持通过“能力”(Capabilities) 插件来扩展其功能。
 - **直接预览计算:** 搜索框里即时解析算式、单位、货币、时间与科学常量，结果一键复制。
 - **连接你自己的大语言模型:** 允许您连接到私有云或任何自托管的大语言模型，实现极致的隐私与控制。
+- **统一下载中心:** 集中管理下载进度与断点续传。
 
 ### 插件管理策略
 
@@ -104,27 +107,10 @@ Tuff 的操作非常简单直观，让用户可以轻松完成各种任务。您
 
 ## ❤️ 参与贡献
 
-### 我们使用的技术
+### 开发环境
 
-#### 🌀 前端
-
-- Electron ^37.2.4
-- Vue.js: ^3.5.18
-- Vue Router: ^4.5.1
-- Tuffex
-- Milkdown: ^7.15.2
-- Lottie-web: ^5.13.0
-
-#### 💠 后端
-
-- Node.js: >=22.0.0
-- Koa: ^2.7.0
-
-#### 🔧 构建工具
-
-- Vite: ^7.0.6
-- Electron Builder: ^25.1.8
-- Sass: ^1.89.2
+- 运行时、依赖与构建工具版本以[根目录 package manifest](./package.json)、[CoreApp package manifest](./apps/core-app/package.json)、[workspace catalog](./pnpm-workspace.yaml)和 [lockfile](./pnpm-lock.yaml) 为准。
+- 使用 Corepack，并选择根目录 manifest 允许的 Node.js 版本；不要依赖 README 中复制的版本号。
 
 #### [点此查看](./.github/docs/contribution/CONTRIBUTING.md)
 

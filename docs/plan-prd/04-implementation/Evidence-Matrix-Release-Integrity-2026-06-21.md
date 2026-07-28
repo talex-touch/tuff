@@ -1,6 +1,6 @@
 # Evidence Matrix: R1 Release Integrity
 
-> 更新时间：2026-06-21
+> 更新时间：2026-07-27
 > 定位：R1 GitHub Release ↔ Nexus release metadata / download / artifact signature 的校验矩阵。
 
 ## 2026-06-22 真实链路复核
@@ -10,11 +10,24 @@
 - Nexus release metadata / `/api/releases/latest?channel=BETA` / assets / signed download endpoint 可访问，download endpoint 对 `darwin/x64`、`linux/x64`、`win32/x64` 均返回 302 到同 tag GitHub asset。
 - GitHub Release 经认证 `gh` 复核存在 `tuff-release-manifest.json`，release 为 `isDraft=false`、`isPrerelease=true`。
 - Gate E 仍失败：GitHub Release 未上传 artifact `.sig` / `.asc`；manifest core artifacts 缺 `signature` 字段；Nexus assets 没有 `signatureUrl` / `signatureKey`；signature endpoint 全部 404；`/api/releases/signing-key` 未配置 public key。
-- CoreApp / Nexus focused signature tests 通过，说明当前阻塞是 release 资产与生产配置未闭环，不是代码侧 focused matrix 未通过。
+- 当时的 CoreApp / Nexus focused signature tests 已通过，说明 beta.8 阻塞来自 release 资产与生产配置未闭环，而不是代码侧 focused matrix。
 
-## 当前推进
+该结论只属于 `v2.4.12-beta.8` 的 2026-06-22 historical production sampling；后续 tag 的独立验收不会回写或删除这份失败记录。
 
-本轮已补齐代码侧断点：
+## 2026-07-22 beta.19 Gate E 生产复核
+
+精确来源为 [已发布版本 Release Gate 契约](../../../.trellis/tasks/archive/2026-07/07-21-07-20-align-published-release-gates/prd.md)，执行对象是已发布 `v2.4.13-beta.19`，未修改 GitHub Release 或 Nexus 数据。
+
+- 正式 `gate-e --strict` 返回 `result: pass` 且退出码为 `0`。
+- 远端中英文 notes、GitHub manifest 的三平台 preferred matrix、完整 GitHub asset inventory、Nexus preferred assets、download URL、SHA-256、rollback 与 channel latest 门禁通过。
+- Nexus 每个 preferred asset 的实际 `signatureUrl` 被请求；GitHub 直链 sidecar 返回非空、非 HTML/JSON 的有效签名 payload，未用另行拼接的 endpoint 替代实际配置。
+- Linux DEB 与 `.deb.sig` 作为同一已声明 pair 的额外完整格式通过 inventory 校验；它们没有被误写成 manifest 中第二个 preferred artifact。
+
+这关闭的是 `v2.4.13-beta.19` 的精确 Gate E assertions，并取代旧 beta.8 失败作为后续 beta.19 判断。它不证明稳定 `v2.4.13` 已复跑相同 gate，也不证明 CoreApp OTA discovery/download/install/health/recovery 或三平台 host runtime acceptance。
+
+## 代码侧修复
+
+beta.8 historical failure 后已补齐以下代码断点：
 
 - GitHub provider 保留 artifact `.sig` URL 到 `DownloadAsset.signatureUrl`，不再在 renderer release asset 归一化时丢失。
 - Nexus release asset 增加 `signatureKey` / `signatureUrl`，metadata 只暴露真实记录的签名 URL。
@@ -31,11 +44,9 @@
 | R1-F03 | Nexus upload matrix | 上传 signature file 后写入 `signatureKey` / endpoint URL；签名上传失败仍按 signature resource 记录治理事件 | `pnpm -C "apps/nexus" exec vitest run "test/api/releases/assets.post.test.ts"` |
 | R1-F04 | Nexus signature endpoint | endpoint 读取记录的 `signatureKey`；无签名记录返回 404 且不读 artifact storage | `pnpm -C "apps/nexus" exec vitest run "test/api/releases/signature.get.test.ts"` |
 
-## 剩余 Gate E
+## 当前状态边界
 
-R1 Gate E 仍需要真实环境证据，不能只用 focused tests 关闭：
-
-- 真实 GitHub Release 包含 `tuff-release-manifest.json`、core artifact、artifact `.sig`。
-- Nexus release metadata 从同一 tag 导入或链接后，`sha256`、`downloadUrl`、`signatureUrl` 与 GitHub Release asset 一致。
-- Nexus `/api/releases/latest`、`/api/releases/:tag/assets`、`/api/releases/:tag/download/:platform/:arch`、`/api/releases/:tag/signature/:platform/:arch` 在同一 release matrix 上可访问。
-- CoreApp update download 验证能实际拉取 `signatureUrl` 并通过 release public key 校验。
+- `v2.4.13-beta.19` 的 Gate E 已按上方精确来源关闭；稳定 `v2.4.13` 必须对其自身发布资产重新运行同一 strict gate，不能继承 beta.19 的 production pass。
+- Gate E 证明发布侧 notes、manifest/inventory、Nexus metadata/download、SHA-256、signature URL/payload、rollback/latest 对齐；它不替代 CoreApp 对真实下载包执行 pinned-key 验签与安装交接。
+- OTA lifecycle 仍需精确 N/N-1、官方可信 macOS ready→click→replace→health/recovery、Windows/Linux real-host handoff 与 profile compatibility evidence。static-only、workspace package 或 focused tests 不能关闭这些项。
+- 所有未被 exact-version packaged 或 production evidence 直接观察的维度继续保持 open。
