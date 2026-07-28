@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
   buildReleaseDownloadMatrix,
@@ -101,4 +104,53 @@ describe('generate-release-notes', () => {
     assert.ok(payload.githubBody.trimEnd().endsWith(buildReleaseDownloadMatrix('en').trimEnd()))
     assert.equal(payload.prs.length, 1)
   })
+
+  it('fails strict generation when author notes are missing', async () => {
+    await assert.rejects(
+      buildReleaseNotesPayload({
+        tag: 'v2.4.14-beta.1',
+        previousTag: 'v2.4.13-beta.23',
+        notesSourceDir: '',
+        requireManualNotes: true,
+      }),
+      /strict bilingual contract/i,
+    )
+  })
+
+  it('uses strict author notes verbatim and exposes localized summaries', async () => {
+    const notesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tuff-generated-notes-'))
+    const version = '2.4.14-beta.1'
+    try {
+      const zh = strictZh(version)
+      const en = strictEn(version)
+      fs.writeFileSync(path.join(notesDir, `update_${version}.zh.md`), zh, 'utf8')
+      fs.writeFileSync(path.join(notesDir, `update_${version}.en.md`), en, 'utf8')
+
+      const payload = await buildReleaseNotesPayload({
+        tag: `v${version}`,
+        previousTag: 'v2.4.13-beta.23',
+        notesSourceDir: notesDir,
+        requireManualNotes: true,
+      })
+
+      assert.equal(payload.zhNotes, zh)
+      assert.equal(payload.enNotes, en)
+      assert.deepEqual(payload.releaseNotesAsset.summary, {
+        zh: ['摘要一', '摘要二', '摘要三'],
+        en: ['Summary one', 'Summary two', 'Summary three'],
+      })
+      assert.equal(payload.releaseNotesAsset.channel, 'BETA')
+    }
+    finally {
+      fs.rmSync(notesDir, { recursive: true, force: true })
+    }
+  })
 })
+
+function strictZh(version) {
+  return `# Tuff v${version} 更新说明\n\n## 摘要\n\n- 摘要一\n- 摘要二\n- 摘要三\n\n## 变更内容\n\n- 更新内容来自本地 author 文档。\n`
+}
+
+function strictEn(version) {
+  return `# Tuff v${version} Release Notes\n\n## Summary Notes\n\n- Summary one\n- Summary two\n- Summary three\n\n## What's Changed\n\n- Update content now comes from local author documents.\n`
+}

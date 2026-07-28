@@ -1,66 +1,136 @@
-# Release Notes 生成规范 / Release Notes Authoring Guide
+# Release Notes 编写规范 / Release Notes Authoring Guide
 
-> 面向**发版时的 AI**(或人)。目标:每次发版自动生成**精简、效果优先**的双语更新说明,直接被发布链路消费。
-> Audience: the AI (or a human) cutting a release. Goal: auto-produce concise, **effect-first** bilingual notes that the release pipeline consumes verbatim.
+> 面向发版人员及其本地写作工具。每个 Release/Beta 版本必须提交一对中英双语 Markdown；发布云端只做确定性校验，不调用 AI，也不会翻译、补写或回退生成正文。
+>
+> For release authors and their local authoring tools. Every Release/Beta version must commit one Chinese/English Markdown pair. Cloud release jobs only validate deterministically: they do not call AI, translate, complete, or synthesize fallback copy.
 
-## 产物 / Output
+## 唯一输入 / Single source of truth
 
-每个版本生成两个文件,放在 `notes/`:
+每个版本只新增以下两个版本化文件：
 
 - `notes/update_<version>.zh.md`
 - `notes/update_<version>.en.md`
 
-`<version>` = 完整语义版本,**不带 `v` 前缀**,含预发布后缀。例:`2.4.13-beta.21`。
+`<version>` 是不带 `v` 前缀的完整语义版本，例如 `2.4.14` 或 `2.4.14-beta.1`。不要另外维护 JSON、manifest、prompt、模型记录、范围文件或 evidence；GitHub Release、Nexus 和 App 内 What's Changed 所需格式都从这两个文件确定性派生。
 
-文件内首行 H1 **带 `v`**:
+Each version adds only the two files above. `<version>` is the complete semantic version without a `v` prefix. Do not maintain a second JSON/manifest/evidence source.
 
-- zh:`# Tuff v<version> 更新说明`
-- en:`# Tuff v<version> Release Notes`
+Snapshot 构建不要求版本日志，也不会进入 App 内 What's Changed 历史。`notes/release-notes.config.json` 中强契约基线之前的既有 Release/Beta 版本按 Legacy 展示，不要求回填。
 
-## 风格(硬要求)/ Style (hard rules)
+Snapshot builds are exempt and excluded from What's Changed history. Existing Release/Beta versions at or before the thresholds in `notes/release-notes.config.json` remain Legacy and are not backfilled.
 
-- **效果优先**:写用户能感知的变化,不写实现细节。
-  - ✅ 正例:「更新一键完成,无需手动重启」
-  - ❌ 反例:「重构 UpdateService 事件链 / 引入 attemptId 去重」
-- **每条一行**:一句话说清一个变化,不换行、不堆细节。
-- **克制字数**:亮点 3–6 条;能一句说清就不写两句。
-- **双语对应**:zh 与 en 一一对应,条数、含义一致。
-- zh 和 en **都必须非空** —— 否则发布 gate `checkNotes` 失败。
+## 强制结构 / Required contract
 
-## 结构 / Structure
-
-只保留两段,第二段可省:
+中文文件：
 
 ```markdown
 # Tuff v<version> 更新说明
 
-## 本次更新
+## 摘要
 
-- <效果 1>
-- <效果 2>
+- <摘要 1>
+- <摘要 2>
+- <摘要 3>
 
-## 已知限制   ← 可选,只在确有用户可感知的限制时写
+## 变更内容
 
-- <限制 1>
+- <变化 1>
 ```
 
-en 对应 `## Highlights` / `## Known Limitations`。
+英文文件：
 
-> 不再写 beta.14 那种「## 已验证 / Validation」工程证据段——签名、校验、平台验证证据由 release evidence 与 manifest 承载,不进用户可读的 notes。
+```markdown
+# Tuff v<version> Release Notes
 
-## 生成流程(发版时)/ How to generate
+## Summary Notes
 
-1. 确定上一个**同通道** tag(beta→beta,release→release,snapshot→snapshot)。
-2. 读 `<prev-tag>..HEAD` 的 commit / 合并 PR。
-3. 把变更**归纳成用户可感知的效果**:合并同类项,丢弃纯内部项(`refactor`/`chore`/`test`/lockfile/文档/内部组件)。
-4. 按上面的结构写 `zh` + `en` 两个文件。
-5. **在打 tag 之前**提交这两个文件。
+- <Summary 1>
+- <Summary 2>
+- <Summary 3>
 
-## 机制:为什么这么写 / Why
+## What's Changed
 
-- 手动 `notes/update_<version>.{zh,en}.md` 是更新说明的**唯一真相源**:存在即覆盖下游——
-  - 被 `scripts/generate-release-notes.mjs` 当作正文,**覆盖**自动 PR 列表;
-  - 被 Nexus 同步为应用内「更新说明」(verbatim);
-  - 满足发布 gate 的 `checkNotes`(仅要求 zh/en 非空,无结构/字数校验)。
-- GitHub Release 正文仍由合并 PR 自动生成(`buildGitHubBody`),notes 文件作为「Notes Preview」附在其后。
-  所以 notes 只负责**给用户看的精简效果**,详尽 PR 清单交给自动化。
+- <Change 1>
+```
+
+规则：
+
+- H1 必须与语言和目标版本精确匹配。
+- `摘要` / `Summary Notes` 必填，必须有 3–6 条。
+- `变更内容` / `What's Changed` 必填且至少有 1 条。
+- 章节正文只允许无序列表；每条只表达一个用户可感知的变化。
+- 中英文对应章节的条目数量必须一致，含义应一一对应。
+- 不允许 `TODO`、`TBD`、`N/A`、`暂无`、`不适用` 等占位内容。
+
+Rules:
+
+- The H1 must exactly match the locale and target version.
+- Summary Notes is required and must contain 3–6 items.
+- What's Changed is required and must contain at least one item.
+- Section bodies contain unordered lists only; each item describes one user-visible effect.
+- Chinese and English section item counts must match, with equivalent meaning in order.
+- Placeholder copy such as `TODO`, `TBD`, `N/A`, `暂无`, or `不适用` is forbidden.
+
+## 可选章节 / Optional sections
+
+只在确有内容时加入以下章节；禁止为了保持模板完整而填“无”。若加入，中英文两份必须同时出现且条目数量一致。
+
+| 中文 H2         | English H2             | 用途 / Purpose                                                      |
+| --------------- | ---------------------- | ------------------------------------------------------------------- |
+| `## 新增内容`   | `## What's New`        | 新功能或新能力 / New capabilities                                   |
+| `## 破坏性变更` | `## Breaking Changes`  | 需要用户采取行动的兼容变化 / Compatibility changes requiring action |
+| `## 已知限制`   | `## Known Limitations` | 当前真实存在的用户可感知限制 / Current user-visible limitations     |
+
+推荐顺序：摘要、What's New、What's Changed、Breaking Changes、Known Limitations。除表中章节外，不要新增其他 H2。
+
+Recommended order: Summary Notes, What's New, What's Changed, Breaking Changes, Known Limitations. Do not add other H2 sections.
+
+## 写作原则 / Authoring principles
+
+- 效果优先：写用户能感知的结果，不写内部类名、事件链或重构过程。
+- 具体克制：说明改变了什么及其影响，避免营销口号和实现流水账。
+- 保留重要限制：破坏性变化和已知限制不能藏在笼统摘要中。
+- 双语自然：保持事实和顺序一致，但不要求逐字直译。
+- 纯内部变更不必写入；若该版本只有修复，仍应在 What's Changed 中明确修复效果。
+
+- Lead with user-visible outcomes rather than internal implementation details.
+- Be specific and concise; avoid marketing language and engineering inventories.
+- Keep breaking changes and known limitations explicit.
+- Preserve facts and ordering across languages without forcing literal translation.
+- Purely internal work may be omitted; fix-only releases still describe their effect under What's Changed.
+
+## 本地流程 / Local workflow
+
+1. 先同步根目录与 `apps/core-app/package.json` 的目标版本。
+2. 获取同渠道上一 tag 到目标 ref 的本地写作上下文：
+
+   ```bash
+   pnpm release:notes:prepare -- --version <version> --target-ref HEAD
+   ```
+
+   输出包含目标 SHA、上一同渠道 tag、commit 范围和双语模板。需要创建空白模板时可加 `--write`；命令拒绝覆盖已有文件。
+
+3. 使用任意本地编辑器、脚本或 AI 工具撰写两份 Markdown。只提交最终文档，不上传 prompt、模型记录或写作 evidence。
+4. 在打 tag 前执行确定性校验：
+
+   ```bash
+   pnpm release:notes:verify -- --version <version> --tag v<version>
+   ```
+
+5. 修复所有校验错误后再提交和发版。
+
+The author may use any local editor, script, or AI tool. Only the final Markdown pair is versioned. Run `prepare` for same-channel commit context and `verify` before tagging.
+
+## 下游行为 / Downstream behavior
+
+- GitHub Release 正文使用 author 双语文档；merged PR inventory 仅作为附录。
+- Nexus 只接收 generator 产生的双语正文与 metadata asset，不读取 GitHub body 作为 fallback。
+- CoreApp 打包当前版本完整日志和支持范围内的双语摘要索引。
+- 升级后首启弹窗可跨 Release/Beta 聚合摘要；Update 页从 Nexus 分页加载完整历史并使用本地缓存。
+- Release/Beta 缺少合规 author 文档时发版失败。自动 PR 列表、共享 `notes/update_<version>.md` 或 GitHub body 都不能绕过门禁。
+
+- GitHub Release uses the authored bilingual documents; merged PR inventory is appendix-only.
+- Nexus consumes generated bilingual metadata and never falls back to the GitHub body.
+- CoreApp bundles the current full notes plus the supported bilingual summary catalog.
+- The startup dialog aggregates Release/Beta summaries; Update history pages through Nexus with local cache.
+- Missing or invalid Release/Beta author documents fail the release. PR lists, shared Markdown, and GitHub body cannot bypass the gate.
