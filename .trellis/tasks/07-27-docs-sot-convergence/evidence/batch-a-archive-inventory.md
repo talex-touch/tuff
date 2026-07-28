@@ -14,3 +14,10 @@ Reviewed before archive. Each candidate has `task.json.status = completed`, all 
 | `.trellis/tasks/07-18-plugin-tuffex-supply-chain` | 6/6 PRD checks; task evidence; archived after its child | `.trellis/tasks/archive/2026-07/07-18-plugin-tuffex-supply-chain` |
 
 Hard exclusions: `.trellis/tasks/07-27-bilingual-whats-changed/` and `.trellis/tasks/07-17-unify-ota-update-flow/task.json` are concurrently owned and not changed by this batch.
+
+## Latest-base reviewer reconciliation
+
+- Latest-base task inventory: 31 active task directories; the 30 non-excluded active task metadata records now have non-empty `assignee`, `meta.nextAction`, `meta.blocker`, and `meta.evidence`.
+- Valid ownership exceptions remain exactly `.trellis/tasks/07-27-bilingual-whats-changed/` and `.trellis/tasks/07-17-unify-ota-update-flow/task.json`; neither is edited by this batch.
+- Removed six stale active-work metadata hunks from archived completed tasks: widget-sandbox-completion, ota-ui-release-acceptance, persist-ota-lifecycle, unify-ota-install-recovery, unify-ota-provider-security, and align-published-release-gates.
+- The replacement search-split child retains the default-off, silent-data-loss, provider-before-writer-readiness, focused startup-order, flag-on application, and rollback contract.

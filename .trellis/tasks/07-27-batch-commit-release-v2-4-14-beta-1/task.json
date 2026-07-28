@@ -25,5 +25,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete the remaining release child acceptance and then perform the ordered v2.4.14-beta.1 release batch.",
+    "blocker": "The release child has unresolved acceptance criteria; no release action may start before its evidence is complete.",
+    "evidence": "prd.md, child-task map, and task-local release evidence define the batch gate."
+  }
 }

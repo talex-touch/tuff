@@ -18,6 +18,7 @@ Move every remaining search-index write path to the worker-owned `search-index.d
 - With the split enabled, no main-thread path may mutate the moved search-index tables.
 - Keep the flag-off path byte-identical; never enable the flag as part of this task.
 - Await worker acknowledgement before dependent reads.
+- With the split enabled, provider writes must not begin before `searchIndexWriter` is admitted and ready; pre-ready startup must wait or fail closed and must never fall back to the main-thread `db`.
 
 ### R2 — Migrate every remaining writer
 
@@ -35,6 +36,7 @@ Move every remaining search-index write path to the worker-owned `search-index.d
 ## Acceptance Criteria
 
 - [ ] Every 2d/2e writer listed in `design.md` executes on the worker connection when split is enabled, while the default-off path is unchanged.
+- [ ] Focused startup-ordering evidence proves provider writes cannot reach the split path before `searchIndexWriter` readiness and cannot silently fall back to `database.db`.
 - [ ] Provider-specific `displayName`, conflict semantics, and extensions remain intact; no migration substitutes incomplete `upsertFiles` behavior.
 - [ ] The embedding, first-launch reindex, and orphan-cleanup decisions are implemented and covered by focused evidence.
 - [ ] A flag-on CoreApp run proves populated `search-index.db`, complete app/file results, matching counts, healthy indexing, and flag-off rollback.

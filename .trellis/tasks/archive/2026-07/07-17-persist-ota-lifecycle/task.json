@@ -21,10 +21,5 @@
   "children": [],
   "parent": "07-17-unify-ota-update-flow",
   "relatedFiles": [],
-  "notes": "",
-  "meta": {
-    "nextAction": "Coordinate the persisted lifecycle contract with the remaining OTA integration tasks and record parent-level completion disposition.",
-    "blocker": "The OTA parent integration remains open; this completed child contract must not be closed independently of its consumers.",
-    "evidence": "prd.md Verification records focused lifecycle, repository, transport, renderer, migration, and isolated Settings smoke results."
-  }
+  "notes": ""
 }

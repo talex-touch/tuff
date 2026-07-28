@@ -10,6 +10,7 @@
 - The worker protocol supplies `ExecWriteMessage` / `ExecWriteResult`, `handleExecWrite`, and `SearchIndexWorkerClient.execWrite()`.
 - `SearchIndexWriter.execWrite()` passes exact SQL through the admission gate.
 - `createDbUtils(db, auxDb, split?)` routes file-index reads to `readDb` and writes through `writer.execWrite(...)` when supplied split context.
+- Provider startup ordering is part of the sole-writer boundary: before `searchIndexWriter` admission/readiness, split-enabled provider writes must wait or fail closed; they must never use the primary `db` as an eager fallback.
 
 ## Migration map
 
@@ -17,6 +18,7 @@
 
 - `app-provider.ts:607`: pass `{ enabled: databaseManager.isSearchSplitEnabled(), searchDb: databaseManager.getSearchDb(), writer: searchIndexWriter }` to `createDbUtils`; add the currently missing writer import.
 - `file-provider.ts:1822` and `file-provider.ts:2257`: pass equivalent context. The provider already has `filePersistencePort`.
+- Wire the context only after writer readiness is established; provider initialization must not invoke any split-enabled write before `searchIndexWriter` admission can serialize it.
 
 ### 2d.2 App provider transactions
 
