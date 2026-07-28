@@ -8,7 +8,7 @@ This directory contains GitHub Actions workflows for CI/CD automation.
 
 - **`ci.yml`** - Main CI workflow for pull requests
   - Checks for disallowed file changes (lock files)
-  - Lints markdown files
+  - Runs the canonical read-only `mise run docs:verify` documentation gate after a frozen dependency install
   - Runs typecheck on the entire monorepo
   - Uses read-only `pull_request` on `main` / `master`; workflows that execute PR code must not use `pull_request_target`
 

@@ -1,0 +1,13 @@
+{
+  "id": "completed-doc-task",
+  "title": "Completed documentation task",
+  "status": "completed",
+  "completedAt": "2026-07-27T00:00:00.000Z",
+  "assignees": ["docs-owner"],
+  "children": [],
+  "meta": {
+    "nextAction": "Archived.",
+    "blocker": "None.",
+    "evidence": "Completed fixture metadata."
+  }
+}
