@@ -61,6 +61,7 @@ describe('getStreamingAsrConfig', () => {
 
 class FakeSocket {
   static instances: FakeSocket[] = []
+  static autoOpen = true
   readyState = 0
   binaryType = ''
   onopen: (() => void) | null = null
@@ -71,10 +72,12 @@ class FakeSocket {
 
   constructor(public url: string) {
     FakeSocket.instances.push(this)
-    queueMicrotask(() => {
-      this.readyState = 1
-      this.onopen?.()
-    })
+    if (FakeSocket.autoOpen) {
+      queueMicrotask(() => {
+        this.readyState = 1
+        this.onopen?.()
+      })
+    }
   }
 
   send(data: unknown): void {
@@ -94,11 +97,59 @@ class FakeSocket {
 describe('createAsrStream', () => {
   beforeEach(() => {
     FakeSocket.instances = []
+    FakeSocket.autoOpen = true
     ;(globalThis as unknown as { WebSocket: unknown }).WebSocket = FakeSocket
   })
 
   afterEach(() => {
     delete (globalThis as unknown as { WebSocket?: unknown }).WebSocket
+  })
+
+  it('aborts and closes a socket that never opens', async () => {
+    FakeSocket.autoOpen = false
+    const controller = new AbortController()
+    const gen = createAsrStream({
+      url: 'wss://host/asr',
+      sampleRate: 16000,
+      drainFrames: () => Buffer.alloc(0),
+      isCapturing: () => true,
+      signal: controller.signal
+    })
+    const pending = gen.next().then(
+      () => 'resolved',
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
+
+    await Promise.resolve()
+    controller.abort()
+
+    await expect(
+      Promise.race([pending, new Promise((resolve) => setTimeout(() => resolve('pending'), 100))])
+    ).resolves.toBe('VOICE_ASR_STREAM_CANCELLED')
+    expect(FakeSocket.instances[0]?.readyState).toBe(3)
+  })
+
+  it('aborts an open socket while waiting for a final event', async () => {
+    const controller = new AbortController()
+    const gen = createAsrStream({
+      url: 'wss://host/asr',
+      sampleRate: 16000,
+      drainFrames: () => Buffer.alloc(0),
+      isCapturing: () => true,
+      signal: controller.signal
+    })
+    const pending = gen.next().then(
+      () => 'resolved',
+      (error: unknown) => (error instanceof Error ? error.message : String(error))
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    controller.abort()
+
+    await expect(
+      Promise.race([pending, new Promise((resolve) => setTimeout(() => resolve('pending'), 100))])
+    ).resolves.toBe('VOICE_ASR_STREAM_CANCELLED')
+    expect(FakeSocket.instances[0]?.readyState).toBe(3)
   })
 
   it('sends a start frame and yields partial then final events', async () => {
