@@ -20,6 +20,7 @@ import { toast } from 'vue-sonner'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
+import ReleaseNotesHistory from '~/components/update/ReleaseNotesHistory.vue'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -652,6 +653,7 @@ function openAssetsDialog(): void {
 
 <template>
   <TuffGroupBlock
+    data-settings-section="update"
     :name="t('settings.settingUpdate.groupTitle')"
     :description="t('settings.settingUpdate.groupDesc')"
     default-icon="i-carbon-update-now"
@@ -900,6 +902,8 @@ function openAssetsDialog(): void {
     </TuffBlockSlot>
   </TuffGroupBlock>
 
+  <ReleaseNotesHistory class="setting-update__release-notes" />
+
   <TModal
     v-model="assetsDialogVisible"
     :title="t('settings.settingUpdate.assetsTitle')"
@@ -979,6 +983,10 @@ function openAssetsDialog(): void {
 </template>
 
 <style scoped>
+.setting-update__release-notes {
+  margin: 22px 16px 28px;
+}
+
 .native-trust-alert {
   display: flex;
   gap: 12px;

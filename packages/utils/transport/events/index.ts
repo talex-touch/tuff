@@ -554,6 +554,7 @@ import { PluginBroadcastEvents } from "./plugin-broadcast";
 // ============================================================================
 
 import type {
+  UpdateAcknowledgeReleaseNotesRequest,
   UpdateAutoCheckRequest,
   UpdateAutoDownloadRequest,
   UpdateAvailablePayload,
@@ -562,12 +563,17 @@ import type {
   UpdateCheckResponse,
   UpdateDownloadRequest,
   UpdateDownloadResponse,
+  UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
+  UpdateGetReleaseNotesRequest,
+  UpdateGetReleaseNotesResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateIgnoreVersionRequest,
   UpdateInstallRequest,
   UpdateLifecycleChangedPayload,
+  UpdateListReleaseNotesRequest,
+  UpdateListReleaseNotesResponse,
   UpdateOpResponse,
   UpdateRecordActionRequest,
   UpdateUpdateSettingsRequest,
@@ -861,6 +867,26 @@ export const UpdateEvents = {
     .module("service")
     .event("get-cached-release")
     .define<UpdateCachedReleaseRequest, UpdateGetCachedReleaseResponse>(),
+
+  getBundledReleaseNotes: defineEvent("update")
+    .module("release-notes")
+    .event("get-bundled")
+    .define<void, UpdateGetBundledReleaseNotesResponse>(),
+
+  listReleaseNotes: defineEvent("update")
+    .module("release-notes")
+    .event("list")
+    .define<UpdateListReleaseNotesRequest, UpdateListReleaseNotesResponse>(),
+
+  getReleaseNotes: defineEvent("update")
+    .module("release-notes")
+    .event("get")
+    .define<UpdateGetReleaseNotesRequest, UpdateGetReleaseNotesResponse>(),
+
+  acknowledgeReleaseNotes: defineEvent("update")
+    .module("release-notes")
+    .event("acknowledge")
+    .define<UpdateAcknowledgeReleaseNotesRequest, UpdateOpResponse>(),
 
   recordAction: defineEvent("update")
     .module("service")
