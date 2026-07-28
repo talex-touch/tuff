@@ -173,7 +173,7 @@ describe('canonical documentation verifier fixtures', () => {
     const ruleIds = diagnosticRuleIds(result)
     assert.ok(ruleIds.length > 0, 'expected at least one diagnostic rule ID')
     assert.ok(
-      ruleIds.every(ruleId => /^[A-Za-z][A-Za-z0-9.-]*$/.test(ruleId)),
+      ruleIds.every(ruleId => /^[A-Z][A-Z0-9.-]*$/i.test(ruleId)),
       `expected stable rule IDs, got: ${ruleIds.join(', ')}`,
     )
     assert.ok(
@@ -183,7 +183,7 @@ describe('canonical documentation verifier fixtures', () => {
 
     const paths = diagnosticPaths(result)
     assert.ok(
-      paths.some(filePath => filePath === 'notes/update_2.4.14.en.md'),
+      paths.includes('notes/update_2.4.14.en.md'),
       `expected the invalid English release-note path in diagnostics, got: ${paths.join(', ')}`,
     )
   })
