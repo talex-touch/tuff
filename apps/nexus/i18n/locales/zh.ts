@@ -225,12 +225,11 @@ export default {
     eyebrow: '订阅方案',
     title: '选择与你节奏匹配的订阅方案',
     subtitle: '直接在 Nexus 完成升级，订阅后即可即时解锁高级自动化与指挥面板。',
-    note: '免费开始，无需信用卡，随时升级或取消。',
     popular: '最受欢迎',
     comingSoon: '敬请期待',
     comingSoonHint: '上线时公布价格',
+    freeHint: '永久免费，无需信用卡',
     perMonth: '/ 月',
-    included: '包含',
     ctaFree: '开始体验',
     ctaWaitlist: '加入等候名单',
     plans: {

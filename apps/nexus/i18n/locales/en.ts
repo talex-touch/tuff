@@ -225,12 +225,11 @@ export default {
     eyebrow: 'Pricing',
     title: 'Choose the plan that matches your momentum.',
     subtitle: 'Upgrade inside Nexus. Unlock premium automations and surfaces instantly after subscription.',
-    note: 'Start free — no credit card required. Upgrade or cancel anytime.',
     popular: 'Most popular',
     comingSoon: 'Coming soon',
     comingSoonHint: 'Pricing announced at launch',
+    freeHint: 'Free forever, no card required',
     perMonth: '/ month',
-    included: 'Includes',
     ctaFree: 'Get started',
     ctaWaitlist: 'Join the waitlist',
     plans: {
