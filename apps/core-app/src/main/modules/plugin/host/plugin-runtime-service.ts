@@ -114,6 +114,7 @@ const DEFAULT_TEARDOWN_TIMEOUT_MS = 2_000
 const MAX_TEARDOWN_TIMEOUT_MS = 60_000
 const SNAPSHOT_MAX_DEPTH = 32
 const SNAPSHOT_MAX_MEMBERS = 10_000
+const MAX_ISSUED_ACTIVATIONS = 65_536
 const RESOURCE_LIMIT_KEYS = new Set<keyof PluginRuntimeHostResourceLimits>([
   'maxDepth',
   'maxMembers',
@@ -284,6 +285,7 @@ function snapshotValue(
   state.seen.add(input)
   try {
     const descriptors = Object.getOwnPropertyDescriptors(input)
+    if (Reflect.ownKeys(descriptors).some((key) => typeof key === 'symbol')) invalidOptions()
     const nextState = { ...state, depth: state.depth + 1 }
     if (Array.isArray(input)) {
       const lengthDescriptor = descriptors.length
@@ -623,6 +625,7 @@ export class PluginRuntimeService {
       !Number.isSafeInteger(hostGeneration) ||
       Number(hostGeneration) < 1 ||
       Number(hostGeneration) <= this.lastIssuedHostGeneration ||
+      this.issuedActivationHandles.size >= MAX_ISSUED_ACTIVATIONS ||
       this.issuedActivationHandles.has(activationHandle)
     ) {
       throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS')
@@ -635,6 +638,24 @@ export class PluginRuntimeService {
     let record!: RuntimeRecord
     let dispatcher: PluginRuntimeCapabilityDispatcher | undefined
     let ownsCapabilityDispatcher = false
+    let crashReported = false
+    const reportCrash = (): void => {
+      if (crashReported) return
+      crashReported = true
+      try {
+        options.onCrash?.({
+          code: 'PLUGIN_RUNTIME_HOST_CRASHED',
+          pluginName: activation.name,
+          activationGeneration: activation.activationGeneration
+        })
+      } catch {
+        // Crash observers cannot restore authority or expose native errors.
+      }
+    }
+    const stopAndReportCrash = (): void => {
+      const stopping = this.manager.stopPlugin(activation.name)
+      void stopping.then(reportCrash, reportCrash)
+    }
 
     if (this.capabilityDefinitions.length > 0) {
       const registry = new PluginHostCapabilityRegistry({
@@ -659,7 +680,7 @@ export class PluginRuntimeService {
           }
           record.acceptingWork = false
           this.records.delete(activation.name)
-          void this.manager.stopPlugin(activation.name)
+          stopAndReportCrash()
         }
       })
       for (const definition of this.capabilityDefinitions) registry.register(definition)
@@ -683,15 +704,20 @@ export class PluginRuntimeService {
       },
       capabilityDispatcher: dispatcher,
       ownsCapabilityDispatcher,
-      onCrash: (diagnostic) => {
+      onCrash: () => {
         if (this.records.get(activation.name) !== record) return
+        record.acceptingWork = false
         this.records.delete(activation.name)
         void this.manager.stopPlugin(activation.name)
-        try {
-          options.onCrash?.(diagnostic)
-        } catch {
-          // Crash observers cannot restore authority or resources.
+        reportCrash()
+      },
+      onTerminated: () => {
+        if (this.records.get(activation.name) !== record || !record.acceptingWork) {
+          return
         }
+        record.acceptingWork = false
+        this.records.delete(activation.name)
+        stopAndReportCrash()
       }
     })
 
