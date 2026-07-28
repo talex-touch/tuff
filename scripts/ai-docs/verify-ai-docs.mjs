@@ -39,21 +39,27 @@ function currentCoreAppVersion(repoRoot) {
 }
 
 function promotionFailures(file, content, currentVersion) {
-  const failures = []
-  for (const paragraph of content.split(/\n\s*\n/)) {
-    if (CURRENT_PROMOTION_NEGATION.test(paragraph))
+  const failures = new Map()
+  const clauses = content.split(/(?<=[.!?。！？])(?:\s+|$)|\n+/).filter(Boolean)
+  for (const clause of clauses) {
+    if (CURRENT_PROMOTION_NEGATION.test(clause))
       continue
-    if (HISTORICAL_PROMOTION.test(paragraph)) {
-      failures.push({ file, message: `historical evidence cannot prove current CoreApp ${currentVersion} packaged evidence` })
+    if (HISTORICAL_PROMOTION.test(clause)) {
+      const message = `historical evidence cannot prove current CoreApp ${currentVersion} packaged evidence`
+      failures.set(message, { file, message })
       continue
     }
-    const match = CURRENT_PROMOTION.exec(paragraph)
-    if (match && match[1] !== currentVersion)
-      failures.push({ file, message: `current evidence promotion names ${match[1]}, not CoreApp ${currentVersion}` })
-    else if (CURRENT_COMPLETION_WITHOUT_VERSION.test(paragraph))
-      failures.push({ file, message: `current evidence completion must name exact CoreApp ${currentVersion}` })
+    const match = CURRENT_PROMOTION.exec(clause)
+    if (match && match[1] !== currentVersion) {
+      const message = `current evidence promotion names ${match[1]}, not CoreApp ${currentVersion}`
+      failures.set(message, { file, message })
+    }
+    else if (CURRENT_COMPLETION_WITHOUT_VERSION.test(clause)) {
+      const message = `current evidence completion must name exact CoreApp ${currentVersion}`
+      failures.set(message, { file, message })
+    }
   }
-  return failures
+  return [...failures.values()]
 }
 
 export function verifyAiDocs(repoRoot = new URL('../../', import.meta.url)) {

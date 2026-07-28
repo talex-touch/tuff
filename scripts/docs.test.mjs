@@ -488,8 +488,9 @@ describe('canonical documentation verifier fixtures', () => {
       name: 'ai-promotion-current-evidence',
       ruleIds: ['DOC-AI-CONTRACT'],
       paths: [
-        'docs/plan-prd/03-features/ai-2.5.0-plan-prd.md',
+        'docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md',
       ],
+      messages: ['historical evidence cannot prove current CoreApp 2.4.14 packaged evidence'],
       absentMessages: ['missing '],
     },
     {
