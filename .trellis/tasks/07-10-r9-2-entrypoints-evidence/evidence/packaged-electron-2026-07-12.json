@@ -1,0 +1,59 @@
+{
+  "schema": "tuff.context-entrypoint-packaged-evidence.v1",
+  "capturedAt": "2026-07-12T06:24:09.975Z",
+  "source": "packaged-electron",
+  "buildVersion": "2.4.13-beta.4",
+  "runtimeVersion": "electron-41.3.0",
+  "environment": {
+    "platform": "darwin-arm64",
+    "profile": "isolated-controlled",
+    "providerKind": "local-ollama-compatible",
+    "pluginVersion": "1.0.3",
+    "runtimeSeedSynchronized": true
+  },
+  "observations": {
+    "corebox": {
+      "owner": "corebox",
+      "scope": "retrieval",
+      "contextMode": "new",
+      "boundaryLabel": "new / retrieval",
+      "itemCount": 1,
+      "tokenEstimate": 8,
+      "tokenBudget": 1200,
+      "route": "/api/chat",
+      "providerCallCount": 1,
+      "providerEntryCount": 2,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "modelMatched": true,
+      "visibleExecution": true
+    },
+    "assistant": {
+      "entrypointId": "assistant.voice",
+      "dispatch": "voice-panel-to-corebox-ai-feature",
+      "owner": "assistant",
+      "scope": "light",
+      "isolated": true,
+      "contextMode": "new",
+      "boundaryLabel": "new / light",
+      "itemCount": 1,
+      "tokenEstimate": 255,
+      "tokenBudget": 1200,
+      "route": "/api/chat",
+      "providerCallCount": 1,
+      "providerEntryCount": 2,
+      "roles": [
+        "system",
+        "user"
+      ],
+      "modelMatched": true,
+      "visibleExecution": true
+    }
+  },
+  "privacy": {
+    "rawInteractionFieldsStored": 0,
+    "rawSecretFieldsStored": 0
+  }
+}
