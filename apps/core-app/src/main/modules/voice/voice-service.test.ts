@@ -109,6 +109,28 @@ describe('VoiceService.dictate', () => {
     expect(invoke).not.toHaveBeenCalled()
   })
 
+  it('attributes STT and polish to the trusted plugin caller', async () => {
+    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    invoke.mockResolvedValue({ result: 'Raw text.' })
+
+    await new VoiceService().dictate(
+      { cleanup: true },
+      undefined,
+      undefined,
+      'plugin:touch-dictation'
+    )
+
+    expect(stt).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ metadata: { caller: 'plugin:touch-dictation' } })
+    )
+    expect(invoke).toHaveBeenCalledWith(
+      'text.chat',
+      expect.any(Object),
+      expect.objectContaining({ metadata: { caller: 'plugin:touch-dictation' } })
+    )
+  })
+
   it('cancels native capture when the owner signal aborts', async () => {
     vi.useFakeTimers()
     pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
@@ -248,6 +270,18 @@ describe('VoiceService.speak', () => {
     expect(result.played).toBe(true)
     expect(result.durationMs).toBe(1500)
     expect(playAudio).toHaveBeenCalledTimes(1)
+  })
+
+  it('attributes synthesis to the trusted plugin caller', async () => {
+    await new VoiceService().speak(
+      { text: 'hello', play: false },
+      undefined,
+      'plugin:touch-dictation'
+    )
+
+    expect(ttsSpeak).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { caller: 'plugin:touch-dictation' } })
+    )
   })
 
   it('cancels pending synthesis and never starts playback after abort', async () => {
