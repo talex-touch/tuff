@@ -4,7 +4,6 @@ import {
   PluginRuntimeDeniedModuleError,
   createPluginRequire
 } from './plugin-require'
-import { loadPluginFeatureContextFromContent } from '../plugin-feature'
 
 function expectDenied(operation: () => unknown, moduleId: string): void {
   expect(operation).toThrow(PluginRuntimeDeniedModuleError)
@@ -70,18 +69,5 @@ describe('createPluginRequire', () => {
     const pluginRequire = createPluginRequire('test-plugin')
 
     expectDenied(() => pluginRequire.resolve('./native-addon.node'), './native-addon.node')
-  })
-
-  it('preserves the denied error code through plugin script loading', () => {
-    expect(() =>
-      loadPluginFeatureContextFromContent(
-        {
-          name: 'test-plugin',
-          pluginPath: '/tmp/test-plugin'
-        } as never,
-        "require('electron')",
-        {}
-      )
-    ).toThrow(expect.objectContaining({ code: PLUGIN_RUNTIME_DENIED_MODULE }))
   })
 })

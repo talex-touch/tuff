@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 
 type TransportDisposer = () => void
@@ -20,7 +21,15 @@ const mocks = vi.hoisted(() => {
   const plugin = {
     name: 'calendar',
     sdkapi: 260215,
+    status: 3,
+    dev: { enable: false },
     disable: vi.fn(),
+    getActivationIdentity: vi.fn(() => ({
+      name: 'calendar',
+      pluginInstanceId: 'calendar-instance',
+      activationGeneration: 1,
+      key: 'calendar-key'
+    })),
     getDataPath: vi.fn(() => '/fixture/calendar/data')
   }
   const manager = {
@@ -58,6 +67,8 @@ const mocks = vi.hoisted(() => {
     plugin,
     registerMainRuntime: vi.fn(),
     resolvePluginModuleIoRuntime: vi.fn(),
+    runtimeDispose: vi.fn(async () => undefined),
+    setRuntimeService: vi.fn(),
     setSecureStoreValue: vi.fn(),
     setTransport: vi.fn(),
     startUpdateScheduler: vi.fn(),
@@ -106,7 +117,10 @@ vi.mock('@talex-touch/utils/common/logger', () => ({
 }))
 
 vi.mock('../../core/eventbus/touch-event', () => ({
-  TalexEvents: { PERMISSION_GRANTED: 'permission-granted' },
+  TalexEvents: {
+    PERMISSION_GRANTED: 'permission-granted',
+    PERMISSION_REVOKED: 'permission-revoked'
+  },
   touchEventBus: { off: mocks.eventBusOff, on: mocks.eventBusOn }
 }))
 
@@ -170,11 +184,21 @@ vi.mock('../permission', () => ({
   getPermissionModule: () => ({ checkPermission: mocks.checkPermission })
 }))
 vi.mock('./dev-server-monitor', () => ({ DevServerHealthMonitor: class {} }))
+vi.mock('./host/plugin-runtime-electron-process', () => ({
+  ElectronPluginRuntimeProcessFactory: class {}
+}))
+vi.mock('./host/plugin-runtime-service', () => ({
+  PluginRuntimeService: class {
+    dispose = mocks.runtimeDispose
+  },
+  resolvePluginRuntimeArtifactPath: () => '/fixture/plugin-host.js'
+}))
 vi.mock('./plugin-content-installer', () => ({ installPluginContentPackageToLocalPlugin: vi.fn() }))
 vi.mock('./install-queue', () => ({ PluginInstallQueue: class {} }))
 vi.mock('./plugin', () => ({
   TouchPlugin: class {
     static setTransport = mocks.setTransport
+    static setRuntimeService = mocks.setRuntimeService
   }
 }))
 vi.mock('./plugin-installer', () => ({ PluginInstaller: class {} }))
@@ -249,6 +273,9 @@ describe('PluginModule facade', () => {
     mocks.getNetworkService.mockReset()
     mocks.networkCleanup.mockReset()
     mocks.registerMainRuntime.mockReset()
+    mocks.runtimeDispose.mockReset()
+    mocks.runtimeDispose.mockResolvedValue(undefined)
+    mocks.setRuntimeService.mockReset()
     mocks.setTransport.mockReset()
     mocks.startUpdateScheduler.mockReset()
     mocks.stopUpdateScheduler.mockReset()
@@ -308,6 +335,15 @@ describe('PluginModule facade', () => {
       error: { code: 'PLUGIN_WINDOW_NOT_FOUND', message: 'Plugin not found.' }
     })
 
+    const authoritativeContext = {
+      plugin: createTrustedTestPluginContext({
+        name: 'calendar',
+        pluginInstanceId: 'calendar-instance',
+        activationGeneration: 1,
+        uniqueKey: 'calendar-key'
+      })
+    }
+
     mocks.checkPermission.mockReturnValue({
       allowed: false,
       permissionId: 'storage:plugin:secret',
@@ -316,16 +352,20 @@ describe('PluginModule facade', () => {
     const denied = await invokeTransportHandler(
       PluginEvents.storage.setSecret,
       { key: 'token', value: 'encrypted-value' },
-      { plugin: { name: 'calendar' } }
+      authoritativeContext
     )
-    expect(denied).toEqual({ success: false, error: 'Secret access was denied' })
+    expect(denied).toEqual({
+      success: false,
+      code: 'PLUGIN_STORAGE_PERMISSION_DENIED',
+      error: 'Plugin storage permission is denied.'
+    })
     expect(mocks.setSecureStoreValue).not.toHaveBeenCalled()
 
     mocks.checkPermission.mockReturnValue({ allowed: true, permissionId: 'storage:plugin:secret' })
     const approved = await invokeTransportHandler(
       PluginEvents.storage.setSecret,
       { key: 'token', value: 'encrypted-value' },
-      { plugin: { name: 'calendar' } }
+      authoritativeContext
     )
     expect(approved).toEqual({ success: true })
     expect(mocks.setSecureStoreValue).toHaveBeenCalledWith(

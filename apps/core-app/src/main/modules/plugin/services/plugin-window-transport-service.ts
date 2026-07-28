@@ -24,6 +24,10 @@ import { TouchPlugin } from '../plugin'
 import { usePluginInjections } from '../runtime/plugin-injections'
 import { resolvePluginViewSecurityProfile } from '../runtime/plugin-view-security-profile'
 import {
+  registerPluginWebContents,
+  unregisterPluginWebContents
+} from '../runtime/plugin-view-registry'
+import {
   buildPluginViewWebPreferences,
   buildPublicPluginWindowOptions
 } from '../runtime/plugin-view-host'
@@ -117,33 +121,36 @@ export function registerPluginWindowTransportHandlers(
           const webPreferences = buildPluginViewWebPreferences(securityProfile.effectiveProfile, {
             plugin: touchPlugin,
             themeStyle: getMainConfig(StorageList.THEME_STYLE) ?? {},
-            source: `public-window:${target}`,
-            legacyPreload: obj._.preload
+            source: `public-window:${target}`
           })
           const navigationPolicy = await createPluginViewNavigationPolicy({
             pluginRoot: touchPlugin.pluginPath,
-            targetUrl: pathToFileURL(target).href,
-            securityProfile: securityProfile.effectiveProfile,
-            allowLegacyWebview: securityProfile.reason === 'legacy-webview'
+            targetUrl: pathToFileURL(target).href
           })
           const win = new TouchWindow(
             buildPublicPluginWindowOptions(request.options ?? {}, webPreferences)
           )
 
-          let webContents: Electron.WebContents
+          const webContents = win.window.webContents
+          const registrationToken = registerPluginWebContents(
+            webContents.id,
+            touchPlugin.getActivationIdentity()
+          )
+          webContents.once('destroyed', () => {
+            unregisterPluginWebContents(webContents.id, registrationToken)
+          })
+
           try {
-            installPluginViewNavigationPolicy(win.window.webContents, navigationPolicy)
-            webContents = await win.loadFile(target)
+            installPluginViewNavigationPolicy(webContents, navigationPolicy)
+            await win.loadFile(target)
           } catch (error) {
+            unregisterPluginWebContents(webContents.id, registrationToken)
             win.close()
             throw error
           }
 
           if (obj.styles) {
             await webContents.insertCSS(obj.styles)
-          }
-          if (securityProfile.effectiveProfile === 'compat-plugin-view' && obj.js) {
-            await webContents.executeJavaScript(obj.js)
           }
 
           webContents.send('@loaded', {
