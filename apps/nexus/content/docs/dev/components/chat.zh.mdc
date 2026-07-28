@@ -125,9 +125,9 @@ code: |
 
 ## 相关组件
 
-- `TxChatComposer` 负责文本输入、附件、发送保护和工具栏插槽，见 [ChatComposer](./chat-composer.zh.md)。
-- `TxTypingIndicator` 负责助手输入中状态，见 [TypingIndicator](./typing-indicator.zh.md)。
-- 需要 `tool` 消息或 streaming 状态的新 AI 对话界面，优先使用 [AI Elements](./ai-elements.zh.md)。
+- `TxChatComposer` 负责文本输入、附件、发送保护和工具栏插槽，见 [ChatComposer](./chat-composer.zh.mdc)。
+- `TxTypingIndicator` 负责助手输入中状态，见 [TypingIndicator](./typing-indicator.zh.mdc)。
+- 需要 `tool` 消息或 streaming 状态的新 AI 对话界面，优先使用 [AI Elements](./ai-elements.zh.mdc)。
 
 ## 最佳实践
 

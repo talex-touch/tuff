@@ -28,5 +28,5 @@
 - **桌面控制**：`touch-window-manager` + `touch-window-presets` + `touch-quick-actions`。
 
 ## 内置插件文档
-- 推荐入口：《[推荐插件组合](./recommended-plugins.zh.md)》
-- 全量文档：《[内置插件目录](./plugins/index.zh.md)》
+- 推荐入口：《[推荐插件组合](./recommended-plugins.zh.mdc)》
+- 全量文档：《[内置插件目录](./plugins/index.zh.mdc)》

@@ -1,158 +1,73 @@
 # Tuff Core App
 
-An Electron application with Vue 3 and TypeScript, featuring a unified download center and automatic update system.
+CoreApp is the Electron desktop application in the Tuff monorepo. It owns the
+process model, local modules, preload boundary, renderer application, and
+packaged application builds.
 
-## Features
+## Entrypoints
 
-- **Unified Download Center**: Centralized download management with progress tracking, pause/resume, and history
-- **Automatic Updates**: Seamless application updates with download progress and verification
-- **Plugin System**: Extensible architecture for custom capabilities
-- **AI Integration**: Built-in AI-powered search and contextual intelligence
-- **Performance Optimized**: Virtual scrolling, database indexes, and throttled updates
+- [Main process](src/main/index.ts): starts Electron and the CoreApp lifecycle.
+- [Preload](src/preload/index.ts): exposes the constrained renderer bridge.
+- [Renderer](src/renderer/src/main.ts): mounts the Vue application.
+- [Electron Vite configuration](electron.vite.config.ts):
+  defines main, preload, renderer, and worker build inputs.
 
-## Recommended IDE Setup
+## Workspace setup
 
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar)
-
-## Project Setup
-
-### Install
+Run commands from the repository root:
 
 ```bash
-$ pnpm install
+pnpm install --frozen-lockfile
+pnpm core:dev
 ```
 
-### Development
+The root `core:dev` command delegates to the CoreApp workspace. The package also
+provides scoped commands:
 
 ```bash
-$ pnpm dev
+pnpm -C "apps/core-app" run dev
+pnpm -C "apps/core-app" run lint
+pnpm -C "apps/core-app" run test
+pnpm -C "apps/core-app" run typecheck
+pnpm -C "apps/core-app" run build
 ```
 
-### Build
-
-```bash
-# For windows
-$ pnpm build:win
-
-# For macOS
-$ pnpm build:mac
-
-# For Linux
-$ pnpm build:linux
-```
+Platform release builds use `build:win`, `build:mac`, or `build:linux`.
+Release and signing acceptance remain separate from a successful local build.
 
 ## Architecture
 
-### Main Process Modules
+CoreApp is split across Electron boundaries:
 
-- **Download Center** (`src/main/modules/download/`): Unified download management system
-  - Task queue with priority scheduling
-  - Chunk-based downloading with resume support
-  - Progress tracking and speed calculation
-  - Database persistence with SQLite
-  - Error logging and retry mechanisms
-  - See [API Documentation](src/main/modules/download/API.md)
+- `src/main/` owns lifecycle, persistence, search/indexing, downloads, updates,
+  plugins, and other privileged modules.
+- `src/preload/` owns the narrow bridge between isolated renderer contexts and
+  typed transport.
+- `src/renderer/src/` owns Vue views, settings, CoreBox surfaces, and desktop
+  interaction.
+- Shared events, SDKs, and domain types live in `packages/utils`; reusable UI
+  primitives live in `packages/tuffex`.
 
-- **Update System** (`src/main/modules/update/`): Application update management
-  - GitHub Releases integration
-  - Automatic version detection
-  - SHA256 checksum verification
-  - Platform-specific installer handling
-  - See [Update System README](src/main/modules/update/README.md)
+Maintained module documentation:
 
-- **Plugin System** (`src/main/modules/plugin/`): Plugin management and loading
-- **Box Tool** (`src/main/modules/box-tool/`): Core search and command functionality
-- **Database** (`src/main/modules/database/`): SQLite database management
+- [Download Center](src/main/modules/download/README.md)
+- [Search and indexing runtime](src/main/modules/box-tool/search-engine/README.md)
+- [Update regression checklist](../../docs/plan-prd/03-features/download-update/update-regression-checklist.md)
 
-### Renderer Process
+## Project documentation
 
-- **Vue 3** with Composition API
-- **TypeScript** for type safety
-- **Tuffex** UI components
-- **UnoCSS** for styling
-- **Virtual scrolling** for performance
-
-## Documentation
-
-### Download Center
-
-- [API Documentation](src/main/modules/download/API.md) - Complete API reference
-- [Migration Guide](src/main/modules/download/MIGRATION_GUIDE.md) - Data migration from old systems
-- [Performance Optimizations](src/main/modules/download/PERFORMANCE_OPTIMIZATIONS.md) - Performance details
-- [Progress Tracker Usage](src/main/modules/download/PROGRESS_TRACKER_USAGE.md) - Progress tracking guide
-
-### Update System
-
-- [Update System README](src/main/modules/update/README.md) - Update system documentation
-
-## Development
-
-### Running Tests
-
-```bash
-$ pnpm test
-```
-
-### Code Quality
-
-```bash
-# Lint
-$ pnpm lint
-
-# Format
-$ pnpm format
-```
-
-### Database Migrations
-
-Database schema migrations are automatically applied on startup. To create a new migration:
-
-1. Add migration to `src/main/modules/download/migrations.ts`
-2. Increment version number
-3. Implement `up()` and optionally `down()` methods
-4. Test migration on development database
-
-See [Migration Guide](src/main/modules/download/MIGRATION_GUIDE.md) for details.
-
-## Performance
-
-The application includes several performance optimizations:
-
-- **Virtual Scrolling**: Handles 1000+ items smoothly
-- **Database Indexes**: 5-10x faster queries
-- **Progress Throttling**: Reduced IPC overhead
-- **Task Caching**: Faster lookups
-- **Debounced Search**: Smoother user input
-
-See [Performance Optimizations](src/main/modules/download/PERFORMANCE_OPTIMIZATIONS.md) for details.
-
-## Troubleshooting
-
-### Download Issues
-
-1. Check error logs: `download:get-logs` IPC channel
-2. Review error statistics: `download:get-error-stats`
-3. Verify network connectivity
-4. Check disk space
-
-### Update Issues
-
-1. Check update settings in preferences
-2. Verify GitHub API accessibility
-3. Review update system logs
-4. Try manual update check
-
-### Migration Issues
-
-1. Check migration status: `download:get-migration-status`
-2. Review migration logs
-3. Retry migration if needed
-4. Contact support with logs
+- [Documentation index](../../docs/INDEX.md)
+- [Engineering index](../../docs/engineering/README.md)
+- [CoreApp UI contract](../../docs/engineering/coreapp-ui-contract.md)
+- [Project planning index](../../docs/plan-prd/README.md)
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](../../.github/docs/contribution/CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Read the
+[repository contribution guide](../../.github/docs/contribution/CONTRIBUTING.md)
+before opening a change. Keep privileged behavior in the main process, preserve
+the preload boundary, and use the smallest relevant package checks.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](../../LICENSE) file for details.
+CoreApp is distributed under the repository [MIT License](../../LICENSE).

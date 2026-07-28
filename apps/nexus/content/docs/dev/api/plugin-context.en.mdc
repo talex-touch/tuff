@@ -76,19 +76,19 @@ code: |
 `context` also includes `pluginPath` and plugin `config`. Store secrets through `context.utils.secret`, not normal storage or logs.
 
 ## Capability groups
-
-| Context field                    | Purpose                                              | Primary documentation                                                |
-| -------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------- |
-| `box`, `feature`                 | CoreBox window and result-item lifecycle             | [Box](./box.en.md), [Feature](./feature.en.md)                       |
-| `clipboard`, `storage`, `secret` | Clipboard, plugin data, and protected credentials    | [Clipboard](./clipboard.en.md), [Storage](./storage.en.md)           |
-| `intelligence`                   | AI capability discovery, invoke, and stream          | [Intelligence](./intelligence.en.md)                                 |
-| `screenshot`                     | Permission-gated display, cursor, and region capture | [Screenshot](./screenshot.en.md)                                     |
-| `system`                         | Active app and permission-gated selected text        | [Clipboard](./clipboard.en.md)                                       |
-| `i18n`, `lexicon`                | Host locale and plugin-scoped Domain Lexicon         | [Localization](./i18n.en.md)                                         |
-| `quickActions`, `quickOps`       | Global actions and bounded built-in tools            | [Quick Actions](./quick-actions.en.md), [QuickOps](./quickops.en.md) |
-| `divisionBox`, `channel`         | Independent windows and plugin transport             | [DivisionBox](./division-box.en.md), [Channel](./channel.en.md)      |
-| `power`, `recommend`             | Low-power adaptation and recommendation providers    | [Power](./power.en.md), [Recommend](./recommend.en.md)               |
-
+<!-- markdownlint-disable MD060 -->
+| Context field                    | Purpose                                              | Primary documentation                                                  |
+| -------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `box`, `feature`                 | CoreBox window and result-item lifecycle             | [Box](./box.en.mdc), [Feature](./feature.en.mdc)                       |
+| `clipboard`, `storage`, `secret` | Clipboard, plugin data, and protected credentials    | [Clipboard](./clipboard.en.mdc), [Storage](./storage.en.mdc)           |
+| `intelligence`                   | AI capability discovery, invoke, and stream          | [Intelligence](./intelligence.en.mdc)                                  |
+| `screenshot`                     | Permission-gated display, cursor, and region capture | [Screenshot](./screenshot.en.mdc)                                      |
+| `system`                         | Active app and permission-gated selected text        | [Clipboard](./clipboard.en.mdc)                                        |
+| `i18n`, `lexicon`                | Host locale and plugin-scoped Domain Lexicon         | [Localization](./i18n.en.mdc)                                          |
+| `quickActions`, `quickOps`       | Global actions and bounded built-in tools            | [Quick Actions](./quick-actions.en.mdc), [QuickOps](./quickops.en.mdc) |
+| `divisionBox`, `channel`         | Independent windows and plugin transport             | [DivisionBox](./division-box.en.mdc), [Channel](./channel.en.mdc)      |
+| `power`, `recommend`             | Low-power adaptation and recommendation providers    | [Power](./power.en.mdc), [Recommend](./recommend.en.mdc)               |
+<!-- markdownlint-enable MD060 -->
 Protected capabilities still require the matching `manifest.json` permission declaration and current grant. A field being present on `context.utils` is not proof that every operation is authorized.
 
 ## Legacy global compatibility
@@ -250,7 +250,7 @@ code: |
 ---
 :::
 
-> See [RecommendSDK API](./recommend.en.md) for full documentation.
+> See [RecommendSDK API](./recommend.en.mdc) for full documentation.
 
 ---
 
@@ -378,7 +378,7 @@ Common methods:
 | `createSharePayloadFromItem(item, options?)` | Convert a CoreBox item into a Flow payload                |
 | `shareItem(item, options?)`                  | Build item payload, resolve target, and share in one call |
 
-> See [QuickActions SDK](./quick-actions.en.md) for full documentation.
+> See [QuickActions SDK](./quick-actions.en.mdc) for full documentation.
 
 ---
 
@@ -691,9 +691,9 @@ code: |
 
 ## Related Documentation
 
-- [Feature SDK](./feature-sdk.en.md) - Feature detailed API
-- [DivisionBox API](./division-box.en.md) - Independent window system
-- [QuickActions SDK](./quick-actions.en.md) - MetaK global actions and native share
-- [PowerSDK](./power.en.md) - Low-power adaptation
-- [RecommendSDK](./recommend.en.md) - Custom recommendation providers
-- [Flow Transfer API](./flow-transfer.en.md) - Plugin data transfer
+- [Feature SDK](./feature.en.mdc) - Feature detailed API
+- [DivisionBox API](./division-box.en.mdc) - Independent window system
+- [QuickActions SDK](./quick-actions.en.mdc) - MetaK global actions and native share
+- [PowerSDK](./power.en.mdc) - Low-power adaptation
+- [RecommendSDK](./recommend.en.mdc) - Custom recommendation providers
+- [Flow Transfer API](./flow-transfer.en.mdc) - Plugin data transfer
