@@ -16,7 +16,7 @@
 
 ## 2026-07-22 beta.19 Gate E 生产复核
 
-精确来源为 [已发布版本 Release Gate 契约](../../../.trellis/tasks/07-21-07-20-align-published-release-gates/prd.md)，执行对象是已发布 `v2.4.13-beta.19`，未修改 GitHub Release 或 Nexus 数据。
+精确来源为 [已发布版本 Release Gate 契约](../../../.trellis/tasks/archive/2026-07/07-21-07-20-align-published-release-gates/prd.md)，执行对象是已发布 `v2.4.13-beta.19`，未修改 GitHub Release 或 Nexus 数据。
 
 - 正式 `gate-e --strict` 返回 `result: pass` 且退出码为 `0`。
 - 远端中英文 notes、GitHub manifest 的三平台 preferred matrix、完整 GitHub asset inventory、Nexus preferred assets、download URL、SHA-256、rollback 与 channel latest 门禁通过。
