@@ -369,6 +369,20 @@ describe('PluginRuntimeService', () => {
     ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
     expect(getterCalled).toBe(false)
     expect(harness.spawn).not.toHaveBeenCalled()
+
+    const manifest = { name: 'plugin.alpha' }
+    Object.defineProperty(manifest, Symbol('hidden'), {
+      enumerable: true,
+      value: 'forged'
+    })
+    await expect(
+      harness.service.startActivation({
+        activation: activation(),
+        scriptContent: 'module.exports = {}',
+        snapshot: { platform: 'darwin', arch: 'arm64', manifest }
+      })
+    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
+    expect(harness.spawn).not.toHaveBeenCalled()
     await harness.service.dispose()
   })
 
@@ -577,6 +591,41 @@ describe('PluginRuntimeService', () => {
         snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
       })
     ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED'))
+  })
+
+  it('reports asynchronous protocol termination only after cleanup completes', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    const order: string[] = []
+    const onCrash = vi.fn(() => {
+      order.push('crash')
+    })
+    const runtime = await harness.start(identity, {
+      closeResources: () => {
+        order.push('resources')
+      },
+      onCrash
+    })
+
+    harness.ports[0].emit({
+      ...runtime.host.owner,
+      type: 'violation',
+      requestId: 900,
+      error: { code: 'PLUGIN_HOST_VIOLATION_PROTOCOL' }
+    })
+    await vi.waitFor(() => expect(onCrash).toHaveBeenCalledTimes(1))
+
+    expect(order).toEqual(['resources', 'crash'])
+    expect(onCrash).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_CRASHED',
+      pluginName: identity.name,
+      activationGeneration: identity.activationGeneration
+    })
+    expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(harness.revokeKey).toHaveBeenCalledTimes(1)
+    expect(harness.closeResources).toHaveBeenCalledTimes(1)
+    await harness.service.dispose()
+    expect(onCrash).toHaveBeenCalledTimes(1)
   })
 
   it('completes crash cleanup even when the observer throws', async () => {
