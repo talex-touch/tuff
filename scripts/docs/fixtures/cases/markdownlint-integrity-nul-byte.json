@@ -1,5 +1,5 @@
 {
-  "base": "valid-aggregate",
+  "caseBase": "valid-final-contract",
   "files": {
     "AGENTS.md": "# Poison\n\nThis excluded agent file contains a NUL byte: \u0000\n",
     ".github/nul-poison.md": "# Poison\n\nThis excluded workflow file contains a NUL byte: \u0000\n",
