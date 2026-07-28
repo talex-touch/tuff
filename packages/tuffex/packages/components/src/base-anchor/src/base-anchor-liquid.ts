@@ -42,7 +42,10 @@ export interface LiquidGeometry {
 export const LIQUID_DEFAULTS = {
   duration: 260,
   closeDuration: 150,
-  ease: 'cubic-bezier(0.23, 1, 0.32, 1)',
+  // p advances linearly; easeOutQuad on the peel and easeOutCubic on the fill
+  // are the shaping. A master curve on top of those compounds into ~8th-order
+  // ease-out and the drop is over in two frames.
+  ease: 'linear',
   closeEase: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)',
   gooBlur: 4.5,
   gooThreshold: 20,
@@ -186,9 +189,20 @@ export function parseCubicBezier(value: string | undefined | null): [number, num
   return points
 }
 
-/** Resolve an ease string to a timing function, falling back to a known-good curve. */
+/**
+ * Resolve an ease string to a timing function.
+ *
+ * `linear` is a first-class value here, not a fallback: p is meant to advance
+ * linearly so the two per-edge easings are the only shaping in the system.
+ * Compounding a front-loaded master curve on top of them collapses the whole
+ * drop into about two frames at 60Hz.
+ */
 export function resolveLiquidEase(value: string | undefined, fallback: string): (t: number) => number {
-  const points = parseCubicBezier(value) ?? parseCubicBezier(fallback)
+  const raw = typeof value === 'string' && value.trim() ? value : fallback
+  if (raw.trim().toLowerCase() === 'linear')
+    return (t: number) => clamp01(t)
+
+  const points = parseCubicBezier(raw) ?? parseCubicBezier(fallback)
   if (!points)
     return (t: number) => clamp01(t)
   return createCubicBezier(points[0], points[1], points[2], points[3])
@@ -219,6 +233,17 @@ export function createLiquidMetrics(input: {
 }
 
 /**
+ * How far the top edge has peeled, 0..1. Reaches 1 at DETACH_AT and stays there.
+ *
+ * This — not `p` — is the drop's actual fall. `p` advances linearly, so its own
+ * derivative is a constant and carries no information; the peel decelerates to a
+ * dead stop at the detach, which is exactly the speed the bead reports.
+ */
+export function peelAt(p: number): number {
+  return easeOutQuad(clamp01(clamp01(p) / DETACH_AT))
+}
+
+/**
  * The panel is described by two falling edges, not by a box that grows.
  *
  * The top edge peels fast and stops at DETACH_AT; the height keeps filling
@@ -227,7 +252,7 @@ export function createLiquidMetrics(input: {
  */
 export function geometryAt(p: number, metrics: LiquidMetrics): LiquidGeometry {
   const progress = clamp01(p)
-  const peel = easeOutQuad(clamp01(progress / DETACH_AT))
+  const peel = peelAt(progress)
   const fill = easeOutCubic(progress)
 
   const top = metrics.topStart + (metrics.topEnd - metrics.topStart) * peel
@@ -259,9 +284,9 @@ export function normalizedVelocity(dp: number, dtNormalised: number): number {
 /**
  * How hard the sheet is squeezed right now, 0..1.
  *
- * This is the whole point of `bead`: the width reports the drop's own *speed*
- * rather than its progress, so the pinch peaks the instant the drop is falling
- * fastest and decays to nothing as the motion settles.
+ * This is the whole point of `bead`: the width reports how fast the drop is
+ * falling* rather than how far along it is, so the pinch peaks as the drop
+ * breaks away and relaxes to nothing the moment the fall stops.
  */
 export function beadPinchRatio(velocity: number, velocityRef: number = BEAD_VELOCITY_REF): number {
   const ref = velocityRef > 0 ? velocityRef : BEAD_VELOCITY_REF

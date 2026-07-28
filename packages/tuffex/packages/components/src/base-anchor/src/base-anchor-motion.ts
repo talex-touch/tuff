@@ -2,7 +2,7 @@ import type { ComputedRef, Ref } from 'vue'
 import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType } from './types'
 import { computed } from 'vue'
 import { hasWindow } from '../../../../utils/env'
-import { clamp01, LIQUID_DEFAULTS, normalizedVelocity, resolveLiquidEase } from './base-anchor-liquid'
+import { clamp01, LIQUID_DEFAULTS, normalizedVelocity, peelAt, resolveLiquidEase } from './base-anchor-liquid'
 
 type BaseAnchorSide = 'top' | 'bottom' | 'left' | 'right'
 
@@ -328,7 +328,10 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       // to full width for a frame.
       const dt = t - previousT
       if (dt > 0) {
-        liquidVelocity = normalizedVelocity(p - previousP, dt)
+        // Measured off the peel, not off p: p is linear, so its derivative is a
+        // constant and would pin the pinch open forever. The peel decelerates to
+        // a dead stop at the detach, which is the fall the bead is reporting.
+        liquidVelocity = normalizedVelocity(peelAt(p) - peelAt(previousP), dt)
         previousP = p
         previousT = t
       }
