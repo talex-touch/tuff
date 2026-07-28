@@ -1799,21 +1799,24 @@ export class PluginModule extends BaseModule {
       service: Object.freeze({
         dictate: async (payload, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
-          const result = await voiceService.dictate(payload)
+          const result = await voiceService.dictate(payload, undefined, signal)
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
           return result
         },
         speak: async (payload, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
-          const result = await voiceService.speak(payload)
+          const result = await voiceService.speak(payload, signal)
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
           return result
         },
         stream: (payload, signal) => {
           if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
-          return voiceService.streamDictation({
-            ...(payload.language ? { language: payload.language } : {})
-          })
+          return voiceService.streamDictation(
+            {
+              ...(payload.language ? { language: payload.language } : {})
+            },
+            signal
+          )
         }
       })
     })
