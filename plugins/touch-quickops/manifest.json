@@ -13,10 +13,11 @@
   "main": "index.js",
   "permissions": {
     "required": ["search.root-results"],
-    "optional": []
+    "optional": ["storage.shared"]
   },
   "permissionReasons": {
-    "search.root-results": "将 QuickOps 官方入口推送到 CoreBox 根搜索结果"
+    "search.root-results": "将 QuickOps 官方入口推送到 CoreBox 根搜索结果",
+    "storage.shared": "通过宿主 Flow 总线执行固定且经过验证的 QuickOps 会话控制动作"
   },
   "searchProviders": [
     {

@@ -2,7 +2,7 @@ const { plugin, clipboard, logger, TuffItemBuilder, permission, openUrl } = glob
 
 const PLUGIN_NAME = 'touch-browser-bookmarks'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
+const ICON = { type: 'class', value: 'i-ri-bookmark-line' }
 const ACTION_ID = 'browser-bookmarks'
 const NETWORK_PERMISSION_ID = 'network.internet'
 
@@ -320,39 +320,6 @@ function upsertBookmark(items, payload, now = Date.now()) {
   return cleanupBookmarks(list, now)
 }
 
-async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
-  }
-
-  try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission) {
-      return { granted: true }
-    }
-
-    const granted = await permission.request(permissionId, reason)
-    if (granted) {
-      return { granted: true }
-    }
-
-    return {
-      granted: false,
-      reason: 'permission-denied',
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-browser-bookmarks] Failed to request permission', error)
-    return {
-      granted: false,
-      reason: 'permission-request-failed',
-    }
-  }
-}
-
 async function checkPermissionStatus(permissionId) {
   if (!permission?.check)
     return { granted: false, status: 'permission-missing', reason: 'permission-sdk-unavailable' }
@@ -363,8 +330,8 @@ async function checkPermissionStatus(permissionId) {
       ? { granted: true, status: 'available', reason: '' }
       : { granted: false, status: 'permission-missing', reason: `${permissionId.replace('.', '-')}-permission-required` }
   }
-  catch (error) {
-    logger?.warn?.('[touch-browser-bookmarks] Failed to check permission', error)
+  catch {
+    logger?.warn?.('[touch-browser-bookmarks] Failed to check permission')
     return { granted: false, status: 'permission-missing', reason: 'permission-check-failed' }
   }
 }
@@ -383,8 +350,8 @@ async function ensureDataFiles() {
     if (!recent)
       await plugin.storage.setFile(RECENT_FILE, { items: [], updatedAt: 0 })
   }
-  catch (error) {
-    logger?.warn?.('[touch-browser-bookmarks] Failed to ensure data files', error)
+  catch {
+    logger?.warn?.('[touch-browser-bookmarks] Failed to ensure data files')
   }
 }
 
@@ -487,14 +454,11 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload, ca
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
-      sourceType,
-      sourceKind: sourceType,
       defaultAction: ACTION_ID,
-      actionId,
-      payload: {
-        ...(payload || {}),
-        sourceType,
-      },
+    })
+    .createAndAddAction(actionId, 'plugin', title, {
+      ...(payload || {}),
+      sourceType,
       ...(capability ? { capability } : {}),
     })
     .build()
@@ -557,16 +521,18 @@ async function tryCopyUrl(url) {
     }
   }
 
-  const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制链接')
-  if (!permissionResult.granted) {
+  try {
+    await clipboard.writeText(url)
+    return { copied: true }
+  }
+  catch (error) {
     return {
       copied: false,
-      reason: permissionResult.reason || 'permission-denied',
+      reason: error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+        ? 'permission-denied'
+        : 'clipboard-write-failed',
     }
   }
-
-  clipboard.writeText(url)
-  return { copied: true }
 }
 
 function resolveGroupOrder(groups) {
@@ -655,15 +621,6 @@ const pluginLifecycle = {
         }))
       }
 
-      quick.push(buildActionItem({
-        id: `${featureId}-config-open`,
-        featureId,
-        title: '打开配置目录',
-        subtitle: '编辑 bookmarks.json / recent-urls.json',
-        actionId: 'config-open',
-        sourceType: 'manual-quicklink-config',
-      }))
-
       const bookmarkItems = buildBookmarkItems(featureId, filteredBookmarks, networkCapabilityState)
       const recentItems = buildRecentItems(featureId, recentDisplay, networkCapabilityState)
 
@@ -717,22 +674,28 @@ const pluginLifecycle = {
         }
       })
 
-      plugin.feature.clearItems()
-      plugin.feature.pushItems(items)
+      await plugin.feature.clearItems()
+      await plugin.feature.pushItems(items)
       return true
     }
-    catch (error) {
-      logger?.error?.('[touch-browser-bookmarks] Failed to handle feature', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          id: `${featureId}-error`,
-          featureId,
-          title: '浏览器收藏加载失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
-        }),
-      ])
-      return true
+    catch {
+      logger?.error?.('[touch-browser-bookmarks] Failed to handle feature')
+      try {
+        await plugin.feature.clearItems()
+        await plugin.feature.pushItems([
+          buildInfoItem({
+            id: `${featureId}-error`,
+            featureId,
+            title: '浏览器收藏加载失败',
+            subtitle: '插件运行失败',
+          }),
+        ])
+        return true
+      }
+      catch {
+        logger?.error?.('[touch-browser-bookmarks] Failed to publish fallback')
+        return false
+      }
     }
   },
 
@@ -740,15 +703,11 @@ const pluginLifecycle = {
     if (item?.meta?.defaultAction !== ACTION_ID)
       return
 
-    const actionId = item.meta?.actionId
-    const payload = item.meta?.payload || {}
+    const action = Array.isArray(item.actions) ? item.actions[0] : null
+    const actionId = action?.id
+    const payload = action?.payload || {}
 
     try {
-      if (actionId === 'config-open') {
-        await plugin.storage.openFolder()
-        return { externalAction: true }
-      }
-
       if (actionId === 'copy-url') {
         const url = normalizeUrlInput(payload.url)
         if (!url)
@@ -761,9 +720,12 @@ const pluginLifecycle = {
             success: false,
             status: 'blocked',
             reason: copyResult.reason || 'permission-denied',
-            message: copyResult.reason === 'clipboard-unavailable'
-              ? '当前环境不支持写入剪贴板'
-              : '复制失败：缺少 clipboard.write 权限',
+            message:
+              copyResult.reason === 'clipboard-unavailable'
+                ? '当前环境不支持写入剪贴板'
+                : copyResult.reason === 'permission-denied'
+                  ? '复制失败：缺少 clipboard.write 权限'
+                  : '复制失败',
           }
         }
 
@@ -792,17 +754,6 @@ const pluginLifecycle = {
         if (!url)
           return
 
-        const permissionResult = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开网址')
-        if (!permissionResult.granted) {
-          return {
-            externalAction: true,
-            success: false,
-            status: 'blocked',
-            reason: permissionResult.reason || 'permission-denied',
-            message: '缺少 network.internet 权限',
-          }
-        }
-
         if (typeof openUrl !== 'function') {
           return {
             externalAction: true,
@@ -813,7 +764,19 @@ const pluginLifecycle = {
           }
         }
 
-        await openUrl(url)
+        try {
+          await openUrl(url)
+        }
+        catch (error) {
+          const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+          return {
+            externalAction: true,
+            success: false,
+            status: 'blocked',
+            reason: permissionDenied ? 'permission-denied' : 'open-url-failed',
+            message: permissionDenied ? '缺少 network.internet 权限' : '打开外部链接失败',
+          }
+        }
 
         const recent = await loadRecent()
         const nextRecent = touchRecentUrl(recent, url, payload.title)
@@ -822,29 +785,17 @@ const pluginLifecycle = {
         return { externalAction: true, status: 'started' }
       }
     }
-    catch (error) {
-      logger?.error?.('[touch-browser-bookmarks] Action failed', error)
+    catch {
+      logger?.error?.('[touch-browser-bookmarks] Action failed')
       return {
         externalAction: true,
         success: false,
-        message: error?.message || '执行失败',
+        status: 'blocked',
+        reason: 'action-failed',
+        message: '执行失败',
       }
     }
   },
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    cleanupBookmarks,
-    cleanupRecent,
-    filterBookmarks,
-    buildNetworkOpenCapability,
-    resolveNetworkOpenCapabilityState,
-    mergeRecentForDisplay,
-    normalizeUrlInput,
-    parseBookmarks,
-    touchRecentUrl,
-    upsertBookmark,
-  },
-}
+module.exports = pluginLifecycle

@@ -91,7 +91,7 @@ test('onFeatureTriggered creates deterministic empty state', async () => {
 test('onFeatureTriggered awaits clear before publishing items', async () => {
   let releaseClear
   let pushed = false
-  const clearBarrier = new Promise(resolve => {
+  const clearBarrier = new Promise((resolve) => {
     releaseClear = resolve
   })
   const emojiPlugin = loadFreshPluginModule({
@@ -119,7 +119,8 @@ test('onFeatureTriggered publishes a stable fallback after the first capability 
     feature: {
       async clearItems() {
         clearCalls += 1
-        if (clearCalls === 1) throw new Error('/private/first-capability-failure')
+        if (clearCalls === 1)
+          throw new Error('/private/first-capability-failure')
       },
       async pushItems(items) {
         published.push(items)
@@ -232,4 +233,31 @@ test('onItemAction returns a stable redacted failure when host write rejects', a
   })
   assert.deepEqual(logs, ['[touch-emoji-symbols] clipboard write failed'])
   assert.doesNotMatch(JSON.stringify(result), /private|native clipboard/)
+})
+
+test('onItemAction distinguishes host permission denial from clipboard failure', async () => {
+  const emojiPlugin = loadFreshPluginModule({
+    feature: createFeatureHarness().feature,
+    clipboard: {
+      async writeText() {
+        throw Object.assign(new Error('/private/permission detail'), {
+          code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
+        })
+      },
+    },
+  })
+
+  const result = await emojiPlugin.onItemAction({
+    meta: { defaultAction: 'copy' },
+    actions: [{ id: 'copy', type: 'plugin', payload: { text: '✨' } }],
+  })
+
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-denied',
+    message: '缺少 clipboard.write 权限',
+  })
+  assert.doesNotMatch(JSON.stringify(result), /private|permission detail/)
 })

@@ -55,15 +55,40 @@ describe('plugin source package audit contracts', () => {
       '@talex-touch/tuffex',
     ])
     expect(PLUGIN_RELEASE_TARGETS.map(target => target.pluginName)).toEqual([
+      'clipboard-history',
+      'touch-quickops',
+      'touch-snippets',
       'touch-translation',
       'touch-intelligence',
     ])
     expect(PLUGIN_RELEASE_TARGETS.map(target => target.packageName)).toEqual([
+      '@talex-touch/clipboard-history-plugin',
+      '@talex-touch/touch-quickops-plugin',
+      '@talex-touch/touch-snippets-plugin',
       '@talex-touch/touch-translation-plugin',
       '@talex-touch/touch-intelligence-plugin',
     ])
 
-    const translation = PLUGIN_RELEASE_TARGETS[0]!
+    const clipboard = PLUGIN_RELEASE_TARGETS[0]!
+    expect(clipboard.gates.build).toEqual({ command: 'pnpm', args: ['run', 'build'] })
+    expect(clipboard.gates.test).toEqual({ command: 'pnpm', args: ['run', 'test'] })
+    expect(clipboard.gates.typecheck).toEqual({ command: 'pnpm', args: ['run', 'typecheck'] })
+    expect(clipboard.gates.lint).toMatchObject({ notApplicable: true })
+    expect(
+      'reason' in clipboard.gates.lint && clipboard.gates.lint.reason.trim(),
+    ).not.toHaveLength(0)
+
+    for (const target of PLUGIN_RELEASE_TARGETS.slice(1, 3)) {
+      expect(target.gates.build).toEqual({ command: 'pnpm', args: ['run', 'build'] })
+      expect(target.gates.test).toEqual({ command: 'pnpm', args: ['run', 'test'] })
+      for (const gateName of ['typecheck', 'lint']) {
+        const gate = target.gates[gateName]!
+        expect(gate).toMatchObject({ notApplicable: true })
+        expect('reason' in gate && gate.reason.trim()).not.toHaveLength(0)
+      }
+    }
+
+    const translation = PLUGIN_RELEASE_TARGETS[3]!
     expect(translation.gates).toEqual({
       build: { command: 'pnpm', args: ['run', 'build'] },
       test: { command: 'pnpm', args: ['exec', 'vitest', 'run'] },
@@ -71,7 +96,7 @@ describe('plugin source package audit contracts', () => {
       lint: { command: 'pnpm', args: ['run', 'lint'] },
     })
 
-    const intelligence = PLUGIN_RELEASE_TARGETS[1]!
+    const intelligence = PLUGIN_RELEASE_TARGETS[4]!
     expect(intelligence.gates.build).toEqual({ command: 'pnpm', args: ['run', 'build'] })
     for (const gateName of ['test', 'typecheck', 'lint']) {
       const gate = intelligence.gates[gateName]!

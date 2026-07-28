@@ -485,15 +485,7 @@ function buildDeveloperPreviewItem(featureId, query, response) {
   if (payload.title && typeof builder.setTitle === 'function')
     builder.setTitle(payload.title)
 
-  const actions = [
-    {
-      id: 'preview-copy-primary',
-      type: 'copy',
-      label: '复制结果',
-      icon: { type: 'class', value: 'i-ri-file-copy-line' },
-      payload: { text: payload.primaryValue },
-    },
-  ]
+  const actions = []
 
   if (isQrDeveloperPreviewPayload(payload)) {
     builder.setMeta({
@@ -503,15 +495,17 @@ function buildDeveloperPreviewItem(featureId, query, response) {
     })
     actions.push({
       id: DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID,
-      type: 'execute',
+      type: 'plugin',
       label: '保存 SVG 到临时目录',
       icon: { type: 'class', value: 'i-ri-save-line' },
+      payload: { developerPreviewPayload: payload },
     })
     actions.push({
       id: DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID,
-      type: 'execute',
+      type: 'plugin',
       label: '保存 PNG 到临时目录',
       icon: { type: 'class', value: 'i-ri-image-line' },
+      payload: { developerPreviewPayload: payload },
     })
   }
 
@@ -1605,32 +1599,76 @@ async function buildResultItems(featureId, query, api = quickOps) {
   return buildCapabilityItems(featureId, await api.capabilities())
 }
 
+function projectItemsForHost(items) {
+  return items.map((item) => {
+    const basic = item.render?.basic || {
+      title: item.title,
+      ...(item.subtitle ? { subtitle: item.subtitle } : {}),
+      ...(item.icon ? { icon: item.icon } : {}),
+    }
+    const actions = Array.isArray(item.actions)
+      ? item.actions.map(action => ({
+          id: action.id,
+          type: 'plugin',
+          label: action.label || action.title || action.id,
+          ...(action.payload === undefined ? {} : { payload: action.payload }),
+          ...(action.icon ? { icon: action.icon } : {}),
+          ...(typeof action.primary === 'boolean' ? { primary: action.primary } : {}),
+        }))
+      : []
+    const meta = {
+      pluginName: PLUGIN_NAME,
+      featureId: item.meta?.featureId || 'quickops',
+      ...(typeof item.meta?.defaultAction === 'string'
+        ? { defaultAction: item.meta.defaultAction }
+        : {}),
+      ...(Number.isFinite(item.meta?.priority) ? { priority: item.meta.priority } : {}),
+    }
+    return {
+      id: item.id,
+      source: item.source,
+      ...(item.kind ? { kind: item.kind } : {}),
+      ...(actions.length ? { actions } : {}),
+      meta,
+      render: { mode: 'default', basic },
+      ...(item.scoring ? { scoring: item.scoring } : {}),
+    }
+  })
+}
+
 const pluginLifecycle = {
   async onFeatureTriggered(featureId, query) {
     try {
-      const items = await buildResultItems(featureId, query)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems(items)
+      const items = projectItemsForHost(await buildResultItems(featureId, query))
+      await plugin.feature.clearItems()
+      await plugin.feature.pushItems(items)
       return true
     }
-    catch (error) {
-      logger?.error?.('[touch-quickops] Failed to render QuickOps summary', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          featureId,
-          id: 'error',
-          title: 'QuickOps 加载失败',
-          subtitle: truncateText(error?.message || '未知错误'),
-          meta: { mode: 'error' },
-        }),
-      ])
-      return true
+    catch {
+      logger?.error?.('[touch-quickops] Failed to render QuickOps summary')
+      try {
+        await plugin.feature.clearItems()
+        await plugin.feature.pushItems(projectItemsForHost([
+          buildInfoItem({
+            featureId,
+            id: 'error',
+            title: 'QuickOps 加载失败',
+            subtitle: '宿主能力暂不可用',
+            meta: { mode: 'error' },
+          }),
+        ]))
+        return true
+      }
+      catch {
+        logger?.error?.('[touch-quickops] Failed to publish fallback')
+        return false
+      }
     }
   },
 
   async onItemAction(item, context = {}) {
     const selectedActionId = context.actionId || item?.meta?.defaultAction
+    const selectedAction = item?.actions?.find(action => action?.id === selectedActionId)
     if (
       selectedActionId === DEVELOPER_PREVIEW_SAVE_SVG_ACTION_ID
       || selectedActionId === DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID
@@ -1647,7 +1685,7 @@ const pluginLifecycle = {
       const format = selectedActionId === DEVELOPER_PREVIEW_SAVE_PNG_ACTION_ID ? 'png' : 'svg'
       const result = await quickOps.saveDeveloperPreview({
         format,
-        payload: item.meta.developerPreviewPayload,
+        payload: selectedAction?.payload?.developerPreviewPayload,
       })
       return {
         externalAction: true,
@@ -1661,7 +1699,7 @@ const pluginLifecycle = {
     if (item?.meta?.defaultAction !== FLOW_ACTION_ID)
       return
 
-    const payload = item.meta?.payload
+    const payload = selectedAction?.payload || item.meta?.payload
     if (!payload?.targetId || !payload?.payload || !payload?.options) {
       return {
         externalAction: true,
@@ -1692,39 +1730,25 @@ const pluginLifecycle = {
       }
     }
     catch (error) {
-      logger?.error?.('[touch-quickops] Failed to dispatch QuickOps Flow action', error)
+      logger?.error?.('[touch-quickops] Failed to dispatch QuickOps Flow action')
+      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+      const unavailable = error?.code === 'PLUGIN_HOST_CAPABILITY_UNAVAILABLE'
       return {
         externalAction: true,
         success: false,
-        status: 'failed',
+        status: 'blocked',
         targetId: payload.targetId,
-        reason: truncateText(error?.message || 'flow-dispatch-failed'),
+        reason: permissionDenied
+          ? 'permission-denied'
+          : unavailable
+            ? 'host-unavailable'
+            : 'flow-dispatch-failed',
+        message: permissionDenied || unavailable
+          ? undefined
+          : 'Flow action failed',
       }
     }
   },
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    buildAuditItems,
-    buildCapabilityItems,
-    buildResultItems,
-    buildReadOnlyToolItems,
-    buildSessionItems,
-    buildSystemInfoItems,
-    buildNetworkStatusItems,
-    buildSettingsItems,
-    extractFilesFromQuery,
-    buildFlowActionItem,
-    isCleanupFlowAction,
-    buildConfirmationRequiredItems,
-    buildHighRiskBlockedItems,
-    buildFlowAdapterTrace,
-    resolveSafeFlowAction,
-    resolveConfirmationFlowAction,
-    resolveHighRiskFlowAction,
-    resolvePomodoroAdvancedLoopState,
-    resolveMode,
-  },
-}
+module.exports = pluginLifecycle
