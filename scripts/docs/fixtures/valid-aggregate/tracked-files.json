@@ -1,0 +1,19 @@
+[
+  ".trellis/archive/tasks/completed-doc-task/task.json",
+  ".trellis/internal/poison.md",
+  ".trellis/tasks/active-doc-task/prd.md",
+  ".trellis/tasks/active-doc-task/task.json",
+  "README.md",
+  "README.zh-CN.md",
+  "apps/core-app/package.json",
+  "docs/INDEX.md",
+  "docs/guide.md",
+  "docs/plan-prd/03-features/ai-2.5.0-plan-prd.md",
+  "docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md",
+  "docs/plan-prd/TODO.md",
+  "notes/RELEASE_NOTES_GUIDE.md",
+  "notes/release-notes.config.json",
+  "notes/update_2.4.14.en.md",
+  "notes/update_2.4.14.zh.md",
+  "package.json"
+]

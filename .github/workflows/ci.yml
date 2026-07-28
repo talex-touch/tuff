@@ -17,9 +17,6 @@ jobs:
   job1:
     name: Check Not Allowed File Changes
     runs-on: ubuntu-latest
-    outputs:
-      markdown_change: ${{ steps.filter_markdown.outputs.change }}
-      markdown_files: ${{ steps.filter_markdown.outputs.change_files }}
     steps:
       - name: Check Not Allowed File Changes
         uses: dorny/paths-filter@v4
@@ -38,27 +35,29 @@ jobs:
           echo '${{ steps.filter_not_allowed.outputs.change_files }}'
           exit 1
 
-      - name: Check Not Linted Markdown
-        if: ${{ always() }}
-        uses: dorny/paths-filter@v4
-        id: filter_markdown
-        with:
-          list-files: shell
-          filters: |
-            change:
-              - added|modified: '*.md'
-
-  job2:
-    name: Lint Markdown
+  docs_verify:
+    name: Documentation Quality
     runs-on: ubuntu-latest
     needs: job1
-    if: ${{ always() && needs.job1.outputs.markdown_change == 'true' }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
 
-      - name: Lint markdown
-        run: npx markdownlint-cli ${{ needs.job1.outputs.markdown_files }} --ignore node_modules
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify documentation
+        run: mise run docs:verify
+
 
   job_quality_pr:
     name: PR Quality

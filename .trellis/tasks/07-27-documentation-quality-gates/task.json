@@ -2,8 +2,8 @@
   "id": "documentation-quality-gates",
   "name": "documentation-quality-gates",
   "title": "Add documentation quality gates",
-  "description": "Add one deterministic read-only local and CI entrypoint for recursive Markdown, tracked relative links, Trellis state, current release notes, AI evidence, and active PRD placeholder contracts.",
-  "status": "planning",
+  "description": "Add one deterministic read-only local and CI entrypoint for recursive Markdown, tracked relative links, Trellis state, threshold-aware current release notes, AI evidence, and active PRD placeholder contracts.",
+  "status": "in_progress",
   "dev_type": null,
   "scope": "documentation",
   "package": null,
@@ -30,8 +30,8 @@
   ],
   "notes": "Batch D is a stacked integration gate after A, B, C, and the bilingual What's Changed contract. It reads prerequisite documentation but does not rewrite prose, including README.md or README.zh-CN.md, to make the gate pass.",
   "meta": {
-    "nextAction": "After all four prerequisite documentation contracts are available, create the stacked integration branch and record their exact PR URLs and commits before implementing the verifier.",
-    "blocker": "The docs-sot, roadmap/release, peripheral-docs, and concurrent bilingual What's Changed PRs must all be available on the integration branch.",
-    "evidence": "prd.md acceptance criteria, deterministic fixture results, repeated read-only repository runs, CI parity, and the final prerequisite/owned-path diff."
+    "nextAction": "Record the A/B/C/bilingual dependency ledger, then implement the shared verifier with the landed legacy release-note thresholds: RELEASE <= 2.4.13 and BETA <= 2.4.13-beta.23 require no note backfill; post-baseline versions require exact bilingual notes.",
+    "blocker": "The integration branch must retain the landed A/B/C documentation contracts and master gateway commit 8d46f5d1a before the verifier is reviewed.",
+    "evidence": "prd.md acceptance criteria, legacy and post-baseline fixture results, deterministic read-only repository runs, CI parity, and the final prerequisite/owned-path diff."
   }
 }

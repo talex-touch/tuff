@@ -61,8 +61,8 @@ The draft PR must name each prerequisite PR URL and commit. Missing or supersede
 ### R5 - Current release-note coverage
 
 - Read the current version from root `package.json` and `apps/core-app/package.json`; fail if they differ or are invalid.
-- Require non-empty `notes/update_<version>.zh.md` and `notes/update_<version>.en.md` for that exact version.
-- Enforce the versioned H1, allowed sections, non-empty highlight lists, and matching bilingual section/bullet shape from `notes/RELEASE_NOTES_GUIDE.md`.
+- Classify the version with `notes/release-notes.config.json`: `RELEASE <= 2.4.13` and `BETA <= 2.4.13-beta.23` are Legacy and require no backfill; only a version above its channel threshold requires the exact non-empty bilingual note pair.
+- For an enforced version, validate the versioned H1, allowed sections, non-empty highlight lists, and matching bilingual section/bullet shape from `notes/RELEASE_NOTES_GUIDE.md`.
 - Do not generate, translate, or rewrite release notes. Findings return to the bilingual owner.
 
 ### R6 - AI evidence consistency
@@ -99,7 +99,7 @@ The draft PR must name each prerequisite PR URL and commit. Missing or supersede
 - [ ] Two unchanged runs have byte-identical diagnostics and exit codes, and Git tracked/untracked state is unchanged before and after.
 - [ ] Recursive tracked product Markdown/MDC lint and AST-based relative-link validation pass with the documented scope and zero repository-escape targets.
 - [ ] Active/archived Trellis hierarchy, owner/meta, TODO reference, and completed-state checks pass without mutating task files.
-- [ ] Root/CoreApp versions match and exact current bilingual release notes satisfy the guide's version, section, and bullet-shape contract.
+- [ ] Root/CoreApp versions match; a legacy current version is accepted without notes, while an above-baseline version requires exact current bilingual notes satisfying the guide's version, section, and bullet-shape contract.
 - [ ] AI active documents distinguish historical, current source, packaged, and production evidence; the historical 13/13 snapshot is not promoted.
 - [ ] Active PRDs contain no unresolved placeholder under the explicit rules and reviewed allowlist.
 - [ ] Every rule family has a stable failing fixture, the valid and excluded-scope fixtures pass, and output-cap summaries retain total counts.

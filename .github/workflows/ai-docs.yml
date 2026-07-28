@@ -43,5 +43,5 @@ jobs:
           cache: true
           install: true
 
-      - name: Verify AI docs
-        run: mise run ai-docs:verify
+      - name: Verify documentation
+        run: mise run docs:verify

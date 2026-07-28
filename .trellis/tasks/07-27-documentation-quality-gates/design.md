@@ -80,7 +80,7 @@ Batch A must hand off a machine-checkable TODO reference shape. D validates that
 
 ### Current release notes
 
-Parse both root and CoreApp package metadata and require equal valid versions. Resolve exactly two bilingual note paths. Validate H1 version identity, allowed section names/order, non-empty highlight bullets, and corresponding zh/en section and bullet counts. Content translation quality remains human review.
+- Parse root/CoreApp package metadata and require equal valid versions. Reuse `scripts/lib/release-notes-contract.mjs` plus `notes/release-notes.config.json` to classify channels: legacy versions at or below their explicit threshold skip note presence/shape checks; only post-baseline versions resolve exactly two bilingual note paths and validate H1, allowed sections/order, non-empty highlight bullets, and corresponding zh/en section and bullet counts. Content translation quality remains human review.
 
 ### AI evidence
 
