@@ -43,5 +43,17 @@ jobs:
           cache: true
           install: true
 
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Verify documentation
         run: mise run docs:verify
