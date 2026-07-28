@@ -1,3 +1,4 @@
+import type { PluginActivationIdentity } from '@talex-touch/utils/transport/main'
 import type { WebContentsView } from 'electron'
 import type { TalexTouch } from '../types'
 import { Buffer } from 'node:buffer'
@@ -11,7 +12,8 @@ import { perfMonitor, registerPerfReportListener } from '../utils/perf-monitor'
 import { enterPerfContext } from '../utils/perf-context'
 import { appendWorkflowDebugLog } from '../utils/workflow-debug'
 import { resolveMissingHandlerPolicy } from './channel-missing-handler-policy'
-import { resolvePluginNameByWebContents } from '../modules/plugin/runtime/plugin-view-registry'
+import { resolvePluginRegistrationByWebContents } from '../modules/plugin/runtime/plugin-view-registry'
+import { resolveChannelCallerIdentity } from './channel-caller-identity'
 import {
   RAW_MAIN_PROCESS_CHANNEL,
   RAW_PLUGIN_PROCESS_CHANNEL,
@@ -57,6 +59,7 @@ interface RawStandardChannelData {
   code: DataCode
   data?: IChannelData
   plugin?: string
+  pluginIdentity?: PluginActivationIdentity
 }
 
 interface StandardChannelData extends RawStandardChannelData {
@@ -134,6 +137,7 @@ class TouchChannel {
 
   keyToNameMap: Map<string, string> = new Map()
   nameToKeyMap: Map<string, string> = new Map()
+  keyToIdentityMap: Map<string, PluginActivationIdentity> = new Map()
 
   app: TalexTouch.TouchApp
 
@@ -152,14 +156,36 @@ class TouchChannel {
     }
   }
 
-  requestKey(name: string): string {
-    if (this.nameToKeyMap.has(name)) {
-      return this.nameToKeyMap.get(name)!
+  requestKey(
+    name: string,
+    activation?: Pick<PluginActivationIdentity, 'pluginInstanceId' | 'activationGeneration'>
+  ): string {
+    const existingKey = this.nameToKeyMap.get(name)
+    if (existingKey) {
+      const existingIdentity = this.keyToIdentityMap.get(existingKey)
+      const sameActivation =
+        existingIdentity &&
+        (!activation ||
+          (existingIdentity.pluginInstanceId === activation.pluginInstanceId &&
+            existingIdentity.activationGeneration === activation.activationGeneration))
+      if (sameActivation) {
+        return existingKey
+      }
+      this.keyToNameMap.delete(existingKey)
+      this.keyToIdentityMap.delete(existingKey)
+      this.nameToKeyMap.delete(name)
     }
 
     const key = randomBytes(16).toString('hex')
+    const identity: PluginActivationIdentity = {
+      name,
+      pluginInstanceId: activation?.pluginInstanceId ?? `legacy:${name}`,
+      activationGeneration: activation?.activationGeneration ?? 1,
+      key
+    }
     this.keyToNameMap.set(key, name)
     this.nameToKeyMap.set(name, key)
+    this.keyToIdentityMap.set(key, identity)
 
     return key
   }
@@ -172,8 +198,39 @@ class TouchChannel {
 
     this.keyToNameMap.delete(key)
     this.nameToKeyMap.delete(name)
+    this.keyToIdentityMap.delete(key)
 
     return true
+  }
+
+  resolveKey(key: string): string | undefined {
+    return this.keyToNameMap.get(key)
+  }
+
+  isValidKey(key: string): boolean {
+    return this.keyToIdentityMap.has(key)
+  }
+
+  resolveIdentity(key: string): PluginActivationIdentity | undefined {
+    return this.keyToIdentityMap.get(key)
+  }
+
+  resolveCurrentIdentity(name: string): PluginActivationIdentity | undefined {
+    const key = this.nameToKeyMap.get(name)
+    return key ? this.keyToIdentityMap.get(key) : undefined
+  }
+
+  resolveSenderIdentity(sender: Electron.WebContents): PluginActivationIdentity | undefined {
+    const registration = resolvePluginRegistrationByWebContents(sender.id)
+    if (!registration) {
+      return undefined
+    }
+    return {
+      name: registration.name,
+      pluginInstanceId: registration.pluginInstanceId,
+      activationGeneration: registration.activationGeneration,
+      key: registration.key
+    }
   }
 
   __parse_raw_data(e: Electron.IpcMainEvent, arg: unknown): RawStandardChannelData {
@@ -181,31 +238,46 @@ class TouchChannel {
       const { name, header, code, data, sync } = arg as Record<string, unknown>
 
       if (header && typeof header === 'object' && header !== null) {
-        const { uniqueKey } = header as Record<string, unknown>
+        const rawUniqueKey = (header as Record<string, unknown>).uniqueKey
+        const uniqueKey = typeof rawUniqueKey === 'string' ? rawUniqueKey : undefined
+        let senderDestroyed = true
+        try {
+          senderDestroyed = e.sender.isDestroyed()
+        } catch {
+          senderDestroyed = true
+        }
+        const caller = resolveChannelCallerIdentity({
+          senderId: e.sender?.id,
+          senderDestroyed,
+          declaredKey: uniqueKey,
+          registration: resolvePluginRegistrationByWebContents(e.sender?.id),
+          resolveIdentity: (key) => this.resolveIdentity(key)
+        })
 
-        const declaredPluginName = this.keyToNameMap.get(uniqueKey as string)
-        // Verify the real sender. A compromised plugin view can omit or forge
-        // uniqueKey to masquerade as a trusted MAIN caller, so if the sender's
-        // webContents is a registered plugin surface, force it onto the PLUGIN
-        // channel (and its permission checks) regardless of what it declared.
-        const senderPluginName = resolvePluginNameByWebContents(e.sender?.id)
-        const pluginName = senderPluginName ?? declaredPluginName
-
-        return {
+        const parsed: RawStandardChannelData = {
           header: {
             status:
               ((header as Record<string, unknown>).status as 'reply' | 'request') || 'request',
-            type: pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
+            type: caller.pluginName ? ChannelType.PLUGIN : ChannelType.MAIN,
             _originData: arg,
             event: e,
-            uniqueKey: uniqueKey as string
+            uniqueKey
           },
           sync: sync as RawChannelSyncData | undefined,
           code: code as DataCode,
           data: data as IChannelData,
-          plugin: pluginName,
+          plugin: caller.pluginName,
           name: name as string
         }
+        if (caller.pluginIdentity) {
+          Object.defineProperty(parsed, 'pluginIdentity', {
+            configurable: false,
+            enumerable: false,
+            value: caller.pluginIdentity,
+            writable: false
+          })
+        }
+        return parsed
       }
     }
 
@@ -414,6 +486,14 @@ class TouchChannel {
           _replied = true
         },
         ...rawData
+      }
+      if (rawData.pluginIdentity) {
+        Object.defineProperty(handInData, 'pluginIdentity', {
+          configurable: false,
+          enumerable: false,
+          value: rawData.pluginIdentity,
+          writable: false
+        })
       }
 
       let res: unknown
