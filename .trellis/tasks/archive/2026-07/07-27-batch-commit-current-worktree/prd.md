@@ -18,8 +18,8 @@
 - [x] 当前工作区改动被拆为职责清晰、顺序合理的多笔提交。
 - [x] 每笔提交只包含已核对的显式文件，且暂存区检查通过。
 - [x] CoreApp 插件宿主相关测试与 typecheck、插件校验、Nexus 相关测试/typecheck、`git diff --check` 通过。
-- [ ] 提交后 `git status --short` 无遗漏的源码、测试、任务文档或未跟踪文件。
-- [ ] `origin/master` 与本地 `HEAD` 一致，普通推送成功。
+- [x] 提交后 `git status --short` 无遗漏的源码、测试、任务文档或未跟踪文件。
+- [x] `origin/master` 与本地 `HEAD` 一致，普通推送成功。
 
 ## Constraints
 
