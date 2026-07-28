@@ -16,7 +16,7 @@
   "base_branch": "master",
   "worktree_path": null,
   "commit": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/talex-touch/tuff/pull/357",
   "subtasks": [],
   "children": [],
   "parent": "07-27-converge-project-documentation-gates",
@@ -27,8 +27,8 @@
   ],
   "notes": "Batch A. Existing task moves and metadata edits require an exact candidate inventory; the bilingual task and OTA parent task.json are hard exclusions.",
   "meta": {
-    "nextAction": "Open the dedicated stacked Batch A PR with the archive inventory, validation evidence, replacement search task, and concurrent ownership exclusions.",
-    "blocker": "No implementation blocker remains; the dedicated PR must remain unmerged and retain TalexDreamSoul/docs-remediation-plan as its stacked base.",
-    "evidence": "evidence/batch-a-archive-inventory.md, task.py list/validate output, ai-docs:dev, the preserved search migration task, and the final scoped diff."
+    "nextAction": "Await review of the dedicated stacked Batch A PR and retarget it to master only after the planning PR lands.",
+    "blocker": "The PR is intentionally stacked on TalexDreamSoul/docs-remediation-plan until that planning PR merges.",
+    "evidence": "https://github.com/talex-touch/tuff/pull/357; evidence/batch-a-archive-inventory.md; task.py list/validate output; ai-docs:dev; and the scoped diff."
   }
 }

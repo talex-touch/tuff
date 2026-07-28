@@ -1,5 +1,5 @@
 {"file":"docs/plan-prd/TODO.md","reason":"Authoritative global ordering document that must be rebuilt from current task facts."}
-{"file":"todo.md","reason":"Source search-index split plan whose default-off and silent-data-loss contract must migrate losslessly."}
+{"file":".trellis/tasks/07-28-migrate-search-index-split-write-paths/design.md","reason":"Replacement owned search-index split plan preserving the default-off, silent-data-loss, write-site, app-run, and rollback contract."}
 {"file":".trellis/tasks/07-13-search-crossplatform-audit/prd.md","reason":"Owning search and cross-platform backlog for the new linked search-index implementation child."}
 {"file":".trellis/tasks/archive/2026-07/07-16-converge-trellis-task-doc-state/design.md","reason":"Established archive classification, retained metadata, source-of-truth, and rollback design."}
 {"file":".trellis/workflow.md","reason":"Defines parent/child planning and task lifecycle requirements used during migration and archiving."}
