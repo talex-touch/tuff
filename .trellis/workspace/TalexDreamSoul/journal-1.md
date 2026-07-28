@@ -1039,3 +1039,36 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: Repair peripheral product documentation
+
+**Date**: 2026-07-28
+**Task**: Repair peripheral product documentation
+**Branch**: `TalexDreamSoul/peripheral-docs-cleanup`
+
+### Summary
+
+Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Nexus/DivisionBox/TuffEx guidance, added reproducible AST inventory evidence, opened stacked PR #356, and synchronized the advanced planning base without rebase or force push.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `05aa394a3` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

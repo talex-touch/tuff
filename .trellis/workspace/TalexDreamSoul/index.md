@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 25
+- **Total Sessions**: 26
 - **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1041 | Active |
+| `journal-1.md` | ~1074 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 26 | 2026-07-28 | Repair peripheral product documentation | `05aa394a3` | `TalexDreamSoul/peripheral-docs-cleanup` |
 | 25 | 2026-07-28 | 分批提交并推送工作区代码 | `ad8c54944`, `6bee9f5f3`, `d0caa9073`, `3030bcee5`, `b584ef96b`, `1a118b73e`, `e8cb3d393`, `0474cdb5a`, `21484fd3f` | `master` |
 | 24 | 2026-07-27 | 修复 Nexus 文档侧边栏空白与 Hero 中文断行 | `a7a6daad8` | `master` |
 | 23 | 2026-07-22 | Publish reverse proxy trust-boundary design | `a413da30c` | `master` |
