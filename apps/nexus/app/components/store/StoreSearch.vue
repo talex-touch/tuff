@@ -43,7 +43,7 @@ const categoryOptions = computed(() => [
         class="w-full"
         @search="value => emit('search', value)"
       />
-      <p class="self-end pr-4 text-xs text-black/40 dark:text-light/60">
+      <p v-if="$slots.result" class="self-end pr-4 text-xs text-black/40 dark:text-light/60">
         <slot name="result" />
       </p>
     </div>

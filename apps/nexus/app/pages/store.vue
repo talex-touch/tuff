@@ -464,8 +464,10 @@ const resultSummary = computed(() => {
   const total = totalPlugins.value
   const count = displayedPluginCount.value
 
+  // Empty states are already explained by the placeholder card below, so keep the
+  // summary line silent instead of repeating the same sentence twice.
   if (!total)
-    return hasActiveStoreFilter.value ? t('store.results.empty') : t('store.results.none')
+    return ''
 
   if (count >= total)
     return t('store.results.count', { count: total })
@@ -487,7 +489,7 @@ useSeoMeta({
 <template>
   <section class="relative mx-auto max-w-6xl w-full flex flex-col gap-8 px-24 py-20 lg:px-12 sm:px-6">
     <StoreSearch v-model:filter="filters.category" v-model="filters.search" remote :search-debounce="180" class="w-full" @search="applyStoreSearch">
-      <template #result>
+      <template v-if="resultSummary" #result>
         {{ resultSummary }}
       </template>
     </StoreSearch>

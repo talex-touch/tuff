@@ -778,8 +778,12 @@ onBeforeUnmount(() => {
 
 /* ── Subtitle ───────────────────────────────────────────────────────────── */
 .ExpHero-Subtitle {
-  max-width: 44ch;
+  /* A CJK glyph is ~2ch wide, so the old 44ch measure cut the Chinese line short
+     and orphaned its tail. Wide enough here for both locales to hold one line at
+     desktop; `balance` keeps the narrow-viewport wrap even instead of orphaning. */
+  max-width: min(100%, 66ch);
   margin: clamp(0.9rem, 1.6vw, 1.3rem) 0 0;
+  text-wrap: balance;
   color: rgba(246, 247, 244, 0.68);
   font-size: clamp(0.98rem, 1.35vw, 1.18rem);
   font-weight: 460;
