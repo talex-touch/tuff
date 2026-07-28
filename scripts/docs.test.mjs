@@ -44,13 +44,13 @@ async function loadVerifierHarness() {
     ) {
       return {
         source: `${relativePath}#rule-exports`,
-        run: ({ fixtureRoot, trackedFiles }) => {
+        run: ({ fixtureRoot, trackedFiles, skipAiDocs = false }) => {
           const scope = module.scopeRegistry(fixtureRoot, trackedFiles)
           const diagnostics = [
             ...module.checkMarkdownAndLinks(fixtureRoot, scope),
             ...module.checkTasks(fixtureRoot, scope),
             ...module.checkReleaseNotes(fixtureRoot, scope),
-            ...(typeof module.checkAiDocs === 'function' ? module.checkAiDocs(fixtureRoot, scope) : []),
+            ...(typeof module.checkAiDocs === 'function' ? module.checkAiDocs(fixtureRoot, scope, { skipAiDocs }) : []),
             ...module.checkPlaceholders(fixtureRoot, scope),
           ].sort((a, b) =>
             a.ruleId.localeCompare(b.ruleId)
@@ -100,14 +100,28 @@ function readFixtureCase(name) {
   )
 }
 
-function materializeFixtureCase(name) {
+function materializeFixtureCase(name, seen = new Set()) {
+  assert.ok(!seen.has(name), `fixture case inheritance cycle at ${name}`)
+  seen.add(name)
+
   const fixtureCase = readFixtureCase(name)
-  const base = readFixture(fixtureCase.base ?? 'valid-aggregate')
-  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), `docs-fixture-${name}-`))
+  let fixtureRoot
+  let tracked
+  let inheritedOptions = {}
 
-  fs.cpSync(base.fixtureRoot, fixtureRoot, { recursive: true })
+  if (fixtureCase.caseBase) {
+    const inherited = materializeFixtureCase(fixtureCase.caseBase, seen)
+    fixtureRoot = inherited.fixtureRoot
+    tracked = new Set(inherited.trackedFiles)
+    inheritedOptions = inherited
+  }
+  else {
+    const base = readFixture(fixtureCase.base ?? 'valid-aggregate')
+    fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), `docs-fixture-${name}-`))
+    fs.cpSync(base.fixtureRoot, fixtureRoot, { recursive: true })
+    tracked = new Set(base.trackedFiles)
+  }
 
-  const tracked = new Set(base.trackedFiles)
   for (const file of fixtureCase.trackedRemove ?? []) tracked.delete(file)
 
   for (const [file, content] of Object.entries(fixtureCase.files ?? {})) {
@@ -131,7 +145,11 @@ function materializeFixtureCase(name) {
     `${JSON.stringify(trackedFiles, null, 2)}\n`,
   )
 
-  return { fixtureRoot, trackedFiles, includeAiDocs: fixtureCase.includeAiDocs === true }
+  return {
+    fixtureRoot,
+    trackedFiles,
+    skipAiDocs: fixtureCase.skipAiDocs ?? inheritedOptions.skipAiDocs ?? false,
+  }
 }
 
 async function runFixture(name) {
@@ -142,7 +160,7 @@ async function runFixture(name) {
     fixtureRoot: fixture.fixtureRoot,
     repoRoot: fixture.fixtureRoot,
     trackedFiles: fixture.trackedFiles,
-    includeAiDocs: fixture.includeAiDocs === true,
+    skipAiDocs: fixture.skipAiDocs === true,
     diagnosticLimit: 50,
   })
 
@@ -156,6 +174,7 @@ async function runMaterializedFixture(fixture) {
     fixtureRoot: fixture.fixtureRoot,
     repoRoot: fixture.fixtureRoot,
     trackedFiles: fixture.trackedFiles,
+    skipAiDocs: fixture.skipAiDocs === true,
     diagnosticLimit: 50,
   })
 
@@ -315,6 +334,46 @@ describe('canonical documentation verifier fixtures', () => {
     assert.equal(renderedOutput(first), renderedOutput(second))
   })
 
+  const passingCases = [
+    {
+      name: 'ai-fixture-opt-out',
+      absentRuleIds: ['DOC-AI-CONTRACT'],
+      absentMessages: ['historical 13/13 visible AI snapshot'],
+    },
+    {
+      name: 'url-raw-query-fragment-encoded-hash',
+      absentRuleIds: ['DOC-LINK-UNTRACKED', 'DOC-LINK-INVALID'],
+      absentPaths: ['docs/url-edges.md'],
+    },
+  ]
+
+  for (const fixtureCase of passingCases) {
+    it(`accepts ${fixtureCase.name}`, async () => {
+      const result = await runFixtureCase(fixtureCase.name)
+
+      assertDiagnosticShape(result)
+      assert.equal(result.exitCode, 0)
+
+      const ruleIds = diagnosticRuleIds(result)
+      const paths = diagnosticPaths(result)
+      const messages = diagnosticMessages(result).join('\n')
+      const problems = []
+      for (const ruleId of fixtureCase.absentRuleIds ?? []) {
+        if (ruleIds.includes(ruleId))
+          problems.push(`unexpected rule ${ruleId}; got ${ruleIds.join(', ')}`)
+      }
+      for (const absentPath of fixtureCase.absentPaths ?? []) {
+        if (paths.includes(absentPath))
+          problems.push(`unexpected path ${absentPath}; got ${paths.join(', ')}`)
+      }
+      for (const absentMessage of fixtureCase.absentMessages ?? []) {
+        if (messages.includes(absentMessage))
+          problems.push(`unexpected message ${absentMessage}; got ${messages}`)
+      }
+      assert.deepEqual(problems, [])
+    })
+  }
+
   const failingCases = [
     {
       name: 'markdown-link-edges-and-scope-poison',
@@ -349,6 +408,53 @@ describe('canonical documentation verifier fixtures', () => {
       messages: ['Markdown must not contain NUL bytes'],
     },
     {
+      name: 'rooted-artifact-exclusions-preserve-docs-build',
+      ruleIds: ['DOC-MARKDOWN-MD900'],
+      paths: ['docs/reference/build/nul-byte.md'],
+      absentPaths: [
+        'build/nul-poison.md',
+        'dist/nul-poison.md',
+      ],
+      messages: ['Markdown must not contain NUL bytes'],
+    },
+    {
+      name: 'trellis-archive-layout-final-identity-completion-graph',
+      ruleIds: [
+        'DOC-TASK-ARCHIVE-META',
+        'DOC-TASK-ARCHIVE-NONCOMPLETED',
+        'DOC-TASK-GRAPH',
+        'DOC-TASK-IDENTITY',
+      ],
+      paths: [
+        '.trellis/tasks/archive/2026-07/final-child/task.json',
+        '.trellis/tasks/archive/2026-07/final-layout/task.json',
+        '.trellis/tasks/archive/2026-07/final-parent/task.json',
+      ],
+      messages: [
+        'archived task must be completed',
+        'archived task requires non-empty assignee and completedAt',
+        'task id must equal path identity final-child',
+        'child 07-28-final-child does not point to final-parent',
+      ],
+    },
+    {
+      name: 'trellis-malformed-task-roots-types',
+      ruleIds: ['DOC-TASK-TYPE'],
+      paths: [
+        '.trellis/tasks/array-root/task.json',
+        '.trellis/tasks/bad-field-types/task.json',
+        '.trellis/tasks/string-root/task.json',
+      ],
+      messages: ['task JSON root must be an object'],
+    },
+    {
+      name: 'prd-empty-sections-excluding-code',
+      ruleIds: ['DOC-PRD-EMPTY-SECTION'],
+      paths: ['.trellis/tasks/active-doc-task/prd.md'],
+      absentMessages: ['Code Fence Empty Section'],
+      messages: ['required template section has no substantive content'],
+    },
+    {
       name: 'trellis-graph-meta-archive-todo',
       ruleIds: [
         'DOC-TASK-ACTIVE-COMPLETED',
@@ -360,7 +466,7 @@ describe('canonical documentation verifier fixtures', () => {
         'DOC-TODO-TASK-REFERENCE',
       ],
       paths: [
-        '.trellis/archive/tasks/incomplete-task/task.json',
+        '.trellis/tasks/archive/2026-07/incomplete-task/task.json',
         '.trellis/tasks/active-doc-task/task.json',
         '.trellis/tasks/completed-active/task.json',
         '.trellis/tasks/invalid-json/task.json',
@@ -388,7 +494,7 @@ describe('canonical documentation verifier fixtures', () => {
         '.trellis/tasks/active-doc-task/prd.md',
         '.trellis/tasks/07-27-documentation-quality-gates/prd.md',
       ],
-      messages: ['TBD', 'TODO: fill', '<evidence>', '待补充'],
+      messages: ['TBD', 'TODO: fill', '<evidence>', 'required template section has no substantive content'],
     },
   ]
 
@@ -421,6 +527,11 @@ describe('canonical documentation verifier fixtures', () => {
       for (const expectedMessage of fixtureCase.messages ?? []) {
         if (!messages.includes(expectedMessage))
           problems.push(`missing message ${expectedMessage}; got ${messages}`)
+      }
+
+      for (const absentMessage of fixtureCase.absentMessages ?? []) {
+        if (messages.includes(absentMessage))
+          problems.push(`unexpected message ${absentMessage}; got ${messages}`)
       }
 
       assert.deepEqual(problems, [])
