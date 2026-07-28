@@ -14,8 +14,12 @@ describe('plugin window boundary contract', () => {
     'src/main/modules/plugin/services/plugin-window-transport-service.ts'
   )
   const coreBoxSource = read('src/main/modules/box-tool/core-box/plugin-view-controller.ts')
+  const coreBoxIpcSource = read('src/main/modules/box-tool/core-box/ipc.ts')
   const divisionBoxSource = read('src/main/modules/division-box/session.ts')
+  const divisionBoxManagerSource = read('src/main/modules/division-box/manager.ts')
   const preloadSource = read('src/preload/plugin-view.ts')
+  const windowDefaultsSource = read('src/main/config/default.ts')
+  const protocolHandlerSource = read('src/main/service/protocol-handler.ts')
 
   it('delegates every privileged public window event to the protected transport service', () => {
     expect(pluginModuleSource).toContain('registerPluginWindowTransportHandlers')
@@ -51,9 +55,42 @@ describe('plugin window boundary contract', () => {
     for (const source of [windowTransportSource, coreBoxSource, divisionBoxSource]) {
       expect(source).toContain('buildPluginViewWebPreferences')
       expect(source).toContain('installPluginViewNavigationPolicy')
+      expect(source).toContain('registerPluginWebContents')
+      expect(source).toContain('unregisterPluginWebContents')
     }
-    expect(coreBoxSource).toContain("securityProfile.effectiveProfile === 'compat-plugin-view'")
-    expect(divisionBoxSource).toContain("securityProfile.effectiveProfile === 'compat-plugin-view'")
+    expect(coreBoxSource).not.toContain('compat-plugin-view')
+    expect(divisionBoxSource).not.toContain('compat-plugin-view')
+    expect(coreBoxSource).not.toContain('getPluginChannelPreludeCode')
+    expect(divisionBoxSource).not.toContain('getPluginChannelPreludeCode')
+  })
+
+  it('does not allow unowned URL requests to downgrade into app surfaces', () => {
+    expect(coreBoxIpcSource).not.toContain('CoreBoxEvents.uiMode.enter')
+    expect(coreBoxIpcSource).not.toContain('coreBoxManager.enterUIMode(url)')
+
+    const ownerGate = divisionBoxManagerSource.indexOf(
+      'DivisionBox UI views require an owning plugin.'
+    )
+    const sessionConstructor = divisionBoxManagerSource.indexOf('new DivisionBoxSession')
+    expect(ownerGate).toBeGreaterThan(-1)
+    expect(sessionConstructor).toBeGreaterThan(ownerGate)
+  })
+
+  it('runs the legacy compatibility gate before every plugin Electron constructor', () => {
+    const publicProfile = windowTransportSource.indexOf('resolvePluginViewSecurityProfile')
+    const publicConstructor = windowTransportSource.indexOf('new TouchWindow', publicProfile)
+    expect(publicProfile).toBeGreaterThan(-1)
+    expect(publicConstructor).toBeGreaterThan(publicProfile)
+
+    const coreProfile = coreBoxSource.indexOf('resolvePluginViewSecurityProfile')
+    const coreConstructor = coreBoxSource.indexOf('new WebContentsView', coreProfile)
+    expect(coreProfile).toBeGreaterThan(-1)
+    expect(coreConstructor).toBeGreaterThan(coreProfile)
+
+    const divisionProfile = divisionBoxSource.indexOf('resolvePluginViewSecurityProfile')
+    const divisionConstructor = divisionBoxSource.indexOf('new WebContentsView', divisionProfile)
+    expect(divisionProfile).toBeGreaterThan(-1)
+    expect(divisionConstructor).toBeGreaterThan(divisionProfile)
   })
 
   it('removes reflective BrowserWindow and WebContents member invocation', () => {
@@ -71,6 +108,20 @@ describe('plugin window boundary contract', () => {
     expect(controls).not.toContain('BrowserWindow.fromId')
   })
 
+  it('removes the historical webview and arbitrary atom file-read bypasses', () => {
+    expect(windowDefaultsSource).not.toContain('enableWebviewTag')
+    expect(windowDefaultsSource).not.toContain('webviewTag: true')
+    expect(
+      fs.existsSync(path.join(coreAppRoot, 'src/renderer/src/components/plugin/PluginView.vue'))
+    ).toBe(false)
+    expect(
+      fs.existsSync(path.join(coreAppRoot, 'src/renderer/src/views/base/plugin/ViewPlugin.vue'))
+    ).toBe(false)
+    expect(protocolHandlerSource).toContain('status: 410')
+    expect(protocolHandlerSource).not.toContain('net.fetch')
+    expect(protocolHandlerSource).not.toContain('pathToFileURL')
+  })
+
   it('exposes only plugin metadata, config, and the async channel to page context', () => {
     const exposedNames = Array.from(
       preloadSource.matchAll(/exposeInMainWorld\(\s*['"]([^'"]+)['"]/g),
@@ -78,6 +129,7 @@ describe('plugin window boundary contract', () => {
     )
 
     expect(exposedNames).toEqual(['$plugin', '$config', '$channel'])
+    expect(preloadSource).toContain('bridgeVersion: bootstrap.bridgeVersion')
     expect(preloadSource).not.toContain("exposeInMainWorld('electron'")
     expect(preloadSource).not.toContain("exposeInMainWorld('ipcRenderer'")
     expect(preloadSource).not.toContain("exposeInMainWorld('process'")

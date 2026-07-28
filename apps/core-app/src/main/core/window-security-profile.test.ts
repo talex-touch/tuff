@@ -22,26 +22,27 @@ describe('buildWindowWebPreferences', () => {
     })
   })
 
-  it('keeps webviewTag opt-in on app windows that still host historical webviews', () => {
-    const prefs = buildWindowWebPreferences('app', {}, { enableWebviewTag: true })
+  it('fails secure when an obsolete third options argument reaches runtime', () => {
+    const legacyCaller = buildWindowWebPreferences as unknown as (
+      profile: 'app',
+      overrides: Electron.WebPreferences,
+      options: { enableWebviewTag: boolean }
+    ) => Electron.WebPreferences
+    const prefs = legacyCaller('app', {}, { enableWebviewTag: true })
 
-    expect(prefs.webviewTag).toBe(true)
+    expect(prefs.webviewTag).toBe(false)
     expect(prefs.nodeIntegration).toBe(false)
     expect(prefs.contextIsolation).toBe(true)
   })
 
   it('ignores managed security overrides for hardened app windows', () => {
-    const prefs = buildWindowWebPreferences(
-      'app',
-      {
-        webSecurity: false,
-        nodeIntegration: true,
-        contextIsolation: false,
-        sandbox: false,
-        webviewTag: true
-      } as Electron.WebPreferences,
-      { enableWebviewTag: false }
-    )
+    const prefs = buildWindowWebPreferences('app', {
+      webSecurity: false,
+      nodeIntegration: true,
+      contextIsolation: false,
+      sandbox: false,
+      webviewTag: true
+    } as Electron.WebPreferences)
 
     expect(prefs).toMatchObject({
       webSecurity: true,
@@ -52,19 +53,19 @@ describe('buildWindowWebPreferences', () => {
     })
   })
 
-  it('makes plugin view compatibility explicit', () => {
-    const prefs = buildWindowWebPreferences('compat-plugin-view', {
+  it('fails secure when an obsolete compatibility profile reaches runtime', () => {
+    const prefs = buildWindowWebPreferences('compat-plugin-view' as never, {
       preload: '/tmp/plugin-preload.js'
     })
 
     expect(prefs).toMatchObject({
       preload: '/tmp/plugin-preload.js',
-      webSecurity: false,
-      nodeIntegration: true,
-      nodeIntegrationInSubFrames: true,
-      contextIsolation: false,
-      sandbox: false,
-      webviewTag: true
+      webSecurity: true,
+      nodeIntegration: false,
+      nodeIntegrationInSubFrames: false,
+      contextIsolation: true,
+      sandbox: true,
+      webviewTag: false
     })
   })
 

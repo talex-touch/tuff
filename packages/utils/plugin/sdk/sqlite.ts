@@ -1,5 +1,7 @@
+import type { PluginStorageErrorCode } from '../../transport/events/types'
 import { createPluginTuffTransport } from '../../transport'
 import { PluginEvents } from '../../transport/events'
+import { PLUGIN_STORAGE_ERROR_CODES } from '../../transport/events/types'
 import { ensureRendererChannel } from './channel'
 import { usePluginName } from './plugin-info'
 
@@ -22,6 +24,64 @@ export interface PluginSqliteTransactionResult {
   results: PluginSqliteExecuteResult[]
 }
 
+export type PluginSqliteOperation = 'execute' | 'query' | 'transaction'
+export type PluginStorageOperation
+  = | PluginSqliteOperation
+    | 'secret:get'
+    | 'secret:set'
+    | 'secret:delete'
+    | 'secret:health'
+
+export class PluginStorageError extends Error {
+  readonly code: PluginStorageErrorCode | undefined
+  readonly operation: PluginStorageOperation
+
+  constructor(
+    message: string,
+    operation: PluginStorageOperation,
+    code?: PluginStorageErrorCode,
+  ) {
+    super(message)
+    this.name = 'PluginStorageError'
+    this.code = code
+    this.operation = operation
+  }
+}
+
+const pluginStorageErrorCodes = new Set<string>(Object.values(PLUGIN_STORAGE_ERROR_CODES))
+
+function normalizePluginStorageErrorCode(value: unknown): PluginStorageErrorCode | undefined {
+  return typeof value === 'string' && pluginStorageErrorCodes.has(value)
+    ? (value as PluginStorageErrorCode)
+    : undefined
+}
+
+function createSqliteResponseError(
+  response: unknown,
+  operation: PluginSqliteOperation,
+): PluginStorageError {
+  const operationLabel
+    = operation === 'execute'
+      ? 'Execute'
+      : operation === 'query'
+        ? 'Query'
+        : 'Transaction'
+  const error
+    = response && typeof response === 'object' && 'error' in response
+      ? String((response as { error?: unknown }).error ?? 'Unknown error')
+      : 'Unknown error'
+  const code
+    = response && typeof response === 'object' && 'code' in response
+      ? normalizePluginStorageErrorCode((response as { code?: unknown }).code)
+      : undefined
+
+  return new PluginStorageError(
+    `[Plugin SQLite SDK] ${operationLabel} failed: ${error}`,
+    operation,
+    code,
+  )
+}
+
 function normalizeSql(sql: string): string {
   return typeof sql === 'string' ? sql.trim() : ''
 }
@@ -32,17 +92,17 @@ function normalizeParams(params?: unknown[]): unknown[] {
 
 export function usePluginSqlite() {
   const pluginName = usePluginName(
-    '[Plugin SQLite SDK] Cannot determine plugin name. Make sure this is called in a plugin context.'
+    '[Plugin SQLite SDK] Cannot determine plugin name. Make sure this is called in a plugin context.',
   )
   const channel = ensureRendererChannel(
-    '[Plugin SQLite SDK] Channel not available. Make sure this is called in a plugin context.'
+    '[Plugin SQLite SDK] Channel not available. Make sure this is called in a plugin context.',
   )
   const transport = createPluginTuffTransport(channel as any)
 
   return {
     execute: async (
       sql: string,
-      params?: unknown[]
+      params?: unknown[],
     ): Promise<PluginSqliteExecuteResult> => {
       const normalizedSql = normalizeSql(sql)
       if (!normalizedSql) {
@@ -52,15 +112,11 @@ export function usePluginSqlite() {
       const response = await transport.send(PluginEvents.sqlite.execute, {
         pluginName,
         sql: normalizedSql,
-        params: normalizeParams(params)
+        params: normalizeParams(params),
       })
 
       if (!response || typeof response !== 'object' || (response as { success?: unknown }).success !== true) {
-        const error =
-          response && typeof response === 'object' && 'error' in response
-            ? String((response as { error?: unknown }).error ?? 'Unknown error')
-            : 'Unknown error'
-        throw new Error(`[Plugin SQLite SDK] Execute failed: ${error}`)
+        throw createSqliteResponseError(response, 'execute')
       }
 
       return {
@@ -68,13 +124,13 @@ export function usePluginSqlite() {
         lastInsertRowId:
           typeof (response as { lastInsertRowId?: unknown }).lastInsertRowId === 'number'
             ? Math.trunc((response as { lastInsertRowId?: number }).lastInsertRowId ?? 0)
-            : null
+            : null,
       }
     },
 
     query: async <T extends Record<string, unknown> = Record<string, unknown>>(
       sql: string,
-      params?: unknown[]
+      params?: unknown[],
     ): Promise<PluginSqliteQueryResult<T>> => {
       const normalizedSql = normalizeSql(sql)
       if (!normalizedSql) {
@@ -84,15 +140,11 @@ export function usePluginSqlite() {
       const response = await transport.send(PluginEvents.sqlite.query, {
         pluginName,
         sql: normalizedSql,
-        params: normalizeParams(params)
+        params: normalizeParams(params),
       })
 
       if (!response || typeof response !== 'object' || (response as { success?: unknown }).success !== true) {
-        const error =
-          response && typeof response === 'object' && 'error' in response
-            ? String((response as { error?: unknown }).error ?? 'Unknown error')
-            : 'Unknown error'
-        throw new Error(`[Plugin SQLite SDK] Query failed: ${error}`)
+        throw createSqliteResponseError(response, 'query')
       }
 
       return {
@@ -101,37 +153,33 @@ export function usePluginSqlite() {
           : [],
         columns: Array.isArray((response as { columns?: unknown }).columns)
           ? ((response as { columns: string[] }).columns)
-          : []
+          : [],
       }
     },
 
     transaction: async (
-      statements: PluginSqliteStatement[]
+      statements: PluginSqliteStatement[],
     ): Promise<PluginSqliteTransactionResult> => {
       if (!Array.isArray(statements) || statements.length === 0) {
         throw new Error('[Plugin SQLite SDK] Transaction statements are required.')
       }
 
-      const payload = statements.map((statement) => ({
+      const payload = statements.map(statement => ({
         sql: normalizeSql(statement.sql),
-        params: normalizeParams(statement.params)
+        params: normalizeParams(statement.params),
       }))
 
-      if (payload.some((statement) => !statement.sql)) {
+      if (payload.some(statement => !statement.sql)) {
         throw new Error('[Plugin SQLite SDK] Each transaction statement must include SQL.')
       }
 
       const response = await transport.send(PluginEvents.sqlite.transaction, {
         pluginName,
-        statements: payload
+        statements: payload,
       })
 
       if (!response || typeof response !== 'object' || (response as { success?: unknown }).success !== true) {
-        const error =
-          response && typeof response === 'object' && 'error' in response
-            ? String((response as { error?: unknown }).error ?? 'Unknown error')
-            : 'Unknown error'
-        throw new Error(`[Plugin SQLite SDK] Transaction failed: ${error}`)
+        throw createSqliteResponseError(response, 'transaction')
       }
 
       const results = Array.isArray((response as { results?: unknown }).results)
@@ -139,6 +187,6 @@ export function usePluginSqlite() {
         : []
 
       return { results }
-    }
+    },
   }
 }

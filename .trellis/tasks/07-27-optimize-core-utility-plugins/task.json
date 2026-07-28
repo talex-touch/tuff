@@ -1,0 +1,30 @@
+{
+  "id": "optimize-core-utility-plugins",
+  "name": "optimize-core-utility-plugins",
+  "title": "优化核心效率插件",
+  "description": "统一审计并优化 Translation、Intelligence 与 Clipboard 三个插件，建立独立子任务和跨插件验收标准。",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-27-optimize-intelligence-plugin",
+    "07-27-optimize-translation-plugin",
+    "07-27-optimize-clipboard-plugin"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

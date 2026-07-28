@@ -135,7 +135,7 @@ describe('StorageModule', () => {
         value: { beginner: { init: true } },
         persist: true
       })
-    ).rejects.toThrow('disk unavailable')
+    ).resolves.toMatchObject({ success: false })
 
     const restored = storage.getConfig(StorageList.APP_SETTING) as {
       beginner?: { init?: boolean }

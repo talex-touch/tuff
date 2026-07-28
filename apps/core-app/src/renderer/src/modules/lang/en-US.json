@@ -1012,6 +1012,7 @@
     "searchPlaceholder": "Search plugins",
     "opening": "Opening...",
     "openFolder": "Open Folder",
+    "folderOpenFailed": "Failed to open the plugin folder",
     "dropInstall": {
       "installing": "Installing...",
       "ignore": "Ignore",

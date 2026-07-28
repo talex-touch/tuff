@@ -1,7 +1,7 @@
 ---
 title: "Transition 动效"
 description: "用于带 key 内容切换、列表动效与平滑尺寸变化的通用过渡封装。"
-category: Layout
+category: Effects
 tags: [transition, motion, list, auto-size]
 syncStatus: reviewed
 verified: true

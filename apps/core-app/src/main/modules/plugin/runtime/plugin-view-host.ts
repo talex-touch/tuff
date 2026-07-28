@@ -1,9 +1,12 @@
 import type { TalexTouch } from '@talex-touch/utils'
 import type { PluginWindowOptions } from '@talex-touch/utils/transport/events/types'
 import type { PluginViewSecurityProfile } from './plugin-view-security-profile'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { buildPluginViewBootstrapArgument } from '../../../../shared/plugin-view-bridge'
+import {
+  buildPluginViewBootstrapArgument,
+  PLUGIN_VIEW_BRIDGE_VERSION
+} from '../../../../shared/plugin-view-bridge'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 
 interface PluginViewHostPlugin {
@@ -17,7 +20,6 @@ export interface PluginViewWebPreferenceOptions {
   plugin: PluginViewHostPlugin
   themeStyle: unknown
   source: string
-  legacyPreload?: string
   overrides?: Electron.WebPreferences
 }
 
@@ -26,7 +28,10 @@ function resolvePluginViewPreloadPath(): string {
 }
 
 function buildPluginViewPartition(pluginName: string, source: string): string {
-  const hash = createHash('sha256').update(`${pluginName}:${source}`).digest('hex').slice(0, 24)
+  const hash = createHash('sha256')
+    .update(`${PLUGIN_VIEW_BRIDGE_VERSION}:${pluginName}:${source}:${randomUUID()}`)
+    .digest('hex')
+    .slice(0, 24)
   return `tuff-plugin-view-${hash}`
 }
 
@@ -41,37 +46,29 @@ function stripHostControlledPreferences(
 }
 
 export function buildPluginViewWebPreferences(
-  profile: PluginViewSecurityProfile,
+  _profile: PluginViewSecurityProfile,
   options: PluginViewWebPreferenceOptions
 ): Electron.WebPreferences {
   const safeOverrides = stripHostControlledPreferences(options.overrides)
   const partition = buildPluginViewPartition(options.plugin.name, options.source)
+  const bootstrapArgument = buildPluginViewBootstrapArgument({
+    bridgeVersion: PLUGIN_VIEW_BRIDGE_VERSION,
+    channelKey: options.plugin._uniqueChannelKey,
+    plugin: {
+      name: options.plugin.name,
+      version: options.plugin.version,
+      sdkapi: options.plugin.sdkapi
+    },
+    config: {
+      themeStyle: options.themeStyle ?? {}
+    }
+  })
 
-  if (profile === 'trusted-plugin-view') {
-    const bootstrapArgument = buildPluginViewBootstrapArgument({
-      channelKey: options.plugin._uniqueChannelKey,
-      plugin: {
-        name: options.plugin.name,
-        version: options.plugin.version,
-        sdkapi: options.plugin.sdkapi
-      },
-      config: {
-        themeStyle: options.themeStyle ?? {}
-      }
-    })
-
-    return buildWindowWebPreferences(profile, {
-      ...safeOverrides,
-      partition,
-      preload: resolvePluginViewPreloadPath(),
-      additionalArguments: [bootstrapArgument]
-    })
-  }
-
-  return buildWindowWebPreferences(profile, {
+  return buildWindowWebPreferences('trusted-plugin-view', {
     ...safeOverrides,
     partition,
-    preload: options.legacyPreload
+    preload: resolvePluginViewPreloadPath(),
+    additionalArguments: [bootstrapArgument]
   })
 }
 

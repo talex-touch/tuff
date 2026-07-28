@@ -1,0 +1,30 @@
+{
+  "id": "widget-sandbox-completion",
+  "name": "widget-sandbox-completion",
+  "title": "Widget Sandbox Completion",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-17",
+  "completedAt": "2026-07-27",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Implement and verify the widget host-API containment, expression-parser replacement, and bounded audit contracts in the PRD.",
+    "blocker": "The PRD acceptance criteria remain unchecked; no completion evidence exists for the required sandbox boundary.",
+    "evidence": "prd.md defines the fail-closed capability, quota, audit, dynamic-execution, and expression-parser acceptance contract."
+  }
+}

@@ -1,5 +1,6 @@
 import type { ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
+import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { describe, expect, it, vi } from 'vitest'
 import { NativeEvents } from '@talex-touch/utils/transport/events'
@@ -219,9 +220,10 @@ function createContext(pluginName?: string, sdkapi?: number) {
     eventName: NativeEvents.screenshot.capture.toEventName(),
     plugin: pluginName
       ? {
-          name: pluginName,
-          uniqueKey: 'key',
-          verified: true,
+          ...createTrustedTestPluginContext({
+            name: pluginName,
+            uniqueKey: 'key'
+          }),
           sdkapi
         }
       : undefined

@@ -1,7 +1,7 @@
 ---
 title: "TypingIndicator"
 description: "Inline typing and loading status indicators for chat surfaces."
-category: Feedback
+category: Data
 status: beta
 since: 1.0.0
 tags: [typing, loading, chat]

@@ -1,7 +1,7 @@
 ---
 title: Steps 步骤条
 description: 多步骤进度展示，支持横向/纵向布局、数字或字符串步骤键、可点击头部和显式禁用状态。
-category: Layout
+category: Navigation
 status: beta
 since: 1.0.0
 tags: [steps, progress, workflow]

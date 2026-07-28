@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Typed transport and runtime boundary rules for App SDK/system shell changes"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "CoreApp Vue interaction and i18n conventions for renderer feedback"}
+{"file": ".trellis/spec/frontend/plugin-runtime-security.md", "reason": "Privileged Electron boundary and fail-closed requirements"}

@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend scope and pre-development checklist"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Per-package quality gates and onboarding invariants"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Typed transport and cross-layer contract rules"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Vue, accessibility, and i18n conventions"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Cross-layer validation guidance"}
+{"file": ".trellis/tasks/07-26-batch-commit-project-changes/research/commit-inventory.md", "reason": "Authoritative diff grouping, risks, and validation map"}

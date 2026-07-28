@@ -1,0 +1,30 @@
+{
+  "id": "persist-ota-lifecycle",
+  "name": "persist-ota-lifecycle",
+  "title": "持久化 OTA 生命周期状态机",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-17",
+  "completedAt": "2026-07-27",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-17-unify-ota-update-flow",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Coordinate the persisted lifecycle contract with the remaining OTA integration tasks and record parent-level completion disposition.",
+    "blocker": "The OTA parent integration remains open; this completed child contract must not be closed independently of its consumers.",
+    "evidence": "prd.md Verification records focused lifecycle, repository, transport, renderer, migration, and isolated Settings smoke results."
+  }
+}

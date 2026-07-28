@@ -1,7 +1,7 @@
 ---
 title: "AutoSizer"
 description: "Automatically follows content width and height changes with resize and FLIP transitions."
-category: Layout
+category: Primitives
 status: beta
 since: 1.0.0
 tags: [auto-size, layout, animation]

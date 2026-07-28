@@ -25,15 +25,11 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
     height: 40,
     symbolColor: '#1f2937'
   },
-  webPreferences: buildWindowWebPreferences(
-    'app',
-    {
-      preload: path.join(__dirname, '..', 'preload', 'index.js'),
-      scrollBounce: true,
-      additionalArguments: buildWindowArgs({ touchType: 'main' })
-    },
-    { enableWebviewTag: true }
-  )
+  webPreferences: buildWindowWebPreferences('app', {
+    preload: path.join(__dirname, '..', 'preload', 'index.js'),
+    scrollBounce: true,
+    additionalArguments: buildWindowArgs({ touchType: 'main' })
+  })
 }
 
 export const BoxWindowOption: Electron.BrowserWindowConstructorOptions = {
