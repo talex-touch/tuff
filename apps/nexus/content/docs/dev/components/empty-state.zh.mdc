@@ -114,8 +114,8 @@ code: |
 | `TxSearchEmpty` | `search-empty` | 搜索或筛选无结果。 |
 | `TxOfflineState` | `offline` | 网络不可用状态。 |
 | `TxPermissionState` | `permission` | 权限不足状态。 |
-| `TxErrorState` | `error` | 错误状态，详见 [ErrorState](./error-state.zh.md)。 |
-| `TxGuideState` | `guide` | 引导状态，详见 [GuideState](./guide-state.zh.md)。 |
+| `TxErrorState` | `error` | 错误状态，详见 [ErrorState](./error-state.zh.mdc)。 |
+| `TxGuideState` | `guide` | 引导状态，详见 [GuideState](./guide-state.zh.mdc)。 |
 
 ## API
 

@@ -49,7 +49,7 @@ code: |
 
 ## API
 
-`TxGuideState` 接收 `GuideStateProps`，其类型定义为 `Omit<EmptyStateProps, 'variant'>`。组件会把这些 props 透传给 `TxEmptyState`，并注入 `variant="guide"`。完整基础契约见 [EmptyState](./empty-state.zh.md)。
+`TxGuideState` 接收 `GuideStateProps`，其类型定义为 `Omit<EmptyStateProps, 'variant'>`。组件会把这些 props 透传给 `TxEmptyState`，并注入 `variant="guide"`。完整基础契约见 [EmptyState](./empty-state.zh.mdc)。
 
 ### Props
 

@@ -1,8 +1,8 @@
 # Reference
 
 ## Items
-- [Manifest reference](./manifest.en.md)
-- [Plugin development workflow](../getting-started/plugin-workflow.en.md)
-- [Core App startup and runtime env](./runtime-startup-env.en.md)
-- [Examples](./examples.en.md)
-- [Code snippets](./snippets.en.md)
+- [Manifest reference](./manifest.en.mdc)
+- [Plugin development workflow](../getting-started/plugin-workflow.en.mdc)
+- [Core App startup and runtime env](./runtime-startup-env.en.mdc)
+- [Examples](./examples.en.mdc)
+- [Code snippets](./snippets.en.mdc)

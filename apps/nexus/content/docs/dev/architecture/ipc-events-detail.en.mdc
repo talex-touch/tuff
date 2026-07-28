@@ -592,5 +592,5 @@ See: `apps/nexus/content/docs/dev/architecture/transport-events.en.mdc`
 
 ## Further Reading
 
-- **[IPC Handler Index (Function Level)](./ipc-events-handlers.en.md)** — Locate concrete handler methods from event names.
-- **[SDK -> Event -> Handler Index](./ipc-events-sdk-map.en.md)** — SDK call chain plus internal/private transport mapping.
+- **[IPC Handler Index (Function Level)](./ipc-events-handlers.en.mdc)** — Locate concrete handler methods from event names.
+- **[SDK -> Event -> Handler Index](./ipc-events-sdk-map.en.mdc)** — SDK call chain plus internal/private transport mapping.

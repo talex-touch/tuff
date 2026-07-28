@@ -10,7 +10,7 @@ TuffEx（中文名：塔芙）是一个专注于触感体验和流畅动画的�
 > **迁移中** - TuffEx 正在从 Tuff 核心应用迁移组件，技术栈已升级至 Vue 3.5 / Vite 6 / TypeScript 5.8。
 
 ## 组件展示
-- **[Tuffex 组件中心](../components/index.zh.md)** — 组件清单、Demo 与 API（双语）。
+- **[Tuffex 组件中心](../components/index.zh.mdc)** — 组件清单、Demo 与 API（双语）。
 
 
 ## 安装

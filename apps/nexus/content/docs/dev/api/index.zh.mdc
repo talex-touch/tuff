@@ -18,32 +18,32 @@ code: |
 :::
 
 ## API 参考
-
-| 模块                                                       | 导入方式                                       | 说明                                             |
-| ---------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
-| [Plugin Context](./plugin-context.zh.md)                   | `IPluginContext` / `context.utils`             | Canonical lifecycle capability facade            |
-| [Box SDK](./box.zh.md)                                     | `useBox()`                                     | 控制 CoreBox 窗口                                |
-| [Clipboard SDK](./clipboard.zh.md)                         | `useClipboard()` / `system.captureSelection()` | 剪贴板、选中文本和历史                           |
-| [TempFile SDK](./temp-file.zh.md)                          | `useTempPluginFiles()`                         | 临时文件创建与清理                               |
-| [Storage SDK](./storage.zh.md)                             | `usePluginStorage()`                           | 插件数据持久化                                   |
-| [Download SDK](./download.zh.md)                           | `useDownloadSdk()`                             | 下载任务管理                                     |
-| [Platform Capabilities SDK](./platform-capabilities.zh.md) | `usePlatformSdk()`                             | 平台能力目录                                     |
-| [Screenshot SDK](./screenshot.zh.md)                       | `screenshot` / `plugin.screenshot`             | 权限门禁下的显示器、指针屏幕与区域截图           |
-| [PowerSDK](./power.zh.md)                                  | `usePowerSDK()`                                | 插件低电量状态能力                               |
-| [RecommendSDK](./recommend.zh.md)                          | `recommend`                                    | 自定义推荐提供者注册                             |
-| [**Account SDK**](./account.zh.md)                         | `accountSDK`                                   | **用户信息、订阅、配额**                         |
-| [**TuffTransport**](./transport.zh.md)                     | `useTuffTransport()`                           | **新一代 IPC（推荐）**                           |
-| [Feature SDK](./feature.zh.md)                             | `useFeature()`                                 | 搜索结果管理                                     |
-| [Search / Indexed Source SDK](./search.zh.md)              | `@talex-touch/utils/search`                    | Search provider 与 indexed-source lifecycle 合同 |
-| [QuickActions SDK](./quick-actions.zh.md)                  | `quickActions` / `plugin.quickActions`         | MetaK 全局动作与原生分享                         |
-| [QuickOps SDK](./quickops.zh.md)                           | `quickOps` / `plugin.quickOps`                 | 内置本地快捷工具的 bounded、策略感知 host facade |
-| [DivisionBox SDK](./division-box.zh.md)                    | `useDivisionBox()`                             | 独立窗口管理                                     |
-| [Flow SDK](./flow-transfer.zh.md)                          | `createFlowSDK()`                              | 插件间数据流转                                   |
-| [Intelligence SDK](./intelligence.zh.md)                   | `useIntelligenceSdk()` / `plugin.intelligence` | AI 能力调用与 Provider 发现                      |
-| [Localization SDK](./i18n.zh.md)                           | `usePluginI18n()` / `plugin.i18n`              | 主机语言、localized text 与隔离 Domain Lexicon   |
-
+<!-- markdownlint-disable MD060 -->
+| 模块                                                          | 导入方式                                           | 说明                                            |
+| ----------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------- |
+| [Plugin Context](./plugin-context.zh.mdc)                   | `IPluginContext` / `context.utils`             | Canonical lifecycle capability facade         |
+| [Box SDK](./box.zh.mdc)                                     | `useBox()`                                     | 控制 CoreBox 窗口                                 |
+| [Clipboard SDK](./clipboard.zh.mdc)                         | `useClipboard()` / `system.captureSelection()` | 剪贴板、选中文本和历史                                   |
+| [TempFile SDK](./temp-file.zh.mdc)                          | `useTempPluginFiles()`                         | 临时文件创建与清理                                     |
+| [Storage SDK](./storage.zh.mdc)                             | `usePluginStorage()`                           | 插件数据持久化                                       |
+| [Download SDK](./download.zh.mdc)                           | `useDownloadSdk()`                             | 下载任务管理                                        |
+| [Platform Capabilities SDK](./platform-capabilities.zh.mdc) | `usePlatformSdk()`                             | 平台能力目录                                        |
+| [Screenshot SDK](./screenshot.zh.mdc)                       | `screenshot` / `plugin.screenshot`             | 权限门禁下的显示器、指针屏幕与区域截图                           |
+| [PowerSDK](./power.zh.mdc)                                  | `usePowerSDK()`                                | 插件低电量状态能力                                     |
+| [RecommendSDK](./recommend.zh.mdc)                          | `recommend`                                    | 自定义推荐提供者注册                                    |
+| [**Account SDK**](./account.zh.mdc)                         | `accountSDK`                                   | **用户信息、订阅、配额**                                |
+| [**TuffTransport**](./transport.zh.mdc)                     | `useTuffTransport()`                           | **新一代 IPC（推荐）**                               |
+| [Feature SDK](./feature.zh.mdc)                             | `useFeature()`                                 | 搜索结果管理                                        |
+| [Search / Indexed Source SDK](./search.zh.mdc)              | `@talex-touch/utils/search`                    | Search provider 与 indexed-source lifecycle 合同 |
+| [QuickActions SDK](./quick-actions.zh.mdc)                  | `quickActions` / `plugin.quickActions`         | MetaK 全局动作与原生分享                               |
+| [QuickOps SDK](./quickops.zh.mdc)                           | `quickOps` / `plugin.quickOps`                 | 内置本地快捷工具的 bounded、策略感知 host facade            |
+| [DivisionBox SDK](./division-box.zh.mdc)                    | `useDivisionBox()`                             | 独立窗口管理                                        |
+| [Flow SDK](./flow-transfer.zh.mdc)                          | `createFlowSDK()`                              | 插件间数据流转                                       |
+| [Intelligence SDK](./intelligence.zh.mdc)                   | `useIntelligenceSdk()` / `plugin.intelligence` | AI 能力调用与 Provider 发现                          |
+| [Localization SDK](./i18n.zh.mdc)                           | `usePluginI18n()` / `plugin.i18n`              | 主机语言、localized text 与隔离 Domain Lexicon        |
+<!-- markdownlint-enable MD060 -->
 ::alert{type="info"}
-**新功能：** [TuffTransport](./transport.zh.md) 是新插件推荐使用的 IPC API。它提供类型安全的事件、自动批量处理和流式传输支持。查看 [TuffTransport 技术内幕](./transport-internals.zh.md) 了解技术细节。
+**新功能：** [TuffTransport](./transport.zh.mdc) 是新插件推荐使用的 IPC API。它提供类型安全的事件、自动批量处理和流式传输支持。查看 [TuffTransport 技术内幕](./transport-internals.zh.mdc) 了解技术细节。
 ::
 
 ---
@@ -188,6 +188,6 @@ code: |
 
 ## 相关文档
 
-- [插件开发快速开始](../getting-started/quickstart.zh.md)
-- [Manifest 配置](../reference/manifest.zh.md)
-- [构建工具 Unplugin](../extensions/unplugin-export-plugin.zh.md)
+- [插件开发快速开始](../getting-started/quickstart.zh.mdc)
+- [Manifest 配置](../reference/manifest.zh.mdc)
+- [构建工具 Unplugin](../extensions/unplugin-export-plugin.zh.mdc)

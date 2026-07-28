@@ -114,8 +114,8 @@ All preset components render `TxEmptyState` with a fixed `variant` and forward t
 | `TxSearchEmpty` | `search-empty` | Empty search or filtered results. |
 | `TxOfflineState` | `offline` | Network unavailable state. |
 | `TxPermissionState` | `permission` | Access denied state. |
-| `TxErrorState` | `error` | Error state; see [ErrorState](./error-state.en.md). |
-| `TxGuideState` | `guide` | Guided onboarding state; see [GuideState](./guide-state.en.md). |
+| `TxErrorState` | `error` | Error state; see [ErrorState](./error-state.en.mdc). |
+| `TxGuideState` | `guide` | Guided onboarding state; see [GuideState](./guide-state.en.mdc). |
 
 ## API
 

@@ -140,7 +140,7 @@ code: |
 
 **Native share**
 
-Flow Transfer can call native share targets. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.md) `shareItem()` so target resolution and platform fallback stay centralized.
+Flow Transfer can call native share targets. If your plugin is sharing the current CoreBox item from a MetaK / Quick Actions action, prefer [QuickActions SDK](./quick-actions.en.mdc) `shareItem()` so target resolution and platform fallback stay centralized.
 
 :::TuffCodeBlock{lang="typescript"}
 ---
@@ -176,6 +176,6 @@ Flow target lists expose the system chooser as `system-share`; `flow.nativeShare
 - Plugins are registered via `flow:register-targets`; missing registration means targets won’t appear.
 
 ## Related Docs
-- [QuickActions SDK](./quick-actions.en.md)
-- [DivisionBox API](./division-box.en.md)
-- [Plugin Manifest](../reference/manifest.en.md)
+- [QuickActions SDK](./quick-actions.en.mdc)
+- [DivisionBox API](./division-box.en.mdc)
+- [Plugin Manifest](../reference/manifest.en.mdc)

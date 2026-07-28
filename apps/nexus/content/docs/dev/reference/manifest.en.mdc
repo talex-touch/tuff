@@ -167,6 +167,6 @@ code: |
 | Issue | Fix |
 | --- | --- |
 | Missing main on a Prelude plugin | Set `main` to `index.js` and ensure the file exists; UI-only plugins do not need a Prelude entry. |
-| Still using `entry` / `init(ctx)` | Migrate to the Prelude model through [Plugin Development Workflow](../getting-started/plugin-workflow.en.md). |
+| Still using `entry` / `init(ctx)` | Migrate to the Prelude model through [Plugin Development Workflow](../getting-started/plugin-workflow.en.mdc). |
 | Excessive permissions | Request only what you truly need, especially for v1. |
 | Keyword collisions | Namespace features like `todo.*` to avoid conflicts. |

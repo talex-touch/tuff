@@ -1,47 +1,31 @@
-# DivisionBox 使用示例
+# DivisionBox 示例
 
-本目录包含 DivisionBox 系统的各种使用示例,帮助开发者快速上手。
+本目录提供 DivisionBox 插件集成的参考代码。示例是可选择性移植的源码
+片段，不是独立可运行的应用；接入插件前仍需按当前 Manifest、权限和
+类型化 SDK 契约调整。
 
-## 示例列表
+## 示例文件
 
-1. **basic-usage.ts** - 基础使用示例
-   - 创建简单的 DivisionBox
-   - 监听状态变化
-   - 关闭 DivisionBox
+- [basic-usage.ts](basic-usage.ts)：创建、更新和关闭 DivisionBox 会话。
+- [keepalive-mode.ts](keepalive-mode.ts)：KeepAlive 会话与状态恢复。
+- [custom-header.ts](custom-header.ts)：Header 配置和操作按钮。
+- [flow-integration.ts](flow-integration.ts)：通过 Flow 传递参数并处理结果。
+- [flow-usage-example.ts](flow-usage-example.ts)：Flow 调用侧示例。
+- [manifest-example.json](manifest-example.json)：示例插件 Manifest。
 
-2. **keepalive-mode.ts** - KeepAlive 模式示例
-   - 启用缓存模式
-   - 快速恢复会话
-   - 保存和恢复用户状态
+## 使用前提
 
-3. **custom-header.ts** - 自定义 Header 示例
-   - 自定义标题和图标
-   - 添加操作按钮
-   - 处理按钮点击事件
+1. 在仓库根目录执行 `pnpm install --frozen-lockfile`。
+2. 在插件项目中使用当前 workspace 提供的 `@talex-touch/utils` typed SDK。
+3. 根据 [Manifest 参考](../../content/docs/dev/reference/manifest.zh.mdc)
+   声明所需能力和权限。
+4. 对照 [DivisionBox API](../../content/docs/dev/api/division-box.zh.mdc)
+   与[架构说明](../../content/docs/dev/architecture/division-box.zh.mdc)
+   选择示例片段。
+5. 使用插件自己的开发、校验和构建命令验证集成，不要把本目录当作独立
+   package 执行。
 
-4. **flow-integration.ts** - Flow 集成示例
-   - 通过 Flow 触发 DivisionBox
-   - 传递参数
-   - 处理 Flow 结果
+英文参考页：
 
-## 运行示例
-
-每个示例都是独立的 TypeScript 文件,可以直接在插件中使用。
-
-### 前置条件
-
-- 已安装 @talex-touch/utils 包
-- 已配置插件开发环境
-- 了解基本的 TypeScript 语法
-
-### 使用方法
-
-1. 复制示例代码到你的插件项目
-2. 根据需要修改配置
-3. 在插件中导入并使用
-
-## 相关文档
-
-- [API 文档](../../docs/DIVISION_BOX_API.md)
-- [Manifest 配置](../../docs/DIVISION_BOX_MANIFEST.md)
-- [开发者指南](../../docs/DIVISION_BOX_GUIDE.md)
+- [DivisionBox API (English)](../../content/docs/dev/api/division-box.en.mdc)
+- [DivisionBox architecture (English)](../../content/docs/dev/architecture/division-box.en.mdc)
