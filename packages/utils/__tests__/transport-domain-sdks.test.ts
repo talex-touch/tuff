@@ -64,6 +64,36 @@ describe("transport domain sdk mappings", () => {
     );
   });
 
+  it("update sdk maps release notes history and acknowledgement events", async () => {
+    const transport = createTransportMock();
+    const sdk = createUpdateSdk(transport as any);
+
+    await sdk.getBundledReleaseNotes();
+    await sdk.listReleaseNotes({ channel: "BETA", cursor: "next", limit: 20 });
+    await sdk.getReleaseNotes({ tag: "v2.4.14-beta.1" });
+    await sdk.acknowledgeReleaseNotes({ version: "2.4.14-beta.1" });
+
+    expect(transport.send).toHaveBeenNthCalledWith(
+      1,
+      UpdateEvents.getBundledReleaseNotes,
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      2,
+      UpdateEvents.listReleaseNotes,
+      { channel: "BETA", cursor: "next", limit: 20 },
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      3,
+      UpdateEvents.getReleaseNotes,
+      { tag: "v2.4.14-beta.1" },
+    );
+    expect(transport.send).toHaveBeenNthCalledWith(
+      4,
+      UpdateEvents.acknowledgeReleaseNotes,
+      { version: "2.4.14-beta.1" },
+    );
+  });
+
   it("settings sdk maps file index stream to typed transport stream", async () => {
     const transport = createTransportMock();
     const sdk = createSettingsSdk(transport as any);

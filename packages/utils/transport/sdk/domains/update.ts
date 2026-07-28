@@ -1,7 +1,11 @@
 import type {
   AppPreviewChannel,
+  BundledReleaseNotesState,
   CachedUpdateRecord,
+  ReleaseNotesEntry,
+  ReleaseNotesPage,
   UpdateCheckResult,
+  UpdateReleaseNotesChannel,
   UpdateSettings,
   UpdateUserAction,
 } from '../../../types/update'
@@ -9,12 +13,15 @@ import type {
   UpdateAvailablePayload,
   UpdateCheckResponse,
   UpdateDownloadRequest,
+  UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
+  UpdateGetReleaseNotesResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateIgnoreVersionRequest,
   UpdateInstallRequest,
   UpdateLifecycleChangedPayload,
+  UpdateListReleaseNotesResponse,
   UpdateOpResponse,
 } from '../../events/types/update'
 import type { ITuffTransport } from '../../types'
@@ -31,6 +38,14 @@ export interface UpdateSdk {
   getCachedRelease: (payload?: {
     channel?: AppPreviewChannel
   }) => Promise<UpdateGetCachedReleaseResponse>
+  getBundledReleaseNotes: () => Promise<UpdateGetBundledReleaseNotesResponse>
+  listReleaseNotes: (payload: {
+    channel: UpdateReleaseNotesChannel
+    cursor?: string
+    limit?: number
+  }) => Promise<UpdateListReleaseNotesResponse>
+  getReleaseNotes: (payload: { tag: string }) => Promise<UpdateGetReleaseNotesResponse>
+  acknowledgeReleaseNotes: (payload: { version: string }) => Promise<UpdateOpResponse>
   recordAction: (payload: {
     tag: string
     action: UpdateUserAction
@@ -62,6 +77,14 @@ export function createUpdateSdk(transport: ITuffTransport): UpdateSdk {
     clearCache: () => transport.send(UpdateEvents.clearCache),
     getCachedRelease: payload =>
       transport.send(UpdateEvents.getCachedRelease, payload ?? {}),
+    getBundledReleaseNotes: () =>
+      transport.send(UpdateEvents.getBundledReleaseNotes),
+    listReleaseNotes: payload =>
+      transport.send(UpdateEvents.listReleaseNotes, payload),
+    getReleaseNotes: payload =>
+      transport.send(UpdateEvents.getReleaseNotes, payload),
+    acknowledgeReleaseNotes: payload =>
+      transport.send(UpdateEvents.acknowledgeReleaseNotes, payload),
     recordAction: payload =>
       transport.send(UpdateEvents.recordAction, payload),
     download: payload => transport.send(UpdateEvents.download, payload),
@@ -81,17 +104,24 @@ export function createUpdateSdk(transport: ITuffTransport): UpdateSdk {
 export type {
   UpdateAvailablePayload,
   UpdateCheckResponse,
+  UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
+  UpdateGetReleaseNotesResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateLifecycleChangedPayload,
+  UpdateListReleaseNotesResponse,
   UpdateOpResponse,
 }
 
 export type {
   AppPreviewChannel,
+  BundledReleaseNotesState,
   CachedUpdateRecord,
+  ReleaseNotesEntry,
+  ReleaseNotesPage,
   UpdateCheckResult,
+  UpdateReleaseNotesChannel,
   UpdateSettings,
   UpdateUserAction,
 }
