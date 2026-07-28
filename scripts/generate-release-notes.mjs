@@ -6,6 +6,11 @@ import { basename, join } from 'node:path'
 import process, { env, exit } from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { getArgValue, hasFlag } from './lib/argv-utils.mjs'
+import {
+  loadReleaseNotesContractConfig,
+  resolveReleaseNotesEnforcement,
+  validateReleaseNotesPair,
+} from './lib/release-notes-contract.mjs'
 
 // Fallback @-handle used when a PR's real author can't be resolved (no token,
 // a non-PR commit, or a GitHub API miss). Mentioning the maintainer is correct
@@ -617,25 +622,51 @@ export async function buildReleaseNotesPayload({
   previousTag = '',
   pullRequests = [],
   notesSourceDir = 'notes',
+  requireManualNotes = false,
 }) {
   const version = getVersionFromTag(tag)
   const manualNotes = await readManualNotes({ notesSourceDir, version })
   const prs = pullRequests.filter(pr => !shouldSkipPullRequest(pr))
+  const validation = requireManualNotes
+    ? validateReleaseNotesPair({
+        version,
+        zhMarkdown: manualNotes.zh,
+        enMarkdown: manualNotes.en,
+      })
+    : null
 
-  const zhNotes = buildGeneratedNotes({
-    tag,
-    previousTag,
-    prs,
-    manualNotes,
-    locale: 'zh',
-  })
-  const enNotes = buildGeneratedNotes({
-    tag,
-    previousTag,
-    prs,
-    manualNotes,
-    locale: 'en',
-  })
+  if (validation && !validation.valid) {
+    const reasons = validation.errors.map(error => error.code).join(', ')
+    throw new Error(`Release notes violate the strict bilingual contract: ${reasons}`)
+  }
+
+  const zhNotes = validation?.documents
+    ? validation.documents.zh.markdown
+    : buildGeneratedNotes({
+        tag,
+        previousTag,
+        prs,
+        manualNotes,
+        locale: 'zh',
+      })
+  const enNotes = validation?.documents
+    ? validation.documents.en.markdown
+    : buildGeneratedNotes({
+        tag,
+        previousTag,
+        prs,
+        manualNotes,
+        locale: 'en',
+      })
+  const summary = validation?.documents
+    ? {
+        zh: validation.documents.zh.summary,
+        en: validation.documents.en.summary,
+      }
+    : {
+        zh: selectHighlights(prs, 'zh').map(stripListMarker),
+        en: selectHighlights(prs, 'en').map(stripListMarker),
+      }
 
   return {
     version,
@@ -644,6 +675,14 @@ export async function buildReleaseNotesPayload({
     prs,
     zhNotes,
     enNotes,
+    releaseNotesAsset: {
+      schemaVersion: 1,
+      tag,
+      version,
+      channel: inferReleaseChannel(tag),
+      summary,
+      notes: { zh: zhNotes, en: enNotes },
+    },
     githubBody: buildGitHubBody({
       tag,
       previousTag,
@@ -652,6 +691,10 @@ export async function buildReleaseNotesPayload({
       enNotes,
     }),
   }
+}
+
+function stripListMarker(value) {
+  return String(value).replace(/^[-*]\s+/, '').trim()
 }
 
 async function fetchPullRequestsForCommit(repo, hash, token) {
@@ -723,11 +766,13 @@ async function writePayload(payload, outputDir) {
   const enPath = join(outputDir, `update_${payload.version}.en.md`)
   const githubPath = join(outputDir, 'release-notes.github.md')
   const prsPath = join(outputDir, 'release-prs.json')
+  const assetPath = join(outputDir, 'tuff-release-notes.json')
 
   await Promise.all([
     writeFile(zhPath, payload.zhNotes, 'utf8'),
     writeFile(enPath, payload.enNotes, 'utf8'),
     writeFile(githubPath, payload.githubBody, 'utf8'),
+    writeFile(assetPath, `${JSON.stringify(payload.releaseNotesAsset, null, 2)}\n`, 'utf8'),
     writeFile(prsPath, JSON.stringify({
       tag: payload.tag,
       previousTag: payload.previousTag,
@@ -742,7 +787,7 @@ async function writePayload(payload, outputDir) {
     }, null, 2), 'utf8'),
   ])
 
-  return { zhPath, enPath, githubPath, prsPath }
+  return { zhPath, enPath, githubPath, prsPath, assetPath }
 }
 
 async function main() {
@@ -768,6 +813,10 @@ async function main() {
     previousTag,
     pullRequests,
     notesSourceDir,
+    requireManualNotes: resolveReleaseNotesEnforcement({
+      version: getVersionFromTag(tag),
+      config: loadReleaseNotesContractConfig(process.cwd()),
+    }).enforced,
   })
 
   const written = await writePayload(payload, outputDir)
