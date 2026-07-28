@@ -1,1 +1,12 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"复核 activation authority、typed RPC、child 隔离、取消和 fail-closed 生命周期边界。"}
+{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"复核 callback/resource owner binding、事务注册、撤销与异步 teardown barrier。"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"复核 wire/codec/session 的窄化、exact DTO 和 hostile input 校验。"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"执行 RED 回归、15 文件测试、类型检查、lint、构建和 Electron smoke 门禁。"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"复核 child/runtime/host/service 双向请求、取消与资源清理的跨层闭环。"}
+{"file":".trellis/tasks/07-27-isolate-plugin-prelude-297/research/resource-protocol-gap.md","reason":"对照 3B callback、resource/disposer 和 cancellation 已知缺口进行独立安全审查。"}
+{"file":"apps/core-app/src/main/modules/plugin/host/plugin-business-capabilities.ts","reason":"复核 4A exact DTO、hostile snapshot、canonical authority、generation ownership 与 teardown。"}
+{"file":"apps/core-app/src/main/modules/plugin/host/plugin-business-capabilities.test.ts","reason":"补充 host-action/file-icon/custom-render/proxy 服务与旧 generation cleanup 回归。"}
+{"file":"apps/core-app/src/main/modules/plugin/plugin.ts","reason":"复核 TouchPlugin activation-local capability binding、snapshot redaction 与 exact item ownership。"}
+{"file":"apps/core-app/src/main/modules/plugin/plugin-module.ts","reason":"发现并记录 23-ID production default wiring 越过 4A 范围的并发阻塞。"}
+{"file":"apps/core-app/scripts/plugin-host-isolation-smoke.cjs","reason":"将真实 Electron emoji smoke 迁移到当前 business factory 并验证双 utilityProcess 隔离。"}
+{"file":"plugins/touch-emoji-symbols/index.js","reason":"复核 capability-only 迁移、await 顺序与确定性脱敏 fallback。"}
