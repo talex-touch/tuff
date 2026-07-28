@@ -1,4 +1,6 @@
 import { NetworkCooldownError, NetworkHttpStatusError } from '@talex-touch/utils/network'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NetworkService } from './network-service'
 
@@ -76,6 +78,58 @@ describe('networkService cooldown policy', () => {
       'https://example.test/data',
       expect.objectContaining({ redirect: 'follow' })
     )
+  })
+
+  it('pins plugin HTTP to the approved address, rejects redirects and bounds bytes while reading', async () => {
+    const hits: string[] = []
+    const server = createServer((request, response) => {
+      hits.push(request.url ?? '')
+      if (request.url === '/redirect') {
+        response.writeHead(302, { location: '/internal' })
+        response.end('redirect')
+        return
+      }
+      if (request.url === '/large') {
+        response.end('x'.repeat(2_048))
+        return
+      }
+      response.end('internal')
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const port = (server.address() as AddressInfo).port
+    const service = new NetworkService()
+    try {
+      await expect(
+        service.requestPinnedNoRedirect(
+          {
+            method: 'GET',
+            url: `http://rebind.invalid:${port}/redirect`,
+            responseType: 'text',
+            retryPolicy: { maxRetries: 0 },
+            validateStatus: Array.from({ length: 500 }, (_, index) => index + 100)
+          },
+          { resolvedAddresses: ['127.0.0.1'], maxResponseBytes: 1_024 }
+        )
+      ).resolves.toMatchObject({ status: 302, data: 'redirect' })
+      expect(hits).toEqual(['/redirect'])
+      expect(electronMocks.fetch).not.toHaveBeenCalled()
+
+      await expect(
+        service.requestPinnedNoRedirect(
+          {
+            method: 'GET',
+            url: `http://rebind.invalid:${port}/large`,
+            responseType: 'text',
+            retryPolicy: { maxRetries: 0 }
+          },
+          { resolvedAddresses: ['127.0.0.1'], maxResponseBytes: 1_024 }
+        )
+      ).rejects.toThrow('NETWORK_RESPONSE_TOO_LARGE')
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve()))
+      )
+    }
   })
 
   it('blocks ordinary requests while cooldown is active', async () => {

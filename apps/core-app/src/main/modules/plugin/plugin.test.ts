@@ -1,6 +1,8 @@
 import type { TuffItem } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import { createHash } from 'node:crypto'
+import os from 'node:os'
 import path from 'node:path'
 import { PluginStatus, SdkApi } from '@talex-touch/utils/plugin'
 import {
@@ -2021,6 +2023,69 @@ describe('touchPlugin storage overview', () => {
     expect(readdirSync).toHaveBeenCalled()
     expect(statSync).toHaveBeenCalled()
   })
+
+  it('keeps committed business file writes successful when notification transport is unavailable', () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-business-notify-'))
+    try {
+      const plugin = new TouchPlugin(
+        'file-plugin',
+        { type: 'class', value: 'i-ri-test-tube-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        path.join(root, 'source'),
+        {},
+        { runtime: { rootPath: root, mainWindowId: 1 } }
+      )
+
+      expect(() => plugin.writeBusinessFile('state.json', { version: 2 })).not.toThrow()
+      expect(plugin.readBusinessFile('state.json')).toEqual({
+        found: true,
+        value: { version: 2 }
+      })
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('rejects symlink escapes for dynamic business feature file icons', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-business-icon-'))
+    try {
+      const pluginRoot = path.join(root, 'plugin')
+      const assets = path.join(pluginRoot, 'assets')
+      fse.ensureDirSync(assets)
+      const outside = path.join(root, 'outside.svg')
+      fse.writeFileSync(outside, '<svg/>')
+      fse.symlinkSync(outside, path.join(assets, 'linked.svg'))
+      const plugin = new TouchPlugin(
+        'icon-plugin',
+        { type: 'class', value: 'i-ri-test-tube-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        pluginRoot,
+        {},
+        { skipDataInit: true, runtime: { rootPath: root, mainWindowId: 1 } }
+      )
+
+      await expect(
+        plugin.addBusinessFeature({
+          id: 'linked-icon',
+          name: 'Linked icon',
+          desc: 'Linked icon',
+          icon: { type: 'file', value: 'assets/linked.svg' },
+          push: false,
+          platform: {},
+          commands: [{ type: 'match', value: 'linked' }]
+        })
+      ).resolves.toBe(false)
+      expect(plugin.getFeature('linked-icon')).toBeNull()
+    } finally {
+      fse.removeSync(root)
+    }
+  })
 })
 
 describe('touchPlugin.setRuntime', () => {
@@ -2155,6 +2220,98 @@ describe('touchPlugin.enable', () => {
     expect(plugin.pluginLifecycle).not.toBeNull()
   })
 
+  it('loads a declared canonical build artifact instead of a stale root projection', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-prelude-canonical-'))
+    try {
+      fse.ensureDirSync(path.join(root, 'index'))
+      fse.ensureDirSync(path.join(root, 'dist', 'build'))
+      fse.writeFileSync(path.join(root, 'index', 'main.ts'), 'module.exports = {}')
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = { stale: true }')
+      const canonicalScript = 'module.exports = { onInit() { return "canonical" } }'
+      fse.writeFileSync(path.join(root, 'dist', 'build', 'index.js'), canonicalScript)
+      fse.writeJsonSync(path.join(root, 'dist', 'build', 'manifest.json'), {
+        _files: {
+          'index.js': `sha256-${createHash('sha256').update(canonicalScript).digest('hex')}`
+        }
+      })
+      const runtime = createRuntimeServiceMock()
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'canonical-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const plugin = new TouchPlugin(
+        'clipboard-history',
+        { type: 'class', value: 'i-ri-test-tube-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ buildIndexEntry: 'index/main.ts' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      expect(runtime.startActivation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scriptContent: 'module.exports = { onInit() { return "canonical" } }'
+        })
+      )
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('fails a missing required Prelude build before spawning a runtime', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-prelude-missing-'))
+    try {
+      fse.ensureDirSync(path.join(root, 'index'))
+      fse.writeFileSync(path.join(root, 'index', 'main.ts'), 'module.exports = {}')
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = { stale: true }')
+      const runtime = createRuntimeServiceMock()
+      const revokeKey = vi.fn(() => true)
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'missing-build-key'),
+          revokeKey
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const plugin = new TouchPlugin(
+        'clipboard-history',
+        { type: 'class', value: 'i-ri-test-tube-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ buildIndexEntry: 'index/main.ts' })
+
+      await expect(plugin.enable()).resolves.toBe(false)
+      expect(runtime.startActivation).not.toHaveBeenCalled()
+      expect(revokeKey).toHaveBeenCalledWith('missing-build-key')
+      expect(plugin.issues.at(-1)).toMatchObject({
+        code: 'PLUGIN_RUNTIME_PRELUDE_ARTIFACT_MISSING',
+        source: 'runtime:activation'
+      })
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
   it('binds feature items to the activation and cleans only the exact owned records', async () => {
     const stored = new Map<string, TuffItem>()
     boxItemManagerMock.get.mockImplementation((id: string) => stored.get(id))
@@ -2270,6 +2427,52 @@ describe('touchPlugin.enable', () => {
     expect(stored.get('owned-b')).toBe(replacement)
   })
 
+  it('atomically transfers item ownership to a newer activation binding', async () => {
+    const stored = new Map<string, TuffItem>()
+    boxItemManagerMock.get.mockImplementation((id: string) => stored.get(id))
+    boxItemManagerMock.batchUpsert.mockImplementation((items: TuffItem[]) => {
+      for (const item of items) stored.set(item.id, item)
+    })
+    boxItemManagerMock.delete.mockImplementation((id: string) => {
+      stored.delete(id)
+    })
+    const plugin = new TouchPlugin(
+      'transfer-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/transfer-plugin',
+      {},
+      { skipDataInit: true, runtime: { rootPath: '/tmp/root', mainWindowId: 1 } }
+    )
+    plugin.status = PluginStatus.ENABLED
+    const signal = new AbortController().signal
+    const previousActivation = plugin.getActivationIdentity()
+    const previousHost = plugin.createBusinessFeatureHost(previousActivation)
+    const item = (title: string) => ({
+      id: 'shared-item',
+      source: { type: 'plugin', id: 'plugin-features' },
+      render: { mode: 'default', basic: { title } }
+    })
+
+    await previousHost.pushItems('active-feature', [item('generation one')], signal)
+    plugin._activationGeneration += 1
+    plugin._uniqueChannelKey = 'generation-two-key'
+    const currentActivation = plugin.getActivationIdentity()
+    const currentHost = plugin.createBusinessFeatureHost(currentActivation)
+    await currentHost.pushItems('active-feature', [item('generation two')], signal, [
+      { id: 'shared-item', activation: previousActivation }
+    ])
+
+    await plugin.cleanupBusinessItems(previousActivation, ['shared-item'])
+    expect(stored.get('shared-item')).toMatchObject({
+      render: { basic: { title: 'generation two' } }
+    })
+    expect(boxItemManagerMock.delete).not.toHaveBeenCalledWith('shared-item')
+  })
+
   it('revokes authority before stopping a failed activation and reports only a stable code', async () => {
     const order: string[] = []
     const runtime = createRuntimeServiceMock({
@@ -2320,17 +2523,24 @@ describe('touchPlugin.enable', () => {
     )
   })
 
-  it('awaits the runtime termination barrier before completing disable', async () => {
+  it('revokes activation authority before awaiting the runtime termination barrier', async () => {
+    const order: string[] = []
     const stopBarrier = deferred<void>()
     const runtime = createRuntimeServiceMock({
-      stopActivation: vi.fn(() => stopBarrier.promise)
+      stopActivation: vi.fn(() => {
+        order.push('stop')
+        return stopBarrier.promise
+      })
     })
     TouchPlugin.setTransport({
       broadcast: vi.fn(),
       invoke: vi.fn().mockResolvedValue(undefined),
       keyManager: {
         requestKey: vi.fn(() => 'activation-key-1'),
-        revokeKey: vi.fn(() => true)
+        revokeKey: vi.fn(() => {
+          order.push('revoke')
+          return true
+        })
       },
       sendToPlugin: vi.fn().mockResolvedValue(undefined)
     } as unknown as ITuffTransportMain)
@@ -2355,6 +2565,7 @@ describe('touchPlugin.enable', () => {
     })
     await vi.waitFor(() => expect(runtime.stopActivation).toHaveBeenCalledTimes(1))
 
+    expect(order).toEqual(['revoke', 'stop'])
     expect(plugin.status).toBe(PluginStatus.DISABLING)
     expect(disabled).toBe(false)
     expect(runtime.stopActivation).toHaveBeenCalledWith(

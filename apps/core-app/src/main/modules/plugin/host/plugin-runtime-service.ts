@@ -48,6 +48,7 @@ export type PluginRuntimeSnapshotValue =
 export interface PluginRuntimeSnapshot {
   readonly platform: string
   readonly arch: string
+  readonly locale: string
   readonly manifest: Readonly<Record<string, PluginRuntimeSnapshotValue>>
 }
 
@@ -385,12 +386,17 @@ function snapshotValue(
 function snapshotRuntimeSnapshot(input: unknown): PluginRuntimeSnapshot {
   const platform = readDataProperty(input, 'platform')
   const arch = readDataProperty(input, 'arch')
+  const locale = readDataProperty(input, 'locale')
   const manifest = readDataProperty(input, 'manifest')
   if (
     typeof platform !== 'string' ||
     platform.length < 1 ||
     typeof arch !== 'string' ||
-    arch.length < 1
+    arch.length < 1 ||
+    typeof locale !== 'string' ||
+    locale.length < 2 ||
+    locale.length > 64 ||
+    !/^[A-Za-z0-9-]+$/.test(locale)
   ) {
     invalidOptions()
   }
@@ -405,6 +411,7 @@ function snapshotRuntimeSnapshot(input: unknown): PluginRuntimeSnapshot {
   return Object.freeze({
     platform,
     arch,
+    locale,
     manifest: clonedManifest as Readonly<Record<string, PluginRuntimeSnapshotValue>>
   })
 }

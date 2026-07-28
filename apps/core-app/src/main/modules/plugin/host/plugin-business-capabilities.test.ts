@@ -5,6 +5,7 @@ import { issuePluginSecurityContext } from '@talex-touch/utils/transport/securit
 import { describe, expect, it, vi } from 'vitest'
 import {
   createPluginBusinessCapabilities,
+  pluginBusinessSecretPrefix,
   type PluginBusinessCapabilityOptions,
   type PluginBusinessFeatureHost,
   type PluginBusinessItemDto,
@@ -59,6 +60,7 @@ interface Fixture {
     copyAndPaste: ReturnType<typeof vi.fn>
   }
   networkRequest: ReturnType<typeof vi.fn>
+  hasPermission: ReturnType<typeof vi.fn>
   secureGet: ReturnType<typeof vi.fn>
   secureSet: ReturnType<typeof vi.fn>
   emittedFiles: string[]
@@ -159,20 +161,26 @@ function createFixture(): Fixture {
   }
   const secureGet = vi.fn(async () => null)
   const secureSet = vi.fn(async () => true)
-  const networkRequest = vi.fn(
-    async (request: NetworkRequestOptions): Promise<NetworkResponse> => ({
+  const networkRequest = vi.fn(async (request: NetworkRequestOptions): Promise<NetworkResponse> => {
+    const responseUrl = new URL(request.url)
+    for (const [key, value] of Object.entries(request.query ?? {})) {
+      if (value !== null) responseUrl.searchParams.set(key, String(value))
+    }
+    return {
       status: 200,
       statusText: 'OK',
       headers: { 'content-type': 'application/json' },
       data: request.responseType === 'arrayBuffer' ? new Uint8Array([1, 2]).buffer : { ok: true },
-      url: request.url,
+      url: responseUrl.toString(),
       ok: true
-    })
-  )
+    }
+  })
+  const hasPermission = vi.fn(() => true)
   const options: PluginBusinessCapabilityOptions = {
     resolvePlugin: (name) => (name === current.name ? plugin : undefined),
     resolveHostGeneration: (identity) =>
       identity.name === current.name ? identity.activationGeneration + 6 : undefined,
+    hasPermission,
     sqliteOwners: {
       acquire: vi.fn(async () => sqliteClient),
       closeActivation: vi.fn(async () => true)
@@ -186,7 +194,7 @@ function createFixture(): Fixture {
       protocol: 'https:'
     })),
     network: {
-      request: networkRequest,
+      requestPinned: networkRequest,
       resolveAddresses: vi.fn(async () => ['93.184.216.34'])
     }
   }
@@ -198,6 +206,7 @@ function createFixture(): Fixture {
     sqliteClient,
     clipboard,
     networkRequest,
+    hasPermission,
     secureGet,
     secureSet,
     emittedFiles,
@@ -225,6 +234,7 @@ function createRegistry(
 
 const EXPECTED_CAPABILITIES = [
   ['plugin.info.get', undefined],
+  ['permission.check', undefined],
   ['feature.registry.add', undefined],
   ['feature.registry.remove', undefined],
   ['feature.registry.list', undefined],
@@ -245,12 +255,12 @@ const EXPECTED_CAPABILITIES = [
   ['clipboard.read', 'clipboard.read'],
   ['clipboard.write', 'clipboard.write'],
   ['clipboard.copy-and-paste', 'clipboard.write'],
-  ['open-url', undefined],
+  ['open-url', 'network.internet'],
   ['http.request', 'network.internet']
 ] as const
 
 describe('plugin business capability adapters', () => {
-  it('publishes the exact immutable 23-capability production manifest', async () => {
+  it('publishes the exact immutable 24-capability production manifest', async () => {
     const fixture = createFixture()
     const business = createPluginBusinessCapabilities(fixture.options)
 
@@ -283,6 +293,7 @@ describe('plugin business capability adapters', () => {
     const { registry } = createRegistry(fixture)
     const requests: Array<[string, unknown, unknown]> = [
       ['plugin.info.get', null, expect.objectContaining({ name: 'business-plugin' })],
+      ['permission.check', { permissionId: 'clipboard.write' }, { granted: true }],
       ['feature.registry.add', { feature: feature() }, { added: true }],
       ['feature.registry.remove', { featureId: 'dynamic-feature' }, { removed: true }],
       ['feature.registry.list', null, expect.objectContaining({ features: expect.any(Array) })],
@@ -357,6 +368,7 @@ describe('plugin business capability adapters', () => {
     const { registry } = createRegistry(fixture)
     const malformed = new Map<string, unknown>([
       ['plugin.info.get', {}],
+      ['permission.check', { permissionId: 'clipboard.write', pluginName: 'other' }],
       ['feature.registry.add', { feature: { ...feature(), extra: true } }],
       ['feature.registry.remove', { featureId: 'x', pluginName: 'other' }],
       ['feature.registry.list', {}],
@@ -399,6 +411,7 @@ describe('plugin business capability adapters', () => {
       render: { mode: 'default', basic: { title: 'Strict item' } }
     }
     const hostileItems = [
+      { ...baseItem, source: { ...baseItem.source, permission: 'system' } },
       { ...baseItem, icon: { type: 'file', value: '/tmp/host-file' } },
       {
         ...baseItem,
@@ -444,6 +457,77 @@ describe('plugin business capability adapters', () => {
       'PLUGIN_BUSINESS_CAPABILITY_INVALID'
     )
     expect(trap).not.toHaveBeenCalled()
+  })
+
+  it('rejects top-level option accessors without evaluating them', () => {
+    const fixture = createFixture()
+    const getter = vi.fn(() => fixture.options.clipboard)
+    const hostile = { ...fixture.options }
+    Object.defineProperty(hostile, 'clipboard', {
+      configurable: true,
+      enumerable: true,
+      get: getter
+    })
+
+    expect(() => createPluginBusinessCapabilities(hostile)).toThrow(
+      'PLUGIN_BUSINESS_CAPABILITY_INVALID'
+    )
+    expect(getter).not.toHaveBeenCalled()
+  })
+
+  it('rejects dynamic record proxies before evaluating their traps', () => {
+    const fixture = createFixture()
+    const business = createPluginBusinessCapabilities(fixture.options)
+    const http = business.definitions.find((definition) => definition.id === 'http.request')!
+    const ownKeys = vi.fn(() => {
+      throw new Error('proxy trap must not run')
+    })
+    const headers = new Proxy({}, { ownKeys })
+
+    expect(() =>
+      http.validateRequest({
+        method: 'GET',
+        url: 'https://example.com/data',
+        headers,
+        responseType: 'json'
+      })
+    ).toThrow('PLUGIN_BUSINESS_CAPABILITY_INVALID')
+    expect(ownKeys).not.toHaveBeenCalled()
+
+    expect(() =>
+      http.validateRequest({
+        method: 'GET',
+        url: 'https://example.com/data',
+        headers: { 'x-test': 'allowed\r\nforged: value' },
+        responseType: 'json'
+      })
+    ).toThrow('PLUGIN_BUSINESS_CAPABILITY_INVALID')
+  })
+
+  it('rejects hostile sparse arrays and dynamic renderer paths', async () => {
+    const fixture = createFixture()
+    const { registry } = createRegistry(fixture)
+
+    const sparseItems = new Array(2)
+    sparseItems[1] = {
+      id: 'sparse',
+      source: { type: 'plugin', id: 'plugin-features' },
+      render: { mode: 'default', basic: { title: 'Sparse' } }
+    }
+    await expect(
+      registry.dispatch('feature.items.push', { scope: 'active-feature', items: sparseItems })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
+
+    await expect(
+      registry.dispatch('feature.registry.add', {
+        feature: {
+          ...feature('path-feature'),
+          interaction: { type: 'widget', path: 'unbuilt-widget' }
+        }
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
+    expect(fixture.networkRequest).not.toHaveBeenCalled()
+    expect(fixture.plugin.addBusinessFeature).not.toHaveBeenCalled()
   })
 
   it('rechecks branded authority, key, generation, plugin and host generation inside the adapter', async () => {
@@ -518,6 +602,23 @@ describe('plugin business capability adapters', () => {
     expect(fixture.clipboard.read).not.toHaveBeenCalled()
   })
 
+  it('checks an exact permission DTO against the authoritative plugin sdkapi', async () => {
+    const fixture = createFixture()
+    fixture.hasPermission.mockReturnValue(false)
+    const { registry } = createRegistry(fixture)
+
+    await expect(
+      registry.dispatch('permission.check', { permissionId: 'clipboard.write' })
+    ).resolves.toEqual({ granted: false })
+    expect(fixture.hasPermission).toHaveBeenCalledWith('business-plugin', 'clipboard.write', 260215)
+    await expect(
+      registry.dispatch('permission.check', {
+        permissionId: 'clipboard.write',
+        sdkapi: 1
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
+  })
+
   it('prevents foreign feature/item mutation and exact old-generation cleanup from deleting newer items', async () => {
     const fixture = createFixture()
     const first = createPluginBusinessCapabilities(fixture.options)
@@ -561,6 +662,25 @@ describe('plugin business capability adapters', () => {
       onFatalViolation: vi.fn()
     })
     for (const definition of first.definitions) secondRegistry.register(definition)
+    vi.mocked(fixture.featureHost.pushItems).mockRejectedValueOnce(
+      new Error('replacement failed before commit')
+    )
+    await expect(
+      secondRegistry.dispatch('feature.items.push', {
+        scope: 'active-feature',
+        items: [
+          {
+            id: 'shared-item',
+            source: { type: 'plugin', id: 'plugin-features' },
+            render: { mode: 'default', basic: { title: 'failed replacement' } }
+          }
+        ]
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    expect(fixture.itemStore.get('shared-item')).toMatchObject({
+      render: { basic: { title: 'generation one' } }
+    })
+
     await secondRegistry.dispatch('feature.items.push', {
       scope: 'active-feature',
       items: [
@@ -571,6 +691,12 @@ describe('plugin business capability adapters', () => {
         }
       ]
     })
+    expect(fixture.featureHost.pushItems).toHaveBeenLastCalledWith(
+      'active-feature',
+      expect.any(Array),
+      expect.any(AbortSignal),
+      [{ id: 'shared-item', activation: fixture.activation }]
+    )
 
     await first.closeActivation(fixture.activation)
     expect(fixture.options.sqliteOwners.closeActivation).toHaveBeenCalledWith({
@@ -582,6 +708,85 @@ describe('plugin business capability adapters', () => {
       render: { basic: { title: 'generation two' } }
     })
     expect(fixture.featureStore.has('owned-feature')).toBe(false)
+  })
+
+  it('tracks committed item side effects for teardown even when cancellation wins the response race', async () => {
+    const fixture = createFixture()
+    const { business, registry } = createRegistry(fixture)
+    const controller = new AbortController()
+    vi.mocked(fixture.featureHost.pushItems).mockImplementationOnce(async (_scope, items) => {
+      for (const item of items) fixture.itemStore.set(String(item.id), item)
+      controller.abort()
+    })
+
+    await expect(
+      registry.dispatch(
+        'feature.items.push',
+        {
+          scope: 'active-feature',
+          items: [
+            {
+              id: 'cancelled-after-commit',
+              source: { type: 'plugin', id: 'plugin-features' },
+              render: { mode: 'default', basic: { title: 'Committed' } }
+            }
+          ]
+        },
+        controller.signal
+      )
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_CANCELLED'))
+    await vi.waitFor(() => expect(registry.activeCount).toBe(0))
+    expect(fixture.itemStore.has('cancelled-after-commit')).toBe(true)
+
+    await business.closeActivation(fixture.activation)
+    expect(fixture.itemStore.has('cancelled-after-commit')).toBe(false)
+  })
+
+  it('does not close an activation when the key does not match its recorded identity', async () => {
+    const fixture = createFixture()
+    const { business, registry } = createRegistry(fixture)
+    await registry.dispatch('plugin.info.get', null)
+
+    await business.closeActivation({ ...fixture.activation, key: 'forged-key' })
+
+    expect(fixture.options.sqliteOwners.closeActivation).not.toHaveBeenCalled()
+    await expect(registry.dispatch('plugin.info.get', null)).resolves.toMatchObject({
+      name: fixture.activation.name
+    })
+  })
+
+  it('continues exact-activation teardown after item cleanup fails and returns a stable error', async () => {
+    const fixture = createFixture()
+    const { business, registry } = createRegistry(fixture)
+    await registry.dispatch('feature.registry.add', { feature: feature('owned-on-close') })
+    await registry.dispatch('feature.items.push', {
+      scope: 'active-feature',
+      items: [
+        {
+          id: 'owned-on-close',
+          source: { type: 'plugin', id: 'plugin-features' },
+          render: { mode: 'default', basic: { title: 'Owned on close' } }
+        }
+      ]
+    })
+    vi.mocked(fixture.plugin.cleanupBusinessItems).mockRejectedValueOnce(
+      new Error('/private/item-cleanup-detail')
+    )
+
+    await expect(business.closeActivation(fixture.activation)).rejects.toThrow(
+      'PLUGIN_BUSINESS_CLEANUP_FAILED'
+    )
+    expect(fixture.plugin.removeBusinessFeature).toHaveBeenCalledWith('owned-on-close')
+    expect(fixture.options.sqliteOwners.closeActivation).toHaveBeenCalledWith({
+      pluginName: fixture.activation.name,
+      pluginInstanceId: fixture.activation.pluginInstanceId,
+      activationGeneration: fixture.activation.activationGeneration
+    })
+    expect(fixture.itemStore.has('owned-on-close')).toBe(true)
+
+    await expect(business.closeActivation(fixture.activation)).resolves.toBeUndefined()
+    expect(fixture.plugin.cleanupBusinessItems).toHaveBeenCalledTimes(2)
+    expect(fixture.itemStore.has('owned-on-close')).toBe(false)
   })
 
   it('keeps storage bounds, SQLite policy and secret material behind strict host seams', async () => {
@@ -611,7 +816,10 @@ describe('plugin business capability adapters', () => {
       found: true,
       value: secret
     })
-    expect(fixture.secureGet).toHaveBeenCalledWith('/fixture/root', 'plugin.business-plugin.token')
+    expect(fixture.secureGet).toHaveBeenCalledWith(
+      '/fixture/root',
+      `${pluginBusinessSecretPrefix('business-plugin')}token`
+    )
 
     fixture.secureSet.mockRejectedValue(new Error(`${secret}: native failure`))
     const failure = await registry
@@ -631,6 +839,10 @@ describe('plugin business capability adapters', () => {
       expect.objectContaining({ identity: expect.objectContaining({ authority: 'plugin-host' }) }),
       expect.any(AbortSignal)
     )
+
+    await expect(
+      registry.dispatch('open-url', { url: 'https://user:secret@example.com' })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
 
     fixture.options.network.resolveAddresses = vi.fn(async () => ['127.0.0.1'])
     const privateBusiness = createPluginBusinessCapabilities(fixture.options)
@@ -693,5 +905,272 @@ describe('plugin business capability adapters', () => {
         responseType: 'text'
       })
     ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT'))
+    expect(fixture.networkRequest).toHaveBeenLastCalledWith(
+      expect.objectContaining({ url: 'https://example.com/large', retryPolicy: { maxRetries: 0 } }),
+      {
+        resolvedAddresses: ['93.184.216.34'],
+        maxResponseBytes: 768 * 1024
+      }
+    )
+  })
+
+  it('fails HTTP closed when the host cannot guarantee connect-time address pinning', async () => {
+    const fixture = createFixture()
+    const unpinnedOptions = {
+      ...fixture.options,
+      network: {
+        resolveAddresses: fixture.options.network.resolveAddresses
+      }
+    } as unknown as PluginBusinessCapabilityOptions
+    const business = createPluginBusinessCapabilities(unpinnedOptions)
+    const registry = new PluginHostCapabilityRegistry({
+      owner: OWNER,
+      activation: fixture.activation,
+      resolveCurrentActivation: () => fixture.activation,
+      authorize: () => true,
+      watchPermissionRevoked: () => () => undefined,
+      onFatalViolation: vi.fn()
+    })
+    for (const definition of business.definitions) registry.register(definition)
+
+    await expect(
+      registry.dispatch('http.request', {
+        method: 'GET',
+        url: 'https://example.com/data',
+        responseType: 'json'
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    expect(fixture.options.network.resolveAddresses).not.toHaveBeenCalled()
+    expect(fixture.networkRequest).not.toHaveBeenCalled()
+  })
+
+  it('does not evaluate accessors returned by host services', async () => {
+    const fixture = createFixture()
+    const decisionGetter = vi.fn(() => true)
+    fixture.options.openUrl = vi.fn(async () => {
+      const decision = { protocol: 'https:' }
+      Object.defineProperty(decision, 'allowed', {
+        enumerable: true,
+        get: decisionGetter
+      })
+      return decision as never
+    })
+    const { registry } = createRegistry(fixture)
+
+    await expect(
+      registry.dispatch('open-url', { url: 'https://example.com/docs' })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT'))
+    expect(decisionGetter).not.toHaveBeenCalled()
+  })
+
+  it('rejects SQL parameter and host result accessors without evaluating them', async () => {
+    const fixture = createFixture()
+    const business = createPluginBusinessCapabilities(fixture.options)
+    const sqlite = business.definitions.find(
+      (definition) => definition.id === 'storage.sqlite.execute'
+    )!
+    const parameterGetter = vi.fn(() => 'secret')
+    const parameter = Object.create(null)
+    Object.defineProperty(parameter, 'value', {
+      enumerable: true,
+      get: parameterGetter
+    })
+
+    expect(() =>
+      sqlite.validateRequest({ op: 'query', sql: 'SELECT ?', params: [parameter] })
+    ).toThrow('PLUGIN_BUSINESS_CAPABILITY_INVALID')
+    expect(parameterGetter).not.toHaveBeenCalled()
+
+    const resultGetter = vi.fn(() => [])
+    const hostileResult = { columns: [] }
+    Object.defineProperty(hostileResult, 'rows', {
+      enumerable: true,
+      get: resultGetter
+    })
+    fixture.sqliteClient.query.mockResolvedValueOnce(hostileResult as never)
+    const { registry } = createRegistry(fixture)
+    await expect(
+      registry.dispatch('storage.sqlite.execute', {
+        op: 'query',
+        sql: 'SELECT id FROM notes',
+        params: []
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT'))
+    expect(resultGetter).not.toHaveBeenCalled()
+  })
+
+  it('rejects hostile HTTP host results before reading response fields', async () => {
+    const fixture = createFixture()
+    const statusGetter = vi.fn(() => 200)
+    const response = {
+      statusText: 'OK',
+      headers: {},
+      data: { ok: true },
+      url: 'https://example.com/data',
+      ok: true
+    }
+    Object.defineProperty(response, 'status', {
+      enumerable: true,
+      get: statusGetter
+    })
+    fixture.networkRequest.mockResolvedValueOnce(response as never)
+    const { registry } = createRegistry(fixture)
+
+    await expect(
+      registry.dispatch('http.request', {
+        method: 'GET',
+        url: 'https://example.com/data',
+        responseType: 'json'
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT'))
+    expect(statusGetter).not.toHaveBeenCalled()
+
+    const byteTrap = vi.fn(() => null)
+    fixture.networkRequest.mockResolvedValueOnce({
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: new Proxy({}, { getPrototypeOf: byteTrap }),
+      url: 'https://example.com/bytes',
+      ok: true
+    })
+    await expect(
+      registry.dispatch('http.request', {
+        method: 'GET',
+        url: 'https://example.com/bytes',
+        responseType: 'bytes'
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT'))
+    expect(byteTrap).not.toHaveBeenCalled()
+  })
+
+  it('rejects hostile feature-list and SQLite-client containers without evaluating traps', async () => {
+    const fixture = createFixture()
+    const { registry } = createRegistry(fixture)
+    await registry.dispatch('feature.items.push', {
+      scope: 'active-feature',
+      items: [
+        {
+          id: 'owned-item',
+          source: { type: 'plugin', id: 'plugin-features' },
+          render: { mode: 'default', basic: { title: 'Owned' } }
+        }
+      ]
+    })
+    const listTrap = vi.fn(() => 'owned-item')
+    const hostileItem = {
+      source: { type: 'plugin', id: 'plugin-features' },
+      render: { mode: 'default', basic: { title: 'Owned' } }
+    }
+    Object.defineProperty(hostileItem, 'id', {
+      enumerable: true,
+      get: listTrap
+    })
+    vi.mocked(fixture.featureHost.listItems).mockResolvedValueOnce([hostileItem] as never)
+
+    const listFailure = await registry.dispatch('feature.items.list', null).catch((error) => error)
+    expect(listFailure).toBeInstanceOf(PluginHostCapabilityError)
+    if (!(listFailure instanceof PluginHostCapabilityError)) throw listFailure
+    expect(listFailure.code).toBe('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
+    expect(listTrap.mock.calls.length).toBe(0)
+
+    const queryGetter = vi.fn(() => vi.fn())
+    const hostileClient = {
+      execute: vi.fn(),
+      transaction: vi.fn(),
+      close: vi.fn()
+    }
+    Object.defineProperty(hostileClient, 'query', {
+      enumerable: true,
+      get: queryGetter
+    })
+    vi.mocked(fixture.options.sqliteOwners.acquire).mockResolvedValueOnce(hostileClient as never)
+    await expect(
+      registry.dispatch('storage.sqlite.execute', {
+        op: 'query',
+        sql: 'SELECT id FROM notes',
+        params: []
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    expect(queryGetter).not.toHaveBeenCalled()
+  })
+
+  it('blocks reserved and private-transition addresses while allowing mapped public IPs', async () => {
+    for (const address of ['203.0.113.7', '64:ff9b::7f00:1']) {
+      const fixture = createFixture()
+      fixture.options.network.resolveAddresses = vi.fn(async () => [address])
+      const { registry } = createRegistry(fixture)
+      await expect(
+        registry.dispatch('http.request', {
+          method: 'GET',
+          url: 'https://example.com/data',
+          responseType: 'json'
+        })
+      ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+      expect(fixture.networkRequest).not.toHaveBeenCalled()
+    }
+
+    const publicFixture = createFixture()
+    publicFixture.options.network.resolveAddresses = vi.fn(async () => ['::ffff:5db8:d822'])
+    const { registry } = createRegistry(publicFixture)
+    await expect(
+      registry.dispatch('http.request', {
+        method: 'GET',
+        url: 'https://example.com/data',
+        responseType: 'json'
+      })
+    ).resolves.toMatchObject({ status: 200, ok: true })
+    expect(publicFixture.networkRequest).toHaveBeenCalledWith(expect.any(Object), {
+      resolvedAddresses: ['::ffff:5db8:d822'],
+      maxResponseBytes: 768 * 1024
+    })
+  })
+
+  it('derives collision-resistant secret namespaces from dotted plugin names and keys', async () => {
+    const first = createFixture()
+    const second = createFixture()
+    for (const [fixture, name] of [
+      [first, 'alpha'],
+      [second, 'alpha.beta']
+    ] as const) {
+      Object.assign(fixture.activation, { name })
+      Object.assign(fixture.plugin, { name })
+    }
+    const firstRegistry = createRegistry(first).registry
+    const secondRegistry = createRegistry(second).registry
+
+    await firstRegistry.dispatch('secret.set', { key: 'beta.token', value: 'first' })
+    await secondRegistry.dispatch('secret.set', { key: 'token', value: 'second' })
+
+    const firstKey = first.secureSet.mock.calls[0]?.[1]
+    const secondKey = second.secureSet.mock.calls[0]?.[1]
+    expect(firstKey).not.toBe(secondKey)
+  })
+
+  it('rejects absolute dynamic feature icons and redacts host file paths from feature results', async () => {
+    const fixture = createFixture()
+    const { registry } = createRegistry(fixture)
+
+    await expect(
+      registry.dispatch('feature.registry.add', {
+        feature: {
+          ...feature('absolute-icon'),
+          icon: { type: 'file', value: '/private/plugin/icon.png' }
+        }
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
+    expect(fixture.plugin.addBusinessFeature).not.toHaveBeenCalled()
+
+    vi.mocked(fixture.plugin.listBusinessFeatures).mockReturnValue([
+      {
+        ...feature('host-file-icon'),
+        icon: { type: 'file', value: '/private/plugin/resolved-icon.png' }
+      }
+    ])
+    const result = await registry.dispatch('feature.registry.list', null)
+    expect(JSON.stringify(result)).not.toContain('/private/plugin')
+    expect(result).toMatchObject({
+      features: [{ id: 'host-file-icon', icon: { type: 'class' } }]
+    })
   })
 })

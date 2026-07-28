@@ -639,6 +639,40 @@ describe('PluginHostCapabilityRegistry', () => {
     }
   )
 
+  it('rejects registry option accessors without evaluating them', () => {
+    const getter = vi.fn(() => true)
+    const options = {
+      owner,
+      activation,
+      resolveCurrentActivation: () => activation,
+      authorize: () => true,
+      watchPermissionRevoked: () => () => undefined,
+      onFatalViolation: vi.fn()
+    }
+    Object.defineProperty(options, 'authorize', {
+      configurable: true,
+      enumerable: true,
+      get: getter
+    })
+
+    expect(() => new PluginHostCapabilityRegistry(options)).toThrowError(
+      expectCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    )
+    expect(getter).not.toHaveBeenCalled()
+  })
+
+  it('rejects symbol fields on capability definitions', () => {
+    const registry = createRegistry()
+    const definition = stringEchoDefinition() as PluginHostCapabilityDefinition & {
+      [key: symbol]: string
+    }
+    definition[Symbol('hidden')] = 'unexpected'
+
+    expect(() => registry.register(definition)).toThrowError(
+      expectCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    )
+  })
+
   it('retains only an explicitly returned resource for resource-lifetime callbacks', async () => {
     const dispose = vi.fn()
     let resourceSequence = 0
@@ -760,5 +794,26 @@ describe('PluginHostCapabilityRegistry', () => {
       registry.dispatch('channel.subscribe', { callback: { nested: callback } })
     ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
     expect(validateRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds callback-shape scanning before request validation', async () => {
+    const validateRequest = vi.fn(() => 'validated')
+    const invoke = vi.fn(async () => 'result')
+    const registry = createRegistry({
+      definition: stringEchoDefinition({ validateRequest, invoke })
+    })
+    const payload: Record<string, unknown> = {}
+    let cursor = payload
+    for (let depth = 0; depth < 80; depth += 1) {
+      const next: Record<string, unknown> = {}
+      cursor.next = next
+      cursor = next
+    }
+
+    await expect(registry.dispatch('storage.file.read', payload)).rejects.toEqual(
+      new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    )
+    expect(validateRequest).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalled()
   })
 })

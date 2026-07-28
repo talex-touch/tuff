@@ -74,9 +74,16 @@ import type {
   PluginBusinessDto,
   PluginBusinessFeatureHost,
   PluginBusinessItemDto,
+  PluginBusinessItemReplacement,
   PluginBusinessItemScope,
   PluginBusinessRuntimeInfoDto
 } from './host/plugin-business-capabilities'
+import {
+  listPluginBusinessFiles,
+  readPluginBusinessFile,
+  removePluginBusinessFile,
+  writePluginBusinessFile
+} from './host/plugin-business-file-storage'
 import type {
   PluginRuntimeService,
   PluginRuntimeSnapshot,
@@ -141,6 +148,10 @@ import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
 } from './runtime/plugin-prelude-compiler'
+import {
+  resolvePluginPrelude,
+  type PluginPreludeManifestContract
+} from './runtime/plugin-prelude-resolver'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
 
@@ -495,6 +506,7 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private runtimeContext: TouchPluginRuntimeContext | null = null
+  private preludeContract: PluginPreludeManifestContract = Object.freeze({})
 
   dev: IPluginDev
   name: string
@@ -523,6 +535,8 @@ export class TouchPlugin implements ITouchPlugin {
       readonly activation: PluginActivationIdentity
       readonly host: PluginBusinessFeatureHost
       readonly closeResources: () => Promise<void>
+      readonly getOwnedItemForTransfer: (id: string) => TuffItem | undefined
+      readonly releaseTransferredItem: (id: string, item: TuffItem) => void
     }
   >()
   /**
@@ -1118,6 +1132,15 @@ export class TouchPlugin implements ITouchPlugin {
     this.ensureDataDirectories()
   }
 
+  setPreludeContract(contract: PluginPreludeManifestContract): void {
+    this.preludeContract = Object.freeze({
+      ...(contract.main === undefined ? {} : { main: contract.main }),
+      ...(contract.buildIndexEntry === undefined
+        ? {}
+        : { buildIndexEntry: contract.buildIndexEntry })
+    })
+  }
+
   private getRuntimeContext(site: string): TouchPluginRuntimeContext {
     if (!this.runtimeContext?.rootPath) {
       throw new Error(`[Plugin ${this.name}] Runtime context is not initialized for ${site}`)
@@ -1326,9 +1349,17 @@ export class TouchPlugin implements ITouchPlugin {
         }))
       })
     ) as Record<string, PluginRuntimeSnapshotValue>
+    let locale = 'en-US'
+    try {
+      const resolvedLocale = app.getLocale()
+      if (/^[A-Za-z0-9-]{2,64}$/.test(resolvedLocale)) locale = resolvedLocale
+    } catch {
+      // A frozen fallback keeps locale lookup child-local when Electron locale is unavailable.
+    }
     return Object.freeze({
       platform: process.platform,
       arch: process.arch,
+      locale,
       manifest: Object.freeze(manifest)
     })
   }
@@ -1410,6 +1441,8 @@ export class TouchPlugin implements ITouchPlugin {
   ): {
     readonly host: PluginBusinessFeatureHost
     readonly closeResources: () => Promise<void>
+    readonly getOwnedItemForTransfer: (id: string) => TuffItem | undefined
+    readonly releaseTransferredItem: (id: string, item: TuffItem) => void
   } {
     const assertCurrent = (signal: AbortSignal): void =>
       this.assertBusinessActivation(activation, signal)
@@ -1477,7 +1510,8 @@ export class TouchPlugin implements ITouchPlugin {
       pushItems: async (
         scope: PluginBusinessItemScope,
         items: readonly PluginBusinessItemDto[],
-        signal: AbortSignal
+        signal: AbortSignal,
+        replacements: readonly PluginBusinessItemReplacement[] = []
       ) => {
         assertCurrent(signal)
         if (!this.ensureRootResultsPermission('pushItems')) return
@@ -1494,10 +1528,42 @@ export class TouchPlugin implements ITouchPlugin {
         if (accepted.length === 0) return
         assertCurrent(signal)
         const manager = getBoxItemManager()
+        const acceptedIds = new Set(accepted.map((item) => item.id))
+        const replacementOwners = new Map<string, { item: TuffItem; release: () => void }>()
+        for (const replacement of replacements) {
+          if (!acceptedIds.has(replacement.id) || replacementOwners.has(replacement.id)) {
+            throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
+              code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
+            })
+          }
+          const binding = this.businessFeatureBindings.get(
+            this.getBusinessFeatureBindingKey(replacement.activation)
+          )
+          const item = binding?.getOwnedItemForTransfer(replacement.id)
+          if (
+            !binding ||
+            !this.matchesExactBusinessActivation(binding.activation, replacement.activation) ||
+            !item ||
+            manager.get(replacement.id) !== item
+          ) {
+            throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
+              code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
+            })
+          }
+          replacementOwners.set(replacement.id, {
+            item,
+            release: () => binding.releaseTransferredItem(replacement.id, item)
+          })
+        }
         for (const item of accepted) {
           const current = manager.get(item.id)
           const owned = ownedItems.get(item.id)
-          if (current && (!owned || current !== owned.item || owned.scope !== scope)) {
+          if (
+            current &&
+            (!owned || current !== owned.item || owned.scope !== scope) &&
+            replacementOwners.get(item.id)?.item !== current &&
+            !this.ownsLegacyBusinessItem(current)
+          ) {
             throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
               code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
             })
@@ -1506,7 +1572,16 @@ export class TouchPlugin implements ITouchPlugin {
         manager.batchUpsert(accepted)
         for (const item of accepted) {
           const stored = manager.get(item.id)
-          if (stored) ownedItems.set(item.id, { item: stored, scope })
+          const replacement = replacementOwners.get(item.id)
+          if (replacement && (!stored || stored === replacement.item)) {
+            throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
+              code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
+            })
+          }
+          if (stored) {
+            replacement?.release()
+            ownedItems.set(item.id, { item: stored, scope })
+          }
         }
       },
       updateItem: (
@@ -1567,7 +1642,14 @@ export class TouchPlugin implements ITouchPlugin {
       }
     })
 
-    return Object.freeze({ host, closeResources: closeOwnedItems })
+    return Object.freeze({
+      host,
+      closeResources: closeOwnedItems,
+      getOwnedItemForTransfer: (id: string) => getOwnedItem(id)?.item,
+      releaseTransferredItem: (id: string, item: TuffItem) => {
+        if (ownedItems.get(id)?.item === item) ownedItems.delete(id)
+      }
+    })
   }
 
   createBusinessFeatureHost(activation: PluginActivationIdentity): PluginBusinessFeatureHost {
@@ -1604,9 +1686,43 @@ export class TouchPlugin implements ITouchPlugin {
     })
   }
 
+  private isContainedBusinessFeatureFileIcon(requestedPath: string, icon: ITuffIcon): boolean {
+    if (icon.type !== 'file' || icon.status !== 'normal' || !icon.value) return false
+    if (path.isAbsolute(requestedPath) || path.win32.isAbsolute(requestedPath)) return false
+    try {
+      const canonicalRoot = fse.realpathSync(this.pluginPath)
+      const canonicalTarget = fse.realpathSync(path.resolve(this.pluginPath, requestedPath))
+      const relative = path.relative(canonicalRoot, canonicalTarget)
+      if (relative.startsWith('..') || path.isAbsolute(relative)) return false
+      return fse.statSync(canonicalTarget).isFile()
+    } catch {
+      return false
+    }
+  }
+
   async addBusinessFeature(feature: IPluginFeature): Promise<boolean> {
+    const rendererFeatureId = feature.interaction?.rendererFeatureId?.trim()
+    if (feature.interaction) {
+      const renderer = rendererFeatureId ? this.getFeature(rendererFeatureId) : null
+      if (
+        feature.interaction.type !== 'widget' ||
+        !rendererFeatureId ||
+        feature.interaction.path ||
+        !renderer ||
+        renderer.interaction?.type !== 'widget' ||
+        !renderer.interaction.path
+      ) {
+        return false
+      }
+    }
     const normalized = new PluginFeature(this.pluginPath, feature, this.dev)
     if (normalized.icon instanceof TuffIconImpl) await normalized.icon.init()
+    if (
+      feature.icon.type === 'file' &&
+      !this.isContainedBusinessFeatureFileIcon(feature.icon.value, normalized.icon)
+    ) {
+      return false
+    }
     return this.addFeature(normalized)
   }
 
@@ -1619,29 +1735,32 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   readBusinessFile(name: string): { found: false } | { found: true; value: PluginBusinessDto } {
-    const safePath = resolveSafePath(this.getConfigPath(), name)
-    if (!safePath.resolvedPath) throw new Error('PLUGIN_BUSINESS_FILE_PATH_INVALID')
-    if (!fse.existsSync(safePath.resolvedPath)) return { found: false }
-    return {
-      found: true,
-      value: JSON.parse(fse.readFileSync(safePath.resolvedPath, 'utf8')) as PluginBusinessDto
+    return readPluginBusinessFile(this.getConfigPath(), name)
+  }
+
+  private notifyBusinessStorageUpdate(name: string): void {
+    try {
+      this.broadcastStorageUpdate(name)
+    } catch {
+      pluginSystemLog.warn(`[Plugin ${this.name}] Failed to broadcast business storage update`, {
+        error: 'PLUGIN_BUSINESS_STORAGE_NOTIFICATION_FAILED'
+      })
     }
   }
 
   writeBusinessFile(name: string, value: PluginBusinessDto): void {
-    const result = this.savePluginFile(name, value)
-    if (!result.success) throw new Error('PLUGIN_BUSINESS_FILE_WRITE_FAILED')
+    writePluginBusinessFile(this.getConfigPath(), name, value)
+    this.notifyBusinessStorageUpdate(name)
   }
 
   removeBusinessFile(name: string): boolean {
-    const result = this.deletePluginFile(name)
-    if (result.success) return true
-    if (result.error === 'File not found') return false
-    throw new Error('PLUGIN_BUSINESS_FILE_REMOVE_FAILED')
+    const removed = removePluginBusinessFile(this.getConfigPath(), name)
+    if (removed) this.notifyBusinessStorageUpdate(name)
+    return removed
   }
 
   listBusinessFiles(): readonly string[] {
-    return this.listPluginFiles()
+    return listPluginBusinessFiles(this.getConfigPath())
   }
 
   private ownsLegacyBusinessItem(item: TuffItem): boolean {
@@ -1763,11 +1882,12 @@ export class TouchPlugin implements ITouchPlugin {
       return bundledContent ?? response.data
     }
 
-    const featureIndex = path.resolve(this.pluginPath, 'index.js')
-    if (!fse.existsSync(featureIndex)) {
-      this.logger.info(`No index.js found for plugin '${this.name}', using an empty Prelude.`)
-      return 'module.exports = {}'
+    const resolvedPrelude = resolvePluginPrelude(this.pluginPath, this.preludeContract)
+    if (resolvedPrelude.kind === 'empty') {
+      this.logger.info(`Plugin '${this.name}' declares no Prelude; using an empty lifecycle.`)
+      return resolvedPrelude.scriptContent
     }
+    const featureIndex = resolvedPrelude.filePath!
 
     if (shouldBundlePrelude) {
       const bundledContent = await bundlePluginPreludeFromFile(
@@ -1779,7 +1899,7 @@ export class TouchPlugin implements ITouchPlugin {
       )
       if (bundledContent) return bundledContent
     }
-    return fse.readFile(featureIndex, 'utf8')
+    return resolvedPrelude.scriptContent
   }
 
   async enable(): Promise<boolean> {
@@ -1900,6 +2020,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.abortFeatureControllers()
 
     if (activation.key) {
+      this.revokeActivationAuthority(activation)
       try {
         await TouchPlugin._runtimeService?.stopActivation(activation, { runDestroy: true })
       } catch {
@@ -1913,7 +2034,6 @@ export class TouchPlugin implements ITouchPlugin {
         })
       }
     }
-    this.revokeActivationAuthority(activation)
 
     this.clearCoreBoxItems()
     await widgetManager.releasePlugin(this.name)
