@@ -17,6 +17,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TuffIconImpl } from '../../core/tuff-icon'
 import { getCoreBoxWindow } from '../box-tool/core-box'
+import type { PluginRuntimeActivationOptions } from './host/plugin-runtime-service'
+import { PluginRuntimeHostError } from './host/plugin-runtime-host'
 import { TouchPlugin } from './plugin'
 import { widgetManager } from './widget/widget-manager'
 
@@ -133,11 +135,14 @@ vi.mock('../../core', () => ({
   })
 }))
 
+const coreBoxManagerMock = vi.hoisted(() => ({
+  exitUIMode: vi.fn(),
+  getCurrentFeature: vi.fn()
+}))
+
 vi.mock('../box-tool/core-box/manager', () => ({
   CoreBoxManager: {
-    getInstance: () => ({
-      exitUIMode: vi.fn()
-    })
+    getInstance: () => coreBoxManagerMock
   }
 }))
 
@@ -167,19 +172,57 @@ vi.mock('../box-tool/core-box', () => ({
 
 vi.mock('./widget/widget-manager', () => ({
   widgetManager: {
-    registerWidget: vi.fn()
+    registerWidget: vi.fn(),
+    releasePlugin: vi.fn().mockResolvedValue(undefined)
   }
 }))
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function createRuntimeServiceMock(overrides: Record<string, unknown> = {}) {
+  const host = { state: 'active', processId: 7001 }
+  const lifecycle = {
+    onMessage: vi.fn(async () => undefined),
+    onLaunch: vi.fn(async () => undefined),
+    onFeatureTriggered: vi.fn(async () => undefined),
+    onInputChanged: vi.fn(async () => undefined),
+    onActionClick: vi.fn(async () => undefined),
+    onClose: vi.fn(async () => undefined),
+    onItemAction: vi.fn(async () => undefined),
+    onStorageChange: vi.fn(async () => undefined)
+  }
+  return {
+    host,
+    lifecycle,
+    startActivation: vi.fn(async (options: { activation: unknown }) => ({
+      activation: options.activation,
+      host,
+      lifecycle
+    })),
+    stopActivation: vi.fn(async () => undefined),
+    resolve: vi.fn(() => host),
+    ...overrides
+  }
+}
+
 function clearBoxItemMocks(): void {
-  boxItemManagerMock.clear.mockClear()
-  boxItemManagerMock.upsert.mockClear()
-  boxItemManagerMock.batchUpsert.mockClear()
-  boxItemManagerMock.update.mockClear()
-  boxItemManagerMock.delete.mockClear()
-  boxItemManagerMock.get.mockClear()
+  boxItemManagerMock.clear.mockReset()
+  boxItemManagerMock.upsert.mockReset()
+  boxItemManagerMock.batchUpsert.mockReset()
+  boxItemManagerMock.update.mockReset()
+  boxItemManagerMock.delete.mockReset()
+  boxItemManagerMock.get.mockReset()
   boxItemManagerMock.get.mockReturnValue(undefined)
-  boxItemManagerMock.getBySource.mockClear()
+  boxItemManagerMock.getBySource.mockReset()
+  boxItemManagerMock.getBySource.mockReturnValue([])
   permissionModuleMock.checkPermission.mockReset()
   permissionModuleMock.checkPermission.mockReturnValue({
     allowed: true,
@@ -188,6 +231,8 @@ function clearBoxItemMocks(): void {
   })
   notificationModuleMock.showInternalSystemNotification.mockClear()
   notificationModuleMock.showInternalSystemNotification.mockReturnValue({ id: 'notification-id' })
+  coreBoxManagerMock.exitUIMode.mockClear()
+  coreBoxManagerMock.getCurrentFeature.mockReset()
   appSettingsMock.value = {}
 }
 
@@ -432,6 +477,10 @@ describe('touchPlugin.triggerFeature', () => {
     ])
     await Promise.resolve()
     await Promise.resolve()
+    const activeFeatureItem = boxItemManagerMock.batchUpsert.mock.calls.at(-1)?.[0]?.[0]
+    boxItemManagerMock.get.mockImplementation((id: string) =>
+      id === 'active-feature-item' ? activeFeatureItem : undefined
+    )
 
     feature.updateItem('active-feature-item', {
       meta: { updated: true }
@@ -444,7 +493,7 @@ describe('touchPlugin.triggerFeature', () => {
       })
     ])
     expect(boxItemManagerMock.update).toHaveBeenCalledWith('active-feature-item', {
-      meta: { updated: true }
+      meta: { updated: true, pluginName: 'test-plugin' }
     })
   })
 
@@ -842,7 +891,7 @@ describe('touchPlugin.triggerFeature', () => {
     } as Partial<TuffItem>)
 
     expect(boxItemManagerMock.update).toHaveBeenCalledWith('existing-search-item', {
-      meta: { updated: true }
+      meta: { updated: true, pluginName: 'test-plugin' }
     })
   })
 
@@ -1064,9 +1113,53 @@ describe('touchPlugin.triggerFeature', () => {
     })
   })
 
+  it('awaits the isolated onClose lifecycle before completing feature exit', async () => {
+    const closeBarrier = deferred<void>()
+    const feature = {
+      id: 'closing-feature',
+      name: 'Closing Feature',
+      desc: '',
+      commands: [{ type: 'over', value: ['close'] }]
+    } as IPluginFeature
+    coreBoxManagerMock.getCurrentFeature.mockReturnValue(feature)
+
+    const plugin = new TouchPlugin(
+      'closing-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp',
+      {},
+      { skipDataInit: true }
+    )
+    plugin.pluginLifecycle = {
+      onFeatureTriggered: vi.fn(),
+      onClose: vi.fn(() => closeBarrier.promise)
+    }
+
+    const exiting = plugin.triggerFeatureExit()
+    expect(exiting).toBeInstanceOf(Promise)
+    let settled = false
+    void exiting.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    closeBarrier.resolve()
+    await expect(exiting).resolves.toBeUndefined()
+    expect(plugin.pluginLifecycle.onClose).toHaveBeenCalledWith(feature)
+  })
+
   it('exposes plugin secret API through the injected feature util', async () => {
     const transport = {
-      invoke: vi.fn().mockResolvedValue({ success: true }),
+      invoke: vi.fn().mockResolvedValueOnce({ success: true }).mockResolvedValueOnce({
+        backend: 'local-secret',
+        available: true,
+        degraded: false
+      }),
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
@@ -1101,16 +1194,14 @@ describe('touchPlugin.triggerFeature', () => {
       {
         plugin: {
           name: 'test-plugin',
-          uniqueKey: expect.any(String),
-          verified: expect.any(Boolean)
+          uniqueKey: expect.any(String)
         }
       }
     )
     expect(transport.invoke).toHaveBeenCalledWith(PluginEvents.storage.getSecretHealth, undefined, {
       plugin: {
         name: 'test-plugin',
-        uniqueKey: expect.any(String),
-        verified: expect.any(Boolean)
+        uniqueKey: expect.any(String)
       }
     })
   })
@@ -1148,8 +1239,7 @@ describe('touchPlugin.triggerFeature', () => {
     const pluginContext = {
       plugin: {
         name: 'test-plugin',
-        uniqueKey: '',
-        verified: false
+        uniqueKey: ''
       }
     }
     const quickOpsCases = [
@@ -1365,8 +1455,7 @@ describe('touchPlugin.triggerFeature', () => {
     expect(context).toEqual({
       plugin: {
         name: 'test-plugin',
-        uniqueKey: '',
-        verified: false
+        uniqueKey: ''
       }
     })
   })
@@ -1408,7 +1497,6 @@ describe('touchPlugin.triggerFeature', () => {
         plugin: {
           name: 'clipboard-plugin',
           uniqueKey: 'verified-clipboard-key',
-          verified: true,
           sdkapi: SdkApi.V260713
         }
       }
@@ -1477,7 +1565,6 @@ describe('touchPlugin.triggerFeature', () => {
       plugin: {
         name: 'screenshot-plugin',
         uniqueKey: 'verified-screenshot-key',
-        verified: true,
         sdkapi: resolvedPluginSdkapi
       }
     }
@@ -1597,7 +1684,6 @@ describe('touchPlugin.triggerFeature', () => {
       plugin: {
         name: 'system-plugin',
         uniqueKey: 'verified-system-key',
-        verified: true,
         sdkapi: resolvedPluginSdkapi
       }
     }
@@ -1668,7 +1754,6 @@ describe('touchPlugin.triggerFeature', () => {
       plugin: {
         name: 'touch-localization',
         uniqueKey: '',
-        verified: false,
         sdkapi: SdkApi.V260713
       }
     })
@@ -1720,7 +1805,6 @@ describe('touchPlugin.triggerFeature', () => {
       plugin: {
         name: 'touch-intelligence',
         uniqueKey: '',
-        verified: false,
         sdkapi: 260615
       }
     })
@@ -1780,7 +1864,6 @@ describe('touchPlugin.triggerFeature', () => {
       plugin: {
         name: 'touch-intelligence',
         uniqueKey: '',
-        verified: false,
         sdkapi: 260615
       }
     })
@@ -1992,8 +2075,425 @@ describe('touchPlugin.setRuntime', () => {
 describe('touchPlugin.enable', () => {
   afterEach(() => {
     TouchPlugin.setTransport(null)
+    TouchPlugin.setRuntimeService(null)
     clearBoxItemMocks()
     vi.restoreAllMocks()
+  })
+
+  it('signs authority before starting an empty Prelude and awaits activation commit', async () => {
+    const order: string[] = []
+    const activationBarrier = deferred<void>()
+    const runtime = createRuntimeServiceMock({
+      startActivation: vi.fn(async (options: { activation: unknown }) => {
+        order.push('start')
+        await activationBarrier.promise
+        return {
+          activation: options.activation,
+          host: { state: 'active', processId: 7001 },
+          lifecycle: createRuntimeServiceMock().lifecycle
+        }
+      })
+    })
+    const requestKey = vi.fn(() => {
+      order.push('key')
+      return 'activation-key-1'
+    })
+    TouchPlugin.setTransport({
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue(undefined),
+      keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain)
+    TouchPlugin.setRuntimeService(runtime as never)
+    const plugin = new TouchPlugin(
+      'empty-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/missing-empty-plugin',
+      {},
+      { skipDataInit: true }
+    )
+
+    let settled = false
+    const enabling = plugin.enable().then((result) => {
+      settled = true
+      return result
+    })
+    await vi.waitFor(() => expect(runtime.startActivation).toHaveBeenCalledTimes(1))
+
+    expect(order).toEqual(['key', 'start'])
+    expect(plugin.status).toBe(PluginStatus.LOADING)
+    expect(settled).toBe(false)
+    expect(runtime.startActivation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activation: expect.objectContaining({
+          name: 'empty-plugin',
+          activationGeneration: 1,
+          key: 'activation-key-1'
+        }),
+        scriptContent: 'module.exports = {}',
+        snapshot: expect.objectContaining({
+          manifest: expect.objectContaining({ name: 'empty-plugin' })
+        })
+      })
+    )
+    const startOptions = vi.mocked(runtime.startActivation).mock
+      .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+    expect(startOptions.capabilityDefinitions).toBeUndefined()
+    expect(startOptions.closeResources).toBeUndefined()
+    expect(startOptions.snapshot.manifest).not.toHaveProperty('issues')
+    expect(startOptions.snapshot.manifest).not.toHaveProperty('loadError')
+    expect(startOptions.snapshot.manifest).not.toHaveProperty('dev')
+    expect(startOptions.snapshot.manifest).not.toHaveProperty('pluginPath')
+
+    activationBarrier.resolve()
+    await expect(enabling).resolves.toBe(true)
+    expect(plugin.status).toBe(PluginStatus.ENABLED)
+    expect(plugin.pluginLifecycle).not.toBeNull()
+  })
+
+  it('binds feature items to the activation and cleans only the exact owned records', async () => {
+    const stored = new Map<string, TuffItem>()
+    boxItemManagerMock.get.mockImplementation((id: string) => stored.get(id))
+    boxItemManagerMock.batchUpsert.mockImplementation((items: TuffItem[]) => {
+      for (const item of items) stored.set(item.id, item)
+    })
+    boxItemManagerMock.update.mockImplementation((id: string, patch: Partial<TuffItem>) => {
+      const current = stored.get(id)
+      if (!current) return
+      stored.set(id, {
+        ...current,
+        ...patch,
+        source: { ...current.source, ...(patch.source ?? {}) },
+        meta: { ...current.meta, ...(patch.meta ?? {}) }
+      })
+    })
+    boxItemManagerMock.delete.mockImplementation((id: string) => {
+      stored.delete(id)
+    })
+
+    const runtime = createRuntimeServiceMock()
+    TouchPlugin.setTransport({
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue(undefined),
+      keyManager: { requestKey: vi.fn(() => 'activation-key-1'), revokeKey: vi.fn(() => true) },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain)
+    TouchPlugin.setRuntimeService(runtime as never)
+    const plugin = new TouchPlugin(
+      'owner-plugin',
+      { type: 'file', value: '/private/owner-plugin/icon.png' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/private/owner-plugin',
+      {},
+      { skipDataInit: true }
+    )
+
+    await expect(plugin.enable()).resolves.toBe(true)
+    const startOptions = vi.mocked(runtime.startActivation).mock
+      .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+    expect(JSON.stringify(startOptions.snapshot)).not.toContain('/private/owner-plugin')
+    expect(startOptions.snapshot.manifest).not.toHaveProperty('issues')
+    expect(startOptions.snapshot.manifest).not.toHaveProperty('key')
+
+    const featureHost = plugin.createBusinessFeatureHost(startOptions.activation)
+    const signal = new AbortController().signal
+
+    const item = (id: string) => ({
+      id,
+      source: { type: 'plugin', id: 'victim-plugin', name: 'victim-plugin' },
+      actions: [
+        { id: 'copy', type: 'plugin', label: 'Copy', primary: true, payload: { text: 'safe' } }
+      ],
+      meta: {
+        pluginName: 'victim-plugin',
+        featureId: 'feature',
+        defaultAction: 'copy'
+      },
+      render: { mode: 'default', basic: { title: id } }
+    })
+
+    await expect(
+      featureHost.pushItems('active-feature', [item('owned-a'), item('owned-b')], signal)
+    ).resolves.toBeUndefined()
+    expect(stored.get('owned-a')).toMatchObject({
+      source: { type: 'plugin', id: 'plugin-features', name: 'owner-plugin' },
+      meta: { pluginName: 'owner-plugin' }
+    })
+
+    await expect(
+      Promise.resolve(
+        featureHost.updateItem(
+          'active-feature',
+          'owned-a',
+          {
+            source: { type: 'plugin', id: 'victim-plugin', name: 'victim-plugin' },
+            meta: { pluginName: 'victim-plugin' }
+          },
+          signal
+        )
+      )
+    ).resolves.toBe(true)
+    expect(stored.get('owned-a')).toMatchObject({
+      source: { type: 'plugin', id: 'plugin-features', name: 'owner-plugin' },
+      meta: { pluginName: 'owner-plugin' }
+    })
+
+    await expect(Promise.resolve(featureHost.listItems(signal))).resolves.toMatchObject([
+      { id: 'owned-a', meta: { pluginName: 'owner-plugin' } },
+      { id: 'owned-b', meta: { pluginName: 'owner-plugin' } }
+    ])
+
+    stored.set('foreign-id', {
+      id: 'foreign-id',
+      source: { type: 'plugin', id: 'plugin-features', name: 'victim-plugin' },
+      meta: { pluginName: 'victim-plugin' },
+      render: { mode: 'default', basic: { title: 'Foreign' } }
+    })
+    await expect(
+      featureHost.pushItems('active-feature', [item('foreign-id')], signal)
+    ).rejects.toMatchObject({ code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT' })
+    expect(boxItemManagerMock.batchUpsert).toHaveBeenCalledTimes(1)
+
+    const replacement = { ...stored.get('owned-b')! }
+    stored.set('owned-b', replacement)
+    await plugin.cleanupBusinessItems(startOptions.activation, ['owned-a', 'owned-b'])
+
+    expect(boxItemManagerMock.delete).toHaveBeenCalledWith('owned-a')
+    expect(boxItemManagerMock.delete).not.toHaveBeenCalledWith('owned-b')
+    expect(stored.get('owned-b')).toBe(replacement)
+  })
+
+  it('revokes authority before stopping a failed activation and reports only a stable code', async () => {
+    const order: string[] = []
+    const runtime = createRuntimeServiceMock({
+      startActivation: vi.fn(async () => {
+        throw Object.assign(new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_LOAD_FAILED'), {
+          nativePath: '/private/plugin/index.js',
+          activationKey: 'secret-key'
+        })
+      }),
+      stopActivation: vi.fn(async () => {
+        order.push('stop')
+      })
+    })
+    const revokeKey = vi.fn(() => {
+      order.push('revoke')
+      return true
+    })
+    TouchPlugin.setTransport({
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue(undefined),
+      keyManager: { requestKey: vi.fn(() => 'secret-key'), revokeKey },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain)
+    TouchPlugin.setRuntimeService(runtime as never)
+    const plugin = new TouchPlugin(
+      'failed-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/missing-failed-plugin',
+      {},
+      { skipDataInit: true }
+    )
+
+    await expect(plugin.enable()).resolves.toBe(false)
+
+    expect(order).toEqual(['revoke', 'stop'])
+    expect(plugin.status).toBe(PluginStatus.CRASHED)
+    expect(plugin.pluginLifecycle).toBeNull()
+    expect(plugin.issues.at(-1)).toMatchObject({
+      code: 'PLUGIN_RUNTIME_HOST_LOAD_FAILED',
+      source: 'runtime:activation'
+    })
+    expect(JSON.stringify(plugin.issues.at(-1))).not.toMatch(
+      /private\/plugin|secret-key|nativePath|activationKey/
+    )
+  })
+
+  it('awaits the runtime termination barrier before completing disable', async () => {
+    const stopBarrier = deferred<void>()
+    const runtime = createRuntimeServiceMock({
+      stopActivation: vi.fn(() => stopBarrier.promise)
+    })
+    TouchPlugin.setTransport({
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue(undefined),
+      keyManager: {
+        requestKey: vi.fn(() => 'activation-key-1'),
+        revokeKey: vi.fn(() => true)
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain)
+    TouchPlugin.setRuntimeService(runtime as never)
+    const plugin = new TouchPlugin(
+      'barrier-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/missing-barrier-plugin',
+      {},
+      { skipDataInit: true }
+    )
+    await plugin.enable()
+
+    let disabled = false
+    const disabling = plugin.disable().then((result) => {
+      disabled = true
+      return result
+    })
+    await vi.waitFor(() => expect(runtime.stopActivation).toHaveBeenCalledTimes(1))
+
+    expect(plugin.status).toBe(PluginStatus.DISABLING)
+    expect(disabled).toBe(false)
+    expect(runtime.stopActivation).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'barrier-plugin', activationGeneration: 1 }),
+      { runDestroy: true }
+    )
+
+    stopBarrier.resolve()
+    await expect(disabling).resolves.toBe(true)
+    expect(plugin.status).toBe(PluginStatus.DISABLED)
+    expect(plugin.getActivationIdentity().key).toBe('')
+  })
+
+  it('rotates activation metadata across disable and re-enable', async () => {
+    const requestKey = vi.fn(
+      (
+        _pluginName: string,
+        activation?: { pluginInstanceId: string; activationGeneration: number }
+      ) => `key-${activation?.activationGeneration ?? 0}`
+    )
+    const revokeKey = vi.fn(() => true)
+    const transport = {
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue(undefined),
+      keyManager: { requestKey, revokeKey },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain
+    TouchPlugin.setTransport(transport)
+    TouchPlugin.setRuntimeService(createRuntimeServiceMock() as never)
+
+    const plugin = new TouchPlugin(
+      'rotating-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/missing-rotating-plugin',
+      {},
+      { skipDataInit: true }
+    )
+
+    await expect(plugin.enable()).resolves.toBe(true)
+    const first = plugin.getActivationIdentity()
+    await expect(plugin.disable()).resolves.toBe(true)
+    expect(plugin.getActivationIdentity()).toMatchObject({
+      pluginInstanceId: first.pluginInstanceId,
+      activationGeneration: 1,
+      key: ''
+    })
+    await expect(plugin.enable()).resolves.toBe(true)
+    const second = plugin.getActivationIdentity()
+
+    expect(first).toMatchObject({ activationGeneration: 1, key: 'key-1' })
+    expect(second).toMatchObject({
+      pluginInstanceId: first.pluginInstanceId,
+      activationGeneration: 2,
+      key: 'key-2'
+    })
+    expect(revokeKey).toHaveBeenCalledWith('key-1')
+    expect(requestKey).toHaveBeenNthCalledWith(1, 'rotating-plugin', {
+      pluginInstanceId: first.pluginInstanceId,
+      activationGeneration: 1
+    })
+    expect(requestKey).toHaveBeenNthCalledWith(2, 'rotating-plugin', {
+      pluginInstanceId: first.pluginInstanceId,
+      activationGeneration: 2
+    })
+  })
+
+  it('handles a runtime crash once and ignores its stale callback after re-enable', async () => {
+    let crashCallback: ((diagnostic: { code: 'PLUGIN_RUNTIME_HOST_CRASHED' }) => void) | undefined
+    const runtime = createRuntimeServiceMock({
+      startActivation: vi.fn(
+        async (options: {
+          activation: unknown
+          onCrash: (diagnostic: { code: 'PLUGIN_RUNTIME_HOST_CRASHED' }) => void
+        }) => {
+          crashCallback = options.onCrash
+          const base = createRuntimeServiceMock()
+          return {
+            activation: options.activation,
+            host: base.host,
+            lifecycle: base.lifecycle
+          }
+        }
+      )
+    })
+    const revokeKey = vi.fn(() => true)
+    TouchPlugin.setTransport({
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue(undefined),
+      keyManager: {
+        requestKey: vi.fn().mockReturnValueOnce('key-1').mockReturnValueOnce('key-2'),
+        revokeKey
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain)
+    TouchPlugin.setRuntimeService(runtime as never)
+    const plugin = new TouchPlugin(
+      'resource-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/missing-resource-plugin',
+      {},
+      { skipDataInit: true }
+    )
+
+    await plugin.enable()
+    const staleCrashCallback = crashCallback
+    staleCrashCallback?.({ code: 'PLUGIN_RUNTIME_HOST_CRASHED' })
+
+    expect(plugin.status).toBe(PluginStatus.CRASHED)
+    expect(plugin.getActivationIdentity().key).toBe('')
+    expect(plugin.issues.at(-1)).toMatchObject({
+      code: 'PLUGIN_RUNTIME_HOST_CRASHED',
+      source: 'runtime:crash'
+    })
+    expect(JSON.stringify(plugin.issues.at(-1))).not.toMatch(/processId|signal|exitCode/)
+    expect(revokeKey).toHaveBeenCalledWith('key-1')
+
+    await expect(plugin.disable()).resolves.toBe(true)
+    expect(runtime.stopActivation).not.toHaveBeenCalled()
+    expect(plugin.issues).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED' })])
+    )
+
+    await plugin.enable()
+    expect(plugin.status).toBe(PluginStatus.ENABLED)
+    expect(plugin.getActivationIdentity()).toMatchObject({
+      activationGeneration: 2,
+      key: 'key-2'
+    })
+
+    staleCrashCallback?.({ code: 'PLUGIN_RUNTIME_HOST_CRASHED' })
+    expect(plugin.status).toBe(PluginStatus.ENABLED)
   })
 
   it('refuses to enable plugins blocked by sdkapi hard-cut', async () => {

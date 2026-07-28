@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PluginStorageError, usePluginSqlite } from '../plugin/sdk/sqlite'
+
 import { PluginEvents } from '../transport/events'
 
 const mocks = vi.hoisted(() => ({
@@ -21,9 +23,7 @@ vi.mock('../transport', () => ({
   })),
 }))
 
-import { usePluginSqlite } from '../plugin/sdk/sqlite'
-
-describe('Plugin SQLite SDK', () => {
+describe('plugin SQLite SDK', () => {
   beforeEach(() => {
     mocks.send.mockReset()
     mocks.usePluginName.mockClear()
@@ -104,6 +104,43 @@ describe('Plugin SQLite SDK', () => {
 
     await expect(usePluginSqlite().execute('select 1')).rejects.toThrow(
       '[Plugin SQLite SDK] Execute failed: Permission denied',
+    )
+  })
+
+  it('preserves stable error codes and operations for every sqlite method', async () => {
+    mocks.send.mockResolvedValue({
+      success: false,
+      code: 'PLUGIN_STORAGE_PERMISSION_DENIED',
+      error: 'Permission denied',
+    })
+
+    const sqlite = usePluginSqlite()
+
+    await expect(
+      sqlite.execute('insert into notes values (1)'),
+    ).rejects.toMatchObject({
+      name: 'PluginStorageError',
+      code: 'PLUGIN_STORAGE_PERMISSION_DENIED',
+      operation: 'execute',
+      message: '[Plugin SQLite SDK] Execute failed: Permission denied',
+    })
+    await expect(sqlite.query('select 1')).rejects.toMatchObject({
+      name: 'PluginStorageError',
+      code: 'PLUGIN_STORAGE_PERMISSION_DENIED',
+      operation: 'query',
+      message: '[Plugin SQLite SDK] Query failed: Permission denied',
+    })
+    await expect(
+      sqlite.transaction([{ sql: 'insert into notes values (1)' }]),
+    ).rejects.toMatchObject({
+      name: 'PluginStorageError',
+      code: 'PLUGIN_STORAGE_PERMISSION_DENIED',
+      operation: 'transaction',
+      message: '[Plugin SQLite SDK] Transaction failed: Permission denied',
+    })
+
+    await expect(sqlite.execute('delete from notes')).rejects.toBeInstanceOf(
+      PluginStorageError,
     )
   })
 })

@@ -1,7 +1,7 @@
 ---
 title: "GlassSurface 玻璃拟态"
 description: "带 SVG displacement、backdrop-filter 与纯色兜底路径的折射玻璃容器。"
-category: Layout
+category: Effects
 syncStatus: reviewed
 verified: true
 ---

@@ -1078,7 +1078,8 @@ StorageEvents.app.save: TuffEvent<StorageSaveRequest, StorageSaveResponse>;
 
 - The renderer sends a detached, clone-safe snapshot. It must not mutate the reactive gate state before the durable request succeeds.
 - Main applies normal conflict/version checks first. If the save is rejected, it does not flush or open the gate.
-- With `persist: true`, main flushes the accepted version before returning success. Persistence failure rejects the request and keeps the lifecycle gate closed.
+- With `persist: true`, main flushes the accepted version before returning success. Persistence failure returns `{ success: false }` with the current cache version and keeps the lifecycle gate closed; it must not reject, because a contended flush is an expected outcome and the caller needs a version to resync from.
+- A durable flush absorbs transient SQLite `BUSY` with a bounded retry. A `persist: true` caller holds a lifecycle gate open and has no later debounce tick to fall back on, so it must not inherit the background write path's fail-fast-and-retry-next-tick policy.
 - Persistence-internal cache reads use a non-touching accessor. Maintenance must not make a dirty entry look externally hot or hide a concurrent read from eviction checks.
 - On persistence failure, main may restore the previous cache value only while the cache version still equals the failed request's accepted version. A newer concurrent write always wins and must never be overwritten by rollback.
 - Onboarding marks `beginner.init`, closes the guide, hides the primary window, and optionally summons CoreBox only after durable success. Failure leaves the guide available and shows localized recovery feedback.
@@ -1089,8 +1090,8 @@ StorageEvents.app.save: TuffEvent<StorageSaveRequest, StorageSaveResponse>;
 - Version conflict -> conflict response; no durable flush.
 - Accepted ordinary save -> update cache and use the existing debounce path.
 - Accepted `persist: true` save -> flush the exact accepted version, then return success.
-- Flush fails and no newer write exists -> restore the previous cache value and reject.
-- Flush fails after a newer write -> reject without rollback; preserve the newer version.
+- Flush fails and no newer write exists -> restore the previous cache value and return `{ success: false }` with the restored version.
+- Flush fails after a newer write -> return `{ success: false }` without rollback; preserve the newer version.
 - Renderer request rejects or returns unsuccessful -> keep onboarding visible and keep the main-process admission gate closed.
 
 ### 5. Good/Base/Bad Cases

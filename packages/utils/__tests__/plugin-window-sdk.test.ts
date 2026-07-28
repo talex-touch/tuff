@@ -105,6 +105,19 @@ describe('Plugin Window SDK', () => {
     expect(mocks.send).not.toHaveBeenCalled()
   })
 
+  it('preserves deterministic legacy migration errors', async () => {
+    mocks.send.mockResolvedValueOnce({
+      error: {
+        code: 'PLUGIN_WINDOW_LEGACY_RUNTIME_UNSUPPORTED',
+        message: 'Plugin view requires SDK API 260615 or later and the bundled host preload.',
+      },
+    })
+
+    await expect(createWindow({ file: 'index.html' })).rejects.toMatchObject({
+      code: 'PLUGIN_WINDOW_LEGACY_RUNTIME_UNSUPPORTED',
+    })
+  })
+
   it('surfaces fail-closed permission errors returned by the transport boundary', async () => {
     mocks.send.mockResolvedValueOnce({
       code: 'PLUGIN_WINDOW_PERMISSION_DENIED',

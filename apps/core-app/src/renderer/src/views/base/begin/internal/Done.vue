@@ -2,17 +2,16 @@
 import type { AnimationItem } from 'lottie-web'
 import type { Component } from 'vue'
 import { sleep } from '@talex-touch/utils/common/utils'
-import { StorageList } from '@talex-touch/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents, CoreBoxEvents, StorageEvents } from '@talex-touch/utils/transport/events'
+import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import WelcomeData from '~/assets/lotties/welcome.json'
 import LottieFrame from '~/components/icon/lotties/LottieFrame.vue'
-import { appSetting } from '~/modules/storage/app-storage'
+import { appSetting, appSettingStore } from '~/modules/storage/app-storage'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
 import { createRendererLogger } from '~/utils/renderer-log'
 import BeginShortcutKey from './components/BeginShortcutKey.vue'
@@ -105,14 +104,9 @@ async function completeBeginner(options: { openCoreBox?: boolean } = {}): Promis
   // require the main process to persist it before mutating renderer state: changing the reactive
   // object first would race its 300ms auto-save against this lifecycle-critical write.
   try {
-    const result = await transport.send(StorageEvents.app.save, {
-      key: StorageList.APP_SETTING,
-      value: {
-        ...toRaw(appSetting),
-        beginner: completedBeginnerState
-      },
-      clear: false,
-      persist: true
+    const result = await appSettingStore.saveDurable({
+      ...toRaw(appSetting),
+      beginner: completedBeginnerState
     })
     if (!result.success) {
       throw new Error(result.conflict ? 'ONBOARDING_SAVE_CONFLICT' : 'ONBOARDING_SAVE_FAILED')

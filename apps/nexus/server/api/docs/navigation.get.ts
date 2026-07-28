@@ -1,13 +1,12 @@
 import type { H3Event } from 'h3'
+import process from 'node:process'
 import { queryCollectionNavigation } from '@nuxt/content/server'
+import { cacheDocsContent } from '../../utils/docsContentCache'
 import { isMissingDocsContentTableError } from '../../utils/docsContentError'
 import { normalizeDocsPagePath } from '../../utils/docsPath'
 
 const DEV_NAVIGATION_RETRY_ATTEMPTS = 3
 const DEV_NAVIGATION_RETRY_DELAY_MS = 80
-const NAVIGATION_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
-const NAVIGATION_CACHE_MAX_AGE_SECONDS = 300
-const NAVIGATION_CACHE_STALE_MAX_AGE_SECONDS = 3600
 const NAVIGATION_COMPONENTS_SCOPE = 'components'
 
 function toPlainJson<T>(value: T): T {
@@ -118,31 +117,28 @@ async function queryDocsNavigation(event: H3Event) {
     }
   }
 
-  if (!isProduction && isMissingDocsContentTableError(lastError)) {
-    console.warn('[api/docs/navigation] Nuxt Content docs table is not ready; returning an empty navigation tree in development.', lastError)
-    return []
-  }
-
   throw lastError
 }
 
-function resolveNavigationCacheKey(event: H3Event) {
-  const { locale, scope } = resolveNavigationRequest(event)
-  return `${locale ? `locale:${locale}` : 'locale:all'}:${scope ? `scope:${scope}` : 'scope:all'}`
-}
-
-export default defineCachedEventHandler(async (event) => {
-  const { locale, scope } = resolveNavigationRequest(event)
+const resolveDocsNavigation = cacheDocsContent(async (
+  event: H3Event,
+  locale: 'en' | 'zh' | null,
+  scope: typeof NAVIGATION_COMPONENTS_SCOPE | null,
+) => {
   const navigation = await queryDocsNavigation(event)
   const localizedNavigation = filterNavigationByLocale(navigation, locale)
   const scopedNavigation = scopeNavigation(localizedNavigation, scope)
 
-  setHeader(event, 'cache-control', NAVIGATION_CACHE_CONTROL)
-
   return toPlainJson(Array.isArray(scopedNavigation) ? scopedNavigation : [])
 }, {
-  maxAge: NAVIGATION_CACHE_MAX_AGE_SECONDS,
-  staleMaxAge: NAVIGATION_CACHE_STALE_MAX_AGE_SECONDS,
   name: 'docs-navigation',
-  getKey: resolveNavigationCacheKey,
+  getKey: (locale, scope) => `${locale ? `locale:${locale}` : 'locale:all'}:${scope ? `scope:${scope}` : 'scope:all'}`,
+  // The whole docs tree is never legitimately empty.
+  treatEmptyAsUnavailable: true,
+})
+
+export default defineEventHandler(async (event) => {
+  const { locale, scope } = resolveNavigationRequest(event)
+
+  return resolveDocsNavigation(event, locale, scope)
 })

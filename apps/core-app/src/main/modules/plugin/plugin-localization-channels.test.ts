@@ -3,6 +3,7 @@ import type {
   ITuffTransportMain,
   TuffEvent
 } from '@talex-touch/utils/transport/main'
+import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { SdkApi } from '@talex-touch/utils/plugin'
 import {
   type AppLocale,
@@ -43,7 +44,11 @@ import { registerPluginLocalizationChannels } from './plugin-localization-channe
 type RegisteredHandler = (payload: unknown, context: HandlerContext) => Promise<unknown> | unknown
 
 const pluginContext = {
-  plugin: { name: 'plugin-a', verified: true, uniqueKey: 'plugin-a-key' }
+  plugin: createTrustedTestPluginContext({
+    name: 'plugin-a',
+    pluginInstanceId: 'plugin-a-instance',
+    uniqueKey: 'plugin-a-key'
+  })
 } as HandlerContext
 
 function createTransport() {
@@ -178,6 +183,18 @@ describe('registerPluginLocalizationChannels', () => {
     ).resolves.toEqual([])
   })
 
+  it('rejects caller-authored verification flags before reaching host services', async () => {
+    const { invoke, getLocale } = registerChannels()
+    const forged = {
+      plugin: { name: 'plugin-a', verified: true, uniqueKey: 'forged-key' }
+    } as HandlerContext
+
+    await expect(
+      invoke(PluginEvents.i18n.getLocale, { _sdkapi: SdkApi.V260713 }, forged)
+    ).rejects.toMatchObject({ code: 'PLUGIN_I18N_PERMISSION_DENIED' })
+    expect(getLocale).not.toHaveBeenCalled()
+  })
+
   it('fails closed without a verified plugin identity before reaching host services', async () => {
     const { invoke, getLocale } = registerChannels()
 
@@ -286,7 +303,11 @@ describe('registerPluginLocalizationChannels', () => {
   it('projects the active official snapshot while preserving caller-local overlays', async () => {
     const { invoke } = registerChannels()
     const pluginBContext = {
-      plugin: { name: 'plugin-b', verified: true, uniqueKey: 'plugin-b-key' }
+      plugin: createTrustedTestPluginContext({
+        name: 'plugin-b',
+        pluginInstanceId: 'plugin-b-instance',
+        uniqueKey: 'plugin-b-key'
+      })
     } as HandlerContext
 
     await invoke(PluginEvents.lexicon.register, {

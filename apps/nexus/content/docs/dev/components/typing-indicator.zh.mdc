@@ -1,7 +1,7 @@
 ---
 title: "TypingIndicator 打字中"
 description: "用于聊天界面的内联打字中与加载状态。"
-category: Feedback
+category: Data
 status: beta
 since: 1.0.0
 tags: [typing, loading, chat]

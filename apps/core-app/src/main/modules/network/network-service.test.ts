@@ -59,6 +59,25 @@ describe('networkService cooldown policy', () => {
     electronMocks.setProxy.mockResolvedValue(undefined)
   })
 
+  it('keeps plugin-facing requests on the no-redirect network path', async () => {
+    const service = new NetworkService()
+    electronMocks.fetch.mockImplementation(async () => new Response('{}', { status: 200 }))
+
+    await expect(
+      service.requestNoRedirect({ method: 'GET', url: 'https://example.test/data' })
+    ).resolves.toMatchObject({ ok: true })
+    expect(electronMocks.fetch).toHaveBeenLastCalledWith(
+      'https://example.test/data',
+      expect.objectContaining({ redirect: 'error' })
+    )
+
+    await service.request({ method: 'GET', url: 'https://example.test/data' })
+    expect(electronMocks.fetch).toHaveBeenLastCalledWith(
+      'https://example.test/data',
+      expect.objectContaining({ redirect: 'follow' })
+    )
+  })
+
   it('blocks ordinary requests while cooldown is active', async () => {
     const service = new NetworkService()
     electronMocks.fetch

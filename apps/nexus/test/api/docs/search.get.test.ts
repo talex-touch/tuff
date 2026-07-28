@@ -1,4 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { docsContentAvailability } from '../../../server/utils/docsContentCache'
 
 const contentMocks = vi.hoisted(() => ({
   queryCollection: vi.fn(),
@@ -13,6 +14,7 @@ let setHeaderMock: ReturnType<typeof vi.fn>
 let whereMock: ReturnType<typeof vi.fn>
 let selectMock: ReturnType<typeof vi.fn>
 let allMock: ReturnType<typeof vi.fn>
+const cacheStore = new Map<string, unknown>()
 
 const docs = [
   {
@@ -36,10 +38,21 @@ const docs = [
 ]
 
 beforeAll(async () => {
-  ;(globalThis as any).defineCachedEventHandler = (fn: any, options: any) => {
+  ;(globalThis as any).defineEventHandler = (fn: any) => fn
+  // Mirrors nitro: a value is stored only after the wrapped function resolves.
+  ;(globalThis as any).defineCachedFunction = (fn: any, options: any) => {
     handlerOptions = options
-    return fn
+    return async (...args: any[]) => {
+      const key = options.getKey(...args)
+      if (cacheStore.has(key))
+        return cacheStore.get(key)
+      const result = await fn(...args)
+      cacheStore.set(key, result)
+      return result
+    }
   }
+  ;(globalThis as any).createError = (input: any) =>
+    Object.assign(new Error(input.message ?? input.statusMessage), input)
   setHeaderMock = vi.fn()
   getQueryMock = vi.fn()
   ;(globalThis as any).getQuery = getQueryMock
@@ -50,6 +63,8 @@ beforeAll(async () => {
 describe('/api/docs/search', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    cacheStore.clear()
+    docsContentAvailability.reset()
     getQueryMock.mockReturnValue({})
     allMock = vi.fn().mockResolvedValue(docs)
     selectMock = vi.fn().mockReturnValue({ all: allMock })
@@ -91,9 +106,28 @@ describe('/api/docs/search', () => {
       staleMaxAge: 3600,
       name: 'docs-search',
     })
-    expect(handlerOptions.getKey({})).toBe('locale:all')
-    getQueryMock.mockReturnValue({ locale: 'zh' })
-    expect(handlerOptions.getKey({})).toBe('locale:zh')
+    expect(handlerOptions.getKey({}, null)).toBe('locale:all')
+    expect(handlerOptions.getKey({}, 'zh')).toBe('locale:zh')
+  })
+
+  it('never caches an empty search index', async () => {
+    allMock.mockResolvedValue([])
+
+    await expect(handler({})).resolves.toEqual({ items: [] })
+    await expect(handler({})).resolves.toEqual({ items: [] })
+
+    expect(allMock).toHaveBeenCalledTimes(2)
+    expect(setHeaderMock).not.toHaveBeenCalled()
+  })
+
+  it('reports an unreachable content database as 503', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    allMock.mockRejectedValue(new Error('no such table: _content_docs'))
+
+    await expect(handler({})).rejects.toMatchObject({ statusCode: 503 })
+    expect(docsContentAvailability.isDegraded()).toBe(true)
+    expect(setHeaderMock).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 
   it('uses path locale for prerenderable static variants', async () => {

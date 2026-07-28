@@ -11,6 +11,7 @@ const REMOTE_POPUP_URL = 'https://example.invalid/popup'
 const REMOTE_RESOURCE_URL = 'https://example.invalid/resource'
 
 const bootstrap = {
+  bridgeVersion: 1,
   channelKey: 'plugin-view-smoke-key',
   plugin: {
     name: 'plugin-view-smoke',
@@ -31,6 +32,7 @@ function installSecurityPolicy(window, entryUrl) {
     blockedNavigations: [],
     blockedPopups: [],
     blockedResources: [],
+    blockedDownloads: 0,
     permissionChecks: 0,
     permissionRequests: 0
   }
@@ -44,6 +46,10 @@ function installSecurityPolicy(window, entryUrl) {
   webContents.setWindowOpenHandler(({ url }) => {
     evidence.blockedPopups.push(url)
     return { action: 'deny' }
+  })
+  webContents.session.on('will-download', (event, _item, requestingWebContents) => {
+    if (requestingWebContents?.id === webContents.id) evidence.blockedDownloads += 1
+    event.preventDefault()
   })
   webContents.session.setPermissionCheckHandler((requestingWebContents) => {
     if (requestingWebContents?.id === webContents.id) evidence.permissionChecks += 1
@@ -129,7 +135,14 @@ async function run() {
             () => false,
             () => true
           ),
-          notificationPermission: await Notification.requestPermission()
+          notificationPermission: await Notification.requestPermission(),
+          downloadDenied: (() => {
+            const anchor = document.createElement('a')
+            anchor.href = 'data:text/plain,blocked-download'
+            anchor.download = 'blocked.txt'
+            anchor.click()
+            return true
+          })()
         }
       }
       dispose()
@@ -147,6 +160,7 @@ async function run() {
       () => policyEvidence.blockedResources.includes(REMOTE_RESOURCE_URL),
       'remote resource denial'
     )
+    await waitForEvidence(() => policyEvidence.blockedDownloads > 0, 'download denial')
     await waitForEvidence(
       () => policyEvidence.permissionChecks + policyEvidence.permissionRequests > 0,
       'permission denial'
@@ -172,6 +186,7 @@ async function run() {
         resourceDenied:
           rendererResult.security.resourceDenied &&
           policyEvidence.blockedResources.includes(REMOTE_RESOURCE_URL),
+        downloadDenied: policyEvidence.blockedDownloads > 0,
         permissionDenied:
           rendererResult.security.notificationPermission === 'denied' &&
           policyEvidence.permissionChecks + policyEvidence.permissionRequests > 0
@@ -179,7 +194,7 @@ async function run() {
     }
 
     const expected = {
-      plugin: bootstrap.plugin,
+      plugin: { ...bootstrap.plugin, bridgeVersion: bootstrap.bridgeVersion },
       config: bootstrap.config,
       channel: {
         send: 'function',
@@ -199,7 +214,8 @@ async function run() {
       security: {
         popupDenied: true,
         resourceDenied: true,
-        notificationPermission: 'denied'
+        notificationPermission: 'denied',
+        downloadDenied: true
       },
       preferences: {
         nodeIntegration: false,
@@ -214,6 +230,7 @@ async function run() {
         navigationDenied: true,
         popupDenied: true,
         resourceDenied: true,
+        downloadDenied: true,
         permissionDenied: true
       }
     }

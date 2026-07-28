@@ -22,7 +22,7 @@ export const tuffSdkItems: TuffSdkItem[] = [
     description: "CoreBox window control.",
     tag: "useBox()",
     color: "#60a5fa",
-    icon: "i-carbon-rectangle-vertical",
+    icon: "i-carbon-box",
   },
   {
     id: "clipboard-sdk",
@@ -102,7 +102,7 @@ export const tuffSdkItems: TuffSdkItem[] = [
     description: "Independent window control.",
     tag: "useDivisionBox()",
     color: "#fb7185",
-    icon: "i-carbon-screen",
+    icon: "i-carbon-split-screen",
   },
   {
     id: "flow-sdk",
@@ -166,7 +166,7 @@ export const tuffSdkItems: TuffSdkItem[] = [
     description: "Storage & perf metrics.",
     tag: "usePerformance()",
     color: "#fda4af",
-    icon: "i-carbon-speedometer",
+    icon: "i-carbon-meter",
   },
   {
     id: "system-sdk",
@@ -174,7 +174,7 @@ export const tuffSdkItems: TuffSdkItem[] = [
     description: "Active app snapshots.",
     tag: "useSystemSDK()",
     color: "#94a3b8",
-    icon: "i-carbon-desktop",
+    icon: "i-carbon-workspace",
   },
   {
     id: "service-sdk",
@@ -246,7 +246,7 @@ export const tuffSdkItems: TuffSdkItem[] = [
     description: "Unified transport client.",
     tag: "useTuffTransport()",
     color: "#22d3ee",
-    icon: "i-carbon-transportation",
+    icon: "i-carbon-connect",
   },
   {
     id: "analytics-sdk",

@@ -51,6 +51,7 @@ const fromEmptyState = () => import('@tuffex-components/empty-state')
 const fromErrorState = () => import('@tuffex-components/error-state')
 const fromFileUploader = () => import('@tuffex-components/file-uploader')
 const fromFlatButton = () => import('@tuffex-components/flat-button')
+const fromFlatDropdown = () => import('@tuffex-components/flat-dropdown')
 const fromFlatRadio = () => import('@tuffex-components/flat-radio')
 const fromFlatSelect = () => import('@tuffex-components/flat-select')
 const fromFlex = () => import('@tuffex-components/flex')
@@ -177,6 +178,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxEmptyState: asyncTuffexComponent(fromEmptyState, 'TxEmptyState'),
   TxErrorState: asyncTuffexComponent(fromErrorState, 'TxErrorState'),
   TxFileUploader: asyncTuffexComponent(fromFileUploader, 'TxFileUploader'),
+  TxFlatDropdown: asyncTuffexComponent(fromFlatDropdown, 'TxFlatDropdown'),
   TxFlatRadio: asyncTuffexComponent(fromFlatRadio, 'TxFlatRadio'),
   TxFlatRadioItem: asyncTuffexComponent(fromFlatRadio, 'TxFlatRadioItem'),
   TxFlatSelect: asyncTuffexComponent(fromFlatSelect, 'TxFlatSelect'),

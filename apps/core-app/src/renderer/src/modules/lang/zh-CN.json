@@ -1012,6 +1012,7 @@
     "searchPlaceholder": "搜索插件...",
     "opening": "打开中...",
     "openFolder": "打开文件夹",
+    "folderOpenFailed": "打开插件文件夹失败",
     "dropInstall": {
       "installing": "安装中...",
       "ignore": "忽略",

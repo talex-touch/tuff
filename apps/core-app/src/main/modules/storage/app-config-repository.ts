@@ -4,6 +4,7 @@ import process from 'node:process'
 import { createClient } from '@libsql/client'
 import fse from 'fs-extra'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
+import { withSqliteRetry } from '../../db/sqlite-retry'
 import { createLogger } from '../../utils/logger'
 
 const configRepositoryLog = createLogger('Storage').child('ConfigRepository')
@@ -513,16 +514,24 @@ export class ApplicationConfigRepository {
   private async persistSqlitePrimary(input: AppConfigPersistInput): Promise<void> {
     // Route the config write through the shared single-writer queue so it no
     // longer races the search-index worker / startup backfill for the WAL
-    // writer lock. BUSY is intentionally NOT retried inline here — the storage
-    // polling service already retries + quarantines on its next tick — so the
-    // scheduler slot stays short. 'interactive' priority keeps user settings
-    // ahead of background indexing. See issue #295.
+    // writer lock. 'interactive' priority keeps user settings ahead of
+    // background indexing. See issue #295.
+    //
+    // BUSY is retried around the scheduler rather than inside it: the polling
+    // service's next-tick retry only rescues debounced writes, and a
+    // `persist: true` caller is holding a lifecycle gate open with no later
+    // tick to fall back on (onboarding completion is the live example). Each
+    // attempt still occupies one short slot, and the backoff happens while
+    // queued rather than while holding the writer, so a contended flush no
+    // longer surfaces as a user-facing failure.
     const client = this.requireClient()
-    const result = await dbWriteScheduler.schedule(
-      'storage.config.persist',
+    const result = await withSqliteRetry(
       () =>
-        client.execute({
-          sql: `
+        dbWriteScheduler.schedule(
+          'storage.config.persist',
+          () =>
+            client.execute({
+              sql: `
         INSERT INTO app_config_entries (key, value, revision, deleted, updated_at)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(key) DO UPDATE SET
@@ -532,15 +541,19 @@ export class ApplicationConfigRepository {
           updated_at = excluded.updated_at
         WHERE excluded.revision >= app_config_entries.revision
       `,
-          args: [
-            input.key,
-            input.serialized,
-            input.revision,
-            input.deleted ? 1 : 0,
-            input.updatedAt ?? this.now()
-          ]
-        }),
-      { priority: 'interactive', dropPolicy: 'none' }
+              args: [
+                input.key,
+                input.serialized,
+                input.revision,
+                input.deleted ? 1 : 0,
+                input.updatedAt ?? this.now()
+              ]
+            }),
+          { priority: 'interactive', dropPolicy: 'none' }
+        ),
+      // Bounded so a blocked renderer waits well under a second in the worst
+      // case; sustained contention still fails and defers to the polling retry.
+      { label: 'storage.config.persist', retries: 3, baseDelayMs: 50, maxDelayMs: 400 }
     )
     if (result.rowsAffected === 0) return
     this.rememberPersisted(input)

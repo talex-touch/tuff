@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "复核 liquid 分支未破坏既有 props/slots 契约与可访问性。"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "复核类型为纯增量扩展，无 any、无强制断言。"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "执行 tuffex 单测、nexus 文档覆盖测试、lint 与 typecheck 门禁。"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "复核组件层改动与文档层（demo-registry / mdc）是否同步一致。"}

@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/07-13-search-crossplatform-audit/prd.md", "reason": "Avoid claiming unsupported Linux paths are verified"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Evidence quality gate for reproduction and closure"}

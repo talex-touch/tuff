@@ -1,12 +1,9 @@
 import type { H3Event } from 'h3'
+import process from 'node:process'
 import { queryCollection } from '@nuxt/content/server'
+import { cacheDocsContent, docsContentAvailability, uncacheableDocsContent } from '../../utils/docsContentCache'
 import { isMissingDocsContentTableError } from '../../utils/docsContentError'
 import { normalizeDocsPagePath } from '../../utils/docsPath'
-
-const DOCS_PAGE_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
-const DOCS_PAGE_CACHE_MAX_AGE_SECONDS = 300
-const DOCS_PAGE_CACHE_STALE_MAX_AGE_SECONDS = 3600
-const DEV_DOCS_CONTENT_FALLBACK_WINDOW_MS = 10_000
 
 type DocsPageRecord = Record<string, unknown> & {
   body?: unknown
@@ -21,7 +18,6 @@ interface DevDocsPageCacheEntry {
 }
 
 const devDocsPageFileCache = new Map<string, DevDocsPageCacheEntry>()
-let devDocsContentFallbackUntil = 0
 
 function normalizeLocale(value: unknown): 'en' | 'zh' {
   if (typeof value !== 'string')
@@ -129,15 +125,11 @@ function isProduction() {
 }
 
 function shouldPreferDevDocsFallback() {
-  return !isProduction() && Date.now() < devDocsContentFallbackUntil
+  return !isProduction() && docsContentAvailability.isDegraded()
 }
 
 function shouldPreferDevDocsMetadataFileLookup(docPath: string, includeBody: boolean) {
   return process.env.NODE_ENV === 'development' && !includeBody && docPath.includes('/docs/dev/components')
-}
-
-function markDevDocsContentUnavailable() {
-  devDocsContentFallbackUntil = Date.now() + DEV_DOCS_CONTENT_FALLBACK_WINDOW_MS
 }
 
 function normalizeDocsContentStem(contentPath: string) {
@@ -277,60 +269,60 @@ async function readDevDocsPageFallback(lookupPaths: string[], includeBody: boole
   return null
 }
 
-function resolveDocsPageCacheKey(event: H3Event) {
-  const query = getQuery(event)
-  const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
-  const locale = normalizeLocale(query.locale)
-  const body = shouldIncludeBody(query.body) ? 'body' : 'meta'
-  return `${docPath}:${locale}:${body}`
-}
-
-export default defineCachedEventHandler(async (event) => {
-  const query = getQuery(event)
-  const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
-  const locale = normalizeLocale(query.locale)
-  const includeBody = shouldIncludeBody(query.body)
+const resolveDocsPage = cacheDocsContent(async (
+  event: H3Event,
+  docPath: string,
+  locale: 'en' | 'zh',
+  includeBody: boolean,
+) => {
   const lookupPaths = buildDocsPageLookupPaths(docPath, locale)
 
+  // Reading the file directly here is a dev speed-up rather than a degraded
+  // path — the mtime-keyed file cache keeps it authoritative, so it may cache.
   if (shouldPreferDevDocsMetadataFileLookup(docPath, includeBody)) {
     const fallbackDoc = await readDevDocsPageFallback(lookupPaths, includeBody)
-    if (fallbackDoc) {
-      setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
+    if (fallbackDoc)
       return serializeDoc(fallbackDoc, includeBody)
-    }
   }
 
   if (shouldPreferDevDocsFallback()) {
     const fallbackDoc = await readDevDocsPageFallback(lookupPaths, includeBody)
-    if (fallbackDoc) {
-      setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
-      return serializeDoc(fallbackDoc, includeBody)
-    }
+    if (fallbackDoc)
+      uncacheableDocsContent(serializeDoc(fallbackDoc, includeBody))
   }
 
   try {
     const doc = await queryDocsPage(event, lookupPaths)
-    setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
     return doc ? serializeDoc(doc, includeBody) : null
   }
   catch (error) {
     if (isProduction() || !isMissingDocsContentTableError(error))
       throw error
 
-    markDevDocsContentUnavailable()
+    // The error is handled here rather than by the shared wrapper, so the
+    // degraded window has to be opened explicitly for the other endpoints.
+    docsContentAvailability.markUnavailable()
     const fallbackDoc = await readDevDocsPageFallback(lookupPaths, includeBody)
-    setHeader(event, 'cache-control', DOCS_PAGE_CACHE_CONTROL)
 
     if (fallbackDoc) {
       console.warn('[api/docs/page] Nuxt Content docs table is not ready; rendering the local Markdown file in development.', error)
-      return serializeDoc(fallbackDoc, includeBody)
+      uncacheableDocsContent(serializeDoc(fallbackDoc, includeBody))
     }
 
-    return null
+    uncacheableDocsContent(null)
   }
 }, {
-  maxAge: DOCS_PAGE_CACHE_MAX_AGE_SECONDS,
-  staleMaxAge: DOCS_PAGE_CACHE_STALE_MAX_AGE_SECONDS,
   name: 'docs-page',
-  getKey: resolveDocsPageCacheKey,
+  getKey: (docPath, locale, includeBody) => `${docPath}:${locale}:${includeBody ? 'body' : 'meta'}`,
+  // A missing single page is a legitimate 404 and stays cacheable; the shared
+  // degraded window is what keeps outage-induced misses out of the cache.
+})
+
+export default defineEventHandler(async (event) => {
+  const query = getQuery(event)
+  const docPath = normalizeDocsPagePath(typeof query.path === 'string' ? query.path : '/docs')
+  const locale = normalizeLocale(query.locale)
+  const includeBody = shouldIncludeBody(query.body)
+
+  return resolveDocsPage(event, docPath, locale, includeBody)
 })

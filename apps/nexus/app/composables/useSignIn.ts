@@ -752,7 +752,7 @@ export function useSignIn() {
 
   const stepTitle = computed(() => {
     if (step.value === 'email')
-      return t('auth.emailStepTitle', '输入邮箱')
+      return t('auth.emailStepTitle', 'Tuff')
     if (step.value === 'signup')
       return t('auth.signUpTitle', '创建账号')
     if (step.value === 'passkey')
@@ -771,7 +771,7 @@ export function useSignIn() {
 
   const stepSubtitle = computed(() => {
     if (step.value === 'email')
-      return t('auth.emailStepSubtitle', t('auth.signInSubtitle', '支持邮箱与 SSO 登录。'))
+      return ''
     if (step.value === 'signup')
       return t('auth.signUpSubtitle', '使用邮箱创建账号，或选择 Passkey。')
     if (step.value === 'passkey')

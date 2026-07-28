@@ -1,5 +1,4 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
-import type { Client } from '@libsql/client'
 import type {
   IManifest,
   IPluginManager,
@@ -17,9 +16,11 @@ import type {
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { PluginWithSource } from '../../service/store-api.service'
+import { lookup } from 'node:dns/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
+import { shell } from 'electron'
 import fse from 'fs-extra'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -44,6 +45,12 @@ import {
 } from '../../service/store-api.service'
 import { performStoreHttpRequest } from '../../service/store-http.service'
 import { createLogger } from '../../utils/logger'
+import {
+  deleteSecureStoreValuesByPrefix,
+  getSecureStoreValueStrict,
+  setSecureStoreValue
+} from '../../utils/secure-store'
+import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
@@ -54,7 +61,14 @@ import {
   registerPluginLocalizationChannels
 } from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
-import { pluginHostBridge } from './host/plugin-host-bridge'
+import { getClipboardHostService } from '../clipboard/clipboard-host-service'
+import { createPluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import { ElectronPluginRuntimeProcessFactory } from './host/plugin-runtime-electron-process'
+import {
+  PluginRuntimeService,
+  resolvePluginRuntimeArtifactPath
+} from './host/plugin-runtime-service'
 import { PluginInstallQueue } from './install-queue'
 import { TouchPlugin } from './plugin'
 import { PluginInstaller } from './plugin-installer'
@@ -72,6 +86,7 @@ import {
 import { LocalPluginProvider } from './providers/local-provider'
 
 import { inspectPluginRuntimeDrift } from './runtime/plugin-runtime-repair'
+import { registerPluginStorageTeardown } from './runtime/plugin-storage-lifecycle'
 import { getPluginSdkHardCutGate } from './sdkapi-hard-cut-gate'
 import { resolvePluginModuleIoRuntime } from './services/plugin-io-service'
 import { DevPluginWatcher } from './services/dev-plugin-watcher'
@@ -82,6 +97,7 @@ import {
 import { registerPluginApiTransportHandlers } from './services/plugin-api-transport-service'
 import { registerPluginStoreTransportHandlers } from './services/plugin-store-transport-service'
 import { registerPluginStorageTransportHandlers } from './services/plugin-storage-transport-service'
+import { PluginSqliteResourceOwnerRegistry } from './runtime/plugin-sqlite-resource-owner'
 import { registerPluginWindowTransportHandlers } from './services/plugin-window-transport-service'
 import { buildPluginManagerRuntime } from './services/plugin-manager-orchestrator'
 
@@ -408,7 +424,9 @@ function createPluginModuleInternal(
   pluginPath: string,
   transport: ITuffTransportMain,
   _channel: PluginLifecycleChannel,
-  mainWindowId: number
+  mainWindowId: number,
+  pluginSqliteResources?: PluginSqliteResourceOwnerRegistry,
+  purgePluginSecrets?: (pluginName: string) => Promise<void>
 ): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
@@ -842,6 +860,7 @@ function createPluginModuleInternal(
     stopHealthMonitoring(pluginName)
 
     const success = await plugin.disable()
+    await pluginSqliteResources?.closePlugin(plugin.name)
     if (success) {
       clearPluginLocalizationEntries(plugin.name)
       enabledPlugins.delete(pluginName)
@@ -1058,9 +1077,9 @@ function createPluginModuleInternal(
     }
   }
 
-  const unloadPlugin = (pluginName: string): Promise<boolean> => {
+  const unloadPlugin = async (pluginName: string): Promise<boolean> => {
     const plugin = plugins.get(pluginName)
-    if (!plugin) return Promise.resolve(false)
+    if (!plugin) return false
 
     const currentPluginPath = path.resolve(pluginPath, pluginName)
     localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
@@ -1073,14 +1092,13 @@ function createPluginModuleInternal(
     }
 
     try {
-      if (plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE) {
-        plugin.disable().catch((error) => {
-          logWarn('Error disabling plugin during unload:', pluginTag(pluginName), error)
-        })
+      if (plugin.status !== PluginStatus.DISABLED && plugin.status !== PluginStatus.LOADED) {
+        await plugin.disable()
       }
     } catch (error) {
       logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
     }
+    await pluginSqliteResources?.closePlugin(plugin.name)
 
     try {
       plugin.logger.getManager().destroy()
@@ -1101,7 +1119,7 @@ function createPluginModuleInternal(
       name: pluginName
     })
 
-    return Promise.resolve(true)
+    return true
   }
 
   const installFromSource = async (
@@ -1134,6 +1152,12 @@ function createPluginModuleInternal(
     reportPluginUninstall(folderName).catch(() => {})
 
     await unloadPlugin(folderName)
+    try {
+      await purgePluginSecrets?.(manifestName)
+    } catch {
+      logWarn('Failed to purge plugin secrets', pluginTag(folderName))
+      return false
+    }
 
     if (await fse.pathExists(pluginDir)) {
       await fse.remove(pluginDir).catch((error) => {
@@ -1479,10 +1503,14 @@ export class PluginModule extends BaseModule {
   installQueue?: PluginInstallQueue
   healthMonitor?: DevServerHealthMonitor
   private permissionGrantedDisposer: (() => void) | null = null
+  private permissionRevokedDisposer: (() => void) | null = null
   private transport: ITuffTransportMain | null = null
   private transportDisposers: Array<() => void> = []
   private networkStatusCleanup: (() => void) | null = null
-  private pluginSqliteClients = new Map<string, Client>()
+  private storageTeardownDisposer: (() => void) | null = null
+  private pluginSqliteResources = new PluginSqliteResourceOwnerRegistry()
+  private pluginBusinessCapabilities: PluginBusinessCapabilities | null = null
+  private runtimeService: PluginRuntimeService | null = null
   private secureStoreRootPath = ''
 
   static key: symbol = Symbol.for('PluginModule')
@@ -1502,38 +1530,111 @@ export class PluginModule extends BaseModule {
     this.transport = ioRuntime.transport
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
-
-    // C1-B experimental core (flag-gated, off by default): start the isolated
-    // host, then run a synthetic closed-loop self-check — load a Prelude into
-    // the child, call its lifecycle, and round-trip an SDK call back to main.
-    // This proves the architecture; per-plugin real-device regression is a
-    // separate iteration and default-on is intentionally NOT enabled here.
-    if (process.env.TUFF_PLUGIN_ISOLATION === '1') {
-      pluginHostBridge.start()
-      void (async () => {
-        try {
-          const connected = await pluginHostBridge.ping()
-          pluginModuleLog.info(`[C1-B] host connectivity: ${connected ? 'OK' : 'FAILED'}`)
-          const script = `module.exports = { onFeatureTriggered: async () => (await test.echo('ping')) === 'echoed:ping' }`
-          const lifecycle = await pluginHostBridge.loadPlugin('__c1b_selfcheck__', '/tmp', script, {
-            test: { echo: (value: string) => `echoed:${value}` }
-          })
-          const result = await lifecycle.onFeatureTriggered?.('t', {})
-          pluginModuleLog.info(
-            `[C1-B] Prelude+lifecycle+SDK round-trip self-check: ${result === true ? 'OK' : 'FAILED'}`
+    this.pluginBusinessCapabilities = createPluginBusinessCapabilities({
+      resolvePlugin: (pluginName) => {
+        const plugin = this.pluginManager?.getPluginByName(pluginName)
+        return plugin instanceof TouchPlugin ? plugin : undefined
+      },
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      sqliteOwners: this.pluginSqliteResources,
+      secureStoreRootPath: this.secureStoreRootPath,
+      secureStore: Object.freeze({
+        get: async (rootPath: string, key: string) =>
+          await getSecureStoreValueStrict(rootPath, key, 'plugin-secret', (message) =>
+            pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
+          ),
+        set: async (rootPath: string, key: string, value: string | null) =>
+          await setSecureStoreValue(rootPath, key, value, 'plugin-secret', (message) =>
+            pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
           )
-        } catch (error) {
-          pluginModuleLog.error('[C1-B] isolation self-check error', { error })
+      }),
+      clipboard: Object.freeze({
+        read: async (request, context, signal) => {
+          const service = getClipboardHostService()
+          if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
+          return await service.read(request, context, signal)
+        },
+        write: async (request, context, signal) => {
+          const service = getClipboardHostService()
+          if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
+          await service.write(request, context, signal)
+        },
+        copyAndPaste: async (request, context, signal) => {
+          const service = getClipboardHostService()
+          if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
+          return await service.copyAndPaste(request, context, signal)
         }
-      })()
-    }
+      }),
+      openUrl: async (url) =>
+        await openValidatedExternalUrl(url, {
+          opener: async (target) => await shell.openExternal(target)
+        }),
+      network: Object.freeze({
+        request: async (options) => await getNetworkService().requestNoRedirect(options),
+        resolveAddresses: async (hostname) =>
+          (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address)
+      })
+    })
+    this.runtimeService = new PluginRuntimeService({
+      artifactPath: resolvePluginRuntimeArtifactPath(),
+      factory: new ElectronPluginRuntimeProcessFactory(),
+      keyManager: ioRuntime.transport.keyManager,
+      capabilityDefinitions: this.pluginBusinessCapabilities.definitions,
+      authorizeCapability: (pluginName, permissionId) => {
+        try {
+          const permissionModule = getPermissionModule()
+          const store = permissionModule?.getStore()
+          const plugin = this.pluginManager?.getPluginByName(pluginName) as
+            | { sdkapi?: number }
+            | undefined
+          if (!store || !plugin || typeof plugin.sdkapi !== 'number') return false
+          return store.hasPermission(pluginName, permissionId, plugin.sdkapi) === true
+        } catch {
+          return false
+        }
+      },
+      watchPermissionRevoked: (pluginName, permissionId, onRevoke) => {
+        const listener = (event: unknown): void => {
+          if (!isRecord(event) || event.pluginId !== pluginName) return
+          const permissionIds = Array.isArray(event.permissionIds)
+            ? event.permissionIds.filter((value): value is string => typeof value === 'string')
+            : []
+          if (event.all === true || permissionIds.includes(permissionId)) onRevoke()
+        }
+        touchEventBus.on(TalexEvents.PERMISSION_REVOKED, listener)
+        return () => touchEventBus.off(TalexEvents.PERMISSION_REVOKED, listener)
+      },
+      closeResources: async (activation) => {
+        await this.pluginBusinessCapabilities?.closeActivation(activation)
+      }
+    })
+    TouchPlugin.setRuntimeService(this.runtimeService)
+    this.storageTeardownDisposer?.()
+    this.storageTeardownDisposer = registerPluginStorageTeardown(async (pluginName) => {
+      await this.pluginSqliteResources.closePlugin(pluginName)
+    })
 
     const pluginRuntime = buildPluginManagerRuntime({
       pluginRootDir: file.dirPath!,
       transport: ioRuntime.transport,
       channel: ioRuntime.channel,
       mainWindowId: ioRuntime.mainWindowId,
-      createManager: createPluginModuleInternal,
+      createManager: (pluginRootDir, runtimeTransport, channel, mainWindowId) =>
+        createPluginModuleInternal(
+          pluginRootDir,
+          runtimeTransport,
+          channel,
+          mainWindowId,
+          this.pluginSqliteResources,
+          async (pluginName) => {
+            await deleteSecureStoreValuesByPrefix(
+              this.secureStoreRootPath,
+              `plugin.${pluginName}.`,
+              (message) => pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
+            )
+          }
+        ),
       createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
     })
 
@@ -1592,12 +1693,31 @@ export class PluginModule extends BaseModule {
         touchEventBus.off(TalexEvents.PERMISSION_GRANTED, onPermissionGranted)
       }
     }
+
+    if (!this.permissionRevokedDisposer) {
+      const onPermissionRevoked = (event: unknown): void => {
+        if (!isRecord(event) || typeof event.pluginId !== 'string') return
+        const permissionIds = Array.isArray(event.permissionIds)
+          ? event.permissionIds.filter((value): value is string => typeof value === 'string')
+          : []
+        if (event.all === true || permissionIds.includes('storage.sqlite')) {
+          void this.pluginSqliteResources.closePlugin(event.pluginId)
+        }
+      }
+      touchEventBus.on(TalexEvents.PERMISSION_REVOKED, onPermissionRevoked)
+      this.permissionRevokedDisposer = () => {
+        touchEventBus.off(TalexEvents.PERMISSION_REVOKED, onPermissionRevoked)
+      }
+    }
   }
 
-  onDestroy(): MaybePromise<void> {
-    pluginHostBridge.stop()
+  async onDestroy(): Promise<void> {
+    this.storageTeardownDisposer?.()
+    this.storageTeardownDisposer = null
     this.permissionGrantedDisposer?.()
     this.permissionGrantedDisposer = null
+    this.permissionRevokedDisposer?.()
+    this.permissionRevokedDisposer = null
     this.networkStatusCleanup?.()
     this.networkStatusCleanup = null
     for (const disposer of this.transportDisposers) {
@@ -1608,15 +1728,17 @@ export class PluginModule extends BaseModule {
       }
     }
     this.transportDisposers = []
-    for (const client of this.pluginSqliteClients.values()) {
-      try {
-        client.close()
-      } catch {
-        // ignore sqlite close errors during shutdown
-      }
-    }
-    this.pluginSqliteClients.clear()
-    this.pluginManager?.plugins.forEach((plugin) => plugin.disable())
+    await Promise.allSettled(
+      [...(this.pluginManager?.plugins.values() ?? [])].map((plugin) => plugin.disable())
+    )
+    await this.runtimeService?.dispose()
+    this.runtimeService = null
+    await this.pluginBusinessCapabilities?.closeAll()
+    this.pluginBusinessCapabilities = null
+    TouchPlugin.setRuntimeService(null)
+    TouchPlugin.setTransport(null)
+    this.transport = null
+    await this.pluginSqliteResources.closeAll()
     this.healthMonitor?.destroy()
     stopUpdateScheduler()
   }
@@ -1823,7 +1945,7 @@ export class PluginModule extends BaseModule {
           }
           const pluginIns = manager.getPluginByName(pluginName)
           if (pluginIns instanceof TouchPlugin) {
-            pluginIns.triggerFeatureExit()
+            await pluginIns.triggerFeatureExit()
           }
         }
       )
@@ -1840,7 +1962,7 @@ export class PluginModule extends BaseModule {
         manager,
         transport,
         secureStoreRootPath: this.secureStoreRootPath,
-        pluginSqliteClients: this.pluginSqliteClients,
+        pluginSqliteResources: this.pluginSqliteResources,
         isRecord,
         ipcLog: pluginIpcLog,
         logHandlerError: logIpcHandlerError,

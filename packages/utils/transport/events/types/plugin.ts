@@ -638,6 +638,33 @@ export interface PluginStorageSetFileRequest extends PluginStorageFileRequest {
   content: unknown;
 }
 
+export const PLUGIN_STORAGE_ERROR_CODES = {
+  CALLER_UNVERIFIED: "PLUGIN_STORAGE_CALLER_UNVERIFIED",
+  PERMISSION_UNAVAILABLE: "PLUGIN_STORAGE_PERMISSION_UNAVAILABLE",
+  PERMISSION_DENIED: "PLUGIN_STORAGE_PERMISSION_DENIED",
+  SDKAPI_MISMATCH: "PLUGIN_STORAGE_SDKAPI_MISMATCH",
+  PLUGIN_UNAVAILABLE: "PLUGIN_STORAGE_PLUGIN_UNAVAILABLE",
+  PATH_OUTSIDE_ROOT: "PLUGIN_SQLITE_PATH_OUTSIDE_ROOT",
+  SYMLINK_DENIED: "PLUGIN_SQLITE_SYMLINK_DENIED",
+  SQL_INVALID: "PLUGIN_SQLITE_SQL_INVALID",
+  SQL_TOO_LARGE: "PLUGIN_SQLITE_SQL_TOO_LARGE",
+  STATEMENT_DENIED: "PLUGIN_SQLITE_STATEMENT_DENIED",
+  STATEMENT_LIMIT: "PLUGIN_SQLITE_STATEMENT_LIMIT",
+  PARAMS_TOO_LARGE: "PLUGIN_SQLITE_PARAMS_TOO_LARGE",
+  ROW_LIMIT: "PLUGIN_SQLITE_ROW_LIMIT",
+  RESULT_TOO_LARGE: "PLUGIN_SQLITE_RESULT_TOO_LARGE",
+  CONCURRENCY_LIMIT: "PLUGIN_SQLITE_CONCURRENCY_LIMIT",
+  TIMEOUT: "PLUGIN_SQLITE_TIMEOUT",
+  DISK_QUOTA: "PLUGIN_SQLITE_DISK_QUOTA",
+  WORKER_UNAVAILABLE: "PLUGIN_SQLITE_WORKER_UNAVAILABLE",
+  SQLITE_UNAVAILABLE: "PLUGIN_SQLITE_UNAVAILABLE",
+  SECRET_KEY_INVALID: "PLUGIN_SECRET_KEY_INVALID",
+  SECRET_UNAVAILABLE: "PLUGIN_SECRET_UNAVAILABLE",
+} as const;
+
+export type PluginStorageErrorCode =
+  (typeof PLUGIN_STORAGE_ERROR_CODES)[keyof typeof PLUGIN_STORAGE_ERROR_CODES];
+
 export interface PluginStorageSecretRequest {
   pluginName?: string;
   key: string;
@@ -647,7 +674,26 @@ export interface PluginStorageSetSecretRequest extends PluginStorageSecretReques
   value: string | null;
 }
 
-export type PluginStorageSecretHealthResponse = SecureStoreHealthResponse;
+export type PluginStorageSecretValueResponse =
+  | string
+  | null
+  | PluginStorageSecretFailure;
+
+export type PluginStorageSecretHealthResponse =
+  | SecureStoreHealthResponse
+  | PluginStorageSecretFailure;
+
+export interface PluginStorageSecretFailure {
+  success: false;
+  code: PluginStorageErrorCode;
+  error: string;
+}
+
+export interface PluginStorageSecretMutationResponse {
+  success: boolean;
+  code?: PluginStorageErrorCode;
+  error?: string;
+}
 
 export interface PluginStorageListFilesRequest {
   pluginName: string;
@@ -709,6 +755,7 @@ export interface PluginSqliteExecuteResponse {
   success: boolean;
   rowsAffected?: number;
   lastInsertRowId?: number | null;
+  code?: PluginStorageErrorCode;
   error?: string;
 }
 
@@ -718,6 +765,7 @@ export interface PluginSqliteQueryResponse {
   success: boolean;
   rows?: Array<Record<string, unknown>>;
   columns?: string[];
+  code?: PluginStorageErrorCode;
   error?: string;
 }
 
@@ -737,6 +785,7 @@ export interface PluginSqliteTransactionResponse {
     rowsAffected: number;
     lastInsertRowId: number | null;
   }>;
+  code?: PluginStorageErrorCode;
   error?: string;
 }
 
@@ -752,6 +801,7 @@ export const PLUGIN_WINDOW_ERROR_CODES = {
   TARGET_INVALID: "PLUGIN_WINDOW_TARGET_INVALID",
   OPTIONS_INVALID: "PLUGIN_WINDOW_OPTIONS_INVALID",
   COMMAND_REMOVED: "PLUGIN_WINDOW_COMMAND_REMOVED",
+  LEGACY_RUNTIME_UNSUPPORTED: "PLUGIN_WINDOW_LEGACY_RUNTIME_UNSUPPORTED",
   NOT_FOUND: "PLUGIN_WINDOW_NOT_FOUND",
 } as const;
 

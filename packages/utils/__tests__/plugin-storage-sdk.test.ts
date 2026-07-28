@@ -140,6 +140,11 @@ describe('Plugin Storage SDK', () => {
   })
 
   it('maps plugin secret operations to namespaced typed storage events', async () => {
+    mocks.send
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ success: true })
+      .mockResolvedValueOnce({ backend: 'local-secret', available: true, degraded: false })
     const sdk = usePluginSecret()
 
     await sdk.get('providers.baidu.secretKey')
@@ -166,5 +171,19 @@ describe('Plugin Storage SDK', () => {
       4,
       PluginEvents.storage.getSecretHealth,
     )
+  })
+
+  it('preserves stable codes on secret mutation responses', async () => {
+    const denied = {
+      success: false,
+      code: 'PLUGIN_STORAGE_PERMISSION_DENIED' as const,
+      error: 'Permission denied',
+    }
+    mocks.send.mockResolvedValue(denied)
+
+    const sdk = usePluginSecret()
+
+    await expect(sdk.set('providers.baidu.secretKey', 'secret-value')).resolves.toBe(denied)
+    await expect(sdk.delete('providers.baidu.secretKey')).resolves.toBe(denied)
   })
 })

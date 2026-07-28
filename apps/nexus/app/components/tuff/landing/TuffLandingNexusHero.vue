@@ -733,6 +733,9 @@ onBeforeUnmount(() => {
   margin: 0;
   line-height: 1.04;
   letter-spacing: -0.01em;
+  /* CJK breaks between any two glyphs by default, which would split a phrase
+     like 随心创作 mid-word once a line runs out of room */
+  word-break: keep-all;
 }
 
 .ExpHero-TitleLine {
@@ -766,6 +769,8 @@ onBeforeUnmount(() => {
   font-size: clamp(2.7rem, 5.6vw, 5.2rem);
   font-weight: 850;
   line-height: 1.04;
+  /* The accent is one headline beat — it wraps as a whole or not at all */
+  white-space: nowrap;
   /* Extend the painted box below the baseline so gradient descenders (g, p) aren't clipped */
   padding-bottom: 0.12em;
   filter: drop-shadow(0 18px 54px rgba(105, 75, 255, 0.36));
@@ -773,8 +778,12 @@ onBeforeUnmount(() => {
 
 /* ── Subtitle ───────────────────────────────────────────────────────────── */
 .ExpHero-Subtitle {
-  max-width: 44ch;
+  /* A CJK glyph is ~2ch wide, so the old 44ch measure cut the Chinese line short
+     and orphaned its tail. Wide enough here for both locales to hold one line at
+     desktop; `balance` keeps the narrow-viewport wrap even instead of orphaning. */
+  max-width: min(100%, 66ch);
   margin: clamp(0.9rem, 1.6vw, 1.3rem) 0 0;
+  text-wrap: balance;
   color: rgba(246, 247, 244, 0.68);
   font-size: clamp(0.98rem, 1.35vw, 1.18rem);
   font-weight: 460;
