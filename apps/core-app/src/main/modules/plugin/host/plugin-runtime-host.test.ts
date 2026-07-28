@@ -1,6 +1,8 @@
 import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PluginHostCapabilityError } from './plugin-host-capabilities'
+import { PluginHostCallbackError } from './plugin-host-callbacks'
+import { PluginHostResourceRegistry } from './plugin-host-resources'
 import {
   PluginRuntimeHost,
   PluginRuntimeHostError,
@@ -9,6 +11,7 @@ import {
   type PluginRuntimeChildAdapter,
   type PluginRuntimeControlPortAdapter,
   type PluginRuntimeHostOptions,
+  type PluginRuntimeHostResourceLimits,
   type PluginRuntimeProcessFactory,
   type PluginRuntimeSpawnResult
 } from './plugin-runtime-host'
@@ -127,6 +130,7 @@ interface Harness {
   invalidateAuthority: ReturnType<typeof vi.fn>
   closeResources: ReturnType<typeof vi.fn>
   onCrash: ReturnType<typeof vi.fn>
+  onTerminated: ReturnType<typeof vi.fn>
 }
 
 function createHarness(
@@ -148,6 +152,7 @@ function createHarness(
     events.push('close-resources')
   })
   const onCrash = vi.fn()
+  const onTerminated = vi.fn()
   const host = new PluginRuntimeHost({
     activation: options.activation ?? activation(),
     ...ownerFields,
@@ -157,6 +162,7 @@ function createHarness(
     invalidateAuthority,
     closeResources,
     onCrash,
+    onTerminated,
     createNonce: () => 'main-issued-nonce',
     ...overrides
   })
@@ -205,7 +211,8 @@ function createHarness(
     events,
     invalidateAuthority,
     closeResources,
-    onCrash
+    onCrash,
+    onTerminated
   }
 }
 
@@ -256,6 +263,7 @@ describe('PluginRuntimeHost activation transaction', () => {
     expect(factory.spawn).toHaveBeenCalledTimes(code === 'PLUGIN_RUNTIME_HOST_SPAWN_FAILED' ? 1 : 0)
     expect(harness.port.sent).toEqual([])
     expect(harness.events).toEqual(['invalidate', 'close-resources'])
+    expect(harness.onTerminated).not.toHaveBeenCalled()
     await expect(startPromise).rejects.not.toThrow(
       /private|secret script|activation-key|host-handle|native spawn detail/
     )
@@ -334,6 +342,9 @@ describe('PluginRuntimeHost activation transaction', () => {
   it.each([
     ['pending request limit', { maxPendingRequests: 33 }],
     ['request history limit', { maxTrackedRequestIds: 65_537 }],
+    ['callback limit', { maxCallbacks: 65 }],
+    ['concurrent callback limit', { maxConcurrentCallbacks: 17 }],
+    ['resource limit', { maxResources: 65 }],
     ['non-positive heap limit', { maxOldSpaceMb: 0 }],
     ['non-finite deadline', { shutdownTimeoutMs: Number.NaN }]
   ])('rejects an invalid %s snapshot before probing the artifact', (_label, resourceLimits) => {
@@ -347,6 +358,28 @@ describe('PluginRuntimeHost activation transaction', () => {
     )
     expect(factory.artifactExists).not.toHaveBeenCalled()
     expect(factory.spawn).not.toHaveBeenCalled()
+  })
+
+  it('rejects hostile resource-limit accessors before probing the artifact', () => {
+    const factory: PluginRuntimeProcessFactory = {
+      artifactExists: vi.fn(() => true),
+      spawn: vi.fn()
+    }
+    const resourceLimits = {} as Partial<PluginRuntimeHostResourceLimits>
+    let getterCalled = false
+    Object.defineProperty(resourceLimits, 'maxDepth', {
+      enumerable: true,
+      get() {
+        getterCalled = true
+        throw new Error('/private/resource-limit')
+      }
+    })
+
+    expect(() => createHarness({ factory, resourceLimits })).toThrow(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    )
+    expect(getterCalled).toBe(false)
+    expect(factory.artifactExists).not.toHaveBeenCalled()
   })
 
   it('fails closed when the bounded request history cannot admit the load request', async () => {
@@ -388,6 +421,102 @@ describe('PluginRuntimeHost activation transaction', () => {
     expect(() => createHarness({ factory })).toThrow(
       new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
     )
+  })
+
+  it('rejects hostile activation accessors before probing the artifact', () => {
+    const factory: PluginRuntimeProcessFactory = {
+      artifactExists: vi.fn(() => true),
+      spawn: vi.fn()
+    }
+    const options: PluginRuntimeHostOptions = {
+      activation: activation(),
+      ...ownerFields,
+      artifactPath: '/private/plugin-host.js',
+      factory,
+      resourceLimits: limits,
+      invalidateAuthority: vi.fn(),
+      closeResources: vi.fn()
+    }
+    let getterCalled = false
+    Object.defineProperty(options, 'activation', {
+      enumerable: true,
+      get() {
+        getterCalled = true
+        throw new Error('/private/activation-key')
+      }
+    })
+
+    expect(() => new PluginRuntimeHost(options)).toThrow(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    )
+    expect(getterCalled).toBe(false)
+    expect(factory.artifactExists).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-data terminal observers without invoking accessors', () => {
+    const factory: PluginRuntimeProcessFactory = {
+      artifactExists: vi.fn(() => true),
+      spawn: vi.fn()
+    }
+    const options: PluginRuntimeHostOptions = {
+      activation: activation(),
+      ...ownerFields,
+      artifactPath: '/private/plugin-host.js',
+      factory,
+      resourceLimits: limits,
+      invalidateAuthority: vi.fn(),
+      closeResources: vi.fn()
+    }
+    let getterCalled = false
+    Object.defineProperty(options, 'onTerminated', {
+      enumerable: true,
+      get() {
+        getterCalled = true
+        throw new Error('/private/terminal-observer')
+      }
+    })
+
+    expect(() => new PluginRuntimeHost(options)).toThrow(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    )
+    expect(getterCalled).toBe(false)
+    expect(() => createHarness({ onTerminated: 'invalid' as never })).toThrow(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    )
+    expect(factory.artifactExists).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-data crash observers without invoking accessors', () => {
+    const factory: PluginRuntimeProcessFactory = {
+      artifactExists: vi.fn(() => true),
+      spawn: vi.fn()
+    }
+    const options: PluginRuntimeHostOptions = {
+      activation: activation(),
+      ...ownerFields,
+      artifactPath: '/private/plugin-host.js',
+      factory,
+      resourceLimits: limits,
+      invalidateAuthority: vi.fn(),
+      closeResources: vi.fn()
+    }
+    let getterCalled = false
+    Object.defineProperty(options, 'onCrash', {
+      enumerable: true,
+      get() {
+        getterCalled = true
+        throw new Error('/private/crash-observer')
+      }
+    })
+
+    expect(() => new PluginRuntimeHost(options)).toThrow(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    )
+    expect(getterCalled).toBe(false)
+    expect(() => createHarness({ onCrash: 'invalid' as never })).toThrow(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_INVALID_OPTIONS')
+    )
+    expect(factory.artifactExists).not.toHaveBeenCalled()
   })
 
   it('snapshots process-factory getters once and preserves their receiver', async () => {
@@ -710,6 +839,385 @@ describe('PluginRuntimeHost capability dispatch', () => {
       })
     ).toThrowError(expect.objectContaining({ code: 'PLUGIN_RUNTIME_HOST_INVALID_OPTIONS' }))
     expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('roundtrips owner-bound callbacks and releases transient proxies after completion', async () => {
+    let captured: ((value: string) => Promise<unknown>) | undefined
+    const dispatcher: PluginRuntimeCapabilityDispatcher = {
+      owner: ownerFields,
+      activation: activation(),
+      dispatch: vi.fn(async (_capability, payload) => {
+        captured = (payload as { callback: (value: string) => Promise<unknown> }).callback
+        return {
+          sync: await captured('sync'),
+          async: await captured('async')
+        }
+      })
+    }
+    const harness = createHarness({ capabilityDispatcher: dispatcher })
+    await start(harness)
+    const originalResponder = harness.port.responder
+    harness.port.responder = (message) => {
+      if (message.type === 'callback-call') {
+        const [value] = message.payload as string[]
+        harness.port.emit({
+          ...harness.host.owner,
+          type: 'callback-result',
+          requestId: message.requestId,
+          ok: true,
+          result: value === 'async' ? 'child-async' : 'child-sync'
+        })
+        return
+      }
+      originalResponder?.(message)
+    }
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'capability-call',
+      requestId: 90,
+      capability: 'plugin.info.get',
+      payload: {
+        callback: { __tuffHostWire: 'callback', id: 'child-callback-90' }
+      }
+    })
+    await vi.waitFor(() =>
+      expect(harness.port.sent).toContainEqual(
+        expect.objectContaining({ type: 'capability-result', requestId: 90, ok: true })
+      )
+    )
+
+    expect(harness.port.sent.filter((message) => message.type === 'callback-call')).toHaveLength(2)
+    expect(harness.port.sent.at(-1)).toEqual({
+      ...harness.host.owner,
+      type: 'capability-result',
+      requestId: 90,
+      ok: true,
+      result: { sync: 'child-sync', async: 'child-async' }
+    })
+    await expect(captured?.('late')).rejects.toEqual(
+      new PluginHostCallbackError('PLUGIN_HOST_CALLBACK_DISPOSED')
+    )
+    await harness.host.stop()
+  })
+
+  it('retains callbacks only through a returned resource and disposes both exactly once', async () => {
+    const dispose = vi.fn()
+    const resources = new PluginHostResourceRegistry({
+      owner: ownerFields,
+      activation: activation(),
+      resolveCurrentActivation: () => activation(),
+      isActive: () => true,
+      createResourceId: () => 'resource-retained-1'
+    })
+    let retained: ((value: string) => Promise<unknown>) | undefined
+    const dispatcher: PluginRuntimeCapabilityDispatcher = {
+      owner: ownerFields,
+      activation: activation(),
+      getCallbackLifetime: () => 'resource',
+      dispatch: vi.fn(async (_capability, payload) => {
+        retained = (payload as { callback: (value: string) => Promise<unknown> }).callback
+        const invocation = resources.beginInvocation({ capabilityId: 'channel.subscribe' })
+        const handle = invocation.resources.register('subscription', dispose)
+        await invocation.commit(handle)
+        return handle
+      })
+    }
+    const harness = createHarness({
+      capabilityDispatcher: dispatcher,
+      resourceDispatcher: resources,
+      ownsResourceDispatcher: true
+    })
+    await start(harness)
+    const originalResponder = harness.port.responder
+    harness.port.responder = (message) => {
+      if (message.type === 'callback-call') {
+        harness.port.emit({
+          ...harness.host.owner,
+          type: 'callback-result',
+          requestId: message.requestId,
+          ok: true,
+          result: (message.payload as string[])[0]
+        })
+        return
+      }
+      originalResponder?.(message)
+    }
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'capability-call',
+      requestId: 89,
+      capability: 'channel.subscribe',
+      payload: {
+        callback: { __tuffHostWire: 'callback', id: 'child-callback-retained' }
+      }
+    })
+    await vi.waitFor(() =>
+      expect(harness.port.sent.at(-1)).toMatchObject({
+        type: 'capability-result',
+        requestId: 89,
+        ok: true
+      })
+    )
+    await expect(retained?.('before-dispose')).resolves.toBe('before-dispose')
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'resource-dispose',
+      requestId: 90,
+      resourceId: 'resource-retained-1',
+      resourceKind: 'subscription'
+    })
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledTimes(1))
+    await flush()
+    await expect(retained?.('after-dispose')).rejects.toEqual(
+      new PluginHostCallbackError('PLUGIN_HOST_CALLBACK_DISPOSED')
+    )
+
+    await harness.host.stop()
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('disposes the owning resource when its retained callback fails', async () => {
+    const dispose = vi.fn()
+    const resources = new PluginHostResourceRegistry({
+      owner: ownerFields,
+      activation: activation(),
+      resolveCurrentActivation: () => activation(),
+      isActive: () => true,
+      createResourceId: () => 'resource-failed-callback'
+    })
+    let retained: (() => Promise<unknown>) | undefined
+    const dispatcher: PluginRuntimeCapabilityDispatcher = {
+      owner: ownerFields,
+      activation: activation(),
+      getCallbackLifetime: () => 'resource',
+      dispatch: vi.fn(async (_capability, payload) => {
+        retained = (payload as { callback: () => Promise<unknown> }).callback
+        const invocation = resources.beginInvocation({ capabilityId: 'channel.subscribe' })
+        const handle = invocation.resources.register('subscription', dispose)
+        await invocation.commit(handle)
+        return handle
+      })
+    }
+    const harness = createHarness({
+      capabilityDispatcher: dispatcher,
+      resourceDispatcher: resources,
+      ownsResourceDispatcher: true
+    })
+    await start(harness)
+    const originalResponder = harness.port.responder
+    harness.port.responder = (message) => {
+      if (message.type === 'callback-call') {
+        harness.port.emit({
+          ...harness.host.owner,
+          type: 'callback-result',
+          requestId: message.requestId,
+          ok: false,
+          error: { code: 'PLUGIN_HOST_CALLBACK_UNKNOWN' }
+        })
+        return
+      }
+      originalResponder?.(message)
+    }
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'capability-call',
+      requestId: 91,
+      capability: 'channel.subscribe',
+      payload: {
+        callback: { __tuffHostWire: 'callback', id: 'child-callback-failed-resource' }
+      }
+    })
+    await vi.waitFor(() =>
+      expect(harness.port.sent.at(-1)).toMatchObject({
+        type: 'capability-result',
+        requestId: 91,
+        ok: true
+      })
+    )
+
+    await expect(retained?.()).rejects.toEqual(
+      new PluginHostCallbackError('PLUGIN_HOST_CALLBACK_FAILED')
+    )
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledTimes(1))
+    expect(harness.port.sent).toContainEqual({
+      ...harness.host.owner,
+      type: 'resource-dispose',
+      requestId: expect.any(Number),
+      resourceId: 'resource-failed-callback',
+      resourceKind: 'subscription'
+    })
+    await expect(retained?.()).rejects.toEqual(
+      new PluginHostCallbackError('PLUGIN_HOST_CALLBACK_DISPOSED')
+    )
+
+    await harness.host.stop()
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('times out callback work, sends cancel, and fails only the owning activation closed', async () => {
+    vi.useFakeTimers()
+    const dispatcher: PluginRuntimeCapabilityDispatcher = {
+      owner: ownerFields,
+      activation: activation(),
+      dispatch: vi.fn(async (_capability, payload) =>
+        (payload as { callback: () => Promise<unknown> }).callback()
+      )
+    }
+    const harness = createHarness({
+      capabilityDispatcher: dispatcher,
+      resourceLimits: { ...limits, callbackTimeoutMs: 5 }
+    })
+    await start(harness)
+    const originalResponder = harness.port.responder
+    harness.port.responder = (message) => {
+      if (message.type === 'callback-call' || message.type === 'cancel') return
+      originalResponder?.(message)
+    }
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'capability-call',
+      requestId: 88,
+      capability: 'plugin.info.get',
+      payload: {
+        callback: { __tuffHostWire: 'callback', id: 'child-callback-timeout' }
+      }
+    })
+    await vi.advanceTimersByTimeAsync(5)
+    expect(harness.port.sent).toContainEqual(expect.objectContaining({ type: 'cancel' }))
+    expect(harness.host.state).toBe('active')
+
+    await vi.advanceTimersByTimeAsync(limits.cancelGraceMs)
+    await harness.host.close()
+    expect(harness.host.state).toBe('failed')
+    expect(harness.child.exited).toBe(true)
+  })
+
+  it('aborts only the child-origin capability targeted by a scoped cancel', async () => {
+    const signals = new Map<number, AbortSignal>()
+    const resolvers = new Map<number, (value: unknown) => void>()
+    const dispatcher: PluginRuntimeCapabilityDispatcher = {
+      owner: ownerFields,
+      activation: activation(),
+      dispatch: vi.fn((_capability, payload, signal) => {
+        const id = (payload as { id: number }).id
+        signals.set(id, signal)
+        return new Promise((resolve) => {
+          resolvers.set(id, resolve)
+        })
+      })
+    }
+    const harness = createHarness({ capabilityDispatcher: dispatcher })
+    await start(harness)
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'capability-call',
+      requestId: 201,
+      capability: 'plugin.info.get',
+      payload: { id: 201 }
+    })
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'capability-call',
+      requestId: 202,
+      capability: 'plugin.info.get',
+      payload: { id: 202 }
+    })
+    await vi.waitFor(() => expect(signals.size).toBe(2))
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'cancel',
+      requestId: 203,
+      targetRequestId: 201
+    })
+    expect(signals.get(201)?.aborted).toBe(true)
+    expect(signals.get(202)?.aborted).toBe(false)
+
+    resolvers.get(201)?.('ignored-after-cancel')
+    resolvers.get(202)?.('second-result')
+    await vi.waitFor(() =>
+      expect(harness.port.sent).toContainEqual({
+        ...harness.host.owner,
+        type: 'capability-result',
+        requestId: 201,
+        ok: false,
+        error: { code: 'PLUGIN_HOST_CAPABILITY_CANCELLED' }
+      })
+    )
+    expect(harness.port.sent).toContainEqual({
+      ...harness.host.owner,
+      type: 'capability-result',
+      requestId: 202,
+      ok: true,
+      result: 'second-result'
+    })
+    expect(harness.host.state).toBe('active')
+    await harness.host.stop()
+  })
+
+  it('disposes a resource that completes after its capability scope was cancelled', async () => {
+    const dispose = vi.fn()
+    const resourceRegistry = new PluginHostResourceRegistry({
+      owner: ownerFields,
+      activation: activation(),
+      resolveCurrentActivation: () => activation(),
+      isActive: () => true,
+      createResourceId: () => 'resource-late-after-cancel'
+    })
+    const result = deferred<unknown>()
+    const dispatcher: PluginRuntimeCapabilityDispatcher = {
+      owner: ownerFields,
+      activation: activation(),
+      getCallbackLifetime: () => 'resource',
+      dispatch: vi.fn(async () => {
+        const invocation = resourceRegistry.beginInvocation({
+          capabilityId: 'channel.subscribe'
+        })
+        const handle = invocation.resources.register('subscription', dispose)
+        await invocation.commit(handle)
+        await result.promise
+        return handle
+      })
+    }
+    const harness = createHarness({
+      capabilityDispatcher: dispatcher,
+      resourceDispatcher: resourceRegistry
+    })
+    await start(harness)
+
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'capability-call',
+      requestId: 211,
+      capability: 'channel.subscribe',
+      payload: null
+    })
+    await vi.waitFor(() => expect(resourceRegistry.size).toBe(1))
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'cancel',
+      requestId: 212,
+      targetRequestId: 211
+    })
+    result.resolve(null)
+
+    await vi.waitFor(() => expect(dispose).toHaveBeenCalledTimes(1))
+    expect(resourceRegistry.size).toBe(0)
+    expect(harness.port.sent).toContainEqual({
+      ...harness.host.owner,
+      type: 'capability-result',
+      requestId: 211,
+      ok: false,
+      error: { code: 'PLUGIN_HOST_CAPABILITY_CANCELLED' }
+    })
+    expect(harness.host.state).toBe('active')
+    await harness.host.stop()
   })
 
   it('dispatches an owner-bound fixed capability and returns a bounded V2 result', async () => {
@@ -1062,6 +1570,129 @@ describe('PluginRuntimeHost cancellation and protocol failure', () => {
     await flush()
     await harness.host.close()
     expect(harness.host.state).toBe('failed')
+    expect(harness.onTerminated).not.toHaveBeenCalled()
+  })
+
+  it('preserves caller cancellation when the child exits before its acknowledgement', async () => {
+    const harness = createHarness()
+    await start(harness)
+    const controller = new AbortController()
+    harness.port.responder = (message) => {
+      if (message.type === 'lifecycle-call') controller.abort()
+      if (message.type === 'cancel') harness.child.emitExit()
+    }
+
+    const call = harness.host.callLifecycle('onFeatureTriggered', [], {
+      signal: controller.signal
+    })
+    await expect(call).rejects.toEqual(new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_CANCELLED'))
+    await harness.host.close()
+
+    expect(harness.host.state).toBe('failed')
+    expect(harness.onCrash).not.toHaveBeenCalled()
+    expect(harness.onTerminated).not.toHaveBeenCalled()
+  })
+
+  it('preserves timeout classification when the child exits before its acknowledgement', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness()
+    await start(harness)
+    harness.port.responder = (message) => {
+      if (message.type === 'cancel') harness.child.emitExit()
+    }
+
+    const call = harness.host.callLifecycle('onFeatureTriggered', [], { timeoutMs: 5 })
+    const rejection = expect(call).rejects.toEqual(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_TIMEOUT')
+    )
+    await vi.advanceTimersByTimeAsync(5)
+    await rejection
+    await harness.host.close()
+
+    expect(harness.host.state).toBe('failed')
+    expect(harness.onCrash).not.toHaveBeenCalled()
+    expect(harness.onTerminated).toHaveBeenCalledOnce()
+    expect(harness.onTerminated).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_TIMEOUT',
+      pluginName: activation().name,
+      activationGeneration: activation().activationGeneration
+    })
+  })
+
+  it('keeps the activation active after cooperative scoped lifecycle cancellation', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness()
+    await start(harness)
+    const controller = new AbortController()
+    let lifecycleRequestId = 0
+    const originalResponder = harness.port.responder
+    harness.port.responder = (message) => {
+      if (message.type === 'lifecycle-call') {
+        lifecycleRequestId = message.requestId
+        controller.abort()
+        return
+      }
+      if (message.type === 'cancel') {
+        harness.port.emit({
+          ...harness.host.owner,
+          type: 'lifecycle-result',
+          requestId: lifecycleRequestId,
+          ok: false,
+          error: { code: 'PLUGIN_HOST_CHILD_CANCELLED' }
+        })
+        return
+      }
+      originalResponder?.(message)
+    }
+
+    const call = harness.host.callLifecycle('onFeatureTriggered', [], {
+      signal: controller.signal
+    })
+    await expect(call).rejects.toEqual(new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_CANCELLED'))
+    await vi.advanceTimersByTimeAsync(limits.cancelGraceMs * 2)
+
+    expect(harness.host.state).toBe('active')
+    expect(harness.invalidateAuthority).not.toHaveBeenCalled()
+    expect(harness.onTerminated).not.toHaveBeenCalled()
+    await harness.host.stop()
+  })
+
+  it('keeps the activation active after a timed out lifecycle returns its canonical acknowledgement', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness()
+    await start(harness)
+    let lifecycleRequestId = 0
+    const originalResponder = harness.port.responder
+    harness.port.responder = (message) => {
+      if (message.type === 'lifecycle-call') {
+        lifecycleRequestId = message.requestId
+        return
+      }
+      if (message.type === 'cancel') {
+        harness.port.emit({
+          ...harness.host.owner,
+          type: 'lifecycle-result',
+          requestId: lifecycleRequestId,
+          ok: false,
+          error: { code: 'PLUGIN_HOST_CHILD_CANCELLED' }
+        })
+        return
+      }
+      originalResponder?.(message)
+    }
+
+    const call = harness.host.callLifecycle('onFeatureTriggered', [], { timeoutMs: 5 })
+    const rejection = expect(call).rejects.toEqual(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_TIMEOUT')
+    )
+    await vi.advanceTimersByTimeAsync(5)
+    await rejection
+    await vi.advanceTimersByTimeAsync(limits.cancelGraceMs * 2)
+
+    expect(harness.host.state).toBe('active')
+    expect(harness.invalidateAuthority).not.toHaveBeenCalled()
+    expect(harness.onTerminated).not.toHaveBeenCalled()
+    await harness.host.stop()
   })
 
   it('fails the activation closed after external cancellation grace without a child acknowledgement', async () => {
@@ -1078,13 +1709,14 @@ describe('PluginRuntimeHost cancellation and protocol failure', () => {
       signal: controller.signal
     })
     await expect(call).rejects.toMatchObject({ code: 'PLUGIN_RUNTIME_HOST_CANCELLED' })
-    expect(harness.host.state).toBe('stopping')
+    expect(harness.host.state).toBe('active')
     expect(harness.host.pendingCount).toBe(0)
 
     await vi.advanceTimersByTimeAsync(limits.cancelGraceMs)
     await flush()
     await harness.host.close()
     expect(harness.host.state).toBe('failed')
+    expect(harness.onTerminated).not.toHaveBeenCalled()
     expect(harness.events).toEqual(['invalidate', 'close-resources', 'exit'])
   })
 
@@ -1107,7 +1739,7 @@ describe('PluginRuntimeHost cancellation and protocol failure', () => {
       targetRequestId: lifecycle?.requestId
     })
     expect(harness.host.pendingCount).toBe(0)
-    expect(harness.host.state).toBe('stopping')
+    expect(harness.host.state).toBe('active')
     expect(harness.events).toEqual([])
 
     harness.port.emit({
@@ -1119,6 +1751,115 @@ describe('PluginRuntimeHost cancellation and protocol failure', () => {
     })
     await harness.host.close()
     expect(harness.host.state).toBe('failed')
+    expect(harness.onTerminated).toHaveBeenCalledTimes(1)
+    expect(harness.onTerminated).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_TIMEOUT',
+      pluginName: 'plugin.alpha',
+      activationGeneration: 3
+    })
+  })
+
+  it('reports an active timeout after its complete cleanup barrier', async () => {
+    vi.useFakeTimers()
+    const onTerminated = vi.fn()
+    const harness = createHarness({ onTerminated })
+    await start(harness)
+    harness.port.responder = (message) => {
+      if (message.type === 'shutdown') harness.child.emitExit()
+    }
+
+    const call = harness.host.callLifecycle('onFeatureTriggered', [], { timeoutMs: 10 })
+    const rejection = expect(call).rejects.toEqual(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_TIMEOUT')
+    )
+    await vi.advanceTimersByTimeAsync(10)
+    await rejection
+    expect(onTerminated).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(limits.cancelGraceMs)
+    await harness.host.close()
+
+    expect(onTerminated).toHaveBeenCalledTimes(1)
+    expect(onTerminated).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_TIMEOUT',
+      pluginName: 'plugin.alpha',
+      activationGeneration: 3
+    })
+    expect(Object.isFrozen(onTerminated.mock.calls[0][0])).toBe(true)
+    expect(harness.child.exited).toBe(true)
+    expect(harness.onCrash).not.toHaveBeenCalled()
+  })
+
+  it('notifies protocol termination only after authority, dispatcher, resources and exit', async () => {
+    const order: string[] = []
+    const dispatcherBarrier = deferred<void>()
+    const resourceBarrier = deferred<void>()
+    const onTerminated = vi.fn((diagnostic) => {
+      order.push(`terminated:${diagnostic.code}`)
+    })
+    const dispatcher: PluginRuntimeCapabilityDispatcher = {
+      owner: ownerFields,
+      activation: activation(),
+      dispatch: async () => null,
+      close: vi.fn(async () => {
+        order.push('dispatcher')
+        await dispatcherBarrier.promise
+      })
+    }
+    const closeResources = vi.fn(async () => {
+      order.push('resources')
+      await resourceBarrier.promise
+    })
+    const harness = createHarness({
+      capabilityDispatcher: dispatcher,
+      ownsCapabilityDispatcher: true,
+      invalidateAuthority: vi.fn(() => {
+        order.push('invalidate')
+      }),
+      closeResources,
+      onTerminated
+    })
+    await start(harness)
+    harness.child.autoExitOnForceKill = false
+
+    harness.port.emit({
+      ...ownerFields,
+      type: 'violation',
+      requestId: 901,
+      error: { code: 'PLUGIN_HOST_VIOLATION_PROTOCOL' }
+    })
+    await vi.waitFor(() => expect(dispatcher.close).toHaveBeenCalledTimes(1))
+    expect(order).toEqual(['invalidate', 'dispatcher'])
+    expect(onTerminated).not.toHaveBeenCalled()
+
+    dispatcherBarrier.resolve()
+    await vi.waitFor(() => expect(closeResources).toHaveBeenCalledTimes(1))
+    expect(order).toEqual(['invalidate', 'dispatcher', 'resources'])
+    expect(onTerminated).not.toHaveBeenCalled()
+
+    resourceBarrier.resolve()
+    await vi.waitFor(() => expect(harness.child.forceKillCalls).toBe(1))
+    expect(onTerminated).not.toHaveBeenCalled()
+
+    harness.child.emitExit()
+    await vi.waitFor(() => expect(onTerminated).toHaveBeenCalledTimes(1))
+    expect(order).toEqual([
+      'invalidate',
+      'dispatcher',
+      'resources',
+      'terminated:PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION'
+    ])
+    expect(onTerminated).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION',
+      pluginName: 'plugin.alpha',
+      activationGeneration: 3
+    })
+    expect(JSON.stringify(onTerminated.mock.calls)).not.toMatch(
+      /private|activation-key|host-handle/
+    )
+    expect(harness.onCrash).not.toHaveBeenCalled()
+    await harness.host.stop()
+    expect(onTerminated).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -1192,6 +1933,7 @@ describe('PluginRuntimeHost cancellation and protocol failure', () => {
     expect(harness.invalidateAuthority).toHaveBeenCalledTimes(1)
     expect(harness.closeResources).toHaveBeenCalledTimes(1)
     expect(harness.onCrash).toHaveBeenCalledTimes(1)
+    expect(harness.onTerminated).not.toHaveBeenCalled()
     expect(harness.onCrash).toHaveBeenCalledWith({
       code: 'PLUGIN_RUNTIME_HOST_CRASHED',
       pluginName: 'plugin.alpha',
@@ -1219,6 +1961,7 @@ describe('PluginRuntimeHost cancellation and protocol failure', () => {
       pluginName: 'plugin.alpha',
       activationGeneration: 3
     })
+    expect(harness.onTerminated).not.toHaveBeenCalled()
     expect(JSON.stringify(harness.onCrash.mock.calls)).not.toMatch(
       /do-not-log|private|activation-key|host-handle/
     )
@@ -1236,6 +1979,7 @@ describe('PluginRuntimeHost termination barrier', () => {
     expect(harness.child.forceKillCalls).toBe(0)
     expect(harness.events).toEqual(['invalidate', 'close-resources', 'exit'])
     expect(harness.host.state).toBe('closed')
+    expect(harness.onTerminated).not.toHaveBeenCalled()
   })
 
   it('waits for the real exit event after the graceful deadline and forceKill promise', async () => {

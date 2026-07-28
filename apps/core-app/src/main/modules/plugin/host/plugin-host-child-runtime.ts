@@ -1,15 +1,19 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes, randomUUID } from 'node:crypto'
+import { types as utilTypes } from 'node:util'
 import vm from 'node:vm'
 import {
   DEFAULT_HOST_WIRE_LIMITS,
   decodeHostWireValue,
   encodeHostWireValue,
-  type HostWireLimits
+  type HostWireLimits,
+  type HostWireResourceDescriptor
 } from './plugin-host-wire-codec'
 import {
   PLUGIN_HOST_CAPABILITIES,
   PLUGIN_HOST_LIFECYCLE_METHODS,
   type PluginHostCapability,
+  type PluginHostCapabilityDeclaration,
   type PluginHostLifecycleMethod
 } from './plugin-host-wire'
 
@@ -47,7 +51,12 @@ export interface PluginHostLoadSnapshot {
 export interface PluginHostLoadPayload {
   readonly scriptContent: string
   readonly snapshot: PluginHostLoadSnapshot
-  readonly capabilityManifest: readonly PluginHostCapability[]
+  readonly capabilityManifest: readonly PluginHostCapabilityDeclaration[]
+  readonly callbackLimits: {
+    readonly maxCallbacks: number
+    readonly maxConcurrentCallbacks: number
+    readonly maxResources: number
+  }
 }
 
 interface ContextTransportNode {
@@ -61,6 +70,8 @@ interface ContextTransportNode {
     | 'object'
     | 'bytes'
     | 'error'
+    | 'callback'
+    | 'resource'
   readonly value?: unknown
 }
 
@@ -88,31 +99,44 @@ interface ContextBridge {
   parseUrl(input: string, base?: string): string
   randomBytes(length: number): number[]
   randomUUID(): string
-  invokeCapability(capability: string, payloadJson: string): Promise<string>
+  invokeCapability(capability: string, payloadJson: string, callbacks: unknown[]): Promise<string>
+  disposeResource(id: string, kind: string): Promise<void>
 }
 
 export interface PluginPreludeLifecycleCall {
   readonly promise: Promise<unknown>
+  readonly completion: Promise<void>
   cancel(): void
 }
 
 export interface PluginPreludeRuntime {
   readonly methods: readonly PluginHostLifecycleMethod[]
   callLifecycle(method: PluginHostLifecycleMethod, payload: unknown): PluginPreludeLifecycleCall
+  callCallback(callback: () => unknown): PluginPreludeLifecycleCall
   shutdown(): void
 }
 
 export interface LoadPluginPreludeOptions {
   limits?: Partial<HostWireLimits>
   onUnhandledError?: () => void
-  invokeCapability?: (capability: PluginHostCapability, payload: unknown) => Promise<unknown>
+  invokeCapability?: (
+    capability: PluginHostCapability,
+    payload: unknown,
+    scopeId?: number
+  ) => Promise<unknown>
+  cancelCapabilityScope?: (scopeId: number) => void
+  releaseCapabilityScope?: (scopeId: number) => void
   cancelCapabilities?: () => void
+  inspectResource?: (value: unknown) => HostWireResourceDescriptor | null
+  disposeResource?: (id: string, kind: HostWireResourceDescriptor['kind']) => Promise<void>
 }
 
 const CAPABILITIES = new Set<string>(PLUGIN_HOST_CAPABILITIES)
 const LIFECYCLE_METHODS = new Set<string>(PLUGIN_HOST_LIFECYCLE_METHODS)
 const FORBIDDEN_SNAPSHOT_KEYS = new Set(['__proto__', 'prototype', 'constructor', '__tuffHostWire'])
 const IDENTIFIER_PATTERN = /^[a-z0-9_-]+$/i
+const CALLBACK_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/
+const FORBIDDEN_CALLBACK_FIELDS = new Set(['__proto__', 'prototype', 'constructor', 'then'])
 const MAX_PLATFORM_FIELD_LENGTH = 32
 const MAX_CONTEXT_JSON_EXPANSION = 8
 
@@ -186,6 +210,41 @@ function exactRecord(value: unknown, keys: readonly string[]): Record<string, un
   return value as Record<string, unknown>
 }
 
+function snapshotCallbackFields(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value) as unknown as PropertyDescriptorMap
+  const lengthDescriptor = descriptors.length
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
+  if (!Number.isSafeInteger(length) || Number(length) < 0 || Number(length) > 64) {
+    throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
+  }
+  const allowedKeys = new Set<PropertyKey>(['length'])
+  const fields: string[] = []
+  for (let index = 0; index < Number(length); index += 1) {
+    const key = String(index)
+    allowedKeys.add(key)
+    const descriptor = descriptors[key]
+    const field = descriptor && 'value' in descriptor ? descriptor.value : undefined
+    if (
+      !descriptor?.enumerable ||
+      typeof field !== 'string' ||
+      !CALLBACK_FIELD_PATTERN.test(field) ||
+      FORBIDDEN_CALLBACK_FIELDS.has(field) ||
+      fields.includes(field)
+    ) {
+      throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
+    }
+    fields.push(field)
+  }
+  if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) {
+    throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
+  }
+  return Object.freeze(fields)
+}
+
 function snapshotJsonValue(value: unknown): PluginHostSnapshotValue {
   if (value === null || typeof value === 'boolean' || typeof value === 'string') return value
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -218,7 +277,8 @@ export function parsePluginHostLoadPayload(
   const normalized = exactRecord(normalizedWireValue(value, limits), [
     'scriptContent',
     'snapshot',
-    'capabilityManifest'
+    'capabilityManifest',
+    'callbackLimits'
   ])
   if (typeof normalized.scriptContent !== 'string') {
     throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
@@ -245,17 +305,45 @@ export function parsePluginHostLoadPayload(
     throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
   }
   const seenCapabilities = new Set<string>()
-  const capabilityManifest = normalized.capabilityManifest.map((capability) => {
+  const capabilityManifest = normalized.capabilityManifest.map((entry) => {
+    const declaration = exactRecord(entry, ['id', 'callbackLifetime', 'callbackFields'])
+    const capability = declaration.id
+    const callbackLifetime = declaration.callbackLifetime
+    const callbackFields = snapshotCallbackFields(declaration.callbackFields)
     if (
       typeof capability !== 'string' ||
       !CAPABILITIES.has(capability) ||
-      seenCapabilities.has(capability)
+      seenCapabilities.has(capability) ||
+      (callbackLifetime !== 'transient' && callbackLifetime !== 'resource')
     ) {
       throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
     }
     seenCapabilities.add(capability)
-    return capability as PluginHostCapability
+    return Object.freeze({
+      id: capability as PluginHostCapability,
+      callbackLifetime,
+      callbackFields
+    })
   })
+
+  const callbackLimits = exactRecord(normalized.callbackLimits, [
+    'maxCallbacks',
+    'maxConcurrentCallbacks',
+    'maxResources'
+  ])
+  for (const [key, maximum] of [
+    ['maxCallbacks', 64],
+    ['maxConcurrentCallbacks', 16],
+    ['maxResources', 64]
+  ] as const) {
+    if (
+      !Number.isSafeInteger(callbackLimits[key]) ||
+      Number(callbackLimits[key]) < 1 ||
+      Number(callbackLimits[key]) > maximum
+    ) {
+      throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
+    }
+  }
 
   return Object.freeze({
     scriptContent: normalized.scriptContent,
@@ -264,7 +352,12 @@ export function parsePluginHostLoadPayload(
       arch: snapshot.arch as string,
       manifest: manifest as Readonly<Record<string, PluginHostSnapshotValue>>
     }),
-    capabilityManifest: Object.freeze(capabilityManifest)
+    capabilityManifest: Object.freeze(capabilityManifest),
+    callbackLimits: Object.freeze({
+      maxCallbacks: Number(callbackLimits.maxCallbacks),
+      maxConcurrentCallbacks: Number(callbackLimits.maxConcurrentCallbacks),
+      maxResources: Number(callbackLimits.maxResources)
+    })
   })
 }
 
@@ -347,7 +440,8 @@ function valueToContextNode(
   limits: HostWireLimits,
   ancestors = new WeakSet<object>(),
   budget = new ContextTransportBudget(limits),
-  depth = 0
+  depth = 0,
+  inspectResource?: (value: unknown) => HostWireResourceDescriptor | null
 ): ContextTransportNode {
   budget.enter(depth)
   if (value === undefined) {
@@ -373,6 +467,13 @@ function valueToContextNode(
   if (!value || typeof value !== 'object') {
     throw new PluginHostChildError('PLUGIN_HOST_CHILD_LIFECYCLE_PAYLOAD_INVALID')
   }
+  const resource = inspectResource?.(value)
+  if (resource) {
+    budget.addMembers(2)
+    budget.addString(resource.id)
+    budget.addString(resource.kind)
+    return { type: 'resource', value: resource }
+  }
   if (ancestors.has(value)) {
     throw new PluginHostChildError('PLUGIN_HOST_CHILD_LIFECYCLE_PAYLOAD_INVALID')
   }
@@ -391,7 +492,9 @@ function valueToContextNode(
       budget.addMembers(value.length)
       return {
         type: 'array',
-        value: value.map((entry) => valueToContextNode(entry, limits, ancestors, budget, depth + 1))
+        value: value.map((entry) =>
+          valueToContextNode(entry, limits, ancestors, budget, depth + 1, inspectResource)
+        )
       }
     }
     const prototype = Object.getPrototypeOf(value)
@@ -411,7 +514,7 @@ function valueToContextNode(
       budget.addString(key)
       entries.push([
         key,
-        valueToContextNode(descriptor.value, limits, ancestors, budget, depth + 1)
+        valueToContextNode(descriptor.value, limits, ancestors, budget, depth + 1, inspectResource)
       ])
     }
     return { type: 'object', value: entries }
@@ -420,11 +523,18 @@ function valueToContextNode(
   }
 }
 
+interface ContextNodeDecodeOptions {
+  resolveCallback?: (index: number) => Callback
+}
+
+type Callback = (...args: unknown[]) => unknown
+
 function contextNodeToValue(
   node: unknown,
   limits: HostWireLimits,
   budget = new ContextTransportBudget(limits),
-  depth = 0
+  depth = 0,
+  options: ContextNodeDecodeOptions = {}
 ): unknown {
   budget.enter(depth)
   const record = exactRecord(
@@ -461,7 +571,9 @@ function contextNodeToValue(
     case 'array':
       if (!Array.isArray(record.value)) break
       budget.addMembers(record.value.length)
-      return record.value.map((entry) => contextNodeToValue(entry, limits, budget, depth + 1))
+      return record.value.map((entry) =>
+        contextNodeToValue(entry, limits, budget, depth + 1, options)
+      )
     case 'object': {
       if (!Array.isArray(record.value)) break
       const output: Record<string, unknown> = {}
@@ -476,9 +588,16 @@ function contextNodeToValue(
         }
         budget.addMembers(1)
         budget.addString(entry[0])
-        output[entry[0]] = contextNodeToValue(entry[1], limits, budget, depth + 1)
+        output[entry[0]] = contextNodeToValue(entry[1], limits, budget, depth + 1, options)
       }
       return output
+    }
+    case 'callback': {
+      if (!Number.isSafeInteger(record.value) || Number(record.value) < 0) break
+      budget.addBytes(16)
+      const callback = options.resolveCallback?.(Number(record.value))
+      if (typeof callback !== 'function') break
+      return callback
     }
     case 'error': {
       const errorRecord = exactRecord(record.value, ['message', 'code'])
@@ -515,17 +634,25 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const objectGetPrototypeOf = Object.getPrototypeOf
   const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
   const objectDefineProperty = Object.defineProperty
+  const objectCreate = Object.create
   const objectPrototype = Object.prototype
   const arrayConstructor = Array
   const arrayIsArray = Array.isArray
   const arrayFrom = Array.from
   const arrayMap = Array.prototype.map
+  const arrayPush = Array.prototype.push
   const arrayBufferConstructor = ArrayBuffer
   const arrayBufferIsView = ArrayBuffer.isView
   const uint8ArrayConstructor = Uint8Array
   const errorConstructor = Error
   const typeErrorConstructor = TypeError
   const weakSetConstructor = WeakSet
+  const setConstructor = Set
+  const setHas = Set.prototype.has
+  const mapConstructor = Map
+  const mapGet = Map.prototype.get
+  const hasSetValue = (set, value) => reflectApply(setHas, set, [value])
+  const getMapValue = (map, value) => reflectApply(mapGet, map, [value])
   const numberIsFinite = Number.isFinite
   const stringConstructor = String
   const stringSlice = String.prototype.slice
@@ -615,17 +742,59 @@ const CONTEXT_BOOTSTRAP = String.raw`
         }
         return output
       }
+      case 'resource': {
+        const descriptor = node.value
+        if (!descriptor || typeof descriptor !== 'object' ||
+            typeof descriptor.id !== 'string' || typeof descriptor.kind !== 'string') {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        budget.addMembers(3)
+        budget.addString(descriptor.id)
+        budget.addString(descriptor.kind)
+        let disposed = false
+        const resource = objectCreate(null)
+        const dispose = () => {
+          if (disposed) return resolvePromise()
+          disposed = true
+          return thenPromise(resolvePromise(), () => bridge.disposeResource(descriptor.id, descriptor.kind))
+        }
+        objectDefineProperty(resource, 'id', { value: descriptor.id, enumerable: true })
+        objectDefineProperty(resource, 'kind', { value: descriptor.kind, enumerable: true })
+        objectDefineProperty(resource, 'dispose', { value: objectFreeze(dispose), enumerable: true })
+        return objectFreeze(resource)
+      }
       default: throw new typeErrorConstructor('PLUGIN_HOST_CHILD_LIFECYCLE_PAYLOAD_INVALID')
     }
   }
 
-  const encodeNode = (value, budget = createBudget(), ancestors = new weakSetConstructor(), depth = 0) => {
+  const encodeNode = (
+    value,
+    budget = createBudget(),
+    ancestors = new weakSetConstructor(),
+    depth = 0,
+    callbacks = null,
+    callbackFields = null,
+    callbackAllowed = false
+  ) => {
     budget.enter(depth)
     if (value === undefined) { budget.addBytes(24); return { type: 'undefined' } }
     if (value === null) { budget.addBytes(8); return { type: 'null' } }
     if (typeof value === 'boolean') { budget.addBytes(8); return { type: 'boolean', value } }
     if (typeof value === 'string') { budget.addString(value); return { type: 'string', value } }
     if (typeof value === 'number' && numberIsFinite(value)) { budget.addBytes(8); return { type: 'number', value } }
+    if (typeof value === 'function') {
+      if (
+        !callbacks ||
+        !callbackAllowed ||
+        callbacks.length >= snapshot.callbackLimits.maxCallbacks
+      ) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      budget.addMembers(1)
+      const index = callbacks.length
+      callbacks.push(value)
+      return { type: 'callback', value: index }
+    }
     if (typeof value !== 'object') throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
     if (ancestors.has(value)) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
     ancestors.add(value)
@@ -649,7 +818,12 @@ const CONTEXT_BOOTSTRAP = String.raw`
       }
       if (arrayIsArray(value)) {
         budget.addMembers(value.length)
-        return { type: 'array', value: mapArray(value, (entry) => encodeNode(entry, budget, ancestors, depth + 1)) }
+        return {
+          type: 'array',
+          value: mapArray(value, (entry) =>
+            encodeNode(entry, budget, ancestors, depth + 1, callbacks, callbackFields, false)
+          )
+        }
       }
       const prototype = objectGetPrototypeOf(value)
       if (prototype !== objectPrototype && prototype !== null) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
@@ -662,7 +836,18 @@ const CONTEXT_BOOTSTRAP = String.raw`
         if (!descriptor || !descriptor.enumerable || !('value' in descriptor)) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
         budget.addMembers(1)
         budget.addString(key)
-        entries.push([key, encodeNode(descriptor.value, budget, ancestors, depth + 1)])
+        entries.push([
+          key,
+          encodeNode(
+            descriptor.value,
+            budget,
+            ancestors,
+            depth + 1,
+            callbacks,
+            callbackFields,
+            depth === 0 && callbackFields !== null && hasSetValue(callbackFields, key)
+          )
+        ])
       }
       return { type: 'object', value: entries }
     } finally {
@@ -761,23 +946,40 @@ const CONTEXT_BOOTSTRAP = String.raw`
     objectDefineProperty(error, 'code', { value: code, enumerable: true })
     return error
   }
-  const fixedCapabilities = new Set(snapshot.fixedCapabilities)
-  const declaredCapabilities = new Set(snapshot.capabilityManifest)
+  const fixedCapabilities = new setConstructor(snapshot.fixedCapabilities)
+  const declaredCapabilities = new mapConstructor(
+    mapArray(snapshot.capabilityManifest, (entry) => [
+      entry.id,
+      objectFreeze({ callbackFields: new setConstructor(entry.callbackFields) })
+    ])
+  )
   const invokeCapability = (capability, payload) => {
-    if (typeof capability !== 'string' || !fixedCapabilities.has(capability)) {
+    if (typeof capability !== 'string' || !hasSetValue(fixedCapabilities, capability)) {
       return rejectPromise(createCapabilityError('PLUGIN_HOST_UNKNOWN_CAPABILITY'))
     }
-    if (!declaredCapabilities.has(capability)) {
+    const declaration = getMapValue(declaredCapabilities, capability)
+    if (!declaration) {
       return rejectPromise(createCapabilityError('PLUGIN_HOST_CAPABILITY_NOT_DECLARED'))
     }
     let payloadJson
+    const callbacks = []
     try {
-      payloadJson = stringifyJson(encodeNode(payload))
+      payloadJson = stringifyJson(
+        encodeNode(
+          payload,
+          undefined,
+          undefined,
+          0,
+          callbacks,
+          declaration.callbackFields,
+          false
+        )
+      )
     } catch {
       return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_PAYLOAD_INVALID'))
     }
     const invoked = thenPromise(resolvePromise(), () =>
-      bridge.invokeCapability(capability, payloadJson)
+      bridge.invokeCapability(capability, payloadJson, callbacks)
     )
     return thenPromise(invoked, (outcomeJson) => {
         let outcome
@@ -805,6 +1007,191 @@ const CONTEXT_BOOTSTRAP = String.raw`
     enumerable: true
   })
   objectFreeze(hostCapabilities)
+
+  const hasDeclaredCapability = (id) => Boolean(getMapValue(declaredCapabilities, id))
+  const hasFeatureFacade = [
+    'feature.items.push',
+    'feature.items.update',
+    'feature.items.remove',
+    'feature.items.clear',
+    'feature.items.list'
+  ].some(hasDeclaredCapability)
+  const hasClipboardFacade = [
+    'clipboard.read',
+    'clipboard.write',
+    'clipboard.copy-and-paste'
+  ].some(hasDeclaredCapability)
+  const defineFacadeMethod = (target, name, callback) => {
+    objectDefineProperty(target, name, {
+      value: objectFreeze(callback),
+      enumerable: true
+    })
+  }
+  const cloneLocalDto = (value) => decodeNode(encodeNode(value))
+  const mapCapabilityResult = (promise, select) => thenPromise(promise, select)
+
+  const featureFacade = objectCreate(null)
+  if (hasDeclaredCapability('feature.items.push')) {
+    defineFacadeMethod(featureFacade, 'pushItems', (items) =>
+      mapCapabilityResult(
+        invokeCapability('feature.items.push', { scope: 'active-feature', items }),
+        () => undefined
+      )
+    )
+  }
+  if (hasDeclaredCapability('feature.items.update')) {
+    defineFacadeMethod(featureFacade, 'updateItem', (id, patch) =>
+      mapCapabilityResult(
+        invokeCapability('feature.items.update', {
+          scope: 'active-feature',
+          id: stringConstructor(id),
+          patch
+        }),
+        (result) => result.updated === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('feature.items.remove')) {
+    defineFacadeMethod(featureFacade, 'removeItem', (id) =>
+      mapCapabilityResult(
+        invokeCapability('feature.items.remove', { id: stringConstructor(id) }),
+        (result) => result.removed === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('feature.items.clear')) {
+    defineFacadeMethod(featureFacade, 'clearItems', () =>
+      mapCapabilityResult(invokeCapability('feature.items.clear', null), () => undefined)
+    )
+  }
+  if (hasDeclaredCapability('feature.items.list')) {
+    defineFacadeMethod(featureFacade, 'getItems', () =>
+      mapCapabilityResult(invokeCapability('feature.items.list', null), (result) => result.items)
+    )
+  }
+  objectFreeze(featureFacade)
+  const pluginFacade = objectCreate(null)
+  objectDefineProperty(pluginFacade, 'feature', { value: featureFacade, enumerable: true })
+  objectFreeze(pluginFacade)
+
+  const clipboardFacade = objectCreate(null)
+  if (hasDeclaredCapability('clipboard.read')) {
+    defineFacadeMethod(clipboardFacade, 'readText', () =>
+      mapCapabilityResult(
+        invokeCapability('clipboard.read', { op: 'text' }),
+        (result) => result.text
+      )
+    )
+    defineFacadeMethod(clipboardFacade, 'read', () =>
+      invokeCapability('clipboard.read', { op: 'snapshot' })
+    )
+  }
+  if (hasDeclaredCapability('clipboard.write')) {
+    defineFacadeMethod(clipboardFacade, 'writeText', (text) =>
+      mapCapabilityResult(
+        invokeCapability('clipboard.write', {
+          op: 'write',
+          content: { text: stringConstructor(text) }
+        }),
+        () => undefined
+      )
+    )
+    defineFacadeMethod(clipboardFacade, 'clear', () =>
+      mapCapabilityResult(invokeCapability('clipboard.write', { op: 'clear' }), () => undefined)
+    )
+  }
+  if (hasDeclaredCapability('clipboard.copy-and-paste')) {
+    defineFacadeMethod(clipboardFacade, 'copyAndPaste', (options) =>
+      mapCapabilityResult(
+        invokeCapability('clipboard.copy-and-paste', options),
+        (result) => result.success === true
+      )
+    )
+  }
+  objectFreeze(clipboardFacade)
+
+  const loggerFacade = objectCreate(null)
+  const localLog = (...values) => {
+    for (const value of values) {
+      if (typeof value !== 'string') {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_LOG_INVALID')
+      }
+      if (bridge.utf8ByteLength(value) > 4096) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_LOG_INVALID')
+      }
+    }
+  }
+  for (const level of ['debug', 'info', 'warn', 'error']) {
+    defineFacadeMethod(loggerFacade, level, localLog)
+  }
+  objectFreeze(loggerFacade)
+
+  class ChildTuffItemBuilder {
+    #item
+    #basic
+    constructor(id) {
+      this.#item = objectCreate(null)
+      this.#basic = objectCreate(null)
+      this.#item.id = stringConstructor(id)
+    }
+    setSource(type, id, name) {
+      const source = objectCreate(null)
+      source.type = stringConstructor(type)
+      source.id = stringConstructor(id)
+      if (name !== undefined && name !== '') source.name = stringConstructor(name)
+      this.#item.source = source
+      return this
+    }
+    setTitle(title) {
+      this.#basic.title = stringConstructor(title)
+      return this
+    }
+    setSubtitle(subtitle) {
+      this.#basic.subtitle = stringConstructor(subtitle)
+      return this
+    }
+    setIcon(icon) {
+      this.#basic.icon = cloneLocalDto(icon)
+      return this
+    }
+    setMeta(meta) {
+      const next = cloneLocalDto(meta)
+      if (!next || typeof next !== 'object' || arrayIsArray(next)) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      const merged = objectCreate(null)
+      const current = this.#item.meta
+      if (current) {
+        for (const key of objectKeys(current)) merged[key] = current[key]
+      }
+      for (const key of objectKeys(next)) merged[key] = next[key]
+      this.#item.meta = merged
+      return this
+    }
+    createAndAddAction(id, type, label, payload) {
+      const action = objectCreate(null)
+      action.id = stringConstructor(id)
+      action.type = stringConstructor(type)
+      action.label = stringConstructor(label)
+      action.primary = !this.#item.actions || this.#item.actions.length === 0
+      if (payload !== undefined) action.payload = cloneLocalDto(payload)
+      if (!this.#item.actions) this.#item.actions = []
+      reflectApply(arrayPush, this.#item.actions, [action])
+      return this
+    }
+    build() {
+      if (!this.#item.id || !this.#item.source || !this.#basic.title) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_ITEM_INVALID')
+      }
+      const item = cloneLocalDto(this.#item)
+      item.render = objectCreate(null)
+      item.render.mode = 'default'
+      item.render.basic = cloneLocalDto(this.#basic)
+      return deepFreeze(item)
+    }
+  }
+  objectFreeze(ChildTuffItemBuilder.prototype)
+  objectFreeze(ChildTuffItemBuilder)
 
   Object.defineProperties(globalThis, {
     setTimeout: {
@@ -837,6 +1224,13 @@ const CONTEXT_BOOTSTRAP = String.raw`
     platform: { value: deepFreeze({ platform: snapshot.platform, arch: snapshot.arch }) },
     manifest: { value: deepFreeze(snapshot.manifest) },
     hostCapabilities: { value: hostCapabilities },
+    plugin: { value: hasFeatureFacade ? pluginFacade : undefined, configurable: true },
+    clipboard: { value: hasClipboardFacade ? clipboardFacade : undefined, configurable: true },
+    logger: { value: loggerFacade, configurable: true },
+    TuffItemBuilder: {
+      value: hasDeclaredCapability('feature.items.push') ? ChildTuffItemBuilder : undefined,
+      configurable: true
+    },
     module: { value: { exports: {} }, writable: false },
     exports: { value: undefined, writable: true },
     __tuffCreateAbortController: { value: () => new TuffAbortController(), configurable: true },
@@ -848,6 +1242,13 @@ const CONTEXT_BOOTSTRAP = String.raw`
         () => reflectApply(fn, undefined, [...args, signal])
       ),
       configurable: true
+    },
+    __tuffInvokeCallback: {
+      value: (fn, args) => thenPromise(
+        resolvePromise(),
+        () => reflectApply(fn, undefined, args)
+      ),
+      configurable: true
     }
   })
   globalThis.exports = globalThis.module.exports
@@ -857,7 +1258,10 @@ const CONTEXT_BOOTSTRAP = String.raw`
 function createContextBridge(
   timers: TimerRegistry,
   options: LoadPluginPreludeOptions,
-  limits: HostWireLimits
+  limits: HostWireLimits,
+  maxCallbacks: number,
+  wrapContextCallback: (callback: Callback) => Callback,
+  currentCapabilityScope: () => number | undefined
 ): ContextBridge {
   const stableCapabilityCode = (error: unknown): string => {
     if (!error || typeof error !== 'object') return 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'
@@ -905,7 +1309,13 @@ function createContextBridge(
     },
     randomBytes: (length) => Array.from(randomBytes(length)),
     randomUUID,
-    invokeCapability: async (capability, payloadJson) => {
+    disposeResource: async (id, kind) => {
+      if (typeof id !== 'string' || typeof kind !== 'string' || !options.disposeResource) {
+        throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      await options.disposeResource(id, kind as HostWireResourceDescriptor['kind'])
+    },
+    invokeCapability: async (capability, payloadJson, callbacks) => {
       if (!options.invokeCapability) {
         return JSON.stringify({
           ok: false,
@@ -916,11 +1326,56 @@ function createContextBridge(
       try {
         if (
           typeof payloadJson !== 'string' ||
-          payloadJson.length > limits.maxBytes * MAX_CONTEXT_JSON_EXPANSION
+          payloadJson.length > limits.maxBytes * MAX_CONTEXT_JSON_EXPANSION ||
+          !Array.isArray(callbacks) ||
+          utilTypes.isProxy(callbacks) ||
+          callbacks.length > maxCallbacks
         ) {
           throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
         }
-        payload = contextNodeToValue(JSON.parse(payloadJson), limits)
+        const callbackDescriptors = Object.getOwnPropertyDescriptors(callbacks)
+        const lengthDescriptor = callbackDescriptors['length'] as PropertyDescriptor | undefined
+        if (
+          !lengthDescriptor ||
+          !('value' in lengthDescriptor) ||
+          lengthDescriptor.value !== callbacks.length
+        ) {
+          throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        const allowedCallbackKeys = new Set<PropertyKey>(['length'])
+        for (let index = 0; index < callbacks.length; index += 1) {
+          allowedCallbackKeys.add(String(index))
+        }
+        if (Reflect.ownKeys(callbackDescriptors).some((key) => !allowedCallbackKeys.has(key))) {
+          throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        const wrappedCallbacks: Callback[] = []
+        for (let index = 0; index < callbacks.length; index += 1) {
+          const descriptor = callbackDescriptors[String(index)]
+          const callback = descriptor && 'value' in descriptor ? descriptor.value : undefined
+          if (
+            !descriptor?.enumerable ||
+            typeof callback !== 'function' ||
+            utilTypes.isProxy(callback) ||
+            /^class\s/.test(Function.prototype.toString.call(callback))
+          ) {
+            throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+          }
+          wrappedCallbacks.push(wrapContextCallback(callback))
+        }
+        const usedCallbacks = new Set<number>()
+        payload = contextNodeToValue(JSON.parse(payloadJson), limits, undefined, 0, {
+          resolveCallback(index) {
+            if (index >= wrappedCallbacks.length || usedCallbacks.has(index)) {
+              throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+            }
+            usedCallbacks.add(index)
+            return wrappedCallbacks[index]
+          }
+        })
+        if (usedCallbacks.size !== wrappedCallbacks.length) {
+          throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
       } catch {
         return JSON.stringify({
           ok: false,
@@ -928,9 +1383,23 @@ function createContextBridge(
         })
       }
       try {
-        const result = await options.invokeCapability(capability as PluginHostCapability, payload)
+        const result = await options.invokeCapability(
+          capability as PluginHostCapability,
+          payload,
+          currentCapabilityScope()
+        )
         try {
-          return JSON.stringify({ ok: true, value: valueToContextNode(result, limits) })
+          return JSON.stringify({
+            ok: true,
+            value: valueToContextNode(
+              result,
+              limits,
+              undefined,
+              undefined,
+              0,
+              options.inspectResource
+            )
+          })
         } catch {
           return JSON.stringify({
             ok: false,
@@ -958,9 +1427,46 @@ export function loadPluginPrelude(
   const limits = contextLimits(options.limits)
   const payload = parsePluginHostLoadPayload(value, limits)
   const timers = new TimerRegistry(() => options.onUnhandledError?.())
+  const lifecycleScopes = new AsyncLocalStorage<number>()
+  const activeCapabilityScopes = new Set<number>()
+  let nextLifecycleScopeId = 0
+  let createAbortController!: () => ContextAbortController
+  let decodeContextValue!: (json: string) => unknown
+  let encodeContextValue!: (value: unknown) => string
+  let invokeLifecycleInContext!: (
+    fn: (...args: unknown[]) => unknown,
+    args: unknown[],
+    signal: ContextAbortSignal
+  ) => unknown
+  let invokeCallbackInContext!: (fn: Callback, args: unknown[]) => unknown
+  const wrapContextCallback =
+    (callback: Callback): Callback =>
+    async (...args: unknown[]): Promise<unknown> => {
+      const transport = valueToContextNode(args, limits)
+      const contextArgs = decodeContextValue(JSON.stringify(transport)) as unknown[]
+      const result = await invokeCallbackInContext(callback, contextArgs)
+      return contextNodeToValue(JSON.parse(encodeContextValue(result)), limits)
+    }
   const sandbox = Object.create(null) as Record<string, unknown>
   Object.defineProperties(sandbox, {
-    __tuffHostBridge: { value: createContextBridge(timers, options, limits), configurable: true },
+    __tuffHostBridge: {
+      value: createContextBridge(
+        timers,
+        options,
+        limits,
+        payload.callbackLimits.maxCallbacks,
+        wrapContextCallback,
+        () => {
+          const scopeId = lifecycleScopes.getStore()
+          if (scopeId === undefined) return undefined
+          if (!activeCapabilityScopes.has(scopeId)) {
+            throw new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED')
+          }
+          return scopeId
+        }
+      ),
+      configurable: true
+    },
     __tuffSnapshotJson: {
       value: JSON.stringify({
         platform: payload.snapshot.platform,
@@ -968,7 +1474,8 @@ export function loadPluginPrelude(
         manifest: payload.snapshot.manifest,
         capabilityManifest: payload.capabilityManifest,
         fixedCapabilities: PLUGIN_HOST_CAPABILITIES,
-        wireLimits: limits
+        wireLimits: limits,
+        callbackLimits: payload.callbackLimits
       }),
       configurable: true
     }
@@ -978,14 +1485,6 @@ export function loadPluginPrelude(
     codeGeneration: { strings: false, wasm: false }
   })
 
-  let createAbortController: () => ContextAbortController
-  let decodeContextValue: (json: string) => unknown
-  let encodeContextValue: (value: unknown) => string
-  let invokeLifecycleInContext: (
-    fn: (...args: unknown[]) => unknown,
-    args: unknown[],
-    signal: ContextAbortSignal
-  ) => unknown
   let objectPrototype: object
   try {
     vm.runInContext(CONTEXT_BOOTSTRAP, context, { filename: 'plugin-host-bootstrap.js' })
@@ -993,9 +1492,10 @@ export function loadPluginPrelude(
     decodeContextValue = vm.runInContext('globalThis.__tuffDecodeContextValue', context)
     encodeContextValue = vm.runInContext('globalThis.__tuffEncodeContextValue', context)
     invokeLifecycleInContext = vm.runInContext('globalThis.__tuffInvokeLifecycle', context)
+    invokeCallbackInContext = vm.runInContext('globalThis.__tuffInvokeCallback', context)
     objectPrototype = vm.runInContext('Object.prototype', context)
     vm.runInContext(
-      'delete globalThis.__tuffCreateAbortController; delete globalThis.__tuffDecodeContextValue; delete globalThis.__tuffEncodeContextValue; delete globalThis.__tuffInvokeLifecycle',
+      'delete globalThis.__tuffCreateAbortController; delete globalThis.__tuffDecodeContextValue; delete globalThis.__tuffEncodeContextValue; delete globalThis.__tuffInvokeLifecycle; delete globalThis.__tuffInvokeCallback',
       context
     )
     vm.runInContext(payload.scriptContent, context, { filename: 'plugin-prelude.js' })
@@ -1045,6 +1545,7 @@ export function loadPluginPrelude(
       if (closed) {
         return {
           promise: Promise.reject(new PluginHostChildError('PLUGIN_HOST_CHILD_CLOSED')),
+          completion: Promise.resolve(),
           cancel() {}
         }
       }
@@ -1053,6 +1554,7 @@ export function loadPluginPrelude(
           promise: Promise.reject(
             new PluginHostChildError('PLUGIN_HOST_CHILD_LIFECYCLE_PAYLOAD_INVALID')
           ),
+          completion: Promise.resolve(),
           cancel() {}
         }
       }
@@ -1066,10 +1568,13 @@ export function loadPluginPrelude(
           promise: Promise.reject(
             stableChildError(error, 'PLUGIN_HOST_CHILD_LIFECYCLE_PAYLOAD_INVALID')
           ),
+          completion: Promise.resolve(),
           cancel() {}
         }
       }
 
+      const scopeId = ++nextLifecycleScopeId
+      activeCapabilityScopes.add(scopeId)
       const controller = createAbortController()
       let cancelled = false
       let rejectCancellation!: (error: PluginHostChildError) => void
@@ -1081,7 +1586,7 @@ export function loadPluginPrelude(
           if (cancelled) return
           cancelled = true
           try {
-            options.cancelCapabilities?.()
+            options.cancelCapabilityScope?.(scopeId)
           } catch {
             options.onUnhandledError?.()
           }
@@ -1097,7 +1602,9 @@ export function loadPluginPrelude(
             throw new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED')
           }
           const fn = lifecycle.get(method)
-          return fn ? invokeLifecycleInContext(fn, contextArgs, controller.signal) : undefined
+          return lifecycleScopes.run(scopeId, () =>
+            fn ? invokeLifecycleInContext(fn, contextArgs, controller.signal) : undefined
+          )
         })
         .then((result) => {
           if (cancelled || closed) throw new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED')
@@ -1111,10 +1618,75 @@ export function loadPluginPrelude(
           throw stableChildError(error, 'PLUGIN_HOST_CHILD_LIFECYCLE_FAILED')
         })
 
+      const completion = invoke
+        .then(
+          () => undefined,
+          () => undefined
+        )
+        .finally(() => {
+          activeCapabilityScopes.delete(scopeId)
+          try {
+            options.releaseCapabilityScope?.(scopeId)
+          } catch {
+            options.onUnhandledError?.()
+          }
+        })
       const promise = Promise.race([invoke, cancellation]).finally(() => {
         activeCalls.delete(handle)
       })
-      return { promise, cancel: () => handle.cancel() }
+      return { promise, completion, cancel: () => handle.cancel() }
+    },
+    callCallback(callback) {
+      if (closed || typeof callback !== 'function') {
+        return {
+          promise: Promise.reject(new PluginHostChildError('PLUGIN_HOST_CHILD_CLOSED')),
+          completion: Promise.resolve(),
+          cancel() {}
+        }
+      }
+      const scopeId = ++nextLifecycleScopeId
+      activeCapabilityScopes.add(scopeId)
+      let cancelled = false
+      let rejectCancellation!: (error: PluginHostChildError) => void
+      const cancellation = new Promise<never>((_resolve, reject) => {
+        rejectCancellation = reject
+      })
+      const handle = {
+        cancel(): void {
+          if (cancelled) return
+          cancelled = true
+          try {
+            options.cancelCapabilityScope?.(scopeId)
+          } catch {
+            options.onUnhandledError?.()
+          }
+          rejectCancellation(new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED'))
+        }
+      }
+      activeCalls.add(handle)
+      const invoke = Promise.resolve().then(() => {
+        if (cancelled || closed) {
+          throw new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED')
+        }
+        return lifecycleScopes.run(scopeId, callback)
+      })
+      const completion = invoke
+        .then(
+          () => undefined,
+          () => undefined
+        )
+        .finally(() => {
+          activeCapabilityScopes.delete(scopeId)
+          try {
+            options.releaseCapabilityScope?.(scopeId)
+          } catch {
+            options.onUnhandledError?.()
+          }
+        })
+      const promise = Promise.race([invoke, cancellation]).finally(() => {
+        activeCalls.delete(handle)
+      })
+      return { promise, completion, cancel: () => handle.cancel() }
     },
     shutdown() {
       if (closed) return
@@ -1126,6 +1698,7 @@ export function loadPluginPrelude(
       }
       for (const call of [...activeCalls]) call.cancel()
       activeCalls.clear()
+      activeCapabilityScopes.clear()
       timers.close()
     }
   }

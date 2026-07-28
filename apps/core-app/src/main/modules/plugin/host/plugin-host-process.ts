@@ -7,6 +7,8 @@ import {
   type PluginPreludeRuntime
 } from './plugin-host-child-runtime'
 import { PluginHostChildCapabilityClient } from './plugin-host-child-capabilities'
+import { PluginHostCallbackError, PluginHostChildCallbackRegistry } from './plugin-host-callbacks'
+import { PluginHostChildResourceClient } from './plugin-host-resources'
 import { takePluginHostControlPort, type PluginHostControlPortLike } from './plugin-host-bootstrap'
 import { PluginHostSession, type PluginHostPendingRequest } from './plugin-host-session'
 import { encodeHostWireValue } from './plugin-host-wire-codec'
@@ -51,10 +53,13 @@ let controlPort: UtilityMessagePort | null = null
 let session: PluginHostSession | null = null
 let runtime: PluginPreludeRuntime | null = null
 let capabilityClient: PluginHostChildCapabilityClient | null = null
+let callbackRegistry: PluginHostChildCallbackRegistry | null = null
+let resourceClient: PluginHostChildResourceClient | null = null
 let owner: HostMessageOwner | null = null
 let stopping = false
 let childRequestId = 0
 const activeLifecycle = new Map<number, PluginPreludeLifecycleCall>()
+const activeCallbacks = new Map<number, PluginPreludeLifecycleCall>()
 
 function stableError(code: string): StableHostError {
   return Object.freeze({ code })
@@ -76,10 +81,15 @@ function closeAndExit(code: number): void {
   session = null
   for (const call of activeLifecycle.values()) call.cancel()
   activeLifecycle.clear()
+  activeCallbacks.clear()
   runtime?.shutdown()
   runtime = null
   capabilityClient?.close()
   capabilityClient = null
+  callbackRegistry?.close()
+  callbackRegistry = null
+  resourceClient?.close()
+  resourceClient = null
   try {
     controlPort?.off('message', handleControlMessage)
     controlPort?.off('close', handleControlClose)
@@ -162,10 +172,37 @@ function rejectPending(pending: PluginHostPendingRequest): void {
     return
   }
   if (pending.direction !== 'main-to-child') return
+  if (pending.requestType === 'callback-call') {
+    const active = activeCallbacks.get(pending.requestId)
+    if (!active) return
+    activeCallbacks.delete(pending.requestId)
+    active.cancel()
+    void active.completion.then(() => {
+      if (stopping || !owner) return
+      send({
+        ...owner,
+        type: 'callback-result',
+        requestId: pending.requestId,
+        ok: false,
+        error: stableError('PLUGIN_HOST_CHILD_CANCELLED')
+      })
+    })
+    return
+  }
   const active = activeLifecycle.get(pending.requestId)
   if (!active) return
   activeLifecycle.delete(pending.requestId)
   active.cancel()
+  void active.completion.then(() => {
+    if (stopping || !owner) return
+    send({
+      ...owner,
+      type: 'lifecycle-result',
+      requestId: pending.requestId,
+      ok: false,
+      error: stableError('PLUGIN_HOST_CHILD_CANCELLED')
+    })
+  })
 }
 
 function initializeSession(value: unknown): void {
@@ -174,6 +211,20 @@ function initializeSession(value: unknown): void {
     session = new PluginHostSession({
       owner,
       endpoint: 'child',
+      codec: {
+        registerCallback: (resolvedOwner, callback, context) => {
+          if (!callbackRegistry || context.messageType !== 'capability-call') throw new Error()
+          return callbackRegistry.register(callback, context.requestId, resolvedOwner)
+        },
+        unregisterCallback: (resolvedOwner, id, context) => {
+          callbackRegistry?.unregister(id, context.requestId, resolvedOwner)
+        },
+        resolveResource: (_resolvedOwner, id, kind) => resourceClient?.resolve(id, kind),
+        releaseResource: (_resolvedOwner, id, kind, resource) => {
+          if (kind === 'callback' || !resourceClient?.inspect(resource)) throw new Error()
+          resourceClient.releaseFromHost(id, kind)
+        }
+      },
       onPendingRejected: rejectPending,
       onFatalViolation: () => undefined
     })
@@ -196,18 +247,41 @@ function handleLoad(message: Extract<HostWireMessage, { type: 'host-load' }>): v
   }
   try {
     const payload = parsePluginHostLoadPayload(message.payload)
+    callbackRegistry = new PluginHostChildCallbackRegistry({
+      owner,
+      maxCallbacks: payload.callbackLimits.maxCallbacks,
+      maxConcurrent: payload.callbackLimits.maxConcurrentCallbacks
+    })
+    resourceClient = new PluginHostChildResourceClient({
+      owner,
+      session: session!,
+      allocateRequestId: allocateChildRequestId,
+      postMessage: (wireMessage) => controlPort!.postMessage(wireMessage),
+      onFatalViolation: failProtocol,
+      onDisposed: (id) => callbackRegistry?.releaseResource(id),
+      maxResources: payload.callbackLimits.maxResources
+    })
     capabilityClient = new PluginHostChildCapabilityClient({
       owner,
       session: session!,
       capabilityManifest: payload.capabilityManifest,
+      callbacks: callbackRegistry,
+      resources: resourceClient,
       allocateRequestId: allocateChildRequestId,
       postMessage: (wireMessage) => controlPort!.postMessage(wireMessage),
       onFatalViolation: failProtocol
     })
     runtime = loadPluginPrelude(payload, {
-      invokeCapability: (capability, capabilityPayload) =>
-        capabilityClient!.invoke(capability, capabilityPayload),
+      invokeCapability: (capability, capabilityPayload, scopeId) =>
+        capabilityClient!.invoke(capability, capabilityPayload, scopeId),
+      cancelCapabilityScope: (scopeId) => capabilityClient?.cancelScope(scopeId),
+      releaseCapabilityScope: (scopeId) => capabilityClient?.releaseScope(scopeId),
       cancelCapabilities: () => capabilityClient?.cancelAll(),
+      inspectResource: (value) => resourceClient?.inspect(value) ?? null,
+      disposeResource: (id, kind) => {
+        if (!resourceClient) throw new Error()
+        return resourceClient.dispose(id, kind)
+      },
       onUnhandledError: () => failProtocol('PLUGIN_HOST_VIOLATION_RUNTIME')
     })
     send({
@@ -220,6 +294,10 @@ function handleLoad(message: Extract<HostWireMessage, { type: 'host-load' }>): v
   } catch (error) {
     capabilityClient?.close()
     capabilityClient = null
+    callbackRegistry?.close()
+    callbackRegistry = null
+    resourceClient?.close()
+    resourceClient = null
     send({
       ...owner,
       type: 'load-result',
@@ -275,14 +353,40 @@ function handleLifecycle(message: Extract<HostWireMessage, { type: 'lifecycle-ca
 }
 
 function handleCallback(message: Extract<HostWireMessage, { type: 'callback-call' }>): void {
-  if (!owner) return
-  send({
-    ...owner,
-    type: 'callback-result',
-    requestId: message.requestId,
-    ok: false,
-    error: stableError('PLUGIN_HOST_CHILD_CALLBACK_UNSUPPORTED')
-  })
+  if (!owner || !callbackRegistry || !runtime || !Array.isArray(message.payload)) {
+    failProtocol('PLUGIN_HOST_VIOLATION_PROTOCOL')
+    return
+  }
+  const call = runtime.callCallback(() =>
+    callbackRegistry!.invoke(message.callbackId, message.payload as unknown[], owner!)
+  )
+  activeCallbacks.set(message.requestId, call)
+  void call.promise.then(
+    (result) => {
+      if (stopping || activeCallbacks.get(message.requestId) !== call) return
+      activeCallbacks.delete(message.requestId)
+      send({
+        ...owner!,
+        type: 'callback-result',
+        requestId: message.requestId,
+        ok: true,
+        result
+      })
+    },
+    (error: unknown) => {
+      if (stopping || activeCallbacks.get(message.requestId) !== call) return
+      activeCallbacks.delete(message.requestId)
+      send({
+        ...owner!,
+        type: 'callback-result',
+        requestId: message.requestId,
+        ok: false,
+        error: stableError(
+          error instanceof PluginHostCallbackError ? error.code : 'PLUGIN_HOST_CALLBACK_FAILED'
+        )
+      })
+    }
+  )
 }
 
 function handleControlMessage(event: UtilityMessageEvent): void {
@@ -314,7 +418,14 @@ function handleControlMessage(event: UtilityMessageEvent): void {
       handleCallback(message)
       return
     case 'cancel':
+      return
     case 'resource-dispose':
+      try {
+        if (message.resourceKind === 'callback') throw new Error()
+        resourceClient?.releaseFromHost(message.resourceId, message.resourceKind)
+      } catch {
+        failProtocol('PLUGIN_HOST_VIOLATION_PROTOCOL')
+      }
       return
     case 'shutdown':
       closeAndExit(0)

@@ -17,7 +17,13 @@ import {
   type PluginRuntimeHostResourceLimits,
   type PluginRuntimeProcessFactory
 } from './plugin-runtime-host'
-import type { PluginHostCapability, PluginHostLifecycleMethod } from './plugin-host-wire'
+import { PluginHostResourceRegistry } from './plugin-host-resources'
+import {
+  PLUGIN_HOST_CAPABILITIES,
+  type PluginHostCapability,
+  type PluginHostCapabilityDeclaration,
+  type PluginHostLifecycleMethod
+} from './plugin-host-wire'
 
 export type PluginRuntimeServiceErrorCode =
   | 'PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'
@@ -67,6 +73,7 @@ export interface PluginRuntimeActivationOptions {
   activation: PluginActivationIdentity
   scriptContent: string
   snapshot: PluginRuntimeSnapshot
+  capabilityDefinitions?: readonly PluginHostCapabilityDefinition[]
   closeResources?: () => void | Promise<void>
   onCrash?: (diagnostic: PluginRuntimeCrashDiagnostic) => void
 }
@@ -101,6 +108,7 @@ interface SnapshotActivationOptions {
   activation: PluginActivationIdentity
   scriptContent: string
   snapshot: PluginRuntimeSnapshot
+  capabilityDefinitions: readonly PluginHostCapabilityDefinition[]
   closeResources?: () => void | Promise<void>
   onCrash?: (diagnostic: PluginRuntimeCrashDiagnostic) => void
 }
@@ -126,7 +134,11 @@ const RESOURCE_LIMIT_KEYS = new Set<keyof PluginRuntimeHostResourceLimits>([
   'loadTimeoutMs',
   'lifecycleTimeoutMs',
   'shutdownTimeoutMs',
-  'cancelGraceMs'
+  'cancelGraceMs',
+  'callbackTimeoutMs',
+  'maxCallbacks',
+  'maxConcurrentCallbacks',
+  'maxResources'
 ])
 
 function invalidOptions(): never {
@@ -217,10 +229,30 @@ function snapshotResourceLimits(input: unknown): Readonly<PluginRuntimeHostResou
 
 function snapshotDefinitions(input: unknown): readonly PluginHostCapabilityDefinition[] {
   if (!Array.isArray(input)) invalidOptions()
+  let descriptors: Record<string, PropertyDescriptor>
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(input)
+  } catch {
+    invalidOptions()
+  }
+  const lengthDescriptor = descriptors.length
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
+  if (
+    !Number.isSafeInteger(length) ||
+    Number(length) < 0 ||
+    Number(length) > PLUGIN_HOST_CAPABILITIES.length
+  ) {
+    invalidOptions()
+  }
+  const allowedKeys = new Set<PropertyKey>(['length'])
+  for (let index = 0; index < Number(length); index += 1) allowedKeys.add(String(index))
+  if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) invalidOptions()
+
   const definitions: PluginHostCapabilityDefinition[] = []
   const ids = new Set<PluginHostCapability>()
-  for (let index = 0; index < input.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(input, String(index))
+  for (let index = 0; index < Number(length); index += 1) {
+    const descriptor = descriptors[String(index)]
     if (!descriptor?.enumerable || !('value' in descriptor)) invalidOptions()
     let definition: PluginHostCapabilityDefinition
     try {
@@ -230,6 +262,20 @@ function snapshotDefinitions(input: unknown): readonly PluginHostCapabilityDefin
     } catch {
       invalidOptions()
     }
+    if (ids.has(definition.id)) invalidOptions()
+    ids.add(definition.id)
+    definitions.push(definition)
+  }
+  return Object.freeze(definitions)
+}
+
+function mergeDefinitions(
+  baseDefinitions: readonly PluginHostCapabilityDefinition[],
+  activationDefinitions: readonly PluginHostCapabilityDefinition[]
+): readonly PluginHostCapabilityDefinition[] {
+  const definitions: PluginHostCapabilityDefinition[] = []
+  const ids = new Set<PluginHostCapability>()
+  for (const definition of [...baseDefinitions, ...activationDefinitions]) {
     if (ids.has(definition.id)) invalidOptions()
     ids.add(definition.id)
     definitions.push(definition)
@@ -371,6 +417,9 @@ function snapshotActivationOptions(
   )
   const scriptContent = readDataProperty(input, 'scriptContent')
   const snapshot = snapshotRuntimeSnapshot(readDataProperty(input, 'snapshot'))
+  const capabilityDefinitions = snapshotDefinitions(
+    readDataProperty(input, 'capabilityDefinitions', false) ?? Object.freeze([])
+  )
   const closeResources = readDataProperty(input, 'closeResources', false)
   const onCrash = readDataProperty(input, 'onCrash', false)
   if (
@@ -384,6 +433,7 @@ function snapshotActivationOptions(
     activation,
     scriptContent,
     snapshot,
+    capabilityDefinitions,
     ...(closeResources === undefined
       ? {}
       : { closeResources: closeResources as () => void | Promise<void> }),
@@ -410,7 +460,6 @@ export class PluginRuntimeService {
   private readonly factory: PluginRuntimeProcessFactory
   private readonly keyManager: RuntimeKeyManager
   private readonly capabilityDefinitions: readonly PluginHostCapabilityDefinition[]
-  private readonly capabilityManifest: readonly PluginHostCapability[]
   private readonly authorizeCapability: PluginRuntimeServiceOptions['authorizeCapability']
   private readonly watchPermissionRevoked: PluginRuntimeServiceOptions['watchPermissionRevoked']
   private readonly closeResources: PluginRuntimeServiceOptions['closeResources']
@@ -475,9 +524,6 @@ export class PluginRuntimeService {
     this.factory = snapshotProcessFactory(factory)
     this.keyManager = snapshotKeyManager(keyManager)
     this.capabilityDefinitions = snapshotDefinitions(capabilityDefinitions)
-    this.capabilityManifest = Object.freeze(
-      this.capabilityDefinitions.map((definition) => definition.id)
-    )
     this.authorizeCapability =
       authorizeCapability as PluginRuntimeServiceOptions['authorizeCapability']
     this.watchPermissionRevoked =
@@ -610,12 +656,34 @@ export class PluginRuntimeService {
     if (previous) await this.stopRecord(previous, previous.host.state === 'active')
     this.assertCurrentActivation(activation)
 
+    let capabilityDefinitions: readonly PluginHostCapabilityDefinition[]
+    let capabilityManifest: readonly PluginHostCapabilityDeclaration[]
+    try {
+      capabilityDefinitions = mergeDefinitions(
+        this.capabilityDefinitions,
+        options.capabilityDefinitions
+      )
+      capabilityManifest = Object.freeze(
+        capabilityDefinitions.map((definition) =>
+          Object.freeze({
+            id: definition.id,
+            callbackLifetime: definition.callbackLifetime ?? 'transient',
+            callbackFields: definition.callbackFields ?? Object.freeze([])
+          })
+        )
+      )
+    } catch (error) {
+      await this.rollbackUnstartedActivation(options)
+      throw error
+    }
+
     let activationHandle: unknown
     let hostGeneration: unknown
     try {
       activationHandle = this.createActivationHandle()
       hostGeneration = this.createHostGeneration()
     } catch {
+      await this.rollbackUnstartedActivation(options)
       throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS')
     }
     if (
@@ -628,6 +696,7 @@ export class PluginRuntimeService {
       this.issuedActivationHandles.size >= MAX_ISSUED_ACTIVATIONS ||
       this.issuedActivationHandles.has(activationHandle)
     ) {
+      await this.rollbackUnstartedActivation(options)
       throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS')
     }
     const resolvedHostGeneration = Number(hostGeneration)
@@ -638,7 +707,9 @@ export class PluginRuntimeService {
     let record!: RuntimeRecord
     let dispatcher: PluginRuntimeCapabilityDispatcher | undefined
     let ownsCapabilityDispatcher = false
+    let resourceRegistry: PluginHostResourceRegistry | undefined
     let crashReported = false
+    let crashCleanupStarted = false
     const reportCrash = (): void => {
       if (crashReported) return
       crashReported = true
@@ -653,37 +724,59 @@ export class PluginRuntimeService {
       }
     }
     const stopAndReportCrash = (): void => {
+      if (crashCleanupStarted) return
+      crashCleanupStarted = true
       const stopping = this.manager.stopPlugin(activation.name)
       void stopping.then(reportCrash, reportCrash)
     }
+    const handleUnexpectedTermination = (): void => {
+      if (!record || this.records.get(activation.name) !== record) {
+        void host.stop()
+        return
+      }
+      if (!record.acceptingWork) {
+        void this.manager.stopPlugin(activation.name)
+        return
+      }
+      record.acceptingWork = false
+      this.records.delete(activation.name)
+      stopAndReportCrash()
+    }
 
-    if (this.capabilityDefinitions.length > 0) {
+    const runtimeOwner = {
+      protocolVersion: 2 as const,
+      activationHandle,
+      hostGeneration: resolvedHostGeneration
+    }
+    resourceRegistry = new PluginHostResourceRegistry({
+      owner: runtimeOwner,
+      activation,
+      resolveCurrentActivation: (pluginName) => this.keyManager.resolveCurrentIdentity(pluginName),
+      isActive: () =>
+        Boolean(record) &&
+        this.records.get(activation.name) === record &&
+        (host.state === 'starting' || host.state === 'active'),
+      maxResources: this.resourceLimits.maxResources,
+      watchPermissionRevoked: this.watchPermissionRevoked,
+      onFatalViolation: handleUnexpectedTermination
+    })
+
+    if (capabilityDefinitions.length > 0) {
       const registry = new PluginHostCapabilityRegistry({
-        owner: {
-          protocolVersion: 2,
-          activationHandle,
-          hostGeneration: resolvedHostGeneration
-        },
+        owner: runtimeOwner,
         activation,
         resolveCurrentActivation: (pluginName) =>
           this.keyManager.resolveCurrentIdentity(pluginName),
         authorize: this.authorizeCapability,
         watchPermissionRevoked: this.watchPermissionRevoked,
+        resources: resourceRegistry,
         isActive: () =>
           Boolean(record) &&
           this.records.get(activation.name) === record &&
           (host.state === 'starting' || host.state === 'active'),
-        onFatalViolation: () => {
-          if (!record || this.records.get(activation.name) !== record) {
-            void host.stop()
-            return
-          }
-          record.acceptingWork = false
-          this.records.delete(activation.name)
-          stopAndReportCrash()
-        }
+        onFatalViolation: handleUnexpectedTermination
       })
-      for (const definition of this.capabilityDefinitions) registry.register(definition)
+      for (const definition of capabilityDefinitions) registry.register(definition)
       dispatcher = registry
       ownsCapabilityDispatcher = true
     }
@@ -702,23 +795,13 @@ export class PluginRuntimeService {
         await safeCall(() => this.closeResources(activation))
         if (options.closeResources) await safeCall(options.closeResources)
       },
+      resolveCurrentActivation: (pluginName) => this.keyManager.resolveCurrentIdentity(pluginName),
       capabilityDispatcher: dispatcher,
       ownsCapabilityDispatcher,
-      onCrash: () => {
-        if (this.records.get(activation.name) !== record) return
-        record.acceptingWork = false
-        this.records.delete(activation.name)
-        void this.manager.stopPlugin(activation.name)
-        reportCrash()
-      },
-      onTerminated: () => {
-        if (this.records.get(activation.name) !== record || !record.acceptingWork) {
-          return
-        }
-        record.acceptingWork = false
-        this.records.delete(activation.name)
-        stopAndReportCrash()
-      }
+      resourceDispatcher: resourceRegistry,
+      ownsResourceDispatcher: true,
+      onCrash: handleUnexpectedTermination,
+      onTerminated: handleUnexpectedTermination
     })
 
     const lifecycle = this.createLifecycleProxy(activation)
@@ -740,7 +823,12 @@ export class PluginRuntimeService {
         loadPayload: {
           scriptContent: options.scriptContent,
           snapshot: options.snapshot,
-          capabilityManifest: this.capabilityManifest
+          capabilityManifest,
+          callbackLimits: {
+            maxCallbacks: this.resourceLimits.maxCallbacks,
+            maxConcurrentCallbacks: this.resourceLimits.maxConcurrentCallbacks,
+            maxResources: this.resourceLimits.maxResources
+          }
         },
         initialize: true,
         initPayload: []
@@ -766,6 +854,14 @@ export class PluginRuntimeService {
       await this.manager.stopPlugin(activation.name)
       throw error
     }
+  }
+
+  private async rollbackUnstartedActivation(options: SnapshotActivationOptions): Promise<void> {
+    await safeCall(() => {
+      this.keyManager.revokeKey(options.activation.key)
+    })
+    await safeCall(() => this.closeResources(options.activation))
+    if (options.closeResources) await safeCall(options.closeResources)
   }
 
   private createLifecycleProxy(activation: PluginActivationIdentity): PluginRuntimeLifecycleProxy {

@@ -36,6 +36,11 @@ interface HostWireHandle {
   readonly resourceKind?: ResourceKind
 }
 
+export interface HostWireResourceDescriptor {
+  readonly id: string
+  readonly kind: HostWireResourceKind
+}
+
 export interface HostWireLimits {
   maxDepth: number
   maxMembers: number
@@ -50,8 +55,10 @@ export interface EncodeHostWireOptions {
 
 export interface DecodeHostWireOptions {
   resolveCallback?: (id: string) => Callback | undefined
+  releaseCallback?: (id: string, callback: Callback) => void
   resolveCancel?: (id: string) => unknown
   resolveResource?: (id: string, kind: ResourceKind) => unknown
+  releaseResource?: (id: string, kind: ResourceKind, resource: unknown) => void
   limits?: Partial<HostWireLimits>
 }
 
@@ -129,6 +136,13 @@ export function hostWireResourceHandle(id: string, kind: ResourceKind): HostWire
     throw new HostWireValueError('PLUGIN_HOST_WIRE_INVALID_HANDLE')
   }
   return createOwnedHandle({ kind: 'resource', id, resourceKind: kind })
+}
+
+export function inspectHostWireResourceHandle(value: unknown): HostWireResourceDescriptor | null {
+  if (!value || typeof value !== 'object' || !ownedHandles.has(value)) return null
+  const handle = value as HostWireHandle
+  if (handle.kind !== 'resource' || !handle.resourceKind) return null
+  return Object.freeze({ id: handle.id, kind: handle.resourceKind })
 }
 
 function isPlainObject(value: object): boolean {
@@ -334,6 +348,8 @@ function resolveOwnedHandle<T>(resolver: (() => T | undefined) | undefined): T |
 export function decodeHostWireValue(value: unknown, options: DecodeHostWireOptions = {}): unknown {
   const budget = new WireBudget(limitsOf(options.limits))
   const ancestors = new WeakSet<object>()
+  const resolvedCallbacks: Array<{ id: string; callback: Callback }> = []
+  const resolvedResources: Array<{ id: string; kind: ResourceKind; resource: unknown }> = []
 
   const visit = (current: unknown, depth: number): unknown => {
     budget.enter(depth)
@@ -422,6 +438,7 @@ export function decodeHostWireValue(value: unknown, options: DecodeHostWireOptio
             if (typeof callback !== 'function') {
               throw new HostWireValueError('PLUGIN_HOST_WIRE_UNKNOWN_HANDLE')
             }
+            resolvedCallbacks.push({ id, callback })
             return callback
           }
           case 'cancel': {
@@ -456,6 +473,7 @@ export function decodeHostWireValue(value: unknown, options: DecodeHostWireOptio
             )
             if (resource === undefined)
               throw new HostWireValueError('PLUGIN_HOST_WIRE_UNKNOWN_HANDLE')
+            resolvedResources.push({ id, kind: resourceKind, resource })
             return resource
           }
           default:
@@ -476,5 +494,24 @@ export function decodeHostWireValue(value: unknown, options: DecodeHostWireOptio
     }
   }
 
-  return visit(value, 0)
+  try {
+    return visit(value, 0)
+  } catch (error) {
+    for (const resolved of resolvedResources.reverse()) {
+      try {
+        options.releaseResource?.(resolved.id, resolved.kind, resolved.resource)
+      } catch {
+        // Resource rollback cannot replace the stable codec error.
+      }
+    }
+    for (const resolved of resolvedCallbacks.reverse()) {
+      try {
+        options.releaseCallback?.(resolved.id, resolved.callback)
+      } catch {
+        // Rollback failures cannot replace the stable codec error.
+      }
+    }
+    if (error instanceof HostWireValueError) throw new HostWireValueError(error.code)
+    throw new HostWireValueError('PLUGIN_HOST_WIRE_UNSUPPORTED')
+  }
 }

@@ -51,6 +51,7 @@ describe('plugin host wire protocol', () => {
       { type: 'callback-result', requestId: 4, ok: true, result: undefined }
     ],
     ['cancel', 'main-to-child', { type: 'cancel', requestId: 6, targetRequestId: 7 }],
+    ['capability cancel', 'child-to-main', { type: 'cancel', requestId: 7, targetRequestId: 6 }],
     [
       'resource-dispose',
       'child-to-main',
@@ -234,12 +235,6 @@ describe('plugin host wire protocol', () => {
       'main-to-child',
       { type: 'cancel', requestId: 1, targetRequestId: -1 },
       'PLUGIN_HOST_INVALID_REQUEST_ID'
-    ],
-    [
-      'child-originated cancel',
-      'child-to-main',
-      { type: 'cancel', requestId: 1, targetRequestId: 2 },
-      'PLUGIN_HOST_WRONG_DIRECTION'
     ],
     [
       'shutdown result extension',

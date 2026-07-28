@@ -4,9 +4,15 @@ import {
   issuePluginSecurityContext
 } from '@talex-touch/utils/transport/security/plugin-identity'
 import {
+  unavailablePluginHostResourceContext,
+  type PluginHostCapabilityResourceContext,
+  type PluginHostResourceDispatcher
+} from './plugin-host-resources'
+import {
   HOST_PROTOCOL_VERSION,
   PLUGIN_HOST_CAPABILITIES,
   type HostMessageOwner,
+  type PluginHostCallbackLifetime,
   type PluginHostCapability
 } from './plugin-host-wire'
 
@@ -38,12 +44,15 @@ export interface PluginHostCapabilityDefinition<Request = unknown, Result = unkn
   permission?: string
   timeoutMs: number
   maxConcurrency: number
+  callbackLifetime?: PluginHostCallbackLifetime
+  callbackFields?: readonly string[]
   validateRequest: (value: unknown) => Request
   validateResult: (value: unknown) => Result
   invoke(
     context: PluginSecurityContext,
     request: Request,
-    signal: AbortSignal
+    signal: AbortSignal,
+    resources: PluginHostCapabilityResourceContext
   ): Result | Promise<Result>
 }
 
@@ -58,6 +67,7 @@ export interface PluginHostCapabilityRegistryOptions {
     onRevoke: () => void
   ) => () => void
   onFatalViolation: (code: PluginHostCapabilityErrorCode) => void
+  resources?: PluginHostResourceDispatcher
   isActive?: () => boolean
   maxConcurrent?: number
   abortGraceMs?: number
@@ -87,6 +97,8 @@ const DEFINITION_KEYS = new Set([
   'permission',
   'timeoutMs',
   'maxConcurrency',
+  'callbackLifetime',
+  'callbackFields',
   'validateRequest',
   'validateResult',
   'invoke'
@@ -168,6 +180,97 @@ function assertPositiveLimit(value: number, maximum: number): void {
   }
 }
 
+const CALLBACK_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/
+const FORBIDDEN_CALLBACK_FIELDS = new Set(['__proto__', 'prototype', 'constructor', 'then'])
+
+function snapshotCallbackFields(input: unknown): readonly string[] {
+  if (input === undefined) return Object.freeze([])
+  if (!Array.isArray(input)) {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  let descriptors: PropertyDescriptorMap
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(input) as unknown as PropertyDescriptorMap
+  } catch {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  const lengthDescriptor = descriptors.length
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
+  if (!Number.isSafeInteger(length) || Number(length) < 0 || Number(length) > 64) {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  const allowedKeys = new Set<PropertyKey>(['length'])
+  const fields: string[] = []
+  for (let index = 0; index < Number(length); index += 1) {
+    const key = String(index)
+    allowedKeys.add(key)
+    const descriptor = descriptors[key]
+    const field = descriptor && 'value' in descriptor ? descriptor.value : undefined
+    if (
+      !descriptor?.enumerable ||
+      typeof field !== 'string' ||
+      !CALLBACK_FIELD_PATTERN.test(field) ||
+      FORBIDDEN_CALLBACK_FIELDS.has(field) ||
+      fields.includes(field)
+    ) {
+      throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    }
+    fields.push(field)
+  }
+  if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  return Object.freeze(fields)
+}
+
+function callbacksMatchDeclaration(input: unknown, callbackFields: readonly string[]): boolean {
+  const allowed = new Set(callbackFields)
+  const ancestors = new WeakSet<object>()
+  const visit = (value: unknown, callbackAllowed: boolean, depth: number): boolean => {
+    if (typeof value === 'function') return callbackAllowed
+    if (!value || typeof value !== 'object') return true
+    if (ancestors.has(value)) return false
+    ancestors.add(value)
+    try {
+      let descriptors: PropertyDescriptorMap
+      try {
+        descriptors = Object.getOwnPropertyDescriptors(value)
+      } catch {
+        return false
+      }
+      if (Array.isArray(value)) {
+        const lengthDescriptor = descriptors.length
+        const length =
+          lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
+        if (!Number.isSafeInteger(length) || Number(length) < 0) return false
+        const allowedKeys = new Set<PropertyKey>(['length'])
+        for (let index = 0; index < Number(length); index += 1) {
+          const key = String(index)
+          allowedKeys.add(key)
+          const descriptor = descriptors[key]
+          if (!descriptor?.enumerable || !('value' in descriptor)) return false
+          if (!visit(descriptor.value, false, depth + 1)) return false
+        }
+        return !Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))
+      }
+      const prototype = Object.getPrototypeOf(value)
+      if (prototype !== Object.prototype && prototype !== null) return false
+      for (const key of Reflect.ownKeys(descriptors)) {
+        if (typeof key !== 'string') return false
+        const descriptor = descriptors[key]
+        if (!descriptor?.enumerable || !('value' in descriptor)) return false
+        const fieldAllowsCallback = depth === 0 && allowed.has(key)
+        if (!visit(descriptor.value, fieldAllowsCallback, depth + 1)) return false
+      }
+      return true
+    } finally {
+      ancestors.delete(value)
+    }
+  }
+  return visit(input, false, 0)
+}
+
 export function snapshotPluginHostCapabilityDefinition<Request, Result>(
   input: PluginHostCapabilityDefinition<Request, Result>
 ): PluginHostCapabilityDefinition<Request, Result> {
@@ -197,6 +300,8 @@ export function snapshotPluginHostCapabilityDefinition<Request, Result>(
   const permission = value('permission')
   const timeoutMs = value('timeoutMs')
   const maxConcurrency = value('maxConcurrency')
+  const callbackLifetime = value('callbackLifetime')
+  const callbackFields = snapshotCallbackFields(value('callbackFields'))
   const validateRequest = value('validateRequest')
   const validateResult = value('validateResult')
   const invoke = value('invoke')
@@ -207,6 +312,9 @@ export function snapshotPluginHostCapabilityDefinition<Request, Result>(
       (typeof permission !== 'string' || permission.length < 1 || permission.length > 128)) ||
     typeof timeoutMs !== 'number' ||
     typeof maxConcurrency !== 'number' ||
+    (callbackLifetime !== undefined &&
+      callbackLifetime !== 'transient' &&
+      callbackLifetime !== 'resource') ||
     typeof validateRequest !== 'function' ||
     typeof validateResult !== 'function' ||
     typeof invoke !== 'function'
@@ -220,6 +328,8 @@ export function snapshotPluginHostCapabilityDefinition<Request, Result>(
     ...(permission === undefined ? {} : { permission }),
     timeoutMs,
     maxConcurrency,
+    callbackLifetime: callbackLifetime ?? 'transient',
+    callbackFields,
     validateRequest: validateRequest as (value: unknown) => Request,
     validateResult: validateResult as (value: unknown) => Result,
     invoke: invoke as PluginHostCapabilityDefinition<Request, Result>['invoke']
@@ -236,6 +346,7 @@ export class PluginHostCapabilityRegistry {
   private readonly authorize: PluginHostCapabilityRegistryOptions['authorize']
   private readonly watchPermissionRevoked: PluginHostCapabilityRegistryOptions['watchPermissionRevoked']
   private readonly onFatalViolation: PluginHostCapabilityRegistryOptions['onFatalViolation']
+  private readonly resources: PluginHostResourceDispatcher
   private readonly isActive: () => boolean
   private readonly maxConcurrent: number
   private readonly abortGraceMs: number
@@ -261,6 +372,50 @@ export class PluginHostCapabilityRegistry {
     this.authorize = options.authorize
     this.watchPermissionRevoked = options.watchPermissionRevoked
     this.onFatalViolation = options.onFatalViolation
+    const resourcesDescriptor = Object.getOwnPropertyDescriptor(options, 'resources')
+    if (
+      resourcesDescriptor &&
+      (!resourcesDescriptor.enumerable || !('value' in resourcesDescriptor))
+    ) {
+      throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    }
+    const suppliedResources = resourcesDescriptor?.value as PluginHostResourceDispatcher | undefined
+    if (suppliedResources) {
+      const resourceOwner = snapshotOwner(
+        readOwnDataField(suppliedResources, 'owner') as HostMessageOwner
+      )
+      const resourceActivation = snapshotActivation(
+        readOwnDataField(suppliedResources, 'activation') as PluginActivationIdentity
+      )
+      if (
+        resourceOwner.protocolVersion !== owner.protocolVersion ||
+        resourceOwner.activationHandle !== owner.activationHandle ||
+        resourceOwner.hostGeneration !== owner.hostGeneration ||
+        !isSameActivation(activation, resourceActivation)
+      ) {
+        throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+      }
+    }
+    this.resources =
+      suppliedResources ??
+      Object.freeze({
+        owner,
+        activation,
+        ...unavailablePluginHostResourceContext(),
+        beginInvocation: () =>
+          Object.freeze({
+            resources: unavailablePluginHostResourceContext(),
+            owns: () => false,
+            commit: async () => undefined,
+            rollback: async () => undefined
+          }),
+        inspect: () => null,
+        retainCallbacks: () => undefined,
+        dispose: async () => {
+          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_RUNTIME_UNAVAILABLE')
+        },
+        close: async () => undefined
+      })
     this.isActive = options.isActive ?? (() => true)
     this.maxConcurrent = options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT
     this.abortGraceMs = options.abortGraceMs ?? DEFAULT_ABORT_GRACE_MS
@@ -272,6 +427,10 @@ export class PluginHostCapabilityRegistry {
 
   get isClosed(): boolean {
     return this.closed
+  }
+
+  getCallbackLifetime(capability: PluginHostCapability): PluginHostCallbackLifetime {
+    return this.definitions.get(capability)?.callbackLifetime ?? 'transient'
   }
 
   register<Request, Result>(definition: PluginHostCapabilityDefinition<Request, Result>): void {
@@ -410,6 +569,9 @@ export class PluginHostCapabilityRegistry {
 
     let request: unknown
     try {
+      if (!callbacksMatchDeclaration(payload, definition.callbackFields ?? [])) {
+        throw new Error()
+      }
       request = definition.validateRequest(payload)
     } catch {
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
@@ -427,40 +589,77 @@ export class PluginHostCapabilityRegistry {
     }
 
     const context = this.issueCurrentContext(call)
+    const invocation = this.resources.beginInvocation({
+      capabilityId: definition.id,
+      ...(definition.permission === undefined ? {} : { permissionId: definition.permission })
+    })
     call.invoked = true
     let result: unknown
     try {
-      result = await definition.invoke(context, request, call.controller.signal)
+      result = await definition.invoke(
+        context,
+        request,
+        call.controller.signal,
+        invocation.resources
+      )
     } catch {
+      await invocation.rollback()
       if (call.controller.signal.aborted) {
         throw new PluginHostCapabilityError(call.abortCode)
       }
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED')
     }
     if (call.controller.signal.aborted) {
+      await invocation.rollback()
       throw new PluginHostCapabilityError(call.abortCode)
     }
     this.assertRuntimeCurrent()
     if (call.controller.signal.aborted) {
+      await invocation.rollback()
       throw new PluginHostCapabilityError(call.abortCode)
     }
     let validatedResult: unknown
     try {
       validatedResult = definition.validateResult(result)
     } catch {
+      await invocation.rollback()
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
     }
     if (validatedResult instanceof Promise) {
       void validatedResult.catch(() => undefined)
+      await invocation.rollback()
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
     }
+    if (definition.callbackLifetime === 'resource') {
+      if (!invocation.owns(validatedResult)) {
+        await invocation.rollback()
+        throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
+      }
+      try {
+        await invocation.commit(validatedResult)
+      } catch {
+        throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
+      }
+    } else {
+      const returnedResource =
+        invocation.owns(validatedResult) || Boolean(this.resources.inspect(validatedResult))
+      await invocation.rollback()
+      if (returnedResource) {
+        throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
+      }
+    }
     if (call.controller.signal.aborted) {
+      const resource = this.resources.inspect(validatedResult)
+      if (resource) {
+        try {
+          await this.resources.dispose(resource.id, resource.kind)
+        } catch {
+          // Activation teardown remains the final resource barrier.
+        }
+      }
       throw new PluginHostCapabilityError(call.abortCode)
     }
     this.assertRuntimeCurrent()
-    if (call.controller.signal.aborted) {
-      throw new PluginHostCapabilityError(call.abortCode)
-    }
     return validatedResult
   }
 

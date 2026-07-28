@@ -72,6 +72,12 @@ export const PLUGIN_HOST_VIOLATION_CODES = [
 ] as const
 
 export type PluginHostCapability = (typeof PLUGIN_HOST_CAPABILITIES)[number]
+export type PluginHostCallbackLifetime = 'transient' | 'resource'
+export interface PluginHostCapabilityDeclaration {
+  readonly id: PluginHostCapability
+  readonly callbackLifetime: PluginHostCallbackLifetime
+  readonly callbackFields: readonly string[]
+}
 export type PluginHostLifecycleMethod = (typeof PLUGIN_HOST_LIFECYCLE_METHODS)[number]
 export type PluginHostResourceKind = (typeof PLUGIN_HOST_RESOURCE_KINDS)[number]
 export type PluginHostViolationCode = (typeof PLUGIN_HOST_VIOLATION_CODES)[number]
@@ -466,7 +472,6 @@ function parseHostMessageInternal(
       parseResultMessage(value, [...COMMON_KEYS, 'ok', 'result'], [...COMMON_KEYS, 'ok', 'error'])
       return value as unknown as HostCallbackResult
     case 'cancel':
-      assertDirection(direction, 'main-to-child')
       if (!hasExactKeys(value, [...COMMON_KEYS, 'targetRequestId'])) {
         throw new HostProtocolError('PLUGIN_HOST_INVALID_MESSAGE')
       }

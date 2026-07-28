@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   loadPluginPrelude,
@@ -14,6 +16,14 @@ const owner: HostMessageOwner = {
 }
 
 function loadPayload(scriptContent: string, overrides: Record<string, unknown> = {}) {
+  const requestedCapabilities = overrides.capabilityManifest ?? []
+  const capabilityManifest = Array.isArray(requestedCapabilities)
+    ? requestedCapabilities.map((entry) =>
+        typeof entry === 'string'
+          ? { id: entry, callbackLifetime: 'transient', callbackFields: [] }
+          : entry
+      )
+    : requestedCapabilities
   return {
     scriptContent,
     snapshot: {
@@ -21,8 +31,13 @@ function loadPayload(scriptContent: string, overrides: Record<string, unknown> =
       arch: 'arm64',
       manifest: { name: 'plugin.smoke', nested: { enabled: true } }
     },
-    capabilityManifest: [],
-    ...overrides
+    callbackLimits: {
+      maxCallbacks: 64,
+      maxConcurrentCallbacks: 16,
+      maxResources: 32
+    },
+    ...overrides,
+    capabilityManifest
   }
 }
 
@@ -52,7 +67,10 @@ describe('plugin host load payload', () => {
       arch: 'arm64',
       manifest: { name: 'plugin.smoke', nested: { enabled: true } }
     })
-    expect(parsed.capabilityManifest).toEqual(['plugin.info.get', 'storage.file.read'])
+    expect(parsed.capabilityManifest).toEqual([
+      { id: 'plugin.info.get', callbackLifetime: 'transient', callbackFields: [] },
+      { id: 'storage.file.read', callbackLifetime: 'transient', callbackFields: [] }
+    ])
     expect(Object.isFrozen(parsed)).toBe(true)
     expect(Object.isFrozen(parsed.snapshot)).toBe(true)
     expect(Object.isFrozen(parsed.snapshot.manifest)).toBe(true)
@@ -70,6 +88,14 @@ describe('plugin host load payload', () => {
     [
       'duplicate capability',
       loadPayload('', { capabilityManifest: ['plugin.info.get', 'plugin.info.get'] })
+    ],
+    [
+      'thenable callback field',
+      loadPayload('', {
+        capabilityManifest: [
+          { id: 'plugin.info.get', callbackLifetime: 'transient', callbackFields: ['then'] }
+        ]
+      })
     ],
     [
       'unsupported manifest value',
@@ -403,6 +429,236 @@ describe('plugin Prelude child VM', () => {
     }
   })
 
+  it('exposes immutable fixed business facades and a DTO-only TuffItemBuilder', async () => {
+    const invokeCapability = vi.fn(async (capability: string, _payload: unknown) => {
+      if (capability === 'feature.items.push') return { ok: true }
+      if (capability === 'feature.items.list') return { items: [] }
+      if (capability === 'clipboard.write') return { ok: true }
+      throw new Error('unexpected capability')
+    })
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              const item = new TuffItemBuilder('emoji-rocket')
+                .setSource('plugin', 'plugin-features', 'touch-emoji-symbols')
+                .setTitle('🚀 Rocket')
+                .setSubtitle('emoji')
+                .setIcon({ type: 'emoji', value: '🚀' })
+                .setMeta({ featureId: 'emoji-symbols' })
+                .createAndAddAction('copy', 'plugin', '复制', { text: '🚀' })
+                .build()
+              await plugin.feature.pushItems([item])
+              await clipboard.writeText('🚀')
+              let featureEscape = false
+              let builderEscape = false
+              try { plugin.feature.pushItems.constructor('return process')() } catch { featureEscape = true }
+              try { TuffItemBuilder.constructor('return process')() } catch { builderEscape = true }
+              return {
+                item,
+                pluginKeys: Object.keys(plugin),
+                featureKeys: Object.keys(plugin.feature),
+                clipboardKeys: Object.keys(clipboard),
+                loggerKeys: Object.keys(logger),
+                frozen: [plugin, plugin.feature, clipboard, logger, TuffItemBuilder].every(Object.isFrozen),
+                prototypes: [plugin, plugin.feature, clipboard, logger].map(value => Object.getPrototypeOf(value)),
+                undeclaredUpdate: typeof plugin.feature.updateItem,
+                genericInvoke: typeof plugin.invoke,
+                constructorType: typeof plugin.constructor,
+                featureEscape,
+                builderEscape
+              }
+            }
+          }
+        `,
+        {
+          capabilityManifest: ['feature.items.push', 'feature.items.list', 'clipboard.write']
+        }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      item: {
+        id: 'emoji-rocket',
+        source: { type: 'plugin', id: 'plugin-features', name: 'touch-emoji-symbols' },
+        actions: [
+          {
+            id: 'copy',
+            type: 'plugin',
+            label: '复制',
+            primary: true,
+            payload: { text: '🚀' }
+          }
+        ],
+        meta: { featureId: 'emoji-symbols' },
+        render: {
+          mode: 'default',
+          basic: {
+            title: '🚀 Rocket',
+            subtitle: 'emoji',
+            icon: { type: 'emoji', value: '🚀' }
+          }
+        }
+      },
+      pluginKeys: ['feature'],
+      featureKeys: ['pushItems', 'getItems'],
+      clipboardKeys: ['writeText', 'clear'],
+      loggerKeys: ['debug', 'info', 'warn', 'error'],
+      frozen: true,
+      prototypes: [null, null, null, null],
+      undeclaredUpdate: 'undefined',
+      genericInvoke: 'undefined',
+      constructorType: 'undefined',
+      featureEscape: true,
+      builderEscape: true
+    })
+    expect(invokeCapability).toHaveBeenNthCalledWith(
+      1,
+      'feature.items.push',
+      expect.objectContaining({ scope: 'active-feature' }),
+      expect.any(Number)
+    )
+    expect(invokeCapability).toHaveBeenNthCalledWith(
+      2,
+      'clipboard.write',
+      { op: 'write', content: { text: '🚀' } },
+      expect.any(Number)
+    )
+    runtime.shutdown()
+  })
+
+  it('does not expose business facades when no matching capability is declared', async () => {
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            onInit() {
+              return {
+                pluginType: typeof plugin,
+                clipboardType: typeof clipboard,
+                builderType: typeof TuffItemBuilder,
+                loggerType: typeof logger,
+                loggerKeys: Object.keys(logger)
+              }
+            }
+          }
+        `,
+        { capabilityManifest: [] }
+      )
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      pluginType: 'undefined',
+      clipboardType: 'undefined',
+      builderType: 'undefined',
+      loggerType: 'object',
+      loggerKeys: ['debug', 'info', 'warn', 'error']
+    })
+    runtime.shutdown()
+  })
+
+  it('clones immutable builder output across repeated builds', async () => {
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            onInit() {
+              const builder = new TuffItemBuilder('item')
+                .setSource('plugin', 'plugin-features', 'plugin.alpha')
+                .setTitle('First')
+                .setMeta({ featureId: 'feature' })
+              const first = builder.build()
+              builder.setTitle('Second').setMeta({ state: 'second' })
+              const second = builder.build()
+              let mutationBlocked = false
+              try { first.render.basic.title = 'mutated' } catch { mutationBlocked = true }
+              return {
+                first,
+                second,
+                mutationBlocked,
+                firstTitleAfterMutation: first.render.basic.title,
+                frozen: Object.isFrozen(first) && Object.isFrozen(first.render.basic)
+              }
+            }
+          }
+        `,
+        { capabilityManifest: ['feature.items.push'] }
+      )
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      first: {
+        id: 'item',
+        source: { type: 'plugin', id: 'plugin-features', name: 'plugin.alpha' },
+        meta: { featureId: 'feature' },
+        render: { mode: 'default', basic: { title: 'First' } }
+      },
+      second: {
+        id: 'item',
+        source: { type: 'plugin', id: 'plugin-features', name: 'plugin.alpha' },
+        meta: { featureId: 'feature', state: 'second' },
+        render: { mode: 'default', basic: { title: 'Second' } }
+      },
+      mutationBlocked: false,
+      firstTitleAfterMutation: 'First',
+      frozen: true
+    })
+    runtime.shutdown()
+  })
+
+  it('loads the real emoji Prelude and completes feature and clipboard calls', async () => {
+    const scriptContent = readFileSync(
+      path.resolve(process.cwd(), '../../plugins/touch-emoji-symbols/index.js'),
+      'utf8'
+    )
+    let items: Array<Record<string, unknown>> = []
+    const clipboardWrites: string[] = []
+    const invokeCapability = vi.fn(async (capability: string, payload: unknown) => {
+      if (capability === 'feature.items.clear') {
+        const removed = items.length
+        items = []
+        return { removed }
+      }
+      if (capability === 'feature.items.push') {
+        items = (payload as { items: Array<Record<string, unknown>> }).items
+        return { ok: true }
+      }
+      if (capability === 'clipboard.write') {
+        clipboardWrites.push((payload as { content: { text: string } }).content.text)
+        return { ok: true }
+      }
+      throw new Error('unexpected capability')
+    })
+    const runtime = loadPluginPrelude(
+      loadPayload(scriptContent, {
+        capabilityManifest: ['feature.items.push', 'feature.items.clear', 'clipboard.write']
+      }),
+      { invokeCapability }
+    )
+
+    await expect(
+      runtime.callLifecycle('onFeatureTriggered', [
+        'emoji-symbols',
+        { text: 'emoji rocket' },
+        { id: 'emoji-symbols' }
+      ]).promise
+    ).resolves.toBe(true)
+    expect(items[0]).toMatchObject({
+      id: 'emoji-symbols-rocket',
+      meta: { defaultAction: 'copy', featureId: 'emoji-symbols' },
+      render: { basic: { title: '🚀 Rocket' } }
+    })
+
+    await expect(runtime.callLifecycle('onItemAction', [items[0]]).promise).resolves.toEqual({
+      externalAction: true,
+      status: 'started'
+    })
+    expect(clipboardWrites).toEqual(['🚀'])
+    runtime.shutdown()
+  })
+
   it('exposes one frozen invoke-only host capability facade with realm-safe round trips', async () => {
     const invokeCapability = vi.fn(async (capability: string, payload: unknown) => {
       expect(capability).toBe('plugin.info.get')
@@ -475,7 +731,11 @@ describe('plugin Prelude child VM', () => {
     )
 
     await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({ source: 'host' })
-    expect(invokeCapability).toHaveBeenCalledWith('plugin.info.get', { source: 'plugin' })
+    expect(invokeCapability).toHaveBeenCalledWith(
+      'plugin.info.get',
+      { source: 'plugin' },
+      expect.any(Number)
+    )
     runtime.shutdown()
   })
 
@@ -536,8 +796,128 @@ describe('plugin Prelude child VM', () => {
     runtime.shutdown()
   })
 
+  it('roundtrips sync and async capability callbacks without host constructor exposure', async () => {
+    const invokeCapability = vi.fn(async (_capability, payload) => {
+      const request = payload as {
+        sync: (value: { text: string }) => unknown
+        async: (value: string) => Promise<unknown>
+      }
+      return {
+        sync: await request.sync({ text: 'main-sync' }),
+        async: await request.async('main-async')
+      }
+    })
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              return hostCapabilities.invoke('plugin.info.get', {
+                sync(value) {
+                  let escaped = false
+                  try { value.constructor.constructor('return process')() } catch { escaped = true }
+                  return { text: value.text, escaped }
+                },
+                async: async (value) => ({ value, realm: typeof process })
+              })
+            }
+          }
+        `,
+        {
+          capabilityManifest: [
+            {
+              id: 'plugin.info.get',
+              callbackLifetime: 'transient',
+              callbackFields: ['sync', 'async']
+            }
+          ]
+        }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      sync: { text: 'main-sync', escaped: true },
+      async: { value: 'main-async', realm: 'undefined' }
+    })
+    expect(invokeCapability).toHaveBeenCalledTimes(1)
+    runtime.shutdown()
+  })
+
   it.each([
-    ['function', '() => {}'],
+    ['Proxy callback', 'new Proxy(() => null, {})'],
+    ['class callback', 'class Callback {}']
+  ])('rejects %s before capability transport registration', async (_label, callbackSource) => {
+    const invokeCapability = vi.fn()
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              try {
+                await hostCapabilities.invoke('plugin.info.get', { callback: ${callbackSource} })
+              } catch (error) {
+                return error.code
+              }
+            }
+          }
+        `,
+        { capabilityManifest: ['plugin.info.get'] }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toBe(
+      'PLUGIN_HOST_CHILD_CAPABILITY_PAYLOAD_INVALID'
+    )
+    expect(invokeCapability).not.toHaveBeenCalled()
+    runtime.shutdown()
+  })
+
+  it('projects returned resources as frozen idempotent disposer-only realm objects', async () => {
+    const token = Object.freeze(Object.create(null))
+    const disposeResource = vi.fn(async () => undefined)
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              const resource = await hostCapabilities.invoke('plugin.info.get', null)
+              const result = {
+                id: resource.id,
+                kind: resource.kind,
+                keys: Object.keys(resource),
+                frozen: Object.isFrozen(resource),
+                nullPrototype: Object.getPrototypeOf(resource) === null
+              }
+              await resource.dispose()
+              await resource.dispose()
+              return result
+            }
+          }
+        `,
+        { capabilityManifest: ['plugin.info.get'] }
+      ),
+      {
+        invokeCapability: async () => token,
+        inspectResource: (value) =>
+          value === token ? { id: 'resource-1', kind: 'disposer' } : null,
+        disposeResource
+      }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      id: 'resource-1',
+      kind: 'disposer',
+      keys: ['id', 'kind', 'dispose'],
+      frozen: true,
+      nullPrototype: true
+    })
+    expect(disposeResource).toHaveBeenCalledTimes(1)
+    runtime.shutdown()
+  })
+
+  it.each([
     ['AbortSignal', 'new AbortController().signal'],
     ['class instance', 'new (class Payload {})()'],
     [
@@ -651,12 +1031,12 @@ describe('plugin Prelude child VM', () => {
     runtime.shutdown()
   })
 
-  it('rejects active capability promises when lifecycle cancellation wins', async () => {
+  it('cancels only capabilities in the owning lifecycle scope', async () => {
     let rejectCapability!: (error: Error) => void
     const capability = new Promise<unknown>((_resolve, reject) => {
       rejectCapability = reject
     })
-    const cancelCapabilities = vi.fn(() => {
+    const cancelCapabilityScope = vi.fn(() => {
       rejectCapability(
         Object.assign(new Error('cancelled'), { code: 'PLUGIN_HOST_CHILD_CAPABILITY_CANCELLED' })
       )
@@ -670,7 +1050,7 @@ describe('plugin Prelude child VM', () => {
         `,
         { capabilityManifest: ['plugin.info.get'] }
       ),
-      { invokeCapability: () => capability, cancelCapabilities }
+      { invokeCapability: () => capability, cancelCapabilityScope }
     )
     const lifecycle = runtime.callLifecycle('onMessage', [])
     await Promise.resolve()
@@ -681,7 +1061,160 @@ describe('plugin Prelude child VM', () => {
     await expect(lifecycle.promise).rejects.toEqual(
       new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED')
     )
-    expect(cancelCapabilities).toHaveBeenCalledTimes(1)
+    expect(cancelCapabilityScope).toHaveBeenCalledTimes(1)
+    expect(cancelCapabilityScope).toHaveBeenCalledWith(expect.any(Number))
+    runtime.shutdown()
+  })
+
+  it('keeps concurrent lifecycle capability scopes isolated', async () => {
+    const pending = new Map<
+      string,
+      { resolve(value: unknown): void; reject(error: Error): void; scopeId: number }
+    >()
+    const cancelCapabilityScope = vi.fn((scopeId: number) => {
+      for (const entry of pending.values()) {
+        if (entry.scopeId !== scopeId) continue
+        entry.reject(
+          Object.assign(new Error('cancelled'), {
+            code: 'PLUGIN_HOST_CHILD_CAPABILITY_CANCELLED'
+          })
+        )
+      }
+    })
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            onMessage(id) {
+              return hostCapabilities.invoke('plugin.info.get', { id })
+            }
+          }
+        `,
+        { capabilityManifest: ['plugin.info.get'] }
+      ),
+      {
+        invokeCapability: (_capability, payload, scopeId) =>
+          new Promise((resolve, reject) => {
+            pending.set((payload as { id: string }).id, {
+              resolve,
+              reject,
+              scopeId: scopeId!
+            })
+          }),
+        cancelCapabilityScope
+      }
+    )
+    const first = runtime.callLifecycle('onMessage', ['first'])
+    const second = runtime.callLifecycle('onMessage', ['second'])
+    await vi.waitFor(() => expect(pending.size).toBe(2))
+
+    first.cancel()
+    pending.get('second')?.resolve('second-result')
+
+    await expect(first.promise).rejects.toEqual(
+      new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED')
+    )
+    await expect(second.promise).resolves.toBe('second-result')
+    expect(cancelCapabilityScope).toHaveBeenCalledTimes(1)
+    expect(cancelCapabilityScope).toHaveBeenCalledWith(pending.get('first')?.scopeId)
+    runtime.shutdown()
+  })
+
+  it('runs callback work in its own cancellable capability scope', async () => {
+    let childCallback!: () => Promise<unknown>
+    let resolveNested!: (value: unknown) => void
+    let nestedScopeId = 0
+    const cancelCapabilityScope = vi.fn()
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            onInit() {
+              return hostCapabilities.invoke('plugin.info.get', {
+                callback: () => hostCapabilities.invoke('storage.file.read', null)
+              })
+            }
+          }
+        `,
+        {
+          capabilityManifest: [
+            {
+              id: 'plugin.info.get',
+              callbackLifetime: 'transient',
+              callbackFields: ['callback']
+            },
+            'storage.file.read'
+          ]
+        }
+      ),
+      {
+        invokeCapability: async (capability, payload, scopeId) => {
+          if (capability === 'plugin.info.get') {
+            childCallback = (payload as { callback: () => Promise<unknown> }).callback
+            return 'registered'
+          }
+          nestedScopeId = scopeId ?? 0
+          return new Promise((resolve) => {
+            resolveNested = resolve
+          })
+        },
+        cancelCapabilityScope
+      }
+    )
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toBe('registered')
+
+    const callbackCall = runtime.callCallback(() => childCallback())
+    await vi.waitFor(() => expect(nestedScopeId).toBeGreaterThan(0))
+    callbackCall.cancel()
+
+    await expect(callbackCall.promise).rejects.toEqual(
+      new PluginHostChildError('PLUGIN_HOST_CHILD_CANCELLED')
+    )
+    expect(cancelCapabilityScope).toHaveBeenCalledWith(nestedScopeId)
+    resolveNested('late')
+    await callbackCall.completion
+    runtime.shutdown()
+  })
+
+  it('rejects detached capability work after its lifecycle scope has completed', async () => {
+    const invokeCapability = vi.fn(async () => 'unexpected-success')
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          let detachedOutcome = null
+          module.exports = {
+            onMessage() {
+              setImmediate(async () => {
+                try {
+                  await hostCapabilities.invoke('plugin.info.get', null)
+                  detachedOutcome = 'unexpected-success'
+                } catch (error) {
+                  detachedOutcome = error.code
+                }
+              })
+              return 'lifecycle-complete'
+            },
+            async onClose() {
+              while (detachedOutcome === null) {
+                await new Promise((resolve) => setTimeout(resolve, 0))
+              }
+              return detachedOutcome
+            }
+          }
+        `,
+        { capabilityManifest: ['plugin.info.get'] }
+      ),
+      { invokeCapability }
+    )
+
+    const lifecycle = runtime.callLifecycle('onMessage', [])
+    await expect(lifecycle.promise).resolves.toBe('lifecycle-complete')
+    await lifecycle.completion
+
+    await expect(runtime.callLifecycle('onClose', []).promise).resolves.toBe(
+      'PLUGIN_HOST_CHILD_CANCELLED'
+    )
+    expect(invokeCapability).not.toHaveBeenCalled()
     runtime.shutdown()
   })
 
@@ -713,6 +1246,81 @@ describe('plugin Prelude child VM', () => {
       new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
     )
     await expect(runtime.callLifecycle('onMessage', []).promise).resolves.toBe(false)
+    runtime.shutdown()
+  })
+})
+
+describe('plugin Prelude declared callback fields', () => {
+  it('encodes a callback only at a manifest-declared capability field', async () => {
+    const invokeCapability = vi.fn(async (_capability, payload) => {
+      const callback = (payload as { callback: (value: string) => Promise<unknown> }).callback
+      return callback('declared')
+    })
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            onInit() {
+              return hostCapabilities.invoke('channel.subscribe', {
+                callback: async (value) => 'child:' + value
+              })
+            }
+          }
+        `,
+        {
+          capabilityManifest: [
+            {
+              id: 'channel.subscribe',
+              callbackLifetime: 'resource',
+              callbackFields: ['callback']
+            }
+          ]
+        }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toBe('child:declared')
+    expect(invokeCapability).toHaveBeenCalledTimes(1)
+    runtime.shutdown()
+  })
+
+  it.each([
+    ['undeclared top-level field', '{ other: () => null }'],
+    ['nested declared field', '{ callback: { nested: () => null } }'],
+    ['callback array', '{ callback: [() => null] }']
+  ])('rejects callback values in an %s before transport', async (_label, payloadSource) => {
+    const invokeCapability = vi.fn()
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              try {
+                await hostCapabilities.invoke('channel.subscribe', ${payloadSource})
+              } catch (error) {
+                return error.code
+              }
+            }
+          }
+        `,
+        {
+          capabilityManifest: [
+            {
+              id: 'channel.subscribe',
+              callbackLifetime: 'resource',
+              callbackFields: ['callback']
+            }
+          ]
+        }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toBe(
+      'PLUGIN_HOST_CHILD_CAPABILITY_PAYLOAD_INVALID'
+    )
+    expect(invokeCapability).not.toHaveBeenCalled()
     runtime.shutdown()
   })
 })

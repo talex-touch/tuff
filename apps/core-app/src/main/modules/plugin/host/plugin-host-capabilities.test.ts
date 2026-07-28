@@ -1,6 +1,11 @@
 import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { describe, expect, it, vi } from 'vitest'
+import {
+  PluginHostResourceRegistry,
+  type PluginHostCapabilityResourceContext,
+  type PluginHostResourceDispatcher
+} from './plugin-host-resources'
 import { HOST_PROTOCOL_VERSION, type HostMessageOwner } from './plugin-host-wire'
 import {
   PluginHostCapabilityError,
@@ -56,6 +61,7 @@ function createRegistry(
     isActive?: () => boolean
     abortGraceMs?: number
     definition?: PluginHostCapabilityDefinition<unknown, unknown>
+    resources?: PluginHostResourceDispatcher & PluginHostCapabilityResourceContext
     maxConcurrent?: number
   } = {}
 ) {
@@ -67,6 +73,7 @@ function createRegistry(
     authorize: options.authorize ?? (() => true),
     watchPermissionRevoked: options.watchPermissionRevoked ?? (() => () => undefined),
     onFatalViolation: options.onFatalViolation ?? (() => undefined),
+    resources: options.resources,
     isActive: options.isActive,
     abortGraceMs: options.abortGraceMs,
     maxConcurrent: options.maxConcurrent ?? 4
@@ -385,6 +392,11 @@ describe('PluginHostCapabilityRegistry', () => {
     expect(() => createRegistry({ definition: accessorPermission })).toThrowError(
       expectCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
     )
+
+    const thenableCallback = stringEchoDefinition({ callbackFields: ['then'] })
+    expect(() => createRegistry({ definition: thenableCallback })).toThrowError(
+      expectCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    )
   })
 
   it('rechecks caller cancellation after request validation', async () => {
@@ -604,6 +616,94 @@ describe('PluginHostCapabilityRegistry', () => {
     }
   })
 
+  it.each([
+    ['owner', { ...owner, hostGeneration: owner.hostGeneration + 1 }, activation],
+    [
+      'activation',
+      owner,
+      { ...activation, activationGeneration: activation.activationGeneration + 1, key: 'rotated' }
+    ]
+  ])(
+    'rejects a resource dispatcher bound to another %s',
+    (_label, resourceOwner, resourceActivation) => {
+      const resources = new PluginHostResourceRegistry({
+        owner: resourceOwner,
+        activation: resourceActivation,
+        resolveCurrentActivation: () => resourceActivation,
+        isActive: () => true
+      })
+
+      expect(() => createRegistry({ resources })).toThrowError(
+        expectCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+      )
+    }
+  )
+
+  it('retains only an explicitly returned resource for resource-lifetime callbacks', async () => {
+    const dispose = vi.fn()
+    let resourceSequence = 0
+    const resources = new PluginHostResourceRegistry({
+      owner,
+      activation,
+      resolveCurrentActivation: () => activation,
+      isActive: () => true,
+      createResourceId: () => `resource-${++resourceSequence}`
+    })
+    const definition: PluginHostCapabilityDefinition<null, unknown> = {
+      id: 'channel.subscribe',
+      timeoutMs: 100,
+      maxConcurrency: 1,
+      callbackLifetime: 'resource',
+      validateRequest: (value) => {
+        if (value !== null) throw new Error()
+        return null
+      },
+      validateResult: (value) => value,
+      invoke: async (_context, _request, _signal, scopedResources) =>
+        scopedResources.register('subscription', dispose)
+    }
+    const registry = createRegistry({ definition, resources })
+
+    const handle = await registry.dispatch('channel.subscribe', null)
+    expect(resources.inspect(handle)).toEqual({ id: 'resource-1', kind: 'subscription' })
+    expect(registry.getCallbackLifetime('channel.subscribe')).toBe('resource')
+    expect(dispose).not.toHaveBeenCalled()
+    await resources.close()
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('rolls back every resource registration when a handler or result validator fails', async () => {
+    const dispose = vi.fn()
+    let resourceSequence = 0
+    const resources = new PluginHostResourceRegistry({
+      owner,
+      activation,
+      resolveCurrentActivation: () => activation,
+      isActive: () => true,
+      createResourceId: () => `rollback-${++resourceSequence}`
+    })
+    const definition: PluginHostCapabilityDefinition<null, unknown> = {
+      id: 'channel.subscribe',
+      timeoutMs: 100,
+      maxConcurrency: 1,
+      validateRequest: () => null,
+      validateResult: () => {
+        throw new Error('/private/result-detail')
+      },
+      invoke: async (_context, _request, _signal, scopedResources) => {
+        scopedResources.register('subscription', dispose)
+        return { invalid: true }
+      }
+    }
+    const registry = createRegistry({ definition, resources })
+
+    await expect(registry.dispatch('channel.subscribe', null)).rejects.toEqual(
+      new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_RESULT')
+    )
+    expect(dispose).toHaveBeenCalledTimes(1)
+    expect(resources.size).toBe(0)
+  })
+
   it('propagates caller cancellation and close without exposing handler errors', async () => {
     const controller = new AbortController()
     const registry = createRegistry({
@@ -628,5 +728,37 @@ describe('PluginHostCapabilityRegistry', () => {
     await expect(registry.dispatch('storage.file.read', 'after-close')).rejects.toMatchObject(
       expectCapabilityError('PLUGIN_HOST_CAPABILITY_CLOSED')
     )
+  })
+
+  it('admits callbacks only at top-level fields declared by the capability definition', async () => {
+    const callback = vi.fn(async () => 'callback-result')
+    const validateRequest = vi.fn((value: unknown) => {
+      const request = value as { callback?: unknown }
+      if (typeof request.callback !== 'function') throw new Error()
+      return request as { callback: () => Promise<unknown> }
+    })
+    const definition: PluginHostCapabilityDefinition<{ callback: () => Promise<unknown> }, string> =
+      {
+        id: 'channel.subscribe',
+        timeoutMs: 100,
+        maxConcurrency: 1,
+        callbackFields: ['callback'],
+        validateRequest,
+        validateResult: (value) => String(value),
+        invoke: async (_context, request) => String(await request.callback())
+      }
+    const registry = createRegistry({ definition })
+
+    await expect(registry.dispatch('channel.subscribe', { callback })).resolves.toBe(
+      'callback-result'
+    )
+    expect(callback).toHaveBeenCalledTimes(1)
+    await expect(registry.dispatch('channel.subscribe', { other: callback })).rejects.toEqual(
+      new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    )
+    await expect(
+      registry.dispatch('channel.subscribe', { callback: { nested: callback } })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
+    expect(validateRequest).toHaveBeenCalledTimes(1)
   })
 })

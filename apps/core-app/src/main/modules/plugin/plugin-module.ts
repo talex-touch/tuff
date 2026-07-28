@@ -16,9 +16,11 @@ import type {
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { PluginWithSource } from '../../service/store-api.service'
+import { lookup } from 'node:dns/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
+import { shell } from 'electron'
 import fse from 'fs-extra'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -43,7 +45,12 @@ import {
 } from '../../service/store-api.service'
 import { performStoreHttpRequest } from '../../service/store-http.service'
 import { createLogger } from '../../utils/logger'
-import { deleteSecureStoreValuesByPrefix } from '../../utils/secure-store'
+import {
+  deleteSecureStoreValuesByPrefix,
+  getSecureStoreValueStrict,
+  setSecureStoreValue
+} from '../../utils/secure-store'
+import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
 import { getNetworkService } from '../network'
@@ -54,6 +61,9 @@ import {
   registerPluginLocalizationChannels
 } from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
+import { getClipboardHostService } from '../clipboard/clipboard-host-service'
+import { createPluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
 import { ElectronPluginRuntimeProcessFactory } from './host/plugin-runtime-electron-process'
 import {
   PluginRuntimeService,
@@ -1499,6 +1509,7 @@ export class PluginModule extends BaseModule {
   private networkStatusCleanup: (() => void) | null = null
   private storageTeardownDisposer: (() => void) | null = null
   private pluginSqliteResources = new PluginSqliteResourceOwnerRegistry()
+  private pluginBusinessCapabilities: PluginBusinessCapabilities | null = null
   private runtimeService: PluginRuntimeService | null = null
   private secureStoreRootPath = ''
 
@@ -1519,13 +1530,70 @@ export class PluginModule extends BaseModule {
     this.transport = ioRuntime.transport
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
+    this.pluginBusinessCapabilities = createPluginBusinessCapabilities({
+      resolvePlugin: (pluginName) => {
+        const plugin = this.pluginManager?.getPluginByName(pluginName)
+        return plugin instanceof TouchPlugin ? plugin : undefined
+      },
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      sqliteOwners: this.pluginSqliteResources,
+      secureStoreRootPath: this.secureStoreRootPath,
+      secureStore: Object.freeze({
+        get: async (rootPath: string, key: string) =>
+          await getSecureStoreValueStrict(rootPath, key, 'plugin-secret', (message) =>
+            pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
+          ),
+        set: async (rootPath: string, key: string, value: string | null) =>
+          await setSecureStoreValue(rootPath, key, value, 'plugin-secret', (message) =>
+            pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
+          )
+      }),
+      clipboard: Object.freeze({
+        read: async (request, context, signal) => {
+          const service = getClipboardHostService()
+          if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
+          return await service.read(request, context, signal)
+        },
+        write: async (request, context, signal) => {
+          const service = getClipboardHostService()
+          if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
+          await service.write(request, context, signal)
+        },
+        copyAndPaste: async (request, context, signal) => {
+          const service = getClipboardHostService()
+          if (!service) throw new Error('PLUGIN_BUSINESS_CLIPBOARD_UNAVAILABLE')
+          return await service.copyAndPaste(request, context, signal)
+        }
+      }),
+      openUrl: async (url) =>
+        await openValidatedExternalUrl(url, {
+          opener: async (target) => await shell.openExternal(target)
+        }),
+      network: Object.freeze({
+        request: async (options) => await getNetworkService().requestNoRedirect(options),
+        resolveAddresses: async (hostname) =>
+          (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address)
+      })
+    })
     this.runtimeService = new PluginRuntimeService({
       artifactPath: resolvePluginRuntimeArtifactPath(),
       factory: new ElectronPluginRuntimeProcessFactory(),
       keyManager: ioRuntime.transport.keyManager,
-      capabilityDefinitions: Object.freeze([]),
-      authorizeCapability: (pluginName, permissionId) =>
-        getPermissionModule()?.checkPermission(pluginName, permissionId).allowed ?? false,
+      capabilityDefinitions: this.pluginBusinessCapabilities.definitions,
+      authorizeCapability: (pluginName, permissionId) => {
+        try {
+          const permissionModule = getPermissionModule()
+          const store = permissionModule?.getStore()
+          const plugin = this.pluginManager?.getPluginByName(pluginName) as
+            | { sdkapi?: number }
+            | undefined
+          if (!store || !plugin || typeof plugin.sdkapi !== 'number') return false
+          return store.hasPermission(pluginName, permissionId, plugin.sdkapi) === true
+        } catch {
+          return false
+        }
+      },
       watchPermissionRevoked: (pluginName, permissionId, onRevoke) => {
         const listener = (event: unknown): void => {
           if (!isRecord(event) || event.pluginId !== pluginName) return
@@ -1538,7 +1606,7 @@ export class PluginModule extends BaseModule {
         return () => touchEventBus.off(TalexEvents.PERMISSION_REVOKED, listener)
       },
       closeResources: async (activation) => {
-        await this.pluginSqliteResources.closePlugin(activation.name)
+        await this.pluginBusinessCapabilities?.closeActivation(activation)
       }
     })
     TouchPlugin.setRuntimeService(this.runtimeService)
@@ -1665,6 +1733,8 @@ export class PluginModule extends BaseModule {
     )
     await this.runtimeService?.dispose()
     this.runtimeService = null
+    await this.pluginBusinessCapabilities?.closeAll()
+    this.pluginBusinessCapabilities = null
     TouchPlugin.setRuntimeService(null)
     TouchPlugin.setTransport(null)
     this.transport = null
@@ -1875,7 +1945,7 @@ export class PluginModule extends BaseModule {
           }
           const pluginIns = manager.getPluginByName(pluginName)
           if (pluginIns instanceof TouchPlugin) {
-            pluginIns.triggerFeatureExit()
+            await pluginIns.triggerFeatureExit()
           }
         }
       )

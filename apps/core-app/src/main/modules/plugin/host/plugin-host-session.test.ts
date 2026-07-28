@@ -356,6 +356,30 @@ describe('PluginHostSession', () => {
     expect(resolveCallback).not.toHaveBeenCalled()
   })
 
+  it('rejects unknown main responses before resolving child resource handles', () => {
+    const resolveResource = vi.fn(() => Object.freeze({ resource: true }))
+    const session = new PluginHostSession({
+      owner,
+      endpoint: 'child',
+      codec: { resolveResource }
+    })
+    activate(session)
+
+    expect(() =>
+      accept(session, 'main-to-child', {
+        type: 'capability-result',
+        requestId: 99,
+        ok: true,
+        result: {
+          __tuffHostWire: 'resource',
+          id: 'resource-unknown-response',
+          kind: 'subscription'
+        }
+      })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_UNKNOWN_RESPONSE' }))
+    expect(resolveResource).not.toHaveBeenCalled()
+  })
+
   it('cancels only main-origin work and rejects its late response', () => {
     const rejected = vi.fn()
     const session = new PluginHostSession({ owner, onPendingRejected: rejected })
@@ -368,12 +392,19 @@ describe('PluginHostSession', () => {
     })
     accept(session, 'main-to-child', { type: 'cancel', requestId: 4, targetRequestId: 3 })
 
-    expect(session.pendingCount).toBe(0)
+    expect(session.pendingCount).toBe(1)
     expect(rejected).toHaveBeenCalledTimes(1)
     expect(rejected).toHaveBeenCalledWith(
       expect.objectContaining({ requestId: 3, requestType: 'lifecycle-call' }),
       new PluginHostSessionError('PLUGIN_HOST_SESSION_REQUEST_CANCELLED')
     )
+    accept(session, 'child-to-main', {
+      type: 'lifecycle-result',
+      requestId: 3,
+      ok: false,
+      error: { code: 'PLUGIN_HOST_CHILD_CANCELLED' }
+    })
+    expect(session.pendingCount).toBe(0)
     expect(() =>
       accept(session, 'child-to-main', {
         type: 'lifecycle-result',
@@ -406,6 +437,136 @@ describe('PluginHostSession', () => {
         targetRequestId: 3
       })
     ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_INVALID_CANCEL' }))
+  })
+
+  it('allows child cancellation only in the child-origin request namespace', () => {
+    const rejected = vi.fn()
+    const session = new PluginHostSession({ owner, onPendingRejected: rejected })
+    activate(session)
+    accept(session, 'child-to-main', {
+      type: 'capability-call',
+      requestId: 30,
+      capability: 'plugin.info.get',
+      payload: null
+    })
+
+    accept(session, 'child-to-main', {
+      type: 'cancel',
+      requestId: 31,
+      targetRequestId: 30
+    })
+    expect(rejected).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 30, requestType: 'capability-call' }),
+      new PluginHostSessionError('PLUGIN_HOST_SESSION_REQUEST_CANCELLED')
+    )
+    accept(session, 'main-to-child', {
+      type: 'capability-result',
+      requestId: 30,
+      ok: false,
+      error: { code: 'PLUGIN_HOST_CAPABILITY_CANCELLED' }
+    })
+    expect(session.pendingCount).toBe(0)
+  })
+
+  it('keeps equal numeric request and cancel ids isolated by origin direction', () => {
+    const rejected = vi.fn()
+    const session = new PluginHostSession({ owner, onPendingRejected: rejected })
+    activate(session)
+    accept(session, 'main-to-child', {
+      type: 'lifecycle-call',
+      requestId: 30,
+      method: 'onFeatureTriggered',
+      payload: []
+    })
+    accept(session, 'child-to-main', {
+      type: 'capability-call',
+      requestId: 30,
+      capability: 'plugin.info.get',
+      payload: null
+    })
+
+    accept(session, 'main-to-child', {
+      type: 'cancel',
+      requestId: 31,
+      targetRequestId: 30
+    })
+    expect(rejected).toHaveBeenCalledTimes(1)
+    expect(rejected).toHaveBeenLastCalledWith(
+      expect.objectContaining({ direction: 'main-to-child', requestId: 30 }),
+      new PluginHostSessionError('PLUGIN_HOST_SESSION_REQUEST_CANCELLED')
+    )
+
+    accept(session, 'child-to-main', {
+      type: 'cancel',
+      requestId: 31,
+      targetRequestId: 30
+    })
+    expect(rejected).toHaveBeenCalledTimes(2)
+    expect(rejected).toHaveBeenLastCalledWith(
+      expect.objectContaining({ direction: 'child-to-main', requestId: 30 }),
+      new PluginHostSessionError('PLUGIN_HOST_SESSION_REQUEST_CANCELLED')
+    )
+
+    accept(session, 'child-to-main', {
+      type: 'lifecycle-result',
+      requestId: 30,
+      ok: false,
+      error: { code: 'PLUGIN_HOST_CHILD_CANCELLED' }
+    })
+    accept(session, 'main-to-child', {
+      type: 'capability-result',
+      requestId: 30,
+      ok: false,
+      error: { code: 'PLUGIN_HOST_CAPABILITY_CANCELLED' }
+    })
+    expect(session.pendingCount).toBe(0)
+    expect(session.state).toBe('active')
+  })
+
+  it('accepts only the exact canonical cancellation result for each request kind', () => {
+    const lifecycle = new PluginHostSession({ owner })
+    activate(lifecycle)
+    accept(lifecycle, 'main-to-child', {
+      type: 'lifecycle-call',
+      requestId: 3,
+      method: 'onFeatureTriggered',
+      payload: []
+    })
+    accept(lifecycle, 'main-to-child', {
+      type: 'cancel',
+      requestId: 4,
+      targetRequestId: 3
+    })
+    expect(() =>
+      accept(lifecycle, 'child-to-main', {
+        type: 'lifecycle-result',
+        requestId: 3,
+        ok: false,
+        error: { code: 'ATTACKER_CANCELLED' }
+      })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_LATE_RESPONSE' }))
+
+    const capability = new PluginHostSession({ owner })
+    activate(capability)
+    accept(capability, 'child-to-main', {
+      type: 'capability-call',
+      requestId: 3,
+      capability: 'plugin.info.get',
+      payload: null
+    })
+    accept(capability, 'child-to-main', {
+      type: 'cancel',
+      requestId: 4,
+      targetRequestId: 3
+    })
+    expect(() =>
+      accept(capability, 'main-to-child', {
+        type: 'capability-result',
+        requestId: 3,
+        ok: false,
+        error: { code: 'PLUGIN_HOST_CHILD_CANCELLED' }
+      })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_LATE_RESPONSE' }))
   })
 
   it('abandons only the endpoint-owned outbound request and classifies its response as late', () => {
@@ -577,56 +738,38 @@ describe('PluginHostSession', () => {
     ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_LATE_RESPONSE' }))
   })
 
-  it('applies the bounded codec by direction with owner-bound handle resolvers', () => {
-    const mainCallback = vi.fn()
+  it('applies callback codecs only to capability-call payloads with owner context', () => {
     const childCallback = vi.fn()
     const cancelToken = Object.freeze({ cancel: 'child-cancel-1' })
     const resource = Object.freeze({ resource: 'child-resource-1' })
-    let callbackSequence = 0
-    const registerCallback = vi.fn((resolvedOwner: HostMessageOwner, callback: unknown) => {
-      expect(resolvedOwner).toBe(session.owner)
-      expect(callback).toBe(mainCallback)
-      callbackSequence += 1
-      return `main-callback-${callbackSequence}`
-    })
-    const unregisterCallback = vi.fn()
-    const resolveCallback = vi.fn((resolvedOwner: HostMessageOwner, id: string) => {
-      expect(resolvedOwner).toBe(session.owner)
-      return id === 'child-callback-1' ? childCallback : undefined
-    })
+    const resolveCallback = vi.fn(
+      (resolvedOwner: HostMessageOwner, id: string, context: { messageType: string }) => {
+        expect(resolvedOwner).toBe(mainSession.owner)
+        expect(context.messageType).toBe('capability-call')
+        return id === 'child-callback-1' ? childCallback : undefined
+      }
+    )
     const resolveCancel = vi.fn((resolvedOwner: HostMessageOwner, id: string) => {
-      expect(resolvedOwner).toBe(session.owner)
+      expect(resolvedOwner).toBe(mainSession.owner)
       return id === 'child-cancel-1' ? cancelToken : undefined
     })
     const resolveResource = vi.fn((resolvedOwner: HostMessageOwner, id: string, kind: string) => {
-      expect(resolvedOwner).toBe(session.owner)
+      expect(resolvedOwner).toBe(mainSession.owner)
       return id === 'child-resource-1' && kind === 'subscription' ? resource : undefined
     })
-    const session = new PluginHostSession({
+    const mainSession = new PluginHostSession({
       owner,
-      codec: {
-        registerCallback,
-        unregisterCallback,
-        resolveCallback,
-        resolveCancel,
-        resolveResource
-      }
+      codec: { resolveCallback, resolveCancel, resolveResource }
     })
-    activate(session)
+    activate(mainSession)
 
-    const lifecycleCall = accept(session, 'main-to-child', {
+    accept(mainSession, 'main-to-child', {
       type: 'lifecycle-call',
       requestId: 3,
       method: 'onInit',
-      payload: { callback: mainCallback }
+      payload: null
     })
-    expect(lifecycleCall).toMatchObject({
-      payload: {
-        callback: { __tuffHostWire: 'callback', id: 'main-callback-1' }
-      }
-    })
-
-    const capabilityCall = accept(session, 'child-to-main', {
+    const capabilityCall = accept(mainSession, 'child-to-main', {
       type: 'capability-call',
       requestId: 4,
       capability: 'plugin.info.get',
@@ -643,29 +786,69 @@ describe('PluginHostSession', () => {
     expect(capabilityCall).toMatchObject({
       payload: { callback: childCallback, cancel: cancelToken, resource }
     })
-    expect(resolveCallback).toHaveBeenCalledWith(session.owner, 'child-callback-1')
-    expect(resolveCancel).toHaveBeenCalledWith(session.owner, 'child-cancel-1')
-    expect(resolveResource).toHaveBeenCalledWith(session.owner, 'child-resource-1', 'subscription')
+    expect(resolveCallback).toHaveBeenCalledTimes(1)
 
-    const lifecycleResult = accept(session, 'child-to-main', {
+    const lifecycleResult = accept(mainSession, 'child-to-main', {
       type: 'lifecycle-result',
       requestId: 3,
       ok: true,
       result: { __tuffHostWire: 'undefined' }
     })
-    expect(lifecycleResult).toMatchObject({ ok: true })
     expect('result' in lifecycleResult && lifecycleResult.result).toBeUndefined()
-
-    const capabilityResult = accept(session, 'main-to-child', {
+    accept(mainSession, 'main-to-child', {
       type: 'capability-result',
       requestId: 4,
       ok: true,
-      result: mainCallback
+      result: null
     })
-    expect(capabilityResult).toMatchObject({
-      result: { __tuffHostWire: 'callback', id: 'main-callback-2' }
+
+    const registerCallback = vi.fn(
+      (_resolvedOwner: HostMessageOwner, callback: unknown, context: { requestId: number }) => {
+        expect(callback).toBe(childCallback)
+        expect(context.requestId).toBe(7)
+        return 'child-callback-registered'
+      }
+    )
+    const unregisterCallback = vi.fn()
+    const childSession = new PluginHostSession({
+      owner,
+      endpoint: 'child',
+      codec: { registerCallback, unregisterCallback }
+    })
+    activate(childSession)
+    const encodedCall = accept(childSession, 'child-to-main', {
+      type: 'capability-call',
+      requestId: 7,
+      capability: 'plugin.info.get',
+      payload: { callback: childCallback }
+    })
+    expect(encodedCall).toMatchObject({
+      payload: {
+        callback: { __tuffHostWire: 'callback', id: 'child-callback-registered' }
+      }
     })
     expect(unregisterCallback).not.toHaveBeenCalled()
+
+    const resultSession = new PluginHostSession({
+      owner,
+      endpoint: 'child',
+      codec: { registerCallback, unregisterCallback }
+    })
+    activate(resultSession)
+    accept(resultSession, 'main-to-child', {
+      type: 'lifecycle-call',
+      requestId: 8,
+      method: 'onInit',
+      payload: null
+    })
+    expect(() =>
+      accept(resultSession, 'child-to-main', {
+        type: 'lifecycle-result',
+        requestId: 8,
+        ok: true,
+        result: childCallback
+      })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_WIRE_CALLBACK_UNSUPPORTED' }))
   })
 
   it('reports owner and codec violations once using only their stable code', () => {

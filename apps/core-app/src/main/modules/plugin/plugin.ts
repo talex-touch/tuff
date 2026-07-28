@@ -71,6 +71,13 @@ import type {
 import type { TouchWindow } from '../../core/touch-window'
 import type { PluginInjections } from './runtime/plugin-injections'
 import type {
+  PluginBusinessDto,
+  PluginBusinessFeatureHost,
+  PluginBusinessItemDto,
+  PluginBusinessItemScope,
+  PluginBusinessRuntimeInfoDto
+} from './host/plugin-business-capabilities'
+import type {
   PluginRuntimeService,
   PluginRuntimeSnapshot,
   PluginRuntimeSnapshotValue
@@ -510,6 +517,14 @@ export class TouchPlugin implements ITouchPlugin {
   _uniqueChannelKey: string
   readonly _runtimeInstanceId: string
   _activationGeneration: number
+  private readonly businessFeatureBindings = new Map<
+    string,
+    {
+      readonly activation: PluginActivationIdentity
+      readonly host: PluginBusinessFeatureHost
+      readonly closeResources: () => Promise<void>
+    }
+  >()
   /**
    * SDK API version declared by the plugin.
    * Used for hard-cut runtime gating and permission enforcement.
@@ -1262,15 +1277,398 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private createRuntimeSnapshot(): PluginRuntimeSnapshot {
-    const manifest = JSON.parse(JSON.stringify(this.toJSONObject())) as Record<
-      string,
-      PluginRuntimeSnapshotValue
-    >
+    const snapshotIcon = (icon: ITuffIcon): Record<string, PluginRuntimeSnapshotValue> => ({
+      type: icon.type,
+      ...(icon.type === 'file' ? {} : { value: icon.value }),
+      ...(icon.status === undefined ? {} : { status: icon.status }),
+      ...(icon.color === undefined ? {} : { color: icon.color }),
+      ...(icon.colorful === undefined ? {} : { colorful: icon.colorful })
+    })
+    const manifest = JSON.parse(
+      JSON.stringify({
+        name: this.name,
+        displayName: this.displayName,
+        localizedName: this.localizedName,
+        localizedDescription: this.localizedDescription,
+        version: this.version,
+        desc: this.desc,
+        category: this.category,
+        icon: snapshotIcon(this.icon),
+        platforms: this.platforms,
+        sdkapi: this.sdkapi,
+        declaredPermissions: this.declaredPermissions
+          ? {
+              required: [...this.declaredPermissions.required],
+              optional: [...this.declaredPermissions.optional]
+            }
+          : undefined,
+        features: this.features.map((feature) => ({
+          id: feature.id,
+          name: feature.name,
+          desc: feature.desc,
+          icon: snapshotIcon(feature.icon),
+          keywords: feature.keywords,
+          push: feature.push,
+          platform: feature.platform,
+          interaction: feature.interaction
+            ? {
+                type: feature.interaction.type,
+                rendererFeatureId: feature.interaction.rendererFeatureId,
+                showInput: feature.interaction.showInput,
+                allowInput: feature.interaction.allowInput,
+                sendMode: feature.interaction.sendMode,
+                forceMax: feature.interaction.forceMax
+              }
+            : undefined,
+          priority: feature.priority,
+          experimental: feature.experimental,
+          acceptedInputTypes: feature.acceptedInputTypes
+        }))
+      })
+    ) as Record<string, PluginRuntimeSnapshotValue>
     return Object.freeze({
       platform: process.platform,
       arch: process.arch,
       manifest: Object.freeze(manifest)
     })
+  }
+
+  private assertBusinessActivation(
+    activation: PluginActivationIdentity,
+    signal: AbortSignal
+  ): void {
+    if (signal.aborted) {
+      throw Object.assign(new Error('PLUGIN_HOST_CAPABILITY_CANCELLED'), {
+        code: 'PLUGIN_HOST_CAPABILITY_CANCELLED'
+      })
+    }
+    if (
+      !this.matchesActivation(activation) ||
+      ![PluginStatus.LOADING, PluginStatus.ENABLED, PluginStatus.ACTIVE].includes(this.status)
+    ) {
+      throw Object.assign(new Error('PLUGIN_RUNTIME_ACTIVATION_STALE'), {
+        code: 'PLUGIN_RUNTIME_ACTIVATION_STALE'
+      })
+    }
+  }
+
+  private async processBusinessItemIcon(item: TuffItem): Promise<TuffItem> {
+    const processedItem = { ...item }
+    if (processedItem.icon?.type === 'file') {
+      const icon = new TuffIconImpl(
+        this.pluginPath,
+        processedItem.icon.type,
+        processedItem.icon.value,
+        this.dev,
+        processedItem.icon.colorful,
+        processedItem.icon.color
+      )
+      await icon.init()
+      processedItem.icon = {
+        type: icon.type,
+        value: icon.value,
+        status: icon.status,
+        color: icon.color,
+        colorful: icon.colorful
+      }
+    }
+    if (
+      processedItem.render?.basic?.icon &&
+      typeof processedItem.render.basic.icon === 'object' &&
+      processedItem.render.basic.icon.type === 'file'
+    ) {
+      const basicIcon = processedItem.render.basic.icon
+      const icon = new TuffIconImpl(
+        this.pluginPath,
+        basicIcon.type,
+        basicIcon.value,
+        this.dev,
+        basicIcon.colorful,
+        basicIcon.color
+      )
+      await icon.init()
+      processedItem.render = {
+        ...processedItem.render,
+        basic: {
+          ...processedItem.render.basic,
+          icon: {
+            type: icon.type,
+            value: icon.value,
+            status: icon.status,
+            color: icon.color,
+            colorful: icon.colorful
+          }
+        }
+      }
+    }
+    return processedItem
+  }
+
+  private createBusinessFeatureBinding(
+    activation: PluginActivationIdentity,
+    allowExistingPluginItems = false
+  ): {
+    readonly host: PluginBusinessFeatureHost
+    readonly closeResources: () => Promise<void>
+  } {
+    const assertCurrent = (signal: AbortSignal): void =>
+      this.assertBusinessActivation(activation, signal)
+    const ownedItems = new Map<string, { item: TuffItem; scope: PluginBusinessItemScope }>()
+    const canonicalSourceId = (scope: PluginBusinessItemScope): string =>
+      scope === 'active-feature' ? 'plugin-features' : this.name
+    const bindItemIdentity = (item: TuffItem, scope: PluginBusinessItemScope): TuffItem => {
+      const enrichedItem = this.enrichItemWithSource(item, scope)
+      return {
+        ...enrichedItem,
+        source: {
+          type: 'plugin',
+          id: canonicalSourceId(scope),
+          name: this.name,
+          version: this.version
+        },
+        meta: {
+          ...enrichedItem.meta,
+          pluginName: this.name
+        }
+      }
+    }
+    const bindPatchIdentity = (
+      patch: Partial<TuffItem>,
+      scope: PluginBusinessItemScope
+    ): Partial<TuffItem> => {
+      const normalized: Partial<TuffItem> = { ...patch }
+      if (patch.source) {
+        normalized.source = {
+          ...patch.source,
+          type: 'plugin',
+          id: canonicalSourceId(scope),
+          name: this.name,
+          version: this.version
+        }
+      }
+      if (patch.meta) {
+        normalized.meta = { ...patch.meta, pluginName: this.name }
+        if (scope === 'active-feature') delete normalized.meta.searchProviderId
+      }
+      return normalized
+    }
+    const getOwnedItem = (
+      id: string,
+      scope?: PluginBusinessItemScope
+    ): { item: TuffItem; scope: PluginBusinessItemScope } | undefined => {
+      let owned = ownedItems.get(id)
+      const current = getBoxItemManager().get(id)
+      if (!owned && allowExistingPluginItems && current && this.ownsLegacyBusinessItem(current)) {
+        owned = { item: current, scope: scope ?? 'root-results' }
+        ownedItems.set(id, owned)
+      }
+      if (!owned || (scope && owned.scope !== scope)) return undefined
+      return current === owned.item ? owned : undefined
+    }
+    const closeOwnedItems = async (): Promise<void> => {
+      const manager = getBoxItemManager()
+      for (const [id, owned] of ownedItems) {
+        if (manager.get(id) === owned.item) manager.delete(id)
+      }
+      ownedItems.clear()
+    }
+
+    const host: PluginBusinessFeatureHost = Object.freeze({
+      pushItems: async (
+        scope: PluginBusinessItemScope,
+        items: readonly PluginBusinessItemDto[],
+        signal: AbortSignal
+      ) => {
+        assertCurrent(signal)
+        if (!this.ensureRootResultsPermission('pushItems')) return
+        const processed = await Promise.all(
+          items.map((item) => this.processBusinessItemIcon(item as unknown as TuffItem))
+        )
+        assertCurrent(signal)
+        if (!this.ensureRootResultsPermission('pushItems')) return
+        const enriched = processed.map((item) => bindItemIdentity(item, scope))
+        const accepted =
+          scope === 'root-results'
+            ? enriched.filter((item) => this.isRootResultsProviderEnabled(item))
+            : enriched
+        if (accepted.length === 0) return
+        assertCurrent(signal)
+        const manager = getBoxItemManager()
+        for (const item of accepted) {
+          const current = manager.get(item.id)
+          const owned = ownedItems.get(item.id)
+          if (current && (!owned || current !== owned.item || owned.scope !== scope)) {
+            throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
+              code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
+            })
+          }
+        }
+        manager.batchUpsert(accepted)
+        for (const item of accepted) {
+          const stored = manager.get(item.id)
+          if (stored) ownedItems.set(item.id, { item: stored, scope })
+        }
+      },
+      updateItem: (
+        scope: PluginBusinessItemScope,
+        id: string,
+        patch: PluginBusinessItemDto,
+        signal: AbortSignal
+      ) => {
+        assertCurrent(signal)
+        if (!this.ensureRootResultsPermission('update')) return false
+        const manager = getBoxItemManager()
+        const owned = getOwnedItem(id, scope)
+        if (!owned) return false
+        const normalizedPatch = bindPatchIdentity(patch as unknown as Partial<TuffItem>, scope)
+        if (scope === 'root-results') {
+          const candidate = this.enrichItemWithSource({
+            ...owned.item,
+            ...normalizedPatch,
+            meta: {
+              ...owned.item.meta,
+              ...(normalizedPatch.meta ?? {})
+            }
+          } as TuffItem)
+          if (!this.ensureRootResultsProviderEnabled('update', candidate)) return false
+        }
+        assertCurrent(signal)
+        manager.update(id, normalizedPatch)
+        const stored = manager.get(id)
+        if (!stored) {
+          ownedItems.delete(id)
+          return false
+        }
+        ownedItems.set(id, { item: stored, scope })
+        return true
+      },
+      removeItem: (id: string, signal: AbortSignal) => {
+        assertCurrent(signal)
+        const owned = getOwnedItem(id)
+        if (!owned) return false
+        getBoxItemManager().delete(id)
+        ownedItems.delete(id)
+        return true
+      },
+      clearItems: async (signal: AbortSignal) => {
+        assertCurrent(signal)
+        const removed = [...ownedItems.keys()].filter((id) => getOwnedItem(id)).length
+        await closeOwnedItems()
+        return removed
+      },
+      listItems: (signal: AbortSignal) => {
+        assertCurrent(signal)
+        const items: TuffItem[] = []
+        for (const [id, owned] of ownedItems) {
+          if (getBoxItemManager().get(id) === owned.item) items.push(owned.item)
+          else ownedItems.delete(id)
+        }
+        return items as unknown as PluginBusinessItemDto[]
+      }
+    })
+
+    return Object.freeze({ host, closeResources: closeOwnedItems })
+  }
+
+  createBusinessFeatureHost(activation: PluginActivationIdentity): PluginBusinessFeatureHost {
+    const key = this.getBusinessFeatureBindingKey(activation)
+    const existing = this.businessFeatureBindings.get(key)
+    if (existing && this.matchesExactBusinessActivation(existing.activation, activation)) {
+      return existing.host
+    }
+    const binding = this.createBusinessFeatureBinding(activation)
+    this.businessFeatureBindings.set(key, { activation, ...binding })
+    return binding.host
+  }
+
+  async cleanupBusinessItems(
+    activation: PluginActivationIdentity,
+    _ids: readonly string[]
+  ): Promise<void> {
+    const key = this.getBusinessFeatureBindingKey(activation)
+    const binding = this.businessFeatureBindings.get(key)
+    if (!binding || !this.matchesExactBusinessActivation(binding.activation, activation)) return
+    this.businessFeatureBindings.delete(key)
+    await binding.closeResources()
+  }
+
+  getBusinessRuntimeInfo(): PluginBusinessRuntimeInfoDto {
+    return Object.freeze({
+      name: this.name,
+      displayName: this.displayName ?? this.name,
+      version: this.version,
+      description: this.desc,
+      status: PluginStatus[this.status]?.toLowerCase() ?? 'unknown',
+      sdkapi: this.sdkapi ?? 0,
+      ...(this.category ? { category: this.category } : {})
+    })
+  }
+
+  async addBusinessFeature(feature: IPluginFeature): Promise<boolean> {
+    const normalized = new PluginFeature(this.pluginPath, feature, this.dev)
+    if (normalized.icon instanceof TuffIconImpl) await normalized.icon.init()
+    return this.addFeature(normalized)
+  }
+
+  removeBusinessFeature(featureId: string): boolean {
+    return this.delFeature(featureId)
+  }
+
+  listBusinessFeatures(): readonly IPluginFeature[] {
+    return this.features.map((feature) => feature.toJSONObject() as IPluginFeature)
+  }
+
+  readBusinessFile(name: string): { found: false } | { found: true; value: PluginBusinessDto } {
+    const safePath = resolveSafePath(this.getConfigPath(), name)
+    if (!safePath.resolvedPath) throw new Error('PLUGIN_BUSINESS_FILE_PATH_INVALID')
+    if (!fse.existsSync(safePath.resolvedPath)) return { found: false }
+    return {
+      found: true,
+      value: JSON.parse(fse.readFileSync(safePath.resolvedPath, 'utf8')) as PluginBusinessDto
+    }
+  }
+
+  writeBusinessFile(name: string, value: PluginBusinessDto): void {
+    const result = this.savePluginFile(name, value)
+    if (!result.success) throw new Error('PLUGIN_BUSINESS_FILE_WRITE_FAILED')
+  }
+
+  removeBusinessFile(name: string): boolean {
+    const result = this.deletePluginFile(name)
+    if (result.success) return true
+    if (result.error === 'File not found') return false
+    throw new Error('PLUGIN_BUSINESS_FILE_REMOVE_FAILED')
+  }
+
+  listBusinessFiles(): readonly string[] {
+    return this.listPluginFiles()
+  }
+
+  private ownsLegacyBusinessItem(item: TuffItem): boolean {
+    const providerId =
+      typeof item.meta?.searchProviderId === 'string' ? item.meta.searchProviderId : undefined
+    return Boolean(
+      item.meta?.pluginName === this.name ||
+      item.source?.name === this.name ||
+      item.source?.id === this.name ||
+      (providerId && this.searchProviders?.some((provider) => provider.id === providerId))
+    )
+  }
+
+  private getBusinessFeatureBindingKey(activation: PluginActivationIdentity): string {
+    return `${activation.name}\u0000${activation.pluginInstanceId}\u0000${activation.activationGeneration}`
+  }
+
+  private matchesExactBusinessActivation(
+    left: PluginActivationIdentity,
+    right: PluginActivationIdentity
+  ): boolean {
+    return (
+      left.name === right.name &&
+      left.pluginInstanceId === right.pluginInstanceId &&
+      left.activationGeneration === right.activationGeneration &&
+      left.key === right.key
+    )
   }
 
   private matchesActivation(activation: PluginActivationIdentity): boolean {
@@ -1501,17 +1899,19 @@ export class TouchPlugin implements ITouchPlugin {
     this.pluginLifecycle = null
     this.abortFeatureControllers()
 
-    try {
-      await TouchPlugin._runtimeService?.stopActivation(activation, { runDestroy: true })
-    } catch {
-      this.issues.push({
-        type: 'error',
-        message: 'Plugin runtime termination failed (PLUGIN_RUNTIME_HOST_STOP_FAILED).',
-        source: 'runtime:teardown',
-        code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED',
-        meta: { code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED' },
-        timestamp: Date.now()
-      })
+    if (activation.key) {
+      try {
+        await TouchPlugin._runtimeService?.stopActivation(activation, { runDestroy: true })
+      } catch {
+        this.issues.push({
+          type: 'error',
+          message: 'Plugin runtime termination failed (PLUGIN_RUNTIME_HOST_STOP_FAILED).',
+          source: 'runtime:teardown',
+          code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED',
+          meta: { code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED' },
+          timestamp: Date.now()
+        })
+      }
     }
     this.revokeActivationAuthority(activation)
 
@@ -2208,65 +2608,16 @@ export class TouchPlugin implements ITouchPlugin {
     }
 
     const boxItemManager = getBoxItemManager()
+    const businessFeatureHost = this.createBusinessFeatureBinding(
+      this.getActivationIdentity(),
+      true
+    ).host
 
     /**
      * Process item icons - convert relative paths to absolute paths or dev server URLs
      */
     const processItemIcon = async (item: TuffItem): Promise<TuffItem> => {
-      const processedItem = { ...item }
-
-      // Process item.icon
-      if (processedItem.icon && processedItem.icon.type === 'file') {
-        const icon = new TuffIconImpl(
-          this.pluginPath,
-          processedItem.icon.type,
-          processedItem.icon.value,
-          this.dev,
-          processedItem.icon.colorful,
-          processedItem.icon.color
-        )
-        await icon.init()
-        processedItem.icon = {
-          type: icon.type,
-          value: icon.value,
-          status: icon.status,
-          color: icon.color,
-          colorful: icon.colorful
-        }
-      }
-
-      // Process render.basic.icon
-      if (
-        processedItem.render?.basic?.icon &&
-        typeof processedItem.render.basic.icon === 'object' &&
-        processedItem.render.basic.icon.type === 'file'
-      ) {
-        const basicIcon = processedItem.render.basic.icon
-        const icon = new TuffIconImpl(
-          this.pluginPath,
-          basicIcon.type,
-          basicIcon.value,
-          this.dev,
-          basicIcon.colorful,
-          basicIcon.color
-        )
-        await icon.init()
-        processedItem.render = {
-          ...processedItem.render,
-          basic: {
-            ...processedItem.render.basic,
-            icon: {
-              type: icon.type,
-              value: icon.value,
-              status: icon.status,
-              color: icon.color,
-              colorful: icon.colorful
-            }
-          }
-        }
-      }
-
-      return processedItem
+      return this.processBusinessItemIcon(item)
     }
 
     const ensureBoxItemsActive = (method: string): boolean => {
@@ -2279,23 +2630,11 @@ export class TouchPlugin implements ITouchPlugin {
 
     const pushBoxItems = async (items: TuffItem[], scope: BoxItemWriteScope): Promise<void> => {
       if (!ensureBoxItemsActive('pushItems')) return
-      if (!this.ensureRootResultsPermission('pushItems')) return
-      const processed = await Promise.all(items.map(processItemIcon))
-      if (!ensureBoxItemsActive('pushItems')) return
-      if (!this.ensureRootResultsPermission('pushItems')) return
-      const enriched = processed.map((item) => this.enrichItemWithSource(item, scope))
-
-      const acceptedItems =
-        scope === 'root-results'
-          ? enriched.filter((item) => this.isRootResultsProviderEnabled(item))
-          : enriched
-      if (acceptedItems.length === 0) {
-        if (scope === 'root-results') {
-          this.logger.warn('[Feature SDK] Ignored boxItems.pushItems: search provider is disabled.')
-        }
-        return
-      }
-      boxItemManager.batchUpsert(acceptedItems)
+      await businessFeatureHost.pushItems(
+        scope,
+        items as unknown as PluginBusinessItemDto[],
+        new AbortController().signal
+      )
     }
 
     const updateBoxItem = (
@@ -2304,23 +2643,12 @@ export class TouchPlugin implements ITouchPlugin {
       scope: BoxItemWriteScope
     ): void => {
       if (!ensureBoxItemsActive('update')) return
-      if (!this.ensureRootResultsPermission('update')) return
-      if (scope === 'root-results') {
-        const existing = boxItemManager.get(id)
-        const providerGuardItem =
-          existing && updates
-            ? this.enrichItemWithSource({
-                ...existing,
-                ...updates,
-                meta: {
-                  ...existing.meta,
-                  ...updates.meta
-                }
-              })
-            : this.enrichItemWithSource({ ...(updates as TuffItem), id })
-        if (!this.ensureRootResultsProviderEnabled('update', providerGuardItem)) return
-      }
-      boxItemManager.update(id, updates)
+      void businessFeatureHost.updateItem(
+        scope,
+        id,
+        updates as unknown as PluginBusinessItemDto,
+        new AbortController().signal
+      )
     }
 
     // BoxItem SDK 工具对象
@@ -2672,14 +3000,14 @@ export class TouchPlugin implements ITouchPlugin {
    * routed through the standard runtime-error handler so a throwing `onClose`
    * cannot break the feature-exit flow.
    */
-  triggerFeatureExit(): void {
+  async triggerFeatureExit(): Promise<void> {
     const feature = CoreBoxManager.getInstance().getCurrentFeature() ?? undefined
     if (!feature) return
 
     try {
-      this.pluginLifecycle?.onClose?.(feature)
+      await this.pluginLifecycle?.onClose?.(feature)
     } catch (error) {
-      void this.handleRuntimeError('onClose', error)
+      await this.handleRuntimeError('onClose', error)
     }
 
     try {

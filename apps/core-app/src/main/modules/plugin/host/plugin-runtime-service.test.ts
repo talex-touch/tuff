@@ -1,14 +1,19 @@
 import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   PluginRuntimeChildAdapter,
   PluginRuntimeControlPortAdapter,
   PluginRuntimeProcessFactory
 } from './plugin-runtime-host'
 import { PluginRuntimeHostError } from './plugin-runtime-host'
-import { PluginRuntimeService, type PluginRuntimeActivationOptions } from './plugin-runtime-service'
+import {
+  PluginRuntimeService,
+  PluginRuntimeServiceError,
+  type PluginRuntimeActivationOptions,
+  type PluginRuntimeServiceOptions
+} from './plugin-runtime-service'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
-import type { HostWireMessage } from './plugin-host-wire'
+import { PLUGIN_HOST_CAPABILITIES, type HostWireMessage } from './plugin-host-wire'
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -142,6 +147,13 @@ function createHarness(
   options: {
     artifactExists?: boolean
     capabilityDefinitions?: readonly PluginHostCapabilityDefinition[]
+    authorizeCapability?: PluginRuntimeServiceOptions['authorizeCapability']
+    watchPermissionRevoked?: PluginRuntimeServiceOptions['watchPermissionRevoked']
+    resourceLimits?: {
+      lifecycleTimeoutMs?: number
+      cancelGraceMs?: number
+      shutdownTimeoutMs?: number
+    }
   } = {}
 ) {
   const children: FakeChild[] = []
@@ -183,9 +195,10 @@ function createHarness(
       resolveCurrentIdentity: (pluginName) => currentByPlugin.get(pluginName)
     },
     capabilityDefinitions: options.capabilityDefinitions ?? [],
-    authorizeCapability: () => false,
-    watchPermissionRevoked: () => () => undefined,
+    authorizeCapability: options.authorizeCapability ?? (() => false),
+    watchPermissionRevoked: options.watchPermissionRevoked ?? (() => () => undefined),
     closeResources,
+    resourceLimits: options.resourceLimits,
     createActivationHandle: () => `opaque-handle-${++handleId}`,
     createHostGeneration: () => ++hostGeneration
   })
@@ -278,6 +291,10 @@ function expectInvalidServiceOptions(options: unknown): void {
   )
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('PluginRuntimeService', () => {
   it('rejects malformed constructor options without invoking accessors or leaking native errors', () => {
     expectInvalidServiceOptions(undefined)
@@ -337,6 +354,23 @@ describe('PluginRuntimeService', () => {
       })
     )
 
+    expectInvalidServiceOptions(
+      constructorOptions({
+        capabilityDefinitions: new Array(PLUGIN_HOST_CAPABILITIES.length + 1) as never
+      })
+    )
+
+    const hostileDefinitions = new Proxy([stringCapabilityDefinition()], {
+      getOwnPropertyDescriptor() {
+        throw new Error('/private/definition-list')
+      }
+    })
+    expectInvalidServiceOptions(
+      constructorOptions({
+        capabilityDefinitions: hostileDefinitions
+      })
+    )
+
     const definition = stringCapabilityDefinition()
     const harness = createHarness({ capabilityDefinitions: [definition] })
     definition.id = 'storage.file.write'
@@ -344,7 +378,15 @@ describe('PluginRuntimeService', () => {
     await harness.start(activation())
 
     expect(harness.ports[0].loadPayloads).toEqual([
-      expect.objectContaining({ capabilityManifest: ['storage.file.read'] })
+      expect.objectContaining({
+        capabilityManifest: [
+          {
+            id: 'storage.file.read',
+            callbackLifetime: 'transient',
+            callbackFields: []
+          }
+        ]
+      })
     ])
     await harness.service.dispose()
   })
@@ -364,9 +406,12 @@ describe('PluginRuntimeService', () => {
       }
     })
 
-    await expect(
-      harness.service.startActivation(options as unknown as PluginRuntimeActivationOptions)
-    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
+    const hostileStart = harness.service.startActivation(
+      options as unknown as PluginRuntimeActivationOptions
+    )
+    await expect(hostileStart).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS')
+    )
     expect(getterCalled).toBe(false)
     expect(harness.spawn).not.toHaveBeenCalled()
 
@@ -418,8 +463,9 @@ describe('PluginRuntimeService', () => {
   it('fails before constructing a child when the fixed artifact is missing', async () => {
     const harness = createHarness({ artifactExists: false })
     const identity = activation()
+    const onCrash = vi.fn()
 
-    await expect(harness.start(identity)).rejects.toEqual(
+    await expect(harness.start(identity, { onCrash })).rejects.toEqual(
       new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_ARTIFACT_UNAVAILABLE')
     )
 
@@ -427,6 +473,7 @@ describe('PluginRuntimeService', () => {
     expect(harness.revokeKey).toHaveBeenCalledWith(identity.key)
     expect(harness.closeResources).toHaveBeenCalledWith(identity)
     expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(onCrash).not.toHaveBeenCalled()
   })
 
   it('loads an immutable empty capability manifest and awaits child onInit', async () => {
@@ -451,7 +498,12 @@ describe('PluginRuntimeService', () => {
           arch: 'arm64',
           manifest: { name: 'plugin.alpha' }
         },
-        capabilityManifest: []
+        capabilityManifest: [],
+        callbackLimits: {
+          maxCallbacks: 64,
+          maxConcurrentCallbacks: 16,
+          maxResources: 64
+        }
       }
     ])
 
@@ -494,8 +546,16 @@ describe('PluginRuntimeService', () => {
   it('reports a stable crash and rotates process, handle, generation and key on re-enable', async () => {
     const harness = createHarness()
     const firstIdentity = activation('plugin.alpha', 1, 'first-key')
-    const onCrash = vi.fn()
-    const first = await harness.start(firstIdentity, { onCrash })
+    const order: string[] = []
+    const onCrash = vi.fn(() => {
+      order.push('crash')
+    })
+    const first = await harness.start(firstIdentity, {
+      closeResources: () => {
+        order.push('resources')
+      },
+      onCrash
+    })
 
     harness.children[0].emitExit()
     await vi.waitFor(() => expect(onCrash).toHaveBeenCalledTimes(1))
@@ -504,6 +564,8 @@ describe('PluginRuntimeService', () => {
       pluginName: 'plugin.alpha',
       activationGeneration: 1
     })
+    expect(order).toEqual(['resources', 'crash'])
+    expect(harness.children[0].exited).toBe(true)
     expect(harness.service.resolve(firstIdentity)).toBeUndefined()
 
     const secondIdentity = activation('plugin.alpha', 2, 'second-key')
@@ -624,6 +686,136 @@ describe('PluginRuntimeService', () => {
     expect(harness.service.resolve(identity)).toBeUndefined()
     expect(harness.revokeKey).toHaveBeenCalledTimes(1)
     expect(harness.closeResources).toHaveBeenCalledTimes(1)
+    expect(harness.children[0].exited).toBe(true)
+    await harness.service.dispose()
+    expect(onCrash).toHaveBeenCalledTimes(1)
+  })
+
+  it('tears down a retained resource before reporting a permission-revoke crash', async () => {
+    const watchers = new Set<() => void>()
+    const order: string[] = []
+    const nativeDispose = vi.fn(() => {
+      order.push('native-resource')
+    })
+    const definition: PluginHostCapabilityDefinition<null, object> = {
+      id: 'channel.subscribe',
+      permission: 'channel.private',
+      timeoutMs: 1_000,
+      maxConcurrency: 1,
+      callbackLifetime: 'resource',
+      callbackFields: [],
+      validateRequest(value) {
+        if (value !== null) throw new Error('invalid request')
+        return null
+      },
+      validateResult(value) {
+        if (!value || typeof value !== 'object') throw new Error('invalid result')
+        return value
+      },
+      invoke(_context, _request, _signal, resources) {
+        return resources.register('subscription', nativeDispose)
+      }
+    }
+    const harness = createHarness({
+      capabilityDefinitions: [definition],
+      authorizeCapability: () => true,
+      watchPermissionRevoked: (_pluginName, _permissionId, onRevoke) => {
+        watchers.add(onRevoke)
+        return () => watchers.delete(onRevoke)
+      }
+    })
+    const identity = activation()
+    const onCrash = vi.fn(() => {
+      order.push(harness.children[0].exited ? 'crash' : 'crash-before-exit')
+    })
+    const runtime = await harness.start(identity, {
+      closeResources: () => {
+        order.push('external-resources')
+      },
+      onCrash
+    })
+
+    harness.ports[0].emit({
+      ...runtime.host.owner,
+      type: 'capability-call',
+      requestId: 901,
+      capability: 'channel.subscribe',
+      payload: null
+    })
+    await vi.waitFor(() =>
+      expect(harness.ports[0].sent).toContainEqual(
+        expect.objectContaining({
+          type: 'capability-result',
+          requestId: 901,
+          ok: true,
+          result: expect.objectContaining({
+            __tuffHostWire: 'resource',
+            kind: 'subscription'
+          })
+        })
+      )
+    )
+    expect(watchers.size).toBe(1)
+
+    const revoke = [...watchers][0]
+    revoke()
+    revoke()
+    await vi.waitFor(() => expect(onCrash).toHaveBeenCalledTimes(1))
+
+    expect(harness.revokeKey).toHaveBeenCalledWith(identity.key)
+    expect(nativeDispose).toHaveBeenCalledTimes(1)
+    expect(watchers.size).toBe(0)
+    expect(order).toEqual(['native-resource', 'external-resources', 'crash'])
+    expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(harness.children[0].exited).toBe(true)
+    await harness.service.dispose()
+    expect(nativeDispose).toHaveBeenCalledTimes(1)
+    expect(onCrash).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports an active timeout once after resource and child cleanup', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness({
+      resourceLimits: {
+        lifecycleTimeoutMs: 10,
+        cancelGraceMs: 5,
+        shutdownTimeoutMs: 5
+      }
+    })
+    const identity = activation()
+    const order: string[] = []
+    const onCrash = vi.fn(() => {
+      order.push('crash')
+    })
+    const runtime = await harness.start(identity, {
+      closeResources: () => {
+        order.push('resources')
+      },
+      onCrash
+    })
+    harness.ports[0].destroyBarrier = deferred<void>()
+
+    const call = runtime.lifecycle.onMessage('timeout', null)
+    const rejection = expect(call).rejects.toEqual(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_TIMEOUT')
+    )
+    await vi.advanceTimersByTimeAsync(10)
+    await rejection
+    expect(onCrash).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(5)
+    await runtime.host.stop()
+    await flush()
+
+    expect(order).toEqual(['resources', 'crash'])
+    expect(onCrash).toHaveBeenCalledTimes(1)
+    expect(onCrash).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_CRASHED',
+      pluginName: identity.name,
+      activationGeneration: identity.activationGeneration
+    })
+    expect(harness.children[0].exited).toBe(true)
+    expect(harness.service.resolve(identity)).toBeUndefined()
     await harness.service.dispose()
     expect(onCrash).toHaveBeenCalledTimes(1)
   })
@@ -653,7 +845,8 @@ describe('PluginRuntimeService', () => {
   it('keeps repeated stop and dispose idempotent', async () => {
     const harness = createHarness()
     const identity = activation()
-    await harness.start(identity)
+    const onCrash = vi.fn()
+    await harness.start(identity, { onCrash })
 
     await Promise.all([
       harness.service.stopActivation(identity),
@@ -666,6 +859,47 @@ describe('PluginRuntimeService', () => {
     expect(harness.closeResources).toHaveBeenCalledTimes(1)
     expect(harness.children[0].exited).toBe(true)
     expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(onCrash).not.toHaveBeenCalled()
+  })
+
+  it('merges trusted activation-local definitions into only that activation manifest', async () => {
+    const harness = createHarness()
+    const localDefinition = stringCapabilityDefinition({ id: 'plugin.info.get' })
+    const alpha = activation('plugin.alpha', 1, 'alpha-key')
+    const beta = activation('plugin.beta', 1, 'beta-key')
+
+    await harness.start(alpha, { capabilityDefinitions: [localDefinition] })
+    await harness.start(beta)
+
+    const alphaLoad = harness.ports[0].sent.find(
+      (message) => (message as { type?: string }).type === 'host-load'
+    ) as { payload: { capabilityManifest: Array<{ id: string }> } }
+    const betaLoad = harness.ports[1].sent.find(
+      (message) => (message as { type?: string }).type === 'host-load'
+    ) as { payload: { capabilityManifest: Array<{ id: string }> } }
+    expect(alphaLoad.payload.capabilityManifest.map((entry) => entry.id)).toEqual([
+      'plugin.info.get'
+    ])
+    expect(betaLoad.payload.capabilityManifest).toEqual([])
+
+    await harness.service.dispose()
+  })
+
+  it('rejects duplicate base and activation definitions before spawning a process', async () => {
+    const base = stringCapabilityDefinition()
+    const harness = createHarness({ capabilityDefinitions: [base] })
+    const closeResources = vi.fn()
+
+    await expect(
+      harness.start(activation(), {
+        capabilityDefinitions: [stringCapabilityDefinition()],
+        closeResources
+      })
+    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
+    expect(harness.spawn).not.toHaveBeenCalled()
+    expect(harness.revokeKey).toHaveBeenCalledWith(activation().key)
+    expect(harness.closeResources).toHaveBeenCalledWith(activation())
+    expect(closeResources).toHaveBeenCalledTimes(1)
   })
 
   it('never routes an old lifecycle proxy into a replacement generation', async () => {
