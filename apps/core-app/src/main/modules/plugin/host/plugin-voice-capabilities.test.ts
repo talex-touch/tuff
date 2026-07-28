@@ -177,7 +177,16 @@ describe('plugin voice capabilities', () => {
       data: { format: 'wav', played: true, durationMs: 800 }
     })
     expect(JSON.stringify(spoken)).not.toMatch(/host-only-audio|base64/i)
-    expect(service.speak).toHaveBeenCalledTimes(1)
+    expect(service.dictate).toHaveBeenCalledWith(
+      expect.objectContaining({ cleanup: true }),
+      expect.any(AbortSignal),
+      'plugin:touch-dictation'
+    )
+    expect(service.speak).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'hello' }),
+      expect.any(AbortSignal),
+      'plugin:touch-dictation'
+    )
   })
 
   it.each([
@@ -196,7 +205,7 @@ describe('plugin voice capabilities', () => {
   })
 
   it('streams one bounded event at a time and closes the owner resource on dispose', async () => {
-    const { controlled, registry, resources } = createHarness()
+    const { controlled, registry, resources, service } = createHarness()
     let releaseCallback: (() => void) | undefined
     const onEvent = vi.fn(
       async () =>
@@ -209,6 +218,15 @@ describe('plugin voice capabilities', () => {
       payload: { cleanup: true, language: 'zh-CN' },
       onEvent
     })
+    expect(service.stream).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'zh-CN' }),
+      expect.any(AbortSignal),
+      'plugin:touch-dictation'
+    )
+    const streamSignal = (service.stream as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as
+      | AbortSignal
+      | undefined
+    expect(streamSignal?.aborted).toBe(false)
     expect(resources.inspect(handle)).toMatchObject({ kind: 'stream' })
     await waitUntil(() => controlled.next.mock.calls.length === 1)
 
@@ -220,6 +238,7 @@ describe('plugin voice capabilities', () => {
 
     const resource = resources.inspect(handle)!
     await resources.dispose(resource.id, resource.kind)
+    expect(streamSignal?.aborted).toBe(true)
     expect(controlled.close).toHaveBeenCalledTimes(1)
     expect(resources.size).toBe(0)
   })

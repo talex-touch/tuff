@@ -44,15 +44,18 @@ export interface PluginVoiceSpeakResult {
 export interface PluginVoiceHostService {
   dictate(
     payload: PluginVoiceDictateRequest,
-    signal: AbortSignal
+    signal: AbortSignal,
+    caller: string
   ): PluginVoiceDictateResult | Promise<PluginVoiceDictateResult>
   speak(
     payload: PluginVoiceSpeakRequest,
-    signal: AbortSignal
+    signal: AbortSignal,
+    caller: string
   ): PluginVoiceSpeakResult | Promise<PluginVoiceSpeakResult>
   stream(
     payload: PluginVoiceDictateRequest,
-    signal: AbortSignal
+    signal: AbortSignal,
+    caller: string
   ): AsyncIterable<PluginVoiceStreamEvent> | Promise<AsyncIterable<PluginVoiceStreamEvent>>
 }
 
@@ -350,7 +353,8 @@ function freezeDefinition<Request, Result>(
 function startStreamPump(
   iterable: AsyncIterable<PluginVoiceStreamEvent>,
   request: VoiceStreamRequest,
-  signal: AbortSignal,
+  parentSignal: AbortSignal,
+  streamController: AbortController,
   resources: PluginHostCapabilityResourceContext
 ): object {
   let iterator: AsyncIterator<PluginVoiceStreamEvent>
@@ -366,7 +370,8 @@ function startStreamPump(
   const dispose = (): Promise<void> => {
     if (disposePromise) return disposePromise
     disposed = true
-    signal.removeEventListener('abort', onAbort)
+    parentSignal.removeEventListener('abort', onAbort)
+    streamController.abort()
     disposePromise = Promise.resolve()
       .then(async () => {
         if (typeof iterator.return === 'function') await iterator.return()
@@ -377,21 +382,22 @@ function startStreamPump(
   const onAbort = (): void => {
     void dispose().catch(() => undefined)
   }
-  signal.addEventListener('abort', onAbort, { once: true })
+  parentSignal.addEventListener('abort', onAbort, { once: true })
+  if (parentSignal.aborted) onAbort()
   const handle = resources.register('stream', dispose)
 
   setImmediate(() => {
     void (async () => {
       try {
-        while (!disposed && !signal.aborted) {
+        while (!disposed && !streamController.signal.aborted) {
           const step = await iterator.next()
-          if (disposed || signal.aborted || step.done) break
+          if (disposed || streamController.signal.aborted || step.done) break
           const event = validateStreamEvent(step.value)
           await request.onEvent(event)
           if (event.type === 'end' || event.type === 'error') break
         }
       } catch {
-        if (!disposed && !signal.aborted) {
+        if (!disposed && !streamController.signal.aborted) {
           try {
             await request.onEvent(Object.freeze({ type: 'error', code: 'VOICE_STREAM_FAILED' }))
           } catch {
@@ -475,13 +481,14 @@ export function createPluginVoiceCapabilities(
       validateRequest: validateInvokeRequest,
       validateResult: validateInvokeResult,
       async invoke(context, request, signal) {
-        assertAuthority(context)
+        const activation = assertAuthority(context)
+        const caller = `plugin:${activation.name}`
         const normalized = request as VoiceInvokeRequest
         if (normalized.operation === 'dictate') {
-          const result = await service.dictate(normalized.payload, signal)
+          const result = await service.dictate(normalized.payload, signal, caller)
           return { operation: 'dictate', data: result }
         }
-        const result = validateSpeakResult(await service.speak(normalized.payload, signal))
+        const result = validateSpeakResult(await service.speak(normalized.payload, signal, caller))
         return {
           operation: 'speak',
           data: {
@@ -502,10 +509,26 @@ export function createPluginVoiceCapabilities(
       validateRequest: validateStreamRequest,
       validateResult: (value) => value,
       async invoke(context, request, signal, resources) {
-        assertAuthority(context)
+        const activation = assertAuthority(context)
         const normalized = request as VoiceStreamRequest
-        const iterable = await service.stream(normalized.payload, signal)
-        return startStreamPump(iterable, normalized, signal, resources)
+        const streamController = new AbortController()
+        const abortStream = (): void => streamController.abort()
+        signal.addEventListener('abort', abortStream, { once: true })
+        if (signal.aborted) abortStream()
+        let iterable: AsyncIterable<PluginVoiceStreamEvent>
+        try {
+          iterable = await service.stream(
+            normalized.payload,
+            streamController.signal,
+            `plugin:${activation.name}`
+          )
+        } catch (error) {
+          signal.removeEventListener('abort', abortStream)
+          streamController.abort()
+          throw error
+        }
+        signal.removeEventListener('abort', abortStream)
+        return startStreamPump(iterable, normalized, signal, streamController, resources)
       }
     })
   ]

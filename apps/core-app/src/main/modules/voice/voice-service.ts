@@ -136,7 +136,8 @@ export class VoiceService {
   async dictate(
     payload: VoiceDictatePayload = {},
     _context?: HandlerContext,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
   ): Promise<VoiceDictateResult> {
     throwIfCancelled(signal)
     this.assertSupported()
@@ -170,7 +171,7 @@ export class VoiceService {
       throw new Error('No audio was captured')
     }
 
-    const transcript = await this.transcribe(capture.audio, payload.language, signal)
+    const transcript = await this.transcribe(capture.audio, payload.language, signal, caller)
     throwIfCancelled(signal)
     const language = transcript.language ?? payload.language
 
@@ -188,7 +189,7 @@ export class VoiceService {
 
     const cleanup = payload.cleanup ?? true
     const polishedText = cleanup
-      ? await this.polish(transcript.text, payload.language, signal)
+      ? await this.polish(transcript.text, payload.language, signal, caller)
       : null
     throwIfCancelled(signal)
 
@@ -204,7 +205,11 @@ export class VoiceService {
   }
 
   /** Synthesize `text` via the intelligence `audio.tts` capability and (by default) play it. */
-  async speak(payload: VoiceSpeakPayload, signal?: AbortSignal): Promise<VoiceSpeakResult> {
+  async speak(
+    payload: VoiceSpeakPayload,
+    signal?: AbortSignal,
+    caller = 'core.voice.speak'
+  ): Promise<VoiceSpeakResult> {
     throwIfCancelled(signal)
     const text = typeof payload.text === 'string' ? payload.text.trim() : ''
     if (!text) {
@@ -217,7 +222,7 @@ export class VoiceService {
         ...(payload.voice ? { voice: payload.voice } : {}),
         ...(payload.language ? { language: payload.language } : {}),
         format: 'wav',
-        metadata: { caller: 'core.voice.speak' }
+        metadata: { caller }
       }),
       signal
     )
@@ -332,7 +337,8 @@ export class VoiceService {
    */
   async *streamDictation(
     payload: VoiceAsrStreamPayload = {},
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     throwIfCancelled(signal)
     this.assertSupported()
@@ -340,9 +346,9 @@ export class VoiceService {
     const wsConfig = getStreamingAsrConfig()
     const drainCapture = getDrainCapture()
     if (wsConfig && drainCapture) {
-      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal)
+      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal, caller)
     } else {
-      yield* this.streamViaChunkedBatch(payload, signal)
+      yield* this.streamViaChunkedBatch(payload, signal, caller)
     }
   }
 
@@ -351,7 +357,8 @@ export class VoiceService {
     payload: VoiceAsrStreamPayload,
     wsConfig: StreamingAsrConfig,
     drainCapture: (sessionId: string) => { pcm: Buffer },
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const pollCapture = getPollCapture()
     const { sessionId } = nativeAudio.startCapture({
@@ -365,12 +372,13 @@ export class VoiceService {
         url: wsConfig.url,
         sampleRate: wsConfig.sampleRate,
         language: payload.language,
+        signal,
         drainFrames: () => drainCapture(sessionId).pcm,
         isCapturing: () => (pollCapture ? pollCapture(sessionId).active : true)
       })) {
         throwIfCancelled(signal)
         if (event.type === 'final' && event.text) {
-          const polished = await this.polish(event.text, payload.language, signal)
+          const polished = await this.polish(event.text, payload.language, signal, caller)
           yield {
             type: 'final',
             text: polished ?? event.text,
@@ -391,7 +399,8 @@ export class VoiceService {
   /** Chunked-batch streaming: re-transcribe the audio-so-far on an interval. */
   private async *streamViaChunkedBatch(
     payload: VoiceAsrStreamPayload,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const language = payload.language
     const snapshotCapture = getSnapshotCapture()
@@ -416,7 +425,7 @@ export class VoiceService {
           const snapshot = snapshotCapture(sessionId)
           if (snapshot?.audio && snapshot.audio.length > WAV_HEADER_BYTES) {
             try {
-              const { text } = await this.transcribe(snapshot.audio, language, signal)
+              const { text } = await this.transcribe(snapshot.audio, language, signal, caller)
               if (text && text !== lastPartial) {
                 lastPartial = text
                 yield { type: 'partial', text }
@@ -438,14 +447,14 @@ export class VoiceService {
       const final = nativeAudio.stopCapture(sessionId)
       stopped = true
 
-      const transcript = await this.transcribe(final.audio, language, signal)
+      const transcript = await this.transcribe(final.audio, language, signal, caller)
       throwIfCancelled(signal)
       const finalLanguage = transcript.language ?? language
 
       if (!transcript.text) {
         yield { type: 'final', text: '', ...(finalLanguage ? { language: finalLanguage } : {}) }
       } else {
-        const polished = await this.polish(transcript.text, language, signal)
+        const polished = await this.polish(transcript.text, language, signal, caller)
         throwIfCancelled(signal)
         yield {
           type: 'final',
@@ -504,7 +513,8 @@ export class VoiceService {
   private async transcribe(
     audio: Buffer,
     language?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
   ): Promise<{ text: string; language?: string }> {
     throwIfCancelled(signal)
     const dataUrl = `data:audio/wav;base64,${audio.toString('base64')}`
@@ -515,7 +525,7 @@ export class VoiceService {
           format: 'wav',
           ...(language ? { language } : {})
         },
-        { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller: VOICE_CALLER } }
+        { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller } }
       ),
       signal
     )
@@ -530,7 +540,8 @@ export class VoiceService {
   private async polish(
     transcript: string,
     language?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    caller = VOICE_CALLER
   ): Promise<string | null> {
     try {
       throwIfCancelled(signal)
@@ -543,7 +554,7 @@ export class VoiceService {
               { role: 'user', content: wrapTranscription(transcript) }
             ]
           },
-          { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller: VOICE_CALLER } }
+          { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller } }
         ),
         signal
       )
