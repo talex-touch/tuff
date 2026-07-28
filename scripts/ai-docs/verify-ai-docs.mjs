@@ -15,8 +15,9 @@ export const AI_DOC_CHECKS = Object.freeze([
 ])
 
 const CURRENT_PROMOTION = /(?:current|当前)[\s\S]{0,80}?(?:CoreApp\s*)?(\d+\.\d+\.\d+(?:-[\w.]+)?)[\s\S]{0,100}?(?:passed|complete|完成|已闭合)/i
-const CURRENT_PROMOTION_NEGATION = /(?:current|当前)[\s\S]{0,120}?(?:fail-closed|不再称为|not\s+(?:passed|complete))/i
+const CURRENT_PROMOTION_NEGATION = /fail-closed|不再称为|not\s+(?:passed|complete)|(?:current|当前)[\s\S]{0,80}?(?:open|未完成|未通过)/i
 const CURRENT_COMPLETION_WITHOUT_VERSION = /(?:current|当前)[\s\S]{0,80}?(?:strict visible gate|packaged evidence|体验证据)[\s\S]{0,80}?(?:passed|complete|完成|已闭合)/i
+const HISTORICAL_PROMOTION = /historical[\s\S]{0,80}?(?:proves?|shows?)[\s\S]{0,80}?(?:current|当前)[\s\S]{0,80}?(?:packaged evidence|recapture|completed?)/i
 
 function readRepoFile(repoRoot, file) {
   try {
@@ -38,15 +39,19 @@ function currentCoreAppVersion(repoRoot) {
 }
 
 function promotionFailures(file, content, currentVersion) {
-  if (CURRENT_PROMOTION_NEGATION.test(content))
-    return []
   const failures = []
-  const match = CURRENT_PROMOTION.exec(content)
-  if (match && match[1] !== currentVersion) {
-    failures.push({ file, message: `current evidence promotion names ${match[1]}, not CoreApp ${currentVersion}` })
-  }
-  else if (CURRENT_COMPLETION_WITHOUT_VERSION.test(content)) {
-    failures.push({ file, message: `current evidence completion must name exact CoreApp ${currentVersion}` })
+  for (const paragraph of content.split(/\n\s*\n/)) {
+    if (CURRENT_PROMOTION_NEGATION.test(paragraph))
+      continue
+    if (HISTORICAL_PROMOTION.test(paragraph)) {
+      failures.push({ file, message: `historical evidence cannot prove current CoreApp ${currentVersion} packaged evidence` })
+      continue
+    }
+    const match = CURRENT_PROMOTION.exec(paragraph)
+    if (match && match[1] !== currentVersion)
+      failures.push({ file, message: `current evidence promotion names ${match[1]}, not CoreApp ${currentVersion}` })
+    else if (CURRENT_COMPLETION_WITHOUT_VERSION.test(paragraph))
+      failures.push({ file, message: `current evidence completion must name exact CoreApp ${currentVersion}` })
   }
   return failures
 }

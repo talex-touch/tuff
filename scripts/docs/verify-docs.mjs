@@ -16,6 +16,7 @@ const POSIX = value => value.split(path.sep).join('/')
 const TASK_JSON = /^\.trellis\/(?:tasks\/archive\/\d{4}-\d{2}|tasks)\/([^/]+)\/task\.json$/
 const MARKDOWN = /\.(?:md|mdc)$/i
 const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Z-]+(?:\.[0-9A-Z-]+)*)?(?:\+[0-9A-Z-]+(?:\.[0-9A-Z-]+)*)?$/i
+const TASK_STATUSES = new Set(['completed', 'in_progress', 'planning', 'review'])
 
 // Every documentation exclusion is declared here, once, and applies to all Markdown rules.
 export const MARKDOWN_SCOPE_EXCLUSIONS = Object.freeze([
@@ -189,7 +190,7 @@ function readTask(repoRoot, file, diagnostics) {
   }
   catch {
     diagnostics.push(diagnostic('DOC-TASK-JSON', file, null, 'invalid JSON'))
-    return null
+    return undefined
   }
 }
 function validTaskShape(task, file, archive, diagnostics) {
@@ -199,15 +200,20 @@ function validTaskShape(task, file, archive, diagnostics) {
   }
   const valid = [
     ['id', typeof task.id === 'string'],
-    ['status', typeof task.status === 'string'],
+    ['status', typeof task.status === 'string' && TASK_STATUSES.has(task.status)],
     ['assignee', typeof task.assignee === 'string'],
     ['children', Array.isArray(task.children) && task.children.every(child => typeof child === 'string')],
+    ['parent', task.parent === null || nonEmptyString(task.parent)],
     ['meta', archive ? task.meta == null || plainObject(task.meta) : plainObject(task.meta)],
     ['completedAt', !archive || typeof task.completedAt === 'string'],
   ]
   for (const [field, validField] of valid) {
-    if (!validField)
-      diagnostics.push(diagnostic('DOC-TASK-TYPE', file, null, `${field} has an invalid type`))
+    if (!validField) {
+      const message = field === 'status'
+        ? `status must be one of ${[...TASK_STATUSES].join(', ')}`
+        : `${field} has an invalid type`
+      diagnostics.push(diagnostic('DOC-TASK-TYPE', file, null, message))
+    }
   }
   return valid.every(([, validField]) => validField)
 }
@@ -221,7 +227,7 @@ export function checkTasks(repoRoot, scope) {
   for (const file of [...scope.activeTasks, ...scope.archivedTasks].sort()) {
     const task = readTask(repoRoot, file, diagnostics)
     const archive = scope.archivedTasks.includes(file)
-    if (task !== null && validTaskShape(task, file, archive, diagnostics))
+    if (task !== undefined && validTaskShape(task, file, archive, diagnostics))
       records.push({ file, archive, task, pathRef: taskReference(file), pathId: taskLocation(file) })
   }
   const aliases = record => [record.task.id, record.pathRef, record.pathId].filter(nonEmptyString)
