@@ -239,6 +239,9 @@ importers:
       marked:
         specifier: 17.0.6
         version: 17.0.6
+      remark-mdc:
+        specifier: 3.11.1
+        version: 3.11.1
       remark-parse:
         specifier: 11.0.0
         version: 11.0.0
