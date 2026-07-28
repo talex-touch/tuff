@@ -15,6 +15,7 @@ import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import { DivisionBoxError, DivisionBoxErrorCode } from '@talex-touch/utils'
 import { DivisionBoxEvents, type HandlerContext } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { getPermissionModule } from '../permission'
 import { pluginModule } from '../plugin/plugin-module'
 import { divisionBoxIpcLog } from './logger'
@@ -213,13 +214,41 @@ export class DivisionBoxIPC {
 
     this.transportDisposers.push(
       transport.on(DivisionBoxEvents.open, async (payload, context) => {
-        enforce(context, 'division-box:session:open', payload)
         const validation = validateConfig(payload)
         if (!validation.valid) {
           return createErrorResponse(validation.error!)
         }
 
-        const session = await this.manager.createSession(payload)
+        const requiresPluginView = !payload.url.startsWith('tuff://detached')
+        const authoritativePlugin = isAuthoritativePluginContext(context.plugin)
+          ? context.plugin
+          : undefined
+        if (requiresPluginView && !authoritativePlugin) {
+          return createErrorResponse(
+            new DivisionBoxError(
+              DivisionBoxErrorCode.PERMISSION_DENIED,
+              'DivisionBox UI views require an authoritative plugin caller.'
+            )
+          )
+        }
+        if (
+          authoritativePlugin &&
+          payload.pluginId &&
+          payload.pluginId !== authoritativePlugin.name
+        ) {
+          return createErrorResponse(
+            new DivisionBoxError(
+              DivisionBoxErrorCode.PERMISSION_DENIED,
+              'DivisionBox UI view owner does not match the caller.'
+            )
+          )
+        }
+
+        const ownerBoundPayload = authoritativePlugin
+          ? { ...payload, pluginId: authoritativePlugin.name }
+          : payload
+        enforce(context, 'division-box:session:open', ownerBoundPayload)
+        const session = await this.manager.createSession(ownerBoundPayload)
         const pluginName = session.getAttachedPlugin()?.name ?? session.meta?.pluginId
 
         session.onStateChange((event) => {

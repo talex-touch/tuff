@@ -154,7 +154,13 @@ code: |
 
 命令、prompt variables、插件存储和日志都不得保存 provider credential。typed contract 见 [Intelligence SDK](../api/intelligence.zh.md)。
 
-## 4. 验证
+## 4. 安全插件视图
+
+插件 BrowserWindow 与 WebContentsView 要求 `sdkapi >= 260615`，并统一使用 Tuff 内置 preload。渲染页只会获得冻结的 `$plugin`、`$config`、`$channel`；可通过 `$plugin.bridgeVersion` 检测 bridge 能力版本。
+
+不再支持自定义 preload、`<webview>`、渲染进程 `require` / `process` / Electron、生产远程 URL、popup 或下载。提高 SDK marker 前必须移除这些依赖。不兼容 surface 会在创建窗口前返回 `PLUGIN_WINDOW_LEGACY_RUNTIME_UNSUPPORTED`，且没有环境变量兼容开关。
+
+## 5. 验证
 
 发布前至少完成这些本地检查：
 
@@ -169,7 +175,7 @@ code: |
 
 仓库内改动还应补最近路径验证，例如 focused Vitest、文件级 ESLint 和 `git diff --check`。不要把全仓历史 lint 噪声当作当前插件改动失败。
 
-## 5. 构建与发布
+## 6. 构建与发布
 
 常规发布路径：
 
@@ -191,7 +197,7 @@ code: |
 - Nexus API Key 至少需要 `plugin:publish`，当前发布预检会按 publisher 权限校验；`plugin:publish` 口径包含发布前读取插件信息所需的能力。
 - 如果 Nexus 拒绝 CLI Token，先执行 `tuff login` 刷新浏览器授权会话，或检查 API Key scopes。
 
-## 6. 插件包与内容包边界
+## 7. 插件包与内容包边界
 
 插件包发布和插件内容包发布是两条不同链路：
 

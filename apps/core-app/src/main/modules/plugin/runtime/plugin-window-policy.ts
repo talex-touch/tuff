@@ -7,7 +7,7 @@ import type {
   PluginWindowNewRequest,
   PluginWindowOptions
 } from '@talex-touch/utils/transport/events/types'
-import type { PluginViewSecurityProfile } from './plugin-view-security-profile'
+import { PluginViewCompatibilityError } from './plugin-view-security-profile'
 import fs from 'node:fs/promises'
 import fsSync from 'node:fs'
 import path from 'node:path'
@@ -45,7 +45,7 @@ export class PluginWindowPolicyError extends Error {
 }
 
 export function toPluginWindowErrorData(error: unknown): PluginWindowErrorData {
-  if (error instanceof PluginWindowPolicyError) {
+  if (error instanceof PluginWindowPolicyError || error instanceof PluginViewCompatibilityError) {
     return { code: error.code, message: error.message }
   }
 
@@ -385,25 +385,21 @@ export type PluginViewNavigationPolicy =
       entryUrl: string
       entryPath: string
       pluginRoot: string
-      allowLegacyWebview: boolean
     }
   | {
       kind: 'development'
       entryUrl: string
       origin: string
       pluginRoot: string
-      allowLegacyWebview: boolean
     }
 
 export interface PluginViewNavigationPolicyOptions {
   pluginRoot: string
   targetUrl: string
-  securityProfile: PluginViewSecurityProfile
   devAddress?: string
   appIsPackaged?: boolean
   pluginDevEnabled?: boolean
   pluginDevSource?: boolean
-  allowLegacyWebview: boolean
 }
 
 export async function createPluginViewNavigationPolicy(
@@ -449,16 +445,8 @@ export async function createPluginViewNavigationPolicy(
       kind: 'local',
       entryUrl: pathToFileURL(entryPath).href,
       entryPath,
-      pluginRoot: realRoot,
-      allowLegacyWebview: options.allowLegacyWebview
+      pluginRoot: realRoot
     }
-  }
-
-  if (options.securityProfile !== 'trusted-plugin-view') {
-    throw new PluginWindowPolicyError(
-      PLUGIN_WINDOW_ERROR_CODES.REMOTE_URL_DENIED,
-      'Compatibility plugin views are local-only.'
-    )
   }
 
   const devAddress = resolveExactLoopbackDevOrigin(options.devAddress, {
@@ -477,8 +465,7 @@ export async function createPluginViewNavigationPolicy(
     kind: 'development',
     entryUrl: target.toString(),
     origin: devAddress.origin,
-    pluginRoot: realRoot,
-    allowLegacyWebview: options.allowLegacyWebview
+    pluginRoot: realRoot
   }
 }
 
@@ -543,42 +530,38 @@ export function installPluginViewNavigationPolicy(
   webContents: Electron.WebContents,
   policy: PluginViewNavigationPolicy
 ): void {
+  const ownerWebContentsId = webContents.id
   webContents.on('will-navigate', (event, targetUrl) => {
     if (!isPluginViewNavigationAllowed(policy, targetUrl)) {
       event.preventDefault()
     }
   })
+  webContents.on('will-frame-navigate', (details) => {
+    const allowed = details.isMainFrame
+      ? isPluginViewNavigationAllowed(policy, details.url)
+      : isPluginViewResourceAllowed(policy, details.url)
+    if (!allowed) details.preventDefault()
+  })
   webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-  webContents.on('will-attach-webview', (event, webPreferences, params) => {
-    if (!policy.allowLegacyWebview || !isPluginViewResourceAllowed(policy, params.src)) {
-      event.preventDefault()
-      return
-    }
-
-    delete webPreferences.preload
-    delete webPreferences.partition
-    webPreferences.nodeIntegration = false
-    webPreferences.nodeIntegrationInSubFrames = false
-    webPreferences.contextIsolation = true
-    webPreferences.sandbox = true
-    webPreferences.webSecurity = true
-  })
-  webContents.on('did-attach-webview', (_event, guestWebContents) => {
-    guestWebContents.on('will-navigate', (event, targetUrl) => {
-      if (!isPluginViewResourceAllowed(policy, targetUrl)) {
-        event.preventDefault()
-      }
-    })
-    guestWebContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  webContents.on('will-attach-webview', (event) => {
+    event.preventDefault()
   })
 
-  webContents.session.setPermissionCheckHandler(() => false)
-  webContents.session.setPermissionRequestHandler(
-    (_requestingWebContents, _permission, callback) => {
-      callback(false)
-    }
-  )
-  webContents.session.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) =>
-    callback({ cancel: !isPluginViewResourceAllowed(policy, details.url) })
-  )
+  const pluginSession = webContents.session
+  pluginSession.setPermissionCheckHandler(() => false)
+  pluginSession.setPermissionRequestHandler((_requestingWebContents, _permission, callback) => {
+    callback(false)
+  })
+  pluginSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+    const ownedRequest = details.webContentsId === ownerWebContentsId
+    callback({ cancel: !ownedRequest || !isPluginViewResourceAllowed(policy, details.url) })
+  })
+
+  const denyDownload = (event: Electron.Event): void => {
+    event.preventDefault()
+  }
+  pluginSession.on('will-download', denyDownload)
+  webContents.once('destroyed', () => {
+    pluginSession.removeListener('will-download', denyDownload)
+  })
 }
