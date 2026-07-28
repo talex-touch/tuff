@@ -22,5 +22,9 @@
   "parent": "07-27-optimize-core-utility-plugins",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete the Intelligence workflow audit and turn its findings into a scoped implementation plan and acceptance evidence.",
+    "blocker": "The child remains in planning; implementation cannot start before its audit and acceptance scope are approved.",
+    "evidence": "prd.md and parent program task map define the Intelligence optimization contract."
+  }
 }

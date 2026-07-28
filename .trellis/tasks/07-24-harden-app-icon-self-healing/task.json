@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Run the real-profile smoke against an official-attested N+1 release and record native trust pass evidence.",
+    "blocker": "An official-attested N+1 release is unavailable; local unsigned packaging cannot satisfy this acceptance criterion.",
+    "evidence": "prd.md acceptance criteria record real-profile hydration, native stress, focused tests, and the pending official-release proof."
+  }
 }
