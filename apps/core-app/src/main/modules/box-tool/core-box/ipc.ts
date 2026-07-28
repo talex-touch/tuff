@@ -5,7 +5,6 @@ import type {
   AllowClipboardRequest,
   CoreBoxHideRequest,
   DeactivateProviderRequest,
-  EnterUIModeRequest,
   ExpandOptions,
   GetProviderDetailsRequest,
   ProviderDetail,
@@ -526,21 +525,9 @@ export class IpcManager {
       this.ensureTransport().on(CoreBoxEvents.provider.getDetails, handleGetProviderDetails)
     )
 
-    const handleEnterUIMode = (request: EnterUIModeRequest) => {
-      const { url } = request
-      if (url) {
-        coreBoxManager.enterUIMode(url)
-      }
-    }
-
     const handleExitUIMode = () => {
       coreBoxManager.exitUIMode()
     }
-
-    this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.enter, handleEnterUIMode))
-    this.transportDisposers.push(
-      this.ensureTransport().on(CoreBoxEvents.uiMode.enter, handleEnterUIMode)
-    )
 
     this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.exit, handleExitUIMode))
     this.transportDisposers.push(
