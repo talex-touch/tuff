@@ -36,6 +36,42 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function voiceCancellationError(): Error {
+  return new Error('VOICE_OPERATION_CANCELLED')
+}
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw voiceCancellationError()
+}
+
+async function awaitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return await operation
+  throwIfCancelled(signal)
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false
+    const onAbort = (): void => {
+      if (settled) return
+      settled = true
+      reject(voiceCancellationError())
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    void operation.then(
+      (value) => {
+        if (settled) return
+        settled = true
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error: unknown) => {
+        if (settled) return
+        settled = true
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+  })
+}
+
 /** Optional native pollCapture accessor — tolerated when the binding predates it. */
 function getPollCapture(): ((sessionId: string) => { active: boolean }) | undefined {
   return (
@@ -99,33 +135,43 @@ export class VoiceService {
   /** One-shot dictation. Throws on hard failures (no mic / no ASR provider). */
   async dictate(
     payload: VoiceDictatePayload = {},
-    _context?: HandlerContext
+    _context?: HandlerContext,
+    signal?: AbortSignal
   ): Promise<VoiceDictateResult> {
+    throwIfCancelled(signal)
     this.assertSupported()
 
     const maxDurationMs = payload.maxDurationMs ?? DEFAULT_MAX_DURATION_MS
     const silenceStopMs = payload.silenceStopMs ?? DEFAULT_SILENCE_STOP_MS
 
     const { sessionId } = nativeAudio.startCapture({ maxDurationMs, silenceStopMs })
-
-    let capture: ReturnType<typeof nativeAudio.stopCapture>
-    try {
-      await this.waitForAutoStop(sessionId, maxDurationMs)
-      capture = nativeAudio.stopCapture(sessionId)
-    } catch (error) {
+    const cancelCapture = (): void => {
       try {
         nativeAudio.cancelCapture(sessionId)
       } catch {
-        /* best effort */
+        // The native session may already have stopped.
       }
+    }
+    signal?.addEventListener('abort', cancelCapture, { once: true })
+
+    let capture: ReturnType<typeof nativeAudio.stopCapture>
+    try {
+      await this.waitForAutoStop(sessionId, maxDurationMs, signal)
+      throwIfCancelled(signal)
+      capture = nativeAudio.stopCapture(sessionId)
+    } catch (error) {
+      cancelCapture()
       throw error
+    } finally {
+      signal?.removeEventListener('abort', cancelCapture)
     }
 
     if (!capture.audio || capture.audio.length === 0) {
       throw new Error('No audio was captured')
     }
 
-    const transcript = await this.transcribe(capture.audio, payload.language)
+    const transcript = await this.transcribe(capture.audio, payload.language, signal)
+    throwIfCancelled(signal)
     const language = transcript.language ?? payload.language
 
     if (!transcript.text) {
@@ -141,7 +187,10 @@ export class VoiceService {
     }
 
     const cleanup = payload.cleanup ?? true
-    const polishedText = cleanup ? await this.polish(transcript.text, payload.language) : null
+    const polishedText = cleanup
+      ? await this.polish(transcript.text, payload.language, signal)
+      : null
+    throwIfCancelled(signal)
 
     return {
       text: polishedText ?? transcript.text,
@@ -155,19 +204,24 @@ export class VoiceService {
   }
 
   /** Synthesize `text` via the intelligence `audio.tts` capability and (by default) play it. */
-  async speak(payload: VoiceSpeakPayload): Promise<VoiceSpeakResult> {
+  async speak(payload: VoiceSpeakPayload, signal?: AbortSignal): Promise<VoiceSpeakResult> {
+    throwIfCancelled(signal)
     const text = typeof payload.text === 'string' ? payload.text.trim() : ''
     if (!text) {
       throw new Error('speak requires non-empty text')
     }
 
-    const tts = await intelligenceTtsService.speak({
-      text,
-      ...(payload.voice ? { voice: payload.voice } : {}),
-      ...(payload.language ? { language: payload.language } : {}),
-      format: 'wav',
-      metadata: { caller: 'core.voice.speak' }
-    })
+    const tts = await awaitWithAbort(
+      intelligenceTtsService.speak({
+        text,
+        ...(payload.voice ? { voice: payload.voice } : {}),
+        ...(payload.language ? { language: payload.language } : {}),
+        format: 'wav',
+        metadata: { caller: 'core.voice.speak' }
+      }),
+      signal
+    )
+    throwIfCancelled(signal)
 
     const format = tts.format || 'wav'
     let played = false
@@ -176,9 +230,11 @@ export class VoiceService {
       const playAudio = getPlayAudio()
       if (bytes && bytes.length > 0 && playAudio) {
         try {
+          throwIfCancelled(signal)
           const playback = playAudio(bytes)
           played = Boolean(playback?.playbackId)
         } catch (error) {
+          if (signal?.aborted) throw voiceCancellationError()
           // A playback failure must not fail synthesis — the audio is still returned.
           voiceLog.warn('Audio playback failed', { error })
         }
@@ -274,15 +330,19 @@ export class VoiceService {
    * The event contract is provider-agnostic: a true streaming / WebSocket ASR
    * backend can later replace the inner loop without changing consumers.
    */
-  async *streamDictation(payload: VoiceAsrStreamPayload = {}): AsyncGenerator<VoiceAsrStreamEvent> {
+  async *streamDictation(
+    payload: VoiceAsrStreamPayload = {},
+    signal?: AbortSignal
+  ): AsyncGenerator<VoiceAsrStreamEvent> {
+    throwIfCancelled(signal)
     this.assertSupported()
 
     const wsConfig = getStreamingAsrConfig()
     const drainCapture = getDrainCapture()
     if (wsConfig && drainCapture) {
-      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture)
+      yield* this.streamViaWebSocket(payload, wsConfig, drainCapture, signal)
     } else {
-      yield* this.streamViaChunkedBatch(payload)
+      yield* this.streamViaChunkedBatch(payload, signal)
     }
   }
 
@@ -290,13 +350,16 @@ export class VoiceService {
   private async *streamViaWebSocket(
     payload: VoiceAsrStreamPayload,
     wsConfig: StreamingAsrConfig,
-    drainCapture: (sessionId: string) => { pcm: Buffer }
+    drainCapture: (sessionId: string) => { pcm: Buffer },
+    signal?: AbortSignal
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const pollCapture = getPollCapture()
     const { sessionId } = nativeAudio.startCapture({
       maxDurationMs: DEFAULT_MAX_DURATION_MS,
       silenceStopMs: DEFAULT_SILENCE_STOP_MS
     })
+    const cancelCapture = (): void => this.abortCapture(sessionId)
+    signal?.addEventListener('abort', cancelCapture, { once: true })
     try {
       for await (const event of createAsrStream({
         url: wsConfig.url,
@@ -305,8 +368,9 @@ export class VoiceService {
         drainFrames: () => drainCapture(sessionId).pcm,
         isCapturing: () => (pollCapture ? pollCapture(sessionId).active : true)
       })) {
+        throwIfCancelled(signal)
         if (event.type === 'final' && event.text) {
-          const polished = await this.polish(event.text, payload.language)
+          const polished = await this.polish(event.text, payload.language, signal)
           yield {
             type: 'final',
             text: polished ?? event.text,
@@ -316,15 +380,18 @@ export class VoiceService {
           yield event
         }
       }
+      throwIfCancelled(signal)
       yield { type: 'end' }
     } finally {
+      signal?.removeEventListener('abort', cancelCapture)
       this.abortCapture(sessionId)
     }
   }
 
   /** Chunked-batch streaming: re-transcribe the audio-so-far on an interval. */
   private async *streamViaChunkedBatch(
-    payload: VoiceAsrStreamPayload
+    payload: VoiceAsrStreamPayload,
+    signal?: AbortSignal
   ): AsyncGenerator<VoiceAsrStreamEvent> {
     const language = payload.language
     const snapshotCapture = getSnapshotCapture()
@@ -335,23 +402,27 @@ export class VoiceService {
       silenceStopMs: DEFAULT_SILENCE_STOP_MS
     })
 
+    const cancelCapture = (): void => this.abortCapture(sessionId)
+    signal?.addEventListener('abort', cancelCapture, { once: true })
     let lastPartial = ''
     let stopped = false
     try {
       if (snapshotCapture) {
         // Live partials: transcribe the audio-so-far on an interval until auto-stop.
         for (;;) {
-          await delay(PARTIAL_INTERVAL_MS)
+          await awaitWithAbort(delay(PARTIAL_INTERVAL_MS), signal)
+          throwIfCancelled(signal)
           const active = pollCapture ? pollCapture(sessionId).active : true
           const snapshot = snapshotCapture(sessionId)
           if (snapshot?.audio && snapshot.audio.length > WAV_HEADER_BYTES) {
             try {
-              const { text } = await this.transcribe(snapshot.audio, language)
+              const { text } = await this.transcribe(snapshot.audio, language, signal)
               if (text && text !== lastPartial) {
                 lastPartial = text
                 yield { type: 'partial', text }
               }
             } catch (error) {
+              if (signal?.aborted) throw voiceCancellationError()
               // A failed interim transcription must not kill the stream.
               voiceLog.debug('Partial transcription failed; continuing', { error })
             }
@@ -360,19 +431,22 @@ export class VoiceService {
         }
       } else {
         // No snapshot support → no live partials; just wait for auto-stop.
-        await this.waitForAutoStop(sessionId, DEFAULT_MAX_DURATION_MS)
+        await this.waitForAutoStop(sessionId, DEFAULT_MAX_DURATION_MS, signal)
       }
 
+      throwIfCancelled(signal)
       const final = nativeAudio.stopCapture(sessionId)
       stopped = true
 
-      const transcript = await this.transcribe(final.audio, language)
+      const transcript = await this.transcribe(final.audio, language, signal)
+      throwIfCancelled(signal)
       const finalLanguage = transcript.language ?? language
 
       if (!transcript.text) {
         yield { type: 'final', text: '', ...(finalLanguage ? { language: finalLanguage } : {}) }
       } else {
-        const polished = await this.polish(transcript.text, language)
+        const polished = await this.polish(transcript.text, language, signal)
+        throwIfCancelled(signal)
         yield {
           type: 'final',
           text: polished ?? transcript.text,
@@ -381,6 +455,7 @@ export class VoiceService {
       }
       yield { type: 'end' }
     } finally {
+      signal?.removeEventListener('abort', cancelCapture)
       if (!stopped) {
         try {
           nativeAudio.cancelCapture(sessionId)
@@ -403,36 +478,48 @@ export class VoiceService {
    * duration). Prefers the native `pollCapture` signal; falls back to a bounded
    * max-duration wait when it's unavailable. Does NOT stop the session.
    */
-  private async waitForAutoStop(sessionId: string, maxDurationMs: number): Promise<void> {
+  private async waitForAutoStop(
+    sessionId: string,
+    maxDurationMs: number,
+    signal?: AbortSignal
+  ): Promise<void> {
     const pollCapture = getPollCapture()
     const deadline = maxDurationMs + CAPTURE_HARD_TIMEOUT_GRACE_MS
     let waited = 0
     while (waited < deadline) {
+      throwIfCancelled(signal)
       if (pollCapture && !pollCapture(sessionId).active) {
         break
       }
-      await delay(POLL_INTERVAL_MS)
+      await awaitWithAbort(delay(POLL_INTERVAL_MS), signal)
       waited += POLL_INTERVAL_MS
       if (!pollCapture && waited >= maxDurationMs) {
         break
       }
     }
+    throwIfCancelled(signal)
   }
 
   /** Speech-to-text via the intelligence `audio.stt` capability. */
   private async transcribe(
     audio: Buffer,
-    language?: string
+    language?: string,
+    signal?: AbortSignal
   ): Promise<{ text: string; language?: string }> {
+    throwIfCancelled(signal)
     const dataUrl = `data:audio/wav;base64,${audio.toString('base64')}`
-    const response = await tuffIntelligence.audio.stt(
-      {
-        audio: dataUrl,
-        format: 'wav',
-        ...(language ? { language } : {})
-      },
-      { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller: VOICE_CALLER } }
+    const response = await awaitWithAbort(
+      tuffIntelligence.audio.stt(
+        {
+          audio: dataUrl,
+          format: 'wav',
+          ...(language ? { language } : {})
+        },
+        { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller: VOICE_CALLER } }
+      ),
+      signal
     )
+    throwIfCancelled(signal)
     const text = typeof response.result?.text === 'string' ? response.result.text.trim() : ''
     const detected =
       typeof response.result?.language === 'string' ? response.result.language.trim() : ''
@@ -440,21 +527,31 @@ export class VoiceService {
   }
 
   /** AI polish via the intelligence `text.chat` capability. Returns null on failure. */
-  private async polish(transcript: string, language?: string): Promise<string | null> {
+  private async polish(
+    transcript: string,
+    language?: string,
+    signal?: AbortSignal
+  ): Promise<string | null> {
     try {
-      const response = await tuffIntelligence.invoke<string>(
-        'text.chat',
-        {
-          messages: [
-            { role: 'system', content: withLanguageDirective(POLISH_SYSTEM_PROMPT, language) },
-            { role: 'user', content: wrapTranscription(transcript) }
-          ]
-        },
-        { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller: VOICE_CALLER } }
+      throwIfCancelled(signal)
+      const response = await awaitWithAbort(
+        tuffIntelligence.invoke<string>(
+          'text.chat',
+          {
+            messages: [
+              { role: 'system', content: withLanguageDirective(POLISH_SYSTEM_PROMPT, language) },
+              { role: 'user', content: wrapTranscription(transcript) }
+            ]
+          },
+          { timeout: CAPABILITY_TIMEOUT_MS, metadata: { caller: VOICE_CALLER } }
+        ),
+        signal
       )
+      throwIfCancelled(signal)
       const cleaned = typeof response.result === 'string' ? response.result.trim() : ''
       return cleaned || null
     } catch (error) {
+      if (signal?.aborted) throw voiceCancellationError()
       voiceLog.warn('Polish pass failed; falling back to raw transcript', { error })
       return null
     }
