@@ -14,6 +14,9 @@ import OmniPanel from './views/omni-panel/OmniPanel.vue'
 import { createRendererLogger } from './utils/renderer-log'
 
 const FloatingBall = defineAsyncComponent(() => import('./views/assistant/FloatingBall.vue'))
+const WhatsChangedDialog = defineAsyncComponent(
+  () => import('./components/update/WhatsChangedDialog.vue')
+)
 const VoicePanel = defineAsyncComponent(() => import('./views/assistant/VoicePanel.vue'))
 const ScreenshotRegionSelector = defineAsyncComponent(
   () => import('./views/assistant/ScreenshotRegionSelector.vue')
@@ -77,6 +80,7 @@ watchEffect(() => {
       :theme="resolvedTheme"
       rich-colors
     />
+    <WhatsChangedDialog v-if="appEntranceMode === 'MainApp'" />
     <template v-if="appEntranceMode === 'MetaOverlay'">
       <MetaOverlay />
     </template>

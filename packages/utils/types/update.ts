@@ -43,6 +43,169 @@ export interface GitHubRelease {
   source?: UpdateProviderSource
 }
 
+export type UpdateReleaseNotesChannel = 'RELEASE' | 'BETA'
+
+export interface LocalizedReleaseNotes {
+  zh: string
+  en: string
+}
+
+export interface LocalizedReleaseSummary {
+  zh: string[]
+  en: string[]
+}
+
+export interface BundledReleaseNotesEntry {
+  version: string
+  tag: string
+  channel: UpdateReleaseNotesChannel
+  summary: LocalizedReleaseSummary
+  currentNotes?: LocalizedReleaseNotes
+}
+
+export interface BundledReleaseNotesCatalog {
+  schemaVersion: 1
+  generatedForVersion: string
+  legacyThrough: Record<UpdateReleaseNotesChannel, string>
+  entries: BundledReleaseNotesEntry[]
+}
+
+export interface BundledReleaseNotesState {
+  catalog: BundledReleaseNotesCatalog
+  lastAcknowledgedVersion: string | null
+}
+
+export interface ReleaseNotesEntry {
+  tag: string
+  version: string
+  name: string
+  channel: UpdateReleaseNotesChannel
+  notes: LocalizedReleaseNotes
+  publishedAt: string
+  legacy: boolean
+}
+
+export interface ReleaseNotesPage {
+  entries: ReleaseNotesEntry[]
+  nextCursor: string | null
+  hasMore: boolean
+  stale: boolean
+}
+
+export function normalizeBundledReleaseNotesCatalog(
+  input: unknown,
+): BundledReleaseNotesCatalog | null {
+  if (!isRecord(input) || input.schemaVersion !== 1)
+    return null
+  if (
+    typeof input.generatedForVersion !== 'string'
+    || !isRecord(input.legacyThrough)
+    || typeof input.legacyThrough.RELEASE !== 'string'
+    || typeof input.legacyThrough.BETA !== 'string'
+    || !Array.isArray(input.entries)
+  ) {
+    return null
+  }
+
+  const entries: BundledReleaseNotesEntry[] = []
+  const seenVersions = new Set<string>()
+  for (const rawEntry of input.entries) {
+    if (!isRecord(rawEntry))
+      return null
+    const version = typeof rawEntry.version === 'string' ? rawEntry.version.trim() : ''
+    const tag = typeof rawEntry.tag === 'string' ? rawEntry.tag.trim() : ''
+    const channel = normalizeReleaseNotesChannel(rawEntry.channel)
+    const summary = normalizeLocalizedSummary(rawEntry.summary)
+    if (!version || tag !== `v${version}` || !channel || !summary || seenVersions.has(version)) {
+      return null
+    }
+
+    const currentNotes = rawEntry.currentNotes === undefined
+      ? undefined
+      : normalizeLocalizedNotes(rawEntry.currentNotes)
+    if (rawEntry.currentNotes !== undefined && !currentNotes)
+      return null
+
+    seenVersions.add(version)
+    entries.push({
+      version,
+      tag,
+      channel,
+      summary,
+      ...(currentNotes ? { currentNotes } : {}),
+    })
+  }
+
+  return {
+    schemaVersion: 1,
+    generatedForVersion: input.generatedForVersion,
+    legacyThrough: {
+      RELEASE: input.legacyThrough.RELEASE,
+      BETA: input.legacyThrough.BETA,
+    },
+    entries,
+  }
+}
+
+export function normalizeReleaseNotesEntry(
+  input: unknown,
+  options: { legacy: boolean },
+): ReleaseNotesEntry | null {
+  if (!isRecord(input) || input.status !== 'published')
+    return null
+  const tag = typeof input.tag === 'string' ? input.tag.trim() : ''
+  const version = typeof input.version === 'string' ? input.version.trim() : ''
+  const channel = normalizeReleaseNotesChannel(input.channel)
+  const notes = normalizeLocalizedNotes(input.notes)
+  const publishedAt = typeof input.publishedAt === 'string' && input.publishedAt
+    ? input.publishedAt
+    : typeof input.createdAt === 'string'
+      ? input.createdAt
+      : ''
+  if (!tag || tag !== `v${version}` || !channel || !notes || !publishedAt)
+    return null
+
+  return {
+    tag,
+    version,
+    name: typeof input.name === 'string' && input.name.trim() ? input.name.trim() : tag,
+    channel,
+    notes,
+    publishedAt,
+    legacy: options.legacy,
+  }
+}
+
+function normalizeReleaseNotesChannel(value: unknown): UpdateReleaseNotesChannel | null {
+  return value === 'RELEASE' || value === 'BETA' ? value : null
+}
+
+function normalizeLocalizedNotes(value: unknown): LocalizedReleaseNotes | null {
+  if (!isRecord(value))
+    return null
+  const zh = typeof value.zh === 'string' ? value.zh.trim() : ''
+  const en = typeof value.en === 'string' ? value.en.trim() : ''
+  return zh && en ? { zh: `${zh}\n`, en: `${en}\n` } : null
+}
+
+function normalizeLocalizedSummary(value: unknown): LocalizedReleaseSummary | null {
+  if (!isRecord(value))
+    return null
+  const normalize = (items: unknown): string[] | null => {
+    if (!Array.isArray(items) || items.length < 3 || items.length > 6)
+      return null
+    const normalized = items.map(item => typeof item === 'string' ? item.trim() : '')
+    return normalized.every(Boolean) ? normalized : null
+  }
+  const zh = normalize(value.zh)
+  const en = normalize(value.en)
+  return zh && en && zh.length === en.length ? { zh, en } : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 /**
  * Standardized shape of an update check response.
  */
