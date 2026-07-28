@@ -6,10 +6,7 @@ import type {
   PluginRuntimeProcessFactory
 } from './plugin-runtime-host'
 import { PluginRuntimeHostError } from './plugin-runtime-host'
-import {
-  PluginRuntimeService,
-  type PluginRuntimeActivationOptions
-} from './plugin-runtime-service'
+import { PluginRuntimeService, type PluginRuntimeActivationOptions } from './plugin-runtime-service'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 import type { HostWireMessage } from './plugin-host-wire'
 
@@ -329,9 +326,7 @@ describe('PluginRuntimeService', () => {
 
     expectInvalidServiceOptions(
       constructorOptions({
-        capabilityDefinitions: [
-          hostileDefinition as unknown as PluginHostCapabilityDefinition
-        ]
+        capabilityDefinitions: [hostileDefinition as unknown as PluginHostCapabilityDefinition]
       })
     )
     expect(getterCalled).toBe(false)
@@ -575,11 +570,13 @@ describe('PluginRuntimeService', () => {
     expect(harness.revokeKey).toHaveBeenCalledTimes(1)
     expect(harness.closeResources).toHaveBeenCalledTimes(1)
     expect(harness.children[0].exited).toBe(true)
-    await expect(harness.service.startActivation({
-      activation: identity,
-      scriptContent: 'module.exports = {}',
-      snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
-    })).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED'))
+    await expect(
+      harness.service.startActivation({
+        activation: identity,
+        scriptContent: 'module.exports = {}',
+        snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
+      })
+    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED'))
   })
 
   it('completes crash cleanup even when the observer throws', async () => {
