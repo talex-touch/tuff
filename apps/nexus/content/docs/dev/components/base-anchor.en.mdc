@@ -206,9 +206,11 @@ Tag menu items with `data-liquid-item` to opt into per-item reveal: each item's 
 
 `animation.type='bead'` shares one engine, one geometry, and one timing table with `drip`. The only difference is **width**.
 
-`drip` keeps the sheet at a constant width. `bead` draws its sides in by how fast the drop is **falling**: the larger `|dp/dt|`, the tighter the pinch, relaxing back to full width as the speed decays to nothing. The shape reports the drop's own **speed** rather than its progress.
+`drip` keeps the sheet at a constant width. `bead` draws its sides in by how fast the **top edge is falling**, relaxing back to full width as that fall decays to nothing. The shape reports the drop's own **speed** rather than its progress.
 
-Velocity is normalised against elapsed timeline fraction — a linear ramp reads exactly `1.0` — so the pinch is identical at any duration or refresh rate. It is applied symmetrically about the sheet's own centre line, so the bead necks instead of sliding sideways. And because the open curve only ever decelerates, the pinch decays monotonically to zero without needing a separate decay term.
+The speed is measured on the peel, not on `p`. `p` advances linearly, so its derivative is a constant and carries no speed at all — reading it would pin the pinch open forever. The peel runs ease-out-quad and decelerates to a dead stop at the detach, which is exactly the fall the bead is reporting, so the pinch decays monotonically to zero with no separate decay term.
+
+It is normalised against elapsed timeline fraction, so the pinch is identical at any duration or refresh rate, and applied symmetrically about the sheet's own centre line, so the bead necks instead of sliding sideways.
 
 ### Bead
 :::TuffDemoWrapper{demo="BaseAnchorBeadDemo" code-lang="vue"}
@@ -352,9 +354,11 @@ code: |
 | `seedHeight` | `number` | `12` | `drip` / `bead` only. Panel height at p=0 — the seed the drop is torn from. |
 | `itemSelector` | `string` | `'[data-liquid-item]'` | `drip` / `bead` only. Items faded in against the panel's own growth. |
 | `beadPinch` | `number` | `14` | `bead` only. Peak draw-in per side (px). Reports the drop's velocity, so it decays to 0 as the motion settles. |
-| `beadVelocityRef` | `number` | `4` | `bead` only. Speed at which the pinch saturates, in `p` per unit of normalised time — a linear ramp is `1.0`. |
+| `beadVelocityRef` | `number` | `4` | `bead` only. Speed at which the pinch saturates, measured on the falling edge per unit of normalised time. |
 
-When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`, `closeDuration` is `150` (markedly faster, and on its own curve rather than the open reversed), `ease` is `cubic-bezier(0.23, 1, 0.32, 1)` and `closeEase` is `cubic-bezier(0.25, 0.46, 0.45, 0.94)`. Both are CSS cubic-beziers, not GSAP ease strings — a GSAP string or any spring formulation falls back to the built-in curve.
+When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`, `closeDuration` is `150` (markedly faster, and on its own curve rather than the open reversed), `ease` is `linear` and `closeEase` is `cubic-bezier(0.25, 0.46, 0.45, 0.94)`.
+
+`ease` defaults to `linear` deliberately. `p` is raw progress; all the shaping lives in the two per-edge easings — ease-out-quad on the peel, ease-out-cubic on the fill. Stacking a front-loaded master curve on top of those compounds into roughly eighth-order ease-out: at 60Hz the entire tear collapses into two frames and the rest of the duration is an invisible few-pixel crawl. Any `cubic-bezier(...)` is still accepted; GSAP ease strings and spring formulations are rejected and fall back to the default.
 
 ### Events
 
