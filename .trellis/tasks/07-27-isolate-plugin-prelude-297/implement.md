@@ -141,6 +141,155 @@ git diff --check
 - Independent 4A check added strict hostile DTO coverage for host actions, file icons, custom render/meta path bypasses and proxied nested host services; fixed canonical item ownership, exact-generation cleanup, activation startup rollback, snapshot path redaction, facade declaration gating, builder clone stability, and deterministic emoji fallback containment. The activation-local implementation passed 384/384 tests across the 16-file host/service/TouchPlugin suite, 8/8 emoji tests, Node/Web typechecks, zero-warning scoped lint, 24/24 plugin validation, production `build:vite`, source/built-child forbidden scans, `git diff --check`, and real Electron smoke (`PLUGIN_HOST_ISOLATION_SMOKE_OK`).
 - Final handoff is BLOCKED by a concurrent Pi writer: after the above final-source validation it repeatedly restored all 23 business definitions as `PluginModule` production defaults and removed the 8-ID activation-local `TouchPlugin.startActivation` binding. That current state directly violates the delegated 4A prohibition on storage/network/process and production default wiring, so the validation evidence must not be treated as applying to the final worktree until the concurrent writer is stopped and the activation-local version is restored.
 
+## Candidate 4B Final Independent Review
+
+This section supersedes the earlier concurrent-writer handoff for the final reviewed worktree. No official Prelude was migrated in this review.
+
+### Findings
+
+- **P0:** none found.
+- **P1 closed:** production installation of the 23-capability runtime was enabled before the official Prelude set was compatible. `plugin-runtime-rollout.ts` now keeps only default installation disabled, with no environment escape and no fallback to the main-process VM.
+- **P1 closed:** HTTP DNS validation was separated from connection and remained vulnerable to DNS rebinding/redirect behavior. The host now performs a no-redirect/no-retry request through a connect-time pinned DNS lookup, revalidates the canonical response URL, rejects credentials/private/reserved/mapped-private addresses, strips hop-by-hop response headers and bounds streamed bytes.
+- **P1 closed:** business file storage delegated to generic plugin methods without a canonical filesystem boundary or aggregate quota. It now uses strict flat JSON filenames, canonical-root checks, symlink rejection, `O_NOFOLLOW`, atomic temp-write/rename, 1 MiB per-file and 10 MiB/1,000-file aggregate limits, bounded listing, and cleanup-error containment.
+- **P1 closed:** feature-item ownership takeover could delete the previous generation before the replacement push committed. Ownership now transfers only after a successful host push; cancellation that wins after a committed push still records the new owner for teardown, and exact activation cleanup cannot delete a newer generation's items.
+- **P1 closed:** activation/module teardown could stop after an early failure or discard failed item ownership before a later retry. Business cleanup retains failed owner records for retry; SQLite close, runtime disposal, transport reset, health-monitor disposal and scheduler cleanup continue independently and report one stable aggregate failure.
+- **P1 closed:** child item DTOs could declare `source.permission: "system"` and spoof a host-owned trust marker. Business item requests now reject that field; plugin/source identity and trust remain host-derived.
+- **P2 closed:** proxy/accessor/sparse-array/prototype-key DTOs, oversized serialized item/SQLite results, SQL parameter cycles/depth/member overflow, unbounded callback-shape traversal, dynamic renderer paths, file icons, host-action payloads, HTTP header control characters and hostile host return containers now fail before unsafe reads or privileged work.
+- **P2 closed:** open URL rejects embedded credentials and requires the host policy decision to match the canonical requested URL/protocol. Business Secret keys use a collision-resistant encoded plugin namespace, including dotted plugin names/keys, while uninstall cleanup covers both the legacy and isolated prefixes; plaintext values and native failures stay redacted.
+- **P2 closed:** every accepted flat business filename, including extensionless names, is visible to list/remove, and atomic writes remain successful if post-commit notification transport is unavailable.
+- **P2 closed:** rollout and smoke tests now fail diagnostically instead of hiding the underlying Electron exception; the smoke fixture uses the pinned network seam.
+- **Remaining rollout blocker:** setting the production runtime default to `true` is not safe. The gate is safely fail-closed, but the isolated path is not production-ready for the complete official set and, while disabled, isolated Prelude activation returns the stable runtime-closed failure rather than using a legacy fallback.
+
+### Official Prelude Compatibility
+
+The current 21 manifest-backed official Preludes split as follows:
+
+- Compatible with the current child facades: `touch-code-snippets`, `touch-emoji-symbols`, `touch-text-snippets`.
+- Blocked by top-level `require` (some also need storage/intelligence/process facades): `touch-batch-rename`, `touch-browser-data`, `touch-browser-open`, `touch-dev-utils`, `touch-intelligence`, `touch-quick-actions`, `touch-snipaste`, `touch-snippets`, `touch-system-actions`, `touch-text-tools`, `touch-translation`, `touch-window-manager`, `touch-window-presets`, `touch-workspace-scripts`.
+- Blocked by missing child facades: `touch-browser-bookmarks` (storage/permission/open URL), `touch-dev-toolbox` (storage/permission/open URL), `touch-dictation` (voice), `touch-quickops` (quick-ops/flow).
+
+The static rollout test inventories all 18 blocked plugins and requires the default to remain disabled until the inventory reaches zero. Production does construct and retain the 23 immutable business definitions and runtime service, but injects `null` into `TouchPlugin` by default.
+
+### Final Validation
+
+- Expanded plugin V2/runtime/business/storage/clipboard/network set: 27 files, 522 tests passed; focused business/registry/module/TouchPlugin/network set: 121 tests passed.
+- Official Emoji regression: 8/8 passed.
+- CoreApp Node and Web typechecks passed.
+- Scoped host/plugin/network/smoke ESLint passed with `--max-warnings 0`.
+- Plugin validation passed 24/24 (existing `touch-dictation` permission/search-provider warnings remain).
+- Final-source production `build:vite` passed with existing chunking/third-party warnings.
+- Real Electron isolation smoke passed: `PLUGIN_HOST_ISOLATION_SMOKE_OK`.
+- `git diff --check` passed.
+
+## Batch A Official Prelude Migration
+
+This section supersedes the Candidate 4B compatibility count and records the first four compatible manifested activations. The production default remains disabled and the legacy bridge is unchanged.
+
+### Implemented Contracts
+
+- The official inventory now uses **22 manifest activations** plus two explicitly non-activation Surface directories. `touch-image` and `touch-music` have no `manifest.json`; the latter's renderer `preload.js` is not a Prelude.
+- `PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES` is exactly `clipboard-history`, `touch-code-snippets`, `touch-emoji-symbols`, and `touch-text-snippets`. The source-derived rollout test computes 18 remaining incompatible manifests and keeps `shouldInstallPluginRuntimeServiceByDefault()` false.
+- `TouchPlugin` receives a sanitized internal Prelude contract from the manifest loader. A declared root `main` is required; a canonical `build.index.entry` selects `dist/build/index.js` when the source entry exists and package-root `index.js` in the built projection. Missing required builds fail with stable `PLUGIN_RUNTIME_PRELUDE_*` codes and never fall back to a stale root script or an empty module. Only a manifest with neither contract gets `module.exports = {}`.
+- `clipboard-history/index/main.ts` now produces strict CJS `module.exports = {}` without `__esModule` or unknown exports. The package is registered in the official build/seed projection pipeline, and the validator recognizes `build.index.entry` without treating the plugin as UI-only.
+- Batch A source and child-load tests reject `__test`, direct privileged imports, raw fetch, process, arbitrary require, and unknown exports. Code/text snippets retain only child-local logger initialization; emoji retains the reviewed feature/clipboard capability path.
+- The Electron smoke loads the production clipboard seed plus the three exact root scripts. Two complete four-plugin rounds prove four unique PIDs/handles/host generations, awaited load/init, no-op or emoji trigger, awaited exit barriers, PID/handle/generation rotation, and rejection of an old-port forged lifecycle result.
+- `disable()` now invalidates activation authority before awaiting runtime teardown and child exit.
+
+### Validation
+
+- Full V2/business/service/module/TouchPlugin set: 20 files, **446/446 tests passed**.
+- Additional production-contract, require-policy, runtime-integrity and official-seed set: 4 files, **20/20 tests passed**; release projection/after-pack/loader set: **38/38 passed**; root source-package audit: **6/6 passed**.
+- Official emoji Node suite: **8/8 passed**. Clipboard package typecheck, **20/20 tests**, and canonical production build passed.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp ESLint passed with zero warnings.
+- `pnpm plugins:validate` passed **22 manifest policies** and **24/24 directory classification**. The existing dictation permission/search-provider warnings remain; image/music are explicitly skipped Surface-only directories.
+- `clipboard-history` canonical build, release seed, and runtime projection share SHA-256 `7dd11b8459fcfbff4ffbf6028eb392435839087d8590a6f9726dd78832692dc3`; all contain strict `globalThis.module.exports={}` output.
+- Final-source `build:vite`, source/built-child forbidden scans, real Electron smoke (`PLUGIN_HOST_ISOLATION_SMOKE_OK`) and `git diff --check` passed.
+- `touch-music` Surface build and renderer-preload syntax check passed. `touch-image` transformed/rendered its Surface but the existing exporter failed while writing `build/@talex-touch/touch-image-plugin-0.0.0.tpex`; it remains outside activation success and was not modified.
+
+### Remaining Findings And Blockers
+
+- **P0:** none found in Batch A scope.
+- **P1:** none found in the four manifested activation migrations.
+- **P2:** the non-activation `touch-image` build-only smoke remains blocked by the existing exporter output-path failure described above. It creates no plugin activation or Prelude path.
+- **18 manifested compatibility blockers remain:** 14 top-level-require plugins (`touch-batch-rename`, `touch-browser-data`, `touch-browser-open`, `touch-dev-utils`, `touch-intelligence`, `touch-quick-actions`, `touch-snipaste`, `touch-snippets`, `touch-system-actions`, `touch-text-tools`, `touch-translation`, `touch-window-manager`, `touch-window-presets`, `touch-workspace-scripts`) and four missing-facade plugins (`touch-browser-bookmarks`, `touch-dev-toolbox`, `touch-dictation`, `touch-quickops`).
+
+## Concurrent Writer Final-Worktree Blocker
+
+This section supersedes the Batch A final-source validation claim for the current shared worktree.
+
+A concurrent writer continued modifying the same runtime and test files after Batch A passed its complete validation. `plugin-host-child-runtime.ts` changed repeatedly through the final check, while `plugin-runtime-rollout.test.ts` was expanded from the delegated four-plugin list to eight plugins. These writes violate this delegation's “no other plugin migration” boundary and make it unsafe to repair or revert them from this agent.
+
+The last replay against the concurrently modified tree is not green:
+
+- rollout now expects eight compatible plugins while production source still declares the delegated four;
+- child load snapshots now require `locale` and a new capability surface, but several runtime/test payloads are not coherently updated;
+- a concurrent stale-projection test expects `PLUGIN_RUNTIME_PRELUDE_ARTIFACT_STALE` without the matching resolver contract;
+- business definitions increased to 24 while a module test still asserts 23;
+- CoreApp Node typecheck fails on the concurrent stale-code expectation.
+
+The earlier 446/446 suite, Node/Web typechecks, build, forbidden scans and Electron smoke were valid before these later writes, but must not be reported as final-worktree evidence. Stop the concurrent writer, restore one coherent scope, and rerun every Batch A gate before handoff.
+
+## Batch A/B/C-Simple Final Worktree Report
+
+This section supersedes the earlier Batch A compatibility count and the concurrent-writer blocker for the current reviewed worktree. It does not claim the #297 production hard cut.
+
+### Rollout Inventory
+
+- `PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES` now contains exactly eight manifested activations: `clipboard-history`, `touch-browser-bookmarks`, `touch-code-snippets`, `touch-dev-toolbox`, `touch-dev-utils`, `touch-emoji-symbols`, `touch-text-snippets`, and `touch-text-tools`.
+- The source-derived rollout gate still counts 22 manifested official activations and two explicitly manifestless Surface directories. `shouldInstallPluginRuntimeServiceByDefault()` remains `false`; there is no environment override.
+- Fourteen manifested blockers remain: `touch-batch-rename`, `touch-browser-data`, `touch-browser-open`, `touch-intelligence`, `touch-quick-actions`, `touch-snipaste`, `touch-snippets`, `touch-system-actions`, `touch-translation`, `touch-window-manager`, `touch-window-presets`, and `touch-workspace-scripts` retain top-level `require`; `touch-dictation` still needs the voice facade; `touch-quickops` still needs quick-ops and flow facades.
+- The eight compatible Prelude sources contain no `__test`, top-level `require`, raw `fetch`, `process`, Electron, filesystem, SQLite, child-process, or worker-thread surface. Emitted simple-plugin items use bounded class icons rather than child-supplied file paths, and bookmarks/toolbox route commands through typed item actions instead of broad metadata fields.
+
+### Real Electron Evidence
+
+- The production-built `out/main/plugin-host.js` smoke now reads the actual `plugins/touch-dev-utils/index.js`; it does not substitute a synthetic dev-utils script.
+- Two complete five-plugin rounds start `clipboard-history`, `touch-code-snippets`, `touch-text-snippets`, `touch-emoji-symbols`, and `touch-dev-utils` in distinct utility processes. Every round proves unique PID, activation handle, host generation, and activation generation.
+- The actual dev-utils Prelude runs `onFeatureTriggered`, publishes validated feature items through the production business capability registry, executes a real clipboard action, crosses the stop/exit barrier, restarts with rotated ownership, and rejects a first-round closed-port response forged against the second-round request.
+- The smoke continues to prove callback/resource disposal, request-scoped cancellation, timeout containment, stale owner isolation, and survival of the unrelated activation. Final result: `PLUGIN_HOST_ISOLATION_SMOKE_OK`.
+
+### Final Validation
+
+- Complete plugin-host suite: **16 files, 377/377 tests passed**.
+- Plugin/module/loader/rollout/production-contract/require/resolver/network set: **98/98 tests passed** after correcting the canonical projection fixture to include its `_files['index.js']` SHA-256 contract.
+- Release projection tests: **15/15 passed**; source package audit: **6/6 passed**.
+- Official simple Prelude local suites: **26/26 passed**. Clipboard History passed typecheck, **20/20 tests**, and canonical build. Dev Utils, Text Tools, and Emoji passed their package tests and real Tuff builders.
+- Clipboard History canonical build, bundled resource, and runtime projection retain identical SHA-256 `7dd11b8459fcfbff4ffbf6028eb392435839087d8590a6f9726dd78832692dc3`. Dev Utils, Text Tools, and Emoji root/build Prelude hashes also match exactly.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp ESLint passed with `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies** and **24/24 directory classification**. The existing dictation permission/search-provider warnings remain.
+- Final-source production `build:vite`, compatible-source and built-child forbidden-surface scans, real Electron smoke, syntax checks, and `git diff --check` passed. Existing Vite chunking/third-party warnings remain non-blocking.
+
+### Scope Result
+
+- No known P0/P1/P2 remains in this Batch A/B/C-simple migration and actual dev-utils smoke scope.
+- Production runtime installation remains deliberately disabled while the fourteen blockers remain. The legacy bridge and the complete #297 hard cut are unchanged and remain release blockers.
+
+## Batch C QuickOps And Snippets Migration
+
+This section supersedes the earlier rollout count for the final reviewed Batch C worktree. It does not claim the #297 production hard cut.
+
+### Implemented Contracts
+
+- `touch-quickops` and `touch-snippets` now execute through isolated-runtime facades only. Their production exports contain lifecycle hooks only: no `__test`, top-level `require`, raw `fetch`, `process`, Electron, filesystem, SQLite, child-process, worker-thread, or reflective loader surface.
+- QuickOps publishes bounded host-valid item DTOs, awaits clear/push ordering, dispatches only fixed QuickOps and Flow operations through the dedicated `quickOps` and `flow` facades, uses manifest-declared optional `storage.shared`, and returns deterministic redacted failures when capability access is denied or unavailable.
+- Snippets initializes and bounds its plugin-owned JSON store, publishes host-valid search/save/manage items, resolves clipboard placeholders through the clipboard facade, and routes CloudShare list/publish/install through fixed request/reply operations. Public packs exclude sensitive snippets and contain no child-provided credentials; `storage.plugin` is required and `network.internet` is optional.
+- Both packages are registered in the canonical release target registry. Their canonical source, package build output, bundled resource, and runtime seed are synchronized and byte-identical; projection and after-pack tests cover both names and versions.
+- The rollout allowlist is now **10 of 22** manifested official activations. Exactly 12 plugins remain explicitly unmigrated, and `shouldInstallPluginRuntimeServiceByDefault()` remains false with no environment bypass.
+- The real Electron smoke activates both actual bundled Preludes, exercises permission denial/grant, QuickOps Flow dispatch, Snippets CloudShare and clipboard-placeholder paths, restart/generation rotation, stale-message rejection, teardown, and listener cleanup.
+
+### Final Validation
+
+- Complete focused host/plugin suite: **393 tests passed**; additional runtime/network suite: **56 tests passed**; rollout/request-reply/simple-Prelude suite: **24 tests passed**.
+- Plugin-local suites: QuickOps **5/5 passed** and Snippets **7/7 passed**. Release synchronization, after-pack, and source-package-audit suites passed.
+- CoreApp Node and Web typechecks passed. Scoped ESLint passed with zero warnings.
+- `pnpm plugins:validate` passed **22 manifest policies** and **24/24 directory classification**; only the existing unrelated dictation/search-provider warnings remain.
+- Production `build:vite`, compatible-source and built-child forbidden-surface scans, syntax checks, projection parity, `git diff --check`, and the final real Electron smoke passed. Smoke result: `PLUGIN_HOST_ISOLATION_SMOKE_OK`.
+- QuickOps projections share SHA-256 `e371d27d7babf7015234e69fb6a28a9ea4e081014b03b1aa6c22ad0e61a640eb`; Snippets projections share SHA-256 `a29cacc79055c5108e658e66fad21411c7bf1762c43feae5365329db4734b765`.
+
+### Remaining Scope
+
+- The 12 explicitly unmigrated official Preludes, production runtime default enablement, legacy bridge removal, and the complete #297 hard cut remain pending.
+- No commit, push, merge, renderer migration, unsupported plugin migration, or unrelated cleanup was performed for Batch C.
+
 ## Release Gate
 
 Do not mark review, commit, publish or close #297 until every real plugin Prelude uses a dedicated utilityProcess, all privileged access is typed and per-call authorized, official plugins pass isolated regression, and real Electron smoke proves crash/hang/resource violations cannot block main or cross activation boundaries.

@@ -274,6 +274,122 @@ const plugin = resolveHandlerPluginContext(realSender, currentActivation);
 if (!isAuthoritativePluginContext(plugin)) denyPrivilegedOperation();
 ```
 
+## Scenario: Isolated Plugin Prelude Runtime
+
+### 1. Scope / Trigger
+
+- Trigger: an official or third-party plugin Prelude executes in the plugin-host child
+  VM and accesses host-owned work through declared capability facades.
+- This boundary spans manifest permissions, capability projection, child realm
+  construction, wire DTO normalization, business-resource ownership, canonical build
+  resolution, rollout policy, and real Electron process smoke.
+
+### 2. Contracts
+
+- The child global is a closed projection. Expose only immutable snapshots, standard
+  safe intrinsics, logging, lifecycle registration, and facades derived from the
+  exact capability manifest. Do not expose `process`, `Buffer`, `require`, Electron,
+  filesystem APIs, host constructors, host arrays, host errors, or mutable host DTOs.
+- A facade exists only when at least one of its capability IDs is declared, and each
+  method exists only for its exact declared ID. `hostCapabilities.invoke()` remains
+  declaration-gated; a facade must not broaden that authority.
+- Host authorization is `manifest declaration AND current permission grant AND
+  current activation authority`. A default grant, including `storage.plugin`, never
+  authorizes an undeclared permission. Normalize permission IDs before comparing the
+  manifest declaration and store grant.
+- Clone every capability request and result through bounded wire DTOs. Plugin-visible
+  items use portable icon descriptors; never return absolute paths, native handles,
+  Electron objects, host errors/stacks, or host-realm arrays and typed arrays.
+- Capture byte-related intrinsic getters and mutation methods before plugin code runs.
+  Determine `ArrayBuffer`, typed-array, and `DataView` offsets and lengths with those
+  captured getters; enforce byte limits before iteration or other plugin-controlled
+  callbacks; copy bytes by bounded index reads; use the captured typed-array `set`
+  for `getRandomValues`. Digest inputs and outputs must not depend on `Buffer` or on a
+  plugin-replaced iterator/prototype method.
+- `TextEncoder`, `TextDecoder`, random bytes, and digest return values are child-realm
+  values. Supported digest algorithms are an exact allow-list, and oversized input
+  fails before hashing or invoking plugin-controlled iteration.
+- Locale is a validated, bounded, immutable load snapshot. `plugin.getLocale()` reads
+  that snapshot and does not call back into mutable main-process state.
+- Prelude capability calls are asynchronous. Await clear-before-push, storage writes,
+  clipboard writes, external opens, HTTP requests, and lifecycle cleanup before
+  reporting success. Fixed business actions use exact host-owned request/reply IDs
+  and bounded DTOs; child code never selects destinations, routes, credentials, SQL,
+  filesystem paths, Flow identities, or other authority-bearing values. Map denials
+  and operational failures to distinct stable codes and redacted messages; do not
+  infer permission denial from every host exception. Filter sensitive content before
+  public sharing and never send child-managed credentials across the channel.
+- Canonical Prelude resolution accepts only the declared build artifact under the
+  plugin root and verifies source/build/resource/runtime projection parity where a
+  release projection exists. Never silently execute a stale root or generated copy.
+- Production installation of the isolated runtime remains default-off until the
+  migration inventory is complete. Unsupported official plugins fail explicitly;
+  they do not fall through to the isolated child or gain a legacy bridge.
+- Real Electron smoke executes every claimed compatible Prelude in at least two host
+  generations. It records real child PIDs, verifies handle and generation rotation,
+  and proves stale ports/messages cannot mutate storage, clipboard, open, HTTP, or
+  published feature state after stop/reload.
+
+### 3. Validation Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Facade or method capability is undeclared | Property absent or stable undeclared-capability rejection |
+| Permission is granted by default but absent from manifest | Authorization denied before handler execution |
+| Plugin replaces typed-array iterator, getter, or `set` | No host constructor/value exposure; bounded operation remains correct |
+| Byte input exceeds the wire limit | Reject before plugin iterator/callback and before digest allocation |
+| Clipboard/open/HTTP operation fails without a denial code | Stable operational failure, not `permission-denied` |
+| Host denial code is returned | Stable `permission-denied`; no native detail or stack |
+| Item contains file icon/path or host object | Reject or project to a portable DTO before child publication |
+| Runtime rollout environment is absent | Isolated runtime service is not installed by default |
+| Resolver sees stale root projection | Select the canonical declared build or fail closed |
+| Old handle/port emits after generation rotation | Ignore/reject; no stale side effect |
+
+### 4. Tests Required
+
+- Child-realm RED tests replace `Uint8Array.prototype.set`, typed-array iterators, and
+  related getters, then exercise random values, encoding/decoding, digest, and wire
+  serialization. Assert no host constructor can recover `process` and oversized
+  inputs reject before the plugin hook is observed.
+- Authorization tests grant a default permission while omitting it from required and
+  optional manifest declarations; assert both generic and business capabilities deny
+  without consulting a permissive fallback.
+- Facade projection tests cover absent facade, absent individual method, frozen
+  null-prototype objects, local DTO clones, portable icons, locale snapshot, and no
+  host path/error leakage.
+- Official Prelude tests exercise success, denial, and ordinary failure for storage,
+  clipboard, open URL, HTTP, and fixed request/reply operations; assert every success
+  waits for its side effect, every failure is stable and redacted, persistence is
+  bounded, clipboard placeholders read only when needed, and public payloads exclude
+  sensitive content and credentials.
+- Resolver/release tests cover canonical source selection, projection cleanup, and
+  SHA-256 parity. Rollout tests prove production default-off and explicit inventory
+  failure for every unconverted official plugin.
+- Real Electron smoke executes the complete claimed compatibility set twice and
+  asserts PID/handle/generation rotation plus stale message and stale side-effect
+  denial after the first host is stopped.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (permissionStore.hasPermission(pluginName, permissionId, sdkapi)) allow();
+const bytes = Array.from(new Uint8Array(value.buffer));
+target.set(hostRandomBytes);
+```
+
+#### Correct
+
+```ts
+if (!manifestDeclares(plugin, permissionId)) deny();
+if (!permissionStore.hasPermission(pluginName, permissionId, sdkapi)) deny();
+const { byteLength, view } = readByteViewWithCapturedGetters(value);
+assertWireByteLimit(byteLength);
+const bytes = copyByBoundedIndex(view, byteLength);
+Reflect.apply(capturedUint8ArraySet, target, [childRealmBytes]);
+```
+
 ## Scenario: Plugin-Owned Runtime Overlay
 
 ### 1. Scope / Trigger
