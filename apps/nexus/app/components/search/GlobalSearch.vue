@@ -5,6 +5,7 @@ import { computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { TxCommandPalette } from '@talex-touch/tuffex/command-palette'
 import type { CommandPaletteItem } from '@talex-touch/tuffex/command-palette'
 import { useGlobalSearch } from '~/composables/useGlobalSearch'
+import { currentOverlayLayer } from '~/utils/layers'
 
 type SearchCommandItem = CommandPaletteItem & {
   to?: string
@@ -129,6 +130,21 @@ function getPanelElement() {
   return document.querySelector<HTMLElement>('.NexusGlobalSearchPanel')
 }
 
+function getOverlayElement() {
+  return document.querySelector<HTMLElement>('.NexusGlobalSearchOverlay')
+}
+
+/**
+ * Publish the layer TxCommandPalette just allocated so the panel rides the same
+ * number as its backdrop instead of relying on implicit stacking order.
+ */
+function syncSearchLayer() {
+  const overlay = getOverlayElement()
+  if (!overlay)
+    return
+  overlay.style.setProperty('--nexus-search-layer', String(currentOverlayLayer()))
+}
+
 function lockPageScroll() {
   if (!import.meta.client || scrollLockState)
     return
@@ -161,10 +177,11 @@ function unlockPageScroll() {
 }
 
 async function runFlipAnimation() {
+  await nextTick()
+  syncSearchLayer()
   const anchor = anchorRect.value
   if (!anchor || prefersReducedMotion())
     return
-  await nextTick()
   requestAnimationFrame(() => {
     const panel = getPanelElement()
     if (!panel)
@@ -359,15 +376,27 @@ onBeforeUnmount(() => {
 
 <style scoped lang="scss">
 :global(.NexusGlobalSearchOverlay.tx-command-palette__overlay) {
-  padding: clamp(24px, 7vh, 42px) 16px 16px;
+  // Optical centre instead of the base flex-start layout. Top and bottom padding
+  // must stay equal for the centring maths below to hold; the padding only acts
+  // as a safety margin once the panel runs out of room.
+  align-items: center;
+  padding: 16px;
   background:
-    linear-gradient(180deg, rgba(4, 7, 13, 0.46), rgba(4, 7, 13, 0.62)),
-    rgba(4, 7, 13, 0.26);
+    linear-gradient(180deg, rgba(4, 7, 13, 0.58), rgba(4, 7, 13, 0.74)),
+    rgba(4, 7, 13, 0.36);
   overscroll-behavior: contain;
   touch-action: none;
 }
 
 :global(.NexusGlobalSearchPanel.tx-command-palette__panel) {
+  // The panel reserves 30vh below itself, which pushes the flex-centred box up by
+  // half of that. Resting top therefore lands on `50vh - panelHeight / 2 - 15vh`,
+  // i.e. the optical centre rather than the geometric one. The FLIP tween in
+  // `runFlipAnimation` animates x/y back to 0, so this stays the animation's end
+  // position without any JS coordinate maths.
+  margin-bottom: 30vh;
+  position: relative;
+  z-index: var(--nexus-search-layer, 1);
   width: min(593px, calc(100vw - 32px));
   background: color-mix(in srgb, var(--tx-bg-color, #fff) 92%, rgba(12, 14, 18, 0.08));
   border-color: color-mix(in srgb, var(--tx-border-color, #d4d7de) 62%, transparent);
@@ -526,10 +555,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   :global(.NexusGlobalSearchOverlay.tx-command-palette__overlay) {
-    padding: 20px 10px 12px;
+    padding: 12px 10px;
   }
 
   :global(.NexusGlobalSearchPanel.tx-command-palette__panel) {
+    // Short viewports (and the on-screen keyboard) leave far less headroom, so
+    // lift by 7.5vh instead of 15vh to keep the panel fully on screen.
+    margin-bottom: 15vh;
     width: calc(100vw - 20px);
     border-radius: 14px;
   }
