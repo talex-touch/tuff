@@ -403,11 +403,20 @@ Reflect.apply(capturedUint8ArraySet, target, [childRealmBytes]);
 
 ```ts
 interface IsolatedVoiceHostService {
-  dictate(payload: VoiceDictatePayload, signal: AbortSignal): Promise<VoiceDictateResult>;
-  speak(payload: VoiceSpeakPayload, signal: AbortSignal): Promise<VoiceSpeakResult>;
+  dictate(
+    payload: VoiceDictatePayload,
+    signal: AbortSignal,
+    caller: string,
+  ): Promise<VoiceDictateResult>;
+  speak(
+    payload: VoiceSpeakPayload,
+    signal: AbortSignal,
+    caller: string,
+  ): Promise<VoiceSpeakResult>;
   streamDictation(
     payload: VoiceAsrStreamPayload,
     signal: AbortSignal,
+    caller: string,
   ): AsyncIterable<VoiceAsrStreamEvent>;
 }
 
@@ -423,6 +432,10 @@ type VoiceStreamRequest = {
 - Require manifest declaration and a current grant for `voice.dictation` on every
   invoke and stream start. Bind the returned stream resource and retained callback
   to the current activation owner and generation.
+- After authoritative activation and host-generation validation, main derives the
+  provider caller as `plugin:<manifest plugin id>`. The child request cannot supply
+  or override caller. Thread the derived caller through STT, polish, and TTS so quota,
+  audit, and TTS cache entries remain plugin-scoped.
 - Deliver stream events one at a time and await `onEvent` before reading the next
   event. `final`, `error`, and `end` are terminal and automatically dispose the
   resource; explicit `cancel()` and repeated disposal are idempotent.
@@ -438,6 +451,10 @@ type VoiceStreamRequest = {
 - Permission revoke and activation teardown abort the signal, dispose the resource,
   release the callback, and await native capture cancellation before the host stop
   barrier resolves.
+- Every stream owns a dedicated `AbortController`. Explicit dispose aborts that
+  controller before awaiting `iterator.return()`. WebSocket open, event-queue wait,
+  and frame-pump delay all observe the signal; abort closes the socket, latches the
+  queue terminal state, removes handlers, and awaits the stopped pump.
 
 ### 4. Validation & Error Matrix
 
@@ -445,11 +462,13 @@ type VoiceStreamRequest = {
 | --- | --- |
 | `voice.*` capability or method undeclared | Facade/method absent or stable undeclared-capability failure |
 | `voice.dictation` missing or revoked | Reject before new native capture; close current stream resource |
+| Child supplies/spoofs caller or plugin identity | Reject the exact DTO before service work; main derives caller |
 | Signal aborts during capture | `cancelCapture(sessionId)` and `VOICE_OPERATION_CANCELLED` |
 | Signal aborts during STT/polish/TTS | Release awaiting caller; discard late result and side effects |
 | Signal aborts before TTS playback | No `playAudio` call |
 | Callback rejects or exceeds deadline | Stable redacted callback failure and resource disposal |
 | Duplicate cancel/dispose | No-op after the first completed cleanup |
+| Dispose while WebSocket never opens or never finalizes | Abort provider signal, close socket, and settle disposer |
 | Old generation emits a late event | Reject/ignore; no callback or host side effect |
 
 ### 5. Good / Base / Bad Cases
@@ -466,9 +485,11 @@ type VoiceStreamRequest = {
 - VoiceService unit tests abort dictate, stream, and speak while work is pending;
   assert native cancel, stable cancellation, no STT after capture abort, and no audio
   playback after synthesis abort.
-- Capability tests cover manifest/grant checks, owner/generation binding, per-event
-  backpressure, terminal auto-dispose, callback failure, explicit cancel, repeated
-  dispose, permission revoke, and activation cleanup.
+- Capability tests cover manifest/grant checks, owner/generation binding, main-derived
+  caller attribution, per-event backpressure, terminal auto-dispose, callback failure,
+  explicit cancel, repeated dispose, permission revoke, and activation cleanup.
+- WebSocket tests cover never-open, open-without-final, external abort, and explicit
+  resource dispose; assert stable cancellation, socket close, and bounded pump exit.
 - Child VM tests cover declaration-gated frozen facades, terminal auto-dispose,
   idempotent cancel, callback error redaction, and absence when undeclared.
 - Real Electron smoke runs the actual Dictation Prelude in two generations and proves
@@ -487,7 +508,9 @@ const result = await Promise.race([voiceService.speak(payload), timeout]);
 #### Correct
 
 ```ts
-const result = await voiceService.speak(payload, signal);
+const activation = assertAuthoritativeActivation(context);
+const caller = `plugin:${activation.name}`;
+const result = await voiceService.speak(payload, signal, caller);
 signal.throwIfAborted();
 // VoiceService also checks abort immediately before native playback.
 ```
