@@ -1,7 +1,7 @@
 ---
 title: "Fusion"
 description: "Gooey two-slot fusion effect with hover, click, or manual active control."
-category: Basic
+category: Effects
 status: beta
 since: 1.0.0
 tags: [fusion, gooey, motion]

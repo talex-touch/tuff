@@ -100,6 +100,10 @@ export type {
   PluginKeyManager,
 
   // Plugin security
+  PluginActivationIdentity,
+  PluginCallerAuthority,
+  PluginCallerIdentity,
+  PluginInvokeContext,
   PluginSecurityContext,
   // Options
   SendOptions,

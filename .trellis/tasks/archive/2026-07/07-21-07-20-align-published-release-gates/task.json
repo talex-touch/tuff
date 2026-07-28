@@ -1,0 +1,30 @@
+{
+  "id": "07-20-align-published-release-gates",
+  "name": "07-20-align-published-release-gates",
+  "title": "对齐已发布版本 Release Gate 契约",
+  "description": "修复 gate-e 对已发布版本 notes、完整 GitHub 资产清单与签名 URL 的误判，并用 v2.4.13-beta.19 真实链路验收。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-21",
+  "completedAt": "2026-07-27",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-17-ota-ui-release-acceptance",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Complete review of the published-release gate evidence and record the review disposition with the OTA acceptance parent.",
+    "blocker": "The task is awaiting review; it must not be treated as archived completion until the review disposition is recorded.",
+    "evidence": "prd.md records strict gate-e evidence for v2.4.13-beta.19 and its negative-path contract."
+  }
+}

@@ -1,0 +1,127 @@
+---
+title: "FlatDropdown"
+description: "Slot-driven floating dropdown panel (`TxFlatDropdown`). Hover / click / manual triggers, flip-aware placement, and a scale + blur exit animation."
+category: Navigation
+status: beta
+since: 2.5.0
+tags: [dropdown, flat, navigation, floating, menu]
+syncStatus: migrated
+verified: false
+---
+# FlatDropdown
+
+A slot-driven floating panel anchored to a trigger. `TxFlatDropdown` owns the open state, placement and dismissal rules; you supply the trigger and the panel body. It is the flat-styled counterpart to `TxDropdownMenu`, without any opinion about the panel's contents.
+
+## Basic Usage
+
+Hover the trigger to open. The panel stays alive for `closeDelay` ms after the pointer leaves, so you can travel into it. `close-on-content-click` dismisses the panel after any click inside.
+
+### FlatDropdown (basic)
+:::TuffDemoWrapper{demo="FlatDropdownBasicDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const lastAction = ref('—')
+  </script>
+
+  <template>
+    <TxFlatDropdown trigger="hover" placement="bottom-start" close-on-content-click>
+      <template #trigger="{ open }">
+        <TxButton size="sm" :variant="open ? 'primary' : 'default'">Actions</TxButton>
+      </template>
+
+      <button @click="lastAction = 'Duplicate'">Duplicate</button>
+      <button @click="lastAction = 'Rename'">Rename</button>
+    </TxFlatDropdown>
+  </template>
+---
+:::
+
+## Trigger Modes
+
+`trigger` decides how the panel is summoned:
+
+- `hover` (default) — opens on pointer enter / focus, closes after `closeDelay`.
+- `click` — toggles on click; `closeDelay` is not applied.
+- `manual` — the component never opens itself. Drive it with `v-model`.
+
+Use `manual` when the panel must follow application state rather than pointer intent — for example a dropdown that opens as the result of a keyboard shortcut.
+
+## Controlled vs Uncontrolled
+
+Omit `v-model` and the component tracks its own open state. Bind `v-model` and you own it — the component still emits `open` / `close`, but will not change the value itself unless the interaction is allowed.
+
+`disabled` blocks every opening path, including programmatic ones through the trigger slot's `show()`.
+
+## Sizing
+
+By default the panel sizes to its content. Two escape hatches:
+
+- `match-trigger-width` — sets the panel's `min-width` to the measured trigger width. Good for select-like menus.
+- `width` — a fixed px number or any CSS length. Overrides `match-trigger-width`.
+
+## Dismissal Contract
+
+Three independent dismissal paths, each separately switchable:
+
+| Prop | Default | Dismisses when |
+|---|---|---|
+| `closeOnClickOutside` | `true` | A click lands outside both trigger and panel |
+| `closeOnEsc` | `true` | `Escape` is pressed |
+| `closeOnContentClick` | `false` | Any click inside the panel |
+
+`closeOnClickOutside` only applies to the `click` and `hover` triggers — under `manual` the host owns dismissal entirely.
+
+## API
+
+### TxFlatDropdown
+
+#### Props
+
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `modelValue` | `boolean` | `undefined` | Controlled open state. Omit for uncontrolled behaviour. |
+| `trigger` | `'hover' \| 'click' \| 'manual'` | `'hover'` | How the panel is summoned. |
+| `placement` | `Placement` | `'bottom-start'` | Floating placement relative to the trigger. |
+| `offset` | `number` | `10` | Gap in px between trigger and panel. |
+| `openDelay` | `number` | `0` | Delay before opening on hover/focus (ms). |
+| `closeDelay` | `number` | `600` | Delay before closing after pointer leave (ms). |
+| `exitDuration` | `number` | `280` | Duration of the scale + blur exit animation (ms). |
+| `disabled` | `boolean` | `false` | Disable every interaction. |
+| `teleport` | `boolean \| string` | `'body'` | Teleport target; pass `false` to render inline. |
+| `matchTriggerWidth` | `boolean` | `false` | Match the panel's min-width to the trigger width. |
+| `width` | `number \| string` | `undefined` | Fixed panel width. Overrides `matchTriggerWidth`. |
+| `closeOnClickOutside` | `boolean` | `true` | Close when clicking outside. |
+| `closeOnEsc` | `boolean` | `true` | Close when pressing Escape. |
+| `closeOnContentClick` | `boolean` | `false` | Close after any click inside the panel. |
+| `panelClass` | `TxFlatDropdownClass` | `undefined` | Extra class(es) merged onto the panel element. |
+
+#### Events
+
+| Event | Payload | Description |
+|---|---|---|
+| `update:modelValue` | `boolean` | Open state changed. |
+| `open` | — | The panel opened. |
+| `close` | — | The panel closed. |
+
+#### Slots
+
+| Slot | Props | Description |
+|---|---|---|
+| `trigger` | `{ open, toggle, show, hide }` | The anchor element. |
+| `default` | `{ open, close, side }` | Panel body. `side` is the resolved side after flip. |
+
+## Best Practices
+
+- Prefer `trigger="click"` for destructive or state-changing menus — hover-opened panels are easy to trip over on trackpads.
+- Keep `closeDelay` generous (the `600` default) for `hover`; a short delay makes diagonal pointer travel into the panel frustrating.
+- Set `teleport="false"` when the dropdown lives inside a container with its own stacking or clipping context and you need it to inherit that context. Note that inline rendering re-exposes the panel to ancestor `overflow: hidden`.
+- Use the `side` slot prop to flip your own decorations (arrows, shadows) when the panel flips above the trigger.
+- Do not rely on the panel being positioned synchronously after opening — placement is written back reactively, so measure in a `requestAnimationFrame` if you need absolute geometry.
+
+## Source
+
+- Component: `packages/tuffex/packages/components/src/flat-dropdown/src/TxFlatDropdown.vue`
+- Types: `packages/tuffex/packages/components/src/flat-dropdown/src/types.ts`

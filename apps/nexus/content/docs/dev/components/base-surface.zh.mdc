@@ -1,7 +1,7 @@
 ---
 title: "BaseSurface 基础表面层"
 description: "统一管理背景渲染策略的基础组件，支持 pure/mask/blur/glass/refraction 五种模式，并通过运动降级机制解决 backdrop-filter + transform 失效问题。"
-category: Layout
+category: Primitives
 status: beta
 since: 2.5.0
 tags: [surface, background, blur, glass, backdrop-filter, fallback]

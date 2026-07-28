@@ -116,12 +116,22 @@ describe('TuffEx component docs coverage', () => {
     expect(missingRegistryEntries, 'TuffDemoWrapper demo references missing from demo-registry.ts').toEqual([])
     expect(missingDemoFiles, 'demo-registry.ts entries pointing at missing Vue demo files').toEqual([])
   })
+  // Collect every contract violation before asserting: a single missing or malformed
+  // doc must not abort the loop and silently skip the remaining components.
   it('requires complete localized documentation contracts for every exported component', () => {
     const componentSlugs = getExportedComponentSlugs()
+    const problems: string[] = []
 
     for (const locale of ['en', 'zh'] as const) {
       for (const slug of componentSlugs) {
-        const source = readFileSync(docsPath(slug, locale), 'utf8')
+        const filePath = docsPath(slug, locale)
+
+        if (!existsSync(filePath)) {
+          problems.push(`${slug}.${locale}.mdc is missing`)
+          continue
+        }
+
+        const source = readFileSync(filePath, 'utf8')
         const requirements = [
           {
             element: 'a live TuffDemoWrapper reference',
@@ -143,9 +153,13 @@ describe('TuffEx component docs coverage', () => {
           },
         ]
 
-        for (const { element, present } of requirements)
-          expect(present, `${slug}.${locale}.mdc (${locale}/${slug}) missing ${element}`).toBe(true)
+        for (const { element, present } of requirements) {
+          if (!present)
+            problems.push(`${slug}.${locale}.mdc (${locale}/${slug}) missing ${element}`)
+        }
       }
     }
+
+    expect(problems, 'incomplete localized documentation contracts').toEqual([])
   })
 })

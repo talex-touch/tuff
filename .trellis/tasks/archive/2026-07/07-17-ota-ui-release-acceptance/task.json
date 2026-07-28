@@ -1,0 +1,32 @@
+{
+  "id": "ota-ui-release-acceptance",
+  "name": "ota-ui-release-acceptance",
+  "title": "闭环 OTA UI 发布与验收",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-17",
+  "completedAt": "2026-07-27",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-21-07-20-align-published-release-gates"
+  ],
+  "parent": "07-17-unify-ota-update-flow",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Obtain the official-attested N+1 package evidence for the remaining cross-platform OTA runtime acceptance.",
+    "blocker": "An official-attested N+1 release artifact and corresponding host/runtime evidence are not yet available.",
+    "evidence": "prd.md acceptance criteria and focused renderer, main, release-gate, and packaged Settings evidence."
+  }
+}

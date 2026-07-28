@@ -14,6 +14,18 @@ const useWebFonts = process.env.NUXT_DISABLE_WEB_FONTS !== 'true'
 
 export default defineConfig({
   blocklist: [/^m\[pascalCase\(component\)\]$/],
+  content: {
+    pipeline: {
+      // Uno's default pipeline only scans template-ish files, so icon classes
+      // declared in plain .ts data modules (SDK cards, search index, plugin
+      // categories) were never extracted and rendered as empty tiles. The first
+      // entry restores Uno's default set; the second adds those modules.
+      include: [
+        /\.(vue|svelte|[jt]sx|vine\.ts|mdx?|astro|elm|php|phtml|marko|html)($|\?)/,
+        /\/app\/(data|composables|utils)\/.*\.ts($|\?)/,
+      ],
+    },
+  },
   shortcuts: [
     // Keep common glyphs compact because Uno emits every referenced icon into the shared entry CSS.
     ['i-carbon-settings', 'i-ri-settings-line'],

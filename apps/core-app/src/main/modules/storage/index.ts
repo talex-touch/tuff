@@ -495,7 +495,11 @@ export class StorageModule extends BaseModule {
                 undefined
               )
             }
-            throw error
+            // Report the closed gate as a value, not a rejection: a contended flush is an
+            // expected outcome of this request, and an IPC rejection would strand the caller
+            // with an opaque cross-process error instead of the version it must resync from.
+            storageLog.error(`Durable save failed for ${request.key}`, { error })
+            return { success: false, version: this.cache.getVersion(request.key) }
           }
         }
         return result

@@ -1,7 +1,7 @@
 ---
 title: "CornerOverlay 角标覆盖层"
 description: "用于头像、缩略图和状态标记的角落绝对定位覆盖层。"
-category: Layout
+category: Effects
 status: beta
 since: 1.0.0
 tags: [overlay, badge, corner]

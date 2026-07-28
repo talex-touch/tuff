@@ -450,34 +450,68 @@ export class PermissionStore {
   /**
    * Revoke permission from plugin
    */
-  async revoke(pluginId: string, permissionId: string): Promise<void> {
+  async revoke(pluginId: string, permissionId: string): Promise<string[]> {
     const normalizedPermissionId = normalizePermissionId(permissionId)
+    const candidates = getPermissionIdCandidates(normalizedPermissionId)
     this.ensureWritable('revoke')
-    if (!this.data.grants[pluginId]) {
-      return
+
+    const hasPersistentGrant = candidates.some((candidate) =>
+      Boolean(this.data.grants[pluginId]?.[candidate])
+    )
+    const hasSessionGrant = candidates.some(
+      (candidate) => this.sessionGrants[pluginId]?.has(candidate) ?? false
+    )
+    if (!hasPersistentGrant && !hasSessionGrant) {
+      return []
     }
 
     await this.commitPersistentMutation('revoke', () => {
-      for (const candidate of getPermissionIdCandidates(normalizedPermissionId)) {
-        delete this.data.grants[pluginId][candidate]
+      const persistentGrants = this.data.grants[pluginId]
+      const sessionGrants = this.sessionGrants[pluginId]
+      for (const candidate of candidates) {
+        if (persistentGrants) delete persistentGrants[candidate]
+        sessionGrants?.delete(candidate)
+      }
+      if (persistentGrants && Object.keys(persistentGrants).length === 0) {
+        delete this.data.grants[pluginId]
+      }
+      if (sessionGrants?.size === 0) {
+        delete this.sessionGrants[pluginId]
       }
 
       this.addAuditLog('revoked', pluginId, normalizedPermissionId, 'user')
     })
+
+    return [normalizedPermissionId]
   }
 
   /**
    * Revoke all permissions for plugin
    */
-  async revokeAll(pluginId: string): Promise<void> {
-    const permissions = Object.keys(this.data.grants[pluginId] || {})
+  async revokeAll(pluginId: string): Promise<string[]> {
+    this.ensureWritable('revokeAll')
+    const permissions = Array.from(
+      new Set(
+        [
+          ...Object.keys(this.data.grants[pluginId] || {}),
+          ...(this.sessionGrants[pluginId] || new Set<string>())
+        ].map((permissionId) => normalizePermissionId(permissionId))
+      )
+    ).sort()
+    if (permissions.length === 0) {
+      return []
+    }
+
     await this.commitPersistentMutation('revokeAll', () => {
       delete this.data.grants[pluginId]
+      delete this.sessionGrants[pluginId]
 
       for (const permissionId of permissions) {
         this.addAuditLog('revoked', pluginId, permissionId, 'user', 'Revoked via "revoke all"')
       }
     })
+
+    return permissions
   }
 
   /**

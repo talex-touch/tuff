@@ -1,7 +1,7 @@
 ---
 title: "TextTransformer"
 description: "Short-text transition helper that crossfades text with blur, preserves outgoing color, exposes a scoped text slot, and pairs with TxAutoSizer for size-following changes."
-category: Basic
+category: Effects
 tags: [text, transition, autosize, live-region]
 syncStatus: reviewed
 verified: true

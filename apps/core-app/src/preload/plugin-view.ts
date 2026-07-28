@@ -1,3 +1,5 @@
+// The Electron sandbox exposes a restricted preload `process`, so it is read directly here
+// rather than through a global import.
 import { installTransportPortHandoff } from '@talex-touch/utils/transport'
 import { contextBridge } from 'electron'
 import { pluginViewRendererIpcAdapter } from '../shared/ipc/plugin-view-renderer-adapter'
@@ -58,7 +60,10 @@ const publicChannel = Object.freeze({
   send: channel.send
 })
 
-contextBridge.exposeInMainWorld('$plugin', Object.freeze({ ...bootstrap.plugin }))
+contextBridge.exposeInMainWorld(
+  '$plugin',
+  Object.freeze({ ...bootstrap.plugin, bridgeVersion: bootstrap.bridgeVersion })
+)
 contextBridge.exposeInMainWorld(
   '$config',
   Object.freeze({ themeStyle: bootstrap.config.themeStyle })

@@ -1,7 +1,7 @@
 ---
 title: Floating 浮动层
 description: 基于指针位置的视差容器，支持注册绝对定位的深度图层。
-category: Design
+category: Primitives
 status: beta
 since: 1.0.0
 tags: [floating, parallax, motion]

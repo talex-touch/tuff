@@ -1,7 +1,7 @@
 ---
 title: Steps
 description: Step-by-step progress indicator with horizontal/vertical layouts, numeric or string step keys, clickable heads, and explicit disabled states.
-category: Layout
+category: Navigation
 status: beta
 since: 1.0.0
 tags: [steps, progress, workflow]

@@ -177,6 +177,103 @@ registerProtectedWindowChannel(
 );
 ```
 
+## Scenario: Authoritative Transport Caller Identity
+
+### 1. Scope / Trigger
+
+- Trigger: a plugin request reaches raw IPC, `ipcMain.handle`, local main-process
+  invoke, a plugin-scoped MessagePort, or the isolated plugin-host protocol.
+- The boundary spans plugin activation, every host-owned plugin WebContents,
+  transport context construction, port ownership, privileged middleware, and test
+  fixtures.
+
+### 2. Contracts
+
+- A plugin name is actor scope, not authentication. A non-empty `uniqueKey`,
+  payload plugin name, port scope, child-process plugin name, or caller-authored
+  `verified: true` must never authorize a privileged operation.
+- The activation registry owns `{ name, pluginInstanceId,
+  activationGeneration, key }`. A plugin instance id is stable for one runtime
+  object; generation increments on each successful enable; disable revokes and
+  clears the current key.
+- Register every host-created plugin WebContents before its first load/IPC. The
+  registration snapshots the current activation and returns a token; destroyed or
+  failed-load cleanup removes only the matching token, never a replacement entry.
+- Registered senders always route through the PLUGIN lane. Sender id, registration,
+  current activation, plugin name, instance, generation, and any supplied key must
+  agree before the channel supplies an identity candidate. A stale or mismatched
+  registration remains an unverified plugin caller; it never falls back to MAIN.
+- `TuffMainTransport` issues a runtime-branded `PluginCallerIdentity`. Privileged
+  code calls `isAuthoritativePluginContext()`; it does not inspect a boolean.
+  Structurally copied or caller-authored identity objects fail the runtime brand.
+- `ipcMain.handle` resolves the real `event.sender` through the same registry.
+  Production local invoke ignores caller verification fields and resolves the
+  current activation from `PluginKeyManager` before issuing `local-host` authority.
+- A plugin-scoped port can be upgraded and confirmed only by an authoritative
+  sender. Its record binds sender, plugin instance, and generation; stream context
+  derives `message-port` authority with the concrete port id. Revocation or
+  re-enable makes an old record unusable even before physical close.
+- Plugin-host SDK calls use a cryptographically random main-issued handle plus the
+  current host generation. The child cannot select a main SDK context by declaring
+  a plugin name. Reload, host restart, exit, or stop invalidates stale handles.
+- Unit tests that need positive privileged identity use
+  `createTrustedTestPluginContext()` explicitly. The factory throws outside test
+  runtime. Actor-only tests that do not exercise verification may use an
+  unverified structural plugin scope.
+- Activation keys, host handles, and branded proof never enter logs, audit,
+  persistence, renderer replies, or plugin-visible payloads.
+
+### 3. Validation Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Non-empty, stolen, or forged payload key | No authoritative identity |
+| Registered current sender, matching activation | `web-contents` authority |
+| Registered sender with mismatched/stale generation | PLUGIN lane, unverified |
+| Unregistered sender presenting a valid plugin key | PLUGIN lane, unverified |
+| Destroyed registered sender | PLUGIN lane, unverified |
+| Valid current local lookup | `local-host` authority |
+| Caller passes `verified: true` or copied identity | Unverified |
+| Current plugin port confirmed | `message-port` authority bound to port id |
+| Port reused after revoke/re-enable | Reject/fallback; no plugin port delivery |
+| Unknown or stale plugin-host handle/generation | SDK result error; no context lookup |
+| Trusted-test factory outside test runtime | Throw before identity issuance |
+
+### 4. Tests Required
+
+- Channel resolver table tests cover omitted/mismatched/stolen keys, unknown and
+  destroyed senders, stale generation, and unregistered valid-key holders.
+- Registry tests cover activation snapshots and tokenized replacement cleanup.
+- Main transport tests cover raw channel, `ipcMain.handle`, current/stale local
+  lookup, runtime branding, explicit test issuance, port upgrade/confirm, and
+  message-port stream provenance.
+- Plugin lifecycle tests prove stable instance id, generation increment, key
+  rotation, and revoke-on-disable.
+- Plugin-window boundary tests prove CoreBox, DivisionBox, and public plugin windows
+  register and unregister their WebContents before plugin execution.
+- Privileged permission, localization, native capability, selection capture, and
+  plugin window tests reject structural verification and accept branded contexts.
+- Plugin-host tests cover current, unknown, stale-generation, reload, and
+  cross-plugin handle behavior.
+
+### 5. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const plugin = data.plugin
+  ? { name: data.plugin, uniqueKey: data.header.uniqueKey, verified: true }
+  : undefined;
+if (plugin?.verified) allowPrivilegedOperation();
+```
+
+#### Correct
+
+```ts
+const plugin = resolveHandlerPluginContext(realSender, currentActivation);
+if (!isAuthoritativePluginContext(plugin)) denyPrivilegedOperation();
+```
+
 ## Scenario: Plugin-Owned Runtime Overlay
 
 ### 1. Scope / Trigger

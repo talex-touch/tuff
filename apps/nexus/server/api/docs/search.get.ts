@@ -1,9 +1,7 @@
-import { queryCollection } from '@nuxt/content/server'
 import type { DocsSearchResponse } from '#shared/types/content-api'
-
-const DOCS_SEARCH_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
-const DOCS_SEARCH_CACHE_MAX_AGE_SECONDS = 300
-const DOCS_SEARCH_CACHE_STALE_MAX_AGE_SECONDS = 3600
+import type { H3Event } from 'h3'
+import { queryCollection } from '@nuxt/content/server'
+import { cacheDocsContent } from '../../utils/docsContentCache'
 
 function normalizeLocale(value: unknown): 'en' | 'zh' | null {
   return value === 'en' || value === 'zh' ? value : null
@@ -53,8 +51,7 @@ function resolveTags(meta: Record<string, unknown> | null) {
   return meta.tags.filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
 }
 
-export default defineCachedEventHandler(async (event): Promise<DocsSearchResponse> => {
-  const locale = resolveSearchLocale(event)
+const resolveDocsSearch = cacheDocsContent(async (event: H3Event, locale: 'en' | 'zh' | null): Promise<DocsSearchResponse> => {
   const docs = await queryCollection(event, 'docs')
     .where('path', 'LIKE', buildDocsSearchPathPattern(locale))
     .select('path', 'title', 'description', 'meta')
@@ -79,11 +76,15 @@ export default defineCachedEventHandler(async (event): Promise<DocsSearchRespons
     .filter(item => !locale || item.locale === locale)
     .sort((a, b) => a.title.localeCompare(b.title, a.locale === 'zh' ? 'zh-CN' : 'en'))
 
-  setHeader(event, 'cache-control', DOCS_SEARCH_CACHE_CONTROL)
   return { items }
 }, {
-  maxAge: DOCS_SEARCH_CACHE_MAX_AGE_SECONDS,
-  staleMaxAge: DOCS_SEARCH_CACHE_STALE_MAX_AGE_SECONDS,
   name: 'docs-search',
-  getKey: event => `locale:${resolveSearchLocale(event) ?? 'all'}`,
+  getKey: locale => `locale:${locale ?? 'all'}`,
+  isEmpty: result => result.items.length === 0,
+  // The searchable docs set is never legitimately empty.
+  treatEmptyAsUnavailable: true,
+})
+
+export default defineEventHandler(async (event): Promise<DocsSearchResponse> => {
+  return resolveDocsSearch(event, resolveSearchLocale(event))
 })
