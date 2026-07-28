@@ -19,7 +19,7 @@ describe('landing page performance boundaries', () => {
 
     expect(waitlist).not.toContain('Math.random')
     expect(waitlist).toContain('const seed = i + 1')
-    expect(waitlist).toContain('hue: (seed * 47) % 360')
+    expect(waitlist).toContain('hue: 210 + ((seed * 47) % 110)')
     expect(waitlist).toContain('aspectRatio: (seed * 7) % 10 + 1')
     expect(waitlist).toContain(':hue="bar.hue"')
     expect(waitlist).toContain(':aspect-ratio="bar.aspectRatio"')
