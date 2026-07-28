@@ -733,6 +733,9 @@ onBeforeUnmount(() => {
   margin: 0;
   line-height: 1.04;
   letter-spacing: -0.01em;
+  /* CJK breaks between any two glyphs by default, which would split a phrase
+     like 随心创作 mid-word once a line runs out of room */
+  word-break: keep-all;
 }
 
 .ExpHero-TitleLine {
@@ -766,6 +769,8 @@ onBeforeUnmount(() => {
   font-size: clamp(2.7rem, 5.6vw, 5.2rem);
   font-weight: 850;
   line-height: 1.04;
+  /* The accent is one headline beat — it wraps as a whole or not at all */
+  white-space: nowrap;
   /* Extend the painted box below the baseline so gradient descenders (g, p) aren't clipped */
   padding-bottom: 0.12em;
   filter: drop-shadow(0 18px 54px rgba(105, 75, 255, 0.36));
