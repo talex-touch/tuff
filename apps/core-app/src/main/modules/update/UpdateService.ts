@@ -37,6 +37,7 @@ import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getSentryService } from '../sentry'
+import { getNetworkService } from '../network'
 import { operationalErrorService } from '../observability'
 /**
  * Update service for checking application updates in main process
@@ -54,6 +55,8 @@ import { UpdateAttemptRepository } from './update-attempt-repository'
 import { UpdateLifecycleConflictError } from './update-lifecycle'
 import { resolveUpdateInstallSettingsMigration } from './update-settings-migration'
 import { ReleaseFetchService } from './services/release-fetch-service'
+import { ReleaseNotesRepository } from './release-notes-repository'
+import { ReleaseNotesService } from './release-notes-service'
 import { UpdateActionController } from './services/update-action-controller'
 import { UpdateInstallCoordinator } from './services/update-install-coordinator'
 import { UpdateDownloadAdapter } from './services/update-download-adapter'
@@ -102,6 +105,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
   private updateNotificationService: NotificationService | null = null
   private readonly readyNotificationAttemptIds = new Set<string>()
   private releaseFetchService: ReleaseFetchService
+  private releaseNotesService: ReleaseNotesService | null = null
   private releaseCacheLoadPromise: Promise<void> | null = null
   private startupBackgroundTimer: NodeJS.Timeout | null = null
   private startupAutoCheckTimer: NodeJS.Timeout | null = null
@@ -262,6 +266,22 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
         onObserverError: (error) =>
           updateLog.warn('Failed to publish committed update lifecycle', { error })
       })
+      this.releaseNotesService = new ReleaseNotesService({
+        currentVersion: this.currentVersion,
+        catalogPaths: this.getReleaseNotesCatalogPaths(),
+        cachePath: path.join(ctx.app.rootPath, 'config', 'release-notes-cache.json'),
+        officialBaseUrl: NEXUS_BASE_URL,
+        repository: new ReleaseNotesRepository(db),
+        request: async (url) => {
+          const response = await getNetworkService().request<unknown>({
+            method: 'GET',
+            url,
+            timeoutMs: 8000,
+            responseType: 'json'
+          })
+          return response.data
+        }
+      })
       updateLog.success('Update repositories initialized')
     } catch (error) {
       updateLog.warn('Failed to initialize update repositories', { error })
@@ -353,6 +373,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     }
     this.transport = null
     this.actionController = null
+    this.releaseNotesService = null
     this.updateNotificationService = null
     this.readyNotificationAttemptIds.clear()
 
@@ -384,6 +405,25 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
     })
 
     return this.actionController
+  }
+
+  private getReleaseNotesCatalogPaths(): string[] {
+    const relative = path.join('resources', 'release-notes', 'catalog.json')
+    return [
+      ...new Set([
+        path.join(app.getAppPath(), relative),
+        path.join(process.resourcesPath, 'app', relative),
+        path.join(process.resourcesPath, relative),
+        path.join(process.cwd(), 'apps', 'core-app', relative)
+      ])
+    ]
+  }
+
+  private getReleaseNotesService(): ReleaseNotesService {
+    if (!this.releaseNotesService) {
+      throw new Error('Release notes service is unavailable')
+    }
+    return this.releaseNotesService
   }
 
   /**
@@ -564,6 +604,72 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
           return {
             success: false,
             error: error instanceof Error ? error.message : 'Unknown error'
+          }
+        }
+      }),
+
+      tx.on(UpdateEvents.getBundledReleaseNotes, async () => {
+        try {
+          return {
+            success: true,
+            data: await this.getReleaseNotesService().getBundledState()
+          }
+        } catch (error) {
+          updateLog.warn('Failed to load bundled release notes', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Release notes are unavailable',
+            errorCode: 'RELEASE_NOTES_BUNDLE_UNAVAILABLE',
+            retryable: false
+          }
+        }
+      }),
+
+      tx.on(UpdateEvents.listReleaseNotes, async (payload) => {
+        try {
+          return {
+            success: true,
+            data: await this.getReleaseNotesService().list(payload)
+          }
+        } catch (error) {
+          updateLog.warn('Failed to list release notes', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Release notes history is unavailable',
+            errorCode: 'RELEASE_NOTES_HISTORY_UNAVAILABLE',
+            retryable: true
+          }
+        }
+      }),
+
+      tx.on(UpdateEvents.getReleaseNotes, async (payload) => {
+        try {
+          return {
+            success: true,
+            data: await this.getReleaseNotesService().get(payload.tag)
+          }
+        } catch (error) {
+          updateLog.warn('Failed to get release notes', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Release notes are unavailable',
+            errorCode: 'RELEASE_NOTES_ENTRY_UNAVAILABLE',
+            retryable: true
+          }
+        }
+      }),
+
+      tx.on(UpdateEvents.acknowledgeReleaseNotes, async (payload) => {
+        try {
+          await this.getReleaseNotesService().acknowledge(payload.version)
+          return { success: true }
+        } catch (error) {
+          updateLog.warn('Failed to acknowledge release notes', { error })
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Release notes acknowledgement failed',
+            errorCode: 'RELEASE_NOTES_ACKNOWLEDGE_FAILED',
+            retryable: false
           }
         }
       }),
