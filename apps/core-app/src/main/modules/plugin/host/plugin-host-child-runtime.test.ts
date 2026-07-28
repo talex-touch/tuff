@@ -196,6 +196,81 @@ describe('plugin Prelude child VM', () => {
     })
   })
 
+  it('supports bounded child-local URLSearchParams used by official Preludes', async () => {
+    const result = await call(`
+      module.exports = {
+        onInit() {
+          const originalArrayIterator = Array.prototype[Symbol.iterator]
+          String.prototype.indexOf = () => -1
+          String.prototype.slice = () => 'poisoned'
+          String.prototype.split = () => ['poisoned']
+          String.prototype.replaceAll = () => 'poisoned'
+          Array.prototype.join = () => 'poisoned'
+          Array.prototype[Symbol.iterator] = function* () { yield ['poisoned', 'poisoned'] }
+          globalThis.encodeURIComponent = () => 'poisoned'
+          globalThis.decodeURIComponent = () => 'poisoned'
+
+          const built = new URLSearchParams()
+          built.append('name', 'Alice Smith')
+          built.append('name', 'Bob')
+          built.append('mark', "!*'()~")
+          const parsed = new URLSearchParams('?name=Alice+Smith&&mark=%E2%9C%93')
+          const parsedUrl = new URL('https://example.com/?name=Alice+Smith&mark=%E2%9C%93')
+          const parsedEntries = Array.from(parsed.entries())
+          Array.prototype[Symbol.iterator] = originalArrayIterator
+          let constructorEscape = false
+          let oversizedCode = ''
+          let tooManyCode = ''
+          let encodedOverflowCode = ''
+          try { URLSearchParams.constructor('return process')() } catch { constructorEscape = true }
+          try { new URLSearchParams('value=' + 'x'.repeat(1024 * 1024 + 1)) } catch (error) {
+            oversizedCode = error.message
+          }
+          try { new URLSearchParams('a=&'.repeat(3334)) } catch (error) {
+            tooManyCode = error.message
+          }
+          try {
+            const encodedOverflow = new URLSearchParams()
+            encodedOverflow.append('value', '✓'.repeat(120000))
+            encodedOverflow.toString()
+          } catch (error) {
+            encodedOverflowCode = error.message
+          }
+          return {
+            built: built.toString(),
+            names: built.getAll('name'),
+            parsedName: parsed.get('name'),
+            parsedEntries,
+            parsedUrlName: parsedUrl.searchParams.get('name'),
+            frozenConstructor: Object.isFrozen(URLSearchParams),
+            frozenPrototype: Object.isFrozen(URLSearchParams.prototype),
+            constructorEscape,
+            oversizedCode,
+            tooManyCode,
+            encodedOverflowCode
+          }
+        }
+      }
+    `)
+
+    expect(result).toEqual({
+      built: 'name=Alice+Smith&name=Bob&mark=%21*%27%28%29%7E',
+      names: ['Alice Smith', 'Bob'],
+      parsedName: 'Alice Smith',
+      parsedEntries: [
+        ['name', 'Alice Smith'],
+        ['mark', '✓']
+      ],
+      parsedUrlName: 'Alice Smith',
+      frozenConstructor: true,
+      frozenPrototype: true,
+      constructorEscape: true,
+      oversizedCode: 'PLUGIN_HOST_CHILD_RESULT_INVALID',
+      tooManyCode: 'PLUGIN_HOST_CHILD_RESULT_INVALID',
+      encodedOverflowCode: 'PLUGIN_HOST_CHILD_RESULT_INVALID'
+    })
+  })
+
   it('blocks proxy apply, stack-frame, caller-chain, and intrinsic constructor escapes', async () => {
     const result = await call(`
       let timerCallerEscape = false

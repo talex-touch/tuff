@@ -13,7 +13,6 @@ const EXPECTED_UNMIGRATED = Object.freeze({
   'touch-batch-rename': 'top-level require',
   'touch-browser-data': 'top-level require',
   'touch-browser-open': 'top-level require',
-  'touch-dictation': 'missing voice facade',
   'touch-intelligence': 'top-level require',
   'touch-quick-actions': 'top-level require',
   'touch-snipaste': 'top-level require',
@@ -62,6 +61,7 @@ describe('plugin runtime production rollout gate', () => {
       'touch-code-snippets',
       'touch-dev-toolbox',
       'touch-dev-utils',
+      'touch-dictation',
       'touch-emoji-symbols',
       'touch-quickops',
       'touch-snippets',
@@ -69,7 +69,7 @@ describe('plugin runtime production rollout gate', () => {
       'touch-text-tools'
     ])
     expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
-    expect(unmigrated).toHaveLength(12)
+    expect(unmigrated).toHaveLength(11)
     expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(unmigrated.length === 0)
   })
 
@@ -99,6 +99,7 @@ describe('plugin runtime production rollout gate', () => {
       'touch-code-snippets',
       'touch-dev-toolbox',
       'touch-dev-utils',
+      'touch-dictation',
       'touch-emoji-symbols',
       'touch-quickops',
       'touch-snippets',
@@ -154,6 +155,20 @@ describe('plugin runtime production rollout gate', () => {
       ...(Array.isArray(quickOps?.optional) ? quickOps.optional : [])
     ]
     expect(quickOpsPermissions).toContain('storage.shared')
+
+    const dictation = manifests.get('touch-dictation')?.permissions
+    const dictationPermissions = [
+      ...(Array.isArray(dictation?.required) ? dictation.required : []),
+      ...(Array.isArray(dictation?.optional) ? dictation.optional : [])
+    ]
+    expect(dictationPermissions).toEqual(
+      expect.arrayContaining([
+        'voice.dictation',
+        'search.root-results',
+        'clipboard.read',
+        'clipboard.write'
+      ])
+    )
   })
 
   it('keeps every current top-level require plugin in the explicit failure inventory', () => {
