@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, it } from 'vitest'
@@ -48,7 +49,8 @@ async function loadVerifierHarness() {
           const diagnostics = [
             ...module.checkMarkdownAndLinks(fixtureRoot, scope),
             ...module.checkTasks(fixtureRoot, scope),
-            ...module.checkReleaseNotes(fixtureRoot),
+            ...module.checkReleaseNotes(fixtureRoot, scope),
+            ...(typeof module.checkAiDocs === 'function' ? module.checkAiDocs(fixtureRoot, scope) : []),
             ...module.checkPlaceholders(fixtureRoot, scope),
           ].sort((a, b) =>
             a.ruleId.localeCompare(b.ruleId)
@@ -92,9 +94,63 @@ function readFixture(name) {
   return { fixtureRoot, trackedFiles }
 }
 
+function readFixtureCase(name) {
+  return JSON.parse(
+    fs.readFileSync(path.join(fixturesRoot, 'cases', `${name}.json`), 'utf8'),
+  )
+}
+
+function materializeFixtureCase(name) {
+  const fixtureCase = readFixtureCase(name)
+  const base = readFixture(fixtureCase.base ?? 'valid-aggregate')
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), `docs-fixture-${name}-`))
+
+  fs.cpSync(base.fixtureRoot, fixtureRoot, { recursive: true })
+
+  const tracked = new Set(base.trackedFiles)
+  for (const file of fixtureCase.trackedRemove ?? []) tracked.delete(file)
+
+  for (const [file, content] of Object.entries(fixtureCase.files ?? {})) {
+    const absolutePath = path.join(fixtureRoot, file)
+    if (content === null) {
+      fs.rmSync(absolutePath, { force: true })
+      tracked.delete(file)
+      continue
+    }
+
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true })
+    fs.writeFileSync(absolutePath, content)
+    tracked.add(file)
+  }
+
+  for (const file of fixtureCase.trackedAdd ?? []) tracked.add(file)
+
+  const trackedFiles = [...tracked].sort()
+  fs.writeFileSync(
+    path.join(fixtureRoot, 'tracked-files.json'),
+    `${JSON.stringify(trackedFiles, null, 2)}\n`,
+  )
+
+  return { fixtureRoot, trackedFiles, includeAiDocs: fixtureCase.includeAiDocs === true }
+}
+
 async function runFixture(name) {
   const { run } = await loadVerifierHarness()
   const fixture = readFixture(name)
+
+  const result = await run({
+    fixtureRoot: fixture.fixtureRoot,
+    repoRoot: fixture.fixtureRoot,
+    trackedFiles: fixture.trackedFiles,
+    includeAiDocs: fixture.includeAiDocs === true,
+    diagnosticLimit: 50,
+  })
+
+  return normalizeVerifierResult(result)
+}
+
+async function runMaterializedFixture(fixture) {
+  const { run } = await loadVerifierHarness()
 
   const result = await run({
     fixtureRoot: fixture.fixtureRoot,
@@ -104,6 +160,16 @@ async function runFixture(name) {
   })
 
   return normalizeVerifierResult(result)
+}
+
+async function runFixtureCase(name) {
+  const fixture = materializeFixtureCase(name)
+  try {
+    return await runMaterializedFixture(fixture)
+  }
+  finally {
+    fs.rmSync(fixture.fixtureRoot, { recursive: true, force: true })
+  }
 }
 
 function normalizeVerifierResult(result) {
@@ -136,10 +202,56 @@ function diagnosticRuleIds(result) {
     .filter(Boolean)
 }
 
+function assertDiagnosticShape(result) {
+  assert.equal(typeof result.exitCode, 'number')
+  assert.ok(Array.isArray(result.diagnostics))
+  for (const diagnostic of result.diagnostics) {
+    assert.equal(typeof diagnostic.ruleId, 'string')
+    assert.equal(typeof diagnostic.file, 'string')
+    assert.equal(typeof diagnostic.line, 'number')
+    assert.equal(typeof diagnostic.column, 'number')
+    assert.equal(typeof diagnostic.message, 'string')
+  }
+}
+
 function diagnosticPaths(result) {
   return result.diagnostics
     .map(diagnostic => diagnostic.path ?? diagnostic.file ?? diagnostic.sourcePath)
     .filter(Boolean)
+}
+
+function diagnosticMessages(result) {
+  return result.diagnostics
+    .map(diagnostic => diagnostic.message ?? '')
+    .filter(Boolean)
+}
+
+function diagnosticSortKey(diagnostic) {
+  return [
+    diagnostic.ruleId ?? diagnostic.rule ?? diagnostic.code ?? '',
+    diagnostic.file ?? diagnostic.path ?? diagnostic.sourcePath ?? '',
+    diagnostic.line ?? 0,
+    diagnostic.column ?? 0,
+    diagnostic.message ?? '',
+  ]
+}
+
+function snapshotFixtureFiles(name) {
+  const { fixtureRoot } = readFixture(name)
+  const files = {}
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolutePath = path.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        walk(absolutePath)
+        continue
+      }
+      const relativePath = path.relative(fixtureRoot, absolutePath).split(path.sep).join('/')
+      files[relativePath] = fs.readFileSync(absolutePath, 'utf8')
+    }
+  }
+  walk(fixtureRoot)
+  return files
 }
 
 function renderedOutput(result) {
@@ -150,17 +262,23 @@ function renderedOutput(result) {
   ].join('\n')
 }
 
+async function loadVerifierModule() {
+  return import(pathToFileURL(path.join(repoRoot, 'scripts/docs/verify-docs.mjs')).href)
+}
+
 describe('canonical documentation verifier fixtures', () => {
   it('accepts the aggregate valid fixture', async () => {
-    const result = await runFixture('valid-aggregate')
+    const result = await runFixtureCase('valid-final-contract')
 
+    assertDiagnosticShape(result)
     assert.equal(result.exitCode, 0)
     assert.deepEqual(result.diagnostics, [])
   })
 
   it('keeps 2.4.13 release notes legacy-compatible', async () => {
-    const result = await runFixture('release-notes-legacy-2.4.13')
+    const result = await runFixtureCase('release-notes-legacy-final-contract')
 
+    assertDiagnosticShape(result)
     assert.equal(result.exitCode, 0)
     assert.deepEqual(result.diagnostics, [])
   })
@@ -169,6 +287,7 @@ describe('canonical documentation verifier fixtures', () => {
     const result = await runFixture('release-notes-post-baseline-invalid')
 
     assert.notEqual(result.exitCode, 0)
+    assertDiagnosticShape(result)
 
     const ruleIds = diagnosticRuleIds(result)
     assert.ok(ruleIds.length > 0, 'expected at least one diagnostic rule ID')
@@ -194,5 +313,214 @@ describe('canonical documentation verifier fixtures', () => {
 
     assert.equal(first.exitCode, second.exitCode)
     assert.equal(renderedOutput(first), renderedOutput(second))
+  })
+
+  const failingCases = [
+    {
+      name: 'markdown-link-edges-and-scope-poison',
+      ruleIds: ['DOC-LINK-INVALID', 'DOC-LINK-UNTRACKED'],
+      paths: ['docs/INDEX.md', 'docs/link-edge.mdc'],
+      absentPaths: [
+        '.github/poison.md',
+        '.trellis/internal/poison.md',
+        'AGENTS.md',
+        'apps/nexus/examples/poison.md',
+        'coverage/poison.md',
+        'dist/poison.md',
+        'docs/engineering/reports/poison.md',
+        'generated/poison.md',
+        'node_modules/poison.md',
+      ],
+    },
+    {
+      name: 'trellis-graph-meta-archive-todo',
+      ruleIds: [
+        'DOC-TASK-ACTIVE-COMPLETED',
+        'DOC-TASK-ARCHIVE-META',
+        'DOC-TASK-DUPLICATE-ID',
+        'DOC-TASK-GRAPH',
+        'DOC-TASK-JSON',
+        'DOC-TASK-META',
+        'DOC-TODO-TASK-REFERENCE',
+      ],
+      paths: [
+        '.trellis/archive/tasks/incomplete-task/task.json',
+        '.trellis/tasks/active-doc-task/task.json',
+        '.trellis/tasks/completed-active/task.json',
+        '.trellis/tasks/invalid-json/task.json',
+        '.trellis/tasks/parent/task.json',
+        'docs/plan-prd/TODO.md',
+      ],
+    },
+    {
+      name: 'release-version-mismatch',
+      ruleIds: ['DOC-RELEASE-VERSION'],
+      paths: ['package.json'],
+    },
+    {
+      name: 'ai-promotion-current-evidence',
+      ruleIds: ['DOC-AI-CONTRACT'],
+      paths: [
+        'docs/plan-prd/03-features/ai-2.5.0-plan-prd.md',
+        'docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md',
+      ],
+    },
+    {
+      name: 'prd-placeholders-and-allowlist',
+      ruleIds: ['DOC-PRD-PLACEHOLDER'],
+      paths: [
+        '.trellis/tasks/active-doc-task/prd.md',
+        '.trellis/tasks/07-27-documentation-quality-gates/prd.md',
+      ],
+      messages: ['TBD', 'TODO: fill', '<evidence>', '待补充'],
+    },
+  ]
+
+  for (const fixtureCase of failingCases) {
+    it(`fails ${fixtureCase.name} with stable rule IDs and paths`, async () => {
+      const result = await runFixtureCase(fixtureCase.name)
+
+      assert.notEqual(result.exitCode, 0)
+      assertDiagnosticShape(result)
+
+      const ruleIds = diagnosticRuleIds(result)
+      const paths = diagnosticPaths(result)
+      const messages = diagnosticMessages(result).join('\n')
+      const problems = []
+      for (const ruleId of fixtureCase.ruleIds) {
+        if (!ruleIds.includes(ruleId))
+          problems.push(`missing rule ${ruleId}; got ${ruleIds.join(', ')}`)
+      }
+
+      for (const expectedPath of fixtureCase.paths) {
+        if (!paths.includes(expectedPath))
+          problems.push(`missing path ${expectedPath}; got ${paths.join(', ')}`)
+      }
+
+      for (const excludedPath of fixtureCase.absentPaths ?? []) {
+        if (paths.includes(excludedPath))
+          problems.push(`unexpected excluded poison path ${excludedPath}; got ${paths.join(', ')}`)
+      }
+
+      for (const expectedMessage of fixtureCase.messages ?? []) {
+        if (!messages.includes(expectedMessage))
+          problems.push(`missing message ${expectedMessage}; got ${messages}`)
+      }
+
+      assert.deepEqual(problems, [])
+    })
+  }
+
+  it('sorts diagnostics deterministically and renders capped totals', async () => {
+    const fixture = materializeFixtureCase('markdown-link-edges-and-scope-poison')
+    try {
+      const result = await runMaterializedFixture(fixture)
+      const keys = result.diagnostics.map(diagnosticSortKey)
+      assert.deepEqual(keys, [...keys].sort((a, b) => {
+        for (let index = 0; index < a.length; index += 1) {
+          const left = a[index]
+          const right = b[index]
+          if (typeof left === 'number' && typeof right === 'number') {
+            if (left !== right)
+              return left - right
+            continue
+          }
+          const comparison = String(left).localeCompare(String(right))
+          if (comparison !== 0)
+            return comparison
+        }
+        return 0
+      }))
+
+      const { renderDiagnostics } = await loadVerifierModule()
+      const output = renderDiagnostics(result.diagnostics, 2)
+      assert.match(output, /docs:verify failed: shown 2\/\d+; totals /)
+      for (const ruleId of new Set(diagnosticRuleIds(result))) {
+        const expectedTotal = result.diagnostics.filter(diagnostic => diagnostic.ruleId === ruleId).length
+        assert.match(output, new RegExp(`${ruleId}=${expectedTotal}(?:,|\\n)`))
+      }
+      assert.equal(output.split('\n').filter(Boolean).length, 3)
+    }
+    finally {
+      fs.rmSync(fixture.fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves source fixtures read-only and produces byte-identical repeated output', async () => {
+    const before = snapshotFixtureFiles('valid-aggregate')
+    const first = await runFixtureCase('valid-final-contract')
+    const second = await runFixtureCase('valid-final-contract')
+    const after = snapshotFixtureFiles('valid-aggregate')
+
+    assert.deepEqual(after, before)
+    assert.equal(first.exitCode, second.exitCode)
+    assert.equal(renderedOutput(first), renderedOutput(second))
+  })
+
+  it('renders diagnostics with per-rule totals and round-robin caps', async () => {
+    const { renderDiagnostics } = await loadVerifierModule()
+    const diagnostics = [
+      { ruleId: 'DOC-ZETA', file: 'docs/zeta-1.md', line: 1, column: 1, message: 'zeta 1' },
+      { ruleId: 'DOC-ALPHA', file: 'docs/alpha-2.md', line: 1, column: 1, message: 'alpha 2' },
+      { ruleId: 'DOC-BETA', file: 'docs/beta-1.md', line: 1, column: 1, message: 'beta 1' },
+      { ruleId: 'DOC-ALPHA', file: 'docs/alpha-1.md', line: 1, column: 1, message: 'alpha 1' },
+      { ruleId: 'DOC-ZETA', file: 'docs/zeta-2.md', line: 1, column: 1, message: 'zeta 2' },
+      { ruleId: 'DOC-BETA', file: 'docs/beta-2.md', line: 1, column: 1, message: 'beta 2' },
+      { ruleId: 'DOC-ZETA', file: 'docs/zeta-3.md', line: 1, column: 1, message: 'zeta 3' },
+    ]
+
+    const output = renderDiagnostics(diagnostics, 5)
+    const lines = output.split('\n').filter(Boolean)
+
+    assert.deepEqual(
+      lines.slice(0, 5).map(line => line.split(' ', 1)[0]),
+      ['DOC-ALPHA', 'DOC-BETA', 'DOC-ZETA', 'DOC-ALPHA', 'DOC-BETA'],
+    )
+    assert.equal(lines[5], 'docs:verify failed: shown 5/7; totals DOC-ALPHA=2, DOC-BETA=2, DOC-ZETA=3')
+  })
+
+  it('exports no production PRD placeholder self-allowlist entries', async () => {
+    const { PLACEHOLDER_ALLOWLIST = [] } = await loadVerifierModule()
+
+    assert.deepEqual(
+      PLACEHOLDER_ALLOWLIST
+        .filter(entry => /^\.trellis\/tasks\/[^/]+\/prd\.md$/.test(entry.path ?? ''))
+        .map(entry => entry.path)
+        .sort(),
+      [],
+    )
+  })
+
+  it('rejects stale, broad, and unjustified placeholder allowlist shapes', async () => {
+    const { PLACEHOLDER_ALLOWLIST = [] } = await loadVerifierModule()
+    const fixture = materializeFixtureCase('valid-final-contract')
+    try {
+      const tracked = new Set(fixture.trackedFiles)
+      const invalidAllowlistCases = [
+        {
+          name: 'stale path',
+          invalid: entry => typeof entry.path === 'string' && !tracked.has(entry.path),
+        },
+        {
+          name: 'broad path',
+          invalid: entry => typeof entry.path !== 'string' || entry.path.includes('*') || !/^\.trellis\/tasks\/[^/]+\/prd\.md$/.test(entry.path),
+        },
+        {
+          name: 'missing rationale',
+          invalid: entry => typeof entry.rationale !== 'string' || entry.rationale.trim() === '',
+        },
+      ]
+
+      for (const fixtureCase of invalidAllowlistCases) {
+        assert.deepEqual(
+          PLACEHOLDER_ALLOWLIST.filter(fixtureCase.invalid),
+          [],
+          `${fixtureCase.name} placeholder allowlist entries must be rejected`,
+        )
+      }
+    }
+    finally {
+      fs.rmSync(fixture.fixtureRoot, { recursive: true, force: true })
+    }
   })
 })
