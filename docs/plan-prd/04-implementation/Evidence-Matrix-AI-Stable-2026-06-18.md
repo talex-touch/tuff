@@ -20,7 +20,7 @@
 ## 历史 visible gate 与当前复采状态
 
 - manifest 的 `baselineVersion` 为 `2.4.12-beta.8`，用于标识 historical baseline，不代表所有 surface 来自该精确版本。
-- historical mixed-version manifest snapshot 覆盖 13/13 surfaces、77 个 artifact refs；证据集包含 `2.4.12-beta.8`、`2.4.12-beta.10`、`2.4.13-beta.1`，部分 surface 未显式标注版本。
+- historical mixed-version manifest snapshot 的 13/13 passed surfaces 在 2026-06-24 时有 72 个 artifact refs；证据集包含 `2.4.12-beta.8`、`2.4.12-beta.10`、`2.4.13-beta.1`，部分 surface 未显式标注版本。2026-07-13 `2.4.13-beta.4` checkpoint 新增 5 个当时版本的 partial AI Command artifacts：`packaged-ai-command-editor-2026-07-13.png`、`packaged-ai-command-editor-2026-07-13-probe.json`、`packaged-ai-command-preset-preview-2026-07-13.png`、`packaged-ai-command-dynamic-feature-2026-07-13.png` 与 `packaged-ai-command-dynamic-widget-2026-07-13.png`，使 mixed-version manifest 总计 77；它们不构成全部 surfaces 的 current-version recapture。
 - 当前源码状态由根目录与 `apps/core-app/package.json` 解析为稳定 `2.4.13`。current-version packaged recapture 保持 open；只有精确 `2.4.13` 制品重采全部 surface 并通过 `--requireCurrentVersion` 后才能关闭。
 - `assistant-screenshot-translate` 仅在 historical packaged snapshot 中 passed；后续 permission recovery、cursor/display/region 来源、image route metadata、OCR fallback、pin window host copy/close/work-area/zoom/opacity，以及失败后直达 Intelligence Channels 的恢复只有 focused code/test evidence，仍待精确 `2.4.13` 制品复采。多显示器/HiDPI 也保持 open。
 
