@@ -170,6 +170,23 @@ export function getAuthToken(): string | null {
   return authToken
 }
 
+export function getSanitizedAuthSessionState(): {
+  readonly isLoaded: boolean
+  readonly isSignedIn: boolean
+  readonly user: { readonly id: string; readonly name?: string } | null
+} {
+  return Object.freeze({
+    isLoaded: authState.isLoaded,
+    isSignedIn: authState.isSignedIn,
+    user: authState.user
+      ? Object.freeze({
+          id: authState.user.id,
+          ...(typeof authState.user.name === 'string' ? { name: authState.user.name } : {})
+        })
+      : null
+  })
+}
+
 export function getDeviceId(): string | null {
   const { deviceId } = ensureDeviceProfile()
   return deviceId || null

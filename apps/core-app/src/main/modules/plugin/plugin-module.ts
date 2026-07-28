@@ -1,4 +1,5 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { FlowDispatchOptions, FlowPayload } from '@talex-touch/utils/types/flow'
 import type {
   IManifest,
   IPluginManager,
@@ -25,9 +26,14 @@ import fse from 'fs-extra'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-touch/utils/i18n'
-import { parseManifestPermissions } from '@talex-touch/utils/permission'
+import { normalizePermissionId, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { CoreBoxEvents, StoreEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import {
+  CoreBoxEvents,
+  PluginEvents,
+  QuickOpsEvents,
+  StoreEvents
+} from '@talex-touch/utils/transport/events'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   PluginInstallCompletedEvent,
@@ -53,7 +59,10 @@ import {
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
+import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
+import { flowBus } from '../flow-bus/flow-bus'
 import { getNetworkService } from '../network'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
 import {
@@ -61,9 +70,18 @@ import {
   registerPluginLocalizationChannels
 } from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
+import { shouldInstallPluginRuntimeServiceByDefault } from './plugin-runtime-rollout'
 import { getClipboardHostService } from '../clipboard/clipboard-host-service'
-import { createPluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import {
+  createPluginBusinessCapabilities,
+  pluginBusinessSecretPrefix
+} from './host/plugin-business-capabilities'
 import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import {
+  createPluginHostNexusService,
+  createPluginRequestReplyCapabilities,
+  type PluginQuickOpsOperationId
+} from './host/plugin-host-request-reply'
 import { ElectronPluginRuntimeProcessFactory } from './host/plugin-runtime-electron-process'
 import {
   PluginRuntimeService,
@@ -110,6 +128,87 @@ const PLUGIN_FILE_TREE_MAX_DEPTH = 5
 const PLUGIN_FILE_TREE_MAX_ENTRIES = 500
 const PLUGIN_FILE_TREE_IGNORED_DIRS = new Set(['.git', '.vite', 'dist', 'logs', 'node_modules'])
 const ISSUE_FULL_RESYNC_INTERVAL_MS = 45 * 60 * 1000
+const NEXUS_SUCCESS_STATUSES = Object.freeze(
+  Array.from({ length: 100 }, (_value, index) => index + 200)
+)
+
+async function invokeQuickOpsHostOperation(
+  transport: ITuffTransportMain,
+  operation: PluginQuickOpsOperationId,
+  payload: unknown,
+  signal: AbortSignal
+): Promise<unknown> {
+  if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+  let result: unknown
+  switch (operation) {
+    case 'capabilities.get':
+      result = await transport.invoke(QuickOpsEvents.capabilities.get, undefined)
+      break
+    case 'sessions.get':
+      result = await transport.invoke(QuickOpsEvents.sessions.get, undefined)
+      break
+    case 'audit.get':
+      result = await transport.invoke(QuickOpsEvents.audit.get, payload as never)
+      break
+    case 'system-info.get':
+      result = await transport.invoke(QuickOpsEvents.systemInfo.get, undefined)
+      break
+    case 'tuff-diagnostics.get':
+      result = await transport.invoke(QuickOpsEvents.tuffDiagnostics.get, undefined)
+      break
+    case 'disk-space.get':
+      result = await transport.invoke(QuickOpsEvents.diskSpace.get, undefined)
+      break
+    case 'directory-usage.get':
+      result = await transport.invoke(QuickOpsEvents.directoryUsage.get, payload as never)
+      break
+    case 'query-local-ip.get':
+      result = await transport.invoke(QuickOpsEvents.queryLocalIp.get, undefined)
+      break
+    case 'port-status.get':
+      result = await transport.invoke(QuickOpsEvents.portStatus.get, payload as never)
+      break
+    case 'dns-query.get':
+      result = await transport.invoke(QuickOpsEvents.dnsQuery.get, payload as never)
+      break
+    case 'file-hash.get':
+      result = await transport.invoke(QuickOpsEvents.fileHash.get, payload as never)
+      break
+    case 'file-base64.get':
+      result = await transport.invoke(QuickOpsEvents.fileBase64.get, payload as never)
+      break
+    case 'recent-download.get':
+      result = await transport.invoke(QuickOpsEvents.recentDownload.get, undefined)
+      break
+    case 'common-directory.get':
+      result = await transport.invoke(QuickOpsEvents.commonDirectory.get, payload as never)
+      break
+    case 'path-format.get':
+      result = await transport.invoke(QuickOpsEvents.pathFormat.get, payload as never)
+      break
+    case 'format-text.get':
+      result = await transport.invoke(QuickOpsEvents.formatText.get, payload as never)
+      break
+    case 'network-status.get':
+      result = await transport.invoke(QuickOpsEvents.networkStatus.get, undefined)
+      break
+    case 'battery-status.get':
+      result = await transport.invoke(QuickOpsEvents.batteryStatus.get, undefined)
+      break
+    case 'system-proxy.get':
+      result = await transport.invoke(QuickOpsEvents.systemProxy.get, undefined)
+      break
+    case 'developer-preview.get':
+      result = await transport.invoke(QuickOpsEvents.developerPreview.get, payload as never)
+      break
+    case 'developer-preview.save':
+      result = await transport.invoke(QuickOpsEvents.developerPreview.save, payload as never)
+      break
+  }
+  if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+  return result
+}
+
 type PluginLifecycleChannel = {
   broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
 }
@@ -340,6 +439,18 @@ type IPluginManagerWithInternals = IPluginManager & {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function hasDeclaredPluginPermission(
+  plugin: Pick<ITouchPlugin, 'declaredPermissions'>,
+  permissionId: string
+): boolean {
+  const normalizedPermissionId = normalizePermissionId(permissionId)
+  const declared = [
+    ...(plugin.declaredPermissions?.required ?? []),
+    ...(plugin.declaredPermissions?.optional ?? [])
+  ]
+  return declared.some((value) => normalizePermissionId(value) === normalizedPermissionId)
 }
 
 function buildIssueId(issue: PluginIssue): string {
@@ -1530,6 +1641,50 @@ export class PluginModule extends BaseModule {
     this.transport = ioRuntime.transport
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
+    TouchPlugin.setRuntimeService(null)
+
+    const pluginRuntime = buildPluginManagerRuntime({
+      pluginRootDir: file.dirPath!,
+      transport: ioRuntime.transport,
+      channel: ioRuntime.channel,
+      mainWindowId: ioRuntime.mainWindowId,
+      createManager: (pluginRootDir, runtimeTransport, channel, mainWindowId) =>
+        createPluginModuleInternal(
+          pluginRootDir,
+          runtimeTransport,
+          channel,
+          mainWindowId,
+          this.pluginSqliteResources,
+          async (pluginName) => {
+            const reportFailure = (message: string): void =>
+              pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
+            const results = await Promise.allSettled([
+              deleteSecureStoreValuesByPrefix(
+                this.secureStoreRootPath,
+                `plugin.${pluginName}.`,
+                reportFailure
+              ),
+              deleteSecureStoreValuesByPrefix(
+                this.secureStoreRootPath,
+                pluginBusinessSecretPrefix(pluginName),
+                reportFailure
+              )
+            ])
+            const failures = results.flatMap((result) =>
+              result.status === 'rejected' ? [result.reason] : []
+            )
+            if (failures.length > 0) {
+              throw new AggregateError(failures, 'PLUGIN_SECRET_CLEANUP_FAILED')
+            }
+          }
+        ),
+      createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
+    })
+
+    this.pluginManager = pluginRuntime.pluginManager
+    this.installQueue = pluginRuntime.installQueue
+    this.healthMonitor = pluginRuntime.healthMonitor
+
     this.pluginBusinessCapabilities = createPluginBusinessCapabilities({
       resolvePlugin: (pluginName) => {
         const plugin = this.pluginManager?.getPluginByName(pluginName)
@@ -1537,6 +1692,18 @@ export class PluginModule extends BaseModule {
       },
       resolveHostGeneration: (activation) =>
         this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      hasPermission: (pluginName, permissionId, sdkapi) => {
+        try {
+          const plugin = this.pluginManager?.getPluginByName(pluginName)
+          if (!plugin || !hasDeclaredPluginPermission(plugin, permissionId)) return false
+          return (
+            getPermissionModule()?.getStore().hasPermission(pluginName, permissionId, sdkapi) ===
+            true
+          )
+        } catch {
+          return false
+        }
+      },
       sqliteOwners: this.pluginSqliteResources,
       secureStoreRootPath: this.secureStoreRootPath,
       secureStore: Object.freeze({
@@ -1571,24 +1738,78 @@ export class PluginModule extends BaseModule {
           opener: async (target) => await shell.openExternal(target)
         }),
       network: Object.freeze({
-        request: async (options) => await getNetworkService().requestNoRedirect(options),
+        requestPinned: async (options, policy) =>
+          await getNetworkService().requestPinnedNoRedirect(options, policy),
         resolveAddresses: async (hostname) =>
           (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address)
+      })
+    })
+    const nexusService = createPluginHostNexusService({
+      getBaseUrl: () => getRuntimeNexusBaseUrl(),
+      getCredential: () => getAuthToken(),
+      resolveAddresses: async (hostname) =>
+        (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address),
+      requestPinned: async (request) =>
+        await getNetworkService().requestPinnedNoRedirect(
+          {
+            method: request.method,
+            url: request.url,
+            headers: { ...request.headers },
+            ...(Object.hasOwn(request, 'body') ? { body: request.body } : {}),
+            responseType: 'json',
+            timeoutMs: 30_000,
+            retryPolicy: { maxRetries: 0 },
+            validateStatus: [...NEXUS_SUCCESS_STATUSES],
+            signal: request.signal
+          },
+          {
+            resolvedAddresses: request.resolvedAddresses,
+            maxResponseBytes: request.maxResponseBytes
+          }
+        )
+    })
+    const requestReplyCapabilities = createPluginRequestReplyCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      authState: () => getSanitizedAuthSessionState(),
+      nexus: nexusService,
+      quickOps: Object.freeze({
+        invoke: async (operation, payload, signal) =>
+          await invokeQuickOpsHostOperation(ioRuntime.transport, operation, payload, signal)
+      }),
+      flow: Object.freeze({
+        dispatch: async (senderId, payload, options, signal) =>
+          await flowBus.dispatch(
+            senderId,
+            payload as FlowPayload,
+            options as FlowDispatchOptions,
+            signal
+          )
       })
     })
     this.runtimeService = new PluginRuntimeService({
       artifactPath: resolvePluginRuntimeArtifactPath(),
       factory: new ElectronPluginRuntimeProcessFactory(),
       keyManager: ioRuntime.transport.keyManager,
-      capabilityDefinitions: this.pluginBusinessCapabilities.definitions,
+      capabilityDefinitions: Object.freeze([
+        ...this.pluginBusinessCapabilities.definitions,
+        ...requestReplyCapabilities.definitions
+      ]),
       authorizeCapability: (pluginName, permissionId) => {
         try {
           const permissionModule = getPermissionModule()
           const store = permissionModule?.getStore()
-          const plugin = this.pluginManager?.getPluginByName(pluginName) as
-            | { sdkapi?: number }
-            | undefined
-          if (!store || !plugin || typeof plugin.sdkapi !== 'number') return false
+          const plugin = this.pluginManager?.getPluginByName(pluginName) as ITouchPlugin | undefined
+          if (
+            !store ||
+            !plugin ||
+            typeof plugin.sdkapi !== 'number' ||
+            !hasDeclaredPluginPermission(plugin, permissionId)
+          ) {
+            return false
+          }
           return store.hasPermission(pluginName, permissionId, plugin.sdkapi) === true
         } catch {
           return false
@@ -1609,38 +1830,13 @@ export class PluginModule extends BaseModule {
         await this.pluginBusinessCapabilities?.closeActivation(activation)
       }
     })
-    TouchPlugin.setRuntimeService(this.runtimeService)
+    TouchPlugin.setRuntimeService(
+      shouldInstallPluginRuntimeServiceByDefault() ? this.runtimeService : null
+    )
     this.storageTeardownDisposer?.()
     this.storageTeardownDisposer = registerPluginStorageTeardown(async (pluginName) => {
       await this.pluginSqliteResources.closePlugin(pluginName)
     })
-
-    const pluginRuntime = buildPluginManagerRuntime({
-      pluginRootDir: file.dirPath!,
-      transport: ioRuntime.transport,
-      channel: ioRuntime.channel,
-      mainWindowId: ioRuntime.mainWindowId,
-      createManager: (pluginRootDir, runtimeTransport, channel, mainWindowId) =>
-        createPluginModuleInternal(
-          pluginRootDir,
-          runtimeTransport,
-          channel,
-          mainWindowId,
-          this.pluginSqliteResources,
-          async (pluginName) => {
-            await deleteSecureStoreValuesByPrefix(
-              this.secureStoreRootPath,
-              `plugin.${pluginName}.`,
-              (message) => pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
-            )
-          }
-        ),
-      createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
-    })
-
-    this.pluginManager = pluginRuntime.pluginManager
-    this.installQueue = pluginRuntime.installQueue
-    this.healthMonitor = pluginRuntime.healthMonitor
 
     if (!this.networkStatusCleanup) {
       this.networkStatusCleanup = getNetworkService().onStatusChange((status) => {
@@ -1712,35 +1908,70 @@ export class PluginModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
-    this.storageTeardownDisposer?.()
-    this.storageTeardownDisposer = null
-    this.permissionGrantedDisposer?.()
-    this.permissionGrantedDisposer = null
-    this.permissionRevokedDisposer?.()
-    this.permissionRevokedDisposer = null
-    this.networkStatusCleanup?.()
-    this.networkStatusCleanup = null
-    for (const disposer of this.transportDisposers) {
+    const cleanupErrors: unknown[] = []
+    const runCleanup = (cleanup: (() => void) | null | undefined): void => {
+      if (!cleanup) return
       try {
-        disposer()
-      } catch {
-        // ignore
+        cleanup()
+      } catch (error) {
+        cleanupErrors.push(error)
       }
     }
+
+    const storageTeardownDisposer = this.storageTeardownDisposer
+    this.storageTeardownDisposer = null
+    runCleanup(storageTeardownDisposer)
+    const permissionGrantedDisposer = this.permissionGrantedDisposer
+    this.permissionGrantedDisposer = null
+    runCleanup(permissionGrantedDisposer)
+    const permissionRevokedDisposer = this.permissionRevokedDisposer
+    this.permissionRevokedDisposer = null
+    runCleanup(permissionRevokedDisposer)
+    const networkStatusCleanup = this.networkStatusCleanup
+    this.networkStatusCleanup = null
+    runCleanup(networkStatusCleanup)
+    for (const disposer of this.transportDisposers) runCleanup(disposer)
     this.transportDisposers = []
-    await Promise.allSettled(
-      [...(this.pluginManager?.plugins.values() ?? [])].map((plugin) => plugin.disable())
+
+    const disableResults = await Promise.allSettled(
+      [...(this.pluginManager?.plugins.values() ?? [])].map(async (plugin) => {
+        await plugin.disable()
+      })
     )
-    await this.runtimeService?.dispose()
+    for (const result of disableResults) {
+      if (result.status === 'rejected') cleanupErrors.push(result.reason)
+    }
+
+    const runtimeService = this.runtimeService
     this.runtimeService = null
-    await this.pluginBusinessCapabilities?.closeAll()
+    try {
+      await runtimeService?.dispose()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+
+    const businessCapabilities = this.pluginBusinessCapabilities
     this.pluginBusinessCapabilities = null
-    TouchPlugin.setRuntimeService(null)
-    TouchPlugin.setTransport(null)
+    try {
+      await businessCapabilities?.closeAll()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+
+    runCleanup(() => TouchPlugin.setRuntimeService(null))
+    runCleanup(() => TouchPlugin.setTransport(null))
     this.transport = null
-    await this.pluginSqliteResources.closeAll()
-    this.healthMonitor?.destroy()
-    stopUpdateScheduler()
+    try {
+      await this.pluginSqliteResources.closeAll()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    runCleanup(() => this.healthMonitor?.destroy())
+    runCleanup(() => stopUpdateScheduler())
+
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(cleanupErrors, 'PLUGIN_MODULE_CLEANUP_FAILED')
+    }
   }
 
   private async refreshRemoteWidgetsAfterNetworkRecovery(): Promise<void> {

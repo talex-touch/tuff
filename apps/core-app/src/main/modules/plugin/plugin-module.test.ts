@@ -21,6 +21,10 @@ const mocks = vi.hoisted(() => {
   const plugin = {
     name: 'calendar',
     sdkapi: 260215,
+    declaredPermissions: {
+      required: ['clipboard.read', 'search.root-results', 'storage.plugin'],
+      optional: [] as string[]
+    },
     status: 3,
     dev: { enable: false },
     disable: vi.fn(),
@@ -276,6 +280,10 @@ describe('PluginModule facade', () => {
     mocks.manager.enablePlugin.mockReset()
     mocks.healthMonitor.destroy.mockReset()
     mocks.plugin.disable.mockReset()
+    mocks.plugin.declaredPermissions = {
+      required: ['clipboard.read', 'search.root-results', 'storage.plugin'],
+      optional: []
+    }
     mocks.checkPermission.mockReset()
     mocks.permissionHasPermission.mockReset()
     mocks.permissionGetStore.mockReset()
@@ -331,7 +339,7 @@ describe('PluginModule facade', () => {
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
   })
 
-  it('wires the immutable 23-ID business manifest and canonical permissions', async () => {
+  it('wires the immutable 27-ID business and request/reply manifest with canonical permissions', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockImplementation((name) =>
       name === 'calendar' ? mocks.plugin : undefined
@@ -345,10 +353,15 @@ describe('PluginModule facade', () => {
     const definitions = runtimeOptions?.capabilityDefinitions as
       | ReadonlyArray<{ id: string }>
       | undefined
-    expect(definitions).toHaveLength(23)
+    expect(definitions).toHaveLength(27)
     expect(definitions?.map((definition) => definition.id)).toContain('plugin.info.get')
+    expect(definitions?.map((definition) => definition.id)).toContain('permission.check')
     expect(definitions?.map((definition) => definition.id)).toContain('http.request')
+    expect(definitions?.map((definition) => definition.id)).toContain('channel.invoke')
+    expect(definitions?.map((definition) => definition.id)).toContain('quick-ops.invoke')
+    expect(definitions?.map((definition) => definition.id)).toContain('flow.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
+    expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
 
     const authorize = runtimeOptions?.authorizeCapability as
       | ((pluginName: string, permissionId: string) => boolean)
@@ -356,6 +369,17 @@ describe('PluginModule facade', () => {
     expect(authorize?.('calendar', 'clipboard.read')).toBe(true)
     expect(mocks.permissionHasPermission).toHaveBeenCalledWith('calendar', 'clipboard.read', 260215)
     expect(mocks.checkPermission).not.toHaveBeenCalled()
+
+    mocks.plugin.declaredPermissions = {
+      required: ['clipboard.read'],
+      optional: []
+    }
+    expect(authorize?.('calendar', 'storage.plugin')).toBe(false)
+    expect(mocks.permissionHasPermission).not.toHaveBeenCalledWith(
+      'calendar',
+      'storage.plugin',
+      260215
+    )
 
     mocks.permissionHasPermission.mockReturnValue(false)
     expect(authorize?.('calendar', 'search.root-results')).toBe(false)
@@ -448,6 +472,32 @@ describe('PluginModule facade', () => {
     expect(mocks.plugin.disable).toHaveBeenCalledOnce()
     expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.networkCleanup).toHaveBeenCalledOnce()
+    expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()
+  })
+
+  it('continues all resource teardown when runtime and business cleanup fail', async () => {
+    const module = new PluginModule()
+    await initializeModule(module)
+    const closeBusiness = vi.fn(async () => {
+      throw new Error('business cleanup failed')
+    })
+    const closeSqlite = vi.fn(async () => undefined)
+    Reflect.set(module, 'pluginBusinessCapabilities', {
+      definitions: [],
+      closeActivation: vi.fn(),
+      closeAll: closeBusiness
+    })
+    Reflect.set(module, 'pluginSqliteResources', { closeAll: closeSqlite })
+    mocks.runtimeDispose.mockRejectedValueOnce(new Error('runtime cleanup failed'))
+
+    await expect(module.onDestroy()).rejects.toThrow('PLUGIN_MODULE_CLEANUP_FAILED')
+
+    expect(mocks.runtimeDispose).toHaveBeenCalledOnce()
+    expect(closeBusiness).toHaveBeenCalledOnce()
+    expect(closeSqlite).toHaveBeenCalledOnce()
+    expect(mocks.setRuntimeService).toHaveBeenLastCalledWith(null)
+    expect(mocks.setTransport).toHaveBeenLastCalledWith(null)
+    expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()
   })
 })

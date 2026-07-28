@@ -214,6 +214,7 @@ function createHarness(
       snapshot: {
         platform: 'darwin',
         arch: 'arm64',
+        locale: 'zh-CN',
         manifest: { name: identity.name }
       },
       ...overrides
@@ -396,7 +397,7 @@ describe('PluginRuntimeService', () => {
     let getterCalled = false
     const options = {
       scriptContent: 'module.exports = {}',
-      snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
+      snapshot: { platform: 'darwin', arch: 'arm64', locale: 'zh-CN', manifest: {} }
     }
     Object.defineProperty(options, 'activation', {
       enumerable: true,
@@ -424,7 +425,7 @@ describe('PluginRuntimeService', () => {
       harness.service.startActivation({
         activation: activation(),
         scriptContent: 'module.exports = {}',
-        snapshot: { platform: 'darwin', arch: 'arm64', manifest }
+        snapshot: { platform: 'darwin', arch: 'arm64', locale: 'zh-CN', manifest }
       })
     ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
     expect(harness.spawn).not.toHaveBeenCalled()
@@ -496,6 +497,7 @@ describe('PluginRuntimeService', () => {
         snapshot: {
           platform: 'darwin',
           arch: 'arm64',
+          locale: 'zh-CN',
           manifest: { name: 'plugin.alpha' }
         },
         capabilityManifest: [],
@@ -590,7 +592,7 @@ describe('PluginRuntimeService', () => {
       harness.service.startActivation({
         activation: stale,
         scriptContent: 'module.exports = {}',
-        snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
+        snapshot: { platform: 'darwin', arch: 'arm64', locale: 'zh-CN', manifest: {} }
       })
     ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_ACTIVATION_STALE'))
 
@@ -650,7 +652,7 @@ describe('PluginRuntimeService', () => {
       harness.service.startActivation({
         activation: identity,
         scriptContent: 'module.exports = {}',
-        snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} }
+        snapshot: { platform: 'darwin', arch: 'arm64', locale: 'zh-CN', manifest: {} }
       })
     ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED'))
   })

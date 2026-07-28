@@ -1,4 +1,5 @@
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
+import { types as utilTypes } from 'node:util'
 import {
   isAuthoritativePluginContext,
   issuePluginSecurityContext
@@ -105,11 +106,33 @@ const DEFINITION_KEYS = new Set([
 ])
 
 function readOwnDataField(input: unknown, key: string): unknown {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || utilTypes.isProxy(input)) {
     throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
   }
-  const descriptor = Object.getOwnPropertyDescriptor(input, key)
+  let descriptor: PropertyDescriptor | undefined
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(input, key)
+  } catch {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
   if (!descriptor?.enumerable || !('value' in descriptor)) {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  return descriptor.value
+}
+
+function readOptionalOwnDataField(input: unknown, key: string): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || utilTypes.isProxy(input)) {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  let descriptor: PropertyDescriptor | undefined
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(input, key)
+  } catch {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  if (!descriptor) return undefined
+  if (!descriptor.enumerable || !('value' in descriptor)) {
     throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
   }
   return descriptor.value
@@ -181,11 +204,13 @@ function assertPositiveLimit(value: number, maximum: number): void {
 }
 
 const CALLBACK_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/
+const MAX_CALLBACK_SCAN_DEPTH = 64
+const MAX_CALLBACK_SCAN_MEMBERS = 10_000
 const FORBIDDEN_CALLBACK_FIELDS = new Set(['__proto__', 'prototype', 'constructor', 'then'])
 
 function snapshotCallbackFields(input: unknown): readonly string[] {
   if (input === undefined) return Object.freeze([])
-  if (!Array.isArray(input)) {
+  if (!Array.isArray(input) || utilTypes.isProxy(input)) {
     throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
   }
   let descriptors: PropertyDescriptorMap
@@ -227,9 +252,12 @@ function snapshotCallbackFields(input: unknown): readonly string[] {
 function callbacksMatchDeclaration(input: unknown, callbackFields: readonly string[]): boolean {
   const allowed = new Set(callbackFields)
   const ancestors = new WeakSet<object>()
+  let members = 0
   const visit = (value: unknown, callbackAllowed: boolean, depth: number): boolean => {
+    if (depth > MAX_CALLBACK_SCAN_DEPTH) return false
     if (typeof value === 'function') return callbackAllowed
     if (!value || typeof value !== 'object') return true
+    if (utilTypes.isProxy(value)) return false
     if (ancestors.has(value)) return false
     ancestors.add(value)
     try {
@@ -244,6 +272,8 @@ function callbacksMatchDeclaration(input: unknown, callbackFields: readonly stri
         const length =
           lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
         if (!Number.isSafeInteger(length) || Number(length) < 0) return false
+        members += Number(length)
+        if (members > MAX_CALLBACK_SCAN_MEMBERS) return false
         const allowedKeys = new Set<PropertyKey>(['length'])
         for (let index = 0; index < Number(length); index += 1) {
           const key = String(index)
@@ -257,6 +287,8 @@ function callbacksMatchDeclaration(input: unknown, callbackFields: readonly stri
       const prototype = Object.getPrototypeOf(value)
       if (prototype !== Object.prototype && prototype !== null) return false
       for (const key of Reflect.ownKeys(descriptors)) {
+        members += 1
+        if (members > MAX_CALLBACK_SCAN_MEMBERS) return false
         if (typeof key !== 'string') return false
         const descriptor = descriptors[key]
         if (!descriptor?.enumerable || !('value' in descriptor)) return false
@@ -274,11 +306,25 @@ function callbacksMatchDeclaration(input: unknown, callbackFields: readonly stri
 export function snapshotPluginHostCapabilityDefinition<Request, Result>(
   input: PluginHostCapabilityDefinition<Request, Result>
 ): PluginHostCapabilityDefinition<Request, Result> {
-  if (!input || typeof input !== 'object' || Object.getPrototypeOf(input) !== Object.prototype) {
+  if (!input || typeof input !== 'object' || Array.isArray(input) || utilTypes.isProxy(input)) {
     throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
   }
-  const descriptors = Object.getOwnPropertyDescriptors(input)
-  for (const [key, descriptor] of Object.entries(descriptors)) {
+  let prototype: object | null
+  let descriptors: PropertyDescriptorMap
+  try {
+    prototype = Object.getPrototypeOf(input)
+    descriptors = Object.getOwnPropertyDescriptors(input)
+  } catch {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  if (prototype !== Object.prototype) {
+    throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+  }
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (typeof key !== 'string') {
+      throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    }
+    const descriptor = descriptors[key]
     if (!DEFINITION_KEYS.has(key) || !descriptor.enumerable || !('value' in descriptor)) {
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
     }
@@ -316,8 +362,11 @@ export function snapshotPluginHostCapabilityDefinition<Request, Result>(
       callbackLifetime !== 'transient' &&
       callbackLifetime !== 'resource') ||
     typeof validateRequest !== 'function' ||
+    utilTypes.isProxy(validateRequest) ||
     typeof validateResult !== 'function' ||
-    typeof invoke !== 'function'
+    utilTypes.isProxy(validateResult) ||
+    typeof invoke !== 'function' ||
+    utilTypes.isProxy(invoke)
   ) {
     throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
   }
@@ -354,32 +403,42 @@ export class PluginHostCapabilityRegistry {
   private fatalReported = false
 
   constructor(options: PluginHostCapabilityRegistryOptions) {
-    assertPositiveLimit(options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT, DEFAULT_MAX_CONCURRENT)
-    assertPositiveLimit(options.abortGraceMs ?? DEFAULT_ABORT_GRACE_MS, MAX_ABORT_GRACE_MS)
-    const owner = snapshotOwner(options.owner)
-    const activation = snapshotActivation(options.activation)
+    const maxConcurrent = readOptionalOwnDataField(options, 'maxConcurrent')
+    const abortGraceMs = readOptionalOwnDataField(options, 'abortGraceMs')
+    const owner = snapshotOwner(readOwnDataField(options, 'owner') as HostMessageOwner)
+    const activation = snapshotActivation(
+      readOwnDataField(options, 'activation') as PluginActivationIdentity
+    )
+    const resolveCurrentActivation = readOwnDataField(options, 'resolveCurrentActivation')
+    const authorize = readOwnDataField(options, 'authorize')
+    const watchPermissionRevoked = readOwnDataField(options, 'watchPermissionRevoked')
+    const onFatalViolation = readOwnDataField(options, 'onFatalViolation')
+    assertPositiveLimit((maxConcurrent ?? DEFAULT_MAX_CONCURRENT) as number, DEFAULT_MAX_CONCURRENT)
+    assertPositiveLimit((abortGraceMs ?? DEFAULT_ABORT_GRACE_MS) as number, MAX_ABORT_GRACE_MS)
     if (
-      typeof options.resolveCurrentActivation !== 'function' ||
-      typeof options.authorize !== 'function' ||
-      typeof options.watchPermissionRevoked !== 'function' ||
-      typeof options.onFatalViolation !== 'function'
+      typeof resolveCurrentActivation !== 'function' ||
+      utilTypes.isProxy(resolveCurrentActivation) ||
+      typeof authorize !== 'function' ||
+      utilTypes.isProxy(authorize) ||
+      typeof watchPermissionRevoked !== 'function' ||
+      utilTypes.isProxy(watchPermissionRevoked) ||
+      typeof onFatalViolation !== 'function' ||
+      utilTypes.isProxy(onFatalViolation)
     ) {
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
     }
     this.owner = owner
     this.activation = activation
-    this.resolveCurrentActivation = options.resolveCurrentActivation
-    this.authorize = options.authorize
-    this.watchPermissionRevoked = options.watchPermissionRevoked
-    this.onFatalViolation = options.onFatalViolation
-    const resourcesDescriptor = Object.getOwnPropertyDescriptor(options, 'resources')
-    if (
-      resourcesDescriptor &&
-      (!resourcesDescriptor.enumerable || !('value' in resourcesDescriptor))
-    ) {
-      throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
-    }
-    const suppliedResources = resourcesDescriptor?.value as PluginHostResourceDispatcher | undefined
+    this.resolveCurrentActivation =
+      resolveCurrentActivation as PluginHostCapabilityRegistryOptions['resolveCurrentActivation']
+    this.authorize = authorize as PluginHostCapabilityRegistryOptions['authorize']
+    this.watchPermissionRevoked =
+      watchPermissionRevoked as PluginHostCapabilityRegistryOptions['watchPermissionRevoked']
+    this.onFatalViolation =
+      onFatalViolation as PluginHostCapabilityRegistryOptions['onFatalViolation']
+    const suppliedResources = readOptionalOwnDataField(options, 'resources') as
+      | PluginHostResourceDispatcher
+      | undefined
     if (suppliedResources) {
       const resourceOwner = snapshotOwner(
         readOwnDataField(suppliedResources, 'owner') as HostMessageOwner
@@ -416,9 +475,13 @@ export class PluginHostCapabilityRegistry {
         },
         close: async () => undefined
       })
-    this.isActive = options.isActive ?? (() => true)
-    this.maxConcurrent = options.maxConcurrent ?? DEFAULT_MAX_CONCURRENT
-    this.abortGraceMs = options.abortGraceMs ?? DEFAULT_ABORT_GRACE_MS
+    const isActive = readOptionalOwnDataField(options, 'isActive')
+    if (isActive !== undefined && (typeof isActive !== 'function' || utilTypes.isProxy(isActive))) {
+      throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST')
+    }
+    this.isActive = (isActive as (() => boolean) | undefined) ?? (() => true)
+    this.maxConcurrent = (maxConcurrent as number | undefined) ?? DEFAULT_MAX_CONCURRENT
+    this.abortGraceMs = (abortGraceMs as number | undefined) ?? DEFAULT_ABORT_GRACE_MS
   }
 
   get activeCount(): number {

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { types as utilTypes } from 'node:util'
 import vm from 'node:vm'
 import {
@@ -9,6 +9,11 @@ import {
   type HostWireLimits,
   type HostWireResourceDescriptor
 } from './plugin-host-wire-codec'
+import {
+  PLUGIN_CHANNEL_OPERATION_IDS,
+  PLUGIN_FLOW_OPERATION_IDS,
+  PLUGIN_QUICK_OPS_OPERATION_IDS
+} from './plugin-host-request-reply'
 import {
   PLUGIN_HOST_CAPABILITIES,
   PLUGIN_HOST_LIFECYCLE_METHODS,
@@ -45,6 +50,7 @@ export type PluginHostSnapshotValue =
 export interface PluginHostLoadSnapshot {
   readonly platform: string
   readonly arch: string
+  readonly locale: string
   readonly manifest: Readonly<Record<string, PluginHostSnapshotValue>>
 }
 
@@ -99,6 +105,7 @@ interface ContextBridge {
   parseUrl(input: string, base?: string): string
   randomBytes(length: number): number[]
   randomUUID(): string
+  digest(algorithm: string, value: number[]): number[]
   invokeCapability(capability: string, payloadJson: string, callbacks: unknown[]): Promise<string>
   disposeResource(id: string, kind: string): Promise<void>
 }
@@ -138,7 +145,15 @@ const IDENTIFIER_PATTERN = /^[a-z0-9_-]+$/i
 const CALLBACK_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/
 const FORBIDDEN_CALLBACK_FIELDS = new Set(['__proto__', 'prototype', 'constructor', 'then'])
 const MAX_PLATFORM_FIELD_LENGTH = 32
+const MAX_LOCALE_FIELD_LENGTH = 64
 const MAX_CONTEXT_JSON_EXPANSION = 8
+const CHILD_DIGEST_ALGORITHMS = new Map([
+  ['SHA-1', 'sha1'],
+  ['SHA-256', 'sha256'],
+  ['SHA-384', 'sha384'],
+  ['SHA-512', 'sha512'],
+  ['MD5', 'md5']
+])
 
 class ContextTransportBudget {
   private bytes = 0
@@ -284,7 +299,7 @@ export function parsePluginHostLoadPayload(
     throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
   }
 
-  const snapshot = exactRecord(normalized.snapshot, ['platform', 'arch', 'manifest'])
+  const snapshot = exactRecord(normalized.snapshot, ['platform', 'arch', 'locale', 'manifest'])
   for (const field of ['platform', 'arch'] as const) {
     const entry = snapshot[field]
     if (
@@ -295,6 +310,15 @@ export function parsePluginHostLoadPayload(
     ) {
       throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
     }
+  }
+  const locale = snapshot.locale
+  if (
+    typeof locale !== 'string' ||
+    locale.length < 2 ||
+    locale.length > MAX_LOCALE_FIELD_LENGTH ||
+    !/^[A-Za-z0-9-]+$/.test(locale)
+  ) {
+    throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
   }
   const manifest = snapshotJsonValue(snapshot.manifest)
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
@@ -350,6 +374,7 @@ export function parsePluginHostLoadPayload(
     snapshot: Object.freeze({
       platform: snapshot.platform as string,
       arch: snapshot.arch as string,
+      locale,
       manifest: manifest as Readonly<Record<string, PluginHostSnapshotValue>>
     }),
     capabilityManifest: Object.freeze(capabilityManifest),
@@ -634,16 +659,41 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const objectGetPrototypeOf = Object.getPrototypeOf
   const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
   const objectDefineProperty = Object.defineProperty
+  const objectDefineProperties = Object.defineProperties
   const objectCreate = Object.create
+  const objectHasOwn = Object.hasOwn
   const objectPrototype = Object.prototype
   const arrayConstructor = Array
   const arrayIsArray = Array.isArray
   const arrayFrom = Array.from
   const arrayMap = Array.prototype.map
   const arrayPush = Array.prototype.push
-  const arrayBufferConstructor = ArrayBuffer
   const arrayBufferIsView = ArrayBuffer.isView
+  const arrayBufferByteLengthGetter = objectGetOwnPropertyDescriptor(
+    ArrayBuffer.prototype,
+    'byteLength'
+  ).get
   const uint8ArrayConstructor = Uint8Array
+  const uint8ArraySet = Uint8Array.prototype.set
+  const typedArrayPrototype = objectGetPrototypeOf(Uint8Array.prototype)
+  const typedArrayBufferGetter = objectGetOwnPropertyDescriptor(typedArrayPrototype, 'buffer').get
+  const typedArrayByteLengthGetter = objectGetOwnPropertyDescriptor(
+    typedArrayPrototype,
+    'byteLength'
+  ).get
+  const typedArrayByteOffsetGetter = objectGetOwnPropertyDescriptor(
+    typedArrayPrototype,
+    'byteOffset'
+  ).get
+  const dataViewBufferGetter = objectGetOwnPropertyDescriptor(DataView.prototype, 'buffer').get
+  const dataViewByteLengthGetter = objectGetOwnPropertyDescriptor(
+    DataView.prototype,
+    'byteLength'
+  ).get
+  const dataViewByteOffsetGetter = objectGetOwnPropertyDescriptor(
+    DataView.prototype,
+    'byteOffset'
+  ).get
   const errorConstructor = Error
   const typeErrorConstructor = TypeError
   const weakSetConstructor = WeakSet
@@ -654,8 +704,10 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasSetValue = (set, value) => reflectApply(setHas, set, [value])
   const getMapValue = (map, value) => reflectApply(mapGet, map, [value])
   const numberIsFinite = Number.isFinite
+  const numberIsSafeInteger = Number.isSafeInteger
   const stringConstructor = String
   const stringSlice = String.prototype.slice
+  const stringToUpperCase = String.prototype.toUpperCase
   const jsonParse = JSON.parse
   const jsonStringify = JSON.stringify
   const parseJson = (value) => reflectApply(jsonParse, undefined, [value])
@@ -717,6 +769,56 @@ const CONTEXT_BOOTSTRAP = String.raw`
         addBytes(bridge.utf8ByteLength(value) + 8)
       }
     }
+  }
+
+  const createByteView = (value) => {
+    let buffer
+    let byteOffset = 0
+    let byteLength
+    try {
+      byteLength = reflectApply(arrayBufferByteLengthGetter, value, [])
+      buffer = value
+    } catch {
+      if (!arrayBufferIsView(value)) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      try {
+        buffer = reflectApply(typedArrayBufferGetter, value, [])
+        byteOffset = reflectApply(typedArrayByteOffsetGetter, value, [])
+        byteLength = reflectApply(typedArrayByteLengthGetter, value, [])
+      } catch {
+        try {
+          buffer = reflectApply(dataViewBufferGetter, value, [])
+          byteOffset = reflectApply(dataViewByteOffsetGetter, value, [])
+          byteLength = reflectApply(dataViewByteLengthGetter, value, [])
+        } catch {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+      }
+    }
+    if (
+      !numberIsSafeInteger(byteOffset) ||
+      byteOffset < 0 ||
+      !numberIsSafeInteger(byteLength) ||
+      byteLength < 0
+    ) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    return {
+      view: new uint8ArrayConstructor(buffer, byteOffset, byteLength),
+      byteLength
+    }
+  }
+  const copyByteView = (value, maximumBytes = snapshot.wireLimits.maxBytes) => {
+    const info = createByteView(value)
+    if (info.byteLength > maximumBytes) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    const output = []
+    for (let index = 0; index < info.byteLength; index += 1) {
+      reflectApply(arrayPush, output, [info.view[index]])
+    }
+    return output
   }
 
   const decodeNode = (node, budget = createBudget(), depth = 0) => {
@@ -808,13 +910,16 @@ const CONTEXT_BOOTSTRAP = String.raw`
         return { type: 'error', value: { message, code } }
       }
       if (arrayBufferIsView(value)) {
-        budget.addBytes(value.byteLength + 32)
-        const bytes = new uint8ArrayConstructor(value.buffer, value.byteOffset, value.byteLength)
-        return { type: 'bytes', value: reflectApply(arrayFrom, arrayConstructor, [bytes]) }
+        const bytes = copyByteView(value)
+        budget.addBytes(bytes.length + 32)
+        return { type: 'bytes', value: bytes }
       }
-      if (value instanceof arrayBufferConstructor) {
-        budget.addBytes(value.byteLength + 32)
-        return { type: 'bytes', value: reflectApply(arrayFrom, arrayConstructor, [new uint8ArrayConstructor(value)]) }
+      try {
+        const bytes = copyByteView(value)
+        budget.addBytes(bytes.length + 32)
+        return { type: 'bytes', value: bytes }
+      } catch {
+        // Continue into the plain DTO validator for non-ArrayBuffer objects.
       }
       if (arrayIsArray(value)) {
         budget.addMembers(value.length)
@@ -922,24 +1027,54 @@ const CONTEXT_BOOTSTRAP = String.raw`
     toJSON() { return this.href }
   }
   class TuffTextEncoder {
-    encode(value = '') { return new uint8ArrayConstructor(bridge.encodeUtf8(stringConstructor(value))) }
+    encode(value = '') {
+      const normalized = stringConstructor(value)
+      if (bridge.utf8ByteLength(normalized) > snapshot.wireLimits.maxBytes) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      return new uint8ArrayConstructor(bridge.encodeUtf8(normalized))
+    }
   }
   class TuffTextDecoder {
     decode(value = new uint8ArrayConstructor()) {
-      if (value instanceof arrayBufferConstructor) value = new uint8ArrayConstructor(value)
-      if (!arrayBufferIsView(value)) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
-      return bridge.decodeUtf8(reflectApply(arrayFrom, arrayConstructor, [new uint8ArrayConstructor(value.buffer, value.byteOffset, value.byteLength)]))
+      return bridge.decodeUtf8(copyByteView(value))
     }
   }
 
-  const crypto = objectFreeze({
-    randomUUID: () => bridge.randomUUID(),
-    getRandomValues: (value) => {
-      if (!arrayBufferIsView(value) || value.byteLength > 65536) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
-      new uint8ArrayConstructor(value.buffer, value.byteOffset, value.byteLength).set(bridge.randomBytes(value.byteLength))
-      return value
+  const subtleCrypto = objectCreate(null)
+  const digest = (algorithm, value) => {
+    const normalized = reflectApply(stringToUpperCase, stringConstructor(algorithm), [])
+    let bytes
+    try {
+      bytes = copyByteView(value)
+    } catch {
+      return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_RESULT_INVALID'))
     }
-  })
+    return thenPromise(resolvePromise(), () => {
+      const output = bridge.digest(normalized, bytes)
+      return new uint8ArrayConstructor(output).buffer
+    })
+  }
+  objectFreeze(digest)
+  objectDefineProperty(subtleCrypto, 'digest', { value: digest, enumerable: true })
+  objectFreeze(subtleCrypto)
+  const crypto = objectCreate(null)
+  const getRandomValues = (value) => {
+    const info = createByteView(value)
+    if (!arrayBufferIsView(value) || info.byteLength > 65536) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    reflectApply(uint8ArraySet, info.view, [bridge.randomBytes(info.byteLength)])
+    return value
+  }
+  objectFreeze(getRandomValues)
+  const randomUuid = () => bridge.randomUUID()
+  objectFreeze(randomUuid)
+  objectDefineProperty(crypto, 'randomUUID', { value: randomUuid, enumerable: true })
+  objectDefineProperty(crypto, 'getRandomValues', { value: getRandomValues, enumerable: true })
+  objectDefineProperty(crypto, 'digest', { value: digest, enumerable: true })
+  objectDefineProperty(crypto, 'subtle', { value: subtleCrypto, enumerable: true })
+  objectFreeze(crypto)
 
   const createCapabilityError = (code) => {
     const error = new errorConstructor(code)
@@ -1001,7 +1136,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
       })
   }
   objectFreeze(invokeCapability)
-  const hostCapabilities = Object.create(null)
+  const hostCapabilities = objectCreate(null)
   objectDefineProperty(hostCapabilities, 'invoke', {
     value: invokeCapability,
     enumerable: true
@@ -1009,18 +1144,37 @@ const CONTEXT_BOOTSTRAP = String.raw`
   objectFreeze(hostCapabilities)
 
   const hasDeclaredCapability = (id) => Boolean(getMapValue(declaredCapabilities, id))
-  const hasFeatureFacade = [
-    'feature.items.push',
-    'feature.items.update',
-    'feature.items.remove',
-    'feature.items.clear',
-    'feature.items.list'
-  ].some(hasDeclaredCapability)
-  const hasClipboardFacade = [
-    'clipboard.read',
-    'clipboard.write',
-    'clipboard.copy-and-paste'
-  ].some(hasDeclaredCapability)
+  const hasFeatureFacade =
+    hasDeclaredCapability('feature.items.push') ||
+    hasDeclaredCapability('feature.items.update') ||
+    hasDeclaredCapability('feature.items.remove') ||
+    hasDeclaredCapability('feature.items.clear') ||
+    hasDeclaredCapability('feature.items.list')
+  const hasStorageFacade =
+    hasDeclaredCapability('storage.file.read') ||
+    hasDeclaredCapability('storage.file.write') ||
+    hasDeclaredCapability('storage.file.remove') ||
+    hasDeclaredCapability('storage.file.list')
+  const hasFeaturesFacade =
+    hasDeclaredCapability('feature.registry.add') ||
+    hasDeclaredCapability('feature.registry.remove') ||
+    hasDeclaredCapability('feature.registry.list')
+  const hasSecretFacade =
+    hasDeclaredCapability('secret.get') ||
+    hasDeclaredCapability('secret.set') ||
+    hasDeclaredCapability('secret.delete')
+  const hasClipboardFacade =
+    hasDeclaredCapability('clipboard.read') ||
+    hasDeclaredCapability('clipboard.write') ||
+    hasDeclaredCapability('clipboard.copy-and-paste')
+  const hasHttpFacade = hasDeclaredCapability('http.request')
+  const hasPermissionFacade = hasDeclaredCapability('permission.check')
+  const hasChannelFacade = hasDeclaredCapability('channel.invoke')
+  const hasQuickOpsFacade = hasDeclaredCapability('quick-ops.invoke')
+  const hasFlowFacade = hasDeclaredCapability('flow.invoke')
+  const fixedChannelOperations = new setConstructor(${JSON.stringify(PLUGIN_CHANNEL_OPERATION_IDS)})
+  const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
+  const fixedFlowOperations = new setConstructor(${JSON.stringify(PLUGIN_FLOW_OPERATION_IDS)})
   const defineFacadeMethod = (target, name, callback) => {
     objectDefineProperty(target, name, {
       value: objectFreeze(callback),
@@ -1066,13 +1220,124 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   if (hasDeclaredCapability('feature.items.list')) {
     defineFacadeMethod(featureFacade, 'getItems', () =>
-      mapCapabilityResult(invokeCapability('feature.items.list', null), (result) => result.items)
+      mapCapabilityResult(
+        invokeCapability('feature.items.list', null),
+        (result) => cloneLocalDto(result.items)
+      )
     )
   }
   objectFreeze(featureFacade)
+
+  const storageFacade = objectCreate(null)
+  if (hasDeclaredCapability('storage.file.read')) {
+    defineFacadeMethod(storageFacade, 'getFile', (name) =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.read', { name: stringConstructor(name) }),
+        (result) => result.found === true ? cloneLocalDto(result.value) : null
+      )
+    )
+  }
+  if (hasDeclaredCapability('storage.file.write')) {
+    defineFacadeMethod(storageFacade, 'setFile', (name, value) =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.write', { name: stringConstructor(name), value }),
+        () => undefined
+      )
+    )
+  }
+  if (hasDeclaredCapability('storage.file.remove')) {
+    defineFacadeMethod(storageFacade, 'deleteFile', (name) =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.remove', { name: stringConstructor(name) }),
+        (result) => result.removed === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('storage.file.list')) {
+    defineFacadeMethod(storageFacade, 'listFiles', () =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.list', null),
+        (result) => cloneLocalDto(result.names)
+      )
+    )
+  }
+  objectFreeze(storageFacade)
+
   const pluginFacade = objectCreate(null)
-  objectDefineProperty(pluginFacade, 'feature', { value: featureFacade, enumerable: true })
+  defineFacadeMethod(pluginFacade, 'getLocale', () => snapshot.locale)
+  if (hasFeatureFacade) {
+    objectDefineProperty(pluginFacade, 'feature', { value: featureFacade, enumerable: true })
+  }
+  if (hasStorageFacade) {
+    objectDefineProperty(pluginFacade, 'storage', { value: storageFacade, enumerable: true })
+  }
   objectFreeze(pluginFacade)
+
+  const featuresFacade = objectCreate(null)
+  if (hasDeclaredCapability('feature.registry.add')) {
+    defineFacadeMethod(featuresFacade, 'addFeature', (feature) =>
+      mapCapabilityResult(
+        invokeCapability('feature.registry.add', { feature }),
+        (result) => result.added === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('feature.registry.remove')) {
+    defineFacadeMethod(featuresFacade, 'removeFeature', (featureId) =>
+      mapCapabilityResult(
+        invokeCapability('feature.registry.remove', { featureId: stringConstructor(featureId) }),
+        (result) => result.removed === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('feature.registry.list')) {
+    defineFacadeMethod(featuresFacade, 'getFeature', (featureId) =>
+      mapCapabilityResult(invokeCapability('feature.registry.list', null), (result) => {
+        const expectedId = stringConstructor(featureId)
+        for (const feature of result.features) {
+          if (feature.id === expectedId) return cloneLocalDto(feature)
+        }
+        return undefined
+      })
+    )
+    defineFacadeMethod(featuresFacade, 'getFeatures', () =>
+      mapCapabilityResult(
+        invokeCapability('feature.registry.list', null),
+        (result) => cloneLocalDto(result.features)
+      )
+    )
+  }
+  objectFreeze(featuresFacade)
+
+  const secretFacade = objectCreate(null)
+  if (hasDeclaredCapability('secret.get')) {
+    defineFacadeMethod(secretFacade, 'get', (key) =>
+      mapCapabilityResult(
+        invokeCapability('secret.get', { key: stringConstructor(key) }),
+        (result) => result.found === true ? result.value : null
+      )
+    )
+  }
+  if (hasDeclaredCapability('secret.set')) {
+    defineFacadeMethod(secretFacade, 'set', (key, value) =>
+      mapCapabilityResult(
+        invokeCapability('secret.set', {
+          key: stringConstructor(key),
+          value: stringConstructor(value)
+        }),
+        () => undefined
+      )
+    )
+  }
+  if (hasDeclaredCapability('secret.delete')) {
+    defineFacadeMethod(secretFacade, 'delete', (key) =>
+      mapCapabilityResult(
+        invokeCapability('secret.delete', { key: stringConstructor(key) }),
+        () => undefined
+      )
+    )
+  }
+  objectFreeze(secretFacade)
 
   const clipboardFacade = objectCreate(null)
   if (hasDeclaredCapability('clipboard.read')) {
@@ -1109,6 +1374,133 @@ const CONTEXT_BOOTSTRAP = String.raw`
     )
   }
   objectFreeze(clipboardFacade)
+
+  const openUrlFacade = hasDeclaredCapability('open-url')
+    ? objectFreeze((url) =>
+        mapCapabilityResult(
+          invokeCapability('open-url', { url: stringConstructor(url) }),
+          () => undefined
+        )
+      )
+    : undefined
+
+  const normalizeHttpRequest = (input, forcedMethod, forcedUrl, forcedBody, hasForcedBody) => {
+    const source = cloneLocalDto(input === undefined ? {} : input)
+    if (!source || typeof source !== 'object' || arrayIsArray(source)) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_CAPABILITY_PAYLOAD_INVALID')
+    }
+    const request = objectCreate(null)
+    const method = forcedMethod === undefined ? source.method : forcedMethod
+    request.method = reflectApply(
+      stringToUpperCase,
+      stringConstructor(method === undefined ? 'GET' : method),
+      []
+    )
+    request.url = stringConstructor(forcedUrl === undefined ? source.url : forcedUrl)
+    const responseType = source.responseType === 'arraybuffer' ? 'bytes' : source.responseType
+    request.responseType = responseType === undefined ? 'json' : stringConstructor(responseType)
+    if (source.headers !== undefined) request.headers = source.headers
+    if (source.query !== undefined) request.query = source.query
+    else if (source.params !== undefined) request.query = source.params
+    if (hasForcedBody) request.body = cloneLocalDto(forcedBody)
+    else if (objectHasOwn(source, 'body')) request.body = source.body
+    else if (objectHasOwn(source, 'data')) request.body = source.data
+    const timeoutMs = source.timeoutMs === undefined ? source.timeout : source.timeoutMs
+    if (timeoutMs !== undefined) request.timeoutMs = timeoutMs
+    return request
+  }
+  const httpFacade = objectCreate(null)
+  if (hasHttpFacade) {
+    defineFacadeMethod(httpFacade, 'request', (config) =>
+      invokeCapability('http.request', normalizeHttpRequest(config))
+    )
+    defineFacadeMethod(httpFacade, 'get', (url, config) =>
+      invokeCapability('http.request', normalizeHttpRequest(config, 'GET', url))
+    )
+    defineFacadeMethod(httpFacade, 'post', (url, body, config) =>
+      invokeCapability('http.request', normalizeHttpRequest(config, 'POST', url, body, true))
+    )
+  }
+  objectFreeze(httpFacade)
+
+  const permissionFacade = objectCreate(null)
+  if (hasPermissionFacade) {
+    defineFacadeMethod(permissionFacade, 'check', (permissionId) =>
+      mapCapabilityResult(
+        invokeCapability('permission.check', { permissionId: stringConstructor(permissionId) }),
+        (result) => result.granted === true
+      )
+    )
+  }
+  objectFreeze(permissionFacade)
+
+  const invokeOperation = (capability, operations, operation, payload) => {
+    if (typeof operation !== 'string' || !hasSetValue(operations, operation)) {
+      return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+    }
+    return mapCapabilityResult(
+      invokeCapability(capability, { operation, payload }),
+      (result) => cloneLocalDto(result.data)
+    )
+  }
+  objectFreeze(invokeOperation)
+
+  const touchChannelFacade = objectCreate(null)
+  if (hasChannelFacade) {
+    defineFacadeMethod(touchChannelFacade, 'send', (operation, payload = null) =>
+      invokeOperation('channel.invoke', fixedChannelOperations, operation, payload)
+    )
+  }
+  objectFreeze(touchChannelFacade)
+
+  const quickOpsFacade = objectCreate(null)
+  const defineQuickOpsMethod = (name, operation, payloadFactory) => {
+    if (!hasQuickOpsFacade || !hasSetValue(fixedQuickOpsOperations, operation)) return
+    defineFacadeMethod(quickOpsFacade, name, (...args) =>
+      invokeOperation(
+        'quick-ops.invoke',
+        fixedQuickOpsOperations,
+        operation,
+        payloadFactory(...args)
+      )
+    )
+  }
+  defineQuickOpsMethod('capabilities', 'capabilities.get', () => null)
+  defineQuickOpsMethod('sessions', 'sessions.get', () => null)
+  defineQuickOpsMethod('auditRecent', 'audit.get', (request) => request === undefined ? {} : request)
+  defineQuickOpsMethod('systemInfo', 'system-info.get', () => null)
+  defineQuickOpsMethod('tuffDiagnostics', 'tuff-diagnostics.get', () => null)
+  defineQuickOpsMethod('diskSpace', 'disk-space.get', () => null)
+  defineQuickOpsMethod('directoryUsage', 'directory-usage.get', (request) => request === undefined ? {} : request)
+  defineQuickOpsMethod('queryLocalIp', 'query-local-ip.get', () => null)
+  defineQuickOpsMethod('portStatus', 'port-status.get', (request) => request)
+  defineQuickOpsMethod('dnsQuery', 'dns-query.get', (request) => request)
+  defineQuickOpsMethod('fileHash', 'file-hash.get', (request) => request)
+  defineQuickOpsMethod('fileBase64', 'file-base64.get', (request) => request)
+  defineQuickOpsMethod('recentDownload', 'recent-download.get', () => null)
+  defineQuickOpsMethod('commonDirectory', 'common-directory.get', (request) => request === undefined ? {} : request)
+  defineQuickOpsMethod('pathFormat', 'path-format.get', (request) => request)
+  defineQuickOpsMethod('formatText', 'format-text.get', (request) => request)
+  defineQuickOpsMethod('networkStatus', 'network-status.get', () => null)
+  defineQuickOpsMethod('batteryStatus', 'battery-status.get', () => null)
+  defineQuickOpsMethod('systemProxy', 'system-proxy.get', () => null)
+  defineQuickOpsMethod('developerPreview', 'developer-preview.get', (request) => request)
+  defineQuickOpsMethod('saveDeveloperPreview', 'developer-preview.save', (request) => request)
+  objectFreeze(defineQuickOpsMethod)
+  objectFreeze(quickOpsFacade)
+
+  const flowFacade = objectCreate(null)
+  if (hasFlowFacade) {
+    defineFacadeMethod(flowFacade, 'dispatch', (payload, options) =>
+      invokeOperation(
+        'flow.invoke',
+        fixedFlowOperations,
+        'quickops.dispatch',
+        { payload, options }
+      )
+    )
+  }
+  objectFreeze(flowFacade)
 
   const loggerFacade = objectCreate(null)
   const localLog = (...values) => {
@@ -1193,7 +1585,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   objectFreeze(ChildTuffItemBuilder.prototype)
   objectFreeze(ChildTuffItemBuilder)
 
-  Object.defineProperties(globalThis, {
+  objectDefineProperties(globalThis, {
     setTimeout: {
       value: (callback, delay = 0, ...args) =>
         typeof callback === 'function'
@@ -1224,8 +1616,22 @@ const CONTEXT_BOOTSTRAP = String.raw`
     platform: { value: deepFreeze({ platform: snapshot.platform, arch: snapshot.arch }) },
     manifest: { value: deepFreeze(snapshot.manifest) },
     hostCapabilities: { value: hostCapabilities },
-    plugin: { value: hasFeatureFacade ? pluginFacade : undefined, configurable: true },
+    plugin: { value: pluginFacade, configurable: true },
+    features: { value: hasFeaturesFacade ? featuresFacade : undefined, configurable: true },
+    secret: { value: hasSecretFacade ? secretFacade : undefined, configurable: true },
     clipboard: { value: hasClipboardFacade ? clipboardFacade : undefined, configurable: true },
+    openUrl: { value: openUrlFacade, configurable: true },
+    http: { value: hasHttpFacade ? httpFacade : undefined, configurable: true },
+    touchChannel: {
+      value: hasChannelFacade ? touchChannelFacade : undefined,
+      configurable: true
+    },
+    quickOps: { value: hasQuickOpsFacade ? quickOpsFacade : undefined, configurable: true },
+    flow: { value: hasFlowFacade ? flowFacade : undefined, configurable: true },
+    permission: {
+      value: hasPermissionFacade ? permissionFacade : undefined,
+      configurable: true
+    },
     logger: { value: loggerFacade, configurable: true },
     TuffItemBuilder: {
       value: hasDeclaredCapability('feature.items.push') ? ChildTuffItemBuilder : undefined,
@@ -1309,6 +1715,47 @@ function createContextBridge(
     },
     randomBytes: (length) => Array.from(randomBytes(length)),
     randomUUID,
+    digest: (algorithm, value) => {
+      const resolved = CHILD_DIGEST_ALGORITHMS.get(algorithm)
+      if (
+        !resolved ||
+        !Array.isArray(value) ||
+        utilTypes.isProxy(value) ||
+        value.length > limits.maxBytes
+      ) {
+        throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      const descriptors = Object.getOwnPropertyDescriptors(value)
+      const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length')
+      if (
+        !lengthDescriptor ||
+        !('value' in lengthDescriptor) ||
+        lengthDescriptor.value !== value.length
+      ) {
+        throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      const bytes = new Uint8Array(value.length)
+      const allowedKeys = new Set<PropertyKey>(['length'])
+      for (let index = 0; index < value.length; index += 1) {
+        const key = String(index)
+        allowedKeys.add(key)
+        const descriptor = descriptors[key]
+        const entry = descriptor && 'value' in descriptor ? descriptor.value : undefined
+        if (
+          !descriptor?.enumerable ||
+          !Number.isInteger(entry) ||
+          Number(entry) < 0 ||
+          Number(entry) > 255
+        ) {
+          throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        bytes[index] = Number(entry)
+      }
+      if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) {
+        throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      return Array.from(createHash(resolved).update(bytes).digest())
+    },
     disposeResource: async (id, kind) => {
       if (typeof id !== 'string' || typeof kind !== 'string' || !options.disposeResource) {
         throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
@@ -1471,6 +1918,7 @@ export function loadPluginPrelude(
       value: JSON.stringify({
         platform: payload.snapshot.platform,
         arch: payload.snapshot.arch,
+        locale: payload.snapshot.locale,
         manifest: payload.snapshot.manifest,
         capabilityManifest: payload.capabilityManifest,
         fixedCapabilities: PLUGIN_HOST_CAPABILITIES,

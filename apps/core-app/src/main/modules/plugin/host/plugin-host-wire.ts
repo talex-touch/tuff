@@ -2,6 +2,7 @@ export const HOST_PROTOCOL_VERSION = 2 as const
 
 export const PLUGIN_HOST_CAPABILITIES = [
   'plugin.info.get',
+  'permission.check',
   'feature.registry.add',
   'feature.registry.remove',
   'feature.registry.list',

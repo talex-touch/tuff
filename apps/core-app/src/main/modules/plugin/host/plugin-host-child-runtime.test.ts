@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
+import { transformSync } from 'esbuild'
 import { describe, expect, it, vi } from 'vitest'
 import {
   loadPluginPrelude,
@@ -29,6 +30,7 @@ function loadPayload(scriptContent: string, overrides: Record<string, unknown> =
     snapshot: {
       platform: 'darwin',
       arch: 'arm64',
+      locale: 'zh-CN',
       manifest: { name: 'plugin.smoke', nested: { enabled: true } }
     },
     callbackLimits: {
@@ -65,6 +67,7 @@ describe('plugin host load payload', () => {
     expect(parsed.snapshot).toEqual({
       platform: 'darwin',
       arch: 'arm64',
+      locale: 'zh-CN',
       manifest: { name: 'plugin.smoke', nested: { enabled: true } }
     })
     expect(parsed.capabilityManifest).toEqual([
@@ -81,7 +84,10 @@ describe('plugin host load payload', () => {
   it.each([
     [
       'missing field',
-      { scriptContent: '', snapshot: { platform: 'darwin', arch: 'arm64', manifest: {} } }
+      {
+        scriptContent: '',
+        snapshot: { platform: 'darwin', arch: 'arm64', locale: 'zh-CN', manifest: {} }
+      }
     ],
     ['extra field', { ...loadPayload(''), extra: true }],
     ['unknown capability', loadPayload('', { capabilityManifest: ['constructor.constructor'] })],
@@ -99,11 +105,20 @@ describe('plugin host load payload', () => {
     ],
     [
       'unsupported manifest value',
-      loadPayload('', { snapshot: { platform: 'darwin', arch: 'arm64', manifest: { value: 1n } } })
+      loadPayload('', {
+        snapshot: {
+          platform: 'darwin',
+          arch: 'arm64',
+          locale: 'zh-CN',
+          manifest: { value: 1n }
+        }
+      })
     ],
     [
       'invalid platform',
-      loadPayload('', { snapshot: { platform: '../darwin', arch: 'arm64', manifest: {} } })
+      loadPayload('', {
+        snapshot: { platform: '../darwin', arch: 'arm64', locale: 'zh-CN', manifest: {} }
+      })
     ]
   ])('rejects %s before VM execution', (_label, payload) => {
     expect(() => parsePluginHostLoadPayload(payload)).toThrowError(
@@ -502,7 +517,7 @@ describe('plugin Prelude child VM', () => {
           }
         }
       },
-      pluginKeys: ['feature'],
+      pluginKeys: ['getLocale', 'feature'],
       featureKeys: ['pushItems', 'getItems'],
       clipboardKeys: ['writeText', 'clear'],
       loggerKeys: ['debug', 'info', 'warn', 'error'],
@@ -529,6 +544,268 @@ describe('plugin Prelude child VM', () => {
     runtime.shutdown()
   })
 
+  it('projects every simple business facade from declarations with async DTO-only methods', async () => {
+    const invokeCapability = vi.fn(async (capability: string, _payload: unknown) => {
+      switch (capability) {
+        case 'feature.items.push':
+        case 'storage.file.write':
+        case 'secret.set':
+        case 'secret.delete':
+        case 'clipboard.write':
+          return { ok: true }
+        case 'feature.items.clear':
+          return { removed: 1 }
+        case 'feature.items.update':
+          return { updated: true }
+        case 'feature.items.remove':
+        case 'storage.file.remove':
+          return { removed: true }
+        case 'feature.items.list':
+          return { items: [{ id: 'item-a' }] }
+        case 'feature.registry.add':
+          return { added: true }
+        case 'feature.registry.remove':
+          return { removed: true }
+        case 'feature.registry.list':
+          return { features: [{ id: 'feature-a', name: 'Feature A' }] }
+        case 'storage.file.read':
+          return { found: true, value: { enabled: true } }
+        case 'storage.file.list':
+          return { names: ['state.json'] }
+        case 'secret.get':
+          return { found: true, value: 'secret-value' }
+        case 'clipboard.read':
+          return { op: 'text', text: 'clipboard-value' }
+        case 'clipboard.copy-and-paste':
+          return { success: true }
+        case 'open-url':
+          return { opened: true, protocol: 'https:' }
+        case 'http.request':
+          return {
+            status: 200,
+            statusText: 'OK',
+            headers: { 'content-type': 'application/json' },
+            data: { ok: true },
+            url: 'https://example.test/',
+            ok: true
+          }
+        case 'permission.check':
+          return { granted: true }
+        default:
+          throw new Error(`unexpected capability: ${capability}`)
+      }
+    })
+    const capabilityManifest = [
+      'feature.items.push',
+      'feature.items.update',
+      'feature.items.remove',
+      'feature.items.clear',
+      'feature.items.list',
+      'feature.registry.add',
+      'feature.registry.remove',
+      'feature.registry.list',
+      'storage.file.read',
+      'storage.file.write',
+      'storage.file.remove',
+      'storage.file.list',
+      'secret.get',
+      'secret.set',
+      'secret.delete',
+      'clipboard.read',
+      'clipboard.write',
+      'clipboard.copy-and-paste',
+      'open-url',
+      'http.request',
+      'permission.check'
+    ]
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              const itemResults = [
+                await plugin.feature.pushItems([]),
+                await plugin.feature.updateItem('item-a', { meta: { priority: 1 } }),
+                await plugin.feature.removeItem('item-a'),
+                await plugin.feature.clearItems(),
+                await plugin.feature.getItems()
+              ]
+              const registryResults = [
+                await features.addFeature({ id: 'feature-a' }),
+                await features.removeFeature('feature-a'),
+                await features.getFeature('feature-a'),
+                await features.getFeatures()
+              ]
+              const storageResults = [
+                await plugin.storage.getFile('state.json'),
+                await plugin.storage.setFile('state.json', { enabled: true }),
+                await plugin.storage.deleteFile('state.json'),
+                await plugin.storage.listFiles()
+              ]
+              const secretResults = [
+                await secret.get('token'),
+                await secret.set('token', 'value'),
+                await secret.delete('token')
+              ]
+              const clipboardResults = [
+                await clipboard.readText(),
+                await clipboard.writeText('next'),
+                await clipboard.copyAndPaste({ text: 'paste' })
+              ]
+              const networkResults = [
+                await openUrl('https://example.test/'),
+                await http.request({ method: 'GET', url: 'https://example.test/', responseType: 'json' }),
+                await http.get('https://example.test/'),
+                await http.post('https://example.test/', { value: 1 }),
+                await permission.check('network.internet')
+              ]
+              const facades = [plugin, plugin.feature, plugin.storage, features, secret, clipboard, http, permission]
+              return {
+                locale: plugin.getLocale(),
+                itemResults,
+                registryResults,
+                storageResults,
+                secretResults,
+                clipboardResults,
+                networkResults,
+                keys: facades.map(value => Object.keys(value)),
+                frozen: facades.every(Object.isFrozen),
+                prototypes: facades.map(Object.getPrototypeOf),
+                constructors: facades.map(value => typeof value.constructor),
+                thenables: facades.map(value => typeof value.then),
+                requestEscape: (() => {
+                  try { http.request.constructor('return process')(); return false } catch { return true }
+                })()
+              }
+            }
+          }
+        `,
+        { capabilityManifest }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toMatchObject({
+      locale: 'zh-CN',
+      itemResults: [undefined, true, true, undefined, [{ id: 'item-a' }]],
+      registryResults: [
+        true,
+        true,
+        { id: 'feature-a', name: 'Feature A' },
+        [{ id: 'feature-a', name: 'Feature A' }]
+      ],
+      storageResults: [{ enabled: true }, undefined, true, ['state.json']],
+      secretResults: ['secret-value', undefined, undefined],
+      clipboardResults: ['clipboard-value', undefined, true],
+      frozen: true,
+      prototypes: [null, null, null, null, null, null, null, null],
+      constructors: [
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined'
+      ],
+      thenables: [
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined',
+        'undefined'
+      ],
+      requestEscape: true
+    })
+    expect(invokeCapability).toHaveBeenCalledWith(
+      'permission.check',
+      { permissionId: 'network.internet' },
+      expect.any(Number)
+    )
+    runtime.shutdown()
+  })
+
+  it('exposes a child-local bounded digest facade without direct plugin require', async () => {
+    const result = await call(`
+      module.exports = {
+        async onInit() {
+          const bytes = new TextEncoder().encode('abc')
+          const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+          return {
+            digest: Array.from(digest).map(value => value.toString(16).padStart(2, '0')).join(''),
+            subtleFrozen: Object.isFrozen(crypto.subtle),
+            cryptoFrozen: Object.isFrozen(crypto),
+            digestEscape: (() => {
+              try { crypto.subtle.digest.constructor('return process')(); return false } catch { return true }
+            })()
+          }
+        }
+      }
+    `)
+
+    expect(result).toEqual({
+      digest: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      subtleFrozen: true,
+      cryptoFrozen: true,
+      digestEscape: true
+    })
+  })
+
+  it('uses captured byte intrinsics and rejects oversized digests before iteration', async () => {
+    const runtime = loadPluginPrelude(
+      loadPayload(`
+        module.exports = {
+          async onInit() {
+            let randomSetCalled = false
+            let randomConstructorEscape = false
+            const originalSet = Uint8Array.prototype.set
+            Uint8Array.prototype.set = function (values) {
+              randomSetCalled = true
+              try {
+                const hostProcess = values.constructor.constructor('return process')()
+                randomConstructorEscape = typeof hostProcess.getBuiltinModule === 'function'
+              } catch {}
+              return originalSet.call(this, values)
+            }
+
+            crypto.getRandomValues(new Uint8Array(8))
+
+            let oversizedIterated = false
+            const originalIterator = Uint8Array.prototype[Symbol.iterator]
+            Uint8Array.prototype[Symbol.iterator] = function () {
+              oversizedIterated = true
+              return originalIterator.call(this)
+            }
+            let digestCode = 'resolved'
+            try {
+              await crypto.digest('SHA-256', new Uint8Array(1024 * 1024 + 1))
+            } catch (error) {
+              digestCode = error.code || error.message
+            }
+            return {
+              randomSetCalled,
+              randomConstructorEscape,
+              oversizedIterated,
+              digestCode
+            }
+          }
+        }
+      `)
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      randomSetCalled: false,
+      randomConstructorEscape: false,
+      oversizedIterated: false,
+      digestCode: 'PLUGIN_HOST_CHILD_RESULT_INVALID'
+    })
+    runtime.shutdown()
+  })
+
   it('does not expose business facades when no matching capability is declared', async () => {
     const runtime = loadPluginPrelude(
       loadPayload(
@@ -550,7 +827,7 @@ describe('plugin Prelude child VM', () => {
     )
 
     await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
-      pluginType: 'undefined',
+      pluginType: 'object',
       clipboardType: 'undefined',
       builderType: 'undefined',
       loggerType: 'object',
@@ -657,6 +934,60 @@ describe('plugin Prelude child VM', () => {
     })
     expect(clipboardWrites).toEqual(['🚀'])
     runtime.shutdown()
+  })
+
+  it('loads the exact Batch A shell sources with only supported lifecycle exports', async () => {
+    const pluginRoot = path.resolve(process.cwd(), '../../plugins')
+    const clipboardSource = readFileSync(
+      path.join(pluginRoot, 'clipboard-history', 'index', 'main.ts'),
+      'utf8'
+    )
+    const clipboardBuild = transformSync(clipboardSource, {
+      format: 'cjs',
+      loader: 'ts',
+      minify: true,
+      platform: 'node',
+      target: 'node24'
+    }).code
+    expect(clipboardBuild).not.toContain('__esModule')
+
+    const scripts = [
+      { name: 'clipboard-history', scriptContent: clipboardBuild, methods: [] },
+      {
+        name: 'touch-code-snippets',
+        scriptContent: readFileSync(
+          path.join(pluginRoot, 'touch-code-snippets', 'index.js'),
+          'utf8'
+        ),
+        methods: ['onInit']
+      },
+      {
+        name: 'touch-text-snippets',
+        scriptContent: readFileSync(
+          path.join(pluginRoot, 'touch-text-snippets', 'index.js'),
+          'utf8'
+        ),
+        methods: ['onInit']
+      }
+    ] as const
+
+    for (const script of scripts) {
+      const runtime = loadPluginPrelude(
+        loadPayload(script.scriptContent, {
+          snapshot: {
+            platform: 'darwin',
+            arch: 'arm64',
+            locale: 'zh-CN',
+            manifest: { name: script.name }
+          }
+        })
+      )
+      expect(runtime.methods).toEqual(script.methods)
+      if (runtime.methods.includes('onInit')) {
+        await expect(runtime.callLifecycle('onInit', []).promise).resolves.toBeUndefined()
+      }
+      runtime.shutdown()
+    }
   })
 
   it('exposes one frozen invoke-only host capability facade with realm-safe round trips', async () => {
@@ -1322,6 +1653,119 @@ describe('plugin Prelude declared callback fields', () => {
     )
     expect(invokeCapability).not.toHaveBeenCalled()
     runtime.shutdown()
+  })
+})
+
+describe('plugin Prelude fixed request/reply facades', () => {
+  it('projects frozen null-prototype channel, QuickOps and Flow facades', async () => {
+    const invokeCapability = vi.fn(async (capability, payload) => ({ capability, payload }))
+    const runtime = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              const auth = await touchChannel.send('auth.session.get-state', null)
+              const capabilities = await quickOps.capabilities()
+              const flowResult = await flow.dispatch(
+                {
+                  type: 'json',
+                  data: { action: 'stop-timer', targetId: 'quickops.stop-timer' },
+                  context: { sourcePluginId: 'touch-quickops' }
+                },
+                {
+                  preferredTarget: 'quickops.stop-timer',
+                  skipSelector: true,
+                  requireAck: true
+                }
+              )
+              return {
+                auth,
+                capabilities,
+                flowResult,
+                frozen: Object.isFrozen(touchChannel) && Object.isFrozen(quickOps) && Object.isFrozen(flow),
+                prototypes: [
+                  Object.getPrototypeOf(touchChannel),
+                  Object.getPrototypeOf(quickOps),
+                  Object.getPrototypeOf(flow)
+                ]
+              }
+            }
+          }
+        `,
+        { capabilityManifest: ['channel.invoke', 'quick-ops.invoke', 'flow.invoke'] }
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toMatchObject({
+      frozen: true,
+      prototypes: [null, null, null]
+    })
+    expect(invokeCapability.mock.calls.map(([capability]) => capability)).toEqual([
+      'channel.invoke',
+      'quick-ops.invoke',
+      'flow.invoke'
+    ])
+    expect(invokeCapability.mock.calls[0][1]).toEqual({
+      operation: 'auth.session.get-state',
+      payload: null
+    })
+    expect(invokeCapability.mock.calls[1][1]).toEqual({
+      operation: 'capabilities.get',
+      payload: null
+    })
+    expect(invokeCapability.mock.calls[2][1]).toMatchObject({
+      operation: 'quickops.dispatch'
+    })
+    runtime.shutdown()
+  })
+
+  it('omits undeclared facades and denies unknown operations locally', async () => {
+    const invokeCapability = vi.fn()
+    const undeclared = loadPluginPrelude(
+      loadPayload(`
+        module.exports = {
+          onInit() {
+            return {
+              touchChannel: typeof touchChannel,
+              quickOps: typeof quickOps,
+              flow: typeof flow
+            }
+          }
+        }
+      `),
+      { invokeCapability }
+    )
+    await expect(undeclared.callLifecycle('onInit', []).promise).resolves.toEqual({
+      touchChannel: 'undefined',
+      quickOps: 'undefined',
+      flow: 'undefined'
+    })
+    undeclared.shutdown()
+
+    const declared = loadPluginPrelude(
+      loadPayload(
+        `
+          module.exports = {
+            async onInit() {
+              try {
+                await touchChannel.send('account:auth:get-token', null)
+                return 'unexpected-success'
+              } catch (error) {
+                return error.code
+              }
+            }
+          }
+        `,
+        { capabilityManifest: ['channel.invoke'] }
+      ),
+      { invokeCapability }
+    )
+    await expect(declared.callLifecycle('onInit', []).promise).resolves.toBe(
+      'PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'
+    )
+    expect(invokeCapability).not.toHaveBeenCalled()
+    declared.shutdown()
   })
 })
 
