@@ -1,34 +1,37 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import type { TreeSelectNode } from '@talex-touch/tuffex/tree-select'
+import { computed, ref } from 'vue'
 const { locale } = useI18n()
 
-interface TreeNode {
-  label: string
-  value: string
-  children?: TreeNode[]
-}
-
 const multiple = ref(false)
-const nodes = ref<TreeNode[]>([
+const nodes = ref<TreeSelectNode[]>([
   {
-    label: 'Group A',
-    value: 'group-a',
+    key: 'general',
+    label: 'General',
     children: [
-      { label: 'Alpha', value: 'alpha' },
-      { label: 'Beta', value: 'beta' },
+      { key: 'appearance', label: 'Appearance' },
+      { key: 'language', label: 'Language' },
     ],
   },
   {
-    label: 'Group B',
-    value: 'group-b',
+    key: 'account',
+    label: 'Account',
     children: [
-      { label: 'Gamma', value: 'gamma' },
-      { label: 'Delta', value: 'delta' },
+      { key: 'profile', label: 'Profile' },
+      { key: 'billing', label: 'Billing' },
+    ],
+  },
+  {
+    key: 'danger',
+    label: 'Danger Zone',
+    disabled: true,
+    children: [
+      { key: 'delete', label: 'Delete account', disabled: true },
     ],
   },
 ])
-const placeholder = ref('Select item')
-const value = ref<string | string[] | undefined>(undefined)
+const placeholder = computed(() => (multiple.value ? 'Select multiple' : 'Select one'))
+const value = ref<string | number | Array<string | number> | undefined>(undefined)
 </script>
 
 <template>

@@ -2,8 +2,11 @@
 import { ref } from 'vue'
 const { locale } = useI18n()
 const mode = ref<'short' | 'long'>('short')
-const toggle = () => {
-  mode.value = mode.value === 'short' ? 'long' : 'short'
+const sizerRef = ref<any>(null)
+function toggle() {
+  void sizerRef.value?.action?.(() => {
+    mode.value = mode.value === 'short' ? 'long' : 'short'
+  })
 }
 </script>
 

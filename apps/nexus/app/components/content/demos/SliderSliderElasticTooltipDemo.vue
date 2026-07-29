@@ -1,28 +1,209 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 const { locale } = useI18n()
-const accelBoost = ref('')
-const indicatorVariant = ref('')
-const offsetMaxPx = ref('')
-const placement = ref('')
-const preset = ref('')
-const springDamping = ref('')
-const springStiffness = ref('')
-const tiltMaxDeg = ref('')
-const tiltMode = ref('')
-const tooltipDistortSkewDeg = ref(false)
-const tooltipJelly = ref('')
-const tooltipJellyDecay = ref('')
-const tooltipJellyFrequency = ref('')
-const tooltipJellyRotateDeg = ref('')
-const tooltipJellySkewDeg = ref('')
-const tooltipJellySquash = ref('')
-const tooltipJellyTriggerAccel = ref('')
-const tooltipMotion = ref('')
-const tooltipMotionBlurPx = ref('')
-const tooltipMotionDuration = ref('')
-const trigger = ref('')
-const value = ref('')
+
+const value = ref(30)
+
+type IndicatorVariant = 'solid' | 'outline' | 'glass' | 'blur'
+
+const indicatorVariant = ref<IndicatorVariant>('blur')
+
+const tiltMode = ref<'on' | 'off'>('on')
+const placement = ref<'top' | 'bottom'>('top')
+const trigger = ref<'drag' | 'hover' | 'always'>('drag')
+
+type PresetKey = 'current' | 'tofu' | 'jelly' | 'soft' | 'snappy' | 'extreme'
+
+const preset = ref<PresetKey>('jelly')
+
+interface Preset {
+  tiltMaxDeg: number
+  offsetMaxPx: number
+  accelBoost: number
+  springStiffness: number
+  springDamping: number
+  motion: 'blur' | 'fade' | 'none'
+  motionDuration: number
+  motionBlurPx: number
+  distortSkewDeg: number
+  jelly: boolean
+  jellyFrequency: number
+  jellyDecay: number
+  jellyRotateDeg: number
+  jellySkewDeg: number
+  jellySquash: number
+  jellyTriggerAccel: number
+}
+
+const currentPreset: Preset = {
+  tiltMaxDeg: 18,
+  offsetMaxPx: 28,
+  accelBoost: 0.65,
+  springStiffness: 320,
+  springDamping: 24,
+  motion: 'blur' as const,
+  motionDuration: 160,
+  motionBlurPx: 10,
+  distortSkewDeg: 8,
+  jelly: true,
+  jellyFrequency: 8.5,
+  jellyDecay: 10,
+  jellyRotateDeg: 10,
+  jellySkewDeg: 12,
+  jellySquash: 0.16,
+  jellyTriggerAccel: 2800,
+}
+
+const tofuPreset: Preset = {
+  tiltMaxDeg: 20,
+  offsetMaxPx: 34,
+  accelBoost: 0.75,
+  springStiffness: 420,
+  springDamping: 28,
+  motion: 'blur' as const,
+  motionDuration: 180,
+  motionBlurPx: 12,
+  distortSkewDeg: 12,
+  jelly: true,
+  jellyFrequency: 9.5,
+  jellyDecay: 9,
+  jellyRotateDeg: 16,
+  jellySkewDeg: 18,
+  jellySquash: 0.26,
+  jellyTriggerAccel: 2200,
+}
+
+const jellyPreset: Preset = {
+  tiltMaxDeg: 22,
+  offsetMaxPx: 36,
+  accelBoost: 0.8,
+  springStiffness: 420,
+  springDamping: 26,
+  motion: 'blur' as const,
+  motionDuration: 180,
+  motionBlurPx: 12,
+  distortSkewDeg: 14,
+  jelly: true,
+  jellyFrequency: 11,
+  jellyDecay: 6,
+  jellyRotateDeg: 18,
+  jellySkewDeg: 22,
+  jellySquash: 0.32,
+  jellyTriggerAccel: 1600,
+}
+
+const softPreset: Preset = {
+  tiltMaxDeg: 16,
+  offsetMaxPx: 30,
+  accelBoost: 0.55,
+  springStiffness: 240,
+  springDamping: 26,
+  motion: 'blur' as const,
+  motionDuration: 200,
+  motionBlurPx: 10,
+  distortSkewDeg: 8,
+  jelly: true,
+  jellyFrequency: 7.5,
+  jellyDecay: 8,
+  jellyRotateDeg: 10,
+  jellySkewDeg: 12,
+  jellySquash: 0.2,
+  jellyTriggerAccel: 2200,
+}
+
+const snappyPreset: Preset = {
+  tiltMaxDeg: 18,
+  offsetMaxPx: 26,
+  accelBoost: 0.65,
+  springStiffness: 460,
+  springDamping: 34,
+  motion: 'fade' as const,
+  motionDuration: 140,
+  motionBlurPx: 0,
+  distortSkewDeg: 10,
+  jelly: true,
+  jellyFrequency: 9,
+  jellyDecay: 14,
+  jellyRotateDeg: 12,
+  jellySkewDeg: 14,
+  jellySquash: 0.18,
+  jellyTriggerAccel: 2400,
+}
+
+const extremePreset: Preset = {
+  tiltMaxDeg: 24,
+  offsetMaxPx: 42,
+  accelBoost: 1,
+  springStiffness: 520,
+  springDamping: 22,
+  motion: 'blur' as const,
+  motionDuration: 160,
+  motionBlurPx: 14,
+  distortSkewDeg: 18,
+  jelly: true,
+  jellyFrequency: 13,
+  jellyDecay: 4.5,
+  jellyRotateDeg: 22,
+  jellySkewDeg: 24,
+  jellySquash: 0.42,
+  jellyTriggerAccel: 1100,
+}
+
+const presets: Record<PresetKey, Preset> = {
+  current: currentPreset,
+  tofu: tofuPreset,
+  jelly: jellyPreset,
+  soft: softPreset,
+  snappy: snappyPreset,
+  extreme: extremePreset,
+}
+
+const tiltMaxDeg = ref(currentPreset.tiltMaxDeg)
+const offsetMaxPx = ref(currentPreset.offsetMaxPx)
+const accelBoost = ref(currentPreset.accelBoost)
+const springStiffness = ref(currentPreset.springStiffness)
+const springDamping = ref(currentPreset.springDamping)
+
+const tooltipMotion = ref<'blur' | 'fade' | 'none'>(currentPreset.motion)
+const tooltipMotionDuration = ref(currentPreset.motionDuration)
+const tooltipMotionBlurPx = ref(currentPreset.motionBlurPx)
+const tooltipDistortSkewDeg = ref(currentPreset.distortSkewDeg)
+
+const tooltipJelly = ref(currentPreset.jelly)
+const tooltipJellyFrequency = ref(currentPreset.jellyFrequency)
+const tooltipJellyDecay = ref(currentPreset.jellyDecay)
+const tooltipJellyRotateDeg = ref(currentPreset.jellyRotateDeg)
+const tooltipJellySkewDeg = ref(currentPreset.jellySkewDeg)
+const tooltipJellySquash = ref(currentPreset.jellySquash)
+const tooltipJellyTriggerAccel = ref(currentPreset.jellyTriggerAccel)
+
+function applyPreset(p: Preset) {
+  tiltMaxDeg.value = p.tiltMaxDeg
+  offsetMaxPx.value = p.offsetMaxPx
+  accelBoost.value = p.accelBoost
+  springStiffness.value = p.springStiffness
+  springDamping.value = p.springDamping
+  tooltipMotion.value = p.motion
+  tooltipMotionDuration.value = p.motionDuration
+  tooltipMotionBlurPx.value = p.motionBlurPx
+  tooltipDistortSkewDeg.value = p.distortSkewDeg
+
+  tooltipJelly.value = p.jelly
+  tooltipJellyFrequency.value = p.jellyFrequency
+  tooltipJellyDecay.value = p.jellyDecay
+  tooltipJellyRotateDeg.value = p.jellyRotateDeg
+  tooltipJellySkewDeg.value = p.jellySkewDeg
+  tooltipJellySquash.value = p.jellySquash
+  tooltipJellyTriggerAccel.value = p.jellyTriggerAccel
+}
+
+watch(
+  preset,
+  (v) => {
+    applyPreset(presets[v])
+  },
+  { immediate: true },
+)
 </script>
 
 <template>

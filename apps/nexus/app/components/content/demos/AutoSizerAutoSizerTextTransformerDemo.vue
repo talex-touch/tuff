@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const blurPx = ref(12)
-const duration = ref(320)
-const label = ref('Adaptive text')
+const sizerRef = ref<any>(null)
+const label = ref('Short')
 const accent = ref(false)
-const toggle = () => {
-  accent.value = !accent.value
-  label.value = accent.value ? 'Accent text' : 'Adaptive text'
+const duration = ref(360)
+const blurPx = ref(10)
+function toggle() {
+  void sizerRef.value?.action?.(() => {
+    label.value = label.value === 'Short'
+      ? 'Very very long label (blur + fade) that will be clipped while resizing'
+      : 'Short'
+    accent.value = !accent.value
+  })
 }
 </script>
 
