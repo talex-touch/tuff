@@ -210,8 +210,8 @@ describe('plugin window policy', () => {
       expect(isPluginViewResourceAllowed(policy, target)).toBe(false)
     }
 
-    const listeners = new Map<string, (...args: any[]) => void>()
-    const sessionListeners = new Map<string, (...args: any[]) => void>()
+    const listeners = new Map<string, (...args: unknown[]) => void>()
+    const sessionListeners = new Map<string, (...args: unknown[]) => void>()
     let beforeRequest:
       | ((
           details: { url: string; webContentsId?: number },
@@ -220,15 +220,15 @@ describe('plugin window policy', () => {
       | undefined
     const webContents = {
       id: 42,
-      on: vi.fn((event: string, handler: (...args: any[]) => void) =>
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) =>
         listeners.set(event, handler)
       ),
-      once: vi.fn((event: string, handler: (...args: any[]) => void) =>
+      once: vi.fn((event: string, handler: (...args: unknown[]) => void) =>
         listeners.set(event, handler)
       ),
       setWindowOpenHandler: vi.fn(),
       session: {
-        on: vi.fn((event: string, handler: (...args: any[]) => void) =>
+        on: vi.fn((event: string, handler: (...args: unknown[]) => void) =>
           sessionListeners.set(event, handler)
         ),
         setPermissionCheckHandler: vi.fn(),
