@@ -1340,3 +1340,316 @@ Production default enablement, heartbeat/restart budget, legacy bridge removal, 
 - `touch-intelligence` and `touch-translation`, real controlled Context Electron coverage,
   production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
   regression and the independent final security review remain release blockers.
+
+## Independent Check: Migration 20/22 Browser Data
+
+This section completes the strict independent review of the Browser Data migration and
+supersedes the earlier note that this migration's independent review was pending. It does
+not review or expand the concurrently committed Intelligence Context scope.
+
+### Findings And Direct Fixes
+
+- **P0: none found.** The child still cannot select a path, SQL statement, profile, platform,
+  time window, result limit, temp destination, database handle, or native browser identity.
+- **P1 fixed: History copy-set consistency.** The previous implementation validated each
+  DB/WAL/SHM file independently but did not prove that the complete set remained unchanged
+  across acquisition. Main now snapshots set membership plus
+  `dev`/`ino`/`size`/`mtimeNs`/`ctimeNs`, copies every member through a canonical
+  `O_NOFOLLOW` handle, and repeats the complete snapshot before query. Any new, removed,
+  replaced, resized, or modified member rejects and removes the copy before SQLite runs.
+- **P1 fixed: temporary-root symlink containment.** The previous implementation called
+  `realpath()` and accepted a pre-positioned symlink as the temp owner root. It now requires
+  the configured root and the generated child directory to remain canonical non-symlink
+  directories before any browser bytes are copied.
+- **P2 evidence gaps closed.** Focused regressions now prove `fs.read` denial and host
+  generation mismatch perform no query; schema/native errors and temp paths are redacted;
+  a WAL appearing during DB copy fails closed with cleanup; and the real built query-only
+  worker rejects execute, transaction, multiple statements, PRAGMA, and ATTACH.
+- **P0/P1/P2 open in the reviewed Browser Data scope: none.** Rollout remains exactly
+  **20 of 22**, and `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains `false` with no environment
+  override.
+
+### Independent Validation Evidence
+
+- Browser Data capability **14/14**, child facade **2/2**, and official Prelude **7/7**
+  passed. The Prelude source/built-host scan found no privileged child surface and confirmed
+  the built `browser-data.scan` projection.
+- Built SQLite worker integration plus client suite passed **12/12**, including the complete
+  query-only rejection matrix and ordinary writable-owner/quota regressions.
+- Current-HEAD plugin-host plus `TouchPlugin`/`PluginModule`/rollout baseline passed **43
+  files, 764/764 tests**, including the final schema-redaction regression.
+- CoreApp Node and Web typechecks, scoped ESLint with `--max-warnings 0`,
+  `git diff --check`, and `pnpm plugins:validate` passed. Plugin validation remained **22
+  manifest policies**, **24/24 plugins**, and **20/20 push-provider coverage**.
+- Production `build:vite` passed and emitted `plugin-host.js` plus
+  `plugin-sqlite-worker.js`; existing Vite chunking/third-party warnings remain
+  non-blocking.
+- Real Electron utility-process smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK`, using
+  only generated temporary Bookmarks/History/WAL/SHM fixtures and a fake fixed query. No
+  real browser profile, network request, browser launch, or OS action was used.
+
+### Residual Risk
+
+- The host cannot take Chromium's live SQLite lock. Set-level fingerprint revalidation plus
+  SQLite WAL validation fails closed for observed drift, but real browsers may still update
+  files aggressively enough to produce transient `BROWSER_DATA_QUERY_FAILED`; retry policy
+  remains intentionally out of this migration.
+- Only the current Chromium Bookmarks roots and `urls(url, title, last_visit_time)` History
+  schema are supported. Vendor/platform schema drift fails closed and is covered for
+  redaction, not for forward compatibility.
+- The fake-only Electron smoke does not prove real Windows/Linux browser installations,
+  filesystem timestamp behavior, or every vendor profile layout. Production isolated-runtime
+  enablement, the two remaining official Prelude migrations, legacy removal, and the complete
+  22/22 hard cut remain outside this review.
+
+## Migration 21/22: Touch Intelligence Prelude
+
+This section records the completed `touch-intelligence` isolated Prelude migration. It
+builds on the Stage 2B Context invoke foundation and does not modify the concurrently
+reviewed Browser Data contract above.
+
+### Implementation And Review
+
+- `intelligence.context.invoke` moved out of the global capability manifest and is now
+  activation-local to the exact `touch-intelligence` identity together with the new
+  `intelligence.stream` capability. `plugin-module` installs one frozen factory and clears
+  it during teardown; `TouchPlugin` injects both definitions only into that activation.
+- The stream capability snapshots its Context execution dependency, derives the plugin
+  actor in main, validates exact requests/events, uses a retained resource callback, and
+  owns iterator cancellation/disposal. The child exposes only a declaration-gated frozen
+  `intelligence.contextStream()` controller and redacts host/iterator failures.
+- The official Prelude no longer uses top-level `require`, `process`, raw `fetch`, Node or
+  Electron imports, `touchChannel`, runtime permission requests, or test-only exports. It
+  uses projected crypto, feature, storage, clipboard and Intelligence globals only.
+- **P1 fixed:** the Prelude's top-level `crypto` lexical binding collided with the child
+  bootstrap binding and prevented real child evaluation. The projected global is now
+  locally aliased as `hostCrypto`.
+- **P1 fixed:** feature and action entrypoints detached `dispatchPrompt()` with `void`, so
+  request-scoped lifecycle authority ended before later Context/model/widget operations.
+  Both entrypoints now await the complete dispatch.
+- **P2 fixed:** pending/error widget DTOs emitted optional `latency`/`draftId` properties as
+  `undefined`, which the business capability correctly rejects. Optional values are now
+  normalized and omitted; the Electron smoke requires all three accepted writes in each
+  generation: pending, streamed pending, and ready.
+- **P2 fixture correction:** source manifest platform booleans/`win32` are projected to the
+  host runtime feature shape in the fake-only smoke. Stream terminal latency is emitted as
+  protocol-valid `metadata.latency`.
+- Direct final review found no open P0/P1/P2 identity, permission, lifecycle, callback,
+  resource, DTO, fallback, or privileged-surface finding in migration 21. An independent
+  channel reviewer could not be started because the current environment does not provide
+  the `trellis` CLI; this is not claimed as the complete independent #297 security review.
+
+### Validation Evidence
+
+- Focused CoreApp migration tests passed **4 files, 60/60 tests**; plugin-local Intelligence
+  tests passed **66/66**. The complete plugin-host, TouchPlugin, PluginModule, rollout and
+  Context execution suite passed **48 files, 818/818 tests**.
+- The real Electron utility-process smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK` for
+  two distinct activation generations and fake Context/provider streams. It performed no
+  real provider, browser, network, native-process, or OS action.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp, package-test and Prelude ESLint
+  passed with `--max-warnings 0`; syntax checks and `git diff --check` passed.
+- Plugin validation passed **22 manifest policies**, **24/24 plugins**, and **20/20** push
+  search-provider coverage. Official runtime sync, after-pack and seed tests passed **23/23**.
+- The canonical plugin build and CoreApp bundled seed have identical SHA-256 hashes. Source
+  and bundled Prelude scans found no forbidden require/process/raw-fetch/privileged-import,
+  legacy bridge, permission-request, or test-export surface.
+- Production `build:vite` passed. Existing Vite chunking, browser-externalization and
+  third-party annotation warnings remain non-blocking and unrelated to this migration.
+
+### Remaining Scope
+
+The tracked isolated rollout is now **21/22**. `touch-translation` remains intentionally
+unmigrated. Production default enablement, heartbeat/restart budget, legacy bridge removal,
+complete 22/22 regression, the independent final #297 security review, commit/push and
+issue closure remain outside this migration. GitHub issue #476 and its indexing defect were
+not touched.
+
+## Independent Check Addendum: Migration 21/22
+
+This addendum supersedes the earlier direct-review claim for the current uncommitted
+`touch-intelligence` slice. The review covered the custom widget facade/capability, Context
+invoke and stream authority, commit/cancellation/resource semantics, activation-local
+wiring, official Prelude/manifest/rollout/package behavior, and real Electron smoke.
+
+### Findings And Direct Fixes
+
+- **P0: none found.** Actor/caller, activation identity, host generation, permissions,
+  provider authority, renderer identity, callbacks, and resources remain main-derived and
+  exact-activation-bound.
+- **P1 fixed: committed invoke teardown could wait forever.** `commit()` cleared the only
+  timeout and made every later abort a no-op, so a stuck assistant-turn append could block
+  dispatch, registry close, and plugin disable indefinitely. The absolute timeout now remains
+  active; caller abort still preserves committed success, timeout contains finalization and
+  may return only the frozen degraded snapshot, while revoke/close discard late responses.
+  Ignored abort reaches the existing grace barrier, releases the call, and fails closed.
+- **P1 fixed: stream finalization was not containment-cancellable.** An `end` event awaited
+  assistant-turn persistence outside the signal race, allowing cancel/revoke/disable to hang
+  behind a stuck append. Stream finalization now races the host signal while attached handlers
+  contain late settlement; invoke finalization without a signal still preserves the real
+  post-commit append barrier.
+- **P2 fixed: unterminated provider completion.** Provider iterator completion without an
+  `end` event previously left the Prelude promise and retained callback/resource waiting.
+  The pump now emits stable `INTELLIGENCE_STREAM_FAILED`, allowing the child to run its same
+  idempotent disposer.
+- **P2 fixed: widget host authority was too broad.** Widget navigation accepted any internal
+  slash path and renderer validation accepted alias chains. Main now admits only the two exact
+  `touch-intelligence` action-id/path pairs and requires the selected renderer feature to
+  directly own a widget path.
+- **Open P0/P1/P2 in the reviewed Migration 21 scope: none.** The rollout remains exactly
+  **21/22** and production isolated-runtime default enablement remains unchanged.
+
+### Independent Validation Evidence
+
+- Focused CoreApp review matrix passed **14 files, 291/291 tests**, including registry,
+  invoke/stream, widget, actual official Prelude, runtime host, `TouchPlugin`, `PluginModule`,
+  and rollout coverage. The package Intelligence suite passed **66/66**.
+- CoreApp Node typecheck and scoped CoreApp/package ESLint passed with zero warnings.
+  `git diff --check` and focused Prettier verification passed.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 plugins**, and **20/20**
+  push search-provider coverage. The source Prelude forbidden-surface scan found no
+  `require`, `child_process`, `process`, Electron, raw fetch, or `__test` surface.
+- Production `build:vite` passed and emitted the updated `plugin-host.js`. Existing Vite
+  chunking, browser-externalization, eval, and third-party annotation warnings remain
+  non-blocking and unrelated to this review.
+- Real Electron utility-process smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It used
+  fake Context/provider work across two activation generations and performed no real provider,
+  browser, network, native-process, or OS action.
+- No Browser Data, TuffEx, Nexus, search, release, or user-authored `tuffex.md` change was
+  made by this addendum. No commit, push, branch switch, reset, rebase, or history operation
+  was performed.
+
+## Ephemeral One-Shot Context Correction Addendum
+
+This addendum supersedes every earlier Migration 21 statement that described
+`intelligence.context.invoke` as a persistent ContextHygiene operation. The official plugin's
+owner-bound `intelligence.stream` path remains the persistent session/resource path; the
+non-streaming fallback is deliberately ephemeral.
+
+### Corrected Boundary
+
+- `intelligence.context.invoke` remains activation-local to exact `touch-intelligence`, but
+  main always injects the CoreApp-private `persistence: 'ephemeral'` policy. The child cannot
+  request another mode.
+- The one-shot path supports `new` and `stateless` only. `continue` is denied locally and in
+  main before provider work.
+- It uses bounded system messages plus current input, checks input/system/template/variables
+  with the shared secret policy, and performs no `prepareTurn`, memory revalidation,
+  assistant append, session, checkpoint, ContextPackage or package-log write.
+- Its result contains no session/turn/package/checkpoint/continuation identity and requires
+  exactly one `current_input` source plus
+  `isolated_context_persistence_unavailable`. The host and child validate this independently.
+- The attempted capability-specific committed-success mode was removed. Canonical
+  cancel/timeout/revoke/close behavior is unchanged, matching the child lifecycle's local
+  cancellation contract.
+- This is a foundation/fallback limitation, not evidence of persistent one-shot Context or
+  exactly-once database finalization. Full persistent Context remains on the owner-bound
+  stream/resource path.
+
+### Corrected Verification
+
+- One-shot Context/host/capability/child tests passed **56/56**, including zero persistence,
+  continue denial, caller cancellation, secret-bearing system/template denial, persistent-id
+  denial and fixed result projection.
+- The broader focused SDK/context/registry/plugin set passed before final documentation
+  synchronization; CoreApp Node typecheck and scoped ESLint passed with zero warnings.
+- Final-source production `build:vite` passed. Real Electron smoke passed with
+  `PLUGIN_HOST_ISOLATION_SMOKE_OK`: the first actual `touch-intelligence` generation omitted
+  stream to force the one-shot fallback, while the second generation exercised owner-bound
+  stream. Both used controlled fake provider work and no real external action.
+- The rollout remains **21/22** because the official Prelude's full persistent behavior is
+  supplied by the separately reviewed owner-bound stream capability; this one-shot fallback
+  alone must not be used to justify compatibility or production default enablement.
+
+## Migration 22/22: Touch Translation Prelude
+
+This section records the final official Prelude compatibility migration. It completes the
+tracked manifest inventory at exactly **22/22** without enabling production runtime
+installation, removing the legacy bridge, or claiming the #297 production hard cut.
+
+### Delivered Boundary
+
+- `intelligence.invoke` is absent from the global runtime manifest. `TouchPlugin` injects one
+  activation-bound definition only into exact `touch-translation`, limited to
+  `text.translate`, `vision.ocr`, and public `text.translate` provider/model enumeration.
+- The child projects only a frozen null-prototype `plugin.translation` facade with
+  `translate`, `ocr`, and `listProviders`. Generic `intelligence`, `plugin.intelligence`, raw
+  capabilities, provider credentials, endpoints, account tokens, and network access remain
+  absent from the Translation Prelude.
+- Exact bounded DTOs recheck main-issued activation authority and host generation, derive the
+  caller in main, honor cancellation/revoke containment, and return only redacted public
+  provider/model/result fields.
+- The official Prelude contains no direct require, Node crypto, Electron, process, raw fetch,
+  legacy channel, runtime permission request, provider secret, window/DivisionBox helper, or
+  production test export. It awaits text, multi-provider, OCR-to-text, item, and clipboard
+  work; `onDestroy` invalidates all local requests.
+- Screenshot translation intentionally publishes bounded OCR plus translated text. The legacy
+  translated-image DivisionBox renderer was removed because it would require broader window
+  and custom-widget authority.
+- The canonical manifest build entry is `index.js`. `clipboard.read` and `window.create` were
+  removed; `network.internet` remains declared only because the existing renderer settings
+  Surface still requires it. The isolated Prelude receives no network facade.
+- `PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES` now covers all 22 manifested activations while
+  `PLUGIN_RUNTIME_DEFAULT_ENABLED` and `shouldInstallPluginRuntimeServiceByDefault()` remain
+  false. The legacy bridge and main-VM path were not removed or modified by this migration.
+
+### Findings And Fixes
+
+- **P0: none found.** Child-selected credentials, endpoints, caller identity, host generation,
+  provider authority, raw network, window authority, and native image output do not cross the
+  boundary.
+- **P1 fixed: real result items violated the exact business DTO.** The Prelude placed its
+  internal request id in public item metadata, so the real host rejected every translated
+  result even though unit fakes accepted it. Public metadata now contains only admitted keys;
+  the request id remains in the bounded action payload.
+- **P1 fixed: action ids collided across activation generations.** Each child restarted its
+  local counters at one, allowing a previous generation's copy item to match a new generation.
+  Request ids now include the frozen main-issued activation generation, and both VM and real
+  Electron coverage require the second activation to reject the first activation's item.
+- **P2 fixed: stale Integration fixtures hid the current contract.** The actual Intelligence
+  Prelude fixture now returns capability-aware provider-list results and the current ephemeral
+  Context summary. The Translation package's old Node `Module._compile`/`__test` helper test
+  was replaced with an isolation regression proving screenshots use typed OCR and no runtime
+  image helper/test surface.
+- No known P0/P1/P2 remains in the Translation capability, child facade, Prelude, manifest,
+  rollout, projection, or fake-only Electron scope. The complete independent #297 security
+  review remains a release blocker outside this migration.
+
+### Final Validation Evidence
+
+- Complete CoreApp plugin directory: **83 files, 1066/1066 tests passed**. Focused modified
+  AI/Context/SDK/provider matrix: **4 files, 92/92 passed**. Translation host/facade/capability
+  focused replay: **3 files, 36/36 passed**.
+- Translation package tests passed **19/19**; isolated Prelude package tests passed **6/6**.
+  Package typecheck, explicit non-ignored Prelude lint, package lint, and canonical builder
+  passed.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp/package/Prelude ESLint passed with
+  zero warnings. Production `build:vite` and `git diff --check` passed.
+- Release sync/after-pack/seed/loader tests passed **46/46**. `plugins:validate` passed **22
+  manifest policies**, **24/24 directory classifications**, and **20/20** push-provider
+  coverage.
+- Two-run local source audit passed every test/typecheck/lint/build gate, both security scans,
+  both bundled-projection comparisons, and normalized inventory reproducibility with SHA-256
+  `030deb2327e2ce8bfe50a10ab0ba29cdb17a60709741e0aa518fa9c67ec6845a`.
+- Canonical build and bundled seed `index.js` share SHA-256
+  `e52eb6ac108569a83418f1971437fba0dde2f7e15a954059b5c71d297fc7b06e`.
+  Source/build/seed forbidden-surface scans and the built child privileged-import scan passed.
+- Final rebuilt-artifact Electron smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It used
+  fake-only providers and temporary fixtures for text, multi-source, screenshot OCR, copy,
+  two-generation rotation, stale action rejection, cancellation/resource regressions, and
+  cross-process isolation. It performed no real provider, network, browser, native process,
+  or OS action.
+
+### Non-Scoped Baseline Results
+
+- The whole CoreApp AI directory was also run: **39/46 files and 384/403 tests passed**. The
+  seven unchanged failing files use incomplete full mocks of
+  `@talex-touch/utils/transport/events/types` or still expect unnormalized host-only error
+  text. Translation-related AI tests are green; those unrelated test debts were not modified.
+- The whole legacy `packages/test/src/plugins` directory was also run: Translation **6/6** and
+  Intelligence **66/66** passed, while seven old suites still require removed production
+  `__test`, child permission-request behavior, or stale manifest inventories from earlier
+  migrations. Reintroducing those surfaces would violate the isolation contract, so they were
+  left unchanged and are not counted as Translation gates.
+- No commit, push, merge, branch switch, reset, rebase, provider request, real browser action,
+  or history operation was performed.

@@ -761,21 +761,22 @@ const projected = await intelligenceAdapter.invoke(request, signal, caller)
 return validateProjectedIntelligenceResult(projected)
 ```
 
-## Scenario: Activation-Bound Intelligence Context Invoke
+## Scenario: Activation-Bound Ephemeral Intelligence Context Invoke
 
 ### 1. Scope / Trigger
 
-- Trigger: an isolated Prelude needs one governed, non-streaming `text.chat` call
-  assembled through the host ContextHygiene pipeline.
-- This contract covers `intelligence.context.invoke`, context preparation and
-  revalidation, actor ownership, host cancellation, result projection, and the child
-  `intelligence.contextInvoke()` facade. It does not authorize context streams, memory
-  evaluation, Agent sessions, raw checkpoints, or the persisted context control plane.
+- Trigger: the exact isolated `touch-intelligence` activation needs a governed,
+  non-streaming `text.chat` fallback without admitting a durable Context operation.
+- This foundation covers `intelligence.context.invoke`, main-derived actor identity,
+  current-input secret policy, host cancellation, exact result projection, and the child
+  `intelligence.contextInvoke()` facade. Persistent sessions, turns, package logs,
+  checkpoints, continuation, Memory and retrieval belong to the owner-bound stream path
+  or a future terminable durable-operation contract.
 
 ### 2. Signatures
 
 ```ts
-type PluginIntelligenceContextRequest = {
+type EphemeralPluginContextInvokeRequest = {
   operation: 'context.invoke'
   capabilityId: 'text.chat'
   input: string
@@ -784,9 +785,8 @@ type PluginIntelligenceContextRequest = {
   }
   options?: SafePluginIntelligenceOptions
   context: {
-    mode: 'new' | 'continue' | 'stateless'
-    owner?: 'corebox' | 'assistant'
-    sessionId?: string
+    mode: 'new' | 'stateless'
+    owner: 'corebox' | 'assistant'
     scope?: 'light' | 'session' | 'retrieval'
     objective?: string
     tokenBudget?: number
@@ -794,115 +794,268 @@ type PluginIntelligenceContextRequest = {
   }
 }
 
-interface PluginIntelligenceContextHostService {
-  contextInvoke(
-    request: unknown,
-    signal: AbortSignal,
-    caller: `plugin:${string}`,
-  ): Promise<PluginIntelligenceContextResult>
+interface IntelligenceContextExecutionHostOptions {
+  signal?: AbortSignal
+  persistence?: 'full' | 'ephemeral' // CoreApp-private; never a child DTO field
 }
 ```
 
-The child result contains invocation text, public provider/model ids, trace id and
-latency plus a bounded metadata-only context summary. It never contains usage,
-reasoning, package items, checkpoint detail, continuation content, prompts, credentials,
-or native failures.
+The result contains the bounded invocation plus a summary with exactly one
+`current_input` item and `degradedReason: 'isolated_context_persistence_unavailable'`.
+It contains no session, turn, package, checkpoint or continuation identity.
 
 ### 3. Contracts
 
-- Register exactly `intelligence.context.invoke` with `intelligence.basic`. Recheck the
-  branded plugin-host context, full activation identity and current host generation on
-  every call. Main derives `caller = plugin:<manifest id>`; child `owner`, `sessionId`,
-  metadata and options are never actor authority.
-- Accept only exact plain DTOs. `continue` requires one bounded session id; `new` and
-  `stateless` forbid it. Provider/model preferences, prompt variables and diagnostic
-  metadata use the same bounded safe subset as ordinary Intelligence invoke. Caller,
-  signal, endpoint, credentials, quota scope and arbitrary metadata fields are rejected.
-- Context ownership is enforced by passing `{ id: caller, type: 'plugin' }` separately
-  to `IntelligenceContextExecutionService`. The context assembler and session lookup use
-  that actor; a guessed session id cannot cross plugin ownership.
-- Inject the host-owned signal through a CoreApp-private host options type. The public
-  `IntelligenceInvokeOptions`, child DTO and cache identity remain signal-free.
-- Check cancellation before validation, after each non-cancellable hygiene await, after
-  provider settlement, and before assistant finalization. A preparation await may have
-  committed its host-owned user turn before cancellation is observed; no provider or
-  assistant work may start afterward.
-- Assistant-turn persistence is a success commit point. Cancellation that wins before
-  finalization prevents the append. Once an admitted append completes successfully, a
-  later abort does not rewrite that committed success inside the context service. The
-  outer capability registry still rejects a late response to a revoked or closed
-  activation.
-- A preparation failure may use the existing current-input-only degraded path only after
-  the shared host secret classifier accepts the raw input. Secret-bearing input fails with
-  `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED`; it never reaches the provider or assistant turn.
-- Project host execution results through an exact adapter. Validate then discard usage and
-  reasoning; discard checkpoint and continuation detail; reject any extra raw SDK,
-  credential, endpoint, stack, or oversized field before capability result encoding.
-- Snapshot the context execution dependency and host service methods during construction.
-  Later replacement, accessor, Proxy, class or structural request tricks cannot change the
-  admitted host path.
-- Project a frozen, null-prototype child Intelligence facade only from declared ids.
-  `contextInvoke` is independent of basic `invoke`; `contextStream`, memory evaluation,
-  Agent sessions and host capability handles remain absent until separately specified.
+- Install `intelligence.context.invoke` only in the exact `touch-intelligence` activation.
+  Recheck the branded plugin-host context, full activation identity, permission and host
+  generation on every call. Main derives `caller = plugin:touch-intelligence`.
+- The host service always injects frozen `{ signal, persistence: 'ephemeral' }`. Child
+  fields cannot enable persistence, select an actor, provide a signal, or alter caller,
+  endpoint, credentials, quota identity or host generation.
+- Accept `new` and `stateless` only. Reject `continue` locally and again in main with
+  `CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED` before provider work. Do not imply that a
+  child session id was consumed.
+- Validate the actor and fixed entrypoint pair before execution:
+  `corebox.ai-ask/corebox` or `assistant.voice/assistant`, with matching mode.
+- Build provider input from bounded system messages plus the trimmed current input only.
+  Child user/assistant history is not trusted Context state. Apply the shared host secret
+  classifier to current input, every provider-bound system message, every prompt variable,
+  and both the raw and rendered prompt template before invoking a provider.
+- The ephemeral path never calls `prepareTurn()`, `revalidatePackageMemories()` or
+  `appendAssistantTurn()`. It creates no session, turn, checkpoint, ContextPackage or
+  package log, so cancellation/retry cannot duplicate durable Context state.
+- Cancellation uses the canonical capability protocol. Pre-abort and abort during provider
+  wait reject; late provider settlement is observed and discarded. This is containment,
+  not a claim that provider compute or billing physically stopped.
+- Exact-project results before child delivery. Drop usage and reasoning; reject credential,
+  endpoint, native-error, stack, persistent-id, arbitrary degraded-reason, extra-field and
+  oversized results. The child independently enforces the same ephemeral summary shape.
+- Full host-owned Context invoke keeps the existing persistent default. Owner-bound Context
+  stream remains a separate capability/resource contract; this foundation must not be cited
+  as persistent Context or official migration evidence by itself.
 
 ### 4. Validation & Error Matrix
 
 | Condition | Required result |
 | --- | --- |
-| Unknown operation/capability, extra field, Proxy, accessor, sparse/cyclic/class DTO | Invalid request before context or provider work |
-| Child supplies caller, signal, endpoint, credential, unsafe owner or mismatched entrypoint | Invalid request before host work |
-| `continue` lacks a session id, or another mode supplies one | Invalid request |
-| Permission denied/revoked, activation stale, or host generation changed | Stable fail-closed capability error; late result discarded |
-| Signal is pre-aborted or wins before provider/finalization | `INTELLIGENCE_OPERATION_CANCELLED`; no later provider/assistant work |
-| Signal arrives while a successful assistant append is in flight | Preserve the committed context-service success; registry may discard the stale reply |
-| Context preparation fails with secret-bearing current input | `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED`; provider untouched |
-| Host result contains raw/extra credential, SDK, usage projection, or oversized text | `PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID` |
-| Native context/provider failure | Stable redacted handler failure; no message, path, stack, key, or cause crosses |
+| Non-`touch-intelligence`, stale activation, wrong host generation or missing permission | Reject before Context/provider work |
+| Unknown operation/capability, extra field, Proxy, accessor, sparse/cyclic/class DTO | Invalid request before provider work |
+| Child supplies caller, signal, persistence, endpoint, credential or mismatched entrypoint | Invalid request before host work |
+| `continue` or any supplied session id | `CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED`; provider untouched |
+| Secret in input, system message, prompt variable or rendered template | `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED`; provider untouched |
+| Signal aborts before or during provider wait | Canonical cancellation; no Context DB method called |
+| Result contains a persistent id or non-fixed degraded reason | `PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID` |
+| Result count/source shape differs from one current input | Invalid host/child result |
+| Native provider failure | Stable redacted handler failure; no message, path, stack, key or cause crosses |
 
 ### 5. Good / Base / Bad Cases
 
-- Good: a current plugin continues its own bounded session; main derives its actor,
-  ContextHygiene assembles the package, and the child receives only answer plus safe counts
-  and ids.
-- Base: storage preparation fails for safe input, so the current-input-only degraded path
-  runs with a finite normalized token budget.
-- Bad: trust `context.owner`, child metadata caller, or a session id as authority; expose
-  raw checkpoint/package items; or report a successfully persisted assistant turn as if no
-  commit occurred.
+- Good: the current `touch-intelligence` activation runs a bounded stateless AI command;
+  main derives the caller, checks the fully rendered prompt for secrets, and returns an
+  ephemeral metadata-only summary with no database write.
+- Base: `new` executes with current input only and explicitly reports persistence
+  unavailable; callers do not retain a returned session id.
+- Bad: accept `continue`, run ContextHygiene, append an assistant turn, trust child history,
+  or introduce a capability-specific committed-success exception after child cancellation.
 
 ### 6. Tests Required
 
-- Host service tests cover exact hostile DTOs, actor derivation, signal forwarding,
-  metadata/caller rebinding, dependency snapshotting, raw-result rejection and redaction.
-- Capability tests cover current/cross-plugin/stale activation, host-generation mismatch,
-  permission deny/revoke, caller cancellation, late completion and exact result validation.
-- Context execution tests cover pre-abort, cancellation after hygiene/provider awaits,
-  prepare-failure secret blocking, no assistant append before finalization admission, and
-  committed success when abort arrives during an in-flight successful append.
-- Child tests cover independent declaration gating, frozen null-prototype facade, local
-  malformed-request denial, result discriminants, constructor containment, local cloning,
-  and absence of stream/memory/session methods.
-- Before claiming official migration, run the actual Prelude in two Electron utility
-  process generations and prove permission, cancellation, session ownership, stale-port
-  denial and teardown with controlled provider/context fixtures.
+- Context execution tests prove zero prepare/revalidate/append calls, fixed summary shape,
+  full default persistence unchanged, and secret blocking for input, system message and
+  rendered prompt template before provider work.
+- Host/capability tests cover exact DTOs, actor derivation, private ephemeral injection,
+  activation/host-generation/permission checks, cancellation, raw-result rejection and
+  explicit denial of persistent ids and arbitrary degraded reasons.
+- Child tests cover declaration gating, local `continue` denial, frozen null-prototype
+  facade, exact result bounds, constructor containment and no stream/memory/session/admin
+  expansion from the one-shot id.
+- Real Electron smoke runs the actual Prelude once without the stream capability to force
+  the one-shot fallback, then runs a separate generation with owner-bound stream. Both use
+  controlled providers and prove process/generation rotation and cleanup.
 
 ### 7. Wrong vs Correct
 
 #### Wrong
 
 ```ts
-const actor = { id: request.context.owner, type: 'plugin' }
-return contextExecution.invoke(request, actor, request.options)
+return contextExecution.invoke(request, actor, {
+  signal,
+  persistence: request.persistence,
+})
 ```
 
 #### Correct
 
 ```ts
-const activation = assertAuthoritativeActivation(context)
+const activation = assertTouchIntelligenceActivation(context)
 const caller = `plugin:${activation.name}` as const
 const projected = validatePluginIntelligenceContextRequest(request, caller)
-return contextHost.contextInvoke(projected, hostSignal, caller)
+return contextExecution.invoke(projected, { id: caller, type: 'plugin' }, {
+  signal: hostSignal,
+  persistence: 'ephemeral',
+})
 ```
+
+## Scenario: Activation-Bound Custom Widget Publication
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated Prelude publishes a custom-render `TuffItem` whose renderer was
+  compiled and registered from the same plugin manifest or an activation-local dynamic
+  feature.
+- Generic `feature.items.push` remains non-custom. Custom publication uses only
+  `feature.items.widget.push` and the declaration-gated `plugin.widget.pushItems()` facade.
+
+### 2. Signatures
+
+```ts
+type PluginWidgetPushRequest = {
+  scope: 'active-feature'
+  items: readonly PluginWidgetItemDto[]
+}
+
+plugin.widget.pushItems(items: readonly PluginWidgetItemDto[]): Promise<void>
+```
+
+### 3. Contracts
+
+- The main registry derives plugin name, activation generation, item ownership and source
+  provenance. Child `source`, `pluginName`, renderer content and generation are correlation
+  data only and are rewritten or checked against the authoritative activation.
+- Every custom renderer must resolve to one directly registered same-plugin feature with
+  `interaction.type: 'widget'` and a concrete path. Alias chains, another plugin, dynamic
+  paths and an arbitrary namespaced widget id fail before item mutation.
+- Navigation actions are limited to exact host-owned action-id/path pairs. Other custom
+  actions remain plugin lifecycle actions and cannot become a generic host command.
+- Requests/results use bounded plain DTOs. The Prelude omits optional `undefined` fields
+  before publication; main does not loosen item validation to accommodate them.
+- Manifest platform booleans are host input only. `feature.registry.list` projects them to
+  canonical `{ win|darwin|linux: { enable, arch, os } }` DTOs before child delivery.
+- Clear, push, stream callback updates and lifecycle teardown are awaited. A detached
+  publication after lifecycle scope completion is cancelled and cannot mutate a newer
+  activation.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| `feature.items.widget.push` undeclared | `plugin.widget` absent; no generic fallback |
+| Renderer missing, foreign, aliased, pathless or dynamic | Invalid request before feature-host mutation |
+| Child source/plugin/generation differs from owner | Reject or replace from authoritative activation |
+| DTO contains `undefined`, accessor, Proxy, class, cycle or oversized content | Stable invalid request before host work |
+| Manifest uses `win32` boolean platform | Project to canonical `win` platform DTO |
+| Permission revoked, activation stale or teardown started | Reject and remove only that activation's items |
+
+### 5. Good / Base / Bad Cases
+
+- Good: `touch-intelligence` publishes `touch-intelligence::intelligence-ask`; main verifies
+  the manifest renderer, rewrites ownership and tracks the item for exact-generation cleanup.
+- Base: a default-render item continues through `feature.items.push` and never acquires a
+  custom renderer.
+- Bad: allow arbitrary `render.custom.content`, accept another feature's alias chain, emit
+  `draftId: undefined`, or fall back to generic item push after widget validation fails.
+
+### 6. Tests Required
+
+- Business capability tests cover same-plugin renderer success, foreign/path/alias denial,
+  canonical source rewriting, manifest platform projection and activation cleanup.
+- Child tests cover declaration gating, frozen null-prototype facade and builder methods,
+  absent generic custom-render escape and hostile DTO rejection.
+- Official Prelude tests load the real script, require pending/delta/ready widget writes and
+  prove production exports contain no test hook.
+- Real Electron smoke uses two utility-process generations and proves stale-port denial,
+  item cleanup and no real provider, network, native or OS action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await plugin.feature.pushItems([
+  { render: { custom: { content: childSelectedRenderer, data } } },
+])
+```
+
+#### Correct
+
+```ts
+const item = compactPluginDto(builder.setCustomRender('vue', fixedRendererId, data).build())
+await plugin.feature.clearItems()
+await plugin.widget.pushItems([item])
+```
+
+## Scenario: Activation-Bound Intelligence Context Stream
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated official `touch-intelligence` Prelude needs governed streaming
+  `text.chat` events assembled through the host ContextHygiene pipeline.
+- This contract covers the activation-local `intelligence.stream` capability, retained
+  event callback, stream resource, child `intelligence.contextStream()` controller, and
+  the official Prelude migration. It does not authorize another plugin, memory evaluation,
+  Agent sessions, raw checkpoints, provider credentials, or a generic stream transport.
+
+### 2. Contracts
+
+- Register `intelligence.context.invoke` and `intelligence.stream` only through the exact
+  `touch-intelligence` activation factory. Neither id belongs in the global manifest.
+  Construction and every call must match the full activation identity and current host
+  generation; main derives `caller = plugin:touch-intelligence`.
+- `intelligence.stream` requires `intelligence.basic`, exact Context request DTOs, one
+  resource-lifetime `onEvent` callback, a bounded timeout, and bounded concurrency. The
+  child cannot supply caller, signal, actor authority, endpoint, credential, arbitrary
+  capability id, or resource identity.
+- Main obtains an `AsyncIterable` only from the snapped Context execution service. It
+  validates and projects each event before invoking the retained callback. Allowed events
+  are bounded `start`, `delta`, `message`, `usage`, `metadata`, and terminal `end`; native
+  failures and malformed/premature termination become only `INTELLIGENCE_STREAM_FAILED`.
+- The capability returns a `stream` resource. Cancellation, permission revoke, generation
+  rotation, registry close, child cancel, and normal terminal disposal abort the host
+  controller and await `iterator.return()` when available. Late events cannot cross a
+  disposed resource or stale activation.
+- The child projects `contextStream()` only when `intelligence.stream` is declared. It
+  accepts only the named callback set, validates event discriminants again, and returns a
+  frozen null-prototype controller with `cancel()` and read-only `cancelled`. Callback
+  failure terminates and disposes the stream.
+- Prelude lifecycle entrypoints must await the complete prompt/action dispatch. Work
+  detached with `void` loses request-scoped lifecycle authority when the entrypoint
+  resolves and must not later invoke Context, stream, feature, storage, or clipboard
+  capabilities.
+- Prelude feature/widget DTOs crossing the business boundary must contain only supported
+  plain values. Optional values are omitted instead of emitted as `undefined`; manifest
+  features used by a host fixture must be projected to the host runtime platform shape
+  before business validation.
+- The official Prelude uses only projected globals. It must not import/require Node or
+  Electron, access `process`, call raw `fetch`, request permissions at runtime, expose
+  test hooks, or retain the legacy channel bridge.
+
+### 3. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Non-Intelligence activation, stale identity/generation, or undeclared capability | Reject before Context/provider work |
+| Permission denied/revoked or stream resource disposed | Abort and close the iterator; no late child event |
+| Extra request/event field, wrong capability id, Proxy/accessor/class DTO | Stable invalid request/result before plugin callback |
+| Stream ends without a terminal event or host iteration fails | Redacted `INTELLIGENCE_STREAM_FAILED` |
+| Child callback throws or receives a malformed event | `INTELLIGENCE_STREAM_CALLBACK_FAILED`, then dispose |
+| Lifecycle entrypoint resolves before prompt dispatch settles | Forbidden detached work; regression must fail |
+| Widget DTO contains `undefined` or an unprojected source-manifest feature | Business validation rejects; Prelude/fixture must omit/project |
+
+### 4. Tests Required
+
+- Capability and host-service tests cover exact DTOs, actor derivation, activation and host
+  generation checks, permission/revoke/cancel/close races, iterator cleanup, malformed
+  events, redaction, and Context execution delegation.
+- Child tests cover declaration gating, callback allowlisting, event projection, terminal
+  disposal, callback failure, frozen controller containment, and absent raw capability
+  access.
+- Official Prelude tests load the real script in the child VM and prove invoke plus stream,
+  awaited lifecycle completion, widget updates, no forbidden globals, and no exported test
+  surface.
+- Real Electron smoke runs the actual Prelude in two activation generations with only fake
+  Context/provider events. It must observe pending, delta, and ready widget writes, stale
+  generation isolation, resource teardown, and no real provider, browser, network, native,
+  or OS action.
 
 ## Scenario: Plugin-Owned Runtime Overlay
 
@@ -2804,7 +2957,7 @@ The child projection is exactly `plugin.browserData.scan(sources, browser?)`. It
 - Child input contains only a non-empty unique source list and an optional fixed browser id. Paths, SQL, profile names, platform, time windows, limits, temp roots, and permission decisions remain in main.
 - Main derives fixed Chromium roots from `home`, platform config data, and Windows `LOCALAPPDATA`. Canonical roots and profile directories must be non-symlink directories with stable `dev`/`ino` identity inside those main-owned parents.
 - Bookmarks are read through an `O_NOFOLLOW` handle, bounded to 4 MiB, and revalidated before return. Profile enumeration stops after 128 entries without first materializing an unbounded directory, and parsing is iterative and bounded by depth/member/record limits.
-- History never queries the live browser database. Main copies the regular database plus bounded `-wal`/`-shm` sidecars into a private temp directory, then a worker executes only the fixed `chromium-history` query with host-owned lower/upper visit-time parameters against that owned copy.
+- History never queries the live browser database. The temp root must itself be a canonical non-symlink directory before `mkdtemp`; a pre-positioned symlink is rejected before browser bytes are copied. Main snapshots the regular database plus bounded `-wal`/`-shm` sidecar membership and each file's `dev`/`ino`/`size`/`mtimeNs`/`ctimeNs`, copies them through revalidated `O_NOFOLLOW` handles into one private temp directory, then repeats the complete set snapshot. A new, removed, replaced, resized, or modified member rejects the copy before query. Only then may a worker execute the fixed `chromium-history` query with host-owned lower/upper visit-time parameters against that owned copy.
 - Worker `readOnly` means query-only protocol admission. It does not rely on unsupported libSQL `?mode=ro` URI behavior; the original browser file remains protected because only the temporary copy is opened.
 - Every temp directory is removed after success, failure, cancellation, revoke, and close. Cleanup failure is a stable terminal error and must not be swallowed, including copy-acquisition rollback.
 - `fs.read` is required for every scan. `fs.index` is required only when an enabled history source is admitted; disabling history must not block bookmarks.
@@ -2813,31 +2966,33 @@ The child projection is exactly `plugin.browserData.scan(sources, browser?)`. It
 
 ### 4. Validation & Error Matrix
 
-| Condition                                                                          | Required result                                                                |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Extra field, duplicate source, path, SQL, profile, platform, or unknown browser    | Invalid request before filesystem/query work                                   |
-| C0/C1 controls in URL or display fields                                            | Drop the URL record or normalize display controls before child projection      |
-| Source disabled by current main registry                                           | Omit it; if none remain, `BROWSER_DATA_SOURCE_DISABLED`                        |
-| `fs.read` missing/unavailable                                                      | Stable permission result; no file open                                         |
-| Enabled history with `fs.index` missing/unavailable                                | Stable permission result; bookmarks remain available when requested separately |
-| Root/profile/file is symlinked, non-canonical, non-regular, replaced, or oversized | Per-source safe diagnostic; no leaked path/native error                        |
-| SQLite rows exceed the fixed per-profile limit                                     | `BROWSER_DATA_RESULT_LIMIT`; discard that profile                              |
-| Caller abort, permission revoke, stale generation, or close                        | Abort query, remove temp copy, await cleanup barrier                           |
-| Temp cleanup fails during success or rollback                                      | `BROWSER_DATA_TEMP_CLEANUP_FAILED`; never silently leave browser data          |
-| Arc requested on Linux or another unavailable fixed browser                        | Stable `BROWSER_DATA_PLATFORM_UNSUPPORTED`; no arbitrary fallback              |
+| Condition                                                                                       | Required result                                                                |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Extra field, duplicate source, path, SQL, profile, platform, or unknown browser                 | Invalid request before filesystem/query work                                   |
+| C0/C1 controls in URL or display fields                                                         | Drop the URL record or normalize display controls before child projection      |
+| Source disabled by current main registry                                                        | Omit it; if none remain, `BROWSER_DATA_SOURCE_DISABLED`                        |
+| `fs.read` missing/unavailable                                                                   | Stable permission result; no file open                                         |
+| Enabled history with `fs.index` missing/unavailable                                             | Stable permission result; bookmarks remain available when requested separately |
+| Root/profile/file or temp root is symlinked, non-canonical, non-regular, replaced, or oversized | Per-source safe diagnostic; no leaked path/native error                        |
+| Database/WAL/SHM membership or fingerprint changes during the complete copy                     | Reject and remove the copy before query; stable safe diagnostic                |
+| Query-only worker receives execute, transaction, multiple statements, PRAGMA, or ATTACH         | Stable SQL-policy rejection; database remains unchanged                        |
+| SQLite rows exceed the fixed per-profile limit                                                  | `BROWSER_DATA_RESULT_LIMIT`; discard that profile                              |
+| Caller abort, permission revoke, stale generation, or close                                     | Abort query, remove temp copy, await cleanup barrier                           |
+| Temp cleanup fails during success or rollback                                                   | `BROWSER_DATA_TEMP_CLEANUP_FAILED`; never silently leave browser data          |
+| Arc requested on Linux or another unavailable fixed browser                                     | Stable `BROWSER_DATA_PLATFORM_UNSUPPORTED`; no arbitrary fallback              |
 
 ### 5. Good / Base / Bad Cases
 
 - Good: Chrome history is copied to one private temp directory, queried with fixed SQL, projected to bounded URL/title/time fields, then removed before the capability settles.
 - Base: history is disabled or lacks `fs.index`; bookmarks still scan through the fixed JSON path with no history query.
-- Bad: pass a child path or SQL string, query the live database, inherit arbitrary browser profile locations, open a SQLite URI selected by the child, or swallow temp cleanup failure.
+- Bad: pass a child path or SQL string, query the live database, follow a symlinked temp root, query a DB/WAL/SHM set that changed during acquisition, inherit arbitrary browser profile locations, open a SQLite URI selected by the child, or swallow temp cleanup failure.
 
 ### 6. Tests Required
 
 - DTO tests reject authority fields, paths, SQL, duplicate/unknown sources, extra keys, accessors, proxies, and malformed results before host work.
-- Filesystem tests cover fixed macOS/Windows/Linux roots, unsupported Arc on Linux, bounded directory enumeration, symlink/non-regular/oversized inputs, database/WAL/SHM copy, host-owned SQL time bounds, row/result limits, partial diagnostics, control-character sanitation, and path/native-field exclusion.
+- Filesystem tests cover fixed macOS/Windows/Linux roots, unsupported Arc on Linux, bounded directory enumeration, symlink/non-regular/oversized inputs, canonical temp-root rejection, database/WAL/SHM copy and whole-set drift, host-owned SQL time bounds, row/result limits, partial diagnostics, control-character sanitation, schema-error redaction, and path/native-field exclusion.
 - Permission/lifecycle tests cover disabled history without index permission, read/index denial, revoke during query, stale activation, close waiting, and cleanup after success/failure/cancel.
-- Worker tests prove `readOnly` owners can query the owned copy, reject execute/transaction operations, preserve ordinary plugin SQLite behavior, and retain the 64 MiB quota.
+- Worker tests prove `readOnly` owners can query the owned copy; reject execute, transaction, multiple-statement, PRAGMA, and ATTACH operations; preserve ordinary plugin SQLite behavior; and retain the 64 MiB quota.
 - Child tests prove exact manifest/declaration gating, frozen null-prototype facade, fixed browser/source membership, constructor containment, and no filesystem/SQLite/process surface.
 - Real Electron smoke loads the actual Prelude in two generations using only temporary fixtures and a fake fixed query. It proves deny/grant, bookmarks/history, action dispatch, revoke cancellation, temp cleanup, generation rotation, stale-port denial, and no real browser/network/OS action.
 
@@ -2854,6 +3009,108 @@ return sqlite.prepare(request.sql).all()
 
 ```ts
 const profile = await resolveFixedCanonicalProfile(owner, request.browser)
-const copy = await copyBoundedBrowserDatabase(profile.history, owner.tempRoot, signal)
+const copy = await copyStableBrowserDatabaseSet(profile.history, owner.canonicalTempRoot, signal)
 return await withOwnedTemporaryCopy(copy, () => fixedReadOnlyQuery(copy.databasePath, 'chromium-history', signal))
+```
+
+## Scenario: Owner-Bound Intelligence Stream Finalization
+
+### 1. Scope / Trigger
+
+- Trigger: activation-local `intelligence.stream` runs for the exact isolated
+  `touch-intelligence` activation and persists the terminal assistant turn through its
+  owner-bound retained resource.
+- This boundary covers callback backpressure, iterator teardown, stream finalization,
+  custom widget projection and activation close. It does not change the ephemeral
+  `intelligence.context.invoke` contract above; host-owned non-plugin Context invoke keeps
+  its separate persistent default.
+
+### 2. Signatures
+
+```ts
+type PluginIntelligenceStreamRequest = {
+  operation: 'context.stream'
+  capabilityId: 'text.chat'
+  input: string
+  context: PluginIntelligenceContextRequest['context']
+  onEvent(event: ProjectedContextStreamEvent): Promise<void>
+}
+
+type PluginIntelligenceStreamResource = {
+  id: string
+  kind: 'stream'
+}
+```
+
+### 3. Contracts
+
+- Install `intelligence.stream` only for the exact `touch-intelligence` activation with
+  `intelligence.basic`, one retained `onEvent` callback and one owner-bound stream resource.
+- Main derives actor/caller, prepares persistent Context through the host service and
+  validates every event before invoking the child callback. Callback delivery is serial and
+  awaited for backpressure.
+- Stream finalization is signal-raced. Cancel/revoke/close releases the visible stream,
+  aborts provider iteration, observes late append settlement and converges on one idempotent
+  resource disposer plus `iterator.return()` path.
+- A provider iterator must emit a terminal `end`. Completion without a terminal event emits
+  stable `INTELLIGENCE_STREAM_FAILED` and disposes callbacks/resources.
+- Host-owned direct Context invoke may retain full persistence and await its assistant-turn
+  append. The plugin one-shot capability must never acquire this behavior or add a special
+  registry commit mode.
+- Custom widget items may render only through a same-plugin feature whose renderer target
+  directly owns a widget path. Navigate actions are limited to exact host-owned
+  action-id/path pairs.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Permission revoke, activation rotation or resource dispose | Abort iteration, release callback/resource and reject late events |
+| Callback rejects or exceeds its deadline | Stable callback failure and one disposer path |
+| Stream append is pending when cancellation wins | Visible stream settles cancelled; late append settlement is contained |
+| Provider stream completes without `end` | Emit stable stream failure and dispose retained state |
+| Duplicate cancel/dispose/end | Idempotent no-op after the first cleanup |
+| Widget renderer resolves through another alias | Reject before item push |
+| Unknown or mismatched navigate action/path | Reject before item push |
+
+### 5. Good / Base / Bad Cases
+
+- Good: the owner-bound stream emits start/delta/end with awaited callbacks, persists its
+  terminal answer through host Context, then disposes the iterator and resource exactly once.
+- Base: user cancellation stops visible delivery and cleanup without waiting for provider
+  computation that cannot be physically cancelled.
+- Bad: reuse one-shot invoke commit exceptions, detach assistant persistence from every
+  resource owner, accept completion without a terminal event, or let a widget select an
+  arbitrary host route.
+
+### 6. Tests Required
+
+- Stream tests cover callback backpressure, terminal and missing-terminal completion,
+  callback failure, cancellation during finalization, permission revoke, generation
+  rotation and awaited iterator disposal.
+- Registry/resource tests cover owner/generation matching, retained callback release,
+  duplicate disposal and no late event after close.
+- Widget tests cover declaration gating, direct renderer ownership, exact navigation pairs
+  and activation-owned item cleanup.
+- Real Electron smoke loads the actual Prelude in two generations and proves stream
+  pending/delta/end writes, cancellation, stale-port rejection, callback/resource cleanup
+  and no real provider/native action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await contextInvoke(request) // then retrofit a committed-success exception after cancel
+```
+
+#### Correct
+
+```ts
+const resource = await startOwnerBoundContextStream(request, onEvent, hostSignal)
+try {
+  await resource.completed
+} finally {
+  await resource.dispose()
+}
 ```
