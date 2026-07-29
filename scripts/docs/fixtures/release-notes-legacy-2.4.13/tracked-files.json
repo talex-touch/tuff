@@ -1,0 +1,6 @@
+[
+  "apps/core-app/package.json",
+  "notes/RELEASE_NOTES_GUIDE.md",
+  "notes/release-notes.config.json",
+  "package.json"
+]

@@ -1,6 +1,6 @@
 # Tuff 当前执行顺序
 
-> Authority: this document is the sole global execution-order source. Live task status, assignee, acceptance criteria, blocker, and evidence are authoritative only in the active [Trellis task tree](../../.trellis/tasks/).
+> Authority: this document is the sole global execution-order source. Live task status, assignee, acceptance criteria, blocker, and evidence are authoritative only in the active [Trellis task tree](../../.trellis/tasks/README.md).
 
 ## Current order
 

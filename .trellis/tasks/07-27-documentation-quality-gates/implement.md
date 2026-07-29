@@ -14,7 +14,7 @@
 2. Add one passing aggregate fixture and poison files under every excluded scope.
 3. Add failing fixtures for recursive Markdown/MDC lint, missing links, decoded links, repository escapes, and untracked targets.
 4. Add failing fixtures for malformed/duplicate tasks, parent-child asymmetry, missing assignee/meta, active completed tasks, archived incomplete tasks, and TODO reference drift.
-5. Add failing fixtures for root/CoreApp version mismatch, missing/empty/wrong-version bilingual notes, invalid sections, and mismatched section/bullet shape.
+5. Add passing legacy `2.4.13` and failing post-baseline fixtures for missing/empty/wrong-version bilingual notes, invalid sections, and mismatched section/bullet shape.
 6. Add failing fixtures for historical AI evidence promoted to current and current recapture claimed without exact-version evidence.
 7. Add failing fixtures and controls for active PRD placeholders, intentional examples, backlog wording, and allowlist rationale.
 8. Add output sorting/cap, repeat-run byte identity, and read-only repository-state assertions.
@@ -27,7 +27,7 @@
 3. Wire a declared fixed-version Markdown lint/parser toolchain; remove any runtime `npx` download dependency.
 4. Implement AST inline link/image resolution with URL classification, decoding, query/fragment removal, repository-escape rejection, and tracked-target checks.
 5. Implement structured Trellis JSON graph, metadata, completion, and Batch A TODO-reference rules.
-6. Implement current-version and bilingual release-note guide checks.
+6. Reuse `scripts/lib/release-notes-contract.mjs` to enforce only post-baseline current-version bilingual release-note coverage and guide checks.
 7. Refactor or export existing AI checks into one shared implementation consumed by the canonical command and any retained `ai-docs:dev` compatibility wrapper.
 8. Implement active PRD discovery, placeholder matchers, and structured rationale-bearing allowlist.
 9. Make every focused fixture pass without broadening exclusions beyond the reviewed registry.
