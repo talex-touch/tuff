@@ -8,11 +8,11 @@
 | 需要回答的问题 | 单一事实源 |
 | --- | --- |
 | 当前代码版本是什么 | 根目录与 `apps/core-app/package.json` |
-| 当前任务由谁执行、状态如何 | [`.trellis/tasks/`](../.trellis/tasks/) 与 `.trellis/scripts/get_context.py` |
+| 当前任务由谁执行、状态如何 | [`.trellis/tasks/README.md`](../.trellis/tasks/README.md) 与 `.trellis/scripts/get_context.py` |
 | 接下来两周先做什么 | [`plan-prd/TODO.md`](./plan-prd/TODO.md) |
 | 产品阶段和能力边界是什么 | [`plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`](./plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md) |
 | 最近已经发生了什么 | [`plan-prd/01-project/CHANGES.md`](./plan-prd/01-project/CHANGES.md) |
-| 某项是否真的完成 | 对应 Evidence Matrix 或 [`engineering/reports/`](./engineering/reports/) |
+| 某项是否真的完成 | 对应 Evidence Matrix 或 [`engineering/reports/README.md`](./engineering/reports/README.md) |
 
 ## 当前稳定化结论
 
@@ -32,7 +32,7 @@ Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三�
 
 - [`plan-prd/README.md`](./plan-prd/README.md)：规划入口与事实源边界。
 - [`plan-prd/TODO.md`](./plan-prd/TODO.md)：唯一的两周级优先级清单。
-- [`.trellis/tasks/`](../.trellis/tasks/)：任务 owner、状态、PRD、设计和实施记录。
+- [`.trellis/tasks/README.md`](../.trellis/tasks/README.md)：任务 owner、状态、PRD、设计和实施记录。
 
 ### 2. 路线与专题层
 
@@ -51,7 +51,7 @@ Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三�
 
 ### 4. 验收与历史层
 
-- [`engineering/reports/`](./engineering/reports/)：curated evidence、manifest、checklist 与审计摘要。
+- [`engineering/reports/README.md`](./engineering/reports/README.md)：curated evidence、manifest、checklist 与审计摘要。
 - [`plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md`](./plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md)：AI Stable evidence。
 - [`plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md`](./plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md)：发布完整性 evidence。
 - [`plan-prd/04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md`](./plan-prd/04-implementation/Evidence-Matrix-Nexus-Governance-2026-06-18.md)：Nexus 治理 evidence。

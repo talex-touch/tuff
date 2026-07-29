@@ -1,0 +1,27 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "AGENTS.md": "# Poison\n\nThis excluded agent file contains a NUL byte: \u0000\n",
+    ".github/nul-poison.md": "# Poison\n\nThis excluded workflow file contains a NUL byte: \u0000\n",
+    ".trellis/internal/nul-poison.md": "# Poison\n\nThis excluded Trellis file contains a NUL byte: \u0000\n",
+    "coverage/nul-poison.md": "# Poison\n\nThis excluded coverage file contains a NUL byte: \u0000\n",
+    "dist/nul-poison.md": "# Poison\n\nThis excluded build file contains a NUL byte: \u0000\n",
+    "docs/engineering/reports/nul-poison.md": "# Poison\n\nThis excluded report file contains a NUL byte: \u0000\n",
+    "docs/nul-byte.md": "# NUL Byte\n\nTracked Markdown contains a NUL byte here: \u0000\n",
+    "docs/nul-byte.mdc": "# NUL Byte MDC\n\nTracked MDC contains a NUL byte here: \u0000\n",
+    "generated/nul-poison.md": "# Poison\n\nThis excluded generated file contains a NUL byte: \u0000\n",
+    "node_modules/nul-poison.md": "# Poison\n\nThis excluded dependency file contains a NUL byte: \u0000\n"
+  },
+  "trackedAdd": [
+    ".github/nul-poison.md",
+    ".trellis/internal/nul-poison.md",
+    "AGENTS.md",
+    "coverage/nul-poison.md",
+    "dist/nul-poison.md",
+    "docs/engineering/reports/nul-poison.md",
+    "docs/nul-byte.md",
+    "docs/nul-byte.mdc",
+    "generated/nul-poison.md",
+    "node_modules/nul-poison.md"
+  ]
+}
