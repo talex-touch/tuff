@@ -761,6 +761,149 @@ const projected = await intelligenceAdapter.invoke(request, signal, caller)
 return validateProjectedIntelligenceResult(projected)
 ```
 
+## Scenario: Activation-Bound Intelligence Context Invoke
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated Prelude needs one governed, non-streaming `text.chat` call
+  assembled through the host ContextHygiene pipeline.
+- This contract covers `intelligence.context.invoke`, context preparation and
+  revalidation, actor ownership, host cancellation, result projection, and the child
+  `intelligence.contextInvoke()` facade. It does not authorize context streams, memory
+  evaluation, Agent sessions, raw checkpoints, or the persisted context control plane.
+
+### 2. Signatures
+
+```ts
+type PluginIntelligenceContextRequest = {
+  operation: 'context.invoke'
+  capabilityId: 'text.chat'
+  input: string
+  payload: {
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+  }
+  options?: SafePluginIntelligenceOptions
+  context: {
+    mode: 'new' | 'continue' | 'stateless'
+    owner?: 'corebox' | 'assistant'
+    sessionId?: string
+    scope?: 'light' | 'session' | 'retrieval'
+    objective?: string
+    tokenBudget?: number
+    traceId?: string
+  }
+}
+
+interface PluginIntelligenceContextHostService {
+  contextInvoke(
+    request: unknown,
+    signal: AbortSignal,
+    caller: `plugin:${string}`,
+  ): Promise<PluginIntelligenceContextResult>
+}
+```
+
+The child result contains invocation text, public provider/model ids, trace id and
+latency plus a bounded metadata-only context summary. It never contains usage,
+reasoning, package items, checkpoint detail, continuation content, prompts, credentials,
+or native failures.
+
+### 3. Contracts
+
+- Register exactly `intelligence.context.invoke` with `intelligence.basic`. Recheck the
+  branded plugin-host context, full activation identity and current host generation on
+  every call. Main derives `caller = plugin:<manifest id>`; child `owner`, `sessionId`,
+  metadata and options are never actor authority.
+- Accept only exact plain DTOs. `continue` requires one bounded session id; `new` and
+  `stateless` forbid it. Provider/model preferences, prompt variables and diagnostic
+  metadata use the same bounded safe subset as ordinary Intelligence invoke. Caller,
+  signal, endpoint, credentials, quota scope and arbitrary metadata fields are rejected.
+- Context ownership is enforced by passing `{ id: caller, type: 'plugin' }` separately
+  to `IntelligenceContextExecutionService`. The context assembler and session lookup use
+  that actor; a guessed session id cannot cross plugin ownership.
+- Inject the host-owned signal through a CoreApp-private host options type. The public
+  `IntelligenceInvokeOptions`, child DTO and cache identity remain signal-free.
+- Check cancellation before validation, after each non-cancellable hygiene await, after
+  provider settlement, and before assistant finalization. A preparation await may have
+  committed its host-owned user turn before cancellation is observed; no provider or
+  assistant work may start afterward.
+- Assistant-turn persistence is a success commit point. Cancellation that wins before
+  finalization prevents the append. Once an admitted append completes successfully, a
+  later abort does not rewrite that committed success inside the context service. The
+  outer capability registry still rejects a late response to a revoked or closed
+  activation.
+- A preparation failure may use the existing current-input-only degraded path only after
+  the shared host secret classifier accepts the raw input. Secret-bearing input fails with
+  `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED`; it never reaches the provider or assistant turn.
+- Project host execution results through an exact adapter. Validate then discard usage and
+  reasoning; discard checkpoint and continuation detail; reject any extra raw SDK,
+  credential, endpoint, stack, or oversized field before capability result encoding.
+- Snapshot the context execution dependency and host service methods during construction.
+  Later replacement, accessor, Proxy, class or structural request tricks cannot change the
+  admitted host path.
+- Project a frozen, null-prototype child Intelligence facade only from declared ids.
+  `contextInvoke` is independent of basic `invoke`; `contextStream`, memory evaluation,
+  Agent sessions and host capability handles remain absent until separately specified.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Unknown operation/capability, extra field, Proxy, accessor, sparse/cyclic/class DTO | Invalid request before context or provider work |
+| Child supplies caller, signal, endpoint, credential, unsafe owner or mismatched entrypoint | Invalid request before host work |
+| `continue` lacks a session id, or another mode supplies one | Invalid request |
+| Permission denied/revoked, activation stale, or host generation changed | Stable fail-closed capability error; late result discarded |
+| Signal is pre-aborted or wins before provider/finalization | `INTELLIGENCE_OPERATION_CANCELLED`; no later provider/assistant work |
+| Signal arrives while a successful assistant append is in flight | Preserve the committed context-service success; registry may discard the stale reply |
+| Context preparation fails with secret-bearing current input | `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED`; provider untouched |
+| Host result contains raw/extra credential, SDK, usage projection, or oversized text | `PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID` |
+| Native context/provider failure | Stable redacted handler failure; no message, path, stack, key, or cause crosses |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a current plugin continues its own bounded session; main derives its actor,
+  ContextHygiene assembles the package, and the child receives only answer plus safe counts
+  and ids.
+- Base: storage preparation fails for safe input, so the current-input-only degraded path
+  runs with a finite normalized token budget.
+- Bad: trust `context.owner`, child metadata caller, or a session id as authority; expose
+  raw checkpoint/package items; or report a successfully persisted assistant turn as if no
+  commit occurred.
+
+### 6. Tests Required
+
+- Host service tests cover exact hostile DTOs, actor derivation, signal forwarding,
+  metadata/caller rebinding, dependency snapshotting, raw-result rejection and redaction.
+- Capability tests cover current/cross-plugin/stale activation, host-generation mismatch,
+  permission deny/revoke, caller cancellation, late completion and exact result validation.
+- Context execution tests cover pre-abort, cancellation after hygiene/provider awaits,
+  prepare-failure secret blocking, no assistant append before finalization admission, and
+  committed success when abort arrives during an in-flight successful append.
+- Child tests cover independent declaration gating, frozen null-prototype facade, local
+  malformed-request denial, result discriminants, constructor containment, local cloning,
+  and absence of stream/memory/session methods.
+- Before claiming official migration, run the actual Prelude in two Electron utility
+  process generations and prove permission, cancellation, session ownership, stale-port
+  denial and teardown with controlled provider/context fixtures.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const actor = { id: request.context.owner, type: 'plugin' }
+return contextExecution.invoke(request, actor, request.options)
+```
+
+#### Correct
+
+```ts
+const activation = assertAuthoritativeActivation(context)
+const caller = `plugin:${activation.name}` as const
+const projected = validatePluginIntelligenceContextRequest(request, caller)
+return contextHost.contextInvoke(projected, hostSignal, caller)
+```
+
 ## Scenario: Plugin-Owned Runtime Overlay
 
 ### 1. Scope / Trigger

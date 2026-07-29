@@ -1268,3 +1268,75 @@ The exact two unmigrated official activations are:
 - `touch-translation`
 
 Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22 regression, complete independent security review, and the hard cut remain release blockers. The concurrent Intelligence Context Stage 2B RED work was explicitly excluded from this migration commit and validation claim.
+
+## Stage 2B Intelligence Context Invoke Foundation
+
+### Delivered Boundary
+
+- Added fixed `intelligence.context.invoke` under `intelligence.basic`. The capability
+  rechecks branded plugin-host authority, the complete current activation and host
+  generation, then derives `plugin:<manifest id>` as the Context actor. Child owner,
+  session, metadata and options never become identity.
+- The host accepts only bounded exact `text.chat` Context DTOs. `continue` requires a
+  session id while `new` and `stateless` forbid one; caller, signal, endpoint, credential,
+  quota authority, unsafe owner, extra fields, accessors, proxies, classes, sparse arrays
+  and cycles fail before Context or provider work.
+- `IntelligenceContextExecutionService.invoke()` accepts a private host-only signal and
+  observes it before validation, after non-cancellable hygiene awaits, after provider
+  settlement and before assistant finalization. The shared secret classifier still owns
+  degraded current-input admission, so a database failure cannot route Bearer/JWT input to
+  the Provider.
+- Host results are exact-projected to answer/provider/model/trace/latency plus bounded
+  metadata-only Context ids, counts and source types. Usage, reasoning, checkpoint and
+  continuation detail, package items, credentials, native errors and stacks do not cross.
+- The child projects an independently declaration-gated, frozen null-prototype
+  `intelligence.contextInvoke()` facade. It does not expose context stream, memory
+  evaluation, Agent session, raw host capability or generic Intelligence methods unless
+  their own capability ids are separately declared.
+- `PluginModule` snapshots the production Context host service and installs one immutable
+  definition in the global runtime manifest. The isolated runtime default remains off.
+
+### Security Review
+
+- **P0: none found.** Caller and session ownership remain main-derived and ContextHygiene
+  actor-bound; child fields cannot select another plugin actor or host generation.
+- **P1 fixed:** an abort arriving while `appendAssistantTurn()` was in flight previously
+  reported cancellation even when the host persistence had succeeded. Finalization now
+  remains cancellable before admission, but a successfully completed assistant append is a
+  commit point and is not rewritten inside the Context service. The outer capability
+  registry still discards any late response for a revoked or closed activation.
+- **P1: none open in the scoped invoke foundation.** Cancellation is containment: provider
+  compute/billing and a hygiene write already admitted before an abort may physically
+  finish. Boundary checks prevent later provider/finalization work; this is not described
+  as physical cancellation.
+- **P2: none open in the scoped DTO, projection, dependency snapshot or child facade
+  boundary.** Stream/resource semantics and official Prelude behavior are not part of this
+  foundation claim.
+- The project `trellis-check` runner could not start because the configured OpenRouter
+  provider was unavailable, and the fallback reviewer returned no output. Therefore this
+  section records direct review and executable gates only; it is not an independent final
+  #297 security review.
+
+### Validation Evidence
+
+- Focused Context execution/host service/capability/child/PluginModule suite passed **5
+  files, 49/49 tests**.
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite passed **43 files,
+  761/761 tests**.
+- CoreApp Node typecheck and scoped Context/host/plugin ESLint passed with
+  `--max-warnings 0`; workspace `git diff --check` passed.
+- Production `build:vite` passed and emitted the updated declaration-gated child artifact.
+  Existing Vite chunking and third-party annotation warnings remain non-blocking.
+- Real Electron utility-process regression remained green with
+  `PLUGIN_HOST_ISOLATION_SMOKE_OK`. This smoke validates the shared child artifact and
+  existing two-generation isolation paths; it does not claim a real Context provider or
+  official `touch-intelligence` flow.
+
+### Remaining Scope
+
+- This batch does not migrate `touch-intelligence`, add `intelligence.context.stream`,
+  expose memory/Agent/session control planes, change the 20/22 rollout inventory, or enable
+  the production isolated runtime.
+- `touch-intelligence` and `touch-translation`, real controlled Context Electron coverage,
+  production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+  regression and the independent final security review remain release blockers.
