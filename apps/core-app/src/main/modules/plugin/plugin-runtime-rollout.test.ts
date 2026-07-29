@@ -10,7 +10,6 @@ const workspaceRoot = path.resolve(__dirname, '../../../../../..')
 const pluginsRoot = path.join(workspaceRoot, 'plugins')
 
 const EXPECTED_UNMIGRATED = Object.freeze({
-  'touch-browser-data': 'top-level require',
   'touch-intelligence': 'top-level require',
   'touch-translation': 'top-level require'
 })
@@ -41,7 +40,7 @@ function officialManifestNames(): string[] {
 }
 
 describe('plugin runtime production rollout gate', () => {
-  it('computes the disabled default from 19 compatible of 22 manifested activations', () => {
+  it('computes the disabled default from 20 compatible of 22 manifested activations', () => {
     const official = officialManifestNames()
     const compatible = new Set<string>(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
@@ -51,6 +50,7 @@ describe('plugin runtime production rollout gate', () => {
       'clipboard-history',
       'touch-batch-rename',
       'touch-browser-bookmarks',
+      'touch-browser-data',
       'touch-browser-open',
       'touch-code-snippets',
       'touch-dev-toolbox',
@@ -69,7 +69,7 @@ describe('plugin runtime production rollout gate', () => {
       'touch-workspace-scripts'
     ])
     expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
-    expect(unmigrated).toHaveLength(3)
+    expect(unmigrated).toHaveLength(2)
     expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(unmigrated.length === 0)
   })
 
@@ -97,6 +97,7 @@ describe('plugin runtime production rollout gate', () => {
     for (const name of [
       'touch-batch-rename',
       'touch-browser-bookmarks',
+      'touch-browser-data',
       'touch-browser-open',
       'touch-code-snippets',
       'touch-dev-toolbox',
@@ -154,6 +155,15 @@ describe('plugin runtime production rollout gate', () => {
       ]
       expect(declared, `${name} must explicitly declare storage.plugin`).toContain('storage.plugin')
     }
+
+    const browserData = manifests.get('touch-browser-data')?.permissions
+    const browserDataPermissions = [
+      ...(Array.isArray(browserData?.required) ? browserData.required : []),
+      ...(Array.isArray(browserData?.optional) ? browserData.optional : [])
+    ]
+    expect(browserDataPermissions).toEqual(
+      expect.arrayContaining(['fs.read', 'fs.index', 'search.root-results'])
+    )
 
     const browserOpen = manifests.get('touch-browser-open')?.permissions
     const browserOpenPermissions = [

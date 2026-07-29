@@ -94,6 +94,7 @@ const mocks = vi.hoisted(() => {
     setSnipasteProcessCapabilityFactory: vi.fn(),
     setSystemActionCapabilityFactory: vi.fn(),
     setBrowserOpenCapabilityFactory: vi.fn(),
+    setBrowserDataCapabilityFactory: vi.fn(),
     setWindowManagerCapabilityFactory: vi.fn(),
     setWindowPresetCapabilityFactory: vi.fn(),
     setWorkspaceScriptCapabilityFactory: vi.fn(),
@@ -260,6 +261,7 @@ vi.mock('./plugin', () => ({
     static setSnipasteProcessCapabilityFactory = mocks.setSnipasteProcessCapabilityFactory
     static setSystemActionCapabilityFactory = mocks.setSystemActionCapabilityFactory
     static setBrowserOpenCapabilityFactory = mocks.setBrowserOpenCapabilityFactory
+    static setBrowserDataCapabilityFactory = mocks.setBrowserDataCapabilityFactory
     static setWindowManagerCapabilityFactory = mocks.setWindowManagerCapabilityFactory
     static setWindowPresetCapabilityFactory = mocks.setWindowPresetCapabilityFactory
     static setWorkspaceScriptCapabilityFactory = mocks.setWorkspaceScriptCapabilityFactory
@@ -362,6 +364,7 @@ describe('PluginModule facade', () => {
     mocks.setSnipasteProcessCapabilityFactory.mockReset()
     mocks.setSystemActionCapabilityFactory.mockReset()
     mocks.setBrowserOpenCapabilityFactory.mockReset()
+    mocks.setBrowserDataCapabilityFactory.mockReset()
     mocks.setWindowManagerCapabilityFactory.mockReset()
     mocks.setWindowPresetCapabilityFactory.mockReset()
     mocks.setWorkspaceScriptCapabilityFactory.mockReset()
@@ -434,11 +437,13 @@ describe('PluginModule facade', () => {
     expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
     expect(mocks.setWindowPresetCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setBrowserOpenCapabilityFactory.mock.calls[0]).toEqual([null])
+    expect(mocks.setBrowserDataCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setWindowManagerCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setWorkspaceScriptCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
@@ -764,6 +769,7 @@ describe('PluginModule facade', () => {
     expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(null)

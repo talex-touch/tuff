@@ -154,6 +154,7 @@ async function run() {
           export { PluginHostCapabilityRegistry } from '../src/main/modules/plugin/host/plugin-host-capabilities'
           export { createPluginBusinessCapabilities } from '../src/main/modules/plugin/host/plugin-business-capabilities'
           export { createFixedPluginBrowserOpenService, createPluginBrowserOpenCapabilities, createPluginBrowserOpenProcess } from '../src/main/modules/plugin/host/plugin-browser-open-capabilities'
+          export { createFixedPluginBrowserDataQuery, createFixedPluginBrowserDataService, createPluginBrowserDataCapabilities } from '../src/main/modules/plugin/host/plugin-browser-data-capabilities'
           export { createPluginBatchRenameFilesystemCapability } from '../src/main/modules/plugin/host/plugin-filesystem-capabilities'
           export { createPluginSnipasteProcessCapability, createFixedPluginSnipasteDiscovery, createFixedPluginSnipasteExecutor } from '../src/main/modules/plugin/host/plugin-process-capabilities'
           export { createPluginRequestReplyCapabilities } from '../src/main/modules/plugin/host/plugin-host-request-reply'
@@ -179,6 +180,9 @@ async function run() {
 
     const {
       createPluginBusinessCapabilities,
+      createFixedPluginBrowserDataQuery,
+      createFixedPluginBrowserDataService,
+      createPluginBrowserDataCapabilities,
       createFixedPluginBrowserOpenService,
       createPluginBrowserOpenCapabilities,
       createPluginBrowserOpenProcess,
@@ -450,6 +454,11 @@ async function run() {
         files: new Map(),
         openedUrls: [],
         browserHttpCalls: [],
+        browserDataQueries: [],
+        browserDataQueryAborted: false,
+        browserDataTemporaryCopies: [],
+        delayBrowserDataQuery: false,
+        revokeBrowserDataIndex: null,
         browserListCalls: 0,
         browserOpenCalls: [],
         browserProcessKills: 0,
@@ -830,6 +839,105 @@ async function run() {
               }
             })
           : null
+      let browserDataCapability = null
+      if (name === 'touch-browser-data') {
+        const browserDataRoot = path.join(bundleRoot, `browser-data-${generation}`)
+        const browserDataHomeCandidate = path.join(browserDataRoot, 'home')
+        const browserDataProfile = path.join(
+          browserDataHomeCandidate,
+          'Library',
+          'Application Support',
+          'Google',
+          'Chrome',
+          'Default'
+        )
+        const browserDataAppDataCandidate = path.join(browserDataRoot, 'app-data')
+        const browserDataTempCandidate = path.join(browserDataRoot, 'temp')
+        mkdirSync(browserDataProfile, { recursive: true })
+        mkdirSync(browserDataAppDataCandidate, { recursive: true })
+        mkdirSync(browserDataTempCandidate, { recursive: true })
+        writeFileSync(
+          path.join(browserDataProfile, 'Bookmarks'),
+          JSON.stringify({
+            roots: {
+              bookmark_bar: {
+                type: 'folder',
+                name: 'Smoke Docs',
+                children: [
+                  {
+                    type: 'url',
+                    name: 'Browser Data Smoke',
+                    url: 'https://browser-data.example/docs'
+                  }
+                ]
+              }
+            }
+          })
+        )
+        writeFileSync(path.join(browserDataProfile, 'History'), 'fake-browser-history')
+        writeFileSync(path.join(browserDataProfile, 'History-wal'), 'fake-browser-history-wal')
+        writeFileSync(path.join(browserDataProfile, 'History-shm'), 'fake-browser-history-shm')
+        const browserDataHome = realpathSync(browserDataHomeCandidate)
+        const browserDataAppData = realpathSync(browserDataAppDataCandidate)
+        const browserDataTemp = realpathSync(browserDataTempCandidate)
+        const browserDataQuery = createFixedPluginBrowserDataQuery(
+          async (databasePath, queryId, signal) => {
+            assert(queryId === 'chromium-history')
+            assert(existsSync(databasePath))
+            assert(existsSync(`${databasePath}-wal`))
+            assert(existsSync(`${databasePath}-shm`))
+            state.browserDataQueries.push(queryId)
+            state.browserDataTemporaryCopies.push(path.dirname(databasePath))
+            if (state.delayBrowserDataQuery) {
+              await new Promise((_resolve, reject) => {
+                signal.addEventListener(
+                  'abort',
+                  () => {
+                    state.browserDataQueryAborted = true
+                    reject(new Error('fake-browser-query-cancelled'))
+                  },
+                  { once: true }
+                )
+              })
+            }
+            return {
+              rows: [
+                {
+                  url: 'https://browser-history.example/docs',
+                  title: 'Browser History Smoke',
+                  rawVisit: 11_644_473_600_000_000 + Date.now() * 1_000
+                }
+              ],
+              columns: ['url', 'title', 'rawVisit']
+            }
+          }
+        )
+        const browserDataService = createFixedPluginBrowserDataService({
+          platform: 'darwin',
+          homeDirectory: browserDataHome,
+          appDataDirectory: browserDataAppData,
+          tempDirectory: browserDataTemp,
+          query: browserDataQuery
+        })
+        browserDataCapability = createPluginBrowserDataCapabilities({
+          activation: activationIdentity,
+          resolveCurrentActivation: () => activationIdentity,
+          resolveHostGeneration: () => generation,
+          resolveEnabledSources: () => ['bookmarks', 'history'],
+          authorizeRead: () => !state.deniedPermissions.has('fs.read'),
+          authorizeIndex: () => !state.deniedPermissions.has('fs.index'),
+          watchReadPermissionRevoked: () => () => undefined,
+          watchIndexPermissionRevoked: (_pluginName, onRevoke) => {
+            state.revokeBrowserDataIndex = onRevoke
+            return () => {
+              if (state.revokeBrowserDataIndex === onRevoke) {
+                state.revokeBrowserDataIndex = null
+              }
+            }
+          },
+          service: browserDataService
+        })
+      }
       const browserOpenService =
         name === 'touch-browser-open'
           ? createFixedPluginBrowserOpenService({
@@ -1112,6 +1220,7 @@ async function run() {
         ...voice.definitions,
         ...(snipasteCapability ? snipasteCapability.definitions : []),
         ...(systemCapability ? systemCapability.definitions : []),
+        ...(browserDataCapability ? browserDataCapability.definitions : []),
         ...(browserOpenCapability ? browserOpenCapability.definitions : []),
         ...(windowManagerCapability ? windowManagerCapability.definitions : []),
         ...(windowPresetCapability ? windowPresetCapability.definitions : []),
@@ -1159,6 +1268,7 @@ async function run() {
           await business.closeActivation(activationIdentity)
           await filesystemCapability?.close()
           await snipasteCapability?.close()
+          await browserDataCapability?.close()
           await browserOpenCapability?.close()
           await windowManagerCapability?.close()
           await windowPresetCapability?.close()
@@ -1171,6 +1281,7 @@ async function run() {
         resources: resourceRegistry,
         filesystemCapability,
         snipasteCapability,
+        browserDataCapability,
         browserOpenCapability,
         windowManagerCapability,
         windowPresetCapability,
@@ -1255,6 +1366,10 @@ async function run() {
       [
         'touch-browser-bookmarks',
         readFileSync(path.join(officialPluginRoot, 'touch-browser-bookmarks', 'index.js'), 'utf8')
+      ],
+      [
+        'touch-browser-data',
+        readFileSync(path.join(officialPluginRoot, 'touch-browser-data', 'index.js'), 'utf8')
       ],
       [
         'touch-browser-open',
@@ -1342,6 +1457,7 @@ async function run() {
     const featureRuntimeNames = new Set([
       'touch-batch-rename',
       'touch-browser-bookmarks',
+      'touch-browser-data',
       'touch-browser-open',
       'touch-dev-toolbox',
       'touch-dev-utils',
@@ -1603,6 +1719,78 @@ async function run() {
     await firstBatchBookmarks.host.callLifecycle('onItemAction', [firstBookmarkItem])
     assert(firstBatchBookmarks.state.openedUrls.includes('https://example.com/'))
     assert(firstBatchBookmarks.state.files.has('recent-urls.json'))
+
+    const firstBatchBrowserData = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-browser-data'
+    )
+    await firstBatchBrowserData.host.callLifecycle('onFeatureTriggered', [
+      'browser-data',
+      { text: 'chrome docs' },
+      { id: 'browser-data' }
+    ])
+    const firstBrowserDataBookmark = firstBatchBrowserData.state.items.find(
+      (item) =>
+        item.meta?.searchProviderId === 'touch-browser-data.browser-bookmarks' &&
+        item.actions?.some((action) => action.id === 'open-url')
+    )
+    const firstBrowserDataHistory = firstBatchBrowserData.state.items.find(
+      (item) =>
+        item.meta?.searchProviderId === 'touch-browser-data.browser-history' &&
+        item.actions?.some((action) => action.id === 'open-url')
+    )
+    assert(firstBrowserDataBookmark && firstBrowserDataHistory)
+    assert(firstBatchBrowserData.state.browserDataQueries.length === 1)
+    assert(
+      !/Library|Application Support|browser-data-\d+\/home|\.sqlite|History-(?:wal|shm)|"profile":/i.test(
+        JSON.stringify(firstBatchBrowserData.state.items)
+      )
+    )
+    await firstBatchBrowserData.host.callLifecycle('onItemAction', [firstBrowserDataBookmark])
+    assert(firstBatchBrowserData.state.openedUrls.includes('https://browser-data.example/docs'))
+    await firstBatchBrowserData.host.callLifecycle('onItemAction', [
+      {
+        ...firstBrowserDataBookmark,
+        actions: [
+          {
+            id: 'copy-url',
+            type: 'plugin',
+            payload: { url: 'https://browser-data.example/docs' }
+          }
+        ]
+      }
+    ])
+    assert(
+      firstBatchBrowserData.state.clipboardWrites.includes('https://browser-data.example/docs')
+    )
+    const firstBrowserHistoryRebuild = firstBatchBrowserData.state.items.find(
+      (item) =>
+        item.meta?.searchProviderId === 'touch-browser-data.browser-history' &&
+        item.actions?.some((action) => action.id === 'rebuild-browser-data')
+    )
+    assert(firstBrowserHistoryRebuild)
+    const rebuiltBrowserHistory = await firstBatchBrowserData.host.callLifecycle('onItemAction', [
+      firstBrowserHistoryRebuild
+    ])
+    assert(rebuiltBrowserHistory?.status === 'completed')
+    const browserQueryCount = firstBatchBrowserData.state.browserDataQueries.length
+    firstBatchBrowserData.state.delayBrowserDataQuery = true
+    const cancelledBrowserDataScan = firstBatchBrowserData.host.callLifecycle(
+      'onFeatureTriggered',
+      ['browser-data', { text: 'chrome history' }, { id: 'browser-data' }]
+    )
+    await waitFor(
+      () => firstBatchBrowserData.state.browserDataQueries.length > browserQueryCount,
+      1000
+    )
+    assert(typeof firstBatchBrowserData.state.revokeBrowserDataIndex === 'function')
+    firstBatchBrowserData.state.revokeBrowserDataIndex()
+    await cancelledBrowserDataScan
+    assert(firstBatchBrowserData.state.browserDataQueryAborted === true)
+    assert(
+      firstBatchBrowserData.state.browserDataTemporaryCopies.every(
+        (directory) => !existsSync(directory)
+      )
+    )
 
     const firstBatchToolbox = firstBatch.find(
       (runtime) => runtime.host.activation.name === 'touch-dev-toolbox'

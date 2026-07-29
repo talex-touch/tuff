@@ -2,6 +2,7 @@ export const PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'clipboard-history',
   'touch-batch-rename',
   'touch-browser-bookmarks',
+  'touch-browser-data',
   'touch-browser-open',
   'touch-code-snippets',
   'touch-dev-toolbox',

@@ -87,6 +87,7 @@ import {
 import type { PluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
 import { createPluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
 import type { PluginBrowserOpenCapabilities } from './host/plugin-browser-open-capabilities'
+import type { PluginBrowserDataCapabilities } from './host/plugin-browser-data-capabilities'
 import type { PluginSnipasteProcessCapability } from './host/plugin-process-capabilities'
 import type { PluginSystemActionCapabilities } from './host/plugin-system-capabilities'
 import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
@@ -463,6 +464,9 @@ export class TouchPlugin implements ITouchPlugin {
   private static _browserOpenCapabilityFactory:
     | ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities)
     | null = null
+  private static _browserDataCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities)
+    | null = null
   private static _windowManagerCapabilityFactory:
     | ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities)
     | null = null
@@ -497,6 +501,12 @@ export class TouchPlugin implements ITouchPlugin {
     factory: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
   ): void {
     TouchPlugin._browserOpenCapabilityFactory = factory
+  }
+
+  static setBrowserDataCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
+  ): void {
+    TouchPlugin._browserDataCapabilityFactory = factory
   }
 
   static setWindowManagerCapabilityFactory(
@@ -571,6 +581,7 @@ export class TouchPlugin implements ITouchPlugin {
   private preludeContract: PluginPreludeManifestContract = Object.freeze({})
   private batchRenameFilesystemCapability: PluginBatchRenameFilesystemCapability | null = null
   private browserOpenCapability: PluginBrowserOpenCapabilities | null = null
+  private browserDataCapability: PluginBrowserDataCapabilities | null = null
   private snipasteProcessCapability: PluginSnipasteProcessCapability | null = null
   private windowManagerCapability: PluginWindowManagerCapabilities | null = null
   private windowPresetCapability: PluginWindowPresetCapabilities | null = null
@@ -1147,6 +1158,10 @@ export class TouchPlugin implements ITouchPlugin {
       providers,
       getSearchProviderUserConfigs()
     )
+  }
+
+  isSearchProviderEnabledForHost(providerId: string): boolean {
+    return this.isRootResultsProviderIdEnabled(providerId)
   }
 
   private ensureRootResultsProviderEnabled(method: string, item?: TuffItem): boolean {
@@ -2039,6 +2054,19 @@ export class TouchPlugin implements ITouchPlugin {
     return factory(activation)
   }
 
+  private createBrowserDataCapability(
+    activation: PluginActivationIdentity
+  ): PluginBrowserDataCapabilities | null {
+    if (this.name !== 'touch-browser-data') return null
+    const factory = TouchPlugin._browserDataCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
   private createWindowManagerCapability(
     activation: PluginActivationIdentity
   ): PluginWindowManagerCapabilities | null {
@@ -2132,6 +2160,7 @@ export class TouchPlugin implements ITouchPlugin {
       const scriptContent = await this.loadPreludeScript()
       const filesystemCapability = this.createBatchRenameFilesystemCapability(currentActivation)
       const browserOpenCapability = this.createBrowserOpenCapability(currentActivation)
+      const browserDataCapability = this.createBrowserDataCapability(currentActivation)
       const snipasteProcessCapability = this.createSnipasteProcessCapability(currentActivation)
       const systemActionCapability = this.createSystemActionCapability(currentActivation)
       const windowManagerCapability = this.createWindowManagerCapability(currentActivation)
@@ -2139,6 +2168,7 @@ export class TouchPlugin implements ITouchPlugin {
       const workspaceScriptCapability = this.createWorkspaceScriptCapability(currentActivation)
       this.batchRenameFilesystemCapability = filesystemCapability
       this.browserOpenCapability = browserOpenCapability
+      this.browserDataCapability = browserDataCapability
       this.snipasteProcessCapability = snipasteProcessCapability
       this.windowManagerCapability = windowManagerCapability
       this.windowPresetCapability = windowPresetCapability
@@ -2146,6 +2176,7 @@ export class TouchPlugin implements ITouchPlugin {
       const closeActivationResources =
         filesystemCapability ||
         browserOpenCapability ||
+        browserDataCapability ||
         snipasteProcessCapability ||
         windowManagerCapability ||
         windowPresetCapability ||
@@ -2170,6 +2201,16 @@ export class TouchPlugin implements ITouchPlugin {
                 }
                 if (this.browserOpenCapability === browserOpenCapability) {
                   this.browserOpenCapability = null
+                }
+              }
+              if (browserDataCapability) {
+                try {
+                  await browserDataCapability.close()
+                } catch (error) {
+                  failures.push(error)
+                }
+                if (this.browserDataCapability === browserDataCapability) {
+                  this.browserDataCapability = null
                 }
               }
               if (snipasteProcessCapability) {
@@ -2220,6 +2261,7 @@ export class TouchPlugin implements ITouchPlugin {
       const activationCapabilityDefinitions = Object.freeze([
         ...(filesystemCapability ? filesystemCapability.definitions : []),
         ...(browserOpenCapability ? browserOpenCapability.definitions : []),
+        ...(browserDataCapability ? browserDataCapability.definitions : []),
         ...(snipasteProcessCapability ? snipasteProcessCapability.definitions : []),
         ...(systemActionCapability ? systemActionCapability.definitions : []),
         ...(windowManagerCapability ? windowManagerCapability.definitions : []),
@@ -2275,6 +2317,8 @@ export class TouchPlugin implements ITouchPlugin {
       this.batchRenameFilesystemCapability = null
       await this.browserOpenCapability?.close().catch(() => undefined)
       this.browserOpenCapability = null
+      await this.browserDataCapability?.close().catch(() => undefined)
+      this.browserDataCapability = null
       await this.snipasteProcessCapability?.close().catch(() => undefined)
       this.snipasteProcessCapability = null
       await this.windowManagerCapability?.close().catch(() => undefined)
@@ -2327,6 +2371,8 @@ export class TouchPlugin implements ITouchPlugin {
     this.batchRenameFilesystemCapability = null
     await this.browserOpenCapability?.close().catch(() => undefined)
     this.browserOpenCapability = null
+    await this.browserDataCapability?.close().catch(() => undefined)
+    this.browserDataCapability = null
     await this.snipasteProcessCapability?.close().catch(() => undefined)
     this.snipasteProcessCapability = null
     await this.windowManagerCapability?.close().catch(() => undefined)
