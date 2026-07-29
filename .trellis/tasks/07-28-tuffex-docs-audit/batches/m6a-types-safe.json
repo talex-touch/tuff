@@ -1,0 +1,452 @@
+[
+ {
+  "component": "blank-slate",
+  "category": "type-leak",
+  "summary": "TxBlankSlate.vue declares no `defineEmits`, so the documented `primary`/`secondary` events exist only through attribute fallthrough onto the inner TxEmptyState — `TxBlankSlateInstance['$emit']` has no signature and IDE/vue-tsc give no completion or checking for `@primary`/`@secondary`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = withDefaults(defineProps<BlankSlateProps>(), {",
+  "suggestion": "Add `const emit = defineEmits<EmptyStateEmits>()` and forward explicitly (`@primary=\"emit('primary')\" @secondary=\"emit('secondary')\"` on the TxEmptyState in the template), export a `BlankSlateEmits` alias from blank-slate/src/types.ts alongside `BlankSlateProps`, and add a blank-slate.test.ts case asserting the events reach the wrapper. The same gap exists in the sibling TxNoData wrapper, so fix both together."
+ },
+ {
+  "component": "error-state",
+  "category": "type-leak",
+  "summary": "TxErrorState 只有 `defineProps`，没有 `defineEmits`，文档 Events 表声明的 `primary` / `secondary` 在组件类型上不存在（运行时靠 attrs fallthrough 才生效），模板类型检查下 `<TxErrorState @primary=\"...\">` 无类型支撑。",
+  "evidenceFile": "packages/tuffex/packages/components/src/error-state/src/TxErrorState.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = defineProps<ErrorStateProps>()",
+  "suggestion": "加 `const emit = defineEmits<EmptyStateEmits>()` 并在模板里显式 `@primary=\"emit('primary')\" @secondary=\"emit('secondary')\"`（EmptyStateEmits 已从 ../../empty-state 导出）；同族的 TxNoData / TxSearchEmpty / TxNoSelection 有同样问题，建议一并处理。"
+ },
+ {
+  "component": "error-state",
+  "category": "type-mismatch",
+  "summary": "Props 表把 `actionSize` 的默认值写成「继承值 / inherited」，但 TxEmptyState 的 withDefaults 明确给了 `actionSize: 'small'`，读者无法从文档得知生成按钮实际是 small。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/error-state.zh.mdc",
+  "evidenceLine": 88,
+  "evidenceQuote": "| `actionSize` | `TxButtonProps['size']` | 继承值 | 生成按钮的尺寸。 |",
+  "suggestion": "把 `actionSize` 默认值改成 `'small'`（zh/en 同步）；`iconSize` 同理写清实际来源 `small=28 / medium=36 / large=44`，而不是「继承值」。"
+ },
+ {
+  "component": "virtual-list",
+  "category": "type-mismatch",
+  "summary": "Docs list `items` default `[]` and `height` default `320`, but both are declared non-optional in `VirtualListProps`, so the SFC compiles them to `required: true` and Vue logs `Missing required prop` for each when they are omitted — the documented defaults are unreachable.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/virtual-list.zh.mdc",
+  "evidenceLine": 88,
+  "evidenceQuote": "| `items` | `T[]` | `[]` | 完整数据集。 |",
+  "suggestion": "Make `items?: T[]` and `height?: number | string` optional in packages/tuffex/packages/components/src/virtual-list/src/types.ts (matching the existing `withDefaults` values) so the documented defaults actually apply; otherwise change both Default cells in virtual-list.zh.mdc:88/90 and virtual-list.en.mdc:88/90 to `required`. Verified empirically: mounting with only `itemHeight` emits `[Vue warn]: Missing required prop: \"items\"` and `\"height\"`."
+ },
+ {
+  "component": "virtual-list",
+  "category": "type-leak",
+  "summary": "`defineProps<VirtualListProps<any>>()` hard-codes the generic to `any` and the SFC is not declared `generic=\"T\"`, so the `#item` slot props documented as `{ item: T, index: number }` actually resolve to `item: any` for every consumer.",
+  "evidenceFile": "packages/tuffex/packages/components/src/virtual-list/src/TxVirtualList.vue",
+  "evidenceLine": 7,
+  "evidenceQuote": "const props = withDefaults(defineProps<VirtualListProps<any>>(), {",
+  "suggestion": "Add `generic=\"T\"` to the `<script setup>` tag and use `defineProps<VirtualListProps<T>>()` plus `defineSlots<{ item(props: { item: T, index: number }): any }>()`, so `itemKey` narrows to `keyof T` and slot consumers get real inference instead of `any`."
+ },
+ {
+  "component": "form",
+  "category": "dead-prop",
+  "summary": "`TxForm`'s `disabled` and `size` props are pushed into the form context but nothing in the library injects them — TxFormItem is the only consumer of `TX_FORM_CONTEXT_KEY` and it reads only `labelPosition`/`labelWidth`, so `<TxForm disabled>` has zero effect.",
+  "evidenceFile": "packages/tuffex/packages/components/src/form/src/TxFormItem.vue",
+  "evidenceLine": 124,
+  "evidenceQuote": "      `tx-form-item--label-${form?.labelPosition.value ?? 'left'}`,",
+  "suggestion": "Either make TxFormItem apply the context `disabled`/`size` (e.g. render `fieldset[disabled]` or an `is-disabled` class and a size modifier), or state plainly in both Props tables that `disabled`/`size` are context-only values that no TuffEx input currently consumes, so `disabled` must be passed to each control."
+ },
+ {
+  "component": "flip-overlay",
+  "category": "undocumented-api",
+  "summary": "`defineExpose({ close })` is a public instance method (index.ts even types `TxFlipOverlayInstance` with it) but neither the zh nor en doc has an `### Expose` table under `## API`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
+  "evidenceLine": 609,
+  "evidenceQuote": "defineExpose({\n  close: requestClose,\n})",
+  "suggestion": "Add an `### Expose` sub-section after `### Slots` in both flip-overlay.zh.mdc and flip-overlay.en.mdc documenting `close(): void` — including that it runs the full close animation and still emits `update:modelValue(false)`, so the parent must own the `v-model`."
+ },
+ {
+  "component": "guide-state",
+  "category": "type-leak",
+  "summary": "TxGuideState documents `primary` / `secondary` events but declares no `defineEmits`, so they only reach listeners through attribute fallthrough and are absent from the component's typed public contract (`TxGuideStateInstance` / volar template checking).",
+  "evidenceFile": "packages/tuffex/packages/components/src/guide-state/src/TxGuideState.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = defineProps<GuideStateProps>()",
+  "suggestion": "Add `const emit = defineEmits<EmptyStateEmits>()` and forward explicitly (`@primary=\"emit('primary')\" @secondary=\"emit('secondary')\"` on `<TxEmptyState>`) so the documented events are type-checked and survive any future change to `inheritAttrs` or the root node structure."
+ },
+ {
+  "component": "tooltip",
+  "category": "type-mismatch",
+  "summary": "The Props table types `anchor` as `Partial<BaseAnchorProps>`, but the real prop is `Partial<TooltipAnchorProps>` = `Partial<Omit<BaseAnchorProps, 'modelValue' | 'disabled'>>`, so the docs imply `:anchor=\"{ disabled: true }\"` / `{ modelValue: ... }` is supported when it is not.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/tooltip.zh.mdc",
+  "evidenceLine": 122,
+  "evidenceQuote": "| `anchor` | `Partial<BaseAnchorProps>` | `{}` | 透传给 `TxBaseAnchor` 的配置；tooltip 会先提供定位、箭头、面板和动画默认值。 |",
+  "suggestion": "Change the type cell in both tooltip.zh.mdc and tooltip.en.mdc to `Partial<TooltipAnchorProps>` and add a sentence noting `modelValue` / `disabled` are owned by Tooltip and must be set via `v-model` / the `disabled` prop."
+ },
+ {
+  "component": "no-selection",
+  "category": "type-leak",
+  "summary": "The docs list `primary` and `secondary` as TxNoSelection events, but TxNoSelection.vue declares no `defineEmits`; the events only reach the caller through attribute fallthrough, so they are absent from the component's typed public surface and are untested.",
+  "evidenceFile": "packages/tuffex/packages/components/src/no-selection/src/TxNoSelection.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = defineProps<NoSelectionProps>()",
+  "suggestion": "Add `const emit = defineEmits<EmptyStateEmits>()` and forward explicitly (`@primary=\"emit('primary')\" @secondary=\"emit('secondary')\"`) on the inner `TxEmptyState`, then add an emit-forwarding case to no-selection.test.ts."
+ },
+ {
+  "component": "search-select",
+  "category": "type-leak",
+  "summary": "`inputRef` is typed `ref<any>`, so the publicly exposed `focus()`, `blur()` and `clear()` methods are unchecked optional-chained calls into an untyped instance — a rename in TxInput would break them silently at runtime.",
+  "evidenceFile": "packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue",
+  "evidenceLine": 36,
+  "evidenceQuote": "const inputRef = ref<any>(null)",
+  "suggestion": "Type it as `ref<InstanceType<typeof TuffInput> | null>(null)` (or import the input's exported instance type) so `inputRef.value?.focus?.()` is validated at compile time, and drop the defensive `?.()` on methods the input actually exposes."
+ },
+ {
+  "component": "search-empty",
+  "category": "type-leak",
+  "summary": "The documented `primary` / `secondary` events are never declared — TxSearchEmpty.vue has only defineProps and no defineEmits, so the events reach the host purely through attribute fallthrough into TxEmptyState, giving no emit typing on TxSearchEmptyInstance and no template type-checking (a typo like `@primry` compiles and silently does nothing).",
+  "evidenceFile": "packages/tuffex/packages/components/src/search-empty/src/TxSearchEmpty.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = defineProps<SearchEmptyProps>()",
+  "suggestion": "Add `const emit = defineEmits<EmptyStateEmits>()` and forward explicitly (`@primary=\"emit('primary')\" @secondary=\"emit('secondary')\"`), re-export `SearchEmptyEmits` from index.ts, and add a test asserting `wrapper.emitted('primary')` fires when the stubbed EmptyState emits it — the current suite (search-empty.test.ts) never exercises the documented events."
+ },
+ {
+  "component": "dialog",
+  "category": "type-mismatch",
+  "summary": "Both locale docs state that plain `message` \"preserves line breaks through component styles\", but `TxBottomDialog`'s `&__content` block sets no `white-space` rule (unlike Blow/Popper/TouchTip which all set `white-space: pre-line`), so newlines collapse in the bottom dialog.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/dialog.en.mdc",
+  "evidenceLine": 185,
+  "evidenceQuote": "`message` is rendered as plain text and preserves line breaks through component styles. Use `messageHtml` only for trusted, sanitized internal content.",
+  "suggestion": "Add `white-space: pre-line;` to `.tx-bottom-dialog__content` (TxBottomDialog.vue:263-268) so the documented contract holds for all four variants, or scope the doc sentence (and the identical claim in dialog.zh.mdc:185/265) to the variants that actually do it."
+ },
+ {
+  "component": "sortable-list",
+  "category": "type-leak",
+  "summary": "`TxSortableList.vue` is not declared `generic`, so `SortableListProps` collapses to the non-generic default and the `item` slot prop is typed `{ id: string }` — the documented usage `{{ item.title }}` does not typecheck, and the reorder path is cast through `move(items.value as any, ...)`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/sortable-list/src/TxSortableList.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = withDefaults(defineProps<SortableListProps>(), {",
+  "suggestion": "Declare the SFC as `<script setup lang=\"ts\" generic=\"T extends SortableListItem\">` and use `defineProps<SortableListProps<T>>()` / `defineEmits<SortableListEmits<T>>()`, which also removes the `as any` cast at line 85 and makes the `item.title` examples in both locale docs type-safe."
+ },
+ {
+  "component": "scroll",
+  "category": "undocumented-api",
+  "summary": "`options.useTransition` is intercepted locally by `getTransitionOverride()` (BetterScroll gets `useTransition: false` injected on macOS when `wheel` and `bounce` are on, unless the caller explicitly supplies the key), but neither doc mentions this — only `wheelOvershoot` is documented as locally consumed.",
+  "evidenceFile": "packages/tuffex/packages/components/src/scroll/src/scroll-wheel.ts",
+  "evidenceLine": 88,
+  "evidenceQuote": "    const shouldDisableTransitionByDefault = !hasUseTransitionOverride\n      && props.wheel\n      && props.bounce\n      && hasNavigator()",
+  "suggestion": "Extend the `options` row (both languages) to list every locally-interpreted key: `wheelOvershoot` (consumed, never forwarded) and `useTransition` (defaulted to `false` on macOS when `wheel && bounce`, overridable by explicitly passing it)."
+ },
+ {
+  "component": "radio",
+  "category": "type-mismatch",
+  "summary": "Three conflicting default values are declared for `stiffness`/`damping`: types.ts JSDoc says 85/10, `withDefaults` in TxRadioGroup.vue uses 110/12 (what the docs table states), and radio-group-indicator.ts uses dead `?? 150` / `?? 8` fallbacks.",
+  "evidenceFile": "packages/tuffex/packages/components/src/radio/src/types.ts",
+  "evidenceLine": 17,
+  "evidenceQuote": "  /** 弹簧刚度，值越大速度越快（默认 85） */",
+  "suggestion": "Update the JSDoc on types.ts:17 and :19 to 110 and 12 to match `withDefaults` (TxRadioGroup.vue:17-18), and delete the unreachable `?? 150` / `?? 8` fallbacks in radio-group-indicator.ts:64-65 so there is a single source of truth."
+ },
+ {
+  "component": "radio",
+  "category": "undocumented-api",
+  "summary": "The button-group indicator is pointer-draggable (a `cursor: grab` hit area captures pointerdown and on release selects the nearest enabled radio, emitting update:modelValue/change), but neither the Interaction Contract nor the Keyboard table mentions dragging at all.",
+  "evidenceFile": "packages/tuffex/packages/components/src/radio/src/radio-group-indicator.ts",
+  "evidenceLine": 587,
+  "evidenceQuote": "        closest.click()",
+  "suggestion": "Add a bullet to `## 交互契约` / `## Interaction Contract` (radio.zh.mdc:184, radio.en.mdc:184) describing the drag-to-select gesture: the indicator can be dragged horizontally in `type=\"button\"` groups, and releasing snaps to and selects the nearest enabled radio; disabled groups ignore pointerdown."
+ },
+ {
+  "component": "input",
+  "category": "undocumented-api",
+  "summary": "TxInput renders a CapsLock warning badge whenever `type=\"password\"` is focused and CapsLock is on, but neither the Props/Events/Slots tables nor the `## 审阅说明` / `## Review Notes` contract sections mention this behavior anywhere.",
+  "evidenceFile": "packages/tuffex/packages/components/src/input/src/TxInput.vue",
+  "evidenceLine": 155,
+  "evidenceQuote": "    <span v-if=\"showCapsLock\" class=\"tx-input__capslock\" title=\"CapsLock is on\">",
+  "suggestion": "Add a bullet to the Review Notes / 审阅说明 contract list in both input.zh.mdc and input.en.mdc: \"`type=\\\"password\\\"` shows a CapsLock indicator while focused and CapsLock is active; the flag resets on blur.\" Consider also adding a demo under Input Types that exercises it."
+ },
+ {
+  "component": "grid",
+  "category": "type-mismatch",
+  "summary": "文档「类型定义 / Types」块声明的 ResponsiveValue<T> 与 GapValue 在代码库中完全不存在（源码只有 TxGrid.vue 内部的 `Partial<Record<Breakpoint, T>>`），且 ResponsiveValue<T> 的字段被写成 number，与同页 `gap: ResponsiveValue<number | string>` 自相矛盾。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/grid.zh.mdc",
+  "evidenceLine": 242,
+  "evidenceQuote": "  interface ResponsiveValue<T> {",
+  "suggestion": "在 grid/src/types.ts 里真正定义并导出 Breakpoint / Responsive<T> / GridGap（`type Responsive<T> = Partial<Record<Breakpoint, T>>`），文档改用与源码同名的类型；若维持文档写法，至少把字段类型改成 `xs?: T` 等。"
+ },
+ {
+  "component": "grid",
+  "category": "type-leak",
+  "summary": "TxGrid 的 justify / align（以及 TxGridItem 的 justifySelf / alignSelf）在源码里是裸 string，而文档 Props 表承诺 `'start' | 'end' | 'center' | 'stretch'` 四值联合，实际拼错值不会有任何类型报错。",
+  "evidenceFile": "packages/tuffex/packages/components/src/grid/src/TxGrid.vue",
+  "evidenceLine": 16,
+  "evidenceQuote": "    justify?: string",
+  "suggestion": "把四个对齐 prop 收敛为 `type GridAlign = 'start' | 'end' | 'center' | 'stretch'`（若需自定义可用 `GridAlign | (string & {})`），并在文档「交互契约」补一句 justify/align 映射的是 justify-items / align-items，而非 justify-content / align-content。"
+ },
+ {
+  "component": "context-menu",
+  "category": "undocumented-api",
+  "summary": "TxContextMenuPanel exposes `focusFirstItem()` via defineExpose, but the docs only document a \"TxContextMenu Exposes\" table and list nothing for the panel.",
+  "evidenceFile": "packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue",
+  "evidenceLine": 83,
+  "evidenceQuote": "defineExpose({ focusFirstItem })",
+  "suggestion": "Add a `### TxContextMenuPanel Exposes` table after context-menu.zh.mdc:352 / .en.mdc:352 documenting `focusFirstItem: () => void` — it is the only way a host embedding a standalone panel in TxPopover can move focus into the menu, and TxContextMenu itself relies on it at TxContextMenu.vue:233."
+ },
+ {
+  "component": "context-menu",
+  "category": "type-leak",
+  "summary": "`ContextMenuPanelProps.role` is typed as a bare `string`, and any value other than `'menu'` silently disables `focusFirstItem` and all arrow/Home/End keyboard navigation.",
+  "evidenceFile": "packages/tuffex/packages/components/src/context-menu/src/TxContextMenuPanel.vue",
+  "evidenceLine": 42,
+  "evidenceQuote": "  if (!panelRef.value || props.role !== 'menu')",
+  "suggestion": "Narrow the type to a union (e.g. `role?: 'menu' | 'listbox' | 'none'`) and either make `getEnabledItems` query the matching item role (`[role=\"menuitem\"]` vs `[role=\"option\"]`) or document the 'menu'-only keyboard contract in the Props table (context-menu.zh.mdc:351 currently just says \"ARIA role\" with no warning)."
+ },
+ {
+  "component": "stagger",
+  "category": "type-leak",
+  "summary": "`easing` is declared as a runtime `{ type: String }` option, so the component's inferred public prop type is `string`, not the `'ease' | 'ease-in' | 'ease-out' | 'ease-in-out' | 'linear'` union that both docs' Props tables advertise — annotating `setup(props: StaggerProps)` does not change the component's external prop typing.",
+  "evidenceFile": "packages/tuffex/packages/components/src/stagger/src/TxStagger.vue",
+  "evidenceLine": 15,
+  "evidenceQuote": "easing: { type: String, default: 'ease-out' },",
+  "suggestion": "Use `easing: { type: String as PropType<StaggerEasing>, default: 'ease-out' }` (and `tag: { type: String as PropType<string> }` stays fine) so template type-checking rejects invalid easing values and matches the documented union."
+ },
+ {
+  "component": "search-input",
+  "category": "type-leak",
+  "summary": "`inputRef` is typed `ref<any>`, so the publicly exposed `getValue()` resolves to `any` at the call site even though both docs declare it as `() => string`; `setValue`/`focus`/`blur`/`clear` are likewise unchecked optional-chained `any` calls.",
+  "evidenceFile": "packages/tuffex/packages/components/src/search-input/src/TxSearchInput.vue",
+  "evidenceLine": 19,
+  "evidenceQuote": "const inputRef = ref<any>(null)",
+  "suggestion": "Type the ref as `ref<InstanceType<typeof TuffInput> | null>(null)` (or a narrow local interface `{ focus(): void; blur(): void; clear(): void; setValue(v: string): void; getValue(): string }`) so the exposed helpers keep the signatures promised in the `### Expose` table at search-input.zh.mdc:181-187."
+ },
+ {
+  "component": "utils",
+  "category": "undocumented-api",
+  "summary": "`src/utils/index.ts` re-exports the whole `packages/utils` barrel into both the root `@talex-touch/tuffex` entry and the published `./utils` subpath, but there is no `utils.zh.mdc` / `utils.en.mdc` page, so public helpers (`withInstall`, `nextZIndex`/`resetZIndex`/`configureZIndex`/`onZIndexEvent`, `hasWindow`/`hasDocument`/`hasNavigator`, the `vibrate` suite, `dialog-manager`, `flip`/`auto-resize`) ship undocumented.",
+  "evidenceFile": "packages/tuffex/packages/components/src/utils/index.ts",
+  "evidenceLine": 1,
+  "evidenceQuote": "export * from '../../../utils'",
+  "suggestion": "Add `utils.zh.mdc` / `utils.en.mdc` with the standard frontmatter and a `## API` section grouped by module (z-index manager, env guards, vibrate, toast, dialog manager, animation helpers, `withInstall`), and link it from `index.*.mdc` — currently the only mention anywhere is the incidental `import { toast } from '@talex-touch/tuffex/utils'` at index.en.mdc:115. Alternatively, if only `toast` is meant to be public, narrow the barrel to an explicit export list instead of `export *`."
+ },
+ {
+  "component": "dropdown-menu",
+  "category": "type-mismatch",
+  "summary": "The en Props table documents `animation` default as `{ type: 'transfer', duration: 180 }`, but the code default is `() => ({})` (and the zh table says `{}`), so en/zh and code all disagree.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/dropdown-menu.en.mdc",
+  "evidenceLine": 134,
+  "evidenceQuote": "| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180 }` | Popover animation config forwarded to BaseAnchor. |",
+  "suggestion": "Change the en default cell to `{}` to match `withDefaults(..., { animation: () => ({}) })` in TxDropdownMenu.vue:13, and note in the description that the effective animation comes from BaseAnchor defaults when the object is empty."
+ },
+ {
+  "component": "dropdown-menu",
+  "category": "type-mismatch",
+  "summary": "Both docs list `modelValue` default `false`, but the code default is `undefined`; passing a literal `false` switches the menu into controlled mode where it can never open, while omitting it uses internal state.",
+  "evidenceFile": "packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "  modelValue: undefined,",
+  "suggestion": "Document the default as `undefined` and add one line to the Interaction Contract: omitting `modelValue` keeps open state internal (uncontrolled); passing a boolean makes the menu fully controlled and the host must handle `update:modelValue`."
+ },
+ {
+  "component": "dropdown-menu",
+  "category": "undocumented-api",
+  "summary": "Keyboard menu navigation (auto-focus of the first enabled item on open, ArrowDown/ArrowUp/Home/End roving focus, skipping aria-disabled items) is implemented and unit-tested but absent from both docs' Interaction Contract, which only mentions the ARIA roles.",
+  "evidenceFile": "packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue",
+  "evidenceLine": 69,
+  "evidenceQuote": "  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))",
+  "suggestion": "Add two bullets to the Interaction Contract (zh line 190 / en line 190): the first enabled item receives focus when the menu opens, and ArrowDown/ArrowUp wrap around while Home/End jump to the ends, skipping disabled items."
+ },
+ {
+  "component": "dropdown-menu",
+  "category": "undocumented-api",
+  "summary": "TxDropdownMenu hardcodes `:max-width=\"360\"` on the Popover, so a documented `minWidth` above 360 is silently clamped and there is no prop to widen the panel.",
+  "evidenceFile": "packages/tuffex/packages/components/src/dropdown-menu/src/TxDropdownMenu.vue",
+  "evidenceLine": 126,
+  "evidenceQuote": "    :max-width=\"360\"",
+  "suggestion": "Either expose a `maxWidth` prop (defaulting to 360) forwarded to TxPopover, or document the hard 360px cap next to `minWidth` in both Props tables so consumers know menus cannot exceed it (BaseAnchor writes `style.maxWidth` which overrides the computed width)."
+ },
+ {
+  "component": "code-editor",
+  "category": "type-leak",
+  "summary": "TxCodeEditorToolbar declares `defineEmits(['action'])` (untyped) even though `CodeEditorToolbarEmits` is defined and exported, so consumers receive `any` for the action key.",
+  "evidenceFile": "packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorToolbar.vue",
+  "evidenceLine": 38,
+  "evidenceQuote": "const emit = defineEmits(['action'])",
+  "suggestion": "Use `const emit = defineEmits<CodeEditorToolbarEmits>()` (and `defineProps<CodeEditorToolbarProps>()` with withDefaults instead of the runtime object at line 27) so the documented `CodeEditorToolbarActionKey` payload is enforced; the toolbar demo currently has to cast `$event as CodeEditorToolbarActionKey` (CodeEditorToolbarDemo.vue:67)."
+ },
+ {
+  "component": "code-editor",
+  "category": "undocumented-api",
+  "summary": "The runtime registers a `Mod-Shift-f` keymap that runs `format()`, but neither doc mentions the shortcut even though Best Practices tells users to \"keep keyboard shortcuts enabled for power users\".",
+  "evidenceFile": "packages/tuffex/packages/components/src/code-editor/src/TxCodeEditorRuntime.vue",
+  "evidenceLine": 572,
+  "evidenceQuote": "        key: 'Mod-Shift-f',",
+  "suggestion": "Add a bullet to the Interaction Contract in both files: `Cmd/Ctrl+Shift+F` runs `format()` inside the editor (and note it is swallowed even when formatting is unavailable, since the keymap handler always returns true)."
+ },
+ {
+  "component": "icon",
+  "category": "type-mismatch",
+  "summary": "The `icon` prop is documented as type `ITuffIcon`, but `TxIcon.vue` declares `icon?: TxIconSource | null` — `ITuffIcon` is an unrelated type living in `@talex-touch/utils/types/icon.ts` and is never imported by the icon component.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/icon.zh.mdc",
+  "evidenceLine": 192,
+  "evidenceQuote": "    type: 'ITuffIcon'",
+  "suggestion": "Change the type cell to `TxIconSource | null` in both icon.zh.mdc:192 and icon.en.mdc:192, matching `TxIcon.vue:13` and the type actually re-exported from `icon/index.ts`. If the intent is to say the two shapes are compatible, say so in the description instead of naming the wrong type."
+ },
+ {
+  "component": "icon",
+  "category": "type-mismatch",
+  "summary": "The `size` prop is documented with default `16`, but `TxIcon.vue` defaults it to `undefined`, which leaves `font-size` unset so the icon inherits the parent's font size instead of rendering at 16px.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/icon.zh.mdc",
+  "evidenceLine": 201,
+  "evidenceQuote": "    default: '16'",
+  "suggestion": "Set default to `-` (inherit) and note in the description that omitting `size` makes the icon size follow the parent `font-size` (`TxIcon.vue:30` `size: undefined`, template line 246 `fontSize: size ? \\`${size}px\\` : undefined`). Update both zh and en."
+ },
+ {
+  "component": "icon",
+  "category": "undocumented-api",
+  "summary": "The Props table omits the public `alt` and `empty` props even though the doc's own Slots table and Best Practices sections tell readers to use them.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/icon.zh.mdc",
+  "evidenceLine": 190,
+  "evidenceQuote": "rows:\n  - name: icon",
+  "suggestion": "Add rows for `alt` (`string`, default `''`, maps to the root `title` attribute — see TxIcon.vue:242) and `empty` (`string`, default `''`, image URL used as the fallback when no icon resolves — see TxIcon.vue:249) to both icon.zh.mdc and icon.en.mdc."
+ },
+ {
+  "component": "icon",
+  "category": "undocumented-api",
+  "summary": "The \"TxStatusIcon API (Lite)\" table omits `colorful`, whose default on TxStatusIcon is `true` — the opposite of TxIcon's `false` — so callers get colorful SVG rendering they never asked for and have no documented way to discover it.",
+  "evidenceFile": "packages/tuffex/packages/components/src/icon/src/TxStatusIcon.vue",
+  "evidenceLine": 14,
+  "evidenceQuote": "  colorful: true,",
+  "suggestion": "Add `colorful` (default `true`) and `size` (default `18`, vs TxIcon's inherit) rows to the TxStatusIcon table at icon.zh.mdc:219-235 / icon.en.mdc:219-235, and call out that TxStatusIcon flips the `colorful` default relative to TxIcon."
+ },
+ {
+  "component": "auto-sizer",
+  "category": "type-mismatch",
+  "summary": "The Expose table types `size` as `Ref<{ width, height } | null>` and `outerEl` as `Ref<HTMLElement | null>`, but defineExpose unwraps refs, so consumers receive the plain value / element — the component's own test asserts the unwrapped shape.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/auto-sizer.zh.mdc",
+  "evidenceLine": 449,
+  "evidenceQuote": "| `size` | `Ref<{ width: number; height: number } \\| null>` | 最新测量结果 |",
+  "suggestion": "Change the documented types to `{ width: number; height: number } | null` and `HTMLElement | null` in both auto-sizer.zh.mdc and auto-sizer.en.mdc (line 449/451), matching auto-sizer.test.ts:163-164 (`expect(exposed.size).toEqual({ width: 12, height: 8 })`, `expect(exposed.outerEl).toBe(wrapper.element)`)."
+ },
+ {
+  "component": "pagination",
+  "category": "type-mismatch",
+  "summary": "The Props table documents `prevIcon` default `'chevron-left'` and `nextIcon` default `'chevron-right'`, but withDefaults sets `'i-carbon-chevron-left'` / `'i-carbon-chevron-right'` — copying the documented value produces a blank icon.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/pagination.zh.mdc",
+  "evidenceLine": 68,
+  "evidenceQuote": "    default: \"'chevron-left'\"",
+  "suggestion": "Change the documented defaults to `'i-carbon-chevron-left'` / `'i-carbon-chevron-right'` (see TxPagination.vue:16-17, asserted by pagination.test.ts:18-19) in both pagination.zh.mdc and pagination.en.mdc, and note that the value is a UnoCSS icon class consumed by TxIcon."
+ },
+ {
+  "component": "pagination",
+  "category": "type-mismatch",
+  "summary": "`total` is documented with default `0`, but withDefaults does not provide a default for it, so the runtime value is `undefined` — which matters because `totalPages` branches on `if (props.total)` and silently falls back to `totalPages`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/pagination.zh.mdc",
+  "evidenceLine": 60,
+  "evidenceQuote": "    default: '0'",
+  "suggestion": "Change the documented default to `-` / `undefined` in both locales and say explicitly that omitting `total` (or passing `0`) makes the component fall back to `totalPages`, per TxPagination.vue:24-29."
+ },
+ {
+  "component": "rating",
+  "category": "type-mismatch",
+  "summary": "`RatingProps`/`RatingIcon` in types.ts is not what the component actually declares — TxRating.vue re-declares a local `Props` with a `RatingIconValue` that omits `TxIconSource.color`, so the documented `icon: string | TxIconSource` type is wider than the real prop type.",
+  "evidenceFile": "packages/tuffex/packages/components/src/rating/src/TxRating.vue",
+  "evidenceLine": 14,
+  "evidenceQuote": "interface Props {",
+  "suggestion": "Delete the local `Props`/`Emits`/`RatingIconValue` declarations and use `withDefaults(defineProps<RatingProps>(), ...)` / `defineEmits<RatingEmits>()` from `./types`, so the exported public type is the component's real contract and cannot drift again."
+ },
+ {
+  "component": "tag",
+  "category": "undocumented-api",
+  "summary": "The `pill` prop (declared in TagProps, defaulted in TxTag.vue, and covered by tag.test.ts) is absent from the Props table in both tag.zh.mdc and tag.en.mdc.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/tag.zh.mdc",
+  "evidenceLine": 131,
+  "evidenceQuote": "| `disabled` | `boolean` | `false` | 禁用标签点击与关闭交互。 |",
+  "suggestion": "Add a row `| \\`pill\\` | \\`boolean\\` | \\`false\\` | 使用全圆角胶囊外形（根节点加 \\`.pill\\` class）；用于筛选芯片等需要与方角标签区分的场景。 |` to both zh and en tables (mirror the existing `pill?: boolean` at tag/src/types.ts:51)."
+ },
+ {
+  "component": "glass-surface",
+  "category": "type-mismatch",
+  "summary": "The Props table documents `mixBlendMode` as plain `string`, but `GlassSurfaceProps` declares an 18-member string-literal union ('normal' | 'multiply' | ... | 'plus-lighter').",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/glass-surface.zh.mdc",
+  "evidenceLine": 451,
+  "evidenceQuote": "    type: string",
+  "suggestion": "Replace the type cell with the real union (or `CSSProperties['mixBlendMode']`-style shorthand listing the allowed values) in both glass-surface.zh.mdc and glass-surface.en.mdc, so readers know arbitrary strings are rejected by TS."
+ },
+ {
+  "component": "no-data",
+  "category": "type-leak",
+  "summary": "TxNoData documents `primary`/`secondary` events but never calls `defineEmits`, so they are untyped and only reach TxEmptyState through single-root attribute fallthrough.",
+  "evidenceFile": "packages/tuffex/packages/components/src/no-data/src/TxNoData.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = defineProps<NoDataProps>()",
+  "suggestion": "Add `const emit = defineEmits<EmptyStateEmits>()` and forward explicitly (`@primary=\"emit('primary')\" @secondary=\"emit('secondary')\"`), so `<TxNoData @primary=\"...\">` is type-checked by Volar and keeps working if the template ever gains a second root or sets `inheritAttrs: false`."
+ },
+ {
+  "component": "gradual-blur",
+  "category": "type-leak",
+  "summary": "`config` is cast `as Required<GradualBlurProps>` even though `width`, `hoverIntensity`, `mobileHeight`, `preset` etc. have no defaults, so downstream code reads `config.value.hoverIntensity` as `number` when it is actually `undefined` at runtime.",
+  "evidenceFile": "packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue",
+  "evidenceLine": 128,
+  "evidenceQuote": "  return resolved as Required<GradualBlurProps>",
+  "suggestion": "Type the merged object as `Required<Pick<GradualBlurProps, keyof typeof DEFAULT_CONFIG>> & GradualBlurProps` instead of `Required<GradualBlurProps>`, so the optional-and-undefined props keep their `| undefined` and the existing truthiness checks stay type-correct."
+ },
+ {
+  "component": "segmented-slider",
+  "category": "type-mismatch",
+  "summary": "The Source/Review section and the test both document \"auto-selects the first segment when modelValue is null\", but `SegmentedSliderProps.modelValue` is typed `number | string` (default `0`), so the `props.modelValue == null` branch is unreachable for any type-correct consumer.",
+  "evidenceFile": "packages/tuffex/packages/components/src/segmented-slider/src/types.ts",
+  "evidenceLine": 7,
+  "evidenceQuote": "  modelValue?: number | string",
+  "suggestion": "Either widen the type to `modelValue?: number | string | null` and drop the `0` default (so the documented auto-select path is reachable), or delete the dead `onMounted` auto-select block plus the corresponding claim in the Source section of both docs."
+ },
+ {
+  "component": "loading-state",
+  "category": "type-leak",
+  "summary": "TxLoadingState documents `primary`/`secondary` events but declares no `defineEmits`, so they exist only as untyped attribute fallthrough to TxEmptyState and are absent from the component's public emit contract.",
+  "evidenceFile": "packages/tuffex/packages/components/src/loading-state/src/TxLoadingState.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = defineProps<LoadingStateProps>()",
+  "suggestion": "Add `defineEmits<EmptyStateEmits>()` and forward explicitly (`@primary=\"emit('primary')\"` / `@secondary=\"emit('secondary')\"`), and export a `LoadingStateEmits` alias from `src/types.ts` next to `LoadingStateProps`. Verified: `@primary` does fire at runtime (1 call) via fallthrough, but because it is not a declared emit, a typo like `@primry` compiles silently and the handler would break if the wrapper ever gained `inheritAttrs: false` or a second root node."
+ },
+ {
+  "component": "loading-state",
+  "category": "type-mismatch",
+  "summary": "The Props table claims `icon={null}` hides the icon area, but combined with the documented `loading` prop the spinner still renders, so the two documented props contradict each other.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/loading-state.zh.mdc",
+  "evidenceLine": 55,
+  "evidenceQuote": "| `icon` | `TxIconSource \\| string \\| null` | - | 替换加载插画；传 `null` 可隐藏图标区域。 |",
+  "suggestion": "Either fix `TxEmptyState.showSpinner` (line 118) to also require `props.icon !== null`, or amend both docs to read \"pass `null` to hide the icon area — has no effect while `loading` is true\". Verified: `mount(TxLoadingState, { props: { icon: null, loading: true } })` still renders `.tx-empty-state__icon` containing a `.tx-spinner`."
+ },
+ {
+  "component": "data-table",
+  "category": "undocumented-api",
+  "summary": "The public `interactiveRows` prop is absent from both the zh and en `### TxDataTable Props` tables, even though it is the only way to make `rowClick` keyboard-reachable and is exercised by the component test.",
+  "evidenceFile": "packages/tuffex/packages/components/src/data-table/src/types.ts",
+  "evidenceLine": 45,
+  "evidenceQuote": "  interactiveRows?: boolean",
+  "suggestion": "Add a row to both Props tables: `| interactiveRows | boolean | false | 让整行可聚焦并支持 Enter/Space 触发 rowClick；只要绑定了 rowClick 就应该开启 |` — and cross-reference it from the `rowClick` event row so readers know mouse-only rows are the default."
+ },
+ {
+  "component": "permission-state",
+  "category": "missing-emits-declaration",
+  "summary": "The docs list `primary` and `secondary` as component events, but `TxPermissionState.vue` declares no `defineEmits`; the handlers only reach `TxEmptyState` through single-root attribute fallthrough, so they are absent from the component's typed emit surface.",
+  "evidenceFile": "packages/tuffex/packages/components/src/permission-state/src/TxPermissionState.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = defineProps<PermissionStateProps>()",
+  "suggestion": "Add `const emit = defineEmits<EmptyStateEmits>()` and forward explicitly (`@primary=\"emit('primary')\" @secondary=\"emit('secondary')\"` on `<TxEmptyState>`), so IDE completion, devtools and the docs agree — and so forwarding survives a future `inheritAttrs: false` or an added wrapper element. Also add an emit-forwarding assertion to permission-state.test.ts."
+ },
+ {
+  "component": "flat-radio",
+  "category": "type-mismatch",
+  "summary": "`modelValue` is a required prop in `TxFlatRadioProps` (no `?`), but both docs list its default as `-` with no required marker, while `TxFlatRadioItem.value` in the same page is correctly marked 必填/required.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/flat-radio.zh.mdc",
+  "evidenceLine": 229,
+  "evidenceQuote": "| `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \\| number \\| (string \\| number)[]` | - |",
+  "suggestion": "Change the Default cell to `*必填*` / `*required*` in both flat-radio.zh.mdc and flat-radio.en.mdc, or make the prop optional in types.ts if an uncontrolled group should be allowed."
+ },
+ {
+  "component": "foundations",
+  "category": "type-mismatch",
+  "summary": "The \"Primary font stack\" block does not match `--tx-font-family` in variables.scss (the page's declared single source of truth); the stack shown is the Nexus site's own `body` font from app.vue.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/foundations.zh.mdc",
+  "evidenceLine": 25,
+  "evidenceQuote": "    'PingFang SC', '-apple-system', 'Helvetica Neue', 'Segoe UI',",
+  "suggestion": "Replace the block in both zh/en with the real token: `--tx-font-family: \"Inter\", \"PingFang SC\", \"Microsoft YaHei\", \"Helvetica Neue\", Arial, sans-serif;` (variables.scss:276), and if the Nexus body stack (app.vue:529) is intentionally different, call it out as a docs-site override rather than presenting it as the Tuffex token."
+ }
+]
