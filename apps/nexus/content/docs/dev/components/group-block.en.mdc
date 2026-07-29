@@ -60,11 +60,11 @@ code: |
 ---
 :::
 
-## Initially Collapsed
+### Initially Collapsed
 
 Use `:default-expand="false"` for first-render collapsed groups. Treat `collapsed` as an external state input that only applies before stored state or user interaction takes over.
 
-### GroupBlock (collapsed)
+#### GroupBlock (collapsed)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockCollapsedDemo" code-lang="vue"}
 ---
 code: |
@@ -82,11 +82,11 @@ code: |
 ---
 :::
 
-## Remember Expanded State
+### Remember Expanded State
 
 Provide a unique key for `memory-name` to persist expansion state.
 
-### GroupBlock (memory)
+#### GroupBlock (memory)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockMemoryDemo" code-lang="vue"}
 ---
 code: |
@@ -110,11 +110,11 @@ code: |
 ---
 :::
 
-## Header Extension
+### Header Extension
 
 Use the `header-extra` slot for actions.
 
-### GroupBlock (header-extra)
+#### GroupBlock (header-extra)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockHeaderExtraDemo" code-lang="vue"}
 ---
 code: |
@@ -155,11 +155,11 @@ code: |
 ---
 :::
 
-## Link Styles
+### Link Styles
 
 Displayed as a clickable link.
 
-### BlockLine (link)
+#### BlockLine (link)
 :::TuffDemoWrapper{demo="GroupBlockBlockLineLinkDemo" code-lang="vue"}
 ---
 code: |
@@ -208,9 +208,9 @@ code: |
 ---
 :::
 
-## Active State and Labels
+### Active State and Labels
 
-### BlockSlot (active)
+#### BlockSlot (active)
 :::TuffDemoWrapper{demo="GroupBlockBlockSlotActiveDemo" code-lang="vue"}
 ---
 code: |
@@ -233,9 +233,9 @@ code: |
 ---
 :::
 
-## Custom Labels
+### Custom Labels
 
-### BlockSlot (custom label)
+#### BlockSlot (custom label)
 :::TuffDemoWrapper{demo="GroupBlockBlockSlotCustomLabelDemo" code-lang="vue"}
 ---
 code: |
@@ -334,9 +334,9 @@ code: |
 ---
 :::
 
-## Loading State
+### Loading State
 
-### BlockSwitch (loading)
+#### BlockSwitch (loading)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchLoadingDemo" code-lang="vue"}
 ---
 code: |
@@ -355,9 +355,9 @@ code: |
 ---
 :::
 
-## Disabled State
+### Disabled State
 
-### BlockSwitch (disabled)
+#### BlockSwitch (disabled)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchDisabledDemo" code-lang="vue"}
 ---
 code: |
@@ -376,11 +376,11 @@ code: |
 ---
 :::
 
-## Guided Mode
+### Guided Mode
 
 Displayed as a navigation item instead of a switch.
 
-### BlockSwitch (guidance)
+#### BlockSwitch (guidance)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchGuidanceDemo" code-lang="vue"}
 ---
 code: |

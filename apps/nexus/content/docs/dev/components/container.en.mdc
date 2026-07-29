@@ -19,22 +19,32 @@ Layout container with flexible options and responsive support
 ---
 code: |
   <template>
-    <div style="width: 600px; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden;">
-      <TxContainer :padding="16">
-        <TxRow :gutter="16">
-          <TxCol :span="12">
-            <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
-              Left
-            </div>
-          </TxCol>
-          <TxCol :span="12">
-            <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
-              Right
-            </div>
-          </TxCol>
-        </TxRow>
-      </TxContainer>
-    </div>
+    <TxContainer max-width="680px" :padding="18">
+      <div style="display: grid; gap: 4px; margin-bottom: 14px;">
+        <strong>Responsive container</strong>
+        <span style="color: var(--tx-text-color-secondary); font-size: 12px;">The same Row / Col layout changes spans by breakpoint while Container owns max width and side padding.</span>
+      </div>
+      <TxRow :gutter="{ xs: 10, sm: 14, md: 18 }" align="stretch">
+        <TxCol :xs="24" :sm="12" :md="8">
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            <strong>Overview</strong>
+            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 12 / md 8</span>
+          </div>
+        </TxCol>
+        <TxCol :xs="24" :sm="12" :md="8">
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            <strong>Metrics</strong>
+            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 12 / md 8</span>
+          </div>
+        </TxCol>
+        <TxCol :xs="24" :sm="24" :md="8">
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            <strong>Actions</strong>
+            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 24 / md 8</span>
+          </div>
+        </TxCol>
+      </TxRow>
+    </TxContainer>
   </template>
 ---
 :::
@@ -155,28 +165,6 @@ code: |
 ---
 :::
 
-### Grid Gutter
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer>
-      <TxRow :gutter="24">
-        <TxCol :span="8">
-          <div class="col-content">Column 1</div>
-        </TxCol>
-        <TxCol :span="8">
-          <div class="col-content">Column 2</div>
-        </TxCol>
-        <TxCol :span="8">
-          <div class="col-content">Column 3</div>
-        </TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
 ### Responsive Grid
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -195,86 +183,6 @@ code: |
         </TxCol>
         <TxCol :xs="24" :sm="12" :md="8" :lg="6">
           <div class="col-content">Responsive column 4</div>
-        </TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
-## Layout Combinations
-
-### Page Layout
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <div class="page-layout">
-      <!-- Header -->
-      <TxContainer class="header" fluid>
-        <TxRow align="middle" justify="space-between">
-          <TxCol>
-            <div class="logo">Logo</div>
-          </TxCol>
-          <TxCol>
-            <nav class="nav">Navigation menu</nav>
-          </TxCol>
-        </TxRow>
-      </TxContainer>
-
-      <!-- Main content -->
-      <TxContainer class="main-content">
-        <TxRow :gutter="32">
-          <TxCol :span="18">
-            <main>Main content area</main>
-          </TxCol>
-          <TxCol :span="6">
-            <aside>Sidebar</aside>
-          </TxCol>
-        </TxRow>
-      </TxContainer>
-
-      <!-- Footer -->
-      <TxContainer class="footer" fluid>
-        <footer>Footer content</footer>
-      </TxContainer>
-    </div>
-  </template>
-
-  <style scoped>
-  .header {
-    background: var(--tx-color-surface);
-    padding: 16px 0;
-    border-bottom: 1px solid var(--tx-color-border);
-  }
-
-  .main-content {
-    min-height: 500px;
-    padding: 32px 0;
-  }
-
-  .footer {
-    background: var(--tx-color-surface);
-    padding: 24px 0;
-    border-top: 1px solid var(--tx-color-border);
-    text-align: center;
-  }
-  </style>
----
-:::
-
-### Card Layout
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer>
-      <TxRow :gutter="24">
-        <TxCol :xs="24" :sm="12" :lg="8" v-for="item in items" :key="item.id">
-          <TxCard>
-            <h3>{{ item.title }}</h3>
-            <p>{{ item.description }}</p>
-          </TxCard>
         </TxCol>
       </TxRow>
     </TxContainer>
@@ -381,39 +289,6 @@ code: |
 - Keep `gutter` values aligned with the page spacing scale; avoid mixing large gutters with tiny column padding inside the same row.
 - Use semantic elements inside the layout primitives (`main`, `aside`, `nav`, `section`) because the primitives render neutral `div` wrappers.
 - Set `wrap=false` only for horizontally scrolling or fixed-width toolbars; normal content grids should wrap.
-### Common Layout Patterns
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <!-- Centered content -->
-    <TxContainer max-width="800px" margin="auto">
-      <div class="content">Main content</div>
-    </TxContainer>
-
-    <!-- Content with sidebar -->
-    <TxContainer>
-      <TxRow :gutter="32">
-        <TxCol :span="16">Article content</TxCol>
-        <TxCol :span="8">Sidebar</TxCol>
-      </TxRow>
-    </TxContainer>
-
-    <!-- Three-column layout -->
-    <TxContainer>
-      <TxRow :gutter="24">
-        <TxCol :span="6">Navigation</TxCol>
-        <TxCol :span="12">Main content</TxCol>
-        <TxCol :span="6">Details</TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
-TouchX UI containers provide flexible layouts to quickly build responsive page structures.
-
 
 ## Review Notes
 

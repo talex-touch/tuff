@@ -178,13 +178,13 @@ code: |
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` and `checkbox.test.ts`.
-- **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, `fill` and `checkmark` variants, click/keyboard emits, and disabled blocking.
+- **Verified coverage:** `checkbox.test.ts` covers rendered labels, `aria-label` fallback behavior, label placement, `fill` and `checkmark` variants, click emits, and disabled blocking.
 - Accessibility note: the root element owns `role="checkbox"`, `aria-checked`, and keyboard handling; provide a visible label or default slot whenever possible, and reserve `ariaLabel` for controls with no visible text.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`.
 - Export alias: `packages/tuffex/packages/components/src/checkbox/index.ts` exports both `TuffCheckbox` and `TxCheckbox`.
-- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` verifies click and keyboard toggles, ARIA labelling, slot precedence, variant classes, and disabled blocking.
+- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` verifies click toggles, ARIA labelling, slot precedence, variant classes, and disabled blocking; keyboard activation is inherited from the native `<button>` element.
 
 <TuffDocSourceLink />

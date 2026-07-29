@@ -2,12 +2,15 @@
 title: "DropdownMenu 下拉菜单"
 description: "基于 Popover 的下拉菜单（Windows 风格）。"
 category: Navigation
+status: beta
+since: 1.0.0
+tags: [dropdown, menu, popover]
 syncStatus: reviewed
 verified: true
 ---
 # DropdownMenu 下拉菜单
 
-基于 Popover 的下拉菜单（Windows 风格）。
+`TxDropdownMenu` 从 trigger 插槽渲染紧凑的操作菜单，通过 `v-model` 控制开合，菜单行使用 `TxDropdownItem`。
 
 
 ## 基础用法
@@ -127,13 +130,13 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `boolean` | `false` | 是否打开（v-model）。 |
+| `modelValue` | `boolean` | `undefined` | 是否打开（v-model）。省略时为非受控，开合状态由内部维护。 |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | 相对触发器的浮层位置。 |
 | `offset` | `number` | `6` | 触发器与面板之间的距离，单位 px。 |
 | `closeOnSelect` | `boolean` | `true` | 可用菜单项触发 `select` 后是否关闭父菜单。 |
-| `animation` | `BaseAnchorAnimationOptions` | `{}` | 透传给 BaseAnchor/Popover 的锚点动画配置。 |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | 透传给 BaseAnchor/Popover 的锚点动画配置；为空对象时使用 BaseAnchor 的默认动画。 |
 | `duration` | `number` | `180` | 兼容旧用法的动画时长；优先使用 `animation.duration`。 |
-| `minWidth` | `number` | `220` | 面板最小宽度，单位 px。 |
+| `minWidth` | `number` | `220` | 面板最小宽度，单位 px。面板最大宽度固定为 360px，且没有对应 prop 可调整。 |
 | `maxHeight` | `number` | `420` | 面板最大可滚动高度，单位 px。 |
 | `unlimitedHeight` | `boolean` | `false` | 禁用面板最大高度限制。 |
 | `referenceClass` | `BaseAnchorClassValue` | - | 透传给触发锚点的额外 class。 |
@@ -188,6 +191,8 @@ code: |
 - `TxDropdownMenu` 包装 `TxPopover`，因此 `placement`、`offset`、高度限制、panel card props 和动画都遵循同一套锚点行为。
 - `closeOnSelect` 默认会在可用菜单项触发 `select` 后关闭父菜单，禁用项不会触发选择或关闭。
 - 菜单面板使用 `role="menu"`，每个 `TxDropdownItem` 使用 `role="menuitem"`。
+- 菜单打开时，第一个启用的菜单项会自动获得焦点。
+- 面板内 `ArrowDown` / `ArrowUp` 在启用项之间循环移动焦点，`Home` / `End` 跳到首 / 末项，跳过 `aria-disabled` 项。
 - `TxDropdownItem` 的 `select` 不带 payload；业务上下文应在渲染该 item 的 handler 中闭包保存。
 
 ## 最佳实践

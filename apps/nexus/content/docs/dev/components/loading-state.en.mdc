@@ -52,7 +52,7 @@ code: |
 |------|------|---------|------|
 | `title` | `string` | `Loading` | Overrides the preset loading title. |
 | `description` | `string` | `Please wait a moment.` | Overrides the loading supporting text. |
-| `icon` | `TxIconSource \| string \| null` | - | Replaces the loading illustration, or `null` to hide the icon area. |
+| `icon` | `TxIconSource \| string \| null` | - | Replaces the loading illustration, or `null` to hide the icon area (no effect while `loading` is `true` — the spinner still renders). |
 | `iconSize` | `number` | - | Sets custom icon/spinner size in pixels. |
 | `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Controls icon/content direction. |
 | `align` | `'start' \| 'center' \| 'end'` | `'center'` | Aligns icon, copy, and actions. |

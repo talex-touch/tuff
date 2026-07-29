@@ -53,7 +53,7 @@ code: |
 ::
 ## API
 ### Props
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: layout
@@ -64,7 +64,7 @@ rows:
 :::
 
 ### TxTimelineItem Props
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: title
@@ -122,7 +122,6 @@ rows:
 - 条目源码:`packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue` 确认 `role="listitem"`、title/time/默认插槽渲染、可选图标渲染、语义节点颜色 class、active 条目/节点 class 和注入布局 class。
 - 类型契约:`packages/tuffex/packages/components/src/timeline/src/types.ts` 定义布局与条目颜色联合类型，以及组件 prop 契约。
 - **实测覆盖:** `packages/tuffex/packages/components/src/timeline/__tests__/timeline.test.ts` 覆盖列表语义、默认纵向布局、横向布局注入、title/time/默认插槽/图标渲染、语义颜色 class 和 active 条目/节点状态。
-- 截图:`.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`。
 - 建议：使用 `active` 标记当前事件，`color` 只使用 `'default' | 'primary' | 'success' | 'warning' | 'error'`，不要传入未定义语义色。
 
 ## Source

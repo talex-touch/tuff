@@ -10,7 +10,7 @@ verified: true
 ---
 # SegmentedSlider 分段滑块
 
-用于在预定义的离散选项中进行选择的分段滑块组件。
+`TxSegmentedSlider` 把有限的取值列表铺在类似滑块的轨道上，适合取值离散、且希望在选择过程中始终可见的场景；连续数值用 `TxSlider`，选项过长或动态时用 `TxSelect`。
 
 ## 基础用法
 
@@ -158,25 +158,25 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `modelValue` | `number \| string` | `0` | 当前选中值 |
-| `segments` | `SegmentedSliderSegment[]` | `[]` | 分段选项数组 |
-| `disabled` | `boolean` | `false` | 是否禁用 |
-| `showLabels` | `boolean` | `true` | 是否显示标签 |
-| `vertical` | `boolean` | `false` | 是否垂直排列 |
+| `modelValue` | `number \| string \| null` | `0` | 当前选中的分段值；传入 `null` 时会在挂载后自动选中第一个分段。 |
+| `segments` | `SegmentedSliderSegment[]` | `[]` | 沿轨道渲染的有序分段定义。 |
+| `disabled` | `boolean` | `false` | 禁用后点击与键盘都不再改变选择（不再触发 `update:modelValue`）。 |
+| `showLabels` | `boolean` | `true` | 仅当某个 segment 提供 `label` 时才显示文字。 |
+| `vertical` | `boolean` | `false` | 改为垂直轨道，进度自下而上。 |
 
 ### SegmentedSliderSegment
 
 | 属性名 | 类型 | 说明 |
 |------|------|------|
-| `value` | `number \| string` | 选项值 |
-| `label` | `string` | 选项标签（可选） |
+| `value` | `number \| string` | 分段被选中时发出的值。 |
+| `label` | `string` | 可选，渲染在分段标记旁的文字。 |
 
 ### Events
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `update:modelValue` | `(value: number \| string)` | 值变化时触发 |
-| `change` | `(value: number \| string)` | 值变化时触发 |
+| `update:modelValue` | `(value: number \| string)` | 启用的分段请求新值时触发。 |
+| `change` | `(value: number \| string)` | 与 `update:modelValue` 携带同一选中值同步触发，供 change 监听使用。 |
 
 ### 插槽
 

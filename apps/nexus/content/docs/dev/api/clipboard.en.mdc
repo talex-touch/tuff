@@ -386,9 +386,7 @@ code: |
 
 Listen to clipboard changes.
 
-::: warning Important
-Plugins must call `box.allowClipboard(types)` first, otherwise no events are emitted.
-:::
+> **Important**: Plugins must call `box.allowClipboard(types)` first, otherwise no events are emitted.
 
 :::TuffCodeBlock{lang="typescript"}
 ---

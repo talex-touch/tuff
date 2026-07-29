@@ -20,6 +20,10 @@ verified: true
 :::TuffDemoWrapper{demo="ToastToastDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { toast } from '@talex-touch/tuffex/utils'
+  </script>
+
   <template>
     <TxToastHost />
     <TxButton @click="toast({ title: 'Saved', description: 'Your changes have been saved.' })">
@@ -86,7 +90,7 @@ code: |
 
 ## 交互契约
 
-- `<TxToastHost />` 通过 teleport 在 `body` 渲染通知区域，带 `role="region"` 与 `aria-label="Notifications"`。
+- `<TxToastHost />` 通过 teleport 在 `body` 渲染通知区域，带 `role="region"`、`aria-label="Notifications"` 与 `aria-live="polite"`，焦点在别处时新 toast 也会被播报。
 - 每条 toast 都有可键盘聚焦的关闭按钮，按钮名称为 `Dismiss notification`。
 - `toast()` 返回最终 id；传入相同 `id` 会替换现有 toast，避免同一业务提示重复堆叠。
 - `duration > 0` 时自动关闭，`duration: 0` 时保持显示直到调用 `dismissToast(id)` 或 `clearToasts()`。
@@ -96,7 +100,7 @@ code: |
 
 `TxToastHost` 建议只在应用或页面根部挂一次；业务动作通过 `toast()` 触发，常驻提示用稳定 `id + duration: 0`，避免同一队列状态重复堆叠。后台任务中心里，Toast 负责短反馈，`TxTooltip` 解释动作，`TxLoadingOverlay` 阻断局部刷新，`TxSpinner` 承担行内等待。
 
-::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="截图验证的 Toast / Tooltip / LoadingOverlay / Spinner 组合。"}
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="截图验证的 Toast / Tooltip / LoadingOverlay / Spinner 组合。"}
 ---
 code: |
   <script setup lang="ts">
@@ -107,10 +111,18 @@ code: |
 
   function showFeedbackToast() {
     toast({
-      id: 'feedback-task-center',
+      id: 'nexus-feedback-task-center',
       title: '同步任务已排队',
-      description: '将在 2 分钟内完成截图核验。',
+      description: '将在 2 分钟内完成 4 个文档页面的截图核验。',
       variant: 'warning',
+      duration: 0,
+    })
+
+    toast({
+      id: 'nexus-feedback-task-center-success',
+      title: '反馈通道正常',
+      description: 'Toast host 已挂载，通知可替换且可关闭。',
+      variant: 'success',
       duration: 0,
     })
   }
@@ -140,7 +152,7 @@ code: |
 
 ## 审阅说明
 
-- **可访问性说明:** Host 暴露带标签的通知区域，每条 toast 有关闭按钮，但 toast item 不是 `role="status"`/`alert`，区域本身也不是 `aria-live`。关键失败或长任务需要用持久可见文案或页面级状态文本补充。
+- **可访问性说明:** Host 是带标签的 `role="region"`，同时是 polite 的 `aria-live` 区域，焦点在别处时新 toast 也会被播报；`danger` toast 会升级为 `role="alert"`。关键失败或长任务仍建议用持久可见文案或页面级状态文本补充。
 - **计时器说明:** 复用 `id` 会替换 store item，但已有自动关闭定时器不会取消。基于 id 的常驻任务 toast 请使用 `duration: 0`；重复的短成功提示则使用唯一 id。
 - **实测覆盖:** `toast.test.ts` 覆盖 id 替换、返回 id、自动关闭、常驻 toast、dismiss/clear 辅助函数、host region 语义、variant class、标题/描述渲染、可访问关闭按钮，以及关闭按钮移除。
 

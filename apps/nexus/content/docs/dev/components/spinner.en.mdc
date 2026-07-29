@@ -10,7 +10,7 @@ verified: true
 ---
 # Spinner
 
-Use `Spinner` for short loading states inside buttons, panels, overlays, or empty-state variants.
+`TxSpinner` signals a short, indeterminate wait — the little spinning ring inside a button, an inline status row, or an overlay. Use `TxProgressBar` when you have a real percentage or staged progress and `TxLoadingState` for full first-load screens; reach for the spinner only when the wait is brief and no percentage is available.
 
 ## Basic Usage
 
@@ -118,13 +118,13 @@ code: |
 - When `visible=false`, the spinner is not rendered after the leave transition.
 - The visible root is an inline-flex `span` with `aria-busy="true"` and `aria-live="polite"`.
 - Default mode renders the animated ball/ring shape; `fallback=true` renders an SVG circle using the same `size` and `strokeWidth` props.
-- The component inherits text color from context through `currentColor`, so host components can tint it with normal CSS color.
+- The spinner root defaults to the secondary text color (`--tx-text-color-secondary`); tint it by setting `color` on the `TxSpinner` element itself — a parent's `color` does not override the root's own declaration.
 
 ## Dashboard Inline Waiting
 
 Use `TxSpinner` for short waits inside buttons, inline status rows, or overlays. Prefer `TxProgressBar` when progress is known; prefer `TxLoadingState` for full first-load states. Spinner is best when the wait is short and no percentage is available.
 
-::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified Spinner with Toast / Tooltip / LoadingOverlay."}
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified Spinner with Toast / Tooltip / LoadingOverlay."}
 ---
 code: |
   <template>

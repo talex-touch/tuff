@@ -2,6 +2,8 @@
 title: "GradualBlur 渐变模糊"
 description: "用于父容器或页面边缘的分层 backdrop-filter 渐变模糊，覆盖预设、hover 强度、滚动触发、响应式尺寸与 GPU 提示。"
 category: Effects
+status: beta
+since: 1.0.0
 tags: [blur, edge-fade, overlay, backdrop-filter]
 syncStatus: reviewed
 verified: true
@@ -52,9 +54,9 @@ code: |
 ---
 :::
 
-## 方向（Top / Bottom / Left / Right）
+### 方向（Top / Bottom / Left / Right）
 
-### Positions
+#### Positions
 :::TuffDemoWrapper{demo="GradualBlurPositionsDemo" code-lang="vue"}
 ---
 code: |
@@ -133,9 +135,9 @@ code: |
 ---
 :::
 
-## Preset 预设
+### Preset 预设
 
-### Presets
+#### Presets
 :::TuffDemoWrapper{demo="GradualBlurPresetsDemo" code-lang="vue"}
 ---
 code: |
@@ -205,9 +207,9 @@ code: |
 ---
 :::
 
-## Hover 强度增强（hoverIntensity）
+### Hover 强度增强（hoverIntensity）
 
-### HoverIntensity
+#### HoverIntensity
 :::TuffDemoWrapper{demo="GradualBlurHoverIntensityDemo" code-lang="vue"}
 ---
 code: |
@@ -238,9 +240,9 @@ code: |
 ---
 :::
 
-## 进入视口触发（animated="scroll"）
+### 进入视口触发（animated="scroll"）
 
-### Animated scroll
+#### Animated scroll
 :::TuffDemoWrapper{demo="GradualBlurAnimatedScrollDemo" code-lang="vue"}
 ---
 code: |
@@ -254,9 +256,9 @@ code: |
 ---
 :::
 
-## Page 目标（target="page"）
+### Page 目标（target="page"）
 
-### Target page
+#### Target page
 :::TuffDemoWrapper{demo="GradualBlurTargetPageDemo" code-lang="vue"}
 ---
 code: |
@@ -281,9 +283,9 @@ code: |
 ---
 :::
 
-## 响应式尺寸（responsive）
+### 响应式尺寸（responsive）
 
-### Responsive sizes
+#### Responsive sizes
 :::TuffDemoWrapper{demo="GradualBlurResponsiveSizesDemo" code-lang="vue"}
 ---
 code: |
@@ -347,13 +349,13 @@ code: |
 | `className` | `string` | `''` | 追加到根节点的额外 class。 |
 | `style` | `CSSProperties` | `{}` | 追加到根节点的内联样式；会在生成的定位样式之后合并。 |
 
-## Slots
+### Slots
 
 | 插槽名 | 说明 |
 |------|------|
 | `default` | 可选内容，渲染在覆盖层根节点内，并位于 blur layers 之上。 |
 
-## Events
+### Events
 
 不派发 Vue 事件；`animated="scroll"` 需要完成回调时使用 `onAnimationComplete`。
 

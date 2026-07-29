@@ -2,14 +2,15 @@
 title: "SearchInput"
 description: "Search input with a built-in icon, clear affordance, Enter search, and optional debounced remote search."
 category: Form
+status: beta
+since: 1.0.0
+tags: [search, input, form]
 syncStatus: reviewed
 verified: true
 ---
 # SearchInput
 
-`TxSearchInput` wraps the base input with a search icon, clear affordance, Enter-triggered `search`, and optional debounced remote search.
-
-If you need a search input that expands results like Select, use `SearchSelect`.
+`TxSearchInput` packs the usual search-field parts — a search icon, a clear button, Enter-to-`search`, and optional debounced remote search — into one field so you don't wire them onto a bare `TuffInput` yourself. Use plain `TuffInput` when you only need text entry, and `TxSearchSelect` when matches should drop into a selectable result panel.
 
 ## Basic Usage
 
@@ -133,18 +134,44 @@ code: |
 
   const query = ref('')
   const selectedScope = ref<string | number>('all')
+  const lastSearch = ref('')
+
   const scopeOptions = [
     { value: 'all', label: 'All' },
+    { value: 'plugins', label: 'Plugins' },
     { value: 'docs', label: 'Docs' },
     { value: 'tasks', label: 'Tasks' },
   ]
-  const records = ['Plugin release stream', 'Tuffex component tutorial', 'Screenshot verification task']
-  const filteredRecords = computed(() => records.filter(item => item.toLowerCase().includes(query.value.toLowerCase())))
+  const records = [
+    { type: 'plugins', title: 'Plugin release stream' },
+    { type: 'docs', title: 'Tuffex component tutorial' },
+    { type: 'tasks', title: 'Screenshot verification task' },
+  ]
+
+  const filteredRecords = computed(() => {
+    const keyword = query.value.trim().toLowerCase()
+    const scope = String(selectedScope.value)
+    return records.filter((item) => {
+      const matchesScope = scope === 'all' || item.type === scope
+      const matchesQuery = !keyword || item.title.toLowerCase().includes(keyword)
+      return matchesScope && matchesQuery
+    })
+  })
+
+  function onSearch(value: string) {
+    lastSearch.value = value.trim()
+  }
   </script>
 
   <template>
     <section class="grid gap-3">
-      <TxSearchInput v-model="query" remote placeholder="Search plugins / docs / tasks" />
+      <TxSearchInput
+        v-model="query"
+        remote
+        :search-debounce="180"
+        placeholder="Search plugins / docs / tasks"
+        @search="onSearch"
+      />
       <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="Filter scope" />
       <TxSearchEmpty v-if="!filteredRecords.length" description="Try another keyword or filter scope." />
     </section>

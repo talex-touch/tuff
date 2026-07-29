@@ -12,8 +12,6 @@ verified: true
 
 `TxOfflineState` 是固定 `variant="offline"` 的轻量 `TxEmptyState` 封装。适合应用离线、依赖网络的面板无法加载，或可重试传输错误需要保留当前上下文的场景。
 
-已人工核对 `packages/tuffex/packages/components/src/offline-state/src/TxOfflineState.vue`、`types.ts` 与 `offline-state.test.ts`。
-
 ## 基础用法
 
 ### OfflineState

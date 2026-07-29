@@ -76,8 +76,8 @@ code: |
 | `rules` | `FormRules` | - | 以字段 prop 为 key 的表单级校验规则。 |
 | `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | 子表单项使用的 label 布局。 |
 | `labelWidth` | `string \| number` | - | 非 top 布局下的 label 宽度，数字会转为 px。 |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 通过上下文暴露的表单尺寸。 |
-| `disabled` | `boolean` | `false` | 通过上下文暴露的禁用状态。 |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 通过表单上下文暴露；TuffEx 输入组件不会自动读取，需按控件单独传入 `size`。 |
+| `disabled` | `boolean` | `false` | 通过表单上下文暴露；TuffEx 输入组件不会自动读取，需给每个控件单独传 `disabled`。 |
 
 ### TxForm Events
 
@@ -123,7 +123,7 @@ code: |
 | 组件 | 插槽名 | Props | 说明 |
 |------|------|------|------|
 | `TxForm` | `default` | - | 表单项和操作内容。 |
-| `TxFormItem` | `default` | - | 字段控件内容。 |
+| `TxFormItem` | `default` | `{ id, ariaInvalid, ariaDescribedby }` | 字段控件内容。把它们展开到插槽控件上，可打通 label `for`/`id` 关联与错误消息 `aria-describedby`。 |
 
 ## 最佳实践
 
@@ -135,8 +135,8 @@ code: |
 
 ## 审阅说明
 
-- **可访问性说明：** `TxFormItem` 会渲染可见 `<label>`，但不会自动绑定 `for`/`id`；需要原生 label 关联时，应给插槽控件补齐匹配 ID 或显式 ARIA 标签。
-- **实测覆盖:** `form.test.ts` 覆盖 required 规则校验、错误消息渲染、model 更新后的再次校验通过，以及 `resetFields()` 恢复挂载时初始值。
+- **可访问性说明：** `TxFormItem` 渲染的可见 `<label>` 的 `for` 指向一个生成的字段 id，并通过默认插槽（`#default="{ id, ariaInvalid, ariaDescribedby }"`）暴露该 id 以及 `ariaInvalid` / `ariaDescribedby`。把它们展开到插槽控件上即可打通 label 关联，并链接 `role="alert"` 的错误消息；控件不消费 `id` 时该关联不生效。
+- **实测覆盖:** `form.test.ts` 覆盖 required 规则校验、错误消息渲染、label/控件/错误关联（`for`/`id`、`aria-invalid`、`role="alert"`、`aria-describedby`）、model 更新后的再次校验通过，以及 `resetFields()` 恢复挂载时初始值。
 
 ## Source
 

@@ -12,8 +12,6 @@ verified: true
 
 `TxBlankSlate` 是固定 `variant="blank-slate"` 并带首次引导默认值的 `TxEmptyState` 封装。适合产品区域还没有用户创建内容时，用来解释第一步操作的价值。
 
-已人工核对 `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`、`types.ts` 与 `blank-slate.test.ts`。
-
 ## 基础用法
 
 ### BlankSlate

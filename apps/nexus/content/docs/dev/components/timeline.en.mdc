@@ -53,7 +53,7 @@ code: |
 ::
 ## API
 ### Props
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: layout
@@ -64,7 +64,7 @@ rows:
 :::
 
 ### TxTimelineItem Props
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: title
@@ -122,7 +122,6 @@ rows:
 - Item source: `packages/tuffex/packages/components/src/timeline/src/TxTimelineItem.vue` confirms `role="listitem"`, title/time/default-slot rendering, optional icon rendering, semantic dot color classes, active item/dot classes, and injected layout classes.
 - Type contracts: `packages/tuffex/packages/components/src/timeline/src/types.ts` defines layout and item color unions plus component prop contracts.
 - **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/timeline/__tests__/timeline.test.ts` covers list semantics, default vertical layout, horizontal layout injection, title/time/default slot/icon rendering, semantic color class, and active item/dot state.
-- Screenshot: `.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`.
 - Recommendation: mark the current event with `active`; keep `color` within `'default' | 'primary' | 'success' | 'warning' | 'error'` and avoid undefined semantic tones.
 
 ## Source

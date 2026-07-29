@@ -59,6 +59,14 @@ code: |
       shortcut: '⌘ ↵',
     },
     {
+      id: 'sync-settings',
+      title: '同步设置',
+      description: '打开账户同步与设备管理',
+      keywords: ['sync', 'account', 'device', '同步'],
+      icon: 'i-carbon-cloud',
+      shortcut: '⌘ ,',
+    },
+    {
       id: 'locked-admin',
       title: '管理员脚本',
       description: '需要管理员权限后才能运行',
@@ -156,9 +164,9 @@ code: |
 
 - `modelValue` 是显示状态的唯一来源；面板显示时触发 `open`，从已打开状态关闭时触发 `close`。
 - 搜索只在本地对 `title`、`description` 和每个 `keywords` 做包含匹配；组件不负责排序、节流或远程请求。
-- `ArrowDown` / `ArrowUp` 在当前可见命令中循环移动；`Enter` 选择当前未禁用命令；`Escape` 关闭面板。
+- `ArrowDown` / `ArrowUp` 在可见命令间循环并跳过禁用项，高亮不会停留在不可用命令上；`Enter` 选择当前命令；`Escape` 关闭面板。初始高亮落在第一个可用命令上；所有命令都禁用时方向键不做任何操作。
 - 输入法组合态（`isComposing`、keyCode `229` 或正在 composition）会阻止键盘选择，避免中文/日文/韩文输入被提前提交。
-- `select` 会返回原始 `CommandPaletteItem`；禁用命令保持可见但不会触发 `select`；`closeOnSelect=false` 会在选择后保持面板打开。
+- `select` 会返回原始 `CommandPaletteItem`；禁用命令以 `role="option"` 保持可见，带 `aria-disabled="true"` 并移出 tab 顺序（`tabindex="-1"`），不会触发 `select`；`closeOnSelect=false` 会在选择后保持面板打开。
 
 ## 最佳实践
 
@@ -171,12 +179,12 @@ code: |
 ## 审阅说明
 
 - 已核对 `packages/tuffex/packages/components/src/command-palette/src/types.ts`、`TxCommandPalette.vue` 与 `command-palette.test.ts`。
-- 现有测试覆盖本地过滤与选择、输入法组合态保护、命中文本高亮，以及自定义 `empty` / `footer` 插槽。
+- 现有测试覆盖本地过滤与选择、禁用命令跳过及 `aria-disabled` / `tabindex` 标记、输入法组合态保护、命中文本高亮，以及自定义 `empty` / `footer` 插槽。
 - 可访问性说明:叠层渲染 `role="dialog"` 与 `aria-modal="true"`;触发按钮文案和 placeholder 应说明当前命令域,不要把展示用 `shortcut` 当作实际快捷键注册。
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue`。
 - Types: `packages/tuffex/packages/components/src/command-palette/src/types.ts` 导出 `CommandPaletteProps`、`CommandPaletteEmits`、`CommandPaletteItem` 与 `CommandPaletteClassValue`。
-- **实测覆盖:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` 覆盖过滤、选择事件、输入法保护、命中高亮与插槽。
+- **实测覆盖:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` 覆盖过滤、选择事件、禁用命令跳过及 `aria-disabled` / `tabindex` 标记、输入法保护、命中高亮与插槽。
 <TuffDocSourceLink />

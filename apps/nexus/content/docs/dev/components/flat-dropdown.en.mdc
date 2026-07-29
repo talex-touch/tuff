@@ -120,6 +120,7 @@ Three independent dismissal paths, each separately switchable:
 - Set `teleport="false"` when the dropdown lives inside a container with its own stacking or clipping context and you need it to inherit that context. Note that inline rendering re-exposes the panel to ancestor `overflow: hidden`.
 - Use the `side` slot prop to flip your own decorations (arrows, shadows) when the panel flips above the trigger.
 - Do not rely on the panel being positioned synchronously after opening — placement is written back reactively, so measure in a `requestAnimationFrame` if you need absolute geometry.
+- The reference wrapper advertises the panel with `aria-haspopup`, `aria-expanded`, and `aria-controls` (pointing at the panel's generated id), so a slotted `<button>` trigger inherits disclosure semantics automatically.
 
 ## Source
 

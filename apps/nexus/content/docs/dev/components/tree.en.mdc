@@ -10,7 +10,7 @@ verified: true
 ---
 # Tree
 
-Tree component with filtering, single/multi select, and expand controls.
+`TxTree` lets users locate and select one scope inside a stable hierarchy — resource domains, permission scopes, org charts. It handles navigation and selection only, not parent/child cascading or lazy loading; reach for `TxTreeSelect` to pick a level inside a collapsed input, and `TxTransfer` for batch permission grants.
 
 ## Basic Usage
 
@@ -150,7 +150,7 @@ None. Control selection and expansion through props and emitted events.
 - The default filter checks `node.label.toLowerCase().includes(query.toLowerCase())`; custom `filterMethod` receives the trimmed original query.
 - Selection is flat. `checkable` only changes the control UI; it does not implement parent/child tri-state or descendant cascading.
 - `disabled` and `node.disabled` block selection, but caret expansion remains available for expandable nodes.
-- The root uses `role="tree"` and rows use `role="treeitem"`; custom `item` slots should preserve comparable semantics when replacing the row.
+- The root uses `role="tree"` (with `aria-multiselectable` in `multiple` mode); each row wrapper is `role="treeitem"` carrying `aria-level`, `aria-setsize`, and `aria-posinset` (position within its sibling group), plus `aria-expanded` / `aria-selected` / `aria-disabled` as applicable, over a `role="presentation"` list. The `item` slot only replaces the inner row visuals, so these row semantics are preserved automatically.
 
 ## Style Customization
 
@@ -173,7 +173,7 @@ None. Control selection and expansion through props and emitted events.
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/tree/src/TxTree.vue` and `types.ts`.
-- Existing tests cover expanded rendering and selection events; docs call out untested but source-visible behavior such as filtering expansion, controlled expansion, and non-cascading checkboxes.
+- Existing tests cover expanded rendering, selection events, and the `role="treeitem"` set/position semantics (`aria-setsize` / `aria-posinset` over a presentational list); docs call out untested but source-visible behavior such as filtering expansion, controlled expansion, and non-cascading checkboxes.
 - The permission orchestration example should keep `TxTree` responsible for scope selection only; assigning resources belongs in adjacent controls.
 - Screenshot reference: `.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`.
 
@@ -181,7 +181,7 @@ None. Control selection and expansion through props and emitted events.
 
 - Component source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
 - Types: `packages/tuffex/packages/components/src/tree/src/types.ts`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` covers default-expanded child rendering and selection-value emission.
+- **Verified coverage:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` covers default-expanded child rendering, selection-value emission, and per-sibling `aria-setsize` / `aria-posinset` over a `role="presentation"` list.
 
 <TuffDocSourceLink />
 

@@ -10,7 +10,7 @@ verified: true
 ---
 # SegmentedSlider
 
-`TxSegmentedSlider` maps a finite list of values onto a slider-like track. Use it when the available values are discrete and should remain visible while the user changes selection.
+`TxSegmentedSlider` maps a finite list of values onto a slider-like track. Use it when the values are discrete and should stay visible while the user changes selection; reach for `TxSlider` for continuous values and `TxSelect` for long or dynamic lists.
 
 ## Basic Usage
 
@@ -158,7 +158,7 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `number \| string` | `0` | Currently selected segment value. |
+| `modelValue` | `number \| string \| null` | `0` | Currently selected segment value; passing `null` auto-selects the first segment on mount. |
 | `segments` | `SegmentedSliderSegment[]` | `[]` | Ordered segment definitions rendered along the track. |
 | `disabled` | `boolean` | `false` | Prevents click and keyboard selection changes. |
 | `showLabels` | `boolean` | `true` | Shows each segment label when a label is provided. |

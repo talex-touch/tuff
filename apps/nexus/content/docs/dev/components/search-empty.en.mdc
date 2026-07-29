@@ -19,7 +19,12 @@ verified: true
 ---
 code: |
   <template>
-    <TxSearchEmpty title="No matches found" description="Try another keyword, clear filters, or broaden the search scope." />
+    <TxSearchEmpty
+      title="No matches found"
+      description="Try another keyword, clear filters, or broaden the search scope."
+      surface="card"
+      :primary-action="{ label: 'Reset filters', type: 'primary', icon: 'i-carbon-reset' }"
+    />
   </template>
 ---
 :::

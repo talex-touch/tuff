@@ -107,7 +107,7 @@ code: |
 
 ## Interaction Contract
 
-- The root renders `role="status"`; tag text must be meaningful without relying on color.
+- The root is static metadata with no live-region role; tag text must be meaningful without relying on color.
 - `label` defaults to an empty string; `null` is normalized to an empty string.
 - The default slot replaces `label` content but keeps the icon and close affordance.
 - `color` defaults to `var(--tx-color-primary)`. Missing `background` and `border` are derived from `color` with `color-mix`.
@@ -129,6 +129,7 @@ code: |
 | `size` | `'sm' \| 'md'` | `'sm'` | Tag density. |
 | `closable` | `boolean` | `false` | Render the close button. |
 | `disabled` | `boolean` | `false` | Disable tag click and close interactions. |
+| `pill` | `boolean` | `false` | Use a fully rounded pill shape (adds `.pill` to the root); for filter chips and similar cases that should read differently in shape from square tags. |
 
 ### Events
 

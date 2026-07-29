@@ -48,13 +48,13 @@ code: |
 
 ```vue
 <template>
-  <p>
+  <span>
     Status:
     <TxStack inline direction="horizontal" align="center" gap="0.5rem">
       <TxBadge value="Live" variant="success" />
       <TxTag label="Beta" size="sm" />
     </TxStack>
-  </p>
+  </span>
 </template>
 ```
 

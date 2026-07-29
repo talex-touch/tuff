@@ -2,13 +2,15 @@
 title: "Transition 动效"
 description: "用于带 key 内容切换、列表动效与平滑尺寸变化的通用过渡封装。"
 category: Effects
+status: beta
+since: 1.0.0
 tags: [transition, motion, list, auto-size]
 syncStatus: reviewed
 verified: true
 ---
 # Transition 动效
 
-用于内容切换（X）与列表增删（Y）的通用过渡封装。
+`TxTransition` 统一了 Tuffex 组件使用的动效预设：它封装 Vue `Transition` / `TransitionGroup`，把时长与缓动映射为 CSS 变量，并在需要尺寸感知的内容变化时切换到 `TxTransitionSmoothSize`。
 
 ## 内容切换（X）
 
@@ -227,6 +229,7 @@ code: |
 - `smooth-size` 是单子节点模式。它用 `TxAutoSizer` 包住内容，默认只动画高度，并在测量期间隐藏溢出。
 - `group=true` 会切换为 `TransitionGroup`；此时 `mode` 不生效，每个列表项都必须有稳定 key。
 - 各预设共用 `--tx-transition-duration` 与 `--tx-transition-easing` CSS 变量；`rebound` 的 enter 阶段刻意使用弹性曲线。
+- 在 `prefers-reduced-motion: reduce` 下，所有预设都会收敛到近乎瞬时的时长并去掉 `translateY`/`scale` 偏移，切换与列表动效仍能完成、只是不再有动画。
 
 ## 最佳实践
 

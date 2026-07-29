@@ -44,26 +44,6 @@ code: |
 ---
 :::
 
-## 设计要点
-
-- `source` 决定动画起点，可传 `HTMLElement` 或 `DOMRect`。
-- `rotateX` / `rotateY` 与 `perspective` 控制 3D 质感。
-- Header 渲染优先级：
-  1. 提供 `#header` 时，完全覆盖内置 header。
-  2. 未提供 `#header` 且 `header=false` 时，不渲染 header。
-  3. 未提供 `#header` 且 `header=true` 时，使用内置 header（支持 `#header-display` / `#header-actions` / `#header-close`）。
-- `closable=false` 会完全隐藏右上角 close 区（`#header-close` 也不会渲染）。
-- 卡片默认内置 `surface` 背景层（基于 `TxBaseSurface`），可通过 `surface` / `surfaceColor` / `surfaceOpacity` 调整。
-- `globalMask` 控制全局遮罩层，默认开启。
-- `border` 控制边框样式（`solid` / `dashed` / `none`，`dash` 等价于 `dashed`）。
-- `randomTilt` 可为每次打开添加轻微随机偏移。
-- `maskClosable=false` 时遮罩点击不会关闭，可通过 `close()` 控制关闭。
-- 连续打开多个 overlay 时，背景遮罩由单例全局层统一渲染并下沉到所有卡片下方；仅顶层保留可交互点击层，下层交互层不可交互且不会遮挡下层卡片露边。
-- 叠层位移仅在相邻层尺寸接近时自动启用（宽高分别满足 `|delta| <= max(8px, 上一层尺寸 * 5%)`）。
-- 位移叠层最多强化 3 层（`-18/-36/-54px` + `0.95/0.90/0.85` 缩放），超过 3 层后按层级渐隐（`1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`）。
-- `preventAccidentalClose=true` 可开启防误关闭模式：遮罩点击不关闭、监听页面退出（刷新/关闭）并拦截，误操作时卡片周围会出现红色警示光。
-- 通过 `open/opened/close/closed` 事件联动外围 UI。
-
 ## API
 
 ### Props
@@ -125,14 +105,22 @@ code: |
 | `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义关闭按钮左侧操作区 |
 | `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | 自定义关闭区域（`closable=false` 时不渲染） |
 
+### Expose
+
+| 方法 | 类型 | 说明 |
+|------|------|------|
+| `close()` | `() => void` | 运行完整关闭动画并 emit `update:modelValue(false)`；父级需通过 `v-model` 拥有开合状态。 |
+
 ## 交互契约
 
 - `modelValue=true` 会挂载 overlay、解析 `source` 矩形、触发 `open`，并在卡片动画完成后触发 `opened`。
-- 内置关闭按钮、插槽 `close()` 和遮罩点击都会进入关闭流程；`maskClosable=false` 只阻止遮罩点击关闭。
+- 内置关闭按钮、插槽 `close()`、遮罩点击和 Escape 都会进入关闭流程。遮罩点击和 Escape 共用 `handleMaskClick`，因此 `maskClosable=false` 会同时阻止两者，`preventAccidentalClose` 则改为闪烁警示；关闭按钮和 `close()` 不受这两个开关限制。
 - 组件内部关闭顺序为 `close`、`update:modelValue(false)`、`closed`。父级必须同步更新 `v-model`，受控 overlay 才会完全关闭。
+- Header 渲染优先级：提供 `#header` 时完全覆盖内置 header；否则 `header=false` 不渲染、`header=true` 使用内置 header（可用 `#header-display` / `#header-actions` / `#header-close` 局部定制）。`closable=false` 时整个关闭区（含 `#header-close`）不渲染。
 - `expanded` 和 `animating` 是同步动效状态；只有外围 UI 需要观测 overlay 动画时才绑定。
-- `globalMask=true` 时堆叠 overlay 共享 body 级遮罩。下层遮罩不可交互，只有顶层响应遮罩点击。
+- `globalMask=true` 时堆叠 overlay 共享 body 级遮罩，下层遮罩不可交互、只有顶层响应遮罩点击。叠层位移仅在相邻层宽高接近（`|delta| <= max(8px, 上一层尺寸 * 5%)`）时启用，最多强化 3 层（`-18/-36/-54px`，缩放 `0.95/0.90/0.85`），更深层按 `1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0` 渐隐。
 - `preventAccidentalClose=true` 会阻止遮罩关闭和页面退出，并用警示状态反馈误操作，而不是静默关闭。
+- 可访问性：卡片是 `role="dialog"`，带 `aria-modal="true"` 和 `tabindex="-1"`。渲染内置 header 时，`headerTitle` 关联 `aria-labelledby`，`headerDesc` 关联 `aria-describedby`。打开时焦点移入卡片，关闭时恢复到打开前聚焦的元素。
 
 ## 最佳实践
 
@@ -147,7 +135,7 @@ code: |
 - **状态契约：** `TxFlipOverlay` 管理挂载与动画生命周期，但只有组件自行关闭时才触发 `update:modelValue(false)`；使用内置关闭、插槽 `close()` 或遮罩关闭后，调用方仍需同步 `v-model`。
 - **叠层契约：** `globalMask=true` 会让多个 overlay 共享视觉遮罩，但只有顶层保留可交互遮罩；尺寸接近的相邻层才应用有限位移，更深层按透明度渐隐。
 - **防误触契约：** `preventAccidentalClose` 会阻止遮罩关闭和页面退出，并闪烁警示状态；它只是交互防护，不是持久化或自动保存能力。
-- **实测覆盖:** `flip-overlay.test.ts` 覆盖默认值、header 插槽优先级、关闭顺序、card style 透传、叠层遮罩、层级位移和防误关闭行为。
+- **实测覆盖:** `flip-overlay.test.ts` 覆盖默认值、header 插槽优先级、关闭顺序、dialog 语义（`role`/`aria-modal`/`aria-labelledby`）与 Escape 关闭、card style 透传、叠层遮罩、层级位移和防误关闭行为。
 
 ## Source
 

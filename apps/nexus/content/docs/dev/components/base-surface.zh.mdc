@@ -42,6 +42,9 @@ code: |
       <TxBaseSurface mode="glass" :blur="12" :saturation="1.8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
         毛玻璃
       </TxBaseSurface>
+      <TxBaseSurface mode="refraction" :blur="11" :displace="0.8" :distortion-scale="-200" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        折射
+      </TxBaseSurface>
     </div>
   </template>
 ---
@@ -132,20 +135,33 @@ code: |
   </script>
 
   <template>
-    <TxBaseSurface
-      mode="glass"
-      :blur="12"
-      :moving="animating"
-      fallback-mode="mask"
-      :radius="14"
-    >
-      <div style="max-height: 140px; overflow-y: auto;">
-        可滚动内容...
-      </div>
-    </TxBaseSurface>
     <TxButton @click="animating = !animating">
-      {{ animating ? '停止' : '开始运动' }}
+      {{ animating ? '停止运动' : '开始运动' }}
     </TxButton>
+
+    <!-- 两张卡片一起做 transform 位移，只有 :moving 不同 -->
+    <div :style="{ display: 'flex', gap: '12px', transition: 'transform 1.4s cubic-bezier(0.22, 1, 0.36, 1)', transform: animating ? 'translateX(16px) translateY(-10px) scale(0.92) rotate(2.5deg)' : 'none' }">
+      <TxBaseSurface
+        mode="glass"
+        :blur="12"
+        :moving="false"
+        :auto-detect="false"
+        fallback-mode="mask"
+        :radius="14"
+      >
+        无降级 — 运动时 backdrop-filter 失效
+      </TxBaseSurface>
+      <TxBaseSurface
+        mode="glass"
+        :blur="12"
+        :moving="animating"
+        :auto-detect="false"
+        fallback-mode="mask"
+        :radius="14"
+      >
+        有降级 — 平滑退化为 mask
+      </TxBaseSurface>
+    </div>
   </template>
 ---
 :::

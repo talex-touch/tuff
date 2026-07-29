@@ -2,6 +2,8 @@
 title: "TabBar 底部导航"
 description: "移动端底部 Tab 导航，支持图标、badge、fixed 定位和安全区占位。"
 category: Navigation
+status: beta
+since: 1.0.0
 tags: [navigation, tabs, mobile]
 syncStatus: reviewed
 verified: true
@@ -70,7 +72,7 @@ code: |
 
 ## 交互契约
 
-- 根节点是带 `role="tablist"` 的 `nav`；每一项是带 `role="tab"` 的 `button`，`aria-selected` 由 `modelValue` 推导。
+- 根节点是 `nav` 地标；它是站点导航而非 tab 组件，因此没有 `role="tablist"`。每一项是 `button`，当前项带由 `modelValue` 推导的 `aria-current="page"`。
 - 点击禁用项，或在 `disabled=true` 时点击任意项，都不会派发事件。
 - 点击当前已选中项仍会派发 `update:modelValue` 和 `change`；需要忽略重复值时在调用方处理。
 - `safeAreaBottom` 只控制底部占位节点；fixed 与非 fixed 布局都可以使用。
@@ -88,7 +90,7 @@ code: |
 
 - **Model contract:** `TxTabBar` 只在 tab bar 本身启用且被点击 item 也启用时派发 `update:modelValue` 与 `change`。禁用项会渲染原生 disabled button。
 - **布局说明:** `fixed=true` 会把 tab bar 固定到视口，`safeAreaBottom=true` 会追加 `env(safe-area-inset-bottom)` spacer。预览框、弹层和嵌入式 shell 内应同时关闭。
-- **实测覆盖:** `tab-bar.test.ts` 覆盖 tablist 语义、选中态、图标、badge、z-index CSS 变量、fixed/safe-area 开关、启用态派发，以及禁用 bar/item 阻断。
+- **实测覆盖:** `tab-bar.test.ts` 覆盖导航语义（nav 地标、无 `role`）、`aria-current="page"` 选中项、图标、badge、z-index CSS 变量、fixed/safe-area 开关、启用态派发，以及禁用 bar/item 阻断。
 
 ## Source
 

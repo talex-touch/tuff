@@ -108,12 +108,21 @@ code: |
   </script>
 
   <template>
-    <label style="display: inline-flex; align-items: center; gap: 10px;">
-      <span>关</span>
-      <TuffSwitch v-model="compact" />
-      <span>开</span>
-      <strong>紧凑模式</strong>
-    </label>
+    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px;">
+      <label style="display: inline-flex; align-items: center; gap: 10px;">
+        <span>关</span>
+        <TuffSwitch v-model="compact" />
+        <span>开</span>
+        <strong>紧凑模式</strong>
+      </label>
+      <label style="display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; max-width: 320px; padding: 12px 14px; border: 1px solid var(--tx-border-color-light); border-radius: 14px;">
+        <span style="display: inline-flex; flex-direction: column; gap: 4px;">
+          <strong>自动同步</strong>
+          <small style="color: var(--tx-text-color-secondary); font-size: 12px;">{{ autoSync ? '开' : '关' }}</small>
+        </span>
+        <TuffSwitch v-model="autoSync" />
+      </label>
+    </div>
   </template>
 ---
 :::
@@ -128,22 +137,55 @@ code: |
 
   const success = ref(true)
   const warning = ref(true)
+  const violet = ref(false)
   </script>
 
   <template>
-    <div class="custom-switch-row">
-      <TuffSwitch v-model="success" class="custom-switch custom-switch--success" />
-      <TuffSwitch v-model="warning" class="custom-switch custom-switch--warning" />
+    <div class="switch-custom-color-demo">
+      <label class="switch-custom-color-demo__item is-success">
+        <span>成功色</span>
+        <TuffSwitch v-model="success" />
+      </label>
+      <label class="switch-custom-color-demo__item is-warning">
+        <span>警告色</span>
+        <TuffSwitch v-model="warning" />
+      </label>
+      <label class="switch-custom-color-demo__item is-violet">
+        <span>紫色</span>
+        <TuffSwitch v-model="violet" />
+      </label>
     </div>
   </template>
 
   <style scoped>
-  .custom-switch-row :deep(.custom-switch--success.is-active) {
-    background-color: var(--tx-color-success);
+  .switch-custom-color-demo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
   }
 
-  .custom-switch-row :deep(.custom-switch--warning.is-active) {
-    background-color: var(--tx-color-warning);
+  .switch-custom-color-demo__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--switch-demo-color);
+  }
+
+  .switch-custom-color-demo__item :deep(.tuff-switch.is-active) {
+    background-color: var(--switch-demo-color);
+  }
+
+  .switch-custom-color-demo__item.is-success {
+    --switch-demo-color: var(--tx-color-success);
+  }
+
+  .switch-custom-color-demo__item.is-warning {
+    --switch-demo-color: var(--tx-color-warning);
+  }
+
+  .switch-custom-color-demo__item.is-violet {
+    --switch-demo-color: #8b5cf6;
   }
   </style>
 ---
@@ -243,13 +285,13 @@ code: |
 
 - **Model contract:** `TxSwitch` 由 `modelValue` 控制。用户交互会同时派发 `update:modelValue` 与 `change`，参数为下一个 boolean；视觉状态在父级回写新 prop 后更新。
 - **键盘契约:** 启用状态响应点击、Enter 与 Space。禁用状态设置 `tabindex="-1"`，保持 `aria-disabled="true"`，且不派发事件。
-- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击与键盘派发、禁用阻断，以及禁用时的 tabindex/aria 状态。
+- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击派发、禁用阻断，以及禁用时的 tabindex/aria 状态。
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/switch/src/TxSwitch.vue`。
 - Style source: `packages/tuffex/packages/components/src/switch/style/index.scss`。
 - Export entry: `packages/tuffex/packages/components/src/switch/index.ts` 导出 `TuffSwitch`，别名 `TxSwitch`，并使用组件自身的 `TuffSwitch` name 注册。
-- Coverage: `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts` 验证语义、尺寸 class、点击/键盘更新与禁用行为。
+- Coverage: `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts` 验证语义、尺寸 class、点击更新与禁用行为。
 
 <TuffDocSourceLink />

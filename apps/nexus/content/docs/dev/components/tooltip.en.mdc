@@ -11,8 +11,7 @@ verified: true
 
 # Tooltip
 
-> Small and lightweight hints that do not interrupt the flow.  
-> **Status**: Beta
+> Small and lightweight hints that do not interrupt the flow.
 
 Tooltip is a semantic wrapper over `TxBaseAnchor`:
 - Tooltip handles trigger timing and hint content;
@@ -120,7 +119,7 @@ code: |
 | `keepAliveContent` | `boolean` | `false` | Passes through to `TxBaseAnchor` to keep floating content mounted after close. |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | Overrides outside-click close behavior. Anchor config is used next, then click mode defaults to `true`. |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | Overrides reference click toggle behavior. Anchor config is used next, then click mode defaults to `true`. |
-| `anchor` | `Partial<BaseAnchorProps>` | `{}` | Pass-through config for `TxBaseAnchor`; tooltip supplies placement, arrow, panel, and animation defaults first. |
+| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | Pass-through config for `TxBaseAnchor`; `modelValue` / `disabled` are owned by Tooltip (set them via `v-model` / the `disabled` prop, not `anchor`); tooltip supplies placement, arrow, panel, and animation defaults first. |
 
 ### Events
 

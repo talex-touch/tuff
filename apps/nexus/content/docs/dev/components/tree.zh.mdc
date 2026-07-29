@@ -10,7 +10,7 @@ verified: true
 ---
 # Tree 树形
 
-基础树形组件，支持搜索过滤、单选/多选与展开控制。
+`TxTree` 用于在稳定的层级结构中定位并选择一个范围——资源域、权限域、组织架构。它只负责导航与选择，不做父子级联或懒加载；需要在收起的输入框里选层级用 `TxTreeSelect`，需要批量授权用 `TxTransfer`。
 
 ## 基础用法
 
@@ -150,7 +150,7 @@ code: |
 - 默认过滤逻辑是 `node.label.toLowerCase().includes(query.toLowerCase())`；自定义 `filterMethod` 收到 trim 后的原始查询。
 - 选择模型是扁平的。`checkable` 只改变控件形态，不提供父子半选或子孙级联。
 - `disabled` 和 `node.disabled` 会阻止选择，但可展开节点的 caret 仍可展开/折叠。
-- 根节点使用 `role="tree"`，行使用 `role="treeitem"`；自定义 `item` 插槽替换整行时应保留等价语义。
+- 根节点使用 `role="tree"`（`multiple` 模式下带 `aria-multiselectable`）；每行外层是 `role="treeitem"`，带 `aria-level`、`aria-setsize`、`aria-posinset`（在同级兄弟中的位置），并按需带 `aria-expanded` / `aria-selected` / `aria-disabled`，外层列表为 `role="presentation"`。`item` 插槽只替换行内视觉，因此这些行语义会自动保留。
 
 ## 样式定制
 
@@ -173,7 +173,7 @@ code: |
 ## 审阅说明
 
 - 已对照 `packages/tuffex/packages/components/src/tree/src/TxTree.vue` 和 `types.ts` 核对。
-- 现有测试覆盖默认展开渲染与选择事件；文档补充了源码可见但测试未直接覆盖的过滤展开、受控展开和非级联 checkbox 行为。
+- 现有测试覆盖默认展开渲染、选择事件，以及 `role="treeitem"` 的 set/position 语义（`aria-setsize` / `aria-posinset`，外层为 presentation 列表）；文档补充了源码可见但测试未直接覆盖的过滤展开、受控展开和非级联 checkbox 行为。
 - 权限编排示例应让 `TxTree` 只负责范围选择；资源分配交给相邻控件。
 - 截图参考：`.codex-screenshots/nexus-tree-permission-orchestration-demo-playwright-2026-05-28.png`。
 
@@ -181,6 +181,6 @@ code: |
 
 - Component source: `packages/tuffex/packages/components/src/tree/src/TxTree.vue`.
 - Types: `packages/tuffex/packages/components/src/tree/src/types.ts`.
-- **实测覆盖:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` 覆盖默认展开的子节点渲染与选择值发出。
+- **实测覆盖:** `packages/tuffex/packages/components/src/tree/__tests__/tree.test.ts` 覆盖默认展开的子节点渲染、选择值发出，以及每个兄弟组的 `aria-setsize` / `aria-posinset`（外层 `role="presentation"` 列表）。
 
 <TuffDocSourceLink />

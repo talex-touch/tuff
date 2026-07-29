@@ -10,7 +10,7 @@ verified: true
 ---
 # LoadingOverlay 加载遮罩
 
-用于在内容区域或全屏展示加载遮罩。
+当内容应保持可见，仅需在加载、保存、同步或长时间操作期间临时阻塞时，使用 `LoadingOverlay`。
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -81,16 +81,39 @@ code: |
 
 `TxLoadingOverlay` 适合阻断“某个数据容器正在刷新”的短等待，不应该替代首屏加载态。首屏加载用 `TxLoadingState`；表格局部刷新或任务队列重算时再使用遮罩，并保持底层内容可见，减少布局跳动。
 
-::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="局部 LoadingOverlay 与 Toast / Tooltip / Spinner 的截图验证组合。"}
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="局部 LoadingOverlay 与 Toast / Tooltip / Spinner 的截图验证组合。"}
 ---
 code: |
+  <script setup lang="ts">
+  import { toast } from '@talex-touch/tuffex/utils'
+  import { ref } from 'vue'
+
+  const syncing = ref(true)
+
+  function notify() {
+    toast({ id: 'nexus-task-center', title: '同步任务已排队', variant: 'warning', duration: 0 })
+  }
+  </script>
+
   <template>
-    <TxLoadingOverlay :loading="true" text="正在刷新任务队列…" :spinner-size="22">
-      <section class="grid gap-2">
-        <TxProgressBar :percentage="72" status="warning" />
-        <TxProgressBar :percentage="96" status="success" />
-      </section>
-    </TxLoadingOverlay>
+    <section class="grid gap-3">
+      <TxToastHost />
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <TxTooltip content="Tooltip 只解释当前动作。">
+          <TxButton size="sm" icon="i-carbon-information" @click="notify">提示说明</TxButton>
+        </TxTooltip>
+        <span style="display: inline-flex; align-items: center; gap: 6px;">
+          <TxSpinner :size="14" />
+          行内等待
+        </span>
+      </div>
+      <TxLoadingOverlay :loading="syncing" text="正在刷新任务队列…" :spinner-size="22">
+        <section class="grid gap-2">
+          <TxProgressBar :percentage="72" status="warning" />
+          <TxProgressBar :percentage="96" status="success" />
+        </section>
+      </TxLoadingOverlay>
+    </section>
   </template>
 ---
 :::

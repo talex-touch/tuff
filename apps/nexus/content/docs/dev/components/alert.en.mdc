@@ -23,7 +23,7 @@ Reviewed against `packages/tuffex/packages/components/src/alert/src/types.ts`, `
 ---
 code: |
   <template>
-    <div class="tuff-demo-stack">
+    <div>
       <TxAlert title="Heads up" message="Check your configuration." type="info" />
       <TxAlert title="Success" message="Saved successfully." type="success" />
       <TxAlert title="Warning" message="Something needs your attention." type="warning" />

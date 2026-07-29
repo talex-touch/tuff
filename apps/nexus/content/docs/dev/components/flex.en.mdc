@@ -70,11 +70,11 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | CSS `flex-direction` value. |
+| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | Main-axis direction; `row` lays children out horizontally, `column` stacks them vertically. |
 | `gap` | `number \| string` | `12` | Gap between children. Numbers become px. |
-| `align` | `string` | `'stretch'` | CSS `align-items` value. |
-| `justify` | `string` | `'flex-start'` | CSS `justify-content` value. |
-| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | CSS `flex-wrap` value. |
+| `align` | `string` | `'stretch'` | Cross-axis alignment (align-items); use `center` for icon+label rows and keep `stretch` when children should share the tallest height. Typed as a free string, so any CSS keyword is accepted. |
+| `justify` | `string` | `'flex-start'` | Main-axis distribution (justify-content); `space-between` pushes items apart, `flex-start` groups them at the start. Also a free string. |
+| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | Whether children wrap; use `wrap` for toolbars and filter rows that must survive narrow containers. |
 | `inline` | `boolean` | `false` | Use `inline-flex` instead of block-level `flex`. |
 
 ### Slots

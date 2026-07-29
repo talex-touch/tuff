@@ -41,10 +41,16 @@ In dashboard headers, `TxStatusBadge` usually works with `TxStatCard`, `TxProgre
 code: |
   <template>
     <section class="grid gap-3">
-      <TxStatusBadge text="Review done" status="success" size="sm" />
-      <TxStatusBadge text="Build stable" status="success" os="linux" size="sm" />
-      <TxStatusBadge text="Sync healthy" status-key="granted" size="sm" />
-      <TxProgressBar :percentage="86" status="success" show-text />
+      <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+        <TxStatusBadge text="Review done" status="success" size="sm" />
+        <TxStatusBadge text="Build stable" status="success" os="linux" size="sm" />
+        <TxStatusBadge text="Sync healthy" status-key="granted" size="sm" />
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <TxStatCard variant="progress" value="99.9%" label="API availability" meta="Normal" :progress="99" icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]" />
+        <TxStatCard variant="progress" :value="18" label="Pending queue" meta="Watch" :progress="64" icon-class="i-carbon-queued text-[var(--tx-color-warning)]" />
+        <TxStatCard variant="progress" :value="2" label="Alerts" meta="Blocked" :progress="22" icon-class="i-carbon-warning-alt text-[var(--tx-color-danger)]" />
+      </div>
     </section>
   </template>
 ---

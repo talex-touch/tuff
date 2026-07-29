@@ -65,12 +65,12 @@ code: |
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
 | `text` | `string` | `''` | 渲染到所有 SVG 文本层的内容。 |
-| `strokeColor` | `string` | `'#4C4CFF'` | 描边动画颜色。 |
-| `fillColor` | `string` | `'#111827'` | 最终填充颜色。 |
+| `strokeColor` | `string` | `'#4C4CFF'` | 描边阶段（先出现的动画轮廓）的颜色；深色背景上应选高对比色，否则第一段描边动画几乎不可见。 |
+| `fillColor` | `string` | `'#111827'` | 描边动画结束后延迟显现的最终文字颜色。 |
 | `durationMs` | `number` | `1800` | 动画时长，单位毫秒；描边和填充动画共用。 |
-| `strokeWidth` | `number` | `2` | SVG 描边宽度，也会影响 viewBox padding。 |
+| `strokeWidth` | `number` | `2` | SVG 描边宽度，同时决定 viewBox padding；数值偏大（如超过 3）会明显改变布局尺寸。 |
 | `fontSize` | `string \| number` | `64` | 字号；数字转为 px，字符串原样透传。 |
-| `fontWeight` | `string \| number` | `700` | SVG 字重。 |
+| `fontWeight` | `string \| number` | `700` | SVG 字重；越大字形轮廓越粗，描边动画也越厚重。 |
 | `fontFamily` | `string` | `'inherit'` | SVG 字体族。 |
 
 ### Events

@@ -59,6 +59,14 @@ code: |
       shortcut: '⌘ ↵',
     },
     {
+      id: 'sync-settings',
+      title: 'Sync Settings',
+      description: 'Open account sync and device management',
+      keywords: ['sync', 'account', 'device'],
+      icon: 'i-carbon-cloud',
+      shortcut: '⌘ ,',
+    },
+    {
       id: 'locked-admin',
       title: 'Admin Script',
       description: 'Requires administrator permission before running',
@@ -156,9 +164,9 @@ code: |
 
 - `modelValue` is the single source of truth for visibility. The palette emits `open` when it becomes visible and `close` when an existing open state is dismissed.
 - Search is local substring matching across `title`, `description`, and every `keywords` entry. The component does not rank, debounce, or fetch remote results.
-- `ArrowDown` / `ArrowUp` cycle through the currently visible commands; `Enter` selects the active non-disabled command; `Escape` closes the overlay.
+- `ArrowDown` / `ArrowUp` cycle through the visible commands and skip disabled ones, so the highlight never parks on an unusable command; `Enter` selects the active command; `Escape` closes the overlay. The initial highlight lands on the first enabled command, and arrow navigation is a no-op when every command is disabled.
 - IME composition (`isComposing`, keyCode `229`, or an active composition session) suppresses keyboard selection so Chinese/Japanese/Korean input is not submitted early.
-- `select` emits the original `CommandPaletteItem`. Disabled commands stay visible but never emit `select`; `closeOnSelect=false` keeps the palette open after selection.
+- `select` emits the original `CommandPaletteItem`. Disabled commands stay visible as `role="option"` with `aria-disabled="true"` and are removed from the tab order (`tabindex="-1"`); they never emit `select`. `closeOnSelect=false` keeps the palette open after selection.
 
 ## Best Practices
 
@@ -171,12 +179,12 @@ code: |
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/command-palette/src/types.ts`, `TxCommandPalette.vue`, and `command-palette.test.ts`.
-- Existing tests cover local filtering and selection, IME composition guarding, matched text highlighting, and custom `empty` / `footer` slots.
+- Existing tests cover local filtering and selection, disabled-command skipping with `aria-disabled` / `tabindex` marking, IME composition guarding, matched text highlighting, and custom `empty` / `footer` slots.
 - Accessibility note: the overlay renders `role="dialog"` with `aria-modal="true"`; keep the trigger label and placeholder specific enough for the current command domain, and do not treat the displayed `shortcut` as actual shortcut registration.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue`.
 - Types: `packages/tuffex/packages/components/src/command-palette/src/types.ts` exports `CommandPaletteProps`, `CommandPaletteEmits`, `CommandPaletteItem`, and `CommandPaletteClassValue`.
-- **Verified coverage:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` verifies filtering, select emits, IME guarding, match highlighting, and slots.
+- **Verified coverage:** `packages/tuffex/packages/components/src/command-palette/__tests__/command-palette.test.ts` verifies filtering, select emits, disabled-command skipping and `aria-disabled` / `tabindex` marking, IME guarding, match highlighting, and slots.
 <TuffDocSourceLink />

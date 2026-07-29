@@ -151,6 +151,7 @@ code: |
 - JSON and YAML linting are enabled only when `lint=true`; TOML, INI, and JavaScript do not currently add custom lint diagnostics.
 - External `modelValue` changes replace the full editor document without re-emitting update/change events.
 - Toolbar slot props are functions from the runtime editor. They are unavailable until the runtime component has mounted.
+- `Cmd/Ctrl+Shift+F` inside the editor runs `format()`; the shortcut is always intercepted (the keymap handler always returns `true`), so it is swallowed even when the current language has no formatter.
 
 ## Style Customization
 

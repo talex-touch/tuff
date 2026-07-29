@@ -2,6 +2,8 @@
 title: "MarkdownView Markdown"
 description: "GitHub-flavored Markdown renderer with explicit sanitization and light/dark theme modes."
 category: Data
+status: beta
+since: 1.0.0
 tags: [markdown, sanitize, theme]
 syncStatus: reviewed
 verified: true
@@ -64,10 +66,25 @@ Set `theme` explicitly when the surrounding surface is known. Leave it as `auto`
 ::::TuffDemoWrapper{demo="MarkdownViewLightDarkDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  const richContent = [
+    '## Theme preview',
+    '',
+    'The same Markdown keeps its structure in light and dark themes.',
+    '',
+    '- sanitize stays enabled by default',
+    '- `theme` can be set explicitly',
+  ].join('\n')
+  </script>
+
   <template>
     <div class="grid gap-4 md:grid-cols-2">
-      <TxMarkdownView :content="richContent" theme="light" />
-      <TxMarkdownView :content="richContent" theme="dark" />
+      <div style="padding: 12px; border-radius: 12px; border: 1px solid #d1d9e0; background: #fff;">
+        <TxMarkdownView :content="richContent" theme="light" />
+      </div>
+      <div style="padding: 12px; border-radius: 12px; border: 1px solid #30363d; background: #0d1117;">
+        <TxMarkdownView :content="richContent" theme="dark" />
+      </div>
     </div>
   </template>
 ---

@@ -189,6 +189,7 @@ code: |
 - Group-level `disabled` disables every child. Item-level `disabled` disables only that radio.
 - Keyboard navigation uses only enabled radios: arrow keys wrap, and `Home` / `End` jump to the first / last enabled item.
 - Button groups render an animated indicator. For `glass` and `blur` indicators, `updateOnSettled` defaults to waiting for the indicator to settle before emitting the model update.
+- The button-group indicator is draggable: in `type="button"` groups, press and drag the indicator horizontally, and releasing snaps to and selects the nearest enabled radio, emitting `update:modelValue` / `change`. Disabled groups ignore the drag (pointerdown is a no-op).
 - `direction` only affects `standard` and `card` groups. Button groups always resolve to row layout.
 
 ## API

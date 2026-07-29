@@ -93,6 +93,8 @@ Remote items without `file` are rendered and removable, but their URLs are not r
 | `accept` | `string` | `'image/*'` | Accepted image types passed to the native input. |
 | `disabled` | `boolean` | `false` | Disables adding and removing images. |
 | `max` | `number` | `9` | Maximum total number of images. |
+| `uploadText` | `string` | `'Upload'` | Text on the add tile. Override to localize. |
+| `removeLabel` | `(name?: string) => string` | `Remove {name}` | Builds each remove button's `aria-label`. Override to localize. |
 
 ### ImageUploaderFile
 

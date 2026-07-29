@@ -102,13 +102,13 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|------|------|
-| `modelValue` | `string[]` | `[]` | 标签列表 |
-| `placeholder` | `string` | `'Add tag'` | 占位文本 |
-| `disabled` | `boolean` | `false` | 禁用 |
-| `max` | `number` | `20` | 最大数量 |
-| `allowDuplicates` | `boolean` | `false` | 允许重复 |
-| `separators` | `string[]` | `[',']` | 分隔符 |
-| `confirmOnBlur` | `boolean` | `true` | 失焦确认 |
+| `modelValue` | `string[]` | `[]` | 受控标签列表，也是唯一数据源；每次增删都会用新数组触发 `update:modelValue`。 |
+| `placeholder` | `string` | `'Add tag'` | 占位文本；达到 `max` 后会被清空。 |
+| `disabled` | `boolean` | `false` | 禁用后不可新增/移除，已有标签的关闭按钮也失效。 |
+| `max` | `number` | `20` | 标签数量硬上限；设为流程真正需要的最小值。达到上限后内部输入框禁用、占位文本隐藏。 |
+| `allowDuplicates` | `boolean` | `false` | 是否允许重复标签；关闭时按 trim 后精确匹配去重（区分大小写）。 |
+| `separators` | `string[]` | `[',']` | 拆分粘贴 / 键入文本的分隔符；帮助文案里出现的分隔符都要加进来。Enter 始终确认当前输入。 |
+| `confirmOnBlur` | `boolean` | `true` | 失焦时是否提交未确认的输入。 |
 
 ### Events
 
