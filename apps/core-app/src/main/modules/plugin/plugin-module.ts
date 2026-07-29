@@ -93,6 +93,8 @@ import {
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
+import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
 import {
   createFixedPluginSnipasteDiscovery,
   createFixedPluginSnipasteExecutor,
@@ -1864,6 +1866,13 @@ export class PluginModule extends BaseModule {
         }
       })
     })
+    const intelligenceCapabilities = createPluginIntelligenceCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      service: createPluginIntelligenceHostService()
+    })
     const authorizePluginCapability = (pluginName: string, permissionId: string): boolean => {
       try {
         const permissionModule = getPermissionModule()
@@ -2226,7 +2235,8 @@ export class PluginModule extends BaseModule {
       capabilityDefinitions: Object.freeze([
         ...this.pluginBusinessCapabilities.definitions,
         ...requestReplyCapabilities.definitions,
-        ...voiceCapabilities.definitions
+        ...voiceCapabilities.definitions,
+        ...intelligenceCapabilities.definitions
       ]),
       authorizeCapability: authorizePluginCapability,
       watchPermissionRevoked: watchPluginPermissionRevoked,

@@ -212,6 +212,13 @@ vi.mock('../voice/voice-service', () => ({
     streamDictation: vi.fn()
   }
 }))
+vi.mock('./host/plugin-intelligence-host-service', () => ({
+  createPluginIntelligenceHostService: () =>
+    Object.freeze({
+      invoke: vi.fn(),
+      listProviderModels: vi.fn()
+    })
+}))
 vi.mock('../network', () => ({ getNetworkService: mocks.getNetworkService }))
 vi.mock('../permission', () => ({
   createProtectedRegister:
@@ -396,7 +403,7 @@ describe('PluginModule facade', () => {
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
   })
 
-  it('wires the immutable 29-ID global manifest and activation-local system factory', async () => {
+  it('wires the immutable 30-ID global manifest and activation-local system factory', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockImplementation((name) =>
       name === 'calendar' ? mocks.plugin : undefined
@@ -410,7 +417,7 @@ describe('PluginModule facade', () => {
     const definitions = runtimeOptions?.capabilityDefinitions as
       | ReadonlyArray<{ id: string }>
       | undefined
-    expect(definitions).toHaveLength(29)
+    expect(definitions).toHaveLength(30)
     expect(definitions?.map((definition) => definition.id)).toContain('plugin.info.get')
     expect(definitions?.map((definition) => definition.id)).toContain('permission.check')
     expect(definitions?.map((definition) => definition.id)).toContain('http.request')
@@ -419,6 +426,9 @@ describe('PluginModule facade', () => {
     expect(definitions?.map((definition) => definition.id)).toContain('flow.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('voice.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('voice.stream')
+    expect(
+      definitions?.filter((definition) => definition.id === 'intelligence.invoke')
+    ).toHaveLength(1)
     expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
     expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)

@@ -1361,6 +1361,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasVoiceInvokeFacade = hasDeclaredCapability('voice.invoke')
   const hasVoiceStreamFacade = hasDeclaredCapability('voice.stream')
   const hasVoiceFacade = hasVoiceInvokeFacade || hasVoiceStreamFacade
+  const hasIntelligenceFacade = hasDeclaredCapability('intelligence.invoke')
   const hasSnipasteFacade = hasDeclaredCapability('process.spawn')
   const hasWorkspaceScriptsFacade =
     snapshot.manifest.name === 'touch-workspace-scripts' &&
@@ -1378,6 +1379,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const fixedChannelOperations = new setConstructor(${JSON.stringify(PLUGIN_CHANNEL_OPERATION_IDS)})
   const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
   const fixedFlowOperations = new setConstructor(${JSON.stringify(PLUGIN_FLOW_OPERATION_IDS)})
+  const fixedIntelligenceCapabilities = new setConstructor(['text.chat', 'vision.ocr'])
   const fixedSnipasteActions = new setConstructor(${JSON.stringify(PLUGIN_SNIPASTE_ACTION_IDS)})
   const fixedSystemActions = new setConstructor(${JSON.stringify(PLUGIN_SYSTEM_ACTION_IDS)})
   const fixedWindowPresetActions = new setConstructor(${JSON.stringify(PLUGIN_WINDOW_PRESET_ACTION_IDS)})
@@ -1689,6 +1691,96 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(voiceFacade)
 
+  const mapIntelligenceInvokeResult = (result) => {
+    if (!result || typeof result !== 'object' || result.operation !== 'capability.invoke') {
+      throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+    }
+    return cloneLocalDto({
+      result: result.result,
+      provider: result.providerId,
+      model: result.modelId,
+      traceId: result.traceId,
+      latency: result.latency
+    })
+  }
+  objectFreeze(mapIntelligenceInvokeResult)
+  const invokeIntelligenceCapability = (capabilityId, payload, options) => {
+    if (
+      typeof capabilityId !== 'string' ||
+      !hasSetValue(fixedIntelligenceCapabilities, capabilityId)
+    ) {
+      return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+    }
+    const request = {
+      operation: 'capability.invoke',
+      capabilityId,
+      payload
+    }
+    if (options !== undefined) request.options = options
+    return mapCapabilityResult(
+      invokeCapability('intelligence.invoke', request),
+      mapIntelligenceInvokeResult
+    )
+  }
+  objectFreeze(invokeIntelligenceCapability)
+  const intelligenceTextFacade = objectCreate(null)
+  const intelligenceVisionFacade = objectCreate(null)
+  const intelligenceFacade = objectCreate(null)
+  if (hasIntelligenceFacade) {
+    defineFacadeMethod(intelligenceFacade, 'invoke', invokeIntelligenceCapability)
+    defineFacadeMethod(intelligenceTextFacade, 'chat', (payload, options) =>
+      invokeIntelligenceCapability('text.chat', payload, options)
+    )
+    defineFacadeMethod(intelligenceVisionFacade, 'ocr', (payload, options) =>
+      invokeIntelligenceCapability('vision.ocr', payload, options)
+    )
+    objectDefineProperty(intelligenceFacade, 'text', {
+      value: intelligenceTextFacade,
+      enumerable: true
+    })
+    objectDefineProperty(intelligenceFacade, 'vision', {
+      value: intelligenceVisionFacade,
+      enumerable: true
+    })
+    defineFacadeMethod(intelligenceFacade, 'getProviderModelOptions', (input = {}) => {
+      let request
+      try {
+        request = cloneLocalDto(input)
+      } catch {
+        return rejectPromise(
+          createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+        )
+      }
+      if (
+        !request ||
+        typeof request !== 'object' ||
+        arrayIsArray(request) ||
+        objectKeys(request).length !== 1 ||
+        !objectHasOwn(request, 'capabilityId') ||
+        request.capabilityId !== 'text.chat'
+      ) {
+        return rejectPromise(
+          createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+        )
+      }
+      return mapCapabilityResult(
+        invokeCapability('intelligence.invoke', {
+          operation: 'provider-models.list',
+          capabilityId: 'text.chat'
+        }),
+        (result) => {
+          if (!result || typeof result !== 'object' || result.operation !== 'provider-models.list') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.providers)
+        }
+      )
+    })
+  }
+  objectFreeze(intelligenceTextFacade)
+  objectFreeze(intelligenceVisionFacade)
+  objectFreeze(intelligenceFacade)
+
   const snipasteFacade = objectCreate(null)
   if (hasSnipasteFacade) {
     defineFacadeMethod(snipasteFacade, 'runAction', (actionId) => {
@@ -1827,6 +1919,12 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   if (hasVoiceFacade) {
     objectDefineProperty(pluginFacade, 'voice', { value: voiceFacade, enumerable: true })
+  }
+  if (hasIntelligenceFacade) {
+    objectDefineProperty(pluginFacade, 'intelligence', {
+      value: intelligenceFacade,
+      enumerable: true
+    })
   }
   if (hasSnipasteFacade) {
     objectDefineProperty(pluginFacade, 'snipaste', { value: snipasteFacade, enumerable: true })
@@ -2204,6 +2302,10 @@ const CONTEXT_BOOTSTRAP = String.raw`
     manifest: { value: deepFreeze(snapshot.manifest) },
     hostCapabilities: { value: hostCapabilities },
     plugin: { value: pluginFacade, configurable: true },
+    intelligence: {
+      value: hasIntelligenceFacade ? intelligenceFacade : undefined,
+      configurable: true
+    },
     features: { value: hasFeaturesFacade ? featuresFacade : undefined, configurable: true },
     secret: { value: hasSecretFacade ? secretFacade : undefined, configurable: true },
     clipboard: { value: hasClipboardFacade ? clipboardFacade : undefined, configurable: true },
