@@ -101,6 +101,8 @@ import {
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
 import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
 import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
+import { createPluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
+import { createPluginIntelligenceContextHostService } from './host/plugin-intelligence-context-host-service'
 import {
   createFixedPluginSnipasteDiscovery,
   createFixedPluginSnipasteExecutor,
@@ -1880,6 +1882,13 @@ export class PluginModule extends BaseModule {
         this.runtimeService?.resolve(activation)?.owner.hostGeneration,
       service: createPluginIntelligenceHostService()
     })
+    const intelligenceContextCapabilities = createPluginIntelligenceContextCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      service: createPluginIntelligenceContextHostService()
+    })
     const authorizePluginCapability = (pluginName: string, permissionId: string): boolean => {
       try {
         const permissionModule = getPermissionModule()
@@ -2281,7 +2290,8 @@ export class PluginModule extends BaseModule {
         ...this.pluginBusinessCapabilities.definitions,
         ...requestReplyCapabilities.definitions,
         ...voiceCapabilities.definitions,
-        ...intelligenceCapabilities.definitions
+        ...intelligenceCapabilities.definitions,
+        ...intelligenceContextCapabilities.definitions
       ]),
       authorizeCapability: authorizePluginCapability,
       watchPermissionRevoked: watchPluginPermissionRevoked,

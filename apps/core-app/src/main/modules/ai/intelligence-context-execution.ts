@@ -31,15 +31,23 @@ export interface IntelligenceContextActor {
 
 interface PreparedContextExecution {
   payload: IntelligenceChatPayload
-  options: IntelligenceInvokeOptions
+  options: HostContextExecutionInvokeOptions
   summary: IntelligenceContextExecutionSummary
+}
+
+type HostContextExecutionInvokeOptions = IntelligenceInvokeOptions & {
+  readonly signal?: AbortSignal
+}
+
+export interface IntelligenceContextExecutionHostOptions {
+  readonly signal?: AbortSignal
 }
 
 interface ContextExecutionRuntime {
   invoke<T = unknown>(
     capabilityId: string,
     payload: unknown,
-    options?: IntelligenceInvokeOptions
+    options?: HostContextExecutionInvokeOptions
   ): Promise<IntelligenceInvokeResult<T>>
   stream<T = unknown>(
     capabilityId: string,
@@ -52,6 +60,19 @@ interface ContextExecutionHygiene {
   prepareTurn: ContextHygieneService['prepareTurn']
   revalidatePackageMemories: ContextHygieneService['revalidatePackageMemories']
   appendAssistantTurn: ContextHygieneService['appendAssistantTurn']
+}
+
+class IntelligenceContextOperationCancelledError extends Error {
+  readonly code = 'INTELLIGENCE_OPERATION_CANCELLED' as const
+
+  constructor() {
+    super('INTELLIGENCE_OPERATION_CANCELLED')
+    this.name = 'IntelligenceContextOperationCancelledError'
+  }
+}
+
+function throwIfContextCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new IntelligenceContextOperationCancelledError()
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -251,24 +272,29 @@ export class IntelligenceContextExecutionService {
   private withContextOptions(
     request: IntelligenceContextExecutionRequest,
     actor: IntelligenceContextActor,
-    summary: IntelligenceContextExecutionSummary
-  ): IntelligenceInvokeOptions {
-    const options: IntelligenceInvokeOptions = {
+    summary: IntelligenceContextExecutionSummary,
+    signal?: AbortSignal
+  ): HostContextExecutionInvokeOptions {
+    const options: HostContextExecutionInvokeOptions = {
       ...(request.options ?? {}),
       metadata: {
         ...(request.options?.metadata ?? {}),
         caller: actor.id,
         contextExecution: summary
-      }
+      },
+      ...(signal ? { signal } : {})
     }
     return inheritOuterGovernance(request.options, options)
   }
 
   private async prepare(
     request: IntelligenceContextExecutionRequest,
-    actor: IntelligenceContextActor
+    actor: IntelligenceContextActor,
+    signal?: AbortSignal
   ): Promise<PreparedContextExecution> {
+    throwIfContextCancelled(signal)
     this.validateRequest(request, actor)
+    throwIfContextCancelled(signal)
     const mode: IntelligenceContextMode = request.context.mode
     const requestedSessionId = request.context.sessionId?.trim()
     const startNewSession = mode !== 'continue' || !requestedSessionId
@@ -293,8 +319,13 @@ export class IntelligenceContextExecutionService {
           noHistory: mode === 'stateless'
         }
       })
+      // prepareTurn persists the governed user turn. Cancellation observed after this
+      // non-cancellable await prevents provider work but cannot roll that commit back.
+      throwIfContextCancelled(signal)
       contextPackage = await this.hygiene.revalidatePackageMemories(prepared.package)
+      throwIfContextCancelled(signal)
     } catch (error) {
+      if (signal?.aborted) throw new IntelligenceContextOperationCancelledError()
       if (!isContextInputProviderSafe(request.input)) {
         log.warn('Context prepare failed; blocked unsafe current-input fallback', {
           meta: {
@@ -315,7 +346,7 @@ export class IntelligenceContextExecutionService {
       })
       return {
         payload: this.assembler.currentOnly(request),
-        options: this.withContextOptions(request, actor, summary),
+        options: this.withContextOptions(request, actor, summary, signal),
         summary
       }
     }
@@ -323,7 +354,7 @@ export class IntelligenceContextExecutionService {
     const summary = safeContextSummary(request, contextPackage, prepared)
     return {
       payload: this.assembler.assemble(contextPackage, request.payload),
-      options: this.withContextOptions(request, actor, summary),
+      options: this.withContextOptions(request, actor, summary, signal),
       summary
     }
   }
@@ -331,8 +362,10 @@ export class IntelligenceContextExecutionService {
   private async finalizeAssistantTurn(
     summary: IntelligenceContextExecutionSummary,
     content: string,
-    traceId?: string
+    traceId?: string,
+    signal?: AbortSignal
   ): Promise<IntelligenceContextExecutionSummary> {
+    throwIfContextCancelled(signal)
     if (!summary.sessionId || !content.trim()) return summary
     try {
       await this.hygiene.appendAssistantTurn({
@@ -342,6 +375,7 @@ export class IntelligenceContextExecutionService {
       })
       return summary
     } catch (error) {
+      if (signal?.aborted) throw new IntelligenceContextOperationCancelledError()
       log.warn('Context assistant turn finalize failed', {
         meta: {
           sessionId: summary.sessionId,
@@ -354,18 +388,24 @@ export class IntelligenceContextExecutionService {
 
   async invoke<T = unknown>(
     request: IntelligenceContextExecutionRequest,
-    actor: IntelligenceContextActor
+    actor: IntelligenceContextActor,
+    hostOptions: IntelligenceContextExecutionHostOptions = {}
   ): Promise<IntelligenceContextExecutionResult<T>> {
-    const execution = await this.prepare(request, actor)
+    const signal = hostOptions.signal
+    throwIfContextCancelled(signal)
+    const execution = await this.prepare(request, actor, signal)
+    throwIfContextCancelled(signal)
     const invocation = await this.runtime.invoke<T>(
       request.capabilityId,
       execution.payload,
       execution.options
     )
+    throwIfContextCancelled(signal)
     const context = await this.finalizeAssistantTurn(
       execution.summary,
       extractInvocationText(invocation.result),
-      invocation.traceId
+      invocation.traceId,
+      signal
     )
     return { invocation, context }
   }

@@ -117,6 +117,14 @@ function createPrepared(contextPackage: ContextPackage): PrepareContextTurnResul
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((accept) => {
+    resolve = accept
+  })
+  return { promise, resolve }
+}
+
 function createRequest(): IntelligenceContextExecutionRequest {
   return {
     capabilityId: 'text.chat',
@@ -684,5 +692,208 @@ describe('IntelligenceContextExecutionService', () => {
     ).rejects.toThrow('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
     expect(invoke).not.toHaveBeenCalled()
     expect(appendAssistantTurn).not.toHaveBeenCalled()
+  })
+
+  it('rejects a pre-aborted host invocation before validation or hygiene work', async () => {
+    const prepareTurn = vi.fn()
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      service.invoke(
+        { ...createRequest(), capabilityId: 'vision.ocr' },
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(prepareTurn).not.toHaveBeenCalled()
+    expect(revalidatePackageMemories).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('observes cancellation after a non-cancellable hygiene await and performs no provider work', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const controller = new AbortController()
+    const prepareTurn = vi.fn(async () => prepared)
+    const revalidatePackageMemories = vi.fn(async () => {
+      controller.abort()
+      return contextPackage
+    })
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+
+    await expect(
+      service.invoke(
+        createRequest(),
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(prepareTurn).toHaveBeenCalledOnce()
+    expect(revalidatePackageMemories).toHaveBeenCalledOnce()
+    expect(invoke).not.toHaveBeenCalled()
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+  })
+
+  it('forwards the private signal so Stage 1 releases a pending provider await immediately', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const prepareTurn = vi.fn(async () => prepared)
+    const revalidatePackageMemories = vi.fn(async () => contextPackage)
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn(
+      async (_capabilityId: string, _payload: unknown, options: IntelligenceInvokeOptions) => {
+        const signal = (options as IntelligenceInvokeOptions & { signal?: AbortSignal }).signal
+        await new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener(
+            'abort',
+            () =>
+              reject(
+                Object.assign(new Error('INTELLIGENCE_OPERATION_CANCELLED'), {
+                  code: 'INTELLIGENCE_OPERATION_CANCELLED'
+                })
+              ),
+            { once: true }
+          )
+        })
+        throw new Error('unreachable')
+      }
+    )
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+    const controller = new AbortController()
+    const pending = service.invoke(
+      createRequest(),
+      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { signal: controller.signal }
+    )
+
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce())
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(invoke.mock.calls[0]?.[2]).toMatchObject({ signal: controller.signal })
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+  })
+
+  it('never converts cancellation during prepare into the current-only degraded fallback', async () => {
+    const controller = new AbortController()
+    const prepareTurn = vi.fn(async () => {
+      controller.abort()
+      throw new Error('database unavailable after cancellation')
+    })
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+
+    await expect(
+      service.invoke(
+        createRequest(),
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(invoke).not.toHaveBeenCalled()
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+  })
+
+  it('does not start finalization when cancellation wins after provider settlement', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const controller = new AbortController()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn(async () => {
+      controller.abort()
+      return {
+        result: 'answer',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        provider: 'provider',
+        model: 'model',
+        traceId: 'trace',
+        latency: 1
+      }
+    })
+    const service = new IntelligenceContextExecutionService(
+      {
+        prepareTurn: vi.fn(async () => prepared),
+        revalidatePackageMemories: vi.fn(async () => contextPackage),
+        appendAssistantTurn
+      } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+
+    await expect(
+      service.invoke(
+        createRequest(),
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+  })
+
+  it('preserves committed finalization success when cancellation arrives during append', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const finalize = deferred<typeof prepared.turn>()
+    const appendAssistantTurn = vi.fn(() => finalize.promise)
+    const service = new IntelligenceContextExecutionService(
+      {
+        prepareTurn: vi.fn(async () => prepared),
+        revalidatePackageMemories: vi.fn(async () => contextPackage),
+        appendAssistantTurn
+      } as never,
+      {
+        invoke: vi.fn(async () => ({
+          result: 'answer',
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+          provider: 'provider',
+          model: 'model',
+          traceId: 'trace',
+          latency: 1
+        })),
+        stream: vi.fn()
+      } as never
+    )
+    const controller = new AbortController()
+    const pending = service.invoke(
+      createRequest(),
+      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { signal: controller.signal }
+    )
+
+    await vi.waitFor(() => expect(appendAssistantTurn).toHaveBeenCalledOnce())
+    controller.abort()
+    finalize.resolve(prepared.turn)
+    await expect(pending).resolves.toMatchObject({
+      invocation: {
+        result: 'answer',
+        provider: 'provider',
+        model: 'model',
+        traceId: 'trace'
+      },
+      context: {
+        sessionId: prepared.session.id,
+        turnId: prepared.turn.id
+      }
+    })
+    expect(appendAssistantTurn).toHaveBeenCalledOnce()
   })
 })

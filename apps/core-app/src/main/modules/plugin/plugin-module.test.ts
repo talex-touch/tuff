@@ -220,6 +220,14 @@ vi.mock('./host/plugin-intelligence-host-service', () => ({
       listProviderModels: vi.fn()
     })
 }))
+vi.mock('./host/plugin-intelligence-context-host-service', () => ({
+  createPluginIntelligenceContextHostService: () =>
+    Object.freeze({
+      contextInvoke: vi.fn()
+    }),
+  validatePluginIntelligenceContextRequest: vi.fn((value) => value),
+  validatePluginIntelligenceContextResult: vi.fn((value) => value)
+}))
 vi.mock('../network', () => ({ getNetworkService: mocks.getNetworkService }))
 vi.mock('../permission', () => ({
   createProtectedRegister:
@@ -406,7 +414,7 @@ describe('PluginModule facade', () => {
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
   })
 
-  it('wires the immutable 30-ID global manifest and activation-local system factory', async () => {
+  it('wires the immutable 31-ID global manifest and activation-local system factory', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockImplementation((name) =>
       name === 'calendar' ? mocks.plugin : undefined
@@ -420,7 +428,7 @@ describe('PluginModule facade', () => {
     const definitions = runtimeOptions?.capabilityDefinitions as
       | ReadonlyArray<{ id: string }>
       | undefined
-    expect(definitions).toHaveLength(30)
+    expect(definitions).toHaveLength(31)
     expect(definitions?.map((definition) => definition.id)).toContain('plugin.info.get')
     expect(definitions?.map((definition) => definition.id)).toContain('permission.check')
     expect(definitions?.map((definition) => definition.id)).toContain('http.request')
@@ -431,6 +439,9 @@ describe('PluginModule facade', () => {
     expect(definitions?.map((definition) => definition.id)).toContain('voice.stream')
     expect(
       definitions?.filter((definition) => definition.id === 'intelligence.invoke')
+    ).toHaveLength(1)
+    expect(
+      definitions?.filter((definition) => definition.id === 'intelligence.context.invoke')
     ).toHaveLength(1)
     expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)

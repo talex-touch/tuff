@@ -30,6 +30,7 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'channel.subscribe',
   'channel.unsubscribe',
   'intelligence.invoke',
+  'intelligence.context.invoke',
   'intelligence.stream',
   'voice.invoke',
   'voice.stream',
