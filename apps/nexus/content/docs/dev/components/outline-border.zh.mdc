@@ -2,6 +2,8 @@
 title: "OutlineBorder 描边容器"
 description: "为头像、缩略图、徽标和自定义 slot 内容提供 border / ring 描边与可选裁切。"
 category: Effects
+status: beta
+since: 1.0.0
 tags: [border, ring, clip, mask]
 syncStatus: reviewed
 verified: true
@@ -86,7 +88,8 @@ code: |
 - `borderRadius`、`borderWidth`、`ringWidth`、`offset`、`padding` 的数字值都会转换为 px。
 - `variant="border"` 写入真实 CSS border；ring 系列使用 `box-shadow`，不改变布局尺寸。
 - `clipMode="overflow"` 通过 `border-radius` 裁切；`clipPath` 写入 CSS `clip-path`；`mask` 写入内联 SVG mask data URI。
-- `clipShape="rounded"` 与默认矩形场景在 `clipPath` 下会解析为 `inset(0 round var(--tx-outline-radius))`。
+- `clipShape="rounded"`、`"squircle"` 与默认矩形场景在 `clipPath` 下会解析为 `inset(0 round var(--tx-outline-radius))`；`squircle` 的真实异形仅在 `clipMode="mask"` 下呈现。
+- `ring`/`border` 描边由 `box-shadow`/CSS border 绘制，只跟随 `border-radius`；`clipShape` 只作用于内容层，因此描边不会贴合 `hexagon`/`squircle` 等异形（需要异形描边时请改用异形 `drop-shadow` 滤镜）。
 - 组件没有内置尺寸；最终盒子大小由 slot 内容决定。
 
 ## 最佳实践

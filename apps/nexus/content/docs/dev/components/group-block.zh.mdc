@@ -1,6 +1,6 @@
 ---
 title: "GroupBlock 分组块"
-description: "用于组织相关内容的可折叠分组容器，带有平滑动画效果。"
+description: "用于偏好设置界面的可折叠分组容器与块状行。"
 category: Layout
 status: beta
 since: 1.0.0
@@ -10,7 +10,7 @@ verified: true
 ---
 # GroupBlock 分组块
 
-用于组织相关内容的可折叠分组容器，带有平滑动画效果。
+使用 GroupBlock 组织设置项、账号选项与紧凑的偏好行，统一图标、标签与控件布局。
 
 <script setup lang="ts">
 import { ref } from 'vue'
@@ -60,11 +60,11 @@ code: |
 ---
 :::
 
-## 初始折叠
+### 初始折叠
 
 使用 `:default-expand="false"` 让分组首屏折叠；`collapsed` 更适合作为外部状态输入，并且只会在持久化状态或用户交互接管前生效。
 
-### GroupBlock (collapsed)
+#### GroupBlock (collapsed)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockCollapsedDemo" code-lang="vue"}
 ---
 code: |
@@ -82,11 +82,11 @@ code: |
 ---
 :::
 
-## 记忆展开状态
+### 记忆展开状态
 
 为 `memory-name` 指定唯一键，组件会持久化展开状态。
 
-### GroupBlock (memory)
+#### GroupBlock (memory)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockMemoryDemo" code-lang="vue"}
 ---
 code: |
@@ -110,11 +110,11 @@ code: |
 ---
 :::
 
-## 头部扩展
+### 头部扩展
 
 使用 `header-extra` 插槽放置操作区。
 
-### GroupBlock (header-extra)
+#### GroupBlock (header-extra)
 :::TuffDemoWrapper{demo="GroupBlockGroupBlockHeaderExtraDemo" code-lang="vue"}
 ---
 code: |
@@ -155,11 +155,11 @@ code: |
 ---
 :::
 
-## 链接样式
+### 链接样式
 
 显示为可点击的链接。
 
-### BlockLine (link)
+#### BlockLine (link)
 :::TuffDemoWrapper{demo="GroupBlockBlockLineLinkDemo" code-lang="vue"}
 ---
 code: |
@@ -208,9 +208,9 @@ code: |
 ---
 :::
 
-## 激活态与标签
+### 激活态与标签
 
-### BlockSlot (active)
+#### BlockSlot (active)
 :::TuffDemoWrapper{demo="GroupBlockBlockSlotActiveDemo" code-lang="vue"}
 ---
 code: |
@@ -233,9 +233,9 @@ code: |
 ---
 :::
 
-## 自定义标签
+### 自定义标签
 
-### BlockSlot (custom label)
+#### BlockSlot (custom label)
 :::TuffDemoWrapper{demo="GroupBlockBlockSlotCustomLabelDemo" code-lang="vue"}
 ---
 code: |
@@ -334,9 +334,9 @@ code: |
 ---
 :::
 
-## 加载状态
+### 加载状态
 
-### BlockSwitch (loading)
+#### BlockSwitch (loading)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchLoadingDemo" code-lang="vue"}
 ---
 code: |
@@ -355,9 +355,9 @@ code: |
 ---
 :::
 
-## 禁用状态
+### 禁用状态
 
-### BlockSwitch (disabled)
+#### BlockSwitch (disabled)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchDisabledDemo" code-lang="vue"}
 ---
 code: |
@@ -376,11 +376,11 @@ code: |
 ---
 :::
 
-## 引导模式
+### 引导模式
 
 显示为导航项而非开关。
 
-### BlockSwitch (guidance)
+#### BlockSwitch (guidance)
 :::TuffDemoWrapper{demo="GroupBlockBlockSwitchGuidanceDemo" code-lang="vue"}
 ---
 code: |

@@ -120,6 +120,7 @@ code: |
 - 当下拉位于自带层叠或裁剪上下文的容器内、且需要继承该上下文时，设 `teleport="false"`。注意就地渲染会重新暴露在祖先的 `overflow: hidden` 之下。
 - 用 `side` 插槽参数翻转你自己的装饰元素（箭头、阴影），以配合面板翻转到触发器上方的情况。
 - 不要假设面板在展开后就已完成定位 —— 位置是响应式异步写回的，若需读取绝对几何请放到 `requestAnimationFrame` 中测量。
+- 触发器包装元素会通过 `aria-haspopup`、`aria-expanded` 与 `aria-controls`（指向面板生成的 id）声明面板，插槽里的 `<button>` 触发器会自动获得展开语义。
 
 ## 源码
 

@@ -178,13 +178,13 @@ code: |
 ## 审阅说明
 
 - 已核对 `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue` 与 `checkbox.test.ts`。
-- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、`fill` / `checkmark` 变体、点击/键盘事件与禁用阻断。
+- **实测覆盖:** `checkbox.test.ts` 覆盖标签渲染、`aria-label` 回退、标签位置、`fill` / `checkmark` 变体、点击事件与禁用阻断。
 - 可访问性说明:根节点负责 `role="checkbox"`、`aria-checked` 与键盘处理;应优先提供可见标签或默认插槽,仅在没有可见文案时使用 `ariaLabel`。
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/checkbox/src/TxCheckbox.vue`。
 - Export alias: `packages/tuffex/packages/components/src/checkbox/index.ts` 同时导出 `TuffCheckbox` 与 `TxCheckbox`。
-- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` 覆盖点击/键盘切换、ARIA 标签、插槽优先级、变体 class 与禁用阻断。
+- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` 覆盖点击切换、ARIA 标签、插槽优先级、变体 class 与禁用阻断；键盘激活由原生 `<button>` 元素继承。
 
 <TuffDocSourceLink />

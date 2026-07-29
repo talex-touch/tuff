@@ -20,6 +20,10 @@ Mount host once, then trigger toasts.
 :::TuffDemoWrapper{demo="ToastToastDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { toast } from '@talex-touch/tuffex/utils'
+  </script>
+
   <template>
     <TxToastHost />
     <TxButton @click="toast({ title: 'Saved', description: 'Your changes have been saved.' })">
@@ -86,7 +90,7 @@ code: |
 
 ## Interaction Contract
 
-- `<TxToastHost />` teleports a notification region to `body` with `role="region"` and `aria-label="Notifications"`.
+- `<TxToastHost />` teleports a notification region to `body` with `role="region"`, `aria-label="Notifications"`, and `aria-live="polite"` so new toasts announce while focus is elsewhere.
 - Each toast includes a keyboard-focusable close button named `Dismiss notification`.
 - `toast()` returns the resolved id. Passing the same `id` replaces the existing toast, preventing duplicate stacked notifications for the same operation.
 - `duration > 0` auto-dismisses the toast; `duration: 0` keeps it visible until `dismissToast(id)` or `clearToasts()` is called.
@@ -96,7 +100,7 @@ code: |
 
 Mount `TxToastHost` once at the app or page root. Business actions should call `toast()`; persistent status notifications should use a stable `id + duration: 0` so the same queue state does not stack repeatedly. In admin task centers, Toast handles transient feedback, `TxTooltip` explains the action, `TxLoadingOverlay` blocks local refreshes, and `TxSpinner` handles inline waiting.
 
-::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified Toast / Tooltip / LoadingOverlay / Spinner composition."}
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified Toast / Tooltip / LoadingOverlay / Spinner composition."}
 ---
 code: |
   <script setup lang="ts">
@@ -107,10 +111,18 @@ code: |
 
   function showFeedbackToast() {
     toast({
-      id: 'feedback-task-center',
+      id: 'nexus-feedback-task-center',
       title: 'Sync task queued',
-      description: 'Screenshot verification will complete within 2 minutes.',
+      description: 'Four documentation pages will be screenshot-verified within 2 minutes.',
       variant: 'warning',
+      duration: 0,
+    })
+
+    toast({
+      id: 'nexus-feedback-task-center-success',
+      title: 'Feedback channel healthy',
+      description: 'Toast host is mounted, notifications can replace and dismiss.',
+      variant: 'success',
       duration: 0,
     })
   }
@@ -140,7 +152,7 @@ code: |
 
 ## Review Notes
 
-- **Accessibility note:** The host exposes a labeled notification region and each toast has a close button, but toast items are not `role="status"`/`alert` and the region is not `aria-live`. Use persistent visible copy or page-level status text for critical failures and long-running operations.
+- **Accessibility note:** The host is a labeled `role="region"` that is also a polite `aria-live` region, so a toast appearing while focus is elsewhere is announced; `danger` toasts escalate to `role="alert"`. Still use persistent visible copy or page-level status text for critical failures and long-running operations.
 - **Timer note:** Reusing an `id` replaces the store item, but existing auto-dismiss timers are not cancelled. Use `duration: 0` for persistent id-based task toasts, or unique ids for repeated transient success messages.
 - **Verified coverage:** `toast.test.ts` checks id replacement, returned ids, auto-dismiss, persistent toasts, dismiss/clear helpers, host region semantics, variant classes, rendered title/description, accessible close buttons, and close-button dismissal.
 

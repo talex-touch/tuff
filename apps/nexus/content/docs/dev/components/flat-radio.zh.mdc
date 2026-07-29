@@ -226,7 +226,7 @@ code: |
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |--------|------|------|--------|
-| `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \| number \| (string \| number)[]` | - |
+| `modelValue` / `v-model` | 单选时为单值，多选时为值数组。 | `string \| number \| (string \| number)[]` | *必填* |
 | `multiple` | 启用类似复选框的多选行为；开启后隐藏单选滑动指示器。 | `boolean` | `false` |
 | `disabled` | 禁用整组，移除容器焦点并阻止点击/键盘变化。 | `boolean` | `false` |
 | `size` | 尺寸变体。 | `'sm' \| 'md' \| 'lg'` | `'md'` |

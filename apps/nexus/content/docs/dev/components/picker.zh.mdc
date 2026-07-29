@@ -2,6 +2,9 @@
 title: "Picker 滚轮选择"
 description: "列式滚轮选择器，支持弹层/内联渲染、工具栏操作、禁用项和数组值归一化。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [picker, form, wheel, selection]
 syncStatus: reviewed
 verified: true
 ---

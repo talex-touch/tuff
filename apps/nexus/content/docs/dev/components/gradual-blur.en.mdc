@@ -2,6 +2,8 @@
 title: "GradualBlur"
 description: "Layered backdrop-filter edge fade for parent or page overlays, presets, hover intensity, scroll reveal, responsive sizing, and GPU hints."
 category: Effects
+status: beta
+since: 1.0.0
 tags: [blur, edge-fade, overlay, backdrop-filter]
 syncStatus: reviewed
 verified: true
@@ -52,9 +54,9 @@ code: |
 ---
 :::
 
-## Direction (Top / Bottom / Left / Right)
+### Direction (Top / Bottom / Left / Right)
 
-### Positions
+#### Positions
 :::TuffDemoWrapper{demo="GradualBlurPositionsDemo" code-lang="vue"}
 ---
 code: |
@@ -133,9 +135,9 @@ code: |
 ---
 :::
 
-## Preset
+### Preset
 
-### Presets
+#### Presets
 :::TuffDemoWrapper{demo="GradualBlurPresetsDemo" code-lang="vue"}
 ---
 code: |
@@ -205,9 +207,9 @@ code: |
 ---
 :::
 
-## Hover Intensity Boost (hoverIntensity)
+### Hover Intensity Boost (hoverIntensity)
 
-### HoverIntensity
+#### HoverIntensity
 :::TuffDemoWrapper{demo="GradualBlurHoverIntensityDemo" code-lang="vue"}
 ---
 code: |
@@ -238,9 +240,9 @@ code: |
 ---
 :::
 
-## Trigger on Viewport (animated="scroll")
+### Trigger on Viewport (animated="scroll")
 
-### Animated scroll
+#### Animated scroll
 :::TuffDemoWrapper{demo="GradualBlurAnimatedScrollDemo" code-lang="vue"}
 ---
 code: |
@@ -254,9 +256,9 @@ code: |
 ---
 :::
 
-## Page Target (target="page")
+### Page Target (target="page")
 
-### Target page
+#### Target page
 :::TuffDemoWrapper{demo="GradualBlurTargetPageDemo" code-lang="vue"}
 ---
 code: |
@@ -281,9 +283,9 @@ code: |
 ---
 :::
 
-## Responsive Sizes (responsive)
+### Responsive Sizes (responsive)
 
-### Responsive sizes
+#### Responsive sizes
 :::TuffDemoWrapper{demo="GradualBlurResponsiveSizesDemo" code-lang="vue"}
 ---
 code: |
@@ -347,13 +349,13 @@ code: |
 | `className` | `string` | `''` | Extra class appended to the root element. |
 | `style` | `CSSProperties` | `{}` | Extra inline style merged into the root style after generated positioning styles. |
 
-## Slots
+### Slots
 
 | Slot | Description |
 |------|-------------|
 | `default` | Optional content rendered above the blur layers inside the overlay root. |
 
-## Events
+### Events
 
 No Vue events are emitted. Use `onAnimationComplete` when `animated="scroll"` needs a completion hook.
 

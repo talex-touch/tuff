@@ -88,49 +88,25 @@ code: |
 
 ## 网格间距
 
-### 统一间距
+`gap` 支持三种写法：数字（转 px 的统一间距）、`{ row, col }`（行列分向）、以及按断点响应式对象。
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
+    <!-- 统一间距：数字转 px -->
     <TxGrid :cols="3" gap="32">
-      <TxGridItem v-for="i in 6" :key="i">
-        项目 {{ i }}
-      </TxGridItem>
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
     </TxGrid>
-  </template>
----
-:::
 
-### 不同方向间距
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
+    <!-- 行列分向 -->
     <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">
-      <TxGridItem v-for="i in 6" :key="i">
-        项目 {{ i }}
-      </TxGridItem>
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
     </TxGrid>
-  </template>
----
-:::
 
-### 响应式间距
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid
-      :cols="{ xs: 1, md: 2, lg: 3 }"
-      :gap="{ xs: 16, md: 24, lg: 32 }"
-    >
-      <TxGridItem v-for="i in 6" :key="i">
-        项目 {{ i }}
-      </TxGridItem>
+    <!-- 按断点响应式 -->
+    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
     </TxGrid>
   </template>
 ---
@@ -216,9 +192,9 @@ code: |
 
 | 属性 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| cols | `number \| ResponsiveValue<number>` | `0` | 列数；为 0 时不输出固定列模板 |
+| cols | `number \| Responsive<number>` | `0` | 列数；为 0 时不输出固定列模板 |
 | rows | `number` | `0` | 行数；为 0 时不输出固定行模板 |
-| gap | `number \| string \| ResponsiveValue<number \| string> \| GapValue` | `16` | 网格间距 |
+| gap | `GridGap` | `16` | 网格间距（数字转 px、`{ row, col }` 或按断点响应式对象） |
 | minItemWidth | `string` | - | 项目最小宽度（自适应模式） |
 | justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 水平对齐 |
 | align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | 垂直对齐 |
@@ -239,18 +215,15 @@ code: |
 code: |
   type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
-  interface ResponsiveValue<T> {
-    xs?: number
-    sm?: number
-    md?: number
-    lg?: number
-    xl?: number
-  }
+  type Responsive<T> = Partial<Record<Breakpoint, T>>
 
-  interface GapValue {
-    row?: number | string
-    col?: number | string
-  }
+  type GridAlign = 'start' | 'end' | 'center' | 'stretch'
+
+  type GridGap =
+    | number
+    | string
+    | { row?: number | string, col?: number | string }
+    | Responsive<number | string>
 ---
 :::
 

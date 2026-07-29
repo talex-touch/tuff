@@ -44,26 +44,6 @@ code: |
 ---
 :::
 
-## Design Notes
-
-- `source` defines the animation origin; pass an `HTMLElement` or `DOMRect`.
-- Use `rotateX` / `rotateY` with `perspective` to control the 3D feel.
-- Header render priority:
-  1. `#header` fully overrides the built-in header.
-  2. Without `#header`, set `header=false` to hide header.
-  3. Without `#header` and with `header=true`, built-in header can be customized by `#header-display` / `#header-actions` / `#header-close`.
-- `closable=false` hides the entire close area (including `#header-close`).
-- The card uses a built-in `surface` background layer (`TxBaseSurface`) by default; tune it with `surface` / `surfaceColor` / `surfaceOpacity`.
-- `globalMask` controls the full-screen visual mask layer and is enabled by default.
-- Use `border` to switch card border style (`solid` / `dashed` / `none`, and `dash` works as an alias of `dashed`).
-- `randomTilt` adds subtle variation to each open.
-- Set `maskClosable=false` to disable closing on mask click.
-- When multiple overlays are open, backdrop rendering is unified into a single shared global mask layer positioned below all overlay cards; only the top overlay keeps the interactive click layer, and underlays remain non-interactive without covering lower card edges.
-- Stack displacement is enabled automatically only when adjacent overlays have similar size (`|delta| <= max(8px, previousSize * 5%)` for both width and height).
-- Layered displacement is capped at depth 3 (`-18/-36/-54px` with `0.95/0.90/0.85` scale), and deeper layers progressively fade (`1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`).
-- Set `preventAccidentalClose=true` to enable safety mode: mask click is blocked, page-exit attempts (refresh/close) are intercepted, and blocked attempts flash a red warning glow around the card.
-- Coordinate UI changes with `open/opened/close/closed` events.
-
 ## API
 
 ### Props
@@ -125,14 +105,22 @@ code: |
 | `header-actions` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom area left of close button |
 | `header-close` | `{ close, expanded, animating, closable, headerTitle, headerDesc }` | Custom close area (hidden when `closable=false`) |
 
+### Expose
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `close()` | `() => void` | Runs the full close animation and emits `update:modelValue(false)`; the parent must own open state via `v-model`. |
+
 ## Interaction Contract
 
 - `modelValue=true` mounts the overlay, resolves the `source` rectangle, emits `open`, then emits `opened` after the card animation completes.
-- Built-in close button, slot `close()`, and mask click all start the close path; `maskClosable=false` blocks only mask clicks.
+- Built-in close button, slot `close()`, mask click, and Escape all start the close path. Mask click and Escape share `handleMaskClick`, so `maskClosable=false` blocks both and `preventAccidentalClose` flashes the warning instead; the close button and `close()` bypass those gates.
 - Internal close emits `close`, then `update:modelValue(false)`, then `closed`. Parent code must update `v-model` to fully close controlled overlays.
+- Header render priority: `#header` fully overrides the built-in header; otherwise `header=false` hides it and `header=true` renders the built-in header (customizable via `#header-display` / `#header-actions` / `#header-close`). `closable=false` hides the entire close area, including `#header-close`.
 - `expanded` and `animating` are sync telemetry values; bind them only when the surrounding UI needs to observe overlay motion state.
-- `globalMask=true` uses a shared body-level mask for stacked overlays. Underlay masks are non-interactive; only the top overlay receives mask clicks.
+- `globalMask=true` uses a shared body-level mask for stacked overlays; underlay masks are non-interactive and only the top overlay receives mask clicks. Stack displacement is enabled only when adjacent overlays have similar width/height (`|delta| <= max(8px, previousSize * 5%)`), is capped at depth 3 (`-18/-36/-54px` with `0.95/0.90/0.85` scale), and deeper layers fade `1.00 → 0.92 → 0.78 → 0.62 → 0.38 → 0.16 → 0`.
 - `preventAccidentalClose=true` blocks mask close and page exit attempts, then flashes the warning state instead of silently closing.
+- Accessibility: the card is `role="dialog"` with `aria-modal="true"` and `tabindex="-1"`. When the built-in header renders, `headerTitle` wires `aria-labelledby` and `headerDesc` wires `aria-describedby`. Focus moves into the card on open and is restored to the previously focused element on close.
 
 ## Best Practices
 
@@ -147,7 +135,7 @@ code: |
 - **State contract:** `TxFlipOverlay` owns the mount/animation lifecycle but only emits `update:modelValue(false)` when it closes itself; consumers must still sync `v-model` after built-in close, slot `close()`, or mask close.
 - **Stacking contract:** `globalMask=true` shares the visual backdrop across open overlays while only the top overlay keeps an interactive mask; size-similar overlays receive capped displacement and deeper overlays fade out.
 - **Safety contract:** `preventAccidentalClose` blocks mask close and page-exit attempts, then flashes the warning state; it is a guardrail, not a persistence or autosave feature.
-- **Verified coverage:** `flip-overlay.test.ts` covers defaults, header slot priority, close ordering, card style forwarding, stacked masks, layered displacement, and blocked-close behavior.
+- **Verified coverage:** `flip-overlay.test.ts` covers defaults, header slot priority, close ordering, dialog semantics (`role`/`aria-modal`/`aria-labelledby`) with Escape close, card style forwarding, stacked masks, layered displacement, and blocked-close behavior.
 
 ## Source
 

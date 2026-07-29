@@ -52,7 +52,7 @@ code: |
 |------|------|---------|------|
 | `title` | `string` | `Loading` | 覆盖预设加载标题。 |
 | `description` | `string` | `Please wait a moment.` | 覆盖加载说明文案。 |
-| `icon` | `TxIconSource \| string \| null` | - | 替换加载插画；传 `null` 可隐藏图标区域。 |
+| `icon` | `TxIconSource \| string \| null` | - | 替换加载插画；传 `null` 可隐藏图标区域（`loading` 为 `true` 时无效，此时仍显示加载指示器）。 |
 | `iconSize` | `number` | - | 自定义图标或 spinner 尺寸。 |
 | `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 控制图标与内容的排列方向。 |
 | `align` | `'start' \| 'center' \| 'end'` | `'center'` | 控制图标、文案和操作区对齐。 |

@@ -10,9 +10,7 @@ verified: true
 ---
 # SearchSelect 搜索选择器
 
-搜索选择器本质上是一个可搜索的 Select：输入时展开下拉面板，展示结果，点击结果项回填并关闭。
-
-下拉层已统一迁移到 `TxPopover → TxTooltip → TxBaseAnchor` 链路，浮层行为与其他选择类组件保持一致。
+`TxSearchSelect` 是可搜索的 `Select`：边输入边过滤（或远程拉取）候选，再从下拉面板里选一项回填。用于值必须从一份受控选项表里选取的场景；若只是收集自由关键词、不受选项约束，用 `TxSearchInput`。
 
 ## 基础用法
 

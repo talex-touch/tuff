@@ -85,7 +85,7 @@ code: |
 
 在权限、成员、发布策略页面中，`TxTreeSelect` 更适合放“归属团队/命名空间/组织单元”这类层级选择；它比完整树更节省空间，也能和 `TxTransfer`、`TxTimeline` 共同构成授权流程。
 
-::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的归属团队选择、资源授权和审计流程。"}
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的归属团队选择、资源授权和审计流程。"}
 ---
 code: |
   <script setup lang="ts">
@@ -183,7 +183,7 @@ code: |
 
 ## 交互契约
 
-- 触发器是可聚焦的 `role="combobox"`；`Enter` 和 `Space` 切换下拉层，`Escape` 关闭下拉层。
+- 触发器是可聚焦的 `role="combobox"`，带 `aria-haspopup="tree"` 且 `aria-controls` 指向浮层；浮层内是 `TxTree`（`role="tree"`），不是 listbox。`Enter` 和 `Space` 切换下拉层，`Escape` 关闭下拉层。
 - 下拉层由 `TxPopover` 承载；位置和宽度类属性会透传给该组件。
 - 搜索使用内部 `TxTree` 的默认 label 过滤；当前没有 prop 可把自定义 `filterMethod` 传给 `TxTreeSelect`。
 - 单选在发出值事件后关闭下拉层；多选会保持打开，便于继续勾选。
@@ -205,7 +205,6 @@ code: |
 - 已对照 `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue` 和 `types.ts` 核对。
 - 现有测试覆盖选择事件、空状态渲染和清空行为。
 - 建议：`nodes` 使用 `key`/`label`，不要沿用旧选择器的 `value` 字段；单选清空为 `undefined`，多选清空为空数组。
-- 截图参考：`.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`。
 
 ## Source
 

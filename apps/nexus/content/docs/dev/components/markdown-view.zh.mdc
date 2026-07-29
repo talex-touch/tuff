@@ -2,6 +2,8 @@
 title: "MarkdownView Markdown 渲染"
 description: "基于 GitHub-flavored Markdown 的渲染组件，支持显式 sanitize 与亮/暗主题模式。"
 category: Data
+status: beta
+since: 1.0.0
 tags: [markdown, sanitize, theme]
 syncStatus: reviewed
 verified: true
@@ -64,10 +66,25 @@ code: |
 ::::TuffDemoWrapper{demo="MarkdownViewLightDarkDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  const richContent = [
+    '## 主题预览',
+    '',
+    '同一段 Markdown 可以在亮色和暗色主题中保持一致结构。',
+    '',
+    '- sanitize 默认开启',
+    '- `theme` 可以显式指定',
+  ].join('\n')
+  </script>
+
   <template>
     <div class="grid gap-4 md:grid-cols-2">
-      <TxMarkdownView :content="richContent" theme="light" />
-      <TxMarkdownView :content="richContent" theme="dark" />
+      <div style="padding: 12px; border-radius: 12px; border: 1px solid #d1d9e0; background: #fff;">
+        <TxMarkdownView :content="richContent" theme="light" />
+      </div>
+      <div style="padding: 12px; border-radius: 12px; border: 1px solid #30363d; background: #0d1117;">
+        <TxMarkdownView :content="richContent" theme="dark" />
+      </div>
     </div>
   </template>
 ---

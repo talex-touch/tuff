@@ -19,22 +19,32 @@ verified: true
 ---
 code: |
   <template>
-    <div style="width: 600px; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden;">
-      <TxContainer :padding="16">
-        <TxRow :gutter="16">
-          <TxCol :span="12">
-            <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
-              Left
-            </div>
-          </TxCol>
-          <TxCol :span="12">
-            <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
-              Right
-            </div>
-          </TxCol>
-        </TxRow>
-      </TxContainer>
-    </div>
+    <TxContainer max-width="680px" :padding="18">
+      <div style="display: grid; gap: 4px; margin-bottom: 14px;">
+        <strong>响应式容器</strong>
+        <span style="color: var(--tx-text-color-secondary); font-size: 12px;">同一组 Row / Col 会随断点切换列宽，Container 负责最大宽度和左右留白。</span>
+      </div>
+      <TxRow :gutter="{ xs: 10, sm: 14, md: 18 }" align="stretch">
+        <TxCol :xs="24" :sm="12" :md="8">
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            <strong>概览</strong>
+            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 12 / md 8</span>
+          </div>
+        </TxCol>
+        <TxCol :xs="24" :sm="12" :md="8">
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            <strong>指标</strong>
+            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 12 / md 8</span>
+          </div>
+        </TxCol>
+        <TxCol :xs="24" :sm="24" :md="8">
+          <div style="padding: 12px; border-radius: 10px; background: var(--tx-fill-color-light, #f5f7fa);">
+            <strong>操作</strong>
+            <span style="display: block; color: var(--tx-text-color-secondary); font-size: 12px;">span 24 / md 8</span>
+          </div>
+        </TxCol>
+      </TxRow>
+    </TxContainer>
   </template>
 ---
 :::
@@ -155,28 +165,6 @@ code: |
 ---
 :::
 
-### 栅格间距
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer>
-      <TxRow :gutter="24">
-        <TxCol :span="8">
-          <div class="col-content">列1</div>
-        </TxCol>
-        <TxCol :span="8">
-          <div class="col-content">列2</div>
-        </TxCol>
-        <TxCol :span="8">
-          <div class="col-content">列3</div>
-        </TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
 ### 响应式栅格
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -195,86 +183,6 @@ code: |
         </TxCol>
         <TxCol :xs="24" :sm="12" :md="8" :lg="6">
           <div class="col-content">响应式列4</div>
-        </TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
-## 布局组合
-
-### 页面布局
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <div class="page-layout">
-      <!-- 页头 -->
-      <TxContainer class="header" fluid>
-        <TxRow align="middle" justify="space-between">
-          <TxCol>
-            <div class="logo">Logo</div>
-          </TxCol>
-          <TxCol>
-            <nav class="nav">导航菜单</nav>
-          </TxCol>
-        </TxRow>
-      </TxContainer>
-
-      <!-- 主要内容 -->
-      <TxContainer class="main-content">
-        <TxRow :gutter="32">
-          <TxCol :span="18">
-            <main>主要内容区域</main>
-          </TxCol>
-          <TxCol :span="6">
-            <aside>侧边栏</aside>
-          </TxCol>
-        </TxRow>
-      </TxContainer>
-
-      <!-- 页脚 -->
-      <TxContainer class="footer" fluid>
-        <footer>页脚内容</footer>
-      </TxContainer>
-    </div>
-  </template>
-
-  <style scoped>
-  .header {
-    background: var(--tx-color-surface);
-    padding: 16px 0;
-    border-bottom: 1px solid var(--tx-color-border);
-  }
-
-  .main-content {
-    min-height: 500px;
-    padding: 32px 0;
-  }
-
-  .footer {
-    background: var(--tx-color-surface);
-    padding: 24px 0;
-    border-top: 1px solid var(--tx-color-border);
-    text-align: center;
-  }
-  </style>
----
-:::
-
-### 卡片布局
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxContainer>
-      <TxRow :gutter="24">
-        <TxCol :xs="24" :sm="12" :lg="8" v-for="item in items" :key="item.id">
-          <TxCard>
-            <h3>{{ item.title }}</h3>
-            <p>{{ item.description }}</p>
-          </TxCard>
         </TxCol>
       </TxRow>
     </TxContainer>
@@ -381,39 +289,6 @@ code: |
 - `gutter` 应和页面间距尺度保持一致；避免同一行里混用过大的 gutter 和过小的列内边距。
 - 在布局原语内部放置语义元素（`main`、`aside`、`nav`、`section`），因为这些原语自身只渲染中性 `div`。
 - 只有横向滚动或固定宽度工具栏才设置 `wrap=false`；普通内容栅格应允许换行。
-### 常见布局模式
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <!-- 居中布局 -->
-    <TxContainer max-width="800px" margin="auto">
-      <div class="content">居中内容</div>
-    </TxContainer>
-
-    <!-- 两栏布局 -->
-    <TxContainer>
-      <TxRow :gutter="32">
-        <TxCol :span="16">主内容</TxCol>
-        <TxCol :span="8">侧边栏</TxCol>
-      </TxRow>
-    </TxContainer>
-
-    <!-- 三栏布局 -->
-    <TxContainer>
-      <TxRow :gutter="24">
-        <TxCol :span="6">左侧栏</TxCol>
-        <TxCol :span="12">主内容</TxCol>
-        <TxCol :span="6">右侧栏</TxCol>
-      </TxRow>
-    </TxContainer>
-  </template>
----
-:::
-
-TouchX UI 的容器组件提供了灵活强大的布局能力，帮助您快速构建响应式的页面结构。
-
 
 ## 审阅说明
 

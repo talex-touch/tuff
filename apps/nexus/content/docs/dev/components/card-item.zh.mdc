@@ -2,6 +2,8 @@
 title: "CardItem 卡片项"
 description: "紧凑列表行，支持可选头像媒体、文本、右侧操作、激活态和显式点击行为。"
 category: Layout
+status: beta
+since: 1.0.0
 tags: [card, list, settings]
 syncStatus: reviewed
 verified: true

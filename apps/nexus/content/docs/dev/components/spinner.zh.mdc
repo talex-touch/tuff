@@ -10,7 +10,7 @@ verified: true
 ---
 # Spinner 加载
 
-用于展示加载中的旋转指示器。通常作为更复杂 Loading 组件的基础。
+`TxSpinner` 表示时长不确定的短等待——按钮、行内状态或遮罩里那一小圈转动。有确定的百分比或阶段进度时用 `TxProgressBar`，整块首屏加载用 `TxLoadingState`；只有等待短、又给不出百分比时才用它。
 
 ## 基础用法
 
@@ -118,13 +118,13 @@ code: |
 - `visible=false` 时，离场过渡结束后不渲染 spinner。
 - 可见根节点是 inline-flex `span`，带 `aria-busy="true"` 与 `aria-live="polite"`。
 - 默认模式渲染 ball/ring 动效；`fallback=true` 渲染 SVG circle，并复用 `size` 与 `strokeWidth`。
-- 组件通过 `currentColor` 继承上下文文本色，宿主组件可用普通 CSS color 着色。
+- 组件根节点默认使用次要文本色（`--tx-text-color-secondary`）；如需着色，请直接在 `TxSpinner` 元素上设置 `color`（父级的 `color` 不会穿透根节点自身的声明）。
 
 ## 后台行内等待
 
 `TxSpinner` 用于按钮、行内状态或遮罩内部的短等待。已知进度请优先使用 `TxProgressBar`；整块首屏加载请使用 `TxLoadingState`；只有在等待时间短且不需要百分比时使用 Spinner。
 
-::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="Spinner 与 Toast / Tooltip / LoadingOverlay 的截图验证组合。"}
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="后台任务反馈中心" description="Spinner 与 Toast / Tooltip / LoadingOverlay 的截图验证组合。"}
 ---
 code: |
   <template>

@@ -21,9 +21,9 @@ Loaded by: `@talex-touch/tuffex/base.css`; component styles are loaded from `@ta
 :::TuffCodeBlock{lang="css"}
 ---
 code: |
-  font-family:
-    'PingFang SC', '-apple-system', 'Helvetica Neue', 'Segoe UI',
-    'Microsoft YaHei', 'Noto Sans SC', 'DM Sans', sans-serif;
+  --tx-font-family:
+    "Inter", "PingFang SC", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
 ---
 :::
 

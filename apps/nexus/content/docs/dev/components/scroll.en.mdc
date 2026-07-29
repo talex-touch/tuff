@@ -2,6 +2,9 @@
 title: "Scroll"
 description: "`@better-scroll/scroll-bar` powered `TxScroll` container."
 category: Layout
+status: beta
+since: 1.0.0
+tags: [scroll, layout, better-scroll]
 syncStatus: reviewed
 verified: true
 ---
@@ -273,7 +276,7 @@ code: |
 | `pullDownStop` | `number` | `56` | BetterScroll pull-down stop position; native mode does not use this value. |
 | `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | Enable pull-up load; BetterScroll receives plugin options, native mode emits when the bottom threshold is reached. |
 | `pullUpThreshold` | `number` | `0` | Native distance-to-bottom threshold and BetterScroll plugin threshold for `pulling-up`. |
-| `options` | `Record<string, unknown>` | `{}` | Extra BetterScroll options; `wheelOvershoot` is consumed locally before options are passed through. |
+| `options` | `Record<string, unknown>` | `{}` | Extra BetterScroll options; `wheelOvershoot` is consumed locally before options are passed through; on macOS, when `wheel` and `bounce` are both on, `useTransition: false` is injected by default — pass `useTransition` explicitly in `options` to override. |
 
 ### Events
 

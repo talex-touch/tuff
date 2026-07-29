@@ -70,11 +70,11 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | CSS `flex-direction` 值。 |
+| `direction` | `'row' \| 'row-reverse' \| 'column' \| 'column-reverse'` | `'row'` | 主轴方向；`row` 横向排列，`column` 纵向堆叠。 |
 | `gap` | `number \| string` | `12` | 子元素间距，数字会转为 px。 |
-| `align` | `string` | `'stretch'` | CSS `align-items` 值。 |
-| `justify` | `string` | `'flex-start'` | CSS `justify-content` 值。 |
-| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | CSS `flex-wrap` 值。 |
+| `align` | `string` | `'stretch'` | 交叉轴对齐（align-items）；图标+文字行用 `center`，需要子元素等高时保留 `stretch`。类型是自由 string，任意 CSS 关键字都可传。 |
+| `justify` | `string` | `'flex-start'` | 主轴分布（justify-content）；两端对齐用 `space-between`，成组靠左用 `flex-start`。同样是自由 string。 |
+| `wrap` | `'nowrap' \| 'wrap' \| 'wrap-reverse'` | `'nowrap'` | 是否换行；工具栏、筛选行需要适配窄容器时用 `wrap`。 |
 | `inline` | `boolean` | `false` | 使用 `inline-flex` 而不是块级 `flex`。 |
 
 ### Slots

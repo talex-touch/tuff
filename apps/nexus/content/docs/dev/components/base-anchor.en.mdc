@@ -40,11 +40,11 @@ code: |
 ---
 :::
 
-## Transfer Motion
+### Transfer Motion
 
 `animation.type='transfer'` is the default motion: content enters from the placement direction through a soft edge and returns through the same direction on close. Pair with `show-arrow` to render a triangle that follows final floating placement and offset.
 
-### Soft Edge
+#### Soft Edge
 :::TuffDemoWrapper{demo="BaseAnchorSplitLineDemo" code-lang="vue"}
 ---
 code: |
@@ -72,11 +72,11 @@ code: |
 ---
 :::
 
-## Placement
+### Placement
 
 Content enters and exits from the placement direction. For `top`, content slides down from above and returns upward on close.
 
-### Placement Directions
+#### Placement Directions
 :::TuffDemoWrapper{demo="BaseAnchorPlacementDemo" code-lang="vue"}
 ---
 code: |
@@ -123,40 +123,65 @@ code: |
 ---
 :::
 
-## Animation Modes
+### Animation Modes
 
 Use one `animation` object to configure motion. Supported modes: `transfer` (default directional reveal), `boom` (focus-scale with blur, scale, and opacity), `opacity` (fade only), and `none` (instant show/hide).
 
-### Multiple Animations
+#### Multiple Animations
 :::TuffDemoWrapper{demo="BaseAnchorAnimationDemo" code-lang="vue"}
 ---
 code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const open = ref(false)
+  type AnchorAnimationType = 'transfer' | 'boom' | 'opacity' | 'none'
+
+  const modes: AnchorAnimationType[] = ['transfer', 'boom', 'opacity', 'none']
+  const open = ref<Record<AnchorAnimationType, boolean>>({
+    transfer: false,
+    boom: false,
+    opacity: false,
+    none: false,
+  })
+
+  function resolveAnimation(type: AnchorAnimationType) {
+    return {
+      type,
+      duration: type === 'none' ? 0 : 420,
+      ease: type === 'transfer' ? 'back.out(2)' : 'power2.out',
+      closeEase: type === 'transfer' ? 'power3.in' : 'power2.in',
+      scale: type === 'boom' ? 1.08 : undefined,
+      blur: type === 'boom' ? 14 : undefined,
+    }
+  }
   </script>
 
   <template>
-    <TxBaseAnchor
-      v-model="open"
-      placement="bottom"
-      :show-arrow="true"
-      :animation="{ type: 'boom', duration: 420, scale: 1.08, blur: 14 }"
-    >
-      <template #reference>
-        <TxButton>Focus Scale</TxButton>
-      </template>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+      <TxBaseAnchor
+        v-for="mode in modes"
+        :key="mode"
+        v-model="open[mode]"
+        placement="bottom"
+        :show-arrow="true"
+        :animation="resolveAnimation(mode)"
+      >
+        <template #reference>
+          <TxButton :variant="open[mode] ? 'primary' : 'secondary'">
+            {{ mode }}
+          </TxButton>
+        </template>
 
-      <div style="width: 220px; padding: 4px;">
-        Anchor-positioned motion with blur, scale, and opacity.
-      </div>
-    </TxBaseAnchor>
+        <div style="width: 230px; padding: 4px;">
+          {{ mode }}
+        </div>
+      </TxBaseAnchor>
+    </div>
   </template>
 ---
 :::
 
-## Drip
+### Drip
 
 `animation.type='drip'` opens the menu like a drop of liquid falling out of its own trigger. The trigger **body** and the panel live inside one SVG goo filter (`feGaussianBlur` plus a hard alpha threshold via `feColorMatrix`), so they start out completely merged; as the panel's top edge falls, the neck between them thins, pinches, and finally snaps.
 
@@ -164,7 +189,7 @@ The neck is not drawn geometry — it is what is left when the Gaussian field dr
 
 The panel is described by its **two falling edges**, not as a box that grows: the top edge peels from the trigger's mid-line to its final position and stops, while the height keeps filling through the detach and past it. At the moment the neck snaps the panel is already about **83%** of its body and still filling.
 
-### Liquid drop
+#### Liquid drop
 :::TuffDemoWrapper{demo="BaseAnchorDripDemo" code-lang="vue"}
 ---
 code: |
@@ -202,7 +227,7 @@ code: |
 
 Tag menu items with `data-liquid-item` to opt into per-item reveal: each item's opacity is keyed to the panel's current height, so an item can never appear before the panel has grown to hold it. Without the attribute the whole panel body reveals as a single unit — still keyed to growth rather than to the clock.
 
-## Bead
+### Bead
 
 `animation.type='bead'` shares one engine, one geometry, and one timing table with `drip`. The only difference is **width**.
 
@@ -214,7 +239,7 @@ Both slopes are **closed forms** of `t` rather than differences between frames. 
 
 The pinch is applied symmetrically about the sheet's own centre line, so the bead necks instead of sliding sideways. Because it can draw in past the panel's own padding, the rows are clipped to the sheet with `clip-path` and are revealed as the neck relaxes — rather than faded, which can only make an overhang faint instead of impossible.
 
-### Bead
+#### Bead
 :::TuffDemoWrapper{demo="BaseAnchorBeadDemo" code-lang="vue"}
 ---
 code: |
@@ -252,11 +277,11 @@ code: |
 
 `beadPinch` sets the peak draw-in per side (px, default 60 — a 200px panel necks to 80px) and `beadVelocityRef` sets what counts as "fastest" (default 4). The pinch can never close the sheet to zero width — a zero-width rect drops out of the Gaussian field entirely and the neck would snap early.
 
-## Custom Animation
+### Custom Animation
 
 Prefer the `animation` object for type, duration, and GSAP easing. `duration` / `ease` remain as compatibility fallbacks.
 
-### Custom Ease
+#### Custom Ease
 :::TuffDemoWrapper{demo="BaseAnchorCustomEaseDemo" code-lang="vue"}
 ---
 code: |
@@ -284,11 +309,11 @@ code: |
 ---
 :::
 
-## Interactive Playground
+### Interactive Playground
 
 Tune key props in one panel and focus on surface differences (`pure / mask / blur / glass / refraction`) plus motion adaptation modes (`auto / manual / off`).
 
-### Surface Playground
+#### Surface Playground
 :::TuffDemoWrapper{demo="BaseAnchorSurfacePlaygroundDemo" code-lang="vue"}
 ---
 code: |
@@ -402,7 +427,7 @@ When `type` is `drip` or `bead` the timing defaults change: `duration` is `260`,
 - `drip` / `bead` suppresses `showArrow`: an arrow contradicts the neck. It also replaces the rounded-rect outline with the ring derived from the merged silhouette, so there is never a double border.
 - `drip` / `bead` punches the trigger's interior out of the goo fill so the trigger's own fill and text always show through, whatever the page's stacking contexts are. The outline `use` is left unmasked, so the derived ring still wraps the trigger. Because of this the trigger must supply its own opaque background — a transparent trigger will show the page through the punched hole.
 - `drip` / `bead` needs a measurable panel height; `unlimitedHeight` (or `maxHeight <= 0`) falls back to the instant show/hide path.
-- Under `prefers-reduced-motion: reduce`, `liquid` snaps to its end state instead of animating.
+- Under `prefers-reduced-motion: reduce`, every animating type snaps to its end state instead of running: the GSAP-driven `transfer` / `boom` / `opacity` paths finish immediately, and `drip` / `bead` snaps through its prepare step (`none` is already instant).
 
 ## Best Practices
 

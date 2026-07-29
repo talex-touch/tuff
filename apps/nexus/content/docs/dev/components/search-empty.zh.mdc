@@ -19,7 +19,12 @@ verified: true
 ---
 code: |
   <template>
-    <TxSearchEmpty title="没有匹配结果" description="换一个关键词、清空筛选条件，或扩大搜索范围。" />
+    <TxSearchEmpty
+      title="没有匹配结果"
+      description="换一个关键词、清空筛选条件，或扩大搜索范围。"
+      surface="card"
+      :primary-action="{ label: '重置筛选', type: 'primary', icon: 'i-carbon-reset' }"
+    />
   </template>
 ---
 :::

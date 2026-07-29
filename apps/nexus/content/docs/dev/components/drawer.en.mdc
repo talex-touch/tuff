@@ -89,7 +89,7 @@ code: |
 
 Use the `header` / `footer` slots to customize the chrome, or disable them with `show-header` / `show-footer`. Built-in header/footer separators reuse `TxDivider`. `mask-effect` supports `blur`, `opacity`, and `transparent`; `panel-transparent` lets the panel surface show content behind it.
 
-### Slots / effects / mobile / close controls
+### Custom header / footer slots + mask effect
 :::TuffDemoWrapper{demo="DrawerSlotsEffectsDemo" code-lang="vue"}
 ---
 code: |

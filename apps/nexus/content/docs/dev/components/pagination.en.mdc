@@ -57,20 +57,20 @@ rows:
     description: Items per page
   - name: total
     type: number
-    default: '0'
-    description: Total items
+    default: '-'
+    description: Total item count; when omitted or 0, page count falls back to totalPages
   - name: totalPages
     type: number
     default: '-'
     description: Explicit total page count; used when total is not provided
   - name: prevIcon
     type: string
-    default: "'chevron-left'"
-    description: Previous page icon
+    default: "'i-carbon-chevron-left'"
+    description: Previous page icon (UnoCSS icon class consumed by TxIcon)
   - name: nextIcon
     type: string
-    default: "'chevron-right'"
-    description: Next page icon
+    default: "'i-carbon-chevron-right'"
+    description: Next page icon (UnoCSS icon class consumed by TxIcon)
   - name: showInfo
     type: boolean
     default: 'false'

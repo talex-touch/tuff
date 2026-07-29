@@ -102,6 +102,7 @@ code: |
 | `striped` | `boolean` | `false` | Zebra rows |
 | `bordered` | `boolean` | `false` | Show borders |
 | `hover` | `boolean` | `true` | Hover highlight |
+| `interactiveRows` | `boolean` | `false` | Makes rows focusable (`tabindex="0"`) so Enter/Space can trigger `rowClick`; automatically enabled when a `rowClick` listener is attached |
 | `selectable` | `boolean` | `false` | Selectable rows |
 | `selectedKeys` | `Array<string \| number>` | `[]` | Selected keys |
 | `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | Default sort |
@@ -120,7 +121,7 @@ code: |
 | `minWidth` | `string \| number` | Minimum column width. |
 | `maxWidth` | `string \| number` | Maximum column width. |
 | `auto` | `boolean` | Force column width to `auto`. |
-| `fixed` | `boolean \| 'left' \| 'right'` | Sticky column side; `true` equals `'left'`. |
+| `fixed` | `boolean \| 'left' \| 'right'` | Sticky column side; `true` equals `'left'`. When any column is fixed the root switches from `overflow: hidden` to `overflow: visible` (it never sets `overflow-x: auto`), so horizontal scrolling must come from an outer container or the sticky offsets have nothing to stick against. |
 | `nowrap` | `boolean` | Prevent wrapping for this column. |
 | `align` | `'left' \| 'center' \| 'right'` | Alignment |
 | `sortable` | `boolean` | Sortable |
@@ -152,6 +153,7 @@ code: |
 - Sortable columns support click, Enter, and Space. Use `sortOnClient=false` with `sortChange` for remote sorting.
 - `tableLayout="fixed"` plus explicit `width` / `minWidth` keeps dense operations tables from shifting during loading or sorting.
 - Fixed columns should use numeric px `width` or `minWidth`; sticky offsets are calculated from those values.
+- `TxDataTable` never scrolls horizontally on its own: with fixed columns, wrap the table in your own `overflow-x: auto` container so sticky columns have a scroll context to stick against.
 - Custom cells should preserve readable text or status-badge labels because sortable headers expose state through `aria-sort`.
 
 ## Review Notes

@@ -102,6 +102,7 @@ code: |
 | `striped` | `boolean` | `false` | 斑马纹 |
 | `bordered` | `boolean` | `false` | 表格边框 |
 | `hover` | `boolean` | `true` | 悬浮高亮 |
+| `interactiveRows` | `boolean` | `false` | 让整行可聚焦（`tabindex="0"`）并支持 Enter/Space 触发 `rowClick`；绑定了 `rowClick` 监听时会自动开启 |
 | `selectable` | `boolean` | `false` | 是否可选择 |
 | `selectedKeys` | `Array<string \| number>` | `[]` | 选中 key 列表 |
 | `defaultSort` | `{ key: string; order: 'asc' \| 'desc' \| null }` | `null` | 默认排序 |
@@ -120,7 +121,7 @@ code: |
 | `minWidth` | `string \| number` | 列最小宽度 |
 | `maxWidth` | `string \| number` | 列最大宽度 |
 | `auto` | `boolean` | 强制列宽为 `auto` |
-| `fixed` | `boolean \| 'left' \| 'right'` | 固定列方向；`true` 等价于 `'left'` |
+| `fixed` | `boolean \| 'left' \| 'right'` | 固定列方向；`true` 等价于 `'left'`。存在固定列时根元素从 `overflow: hidden` 切到 `overflow: visible`（并不设 `overflow-x: auto`），因此横向滚动必须由外层容器提供，否则 sticky 偏移无处附着。 |
 | `nowrap` | `boolean` | 禁止当前列换行 |
 | `align` | `'left' \| 'center' \| 'right'` | 对齐方式 |
 | `sortable` | `boolean` | 是否可排序 |
@@ -152,6 +153,7 @@ code: |
 - 可排序列支持点击、Enter 与 Space；远程排序时设置 `sortOnClient=false` 并监听 `sortChange`。
 - `tableLayout="fixed"` 配合显式 `width` / `minWidth`，能避免运维表格在加载或排序时宽度跳动。
 - 固定列优先使用数值 px 的 `width` 或 `minWidth`；sticky 偏移会根据这些值计算。
+- `TxDataTable` 自身不产生横向滚动：用固定列时把表格包在自己的 `overflow-x: auto` 容器里，sticky 列才有可滚动的参照。
 - 自定义单元格要保留可读文本或状态徽标文本，因为可排序表头会通过 `aria-sort` 暴露状态。
 
 ## 审阅说明

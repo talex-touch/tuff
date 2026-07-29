@@ -10,7 +10,7 @@ verified: true
 ---
 # Floating 浮动层
 
-`TxFloating` 跟踪鼠标和触摸位置，并按容器左上角计算相对坐标。`TxFloatingElement` 注册绝对定位图层，并根据每个图层的 `depth` 应用缓动的 `translate3d` 位移。
+`TxFloating` 跟踪鼠标和触摸位置，并按容器中心计算相对坐标。`TxFloatingElement` 注册绝对定位图层，并根据每个图层的 `depth` 应用缓动的 `translate3d` 位移。
 
 ## 基础用法
 
@@ -63,7 +63,7 @@ code: |
 - 容器渲染相对定位 `div`，类名包含 `tx-floating` 和可选 `className`。
 - `TxFloatingElement` 渲染绝对定位 `div`，类名包含 `tx-floating-element` 和可选 `className`。
 - `TxFloating` 挂载时会启动 passive `mousemove` 与 `touchmove` window 监听，除非已禁用。
-- 指针坐标以 floating 容器左上角为原点。
+- 指针坐标以 floating 容器中心为原点。
 - 每帧会让已注册元素按 `easingFactor` 靠近 `pointerPosition * (depth * sensitivity / 20)`。
 - `disabled=true` 会停止监听、取消当前 RAF，并把 transform 重置为 `translate3d(0px, 0px, 0)`。
 - `disabled=false` 会重新启动监听与 RAF。

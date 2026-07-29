@@ -78,14 +78,14 @@ code: |
 | `title` | `string` | `'Something went wrong'` | Error title. Override it with the failed object or operation. |
 | `description` | `string` | `'Please try again later.'` | Supporting recovery guidance. |
 | `icon` | `TxIconSource \| string \| null` | variant default | Custom icon source; set to `null` to suppress the inherited icon. |
-| `iconSize` | `number` | inherited | Icon size forwarded to `TxEmptyState`. |
+| `iconSize` | `number` | derived from `size` | Icon size forwarded to `TxEmptyState`; when unset it resolves from `size` to 28 / 36 / 44 (small / medium / large). |
 | `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | Layout direction. |
 | `align` | `'start' \| 'center' \| 'end'` | `'center'` | Content alignment. |
 | `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Size tier. |
 | `surface` | `'plain' \| 'card'` | `'plain'` | Surface style. |
 | `primaryAction` | `EmptyStateAction` | - | Primary recovery action config. |
 | `secondaryAction` | `EmptyStateAction` | - | Secondary action config. |
-| `actionSize` | `TxButtonProps['size']` | inherited | Button size for generated action buttons. |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | Size of the generated action buttons; inherits `TxEmptyState`'s `small` default. |
 | `loading` | `boolean` | `false` | Loading state forwarded to generated actions. |
 
 ### Events

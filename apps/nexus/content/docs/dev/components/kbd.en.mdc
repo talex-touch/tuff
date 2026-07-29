@@ -42,8 +42,8 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `size` | `'sm' \| 'md'` | `'sm'` | Shortcut token size. |
-| `tone` | `'default' \| 'primary'` | `'default'` | Visual tone. |
+| `size` | `'sm' \| 'md'` | `'sm'` | Token size: `sm` (default) for inline help and menu shortcuts; `md` is larger for shortcuts shown on their own. |
+| `tone` | `'default' \| 'primary'` | `'default'` | Visual tone: use `primary` only for the main shortcut on a page or command, at most one group per screen. |
 
 ### Events
 

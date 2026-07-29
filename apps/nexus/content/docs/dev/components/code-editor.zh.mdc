@@ -151,6 +151,7 @@ code: |
 - 只有 `lint=true` 且语言为 JSON/YAML 时才会加入对应诊断；TOML、INI、JavaScript 当前没有自定义 lint 诊断。
 - 外部 `modelValue` 变化会替换整份编辑器文档，但不会重新派发 update/change。
 - toolbar slot props 来自运行时编辑器函数；运行时组件挂载前不会渲染 toolbar。
+- 编辑器内按 `Cmd/Ctrl+Shift+F` 触发 `format()`；该快捷键始终被拦截（keymap handler 恒返回 `true`），即使当前语言无格式化能力也会吞掉按键。
 
 ## 样式定制
 

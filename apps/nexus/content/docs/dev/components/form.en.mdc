@@ -76,8 +76,8 @@ code: |
 | `rules` | `FormRules` | - | Form-level validation rules keyed by field prop. |
 | `labelPosition` | `'left' \| 'right' \| 'top'` | `'left'` | Label layout used by child form items. |
 | `labelWidth` | `string \| number` | - | Label width for non-top label layouts. Numbers become pixel values. |
-| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Form size exposed through context. |
-| `disabled` | `boolean` | `false` | Disabled state exposed through context. |
+| `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | Exposed through form context; TuffEx inputs do not read it automatically — pass `size` per control. |
+| `disabled` | `boolean` | `false` | Exposed through form context; TuffEx inputs do not read it automatically — pass `disabled` to each control. |
 
 ### TxForm Events
 
@@ -123,7 +123,7 @@ code: |
 | Component | Slot | Props | Description |
 |-----------|------|------|-------------|
 | `TxForm` | `default` | - | Form item and action content. |
-| `TxFormItem` | `default` | - | Field control content. |
+| `TxFormItem` | `default` | `{ id, ariaInvalid, ariaDescribedby }` | Field control content. Spread these onto the slotted control to wire the label `for`/`id` link and the error `aria-describedby`. |
 
 ## Best Practices
 
@@ -135,8 +135,8 @@ code: |
 
 ## Review Notes
 
-- **Accessibility note:** `TxFormItem` renders a visible `<label>` but does not bind `for`/`id` automatically; ensure slotted controls receive matching IDs or explicit ARIA labels when the native label association matters.
-- **Verified coverage:** `form.test.ts` exercises required-rule validation, error message rendering, successful revalidation after model updates, and `resetFields()` restoring the mounted initial value.
+- **Accessibility note:** `TxFormItem` renders a visible `<label>` whose `for` targets a generated field id, and exposes that id plus `ariaInvalid` / `ariaDescribedby` through the default slot (`#default="{ id, ariaInvalid, ariaDescribedby }"`). Spread them onto the slotted control to complete the label association and link the `role="alert"` error message; the association is inert until the control consumes `id`.
+- **Verified coverage:** `form.test.ts` exercises required-rule validation, error message rendering, label/control/error linkage (`for`/`id`, `aria-invalid`, `role="alert"`, `aria-describedby`), successful revalidation after model updates, and `resetFields()` restoring the mounted initial value.
 
 ## Source
 
