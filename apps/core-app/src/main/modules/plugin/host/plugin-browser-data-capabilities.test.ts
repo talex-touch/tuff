@@ -202,6 +202,56 @@ describe('isolated browser-data capability', () => {
     expect(JSON.stringify(result)).not.toMatch(/Library|Application Support|path|dev|ino|sqlite/i)
   })
 
+  it('sanitizes control characters from display text and drops control-character URLs', async () => {
+    const harness = await createHarness()
+    writeFileSync(
+      path.join(harness.profileRoot, 'Bookmarks'),
+      JSON.stringify({
+        roots: {
+          bookmark_bar: {
+            type: 'folder',
+            name: 'Docs\u0085Private',
+            children: [
+              {
+                type: 'url',
+                name: 'Safe\u0000Title',
+                url: 'https://example.com/safe'
+              },
+              {
+                type: 'url',
+                name: 'Dropped',
+                url: 'https://example.com/control\u0000path'
+              }
+            ]
+          }
+        }
+      })
+    )
+
+    const result = await harness.registry.dispatch('browser-data.scan', {
+      operation: 'scan',
+      sources: ['bookmarks'],
+      browser: 'chrome'
+    })
+
+    expect(result).toMatchObject({
+      records: [
+        {
+          title: 'Safe Title',
+          folder: 'Docs Private',
+          url: 'https://example.com/safe'
+        }
+      ]
+    })
+    const serialized = JSON.stringify(result)
+    expect(
+      Array.from(serialized).some((character) => {
+        const code = character.charCodeAt(0)
+        return code < 32 || (code >= 127 && code <= 159)
+      })
+    ).toBe(false)
+  })
+
   it('uses the main-supplied Linux config root and reports fixed Arc selection unsupported', async () => {
     const harness = await createHarness({ platform: 'linux' })
     const linuxProfile = path.join(harness.appData, 'google-chrome', 'Default')

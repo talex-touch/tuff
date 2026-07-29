@@ -2,7 +2,7 @@ import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-tou
 import type { PluginSqliteQueryResult } from '../runtime/plugin-sqlite-worker-protocol'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { Buffer } from 'node:buffer'
-import { constants as fsConstants } from 'node:fs'
+import { constants as fsConstants, type Dirent } from 'node:fs'
 import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
@@ -292,8 +292,22 @@ function validateRequest(value: unknown): BrowserDataScanRequest {
   })
 }
 
+function containsControlCharacters(value: string): boolean {
+  for (const character of value) {
+    const code = character.charCodeAt(0)
+    if (code < 32 || (code >= 127 && code <= 159)) return true
+  }
+  return false
+}
+
 function boundedText(value: unknown, maximumBytes: number, allowEmpty = false): string {
-  if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > maximumBytes) invalid()
+  if (
+    typeof value !== 'string' ||
+    Buffer.byteLength(value, 'utf8') > maximumBytes ||
+    containsControlCharacters(value)
+  ) {
+    invalid()
+  }
   const normalized = value.trim()
   if (!allowEmpty && normalized.length === 0) invalid()
   return normalized
@@ -569,7 +583,7 @@ async function canonicalDirectory(
 async function boundedDirectoryEntries(directory: string, signal: AbortSignal) {
   assertSignal(signal)
   const handle = await opendir(directory)
-  const entries = []
+  const entries: Dirent[] = []
   try {
     while (entries.length < 128) {
       assertSignal(signal)
@@ -800,7 +814,12 @@ function safeUrl(value: unknown): string | null {
 
 function safeDisplay(value: unknown, maximumBytes: number, fallback: string): string {
   if (typeof value !== 'string') return fallback
-  const normalized = value.trim()
+  let cleaned = ''
+  for (const character of value) {
+    const code = character.charCodeAt(0)
+    cleaned += code < 32 || (code >= 127 && code <= 159) ? ' ' : character
+  }
+  const normalized = cleaned.trim().replace(/\s+/g, ' ')
   if (!normalized) return fallback
   let output = ''
   for (const character of normalized) {
