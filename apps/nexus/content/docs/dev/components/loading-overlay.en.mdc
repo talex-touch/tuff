@@ -127,7 +127,7 @@ code: |
 
 ## Review Notes
 
-- **Accessibility note:** `TxLoadingOverlay` blocks pointer interaction visually but does not expose `role="status"`, `aria-live`, focus trapping, or modal semantics. Keep it for short blocking waits and announce long-running async work with surrounding page copy when necessary.
+- **Accessibility note:** The overlay carries `role="status"` and `aria-live="polite"`, so `text` is announced by screen readers — **you do not need to announce it separately**. Fullscreen mode also parks focus on the overlay, traps Tab, and restores the previously focused element on close. The one thing it lacks is modal semantics (no `aria-modal`), so it is never treated as a dialog; reach for `TxModal` or `TxDialog` when you need a real modal.
 - **Verified coverage:** `loading-overlay.test.ts` checks local overlay rendering, custom background/spinner size/text, closed-state slot preservation, fullscreen teleport, and absence of the local container in fullscreen mode.
 
 ## Source
