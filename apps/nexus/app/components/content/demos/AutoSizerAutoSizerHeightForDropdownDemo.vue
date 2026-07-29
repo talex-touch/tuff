@@ -3,11 +3,16 @@ import { ref } from 'vue'
 const { locale } = useI18n()
 const open = ref(false)
 const mode = ref<'short' | 'long'>('short')
-const toggleItems = () => {
-  mode.value = mode.value === 'short' ? 'long' : 'short'
+const sizerRef = ref<any>(null)
+function toggleOpen() {
+  void sizerRef.value?.action?.(() => {
+    open.value = !open.value
+  })
 }
-const toggleOpen = () => {
-  open.value = !open.value
+function toggleItems() {
+  void sizerRef.value?.action?.(() => {
+    mode.value = mode.value === 'short' ? 'long' : 'short'
+  })
 }
 </script>
 

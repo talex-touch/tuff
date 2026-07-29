@@ -2,7 +2,12 @@
 import { ref } from 'vue'
 const { locale } = useI18n()
 const loading = ref(false)
-const toggle = () => {}
+const sizerRef = ref<any>(null)
+function toggle() {
+  void sizerRef.value?.action?.(() => {
+    loading.value = !loading.value
+  })
+}
 </script>
 
 <template>

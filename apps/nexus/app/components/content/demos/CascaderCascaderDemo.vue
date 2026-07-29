@@ -1,9 +1,39 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const options = ref([])
-const value1 = ref('')
-const value2 = ref('')
+
+const value1 = ref<any>(undefined)
+const value2 = ref<any>([])
+
+const options = [
+  {
+    value: 'zhejiang',
+    label: 'Zhejiang',
+    children: [
+      {
+        value: 'hangzhou',
+        label: 'Hangzhou',
+        children: [
+          { value: 'xihu', label: 'West Lake', leaf: true },
+          { value: 'binjiang', label: 'Binjiang', leaf: true },
+        ],
+      },
+    ],
+  },
+  {
+    value: 'jiangsu',
+    label: 'Jiangsu',
+    children: [
+      {
+        value: 'nanjing',
+        label: 'Nanjing',
+        children: [
+          { value: 'zhonghuamen', label: 'Zhong Hua Men', leaf: true },
+        ],
+      },
+    ],
+  },
+]
 </script>
 
 <template>

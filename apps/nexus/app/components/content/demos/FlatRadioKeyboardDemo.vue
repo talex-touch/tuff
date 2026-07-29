@@ -17,7 +17,7 @@ const multiple = ref<Array<'email' | 'push' | 'sms'>>(['email'])
         <TxFlatRadioItem value="settings" label="Settings" />
       </TxFlatRadio>
       <div class="tx-demo__meta">
-        focus with Tab, move with Arrow keys, confirm with Enter/Space
+        focus with Tab, arrow keys select immediately
       </div>
     </div>
 

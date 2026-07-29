@@ -1,21 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+const { locale } = useI18n()
 
-const value = ref<string>('json')
+const value = ref('json')
 </script>
 
 <template>
-  <div class="tx-demo tx-demo__col">
-    <TxFlatSelect v-model="value" placeholder="选择格式">
-      <TxFlatSelectItem value="json" label="JSON" />
-      <TxFlatSelectItem value="csv" label="CSV" />
-      <TxFlatSelectItem value="xml" label="XML" />
-    </TxFlatSelect>
-
-    <TxCard variant="plain" background="mask" :padding="10" :radius="14">
-      <div class="tx-demo__meta">
-        selected: {{ value }}
-      </div>
-    </TxCard>
-  </div>
+  <TxFlatSelect v-model="value" :placeholder="locale === 'zh' ? '选择格式' : 'Select format'">
+    <TxFlatSelectItem value="json" label="JSON" />
+    <TxFlatSelectItem value="csv" label="CSV" />
+    <TxFlatSelectItem value="xml" label="XML" />
+  </TxFlatSelect>
 </template>

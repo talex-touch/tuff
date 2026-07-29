@@ -12,7 +12,7 @@ function pick(action: string) {
   <div class="tx-demo tx-demo__col">
     <TxFlatDropdown trigger="hover" placement="bottom-start" :offset="10" close-on-content-click>
       <template #trigger="{ open }">
-        <TxButton size="sm" :variant="open ? 'primary' : 'default'">
+        <TxButton size="sm" :variant="open ? 'primary' : 'secondary'">
           Actions
         </TxButton>
       </template>

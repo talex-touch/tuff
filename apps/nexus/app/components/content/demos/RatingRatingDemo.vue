@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const score = ref('')
+const score = ref(3.5)
 </script>
 
 <template>
