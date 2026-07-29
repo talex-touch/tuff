@@ -715,6 +715,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const stringIndexOf = String.prototype.indexOf
   const stringReplaceAll = String.prototype.replaceAll
   const stringSlice = String.prototype.slice
+  const stringTrim = String.prototype.trim
   const stringToUpperCase = String.prototype.toUpperCase
   const encodeUriComponent = encodeURIComponent
   const decodeUriComponent = decodeURIComponent
@@ -1361,7 +1362,12 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasVoiceInvokeFacade = hasDeclaredCapability('voice.invoke')
   const hasVoiceStreamFacade = hasDeclaredCapability('voice.stream')
   const hasVoiceFacade = hasVoiceInvokeFacade || hasVoiceStreamFacade
-  const hasIntelligenceFacade = hasDeclaredCapability('intelligence.invoke')
+  const hasBasicIntelligenceFacade = hasDeclaredCapability('intelligence.invoke')
+  const hasIntelligenceContextInvokeFacade = hasDeclaredCapability(
+    'intelligence.context.invoke'
+  )
+  const hasIntelligenceFacade =
+    hasBasicIntelligenceFacade || hasIntelligenceContextInvokeFacade
   const hasSnipasteFacade = hasDeclaredCapability('process.spawn')
   const hasWorkspaceScriptsFacade =
     snapshot.manifest.name === 'touch-workspace-scripts' &&
@@ -1729,7 +1735,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const intelligenceTextFacade = objectCreate(null)
   const intelligenceVisionFacade = objectCreate(null)
   const intelligenceFacade = objectCreate(null)
-  if (hasIntelligenceFacade) {
+  if (hasBasicIntelligenceFacade) {
     defineFacadeMethod(intelligenceFacade, 'invoke', invokeIntelligenceCapability)
     defineFacadeMethod(intelligenceTextFacade, 'chat', (payload, options) =>
       invokeIntelligenceCapability('text.chat', payload, options)
@@ -1776,6 +1782,119 @@ const CONTEXT_BOOTSTRAP = String.raw`
             throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
           }
           return cloneLocalDto(result.providers)
+        }
+      )
+    })
+  }
+  if (hasIntelligenceContextInvokeFacade) {
+    defineFacadeMethod(intelligenceFacade, 'contextInvoke', (input) => {
+      let request
+      try {
+        request = cloneLocalDto(input)
+      } catch {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const payload = request && typeof request === 'object' ? request.payload : null
+      const messages = payload && typeof payload === 'object' ? payload.messages : null
+      const context = request && typeof request === 'object' ? request.context : null
+      const mode = context && typeof context === 'object' ? context.mode : undefined
+      const owner = context && typeof context === 'object' ? context.owner : undefined
+      const sessionId = context && typeof context === 'object' ? context.sessionId : undefined
+      if (
+        !request ||
+        typeof request !== 'object' ||
+        arrayIsArray(request) ||
+        request.capabilityId !== 'text.chat' ||
+        typeof request.input !== 'string' ||
+        !reflectApply(stringTrim, request.input, []) ||
+        !payload ||
+        typeof payload !== 'object' ||
+        arrayIsArray(payload) ||
+        !arrayIsArray(messages) ||
+        messages.length < 1 ||
+        !context ||
+        typeof context !== 'object' ||
+        arrayIsArray(context) ||
+        (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') ||
+        (owner !== undefined && owner !== 'corebox' && owner !== 'assistant') ||
+        (mode === 'continue' &&
+          (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, [])))
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('intelligence.context.invoke', {
+          operation: 'context.invoke',
+          capabilityId: request.capabilityId,
+          input: request.input,
+          payload: request.payload,
+          ...(objectHasOwn(request, 'options') ? { options: request.options } : {}),
+          context: request.context
+        }),
+        (result) => {
+          if (
+            !result ||
+            typeof result !== 'object' ||
+            result.operation !== 'context.invoke' ||
+            !result.invocation ||
+            typeof result.invocation !== 'object' ||
+            typeof result.invocation.result !== 'string' ||
+            typeof result.invocation.providerId !== 'string' ||
+            typeof result.invocation.modelId !== 'string' ||
+            typeof result.invocation.traceId !== 'string' ||
+            typeof result.invocation.latency !== 'number' ||
+            !numberIsFinite(result.invocation.latency) ||
+            !result.context ||
+            typeof result.context !== 'object' ||
+            arrayIsArray(result.context)
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          const summary = result.context
+          if (
+            (summary.mode !== 'new' &&
+              summary.mode !== 'continue' &&
+              summary.mode !== 'stateless') ||
+            (summary.scope !== 'light' &&
+              summary.scope !== 'session' &&
+              summary.scope !== 'retrieval') ||
+            !numberIsSafeInteger(summary.itemCount) ||
+            !numberIsSafeInteger(summary.tokenBudget) ||
+            !numberIsSafeInteger(summary.tokenEstimate) ||
+            !arrayIsArray(summary.sourceTypes) ||
+            !numberIsSafeInteger(summary.retrievalItemCount) ||
+            !numberIsSafeInteger(summary.citationCount)
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          const projectedContext = {
+            mode: summary.mode,
+            scope: summary.scope,
+            itemCount: summary.itemCount,
+            tokenBudget: summary.tokenBudget,
+            tokenEstimate: summary.tokenEstimate,
+            sourceTypes: cloneLocalDto(summary.sourceTypes),
+            retrievalItemCount: summary.retrievalItemCount,
+            citationCount: summary.citationCount
+          }
+          for (const key of ['sessionId', 'turnId', 'packageId', 'traceId', 'degradedReason']) {
+            if (objectHasOwn(summary, key)) {
+              if (typeof summary[key] !== 'string') {
+                throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+              }
+              projectedContext[key] = summary[key]
+            }
+          }
+          return cloneLocalDto({
+            invocation: {
+              result: result.invocation.result,
+              provider: result.invocation.providerId,
+              model: result.invocation.modelId,
+              traceId: result.invocation.traceId,
+              latency: result.invocation.latency
+            },
+            context: projectedContext
+          })
         }
       )
     })

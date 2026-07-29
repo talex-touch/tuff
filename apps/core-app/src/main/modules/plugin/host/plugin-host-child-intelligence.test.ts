@@ -8,13 +8,30 @@ const snapshot = {
   manifest: { name: 'touch-intelligence', activationGeneration: 1 }
 }
 
-function payload(scriptContent: string, declared = true) {
+function payload(scriptContent: string, declared = true, contextDeclared = false) {
+  const capabilityManifest: Array<{
+    id: string
+    callbackLifetime: 'transient'
+    callbackFields: string[]
+  }> = []
+  if (declared) {
+    capabilityManifest.push({
+      id: 'intelligence.invoke',
+      callbackLifetime: 'transient',
+      callbackFields: []
+    })
+  }
+  if (contextDeclared) {
+    capabilityManifest.push({
+      id: 'intelligence.context.invoke',
+      callbackLifetime: 'transient',
+      callbackFields: []
+    })
+  }
   return {
     scriptContent,
     snapshot,
-    capabilityManifest: declared
-      ? [{ id: 'intelligence.invoke', callbackLifetime: 'transient', callbackFields: [] }]
-      : [],
+    capabilityManifest,
     callbackLimits: { maxCallbacks: 64, maxConcurrentCallbacks: 16, maxResources: 32 }
   }
 }
@@ -243,6 +260,180 @@ describe('plugin Prelude Intelligence facade', () => {
       requireType: 'undefined'
     })
     expect(invokeCapability).not.toHaveBeenCalled()
+    runtime.shutdown()
+  })
+
+  it('projects context invoke through its independently declared frozen facade', async () => {
+    const invokeCapability = vi.fn(async () => ({
+      operation: 'context.invoke',
+      invocation: {
+        result: 'context answer',
+        providerId: 'provider-public',
+        modelId: 'model-public',
+        traceId: 'invoke-trace',
+        latency: 19
+      },
+      context: {
+        mode: 'continue',
+        scope: 'retrieval',
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        packageId: 'package-1',
+        traceId: 'context-trace',
+        itemCount: 2,
+        tokenBudget: 1200,
+        tokenEstimate: 20,
+        sourceTypes: ['current_input', 'retrieval'],
+        retrievalItemCount: 1,
+        citationCount: 1
+      }
+    }))
+    const runtime = loadPluginPrelude(
+      payload(
+        `
+          module.exports = {
+            async onInit() {
+              const result = await intelligence.contextInvoke({
+                capabilityId: 'text.chat',
+                input: 'hello',
+                payload: { messages: [{ role: 'user', content: 'hello' }] },
+                context: {
+                  mode: 'continue',
+                  owner: 'corebox',
+                  sessionId: 'session-1',
+                  scope: 'retrieval'
+                }
+              })
+              result.invocation.result = 'child-mutated'
+              return {
+                alias: intelligence === plugin.intelligence,
+                keys: Object.keys(intelligence),
+                frozen: Object.isFrozen(intelligence) && Object.isFrozen(intelligence.contextInvoke),
+                nullPrototype: Object.getPrototypeOf(intelligence) === null,
+                result,
+                stream: typeof intelligence.contextStream,
+                agentSession: typeof intelligence.agentSessionStart,
+                evaluateMemory: typeof intelligence.contextEvaluateMemory,
+                memory: typeof intelligence.memory,
+                hostCapabilities: typeof intelligence.hostCapabilities
+              }
+            }
+          }
+        `,
+        false,
+        true
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual({
+      alias: true,
+      keys: ['contextInvoke'],
+      frozen: true,
+      nullPrototype: true,
+      result: {
+        invocation: {
+          result: 'child-mutated',
+          provider: 'provider-public',
+          model: 'model-public',
+          traceId: 'invoke-trace',
+          latency: 19
+        },
+        context: {
+          mode: 'continue',
+          scope: 'retrieval',
+          sessionId: 'session-1',
+          turnId: 'turn-1',
+          packageId: 'package-1',
+          traceId: 'context-trace',
+          itemCount: 2,
+          tokenBudget: 1200,
+          tokenEstimate: 20,
+          sourceTypes: ['current_input', 'retrieval'],
+          retrievalItemCount: 1,
+          citationCount: 1
+        }
+      },
+      stream: 'undefined',
+      agentSession: 'undefined',
+      evaluateMemory: 'undefined',
+      memory: 'undefined',
+      hostCapabilities: 'undefined'
+    })
+    expect(invokeCapability).toHaveBeenCalledWith(
+      'intelligence.context.invoke',
+      {
+        operation: 'context.invoke',
+        capabilityId: 'text.chat',
+        input: 'hello',
+        payload: { messages: [{ role: 'user', content: 'hello' }] },
+        context: {
+          mode: 'continue',
+          owner: 'corebox',
+          sessionId: 'session-1',
+          scope: 'retrieval'
+        }
+      },
+      expect.any(Number)
+    )
+    runtime.shutdown()
+  })
+
+  it('rejects invalid context requests locally before host dispatch', async () => {
+    const invokeCapability = vi.fn()
+    const runtime = loadPluginPrelude(
+      payload(
+        `
+          module.exports = {
+            async onInit() {
+              const requests = [
+                { capabilityId: 'vision.ocr', input: 'x', payload: { messages: [{}] }, context: { mode: 'new' } },
+                { capabilityId: 'text.chat', input: 'x', payload: { messages: [{}] }, context: { mode: 'handoff' } },
+                { capabilityId: 'text.chat', input: 'x', payload: { messages: [{}] }, context: { mode: 'new', owner: 'system' } },
+                { capabilityId: 'text.chat', input: 'x', payload: { messages: [{}] }, context: { mode: 'continue' } },
+                { capabilityId: 'text.chat', input: '', payload: { messages: [{}] }, context: { mode: 'new' } },
+                { capabilityId: 'text.chat', input: 'x', payload: { messages: [] }, context: { mode: 'new' } }
+              ]
+              const codes = []
+              for (const request of requests) {
+                try { await intelligence.contextInvoke(request) }
+                catch (error) { codes.push(error.code) }
+              }
+              return codes
+            }
+          }
+        `,
+        false,
+        true
+      ),
+      { invokeCapability }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).resolves.toEqual(
+      new Array(6).fill('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+    )
+    expect(invokeCapability).not.toHaveBeenCalled()
+    runtime.shutdown()
+  })
+
+  it('rejects a mismatched context host discriminant', async () => {
+    const runtime = loadPluginPrelude(
+      payload(
+        `module.exports={onInit(){return intelligence.contextInvoke({capabilityId:'text.chat',input:'x',payload:{messages:[{role:'user',content:'x'}]},context:{mode:'stateless'}})}}`,
+        false,
+        true
+      ),
+      {
+        invokeCapability: async () => ({
+          operation: 'capability.invoke',
+          result: 'wrong discriminant'
+        })
+      }
+    )
+
+    await expect(runtime.callLifecycle('onInit', []).promise).rejects.toMatchObject({
+      code: 'PLUGIN_HOST_CHILD_LIFECYCLE_FAILED'
+    })
     runtime.shutdown()
   })
 
