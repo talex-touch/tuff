@@ -6,8 +6,7 @@
 
 1. **Close verified release and runtime blockers.** Complete the active OTA, macOS release-evidence, and application-icon acceptance work according to their task-local PRDs. The OTA parent remains concurrently owned; this document does not restate its volatile child status.
 2. **Complete the active search and cross-platform remediation.** The audit parent owns the backlog; active children own Windows productionization and the default-off [search-index split write-path migration](../../.trellis/tasks/07-28-migrate-search-index-split-write-paths/prd.md). The split flag must remain off until its child task has direct flag-on app-run evidence for every writer.
-3. **Converge project documentation in independent ownership lanes.** Complete the active documentation children A ([source-of-truth convergence](../../.trellis/tasks/07-27-docs-sot-convergence/prd.md)), B (roadmap/release), and C (peripheral docs); start D (documentation quality gates) only after A/B/C and the concurrently owned bilingual contract are available.
-4. **Continue remaining independently-owned active tasks** in the order recorded here only after the preceding blocker lane is resolved; task-local PRDs define implementation order and acceptance.
+3. **Continue remaining independently-owned active tasks** in the order recorded here only after the preceding blocker lane is resolved; task-local PRDs define implementation order and acceptance.
 
 ## Non-negotiable safety gates
 
@@ -24,7 +23,6 @@
 ## Local and historical references
 
 - Search/cross-platform audit: [task PRD](../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)
-- Documentation convergence program: [task PRD](../../.trellis/tasks/07-27-converge-project-documentation-gates/prd.md)
 - AI: [TODO-AI.md](./TODO-AI.md)
 - R3: [TODO-R3.md](./TODO-R3.md)
 - Nexus: [TODO-nexus.md](./TODO-nexus.md)
