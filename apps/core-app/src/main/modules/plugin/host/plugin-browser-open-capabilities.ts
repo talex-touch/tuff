@@ -475,15 +475,12 @@ function snapshotEnvironment(value: unknown): Readonly<Record<string, string>> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || utilTypes.isProxy(value)) {
     invalid()
   }
-  let prototype: object | null
   let descriptors: PropertyDescriptorMap
   try {
-    prototype = Object.getPrototypeOf(value)
     descriptors = Object.getOwnPropertyDescriptors(value)
   } catch {
     invalid()
   }
-  if (prototype !== Object.prototype && prototype !== null) invalid()
   const output: Record<string, string> = Object.create(null)
   for (const key of Reflect.ownKeys(descriptors)) {
     const descriptor = descriptors[key]

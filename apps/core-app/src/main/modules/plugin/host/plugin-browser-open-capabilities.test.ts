@@ -508,6 +508,19 @@ describe('isolated browser-open capability', () => {
     expect(getter).not.toHaveBeenCalled()
   })
 
+  it('accepts the real Node environment without retaining its special prototype', () => {
+    const service = createFixedPluginBrowserOpenService({
+      platform: 'darwin',
+      homeDirectory: '/Users/test',
+      windowsDirectory: '/Windows',
+      environment: process.env,
+      inspect: vi.fn(async () => null),
+      spawn: vi.fn(() => completedProcess())
+    })
+
+    expect(service.platform).toBe('darwin')
+  })
+
   it('keeps Linux specific inventory empty and uses fixed xdg-open for default URLs', async () => {
     const harness = createHarness({ platform: 'linux' })
 
