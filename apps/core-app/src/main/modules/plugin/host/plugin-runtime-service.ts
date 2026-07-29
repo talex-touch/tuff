@@ -75,6 +75,7 @@ export interface PluginRuntimeActivationOptions {
   scriptContent: string
   snapshot: PluginRuntimeSnapshot
   capabilityDefinitions?: readonly PluginHostCapabilityDefinition[]
+  capabilityAllowlist?: readonly PluginHostCapability[]
   closeResources?: () => void | Promise<void>
   onCrash?: (diagnostic: PluginRuntimeCrashDiagnostic) => void
 }
@@ -110,6 +111,7 @@ interface SnapshotActivationOptions {
   scriptContent: string
   snapshot: PluginRuntimeSnapshot
   capabilityDefinitions: readonly PluginHostCapabilityDefinition[]
+  capabilityAllowlist?: readonly PluginHostCapability[]
   closeResources?: () => void | Promise<void>
   onCrash?: (diagnostic: PluginRuntimeCrashDiagnostic) => void
 }
@@ -270,6 +272,48 @@ function snapshotDefinitions(input: unknown): readonly PluginHostCapabilityDefin
   return Object.freeze(definitions)
 }
 
+function snapshotCapabilityAllowlist(input: unknown): readonly PluginHostCapability[] {
+  if (!Array.isArray(input)) invalidOptions()
+  let descriptors: Record<string, PropertyDescriptor>
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(input)
+  } catch {
+    invalidOptions()
+  }
+  const lengthDescriptor = descriptors.length
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
+  if (
+    !Number.isSafeInteger(length) ||
+    Number(length) < 0 ||
+    Number(length) > PLUGIN_HOST_CAPABILITIES.length
+  ) {
+    invalidOptions()
+  }
+  const allowedKeys = new Set<PropertyKey>(['length'])
+  for (let index = 0; index < Number(length); index += 1) allowedKeys.add(String(index))
+  if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) invalidOptions()
+
+  const known = new Set<string>(PLUGIN_HOST_CAPABILITIES)
+  const seen = new Set<PluginHostCapability>()
+  const capabilities: PluginHostCapability[] = []
+  for (let index = 0; index < Number(length); index += 1) {
+    const descriptor = descriptors[String(index)]
+    if (!descriptor?.enumerable || !('value' in descriptor)) invalidOptions()
+    const capability = descriptor.value
+    if (
+      typeof capability !== 'string' ||
+      !known.has(capability) ||
+      seen.has(capability as PluginHostCapability)
+    ) {
+      invalidOptions()
+    }
+    seen.add(capability as PluginHostCapability)
+    capabilities.push(capability as PluginHostCapability)
+  }
+  return Object.freeze(capabilities)
+}
+
 function mergeDefinitions(
   baseDefinitions: readonly PluginHostCapabilityDefinition[],
   activationDefinitions: readonly PluginHostCapabilityDefinition[]
@@ -427,6 +471,11 @@ function snapshotActivationOptions(
   const capabilityDefinitions = snapshotDefinitions(
     readDataProperty(input, 'capabilityDefinitions', false) ?? Object.freeze([])
   )
+  const rawCapabilityAllowlist = readDataProperty(input, 'capabilityAllowlist', false)
+  const capabilityAllowlist =
+    rawCapabilityAllowlist === undefined
+      ? undefined
+      : snapshotCapabilityAllowlist(rawCapabilityAllowlist)
   const closeResources = readDataProperty(input, 'closeResources', false)
   const onCrash = readDataProperty(input, 'onCrash', false)
   if (
@@ -441,6 +490,7 @@ function snapshotActivationOptions(
     scriptContent,
     snapshot,
     capabilityDefinitions,
+    ...(capabilityAllowlist === undefined ? {} : { capabilityAllowlist }),
     ...(closeResources === undefined
       ? {}
       : { closeResources: closeResources as () => void | Promise<void> }),
@@ -670,6 +720,13 @@ export class PluginRuntimeService {
         this.capabilityDefinitions,
         options.capabilityDefinitions
       )
+      if (options.capabilityAllowlist) {
+        const allowed = new Set(options.capabilityAllowlist)
+        capabilityDefinitions = Object.freeze(
+          capabilityDefinitions.filter((definition) => allowed.has(definition.id))
+        )
+        if (capabilityDefinitions.length !== allowed.size) invalidOptions()
+      }
       capabilityManifest = Object.freeze(
         capabilityDefinitions.map((definition) =>
           Object.freeze({

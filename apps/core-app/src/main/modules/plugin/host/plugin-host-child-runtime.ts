@@ -1330,44 +1330,58 @@ const CONTEXT_BOOTSTRAP = String.raw`
   objectFreeze(hostCapabilities)
 
   const hasDeclaredCapability = (id) => Boolean(getMapValue(declaredCapabilities, id))
+  const isTranslationPrelude = snapshot.manifest.name === 'touch-translation'
   const hasFeatureFacade =
     hasDeclaredCapability('feature.items.push') ||
     hasDeclaredCapability('feature.items.update') ||
     hasDeclaredCapability('feature.items.remove') ||
     hasDeclaredCapability('feature.items.clear') ||
     hasDeclaredCapability('feature.items.list')
+  const hasWidgetItemFacade =
+    !isTranslationPrelude && hasDeclaredCapability('feature.items.widget.push')
   const hasStorageFacade =
-    hasDeclaredCapability('storage.file.read') ||
-    hasDeclaredCapability('storage.file.write') ||
-    hasDeclaredCapability('storage.file.remove') ||
-    hasDeclaredCapability('storage.file.list')
+    !isTranslationPrelude &&
+    (hasDeclaredCapability('storage.file.read') ||
+      hasDeclaredCapability('storage.file.write') ||
+      hasDeclaredCapability('storage.file.remove') ||
+      hasDeclaredCapability('storage.file.list'))
   const hasFeaturesFacade =
-    hasDeclaredCapability('feature.registry.add') ||
-    hasDeclaredCapability('feature.registry.remove') ||
-    hasDeclaredCapability('feature.registry.list')
+    !isTranslationPrelude &&
+    (hasDeclaredCapability('feature.registry.add') ||
+      hasDeclaredCapability('feature.registry.remove') ||
+      hasDeclaredCapability('feature.registry.list'))
   const hasSecretFacade =
-    hasDeclaredCapability('secret.get') ||
-    hasDeclaredCapability('secret.set') ||
-    hasDeclaredCapability('secret.delete')
+    !isTranslationPrelude &&
+    (hasDeclaredCapability('secret.get') ||
+      hasDeclaredCapability('secret.set') ||
+      hasDeclaredCapability('secret.delete'))
   const hasClipboardFacade =
     hasDeclaredCapability('clipboard.read') ||
     hasDeclaredCapability('clipboard.write') ||
     hasDeclaredCapability('clipboard.copy-and-paste')
-  const hasHttpFacade = hasDeclaredCapability('http.request')
-  const hasFilesystemFacade = hasDeclaredCapability('filesystem.write')
-  const hasPermissionFacade = hasDeclaredCapability('permission.check')
-  const hasChannelFacade = hasDeclaredCapability('channel.invoke')
-  const hasQuickOpsFacade = hasDeclaredCapability('quick-ops.invoke')
-  const hasFlowFacade = hasDeclaredCapability('flow.invoke')
-  const hasVoiceInvokeFacade = hasDeclaredCapability('voice.invoke')
-  const hasVoiceStreamFacade = hasDeclaredCapability('voice.stream')
+  const hasHttpFacade = !isTranslationPrelude && hasDeclaredCapability('http.request')
+  const hasFilesystemFacade =
+    !isTranslationPrelude && hasDeclaredCapability('filesystem.write')
+  const hasPermissionFacade =
+    !isTranslationPrelude && hasDeclaredCapability('permission.check')
+  const hasChannelFacade = !isTranslationPrelude && hasDeclaredCapability('channel.invoke')
+  const hasQuickOpsFacade = !isTranslationPrelude && hasDeclaredCapability('quick-ops.invoke')
+  const hasFlowFacade = !isTranslationPrelude && hasDeclaredCapability('flow.invoke')
+  const hasVoiceInvokeFacade = !isTranslationPrelude && hasDeclaredCapability('voice.invoke')
+  const hasVoiceStreamFacade = !isTranslationPrelude && hasDeclaredCapability('voice.stream')
   const hasVoiceFacade = hasVoiceInvokeFacade || hasVoiceStreamFacade
-  const hasBasicIntelligenceFacade = hasDeclaredCapability('intelligence.invoke')
-  const hasIntelligenceContextInvokeFacade = hasDeclaredCapability(
-    'intelligence.context.invoke'
-  )
+  const hasTranslationFacade =
+    isTranslationPrelude && hasDeclaredCapability('intelligence.invoke')
+  const hasBasicIntelligenceFacade =
+    !isTranslationPrelude && hasDeclaredCapability('intelligence.invoke')
+  const hasIntelligenceContextInvokeFacade =
+    !isTranslationPrelude && hasDeclaredCapability('intelligence.context.invoke')
+  const hasIntelligenceContextStreamFacade =
+    !isTranslationPrelude && hasDeclaredCapability('intelligence.stream')
   const hasIntelligenceFacade =
-    hasBasicIntelligenceFacade || hasIntelligenceContextInvokeFacade
+    hasBasicIntelligenceFacade ||
+    hasIntelligenceContextInvokeFacade ||
+    hasIntelligenceContextStreamFacade
   const hasSnipasteFacade = hasDeclaredCapability('process.spawn')
   const hasWorkspaceScriptsFacade =
     snapshot.manifest.name === 'touch-workspace-scripts' &&
@@ -1732,6 +1746,53 @@ const CONTEXT_BOOTSTRAP = String.raw`
     )
   }
   objectFreeze(invokeIntelligenceCapability)
+  const translationFacade = objectCreate(null)
+  if (hasTranslationFacade) {
+    defineFacadeMethod(translationFacade, 'translate', (payload, options) => {
+      const request = {
+        operation: 'capability.invoke',
+        capabilityId: 'text.translate',
+        payload
+      }
+      if (options !== undefined) request.options = options
+      return mapCapabilityResult(
+        invokeCapability('intelligence.invoke', request),
+        mapIntelligenceInvokeResult
+      )
+    })
+    defineFacadeMethod(translationFacade, 'ocr', (payload, options) => {
+      const request = {
+        operation: 'capability.invoke',
+        capabilityId: 'vision.ocr',
+        payload
+      }
+      if (options !== undefined) request.options = options
+      return mapCapabilityResult(
+        invokeCapability('intelligence.invoke', request),
+        mapIntelligenceInvokeResult
+      )
+    })
+    defineFacadeMethod(translationFacade, 'listProviders', () =>
+      mapCapabilityResult(
+        invokeCapability('intelligence.invoke', {
+          operation: 'provider-models.list',
+          capabilityId: 'text.translate'
+        }),
+        (result) => {
+          if (
+            !result ||
+            typeof result !== 'object' ||
+            result.operation !== 'provider-models.list' ||
+            result.capabilityId !== 'text.translate'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.providers)
+        }
+      )
+    )
+  }
+  objectFreeze(translationFacade)
   const intelligenceTextFacade = objectCreate(null)
   const intelligenceVisionFacade = objectCreate(null)
   const intelligenceFacade = objectCreate(null)
@@ -1800,6 +1861,13 @@ const CONTEXT_BOOTSTRAP = String.raw`
       const mode = context && typeof context === 'object' ? context.mode : undefined
       const owner = context && typeof context === 'object' ? context.owner : undefined
       const sessionId = context && typeof context === 'object' ? context.sessionId : undefined
+      const options = request && typeof request === 'object' ? request.options : null
+      const metadata = options && typeof options === 'object' ? options.metadata : null
+      const entrypoint = metadata && typeof metadata === 'object' ? metadata.contextEntrypoint : null
+      const entrypointId = entrypoint && typeof entrypoint === 'object' ? entrypoint.id : undefined
+      const entrypointOwner =
+        entrypoint && typeof entrypoint === 'object' ? entrypoint.owner : undefined
+      const entrypointMode = entrypoint && typeof entrypoint === 'object' ? entrypoint.mode : undefined
       if (
         !request ||
         typeof request !== 'object' ||
@@ -1816,9 +1884,25 @@ const CONTEXT_BOOTSTRAP = String.raw`
         typeof context !== 'object' ||
         arrayIsArray(context) ||
         (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') ||
-        (owner !== undefined && owner !== 'corebox' && owner !== 'assistant') ||
+        mode === 'continue' ||
+        (owner !== 'corebox' && owner !== 'assistant') ||
         (mode === 'continue' &&
-          (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, [])))
+          (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, []))) ||
+        (mode !== 'continue' && sessionId !== undefined) ||
+        !options ||
+        typeof options !== 'object' ||
+        arrayIsArray(options) ||
+        !metadata ||
+        typeof metadata !== 'object' ||
+        arrayIsArray(metadata) ||
+        !entrypoint ||
+        typeof entrypoint !== 'object' ||
+        arrayIsArray(entrypoint) ||
+        objectKeys(entrypoint).length !== 3 ||
+        entrypointOwner !== owner ||
+        entrypointMode !== mode ||
+        ((entrypointId !== 'corebox.ai-ask' || owner !== 'corebox') &&
+          (entrypointId !== 'assistant.voice' || owner !== 'assistant'))
       ) {
         return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
       }
@@ -1852,18 +1936,29 @@ const CONTEXT_BOOTSTRAP = String.raw`
           }
           const summary = result.context
           if (
-            (summary.mode !== 'new' &&
-              summary.mode !== 'continue' &&
-              summary.mode !== 'stateless') ||
+            (summary.mode !== 'new' && summary.mode !== 'stateless') ||
             (summary.scope !== 'light' &&
               summary.scope !== 'session' &&
               summary.scope !== 'retrieval') ||
-            !numberIsSafeInteger(summary.itemCount) ||
+            summary.itemCount !== 1 ||
             !numberIsSafeInteger(summary.tokenBudget) ||
+            summary.tokenBudget < 1 ||
+            summary.tokenBudget > 16000 ||
             !numberIsSafeInteger(summary.tokenEstimate) ||
+            summary.tokenEstimate < 0 ||
+            summary.tokenEstimate > 16000 ||
             !arrayIsArray(summary.sourceTypes) ||
-            !numberIsSafeInteger(summary.retrievalItemCount) ||
-            !numberIsSafeInteger(summary.citationCount)
+            summary.sourceTypes.length !== 1 ||
+            summary.sourceTypes[0] !== 'current_input' ||
+            summary.retrievalItemCount !== 0 ||
+            summary.citationCount !== 0 ||
+            summary.degradedReason !== 'isolated_context_persistence_unavailable' ||
+            objectHasOwn(summary, 'sessionId') ||
+            objectHasOwn(summary, 'turnId') ||
+            objectHasOwn(summary, 'packageId') ||
+            objectHasOwn(summary, 'traceId') ||
+            objectHasOwn(summary, 'checkpoint') ||
+            objectHasOwn(summary, 'continuation')
           ) {
             throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
           }
@@ -1875,15 +1970,8 @@ const CONTEXT_BOOTSTRAP = String.raw`
             tokenEstimate: summary.tokenEstimate,
             sourceTypes: cloneLocalDto(summary.sourceTypes),
             retrievalItemCount: summary.retrievalItemCount,
-            citationCount: summary.citationCount
-          }
-          for (const key of ['sessionId', 'turnId', 'packageId', 'traceId', 'degradedReason']) {
-            if (objectHasOwn(summary, key)) {
-              if (typeof summary[key] !== 'string') {
-                throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
-              }
-              projectedContext[key] = summary[key]
-            }
+            citationCount: summary.citationCount,
+            degradedReason: 'isolated_context_persistence_unavailable'
           }
           return cloneLocalDto({
             invocation: {
@@ -1895,6 +1983,213 @@ const CONTEXT_BOOTSTRAP = String.raw`
             },
             context: projectedContext
           })
+        }
+      )
+    })
+  }
+  if (hasIntelligenceContextStreamFacade) {
+    defineFacadeMethod(intelligenceFacade, 'contextStream', (input, options = {}) => {
+      let request
+      try {
+        request = cloneLocalDto(input)
+      } catch {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const payload = request && typeof request === 'object' ? request.payload : null
+      const messages = payload && typeof payload === 'object' ? payload.messages : null
+      const context = request && typeof request === 'object' ? request.context : null
+      const mode = context && typeof context === 'object' ? context.mode : undefined
+      const owner = context && typeof context === 'object' ? context.owner : undefined
+      const sessionId = context && typeof context === 'object' ? context.sessionId : undefined
+      const requestOptions = request && typeof request === 'object' ? request.options : null
+      const metadata =
+        requestOptions && typeof requestOptions === 'object' ? requestOptions.metadata : null
+      const entrypoint =
+        metadata && typeof metadata === 'object' ? metadata.contextEntrypoint : null
+      const entrypointId = entrypoint && typeof entrypoint === 'object' ? entrypoint.id : undefined
+      const entrypointOwner =
+        entrypoint && typeof entrypoint === 'object' ? entrypoint.owner : undefined
+      const entrypointMode =
+        entrypoint && typeof entrypoint === 'object' ? entrypoint.mode : undefined
+      if (
+        !request ||
+        typeof request !== 'object' ||
+        arrayIsArray(request) ||
+        request.capabilityId !== 'text.chat' ||
+        typeof request.input !== 'string' ||
+        !reflectApply(stringTrim, request.input, []) ||
+        !payload ||
+        typeof payload !== 'object' ||
+        arrayIsArray(payload) ||
+        !arrayIsArray(messages) ||
+        messages.length < 1 ||
+        !context ||
+        typeof context !== 'object' ||
+        arrayIsArray(context) ||
+        (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') ||
+        (owner !== 'corebox' && owner !== 'assistant') ||
+        (mode === 'continue' &&
+          (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, []))) ||
+        (mode !== 'continue' && sessionId !== undefined) ||
+        !requestOptions ||
+        typeof requestOptions !== 'object' ||
+        arrayIsArray(requestOptions) ||
+        !metadata ||
+        typeof metadata !== 'object' ||
+        arrayIsArray(metadata) ||
+        !entrypoint ||
+        typeof entrypoint !== 'object' ||
+        arrayIsArray(entrypoint) ||
+        objectKeys(entrypoint).length !== 3 ||
+        entrypointOwner !== owner ||
+        entrypointMode !== mode ||
+        ((entrypointId !== 'corebox.ai-ask' || owner !== 'corebox') &&
+          (entrypointId !== 'assistant.voice' || owner !== 'assistant'))
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      if (!options || typeof options !== 'object' || arrayIsArray(options)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const allowedCallbacks = [
+        'onStart',
+        'onDelta',
+        'onMessage',
+        'onUsage',
+        'onMetadata',
+        'onEnd',
+        'onError'
+      ]
+      const callbacks = objectCreate(null)
+      for (const key of objectKeys(options)) {
+        let allowed = false
+        for (const expected of allowedCallbacks) {
+          if (key === expected) allowed = true
+        }
+        const descriptor = objectGetOwnPropertyDescriptor(options, key)
+        if (!allowed || !descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+          return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+        }
+        callbacks[key] = descriptor.value
+      }
+      let resource = null
+      let terminal = false
+      let cancelled = false
+      let disposePromise = null
+      const disposeCurrent = () => {
+        if (disposePromise) return disposePromise
+        if (!resource) return resolvePromise()
+        disposePromise = thenPromise(resolvePromise(), () => resource.dispose())
+        return disposePromise
+      }
+      const failCallback = async () => {
+        terminal = true
+        if (callbacks.onError) {
+          try {
+            await callbacks.onError(createCapabilityError('INTELLIGENCE_STREAM_CALLBACK_FAILED'))
+          } catch {}
+        }
+        await disposeCurrent()
+      }
+      const onEvent = async (rawEvent) => {
+        if (terminal || cancelled) return
+        try {
+          const event = cloneLocalDto(rawEvent)
+          if (
+            !event ||
+            typeof event !== 'object' ||
+            event.capabilityId !== 'text.chat' ||
+            typeof event.type !== 'string'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          if (event.type === 'start') {
+            if (callbacks.onStart) await callbacks.onStart(event)
+            return
+          }
+          if (event.type === 'delta') {
+            if (typeof event.delta !== 'string') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (callbacks.onDelta) await callbacks.onDelta(event.delta, event)
+            return
+          }
+          if (event.type === 'message') {
+            if (!event.message || typeof event.message !== 'object') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (callbacks.onMessage) await callbacks.onMessage(event.message, event)
+            return
+          }
+          if (event.type === 'usage') {
+            if (!event.usage || typeof event.usage !== 'object') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (callbacks.onUsage) await callbacks.onUsage(event.usage, event)
+            return
+          }
+          if (event.type === 'metadata') {
+            if (callbacks.onMetadata) await callbacks.onMetadata({}, event)
+            return
+          }
+          if (event.type === 'end') {
+            terminal = true
+            if (callbacks.onEnd) await callbacks.onEnd(event)
+            await disposeCurrent()
+            return
+          }
+          if (event.type === 'error' && event.code === 'INTELLIGENCE_STREAM_FAILED') {
+            terminal = true
+            if (callbacks.onError) {
+              await callbacks.onError(createCapabilityError('INTELLIGENCE_STREAM_FAILED'))
+            }
+            await disposeCurrent()
+            return
+          }
+          throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+        } catch {
+          await failCallback()
+        }
+      }
+      objectFreeze(onEvent)
+      const capabilityRequest = {
+        operation: 'context.stream',
+        capabilityId: request.capabilityId,
+        input: request.input,
+        payload: request.payload,
+        ...(objectHasOwn(request, 'options') ? { options: request.options } : {}),
+        context: request.context,
+        onEvent
+      }
+      return mapCapabilityResult(
+        invokeCapability('intelligence.stream', capabilityRequest),
+        async (streamResource) => {
+          if (
+            !streamResource ||
+            streamResource.kind !== 'stream' ||
+            typeof streamResource.id !== 'string' ||
+            typeof streamResource.dispose !== 'function'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          resource = streamResource
+          const controller = objectCreate(null)
+          objectDefineProperty(controller, 'cancelled', {
+            get: objectFreeze(() => cancelled),
+            enumerable: true
+          })
+          const cancel = () => {
+            if (cancelled) return disposeCurrent()
+            cancelled = true
+            terminal = true
+            return disposeCurrent()
+          }
+          objectDefineProperty(controller, 'cancel', {
+            value: objectFreeze(cancel),
+            enumerable: true
+          })
+          if (terminal) await disposeCurrent()
+          return objectFreeze(controller)
         }
       )
     })
@@ -2072,16 +2367,39 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(windowManagerFacade)
 
+  const widgetItemFacade = objectCreate(null)
+  if (hasWidgetItemFacade) {
+    defineFacadeMethod(widgetItemFacade, 'pushItems', (items) =>
+      mapCapabilityResult(
+        invokeCapability('feature.items.widget.push', {
+          scope: 'active-feature',
+          items
+        }),
+        () => undefined
+      )
+    )
+  }
+  objectFreeze(widgetItemFacade)
+
   const pluginFacade = objectCreate(null)
   defineFacadeMethod(pluginFacade, 'getLocale', () => snapshot.locale)
   if (hasFeatureFacade) {
     objectDefineProperty(pluginFacade, 'feature', { value: featureFacade, enumerable: true })
+  }
+  if (hasWidgetItemFacade) {
+    objectDefineProperty(pluginFacade, 'widget', { value: widgetItemFacade, enumerable: true })
   }
   if (hasStorageFacade) {
     objectDefineProperty(pluginFacade, 'storage', { value: storageFacade, enumerable: true })
   }
   if (hasVoiceFacade) {
     objectDefineProperty(pluginFacade, 'voice', { value: voiceFacade, enumerable: true })
+  }
+  if (hasTranslationFacade) {
+    objectDefineProperty(pluginFacade, 'translation', {
+      value: translationFacade,
+      enumerable: true
+    })
   }
   if (hasIntelligenceFacade) {
     objectDefineProperty(pluginFacade, 'intelligence', {
@@ -2229,7 +2547,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(clipboardFacade)
 
-  const openUrlFacade = hasDeclaredCapability('open-url')
+  const openUrlFacade = !isTranslationPrelude && hasDeclaredCapability('open-url')
     ? objectFreeze((url) =>
         mapCapabilityResult(
           invokeCapability('open-url', { url: stringConstructor(url) }),
@@ -2375,6 +2693,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   class ChildTuffItemBuilder {
     #item
     #basic
+    #custom
     constructor(id) {
       this.#item = objectCreate(null)
       this.#basic = objectCreate(null)
@@ -2396,6 +2715,14 @@ const CONTEXT_BOOTSTRAP = String.raw`
       this.#basic.subtitle = stringConstructor(subtitle)
       return this
     }
+    setDescription(description) {
+      this.#basic.description = stringConstructor(description)
+      return this
+    }
+    setAccessory(accessory) {
+      this.#basic.accessory = stringConstructor(accessory)
+      return this
+    }
     setIcon(icon) {
       this.#basic.icon = cloneLocalDto(icon)
       return this
@@ -2412,6 +2739,25 @@ const CONTEXT_BOOTSTRAP = String.raw`
       }
       for (const key of objectKeys(next)) merged[key] = next[key]
       this.#item.meta = merged
+      return this
+    }
+    setCustomRender(type, content, data) {
+      if (!hasWidgetItemFacade) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+      }
+      const custom = objectCreate(null)
+      custom.type = stringConstructor(type)
+      custom.content = stringConstructor(content)
+      custom.data = cloneLocalDto(data)
+      this.#custom = custom
+      return this
+    }
+    setActions(actions) {
+      const next = cloneLocalDto(actions)
+      if (!arrayIsArray(next)) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      this.#item.actions = next
       return this
     }
     createAndAddAction(id, type, label, payload) {
@@ -2431,10 +2777,16 @@ const CONTEXT_BOOTSTRAP = String.raw`
       }
       const item = cloneLocalDto(this.#item)
       item.render = objectCreate(null)
-      item.render.mode = 'default'
+      item.render.mode = this.#custom ? 'custom' : 'default'
       item.render.basic = cloneLocalDto(this.#basic)
+      if (this.#custom) item.render.custom = cloneLocalDto(this.#custom)
       return deepFreeze(item)
     }
+  }
+  if (!hasWidgetItemFacade) {
+    objectDefineProperty(ChildTuffItemBuilder.prototype, 'setCustomRender', {
+      value: undefined
+    })
   }
   objectFreeze(ChildTuffItemBuilder.prototype)
   objectFreeze(ChildTuffItemBuilder)
@@ -2469,7 +2821,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
     crypto: { value: crypto },
     platform: { value: deepFreeze({ platform: snapshot.platform, arch: snapshot.arch }) },
     manifest: { value: deepFreeze(snapshot.manifest) },
-    hostCapabilities: { value: hostCapabilities },
+    hostCapabilities: { value: isTranslationPrelude ? undefined : hostCapabilities },
     plugin: { value: pluginFacade, configurable: true },
     intelligence: {
       value: hasIntelligenceFacade ? intelligenceFacade : undefined,

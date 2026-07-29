@@ -54,12 +54,12 @@ export function withoutGlobal(): symbol {
   return DELETE_GLOBAL
 }
 
-function compileCommonJsModule<T>(filename: string): T {
+function compileCommonJsModule<T>(filename: string, transform?: (source: string) => string): T {
   const source = readFileSync(filename, 'utf8')
   const mod = new ModuleCtor(filename)
   mod.filename = filename
   mod.paths = ModuleCtor._nodeModulePaths(dirname(filename))
-  mod._compile(source, filename)
+  mod._compile(transform ? transform(source) : source, filename)
   return mod.exports as T
 }
 
@@ -67,6 +67,17 @@ export function loadPluginModule<T = any>(url: URL, overrides?: GlobalOverrides)
   return withGlobalOverrides(overrides, () => {
     const filename = fileURLToPath(url)
     return compileCommonJsModule<T>(filename)
+  })
+}
+
+export function loadPluginModuleWithSourceTransform<T = any>(
+  url: URL,
+  transform: (source: string) => string,
+  overrides?: GlobalOverrides,
+): T {
+  return withGlobalOverrides(overrides, () => {
+    const filename = fileURLToPath(url)
+    return compileCommonJsModule<T>(filename, transform)
   })
 }
 

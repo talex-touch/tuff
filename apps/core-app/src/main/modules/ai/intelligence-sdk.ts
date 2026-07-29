@@ -490,7 +490,7 @@ function extractMustacheVariables(template: string): string[] {
   return Array.from(vars)
 }
 
-async function renderPromptTemplate(
+export async function renderPromptTemplate(
   template: string,
   variables?: Record<string, unknown>
 ): Promise<string> {

@@ -231,16 +231,31 @@ const MAX_HTTP_BODY_BYTES = 256 * 1024
 const MAX_HTTP_RESULT_BYTES = 1024 * 1024
 const MAX_HTTP_RESPONSE_BYTES = 768 * 1024
 const MAX_ITEM_BATCH_BYTES = 1024 * 1024
+const MAX_WIDGET_ITEM_STRING_BYTES = 768 * 1024
+const MAX_WIDGET_ITEM_MEMBERS = 4_096
 const MAX_FEATURES = 256
 const MAX_FEATURE_COMMANDS = 64
 const MAX_FEATURE_KEYWORDS = 64
 const MAX_SQL_PARAMS = 256
 const MAX_SQL_PARAM_BYTES = 1024 * 1024
+const FIXED_WIDGET_NAVIGATION = Object.freeze({
+  'open-intelligence-settings': Object.freeze({
+    pluginName: 'touch-intelligence',
+    path: '/intelligence/channels'
+  }),
+  'open-plugin-permissions': Object.freeze({
+    pluginName: 'touch-intelligence',
+    path: '/plugin/touch-intelligence?tab=Permissions'
+  })
+})
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor', '__tuffHostWire'])
 const ITEM_KEYS = new Set(['id', 'source', 'kind', 'actions', 'meta', 'render', 'scoring'])
+const WIDGET_ITEM_KEYS = new Set(['id', 'source', 'actions', 'meta', 'render'])
 const ITEM_PATCH_KEYS = new Set([...ITEM_KEYS].filter((key) => key !== 'id'))
 const ITEM_SOURCE_KEYS = ['type', 'id', 'name', 'version'] as const
 const ITEM_RENDER_KEYS = ['mode', 'basic'] as const
+const ITEM_WIDGET_RENDER_KEYS = ['mode', 'basic', 'custom'] as const
+const ITEM_WIDGET_CUSTOM_KEYS = ['type', 'content', 'data'] as const
 const ITEM_BASIC_KEYS = ['title', 'subtitle', 'description', 'icon', 'tags', 'accessory'] as const
 const ITEM_ICON_KEYS = ['type', 'value', 'color', 'colorful'] as const
 const ITEM_ACTION_KEYS = [
@@ -259,6 +274,15 @@ const ITEM_META_KEYS = [
   'searchProviderId',
   'defaultAction',
   'priority'
+] as const
+const ITEM_WIDGET_META_KEYS = [
+  ...ITEM_META_KEYS,
+  'actionId',
+  'status',
+  'pluginType',
+  'keepCoreBoxOpen',
+  'payload',
+  'intelligence'
 ] as const
 const ITEM_SCORING_KEYS = [
   'base',
@@ -638,6 +662,139 @@ function cloneItem(value: unknown, patch = false): PluginBusinessItemDto {
   return item
 }
 
+function validateInternalNavigationPath(value: unknown): string {
+  const path = boundedString(value, 4_096)
+  if (path[0] !== '/' || path.startsWith('//') || path.includes('\\')) invalid()
+  for (let index = 0; index < path.length; index += 1) {
+    const code = path.charCodeAt(index)
+    if (code < 32 || code === 127) invalid()
+  }
+  return path
+}
+
+function validateWidgetItemShape(item: PluginBusinessItemDto): void {
+  const record = exactRecord(item, [...WIDGET_ITEM_KEYS])
+  boundedString(requiredField(record, 'id'), MAX_IDENTIFIER_BYTES)
+
+  const source = exactRecord(requiredField(record, 'source'), ITEM_SOURCE_KEYS)
+  if (requiredField(source, 'type') !== 'plugin') invalid()
+  boundedString(requiredField(source, 'id'), MAX_IDENTIFIER_BYTES)
+  validateOptionalItemString(source, 'name', MAX_IDENTIFIER_BYTES)
+  validateOptionalItemString(source, 'version', MAX_IDENTIFIER_BYTES)
+
+  if (Object.hasOwn(record, 'actions')) {
+    const actionIds = new Set<string>()
+    for (const value of snapshotArray(record.actions, 16)) {
+      const action = exactRecord(value, ITEM_ACTION_KEYS)
+      const id = boundedString(requiredField(action, 'id'), MAX_IDENTIFIER_BYTES)
+      const type = requiredField(action, 'type')
+      if (actionIds.has(id) || (type !== 'plugin' && type !== 'navigate')) invalid()
+      actionIds.add(id)
+      validateOptionalItemString(action, 'label')
+      validateOptionalItemString(action, 'description')
+      validateOptionalItemString(action, 'shortcut', 256)
+      if (Object.hasOwn(action, 'icon')) validateItemIcon(action.icon)
+      if (Object.hasOwn(action, 'primary') && typeof action.primary !== 'boolean') invalid()
+      if (type === 'navigate') {
+        const payload = exactRecord(requiredField(action, 'payload'), ['path'])
+        validateInternalNavigationPath(requiredField(payload, 'path'))
+      } else if (Object.hasOwn(action, 'payload')) {
+        const payload = action.payload
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) invalid()
+      }
+    }
+  }
+
+  const meta = exactRecord(requiredField(record, 'meta'), ITEM_WIDGET_META_KEYS)
+  for (const key of [
+    'pluginName',
+    'featureId',
+    'searchProviderId',
+    'defaultAction',
+    'actionId',
+    'status',
+    'pluginType'
+  ]) {
+    validateOptionalItemString(meta, key, MAX_IDENTIFIER_BYTES)
+  }
+  boundedString(requiredField(meta, 'pluginName'), MAX_IDENTIFIER_BYTES)
+  boundedString(requiredField(meta, 'featureId'), MAX_IDENTIFIER_BYTES)
+  if (
+    Object.hasOwn(meta, 'priority') &&
+    (typeof meta.priority !== 'number' || !Number.isFinite(meta.priority))
+  ) {
+    invalid()
+  }
+  if (Object.hasOwn(meta, 'keepCoreBoxOpen') && typeof meta.keepCoreBoxOpen !== 'boolean') {
+    invalid()
+  }
+  for (const key of ['payload', 'intelligence']) {
+    if (!Object.hasOwn(meta, key)) continue
+    const value = meta[key]
+    if (!value || typeof value !== 'object' || Array.isArray(value)) invalid()
+  }
+
+  const render = exactRecord(requiredField(record, 'render'), ITEM_WIDGET_RENDER_KEYS)
+  if (requiredField(render, 'mode') !== 'custom') invalid()
+  const basic = exactRecord(requiredField(render, 'basic'), ITEM_BASIC_KEYS)
+  boundedString(requiredField(basic, 'title'), 4_096)
+  validateOptionalItemString(basic, 'subtitle')
+  validateOptionalItemString(basic, 'description')
+  validateOptionalItemString(basic, 'accessory')
+  if (Object.hasOwn(basic, 'icon')) validateItemIcon(basic.icon)
+  if (Object.hasOwn(basic, 'tags')) {
+    for (const value of snapshotArray(basic.tags, 16)) {
+      const tag = exactRecord(value, ['text', 'color', 'variant'])
+      boundedString(requiredField(tag, 'text'), 1_024)
+      validateOptionalItemString(tag, 'color', 128)
+      if (
+        Object.hasOwn(tag, 'variant') &&
+        tag.variant !== 'filled' &&
+        tag.variant !== 'outlined' &&
+        tag.variant !== 'ghost'
+      ) {
+        invalid()
+      }
+    }
+  }
+
+  const custom = exactRecord(requiredField(render, 'custom'), ITEM_WIDGET_CUSTOM_KEYS)
+  if (requiredField(custom, 'type') !== 'vue') invalid()
+  boundedString(requiredField(custom, 'content'), 2 * MAX_IDENTIFIER_BYTES)
+  const data = requiredField(custom, 'data')
+  if (!data || typeof data !== 'object' || Array.isArray(data)) invalid()
+}
+
+function cloneWidgetItem(value: unknown): PluginBusinessItemDto {
+  const item = cloneDto(value, {
+    maxDepth: 16,
+    maxMembers: MAX_WIDGET_ITEM_MEMBERS,
+    maxStringBytes: MAX_WIDGET_ITEM_STRING_BYTES,
+    allowedTopLevelKeys: WIDGET_ITEM_KEYS,
+    requireItemId: true
+  }) as PluginBusinessItemDto
+  validateWidgetItemShape(item)
+  return item
+}
+
+function validateWidgetPush(value: unknown): {
+  readonly scope: 'active-feature'
+  readonly items: readonly PluginBusinessItemDto[]
+} {
+  const record = exactRecord(value, ['scope', 'items'])
+  if (requiredField(record, 'scope') !== 'active-feature') invalid()
+  const output = Object.freeze({
+    scope: 'active-feature' as const,
+    items: Object.freeze(
+      snapshotArray(requiredField(record, 'items'), MAX_ITEMS_PER_PUSH).map((item) =>
+        cloneWidgetItem(item)
+      )
+    )
+  })
+  assertSerializedBytes(output, MAX_ITEM_BATCH_BYTES)
+  return output
+}
+
 function assertSerializedBytes(value: unknown, maximumBytes: number): void {
   let serialized: string
   try {
@@ -991,16 +1148,79 @@ function projectFeatureIcon(value: unknown): IPluginFeature['icon'] {
   return validateIcon(projected)
 }
 
+function projectFeatureInteraction(
+  value: unknown,
+  featureId: string
+): Readonly<Record<string, unknown>> {
+  const interaction = exactRecord(value, [
+    'type',
+    'runtime',
+    'path',
+    'rendererFeatureId',
+    'showInput',
+    'allowInput',
+    'sendMode',
+    'forceMax'
+  ])
+  if (requiredField(interaction, 'type') !== 'widget') invalid()
+  if (Object.hasOwn(interaction, 'runtime')) boundedString(interaction.runtime, 64)
+  if (Object.hasOwn(interaction, 'path')) boundedString(interaction.path, 1_024)
+  const rendererFeatureId = Object.hasOwn(interaction, 'rendererFeatureId')
+    ? boundedString(interaction.rendererFeatureId, MAX_IDENTIFIER_BYTES)
+    : featureId
+  const projected: Record<string, unknown> = {
+    type: 'widget',
+    rendererFeatureId
+  }
+  for (const key of ['showInput', 'allowInput', 'sendMode', 'forceMax']) {
+    if (!Object.hasOwn(interaction, key)) continue
+    if (typeof interaction[key] !== 'boolean') invalid()
+    projected[key] = interaction[key]
+  }
+  return Object.freeze(projected)
+}
+
+function projectFeaturePlatform(value: unknown): Readonly<Record<string, unknown>> {
+  const record = exactRecord(value, ['win', 'win32', 'darwin', 'linux'])
+  if (Object.hasOwn(record, 'win') && Object.hasOwn(record, 'win32')) invalid()
+  const output: Record<string, unknown> = Object.create(null)
+  for (const [sourceKey, projectedKey] of [
+    ['win', 'win'],
+    ['win32', 'win'],
+    ['darwin', 'darwin'],
+    ['linux', 'linux']
+  ] as const) {
+    if (!Object.hasOwn(record, sourceKey)) continue
+    const value = record[sourceKey]
+    if (typeof value === 'boolean') {
+      output[projectedKey] = Object.freeze({ enable: value, arch: [], os: [] })
+      continue
+    }
+    const info = exactRecord(value, ['enable', 'arch', 'os'])
+    if (typeof requiredField(info, 'enable') !== 'boolean') invalid()
+    output[projectedKey] = Object.freeze({
+      enable: info.enable,
+      arch: Object.freeze(validateStringArray(requiredField(info, 'arch'), 16, 32)),
+      os: Object.freeze(validateStringArray(requiredField(info, 'os'), 16, 32))
+    })
+  }
+  return Object.freeze(output)
+}
+
 function projectFeature(feature: IPluginFeature): IPluginFeature {
   const raw = exactRecord(feature, FEATURE_KEYS)
+  const featureId = boundedString(requiredField(raw, 'id'), MAX_IDENTIFIER_BYTES)
   const projection: Record<string, unknown> = {
-    id: requiredField(raw, 'id'),
+    id: featureId,
     name: requiredField(raw, 'name'),
     desc: requiredField(raw, 'desc'),
     icon: projectFeatureIcon(requiredField(raw, 'icon')),
     push: requiredField(raw, 'push'),
-    platform: requiredField(raw, 'platform'),
+    platform: projectFeaturePlatform(requiredField(raw, 'platform')),
     commands: requiredField(raw, 'commands')
+  }
+  if (Object.hasOwn(raw, 'interaction')) {
+    projection.interaction = projectFeatureInteraction(raw.interaction, featureId)
   }
   for (const key of FEATURE_KEYS) {
     if (!Object.hasOwn(projection, key) && Object.hasOwn(raw, key) && raw[key] !== undefined) {
@@ -1759,6 +1979,130 @@ export function createPluginBusinessCapabilities(
     }
   }
 
+  const projectOwnedWidgetItem = (
+    actor: BusinessActor,
+    item: PluginBusinessItemDto
+  ): PluginBusinessItemDto => {
+    const itemRecord = item as Readonly<Record<string, PluginBusinessDto>>
+    const meta = itemRecord.meta as Readonly<Record<string, PluginBusinessDto>>
+    const featureId = boundedString(meta.featureId, MAX_IDENTIFIER_BYTES)
+    if (meta.pluginName !== actor.activation.name) authorityInvalid()
+
+    const actions = itemRecord.actions as readonly PluginBusinessDto[] | undefined
+    for (const value of actions ?? []) {
+      const action = value as Readonly<Record<string, PluginBusinessDto>>
+      if (action.type !== 'navigate') continue
+      const fixed = FIXED_WIDGET_NAVIGATION[action.id as keyof typeof FIXED_WIDGET_NAVIGATION]
+      const payload = action.payload as Readonly<Record<string, PluginBusinessDto>>
+      if (!fixed || fixed.pluginName !== actor.activation.name || payload.path !== fixed.path) {
+        authorityInvalid()
+      }
+    }
+
+    const list = readMethod(actor.plugin, 'listBusinessFeatures')
+    const rawFeatures = snapshotArray(list.call(actor.plugin), MAX_FEATURES)
+    const features = new Map<string, Record<string, unknown>>()
+    for (const value of rawFeatures) {
+      const featureRecord = exactRecord(value, FEATURE_KEYS)
+      const id = boundedString(requiredField(featureRecord, 'id'), MAX_IDENTIFIER_BYTES)
+      if (features.has(id)) invalid()
+      features.set(id, featureRecord)
+    }
+    const feature = features.get(featureId)
+    if (!feature || !Object.hasOwn(feature, 'interaction')) invalid()
+    const interaction = exactRecord(feature.interaction, [
+      'type',
+      'runtime',
+      'path',
+      'rendererFeatureId',
+      'showInput',
+      'allowInput',
+      'sendMode',
+      'forceMax'
+    ])
+    if (requiredField(interaction, 'type') !== 'widget') invalid()
+    const rendererFeatureId = Object.hasOwn(interaction, 'rendererFeatureId')
+      ? boundedString(interaction.rendererFeatureId, MAX_IDENTIFIER_BYTES)
+      : Object.hasOwn(interaction, 'path')
+        ? featureId
+        : invalid()
+    const rendererFeature = features.get(rendererFeatureId)
+    if (!rendererFeature || !Object.hasOwn(rendererFeature, 'interaction')) invalid()
+    const rendererInteraction = exactRecord(rendererFeature.interaction, [
+      'type',
+      'runtime',
+      'path',
+      'rendererFeatureId',
+      'showInput',
+      'allowInput',
+      'sendMode',
+      'forceMax'
+    ])
+    if (
+      requiredField(rendererInteraction, 'type') !== 'widget' ||
+      !Object.hasOwn(rendererInteraction, 'path')
+    ) {
+      invalid()
+    }
+
+    const render = itemRecord.render as Readonly<Record<string, PluginBusinessDto>>
+    const custom = render.custom as Readonly<Record<string, PluginBusinessDto>>
+    const expectedContent = `${actor.activation.name}::${rendererFeatureId}`
+    if (custom.content !== expectedContent) authorityInvalid()
+
+    return cloneWidgetItem({
+      ...itemRecord,
+      source: {
+        type: 'plugin',
+        id: 'plugin-features',
+        name: actor.activation.name
+      },
+      meta: {
+        ...meta,
+        pluginName: actor.activation.name,
+        featureId
+      },
+      render: {
+        ...render,
+        custom: {
+          ...custom,
+          content: expectedContent
+        }
+      }
+    })
+  }
+
+  const pushOwnedItems = async (
+    actor: BusinessActor,
+    scope: PluginBusinessItemScope,
+    items: readonly PluginBusinessItemDto[],
+    signal: AbortSignal
+  ): Promise<void> => {
+    const priorOwners = new Set<ActivationRecord>()
+    const replacements: PluginBusinessItemReplacement[] = []
+    for (const item of items) {
+      const id = String(item.id)
+      const prior = itemOwners.get(ownerItemKey(actor.activation.name, id))
+      if (prior && prior !== actor.record) {
+        priorOwners.add(prior)
+        replacements.push({ id, activation: prior.activation })
+      }
+    }
+    await actor.record.featureHost.pushItems(scope, items, signal, replacements)
+    for (const item of items) {
+      const id = String(item.id)
+      actor.record.itemIds.add(id)
+      itemOwners.set(ownerItemKey(actor.activation.name, id), actor.record)
+      for (const replacement of replacements) {
+        if (replacement.id === id) {
+          const prior = records.get(activationRecordKey(replacement.activation))
+          if (prior && prior !== actor.record) prior.itemIds.delete(id)
+        }
+      }
+    }
+    for (const prior of priorOwners) await releaseOwnedItems(prior)
+  }
+
   const definitions: PluginHostCapabilityDefinition[] = [
     freezeDefinition({
       id: 'plugin.info.get',
@@ -1858,34 +2202,24 @@ export function createPluginBusinessCapabilities(
       async invoke(context, request, signal) {
         const actor = resolveActor(context)
         const normalized = request as ReturnType<typeof validatePush>
-        const priorOwners = new Set<ActivationRecord>()
-        const replacements: PluginBusinessItemReplacement[] = []
-        for (const item of normalized.items) {
-          const id = String(item.id)
-          const prior = itemOwners.get(ownerItemKey(actor.activation.name, id))
-          if (prior && prior !== actor.record) {
-            priorOwners.add(prior)
-            replacements.push({ id, activation: prior.activation })
-          }
-        }
-        await actor.record.featureHost.pushItems(
-          normalized.scope,
-          normalized.items,
-          signal,
-          replacements
+        await pushOwnedItems(actor, normalized.scope, normalized.items, signal)
+        return { ok: true }
+      }
+    }),
+    freezeDefinition({
+      id: 'feature.items.widget.push',
+      permission: 'search.root-results',
+      timeoutMs: 30_000,
+      maxConcurrency: 1,
+      validateRequest: validateWidgetPush,
+      validateResult: validateOk,
+      async invoke(context, request, signal) {
+        const actor = resolveActor(context)
+        const normalized = request as ReturnType<typeof validateWidgetPush>
+        const items = Object.freeze(
+          normalized.items.map((item) => projectOwnedWidgetItem(actor, item))
         )
-        for (const item of normalized.items) {
-          const id = String(item.id)
-          actor.record.itemIds.add(id)
-          itemOwners.set(ownerItemKey(actor.activation.name, id), actor.record)
-          for (const replacement of replacements) {
-            if (replacement.id === id) {
-              const prior = records.get(activationRecordKey(replacement.activation))
-              if (prior && prior !== actor.record) prior.itemIds.delete(id)
-            }
-          }
-        }
-        for (const prior of priorOwners) await releaseOwnedItems(prior)
+        await pushOwnedItems(actor, normalized.scope, items, signal)
         return { ok: true }
       }
     }),

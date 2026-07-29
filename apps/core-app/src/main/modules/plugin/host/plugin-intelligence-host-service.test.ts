@@ -195,6 +195,33 @@ describe('plugin intelligence host service', () => {
     expect(JSON.stringify(forwardedOptions)).not.toContain('host:forged')
   })
 
+  it('contains text.translate cancellation at the registry without passing an unsupported SDK signal', async () => {
+    const dependencies = createDependencies()
+    dependencies.invoke.mockResolvedValueOnce(sdkResult('translated'))
+    const service = createPluginIntelligenceHostService(dependencies)
+    const signal = new AbortController().signal
+
+    await expect(
+      service.invoke(
+        'text.translate',
+        { text: 'hello', targetLang: 'zh' },
+        { preferredProviderId: 'provider-public' },
+        signal,
+        'plugin:touch-translation'
+      )
+    ).resolves.toMatchObject({ result: 'translated' })
+
+    expect(dependencies.invoke).toHaveBeenCalledWith(
+      'text.translate',
+      { text: 'hello', targetLang: 'zh' },
+      expect.objectContaining({
+        preferredProviderId: 'provider-public',
+        metadata: { caller: 'plugin:touch-translation' }
+      })
+    )
+    expect(dependencies.invoke.mock.calls[0]?.[2]).not.toHaveProperty('signal')
+  })
+
   it('forwards canonical SDK cancellation without converting it to a native failure', async () => {
     const dependencies = createDependencies()
     dependencies.invoke.mockImplementationOnce(

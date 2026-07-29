@@ -16,8 +16,8 @@ const { buildSync } = require('esbuild')
 const SUCCESS = 'PLUGIN_HOST_ISOLATION_SMOKE_OK'
 const FAILURE = 'PLUGIN_HOST_ISOLATION_SMOKE_FAILED'
 
-function assert(condition) {
-  if (!condition) throw new Error(FAILURE)
+function assert(condition, detail = '') {
+  if (!condition) throw new Error(detail ? `${FAILURE}: ${detail}` : FAILURE)
 }
 
 function delay(milliseconds) {
@@ -40,6 +40,7 @@ function createObservedFactory(realFactory) {
     spawn(options) {
       const spawned = realFactory.spawn(options)
       const listeners = new Set()
+      const received = []
       const sent = []
       const controlPort = {
         postMessage(message) {
@@ -48,7 +49,10 @@ function createObservedFactory(realFactory) {
         },
         onMessage(listener) {
           listeners.add(listener)
-          const dispose = spawned.controlPort.onMessage(listener)
+          const dispose = spawned.controlPort.onMessage((message) => {
+            received.push(message)
+            listener(message)
+          })
           return () => {
             listeners.delete(listener)
             dispose()
@@ -58,6 +62,7 @@ function createObservedFactory(realFactory) {
         close: () => spawned.controlPort.close()
       }
       observers.push({
+        received,
         sent,
         listenerCount: () => listeners.size,
         inject(message) {
@@ -157,6 +162,9 @@ async function run() {
           export { createFixedPluginBrowserDataQuery, createFixedPluginBrowserDataService, createPluginBrowserDataCapabilities } from '../src/main/modules/plugin/host/plugin-browser-data-capabilities'
           export { createPluginBatchRenameFilesystemCapability } from '../src/main/modules/plugin/host/plugin-filesystem-capabilities'
           export { createPluginSnipasteProcessCapability, createFixedPluginSnipasteDiscovery, createFixedPluginSnipasteExecutor } from '../src/main/modules/plugin/host/plugin-process-capabilities'
+          export { createPluginIntelligenceCapabilities } from '../src/main/modules/plugin/host/plugin-intelligence-capabilities'
+          export { createPluginIntelligenceContextCapabilities } from '../src/main/modules/plugin/host/plugin-intelligence-context-capabilities'
+          export { createPluginIntelligenceContextStreamCapabilities } from '../src/main/modules/plugin/host/plugin-intelligence-context-stream-capabilities'
           export { createPluginRequestReplyCapabilities } from '../src/main/modules/plugin/host/plugin-host-request-reply'
           export { createPluginVoiceCapabilities } from '../src/main/modules/plugin/host/plugin-voice-capabilities'
           export { createPluginSystemActionCapabilities } from '../src/main/modules/plugin/host/plugin-system-capabilities'
@@ -189,6 +197,9 @@ async function run() {
       createPluginBatchRenameFilesystemCapability,
       createFixedPluginSnipasteDiscovery,
       createFixedPluginSnipasteExecutor,
+      createPluginIntelligenceCapabilities,
+      createPluginIntelligenceContextCapabilities,
+      createPluginIntelligenceContextStreamCapabilities,
       createPluginRequestReplyCapabilities,
       createPluginSnipasteProcessCapability,
       createPluginSystemActionCapabilities,
@@ -423,14 +434,30 @@ async function run() {
       path.join(officialPluginRoot, 'touch-dev-utils', 'index.js'),
       'utf8'
     )
+    const intelligenceFeatures = Object.freeze(
+      JSON.parse(
+        readFileSync(path.join(officialPluginRoot, 'touch-intelligence', 'manifest.json'), 'utf8')
+      ).features.map((feature) => ({
+        ...feature,
+        platform: Object.fromEntries(
+          Object.entries(feature.platform).map(([platform, enable]) => [
+            platform === 'win32' ? 'win' : platform,
+            { enable, arch: [], os: [] }
+          ])
+        )
+      }))
+    )
     const simpleFeatureCapabilityIds = new Set([
       'permission.check',
       'feature.registry.add',
+      'feature.registry.remove',
+      'feature.registry.list',
       'feature.items.push',
       'feature.items.update',
       'feature.items.remove',
       'feature.items.clear',
       'feature.items.list',
+      'feature.items.widget.push',
       'storage.file.read',
       'storage.file.write',
       'storage.file.remove',
@@ -441,7 +468,7 @@ async function run() {
       'open-url',
       'http.request'
     ])
-    const createOfficialFeatureRuntime = (name, generation) => {
+    const createOfficialFeatureRuntime = (name, generation, options = {}) => {
       const activationIdentity = activation(name, generation)
       const runtimeOwner = {
         protocolVersion: 2,
@@ -464,6 +491,8 @@ async function run() {
         browserProcessKills: 0,
         browserProcessStarts: 0,
         deniedPermissions: new Set(),
+        intelligenceCalls: [],
+        intelligenceWidgetStatuses: [],
         nexusCalls: [],
         quickOpsCalls: [],
         flowCalls: [],
@@ -486,6 +515,11 @@ async function run() {
       }
       const featureHost = {
         async pushItems(_scope, items) {
+          if (name === 'touch-intelligence') {
+            state.intelligenceWidgetStatuses.push(
+              ...items.map((item) => item?.render?.custom?.data?.status)
+            )
+          }
           state.items = items
         },
         async updateItem(_scope, id, patch) {
@@ -524,7 +558,7 @@ async function run() {
         createBusinessFeatureHost: () => featureHost,
         addBusinessFeature: async () => false,
         removeBusinessFeature: async () => false,
-        listBusinessFeatures: () => [],
+        listBusinessFeatures: () => (name === 'touch-intelligence' ? intelligenceFeatures : []),
         readBusinessFile: async (fileName) =>
           state.files.has(fileName)
             ? { found: true, value: state.files.get(fileName) }
@@ -1211,10 +1245,168 @@ async function run() {
               host: workspaceScriptHost
             })
           : null
+      const intelligenceSummary = (request) => ({
+        mode: request.context.mode,
+        scope: request.context.scope || 'retrieval',
+        sessionId: `fake-session-${generation}`,
+        turnId: `fake-turn-${generation}`,
+        packageId: `fake-package-${generation}`,
+        traceId: `fake-context-${generation}`,
+        itemCount: 1,
+        tokenBudget: request.context.tokenBudget || 1200,
+        tokenEstimate: 12,
+        sourceTypes: ['current_input'],
+        retrievalItemCount: 0,
+        citationCount: 0
+      })
+      const intelligenceCapability =
+        name === 'touch-intelligence' || name === 'touch-translation'
+          ? createPluginIntelligenceCapabilities({
+              ...(name === 'touch-translation'
+                ? {
+                    activation: activationIdentity,
+                    invokeCapabilities: ['text.translate', 'vision.ocr'],
+                    providerModelCapabilities: ['text.translate']
+                  }
+                : {}),
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              service: {
+                async invoke(capabilityId, payload, options, _signal, caller) {
+                  state.intelligenceCalls.push({
+                    operation: 'invoke',
+                    capabilityId,
+                    caller,
+                    payload,
+                    options
+                  })
+                  return {
+                    result:
+                      capabilityId === 'vision.ocr'
+                        ? { text: `fake recognized ${generation}` }
+                        : capabilityId === 'text.translate'
+                          ? `${options?.preferredProviderId || 'fake-provider'}:${payload.text}:generation-${generation}`
+                          : `fake answer ${generation}`,
+                    provider: options?.preferredProviderId || 'fake-provider',
+                    model: options?.modelPreference?.[0] || 'fake-model',
+                    traceId: `fake-invoke-${generation}`,
+                    latency: 1
+                  }
+                },
+                async listProviderModels(capabilityId, _signal, caller) {
+                  state.intelligenceCalls.push({ operation: 'models', capabilityId, caller })
+                  return [
+                    {
+                      providerId: 'fake-provider',
+                      providerName: 'Fake Provider',
+                      providerType: 'mock',
+                      models: ['fake-model'],
+                      defaultModel: 'fake-model',
+                      capabilities: [capabilityId],
+                      available: true
+                    },
+                    ...(name === 'touch-translation'
+                      ? [
+                          {
+                            providerId: 'fake-provider-b',
+                            providerName: 'Fake Provider B',
+                            providerType: 'mock',
+                            models: ['fake-model-b'],
+                            defaultModel: 'fake-model-b',
+                            capabilities: [capabilityId],
+                            available: true
+                          }
+                        ]
+                      : [])
+                  ]
+                }
+              }
+            })
+          : null
+      const intelligenceContextCapability =
+        name === 'touch-intelligence'
+          ? createPluginIntelligenceContextCapabilities({
+              activation: activationIdentity,
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              service: {
+                async contextInvoke(request, _signal, caller) {
+                  state.intelligenceCalls.push({ operation: 'context.invoke', caller })
+                  return {
+                    operation: 'context.invoke',
+                    invocation: {
+                      result: `fake answer ${generation}`,
+                      providerId: 'fake-provider',
+                      modelId: 'fake-model',
+                      traceId: `fake-context-invoke-${generation}`,
+                      latency: 1
+                    },
+                    context: {
+                      mode: request.context.mode,
+                      scope: request.context.scope || 'retrieval',
+                      itemCount: 1,
+                      tokenBudget: request.context.tokenBudget || 1200,
+                      tokenEstimate: 12,
+                      sourceTypes: ['current_input'],
+                      retrievalItemCount: 0,
+                      citationCount: 0,
+                      degradedReason: 'isolated_context_persistence_unavailable'
+                    }
+                  }
+                }
+              }
+            })
+          : null
+      const intelligenceStreamCapability =
+        name === 'touch-intelligence' && options.intelligenceStream !== false
+          ? createPluginIntelligenceContextStreamCapabilities({
+              activation: activationIdentity,
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              service: {
+                contextStream(request, _signal, caller) {
+                  state.intelligenceCalls.push({ operation: 'context.stream', caller })
+                  const summary = intelligenceSummary(request)
+                  return (async function* () {
+                    yield {
+                      type: 'start',
+                      capabilityId: 'text.chat',
+                      provider: 'fake-provider',
+                      model: 'fake-model',
+                      traceId: `fake-stream-${generation}`,
+                      context: summary
+                    }
+                    yield {
+                      type: 'delta',
+                      capabilityId: 'text.chat',
+                      delta: `fake answer ${generation}`,
+                      content: `fake answer ${generation}`,
+                      provider: 'fake-provider',
+                      model: 'fake-model',
+                      traceId: `fake-stream-${generation}`
+                    }
+                    yield {
+                      type: 'end',
+                      capabilityId: 'text.chat',
+                      content: `fake answer ${generation}`,
+                      provider: 'fake-provider',
+                      model: 'fake-model',
+                      traceId: `fake-stream-${generation}`,
+                      metadata: { latency: 1 },
+                      context: summary
+                    }
+                  })()
+                }
+              }
+            })
+          : null
       const definitions = [
         ...business.definitions.filter((definition) =>
           simpleFeatureCapabilityIds.has(definition.id)
         ),
+        ...(intelligenceCapability ? intelligenceCapability.definitions : []),
+        ...(intelligenceContextCapability ? intelligenceContextCapability.definitions : []),
+        ...(intelligenceStreamCapability ? intelligenceStreamCapability.definitions : []),
         ...(filesystemCapability ? filesystemCapability.definitions : []),
         ...requestReply.definitions,
         ...voice.definitions,
@@ -1390,6 +1582,10 @@ async function run() {
       ],
       ['touch-emoji-symbols', emojiScript],
       [
+        'touch-intelligence',
+        readFileSync(path.join(officialPluginRoot, 'touch-intelligence', 'index.js'), 'utf8')
+      ],
+      [
         'touch-quick-actions',
         readFileSync(path.join(officialPluginRoot, 'touch-quick-actions', 'index.js'), 'utf8')
       ],
@@ -1422,6 +1618,10 @@ async function run() {
       [
         'touch-text-tools',
         readFileSync(path.join(officialPluginRoot, 'touch-text-tools', 'index.js'), 'utf8')
+      ],
+      [
+        'touch-translation',
+        readFileSync(path.join(officialPluginRoot, 'touch-translation', 'index.js'), 'utf8')
       ],
       [
         'touch-window-manager',
@@ -1463,52 +1663,68 @@ async function run() {
       'touch-dev-utils',
       'touch-dictation',
       'touch-emoji-symbols',
+      'touch-intelligence',
       'touch-quick-actions',
       'touch-quickops',
       'touch-snipaste',
       'touch-snippets',
       'touch-system-actions',
       'touch-text-tools',
+      'touch-translation',
       'touch-window-manager',
       'touch-window-presets',
       'touch-workspace-scripts'
     ])
-    const createBatchRuntime = (name, generation) =>
+    const createBatchRuntime = (name, generation, options = {}) =>
       featureRuntimeNames.has(name)
-        ? createOfficialFeatureRuntime(name, generation)
+        ? createOfficialFeatureRuntime(name, generation, options)
         : createShellRuntime(name, generation)
-    const startBatchRuntime = (runtime) =>
-      runtime.host.start({
-        loadPayload: {
-          scriptContent: batchScripts.get(runtime.host.activation.name),
-          snapshot: {
-            platform:
-              runtime.host.activation.name === 'touch-window-presets' ||
-              runtime.host.activation.name === 'touch-window-manager'
-                ? 'win32'
-                : process.platform,
-            arch:
-              runtime.host.activation.name === 'touch-window-presets' ||
-              runtime.host.activation.name === 'touch-window-manager'
-                ? 'x64'
-                : process.arch,
-            locale: 'en-US',
-            manifest: { name: runtime.host.activation.name }
+    const startBatchRuntime = async (runtime) => {
+      try {
+        return await runtime.host.start({
+          loadPayload: {
+            scriptContent: batchScripts.get(runtime.host.activation.name),
+            snapshot: {
+              platform:
+                runtime.host.activation.name === 'touch-window-presets' ||
+                runtime.host.activation.name === 'touch-window-manager'
+                  ? 'win32'
+                  : process.platform,
+              arch:
+                runtime.host.activation.name === 'touch-window-presets' ||
+                runtime.host.activation.name === 'touch-window-manager'
+                  ? 'x64'
+                  : process.arch,
+              locale: 'en-US',
+              manifest: {
+                name: runtime.host.activation.name,
+                activationGeneration: runtime.host.activation.activationGeneration
+              }
+            },
+            capabilityManifest: runtime.capabilityManifest,
+            callbackLimits: {
+              maxCallbacks: 64,
+              maxConcurrentCallbacks: 16,
+              maxResources: 32
+            }
           },
-          capabilityManifest: runtime.capabilityManifest,
-          callbackLimits: {
-            maxCallbacks: 64,
-            maxConcurrentCallbacks: 16,
-            maxResources: 32
-          }
-        },
-        initialize: true,
-        initPayload: []
-      })
-
+          initialize: true,
+          initPayload: []
+        })
+      } catch (error) {
+        console.error(
+          'PLUGIN_HOST_BATCH_START_FAILED',
+          runtime.host.activation.name,
+          error?.code || 'PLUGIN_RUNTIME_HOST_LIFECYCLE_FAILED'
+        )
+        throw error
+      }
+    }
     const batchNames = [...batchScripts.keys()]
     const firstBatchObserverOffset = factory.observers.length
-    const firstBatch = batchNames.map((name, index) => createBatchRuntime(name, 20 + index))
+    const firstBatch = batchNames.map((name, index) =>
+      createBatchRuntime(name, 20 + index, { intelligenceStream: false })
+    )
     hosts.push(...firstBatch.map((runtime) => runtime.host))
     await Promise.all(firstBatch.map(startBatchRuntime))
     assert(new Set(firstBatch.map((runtime) => runtime.host.processId)).size === batchNames.length)
@@ -2115,6 +2331,126 @@ async function run() {
     assert(JSON.stringify(firstBatchWindowPresets.state.windowPresetActions) === '["layout"]')
     assert(firstBatchWindowPresets.state.windowPresetProcessStarts === 3)
 
+    const firstBatchIntelligence = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-intelligence'
+    )
+    await firstBatchIntelligence.host.callLifecycle('onFeatureTriggered', [
+      'intelligence-ask',
+      { text: 'first fake provider prompt' },
+      { id: 'intelligence-ask' }
+    ])
+    await waitFor(
+      () => firstBatchIntelligence.state.items[0]?.render?.custom?.data?.status === 'ready',
+      1000
+    )
+    assert(
+      firstBatchIntelligence.state.items[0].render.custom.data.answer ===
+        `fake answer ${firstBatchIntelligence.host.activation.activationGeneration}`
+    )
+    assert(
+      JSON.stringify(firstBatchIntelligence.state.intelligenceWidgetStatuses) ===
+        '["chat-pending","ready"]'
+    )
+    assert(
+      firstBatchIntelligence.state.intelligenceCalls.some(
+        (call) => call.operation === 'context.invoke' && call.caller === 'plugin:touch-intelligence'
+      )
+    )
+
+    const firstBatchTranslation = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-translation'
+    )
+    await firstBatchTranslation.host.callLifecycle('onFeatureTriggered', [
+      'touch-translate',
+      { text: 'hello translation' },
+      { id: 'touch-translate' }
+    ])
+    const firstTranslationItem = firstBatchTranslation.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'copy-translation')
+    )
+    const firstTranslationObserver =
+      factory.observers[firstBatchObserverOffset + batchNames.indexOf('touch-translation')]
+    const firstTranslationCapabilityCalls = firstTranslationObserver.received.filter(
+      (message) =>
+        message.type === 'capability-call' && message.capability === 'intelligence.invoke'
+    )
+    const firstTranslationCapabilityRequestIds = new Set(
+      firstTranslationCapabilityCalls.map((message) => message.requestId)
+    )
+    const firstTranslationCapabilityResults = firstTranslationObserver.sent
+      .filter(
+        (message) =>
+          message.type === 'capability-result' &&
+          firstTranslationCapabilityRequestIds.has(message.requestId)
+      )
+      .map((message) => ({
+        ok: message.ok,
+        errorCode: message.error?.code,
+        operation: message.result?.operation,
+        resultType: typeof message.result?.result,
+        providerType: typeof message.result?.providerId,
+        modelType: typeof message.result?.modelId
+      }))
+    assert(
+      firstTranslationItem,
+      `translation result missing items=${JSON.stringify(
+        firstBatchTranslation.state.items.map((item) => ({
+          id: item.id,
+          title: item.render?.basic?.title,
+          actions: item.actions?.map((action) => action.id)
+        }))
+      )} calls=${JSON.stringify(
+        firstBatchTranslation.state.intelligenceCalls.map((call) => ({
+          operation: call.operation,
+          capabilityId: call.capabilityId
+        }))
+      )} responses=${JSON.stringify(firstTranslationCapabilityResults)}`
+    )
+    assert(
+      firstTranslationItem.render.basic.title ===
+        `fake-provider:hello translation:generation-${firstBatchTranslation.host.activation.activationGeneration}`
+    )
+    assert(
+      firstBatchTranslation.state.intelligenceCalls.some(
+        (call) =>
+          call.operation === 'invoke' &&
+          call.capabilityId === 'text.translate' &&
+          call.caller === 'plugin:touch-translation'
+      )
+    )
+    assert(
+      !/apiKey|secret|token|endpoint|authorization/i.test(
+        JSON.stringify(firstBatchTranslation.state.intelligenceCalls)
+      )
+    )
+    const firstTranslationCopy = await firstBatchTranslation.host.callLifecycle('onItemAction', [
+      firstTranslationItem
+    ])
+    assert(firstTranslationCopy?.status === 'started')
+    assert(
+      firstBatchTranslation.state.clipboardWrites.at(-1) ===
+        firstTranslationItem.actions[0].payload.text
+    )
+    await firstBatchTranslation.host.callLifecycle('onFeatureTriggered', [
+      'multi-source-translate',
+      { text: 'multi translation' },
+      { id: 'multi-source-translate' }
+    ])
+    assert(firstBatchTranslation.state.items.length === 2)
+    await firstBatchTranslation.host.callLifecycle('onFeatureTriggered', [
+      'screenshot-translate',
+      {
+        inputs: [{ type: 'image', content: 'data:image/png;base64,iVBORw0KGgo=' }]
+      },
+      { id: 'screenshot-translate' }
+    ])
+    assert(
+      firstBatchTranslation.state.items[0].render.basic.title.includes(
+        `fake recognized ${firstBatchTranslation.host.activation.activationGeneration}`
+      )
+    )
+    assert(!JSON.stringify(firstBatchTranslation.state.items).includes('data:image/png'))
+
     await Promise.all(firstBatch.map((runtime) => runtime.host.stop()))
     assert(firstBatch.every((runtime) => runtime.host.state === 'closed'))
     assert(firstBatchSnipaste.state.snipasteKills === 1)
@@ -2137,6 +2473,65 @@ async function run() {
       assert(previous.owner.hostGeneration !== current.owner.hostGeneration)
       assert(previous.activation.activationGeneration !== current.activation.activationGeneration)
     }
+
+    const secondBatchIntelligence = secondBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-intelligence'
+    )
+    await secondBatchIntelligence.host.callLifecycle('onFeatureTriggered', [
+      'intelligence-ask',
+      { text: 'second fake provider prompt' },
+      { id: 'intelligence-ask' }
+    ])
+    await waitFor(
+      () => secondBatchIntelligence.state.items[0]?.render?.custom?.data?.status === 'ready',
+      1000
+    )
+    assert(
+      secondBatchIntelligence.state.items[0].render.custom.data.answer ===
+        `fake answer ${secondBatchIntelligence.host.activation.activationGeneration}`
+    )
+    assert(
+      JSON.stringify(secondBatchIntelligence.state.intelligenceWidgetStatuses) ===
+        '["chat-pending","chat-pending","ready"]'
+    )
+    assert(
+      secondBatchIntelligence.state.intelligenceCalls.some(
+        (call) => call.operation === 'context.stream' && call.caller === 'plugin:touch-intelligence'
+      )
+    )
+
+    const secondBatchTranslation = secondBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-translation'
+    )
+    await secondBatchTranslation.host.callLifecycle('onFeatureTriggered', [
+      'touch-translate',
+      { text: 'hello translation' },
+      { id: 'touch-translate' }
+    ])
+    const secondTranslationItem = secondBatchTranslation.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'copy-translation')
+    )
+    assert(secondTranslationItem)
+    assert(
+      secondTranslationItem.render.basic.title ===
+        `fake-provider:hello translation:generation-${secondBatchTranslation.host.activation.activationGeneration}`
+    )
+    assert(
+      secondBatchTranslation.host.activation.activationGeneration !==
+        firstBatchTranslation.host.activation.activationGeneration
+    )
+    const staleTranslationResult = await secondBatchTranslation.host.callLifecycle('onItemAction', [
+      firstTranslationItem
+    ])
+    assert(
+      staleTranslationResult?.status === 'ignored',
+      `translation stale action status=${JSON.stringify({
+        status: staleTranslationResult?.status,
+        reason: staleTranslationResult?.reason
+      })}`
+    )
+    assert(staleTranslationResult?.reason === 'stale-request')
+    assert(secondBatchTranslation.state.clipboardWrites.length === 0)
 
     const secondBatchBrowserOpenIndex = secondBatch.findIndex(
       (runtime) => runtime.host.activation.name === 'touch-browser-open'

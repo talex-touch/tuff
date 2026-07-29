@@ -7,6 +7,7 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'feature.registry.remove',
   'feature.registry.list',
   'feature.items.push',
+  'feature.items.widget.push',
   'feature.items.update',
   'feature.items.remove',
   'feature.items.clear',

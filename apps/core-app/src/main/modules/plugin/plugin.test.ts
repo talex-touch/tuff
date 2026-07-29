@@ -2151,6 +2151,8 @@ describe('touchPlugin.enable', () => {
     TouchPlugin.setSystemActionCapabilityFactory(null)
     TouchPlugin.setBrowserOpenCapabilityFactory(null)
     TouchPlugin.setBrowserDataCapabilityFactory(null)
+    TouchPlugin.setTranslationCapabilityFactory(null)
+    TouchPlugin.setIntelligenceContextCapabilityFactory(null)
     TouchPlugin.setWindowManagerCapabilityFactory(null)
     TouchPlugin.setWindowPresetCapabilityFactory(null)
     TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
@@ -2292,6 +2294,150 @@ describe('touchPlugin.enable', () => {
       )
       expect(runtime.lifecycle.onFeatureTriggered).toHaveBeenCalledOnce()
       await expect(startOptions.closeResources?.()).resolves.toBeUndefined()
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('injects intelligence.invoke only into the exact touch-translation activation', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-translation-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'translation-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
+        definitions: Object.freeze([
+          { id: 'intelligence.invoke', permission: 'intelligence.basic' }
+        ])
+      }))
+      TouchPlugin.setTranslationCapabilityFactory(factory as never)
+
+      const translation = new TouchPlugin(
+        'touch-translation',
+        { type: 'class', value: 'i-ri-translate-2' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      translation.setPreludeContract({ main: 'index.js' })
+      await expect(translation.enable()).resolves.toBe(true)
+      const translationStart = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(translationStart.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'intelligence.invoke'
+      ])
+      expect(factory).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'touch-translation', activationGeneration: 1 })
+      )
+
+      const otherRuntime = createRuntimeServiceMock()
+      TouchPlugin.setRuntimeService(otherRuntime as never)
+      const other = new TouchPlugin(
+        'other-plugin',
+        { type: 'class', value: 'i-ri-plug-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      other.setPreludeContract({ main: 'index.js' })
+      await expect(other.enable()).resolves.toBe(true)
+      const otherStart = vi.mocked(otherRuntime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(otherStart.capabilityDefinitions).toBeUndefined()
+      expect(factory).toHaveBeenCalledOnce()
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('injects context invoke and stream only into the exact touch-intelligence activation', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-intelligence-context-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'intelligence-context-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
+        definitions: Object.freeze([
+          {
+            id: 'intelligence.context.invoke',
+            permission: 'intelligence.basic'
+          },
+          {
+            id: 'intelligence.stream',
+            permission: 'intelligence.basic',
+            callbackLifetime: 'resource',
+            callbackFields: Object.freeze(['onEvent'])
+          }
+        ])
+      }))
+      TouchPlugin.setIntelligenceContextCapabilityFactory(factory as never)
+
+      const intelligence = new TouchPlugin(
+        'touch-intelligence',
+        { type: 'class', value: 'i-ri-brain-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      intelligence.setPreludeContract({ main: 'index.js' })
+      await expect(intelligence.enable()).resolves.toBe(true)
+      const intelligenceStart = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(intelligenceStart.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'intelligence.context.invoke',
+        'intelligence.stream'
+      ])
+      expect(factory).toHaveBeenCalledOnce()
+
+      const otherRuntime = createRuntimeServiceMock()
+      TouchPlugin.setRuntimeService(otherRuntime as never)
+      const other = new TouchPlugin(
+        'other-plugin',
+        { type: 'class', value: 'i-ri-plug-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      other.setPreludeContract({ main: 'index.js' })
+      await expect(other.enable()).resolves.toBe(true)
+      const otherStart = vi.mocked(otherRuntime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(otherStart.capabilityDefinitions).toBeUndefined()
+      expect(factory).toHaveBeenCalledOnce()
     } finally {
       fse.removeSync(root)
     }

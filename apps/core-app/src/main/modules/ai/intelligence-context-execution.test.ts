@@ -119,10 +119,12 @@ function createPrepared(contextPackage: ContextPackage): PrepareContextTurnResul
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((accept) => {
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((accept, decline) => {
     resolve = accept
+    reject = decline
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 function createRequest(): IntelligenceContextExecutionRequest {
@@ -136,7 +138,12 @@ function createRequest(): IntelligenceContextExecutionRequest {
         { role: 'assistant', content: 'UNTRUSTED plugin answer' }
       ]
     },
-    options: { preferredProviderId: 'local-provider' },
+    options: {
+      preferredProviderId: 'local-provider',
+      metadata: {
+        contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'continue' }
+      }
+    },
     context: {
       mode: 'continue',
       sessionId: 'session-1',
@@ -147,7 +154,265 @@ function createRequest(): IntelligenceContextExecutionRequest {
   }
 }
 
+function createEphemeralRequest(
+  mode: 'new' | 'continue' | 'stateless' = 'new'
+): IntelligenceContextExecutionRequest {
+  return {
+    ...createRequest(),
+    options: {
+      preferredProviderId: 'local-provider',
+      metadata: {
+        contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode }
+      }
+    },
+    context: {
+      mode,
+      owner: 'corebox',
+      scope: 'retrieval',
+      tokenBudget: 1_200,
+      ...(mode === 'continue' ? { sessionId: 'session-1' } : {})
+    }
+  }
+}
+
 describe('IntelligenceContextExecutionService', () => {
+  it('runs an ephemeral invoke from current input only without persistence identifiers', async () => {
+    const prepareTurn = vi.fn()
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn(async () => ({
+      result: 'Ephemeral answer',
+      provider: 'local-provider',
+      model: 'qwen',
+      traceId: 'ephemeral-trace',
+      latency: 4,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
+    }))
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+
+    const result = await service.invoke(
+      createEphemeralRequest('new'),
+      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { persistence: 'ephemeral' }
+    )
+
+    expect(prepareTurn).not.toHaveBeenCalled()
+    expect(revalidatePackageMemories).not.toHaveBeenCalled()
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+    expect(invoke).toHaveBeenCalledWith(
+      'text.chat',
+      {
+        messages: [
+          { role: 'system', content: 'Plugin system policy' },
+          { role: 'user', content: 'Current governed question' }
+        ]
+      },
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          caller: 'plugin:touch-intelligence',
+          contextExecution: expect.objectContaining({
+            mode: 'new',
+            scope: 'retrieval',
+            itemCount: 1,
+            sourceTypes: ['current_input'],
+            retrievalItemCount: 0,
+            citationCount: 0,
+            degradedReason: 'isolated_context_persistence_unavailable'
+          })
+        })
+      })
+    )
+    expect(JSON.stringify(invoke.mock.calls)).not.toContain('"persistence":')
+    expect(result.context).toMatchObject({
+      mode: 'new',
+      scope: 'retrieval',
+      itemCount: 1,
+      sourceTypes: ['current_input'],
+      degradedReason: 'isolated_context_persistence_unavailable'
+    })
+    for (const key of ['sessionId', 'turnId', 'packageId', 'checkpoint', 'continuation']) {
+      expect(result.context).not.toHaveProperty(key)
+    }
+  })
+
+  it('rejects ephemeral continuation before hygiene or provider work', async () => {
+    const prepareTurn = vi.fn()
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+
+    await expect(
+      service.invoke(
+        createEphemeralRequest('continue'),
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { persistence: 'ephemeral' }
+      )
+    ).rejects.toThrow('CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED')
+    expect(prepareTurn).not.toHaveBeenCalled()
+    expect(revalidatePackageMemories).not.toHaveBeenCalled()
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('blocks secret input on the ephemeral path before hygiene or provider work', async () => {
+    const prepareTurn = vi.fn()
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+    const secret = 'Authorization: Bearer synthetic_bearer_token-Alpha.0123456789~+/'
+
+    await expect(
+      service.invoke(
+        { ...createEphemeralRequest('new'), input: secret },
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { persistence: 'ephemeral' }
+      )
+    ).rejects.toThrow('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+    expect(prepareTurn).not.toHaveBeenCalled()
+    expect(revalidatePackageMemories).not.toHaveBeenCalled()
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'system message',
+      {
+        payload: {
+          messages: [
+            {
+              role: 'system' as const,
+              content: 'Authorization: Bearer synthetic_system_token-Alpha.0123456789~+/'
+            },
+            { role: 'user' as const, content: 'ignored child history' }
+          ]
+        }
+      }
+    ],
+    [
+      'rendered prompt template',
+      {
+        options: {
+          preferredProviderId: 'local-provider',
+          promptTemplate: 'Authorization: Bearer {{token}}',
+          promptVariables: { token: 'synthetic_template_token-Alpha.0123456789~+/' },
+          metadata: {
+            contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'new' }
+          }
+        }
+      }
+    ]
+  ])('blocks secret-bearing ephemeral %s before provider work', async (_label, override) => {
+    const prepareTurn = vi.fn()
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+    const base = createEphemeralRequest('new')
+
+    await expect(
+      service.invoke(
+        { ...base, ...override },
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { persistence: 'ephemeral' }
+      )
+    ).rejects.toThrow('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+    expect(prepareTurn).not.toHaveBeenCalled()
+    expect(revalidatePackageMemories).not.toHaveBeenCalled()
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('observes ephemeral cancellation before and after provider settlement', async () => {
+    const prepareTurn = vi.fn()
+    const revalidatePackageMemories = vi.fn()
+    const appendAssistantTurn = vi.fn()
+    const invoke = vi.fn()
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+    const before = new AbortController()
+    before.abort()
+
+    await expect(
+      service.invoke(
+        createEphemeralRequest('new'),
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { signal: before.signal, persistence: 'ephemeral' }
+      )
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(invoke).not.toHaveBeenCalled()
+
+    const after = new AbortController()
+    invoke.mockImplementationOnce(async () => {
+      after.abort()
+      return {
+        result: 'late answer',
+        provider: 'provider',
+        model: 'model',
+        traceId: 'trace',
+        latency: 1
+      }
+    })
+    await expect(
+      service.invoke(
+        createEphemeralRequest('new'),
+        { id: 'plugin:touch-intelligence', type: 'plugin' },
+        { signal: after.signal, persistence: 'ephemeral' }
+      )
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(prepareTurn).not.toHaveBeenCalled()
+    expect(revalidatePackageMemories).not.toHaveBeenCalled()
+    expect(appendAssistantTurn).not.toHaveBeenCalled()
+  })
+
+  it('keeps full persistence as the default and persists user and assistant turns', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const prepareTurn = vi.fn(async () => prepared)
+    const revalidatePackageMemories = vi.fn(async () => contextPackage)
+    const appendAssistantTurn = vi.fn(async () => prepared.turn)
+    const invoke = vi.fn(async () => ({
+      result: 'Persistent answer',
+      provider: 'local-provider',
+      model: 'qwen',
+      traceId: 'persistent-trace',
+      latency: 4
+    }))
+    const service = new IntelligenceContextExecutionService(
+      { prepareTurn, revalidatePackageMemories, appendAssistantTurn } as never,
+      { invoke, stream: vi.fn() } as never
+    )
+
+    await service.invoke(createRequest(), {
+      id: 'plugin:touch-intelligence',
+      type: 'plugin'
+    })
+
+    expect(prepareTurn).toHaveBeenCalledOnce()
+    expect(revalidatePackageMemories).toHaveBeenCalledOnce()
+    expect(appendAssistantTurn).toHaveBeenCalledWith({
+      sessionId: prepared.session.id,
+      content: 'Persistent answer',
+      metadata: { traceId: 'persistent-trace' }
+    })
+  })
+
   it('assembles the same governed provider messages for invoke and stream', async () => {
     const { IntelligenceContextExecutionService } = await import('./intelligence-context-execution')
     const contextPackage = createPackage()
@@ -193,10 +458,13 @@ describe('IntelligenceContextExecutionService', () => {
     )
     const request = createRequest()
 
-    const nonStream = await service.invoke(request, { id: 'touch-intelligence', type: 'plugin' })
+    const nonStream = await service.invoke(request, {
+      id: 'plugin:touch-intelligence',
+      type: 'plugin'
+    })
     const streamEvents: IntelligenceContextStreamEvent<unknown>[] = []
     for await (const event of service.stream(request, {
-      id: 'touch-intelligence',
+      id: 'plugin:touch-intelligence',
       type: 'plugin'
     })) {
       streamEvents.push(event)
@@ -317,7 +585,7 @@ describe('IntelligenceContextExecutionService', () => {
     )
 
     const result = await service.invoke(createRequest(), {
-      id: 'touch-intelligence',
+      id: 'plugin:touch-intelligence',
       type: 'plugin'
     })
 
@@ -369,9 +637,20 @@ describe('IntelligenceContextExecutionService', () => {
     await service.invoke(
       {
         ...createRequest(),
-        context: { mode: 'stateless', scope: 'retrieval', tokenBudget: 1200 }
+        options: {
+          ...createRequest().options,
+          metadata: {
+            ...createRequest().options?.metadata,
+            contextEntrypoint: {
+              id: 'corebox.ai-ask',
+              owner: 'corebox',
+              mode: 'stateless'
+            }
+          }
+        },
+        context: { mode: 'stateless', owner: 'corebox', scope: 'retrieval', tokenBudget: 1200 }
       },
-      { id: 'touch-intelligence', type: 'plugin' }
+      { id: 'plugin:touch-intelligence', type: 'plugin' }
     )
 
     expect(prepareTurn).toHaveBeenCalledWith(
@@ -438,7 +717,7 @@ describe('IntelligenceContextExecutionService', () => {
       }
 
       const result = await service.invoke(request, {
-        id: 'touch-intelligence',
+        id: 'plugin:touch-intelligence',
         type: 'plugin'
       })
 
@@ -483,7 +762,7 @@ describe('IntelligenceContextExecutionService', () => {
 
     let rejection: unknown
     try {
-      await service.invoke(request, { id: 'touch-intelligence', type: 'plugin' })
+      await service.invoke(request, { id: 'plugin:touch-intelligence', type: 'plugin' })
     } catch (error) {
       rejection = error
     }
@@ -513,7 +792,10 @@ describe('IntelligenceContextExecutionService', () => {
 
     let rejection: unknown
     try {
-      for await (const _ of service.stream(request, { id: 'touch-intelligence', type: 'plugin' })) {
+      for await (const _ of service.stream(request, {
+        id: 'plugin:touch-intelligence',
+        type: 'plugin'
+      })) {
       }
     } catch (error) {
       rejection = error
@@ -612,7 +894,10 @@ describe('IntelligenceContextExecutionService', () => {
       { invoke, stream } as never
     )
 
-    await service.invoke(createRequest(), { id: 'touch-intelligence', type: 'plugin' })
+    await service.invoke(createRequest(), {
+      id: 'plugin:touch-intelligence',
+      type: 'plugin'
+    })
 
     const payload = invoke.mock.calls[0]?.[1] as IntelligenceChatPayload
     expect(JSON.stringify(payload.messages)).not.toContain('Prefer concise Chinese answers')
@@ -644,7 +929,11 @@ describe('IntelligenceContextExecutionService', () => {
     )
     const outerOptions = markOuterGovernedInvocation({
       preferredProviderId: 'local-provider',
-      metadata: { caller: 'workflow-outer', workflowExecutionId: 'workflow-run-1' }
+      metadata: {
+        caller: 'workflow-outer',
+        workflowExecutionId: 'workflow-run-1',
+        contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'continue' }
+      }
     })
 
     await service.invoke(
@@ -666,7 +955,8 @@ describe('IntelligenceContextExecutionService', () => {
     })
     expect(outerOptions.metadata).toEqual({
       caller: 'workflow-outer',
-      workflowExecutionId: 'workflow-run-1'
+      workflowExecutionId: 'workflow-run-1',
+      contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'continue' }
     })
   })
 
@@ -688,7 +978,10 @@ describe('IntelligenceContextExecutionService', () => {
     )
 
     await expect(
-      service.invoke(createRequest(), { id: 'touch-intelligence', type: 'plugin' })
+      service.invoke(createRequest(), {
+        id: 'plugin:touch-intelligence',
+        type: 'plugin'
+      })
     ).rejects.toThrow('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
     expect(invoke).not.toHaveBeenCalled()
     expect(appendAssistantTurn).not.toHaveBeenCalled()
@@ -895,5 +1188,106 @@ describe('IntelligenceContextExecutionService', () => {
       }
     })
     expect(appendAssistantTurn).toHaveBeenCalledOnce()
+  })
+
+  it('contains stream finalization cancellation without awaiting a stuck append', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const finalize = deferred<typeof prepared.turn>()
+    const appendAssistantTurn = vi.fn(() => finalize.promise)
+    let providerClosed = false
+    const stream = vi.fn(async function* () {
+      try {
+        yield {
+          type: 'end' as const,
+          capabilityId: 'text.chat' as const,
+          content: 'stream answer',
+          traceId: 'stream-trace'
+        }
+      } finally {
+        providerClosed = true
+      }
+    })
+    const service = new IntelligenceContextExecutionService(
+      {
+        prepareTurn: vi.fn(async () => prepared),
+        revalidatePackageMemories: vi.fn(async () => contextPackage),
+        appendAssistantTurn
+      } as never,
+      { invoke: vi.fn(), stream } as never
+    )
+    const controller = new AbortController()
+    const iterator = service.stream(
+      createRequest(),
+      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { signal: controller.signal }
+    )
+    const pending = iterator.next()
+
+    await vi.waitFor(() => expect(appendAssistantTurn).toHaveBeenCalledOnce())
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    await vi.waitFor(() => expect(providerClosed).toBe(true))
+
+    finalize.resolve(prepared.turn)
+    await Promise.resolve()
+  })
+
+  it('keeps stream cancellation pending until the provider iterator return settles', async () => {
+    const contextPackage = createPackage()
+    const prepared = createPrepared(contextPackage)
+    const finalize = deferred<typeof prepared.turn>()
+    const providerReturn = deferred<IteratorResult<IntelligenceContextStreamEvent<unknown>>>()
+    const returnIterator = vi.fn(() => providerReturn.promise)
+    const stream = vi.fn(() => ({
+      [Symbol.asyncIterator]: () => ({
+        next: vi.fn(async () => ({
+          done: false as const,
+          value: {
+            type: 'end' as const,
+            capabilityId: 'text.chat' as const,
+            content: 'stream answer',
+            traceId: 'stream-trace'
+          }
+        })),
+        return: returnIterator
+      })
+    }))
+    const service = new IntelligenceContextExecutionService(
+      {
+        prepareTurn: vi.fn(async () => prepared),
+        revalidatePackageMemories: vi.fn(async () => contextPackage),
+        appendAssistantTurn: vi.fn(() => finalize.promise)
+      } as never,
+      { invoke: vi.fn(), stream } as never
+    )
+    const controller = new AbortController()
+    const iterator = service.stream(
+      createRequest(),
+      { id: 'plugin:touch-intelligence', type: 'plugin' },
+      { signal: controller.signal }
+    )
+    const pending = iterator.next()
+
+    await vi.waitFor(() => expect(stream).toHaveBeenCalledOnce())
+    controller.abort()
+    await vi.waitFor(() => expect(returnIterator).toHaveBeenCalledOnce())
+    let settled = false
+    void pending.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      }
+    )
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    providerReturn.resolve({ done: true, value: undefined })
+    await expect(pending).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+
+    finalize.resolve(prepared.turn)
+    await Promise.resolve()
   })
 })

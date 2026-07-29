@@ -4,87 +4,51 @@ const {
   logger,
   TuffItemBuilder,
   permission,
-  touchChannel,
   intelligence,
   features,
+  crypto: hostCrypto,
 } = globalThis
-const crypto = require('node:crypto')
-
-const AUTH_SESSION_GET_STATE_EVENT = resolveAuthSessionGetStateEvent()
-
-let makeWidgetIdLoader = null
 
 function getMakeWidgetId() {
-  if (!makeWidgetIdLoader) {
-    try {
-      ;({
-        makeWidgetId: makeWidgetIdLoader,
-      } = require('@talex-touch/utils/plugin/widget'))
-    }
-    catch {
-      makeWidgetIdLoader = (pluginName, featureId) =>
-        `${pluginName}::${featureId}`
-    }
-  }
-  return makeWidgetIdLoader
+  return (pluginName, featureId) => `${pluginName}::${featureId}`
 }
 
-let contextExecutionRequestFactoryLoader = null
-
 function getContextExecutionRequestFactory() {
-  if (!contextExecutionRequestFactoryLoader) {
-    try {
-      ;({
-        createIntelligenceContextExecutionRequest:
-          contextExecutionRequestFactoryLoader,
-      } = require('@talex-touch/utils/intelligence'))
-    }
-    catch {
-      contextExecutionRequestFactoryLoader = ({
-        capabilityId,
-        input,
-        payload,
-        options,
-        policy,
-      }) => ({
-        capabilityId,
-        input,
-        payload,
-        options: {
-          ...(options || {}),
-          metadata: {
-            ...(options?.metadata || {}),
-            contextEntrypoint: {
-              id: policy.entrypointId,
-              owner: policy.owner,
-              mode: policy.mode,
-            },
-          },
-        },
-        context: {
-          mode: policy.mode,
+  return ({ capabilityId, input, payload, options, policy }) => ({
+    capabilityId,
+    input,
+    payload,
+    options: {
+      ...(options || {}),
+      metadata: {
+        ...(options?.metadata || {}),
+        contextEntrypoint: {
+          id: policy.entrypointId,
           owner: policy.owner,
-          ...(policy.sessionId ? { sessionId: policy.sessionId } : {}),
-          ...(policy.scope ? { scope: policy.scope } : {}),
-          ...(policy.objective ? { objective: policy.objective } : {}),
-          ...(policy.tokenBudget ? { tokenBudget: policy.tokenBudget } : {}),
-          ...(policy.traceId ? { traceId: policy.traceId } : {}),
+          mode: policy.mode,
         },
-      })
-    }
-  }
-  return contextExecutionRequestFactoryLoader
+      },
+    },
+    context: {
+      mode: policy.mode,
+      owner: policy.owner,
+      ...(policy.sessionId ? { sessionId: policy.sessionId } : {}),
+      ...(policy.scope ? { scope: policy.scope } : {}),
+      ...(policy.objective ? { objective: policy.objective } : {}),
+      ...(policy.tokenBudget ? { tokenBudget: policy.tokenBudget } : {}),
+      ...(policy.traceId ? { traceId: policy.traceId } : {}),
+    },
+  })
 }
 
 const PLUGIN_NAME = 'touch-intelligence'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
+const ICON = { type: 'class', value: 'i-ri-sparkling-2-line' }
 const ACTION_ID = 'intelligence-action'
 const DEFAULT_FEATURE_ID = 'intelligence-ask'
 const MAX_HISTORY_MESSAGES = 10
 const MAX_DRAFTS = 20
 const MAX_OCR_CONTEXT_CHARS = 4000
-const CALLER_ID = `plugin:${PLUGIN_NAME}`
 const ENTRY_ID = 'corebox.ai-ask'
 const WIDGET_ITEM_ID = 'intelligence-widget'
 const HANDOFF_SOURCE = 'corebox.touch-intelligence'
@@ -99,48 +63,24 @@ const OPEN_INTELLIGENCE_SETTINGS_ACTION_ID = 'open-intelligence-settings'
 const INTELLIGENCE_SETTINGS_PATH = '/intelligence/channels'
 const OPEN_PLUGIN_PERMISSIONS_ACTION_ID = 'open-plugin-permissions'
 const PLUGIN_PERMISSIONS_PATH = `/plugin/${PLUGIN_NAME}?tab=Permissions`
-const INTELLIGENCE_SETTINGS_RECOVERY_CODES = new Set([
-  'NEXUS_AUTH_REQUIRED',
-  'PROVIDER_UNAVAILABLE',
-  'NETWORK_FAILURE',
-])
+const INTELLIGENCE_SETTINGS_RECOVERY_CODES = new Set(['NEXUS_AUTH_REQUIRED', 'PROVIDER_UNAVAILABLE', 'NETWORK_FAILURE'])
 const CONTEXT_CONTINUATION_REASONS = new Set([
   'archived-session-continuation',
   'expired-session-continuation',
   'idle-session-continuation',
   'continuation-session-missing',
 ])
-const CONTEXT_CONTINUATION_STATUSES = new Set([
-  'included',
-  'excluded',
-  'unavailable',
-])
-const CONTEXT_CONTINUATION_SOURCE_TYPES = new Set([
-  'compression_snapshot',
-  'session_summary',
-])
-
-function resolveAuthSessionGetStateEvent() {
-  try {
-    const { AuthEvents } = require('@talex-touch/utils/transport/events')
-    return AuthEvents.session.getState.toEventName()
-  }
-  catch {
-    return 'auth:session:get-state'
-  }
-}
+const CONTEXT_CONTINUATION_STATUSES = new Set(['included', 'excluded', 'unavailable'])
+const CONTEXT_CONTINUATION_SOURCE_TYPES = new Set(['compression_snapshot', 'session_summary'])
 
 const AI_ERROR_MESSAGES = {
   NEXUS_AUTH_REQUIRED: '未登录，请先登录后重试；可在登录恢复后再次发送',
   PERMISSION_DENIED: '权限已拒绝，请在插件权限中授予 intelligence.basic',
   OCR_EMPTY: 'OCR 未识别到可用文字',
-  PROVIDER_UNAVAILABLE:
-    'Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试',
+  PROVIDER_UNAVAILABLE: 'Provider 不可用，请在设置中检查默认模型或 BYOK 配置后重试',
   QUOTA_EXHAUSTED: 'AI 配额不足，请稍后重试或调整用量',
-  QUOTA_CHECK_UNAVAILABLE:
-    'AI 配额校验暂不可用，请稍后重试；若持续失败请检查配额存储与配置',
-  MODEL_UNSUPPORTED:
-    '当前模型不支持该能力，请切换支持 text.chat / vision.ocr 的模型',
+  QUOTA_CHECK_UNAVAILABLE: 'AI 配额校验暂不可用，请稍后重试；若持续失败请检查配额存储与配置',
+  MODEL_UNSUPPORTED: '当前模型不支持该能力，请切换支持 text.chat / vision.ocr 的模型',
   CAPABILITY_UNSUPPORTED: '当前 Provider 不支持该能力，请切换 Provider 或能力',
   NETWORK_FAILURE: 'AI 网络请求失败，请检查网络或 Provider endpoint 后重试',
   INVALID_REQUEST: 'AI 请求无效，请检查输入与调用参数',
@@ -148,8 +88,7 @@ const AI_ERROR_MESSAGES = {
   UNKNOWN: 'AI 调用失败',
 }
 
-const AI_SYSTEM_PROMPT
-  = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
+const AI_SYSTEM_PROMPT = '你是 Talex Touch 桌面助手里的智能助手，请用简洁清晰的中文回答。'
 const AI_COMMAND_VERSION = '1.0.0'
 const CUSTOM_AI_COMMANDS_FILE = 'ai-commands.json'
 const CUSTOM_AI_COMMANDS_SCHEMA_VERSION = 1
@@ -174,8 +113,7 @@ const BUILTIN_AI_COMMANDS = {
     name: 'AI 摘要',
     version: AI_COMMAND_VERSION,
     prefixes: ['summarize', 'summary', '总结', '摘要'],
-    promptTemplate:
-      'Summarize the user input in {{length}}. Return only the summary.',
+    promptTemplate: 'Summarize the user input in {{length}}. Return only the summary.',
     promptVariables: { length: 'three concise bullet points or fewer' },
   },
   'intelligence-explain': {
@@ -183,8 +121,7 @@ const BUILTIN_AI_COMMANDS = {
     name: 'AI 解释',
     version: AI_COMMAND_VERSION,
     prefixes: ['explain', '解释'],
-    promptTemplate:
-      'Explain the user input for a {{audience}} audience. Be concise and return only the explanation.',
+    promptTemplate: 'Explain the user input for a {{audience}} audience. Be concise and return only the explanation.',
     promptVariables: { audience: 'general technical' },
   },
 }
@@ -250,41 +187,59 @@ const registeredCustomAiCommandFeatureIds = new Set()
 const conversationSessions = new Map()
 
 function resolveIntelligenceClient() {
-  const injectedClient = intelligence?.invoke
-    ? intelligence
-    : plugin?.intelligence
-  if (injectedClient?.invoke) {
+  const injectedClient = intelligence || plugin?.intelligence
+  if (
+    injectedClient
+    && (typeof injectedClient.invoke === 'function'
+      || typeof injectedClient.contextInvoke === 'function'
+      || typeof injectedClient.contextStream === 'function'
+      || typeof injectedClient.getProviderModelOptions === 'function')
+  ) {
     return injectedClient
   }
 
-  const {
-    createIntelligenceClient,
-  } = require('@talex-touch/tuff-intelligence/client')
-  return createIntelligenceClient(touchChannel)
+  throw createPluginError('PROVIDER_UNAVAILABLE', 'Intelligence SDK is unavailable for this plugin runtime')
 }
 
 function invokeIntelligenceCapability(client, capabilityId, payload, options) {
   const domainMethod
-    = capabilityId === 'text.chat'
-      ? client?.text?.chat
-      : capabilityId === 'vision.ocr'
-        ? client?.vision?.ocr
-        : null
+    = capabilityId === 'text.chat' ? client?.text?.chat : capabilityId === 'vision.ocr' ? client?.vision?.ocr : null
 
   if (typeof domainMethod === 'function') {
     return domainMethod(payload, options)
   }
   if (typeof client?.invoke !== 'function') {
-    throw createPluginError(
-      'PROVIDER_UNAVAILABLE',
-      'Intelligence SDK is unavailable for this plugin runtime',
-    )
+    throw createPluginError('PROVIDER_UNAVAILABLE', 'Intelligence SDK is unavailable for this plugin runtime')
   }
   return client.invoke(capabilityId, payload, options)
 }
 
 function normalizeText(value) {
   return String(value ?? '').trim()
+}
+
+function compactPluginDto(value) {
+  if (value === undefined)
+    return undefined
+  if (Array.isArray(value)) {
+    const output = []
+    for (const entry of value) {
+      const compacted = compactPluginDto(entry)
+      if (compacted !== undefined)
+        output.push(compacted)
+    }
+    return output
+  }
+  if (value && typeof value === 'object') {
+    const output = {}
+    for (const key of Object.keys(value)) {
+      const compacted = compactPluginDto(value[key])
+      if (compacted !== undefined)
+        output[key] = compacted
+    }
+    return output
+  }
+  return value
 }
 
 function resolveAiCommand(featureId) {
@@ -393,12 +348,7 @@ function getReservedAiCommandAliases() {
 }
 
 function normalizeCustomAiCommand(raw, index, seenIds, seenAliases) {
-  if (
-    !raw
-    || typeof raw !== 'object'
-    || Array.isArray(raw)
-    || raw.enabled === false
-  ) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || raw.enabled === false) {
     return null
   }
 
@@ -421,11 +371,7 @@ function normalizeCustomAiCommand(raw, index, seenIds, seenAliases) {
   }
 
   const prefixes = Array.from(
-    new Set(
-      (Array.isArray(raw.aliases) ? raw.aliases : [])
-        .map(alias => normalizeText(alias))
-        .filter(Boolean),
-    ),
+    new Set((Array.isArray(raw.aliases) ? raw.aliases : []).map(alias => normalizeText(alias)).filter(Boolean)),
   )
   if (
     prefixes.length === 0
@@ -449,16 +395,10 @@ function normalizeCustomAiCommand(raw, index, seenIds, seenAliases) {
     return null
   }
 
-  const promptVariables
-    = raw.promptVariables === undefined
-      ? {}
-      : cloneMetadataRecord(raw.promptVariables)
+  const promptVariables = raw.promptVariables === undefined ? {} : cloneMetadataRecord(raw.promptVariables)
   if (!promptVariables)
     return null
-  if (
-    getUtf8ByteLength(JSON.stringify(promptVariables))
-    > MAX_CUSTOM_AI_COMMAND_VARIABLE_BYTES
-  ) {
+  if (getUtf8ByteLength(JSON.stringify(promptVariables)) > MAX_CUSTOM_AI_COMMAND_VARIABLE_BYTES) {
     return null
   }
 
@@ -506,17 +446,13 @@ function parseCustomAiCommandConfig(raw) {
   const seenAliases = new Set()
   const sourceCommands = config.commands.slice(0, MAX_CUSTOM_AI_COMMANDS)
   const commands = sourceCommands
-    .map((command, index) =>
-      normalizeCustomAiCommand(command, index, seenIds, seenAliases),
-    )
+    .map((command, index) => normalizeCustomAiCommand(command, index, seenIds, seenAliases))
     .filter(Boolean)
   return {
     valid: true,
     commands,
     rejectedCount:
-      sourceCommands.length
-      - commands.length
-      + Math.max(0, config.commands.length - MAX_CUSTOM_AI_COMMANDS),
+      sourceCommands.length - commands.length + Math.max(0, config.commands.length - MAX_CUSTOM_AI_COMMANDS),
   }
 }
 
@@ -527,9 +463,7 @@ async function loadCustomAiCommandConfig() {
 
   try {
     const stored = await plugin.storage.getFile(CUSTOM_AI_COMMANDS_FILE)
-    const storedFiles = plugin.storage.listFiles
-      ? await plugin.storage.listFiles()
-      : []
+    const storedFiles = plugin.storage.listFiles ? await plugin.storage.listFiles() : []
     const missingConfig
       = stored == null
         || (stored
@@ -543,10 +477,7 @@ async function loadCustomAiCommandConfig() {
         commands: [],
       }
       if (plugin.storage.setFile) {
-        const saveResult = await plugin.storage.setFile(
-          CUSTOM_AI_COMMANDS_FILE,
-          emptyConfig,
-        )
+        const saveResult = await plugin.storage.setFile(CUSTOM_AI_COMMANDS_FILE, emptyConfig)
         if (saveResult?.success === false) {
           return { valid: false, commands: [], rejectedCount: 0 }
         }
@@ -555,11 +486,8 @@ async function loadCustomAiCommandConfig() {
     }
     return parseCustomAiCommandConfig(stored)
   }
-  catch (error) {
-    logger?.warn?.(
-      '[touch-intelligence] failed to load custom AI Commands',
-      error,
-    )
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to load custom AI Commands')
     return { valid: false, commands: [], rejectedCount: 0 }
   }
 }
@@ -582,7 +510,11 @@ function buildCustomAiCommandFeature(command) {
       sendMode: true,
       forceMax: true,
     },
-    platform: { win32: true, darwin: true, linux: true },
+    platform: {
+      win: { enable: true, arch: [], os: [] },
+      darwin: { enable: true, arch: [], os: [] },
+      linux: { enable: true, arch: [], os: [] },
+    },
     commands: [{ type: 'match', value: [...command.prefixes] }],
   }
 }
@@ -597,11 +529,7 @@ async function reloadCustomAiCommands() {
     }
   }
 
-  if (
-    !features?.addFeature
-    || !features?.removeFeature
-    || !features?.getFeature
-  ) {
+  if (!features?.addFeature || !features?.removeFeature || !features?.getFeatures) {
     return {
       applied: false,
       registeredCount: customAiCommands.size,
@@ -609,15 +537,16 @@ async function reloadCustomAiCommands() {
     }
   }
 
+  const getRegisteredFeatures = async () => {
+    const current = await features.getFeatures()
+    return Array.isArray(current) ? current : []
+  }
   const nextFeatures = config.commands.map(buildCustomAiCommandFeature)
-  const retainedFeatures = (features.getFeatures?.() || []).filter(
+  const retainedFeatures = (await getRegisteredFeatures()).filter(
     feature => !registeredCustomAiCommandFeatureIds.has(feature.id),
   )
   const hasCollision = nextFeatures.some(nextFeature =>
-    retainedFeatures.some(
-      feature =>
-        feature.id === nextFeature.id || feature.name === nextFeature.name,
-    ),
+    retainedFeatures.some(feature => feature.id === nextFeature.id || feature.name === nextFeature.name),
   )
   if (hasCollision) {
     return {
@@ -628,28 +557,27 @@ async function reloadCustomAiCommands() {
   }
 
   const previousCommands = Array.from(customAiCommands.values())
-  const restorePreviousState = () => {
+  const restorePreviousState = async () => {
+    const currentIds = new Set((await getRegisteredFeatures()).map(feature => feature.id))
     customAiCommands.clear()
     registeredCustomAiCommandFeatureIds.clear()
     for (const command of previousCommands) {
-      if (
-        features.getFeature(command.featureId)
-        || features.addFeature(buildCustomAiCommandFeature(command))
-      ) {
+      const restored
+        = currentIds.has(command.featureId) || (await features.addFeature(buildCustomAiCommandFeature(command)))
+      if (restored) {
         customAiCommands.set(command.featureId, command)
         registeredCustomAiCommandFeatureIds.add(command.featureId)
+        currentIds.add(command.featureId)
       }
       else {
-        logger?.error?.(
-          `[touch-intelligence] failed to restore custom AI Command: ${command.featureId}`,
-        )
+        logger?.error?.(`[touch-intelligence] failed to restore custom AI Command: ${command.featureId}`)
       }
     }
   }
 
   for (const featureId of registeredCustomAiCommandFeatureIds) {
-    if (!features.removeFeature(featureId)) {
-      restorePreviousState()
+    if (!(await features.removeFeature(featureId))) {
+      await restorePreviousState()
       return {
         applied: false,
         registeredCount: customAiCommands.size,
@@ -661,11 +589,11 @@ async function reloadCustomAiCommands() {
   const addedFeatureIds = []
   for (let index = 0; index < config.commands.length; index += 1) {
     const command = config.commands[index]
-    if (!features.addFeature(nextFeatures[index])) {
+    if (!(await features.addFeature(nextFeatures[index]))) {
       for (const featureId of addedFeatureIds) {
-        features.removeFeature(featureId)
+        await features.removeFeature(featureId)
       }
-      restorePreviousState()
+      await restorePreviousState()
       return {
         applied: false,
         registeredCount: customAiCommands.size,
@@ -728,10 +656,7 @@ async function commitCustomAiCommandDocument(document) {
     const stored = await plugin.storage.getFile?.(CUSTOM_AI_COMMANDS_FILE)
     if (stored != null)
       previousDocument = stored
-    await plugin.storage.setFile(
-      CUSTOM_AI_COMMANDS_FILE,
-      buildCustomAiCommandDocument(parsed.commands),
-    )
+    await plugin.storage.setFile(CUSTOM_AI_COMMANDS_FILE, buildCustomAiCommandDocument(parsed.commands))
     const result = await reloadCustomAiCommands()
     if (result.applied)
       return { ...result, reason: '' }
@@ -740,20 +665,14 @@ async function commitCustomAiCommandDocument(document) {
     await reloadCustomAiCommands()
     return { ...result, reason: 'registry-conflict' }
   }
-  catch (error) {
-    logger?.warn?.(
-      '[touch-intelligence] failed to save custom AI Commands',
-      error,
-    )
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to save custom AI Commands')
     try {
       await plugin.storage.setFile(CUSTOM_AI_COMMANDS_FILE, previousDocument)
       await reloadCustomAiCommands()
     }
-    catch (rollbackError) {
-      logger?.error?.(
-        '[touch-intelligence] failed to restore custom AI Commands after save error',
-        rollbackError,
-      )
+    catch {
+      logger?.error?.('[touch-intelligence] failed to restore custom AI Commands')
     }
     return {
       applied: false,
@@ -779,9 +698,7 @@ async function upsertCustomAiCommand(payload = {}) {
   const command = payload.command
   const originalId = normalizeText(payload.originalId).toLocaleLowerCase()
   const nextId = normalizeText(command?.id).toLocaleLowerCase()
-  const existingIndex = candidate.commands.findIndex(
-    item => item.id === (originalId || nextId),
-  )
+  const existingIndex = candidate.commands.findIndex(item => item.id === (originalId || nextId))
   if (existingIndex >= 0)
     candidate.commands[existingIndex] = command
   else candidate.commands.push(command)
@@ -828,9 +745,7 @@ function getQueryText(query) {
 }
 
 function hasAiPrefix(raw) {
-  return /^(?:@?ai|\/ai|智能|问答)(?:[\s:：，,。?？]|$)/i.test(
-    normalizeText(raw),
-  )
+  return /^(?:@?ai|\/ai|智能|问答)(?:[\s:：，,。?？]|$)/i.test(normalizeText(raw))
 }
 
 function normalizePrompt(raw) {
@@ -838,10 +753,7 @@ function normalizePrompt(raw) {
   if (!input)
     return ''
 
-  const withoutPrefix = input.replace(
-    /^(?:@?ai|\/ai|智能|问答)[\s:：，,。?？]*/i,
-    '',
-  )
+  const withoutPrefix = input.replace(/^(?:@?ai|\/ai|智能|问答)[\s:：，,。?？]*/i, '')
   if (withoutPrefix !== input)
     return normalizeText(withoutPrefix)
   return input
@@ -857,35 +769,25 @@ function toSessionIdPart(value) {
     .replace(/^_+|_+$/g, '')
 }
 
+function stableSessionDigest(value) {
+  let hash = 2166136261
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
 function buildHandoffSessionId(featureId) {
   const resolvedFeatureId = resolveFeatureId(featureId)
   const slug = toSessionIdPart(resolvedFeatureId) || DEFAULT_FEATURE_ID
-  const digest = crypto
-    .createHash('sha256')
-    .update(resolvedFeatureId)
-    .digest('hex')
-    .slice(0, 8)
-  return `${HANDOFF_SESSION_PREFIX}_${slug}_${digest}`
+  return `${HANDOFF_SESSION_PREFIX}_${slug}_${stableSessionDigest(resolvedFeatureId)}`
 }
 
 function buildContextTraceId(featureId, requestId) {
   const slug = toSessionIdPart(featureId) || DEFAULT_FEATURE_ID
-  const id = normalizeText(requestId) || crypto.randomUUID()
+  const id = normalizeText(requestId) || hostCrypto.randomUUID()
   return `${CONTEXT_TRACE_PREFIX}_${slug}_${id}`
-}
-
-function shouldSkipOptionalHandoff(error) {
-  const message = toErrorMessage(error).toLowerCase()
-  return (
-    message.includes('not authenticated')
-    || message.includes('auth required')
-    || message.includes('nexus_auth_required')
-    || message.includes('permission')
-    || message.includes('denied')
-    || message.includes('intelligence.basic')
-    || message.includes('未登录')
-    || message.includes('需要登录')
-  )
 }
 
 function shouldFallbackFromStream(error) {
@@ -935,15 +837,11 @@ function keepNewestBusinessMessages(messages) {
 async function loadStoredHistory(featureId) {
   try {
     const raw = await plugin?.storage?.getFile?.(HISTORY_FILE)
-    const byFeature
-      = raw && typeof raw === 'object' ? raw[resolveFeatureId(featureId)] : null
+    const byFeature = raw && typeof raw === 'object' ? raw[resolveFeatureId(featureId)] : null
     return keepNewestBusinessMessages(byFeature?.messages || [])
   }
-  catch (error) {
-    logger?.warn?.(
-      '[touch-intelligence] failed to load conversation history',
-      error,
-    )
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to load conversation history')
     return []
   }
 }
@@ -958,28 +856,27 @@ async function saveStoredHistory(featureId, messages) {
     }
     await plugin?.storage?.setFile?.(HISTORY_FILE, next)
   }
-  catch (error) {
-    logger?.warn?.(
-      '[touch-intelligence] failed to save conversation history',
-      error,
-    )
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to save conversation history')
   }
 }
 
 function canCommitResponse(session, requestId) {
-  return (
-    session.activeRequestId === requestId && session.uiRequestId === requestId
-  )
+  return session.activeRequestId === requestId && session.uiRequestId === requestId
 }
 
 function cancelStreamController(controller) {
-  if (!controller || controller.cancelled || typeof controller.cancel !== 'function')
-    return
-  try {
-    controller.cancel()
+  if (!controller || controller.cancelled || typeof controller.cancel !== 'function') {
+    return Promise.resolve()
   }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to cancel superseded context stream', error)
+  try {
+    return Promise.resolve(controller.cancel()).catch(() => {
+      logger?.warn?.('[touch-intelligence] failed to cancel context stream')
+    })
+  }
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to cancel context stream')
+    return Promise.resolve()
   }
 }
 
@@ -989,28 +886,30 @@ function cancelActiveStream(session) {
   session.activeStreamCancellation = null
   session.activeStreamController = null
   if (typeof cancel === 'function') {
-    cancel()
-    return
+    try {
+      return Promise.resolve(cancel()).catch(() => undefined)
+    }
+    catch {
+      return Promise.resolve()
+    }
   }
-  cancelStreamController(controller)
+  return cancelStreamController(controller)
 }
 
-function supersedeActiveRequest(session) {
+async function supersedeActiveRequest(session) {
   session.activeRequestId = ''
   session.uiRequestId = ''
-  cancelActiveStream(session)
+  await cancelActiveStream(session)
 }
 
-function supersedeAllActiveRequests() {
-  for (const session of conversationSessions.values()) {
-    supersedeActiveRequest(session)
-  }
+async function supersedeAllActiveRequests() {
+  await Promise.all(Array.from(conversationSessions.values(), session => supersedeActiveRequest(session)))
 }
 
-function markPendingRequest(session, requestId) {
+async function markPendingRequest(session, requestId) {
   session.activeRequestId = requestId
   session.uiRequestId = requestId
-  cancelActiveStream(session)
+  await cancelActiveStream(session)
 }
 
 function getSession(featureId) {
@@ -1037,108 +936,12 @@ function getSession(featureId) {
   return conversationSessions.get(resolvedFeatureId)
 }
 
-function buildHandoffContext({
-  featureId,
-  prompt,
-  history,
-  answer,
-  requestId,
-  inputKinds = [],
-}) {
-  const messages = keepNewestBusinessMessages([
-    ...cloneHistory(history),
-    ...(answer
-      ? [
-          { role: 'user', content: normalizeText(prompt) },
-          { role: 'assistant', content: normalizeText(answer) },
-        ]
-      : []),
-  ])
-  const conversation
-    = messages.length > 0
-      ? {
-          conversation: {
-            messages,
-            updatedAt: Date.now(),
-          },
-        }
-      : {}
-
-  return {
-    source: HANDOFF_SOURCE,
-    featureId: resolveFeatureId(featureId),
-    entry: ENTRY_ID,
-    requestId,
-    inputKinds: Array.from(new Set(inputKinds.filter(Boolean))),
-    lastPrompt: normalizeText(prompt),
-    ...(answer ? { lastAnswer: normalizeText(answer) } : {}),
-    ...conversation,
-  }
-}
-
-async function ensureHandoffSession(client, session, params) {
-  const handoffSessionId
-    = normalizeText(session.handoffSessionId)
-      || buildHandoffSessionId(params.featureId)
-
-  if (!client?.agentSessionStart)
-    return ''
-
-  try {
-    const handoff = await client.agentSessionStart({
-      sessionId: handoffSessionId,
-      objective: params.prompt,
-      context: buildHandoffContext(params),
-      metadata: {
-        caller: CALLER_ID,
-        entry: ENTRY_ID,
-        featureId: resolveFeatureId(params.featureId),
-        source: HANDOFF_SOURCE,
-      },
-    })
-    const restoredMessages = normalizeHistory(
-      handoff?.context?.conversation?.messages,
-    )
-    if (restoredMessages.length > session.history.length) {
-      session.history = keepNewestBusinessMessages(restoredMessages)
-    }
-    session.handoffSessionId = handoffSessionId
-    return handoffSessionId
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] handoff session unavailable', error)
-    if (shouldSkipOptionalHandoff(error))
-      session.handoffSessionId = ''
-  }
-
+async function ensureHandoffSession(_client, session) {
+  session.handoffSessionId = ''
   return ''
 }
 
-async function updateHandoffSession(client, session, params) {
-  if (!client?.agentSessionStart || !session.handoffSessionId)
-    return
-
-  try {
-    await client.agentSessionStart({
-      sessionId: session.handoffSessionId,
-      objective: params.prompt,
-      context: buildHandoffContext(params),
-      metadata: {
-        caller: CALLER_ID,
-        entry: ENTRY_ID,
-        featureId: resolveFeatureId(params.featureId),
-        source: HANDOFF_SOURCE,
-        lastRequestId: params.requestId,
-      },
-    })
-  }
-  catch (error) {
-    logger?.warn?.(
-      '[touch-intelligence] failed to update handoff session',
-      error,
-    )
-  }
-}
+async function updateHandoffSession() {}
 
 function summarizeContextContinuation(value) {
   if (!value || typeof value !== 'object')
@@ -1146,10 +949,7 @@ function summarizeContextContinuation(value) {
 
   const reason = normalizeText(value.reason)
   const status = normalizeText(value.status)
-  if (
-    !CONTEXT_CONTINUATION_REASONS.has(reason)
-    || !CONTEXT_CONTINUATION_STATUSES.has(status)
-  ) {
+  if (!CONTEXT_CONTINUATION_REASONS.has(reason) || !CONTEXT_CONTINUATION_STATUSES.has(status)) {
     return null
   }
 
@@ -1161,9 +961,7 @@ function summarizeContextContinuation(value) {
     reason,
     status,
     ...(sourceSessionId ? { sourceSessionId } : {}),
-    ...(CONTEXT_CONTINUATION_SOURCE_TYPES.has(summarySourceType)
-      ? { summarySourceType }
-      : {}),
+    ...(CONTEXT_CONTINUATION_SOURCE_TYPES.has(summarySourceType) ? { summarySourceType } : {}),
     ...(summarySourceId ? { summarySourceId } : {}),
     ...(degradedReason ? { degradedReason } : {}),
   }
@@ -1194,8 +992,7 @@ function summarizeContextPackage(contextPackage) {
   }
 
   const retrieval
-    = contextPackage.metadata?.retrieval
-      && typeof contextPackage.metadata.retrieval === 'object'
+    = contextPackage.metadata?.retrieval && typeof contextPackage.metadata.retrieval === 'object'
       ? contextPackage.metadata.retrieval
       : null
   const metadataCitationCount = Number(retrieval?.citationCount)
@@ -1207,12 +1004,8 @@ function summarizeContextPackage(contextPackage) {
     id: normalizeText(contextPackage.packageId || contextPackage.id),
     sessionId: normalizeText(contextPackage.sessionId),
     turnId: normalizeText(contextPackage.turnId),
-    checkpointId: normalizeText(
-      contextPackage.checkpoint?.id || contextPackage.checkpointId,
-    ),
-    checkpointReason: normalizeText(
-      contextPackage.checkpoint?.reason || contextPackage.checkpointReason,
-    ),
+    checkpointId: normalizeText(contextPackage.checkpoint?.id || contextPackage.checkpointId),
+    checkpointReason: normalizeText(contextPackage.checkpoint?.reason || contextPackage.checkpointReason),
     ...(continuation ? { continuation } : {}),
     mode: normalizeText(contextPackage.mode),
     scope: normalizeText(contextPackage.scope),
@@ -1220,9 +1013,7 @@ function summarizeContextPackage(contextPackage) {
     tokenBudget: Number(contextPackage.tokenBudget) || 0,
     tokenEstimate: Number(contextPackage.tokenEstimate) || 0,
     itemCount: Number(contextPackage.itemCount) || items.length,
-    retrievalItemCount: Number.isFinite(safeRetrievalItemCount)
-      ? safeRetrievalItemCount
-      : retrievalItemCount,
+    retrievalItemCount: Number.isFinite(safeRetrievalItemCount) ? safeRetrievalItemCount : retrievalItemCount,
     citationCount: Number.isFinite(safeCitationCount)
       ? safeCitationCount
       : Number.isFinite(metadataCitationCount)
@@ -1230,104 +1021,27 @@ function summarizeContextPackage(contextPackage) {
         : citationCount,
     sourceTypes,
     retrievalStatus: normalizeText(retrieval?.status),
-    degradedReason: normalizeText(
-      contextPackage.degradedReason || retrieval?.degradedReason,
-    ),
+    degradedReason: normalizeText(contextPackage.degradedReason || retrieval?.degradedReason),
   }
 }
 
-function hasExplicitMemoryIntent(prompt) {
-  return [
-    /\b(remember this|remember that|save this as memory|save this memory)\b/i,
-    /(请)?记住|帮我记住|保存为记忆|加入记忆|记到记忆/,
-  ].some(pattern => pattern.test(normalizeText(prompt)))
-}
-
-function summarizeMemoryPolicy(result) {
-  if (!result || typeof result !== 'object')
-    return null
-
-  const candidate
-    = result.candidate && typeof result.candidate === 'object'
-      ? result.candidate
-      : null
-  const summary = {
-    status: normalizeText(result.status),
-    reason: normalizeText(result.reason),
-  }
-  if (candidate) {
-    summary.candidate = {
-      type: normalizeText(candidate.type),
-      scope: normalizeText(candidate.scope),
-      summary: truncateText(candidate.summary, 160),
-      tags: normalizeStringList(candidate.tags),
-      confidence: Number(candidate.confidence) || 0,
-      privacyLevel: normalizeText(candidate.privacyLevel),
-      ...(candidate.sourceSessionId
-        ? { sourceSessionId: normalizeText(candidate.sourceSessionId) }
-        : {}),
-      ...(candidate.sourceTurnId
-        ? { sourceTurnId: normalizeText(candidate.sourceTurnId) }
-        : {}),
-    }
-  }
-  return summary
-}
-
-async function evaluateMemoryPolicyForAsk(client, { prompt, contextState }) {
-  if (typeof client?.contextEvaluateMemory !== 'function')
-    return null
-
-  const content = normalizeText(prompt)
-  if (!content || !hasExplicitMemoryIntent(content))
-    return null
-
-  try {
-    const result = await client.contextEvaluateMemory({
-      content,
-      type: 'preference',
-      scope: 'session',
-      tags: ['corebox-ai-ask'],
-      sourceSessionId: normalizeText(contextState?.sessionId),
-      sourceTurnId: normalizeText(contextState?.turnId),
-      privacyLevel: 'normal',
-      metadata: {
-        caller: CALLER_ID,
-        entry: ENTRY_ID,
-        source: HANDOFF_SOURCE,
-      },
-    })
-    return summarizeMemoryPolicy(result)
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] memory policy unavailable', error)
-    return null
-  }
+async function evaluateMemoryPolicyForAsk() {
+  return null
 }
 
 function normalizeContextMode(value, fallback = 'new') {
   const mode = normalizeText(value)
-  return mode === 'new' || mode === 'continue' || mode === 'stateless'
-    ? mode
-    : fallback
+  return mode === 'new' || mode === 'continue' || mode === 'stateless' ? mode : fallback
 }
 
 function normalizeContextOwner(value, fallback = 'corebox') {
   const owner = normalizeText(value)
-  return owner === 'corebox'
-    || owner === 'workflow'
-    || owner === 'omni-panel'
-    || owner === 'assistant'
-    || owner === 'system'
-    ? owner
-    : fallback
+  return owner === 'corebox' || owner === 'assistant' ? owner : fallback
 }
 
 function normalizeContextScope(value, fallback = 'retrieval') {
   const scope = normalizeText(value)
-  return scope === 'light' || scope === 'session' || scope === 'retrieval'
-    ? scope
-    : fallback
+  return scope === 'light' || scope === 'session' || scope === 'retrieval' ? scope : fallback
 }
 
 function buildContextExecutionRequest({
@@ -1342,8 +1056,7 @@ function buildContextExecutionRequest({
   forceStateless = false,
 }) {
   const execution = entrypointContext?.execution
-  const requestedSessionId
-    = normalizeText(execution?.sessionId) || session.contextSessionId
+  const requestedSessionId = normalizeText(execution?.sessionId) || session.contextSessionId
   const requestedMode = normalizeContextMode(
     execution?.mode ?? session.contextMode,
     requestedSessionId ? 'continue' : 'new',
@@ -1364,14 +1077,10 @@ function buildContextExecutionRequest({
       entrypointId: normalizeText(entrypointContext?.id) || ENTRY_ID,
       owner: normalizeContextOwner(execution?.owner),
       mode,
-      ...(mode === 'continue' && requestedSessionId
-        ? { sessionId: requestedSessionId }
-        : {}),
+      ...(mode === 'continue' && requestedSessionId ? { sessionId: requestedSessionId } : {}),
       scope: normalizeContextScope(execution?.scope),
-      objective:
-        normalizeText(execution?.objective) || normalizeText(displayPrompt),
-      tokenBudget:
-        Number.isFinite(tokenBudget) && tokenBudget > 0 ? tokenBudget : 1200,
+      objective: normalizeText(execution?.objective) || normalizeText(displayPrompt),
+      tokenBudget: Number.isFinite(tokenBudget) && tokenBudget > 0 ? tokenBudget : 1200,
       traceId,
     },
   })
@@ -1418,50 +1127,14 @@ function buildOcrPayload(imageDataUrl) {
   }
 }
 
-function buildInvokeOptions({
-  featureId,
-  requestId,
-  capabilityId,
-  inputKinds = [],
-  sessionId,
-  contextPackage,
-  memoryPolicy,
-}) {
-  const contextSummary
-    = contextPackage && typeof contextPackage === 'object' ? contextPackage : null
-  const memoryPolicySummary
-    = memoryPolicy && typeof memoryPolicy === 'object' ? memoryPolicy : null
+function buildInvokeOptions({ featureId, requestId, capabilityId, inputKinds = [] }) {
   return {
     metadata: {
-      caller: CALLER_ID,
       entry: ENTRY_ID,
       featureId: resolveFeatureId(featureId),
       requestId,
       inputKinds: Array.from(new Set(inputKinds.filter(Boolean))),
       capabilityId,
-      ...(sessionId
-        ? {
-            sessionId,
-            handoffSessionId: sessionId,
-            handoffSource: HANDOFF_SOURCE,
-          }
-        : {}),
-      ...(contextSummary
-        ? {
-            contextTraceId: contextSummary.traceId,
-            contextSessionId: contextSummary.sessionId,
-            contextPackageId: contextSummary.id,
-            contextScope: contextSummary.scope,
-            contextTokenEstimate: contextSummary.tokenEstimate,
-            contextCitationCount: contextSummary.citationCount,
-          }
-        : {}),
-      ...(memoryPolicySummary
-        ? {
-            memoryPolicyStatus: memoryPolicySummary.status,
-            memoryPolicyReason: memoryPolicySummary.reason,
-          }
-        : {}),
     },
   }
 }
@@ -1469,12 +1142,7 @@ function buildInvokeOptions({
 function normalizeModelSelection(selection = {}) {
   const providerId = normalizeText(selection.providerId)
   const model = normalizeText(selection.model)
-  if (
-    !providerId
-    || !model
-    || providerId === AUTO_MODEL_SELECTION
-    || model === AUTO_MODEL_SELECTION
-  ) {
+  if (!providerId || !model || providerId === AUTO_MODEL_SELECTION || model === AUTO_MODEL_SELECTION) {
     return {
       providerId: '',
       model: '',
@@ -1503,9 +1171,7 @@ function buildModelSelectionInvokeOptions(baseOptions, selection = {}) {
 function normalizeStringList(values) {
   if (!Array.isArray(values))
     return []
-  return Array.from(
-    new Set(values.map(value => normalizeText(value)).filter(Boolean)),
-  )
+  return Array.from(new Set(values.map(value => normalizeText(value)).filter(Boolean)))
 }
 
 function normalizeLatency(value) {
@@ -1513,19 +1179,6 @@ function normalizeLatency(value) {
   if (!Number.isFinite(latency) || latency < 0)
     return undefined
   return Math.round(latency)
-}
-
-function formatLatency(latency) {
-  const normalized = normalizeLatency(latency)
-  if (normalized === undefined)
-    return ''
-  if (normalized < 1000)
-    return `${normalized}ms`
-  return `${(normalized / 1000).toFixed(normalized >= 10000 ? 0 : 1)}s`
-}
-
-function buildCapabilitySummary(values) {
-  return normalizeStringList(values).join(' + ')
 }
 
 function mapInvokeResult(
@@ -1582,6 +1235,7 @@ async function streamChatAnswer({
   let streamSuperseded = false
   let cancelSupersededStream = null
   let streamController = null
+  let streamControllerReady = Promise.resolve()
   let provider = ''
   let model = ''
   let traceId = ''
@@ -1589,9 +1243,7 @@ async function streamChatAnswer({
   let safeContextPackage = contextPackage
   const startedAt = Date.now()
   const updateContextPackage = (event) => {
-    const next = summarizeContextPackage(
-      event?.context || event?.metadata?.contextExecution,
-    )
+    const next = summarizeContextPackage(event?.context || event?.metadata?.contextExecution)
     if (next)
       safeContextPackage = next
   }
@@ -1612,94 +1264,90 @@ async function streamChatAnswer({
       }
       cancelSupersededStream = () => {
         if (streamSettled)
-          return
+          return streamControllerReady
         streamSuperseded = true
-        cancelStreamController(streamController)
+        const cancellationBarrier = streamController
+          ? cancelStreamController(streamController)
+          : streamControllerReady.then(() => undefined)
         settleStream(() => reject(new Error('INTELLIGENCE_STREAM_SUPERSEDED')))
+        return cancellationBarrier
       }
       session.activeStreamCancellation = cancelSupersededStream
-      const controllerPromise = client
-        .contextStream(contextRequest, {
-          onStart(event) {
-            updateContextPackage(event)
-            provider = normalizeText(event?.provider) || provider
-            model = normalizeText(event?.model) || model
-            traceId = normalizeText(event?.traceId) || traceId
-          },
-          onDelta(delta, event) {
-            if (streamSettled || !canCommitResponse(session, requestId))
-              return
-            const nextContent = normalizeText(event?.content)
-            const nextDelta = normalizeText(delta)
-            if (!nextContent && !nextDelta)
-              return
-            hasVisibleDelta = true
-            answer = nextContent || `${answer}${nextDelta}`
-            provider = normalizeText(event?.provider) || provider
-            model = normalizeText(event?.model) || model
-            traceId = normalizeText(event?.traceId) || traceId
-            void pushWidgetState(featureId, {
-              requestId,
-              prompt: displayPrompt,
-              answer,
-              provider,
-              model,
-              traceId,
-              latency: Date.now() - startedAt,
-              handoffSessionId,
-              status: 'chat-pending',
-              stage: 'chat',
-              capabilityId: 'text.chat',
-              inputKinds,
-              imageDataUrl,
-              ocrText,
-              history,
-              selectedProviderId,
-              selectedModel,
-              modelOptions,
-              contextPackage: safeContextPackage,
-              memoryPolicy,
-            })
-          },
-          onUsage(eventUsage, event) {
-            provider = normalizeText(event?.provider) || provider
-            model = normalizeText(event?.model) || model
-            traceId = normalizeText(event?.traceId) || traceId
-            void eventUsage
-          },
-          onEnd(event) {
-            if (streamSettled)
-              return
-            updateContextPackage(event)
-            answer
-              = normalizeText(event?.content)
-                || normalizeText(event?.result)
-                || answer
-            provider = normalizeText(event?.provider) || provider
-            model = normalizeText(event?.model) || model
-            traceId = normalizeText(event?.traceId) || traceId
-            latency
-              = normalizeLatency(event?.metadata?.latency)
-                || Date.now() - startedAt
-            settleStream(resolve)
-          },
-          onError(error) {
-            settleStream(() => reject(error))
-          },
-        })
-      Promise.resolve(controllerPromise)
-        .then((controller) => {
+      const controllerPromise = client.contextStream(contextRequest, {
+        onStart(event) {
+          updateContextPackage(event)
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+        },
+        async onDelta(delta, event) {
+          if (streamSettled || !canCommitResponse(session, requestId))
+            return
+          const nextContent = normalizeText(event?.content)
+          const nextDelta = normalizeText(delta)
+          if (!nextContent && !nextDelta)
+            return
+          hasVisibleDelta = true
+          answer = nextContent || `${answer}${nextDelta}`
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+          await pushWidgetState(featureId, {
+            requestId,
+            prompt: displayPrompt,
+            answer,
+            provider,
+            model,
+            traceId,
+            latency: Date.now() - startedAt,
+            handoffSessionId,
+            status: 'chat-pending',
+            stage: 'chat',
+            capabilityId: 'text.chat',
+            inputKinds,
+            imageDataUrl,
+            ocrText,
+            history,
+            selectedProviderId,
+            selectedModel,
+            modelOptions,
+            contextPackage: safeContextPackage,
+            memoryPolicy,
+          })
+        },
+        onUsage(_eventUsage, event) {
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+        },
+        onEnd(event) {
+          if (streamSettled)
+            return
+          updateContextPackage(event)
+          answer = normalizeText(event?.content) || normalizeText(event?.result) || answer
+          provider = normalizeText(event?.provider) || provider
+          model = normalizeText(event?.model) || model
+          traceId = normalizeText(event?.traceId) || traceId
+          latency = normalizeLatency(event?.metadata?.latency) || Date.now() - startedAt
+          settleStream(resolve)
+        },
+        onError(error) {
+          settleStream(() => reject(error))
+        },
+      })
+      streamControllerReady = Promise.resolve(controllerPromise)
+        .then(async (controller) => {
           if (!controller || typeof controller.cancel !== 'function')
             return
           streamController = controller
           if (streamSettled) {
             if (streamSuperseded)
-              cancelStreamController(controller)
+              await cancelStreamController(controller)
             return
           }
           if (!canCommitResponse(session, requestId)) {
             streamSuperseded = true
-            cancelStreamController(controller)
+            await cancelStreamController(controller)
             settleStream(() => reject(new Error('INTELLIGENCE_STREAM_SUPERSEDED')))
             return
           }
@@ -1710,10 +1358,7 @@ async function streamChatAnswer({
   }
   catch (error) {
     if (!hasVisibleDelta && shouldFallbackFromStream(error)) {
-      logger?.warn?.(
-        '[touch-intelligence] context stream unavailable, falling back to invoke',
-        error,
-      )
+      logger?.warn?.('[touch-intelligence] context stream unavailable; using invoke fallback')
       return null
     }
     throw error
@@ -1748,29 +1393,9 @@ function toErrorMessage(error) {
 }
 
 function createPluginError(code, message) {
-  const error = new Error(
-    message || AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN,
-  )
+  const error = new Error(message || AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN)
   error.code = code
   return error
-}
-
-async function getAuthState() {
-  if (!touchChannel?.send)
-    return null
-
-  try {
-    return await touchChannel.send(AUTH_SESSION_GET_STATE_EVENT)
-  }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to resolve auth state', error)
-    return null
-  }
-}
-
-async function ensureSignedIn() {
-  const state = await getAuthState()
-  return state?.isSignedIn === true
 }
 
 function normalizeInvokeError(error) {
@@ -1789,11 +1414,7 @@ function normalizeInvokeError(error) {
     ) {
       code = 'NEXUS_AUTH_REQUIRED'
     }
-    else if (
-      lower.includes('permission')
-      || lower.includes('denied')
-      || lower.includes('intelligence.basic')
-    ) {
+    else if (lower.includes('permission') || lower.includes('denied') || lower.includes('intelligence.basic')) {
       code = 'PERMISSION_DENIED'
     }
     else if (
@@ -1803,11 +1424,7 @@ function normalizeInvokeError(error) {
     ) {
       code = 'QUOTA_CHECK_UNAVAILABLE'
     }
-    else if (
-      lower.includes('quota')
-      || lower.includes('rate limit')
-      || lower.includes('too many')
-    ) {
+    else if (lower.includes('quota') || lower.includes('rate limit') || lower.includes('too many')) {
       code = 'QUOTA_EXHAUSTED'
     }
     else if (
@@ -1848,19 +1465,13 @@ function normalizeInvokeError(error) {
     else if (lower.includes('invalid request') || lower.includes('invalid_request')) {
       code = 'INVALID_REQUEST'
     }
-    else if (
-      lower.includes('empty response')
-      || lower.includes('未返回可用内容')
-    ) {
+    else if (lower.includes('empty response') || lower.includes('未返回可用内容')) {
       code = 'EMPTY_RESPONSE'
     }
   }
 
   const fallback = AI_ERROR_MESSAGES[code] || AI_ERROR_MESSAGES.UNKNOWN
-  const detail
-    = rawMessage && rawMessage !== fallback
-      ? `：${truncateText(rawMessage, 120)}`
-      : ''
+  const detail = rawMessage && rawMessage !== fallback ? `：${truncateText(rawMessage, 120)}` : ''
   return {
     code,
     message: `${fallback}${detail}`,
@@ -1878,20 +1489,15 @@ function buildWidgetErrorState(normalizedError = {}) {
   }
 }
 
-async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request)
+async function ensurePermission(permissionId) {
+  if (!permission?.check)
     return false
 
   try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission)
-      return true
-
-    const granted = await permission.request(permissionId, reason)
-    return Boolean(granted)
+    return (await permission.check(permissionId)) === true
   }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] Failed to request permission', error)
+  catch {
+    logger?.warn?.('[touch-intelligence] permission check failed')
     return false
   }
 }
@@ -1916,13 +1522,8 @@ function buildIntelligenceMeta(details = {}) {
   const inputKinds = normalizeStringList(details.inputKinds)
   const capabilities = normalizeStringList(details.capabilities)
   const contextPackage
-    = details.contextPackage && typeof details.contextPackage === 'object'
-      ? details.contextPackage
-      : null
-  const memoryPolicy
-    = details.memoryPolicy && typeof details.memoryPolicy === 'object'
-      ? details.memoryPolicy
-      : null
+    = details.contextPackage && typeof details.contextPackage === 'object' ? details.contextPackage : null
+  const memoryPolicy = details.memoryPolicy && typeof details.memoryPolicy === 'object' ? details.memoryPolicy : null
   const latency = normalizeLatency(details.latency)
 
   if (status)
@@ -1975,90 +1576,33 @@ function buildIntelligenceMeta(details = {}) {
   return meta
 }
 
-function buildInfoItem({
-  id,
-  featureId,
-  title,
-  subtitle,
-  description,
-  accessory,
-  payload,
-  actionId,
-  status,
-  handoffSessionId,
-  intelligence,
-}) {
-  const builder = new TuffItemBuilder(id)
-    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-    .setTitle(title)
-    .setSubtitle(subtitle)
-    .setIcon(ICON)
-
-  if (description)
-    builder.setDescription(description)
-  if (accessory)
-    builder.setAccessory(accessory)
-
-  const meta = {
-    pluginName: PLUGIN_NAME,
-    featureId,
-    status,
-    keepCoreBoxOpen: true,
-    intelligence: buildIntelligenceMeta({
-      ...intelligence,
-      status,
-      handoffSessionId,
-    }),
-  }
-
-  if (actionId) {
-    meta.defaultAction = ACTION_ID
-    meta.actionId = actionId
-    meta.payload = payload
-  }
-
-  return builder.setMeta(meta).build()
-}
-
 function buildCustomAiCommandRegistryItem(result, viewState = {}) {
-  const status
-    = viewState.operationStatus || (result.applied ? 'ready' : 'error')
+  const status = viewState.operationStatus || (result.applied ? 'ready' : 'error')
   const operationMessage = normalizeText(viewState.operationMessage)
-  const commands = Array.from(customAiCommands.values()).map(
-    serializeCustomAiCommand,
-  )
+  const commands = Array.from(customAiCommands.values()).map(serializeCustomAiCommand)
   return new TuffItemBuilder('custom-ai-command-registry-editor')
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle('AI 命令管理')
-    .setSubtitle(
-      `${commands.length}/${MAX_CUSTOM_AI_COMMANDS} 个命令 · ${result.rejectedCount} 个跳过`,
-    )
-    .setDescription(
-      operationMessage
-      || '创建、编辑、删除或导入自定义命令；保存后立即原子更新 CoreBox feature。',
-    )
+    .setSubtitle(`${commands.length}/${MAX_CUSTOM_AI_COMMANDS} 个命令 · ${result.rejectedCount} 个跳过`)
+    .setDescription(operationMessage || '创建、编辑、删除或导入自定义命令；保存后立即原子更新 CoreBox feature。')
     .setIcon(ICON)
-    .setCustomRender(
-      'vue',
-      getMakeWidgetId()(PLUGIN_NAME, CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID),
-      {
-        schemaVersion: CUSTOM_AI_COMMANDS_SCHEMA_VERSION,
-        configFile: CUSTOM_AI_COMMANDS_FILE,
-        commands,
-        presets: getAiCommandStarterPresets(),
-        registeredCount: result.registeredCount,
-        rejectedCount: result.rejectedCount,
-        canEdit: result.applied && result.rejectedCount === 0,
-        status,
-        operationMessage,
-        limits: {
-          commands: MAX_CUSTOM_AI_COMMANDS,
-          aliases: MAX_CUSTOM_AI_COMMAND_ALIASES,
-          templateChars: MAX_CUSTOM_AI_COMMAND_TEMPLATE_CHARS,
-          variableBytes: MAX_CUSTOM_AI_COMMAND_VARIABLE_BYTES,
-        },
+    .setCustomRender('vue', getMakeWidgetId()(PLUGIN_NAME, CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID), {
+      schemaVersion: CUSTOM_AI_COMMANDS_SCHEMA_VERSION,
+      configFile: CUSTOM_AI_COMMANDS_FILE,
+      commands,
+      presets: getAiCommandStarterPresets(),
+      registeredCount: result.registeredCount,
+      rejectedCount: result.rejectedCount,
+      canEdit: result.applied && result.rejectedCount === 0,
+      status,
+      operationMessage,
+      limits: {
+        commands: MAX_CUSTOM_AI_COMMANDS,
+        aliases: MAX_CUSTOM_AI_COMMAND_ALIASES,
+        templateChars: MAX_CUSTOM_AI_COMMAND_TEMPLATE_CHARS,
+        variableBytes: MAX_CUSTOM_AI_COMMAND_VARIABLE_BYTES,
       },
-    )
+    })
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId: CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID,
@@ -2074,8 +1618,8 @@ function buildCustomAiCommandRegistryItem(result, viewState = {}) {
 async function pushCustomAiCommandRegistryState(viewState = {}) {
   const result = viewState.result || (await reloadCustomAiCommands())
   const item = buildCustomAiCommandRegistryItem(result, viewState)
-  plugin.feature.clearItems()
-  await plugin.feature.pushItems([item])
+  await plugin.feature.clearItems()
+  await plugin.widget.pushItems([compactPluginDto(item)])
   return result
 }
 
@@ -2106,9 +1650,7 @@ function buildWidgetMessages(state = {}) {
             {
               type: 'image',
               title: '剪贴板图片',
-              detail: state.ocrText
-                ? '已作为 OCR 上下文引用'
-                : '作为图片上下文引用',
+              detail: state.ocrText ? '已作为 OCR 上下文引用' : '作为图片上下文引用',
               preview: state.imageDataUrl,
             },
           ]
@@ -2131,10 +1673,7 @@ function buildWidgetMessages(state = {}) {
       status: 'error',
     })
   }
-  else if (
-    state.status === 'ocr-pending'
-    || state.status === 'chat-pending'
-  ) {
+  else if (state.status === 'ocr-pending' || state.status === 'chat-pending') {
     messages.push({
       id: `${normalizeText(state.requestId) || 'draft'}-assistant-pending`,
       role: 'assistant',
@@ -2147,18 +1686,14 @@ function buildWidgetMessages(state = {}) {
 
 function buildImageContext(state = {}) {
   const hasImage = Boolean(
-    state.imageDataUrl
-    || state.ocrText
-    || normalizeStringList(state.inputKinds).includes(INPUT_TYPE_IMAGE),
+    state.imageDataUrl || state.ocrText || normalizeStringList(state.inputKinds).includes(INPUT_TYPE_IMAGE),
   )
   if (!hasImage)
     return null
 
   const errorCode = normalizeText(state.errorCode)
   const unsupported
-    = errorCode === 'MODEL_UNSUPPORTED'
-      || errorCode === 'CAPABILITY_UNSUPPORTED'
-      || errorCode === 'PROVIDER_UNAVAILABLE'
+    = errorCode === 'MODEL_UNSUPPORTED' || errorCode === 'CAPABILITY_UNSUPPORTED' || errorCode === 'PROVIDER_UNAVAILABLE'
   return {
     type: 'image',
     title: '剪贴板图片上下文',
@@ -2181,6 +1716,7 @@ function buildWidgetPayload(state = {}) {
   const contextPackage = cloneMetadataRecord(state.contextPackage)
   const memoryPolicy = cloneMetadataRecord(state.memoryPolicy)
   const aiCommandId = normalizeText(state.aiCommandId)
+  const latency = normalizeLatency(state.latency)
   return {
     ...(aiCommandId ? { aiCommandId } : {}),
     requestId: normalizeText(state.requestId),
@@ -2189,7 +1725,7 @@ function buildWidgetPayload(state = {}) {
     provider: normalizeText(state.provider),
     model: normalizeText(state.model),
     traceId: normalizeText(state.traceId),
-    latency: normalizeLatency(state.latency),
+    ...(latency === undefined ? {} : { latency }),
     handoffSessionId: normalizeText(state.handoffSessionId),
     status: normalizeText(state.status) || 'idle',
     stage: normalizeText(state.stage),
@@ -2205,10 +1741,7 @@ function buildWidgetPayload(state = {}) {
     replaceStatus: normalizeText(state.replaceStatus),
     replaceError: normalizeText(state.replaceError),
     replaceRecovery: normalizeText(state.replaceRecovery),
-    contextMode: normalizeContextMode(
-      state.contextMode,
-      normalizeContextMode(contextPackage?.mode),
-    ),
+    contextMode: normalizeContextMode(state.contextMode, normalizeContextMode(contextPackage?.mode)),
     contextPackage,
     memoryPolicy,
     modelOptions: normalizeModelOptions(state.modelOptions),
@@ -2255,15 +1788,17 @@ function resolveWidgetAction(state = {}) {
   const contextPackage = cloneMetadataRecord(state.contextPackage)
   const memoryPolicy = cloneMetadataRecord(state.memoryPolicy)
   const status = normalizeText(state.status)
+  const draftId = normalizeText(state.draftId)
+  const latency = normalizeLatency(state.latency)
   if (status === 'ready-to-send') {
     return {
       actionId: 'send',
       payload: {
-        prompt: state.prompt,
-        draftId: state.draftId,
-        inputKinds: state.inputKinds,
-        selectedProviderId: state.selectedProviderId,
-        selectedModel: state.selectedModel,
+        prompt: normalizeText(state.prompt),
+        ...(draftId ? { draftId } : {}),
+        inputKinds: normalizeStringList(state.inputKinds),
+        selectedProviderId: normalizeText(state.selectedProviderId),
+        selectedModel: normalizeText(state.selectedModel),
       },
     }
   }
@@ -2271,19 +1806,19 @@ function resolveWidgetAction(state = {}) {
     return {
       actionId: 'copy-answer',
       payload: {
-        prompt: state.prompt,
-        requestId: state.requestId,
-        answer: state.answer,
-        provider: state.provider,
-        model: state.model,
-        traceId: state.traceId,
-        latency: state.latency,
-        handoffSessionId: state.handoffSessionId,
-        inputKinds: state.inputKinds,
+        prompt: normalizeText(state.prompt),
+        requestId: normalizeText(state.requestId),
+        answer: normalizeText(state.answer),
+        provider: normalizeText(state.provider),
+        model: normalizeText(state.model),
+        traceId: normalizeText(state.traceId),
+        ...(latency === undefined ? {} : { latency }),
+        handoffSessionId: normalizeText(state.handoffSessionId),
+        inputKinds: normalizeStringList(state.inputKinds),
         contextPackage,
         memoryPolicy,
-        selectedProviderId: state.selectedProviderId,
-        selectedModel: state.selectedModel,
+        selectedProviderId: normalizeText(state.selectedProviderId),
+        selectedModel: normalizeText(state.selectedModel),
       },
     }
   }
@@ -2291,19 +1826,19 @@ function resolveWidgetAction(state = {}) {
     return {
       actionId: 'retry',
       payload: {
-        prompt: state.prompt,
+        prompt: normalizeText(state.prompt),
         history: cloneHistory(state.history),
-        draftId: state.draftId,
-        inputKinds: state.inputKinds,
-        errorCode: state.errorCode,
-        errorMessage: state.errorMessage,
-        errorReason: state.errorReason,
-        errorRecovery: state.errorRecovery,
-        handoffSessionId: state.handoffSessionId,
+        ...(draftId ? { draftId } : {}),
+        inputKinds: normalizeStringList(state.inputKinds),
+        errorCode: normalizeText(state.errorCode),
+        errorMessage: normalizeText(state.errorMessage),
+        errorReason: truncateText(normalizeText(state.errorReason), 240),
+        errorRecovery: truncateText(normalizeText(state.errorRecovery), 240),
+        handoffSessionId: normalizeText(state.handoffSessionId),
         contextPackage,
         memoryPolicy,
-        selectedProviderId: state.selectedProviderId,
-        selectedModel: state.selectedModel,
+        selectedProviderId: normalizeText(state.selectedProviderId),
+        selectedModel: normalizeText(state.selectedModel),
       },
     }
   }
@@ -2324,14 +1859,9 @@ function buildWidgetItem(featureId, state = {}) {
       }
     : state
   const status = normalizeText(renderState.status) || 'idle'
-  const prompt = resolveDisplayPrompt(
-    renderState.prompt,
-    Boolean(renderState.imageDataUrl || renderState.ocrText),
-  )
+  const prompt = resolveDisplayPrompt(renderState.prompt, Boolean(renderState.imageDataUrl || renderState.ocrText))
   const commandTitle = aiCommand?.name || '智能问答'
-  const title = prompt
-    ? `${commandTitle}：${truncateText(prompt, 48)}`
-    : commandTitle
+  const title = prompt ? `${commandTitle}：${truncateText(prompt, 48)}` : commandTitle
   const action = resolveWidgetAction({
     ...renderState,
     prompt: prompt || renderState.prompt,
@@ -2353,14 +1883,10 @@ function buildWidgetItem(featureId, state = {}) {
     .setIcon(ICON)
     .setCustomRender(
       'vue',
-      getMakeWidgetId()(
-        PLUGIN_NAME,
-        customAiCommands.has(featureId) ? DEFAULT_FEATURE_ID : featureId,
-      ),
+      getMakeWidgetId()(PLUGIN_NAME, customAiCommands.has(featureId) ? DEFAULT_FEATURE_ID : featureId),
       buildWidgetPayload({
         modelOptions: renderState.modelOptions ?? session.modelOptions,
-        selectedProviderId:
-          renderState.selectedProviderId ?? session.selectedProviderId,
+        selectedProviderId: renderState.selectedProviderId ?? session.selectedProviderId,
         selectedModel: renderState.selectedModel ?? session.selectedModel,
         ...renderState,
         prompt: prompt || renderState.prompt,
@@ -2413,177 +1939,14 @@ async function pushWidgetState(featureId, state = {}) {
       ...state,
       contextMode: normalizeContextMode(state.contextMode, session.contextMode),
     })
-    if (
-      typeof plugin.feature.getItems === 'function'
-      && typeof plugin.feature.updateItem === 'function'
-    ) {
-      const items = plugin.feature.getItems()
-      if (Array.isArray(items) && items.some(current => current?.id === WIDGET_ITEM_ID)) {
-        plugin.feature.updateItem(WIDGET_ITEM_ID, {
-          title: item.title,
-          subtitle: item.subtitle,
-          render: item.render,
-          meta: item.meta,
-        })
-        return item
-      }
-    }
-    plugin.feature.clearItems()
-    await plugin.feature.pushItems([item])
+    await plugin.feature.clearItems()
+    await plugin.widget.pushItems([compactPluginDto(item)])
     return item
   }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to push widget state', error)
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to push widget state')
     return null
   }
-}
-
-function buildSendItem(featureId, draft) {
-  const hasImage = Boolean(draft.imageDataUrl || draft.ocrText)
-  const prompt = resolveDisplayPrompt(draft.prompt, hasImage)
-  const subtitle = hasImage ? '按回车先 OCR，再发送到 AI' : '按回车发送到 AI'
-
-  return buildInfoItem({
-    id: `${featureId}-send`,
-    featureId,
-    title: prompt,
-    subtitle,
-    description: buildCapabilitySummary(
-      hasImage ? ['vision.ocr', 'text.chat'] : ['text.chat'],
-    ),
-    accessory: hasImage ? 'OCR + AI' : 'AI Ask',
-    actionId: 'send',
-    payload: {
-      prompt: draft.prompt,
-      draftId: draft.draftId,
-      inputKinds: draft.inputKinds,
-      selectedProviderId: draft.selectedProviderId,
-      selectedModel: draft.selectedModel,
-    },
-    status: 'ready-to-send',
-    intelligence: {
-      stage: hasImage ? 'ocr' : 'chat',
-      capabilities: hasImage ? ['vision.ocr', 'text.chat'] : ['text.chat'],
-      inputKinds: draft.inputKinds,
-    },
-  })
-}
-
-function buildPendingItem(
-  featureId,
-  prompt,
-  requestId,
-  stage = 'chat',
-  handoffSessionId = '',
-  context = {},
-) {
-  const isOcr = stage === 'ocr'
-  const capabilityId = isOcr ? 'vision.ocr' : 'text.chat'
-  return buildInfoItem({
-    id: `${featureId}-${isOcr ? 'ocr-pending' : 'chat-pending'}-${requestId}`,
-    featureId,
-    title: prompt,
-    subtitle: isOcr ? '正在识别剪贴板图片…' : 'AI 正在思考…',
-    description: isOcr
-      ? '正在调用 vision.ocr，完成后继续 text.chat。'
-      : '正在调用 text.chat。',
-    accessory: capabilityId,
-    status: isOcr ? 'ocr-pending' : 'chat-pending',
-    handoffSessionId,
-    intelligence: {
-      requestId,
-      stage,
-      capabilityId,
-      inputKinds: context.inputKinds,
-    },
-  })
-}
-
-function buildReadyItem(featureId, state) {
-  const modelInfo = [state.provider, state.model].filter(Boolean).join(' / ')
-  const latencyText = formatLatency(state.latency)
-  const handoffText = state.handoffSessionId ? '已接入交接会话' : ''
-  const traceText = state.traceId ? `Trace ${state.traceId}` : ''
-  const subtitle = [truncateText(state.answer, 72), modelInfo, latencyText]
-    .filter(Boolean)
-    .join(' · ')
-  const description = [traceText, handoffText].filter(Boolean).join(' · ')
-
-  return buildInfoItem({
-    id: `${featureId}-ready-${state.requestId}`,
-    featureId,
-    title: state.prompt || 'AI 回答',
-    subtitle: subtitle || '回答已生成',
-    description,
-    accessory: modelInfo || 'text.chat',
-    actionId: 'copy-answer',
-    payload: {
-      prompt: state.prompt,
-      requestId: state.requestId,
-      answer: state.answer,
-      provider: state.provider,
-      model: state.model,
-      traceId: state.traceId,
-      latency: state.latency,
-      handoffSessionId: state.handoffSessionId,
-      inputKinds: state.inputKinds,
-    },
-    status: 'ready',
-    handoffSessionId: state.handoffSessionId,
-    intelligence: {
-      requestId: state.requestId,
-      capabilityId: 'text.chat',
-      provider: state.provider,
-      model: state.model,
-      traceId: state.traceId,
-      latency: state.latency,
-      inputKinds: state.inputKinds,
-    },
-  })
-}
-
-function buildErrorItem(
-  featureId,
-  prompt,
-  error,
-  history = [],
-  retryContext = {},
-) {
-  const normalizedError
-    = typeof error === 'object' && error?.code && error?.message
-      ? error
-      : normalizeInvokeError(error)
-
-  return buildInfoItem({
-    id: `${featureId}-error-${Date.now()}`,
-    featureId,
-    title: prompt ? `AI 请求失败：${truncateText(prompt, 48)}` : 'AI 请求失败',
-    subtitle: truncateText(normalizedError.message, 120),
-    description: buildCapabilitySummary([
-      retryContext.capabilityId || 'text.chat',
-      normalizedError.code,
-    ]),
-    accessory: normalizedError.code,
-    actionId: 'retry',
-    payload: {
-      prompt,
-      history: cloneHistory(history),
-      draftId: retryContext.draftId,
-      inputKinds: retryContext.inputKinds,
-      ...buildWidgetErrorState(normalizedError),
-      handoffSessionId: retryContext.handoffSessionId,
-      selectedProviderId: retryContext.selectedProviderId,
-      selectedModel: retryContext.selectedModel,
-    },
-    status: 'error',
-    handoffSessionId: retryContext.handoffSessionId,
-    intelligence: {
-      stage: 'error',
-      capabilityId: retryContext.capabilityId || 'text.chat',
-      inputKinds: retryContext.inputKinds,
-      ...buildWidgetErrorState(normalizedError),
-    },
-  })
 }
 
 function getQueryInputs(query) {
@@ -2604,8 +1967,7 @@ function extractAttachedText(query) {
 }
 
 function extractEntrypointContext(query) {
-  const entrypoint
-    = query && typeof query === 'object' ? query.context?.entrypoint : null
+  const entrypoint = query && typeof query === 'object' ? query.context?.entrypoint : null
   const execution = entrypoint?.execution
   const id = normalizeText(entrypoint?.id)
   const mode = normalizeContextMode(execution?.mode, '')
@@ -2623,15 +1985,9 @@ function extractEntrypointContext(query) {
       mode,
       owner,
       ...(scope ? { scope } : {}),
-      ...(normalizeText(execution?.sessionId)
-        ? { sessionId: normalizeText(execution.sessionId) }
-        : {}),
-      ...(normalizeText(execution?.objective)
-        ? { objective: normalizeText(execution.objective) }
-        : {}),
-      ...(Number.isFinite(tokenBudget) && tokenBudget > 0
-        ? { tokenBudget }
-        : {}),
+      ...(normalizeText(execution?.sessionId) ? { sessionId: normalizeText(execution.sessionId) } : {}),
+      ...(normalizeText(execution?.objective) ? { objective: normalizeText(execution.objective) } : {}),
+      ...(Number.isFinite(tokenBudget) && tokenBudget > 0 ? { tokenBudget } : {}),
       ...(execution?.isolated === true ? { isolated: true } : {}),
     },
   }
@@ -2640,9 +1996,7 @@ function extractEntrypointContext(query) {
 function extractImageDataUrl(query) {
   const imageInput = getQueryInputs(query).find((input) => {
     return (
-      input?.type === INPUT_TYPE_IMAGE
-      && typeof input?.content === 'string'
-      && input.content.startsWith('data:image/')
+      input?.type === INPUT_TYPE_IMAGE && typeof input?.content === 'string' && input.content.startsWith('data:image/')
     )
   })
   return imageInput?.content || ''
@@ -2668,9 +2022,7 @@ function extractQueryContext(query, options = {}) {
   const imageDataUrl = extractImageDataUrl(query)
   const isExplicitAiQuery = hasAiPrefix(rawText)
   const forceImageOcr = options?.forceImageOcr === true
-  const shouldUseOcr = Boolean(
-    imageDataUrl && prompt && (isExplicitAiQuery || forceImageOcr),
-  )
+  const shouldUseOcr = Boolean(imageDataUrl && prompt && (isExplicitAiQuery || forceImageOcr))
   const shouldShowEntry = Boolean(prompt || shouldUseOcr)
 
   return {
@@ -2688,15 +2040,13 @@ function storeDraft(session, draft) {
     providerId: draft.selectedProviderId ?? session.selectedProviderId,
     model: draft.selectedModel ?? session.selectedModel,
   })
-  const draftId = draft.draftId || crypto.randomUUID()
+  const draftId = draft.draftId || hostCrypto.randomUUID()
   const normalizedDraft = {
     draftId,
     prompt: normalizePrompt(draft.prompt),
     imageDataUrl: normalizeText(draft.imageDataUrl),
     ocrText: normalizeText(draft.ocrText),
-    inputKinds: Array.isArray(draft.inputKinds)
-      ? draft.inputKinds.filter(Boolean)
-      : [],
+    inputKinds: Array.isArray(draft.inputKinds) ? draft.inputKinds.filter(Boolean) : [],
     entrypointContext: cloneMetadataRecord(draft.entrypointContext),
     selectedProviderId: selected.providerId,
     selectedModel: selected.model,
@@ -2759,9 +2109,7 @@ function resolveAvailableModelSelection(options, selection = {}) {
   }
 
   const isAvailable = options.some(
-    option =>
-      option.providerId === normalized.providerId
-      && option.models.includes(normalized.model),
+    option => option.providerId === normalized.providerId && option.models.includes(normalized.model),
   )
   return isAvailable ? normalized : { providerId: '', model: '' }
 }
@@ -2770,12 +2118,10 @@ async function resolveModelOptions(client) {
   if (!client?.getProviderModelOptions)
     return null
   try {
-    return normalizeModelOptions(
-      await client.getProviderModelOptions({ capabilityId: 'text.chat' }),
-    )
+    return normalizeModelOptions(await client.getProviderModelOptions({ capabilityId: 'text.chat' }))
   }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to load model options', error)
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to load model options')
     return null
   }
 }
@@ -2813,18 +2159,14 @@ async function dispatchPrompt({
   const aiCommand = resolveAiCommand(resolvedFeatureId)
   const normalizedPrompt = normalizeFeaturePrompt(resolvedFeatureId, prompt)
   const session = getSession(resolvedFeatureId)
-  const isolatedEntrypoint
-    = Boolean(aiCommand) || entrypointContext?.execution?.isolated === true
+  const isolatedEntrypoint = Boolean(aiCommand) || entrypointContext?.execution?.isolated === true
   let resolvedHistory = isolatedEntrypoint ? [] : cloneHistory(historySnapshot)
   let resolvedOcrText = normalizeText(ocrText)
   let selected = normalizeModelSelection({
     providerId: selectedProviderId,
     model: selectedModel,
   })
-  const displayPrompt = resolveDisplayPrompt(
-    normalizedPrompt,
-    Boolean(imageDataUrl || resolvedOcrText),
-  )
+  const displayPrompt = resolveDisplayPrompt(normalizedPrompt, Boolean(imageDataUrl || resolvedOcrText))
   let contextPackage = null
   let memoryPolicy = null
 
@@ -2850,10 +2192,7 @@ async function dispatchPrompt({
         })
     if (!canCommitResponse(session, requestId))
       return
-    if (
-      !isolatedEntrypoint
-      && session.history.length > resolvedHistory.length
-    ) {
+    if (!isolatedEntrypoint && session.history.length > resolvedHistory.length) {
       resolvedHistory = cloneHistory(session.history)
     }
 
@@ -2986,12 +2325,7 @@ async function dispatchPrompt({
         ocrText: resolvedOcrText,
       })
       mapped = mapInvokeResult(
-        await invokeIntelligenceCapability(
-          client,
-          'text.chat',
-          currentOnlyPayload,
-          invokeOptions,
-        ),
+        await invokeIntelligenceCapability(client, 'text.chat', currentOnlyPayload, invokeOptions),
         displayPrompt,
         requestId,
         handoffSessionId,
@@ -3002,11 +2336,7 @@ async function dispatchPrompt({
     }
 
     contextPackage = mapped.contextPackage || contextPackage
-    if (
-      !isolatedEntrypoint
-      && contextPackage?.sessionId
-      && contextRequest.context.mode !== 'stateless'
-    ) {
+    if (!isolatedEntrypoint && contextPackage?.sessionId && contextRequest.context.mode !== 'stateless') {
       session.contextSessionId = contextPackage.sessionId
       session.contextMode = 'continue'
     }
@@ -3070,14 +2400,13 @@ async function dispatchPrompt({
     session.lastReadyDraftId = ''
     session.lastReadyPromptKey = ''
     const normalizedError = normalizeInvokeError(error)
-    logger?.error?.('[touch-intelligence] invoke failed', error)
+    logger?.error?.('[touch-intelligence] invoke failed')
     await pushWidgetState(resolvedFeatureId, {
       prompt: displayPrompt,
       requestId,
       status: 'error',
       stage: 'error',
-      capabilityId:
-        imageDataUrl && !resolvedOcrText ? 'vision.ocr' : 'text.chat',
+      capabilityId: imageDataUrl && !resolvedOcrText ? 'vision.ocr' : 'text.chat',
       inputKinds,
       imageDataUrl,
       ocrText: resolvedOcrText,
@@ -3097,10 +2426,7 @@ async function copyAnswer(answer) {
   if (!clipboard?.writeText)
     return false
 
-  const canCopy = await ensurePermission(
-    'clipboard.write',
-    '需要剪贴板权限以复制 AI 回答',
-  )
+  const canCopy = await ensurePermission('clipboard.write', '需要剪贴板权限以复制 AI 回答')
   if (!canCopy)
     return false
 
@@ -3108,8 +2434,8 @@ async function copyAnswer(answer) {
     await clipboard.writeText(answer)
     return true
   }
-  catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to copy answer', error)
+  catch {
+    logger?.warn?.('[touch-intelligence] failed to copy answer')
     return false
   }
 }
@@ -3123,8 +2449,7 @@ function normalizeReplaceAnswerFailure(error) {
       success: false,
       code,
       message: '替换失败：未授予 macOS 自动化权限',
-      recovery:
-        '请在系统设置 > 隐私与安全性 > 自动化中允许 Talex Touch 控制当前应用后重试。',
+      recovery: '请在系统设置 > 隐私与安全性 > 自动化中允许 Talex Touch 控制当前应用后重试。',
     }
   }
   if (code === 'PERMISSION_DENIED') {
@@ -3157,10 +2482,7 @@ async function replaceAnswer(answer) {
     return normalizeReplaceAnswerFailure({ code: 'SDK_UNAVAILABLE' })
   }
 
-  const canReplace = await ensurePermission(
-    'clipboard.write',
-    '需要剪贴板权限以替换选中文本',
-  )
+  const canReplace = await ensurePermission('clipboard.write', '需要剪贴板权限以替换选中文本')
   if (!canReplace) {
     return normalizeReplaceAnswerFailure({ code: 'PERMISSION_DENIED' })
   }
@@ -3170,12 +2492,10 @@ async function replaceAnswer(answer) {
       text: answer,
       hideCoreBox: true,
     })
-    return replaced
-      ? { success: true }
-      : normalizeReplaceAnswerFailure({ code: 'AUTO_PASTE_FAILED' })
+    return replaced ? { success: true } : normalizeReplaceAnswerFailure({ code: 'AUTO_PASTE_FAILED' })
   }
   catch (error) {
-    logger?.warn?.('[touch-intelligence] failed to replace selection', error)
+    logger?.warn?.('[touch-intelligence] failed to replace selection')
     return normalizeReplaceAnswerFailure(error)
   }
 }
@@ -3188,10 +2508,23 @@ const pluginLifecycle = {
     )
   },
 
+  async onDestroy() {
+    const barriers = []
+    for (const session of conversationSessions.values()) {
+      session.activeRequestId = ''
+      session.uiRequestId = ''
+      barriers.push(cancelActiveStream(session))
+    }
+    await Promise.all(barriers)
+    conversationSessions.clear()
+    customAiCommands.clear()
+    registeredCustomAiCommandFeatureIds.clear()
+  },
+
   async onFeatureTriggered(featureId, query) {
     try {
       const resolvedFeatureId = resolveFeatureId(featureId)
-      supersedeAllActiveRequests()
+      await supersedeAllActiveRequests()
       if (resolvedFeatureId === CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID) {
         await pushCustomAiCommandRegistryState()
         return true
@@ -3204,15 +2537,9 @@ const pluginLifecycle = {
           forceImageOcr: resolvedFeatureId === DEFAULT_FEATURE_ID,
         }),
       }
-      const explicitPrompt = normalizeFeaturePrompt(
-        resolvedFeatureId,
-        queryContext.prompt,
-      )
-      queryContext.prompt
-        = explicitPrompt || (commandStateless ? extractAttachedText(query) : '')
-      queryContext.shouldShowEntry = Boolean(
-        queryContext.prompt || queryContext.imageDataUrl,
-      )
+      const explicitPrompt = normalizeFeaturePrompt(resolvedFeatureId, queryContext.prompt)
+      queryContext.prompt = explicitPrompt || (commandStateless ? extractAttachedText(query) : '')
+      queryContext.shouldShowEntry = Boolean(queryContext.prompt || queryContext.imageDataUrl)
       if (!commandStateless) {
         const storedHistory = await loadStoredHistory(resolvedFeatureId)
         if (storedHistory.length > session.history.length) {
@@ -3239,21 +2566,13 @@ const pluginLifecycle = {
       }
 
       const draft = storeDraft(session, queryContext)
-      const displayPrompt = resolveDisplayPrompt(
-        draft.prompt,
-        Boolean(draft.imageDataUrl || draft.ocrText),
-      )
+      const displayPrompt = resolveDisplayPrompt(draft.prompt, Boolean(draft.imageDataUrl || draft.ocrText))
       if (!displayPrompt)
         return true
 
-      const hasPermission = await ensurePermission(
-        'intelligence.basic',
-        '需要 AI 权限以执行智能问答',
-      )
+      const hasPermission = await ensurePermission('intelligence.basic', '需要 AI 权限以执行智能问答')
       if (!hasPermission) {
-        const normalizedError = normalizeInvokeError(
-          createPluginError('PERMISSION_DENIED'),
-        )
+        const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
         await pushWidgetState(resolvedFeatureId, {
           ...draft,
           prompt: displayPrompt,
@@ -3263,11 +2582,17 @@ const pluginLifecycle = {
           handoffSessionId: commandStateless ? '' : session.handoffSessionId,
           history: commandStateless ? [] : cloneHistory(session.history),
         })
-        return true
+        return {
+          externalAction: true,
+          success: false,
+          shouldActivate: true,
+          status: 'blocked',
+          reason: 'permission-denied',
+        }
       }
 
-      const requestId = crypto.randomUUID()
-      markPendingRequest(session, requestId)
+      const requestId = hostCrypto.randomUUID()
+      await markPendingRequest(session, requestId)
       session.lastReadyDraftId = ''
       session.lastReadyPromptKey = ''
       await pushWidgetState(resolvedFeatureId, {
@@ -3278,16 +2603,11 @@ const pluginLifecycle = {
         stage: draft.imageDataUrl ? 'ocr' : 'chat',
         capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
         handoffSessionId:
-          commandStateless || draft.entrypointContext?.execution?.isolated
-            ? ''
-            : session.handoffSessionId,
-        history:
-          commandStateless || draft.entrypointContext?.execution?.isolated
-            ? []
-            : cloneHistory(session.history),
+          commandStateless || draft.entrypointContext?.execution?.isolated ? '' : session.handoffSessionId,
+        history: commandStateless || draft.entrypointContext?.execution?.isolated ? [] : cloneHistory(session.history),
         modelOptions: session.modelOptions,
       })
-      void dispatchPrompt({
+      await dispatchPrompt({
         featureId: resolvedFeatureId,
         prompt: draft.prompt,
         requestId,
@@ -3304,7 +2624,7 @@ const pluginLifecycle = {
     }
     catch (error) {
       const normalizedError = normalizeInvokeError(error)
-      logger?.error?.('[touch-intelligence] Failed to handle feature', error)
+      logger?.error?.('[touch-intelligence] feature handling failed')
       await pushWidgetState(featureId, {
         status: 'error',
         stage: 'error',
@@ -3319,9 +2639,8 @@ const pluginLifecycle = {
       const actionId = context?.actionId || item?.meta?.actionId
       const actionFeatureId = normalizeText(item?.meta?.featureId)
       const isWidgetHostAction
-        = (isKnownIntelligenceFeature(actionFeatureId)
-          || actionFeatureId === CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID)
-        && Boolean(actionId)
+        = (isKnownIntelligenceFeature(actionFeatureId) || actionFeatureId === CUSTOM_AI_COMMAND_REGISTRY_FEATURE_ID)
+          && Boolean(actionId)
       if (item?.meta?.defaultAction !== ACTION_ID && !isWidgetHostAction)
         return
       const payload = item.meta?.payload || {}
@@ -3356,16 +2675,12 @@ const pluginLifecycle = {
           await pushCustomAiCommandRegistryState({
             result,
             operationStatus: result.applied ? 'ready' : 'error',
-            operationMessage: result.applied
-              ? successMessage
-              : `操作失败：${result.reason || 'invalid-config'}`,
+            operationMessage: result.applied ? successMessage : `操作失败：${result.reason || 'invalid-config'}`,
           })
           return {
             externalAction: true,
             status: result.applied ? 'started' : 'blocked',
-            reason: result.applied
-              ? undefined
-              : result.reason || 'invalid-config',
+            reason: result.applied ? undefined : result.reason || 'invalid-config',
           }
         }
         return
@@ -3384,7 +2699,7 @@ const pluginLifecycle = {
           }
         }
 
-        supersedeActiveRequest(session)
+        await supersedeActiveRequest(session)
         await pushWidgetState(featureId, {
           prompt,
           requestId,
@@ -3394,9 +2709,7 @@ const pluginLifecycle = {
           traceId: payload.traceId,
           latency: payload.latency,
           status: 'cancelled',
-          stage:
-            normalizeText(payload.stage)
-            || (normalizeText(payload.status) === 'ocr-pending' ? 'ocr' : 'chat'),
+          stage: normalizeText(payload.stage) || (normalizeText(payload.status) === 'ocr-pending' ? 'ocr' : 'chat'),
           capabilityId: normalizeText(payload.capabilityId) || 'text.chat',
           handoffSessionId: commandStateless ? '' : session.handoffSessionId,
           inputKinds: Array.isArray(payload.inputKinds) ? payload.inputKinds : [],
@@ -3530,10 +2843,7 @@ const pluginLifecycle = {
       }
 
       if (actionId === 'select-context-mode') {
-        const nextMode = normalizeContextMode(
-          payload.contextMode,
-          session.contextMode,
-        )
+        const nextMode = normalizeContextMode(payload.contextMode, session.contextMode)
         session.contextMode = nextMode
         if (nextMode === 'new') {
           session.contextSessionId = ''
@@ -3561,9 +2871,7 @@ const pluginLifecycle = {
           replaceError: payload.replaceError,
           replaceRecovery: payload.replaceRecovery,
           handoffSessionId: session.handoffSessionId,
-          inputKinds: Array.isArray(payload.inputKinds)
-            ? payload.inputKinds
-            : [],
+          inputKinds: Array.isArray(payload.inputKinds) ? payload.inputKinds : [],
           imageDataUrl: payload.imageDataUrl,
           ocrText: payload.ocrText,
           history: cloneHistory(session.history),
@@ -3571,8 +2879,7 @@ const pluginLifecycle = {
           selectedProviderId: session.selectedProviderId,
           selectedModel: session.selectedModel,
           contextMode: nextMode,
-          contextPackage:
-            nextMode === 'continue' ? payload.contextPackage : null,
+          contextPackage: nextMode === 'continue' ? payload.contextPackage : null,
         })
 
         return { externalAction: true }
@@ -3609,9 +2916,7 @@ const pluginLifecycle = {
           replaceError: payload.replaceError,
           replaceRecovery: payload.replaceRecovery,
           handoffSessionId: session.handoffSessionId,
-          inputKinds: Array.isArray(payload.inputKinds)
-            ? payload.inputKinds
-            : [],
+          inputKinds: Array.isArray(payload.inputKinds) ? payload.inputKinds : [],
           imageDataUrl: payload.imageDataUrl,
           ocrText: payload.ocrText,
           history: cloneHistory(session.history),
@@ -3627,23 +2932,15 @@ const pluginLifecycle = {
       if (actionId === 'send' || actionId === 'retry') {
         const draft = resolveDraft(session, payload, prompt)
         const hasImageContext = Boolean(draft.imageDataUrl || draft.ocrText)
-        const displayPrompt = resolveDisplayPrompt(
-          draft.prompt,
-          hasImageContext,
-        )
+        const displayPrompt = resolveDisplayPrompt(draft.prompt, hasImageContext)
 
         if (!displayPrompt)
           return
 
-        supersedeAllActiveRequests()
-        const hasPermission = await ensurePermission(
-          'intelligence.basic',
-          '需要 AI 权限以执行智能问答',
-        )
+        await supersedeAllActiveRequests()
+        const hasPermission = await ensurePermission('intelligence.basic', '需要 AI 权限以执行智能问答')
         if (!hasPermission) {
-          const normalizedError = normalizeInvokeError(
-            createPluginError('PERMISSION_DENIED'),
-          )
+          const normalizedError = normalizeInvokeError(createPluginError('PERMISSION_DENIED'))
           await pushWidgetState(featureId, {
             prompt: displayPrompt,
             status: 'error',
@@ -3666,8 +2963,8 @@ const pluginLifecycle = {
               ? cloneHistory(payload.history)
               : cloneHistory(session.history)
 
-        const requestId = crypto.randomUUID()
-        markPendingRequest(session, requestId)
+        const requestId = hostCrypto.randomUUID()
+        await markPendingRequest(session, requestId)
         await pushWidgetState(featureId, {
           prompt: displayPrompt,
           requestId,
@@ -3675,15 +2972,13 @@ const pluginLifecycle = {
           stage: draft.imageDataUrl ? 'ocr' : 'chat',
           capabilityId: draft.imageDataUrl ? 'vision.ocr' : 'text.chat',
           handoffSessionId:
-            commandStateless || draft.entrypointContext?.execution?.isolated
-              ? ''
-              : session.handoffSessionId,
+            commandStateless || draft.entrypointContext?.execution?.isolated ? '' : session.handoffSessionId,
           inputKinds: draft.inputKinds,
           modelOptions: session.modelOptions,
           selectedProviderId: draft.selectedProviderId,
           selectedModel: draft.selectedModel,
         })
-        void dispatchPrompt({
+        await dispatchPrompt({
           featureId,
           prompt: draft.prompt,
           requestId,
@@ -3699,60 +2994,10 @@ const pluginLifecycle = {
         return { externalAction: true }
       }
     }
-    catch (error) {
-      logger?.error?.('[touch-intelligence] Action failed', {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      })
+    catch {
+      logger?.error?.('[touch-intelligence] action failed')
     }
   },
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    buildInvokePayload,
-    buildInvokeOptions,
-    buildAiCommandInvokeOptions,
-    buildCustomAiCommandFeature,
-    buildCustomAiCommandDocument,
-    buildCustomAiCommandRegistryItem,
-    getAiCommandStarterPresets,
-    commitCustomAiCommandDocument,
-    deleteCustomAiCommand,
-    loadCustomAiCommandConfig,
-    parseCustomAiCommandConfig,
-    reloadCustomAiCommands,
-    serializeCustomAiCommand,
-    upsertCustomAiCommand,
-    buildErrorItem,
-    buildWidgetItem,
-    buildWidgetPayload,
-    buildHandoffContext,
-    buildContextExecutionRequest,
-    buildHandoffSessionId,
-    buildIntelligenceMeta,
-    buildOcrPayload,
-    buildPendingItem,
-    buildReadyItem,
-    buildSendItem,
-    extractEntrypointContext,
-    extractImageDataUrl,
-    extractInputKinds,
-    extractQueryContext,
-    formatLatency,
-    getAuthState,
-    ensureSignedIn,
-    mapInvokeResult,
-    normalizeInvokeError,
-    normalizeLatency,
-    normalizeModelOptions,
-    normalizeModelSelection,
-    normalizePrompt,
-    normalizeFeaturePrompt,
-    resolveAiCommand,
-    isKnownIntelligenceFeature,
-    buildModelSelectionInvokeOptions,
-    resolveIntelligenceClient,
-  },
-}
+module.exports = pluginLifecycle

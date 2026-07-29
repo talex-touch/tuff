@@ -66,25 +66,13 @@ function executionResult(): IntelligenceContextExecutionResult<string> {
     context: {
       mode: 'new',
       scope: 'retrieval',
-      sessionId: 'session-1',
-      turnId: 'turn-1',
-      packageId: 'package-1',
-      traceId: 'context-trace',
-      checkpoint: { id: 'checkpoint-1', type: 'session_start', reason: 'new session' },
-      continuation: {
-        sourceSessionId: 'source-session',
-        reason: 'archived-session-continuation',
-        status: 'included',
-        summarySourceType: 'session_summary',
-        summarySourceId: 'summary-1'
-      },
-      itemCount: 3,
+      itemCount: 1,
       tokenBudget: 1200,
       tokenEstimate: 30,
-      sourceTypes: ['current_input', 'retrieval'],
-      retrievalItemCount: 1,
-      citationCount: 1,
-      degradedReason: 'metadata-only'
+      sourceTypes: ['current_input'],
+      retrievalItemCount: 0,
+      citationCount: 0,
+      degradedReason: 'isolated_context_persistence_unavailable'
     }
   }
 }
@@ -115,23 +103,19 @@ describe('plugin Intelligence context host service', () => {
       context: {
         mode: 'new',
         scope: 'retrieval',
-        sessionId: 'session-1',
-        turnId: 'turn-1',
-        packageId: 'package-1',
-        traceId: 'context-trace',
-        itemCount: 3,
+        itemCount: 1,
         tokenBudget: 1200,
         tokenEstimate: 30,
-        sourceTypes: ['current_input', 'retrieval'],
-        retrievalItemCount: 1,
-        citationCount: 1,
-        degradedReason: 'metadata-only'
+        sourceTypes: ['current_input'],
+        retrievalItemCount: 0,
+        citationCount: 0,
+        degradedReason: 'isolated_context_persistence_unavailable'
       }
     })
 
     const [forwardedRequest, actor, hostOptions] = vi.mocked(deps.invoke).mock.calls[0]!
     expect(actor).toEqual({ id: 'plugin:touch-intelligence', type: 'plugin' })
-    expect(hostOptions).toEqual({ signal })
+    expect(hostOptions).toEqual({ signal, persistence: 'ephemeral' })
     expect((forwardedRequest as IntelligenceContextExecutionRequest).options?.metadata).toEqual({
       entry: 'ask',
       contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'new' },
@@ -186,6 +170,33 @@ describe('plugin Intelligence context host service', () => {
       { ...base, context: { mode: 'new', owner: 'system' } },
       { ...base, context: { mode: 'continue', owner: 'corebox' } },
       { ...base, options: { metadata: { caller: 'host:forged' } } },
+      { ...base, options: { metadata: {} } },
+      {
+        ...base,
+        options: {
+          metadata: {
+            contextEntrypoint: { id: 'unknown.entrypoint', owner: 'corebox', mode: 'new' }
+          }
+        }
+      },
+      {
+        ...base,
+        options: {
+          metadata: {
+            contextEntrypoint: { id: 'corebox.ai-ask', owner: 'assistant', mode: 'new' }
+          }
+        },
+        context: { mode: 'new', owner: 'assistant' }
+      },
+      {
+        ...base,
+        options: {
+          metadata: {
+            contextEntrypoint: { id: 'assistant.voice', owner: 'assistant', mode: 'continue' }
+          }
+        },
+        context: { mode: 'new', owner: 'assistant' }
+      },
       { ...base, signal: new AbortController().signal }
     ]
 
@@ -219,6 +230,20 @@ describe('plugin Intelligence context host service', () => {
     await expect(
       service.contextInvoke(request(), new AbortController().signal, 'plugin:touch-intelligence')
     ).rejects.toMatchObject({ code: 'PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID' })
+
+    for (const context of [
+      { ...executionResult().context, sessionId: 'persisted-session' },
+      { ...executionResult().context, turnId: 'persisted-turn' },
+      { ...executionResult().context, packageId: 'persisted-package' },
+      { ...executionResult().context, degradedReason: 'attacker-selected' },
+      { ...executionResult().context, itemCount: 2 },
+      { ...executionResult().context, sourceTypes: ['current_input', 'retrieval'] }
+    ]) {
+      vi.mocked(deps.invoke).mockResolvedValueOnce({ ...executionResult(), context } as never)
+      await expect(
+        service.contextInvoke(request(), new AbortController().signal, 'plugin:touch-intelligence')
+      ).rejects.toMatchObject({ code: 'PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID' })
+    }
   })
 
   it('snapshots one direct dependency without executing accessors or replacements', async () => {

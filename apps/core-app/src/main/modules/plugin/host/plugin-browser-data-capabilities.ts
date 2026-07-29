@@ -2,7 +2,7 @@ import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-tou
 import type { PluginSqliteQueryResult } from '../runtime/plugin-sqlite-worker-protocol'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { Buffer } from 'node:buffer'
-import { constants as fsConstants, type Dirent } from 'node:fs'
+import { constants as fsConstants, type BigIntStats, type Dirent } from 'node:fs'
 import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
@@ -126,6 +126,12 @@ interface ProfileFile {
   readonly source: PluginBrowserDataSourceId
   readonly schema: PluginBrowserDataFixedQueryId | 'chromium-bookmarks'
   readonly filePath: string
+}
+
+interface BrowserDataSourceSnapshot {
+  readonly filePath: string
+  readonly maximumBytes: number
+  readonly status: BigIntStats
 }
 
 interface TrustedPluginBrowserDataService {
@@ -460,6 +466,87 @@ function isPathInside(parentPath: string, targetPath: string, pathApi: typeof pa
   return relative === '' || (!relative.startsWith('..') && !pathApi.isAbsolute(relative))
 }
 
+function sameFileSnapshot(left: BigIntStats, right: BigIntStats): boolean {
+  return (
+    left.dev === right.dev &&
+    left.ino === right.ino &&
+    left.size === right.size &&
+    left.mtimeNs === right.mtimeNs &&
+    left.ctimeNs === right.ctimeNs
+  )
+}
+
+async function snapshotRegularFile(
+  filePath: string,
+  maximumBytes: number,
+  required: boolean,
+  pathApi: typeof path.posix,
+  signal: AbortSignal
+): Promise<BrowserDataSourceSnapshot | null> {
+  assertSignal(signal)
+  const status = await lstat(filePath, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+    if (!required && error.code === 'ENOENT') return null
+    throw error
+  })
+  if (!status) return null
+  if (status.isSymbolicLink() || !status.isFile() || status.size > BigInt(maximumBytes)) {
+    throw Object.assign(new Error('BROWSER_DATA_SOURCE_INVALID'), {
+      code:
+        status.isFile() && status.size > BigInt(maximumBytes)
+          ? 'BROWSER_DATA_SOURCE_TOO_LARGE'
+          : 'BROWSER_DATA_SOURCE_INVALID'
+    })
+  }
+  const canonical = pathApi.normalize(await realpath(filePath))
+  if (canonical !== pathApi.normalize(filePath)) throw new Error('BROWSER_DATA_SOURCE_INVALID')
+  const linked = await stat(canonical, { bigint: true })
+  if (!sameFileSnapshot(status, linked)) throw new Error('BROWSER_DATA_SOURCE_INVALID')
+  assertSignal(signal)
+  return Object.freeze({ filePath, maximumBytes, status })
+}
+
+async function snapshotDatabaseSources(
+  sourcePath: string,
+  pathApi: typeof path.posix,
+  signal: AbortSignal
+): Promise<readonly BrowserDataSourceSnapshot[]> {
+  const snapshots: BrowserDataSourceSnapshot[] = []
+  for (const [suffix, maximumBytes, required] of [
+    ['', PLUGIN_BROWSER_DATA_MAX_DATABASE_BYTES, true],
+    ['-wal', PLUGIN_BROWSER_DATA_MAX_SIDECAR_BYTES, false],
+    ['-shm', PLUGIN_BROWSER_DATA_MAX_SIDECAR_BYTES, false]
+  ] as const) {
+    const snapshot = await snapshotRegularFile(
+      `${sourcePath}${suffix}`,
+      maximumBytes,
+      required,
+      pathApi,
+      signal
+    )
+    if (snapshot) snapshots.push(snapshot)
+  }
+  return Object.freeze(snapshots)
+}
+
+async function assertDatabaseSourcesUnchanged(
+  sourcePath: string,
+  expected: readonly BrowserDataSourceSnapshot[],
+  pathApi: typeof path.posix,
+  signal: AbortSignal
+): Promise<void> {
+  const current = await snapshotDatabaseSources(sourcePath, pathApi, signal)
+  if (
+    current.length !== expected.length ||
+    current.some(
+      (snapshot, index) =>
+        snapshot.filePath !== expected[index]?.filePath ||
+        !sameFileSnapshot(snapshot.status, expected[index].status)
+    )
+  ) {
+    throw new Error('BROWSER_DATA_SOURCE_INVALID')
+  }
+}
+
 function definitionsFor(
   platform: NodeJS.Platform,
   homeDirectory: string,
@@ -701,14 +788,15 @@ async function copyBoundedRegularFile(
   sourcePath: string,
   targetPath: string,
   maximumBytes: number,
+  pathApi: typeof path.posix,
   signal: AbortSignal,
   checkpoint: () => void
 ): Promise<void> {
   const source = await open(sourcePath, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0))
   let target: Awaited<ReturnType<typeof open>> | null = null
   try {
-    const before = await source.stat()
-    if (!before.isFile() || before.size > maximumBytes) {
+    const before = await source.stat({ bigint: true })
+    if (!before.isFile() || before.size > BigInt(maximumBytes)) {
       throw Object.assign(new Error('BROWSER_DATA_SOURCE_TOO_LARGE'), {
         code: 'BROWSER_DATA_SOURCE_TOO_LARGE'
       })
@@ -718,14 +806,15 @@ async function copyBoundedRegularFile(
       fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL,
       0o600
     )
-    const chunk = Buffer.alloc(Math.min(64 * 1024, Math.max(1, before.size)))
+    const sourceBytes = Number(before.size)
+    const chunk = Buffer.alloc(Math.min(64 * 1024, Math.max(1, sourceBytes)))
     let offset = 0
-    while (offset < before.size) {
+    while (offset < sourceBytes) {
       assertSignal(signal)
       const { bytesRead } = await source.read(
         chunk,
         0,
-        Math.min(chunk.length, before.size - offset),
+        Math.min(chunk.length, sourceBytes - offset),
         offset
       )
       if (bytesRead <= 0) break
@@ -736,9 +825,15 @@ async function copyBoundedRegularFile(
       }
       offset += bytesRead
     }
-    if (offset !== before.size) throw new Error('BROWSER_DATA_SOURCE_INVALID')
-    const after = await source.stat()
-    if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size) {
+    if (offset !== sourceBytes) throw new Error('BROWSER_DATA_SOURCE_INVALID')
+    const after = await source.stat({ bigint: true })
+    const canonical = pathApi.normalize(await realpath(sourcePath))
+    const linked = await stat(canonical, { bigint: true })
+    if (
+      canonical !== pathApi.normalize(sourcePath) ||
+      !sameFileSnapshot(before, after) ||
+      !sameFileSnapshot(after, linked)
+    ) {
       throw new Error('BROWSER_DATA_SOURCE_INVALID')
     }
     await target.sync()
@@ -752,35 +847,31 @@ async function copyBoundedRegularFile(
 async function createTemporaryDatabaseCopy(
   sourcePath: string,
   tempDirectory: string,
+  pathApi: typeof path.posix,
   signal: AbortSignal,
   checkpoint: () => void
 ): Promise<{ readonly directory: string; readonly databasePath: string }> {
-  const canonicalTemp = await realpath(tempDirectory)
-  const directory = await mkdtemp(path.join(canonicalTemp, 'tuff-browser-data-'))
-  const databasePath = path.join(directory, 'browser.sqlite')
+  const canonicalTemp = await canonicalDirectory(tempDirectory, [tempDirectory], pathApi, signal)
+  if (!canonicalTemp) throw new Error('BROWSER_DATA_SOURCE_INVALID')
+  const directory = await mkdtemp(pathApi.join(canonicalTemp, 'tuff-browser-data-'))
+  const databasePath = pathApi.join(directory, 'browser.sqlite')
   try {
-    await copyBoundedRegularFile(
-      sourcePath,
-      databasePath,
-      PLUGIN_BROWSER_DATA_MAX_DATABASE_BYTES,
-      signal,
-      checkpoint
-    )
-    for (const suffix of ['-wal', '-shm']) {
-      const sidecar = `${sourcePath}${suffix}`
-      const exists = await lstat(sidecar).catch(() => null)
-      if (!exists) continue
-      if (exists.isSymbolicLink() || !exists.isFile()) {
-        throw new Error('BROWSER_DATA_SOURCE_INVALID')
-      }
+    const canonicalCopy = await canonicalDirectory(directory, [canonicalTemp], pathApi, signal)
+    if (canonicalCopy !== directory) throw new Error('BROWSER_DATA_SOURCE_INVALID')
+    const sources = await snapshotDatabaseSources(sourcePath, pathApi, signal)
+    for (const source of sources) {
+      const suffix = source.filePath.slice(sourcePath.length)
       await copyBoundedRegularFile(
-        sidecar,
+        source.filePath,
         `${databasePath}${suffix}`,
-        PLUGIN_BROWSER_DATA_MAX_SIDECAR_BYTES,
+        source.maximumBytes,
+        pathApi,
         signal,
         checkpoint
       )
     }
+    await assertDatabaseSourcesUnchanged(sourcePath, sources, pathApi, signal)
+    checkpoint()
     return Object.freeze({ directory, databasePath })
   } catch (error) {
     try {
@@ -1044,6 +1135,7 @@ export function createFixedPluginBrowserDataService(
       temporary = await createTemporaryDatabaseCopy(
         file.filePath,
         tempDirectory,
+        pathApi,
         signal,
         checkpoint
       )

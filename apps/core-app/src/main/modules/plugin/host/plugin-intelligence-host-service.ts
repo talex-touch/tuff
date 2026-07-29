@@ -12,7 +12,8 @@ import type {
   PluginIntelligenceHostService,
   PluginIntelligenceInvokeServiceResult,
   PluginIntelligenceOcrPayload,
-  PluginIntelligenceProviderModel
+  PluginIntelligenceProviderModel,
+  PluginIntelligenceTranslatePayload
 } from './plugin-intelligence-capabilities'
 
 export type PluginIntelligenceHostServiceErrorCode =
@@ -28,7 +29,7 @@ export class PluginIntelligenceHostServiceError extends Error {
 }
 
 type HostIntelligenceInvokeOptions = IntelligenceInvokeOptions & {
-  readonly signal: AbortSignal
+  readonly signal?: AbortSignal
 }
 
 type IntelligenceInvokeDependency = (
@@ -45,6 +46,7 @@ export interface PluginIntelligenceHostServiceDependencies {
 const MAX_MESSAGES = 64
 const MAX_MESSAGE_BYTES = 16 * 1024
 const MAX_CHAT_BYTES = 64 * 1024
+const MAX_TRANSLATE_BYTES = 64 * 1024
 const MAX_IMAGE_DATA_URL_BYTES = Math.ceil((640 * 1024 * 4) / 3) + 64
 const MAX_RESULT_TEXT_BYTES = 256 * 1024
 const MAX_IDENTIFIER_BYTES = 256
@@ -263,6 +265,24 @@ function snapshotChatPayload(value: unknown): PluginIntelligenceChatPayload {
   return Object.freeze({ messages: Object.freeze(projected) })
 }
 
+function snapshotTranslatePayload(value: unknown): PluginIntelligenceTranslatePayload {
+  const code = 'PLUGIN_INTELLIGENCE_HOST_INPUT_INVALID'
+  const record = exactRecord(
+    value,
+    ['text', 'sourceLang', 'targetLang'],
+    ['text', 'targetLang'],
+    code
+  )
+  const text = boundedString(required(record, 'text', code), MAX_TRANSLATE_BYTES, code)
+  const sourceLang = optionalString(record, 'sourceLang', 64)
+  const targetLang = boundedString(required(record, 'targetLang', code), 64, code)
+  return Object.freeze({
+    text,
+    ...(sourceLang === undefined ? {} : { sourceLang }),
+    targetLang
+  })
+}
+
 function snapshotOcrPayload(value: unknown): PluginIntelligenceOcrPayload {
   const code = 'PLUGIN_INTELLIGENCE_HOST_INPUT_INVALID'
   const record = exactRecord(
@@ -349,7 +369,8 @@ function snapshotMetadata(
 function snapshotOptions(
   value: unknown,
   caller: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  includeSignal: boolean
 ): HostIntelligenceInvokeOptions {
   const code = 'PLUGIN_INTELLIGENCE_HOST_INPUT_INVALID'
   const record =
@@ -371,7 +392,7 @@ function snapshotOptions(
     ...(promptTemplate === undefined ? {} : { promptTemplate }),
     ...(promptVariables === undefined ? {} : { promptVariables: { ...promptVariables } }),
     metadata: { ...metadata },
-    signal
+    ...(includeSignal ? { signal } : {})
   })
 }
 
@@ -381,7 +402,9 @@ function assertCallBoundary(
   caller: unknown
 ): asserts capabilityId is PluginIntelligenceCapabilityId {
   if (
-    (capabilityId !== 'text.chat' && capabilityId !== 'vision.ocr') ||
+    (capabilityId !== 'text.chat' &&
+      capabilityId !== 'text.translate' &&
+      capabilityId !== 'vision.ocr') ||
     !(signal instanceof AbortSignal) ||
     typeof caller !== 'string' ||
     Buffer.byteLength(caller, 'utf8') > MAX_IDENTIFIER_BYTES ||
@@ -395,9 +418,9 @@ function assertModelBoundary(
   capabilityId: unknown,
   signal: unknown,
   caller: unknown
-): asserts capabilityId is 'text.chat' {
+): asserts capabilityId is 'text.chat' | 'text.translate' {
   if (
-    capabilityId !== 'text.chat' ||
+    (capabilityId !== 'text.chat' && capabilityId !== 'text.translate') ||
     !(signal instanceof AbortSignal) ||
     typeof caller !== 'string' ||
     Buffer.byteLength(caller, 'utf8') > MAX_IDENTIFIER_BYTES ||
@@ -433,7 +456,7 @@ function projectInvokeResult(
   validateUsage(required(record, 'usage', code))
   const rawResult = required(record, 'result', code)
   let result: string | { readonly text: string }
-  if (capabilityId === 'text.chat') {
+  if (capabilityId === 'text.chat' || capabilityId === 'text.translate') {
     result = boundedString(rawResult, MAX_RESULT_TEXT_BYTES, code, true)
   } else {
     const ocr = exactRecord(rawResult, OCR_RESULT_KEYS, ['text'], code)
@@ -452,7 +475,10 @@ function projectInvokeResult(
   })
 }
 
-function projectProvider(value: unknown): PluginIntelligenceProviderModel {
+function projectProvider(
+  value: unknown,
+  capabilityId: 'text.chat' | 'text.translate'
+): PluginIntelligenceProviderModel {
   const code = 'PLUGIN_INTELLIGENCE_HOST_RESULT_INVALID'
   const record = selectedRecord(
     value,
@@ -468,7 +494,7 @@ function projectProvider(value: unknown): PluginIntelligenceProviderModel {
     code
   )
   const capabilities = stringArray(record.capabilities, 16, 64, code)
-  if (!capabilities.includes('text.chat')) fail(code)
+  if (!capabilities.includes(capabilityId)) fail(code)
   const defaultModel = record.defaultModel
   if (defaultModel !== null && typeof defaultModel !== 'string') fail(code)
   if (typeof record.available !== 'boolean') fail(code)
@@ -479,7 +505,7 @@ function projectProvider(value: unknown): PluginIntelligenceProviderModel {
     models: stringArray(record.models, MAX_MODELS, MAX_IDENTIFIER_BYTES, code),
     defaultModel:
       defaultModel === null ? null : boundedString(defaultModel, MAX_IDENTIFIER_BYTES, code),
-    capabilities: Object.freeze(['text.chat'] as const),
+    capabilities: Object.freeze([capabilityId]),
     available: record.available
   })
 }
@@ -490,8 +516,8 @@ function cancelled(): never {
   })
 }
 
-const productionInvoke: IntelligenceInvokeDependency =
-  tuffIntelligence.invoke.bind(tuffIntelligence)
+const productionInvoke: IntelligenceInvokeDependency = (capabilityId, payload, options) =>
+  tuffIntelligence.invoke(capabilityId, payload, options)
 
 const productionDependencies: PluginIntelligenceHostServiceDependencies = Object.freeze({
   invoke: productionInvoke,
@@ -518,8 +544,17 @@ export function createPluginIntelligenceHostService(
     invoke: async (capabilityId, payload, options, signal, caller) => {
       assertCallBoundary(capabilityId, signal, caller)
       const projectedPayload =
-        capabilityId === 'text.chat' ? snapshotChatPayload(payload) : snapshotOcrPayload(payload)
-      const projectedOptions = snapshotOptions(options, caller, signal)
+        capabilityId === 'text.chat'
+          ? snapshotChatPayload(payload)
+          : capabilityId === 'text.translate'
+            ? snapshotTranslatePayload(payload)
+            : snapshotOcrPayload(payload)
+      const projectedOptions = snapshotOptions(
+        options,
+        caller,
+        signal,
+        capabilityId !== 'text.translate'
+      )
       const result = await Reflect.apply(invoke, undefined, [
         capabilityId,
         projectedPayload,
@@ -534,7 +569,7 @@ export function createPluginIntelligenceHostService(
       if (signal.aborted) cancelled()
       return Object.freeze(
         exactArray(result, MAX_PROVIDERS, 'PLUGIN_INTELLIGENCE_HOST_RESULT_INVALID').map(
-          projectProvider
+          (provider) => projectProvider(provider, capabilityId)
         )
       )
     }

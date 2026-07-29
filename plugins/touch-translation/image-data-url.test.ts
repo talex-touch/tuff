@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import Module, { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import {
   parseImageDataUrl,
@@ -7,71 +6,7 @@ import {
 } from '@talex-touch/utils/plugin'
 import { describe, expect, it } from 'vitest'
 
-interface ImageDataUrlFunctions {
-  parseImageDataUrl: (dataUrl: string) => { mime: string, base64: string } | null
-  toImageDataUrl: (base64: string, mime: string) => string
-}
-
-interface NodeModuleInstance {
-  filename: string
-  paths: string[]
-  exports: unknown
-  _compile: (code: string, filename: string) => void
-}
-
-interface NodeModuleConstructor {
-  new (id?: string): NodeModuleInstance
-  _nodeModulePaths: (from: string) => string[]
-}
-
-const ModuleCtor = Module as unknown as NodeModuleConstructor
-
-function isImageDataUrlFunctions(value: unknown): value is ImageDataUrlFunctions {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    && 'parseImageDataUrl' in value
-    && typeof value.parseImageDataUrl === 'function'
-    && 'toImageDataUrl' in value
-    && typeof value.toImageDataUrl === 'function',
-  )
-}
-
-function isRuntimeImageDataUrlExports(value: unknown): value is { __test: ImageDataUrlFunctions } {
-  return Boolean(
-    value
-    && typeof value === 'object'
-    && '__test' in value
-    && isImageDataUrlFunctions(value.__test),
-  )
-}
-
-function loadRuntimeImageDataUrlHelpers(): ImageDataUrlFunctions {
-  const filename = resolve(dirname(__filename), 'index.js')
-  const mod = new ModuleCtor(filename)
-  mod.filename = filename
-  mod.paths = ModuleCtor._nodeModulePaths(dirname(filename))
-  mod._compile(readFileSync(filename, 'utf8'), filename)
-
-  const runtimePlugin = mod.exports
-  if (!isRuntimeImageDataUrlExports(runtimePlugin)) {
-    throw new Error('Touch Translation runtime does not expose image data URL helpers')
-  }
-
-  return runtimePlugin.__test
-}
-
-function loadSharedRuntimeImageDataUrlHelpers(): ImageDataUrlFunctions {
-  const sharedHelpers = createRequire(__filename)('../../packages/utils/plugin/translation.cjs')
-  if (!isImageDataUrlFunctions(sharedHelpers)) {
-    throw new Error('Shared translation module does not expose image data URL helpers')
-  }
-
-  return sharedHelpers
-}
-
-const runtimeImageDataUrlHelpers = loadRuntimeImageDataUrlHelpers()
-const sharedRuntimeImageDataUrlHelpers = loadSharedRuntimeImageDataUrlHelpers()
+const runtimeSource = readFileSync(resolve(dirname(__filename), 'index.js'), 'utf8')
 
 const encodedPng = 'iVBORw0KGgoAAAANSUhEUg=='
 
@@ -106,8 +41,11 @@ describe('image data URL helpers', () => {
     expect(toImageDataUrl(encodedPng, 'application/octet-stream')).toBe(`data:image/png;base64,${encodedPng}`)
   })
 
-  it('exposes the exact shared CommonJS image data URL helpers through the runtime test API', () => {
-    expect(runtimeImageDataUrlHelpers.parseImageDataUrl).toBe(sharedRuntimeImageDataUrlHelpers.parseImageDataUrl)
-    expect(runtimeImageDataUrlHelpers.toImageDataUrl).toBe(sharedRuntimeImageDataUrlHelpers.toImageDataUrl)
+  it('keeps image helpers outside the Prelude and routes screenshots through typed OCR', () => {
+    expect(runtimeSource).not.toMatch(/\b__test\b/)
+    expect(runtimeSource).not.toMatch(/\b(?:parseImageDataUrl|toImageDataUrl)\b/)
+    expect(runtimeSource).toContain('plugin.translation.ocr(')
+    expect(runtimeSource).toContain('source: { type: \'data-url\', dataUrl: image }')
+    expect(runtimeSource).toContain('module.exports = lifecycle')
   })
 })

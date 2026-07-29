@@ -2,6 +2,8 @@ import type { IPluginFeature } from '@talex-touch/utils/plugin'
 import type { NetworkRequestOptions, NetworkResponse } from '@talex-touch/utils/network'
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
 import { issuePluginSecurityContext } from '@talex-touch/utils/transport/security/plugin-identity'
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createPluginBusinessCapabilities,
@@ -19,9 +21,9 @@ const OWNER = Object.freeze({
   hostGeneration: 7
 })
 
-function activation(generation = 1): PluginActivationIdentity {
+function activation(generation = 1, name = 'business-plugin'): PluginActivationIdentity {
   return {
-    name: 'business-plugin',
+    name,
     pluginInstanceId: 'business-instance',
     activationGeneration: generation,
     key: `business-key-${generation}`
@@ -68,8 +70,8 @@ interface Fixture {
   featureStore: Map<string, IPluginFeature>
 }
 
-function createFixture(): Fixture {
-  const current = activation()
+function createFixture(pluginName = 'business-plugin'): Fixture {
+  const current = activation(1, pluginName)
   const itemStore = new Map<string, PluginBusinessItemDto>()
   const featureStore = new Map<string, IPluginFeature>([
     ['manifest-feature', feature('manifest-feature')]
@@ -239,6 +241,7 @@ const EXPECTED_CAPABILITIES = [
   ['feature.registry.remove', undefined],
   ['feature.registry.list', undefined],
   ['feature.items.push', 'search.root-results'],
+  ['feature.items.widget.push', 'search.root-results'],
   ['feature.items.update', 'search.root-results'],
   ['feature.items.remove', undefined],
   ['feature.items.clear', undefined],
@@ -260,7 +263,7 @@ const EXPECTED_CAPABILITIES = [
 ] as const
 
 describe('plugin business capability adapters', () => {
-  it('publishes the exact immutable 24-capability production manifest', async () => {
+  it('publishes the exact immutable 25-capability production manifest', async () => {
     const fixture = createFixture()
     const business = createPluginBusinessCapabilities(fixture.options)
 
@@ -444,6 +447,165 @@ describe('plugin business capability adapters', () => {
       ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'))
     }
     expect(fixture.featureHost.pushItems).not.toHaveBeenCalled()
+  })
+
+  it('publishes owner-derived custom widget items only for registered same-plugin renderers', async () => {
+    const fixture = createFixture('touch-intelligence')
+    fixture.featureStore.set('intelligence-ask', {
+      ...feature('intelligence-ask'),
+      interaction: {
+        type: 'widget',
+        path: 'ask-panel',
+        showInput: true,
+        allowInput: true,
+        sendMode: true,
+        forceMax: true
+      }
+    } as never)
+    fixture.featureStore.set('renderer-alias', {
+      ...feature('renderer-alias'),
+      interaction: { type: 'widget', rendererFeatureId: 'intelligence-ask' }
+    } as never)
+    fixture.featureStore.set('chained-widget', {
+      ...feature('chained-widget'),
+      interaction: { type: 'widget', rendererFeatureId: 'renderer-alias' }
+    } as never)
+    const { business, registry } = createRegistry(fixture)
+    const item = {
+      id: 'intelligence-widget',
+      source: { type: 'plugin', id: 'child-source', name: 'child-name' },
+      actions: [
+        {
+          id: 'retry',
+          type: 'plugin',
+          label: 'Retry',
+          payload: { requestId: 'request-1' },
+          primary: true
+        },
+        {
+          id: 'open-intelligence-settings',
+          type: 'navigate',
+          label: 'Settings',
+          payload: { path: '/intelligence/channels' },
+          primary: false
+        }
+      ],
+      meta: {
+        pluginName: 'touch-intelligence',
+        featureId: 'intelligence-ask',
+        status: 'ready',
+        keepCoreBoxOpen: true,
+        defaultAction: 'intelligence-action',
+        actionId: 'retry',
+        payload: { requestId: 'request-1' },
+        intelligence: { status: 'ready', contextPackageId: 'package-1' }
+      },
+      render: {
+        mode: 'custom',
+        basic: {
+          title: 'Intelligence answer',
+          subtitle: 'Ready',
+          icon: { type: 'class', value: 'i-ri-sparkling-line' }
+        },
+        custom: {
+          type: 'vue',
+          content: 'touch-intelligence::intelligence-ask',
+          data: { answer: 'bounded answer', updatedAt: 1 }
+        }
+      }
+    }
+
+    await expect(
+      registry.dispatch('feature.items.widget.push', {
+        scope: 'active-feature',
+        items: [item]
+      })
+    ).resolves.toEqual({ ok: true })
+    const stored = fixture.itemStore.get('intelligence-widget')
+    expect(stored).toMatchObject({
+      source: { type: 'plugin', id: 'plugin-features', name: 'touch-intelligence' },
+      meta: { pluginName: 'touch-intelligence', featureId: 'intelligence-ask' },
+      render: {
+        mode: 'custom',
+        custom: {
+          type: 'vue',
+          content: 'touch-intelligence::intelligence-ask',
+          data: { answer: 'bounded answer' }
+        }
+      }
+    })
+    expect(stored?.source).not.toEqual(item.source)
+
+    const cases = [
+      { ...item, meta: { ...item.meta, pluginName: 'other-plugin' } },
+      {
+        ...item,
+        render: {
+          ...item.render,
+          custom: { ...item.render.custom, content: 'other-plugin::intelligence-ask' }
+        }
+      },
+      {
+        ...item,
+        actions: [
+          {
+            id: 'open-remote',
+            type: 'navigate',
+            label: 'Remote',
+            payload: { path: 'https://example.com' }
+          }
+        ]
+      },
+      {
+        ...item,
+        actions: [
+          {
+            id: 'open-arbitrary-internal-route',
+            type: 'navigate',
+            label: 'Internal',
+            payload: { path: '/developer/hidden' }
+          }
+        ]
+      },
+      {
+        ...item,
+        actions: [
+          {
+            id: 'open-intelligence-settings',
+            type: 'navigate',
+            label: 'Wrong settings route',
+            payload: { path: '/plugin/touch-intelligence' }
+          }
+        ]
+      },
+      {
+        ...item,
+        render: {
+          ...item.render,
+          basic: { ...item.render.basic, icon: { type: 'file', value: '/private/icon.png' } }
+        }
+      },
+      {
+        ...item,
+        meta: { ...item.meta, featureId: 'chained-widget' },
+        render: {
+          ...item.render,
+          custom: { ...item.render.custom, content: 'touch-intelligence::renderer-alias' }
+        }
+      },
+      { ...item, meta: { ...item.meta, featureId: 'unknown-feature' } }
+    ]
+    for (const value of cases) {
+      await expect(
+        registry.dispatch('feature.items.widget.push', {
+          scope: 'active-feature',
+          items: [value]
+        })
+      ).rejects.toBeInstanceOf(PluginHostCapabilityError)
+    }
+
+    await business.closeActivation(fixture.activation)
+    expect(fixture.itemStore.has('intelligence-widget')).toBe(false)
   })
 
   it('rejects proxied nested host services without evaluating proxy traps', async () => {
@@ -1145,6 +1307,25 @@ describe('plugin business capability adapters', () => {
     const firstKey = first.secureSet.mock.calls[0]?.[1]
     const secondKey = second.secureSet.mock.calls[0]?.[1]
     expect(firstKey).not.toBe(secondKey)
+  })
+
+  it('projects the official Intelligence manifest feature inventory for isolated widget ownership', async () => {
+    const fixture = createFixture()
+    const { registry } = createRegistry(fixture)
+    const manifest = JSON.parse(
+      fs.readFileSync(
+        path.resolve(process.cwd(), '../../plugins/touch-intelligence/manifest.json'),
+        'utf8'
+      )
+    ) as { features: IPluginFeature[] }
+    vi.mocked(fixture.plugin.listBusinessFeatures).mockReturnValue(manifest.features)
+
+    const result = await registry.dispatch('feature.registry.list', null)
+
+    expect(result).toMatchObject({
+      features: expect.arrayContaining([expect.objectContaining({ id: 'intelligence-ask' })])
+    })
+    expect(JSON.stringify(result)).not.toMatch(/(?:^|["'])\/(?:Users|private|home)\//)
   })
 
   it('rejects absolute dynamic feature icons and redacts host file paths from feature results', async () => {

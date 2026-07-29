@@ -1,6 +1,6 @@
 import type { PluginActivationIdentity } from '@talex-touch/utils/transport'
 import { existsSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
-import { mkdtemp, realpath, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, realpath, rm, truncate } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -48,6 +48,16 @@ async function fixtureRoot(): Promise<{
   mkdirSync(appData, { recursive: true })
   mkdirSync(temp, { recursive: true })
   return { root, home, appData, temp, chromeRoot, profileRoot }
+}
+
+async function waitForTemporaryDatabase(tempDirectory: string): Promise<void> {
+  for (let attempt = 0; attempt < 1_000; attempt += 1) {
+    const entries = await readdir(tempDirectory)
+    if (entries.some((entry) => existsSync(path.join(tempDirectory, entry, 'browser.sqlite'))))
+      return
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
+  throw new Error('BROWSER_DATA_TEMP_COPY_NOT_OBSERVED')
 }
 
 function bookmarkPayload(count = 1): string {
@@ -310,6 +320,52 @@ describe('isolated browser-data capability', () => {
     expect(existsSync(observedDirectory)).toBe(false)
   })
 
+  it('rejects a symlinked temporary root before copying browser history', async () => {
+    const query = vi.fn(async () => queryRows('chromium-history'))
+    const harness = await createHarness({ query: createFixedPluginBrowserDataQuery(query) })
+    const outsideTemp = path.join(harness.root, 'outside-temp')
+    await rm(harness.temp, { recursive: true, force: true })
+    mkdirSync(outsideTemp, { recursive: true })
+    symlinkSync(outsideTemp, harness.temp, 'dir')
+    writeFileSync(path.join(harness.profileRoot, 'History'), 'fixture-db')
+
+    const result = await harness.registry.dispatch('browser-data.scan', {
+      operation: 'scan',
+      sources: ['history'],
+      browser: 'chrome'
+    })
+
+    expect(result).toMatchObject({
+      records: [],
+      diagnostics: [{ status: 'failed', code: 'BROWSER_DATA_QUERY_FAILED' }]
+    })
+    expect(query).not.toHaveBeenCalled()
+    await expect(readdir(outsideTemp)).resolves.toEqual([])
+  })
+
+  it('rejects a History snapshot when a WAL appears during the database copy', async () => {
+    const query = vi.fn(async () => queryRows('chromium-history'))
+    const harness = await createHarness({ query: createFixedPluginBrowserDataQuery(query) })
+    const historyPath = path.join(harness.profileRoot, 'History')
+    writeFileSync(historyPath, '')
+    await truncate(historyPath, 64 * 1024 * 1024)
+
+    const pending = harness.registry.dispatch('browser-data.scan', {
+      operation: 'scan',
+      sources: ['history'],
+      browser: 'chrome'
+    })
+    await waitForTemporaryDatabase(harness.temp)
+    writeFileSync(`${historyPath}-wal`, 'late-wal')
+
+    await expect(pending).resolves.toMatchObject({
+      records: [],
+      diagnostics: [{ status: 'failed', code: 'BROWSER_DATA_QUERY_FAILED' }]
+    })
+    expect(query).not.toHaveBeenCalled()
+    await expect(readdir(harness.temp)).resolves.toEqual([])
+  })
+
   it('limits Chromium profile discovery to eight fixed profile directories', async () => {
     const harness = await createHarness()
     for (let index = 1; index <= 10; index += 1) {
@@ -424,6 +480,17 @@ describe('isolated browser-data capability', () => {
       })
     ).resolves.toMatchObject({ status: 'blocked', code: 'BROWSER_DATA_SOURCE_DISABLED' })
 
+    const deniedRead = await createHarness({
+      readAllowed: false,
+      query: createFixedPluginBrowserDataQuery(query)
+    })
+    await expect(
+      deniedRead.registry.dispatch('browser-data.scan', {
+        operation: 'scan',
+        sources: ['bookmarks']
+      })
+    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' })
+
     const denied = await createHarness({
       indexAllowed: false,
       query: createFixedPluginBrowserDataQuery(query)
@@ -443,6 +510,15 @@ describe('isolated browser-data capability', () => {
         sources: ['bookmarks']
       })
     ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_STALE_ACTIVATION' })
+
+    const wrongHost = await createHarness({ query: createFixedPluginBrowserDataQuery(query) })
+    wrongHost.rotateHost()
+    await expect(
+      wrongHost.registry.dispatch('browser-data.scan', {
+        operation: 'scan',
+        sources: ['bookmarks']
+      })
+    ).rejects.toMatchObject({ code: 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED' })
     expect(query).not.toHaveBeenCalled()
   })
 
@@ -476,6 +552,32 @@ describe('isolated browser-data capability', () => {
     await expect(close).resolves.toBeUndefined()
     expect(existsSync(harness.temp)).toBe(true)
     await expect((await import('node:fs/promises')).readdir(harness.temp)).resolves.toEqual([])
+  })
+
+  it('redacts fixed-query schema failures and cleans the temporary copy', async () => {
+    let temporaryDirectory = ''
+    const query = createFixedPluginBrowserDataQuery(async (databasePath) => {
+      temporaryDirectory = path.dirname(databasePath)
+      throw new Error(`SQLITE_ERROR: no such table: urls at ${databasePath}`)
+    })
+    const harness = await createHarness({ query })
+    writeFileSync(path.join(harness.profileRoot, 'History'), 'fixture-db')
+
+    const result = await harness.registry.dispatch('browser-data.scan', {
+      operation: 'scan',
+      sources: ['history'],
+      browser: 'chrome'
+    })
+
+    expect(result).toMatchObject({
+      records: [],
+      diagnostics: [{ status: 'failed', code: 'BROWSER_DATA_QUERY_FAILED' }]
+    })
+    expect(temporaryDirectory).not.toBe('')
+    expect(existsSync(temporaryDirectory)).toBe(false)
+    expect(JSON.stringify(result)).not.toMatch(
+      /SQLITE_ERROR|no such table|browser\.sqlite|Library/i
+    )
   })
 
   it('fails a profile closed when fixed query returns more than the row bound', async () => {

@@ -1385,6 +1385,42 @@ describe('PluginRuntimeHost capability dispatch', () => {
     expect(harness.port.sent.some((message) => message.type === 'capability-result')).toBe(false)
   })
 
+  it('does not cross the old host termination barrier before async dispatcher close settles', async () => {
+    const dispatcherClosing = deferred<void>()
+    const close = vi.fn(() => dispatcherClosing.promise)
+    const harness = createHarness({
+      capabilityDispatcher: {
+        owner: ownerFields,
+        activation: activation(),
+        dispatch: vi.fn(async () => null),
+        close
+      },
+      ownsCapabilityDispatcher: true
+    })
+    await start(harness)
+
+    const stopping = harness.host.stop()
+    let stopSettled = false
+    void stopping.then(() => {
+      stopSettled = true
+    })
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+
+    expect(harness.invalidateAuthority).toHaveBeenCalledOnce()
+    expect(harness.closeResources).not.toHaveBeenCalled()
+    expect(harness.port.sent.some((message) => message.type === 'shutdown')).toBe(false)
+    expect(harness.child.exited).toBe(false)
+    expect(stopSettled).toBe(false)
+
+    dispatcherClosing.resolve()
+    await stopping
+
+    expect(harness.closeResources).toHaveBeenCalledOnce()
+    expect(harness.port.sent.some((message) => message.type === 'shutdown')).toBe(true)
+    expect(harness.child.exited).toBe(true)
+    expect(stopSettled).toBe(true)
+  })
+
   it('does not close an externally owned dispatcher', async () => {
     const close = vi.fn()
     const harness = createHarness({
