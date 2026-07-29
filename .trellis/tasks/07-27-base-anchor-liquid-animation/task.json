@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete the shared BaseAnchor drip/bead engine and run the task-local visual and interaction acceptance checks.",
+    "blocker": "The animation implementation and its acceptance evidence remain incomplete.",
+    "evidence": "prd.md, design.md, implement.md, and check.jsonl define the animation contract and verification."
+  }
 }

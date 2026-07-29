@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Verify the installed-plugin folder action opens the plugin root and exposes user-visible failure feedback.",
+    "blocker": "The implementation and focused UI/runtime acceptance evidence are not yet recorded.",
+    "evidence": "prd.md and task-local focused verification define the folder-action contract."
+  }
 }
