@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check focused tests, exact evidence semantics, scope ownership, and mandatory git diff hygiene."}
+{"file":".trellis/spec/frontend/release-testing.md","reason":"Check that current release identity and evidence classifications are not weakened by documentation wording."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check that no Markdown, AI, scope, or diagnostic contract is implemented twice."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check that local and CI execution consume the same command and structured rule outputs."}
+{"file":".github/workflows/README.md","reason":"Check GitHub Actions permissions, version sources, dependency setup, path coverage, and execution order."}

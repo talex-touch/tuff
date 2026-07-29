@@ -1,0 +1,37 @@
+{
+  "id": "roadmap-release-docs",
+  "name": "roadmap-release-docs",
+  "title": "Refresh roadmap and release documentation",
+  "description": "Align roadmap, evidence matrices, CHANGES, and root READMEs with stable 2.4.13 and exact historical/current/packaged/production evidence boundaries.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "documentation",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-28",
+  "branch": "TalexDreamSoul/roadmap-release-docs",
+  "base_branch": "TalexDreamSoul/docs-remediation-plan",
+  "worktree_path": "/Users/tagzixian/orca/workspaces/talex-touch/roadmap-release-docs",
+  "commit": "60c0d921c",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/358",
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-converge-project-documentation-gates",
+  "relatedFiles": [
+    "README.md",
+    "README.zh-CN.md",
+    "docs/plan-prd/01-project/CHANGES.md",
+    "docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md",
+    "docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md",
+    "docs/plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md"
+  ],
+  "notes": "Batch B owns both root READMEs. It does not own What's Changed or stable release-note files from the concurrent bilingual task.",
+  "meta": {
+    "nextAction": "Review stacked PR #358 after its planning-base dependency; use canonical `mise run docs:verify` once PR #359 lands in the integration path and then observe the required Cloudflare checks.",
+    "blocker": "No Batch B content blocker remains. PR #358 is stacked on `TalexDreamSoul/docs-remediation-plan`; PR #359 is the open canonical documentation-gate PR, and Cloudflare checks remain external review state rather than local completion evidence.",
+    "evidence": "Implementation head `60c0d921c` is pushed to PR #358. `mise run ai-docs:dev`, focused 33-link/7-document Markdown audit, protected bilingual/OTA/note-gateway zero-diff audit, and `git diff --check` passed; reviewer corrections reconcile the 2026-06-24 historical 72 refs with five named `2.4.13-beta.4` partial AI Command artifacts for 77 mixed-version refs. PR #359 declares canonical `mise run docs:verify` and is MERGEABLE/UNSTABLE, while PR #358 is MERGEABLE/UNSTABLE."
+  }
+}

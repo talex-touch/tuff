@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Audit the listed plugin capability, SQLite, privacy, transport, and host-trust boundaries and record reproducible evidence for each finding.",
+    "blocker": "No blocker is recorded; planning requires the evidence inventory before implementation tasks can be scoped.",
+    "evidence": "prd.md, research/*.md, and check.jsonl define the audit scope and required evidence."
+  }
 }

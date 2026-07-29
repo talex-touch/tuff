@@ -718,4 +718,5 @@ For issues or questions:
 - [PERFORMANCE_OPTIMIZATIONS.md](./PERFORMANCE_OPTIMIZATIONS.md) - Performance details
 - [PERFORMANCE_QUICK_REFERENCE.md](./PERFORMANCE_QUICK_REFERENCE.md) - Quick reference
 - [PROGRESS_TRACKER_USAGE.md](./PROGRESS_TRACKER_USAGE.md) - Progress tracking guide
-- [Update System README](../update/README.md) - Update system documentation
+- [Update regression checklist](../../../../../../docs/plan-prd/03-features/download-update/update-regression-checklist.md)
+  for update and rollback acceptance boundaries

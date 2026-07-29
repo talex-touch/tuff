@@ -1056,6 +1056,7 @@ jobs:
           OUTPUT_PATHS+=("release-assets/tuff-release-manifest.json")
           OUTPUT_PATHS+=("release-assets/release-test-summary.json")
           OUTPUT_PATHS+=("release-assets/release-test-summary.md")
+          OUTPUT_PATHS+=("generated-release-notes/tuff-release-notes.json")
 
           {
             echo "files<<EOF"
@@ -1216,41 +1217,16 @@ jobs:
           set -euo pipefail
 
           VERSION="${{ steps.meta.outputs.version }}"
-          NOTES_BASE="notes/update_${VERSION}"
-
-          fallback_body=$(jq -r '.body // ""' /tmp/github-release.json)
-          fallback_body="${fallback_body//$'\r'/}"
-          if [ -z "${fallback_body//[[:space:]]/}" ]; then
-            fallback_body="Release ${TAG}"
-          fi
-
           generated_zh="/tmp/generated-release-notes/update_${VERSION}.zh.md"
           generated_en="/tmp/generated-release-notes/update_${VERSION}.en.md"
 
-          notes_zh="${fallback_body}"
-          notes_en="${fallback_body}"
-
-          if [ -f "${generated_zh}" ]; then
-            notes_zh=$(cat "${generated_zh}")
+          if [ ! -s "${generated_zh}" ] || [ ! -s "${generated_en}" ]; then
+            echo "Generated bilingual release notes are required."
+            exit 1
           fi
 
-          if [ -f "${generated_en}" ]; then
-            notes_en=$(cat "${generated_en}")
-          fi
-
-          if [ -f "${NOTES_BASE}.md" ]; then
-            shared_body=$(cat "${NOTES_BASE}.md")
-            notes_zh="${shared_body}"
-            notes_en="${shared_body}"
-          fi
-
-          if [ -f "${NOTES_BASE}.zh.md" ]; then
-            notes_zh=$(cat "${NOTES_BASE}.zh.md")
-          fi
-
-          if [ -f "${NOTES_BASE}.en.md" ]; then
-            notes_en=$(cat "${NOTES_BASE}.en.md")
-          fi
+          notes_zh=$(cat "${generated_zh}")
+          notes_en=$(cat "${generated_en}")
 
           render_markdown() {
             local content="$1"

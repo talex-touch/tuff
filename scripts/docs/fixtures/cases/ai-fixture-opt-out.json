@@ -1,0 +1,7 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "docs/plan-prd/03-features/ai-2.5.0-plan-prd.md": "# AI 2.5.0 Plan\n\nThis intentionally incomplete AI fixture mentions historical 13/13 visible AI snapshot promotion, but it does not track the complete shared AI document set.\n",
+    "docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md": "# AI 2.5x Execution Plan\n\nThis intentionally incomplete AI fixture claims current recapture without exact-version evidence, but it opts out by omitting the complete shared AI document set.\n"
+  }
+}

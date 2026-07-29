@@ -28,5 +28,5 @@
 - **Desktop control**: `touch-window-manager` + `touch-window-presets` + `touch-quick-actions`.
 
 ## Built-in Plugin Docs
-- Recommended entry: [Recommended Plugin Bundles](./recommended-plugins.en.md)
-- Full catalog: [Built-in Plugin Catalog](./plugins/index.en.md)
+- Recommended entry: [Recommended Plugin Bundles](./recommended-plugins.en.mdc)
+- Full catalog: [Built-in Plugin Catalog](./plugins/index.en.mdc)

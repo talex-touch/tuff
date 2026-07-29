@@ -1,0 +1,26 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "AGENTS.md": "# Poison\n\n[Agent instructions must stay out of product-doc parsing](missing-agent-target.md).\n",
+    ".github/poison.md": "# Poison\n\n[Workflow prose must stay out of product-doc parsing](missing-workflow-target.md).\n",
+    "apps/nexus/examples/poison.md": "# Poison\n\n[Example prose must stay out of product-doc parsing](missing-example-target.md).\n",
+    "coverage/poison.md": "# Poison\n\n[Coverage output must stay out of product-doc parsing](missing-coverage-target.md).\n",
+    "dist/poison.md": "# Poison\n\n[Build output must stay out of product-doc parsing](missing-dist-target.md).\n",
+    "docs/INDEX.md": "# Documentation Index\n\n- [Guide with query and fragment](guide.md?from=index#top)\n- [Encoded target](encoded%20target.md)\n- [Directory target](section/)\n- [Missing target](missing.md)\n- [Repository escape](../../outside.md)\n- [Bad encoding](%E0%A4%A.md)\n\n![Missing image](missing-image.png)\n",
+    "docs/encoded target.md": "# Encoded Target\n",
+    "docs/engineering/reports/poison.md": "# Poison\n\n[Raw report evidence must stay out of product-doc parsing](missing-report-target.md).\n",
+    "docs/link-edge.mdc": "# MDC Edge\n\n::callout\n[Missing nested target](missing-mdc.md)\n::\n",
+    "docs/section/index.md": "# Section Index\n"
+  },
+  "trackedAdd": [
+    ".github/poison.md",
+    "AGENTS.md",
+    "apps/nexus/examples/poison.md",
+    "coverage/poison.md",
+    "dist/poison.md",
+    "docs/encoded target.md",
+    "docs/engineering/reports/poison.md",
+    "docs/link-edge.mdc",
+    "docs/section/index.md"
+  ]
+}

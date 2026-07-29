@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Defines repository quality, focused verification, evidence-class, and read-only source-change boundaries."}
+{"file":".trellis/spec/frontend/release-testing.md","reason":"Defines current-version authority and historical, packaged, and production evidence distinctions used by release and AI rules."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Requires one shared scope, parser, diagnostic, and AI assertion implementation instead of duplicated rule lists."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides parity across local CLI, mise task, CI invocation, structured task data, and rendered diagnostics."}
+{"file":".github/workflows/README.md","reason":"Project-owned CI conventions for runtime versions, read-only permissions, path filters, and local command parity."}

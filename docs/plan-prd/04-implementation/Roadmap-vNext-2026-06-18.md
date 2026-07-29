@@ -1,6 +1,6 @@
 # Roadmap vNext
 
-> 更新时间：2026-07-16
+> 更新时间：2026-07-27
 > 定位：R0-R9 产品阶段与能力边界。当前两周执行顺序以 `../TODO.md` 为准，实时任务状态以 Trellis 为准。
 
 ## 决策锁定
@@ -24,8 +24,8 @@
 | 阶段 | 主线 | 要交付什么 | 完成标准 |
 | --- | --- | --- | --- |
 | R0 | 稳定化与口径清理 | 先关闭 usage 统计双写、sync 半写风险和任务树漂移；入口文档只保留事实源边界 | 已知数据正确性缺陷关闭；活跃任务可判定；文档无易漂移版本/worktree 口径 |
-| R1 | Release Integrity | Nexus release asset `sha256`、`signatureUrl`、signature endpoint、manifest/download matrix 对齐 | GitHub Release ↔ Nexus release metadata 自动校验通过 |
-| R2 | AI 2.5.0 Stable | 修 provider routing；Local/Ollama 优先；CoreBox AI Ask 文本 + 显式 OCR；失败路径 UI | `Evidence-Matrix-AI-Stable-2026-06-18.md` 的固定 evidence item 关闭；`text.chat` / `vision.ocr -> text.chat` 成功，未登录、provider unavailable、quota/model unsupported、permission denied 与 Local/Ollama routing 都可解释 |
+| R1 | Release Integrity | Nexus release asset `sha256`、`signatureUrl`、signature endpoint、manifest/download matrix 对齐 | 对目标 tag 的 GitHub Release ↔ Nexus release metadata strict Gate E 自动校验通过；结果不跨版本继承 |
+| R2 | AI 2.5.0 Stable | 修 provider routing；Local/Ollama 优先；CoreBox AI Ask 文本 + 显式 OCR；失败路径 UI | `Evidence-Matrix-AI-Stable-2026-06-18.md` 的固定 evidence item 由精确当前版本制品关闭；`text.chat` / `vision.ocr -> text.chat` 成功，未登录、provider unavailable、quota/model unsupported、permission denied 与 Local/Ollama routing 都可解释 |
 | R3 | Search / Indexing Runtime | File write/store boundary、SQLite/FTS 写入、`scan_progress`、integrity reset、durable job history | FileProvider 写入/进度/重置都走 runtime task/store；focused tests 覆盖 |
 | R4 | QuickOps 产品化 | 番茄钟模板列表/高级循环、清洁屏幕自动视觉合同、app quit cleanup、Flow/AI adapter | QuickOps 状态型 runtime 可持续清理；无系统副作用；测试覆盖 |
 | R5 | Plugin Trust Boundary | 剩余 shell/OS/network/fs/clipboard permission surface、secret cleanup UX、Widget sandbox 长尾 | 权限缺失全部 fail-closed；不写明文 secret；插件 focused tests 覆盖 |
@@ -37,9 +37,10 @@
 ## 阶段关系（非实时优先级）
 
 - R0 的 Usage、Nexus sync 与 task/doc convergence 已关闭；实时执行顺序只由 [`../TODO.md`](../TODO.md) 维护。
-- R1 / R3 / R5 继续承载发布与原生打包、Search / Indexing evidence 和插件隔离等稳定性能力。
-- R2 historical visible evidence 保持历史边界；current-version recapture 只有在 `TODO.md` 排到时才执行。
-- R4–R7 只接受直接降低稳定性风险的 related-only 小切片。
+- Roadmap R1 的 `v2.4.13-beta.19` strict Gate E 已通过；该 exact-tag production evidence 不关闭稳定 `v2.4.13` 的独立复核，也不关闭 OTA lifecycle / host-runtime acceptance。
+- Roadmap R1 / R3 / R5 继续承载发布与原生打包、Search / Indexing evidence 和插件隔离等稳定性能力。
+- Roadmap R2 的 historical mixed-version manifest snapshot（baseline `2.4.12-beta.8`）保持 13/13 历史边界；当前源码为稳定 `2.4.13`，current-version recapture 仍需精确制品通过 `--requireCurrentVersion`。
+- Roadmap R4-R7 只接受直接降低稳定性风险的 related-only 小切片。
 - R8/R9 新能力继续保留路线；CatalogService、完整本地模型等按 `TODO.md` 恢复。
 
 ## 执行约束

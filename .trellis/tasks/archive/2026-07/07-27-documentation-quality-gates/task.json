@@ -1,0 +1,40 @@
+{
+  "id": "documentation-quality-gates",
+  "name": "documentation-quality-gates",
+  "title": "Add documentation quality gates",
+  "description": "Add one deterministic read-only local and CI entrypoint for recursive Markdown, tracked relative links, Trellis state, threshold-aware current release notes, AI evidence, and active PRD placeholder contracts.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "documentation",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-28",
+  "branch": "TalexDreamSoul/documentation-quality-gates",
+  "base_branch": "TalexDreamSoul/docs-remediation-integration",
+  "worktree_path": "/Users/tagzixian/orca/workspaces/talex-touch/documentation-quality-gates",
+  "commit": "db0f62bd7",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/359",
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-converge-project-documentation-gates",
+  "relatedFiles": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/README.md",
+    "mise.toml",
+    "scripts/ai-docs/verify-ai-docs.mjs",
+    "scripts/docs/markdownlint-config.mjs",
+    "scripts/docs/run-docs-verify.mjs",
+    "scripts/docs/verify-docs.mjs",
+    "scripts/docs.test.mjs",
+    "notes/RELEASE_NOTES_GUIDE.md"
+  ],
+  "notes": "Batch D is a stacked integration gate after A, B, C, and the bilingual What's Changed contract. It reads prerequisite documentation but does not rewrite prose, including README.md or README.zh-CN.md, to make the gate pass.",
+  "meta": {
+    "nextAction": "Keep draft PR #359 unmerged until prerequisite merge and retargeting are confirmed; then refresh the base and rerun the canonical docs gate.",
+    "blocker": "Canonical GitHub verify is green; Cloudflare remains an external pending job and actionlint is unavailable locally, so draft disposition waits on prerequisite merge/retarget rather than a local gate failure.",
+    "evidence": "Commit db0f62bd7; PR #359 canonical verify green; 21 focused fixtures pass; frozen install, changed-source ESLint, YAML parse, direct zero diagnostics, clean diff/status, and byte-identical double docs:verify are recorded in the PR body."
+  }
+}

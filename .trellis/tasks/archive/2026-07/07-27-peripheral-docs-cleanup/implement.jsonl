@@ -1,0 +1,7 @@
+{"file":"apps/core-app/README.md","reason":"Named CoreApp product document requiring current commands and canonical links."}
+{"file":"apps/core-app/src/main/modules/box-tool/search-engine/README.md","reason":"Named Search Engine architecture document that must preserve unfinished split boundaries."}
+{"file":"apps/nexus/content/docs/dev/api/download.en.mdc","reason":"English Nexus download API page in the bilingual navigation repair scope."}
+{"file":"apps/nexus/content/docs/dev/api/download.zh.mdc","reason":"Chinese Nexus download API page that must remain semantically aligned with English."}
+{"file":"apps/nexus/examples/division-box/README.md","reason":"Named DivisionBox example guide whose setup and source links must resolve."}
+{"file":"packages/tuffex/CONTRIBUTING.md","reason":"Named TuffEx contribution guide requiring current package paths and commands."}
+{"file":"docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md","reason":"Canonical Nexus release-asset documentation used to evaluate release/download links."}

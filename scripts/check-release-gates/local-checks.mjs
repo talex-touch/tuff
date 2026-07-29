@@ -1,59 +1,57 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { validateReleaseNotesAtRepo } from '../lib/release-notes-contract.mjs'
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
 }
 
-function readTextIfExists(filePath) {
-  if (!fs.existsSync(filePath))
-    return null
-  return fs.readFileSync(filePath, 'utf8')
-}
-
-function checkNotes({ repoRoot, version, pushCheck }) {
-  const base = path.join(repoRoot, 'notes', `update_${version}`)
-  const sharedPath = `${base}.md`
-  const zhPath = `${base}.zh.md`
-  const enPath = `${base}.en.md`
-
-  const shared = readTextIfExists(sharedPath)
-  let zh = readTextIfExists(zhPath)
-  let en = readTextIfExists(enPath)
-
-  if (!zh && shared)
-    zh = shared
-  if (!en && shared)
-    en = shared
-
-  const zhLen = zh?.trim().length ?? 0
-  const enLen = en?.trim().length ?? 0
-
-  if (zhLen > 0 && enLen > 0) {
-    pushCheck(
-      'notes',
-      'pass',
-      'Release notes zh/en are present and non-empty.',
-      {
-        files: {
-          shared: fs.existsSync(sharedPath) ? sharedPath : null,
-          zh: fs.existsSync(zhPath) ? zhPath : null,
-          en: fs.existsSync(enPath) ? enPath : null,
-        },
-        lengths: { zh: zhLen, en: enLen },
-      },
-    )
+export function checkNotes({ repoRoot, version, pushCheck }) {
+  let result
+  try {
+    result = validateReleaseNotesAtRepo({ repoRoot, version })
+  }
+  catch (error) {
+    pushCheck('notes', 'fail', 'Release notes contract configuration is invalid.', {
+      enforced: true,
+      error: error instanceof Error ? error.message : String(error),
+    })
     return
   }
 
-  pushCheck('notes', 'fail', 'Release notes zh/en are missing or empty.', {
-    files: {
-      shared: fs.existsSync(sharedPath) ? sharedPath : null,
-      zh: fs.existsSync(zhPath) ? zhPath : null,
-      en: fs.existsSync(enPath) ? enPath : null,
-    },
-    lengths: { zh: zhLen, en: enLen },
+  const { enforcement, paths, validation } = result
+  if (!enforcement.enforced) {
+    pushCheck('notes', 'pass', `Release notes strict contract skipped: ${enforcement.reason}.`, {
+      enforced: false,
+      channel: enforcement.channel,
+      legacyThrough: enforcement.legacyThrough ?? null,
+    })
+    return
+  }
+
+  const files = {
+    shared: fs.existsSync(paths.shared) ? paths.shared : null,
+    zh: fs.existsSync(paths.zh) ? paths.zh : null,
+    en: fs.existsSync(paths.en) ? paths.en : null,
+  }
+
+  if (validation?.valid) {
+    pushCheck('notes', 'pass', 'Release notes satisfy the strict bilingual contract.', {
+      enforced: true,
+      channel: enforcement.channel,
+      files,
+      summaryItems: validation.documents?.zh.summary.length ?? 0,
+      changedItems: validation.documents?.zh.whatsChanged.length ?? 0,
+    })
+    return
+  }
+
+  pushCheck('notes', 'fail', 'Release notes violate the strict bilingual contract.', {
+    enforced: true,
+    channel: enforcement.channel,
+    files,
+    errors: validation?.errors ?? [],
   })
 }
 

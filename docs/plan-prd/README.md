@@ -6,7 +6,7 @@
 ## 先看这四个入口
 
 1. [`TODO.md`](./TODO.md)：当前两周稳定化顺序与完成条件。
-2. [`.trellis/tasks/`](../../.trellis/tasks/)：实时任务、owner、PRD、设计和实施状态。
+2. [`.trellis/tasks/README.md`](../../.trellis/tasks/README.md)：实时任务、owner、PRD、设计和实施状态。
 3. [`04-implementation/Roadmap-vNext-2026-06-18.md`](./04-implementation/Roadmap-vNext-2026-06-18.md)：R0-R9 产品路线。
 4. [`01-project/CHANGES.md`](./01-project/CHANGES.md)：已完成事实与验证证据索引。
 
