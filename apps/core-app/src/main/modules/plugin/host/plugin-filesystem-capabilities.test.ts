@@ -51,10 +51,11 @@ function lifecycleInput(paths: readonly string[]): unknown {
 function createHarness(
   options: {
     platform?: NodeJS.Platform
+    generation?: number
     filesystem?: Partial<PluginBatchRenameFilesystemAdapter>
   } = {}
 ) {
-  const initial = activation()
+  const initial = activation(options.generation ?? 1)
   let current = initial
   const permissions = new Set(['fs.read', 'fs.write'])
   const revokeWatchers = new Map<string, Set<() => void>>()
@@ -141,6 +142,63 @@ describe('batch rename filesystem capability', () => {
     await harness.capability.close()
   })
 
+  it('commits and reverses swaps and rename cycles without clobbering', async () => {
+    const swapFixture = await fixtureFiles(['swap-a.txt', 'swap-b.txt'])
+    const swapHarness = createHarness()
+    await swapHarness.capability.approveLifecycleFileInputs(lifecycleInput(swapFixture.paths))
+    const swap = [
+      { source: swapFixture.paths[0], targetName: 'swap-b.txt' },
+      { source: swapFixture.paths[1], targetName: 'swap-a.txt' }
+    ]
+    await expect(
+      swapHarness.registry.dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: swap
+      })
+    ).resolves.toMatchObject({ operation: 'rename-batch' })
+    await expect(
+      Promise.all(swapFixture.paths.map((filePath) => fsp.readFile(filePath, 'utf8')))
+    ).resolves.toEqual(['file-1', 'file-0'])
+    await swapHarness.registry.dispatch('filesystem.write', {
+      operation: 'rename-batch',
+      entries: swap
+    })
+    await expect(
+      Promise.all(swapFixture.paths.map((filePath) => fsp.readFile(filePath, 'utf8')))
+    ).resolves.toEqual(['file-0', 'file-1'])
+
+    const cycleFixture = await fixtureFiles(['cycle-a.txt', 'cycle-b.txt', 'cycle-c.txt'])
+    const cycleHarness = createHarness()
+    await cycleHarness.capability.approveLifecycleFileInputs(lifecycleInput(cycleFixture.paths))
+    await cycleHarness.registry.dispatch('filesystem.write', {
+      operation: 'rename-batch',
+      entries: [
+        { source: cycleFixture.paths[0], targetName: 'cycle-b.txt' },
+        { source: cycleFixture.paths[1], targetName: 'cycle-c.txt' },
+        { source: cycleFixture.paths[2], targetName: 'cycle-a.txt' }
+      ]
+    })
+    await expect(
+      Promise.all(cycleFixture.paths.map((filePath) => fsp.readFile(filePath, 'utf8')))
+    ).resolves.toEqual(['file-2', 'file-0', 'file-1'])
+    await cycleHarness.registry.dispatch('filesystem.write', {
+      operation: 'rename-batch',
+      entries: [
+        { source: cycleFixture.paths[0], targetName: 'cycle-c.txt' },
+        { source: cycleFixture.paths[1], targetName: 'cycle-a.txt' },
+        { source: cycleFixture.paths[2], targetName: 'cycle-b.txt' }
+      ]
+    })
+    await expect(
+      Promise.all(cycleFixture.paths.map((filePath) => fsp.readFile(filePath, 'utf8')))
+    ).resolves.toEqual(['file-0', 'file-1', 'file-2'])
+
+    await swapHarness.registry.close()
+    await swapHarness.capability.close()
+    await cycleHarness.registry.close()
+    await cycleHarness.capability.close()
+  })
+
   it('rejects unapproved paths, symlinks, existing targets and case-fold collisions', async () => {
     const { root, paths } = await fixtureFiles(['alpha.txt', 'beta.txt', 'occupied.txt'])
     const harness = createHarness({ platform: 'darwin' })
@@ -152,6 +210,10 @@ describe('batch rename filesystem capability', () => {
       [
         { source: paths[0], targetName: 'same.txt' },
         { source: paths[1], targetName: 'SAME.txt' }
+      ],
+      [
+        { source: paths[0], targetName: 'caf\u00e9.txt' },
+        { source: paths[1], targetName: 'cafe\u0301.txt' }
       ]
     ]) {
       await expect(
@@ -164,8 +226,170 @@ describe('batch rename filesystem capability', () => {
     await expect(
       harness.capability.approveLifecycleFileInputs(lifecycleInput([symlink]))
     ).resolves.toBe(0)
+    const directory = path.join(root, 'directory')
+    await fsp.mkdir(directory)
+    await expect(
+      harness.capability.approveLifecycleFileInputs(lifecycleInput([directory]))
+    ).resolves.toBe(0)
     expect(fs.existsSync(paths[0])).toBe(true)
     expect(fs.existsSync(paths[1])).toBe(true)
+    await harness.registry.close()
+    await harness.capability.close()
+  })
+
+  it('binds lifecycle approval to the original file and parent identities', async () => {
+    const replacedFixture = await fixtureFiles(['approved.txt'])
+    const replacedHarness = createHarness()
+    await replacedHarness.capability.approveLifecycleFileInputs(
+      lifecycleInput(replacedFixture.paths)
+    )
+    const originalPath = `${replacedFixture.paths[0]}.original`
+    await fsp.rename(replacedFixture.paths[0], originalPath)
+    await fsp.writeFile(replacedFixture.paths[0], 'replacement')
+
+    await expect(
+      replacedHarness.registry.dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: [{ source: replacedFixture.paths[0], targetName: 'renamed.txt' }]
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    await expect(fsp.readFile(replacedFixture.paths[0], 'utf8')).resolves.toBe('replacement')
+    await expect(fsp.readFile(originalPath, 'utf8')).resolves.toBe('file-0')
+
+    const hardlinkFixture = await fixtureFiles(['hardlink-source.txt'])
+    const hardlinkPath = path.join(hardlinkFixture.root, 'hardlink-alias.txt')
+    await fsp.link(hardlinkFixture.paths[0], hardlinkPath)
+    const hardlinkHarness = createHarness()
+    await expect(
+      hardlinkHarness.capability.approveLifecycleFileInputs(lifecycleInput([hardlinkPath]))
+    ).resolves.toBe(0)
+
+    const parentFixture = await fixtureFiles(['parent-source.txt'])
+    const parentHarness = createHarness()
+    await parentHarness.capability.approveLifecycleFileInputs(lifecycleInput(parentFixture.paths))
+    const movedParent = `${parentFixture.root}.moved`
+    tempRoots.push(movedParent)
+    await fsp.rename(parentFixture.root, movedParent)
+    await fsp.mkdir(parentFixture.root)
+    await fsp.writeFile(parentFixture.paths[0], 'replacement-parent')
+
+    await expect(
+      parentHarness.registry.dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: [{ source: parentFixture.paths[0], targetName: 'parent-renamed.txt' }]
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    await expect(fsp.readFile(parentFixture.paths[0], 'utf8')).resolves.toBe('replacement-parent')
+    await expect(fsp.readFile(path.join(movedParent, 'parent-source.txt'), 'utf8')).resolves.toBe(
+      'file-0'
+    )
+
+    await Promise.all([
+      replacedHarness.registry.close(),
+      replacedHarness.capability.close(),
+      hardlinkHarness.registry.close(),
+      hardlinkHarness.capability.close(),
+      parentHarness.registry.close(),
+      parentHarness.capability.close()
+    ])
+  })
+
+  it('revokes stale lifecycle path approval when a new file input is admitted', async () => {
+    const { paths } = await fixtureFiles(['first.txt', 'second.txt'])
+    const harness = createHarness()
+    await harness.capability.approveLifecycleFileInputs(lifecycleInput([paths[0]]))
+    await harness.capability.approveLifecycleFileInputs(lifecycleInput([paths[1]]))
+
+    await expect(
+      harness.registry.dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: [{ source: paths[0], targetName: 'stale.txt' }]
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    await expect(fsp.readFile(paths[0], 'utf8')).resolves.toBe('file-0')
+    await harness.registry.close()
+    await harness.capability.close()
+  })
+
+  it('does not let a new generation use the previous generation undo path', async () => {
+    const { root, paths } = await fixtureFiles(['generation-one.txt'])
+    const first = createHarness({ generation: 1 })
+    await first.capability.approveLifecycleFileInputs(lifecycleInput(paths))
+    await first.registry.dispatch('filesystem.write', {
+      operation: 'rename-batch',
+      entries: [{ source: paths[0], targetName: 'generation-one-renamed.txt' }]
+    })
+    await first.registry.close()
+    await first.capability.close()
+
+    const renamedPath = path.join(root, 'generation-one-renamed.txt')
+    const second = createHarness({ generation: 2 })
+    await expect(
+      second.registry.dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: [{ source: renamedPath, targetName: 'generation-one.txt' }]
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    await expect(fsp.readFile(renamedPath, 'utf8')).resolves.toBe('file-0')
+    await second.registry.close()
+    await second.capability.close()
+  })
+
+  it('never overwrites a target created after preparation', async () => {
+    const { root, paths } = await fixtureFiles(['source.txt'])
+    const target = path.join(root, 'raced.txt')
+    let injected = false
+    const harness = createHarness({
+      filesystem: {
+        async link(source, destination) {
+          if (!injected && path.basename(destination) === 'raced.txt') {
+            injected = true
+            await fsp.writeFile(target, 'racing-writer')
+          }
+          await fsp.link(source, destination)
+        }
+      }
+    })
+    await harness.capability.approveLifecycleFileInputs(lifecycleInput(paths))
+
+    await expect(
+      harness.registry.dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: [{ source: paths[0], targetName: 'raced.txt' }]
+      })
+    ).rejects.toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    await expect(fsp.readFile(paths[0], 'utf8')).resolves.toBe('file-0')
+    await expect(fsp.readFile(target, 'utf8')).resolves.toBe('racing-writer')
+    await harness.registry.close()
+    await harness.capability.close()
+  })
+
+  it('rolls back a link that succeeds before post-link verification fails', async () => {
+    const { root, paths } = await fixtureFiles(['verify-source.txt'])
+    let rejectLinkedTemp = true
+    const harness = createHarness({
+      filesystem: {
+        async open(filePath, flags) {
+          if (rejectLinkedTemp && path.basename(filePath).includes('.tuff-rename-')) {
+            rejectLinkedTemp = false
+            throw new Error(`/private/post-link-verification:${filePath}`)
+          }
+          return await fsp.open(filePath, flags)
+        }
+      }
+    })
+    await harness.capability.approveLifecycleFileInputs(lifecycleInput(paths))
+
+    const failure = await harness.registry
+      .dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: [{ source: paths[0], targetName: 'verify-target.txt' }]
+      })
+      .catch((error) => error)
+    expect(failure).toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    expect(JSON.stringify(failure)).not.toContain(root)
+    await expect(fsp.readFile(paths[0], 'utf8')).resolves.toBe('file-0')
+    expect((await fsp.readdir(root)).some((name) => name.includes('.tuff-rename-'))).toBe(false)
     await harness.registry.close()
     await harness.capability.close()
   })
@@ -173,10 +397,11 @@ describe('batch rename filesystem capability', () => {
   it('rejects hostile exact schemas before filesystem work', () => {
     const harness = createHarness()
     const definition = harness.capability.definitions[0]
+    const absoluteSource = path.resolve('hostile-source.txt')
     const sparse: unknown[] = []
     sparse.length = 1
     const getter = vi.fn(() => 'secret')
-    const accessor = { source: '/tmp/a', targetName: 'b' }
+    const accessor = { source: absoluteSource, targetName: 'b' }
     Object.defineProperty(accessor, 'source', { enumerable: true, get: getter })
     const proxyTrap = vi.fn(() => {
       throw new Error('proxy trap must not run')
@@ -189,66 +414,170 @@ describe('batch rename filesystem capability', () => {
       { operation: 'rename-batch', entries: [accessor] },
       {
         operation: 'rename-batch',
-        entries: [new Proxy({ source: '/tmp/a', targetName: 'b' }, { ownKeys: proxyTrap })]
+        entries: [new Proxy({ source: absoluteSource, targetName: 'b' }, { ownKeys: proxyTrap })]
       },
-      { operation: 'rename-batch', entries: [{ source: '/tmp/a', targetName: '../b' }] },
-      { operation: 'rename-batch', entries: [{ source: '/tmp/a', targetName: 'CON.txt' }] }
+      { operation: 'rename-batch', entries: [{ source: 'relative.txt', targetName: 'b' }] },
+      {
+        operation: 'rename-batch',
+        entries: [{ source: absoluteSource, targetName: '../b' }]
+      },
+      {
+        operation: 'rename-batch',
+        entries: [{ source: absoluteSource, targetName: 'alternate:stream' }]
+      },
+      {
+        operation: 'rename-batch',
+        entries: [{ source: absoluteSource, targetName: `control${String.fromCharCode(1)}` }]
+      },
+      {
+        operation: 'rename-batch',
+        entries: [{ source: absoluteSource, targetName: 'CON.txt' }]
+      },
+      {
+        operation: 'rename-batch',
+        entries: [{ source: absoluteSource, targetName: 'COM¹.log' }]
+      },
+      {
+        operation: 'rename-batch',
+        entries: [{ source: absoluteSource, targetName: 'CONOUT$.txt' }]
+      },
+      {
+        operation: 'rename-batch',
+        entries: Array.from({ length: 65 }, (_, index) => ({
+          source: path.resolve(`source-${index}.txt`),
+          targetName: `target-${index}.txt`
+        }))
+      },
+      {
+        operation: 'rename-batch',
+        entries: Array.from({ length: 64 }, (_, index) => ({
+          source: `/${String(index).padStart(2, '0')}${'a'.repeat(4_092)}`,
+          targetName: `target-${index}.txt`
+        }))
+      }
     ]) {
       expect(() => definition.validateRequest(request)).toThrow('PLUGIN_FILESYSTEM_REQUEST_INVALID')
+    }
+    const windowsDefinition = createHarness({ platform: 'win32' }).capability.definitions[0]
+    expect(() =>
+      windowsDefinition.validateRequest({
+        operation: 'rename-batch',
+        entries: [{ source: 'C:\\safe\\file.txt', targetName: 'renamed.txt' }]
+      })
+    ).not.toThrow()
+    for (const source of [
+      'C:\\safe\\file.txt:stream',
+      'C:\\safe\\CON.txt',
+      'C:\\safe\\LPT².log',
+      'C:\\safe\\CONIN$.txt',
+      '\\\\server\\share\\file.txt',
+      '\\\\?\\C:\\safe\\file.txt'
+    ]) {
+      expect(() =>
+        windowsDefinition.validateRequest({
+          operation: 'rename-batch',
+          entries: [{ source, targetName: 'renamed.txt' }]
+        })
+      ).toThrow('PLUGIN_FILESYSTEM_REQUEST_INVALID')
     }
     expect(getter).not.toHaveBeenCalled()
     expect(proxyTrap).not.toHaveBeenCalled()
   })
 
-  it('rolls back completed renames when cancellation or permission revoke wins', async () => {
-    for (const mode of ['cancel', 'revoke'] as const) {
-      const { paths } = await fixtureFiles([`${mode}-alpha.txt`, `${mode}-beta.txt`])
-      const controller = new AbortController()
-      let harness: ReturnType<typeof createHarness>
-      let renameCount = 0
-      harness = createHarness({
-        filesystem: {
-          async rename(source, target) {
-            await fsp.rename(source, target)
-            renameCount += 1
-            if (renameCount === 1) {
-              if (mode === 'cancel') controller.abort()
-              else harness.revoke('fs.write')
-            }
+  it('rolls back when cancellation, permission revoke or generation rotation wins', async () => {
+    for (const mode of ['cancel', 'revoke', 'rotate'] as const) {
+      for (const triggerAt of Array.from({ length: 8 }, (_, index) => index + 1)) {
+        const { paths } = await fixtureFiles([
+          `${mode}-${triggerAt}-alpha.txt`,
+          `${mode}-${triggerAt}-beta.txt`
+        ])
+        const controller = new AbortController()
+        let harness: ReturnType<typeof createHarness>
+        let renameCount = 0
+        const onMutation = (): void => {
+          renameCount += 1
+          if (renameCount === triggerAt) {
+            if (mode === 'cancel') controller.abort()
+            else if (mode === 'revoke') harness.revoke('fs.write')
+            else harness.rotate()
           }
         }
-      })
-      await harness.capability.approveLifecycleFileInputs(lifecycleInput(paths))
-      await expect(
-        harness.registry.dispatch(
-          'filesystem.write',
-          {
-            operation: 'rename-batch',
-            entries: paths.map((source, index) => ({
-              source,
-              targetName: `${mode}-${index}.txt`
-            }))
-          },
-          mode === 'cancel' ? controller.signal : undefined
+        harness = createHarness({
+          filesystem: {
+            async link(source, target) {
+              await fsp.link(source, target)
+              onMutation()
+            },
+            async unlink(filePath) {
+              await fsp.unlink(filePath)
+              onMutation()
+            }
+          }
+        })
+        await harness.capability.approveLifecycleFileInputs(lifecycleInput(paths))
+        await expect(
+          harness.registry.dispatch(
+            'filesystem.write',
+            {
+              operation: 'rename-batch',
+              entries: paths.map((source, index) => ({
+                source,
+                targetName: `${mode}-${triggerAt}-${index}.txt`
+              }))
+            },
+            mode === 'cancel' ? controller.signal : undefined
+          )
+        ).rejects.toEqual(
+          new PluginHostCapabilityError(
+            mode === 'cancel'
+              ? 'PLUGIN_HOST_CAPABILITY_CANCELLED'
+              : mode === 'revoke'
+                ? 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
+                : 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'
+          )
         )
-      ).rejects.toEqual(
-        new PluginHostCapabilityError(
-          mode === 'cancel'
-            ? 'PLUGIN_HOST_CAPABILITY_CANCELLED'
-            : 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
-        )
-      )
-      await vi.waitFor(() => expect(harness.capability.activeOperationCount).toBe(0))
-      expect(await Promise.all(paths.map((filePath) => fsp.readFile(filePath, 'utf8')))).toEqual([
-        'file-0',
-        'file-1'
-      ])
-      expect(
-        (await fsp.readdir(path.dirname(paths[0]))).some((name) => name.includes('.tuff-rename-'))
-      ).toBe(false)
-      await harness.registry.close()
-      await harness.capability.close()
+        await vi.waitFor(() => expect(harness.capability.activeOperationCount).toBe(0))
+        expect(await Promise.all(paths.map((filePath) => fsp.readFile(filePath, 'utf8')))).toEqual([
+          'file-0',
+          'file-1'
+        ])
+        expect(
+          (await fsp.readdir(path.dirname(paths[0]))).some((name) => name.includes('.tuff-rename-'))
+        ).toBe(false)
+        await harness.registry.close()
+        await harness.capability.close()
+      }
     }
+  })
+
+  it('retries a failed rollback in the close barrier without leaking native detail', async () => {
+    const { root, paths } = await fixtureFiles(['rollback-source.txt'])
+    let unlinkCalls = 0
+    const harness = createHarness({
+      filesystem: {
+        async unlink(filePath) {
+          unlinkCalls += 1
+          if (unlinkCalls <= 2) {
+            throw new Error(`/private/native-rollback:${filePath}`)
+          }
+          await fsp.unlink(filePath)
+        }
+      }
+    })
+    await harness.capability.approveLifecycleFileInputs(lifecycleInput(paths))
+
+    const failure = await harness.registry
+      .dispatch('filesystem.write', {
+        operation: 'rename-batch',
+        entries: [{ source: paths[0], targetName: 'rollback-target.txt' }]
+      })
+      .catch((error) => error)
+    expect(failure).toEqual(new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'))
+    expect(JSON.stringify(failure)).not.toContain(root)
+    await expect(harness.capability.close()).resolves.toBeUndefined()
+    await expect(fsp.readFile(paths[0], 'utf8')).resolves.toBe('file-0')
+    expect((await fsp.readdir(root)).some((name) => name.includes('.tuff-rename-'))).toBe(false)
+    await harness.registry.close()
   })
 
   it('fails stale generations and waits for the active transaction during close', async () => {
@@ -271,9 +600,9 @@ describe('batch rename filesystem capability', () => {
     })
     const barrier = createHarness({
       filesystem: {
-        async rename(source, target) {
+        async link(source, target) {
           await renameBarrier
-          await fsp.rename(source, target)
+          await fsp.link(source, target)
         }
       }
     })

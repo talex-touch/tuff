@@ -11,15 +11,8 @@ const pluginsRoot = path.join(workspaceRoot, 'plugins')
 
 const EXPECTED_UNMIGRATED = Object.freeze({
   'touch-browser-data': 'top-level require',
-  'touch-browser-open': 'top-level require',
   'touch-intelligence': 'top-level require',
-  'touch-quick-actions': 'top-level require',
-  'touch-snipaste': 'top-level require',
-  'touch-system-actions': 'top-level require',
-  'touch-translation': 'top-level require',
-  'touch-window-manager': 'top-level require',
-  'touch-window-presets': 'top-level require',
-  'touch-workspace-scripts': 'top-level require'
+  'touch-translation': 'top-level require'
 })
 
 interface OfficialManifest {
@@ -48,7 +41,7 @@ function officialManifestNames(): string[] {
 }
 
 describe('plugin runtime production rollout gate', () => {
-  it('computes the disabled default from all 22 manifested official activations', () => {
+  it('computes the disabled default from 19 compatible of 22 manifested activations', () => {
     const official = officialManifestNames()
     const compatible = new Set<string>(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
@@ -58,18 +51,25 @@ describe('plugin runtime production rollout gate', () => {
       'clipboard-history',
       'touch-batch-rename',
       'touch-browser-bookmarks',
+      'touch-browser-open',
       'touch-code-snippets',
       'touch-dev-toolbox',
       'touch-dev-utils',
       'touch-dictation',
       'touch-emoji-symbols',
+      'touch-quick-actions',
       'touch-quickops',
+      'touch-snipaste',
       'touch-snippets',
+      'touch-system-actions',
       'touch-text-snippets',
-      'touch-text-tools'
+      'touch-text-tools',
+      'touch-window-manager',
+      'touch-window-presets',
+      'touch-workspace-scripts'
     ])
     expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
-    expect(unmigrated).toHaveLength(10)
+    expect(unmigrated).toHaveLength(3)
     expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(unmigrated.length === 0)
   })
 
@@ -97,15 +97,22 @@ describe('plugin runtime production rollout gate', () => {
     for (const name of [
       'touch-batch-rename',
       'touch-browser-bookmarks',
+      'touch-browser-open',
       'touch-code-snippets',
       'touch-dev-toolbox',
       'touch-dev-utils',
       'touch-dictation',
       'touch-emoji-symbols',
+      'touch-quick-actions',
       'touch-quickops',
+      'touch-snipaste',
       'touch-snippets',
+      'touch-system-actions',
       'touch-text-snippets',
-      'touch-text-tools'
+      'touch-text-tools',
+      'touch-window-manager',
+      'touch-window-presets',
+      'touch-workspace-scripts'
     ]) {
       expect(manifests.get(name)?.main).toBe('index.js')
       expect(fs.existsSync(path.join(pluginsRoot, name, 'index.js'))).toBe(true)
@@ -148,6 +155,21 @@ describe('plugin runtime production rollout gate', () => {
       expect(declared, `${name} must explicitly declare storage.plugin`).toContain('storage.plugin')
     }
 
+    const browserOpen = manifests.get('touch-browser-open')?.permissions
+    const browserOpenPermissions = [
+      ...(Array.isArray(browserOpen?.required) ? browserOpen.required : []),
+      ...(Array.isArray(browserOpen?.optional) ? browserOpen.optional : [])
+    ]
+    expect(browserOpenPermissions).toEqual(
+      expect.arrayContaining([
+        'storage.plugin',
+        'system.shell',
+        'network.internet',
+        'clipboard.write',
+        'search.root-results'
+      ])
+    )
+
     const snippets = manifests.get('touch-snippets')?.permissions
     const snippetPermissions = [
       ...(Array.isArray(snippets?.required) ? snippets.required : []),
@@ -161,6 +183,47 @@ describe('plugin runtime production rollout gate', () => {
       ...(Array.isArray(quickOps?.optional) ? quickOps.optional : [])
     ]
     expect(quickOpsPermissions).toContain('storage.shared')
+
+    const quickActions = manifests.get('touch-quick-actions')?.permissions
+    const quickActionPermissions = [
+      ...(Array.isArray(quickActions?.required) ? quickActions.required : []),
+      ...(Array.isArray(quickActions?.optional) ? quickActions.optional : [])
+    ]
+    expect(quickActionPermissions).toContain('system.shell')
+
+    const snipaste = manifests.get('touch-snipaste')?.permissions
+    const snipastePermissions = [
+      ...(Array.isArray(snipaste?.required) ? snipaste.required : []),
+      ...(Array.isArray(snipaste?.optional) ? snipaste.optional : [])
+    ]
+    expect(snipastePermissions).toContain('system.shell')
+
+    const windowManager = manifests.get('touch-window-manager')?.permissions
+    const windowManagerPermissions = [
+      ...(Array.isArray(windowManager?.required) ? windowManager.required : []),
+      ...(Array.isArray(windowManager?.optional) ? windowManager.optional : [])
+    ]
+    expect(windowManagerPermissions).toContain('system.shell')
+
+    const windowPresets = manifests.get('touch-window-presets')?.permissions
+    const windowPresetPermissions = [
+      ...(Array.isArray(windowPresets?.required) ? windowPresets.required : []),
+      ...(Array.isArray(windowPresets?.optional) ? windowPresets.optional : [])
+    ]
+    expect(windowPresetPermissions).toContain('system.shell')
+
+    const workspaceScripts = manifests.get('touch-workspace-scripts')?.permissions
+    const workspaceScriptPermissions = [
+      ...(Array.isArray(workspaceScripts?.required) ? workspaceScripts.required : []),
+      ...(Array.isArray(workspaceScripts?.optional) ? workspaceScripts.optional : [])
+    ]
+    expect(workspaceScriptPermissions).toEqual(
+      expect.arrayContaining(['fs.read', 'system.shell', 'search.root-results'])
+    )
+
+    const systemActions = manifests.get('touch-system-actions')?.permissions
+    expect(systemActions?.required).not.toContain('system.shell')
+    expect(systemActions?.optional).toContain('system.shell')
 
     const dictation = manifests.get('touch-dictation')?.permissions
     const dictationPermissions = [

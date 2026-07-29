@@ -86,6 +86,12 @@ import {
 } from './host/plugin-business-file-storage'
 import type { PluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
 import { createPluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
+import type { PluginBrowserOpenCapabilities } from './host/plugin-browser-open-capabilities'
+import type { PluginSnipasteProcessCapability } from './host/plugin-process-capabilities'
+import type { PluginSystemActionCapabilities } from './host/plugin-system-capabilities'
+import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
+import type { PluginWindowPresetCapabilities } from './host/plugin-window-preset-capabilities'
+import type { PluginWorkspaceScriptCapabilities } from './host/plugin-workspace-script-capabilities'
 import type {
   PluginRuntimeService,
   PluginRuntimeSnapshot,
@@ -448,6 +454,24 @@ function createPluginHttpClient(): PluginHttpClient {
 export class TouchPlugin implements ITouchPlugin {
   private static _transport: ITuffTransportMain | null = null
   private static _runtimeService: PluginRuntimeService | null = null
+  private static _snipasteProcessCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability)
+    | null = null
+  private static _systemActionCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities)
+    | null = null
+  private static _browserOpenCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities)
+    | null = null
+  private static _windowManagerCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities)
+    | null = null
+  private static _windowPresetCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities)
+    | null = null
+  private static _workspaceScriptCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
+    | null = null
 
   static setTransport(transport: ITuffTransportMain | null): void {
     TouchPlugin._transport = transport
@@ -455,6 +479,42 @@ export class TouchPlugin implements ITouchPlugin {
 
   static setRuntimeService(runtimeService: PluginRuntimeService | null): void {
     TouchPlugin._runtimeService = runtimeService
+  }
+
+  static setSnipasteProcessCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability) | null
+  ): void {
+    TouchPlugin._snipasteProcessCapabilityFactory = factory
+  }
+
+  static setSystemActionCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
+  ): void {
+    TouchPlugin._systemActionCapabilityFactory = factory
+  }
+
+  static setBrowserOpenCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
+  ): void {
+    TouchPlugin._browserOpenCapabilityFactory = factory
+  }
+
+  static setWindowManagerCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities) | null
+  ): void {
+    TouchPlugin._windowManagerCapabilityFactory = factory
+  }
+
+  static setWindowPresetCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities) | null
+  ): void {
+    TouchPlugin._windowPresetCapabilityFactory = factory
+  }
+
+  static setWorkspaceScriptCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities) | null
+  ): void {
+    TouchPlugin._workspaceScriptCapabilityFactory = factory
   }
 
   private get transport(): ITuffTransportMain | null {
@@ -510,6 +570,11 @@ export class TouchPlugin implements ITouchPlugin {
   private runtimeContext: TouchPluginRuntimeContext | null = null
   private preludeContract: PluginPreludeManifestContract = Object.freeze({})
   private batchRenameFilesystemCapability: PluginBatchRenameFilesystemCapability | null = null
+  private browserOpenCapability: PluginBrowserOpenCapabilities | null = null
+  private snipasteProcessCapability: PluginSnipasteProcessCapability | null = null
+  private windowManagerCapability: PluginWindowManagerCapabilities | null = null
+  private windowPresetCapability: PluginWindowPresetCapabilities | null = null
+  private workspaceScriptCapability: PluginWorkspaceScriptCapabilities | null = null
 
   dev: IPluginDev
   name: string
@@ -1935,6 +2000,84 @@ export class TouchPlugin implements ITouchPlugin {
     })
   }
 
+  private createSnipasteProcessCapability(
+    activation: PluginActivationIdentity
+  ): PluginSnipasteProcessCapability | null {
+    if (this.name !== 'touch-snipaste') return null
+    const factory = TouchPlugin._snipasteProcessCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createSystemActionCapability(
+    activation: PluginActivationIdentity
+  ): PluginSystemActionCapabilities | null {
+    if (this.name !== 'touch-quick-actions' && this.name !== 'touch-system-actions') return null
+    const factory = TouchPlugin._systemActionCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createBrowserOpenCapability(
+    activation: PluginActivationIdentity
+  ): PluginBrowserOpenCapabilities | null {
+    if (this.name !== 'touch-browser-open') return null
+    const factory = TouchPlugin._browserOpenCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createWindowManagerCapability(
+    activation: PluginActivationIdentity
+  ): PluginWindowManagerCapabilities | null {
+    if (this.name !== 'touch-window-manager') return null
+    const factory = TouchPlugin._windowManagerCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createWindowPresetCapability(
+    activation: PluginActivationIdentity
+  ): PluginWindowPresetCapabilities | null {
+    if (this.name !== 'touch-window-presets') return null
+    const factory = TouchPlugin._windowPresetCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createWorkspaceScriptCapability(
+    activation: PluginActivationIdentity
+  ): PluginWorkspaceScriptCapabilities | null {
+    if (this.name !== 'touch-workspace-scripts') return null
+    const factory = TouchPlugin._workspaceScriptCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
   async enable(): Promise<boolean> {
     const blockedSdkIssue = this.issues.find((issue) => issue.code === 'SDKAPI_BLOCKED')
     if (this.loadError?.code === 'SDKAPI_BLOCKED' || blockedSdkIssue) {
@@ -1988,25 +2131,109 @@ export class TouchPlugin implements ITouchPlugin {
 
       const scriptContent = await this.loadPreludeScript()
       const filesystemCapability = this.createBatchRenameFilesystemCapability(currentActivation)
+      const browserOpenCapability = this.createBrowserOpenCapability(currentActivation)
+      const snipasteProcessCapability = this.createSnipasteProcessCapability(currentActivation)
+      const systemActionCapability = this.createSystemActionCapability(currentActivation)
+      const windowManagerCapability = this.createWindowManagerCapability(currentActivation)
+      const windowPresetCapability = this.createWindowPresetCapability(currentActivation)
+      const workspaceScriptCapability = this.createWorkspaceScriptCapability(currentActivation)
       this.batchRenameFilesystemCapability = filesystemCapability
-      const closeFilesystemResources = filesystemCapability
-        ? async (): Promise<void> => {
-            await filesystemCapability.close()
-            if (this.batchRenameFilesystemCapability === filesystemCapability) {
-              this.batchRenameFilesystemCapability = null
+      this.browserOpenCapability = browserOpenCapability
+      this.snipasteProcessCapability = snipasteProcessCapability
+      this.windowManagerCapability = windowManagerCapability
+      this.windowPresetCapability = windowPresetCapability
+      this.workspaceScriptCapability = workspaceScriptCapability
+      const closeActivationResources =
+        filesystemCapability ||
+        browserOpenCapability ||
+        snipasteProcessCapability ||
+        windowManagerCapability ||
+        windowPresetCapability ||
+        workspaceScriptCapability
+          ? async (): Promise<void> => {
+              const failures: unknown[] = []
+              if (filesystemCapability) {
+                try {
+                  await filesystemCapability.close()
+                } catch (error) {
+                  failures.push(error)
+                }
+                if (this.batchRenameFilesystemCapability === filesystemCapability) {
+                  this.batchRenameFilesystemCapability = null
+                }
+              }
+              if (browserOpenCapability) {
+                try {
+                  await browserOpenCapability.close()
+                } catch (error) {
+                  failures.push(error)
+                }
+                if (this.browserOpenCapability === browserOpenCapability) {
+                  this.browserOpenCapability = null
+                }
+              }
+              if (snipasteProcessCapability) {
+                try {
+                  await snipasteProcessCapability.close()
+                } catch (error) {
+                  failures.push(error)
+                }
+                if (this.snipasteProcessCapability === snipasteProcessCapability) {
+                  this.snipasteProcessCapability = null
+                }
+              }
+              if (windowManagerCapability) {
+                try {
+                  await windowManagerCapability.close()
+                } catch (error) {
+                  failures.push(error)
+                }
+                if (this.windowManagerCapability === windowManagerCapability) {
+                  this.windowManagerCapability = null
+                }
+              }
+              if (windowPresetCapability) {
+                try {
+                  await windowPresetCapability.close()
+                } catch (error) {
+                  failures.push(error)
+                }
+                if (this.windowPresetCapability === windowPresetCapability) {
+                  this.windowPresetCapability = null
+                }
+              }
+              if (workspaceScriptCapability) {
+                try {
+                  await workspaceScriptCapability.close()
+                } catch (error) {
+                  failures.push(error)
+                }
+                if (this.workspaceScriptCapability === workspaceScriptCapability) {
+                  this.workspaceScriptCapability = null
+                }
+              }
+              if (failures.length > 0) {
+                throw new AggregateError(failures, 'PLUGIN_ACTIVATION_RESOURCE_CLOSE_FAILED')
+              }
             }
-          }
-        : undefined
+          : undefined
+      const activationCapabilityDefinitions = Object.freeze([
+        ...(filesystemCapability ? filesystemCapability.definitions : []),
+        ...(browserOpenCapability ? browserOpenCapability.definitions : []),
+        ...(snipasteProcessCapability ? snipasteProcessCapability.definitions : []),
+        ...(systemActionCapability ? systemActionCapability.definitions : []),
+        ...(windowManagerCapability ? windowManagerCapability.definitions : []),
+        ...(windowPresetCapability ? windowPresetCapability.definitions : []),
+        ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : [])
+      ])
       const runtimeActivation = await activeRuntime.startActivation({
         activation: currentActivation,
         scriptContent,
         snapshot: this.createRuntimeSnapshot(),
-        ...(filesystemCapability
-          ? {
-              capabilityDefinitions: filesystemCapability.definitions,
-              closeResources: closeFilesystemResources
-            }
+        ...(activationCapabilityDefinitions.length > 0
+          ? { capabilityDefinitions: activationCapabilityDefinitions }
           : {}),
+        ...(closeActivationResources ? { closeResources: closeActivationResources } : {}),
         onCrash: (diagnostic) => this.handleRuntimeCrash(currentActivation, diagnostic)
       })
 
@@ -2046,6 +2273,16 @@ export class TouchPlugin implements ITouchPlugin {
       this.pluginLifecycle = null
       await this.batchRenameFilesystemCapability?.close().catch(() => undefined)
       this.batchRenameFilesystemCapability = null
+      await this.browserOpenCapability?.close().catch(() => undefined)
+      this.browserOpenCapability = null
+      await this.snipasteProcessCapability?.close().catch(() => undefined)
+      this.snipasteProcessCapability = null
+      await this.windowManagerCapability?.close().catch(() => undefined)
+      this.windowManagerCapability = null
+      await this.windowPresetCapability?.close().catch(() => undefined)
+      this.windowPresetCapability = null
+      await this.workspaceScriptCapability?.close().catch(() => undefined)
+      this.workspaceScriptCapability = null
       this._runtimeStats.startedAt = 0
       this.recordActivationFailure(error)
       this.status = PluginStatus.CRASHED
@@ -2088,6 +2325,16 @@ export class TouchPlugin implements ITouchPlugin {
 
     await this.batchRenameFilesystemCapability?.close().catch(() => undefined)
     this.batchRenameFilesystemCapability = null
+    await this.browserOpenCapability?.close().catch(() => undefined)
+    this.browserOpenCapability = null
+    await this.snipasteProcessCapability?.close().catch(() => undefined)
+    this.snipasteProcessCapability = null
+    await this.windowManagerCapability?.close().catch(() => undefined)
+    this.windowManagerCapability = null
+    await this.windowPresetCapability?.close().catch(() => undefined)
+    this.windowPresetCapability = null
+    await this.workspaceScriptCapability?.close().catch(() => undefined)
+    this.workspaceScriptCapability = null
     this.clearCoreBoxItems()
     await widgetManager.releasePlugin(this.name)
 

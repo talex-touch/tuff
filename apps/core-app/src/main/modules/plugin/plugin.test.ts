@@ -2147,6 +2147,12 @@ describe('touchPlugin.enable', () => {
   afterEach(() => {
     TouchPlugin.setTransport(null)
     TouchPlugin.setRuntimeService(null)
+    TouchPlugin.setSnipasteProcessCapabilityFactory(null)
+    TouchPlugin.setSystemActionCapabilityFactory(null)
+    TouchPlugin.setBrowserOpenCapabilityFactory(null)
+    TouchPlugin.setWindowManagerCapabilityFactory(null)
+    TouchPlugin.setWindowPresetCapabilityFactory(null)
+    TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
     clearBoxItemMocks()
     vi.restoreAllMocks()
   })
@@ -2285,6 +2291,411 @@ describe('touchPlugin.enable', () => {
       )
       expect(runtime.lifecycle.onFeatureTriggered).toHaveBeenCalledOnce()
       await expect(startOptions.closeResources?.()).resolves.toBeUndefined()
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it.each(['touch-quick-actions', 'touch-system-actions'] as const)(
+    '%s injects an activation-local system definition and rotates it on re-enable',
+    async (pluginName) => {
+      const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-system-action-activation-'))
+      try {
+        fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+        const runtime = createRuntimeServiceMock()
+        const requestKey = vi
+          .fn()
+          .mockReturnValueOnce('system-action-key-1')
+          .mockReturnValueOnce('system-action-key-2')
+        TouchPlugin.setTransport({
+          broadcast: vi.fn(),
+          invoke: vi.fn().mockResolvedValue(undefined),
+          keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+          sendToPlugin: vi.fn().mockResolvedValue(undefined)
+        } as unknown as ITuffTransportMain)
+        TouchPlugin.setRuntimeService(runtime as never)
+        const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => ({
+          definitions: Object.freeze([{ id: 'system.invoke' }])
+        }))
+        TouchPlugin.setSystemActionCapabilityFactory(factory as never)
+        const plugin = new TouchPlugin(
+          pluginName,
+          { type: 'class', value: 'i-ri-settings-3-line' },
+          '1.0.0',
+          'desc',
+          '',
+          { enable: false, address: '' },
+          root,
+          {},
+          { skipDataInit: true }
+        )
+        plugin.setPreludeContract({ main: 'index.js' })
+
+        await expect(plugin.enable()).resolves.toBe(true)
+        const first = vi.mocked(runtime.startActivation).mock
+          .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+        expect(first?.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+          'system.invoke'
+        ])
+        expect(first?.closeResources).toBeUndefined()
+        expect(first?.activation).toMatchObject({
+          activationGeneration: 1,
+          key: 'system-action-key-1'
+        })
+
+        await expect(plugin.disable()).resolves.toBe(true)
+        await expect(plugin.enable()).resolves.toBe(true)
+        const second = vi.mocked(runtime.startActivation).mock
+          .calls[1]?.[0] as unknown as PluginRuntimeActivationOptions
+        expect(second?.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+          'system.invoke'
+        ])
+        expect(second?.activation).toMatchObject({
+          activationGeneration: 2,
+          key: 'system-action-key-2'
+        })
+        expect(factory).toHaveBeenCalledTimes(2)
+        expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
+      } finally {
+        fse.removeSync(root)
+      }
+    }
+  )
+
+  it('injects a generation-local window manager definition and awaited close barrier', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-window-manager-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      const requestKey = vi
+        .fn()
+        .mockReturnValueOnce('window-manager-key-1')
+        .mockReturnValueOnce('window-manager-key-2')
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const closes: Array<ReturnType<typeof vi.fn>> = []
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
+        const close = vi.fn(async () => undefined)
+        closes.push(close)
+        return {
+          definitions: Object.freeze([{ id: 'system.window-manager', permission: 'system.shell' }]),
+          close
+        }
+      })
+      TouchPlugin.setWindowManagerCapabilityFactory(factory as never)
+      const plugin = new TouchPlugin(
+        'touch-window-manager',
+        { type: 'class', value: 'i-ri-window-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const first = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(first.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'system.window-manager'
+      ])
+      expect(first.capabilityDefinitions?.[0]?.permission).toBe('system.shell')
+      expect(first.closeResources).toEqual(expect.any(Function))
+      expect(first.activation).toMatchObject({
+        activationGeneration: 1,
+        key: 'window-manager-key-1'
+      })
+      await expect(first.closeResources?.()).resolves.toBeUndefined()
+      expect(closes[0]).toHaveBeenCalledOnce()
+
+      await expect(plugin.disable()).resolves.toBe(true)
+      await expect(plugin.enable()).resolves.toBe(true)
+      const second = vi.mocked(runtime.startActivation).mock
+        .calls[1]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(second.activation).toMatchObject({
+        activationGeneration: 2,
+        key: 'window-manager-key-2'
+      })
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('injects a generation-local window preset definition and awaited close barrier', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-window-presets-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      const requestKey = vi
+        .fn()
+        .mockReturnValueOnce('window-presets-key-1')
+        .mockReturnValueOnce('window-presets-key-2')
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const closes: Array<ReturnType<typeof vi.fn>> = []
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
+        const close = vi.fn(async () => undefined)
+        closes.push(close)
+        return {
+          definitions: Object.freeze([{ id: 'system.window-presets', permission: 'system.shell' }]),
+          close
+        }
+      })
+      TouchPlugin.setWindowPresetCapabilityFactory(factory as never)
+      const plugin = new TouchPlugin(
+        'touch-window-presets',
+        { type: 'class', value: 'i-ri-layout-column-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const first = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(first.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'system.window-presets'
+      ])
+      expect(first.capabilityDefinitions?.[0]?.permission).toBe('system.shell')
+      expect(first.closeResources).toEqual(expect.any(Function))
+      expect(first.activation).toMatchObject({
+        activationGeneration: 1,
+        key: 'window-presets-key-1'
+      })
+      await expect(first.closeResources?.()).resolves.toBeUndefined()
+      expect(closes[0]).toHaveBeenCalledOnce()
+
+      await expect(plugin.disable()).resolves.toBe(true)
+      await expect(plugin.enable()).resolves.toBe(true)
+      const second = vi.mocked(runtime.startActivation).mock
+        .calls[1]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(second.activation).toMatchObject({
+        activationGeneration: 2,
+        key: 'window-presets-key-2'
+      })
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('injects a generation-local browser-open definition and awaited close barrier', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-browser-open-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      const requestKey = vi
+        .fn()
+        .mockReturnValueOnce('browser-open-key-1')
+        .mockReturnValueOnce('browser-open-key-2')
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const closes: Array<ReturnType<typeof vi.fn>> = []
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
+        const close = vi.fn(async () => undefined)
+        closes.push(close)
+        return {
+          definitions: Object.freeze([{ id: 'system.browser-open', permission: 'system.shell' }]),
+          close
+        }
+      })
+      TouchPlugin.setBrowserOpenCapabilityFactory(factory as never)
+      const plugin = new TouchPlugin(
+        'touch-browser-open',
+        { type: 'class', value: 'i-ri-global-line' },
+        '1.0.4',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const first = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(first.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'system.browser-open'
+      ])
+      expect(first.capabilityDefinitions?.[0]?.permission).toBe('system.shell')
+      expect(first.closeResources).toEqual(expect.any(Function))
+      expect(first.activation).toMatchObject({
+        activationGeneration: 1,
+        key: 'browser-open-key-1'
+      })
+      await expect(first.closeResources?.()).resolves.toBeUndefined()
+      expect(closes[0]).toHaveBeenCalledOnce()
+
+      await expect(plugin.disable()).resolves.toBe(true)
+      await expect(plugin.enable()).resolves.toBe(true)
+      const second = vi.mocked(runtime.startActivation).mock
+        .calls[1]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(second.activation).toMatchObject({
+        activationGeneration: 2,
+        key: 'browser-open-key-2'
+      })
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('injects a generation-local workspace script definition and awaited close barrier', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-workspace-script-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      const requestKey = vi
+        .fn()
+        .mockReturnValueOnce('workspace-script-key-1')
+        .mockReturnValueOnce('workspace-script-key-2')
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const closes: Array<ReturnType<typeof vi.fn>> = []
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
+        const close = vi.fn(async () => undefined)
+        closes.push(close)
+        return {
+          definitions: Object.freeze([{ id: 'process.workspace-scripts', permission: 'fs.read' }]),
+          close
+        }
+      })
+      TouchPlugin.setWorkspaceScriptCapabilityFactory(factory as never)
+      const plugin = new TouchPlugin(
+        'touch-workspace-scripts',
+        { type: 'class', value: 'i-ri-terminal-box-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const first = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(first.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'process.workspace-scripts'
+      ])
+      expect(first.capabilityDefinitions?.[0]?.permission).toBe('fs.read')
+      expect(first.closeResources).toEqual(expect.any(Function))
+      expect(first.activation).toMatchObject({
+        activationGeneration: 1,
+        key: 'workspace-script-key-1'
+      })
+      await expect(first.closeResources?.()).resolves.toBeUndefined()
+      expect(closes[0]).toHaveBeenCalledOnce()
+
+      await expect(plugin.disable()).resolves.toBe(true)
+      await expect(plugin.enable()).resolves.toBe(true)
+      const second = vi.mocked(runtime.startActivation).mock
+        .calls[1]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(second.activation).toMatchObject({
+        activationGeneration: 2,
+        key: 'workspace-script-key-2'
+      })
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('injects a generation-local Snipaste process definition and awaited close barrier', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-snipaste-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      const requestKey = vi
+        .fn()
+        .mockReturnValueOnce('snipaste-key-1')
+        .mockReturnValueOnce('snipaste-key-2')
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const closes: Array<ReturnType<typeof vi.fn>> = []
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
+        const close = vi.fn(async () => undefined)
+        closes.push(close)
+        return {
+          definitions: Object.freeze([{ id: 'process.spawn', permission: 'system.shell' }]),
+          close
+        }
+      })
+      TouchPlugin.setSnipasteProcessCapabilityFactory(factory as never)
+      const plugin = new TouchPlugin(
+        'touch-snipaste',
+        { type: 'class', value: 'i-ri-screenshot-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const first = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(first.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'process.spawn'
+      ])
+      expect(first.capabilityDefinitions?.[0]?.permission).toBe('system.shell')
+      expect(first.closeResources).toEqual(expect.any(Function))
+      expect(first.activation).toMatchObject({ activationGeneration: 1, key: 'snipaste-key-1' })
+      await expect(first.closeResources?.()).resolves.toBeUndefined()
+      expect(closes[0]).toHaveBeenCalledOnce()
+
+      await expect(plugin.disable()).resolves.toBe(true)
+      await expect(plugin.enable()).resolves.toBe(true)
+      const second = vi.mocked(runtime.startActivation).mock
+        .calls[1]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(second.activation).toMatchObject({ activationGeneration: 2, key: 'snipaste-key-2' })
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
     } finally {
       fse.removeSync(root)
     }

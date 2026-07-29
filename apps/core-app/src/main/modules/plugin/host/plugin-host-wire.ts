@@ -40,7 +40,11 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'filesystem.list',
   'filesystem.stat',
   'process.spawn',
-  'system.invoke'
+  'process.workspace-scripts',
+  'system.invoke',
+  'system.browser-open',
+  'system.window-presets',
+  'system.window-manager'
 ] as const
 
 export const PLUGIN_HOST_LIFECYCLE_METHODS = [

@@ -12,14 +12,15 @@
   "description": "浏览器打开：默认浏览器与指定浏览器快速打开链接",
   "main": "index.js",
   "permissions": {
-    "required": ["system.shell", "search.root-results"],
+    "required": ["system.shell", "search.root-results", "storage.plugin"],
     "optional": ["clipboard.write", "network.internet"]
   },
   "permissionReasons": {
-    "system.shell": "调用系统命令打开浏览器",
+    "system.shell": "通过宿主固定启动策略打开浏览器",
     "search.root-results": "将浏览器打开与网页搜索结果推送到 CoreBox 根搜索结果",
+    "storage.plugin": "保存搜索引擎设置与非权威的最近浏览器显示信息",
     "clipboard.write": "复制链接到剪贴板",
-    "network.internet": "获取搜索引擎建议词"
+    "network.internet": "打开网页并通过宿主安全网络能力获取搜索建议"
   },
   "searchProviders": [
     {

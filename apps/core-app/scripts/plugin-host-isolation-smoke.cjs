@@ -1,4 +1,13 @@
-const { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('node:fs')
+const {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync
+} = require('node:fs')
+const { EventEmitter } = require('node:events')
 const { tmpdir } = require('node:os')
 const path = require('node:path')
 const { app } = require('electron')
@@ -144,9 +153,15 @@ async function run() {
           export { PluginRuntimeHost } from '../src/main/modules/plugin/host/plugin-runtime-host'
           export { PluginHostCapabilityRegistry } from '../src/main/modules/plugin/host/plugin-host-capabilities'
           export { createPluginBusinessCapabilities } from '../src/main/modules/plugin/host/plugin-business-capabilities'
+          export { createFixedPluginBrowserOpenService, createPluginBrowserOpenCapabilities, createPluginBrowserOpenProcess } from '../src/main/modules/plugin/host/plugin-browser-open-capabilities'
           export { createPluginBatchRenameFilesystemCapability } from '../src/main/modules/plugin/host/plugin-filesystem-capabilities'
+          export { createPluginSnipasteProcessCapability, createFixedPluginSnipasteDiscovery, createFixedPluginSnipasteExecutor } from '../src/main/modules/plugin/host/plugin-process-capabilities'
           export { createPluginRequestReplyCapabilities } from '../src/main/modules/plugin/host/plugin-host-request-reply'
           export { createPluginVoiceCapabilities } from '../src/main/modules/plugin/host/plugin-voice-capabilities'
+          export { createPluginSystemActionCapabilities } from '../src/main/modules/plugin/host/plugin-system-capabilities'
+          export { createFixedPluginWindowManagerService, createPluginWindowManagerCapabilities } from '../src/main/modules/plugin/host/plugin-window-manager-capabilities'
+          export { createFixedPluginWindowPresetExecutor, createPluginWindowPresetCapabilities } from '../src/main/modules/plugin/host/plugin-window-preset-capabilities'
+          export { createFixedPluginWorkspaceScriptHost, createPluginWorkspaceScriptCapabilities } from '../src/main/modules/plugin/host/plugin-workspace-script-capabilities'
           export { PluginHostResourceRegistry } from '../src/main/modules/plugin/host/plugin-host-resources'
           export { ElectronPluginRuntimeProcessFactory } from '../src/main/modules/plugin/host/plugin-runtime-electron-process'
         `,
@@ -164,8 +179,21 @@ async function run() {
 
     const {
       createPluginBusinessCapabilities,
+      createFixedPluginBrowserOpenService,
+      createPluginBrowserOpenCapabilities,
+      createPluginBrowserOpenProcess,
       createPluginBatchRenameFilesystemCapability,
+      createFixedPluginSnipasteDiscovery,
+      createFixedPluginSnipasteExecutor,
       createPluginRequestReplyCapabilities,
+      createPluginSnipasteProcessCapability,
+      createPluginSystemActionCapabilities,
+      createFixedPluginWindowManagerService,
+      createPluginWindowManagerCapabilities,
+      createFixedPluginWindowPresetExecutor,
+      createPluginWindowPresetCapabilities,
+      createFixedPluginWorkspaceScriptHost,
+      createPluginWorkspaceScriptCapabilities,
       createPluginVoiceCapabilities,
       ElectronPluginRuntimeProcessFactory,
       PluginHostCapabilityRegistry,
@@ -393,6 +421,7 @@ async function run() {
     )
     const simpleFeatureCapabilityIds = new Set([
       'permission.check',
+      'feature.registry.add',
       'feature.items.push',
       'feature.items.update',
       'feature.items.remove',
@@ -405,7 +434,8 @@ async function run() {
       'clipboard.read',
       'clipboard.write',
       'clipboard.copy-and-paste',
-      'open-url'
+      'open-url',
+      'http.request'
     ])
     const createOfficialFeatureRuntime = (name, generation) => {
       const activationIdentity = activation(name, generation)
@@ -419,11 +449,31 @@ async function run() {
         clipboardWrites: [],
         files: new Map(),
         openedUrls: [],
+        browserHttpCalls: [],
+        browserListCalls: 0,
+        browserOpenCalls: [],
+        browserProcessKills: 0,
+        browserProcessStarts: 0,
         deniedPermissions: new Set(),
         nexusCalls: [],
         quickOpsCalls: [],
         flowCalls: [],
-        voiceCalls: []
+        voiceCalls: [],
+        snipasteActions: [],
+        snipasteKills: 0,
+        systemActions: [],
+        systemConfirmations: [],
+        mainWindowShows: 0,
+        windowManagerActions: [],
+        windowManagerListCalls: 0,
+        windowManagerProcessStarts: 0,
+        windowPresetActions: [],
+        windowPresetStatusCalls: 0,
+        windowPresetProcessStarts: 0,
+        workspaceScriptConfirmations: 0,
+        workspaceScriptProcessKills: 0,
+        workspaceScriptProcessStarts: 0,
+        workspaceScriptSelections: 0
       }
       const featureHost = {
         async pushItems(_scope, items) {
@@ -519,11 +569,20 @@ async function run() {
           return { allowed: true, url, protocol: new URL(url).protocol }
         },
         network: {
-          async requestPinned() {
-            throw new Error(FAILURE)
+          async requestPinned(options) {
+            if (name !== 'touch-browser-open') throw new Error(FAILURE)
+            state.browserHttpCalls.push(options.url)
+            return {
+              status: 200,
+              statusText: 'OK',
+              headers: {},
+              data: ['tuff', ['tuff app', 'tuff plugin']],
+              url: options.url,
+              ok: true
+            }
           },
           async resolveAddresses() {
-            return []
+            return ['93.184.216.34']
           }
         }
       })
@@ -663,13 +722,400 @@ async function run() {
           }
         }
       })
+      const snipasteExecutable =
+        process.platform === 'win32'
+          ? 'C:\\Program Files\\Snipaste\\Snipaste.exe'
+          : process.platform === 'linux'
+            ? '/opt/Snipaste/Snipaste.AppImage'
+            : '/Applications/Snipaste.app/Contents/MacOS/Snipaste'
+      const snipasteRoot =
+        process.platform === 'win32'
+          ? 'C:\\Program Files'
+          : process.platform === 'linux'
+            ? '/opt/Snipaste'
+            : '/Applications'
+      const snipasteDiscovery =
+        name === 'touch-snipaste'
+          ? createFixedPluginSnipasteDiscovery({
+              platform: process.platform,
+              fileSystem: {
+                async kind(target) {
+                  if (target === snipasteRoot) return 'directory'
+                  if (target === snipasteExecutable) return 'file'
+                  return 'missing'
+                },
+                async realpath(target) {
+                  return target
+                }
+              }
+            })
+          : null
+      const snipasteExecutor =
+        name === 'touch-snipaste'
+          ? createFixedPluginSnipasteExecutor({
+              platform: process.platform,
+              environment: {},
+              spawn(_executable, args) {
+                const actionId = args.length === 0 ? 'launch' : args[0]
+                state.snipasteActions.push(actionId)
+                let exited = false
+                let resolveExit
+                const exit = new Promise((resolve) => {
+                  resolveExit = resolve
+                })
+                return {
+                  async started() {},
+                  wait: () => exit,
+                  async kill() {
+                    if (exited) return
+                    exited = true
+                    state.snipasteKills += 1
+                    resolveExit({ code: null })
+                    await exit
+                  }
+                }
+              }
+            })
+          : null
+      const snipasteCapability =
+        name === 'touch-snipaste'
+          ? createPluginSnipasteProcessCapability({
+              activation: activationIdentity,
+              platform: process.platform,
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              authorizeShell: () => !state.deniedPermissions.has('system.shell'),
+              watchShellPermissionRevoked: () => () => undefined,
+              discovery: snipasteDiscovery,
+              executor: snipasteExecutor
+            })
+          : null
+      const systemCapability =
+        name === 'touch-quick-actions' || name === 'touch-system-actions'
+          ? createPluginSystemActionCapabilities({
+              activation: activationIdentity,
+              platform: process.platform,
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              authorizeShell: () => !state.deniedPermissions.has('system.shell'),
+              watchShellPermissionRevoked: () => () => undefined,
+              executor: {
+                start(actionId) {
+                  state.systemActions.push(actionId)
+                  return {
+                    async wait() {
+                      return { code: 0 }
+                    },
+                    async kill() {
+                      throw new Error(`${FAILURE}: completed fake process must not be killed`)
+                    }
+                  }
+                }
+              },
+              confirmation: {
+                async confirm(actionId, signal) {
+                  assert(signal.aborted === false)
+                  state.systemConfirmations.push(actionId)
+                  return true
+                }
+              },
+              window: {
+                async showMainWindow(requestActivation, requestHostGeneration, signal) {
+                  assert(signal.aborted === false)
+                  assert(requestActivation.name === name)
+                  assert(requestActivation.activationGeneration === generation)
+                  assert(requestHostGeneration === generation)
+                  state.mainWindowShows += 1
+                }
+              }
+            })
+          : null
+      const browserOpenService =
+        name === 'touch-browser-open'
+          ? createFixedPluginBrowserOpenService({
+              platform: 'darwin',
+              homeDirectory: '/Users/smoke',
+              windowsDirectory: '/Windows',
+              environment: { HOME: '/Users/smoke', LANG: 'en_US.UTF-8' },
+              async inspect(candidatePath, kind, signal) {
+                assert(signal.aborted === false)
+                if (!candidatePath.includes('Google Chrome.app')) return null
+                state.browserListCalls += 1
+                return {
+                  canonicalPath: candidatePath,
+                  kind,
+                  dev: '1',
+                  ino: `browser-${generation}`
+                }
+              },
+              spawn(executable, args, options) {
+                assert(executable === '/usr/bin/open')
+                assert(options.shell === false)
+                assert(options.detached === false)
+                state.browserProcessStarts += 1
+                state.browserOpenCalls.push({ executable, args: [...args] })
+                const child = new EventEmitter()
+                child.pid = 5000 + generation
+                child.kill = () => {
+                  state.browserProcessKills += 1
+                  queueMicrotask(() => child.emit('exit', null))
+                  return true
+                }
+                queueMicrotask(() => child.emit('exit', 0))
+                return createPluginBrowserOpenProcess(child)
+              }
+            })
+          : null
+      const browserOpenCapability =
+        name === 'touch-browser-open'
+          ? createPluginBrowserOpenCapabilities({
+              activation: activationIdentity,
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              authorizeShell: () => !state.deniedPermissions.has('system.shell'),
+              authorizeNetwork: () => !state.deniedPermissions.has('network.internet'),
+              watchShellPermissionRevoked: () => () => undefined,
+              watchNetworkPermissionRevoked: () => () => undefined,
+              service: browserOpenService
+            })
+          : null
+      const windowManagerService =
+        name === 'touch-window-manager'
+          ? createFixedPluginWindowManagerService({
+              platform: 'win32',
+              windowsDirectory: 'C:\\Windows',
+              spawn(_executable, args) {
+                state.windowManagerProcessStarts += 1
+                const serializedArgs = JSON.stringify(args)
+                const listing = serializedArgs.includes("$TuffWindowManagerOperation = 'list'")
+                const action = [
+                  'activate',
+                  'snap-left',
+                  'snap-right',
+                  'topmost-toggle',
+                  'close',
+                  'hide',
+                  'quit',
+                  'launch'
+                ].find((candidate) =>
+                  serializedArgs.includes(`$TuffWindowManagerOperation = 'act:${candidate}'`)
+                )
+                if (listing) state.windowManagerListCalls += 1
+                if (action) state.windowManagerActions.push(action)
+                const stdout = listing
+                  ? JSON.stringify({
+                      windows: [
+                        {
+                          name: 'Terminal',
+                          title: 'Workspace',
+                          pid: 11,
+                          nativeId: '100',
+                          startTime: '638900000000000000',
+                          appPath: 'C:\\Program Files\\Terminal\\terminal.exe',
+                          topmost: false,
+                          isFront: true
+                        }
+                      ],
+                      apps: [
+                        {
+                          name: 'Terminal',
+                          pid: 11,
+                          nativeId: 'terminal-app',
+                          startTime: '638900000000000000',
+                          appPath: 'C:\\Program Files\\Terminal\\terminal.exe',
+                          running: true
+                        }
+                      ]
+                    })
+                  : JSON.stringify({ success: true })
+                return {
+                  async started() {},
+                  async wait() {
+                    return { code: 0, stdout }
+                  },
+                  async kill() {
+                    throw new Error(
+                      `${FAILURE}: completed fake window-manager process must not be killed`
+                    )
+                  }
+                }
+              }
+            })
+          : null
+      const windowManagerCapability =
+        name === 'touch-window-manager'
+          ? createPluginWindowManagerCapabilities({
+              activation: activationIdentity,
+              platform: 'win32',
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              authorizeShell: () => !state.deniedPermissions.has('system.shell'),
+              watchShellPermissionRevoked: () => () => undefined,
+              service: windowManagerService
+            })
+          : null
+      const windowPresetExecutor =
+        name === 'touch-window-presets'
+          ? createFixedPluginWindowPresetExecutor({
+              platform: 'win32',
+              windowsDirectory: 'C:\\Windows',
+              spawn(_executable, args) {
+                state.windowPresetProcessStarts += 1
+                const script = args.at(-1) || ''
+                if (script.includes("$TuffWindowPresetOperation = 'list'")) {
+                  state.windowPresetStatusCalls += 1
+                } else if (script.includes("$TuffWindowPresetOperation = 'layout'")) {
+                  state.windowPresetActions.push('layout')
+                } else if (script.includes("$TuffWindowPresetOperation = 'clear-topmost'")) {
+                  state.windowPresetActions.push('clear-topmost')
+                }
+                const stdout = script.includes("$TuffWindowPresetOperation = 'list'")
+                  ? JSON.stringify([
+                      {
+                        name: 'WindowsTerminal',
+                        title: 'Terminal',
+                        pid: 11,
+                        handle: '100',
+                        isFront: true
+                      },
+                      {
+                        name: 'Chrome',
+                        title: 'Docs',
+                        pid: 22,
+                        handle: '200',
+                        isFront: false
+                      },
+                      {
+                        name: 'Code',
+                        title: 'Workspace',
+                        pid: 33,
+                        handle: '300',
+                        isFront: false
+                      }
+                    ])
+                  : JSON.stringify({
+                      success: true,
+                      affectedWindows: script.includes(
+                        "$TuffWindowPresetOperation = 'clear-topmost'"
+                      )
+                        ? 3
+                        : 2
+                    })
+                return {
+                  async started() {},
+                  async wait() {
+                    return { code: 0, stdout }
+                  },
+                  async kill() {
+                    throw new Error(`${FAILURE}: completed fake window process must not be killed`)
+                  }
+                }
+              }
+            })
+          : null
+      const windowPresetCapability =
+        name === 'touch-window-presets'
+          ? createPluginWindowPresetCapabilities({
+              activation: activationIdentity,
+              platform: 'win32',
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              authorizeShell: () => !state.deniedPermissions.has('system.shell'),
+              watchShellPermissionRevoked: () => () => undefined,
+              executor: windowPresetExecutor
+            })
+          : null
+      let workspaceProcessExit = null
+      let workspaceRoot = path.join(bundleRoot, `workspace-script-${generation}`)
+      const workspaceScriptHost =
+        name === 'touch-workspace-scripts'
+          ? (() => {
+              mkdirSync(workspaceRoot, { recursive: true })
+              workspaceRoot = realpathSync(workspaceRoot)
+              writeFileSync(
+                path.join(workspaceRoot, 'package.json'),
+                JSON.stringify({ name: `workspace-${generation}`, scripts: { lint: 'eslint .' } })
+              )
+              return createFixedPluginWorkspaceScriptHost({
+                platform: process.platform,
+                environment: process.env,
+                resolvePackageManager(platform) {
+                  return platform === 'win32' ? 'C:\\Trusted\\pnpm.cmd' : '/trusted/bin/pnpm'
+                },
+                async selectWorkspace(signal) {
+                  assert(signal.aborted === false)
+                  state.workspaceScriptSelections += 1
+                  return workspaceRoot
+                },
+                async confirmRun(input, signal) {
+                  assert(signal.aborted === false)
+                  assert(input.scriptName === 'lint')
+                  assert(input.workspaceName === `workspace-script-${generation}`)
+                  state.workspaceScriptConfirmations += 1
+                  await delay(20)
+                  return true
+                },
+                spawn(executable, args, options) {
+                  if (process.platform === 'win32') {
+                    assert(executable === 'C:\\Windows\\System32\\cmd.exe')
+                    assert(
+                      JSON.stringify(args) ===
+                        '["/d","/s","/c","\\"\\"C:\\\\Trusted\\\\pnpm.cmd\\" run lint\\""]'
+                    )
+                    assert(options.windowsVerbatimArguments === true)
+                  } else {
+                    assert(executable === '/trusted/bin/pnpm')
+                    assert(JSON.stringify(args) === '["run","lint"]')
+                    assert(options.windowsVerbatimArguments === false)
+                  }
+                  assert(options.cwd === workspaceRoot)
+                  assert(options.shell === false)
+                  state.workspaceScriptProcessStarts += 1
+                  workspaceProcessExit = {}
+                  workspaceProcessExit.promise = new Promise((resolve) => {
+                    workspaceProcessExit.resolve = resolve
+                  })
+                  return {
+                    async started() {},
+                    async wait() {
+                      return await workspaceProcessExit.promise
+                    },
+                    async kill() {
+                      state.workspaceScriptProcessKills += 1
+                      workspaceProcessExit.resolve({ code: null })
+                      await workspaceProcessExit.promise
+                    }
+                  }
+                }
+              })
+            })()
+          : null
+      const workspaceScriptCapability =
+        name === 'touch-workspace-scripts'
+          ? createPluginWorkspaceScriptCapabilities({
+              activation: activationIdentity,
+              resolveCurrentActivation: () => activationIdentity,
+              resolveHostGeneration: () => generation,
+              authorizeRead: () => !state.deniedPermissions.has('fs.read'),
+              authorizeShell: () => !state.deniedPermissions.has('system.shell'),
+              watchReadPermissionRevoked: () => () => undefined,
+              watchShellPermissionRevoked: () => () => undefined,
+              host: workspaceScriptHost
+            })
+          : null
       const definitions = [
         ...business.definitions.filter((definition) =>
           simpleFeatureCapabilityIds.has(definition.id)
         ),
         ...(filesystemCapability ? filesystemCapability.definitions : []),
         ...requestReply.definitions,
-        ...voice.definitions
+        ...voice.definitions,
+        ...(snipasteCapability ? snipasteCapability.definitions : []),
+        ...(systemCapability ? systemCapability.definitions : []),
+        ...(browserOpenCapability ? browserOpenCapability.definitions : []),
+        ...(windowManagerCapability ? windowManagerCapability.definitions : []),
+        ...(windowPresetCapability ? windowPresetCapability.definitions : []),
+        ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : [])
       ]
       let featureHostRuntime
       const resourceRegistry = new PluginHostResourceRegistry({
@@ -712,6 +1158,11 @@ async function run() {
         closeResources: async () => {
           await business.closeActivation(activationIdentity)
           await filesystemCapability?.close()
+          await snipasteCapability?.close()
+          await browserOpenCapability?.close()
+          await windowManagerCapability?.close()
+          await windowPresetCapability?.close()
+          await workspaceScriptCapability?.close()
         }
       })
       return {
@@ -719,6 +1170,11 @@ async function run() {
         state,
         resources: resourceRegistry,
         filesystemCapability,
+        snipasteCapability,
+        browserOpenCapability,
+        windowManagerCapability,
+        windowPresetCapability,
+        workspaceScriptCapability,
         capabilityManifest: definitions.map((definition) => ({
           id: definition.id,
           callbackLifetime: definition.callbackLifetime || 'transient',
@@ -801,6 +1257,10 @@ async function run() {
         readFileSync(path.join(officialPluginRoot, 'touch-browser-bookmarks', 'index.js'), 'utf8')
       ],
       [
+        'touch-browser-open',
+        readFileSync(path.join(officialPluginRoot, 'touch-browser-open', 'index.js'), 'utf8')
+      ],
+      [
         'touch-code-snippets',
         readFileSync(path.join(officialPluginRoot, 'touch-code-snippets', 'index.js'), 'utf8')
       ],
@@ -815,11 +1275,19 @@ async function run() {
       ],
       ['touch-emoji-symbols', emojiScript],
       [
+        'touch-quick-actions',
+        readFileSync(path.join(officialPluginRoot, 'touch-quick-actions', 'index.js'), 'utf8')
+      ],
+      [
         'touch-quickops',
         readFileSync(
           path.join(appRoot, 'resources', 'bundled-plugins', 'touch-quickops', 'index.js'),
           'utf8'
         )
+      ],
+      [
+        'touch-snipaste',
+        readFileSync(path.join(officialPluginRoot, 'touch-snipaste', 'index.js'), 'utf8')
       ],
       [
         'touch-snippets',
@@ -829,12 +1297,28 @@ async function run() {
         )
       ],
       [
+        'touch-system-actions',
+        readFileSync(path.join(officialPluginRoot, 'touch-system-actions', 'index.js'), 'utf8')
+      ],
+      [
         'touch-text-snippets',
         readFileSync(path.join(officialPluginRoot, 'touch-text-snippets', 'index.js'), 'utf8')
       ],
       [
         'touch-text-tools',
         readFileSync(path.join(officialPluginRoot, 'touch-text-tools', 'index.js'), 'utf8')
+      ],
+      [
+        'touch-window-manager',
+        readFileSync(path.join(officialPluginRoot, 'touch-window-manager', 'index.js'), 'utf8')
+      ],
+      [
+        'touch-window-presets',
+        readFileSync(path.join(officialPluginRoot, 'touch-window-presets', 'index.js'), 'utf8')
+      ],
+      [
+        'touch-workspace-scripts',
+        readFileSync(path.join(officialPluginRoot, 'touch-workspace-scripts', 'index.js'), 'utf8')
       ]
     ])
     const createShellRuntime = (name, generation) => {
@@ -858,13 +1342,20 @@ async function run() {
     const featureRuntimeNames = new Set([
       'touch-batch-rename',
       'touch-browser-bookmarks',
+      'touch-browser-open',
       'touch-dev-toolbox',
       'touch-dev-utils',
       'touch-dictation',
       'touch-emoji-symbols',
+      'touch-quick-actions',
       'touch-quickops',
+      'touch-snipaste',
       'touch-snippets',
-      'touch-text-tools'
+      'touch-system-actions',
+      'touch-text-tools',
+      'touch-window-manager',
+      'touch-window-presets',
+      'touch-workspace-scripts'
     ])
     const createBatchRuntime = (name, generation) =>
       featureRuntimeNames.has(name)
@@ -875,8 +1366,16 @@ async function run() {
         loadPayload: {
           scriptContent: batchScripts.get(runtime.host.activation.name),
           snapshot: {
-            platform: process.platform,
-            arch: process.arch,
+            platform:
+              runtime.host.activation.name === 'touch-window-presets' ||
+              runtime.host.activation.name === 'touch-window-manager'
+                ? 'win32'
+                : process.platform,
+            arch:
+              runtime.host.activation.name === 'touch-window-presets' ||
+              runtime.host.activation.name === 'touch-window-manager'
+                ? 'x64'
+                : process.arch,
             locale: 'en-US',
             manifest: { name: runtime.host.activation.name }
           },
@@ -914,6 +1413,69 @@ async function run() {
         .filter((runtime) => runtime.state === null)
         .map((runtime) => runtime.host.callLifecycle('onMessage', []))
     )
+    const firstBatchBrowserOpen = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-browser-open'
+    )
+    await firstBatchBrowserOpen.host.callLifecycle('onFeatureTriggered', [
+      'browser-open',
+      { text: 'example.com' },
+      { id: 'browser-open' }
+    ])
+    const firstDefaultBrowserOpen = firstBatchBrowserOpen.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'default-open')
+    )
+    const firstSpecificBrowserOpen = firstBatchBrowserOpen.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'open-browser')
+    )
+    assert(firstDefaultBrowserOpen && firstSpecificBrowserOpen)
+    assert(
+      JSON.stringify(firstSpecificBrowserOpen.actions[0].payload) ===
+        JSON.stringify({
+          url: 'https://example.com/',
+          browserToken: firstSpecificBrowserOpen.actions[0].payload.browserToken
+        })
+    )
+    assert(/^bo_[A-Za-z0-9_-]{32}$/.test(firstSpecificBrowserOpen.actions[0].payload.browserToken))
+    assert(
+      !/Applications|Google Chrome\.app|target|executable/i.test(
+        JSON.stringify(firstBatchBrowserOpen.state.items)
+      )
+    )
+    firstBatchBrowserOpen.state.deniedPermissions.add('network.internet')
+    const deniedBrowserOpen = await firstBatchBrowserOpen.host.callLifecycle('onItemAction', [
+      firstDefaultBrowserOpen
+    ])
+    assert(deniedBrowserOpen?.status === 'blocked')
+    assert(firstBatchBrowserOpen.state.browserProcessStarts === 0)
+    firstBatchBrowserOpen.state.deniedPermissions.delete('network.internet')
+    const acceptedBrowserOpen = await firstBatchBrowserOpen.host.callLifecycle('onItemAction', [
+      firstSpecificBrowserOpen
+    ])
+    assert(acceptedBrowserOpen?.status === 'completed' && acceptedBrowserOpen?.success === true)
+    assert(firstBatchBrowserOpen.state.browserProcessStarts === 1)
+    assert(firstBatchBrowserOpen.state.browserOpenCalls[0].executable === '/usr/bin/open')
+    assert(firstBatchBrowserOpen.state.browserOpenCalls[0].args[0] === '-a')
+    assert(
+      !/token|target|Applications/i.test(
+        JSON.stringify(firstBatchBrowserOpen.state.files.get('recent-browsers.json'))
+      )
+    )
+    await firstBatchBrowserOpen.host.callLifecycle('onFeatureTriggered', [
+      'search-engine-google',
+      { text: 'google tuff' },
+      { id: 'search-engine-google' }
+    ])
+    assert(firstBatchBrowserOpen.state.browserHttpCalls.length === 1)
+    const firstBrowserSearch = firstBatchBrowserOpen.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'search-web')
+    )
+    assert(firstBrowserSearch)
+    const acceptedBrowserSearch = await firstBatchBrowserOpen.host.callLifecycle('onItemAction', [
+      firstBrowserSearch
+    ])
+    assert(acceptedBrowserSearch?.status === 'completed')
+    assert(firstBatchBrowserOpen.state.browserProcessStarts === 2)
+
     const firstBatchRename = firstBatch.find(
       (runtime) => runtime.host.activation.name === 'touch-batch-rename'
     )
@@ -937,12 +1499,16 @@ async function run() {
       { id: 'batch-rename' }
     ])
     const firstRenameApply = firstBatchRename.state.items.find(
-      (item) => item.meta?.actionId === 'apply'
+      (item) => item.actions?.[0]?.id === 'apply'
     )
     const firstRenameUndo = firstBatchRename.state.items.find(
-      (item) => item.meta?.actionId === 'undo'
+      (item) => item.actions?.[0]?.id === 'undo'
     )
-    assert(firstRenameApply && firstRenameUndo)
+    if (!firstRenameApply || !firstRenameUndo) {
+      throw new Error(
+        `${FAILURE}: batch rename actions missing: ${JSON.stringify(firstBatchRename.state.items)}`
+      )
+    }
     firstBatchRename.state.deniedPermissions.add('fs.write')
     const deniedRename = await firstBatchRename.host.callLifecycle('onItemAction', [
       firstRenameApply
@@ -1143,8 +1709,228 @@ async function run() {
     assert(acceptedFlow?.status === 'ACKED')
     assert(firstBatchQuickOps.state.flowCalls.length === 1)
 
+    const firstBatchSnipaste = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-snipaste'
+    )
+    await firstBatchSnipaste.host.callLifecycle('onFeatureTriggered', [
+      'snipaste-quick',
+      { text: '截图' },
+      { id: 'snipaste-quick' }
+    ])
+    const firstSnipasteAction = firstBatchSnipaste.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'snip')
+    )
+    assert(firstSnipasteAction)
+    firstBatchSnipaste.state.deniedPermissions.add('system.shell')
+    const deniedSnipaste = await firstBatchSnipaste.host.callLifecycle('onItemAction', [
+      firstSnipasteAction,
+      { actionId: 'run-action' }
+    ])
+    assert(deniedSnipaste?.status === 'blocked')
+    assert(deniedSnipaste?.reason === 'permission-denied')
+    assert(firstBatchSnipaste.state.snipasteActions.length === 0)
+    firstBatchSnipaste.state.deniedPermissions.delete('system.shell')
+    const acceptedSnipaste = await firstBatchSnipaste.host.callLifecycle('onItemAction', [
+      firstSnipasteAction,
+      { actionId: 'run-action' }
+    ])
+    assert(acceptedSnipaste?.status === 'started')
+    assert(acceptedSnipaste?.success === true)
+    assert(JSON.stringify(firstBatchSnipaste.state.snipasteActions) === '["snip"]')
+
+    const firstBatchQuickActions = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-quick-actions'
+    )
+    await firstBatchQuickActions.host.callLifecycle('onFeatureTriggered', [
+      'quick-actions',
+      { text: '锁屏' },
+      { id: 'quick-actions' }
+    ])
+    const firstLockAction = firstBatchQuickActions.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'lock-screen')
+    )
+    assert(firstLockAction)
+    firstBatchQuickActions.state.deniedPermissions.add('system.shell')
+    const deniedSystemAction = await firstBatchQuickActions.host.callLifecycle('onItemAction', [
+      firstLockAction,
+      { actionId: 'run-action' }
+    ])
+    assert(deniedSystemAction?.status === 'blocked')
+    assert(deniedSystemAction?.reason === 'permission-denied')
+    assert(firstBatchQuickActions.state.systemActions.length === 0)
+    firstBatchQuickActions.state.deniedPermissions.delete('system.shell')
+    const acceptedSystemAction = await firstBatchQuickActions.host.callLifecycle('onItemAction', [
+      firstLockAction,
+      { actionId: 'run-action' }
+    ])
+    assert(acceptedSystemAction?.status === 'started')
+    assert(acceptedSystemAction?.success === true)
+    assert(JSON.stringify(firstBatchQuickActions.state.systemActions) === '["lock-screen"]')
+    assert(firstBatchQuickActions.state.systemConfirmations.length === 0)
+
+    const firstBatchSystemActions = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-system-actions'
+    )
+    await firstBatchSystemActions.host.callLifecycle('onFeatureTriggered', [
+      'system-actions',
+      { text: '' },
+      { id: 'system-actions' }
+    ])
+    const firstMainWindowAction = firstBatchSystemActions.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'open-main-window')
+    )
+    const firstVolumeAction = firstBatchSystemActions.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'volume-up')
+    )
+    assert(firstMainWindowAction && firstVolumeAction)
+    firstBatchSystemActions.state.deniedPermissions.add('system.shell')
+    const openedMainWindow = await firstBatchSystemActions.host.callLifecycle('onItemAction', [
+      firstMainWindowAction,
+      { actionId: 'run-action' }
+    ])
+    assert(openedMainWindow?.status === 'started')
+    assert(openedMainWindow?.success === true)
+    assert(firstBatchSystemActions.state.mainWindowShows === 1)
+    assert(firstBatchSystemActions.state.systemActions.length === 0)
+    const deniedVolume = await firstBatchSystemActions.host.callLifecycle('onItemAction', [
+      firstVolumeAction,
+      { actionId: 'run-action' }
+    ])
+    assert(deniedVolume?.status === 'blocked')
+    assert(deniedVolume?.reason === 'permission-denied')
+    assert(firstBatchSystemActions.state.systemActions.length === 0)
+    firstBatchSystemActions.state.deniedPermissions.delete('system.shell')
+    const acceptedVolume = await firstBatchSystemActions.host.callLifecycle('onItemAction', [
+      firstVolumeAction,
+      { actionId: 'run-action' }
+    ])
+    assert(acceptedVolume?.status === 'started')
+    assert(JSON.stringify(firstBatchSystemActions.state.systemActions) === '["volume-up"]')
+
+    const firstBatchWorkspaceScripts = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-workspace-scripts'
+    )
+    await firstBatchWorkspaceScripts.host.callLifecycle('onFeatureTriggered', [
+      'workspace-scripts',
+      { text: '' },
+      { id: 'workspace-scripts' }
+    ])
+    const firstWorkspaceSelect = firstBatchWorkspaceScripts.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'select-workspace')
+    )
+    assert(firstWorkspaceSelect)
+    firstBatchWorkspaceScripts.state.deniedPermissions.add('fs.read')
+    const deniedWorkspaceSelect = await firstBatchWorkspaceScripts.host.callLifecycle(
+      'onItemAction',
+      [firstWorkspaceSelect, { actionId: 'select-workspace' }]
+    )
+    assert(deniedWorkspaceSelect?.status === 'blocked')
+    assert(deniedWorkspaceSelect?.reason === 'permission-denied')
+    assert(firstBatchWorkspaceScripts.state.workspaceScriptSelections === 0)
+    firstBatchWorkspaceScripts.state.deniedPermissions.delete('fs.read')
+    const acceptedWorkspaceSelect = await firstBatchWorkspaceScripts.host.callLifecycle(
+      'onItemAction',
+      [firstWorkspaceSelect, { actionId: 'select-workspace' }]
+    )
+    assert(acceptedWorkspaceSelect?.status === 'completed')
+    assert(firstBatchWorkspaceScripts.state.workspaceScriptSelections === 1)
+    assert(
+      !/eslint|command|cwd|path|executable|args|env/i.test(
+        JSON.stringify(firstBatchWorkspaceScripts.state.items)
+      )
+    )
+    const firstWorkspaceRun = firstBatchWorkspaceScripts.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'run-script')
+    )
+    assert(firstWorkspaceRun)
+    firstBatchWorkspaceScripts.state.deniedPermissions.add('system.shell')
+    const deniedWorkspaceRun = await firstBatchWorkspaceScripts.host.callLifecycle('onItemAction', [
+      firstWorkspaceRun,
+      { actionId: 'run-script' }
+    ])
+    assert(deniedWorkspaceRun?.status === 'blocked')
+    assert(deniedWorkspaceRun?.reason === 'permission-denied')
+    assert(firstBatchWorkspaceScripts.state.workspaceScriptProcessStarts === 0)
+    firstBatchWorkspaceScripts.state.deniedPermissions.delete('system.shell')
+    const acceptedWorkspaceRun = await firstBatchWorkspaceScripts.host.callLifecycle(
+      'onItemAction',
+      [firstWorkspaceRun, { actionId: 'run-script' }]
+    )
+    assert(acceptedWorkspaceRun?.status === 'started')
+    assert(firstBatchWorkspaceScripts.state.workspaceScriptConfirmations === 1)
+    assert(firstBatchWorkspaceScripts.state.workspaceScriptProcessStarts === 1)
+
+    const firstBatchWindowManager = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-window-manager'
+    )
+    await firstBatchWindowManager.host.callLifecycle('onFeatureTriggered', [
+      'window-app',
+      { text: 'Terminal' },
+      { id: 'window-app' }
+    ])
+    assert(firstBatchWindowManager.state.windowManagerListCalls === 1)
+    assert(
+      !/nativeId|handle|pid|appPath|Program Files/i.test(
+        JSON.stringify(firstBatchWindowManager.state.items)
+      )
+    )
+    const firstWindowManagerAction = firstBatchWindowManager.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'snap-left')
+    )
+    assert(firstWindowManagerAction)
+    firstBatchWindowManager.state.deniedPermissions.add('system.shell')
+    const deniedWindowManager = await firstBatchWindowManager.host.callLifecycle('onItemAction', [
+      firstWindowManagerAction,
+      { actionId: 'snap-left' }
+    ])
+    assert(deniedWindowManager?.status === 'blocked')
+    assert(deniedWindowManager?.reason === 'permission-denied')
+    assert(firstBatchWindowManager.state.windowManagerProcessStarts === 1)
+    firstBatchWindowManager.state.deniedPermissions.delete('system.shell')
+    const acceptedWindowManager = await firstBatchWindowManager.host.callLifecycle('onItemAction', [
+      firstWindowManagerAction,
+      { actionId: 'snap-left' }
+    ])
+    assert(acceptedWindowManager?.status === 'completed')
+    assert(acceptedWindowManager?.success === true)
+    assert(JSON.stringify(firstBatchWindowManager.state.windowManagerActions) === '["snap-left"]')
+    assert(firstBatchWindowManager.state.windowManagerProcessStarts === 3)
+
+    const firstBatchWindowPresets = firstBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-window-presets'
+    )
+    await firstBatchWindowPresets.host.callLifecycle('onFeatureTriggered', [
+      'window-presets',
+      { text: 'dev' },
+      { id: 'window-presets' }
+    ])
+    assert(firstBatchWindowPresets.state.windowPresetStatusCalls === 1)
+    const firstDevPreset = firstBatchWindowPresets.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'preset-dev-split')
+    )
+    assert(firstDevPreset)
+    firstBatchWindowPresets.state.deniedPermissions.add('system.shell')
+    const deniedWindowPreset = await firstBatchWindowPresets.host.callLifecycle('onItemAction', [
+      firstDevPreset,
+      { actionId: 'run-action' }
+    ])
+    assert(deniedWindowPreset?.status === 'blocked')
+    assert(deniedWindowPreset?.reason === 'permission-denied')
+    assert(firstBatchWindowPresets.state.windowPresetProcessStarts === 1)
+    firstBatchWindowPresets.state.deniedPermissions.delete('system.shell')
+    const acceptedWindowPreset = await firstBatchWindowPresets.host.callLifecycle('onItemAction', [
+      firstDevPreset,
+      { actionId: 'run-action' }
+    ])
+    assert(acceptedWindowPreset?.status === 'completed')
+    assert(acceptedWindowPreset?.success === true)
+    assert(JSON.stringify(firstBatchWindowPresets.state.windowPresetActions) === '["layout"]')
+    assert(firstBatchWindowPresets.state.windowPresetProcessStarts === 3)
+
     await Promise.all(firstBatch.map((runtime) => runtime.host.stop()))
     assert(firstBatch.every((runtime) => runtime.host.state === 'closed'))
+    assert(firstBatchSnipaste.state.snipasteKills === 1)
+    assert(firstBatchWorkspaceScripts.state.workspaceScriptProcessKills === 1)
     const firstBatchObservers = factory.observers.slice(
       firstBatchObserverOffset,
       firstBatchObserverOffset + firstBatch.length
@@ -1163,6 +1949,47 @@ async function run() {
       assert(previous.owner.hostGeneration !== current.owner.hostGeneration)
       assert(previous.activation.activationGeneration !== current.activation.activationGeneration)
     }
+
+    const secondBatchBrowserOpenIndex = secondBatch.findIndex(
+      (runtime) => runtime.host.activation.name === 'touch-browser-open'
+    )
+    const secondBatchBrowserOpen = secondBatch[secondBatchBrowserOpenIndex]
+    await secondBatchBrowserOpen.host.callLifecycle('onFeatureTriggered', [
+      'browser-open',
+      { text: 'example.com' },
+      { id: 'browser-open' }
+    ])
+    const secondSpecificBrowserOpen = secondBatchBrowserOpen.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'open-browser')
+    )
+    assert(secondSpecificBrowserOpen)
+    assert(
+      secondSpecificBrowserOpen.actions[0].payload.browserToken !==
+        firstSpecificBrowserOpen.actions[0].payload.browserToken
+    )
+    const secondBrowserCall = secondBatchBrowserOpen.host.callLifecycle('onItemAction', [
+      secondSpecificBrowserOpen
+    ])
+    const secondBrowserObserver =
+      factory.observers[secondBatchObserverOffset + secondBatchBrowserOpenIndex]
+    await waitFor(
+      () => secondBrowserObserver.sent.some((message) => message.type === 'lifecycle-call'),
+      1000
+    )
+    const secondBrowserRequest = secondBrowserObserver.sent.findLast(
+      (message) => message.type === 'lifecycle-call'
+    )
+    firstBatchObservers[secondBatchBrowserOpenIndex].inject({
+      ...secondBatchBrowserOpen.host.owner,
+      type: 'lifecycle-result',
+      requestId: secondBrowserRequest.requestId,
+      ok: true,
+      result: 'stale-forged-browser-open-result'
+    })
+    const secondBrowserResult = await secondBrowserCall
+    assert(secondBrowserResult?.status === 'completed')
+    assert(secondBrowserResult !== 'stale-forged-browser-open-result')
+    assert(secondBatchBrowserOpen.state.browserProcessStarts === 1)
 
     const secondBatchRename = secondBatch.find(
       (runtime) => runtime.host.activation.name === 'touch-batch-rename'
@@ -1184,10 +2011,10 @@ async function run() {
       { id: 'batch-rename' }
     ])
     const secondRenameApply = secondBatchRename.state.items.find(
-      (item) => item.meta?.actionId === 'apply'
+      (item) => item.actions?.[0]?.id === 'apply'
     )
     const secondRenameUndo = secondBatchRename.state.items.find(
-      (item) => item.meta?.actionId === 'undo'
+      (item) => item.actions?.[0]?.id === 'undo'
     )
     assert(secondRenameApply && secondRenameUndo)
     await secondBatchRename.host.callLifecycle('onItemAction', [secondRenameApply])
@@ -1305,8 +2132,244 @@ async function run() {
     assert(secondBatchQuickOps.state.quickOpsCalls.length === 1)
     assert(secondBatchSnippets.state.files.has('snippets.json'))
 
+    const secondBatchSnipasteIndex = secondBatch.findIndex(
+      (runtime) => runtime.host.activation.name === 'touch-snipaste'
+    )
+    const secondBatchSnipaste = secondBatch[secondBatchSnipasteIndex]
+    await secondBatchSnipaste.host.callLifecycle('onFeatureTriggered', [
+      'snipaste-quick',
+      { text: '贴图' },
+      { id: 'snipaste-quick' }
+    ])
+    const secondSnipasteAction = secondBatchSnipaste.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'paste')
+    )
+    assert(secondSnipasteAction)
+    const secondSnipasteCall = secondBatchSnipaste.host.callLifecycle('onItemAction', [
+      secondSnipasteAction,
+      { actionId: 'run-action' }
+    ])
+    const secondSnipasteObserver =
+      factory.observers[secondBatchObserverOffset + secondBatchSnipasteIndex]
+    await waitFor(
+      () => secondSnipasteObserver.sent.some((message) => message.type === 'lifecycle-call'),
+      1000
+    )
+    const secondSnipasteRequest = secondSnipasteObserver.sent.findLast(
+      (message) => message.type === 'lifecycle-call'
+    )
+    firstBatchObservers[secondBatchSnipasteIndex].inject({
+      ...secondBatchSnipaste.host.owner,
+      type: 'lifecycle-result',
+      requestId: secondSnipasteRequest.requestId,
+      ok: true,
+      result: 'stale-forged-snipaste-result'
+    })
+    const secondSnipasteResult = await secondSnipasteCall
+    assert(secondSnipasteResult?.status === 'started')
+    assert(JSON.stringify(secondBatchSnipaste.state.snipasteActions) === '["paste"]')
+    await firstBatchSnipaste.host
+      .callLifecycle('onItemAction', [firstSnipasteAction, { actionId: 'run-action' }])
+      .then(() => {
+        throw new Error(FAILURE)
+      })
+      .catch((error) => assert(error?.code === 'PLUGIN_RUNTIME_HOST_INACTIVE'))
+    assert(JSON.stringify(firstBatchSnipaste.state.snipasteActions) === '["snip"]')
+
+    const secondBatchQuickActions = secondBatch.find(
+      (runtime) => runtime.host.activation.name === 'touch-quick-actions'
+    )
+    const secondSystemAction = await secondBatchQuickActions.host.callLifecycle(
+      'onFeatureTriggered',
+      ['quick-action-lock-screen', { text: '' }, { id: 'quick-action-lock-screen' }]
+    )
+    assert(secondSystemAction?.status === 'started')
+    assert(JSON.stringify(secondBatchQuickActions.state.systemActions) === '["lock-screen"]')
+
+    const secondBatchSystemActionsIndex = secondBatch.findIndex(
+      (runtime) => runtime.host.activation.name === 'touch-system-actions'
+    )
+    const secondBatchSystemActions = secondBatch[secondBatchSystemActionsIndex]
+    await secondBatchSystemActions.host.callLifecycle('onFeatureTriggered', [
+      'system-actions',
+      { text: '主窗口' },
+      { id: 'system-actions' }
+    ])
+    const secondMainWindowAction = secondBatchSystemActions.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'open-main-window')
+    )
+    assert(secondMainWindowAction)
+    const secondMainWindowCall = secondBatchSystemActions.host.callLifecycle('onItemAction', [
+      secondMainWindowAction,
+      { actionId: 'run-action' }
+    ])
+    const secondSystemObserver =
+      factory.observers[secondBatchObserverOffset + secondBatchSystemActionsIndex]
+    await waitFor(
+      () => secondSystemObserver.sent.some((message) => message.type === 'lifecycle-call'),
+      1000
+    )
+    const secondSystemRequest = secondSystemObserver.sent.findLast(
+      (message) => message.type === 'lifecycle-call'
+    )
+    firstBatchObservers[secondBatchSystemActionsIndex].inject({
+      ...secondBatchSystemActions.host.owner,
+      type: 'lifecycle-result',
+      requestId: secondSystemRequest.requestId,
+      ok: true,
+      result: 'stale-forged-system-result'
+    })
+    const secondMainWindowResult = await secondMainWindowCall
+    assert(secondMainWindowResult?.status === 'started')
+    assert(secondBatchSystemActions.state.mainWindowShows === 1)
+    assert(firstBatchSystemActions.state.mainWindowShows === 1)
+
+    const secondBatchWorkspaceScriptsIndex = secondBatch.findIndex(
+      (runtime) => runtime.host.activation.name === 'touch-workspace-scripts'
+    )
+    const secondBatchWorkspaceScripts = secondBatch[secondBatchWorkspaceScriptsIndex]
+    await secondBatchWorkspaceScripts.host.callLifecycle('onFeatureTriggered', [
+      'workspace-scripts',
+      { text: '' },
+      { id: 'workspace-scripts' }
+    ])
+    const secondWorkspaceSelect = secondBatchWorkspaceScripts.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'select-workspace')
+    )
+    assert(secondWorkspaceSelect)
+    await secondBatchWorkspaceScripts.host.callLifecycle('onItemAction', [
+      secondWorkspaceSelect,
+      { actionId: 'select-workspace' }
+    ])
+    const secondWorkspaceRun = secondBatchWorkspaceScripts.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'run-script')
+    )
+    assert(secondWorkspaceRun)
+    const secondWorkspaceCall = secondBatchWorkspaceScripts.host.callLifecycle('onItemAction', [
+      secondWorkspaceRun,
+      { actionId: 'run-script' }
+    ])
+    const secondWorkspaceObserver =
+      factory.observers[secondBatchObserverOffset + secondBatchWorkspaceScriptsIndex]
+    await waitFor(
+      () => secondWorkspaceObserver.sent.some((message) => message.type === 'lifecycle-call'),
+      1000
+    )
+    const secondWorkspaceRequest = secondWorkspaceObserver.sent.findLast(
+      (message) => message.type === 'lifecycle-call'
+    )
+    firstBatchObservers[secondBatchWorkspaceScriptsIndex].inject({
+      ...secondBatchWorkspaceScripts.host.owner,
+      type: 'lifecycle-result',
+      requestId: secondWorkspaceRequest.requestId,
+      ok: true,
+      result: 'stale-forged-workspace-script-result'
+    })
+    const secondWorkspaceResult = await secondWorkspaceCall
+    assert(secondWorkspaceResult?.status === 'started')
+    assert(secondBatchWorkspaceScripts.state.workspaceScriptProcessStarts === 1)
+    await firstBatchWorkspaceScripts.host
+      .callLifecycle('onItemAction', [firstWorkspaceRun, { actionId: 'run-script' }])
+      .then(() => {
+        throw new Error(FAILURE)
+      })
+      .catch((error) => assert(error?.code === 'PLUGIN_RUNTIME_HOST_INACTIVE'))
+    assert(firstBatchWorkspaceScripts.state.workspaceScriptProcessStarts === 1)
+
+    const secondBatchWindowManagerIndex = secondBatch.findIndex(
+      (runtime) => runtime.host.activation.name === 'touch-window-manager'
+    )
+    const secondBatchWindowManager = secondBatch[secondBatchWindowManagerIndex]
+    await secondBatchWindowManager.host.callLifecycle('onFeatureTriggered', [
+      'window-app',
+      { text: '' },
+      { id: 'window-app' }
+    ])
+    const secondWindowManagerLaunch = secondBatchWindowManager.state.items.find((item) =>
+      item.actions?.some((action) => action.id === 'launch')
+    )
+    assert(secondWindowManagerLaunch)
+    const secondWindowManagerCall = secondBatchWindowManager.host.callLifecycle('onItemAction', [
+      secondWindowManagerLaunch,
+      { actionId: 'launch' }
+    ])
+    const secondWindowManagerObserver =
+      factory.observers[secondBatchObserverOffset + secondBatchWindowManagerIndex]
+    await waitFor(
+      () => secondWindowManagerObserver.sent.some((message) => message.type === 'lifecycle-call'),
+      1000
+    )
+    const secondWindowManagerRequest = secondWindowManagerObserver.sent.findLast(
+      (message) => message.type === 'lifecycle-call'
+    )
+    firstBatchObservers[secondBatchWindowManagerIndex].inject({
+      ...secondBatchWindowManager.host.owner,
+      type: 'lifecycle-result',
+      requestId: secondWindowManagerRequest.requestId,
+      ok: true,
+      result: 'stale-forged-window-manager-result'
+    })
+    const secondWindowManagerResult = await secondWindowManagerCall
+    assert(secondWindowManagerResult?.status === 'completed')
+    assert(JSON.stringify(secondBatchWindowManager.state.windowManagerActions) === '["launch"]')
+    await firstBatchWindowManager.host
+      .callLifecycle('onItemAction', [firstWindowManagerAction, { actionId: 'activate' }])
+      .then(() => {
+        throw new Error(FAILURE)
+      })
+      .catch((error) => assert(error?.code === 'PLUGIN_RUNTIME_HOST_INACTIVE'))
+    assert(JSON.stringify(firstBatchWindowManager.state.windowManagerActions) === '["snap-left"]')
+
+    const secondBatchWindowPresetsIndex = secondBatch.findIndex(
+      (runtime) => runtime.host.activation.name === 'touch-window-presets'
+    )
+    const secondBatchWindowPresets = secondBatch[secondBatchWindowPresetsIndex]
+    await secondBatchWindowPresets.host.callLifecycle('onFeatureTriggered', [
+      'window-presets',
+      { text: 'topmost' },
+      { id: 'window-presets' }
+    ])
+    const secondClearPreset = secondBatchWindowPresets.state.items.find((item) =>
+      item.actions?.some((action) => action.payload?.actionId === 'preset-clear-topmost')
+    )
+    assert(secondClearPreset)
+    const secondWindowPresetCall = secondBatchWindowPresets.host.callLifecycle('onItemAction', [
+      secondClearPreset,
+      { actionId: 'run-action' }
+    ])
+    const secondWindowPresetObserver =
+      factory.observers[secondBatchObserverOffset + secondBatchWindowPresetsIndex]
+    await waitFor(
+      () => secondWindowPresetObserver.sent.some((message) => message.type === 'lifecycle-call'),
+      1000
+    )
+    const secondWindowPresetRequest = secondWindowPresetObserver.sent.findLast(
+      (message) => message.type === 'lifecycle-call'
+    )
+    firstBatchObservers[secondBatchWindowPresetsIndex].inject({
+      ...secondBatchWindowPresets.host.owner,
+      type: 'lifecycle-result',
+      requestId: secondWindowPresetRequest.requestId,
+      ok: true,
+      result: 'stale-forged-window-preset-result'
+    })
+    const secondWindowPresetResult = await secondWindowPresetCall
+    assert(secondWindowPresetResult?.status === 'completed')
+    assert(
+      JSON.stringify(secondBatchWindowPresets.state.windowPresetActions) === '["clear-topmost"]'
+    )
+    await firstBatchWindowPresets.host
+      .callLifecycle('onItemAction', [firstDevPreset, { actionId: 'run-action' }])
+      .then(() => {
+        throw new Error(FAILURE)
+      })
+      .catch((error) => assert(error?.code === 'PLUGIN_RUNTIME_HOST_INACTIVE'))
+    assert(JSON.stringify(firstBatchWindowPresets.state.windowPresetActions) === '["layout"]')
+
     await Promise.all(secondBatch.map((runtime) => runtime.host.stop()))
     assert(secondBatch.every((runtime) => runtime.host.state === 'closed'))
+    assert(secondBatchSnipaste.state.snipasteKills === 1)
+    assert(secondBatchWorkspaceScripts.state.workspaceScriptProcessKills === 1)
 
     await first
       .callLifecycle('onMessage', ['hang'], { timeoutMs: 100 })

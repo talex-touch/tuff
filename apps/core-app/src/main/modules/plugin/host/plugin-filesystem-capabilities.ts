@@ -14,7 +14,8 @@ export interface PluginBatchRenameFilesystemAdapter {
   lstat(filePath: string): Promise<Stats>
   realpath(filePath: string): Promise<string>
   open(filePath: string, flags: number): Promise<FileHandle>
-  rename(source: string, target: string): Promise<void>
+  link(existingPath: string, newPath: string): Promise<void>
+  unlink(filePath: string): Promise<void>
 }
 
 export interface PluginBatchRenameFilesystemCapabilityOptions {
@@ -42,15 +43,28 @@ interface RenameRequest {
   readonly entries: readonly RenameRequestEntry[]
 }
 
+interface ApprovedPath {
+  readonly path: string
+  readonly parent: string
+  readonly dev: number
+  readonly ino: number
+  readonly parentDev: number
+  readonly parentIno: number
+  readonly provenance: 'lifecycle' | 'transaction'
+}
+
 interface PreparedRename {
   readonly index: number
   readonly source: string
   readonly target: string
   readonly targetName: string
+  readonly parent: string
+  readonly parentDev: number
+  readonly parentIno: number
   readonly sourceStat: Stats
   readonly unchanged: boolean
   temp: string
-  state: 'source' | 'temp' | 'target'
+  state: 'source' | 'source+temp' | 'temp' | 'temp+target' | 'target'
 }
 
 const MAX_FILES = 64
@@ -59,7 +73,9 @@ const MAX_TARGET_NAME_BYTES = 255
 const MAX_LIFECYCLE_INPUT_BYTES = 256 * 1024
 const MAX_LIFECYCLE_INPUTS = 64
 const FORBIDDEN_DEVICE_PATH = /^(?:\\\\[?.]\\|\\\\)/
-const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i
+const WINDOWS_DEVICE_NAME =
+  /^(?:con|prn|aux|nul|conin\$|conout\$|com(?:[1-9]|[¹²³])|lpt(?:[1-9]|[¹²³]))(?:\.|$)/i
+const WINDOWS_INVALID_TARGET_NAME = /[<>:"|?*]/
 const ALLOWED_REQUEST_KEYS = ['operation', 'entries'] as const
 const ALLOWED_ENTRY_KEYS = ['source', 'targetName'] as const
 
@@ -67,7 +83,8 @@ const defaultFilesystem: PluginBatchRenameFilesystemAdapter = Object.freeze({
   lstat: async (filePath) => await fsp.lstat(filePath),
   realpath: async (filePath) => await fsp.realpath(filePath),
   open: async (filePath, flags) => await fsp.open(filePath, flags),
-  rename: async (source, target) => await fsp.rename(source, target)
+  link: async (existingPath, newPath) => await fsp.link(existingPath, newPath),
+  unlink: async (filePath) => await fsp.unlink(filePath)
 })
 
 function invalidRequest(): never {
@@ -158,17 +175,38 @@ function requiredString(record: Record<string, unknown>, key: string, maximum: n
   return value
 }
 
-function validateSourcePath(value: unknown): string {
+function validateSourcePath(value: unknown, platform: NodeJS.Platform): string {
   if (
     typeof value !== 'string' ||
     value.length === 0 ||
     value.includes('\0') ||
+    hasControlCharacter(value) ||
     utf8Bytes(value) > MAX_PATH_BYTES ||
     FORBIDDEN_DEVICE_PATH.test(value)
   ) {
     invalidRequest()
   }
+  if (platform === 'win32') {
+    if (!path.win32.isAbsolute(value) || !/^[A-Za-z]:[\\/]/.test(value)) invalidRequest()
+    const remainder = value.slice(2)
+    if (remainder.includes(':') || WINDOWS_INVALID_TARGET_NAME.test(remainder)) invalidRequest()
+    for (const segment of remainder.split(/[\\/]+/)) {
+      if (!segment) continue
+      if (segment.endsWith('.') || segment.endsWith(' ') || WINDOWS_DEVICE_NAME.test(segment)) {
+        invalidRequest()
+      }
+    }
+  } else if (!path.posix.isAbsolute(value)) {
+    invalidRequest()
+  }
   return value
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) <= 0x1f) return true
+  }
+  return false
 }
 
 function validateTargetName(value: unknown): string {
@@ -180,6 +218,8 @@ function validateTargetName(value: unknown): string {
     value.includes('\0') ||
     value.includes('/') ||
     value.includes('\\') ||
+    WINDOWS_INVALID_TARGET_NAME.test(value) ||
+    hasControlCharacter(value) ||
     value.endsWith('.') ||
     value.endsWith(' ') ||
     utf8Bytes(value) > MAX_TARGET_NAME_BYTES ||
@@ -190,7 +230,7 @@ function validateTargetName(value: unknown): string {
   return value
 }
 
-function validateRenameRequest(value: unknown): RenameRequest {
+function validateRenameRequest(value: unknown, platform: NodeJS.Platform): RenameRequest {
   const record = exactRecord(value, ALLOWED_REQUEST_KEYS)
   if (record.operation !== 'rename-batch') invalidRequest()
   const entries = snapshotArray(record.entries, MAX_FILES)
@@ -198,7 +238,10 @@ function validateRenameRequest(value: unknown): RenameRequest {
   let totalBytes = 0
   const normalized = entries.map((entry) => {
     const entryRecord = exactRecord(entry, ALLOWED_ENTRY_KEYS)
-    const source = validateSourcePath(requiredString(entryRecord, 'source', MAX_PATH_BYTES))
+    const source = validateSourcePath(
+      requiredString(entryRecord, 'source', MAX_PATH_BYTES),
+      platform
+    )
     const targetName = validateTargetName(
       requiredString(entryRecord, 'targetName', MAX_TARGET_NAME_BYTES)
     )
@@ -278,7 +321,7 @@ function snapshotFilesystem(
   source: Partial<PluginBatchRenameFilesystemAdapter> | undefined
 ): PluginBatchRenameFilesystemAdapter {
   if (source) {
-    const allowed = new Set(['lstat', 'realpath', 'open', 'rename'])
+    const allowed = new Set(['lstat', 'realpath', 'open', 'link', 'unlink'])
     let descriptors: PropertyDescriptorMap
     try {
       descriptors = Object.getOwnPropertyDescriptors(source)
@@ -293,7 +336,8 @@ function snapshotFilesystem(
     lstat: readAdapterMethod(source, 'lstat'),
     realpath: readAdapterMethod(source, 'realpath'),
     open: readAdapterMethod(source, 'open'),
-    rename: readAdapterMethod(source, 'rename')
+    link: readAdapterMethod(source, 'link'),
+    unlink: readAdapterMethod(source, 'unlink')
   })
 }
 
@@ -303,9 +347,17 @@ function isMissingError(error: unknown): boolean {
   return Boolean(descriptor && 'value' in descriptor && descriptor.value === 'ENOENT')
 }
 
-function pathIdentity(filePath: string, caseFold: boolean): string {
-  const normalized = path.normalize(filePath)
+function pathIdentity(
+  filePath: string,
+  pathApi: typeof path.posix | typeof path.win32,
+  caseFold: boolean
+): string {
+  const normalized = pathApi.normalize(filePath).normalize('NFC')
   return caseFold ? normalized.toLocaleLowerCase('en-US') : normalized
+}
+
+function sameFileIdentity(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino
 }
 
 async function assertNoFollowRegularFile(
@@ -336,7 +388,7 @@ function assertActiveSignal(signal: AbortSignal): void {
   }
 }
 
-function extractLifecyclePaths(query: unknown): readonly string[] {
+function extractLifecyclePaths(query: unknown, platform: NodeJS.Platform): readonly string[] {
   const rawInputs = ownDataField(query, 'inputs')
   if (rawInputs === undefined) return Object.freeze([])
   let inputs: unknown[]
@@ -370,7 +422,7 @@ function extractLifecyclePaths(query: unknown): readonly string[] {
     }
     for (const entry of entries) {
       try {
-        paths.push(validateSourcePath(entry))
+        paths.push(validateSourcePath(entry, platform))
       } catch {
         // Invalid file inputs never enter the authority registry.
       }
@@ -393,11 +445,16 @@ export function createPluginBatchRenameFilesystemCapability(
   const resolveCurrentActivation = options.resolveCurrentActivation.bind(options)
   const hasPermission = options.hasPermission.bind(options)
   const filesystem = snapshotFilesystem(options.filesystem)
-  const caseFold = options.platform === 'win32' || options.platform === 'darwin'
-  const approvedPaths = new Set<string>()
+  const platform = options.platform
+  const pathApi = platform === 'win32' ? path.win32 : path.posix
+  const caseFold = platform === 'win32' || platform === 'darwin'
+  const identifyPath = (filePath: string): string => pathIdentity(filePath, pathApi, caseFold)
+  const approvedPaths = new Map<string, ApprovedPath>()
   const activeOperations = new Set<Promise<unknown>>()
+  const recoveryTransactions = new Set<readonly PreparedRename[]>()
   let closing = false
   let closed = false
+  let failed = false
   let closePromise: Promise<void> | null = null
 
   const assertCurrent = (): void => {
@@ -439,63 +496,125 @@ export function createPluginBatchRenameFilesystemCapability(
     }
   }
 
-  const canonicalApprovedPath = async (filePath: string): Promise<string | null> => {
+  const inspectCanonicalFile = async (
+    filePath: string,
+    provenance: ApprovedPath['provenance']
+  ): Promise<{
+    readonly approved: ApprovedPath
+    readonly stat: Stats
+    readonly parentStat: Stats
+  } | null> => {
     try {
-      const lexical = path.resolve(validateSourcePath(filePath))
+      const lexical = pathApi.resolve(validateSourcePath(filePath, platform))
       const sourceStat = await filesystem.lstat(lexical)
-      if (sourceStat.isSymbolicLink() || !sourceStat.isFile()) return null
+      if (sourceStat.isSymbolicLink() || !sourceStat.isFile() || sourceStat.nlink !== 1) return null
       const canonical = await filesystem.realpath(lexical)
       const canonicalStat = await filesystem.lstat(canonical)
-      if (canonicalStat.isSymbolicLink() || !canonicalStat.isFile()) return null
-      const canonicalParent = await filesystem.realpath(path.dirname(canonical))
+      if (
+        canonicalStat.isSymbolicLink() ||
+        !canonicalStat.isFile() ||
+        canonicalStat.nlink !== 1 ||
+        !sameFileIdentity(sourceStat, canonicalStat)
+      ) {
+        return null
+      }
+      const canonicalParent = await filesystem.realpath(pathApi.dirname(canonical))
       const parentStat = await filesystem.lstat(canonicalParent)
       if (parentStat.isSymbolicLink() || !parentStat.isDirectory()) return null
-      if (sourceStat.dev !== parentStat.dev || canonicalStat.dev !== sourceStat.dev) return null
-      if (path.join(canonicalParent, path.basename(canonical)) !== canonical) return null
+      if (sourceStat.dev !== parentStat.dev) return null
+      if (pathApi.join(canonicalParent, pathApi.basename(canonical)) !== canonical) return null
       await assertNoFollowRegularFile(filesystem, canonical, canonicalStat)
-      return canonical
+      return Object.freeze({
+        approved: Object.freeze({
+          path: canonical,
+          parent: canonicalParent,
+          dev: canonicalStat.dev,
+          ino: canonicalStat.ino,
+          parentDev: parentStat.dev,
+          parentIno: parentStat.ino,
+          provenance
+        }),
+        stat: canonicalStat,
+        parentStat
+      })
     } catch {
       return null
+    }
+  }
+
+  const matchesApproval = (
+    inspected: NonNullable<Awaited<ReturnType<typeof inspectCanonicalFile>>>,
+    approved: ApprovedPath
+  ): boolean =>
+    inspected.approved.path === approved.path &&
+    inspected.approved.parent === approved.parent &&
+    inspected.approved.dev === approved.dev &&
+    inspected.approved.ino === approved.ino &&
+    inspected.approved.parentDev === approved.parentDev &&
+    inspected.approved.parentIno === approved.parentIno
+
+  const assertParentCurrent = async (entry: PreparedRename): Promise<void> => {
+    try {
+      const canonicalParent = await filesystem.realpath(entry.parent)
+      const parentStat = await filesystem.lstat(entry.parent)
+      if (
+        canonicalParent !== entry.parent ||
+        parentStat.isSymbolicLink() ||
+        !parentStat.isDirectory() ||
+        parentStat.dev !== entry.parentDev ||
+        parentStat.ino !== entry.parentIno
+      ) {
+        operationFailed('PLUGIN_FILESYSTEM_PARENT_CHANGED')
+      }
+    } catch {
+      operationFailed('PLUGIN_FILESYSTEM_PARENT_CHANGED')
     }
   }
 
   const prepareRenames = async (request: RenameRequest): Promise<PreparedRename[]> => {
     const preliminary: PreparedRename[] = []
     const sourceIdentities = new Set<string>()
+    const sourceFiles = new Set<string>()
     const targetIdentities = new Set<string>()
     for (let index = 0; index < request.entries.length; index += 1) {
       const entry = request.entries[index]
-      const source = await canonicalApprovedPath(entry.source)
-      if (!source || !approvedPaths.has(pathIdentity(source, caseFold))) {
+      const inspected = await inspectCanonicalFile(entry.source, 'lifecycle')
+      const approved = inspected
+        ? approvedPaths.get(identifyPath(inspected.approved.path))
+        : undefined
+      if (!inspected || !approved || !matchesApproval(inspected, approved)) {
         operationFailed('PLUGIN_FILESYSTEM_PATH_NOT_APPROVED')
       }
-      const sourceStat = await filesystem.lstat(source)
-      const parent = await filesystem.realpath(path.dirname(source))
-      const parentStat = await filesystem.lstat(parent)
-      if (
-        !parentStat.isDirectory() ||
-        parentStat.isSymbolicLink() ||
-        sourceStat.dev !== parentStat.dev
-      ) {
+      const source = inspected.approved.path
+      const parent = inspected.approved.parent
+      const sourceStat = inspected.stat
+      if (sourceStat.dev !== inspected.parentStat.dev) {
         operationFailed('PLUGIN_FILESYSTEM_CROSS_ROOT')
       }
-      const target = path.join(parent, entry.targetName)
-      if (path.dirname(target) !== parent || path.basename(target) !== entry.targetName) {
+      const target = pathApi.join(parent, entry.targetName)
+      if (pathApi.dirname(target) !== parent || pathApi.basename(target) !== entry.targetName) {
         operationFailed('PLUGIN_FILESYSTEM_TARGET_INVALID')
       }
-      const sourceIdentity = pathIdentity(source, caseFold)
-      const targetIdentity = pathIdentity(target, caseFold)
-      if (sourceIdentities.has(sourceIdentity))
+      const sourceIdentity = identifyPath(source)
+      const targetIdentity = identifyPath(target)
+      const sourceFileIdentity = `${sourceStat.dev}:${sourceStat.ino}`
+      if (sourceIdentities.has(sourceIdentity) || sourceFiles.has(sourceFileIdentity)) {
         operationFailed('PLUGIN_FILESYSTEM_DUPLICATE_SOURCE')
-      if (targetIdentities.has(targetIdentity))
+      }
+      if (targetIdentities.has(targetIdentity)) {
         operationFailed('PLUGIN_FILESYSTEM_TARGET_COLLISION')
+      }
       sourceIdentities.add(sourceIdentity)
+      sourceFiles.add(sourceFileIdentity)
       targetIdentities.add(targetIdentity)
       preliminary.push({
         index,
         source,
         target,
         targetName: entry.targetName,
+        parent,
+        parentDev: inspected.parentStat.dev,
+        parentIno: inspected.parentStat.ino,
         sourceStat,
         unchanged: source === target,
         temp: '',
@@ -504,7 +623,7 @@ export function createPluginBatchRenameFilesystemCapability(
     }
 
     const bySourceIdentity = new Map(
-      preliminary.map((entry) => [pathIdentity(entry.source, caseFold), entry] as const)
+      preliminary.map((entry) => [identifyPath(entry.source), entry] as const)
     )
     for (const entry of preliminary) {
       if (entry.unchanged) continue
@@ -513,19 +632,15 @@ export function createPluginBatchRenameFilesystemCapability(
         if (targetStat.isSymbolicLink() || targetStat.isDirectory()) {
           operationFailed('PLUGIN_FILESYSTEM_TARGET_INVALID')
         }
-        const sourceEntry = bySourceIdentity.get(pathIdentity(entry.target, caseFold))
-        if (
-          !sourceEntry ||
-          sourceEntry.sourceStat.dev !== targetStat.dev ||
-          sourceEntry.sourceStat.ino !== targetStat.ino
-        ) {
+        const sourceEntry = bySourceIdentity.get(identifyPath(entry.target))
+        if (!sourceEntry || !sameFileIdentity(sourceEntry.sourceStat, targetStat)) {
           operationFailed('PLUGIN_FILESYSTEM_TARGET_EXISTS')
         }
       } catch (error) {
         if (!isMissingError(error)) throw error
       }
       for (let attempt = 0; attempt < 8; attempt += 1) {
-        const temp = path.join(path.dirname(entry.source), `.tuff-rename-${randomUUID()}`)
+        const temp = pathApi.join(entry.parent, `.tuff-rename-${randomUUID()}`)
         try {
           await filesystem.lstat(temp)
         } catch (error) {
@@ -541,27 +656,63 @@ export function createPluginBatchRenameFilesystemCapability(
     return preliminary
   }
 
+  const linkWithState = async (
+    entry: PreparedRename,
+    source: string,
+    target: string,
+    nextState: PreparedRename['state']
+  ): Promise<void> => {
+    await filesystem.link(source, target)
+    entry.state = nextState
+    await assertNoFollowRegularFile(filesystem, target, entry.sourceStat)
+  }
+
+  const unlinkExpected = async (filePath: string, expected: Stats): Promise<void> => {
+    await assertNoFollowRegularFile(filesystem, filePath, expected)
+    await filesystem.unlink(filePath)
+  }
+
   const rollback = async (entries: readonly PreparedRename[]): Promise<void> => {
     const errors: unknown[] = []
     for (const entry of [...entries].reverse()) {
-      if (entry.state !== 'target') continue
       try {
-        await filesystem.rename(entry.target, entry.temp)
-        entry.state = 'temp'
+        if (entry.state === 'target') {
+          await assertParentCurrent(entry)
+          await linkWithState(entry, entry.target, entry.temp, 'temp+target')
+        }
+        if (entry.state === 'temp+target') {
+          await assertParentCurrent(entry)
+          await unlinkExpected(entry.target, entry.sourceStat)
+          entry.state = 'temp'
+        }
       } catch (error) {
         errors.push(error)
       }
     }
     for (const entry of [...entries].reverse()) {
-      if (entry.state !== 'temp') continue
       try {
-        await filesystem.rename(entry.temp, entry.source)
-        entry.state = 'source'
+        if (entry.state === 'temp') {
+          await assertParentCurrent(entry)
+          await linkWithState(entry, entry.temp, entry.source, 'source+temp')
+        }
+        if (entry.state === 'source+temp') {
+          await assertParentCurrent(entry)
+          await unlinkExpected(entry.temp, entry.sourceStat)
+          entry.state = 'source'
+        }
       } catch (error) {
         errors.push(error)
       }
     }
     if (errors.length > 0) operationFailed('PLUGIN_FILESYSTEM_ROLLBACK_FAILED')
+  }
+
+  const assertTransactionActive = (signal: AbortSignal): void => {
+    assertActiveSignal(signal)
+    assertCurrent()
+    if (!permissionGranted('fs.read') || !permissionGranted('fs.write')) {
+      throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+    }
   }
 
   const executeRenameBatch = async (
@@ -573,39 +724,66 @@ export function createPluginBatchRenameFilesystemCapability(
     if (!permissionGranted('fs.read') || !permissionGranted('fs.write')) {
       throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
     }
-    assertActiveSignal(signal)
+    assertTransactionActive(signal)
     const entries = await prepareRenames(request)
+    const completedApprovals = new Map<PreparedRename, ApprovedPath>()
     try {
+      assertTransactionActive(signal)
       for (const entry of entries) {
         if (entry.unchanged) continue
-        assertActiveSignal(signal)
-        assertCurrent()
-        if (!permissionGranted('fs.read') || !permissionGranted('fs.write')) {
-          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
-        }
+        assertTransactionActive(signal)
+        await assertParentCurrent(entry)
         await assertNoFollowRegularFile(filesystem, entry.source, entry.sourceStat)
-        await filesystem.rename(entry.source, entry.temp)
+        assertTransactionActive(signal)
+        await linkWithState(entry, entry.source, entry.temp, 'source+temp')
+        assertTransactionActive(signal)
+        await assertParentCurrent(entry)
+        await unlinkExpected(entry.source, entry.sourceStat)
         entry.state = 'temp'
+        assertTransactionActive(signal)
       }
       for (const entry of entries) {
         if (entry.unchanged) continue
-        assertActiveSignal(signal)
-        assertCurrent()
-        if (!permissionGranted('fs.read') || !permissionGranted('fs.write')) {
-          throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
-        }
-        await filesystem.rename(entry.temp, entry.target)
+        assertTransactionActive(signal)
+        await assertParentCurrent(entry)
+        await linkWithState(entry, entry.temp, entry.target, 'temp+target')
+        assertTransactionActive(signal)
+        await assertParentCurrent(entry)
+        await unlinkExpected(entry.temp, entry.sourceStat)
         entry.state = 'target'
+        assertTransactionActive(signal)
+        const inspected = await inspectCanonicalFile(entry.target, 'transaction')
+        if (!inspected || !sameFileIdentity(inspected.stat, entry.sourceStat)) {
+          operationFailed('PLUGIN_FILESYSTEM_SOURCE_CHANGED')
+        }
+        completedApprovals.set(entry, inspected.approved)
+        assertTransactionActive(signal)
       }
+      assertTransactionActive(signal)
     } catch (error) {
-      await rollback(entries)
+      recoveryTransactions.add(entries)
+      try {
+        await rollback(entries)
+        recoveryTransactions.delete(entries)
+      } catch {
+        failed = true
+        operationFailed('PLUGIN_FILESYSTEM_ROLLBACK_FAILED')
+      }
       throw error
     }
 
     for (const entry of entries) {
       if (entry.unchanged) continue
-      approvedPaths.delete(pathIdentity(entry.source, caseFold))
-      approvedPaths.add(pathIdentity(entry.target, caseFold))
+      const sourceIdentity = identifyPath(entry.source)
+      const currentSourceApproval = approvedPaths.get(sourceIdentity)
+      if (
+        currentSourceApproval?.dev === entry.sourceStat.dev &&
+        currentSourceApproval.ino === entry.sourceStat.ino
+      ) {
+        approvedPaths.delete(sourceIdentity)
+      }
+      const completed = completedApprovals.get(entry)
+      if (completed) approvedPaths.set(identifyPath(entry.target), completed)
     }
     return {
       operation: 'rename-batch',
@@ -621,10 +799,10 @@ export function createPluginBatchRenameFilesystemCapability(
     permission: 'fs.write',
     timeoutMs: 30_000,
     maxConcurrency: 1,
-    validateRequest: validateRenameRequest,
+    validateRequest: (value) => validateRenameRequest(value, platform),
     validateResult: validateRenameResult,
     invoke(context, request, signal) {
-      if (closing || closed) {
+      if (closing || closed || failed) {
         throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_CLOSED')
       }
       const operation = executeRenameBatch(context, request as RenameRequest, signal)
@@ -640,19 +818,22 @@ export function createPluginBatchRenameFilesystemCapability(
       return activeOperations.size
     },
     async approveLifecycleFileInputs(query: unknown): Promise<number> {
-      if (closing || closed) {
+      if (closing || closed || failed) {
         throw new PluginHostCapabilityError('PLUGIN_HOST_CAPABILITY_CLOSED')
+      }
+      for (const [identity, approved] of approvedPaths) {
+        if (approved.provenance === 'lifecycle') approvedPaths.delete(identity)
       }
       assertCurrent()
       if (!permissionGranted('fs.read')) return 0
-      const paths = extractLifecyclePaths(query)
+      const paths = extractLifecyclePaths(query, platform)
       let approved = 0
       for (const filePath of paths) {
         assertCurrent()
         if (!permissionGranted('fs.read')) break
-        const canonical = await canonicalApprovedPath(filePath)
-        if (!canonical) continue
-        approvedPaths.add(pathIdentity(canonical, caseFold))
+        const inspected = await inspectCanonicalFile(filePath, 'lifecycle')
+        if (!inspected) continue
+        approvedPaths.set(identifyPath(inspected.approved.path), inspected.approved)
         approved += 1
       }
       return approved
@@ -662,8 +843,18 @@ export function createPluginBatchRenameFilesystemCapability(
       closing = true
       closePromise = Promise.resolve().then(async () => {
         await Promise.allSettled([...activeOperations])
+        const recoveryErrors: unknown[] = []
+        for (const entries of [...recoveryTransactions]) {
+          try {
+            await rollback(entries)
+            recoveryTransactions.delete(entries)
+          } catch (error) {
+            recoveryErrors.push(error)
+          }
+        }
         approvedPaths.clear()
         closed = true
+        if (recoveryErrors.length > 0) operationFailed('PLUGIN_FILESYSTEM_ROLLBACK_FAILED')
       })
       return closePromise
     }
