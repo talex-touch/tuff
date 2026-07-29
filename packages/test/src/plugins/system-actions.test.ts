@@ -1,8 +1,37 @@
-import { describe, expect, it } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it, vi } from 'vitest'
+import { createPluginGlobals, loadPluginModule } from './plugin-loader'
+
+interface PluginAction {
+  id: string
+  type: string
+  label: string
+  payload?: Record<string, unknown>
+}
+
+interface PluginItem {
+  id: string
+  title?: string
+  subtitle?: string
+  meta?: Record<string, unknown>
+  actions?: PluginAction[]
+}
+
+type SystemResult
+  = | { actionId: string, status: 'started' }
+    | { actionId: string, status: 'blocked', reason: string }
+    | { actionId: string, status: 'failed', reason: string }
+
+interface SystemActionsPrelude {
+  onInit: () => Promise<void>
+  onFeatureTriggered: (featureId: string, query: unknown) => Promise<boolean>
+  onItemAction: (item: PluginItem, context?: { actionId?: string }) => Promise<Record<string, unknown>>
+  onDestroy: () => Promise<void>
+}
 
 class FakeBuilder {
-  item: Record<string, unknown>
+  private readonly item: PluginItem
 
   constructor(id: string) {
     this.item = { id }
@@ -31,469 +60,209 @@ class FakeBuilder {
     return this
   }
 
+  createAndAddAction(id: string, type: string, label: string, payload: Record<string, unknown>) {
+    this.item.actions = [{ id, type, label, payload }]
+    return this
+  }
+
   build() {
     return this.item
   }
 }
 
-function createTestGlobals(
-  items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }>,
-  permissionAllowed: boolean,
-) {
-  return createPluginGlobals({
-    TuffItemBuilder: FakeBuilder,
-    permission: {
-      check: async () => permissionAllowed,
-      request: async () => permissionAllowed,
-    },
-    plugin: {
-      feature: {
-        clearItems() { items.length = 0 },
-        pushItems(next: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }>) { items.push(...next) },
-      },
-    },
-  })
-}
-
-function createSafeShellRunner(calls: string[] = []) {
-  return (command: string) => {
-    calls.push(command)
-    return {
-      on(event: string, callback: (code?: number) => void) {
-        if (event === 'close') {
-          callback(0)
-        }
-        return this
-      },
-    }
+function createHarness(platform = 'darwin') {
+  const state = {
+    items: [] as PluginItem[],
+    calls: [] as string[],
+    events: [] as string[],
+    result: { actionId: 'lock-screen', status: 'started' } as SystemResult,
   }
-}
-
-const systemPlugin = loadPluginModule(new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url))
-const { __test: systemTest } = systemPlugin
-
-describe('system actions plugin', () => {
-  it('contains full action set on darwin', () => {
-    const actions = systemTest.resolveActions('darwin')
-    const ids = actions.map(action => action.id)
-
-    expect(ids).toContain('shutdown')
-    expect(ids).toContain('restart')
-    expect(ids).toContain('lock-screen')
-    expect(ids).toContain('volume-up')
-    expect(ids).toContain('volume-down')
-    expect(ids).toContain('mute')
-    expect(ids).toContain('brightness-up')
-    expect(ids).toContain('brightness-down')
-    expect(ids).toContain('open-main-window')
+  const runAction = vi.fn(async (actionId: string) => {
+    state.calls.push(actionId)
+    return { ...state.result, actionId }
   })
-
-  it('keeps windows action list without brightness items', () => {
-    const actions = systemTest.resolveActions('win32')
-    const ids = actions.map(action => action.id)
-
-    expect(ids).toContain('shutdown')
-    expect(ids).toContain('restart')
-    expect(ids).toContain('open-main-window')
-    expect(ids).not.toContain('brightness-up')
-    expect(ids).not.toContain('brightness-down')
-  })
-
-  it('matches keyword search', () => {
-    const actions = systemTest.resolveActions('darwin')
-    const matched = systemTest.matchActions(actions, 'shutdown')
-
-    expect(matched.some(action => action.id === 'shutdown')).toBe(true)
-  })
-
-  it('returns grouped order by priority', () => {
-    const actions = [
-      { id: 'a', group: 'window' },
-      { id: 'b', group: 'power' },
-      { id: 'c', group: 'audio' },
-    ]
-
-    const order = systemTest.resolveGroupOrder(actions)
-    expect(order).toEqual(['power', 'audio', 'window'])
-  })
-
-  it('builds normalized search tokens', () => {
-    const tokens = systemTest.buildSearchTokens({
-      name: 'Main Window',
-      description: 'Show Tuff',
-      keywords: ['Open Window'],
-    })
-
-    expect(tokens).toContain('main window')
-    expect(tokens).toContain('mainwindow')
-    expect(tokens).toContain('show tuff')
-    expect(tokens).toContain('showtuff')
-    expect(tokens).toContain('open window')
-    expect(tokens).toContain('openwindow')
-  })
-
-  it('shows permission hint when denied', async () => {
-    const items: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }> = []
-    const requested: string[] = []
-    const globals = createPluginGlobals({
+  const module = loadPluginModule<SystemActionsPrelude>(
+    new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
+    createPluginGlobals({
       TuffItemBuilder: FakeBuilder,
-      permission: {
-        check: async () => false,
-        request: async (permissionId: string) => {
-          requested.push(permissionId)
-          return false
-        },
-      },
+      platform: { platform, arch: 'arm64' },
+      system: { runAction },
       plugin: {
         feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string, subtitle?: string, meta?: Record<string, any> }>) { items.push(...next) },
+          async clearItems() {
+            state.events.push('clear:start')
+            await Promise.resolve()
+            state.items = []
+            state.events.push('clear:end')
+          },
+          async pushItems(items: PluginItem[]) {
+            state.events.push('push:start')
+            await Promise.resolve()
+            state.items = items
+            state.events.push('push:end')
+          },
         },
       },
-    })
+    }),
+  )
+  return { module, runAction, state }
+}
 
-    const pluginModule = loadPluginModule(
+function itemForAction(items: PluginItem[], actionId: string): PluginItem {
+  const item = items.find(entry => entry.actions?.some(action => action.payload?.actionId === actionId))
+  if (!item)
+    throw new Error(`Missing action item: ${actionId}`)
+  return item
+}
+
+describe('isolated system actions Prelude', () => {
+  it('contains no privileged, arbitrary-command, or test-only child surface', () => {
+    const sourcePath = fileURLToPath(
       new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      globals,
     )
-
-    await pluginModule.onFeatureTriggered('system-actions', '')
-    if (systemTest.isShellPlatformSupported(process.platform)) {
-      expect(items[0]?.title).toBe('系统命令能力')
-      expect(['permission-missing', 'unsupported']).toContain(items[0]?.meta?.capability?.status)
-      expect(items[0]?.meta?.capability?.permission).toBe('system.shell')
-      expect(items.some(item => item.title === '打开主窗口')).toBe(true)
-      expect(requested).toEqual([])
-    }
-    else {
-      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
-    }
-  })
-
-  it('marks permission sdk unavailable as permission missing when shell is otherwise available', async () => {
-    const pluginModule = loadPluginModule(
+    const source = readFileSync(sourcePath, 'utf8')
+    const module = loadPluginModule<Record<string, unknown>>(
       new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
       createPluginGlobals({
-        permission: withoutGlobal(),
-      }),
-    )
-    pluginModule.__test.setSpawnShellCommandForTest(() => ({
-      on() {
-        return this
-      },
-    }))
-
-    expect(await pluginModule.__test.resolveFeatureShellCapabilityState('darwin')).toMatchObject({
-      status: 'permission-missing',
-      reason: 'permission-sdk-unavailable',
-    })
-  })
-
-  it('returns empty hint when no matches', async () => {
-    const items: Array<{ title?: string }> = []
-    const globals = createTestGlobals(items, true)
-
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      globals,
-    )
-
-    await pluginModule.onFeatureTriggered('system-actions', '不存在的指令')
-    expect(items[0]?.title).toBe('没有匹配的系统操作')
-  })
-
-  it('builds grouped items for matches', async () => {
-    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
-    const globals = createTestGlobals(items, true)
-
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      globals,
-    )
-
-    await pluginModule.onFeatureTriggered('system-actions', '关机')
-    if (!systemTest.isShellPlatformSupported(process.platform)) {
-      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
-      return
-    }
-
-    expect(items.length).toBeGreaterThan(1)
-    expect(items[0]?.title).toBe('系统命令能力')
-    const shutdown = items.find(item => item.meta?.actionId === 'shutdown')
-    expect(shutdown?.meta?.capability?.audit).toMatchObject({
-      pluginName: 'touch-system-actions',
-      featureId: 'system-actions',
-      actionId: 'shutdown',
-      requiresConfirmation: true,
-      requiresAdmin: true,
-    })
-  })
-
-  it('marks shell fallback as unsupported when safe-shell is unavailable', () => {
-    const capability = systemTest.buildShellCapability({
-      featureId: 'system-actions',
-      actionId: 'shutdown',
-      platform: 'darwin',
-    })
-
-    expect(['available', 'unsupported']).toContain(capability.status)
-    expect(capability.permission).toBe('system.shell')
-    expect(capability.audit.commandKind).toBe('fixed-shell')
-  })
-
-  it('keeps main window action native and independent from shell permission', () => {
-    const [mainWindowAction] = systemTest.resolveActions(process.platform)
-      .filter(action => action.id === 'open-main-window')
-    const capability = systemTest.buildActionCapability('system-actions', mainWindowAction)
-
-    expect(capability).toMatchObject({
-      id: 'app.window',
-      type: 'native-window',
-      status: 'available',
-      audit: {
-        pluginName: 'touch-system-actions',
-        featureId: 'system-actions',
-        actionId: 'open-main-window',
-        commandKind: 'native-window',
-      },
-    })
-  })
-
-  it('executes main window action without shell permission sdk', async () => {
-    let shown = 0
-    let focused = 0
-    const previousApp = (globalThis as Record<string, any>).$app
-    ;(globalThis as Record<string, any>).$app = {
-      window: {
-        window: {
-          show() { shown += 1 },
-          focus() { focused += 1 },
-        },
-      },
-    }
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: withoutGlobal(),
+        TuffItemBuilder: FakeBuilder,
+        platform: { platform: 'darwin', arch: 'arm64' },
+        system: { runAction: async () => ({ status: 'started' }) },
       }),
     )
 
-    try {
-      const result = await pluginModule.onItemAction({
-        meta: {
-          defaultAction: 'system-actions',
-          actionId: 'open-main-window',
-        },
-      })
-
-      expect(result).toMatchObject({
-        externalAction: true,
-        status: 'started',
-      })
-      expect(shown).toBe(1)
-      expect(focused).toBe(1)
+    for (const pattern of [
+      /\b__test\b/,
+      /\brequire\s*\(/,
+      /\bfetch\s*\(/,
+      /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+      /\bnode:(?:fs|child_process|sqlite|worker_threads)\b/,
+      /\b(?:command|executable|args|cwd|env|url|script)\s*:/,
+      /\bpinyin-pro\b/,
+      /\bdialog\b/,
+    ]) {
+      expect(source).not.toMatch(pattern)
     }
-    finally {
-      if (typeof previousApp === 'undefined') {
-        delete (globalThis as Record<string, any>).$app
-      }
-      else {
-        ;(globalThis as Record<string, any>).$app = previousApp
-      }
-    }
+    expect(Object.keys(module).sort()).toEqual([
+      'onDestroy',
+      'onFeatureTriggered',
+      'onInit',
+      'onItemAction',
+    ])
   })
 
-  it('blocks shell action execution when safe-shell is unavailable before permission request', async () => {
-    const requested: string[] = []
-    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    const globals = createPluginGlobals({
-      permission: {
-        check: async () => true,
-        request: async (permissionId: string) => {
-          requested.push(permissionId)
-          return true
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      globals,
-    )
-    pluginModule.__test.setSpawnShellCommandForTest(null)
+  it('initializes and awaits ordered feature publication with fixed Darwin actions', async () => {
+    const harness = createHarness('darwin')
 
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      enumerable: true,
-      value: 'darwin',
-    })
+    await expect(harness.module.onInit()).resolves.toBeUndefined()
+    await expect(
+      harness.module.onFeatureTriggered('system-actions', { text: '' }),
+    ).resolves.toBe(true)
 
-    try {
-      const result = await pluginModule.onItemAction({
-        meta: {
-          defaultAction: 'system-actions',
-          actionId: 'lock-screen',
-        },
-      })
-
-      expect(result).toMatchObject({
-        externalAction: true,
-        status: 'blocked',
-        reason: 'safe-shell-unavailable',
-      })
-      expect(requested).toEqual([])
-    }
-    finally {
-      Object.defineProperty(process, 'platform', platformDescriptor!)
-    }
+    expect(harness.state.events).toEqual(['clear:start', 'clear:end', 'push:start', 'push:end'])
+    const ids = harness.state.items.flatMap(item => item.actions?.map(action => action.payload?.actionId) ?? [])
+    expect(ids).toEqual([
+      'shutdown',
+      'restart',
+      'lock-screen',
+      'volume-up',
+      'volume-down',
+      'mute-toggle',
+      'brightness-up',
+      'brightness-down',
+      'open-main-window',
+    ])
+    expect(ids).not.toContain('mute')
+    expect(JSON.stringify(harness.state.items)).not.toContain('command')
   })
 
-  it('does not execute shell action when permission sdk is unavailable', async () => {
-    const shellCalls: string[] = []
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: withoutGlobal(),
-      }),
-    )
-    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
+  it('omits unsupported brightness actions on Windows', async () => {
+    const harness = createHarness('win32')
 
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'system-actions',
-        actionId: 'lock-screen',
-      },
+    await harness.module.onFeatureTriggered('system-actions', { text: '亮度' })
+
+    expect(harness.state.items).toHaveLength(1)
+    expect(harness.state.items[0]?.title).toBe('没有匹配的系统操作')
+    expect(harness.runAction).not.toHaveBeenCalled()
+  })
+
+  it('opens the main window through the fixed host action without local permission logic', async () => {
+    const harness = createHarness('darwin')
+    await harness.module.onFeatureTriggered('system-actions', { text: '主窗口' })
+    const item = itemForAction(harness.state.items, 'open-main-window')
+
+    await expect(
+      harness.module.onItemAction(item, { actionId: 'run-action' }),
+    ).resolves.toMatchObject({ externalAction: true, status: 'started', success: true })
+    expect(harness.runAction).toHaveBeenCalledExactlyOnceWith('open-main-window')
+  })
+
+  it('passes only the fixed action ID when a forged item adds an arbitrary command', async () => {
+    const harness = createHarness('darwin')
+    await harness.module.onFeatureTriggered('system-actions', { text: '增加音量' })
+    const item = itemForAction(harness.state.items, 'volume-up')
+    Object.assign(item.actions?.[0]?.payload ?? {}, {
+      command: 'rm -rf /',
+      executable: '/bin/sh',
+      args: ['-c', 'unsafe'],
     })
 
-    if (!systemTest.isShellPlatformSupported(process.platform)) {
-      expect(result).toMatchObject({
-        externalAction: true,
-        status: 'blocked',
-        reason: `platform:${process.platform}`,
-      })
-      expect(shellCalls).toEqual([])
-      return
+    await expect(harness.module.onItemAction(item)).resolves.toMatchObject({
+      status: 'started',
+      success: true,
+    })
+    expect(harness.runAction).toHaveBeenCalledExactlyOnceWith('volume-up')
+  })
+
+  it('blocks hostile action IDs locally and preserves main-owned permission denial', async () => {
+    const harness = createHarness('darwin')
+    const hostile: PluginItem = {
+      id: 'hostile',
+      meta: { defaultAction: 'system-actions' },
+      actions: [
+        {
+          id: 'run-action',
+          type: 'plugin',
+          label: 'Hostile',
+          payload: { actionId: 'custom-command' },
+        },
+      ],
     }
 
-    expect(result).toMatchObject({
-      externalAction: true,
+    await expect(harness.module.onItemAction(hostile)).resolves.toMatchObject({
       status: 'blocked',
-      reason: 'permission-sdk-unavailable',
+      reason: 'invalid-action',
+      success: false,
     })
-    expect(shellCalls).toEqual([])
-  })
+    expect(harness.runAction).not.toHaveBeenCalled()
 
-  it('does not execute shell action when permission is denied', async () => {
-    const shellCalls: string[] = []
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: {
-          check: async () => false,
-          request: async () => false,
-        },
-      }),
-    )
-    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'system-actions',
-        actionId: 'lock-screen',
-      },
-    })
-
-    if (!systemTest.isShellPlatformSupported(process.platform)) {
-      expect(result).toMatchObject({ reason: `platform:${process.platform}` })
-      return
-    }
-
-    expect(result).toMatchObject({
-      externalAction: true,
+    await harness.module.onFeatureTriggered('system-actions', { text: '锁屏' })
+    harness.state.result = {
+      actionId: 'lock-screen',
       status: 'blocked',
       reason: 'permission-denied',
-    })
-    expect(shellCalls).toEqual([])
-  })
-
-  it('does not execute shell action when permission request fails', async () => {
-    const shellCalls: string[] = []
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: {
-          check: async () => false,
-          request: async () => {
-            throw new Error('permission transport failed')
-          },
-        },
-      }),
-    )
-    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'system-actions',
-        actionId: 'lock-screen',
-      },
-    })
-
-    if (!systemTest.isShellPlatformSupported(process.platform)) {
-      expect(result).toMatchObject({ reason: `platform:${process.platform}` })
-      return
     }
-
-    expect(result).toMatchObject({
-      externalAction: true,
+    await expect(
+      harness.module.onItemAction(itemForAction(harness.state.items, 'lock-screen')),
+    ).resolves.toMatchObject({
       status: 'blocked',
-      reason: 'permission-request-failed',
+      reason: 'permission-denied',
+      success: false,
     })
-    expect(shellCalls).toEqual([])
   })
 
-  it('does not request or execute shell action when permission check fails', async () => {
-    const shellCalls: string[] = []
-    const requested: string[] = []
-    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-system-actions/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: {
-          check: async () => {
-            throw new Error('permission check failed')
-          },
-          request: async (permissionId: string) => {
-            requested.push(permissionId)
-            return true
-          },
-        },
-      }),
-    )
-    pluginModule.__test.setSpawnShellCommandForTest(createSafeShellRunner(shellCalls))
+  it('destroys and re-enables with a fresh fixed host binding', async () => {
+    const first = createHarness('darwin')
+    await first.module.onInit()
+    await first.module.onFeatureTriggered('system-actions', { text: '锁屏' })
+    await first.module.onItemAction(itemForAction(first.state.items, 'lock-screen'))
+    await expect(first.module.onDestroy()).resolves.toBeUndefined()
 
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      enumerable: true,
-      value: 'darwin',
-    })
+    const second = createHarness('darwin')
+    await second.module.onInit()
+    await second.module.onFeatureTriggered('system-actions', { text: '主窗口' })
+    await second.module.onItemAction(itemForAction(second.state.items, 'open-main-window'))
 
-    try {
-      const result = await pluginModule.onItemAction({
-        meta: {
-          defaultAction: 'system-actions',
-          actionId: 'lock-screen',
-        },
-      })
-
-      expect(result).toMatchObject({
-        externalAction: true,
-        status: 'blocked',
-        reason: 'permission-request-failed',
-      })
-      expect(requested).toEqual([])
-      expect(shellCalls).toEqual([])
-    }
-    finally {
-      Object.defineProperty(process, 'platform', platformDescriptor!)
-    }
+    expect(first.state.calls).toEqual(['lock-screen'])
+    expect(second.state.calls).toEqual(['open-main-window'])
   })
 })

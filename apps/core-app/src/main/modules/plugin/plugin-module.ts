@@ -11,7 +11,10 @@ import type {
   PluginInstallRequest,
   PluginInstallSummary
 } from '@talex-touch/utils/plugin/providers'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type {
+  ITuffTransportMain,
+  PluginActivationIdentity
+} from '@talex-touch/utils/transport/main'
 import type {
   PluginApiGetFileTreeResponse,
   PluginInstallSourceResponse
@@ -21,10 +24,11 @@ import { lookup } from 'node:dns/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
-import { shell } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-touch/utils/i18n'
 import { normalizePermissionId, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus } from '@talex-touch/utils/plugin'
@@ -79,11 +83,44 @@ import {
 } from './host/plugin-business-capabilities'
 import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
 import {
+  createFixedPluginBrowserOpenService,
+  createPluginBrowserOpenCapabilities,
+  createPluginBrowserOpenProcess
+} from './host/plugin-browser-open-capabilities'
+import {
   createPluginHostNexusService,
   createPluginRequestReplyCapabilities,
   type PluginQuickOpsOperationId
 } from './host/plugin-host-request-reply'
 import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import {
+  createFixedPluginSnipasteDiscovery,
+  createFixedPluginSnipasteExecutor,
+  createPluginSnipasteProcess,
+  createPluginSnipasteProcessCapability
+} from './host/plugin-process-capabilities'
+import {
+  createFixedPluginSystemActionConfirmation,
+  createFixedPluginSystemActionExecutor,
+  createPluginSystemActionCapabilities,
+  createPluginSystemActionProcess
+} from './host/plugin-system-capabilities'
+import {
+  createFixedPluginWindowManagerService,
+  createPluginWindowManagerCapabilities,
+  createPluginWindowManagerProcess
+} from './host/plugin-window-manager-capabilities'
+import {
+  createFixedPluginWindowPresetExecutor,
+  createPluginWindowPresetCapabilities,
+  createPluginWindowPresetProcess
+} from './host/plugin-window-preset-capabilities'
+import {
+  createFixedPluginWorkspaceScriptHost,
+  createPluginWorkspaceScriptCapabilities,
+  createPluginWorkspaceScriptProcess,
+  resolvePluginWorkspacePackageManagerPath
+} from './host/plugin-workspace-script-capabilities'
 import { ElectronPluginRuntimeProcessFactory } from './host/plugin-runtime-electron-process'
 import {
   PluginRuntimeService,
@@ -1644,6 +1681,12 @@ export class PluginModule extends BaseModule {
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
     TouchPlugin.setRuntimeService(null)
+    TouchPlugin.setSnipasteProcessCapabilityFactory(null)
+    TouchPlugin.setSystemActionCapabilityFactory(null)
+    TouchPlugin.setBrowserOpenCapabilityFactory(null)
+    TouchPlugin.setWindowManagerCapabilityFactory(null)
+    TouchPlugin.setWindowPresetCapabilityFactory(null)
+    TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
 
     const pluginRuntime = buildPluginManagerRuntime({
       pluginRootDir: file.dirPath!,
@@ -1821,6 +1864,361 @@ export class PluginModule extends BaseModule {
         }
       })
     })
+    const authorizePluginCapability = (pluginName: string, permissionId: string): boolean => {
+      try {
+        const permissionModule = getPermissionModule()
+        const store = permissionModule?.getStore()
+        const plugin = this.pluginManager?.getPluginByName(pluginName) as ITouchPlugin | undefined
+        if (
+          !store ||
+          !plugin ||
+          typeof plugin.sdkapi !== 'number' ||
+          !hasDeclaredPluginPermission(plugin, permissionId)
+        ) {
+          return false
+        }
+        return store.hasPermission(pluginName, permissionId, plugin.sdkapi) === true
+      } catch {
+        return false
+      }
+    }
+    const watchPluginPermissionRevoked = (
+      pluginName: string,
+      permissionId: string,
+      onRevoke: () => void
+    ): (() => void) => {
+      const listener = (event: unknown): void => {
+        if (!isRecord(event) || event.pluginId !== pluginName) return
+        const permissionIds = Array.isArray(event.permissionIds)
+          ? event.permissionIds.filter((value): value is string => typeof value === 'string')
+          : []
+        if (event.all === true || permissionIds.includes(permissionId)) onRevoke()
+      }
+      touchEventBus.on(TalexEvents.PERMISSION_REVOKED, listener)
+      return () => touchEventBus.off(TalexEvents.PERMISSION_REVOKED, listener)
+    }
+    const snipasteDiscovery = createFixedPluginSnipasteDiscovery({
+      platform: process.platform,
+      homeDirectory: app.getPath('home'),
+      fileSystem: Object.freeze({
+        async kind(target: string) {
+          try {
+            const stats = await fse.lstat(target)
+            if (stats.isSymbolicLink()) return 'symlink' as const
+            if (stats.isFile()) return 'file' as const
+            if (stats.isDirectory()) return 'directory' as const
+            return 'other' as const
+          } catch {
+            return 'missing' as const
+          }
+        },
+        realpath: (target: string) => fse.realpath(target)
+      })
+    })
+    const snipasteExecutor = createFixedPluginSnipasteExecutor({
+      platform: process.platform,
+      environment: process.env,
+      spawn: (executable, args, options) =>
+        createPluginSnipasteProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            detached: options.detached,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: options.stdio,
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createSnipasteProcessCapability = (activation: PluginActivationIdentity) =>
+      createPluginSnipasteProcessCapability({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        discovery: snipasteDiscovery,
+        executor: snipasteExecutor
+      })
+    const systemActionExecutor = createFixedPluginSystemActionExecutor({
+      platform: process.platform,
+      spawn: (executable, args, options) =>
+        createPluginSystemActionProcess(
+          spawnSafe(executable, [...args], {
+            windowsHide: options.windowsHide,
+            stdio: options.stdio
+          })
+        )
+    })
+    const systemActionConfirmation = createFixedPluginSystemActionConfirmation({
+      showMessageBox: async (options) => {
+        const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!parentWindow || parentWindow.isDestroyed()) return { response: 0 }
+        const result = await dialog.showMessageBox(parentWindow, {
+          type: options.type,
+          title: options.title,
+          message: options.message,
+          detail: options.detail,
+          buttons: [...options.buttons],
+          defaultId: options.defaultId,
+          cancelId: options.cancelId,
+          noLink: options.noLink,
+          signal: options.signal
+        })
+        if (parentWindow.isDestroyed()) return { response: 0 }
+        return { response: result.response }
+      }
+    })
+    const systemActionWindow = Object.freeze({
+      showMainWindow: async (
+        activation: PluginActivationIdentity,
+        hostGeneration: number,
+        signal: AbortSignal
+      ): Promise<void> => {
+        const assertCurrent = (): void => {
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          const current = ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(activation.name)
+          if (
+            !current ||
+            current.name !== activation.name ||
+            current.pluginInstanceId !== activation.pluginInstanceId ||
+            current.activationGeneration !== activation.activationGeneration ||
+            current.key !== activation.key ||
+            this.runtimeService?.resolve(activation)?.owner.hostGeneration !== hostGeneration
+          ) {
+            throw new Error('PLUGIN_SYSTEM_ACTION_STALE')
+          }
+        }
+        assertCurrent()
+        const mainWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          throw new Error('PLUGIN_SYSTEM_ACTION_MAIN_WINDOW_UNAVAILABLE')
+        }
+        if (mainWindow.isMinimized()) {
+          assertCurrent()
+          mainWindow.restore()
+        }
+        assertCurrent()
+        mainWindow.show()
+        assertCurrent()
+        mainWindow.focus()
+        assertCurrent()
+      }
+    })
+    const createSystemActionCapability = (activation: PluginActivationIdentity) =>
+      createPluginSystemActionCapabilities({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        executor: systemActionExecutor,
+        confirmation: systemActionConfirmation,
+        window: systemActionWindow
+      })
+    const browserOpenService = createFixedPluginBrowserOpenService({
+      platform: process.platform,
+      homeDirectory: app.getPath('home'),
+      windowsDirectory:
+        process.platform === 'win32'
+          ? (process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows')
+          : '/Windows',
+      environment: process.env,
+      inspect: async (candidatePath, kind, signal) => {
+        if (signal.aborted) return null
+        try {
+          const before = await fse.lstat(candidatePath)
+          if (before.isSymbolicLink()) return null
+          if (kind === 'file' ? !before.isFile() : !before.isDirectory()) return null
+          const canonicalPath = path.normalize(await fse.realpath(candidatePath))
+          if (canonicalPath !== path.normalize(candidatePath)) return null
+          const after = await fse.stat(canonicalPath)
+          if (signal.aborted) return null
+          if (kind === 'file' ? !after.isFile() : !after.isDirectory()) return null
+          if (before.dev !== after.dev || before.ino !== after.ino) return null
+          return {
+            canonicalPath,
+            kind,
+            dev: String(after.dev),
+            ino: String(after.ino)
+          }
+        } catch {
+          return null
+        }
+      },
+      spawn: (executable, args, options) =>
+        createPluginBrowserOpenProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            detached: options.detached,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createBrowserOpenCapability = (activation: PluginActivationIdentity) =>
+      createPluginBrowserOpenCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        authorizeNetwork: (pluginName) => authorizePluginCapability(pluginName, 'network.internet'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        watchNetworkPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'network.internet', onRevoke),
+        service: browserOpenService
+      })
+    const windowManagerService = createFixedPluginWindowManagerService({
+      platform: process.platform,
+      windowsDirectory: process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows',
+      spawn: (executable, args, options) =>
+        createPluginWindowManagerProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createWindowManagerCapability = (activation: PluginActivationIdentity) =>
+      createPluginWindowManagerCapabilities({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        service: windowManagerService
+      })
+    const windowPresetExecutor = createFixedPluginWindowPresetExecutor({
+      platform: process.platform,
+      windowsDirectory: process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows',
+      spawn: (executable, args, options) =>
+        createPluginWindowPresetProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createWindowPresetCapability = (activation: PluginActivationIdentity) =>
+      createPluginWindowPresetCapabilities({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        executor: windowPresetExecutor
+      })
+    const workspaceScriptHost = createFixedPluginWorkspaceScriptHost({
+      platform: process.platform,
+      environment: process.env,
+      resolvePackageManager: resolvePluginWorkspacePackageManagerPath,
+      selectWorkspace: async (signal) => {
+        const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return null
+        const selection = dialog.showOpenDialog(parentWindow, {
+          title: 'Select Workspace',
+          buttonLabel: 'Select',
+          properties: ['openDirectory', 'noResolveAliases']
+        })
+        void selection.catch(() => undefined)
+        return await new Promise<string | null>((resolve, reject) => {
+          let settled = false
+          const finish = (value: string | null, error?: unknown): void => {
+            if (settled) return
+            settled = true
+            signal.removeEventListener('abort', onAbort)
+            if (error !== undefined) reject(error)
+            else resolve(value)
+          }
+          const onAbort = (): void => finish(null)
+          signal.addEventListener('abort', onAbort, { once: true })
+          if (signal.aborted) {
+            finish(null)
+            return
+          }
+          void selection.then(
+            (result) => {
+              if (signal.aborted || parentWindow.isDestroyed() || result.canceled) {
+                finish(null)
+                return
+              }
+              finish(typeof result.filePaths[0] === 'string' ? result.filePaths[0] : null)
+            },
+            (error) => finish(null, error)
+          )
+        })
+      },
+      confirmRun: async (input, signal) => {
+        const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return false
+        const result = await dialog.showMessageBox(parentWindow, {
+          type: 'warning',
+          title: 'Run Workspace Script',
+          message: `Run "${input.scriptName}"?`,
+          detail: `Workspace: ${input.workspaceName}\nThe package script is project-owned code and may perform arbitrary actions.`,
+          buttons: ['Cancel', 'Run'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+          signal
+        })
+        return !parentWindow.isDestroyed() && !signal.aborted && result.response === 1
+      },
+      spawn: (executable, args, options) =>
+        createPluginWorkspaceScriptProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            detached: options.detached,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide,
+            windowsVerbatimArguments: options.windowsVerbatimArguments
+          })
+        )
+    })
+    const createWorkspaceScriptCapability = (activation: PluginActivationIdentity) =>
+      createPluginWorkspaceScriptCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        host: workspaceScriptHost
+      })
     this.runtimeService = new PluginRuntimeService({
       artifactPath: resolvePluginRuntimeArtifactPath(),
       factory: new ElectronPluginRuntimeProcessFactory(),
@@ -1830,39 +2228,30 @@ export class PluginModule extends BaseModule {
         ...requestReplyCapabilities.definitions,
         ...voiceCapabilities.definitions
       ]),
-      authorizeCapability: (pluginName, permissionId) => {
-        try {
-          const permissionModule = getPermissionModule()
-          const store = permissionModule?.getStore()
-          const plugin = this.pluginManager?.getPluginByName(pluginName) as ITouchPlugin | undefined
-          if (
-            !store ||
-            !plugin ||
-            typeof plugin.sdkapi !== 'number' ||
-            !hasDeclaredPluginPermission(plugin, permissionId)
-          ) {
-            return false
-          }
-          return store.hasPermission(pluginName, permissionId, plugin.sdkapi) === true
-        } catch {
-          return false
-        }
-      },
-      watchPermissionRevoked: (pluginName, permissionId, onRevoke) => {
-        const listener = (event: unknown): void => {
-          if (!isRecord(event) || event.pluginId !== pluginName) return
-          const permissionIds = Array.isArray(event.permissionIds)
-            ? event.permissionIds.filter((value): value is string => typeof value === 'string')
-            : []
-          if (event.all === true || permissionIds.includes(permissionId)) onRevoke()
-        }
-        touchEventBus.on(TalexEvents.PERMISSION_REVOKED, listener)
-        return () => touchEventBus.off(TalexEvents.PERMISSION_REVOKED, listener)
-      },
+      authorizeCapability: authorizePluginCapability,
+      watchPermissionRevoked: watchPluginPermissionRevoked,
       closeResources: async (activation) => {
         await this.pluginBusinessCapabilities?.closeActivation(activation)
       }
     })
+    TouchPlugin.setSnipasteProcessCapabilityFactory((activation) =>
+      createSnipasteProcessCapability(activation)
+    )
+    TouchPlugin.setSystemActionCapabilityFactory((activation) =>
+      createSystemActionCapability(activation)
+    )
+    TouchPlugin.setBrowserOpenCapabilityFactory((activation) =>
+      createBrowserOpenCapability(activation)
+    )
+    TouchPlugin.setWindowManagerCapabilityFactory((activation) =>
+      createWindowManagerCapability(activation)
+    )
+    TouchPlugin.setWindowPresetCapabilityFactory((activation) =>
+      createWindowPresetCapability(activation)
+    )
+    TouchPlugin.setWorkspaceScriptCapabilityFactory((activation) =>
+      createWorkspaceScriptCapability(activation)
+    )
     TouchPlugin.setRuntimeService(
       shouldInstallPluginRuntimeServiceByDefault() ? this.runtimeService : null
     )
@@ -1991,6 +2380,12 @@ export class PluginModule extends BaseModule {
       cleanupErrors.push(error)
     }
 
+    runCleanup(() => TouchPlugin.setSnipasteProcessCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setSystemActionCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setBrowserOpenCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setWindowManagerCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setWindowPresetCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setWorkspaceScriptCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setRuntimeService(null))
     runCleanup(() => TouchPlugin.setTransport(null))
     this.transport = null

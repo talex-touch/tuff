@@ -1,586 +1,216 @@
-const { plugin, logger, TuffItemBuilder, permission } = globalThis
-const { spawn } = require('node:child_process')
-const path = require('node:path')
+const { plugin, logger, TuffItemBuilder, platform: hostPlatform } = globalThis
 
 const PLUGIN_NAME = 'touch-snipaste'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
-const DEFAULT_ACTION = 'snipaste'
-const SHELL_PERMISSION_ID = 'system.shell'
-const INVALID_ARG_PATTERN = /[\0\r\n]/
-
-const INTERNAL_ACTIONS = [
-  {
-    id: 'config-init',
-    title: '生成默认配置',
-    subtitle: '写入 settings.json（已存在则不覆盖）',
-    keywords: ['config', 'settings', '配置', '初始化'],
-    kind: 'internal',
-  },
-  {
-    id: 'config-open',
-    title: '打开配置目录',
-    subtitle: '打开插件存储目录',
-    keywords: ['config', 'settings', '配置', '目录'],
-    kind: 'internal',
-  },
-]
-
-const BUILTIN_ACTIONS = [
+const FEATURE_ID = 'snipaste-quick'
+const DEFAULT_ACTION = 'snipaste-action'
+const RUN_ACTION_ID = 'run-action'
+const ICON = { type: 'class', value: 'i-ri-screenshot-2-line' }
+const ACTIONS = [
   {
     id: 'launch',
     title: '启动 Snipaste',
     subtitle: '打开 Snipaste 程序',
-    args: [],
     keywords: ['launch', 'start', '启动', '打开'],
   },
   {
     id: 'snip',
     title: '截图',
     subtitle: '开始截图',
-    args: ['snip'],
     keywords: ['snip', '截图'],
   },
   {
     id: 'snip-full',
     title: '全屏截图到剪贴板',
-    subtitle: 'snip --full -o clipboard',
-    args: ['snip', '--full', '-o', 'clipboard'],
+    subtitle: '截取全屏并写入剪贴板',
     keywords: ['full', '全屏', 'clipboard', '剪贴板'],
   },
   {
     id: 'paste',
     title: '贴图',
     subtitle: '从剪贴板贴图',
-    args: ['paste'],
     keywords: ['paste', '贴图'],
   },
   {
     id: 'pick-color',
     title: '取色',
     subtitle: '屏幕取色',
-    args: ['pick-color'],
     keywords: ['color', '取色'],
   },
   {
     id: 'toggle-images',
     title: '显示/隐藏贴图',
-    subtitle: 'toggle-images',
-    args: ['toggle-images'],
+    subtitle: '切换全部贴图的可见状态',
     keywords: ['toggle', '隐藏', '显示', '贴图管理'],
   },
   {
     id: 'docs',
     title: '打开帮助',
     subtitle: '打开 Snipaste 帮助面板',
-    args: ['docs'],
     keywords: ['docs', 'help', '文档', '帮助'],
   },
 ]
+const ACTION_IDS = new Set(ACTIONS.map(action => action.id))
 
 function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
-function truncateText(value, max = 96) {
-  const text = normalizeText(value)
-  if (!text)
-    return ''
-  if (text.length <= max)
-    return text
-  return `${text.slice(0, max - 1)}…`
+function currentPlatform() {
+  return typeof hostPlatform?.platform === 'string' ? hostPlatform.platform : 'unsupported'
 }
 
-function matchesKeyword(action, keyword) {
+function getQueryText(query) {
+  return typeof query === 'string' ? query : (query?.text ?? '')
+}
+
+function matchesKeyword(action, query) {
+  const keyword = normalizeText(query).toLowerCase()
   if (!keyword)
     return true
-  if (action.kind === 'internal')
-    return true
-  const lower = keyword.toLowerCase()
-  return action.keywords?.some(item => item.toLowerCase().includes(lower))
-    || action.title.toLowerCase().includes(lower)
-    || action.subtitle.toLowerCase().includes(lower)
+  return [action.id, action.title, action.subtitle, ...action.keywords]
+    .join(' ')
+    .toLowerCase()
+    .includes(keyword)
 }
 
-function buildCapabilityMeta({
-  actionId,
-  status = 'available',
-  reason = '',
-  commandSource = '',
-} = {}) {
-  return {
-    capability: {
-      id: 'snipaste.shell',
-      status,
-      permissionId: SHELL_PERMISSION_ID,
-      reason,
-      platform: process.platform,
-      commandSource,
-      actionId,
-    },
-  }
-}
-
-async function getShellPermissionState() {
-  if (!permission?.check) {
-    return { granted: false, status: 'permission-missing', reason: 'permission-sdk-unavailable' }
-  }
-
-  try {
-    const granted = Boolean(await permission.check(SHELL_PERMISSION_ID))
-    return granted
-      ? { granted: true, status: 'available', reason: '' }
-      : { granted: false, status: 'permission-missing', reason: 'system.shell permission is required' }
-  }
-  catch {
-    logger?.warn?.('[touch-snipaste] Failed to check permission')
-    return { granted: false, status: 'permission-missing', reason: 'permission-check-failed' }
-  }
-}
-
-async function requestShellPermissionState() {
-  if (!permission?.check || !permission?.request)
-    return { granted: false, reason: 'permission-sdk-unavailable' }
-
-  try {
-    const hasPermission = await permission.check(SHELL_PERMISSION_ID)
-    if (hasPermission)
-      return { granted: true, reason: '' }
-
-    const granted = await permission.request(SHELL_PERMISSION_ID, '需要 system.shell 权限启动 Snipaste')
-    return granted
-      ? { granted: true, reason: '' }
-      : { granted: false, reason: 'permission-denied' }
-  }
-  catch {
-    logger?.warn?.('[touch-snipaste] Failed to request permission')
-    return { granted: false, reason: 'permission-request-failed' }
-  }
-}
-
-function buildInfoItem({ id, featureId, title, subtitle, meta }) {
-  return new TuffItemBuilder(id)
+function buildItem(action, featureId) {
+  return new TuffItemBuilder(`${featureId}-${action.id}`)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-    .setTitle(title)
-    .setSubtitle(subtitle)
-    .setIcon(ICON)
-    .setMeta({ pluginName: PLUGIN_NAME, featureId, ...(meta || {}) })
-    .build()
-}
-
-function buildActionItem({ id, featureId, title, subtitle, actionId, capability }) {
-  return new TuffItemBuilder(id)
-    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-    .setTitle(title)
-    .setSubtitle(subtitle)
+    .setTitle(action.title)
+    .setSubtitle(action.subtitle)
     .setIcon(ICON)
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
       defaultAction: DEFAULT_ACTION,
-      actionId,
-      ...buildCapabilityMeta({
-        actionId,
-        status: capability?.status,
-        reason: capability?.reason,
-        commandSource: actionId?.split(':')[0] || '',
-      }),
     })
+    .createAndAddAction(RUN_ACTION_ID, 'plugin', action.title, { actionId: action.id })
     .build()
 }
 
-function formatBlockedMessage(reason) {
-  if (reason === 'permission-denied')
-    return '缺少 system.shell 权限'
-  if (reason === 'permission-sdk-unavailable')
-    return '权限系统不可用，无法启动 Snipaste'
-  if (reason === 'permission-request-failed')
-    return '权限请求失败，无法启动 Snipaste'
-  if (reason === 'permission-check-failed')
-    return '权限检查失败，无法启动 Snipaste'
-  if (reason === 'permission-missing')
-    return '缺少 system.shell 权限'
-  return 'Snipaste 命令已阻止'
+async function publishItems(items) {
+  await plugin.feature.clearItems()
+  await plugin.feature.pushItems(items)
 }
 
-function normalizeArgs(args) {
-  if (!Array.isArray(args))
-    return { ok: false, reason: 'invalid-args' }
-
-  const normalized = []
-  for (const arg of args) {
-    if (typeof arg !== 'string')
-      return { ok: false, reason: 'invalid-arg-type' }
-
-    const value = arg.trim()
-    if (!value)
-      continue
-    if (INVALID_ARG_PATTERN.test(value))
-      return { ok: false, reason: 'invalid-arg-payload' }
-
-    normalized.push(value)
-  }
-
-  return { ok: true, args: normalized }
-}
-
-function normalizeAction(action, source) {
-  const id = typeof action.id === 'string' ? action.id.trim() : ''
-  if (!id)
-    return null
-
-  const normalizedArgs = normalizeArgs(action.args)
-  const args = normalizedArgs.ok ? normalizedArgs.args : []
-  const title = typeof action.title === 'string' && action.title.trim() ? action.title.trim() : id
-  const subtitle = typeof action.subtitle === 'string' && action.subtitle.trim()
-    ? action.subtitle.trim()
-    : (args.length > 0 ? args.join(' ') : '')
-  const keywords = Array.isArray(action.keywords)
-    ? action.keywords.filter(item => typeof item === 'string' && item.trim())
-    : []
-
-  if (source === 'custom' && args.length === 0 && normalizedArgs.ok)
-    return null
-
+function blocked(reason, message, status = 'blocked') {
   return {
-    id,
-    key: `${source}:${id}`,
-    title,
-    subtitle,
-    args,
-    keywords,
-    source,
-    kind: action.kind || source,
-    invalidReason: normalizedArgs.ok ? '' : normalizedArgs.reason,
+    externalAction: true,
+    success: false,
+    status,
+    reason,
+    message,
   }
 }
 
-function getDefaultSnipastePath() {
-  if (process.platform === 'win32')
-    return 'C:\\Program Files\\Snipaste\\Snipaste.exe'
-  if (process.platform === 'darwin')
-    return '/Applications/Snipaste.app/Contents/MacOS/Snipaste'
-  return '/opt/Snipaste/Snipaste.AppImage'
+function stableFailure(error) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+    return blocked('permission-denied', '缺少 system.shell 权限')
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+    return blocked('permission-unavailable', '权限系统不可用')
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
+    return blocked('cancelled', 'Snipaste 操作已取消', 'cancelled')
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
+    return blocked('timeout', 'Snipaste 启动超时', 'failed')
+  return blocked('snipaste-action-failed', 'Snipaste 操作执行失败', 'failed')
 }
 
-function buildDefaultSettings() {
-  return {
-    snipastePath: getDefaultSnipastePath(),
-    actions: [
-      {
-        id: 'custom-snip',
-        title: '自定义截图',
-        subtitle: 'snip --your-args',
-        args: ['snip', '--your-args'],
-        keywords: ['custom', '自定义'],
-      },
-    ],
-  }
-}
+async function runAction(actionId) {
+  if (!ACTION_IDS.has(actionId))
+    return blocked('invalid-action', '无效 Snipaste 操作')
+  if (!plugin.snipaste || typeof plugin.snipaste.runAction !== 'function')
+    return blocked('process-capability-unavailable', 'Snipaste 操作能力不可用')
 
-async function readSettings() {
   try {
-    const settings = await plugin.storage.getFile('settings.json')
-    if (!settings)
-      return null
-    if (typeof settings === 'string') {
-      try {
-        return JSON.parse(settings)
-      }
-      catch {
-        logger?.warn?.('[touch-snipaste] Failed to parse settings.json')
-        return null
-      }
-    }
-    if (typeof settings === 'object')
-      return settings
-  }
-  catch {
-    return null
-  }
-  return null
-}
-
-async function loadCustomActions() {
-  const settings = await readSettings()
-  if (!settings || !Array.isArray(settings.actions))
-    return []
-  return settings.actions
-    .map(action => normalizeAction(action, 'custom'))
-    .filter(Boolean)
-}
-
-async function resolveActions() {
-  const internal = INTERNAL_ACTIONS.map(action => normalizeAction(action, 'internal')).filter(Boolean)
-  const builtins = BUILTIN_ACTIONS.map(action => normalizeAction(action, 'builtin')).filter(Boolean)
-  const custom = await loadCustomActions()
-  return [...internal, ...builtins, ...custom]
-}
-
-async function getCustomPath() {
-  const envPath = process.env.SNIPASTE_PATH
-  if (envPath)
-    return envPath
-  const settings = await readSettings()
-  if (settings?.snipastePath)
-    return settings.snipastePath
-  return null
-}
-
-async function resolveCommandCandidates() {
-  const candidates = []
-  const customPath = await getCustomPath()
-  if (customPath)
-    candidates.push(customPath)
-
-  const platform = process.platform
-  const homeDir = process.env.HOME
-
-  if (platform === 'win32') {
-    candidates.push(
-      'Snipaste',
-      'Snipaste.exe',
-      'C:\\Program Files\\Snipaste\\Snipaste.exe',
-      'C:\\Program Files (x86)\\Snipaste\\Snipaste.exe',
-    )
-  }
-  else if (platform === 'darwin') {
-    candidates.push(
-      '/Applications/Snipaste.app/Contents/MacOS/Snipaste',
-      'Snipaste',
-    )
-    if (homeDir) {
-      candidates.push(path.join(homeDir, 'Applications', 'Snipaste.app', 'Contents', 'MacOS', 'Snipaste'))
-    }
-  }
-  else {
-    candidates.push(
-      'Snipaste.AppImage',
-      'snipaste',
-      '/opt/Snipaste/Snipaste.AppImage',
-    )
-    if (homeDir) {
-      candidates.push(path.join(homeDir, 'Applications', 'Snipaste.AppImage'))
-    }
-  }
-
-  return [...new Set(candidates.filter(Boolean))]
-}
-
-function spawnCommand(command, args) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    })
-    child.once('error', reject)
-    child.once('spawn', () => resolve())
-    child.unref()
-  })
-}
-
-async function runSnipaste(args, options = {}) {
-  if (options.checkPermission !== false) {
-    const permissionState = await requestShellPermissionState()
-    if (!permissionState.granted) {
-      return {
-        status: 'blocked',
-        ok: false,
-        reason: permissionState.reason,
-      }
-    }
-  }
-
-  const normalizedArgs = normalizeArgs(args)
-  if (!normalizedArgs.ok) {
-    return {
-      status: 'blocked',
-      ok: false,
-      reason: normalizedArgs.reason,
-    }
-  }
-
-  const candidates = await resolveCommandCandidates()
-  let lastError = null
-  for (const command of candidates) {
-    try {
-      await spawnCommand(command, normalizedArgs.args)
-      return { status: 'started', ok: true, command }
-    }
-    catch (error) {
-      lastError = error
-    }
-  }
-  return {
-    status: 'failed',
-    ok: false,
-    reason: 'spawn-failed',
-    error: lastError,
-    errorMessage: lastError?.message || 'Snipaste 启动失败',
-  }
-}
-
-const pluginLifecycle = {
-  async onInit() {
-    const existing = await readSettings()
-    if (!existing)
-      await plugin.storage.setFile('settings.json', buildDefaultSettings())
-  },
-
-  async onFeatureTriggered(featureId, query, _feature, signal) {
-    try {
-      if (signal?.aborted)
-        return true
-
-      const keyword = normalizeText(query?.text ?? query)
-      const items = []
-      const actions = await resolveActions()
-      const settings = await readSettings()
-      const capability = await getShellPermissionState()
-      const configReady = Boolean(settings)
-      const customCount = Array.isArray(settings?.actions) ? settings.actions.length : 0
-      const currentPath = settings?.snipastePath || '未配置'
-
-      items.push(buildInfoItem({
-        id: `${featureId}-config-status`,
-        featureId,
-        title: `配置状态：${configReady ? '已生成' : '未生成'}`,
-        subtitle: `当前路径：${currentPath}`,
-        meta: buildCapabilityMeta({
-          status: capability.status,
-          reason: capability.reason,
-          commandSource: 'config',
-        }),
-      }))
-
-      items.push(buildInfoItem({
-        id: `${featureId}-custom-count`,
-        featureId,
-        title: '自定义动作',
-        subtitle: `已配置 ${customCount} 条（settings.json actions）`,
-      }))
-
-      items.push(buildInfoItem({
-        id: `${featureId}-hint`,
-        featureId,
-        title: '提示：Snipaste 需保持运行',
-        subtitle: '命令行指令需 Snipaste 已运行才会生效',
-      }))
-
-      actions.filter(action => matchesKeyword(action, keyword)).forEach((action) => {
-        const itemCapability = action.invalidReason
-          ? { status: 'blocked', reason: action.invalidReason }
-          : capability
-        items.push(buildActionItem({
-          id: `${featureId}-${action.key}`,
-          featureId,
-          title: action.title,
-          subtitle: action.subtitle,
-          actionId: action.key,
-          capability: itemCapability,
-        }))
-      })
-
-      plugin.feature.clearItems()
-      plugin.feature.pushItems(items)
-      return true
-    }
-    catch (error) {
-      logger?.error?.('[touch-snipaste] Failed to handle feature', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          id: `${featureId}-error`,
-          featureId,
-          title: '加载失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
-        }),
-      ])
-      return true
-    }
-  },
-
-  async onItemAction(item) {
-    try {
-      if (item?.meta?.defaultAction !== DEFAULT_ACTION)
-        return
-
-      const actionId = item?.meta?.actionId
-      if (!actionId)
-        return
-
-      const actions = await resolveActions()
-      const action = actions.find(entry => entry.key === actionId)
-      if (!action)
-        return
-
-      if (action.kind === 'internal') {
-        if (action.id === 'config-init') {
-          const existing = await readSettings()
-          if (!existing)
-            await plugin.storage.setFile('settings.json', buildDefaultSettings())
-          return { externalAction: true }
-        }
-        if (action.id === 'config-open') {
-          await plugin.storage.openFolder()
-          return { externalAction: true }
-        }
-        return
-      }
-
-      if (action.invalidReason) {
-        return {
-          externalAction: true,
-          success: false,
-          status: 'blocked',
-          reason: action.invalidReason,
-          message: 'Snipaste 参数包含不支持的内容',
-        }
-      }
-
-      const result = await runSnipaste(action.args)
-      if (result.status === 'blocked') {
-        return {
-          externalAction: true,
-          success: false,
-          status: 'blocked',
-          reason: result.reason,
-          message: formatBlockedMessage(result.reason),
-        }
-      }
-      if (!result.ok) {
-        logger?.warn?.('[touch-snipaste] Failed to run Snipaste command', result.error)
-        return {
-          externalAction: true,
-          success: false,
-          status: 'failed',
-          reason: result.reason,
-          message: result.errorMessage || 'Snipaste 启动失败',
-        }
-      }
+    const result = await plugin.snipaste.runAction(actionId)
+    if (result?.status === 'started') {
       return {
         externalAction: true,
         success: true,
         status: 'started',
-        command: result.command,
       }
     }
-    catch (error) {
-      logger?.error?.('[touch-snipaste] Action failed', error)
+    if (result?.status === 'blocked') {
+      const reason = normalizeText(result.reason) || 'blocked'
+      const message = reason === 'not-installed'
+        ? '未在受信任位置找到 Snipaste'
+        : reason === 'permission-denied'
+          ? '缺少 system.shell 权限'
+          : reason === 'permission-unavailable'
+            ? '权限系统不可用'
+            : reason === 'platform-unsupported'
+              ? '当前平台暂不支持 Snipaste 操作'
+              : 'Snipaste 操作不可用'
+      return blocked(reason, message)
     }
-  },
+    return blocked('spawn-failed', 'Snipaste 启动失败', 'failed')
+  }
+  catch (error) {
+    const failure = stableFailure(error)
+    logger?.error?.(`[touch-snipaste] ${failure.reason}`)
+    return failure
+  }
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    normalizeAction,
-    matchesKeyword,
-    normalizeArgs,
-    runSnipaste,
-    getShellPermissionState,
-    buildCapabilityMeta,
-    formatBlockedMessage,
-  },
+function selectedActionId(item, context) {
+  if (!item?.meta || item.meta.defaultAction !== DEFAULT_ACTION)
+    return ''
+  const selectedId = context?.actionId || item.actions?.[0]?.id
+  if (selectedId !== RUN_ACTION_ID)
+    return ''
+  const selectedAction = item.actions?.find?.(action => action?.id === selectedId)
+  const actionId = normalizeText(selectedAction?.payload?.actionId)
+  return ACTION_IDS.has(actionId) ? actionId : ''
 }
+
+const pluginLifecycle = {
+  async onInit() {},
+
+  async onFeatureTriggered(featureId, query) {
+    if (featureId !== FEATURE_ID)
+      return false
+    const platform = currentPlatform()
+    if (platform !== 'darwin' && platform !== 'win32' && platform !== 'linux') {
+      await publishItems([
+        new TuffItemBuilder(`${featureId}-unsupported`)
+          .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+          .setTitle('当前平台暂不支持 Snipaste 操作')
+          .setSubtitle('Snipaste 仅支持 macOS、Windows 和 Linux')
+          .setIcon(ICON)
+          .setMeta({ pluginName: PLUGIN_NAME, featureId })
+          .build(),
+      ])
+      return true
+    }
+    const keyword = getQueryText(query)
+    const items = ACTIONS
+      .filter(action => matchesKeyword(action, keyword))
+      .map(action => buildItem(action, featureId))
+    if (items.length === 0) {
+      items.push(
+        new TuffItemBuilder(`${featureId}-empty`)
+          .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+          .setTitle('没有匹配的 Snipaste 操作')
+          .setSubtitle('可尝试输入：截图 / 贴图 / 取色 / 帮助')
+          .setIcon(ICON)
+          .setMeta({ pluginName: PLUGIN_NAME, featureId })
+          .build(),
+      )
+    }
+    await publishItems(items)
+    return true
+  },
+
+  async onItemAction(item, context = {}) {
+    const actionId = selectedActionId(item, context)
+    if (!actionId)
+      return blocked('invalid-action', '无效 Snipaste 操作')
+    return await runAction(actionId)
+  },
+
+  async onDestroy() {},
+}
+
+module.exports = pluginLifecycle

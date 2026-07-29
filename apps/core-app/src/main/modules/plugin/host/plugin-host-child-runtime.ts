@@ -14,6 +14,10 @@ import {
   PLUGIN_FLOW_OPERATION_IDS,
   PLUGIN_QUICK_OPS_OPERATION_IDS
 } from './plugin-host-request-reply'
+import { PLUGIN_SNIPASTE_ACTION_IDS } from './plugin-process-capabilities'
+import { PLUGIN_SYSTEM_ACTION_IDS } from './plugin-system-capabilities'
+import { PLUGIN_WINDOW_MANAGER_ACTION_IDS } from './plugin-window-manager-capabilities'
+import { PLUGIN_WINDOW_PRESET_ACTION_IDS } from './plugin-window-preset-capabilities'
 import {
   PLUGIN_HOST_CAPABILITIES,
   PLUGIN_HOST_LIFECYCLE_METHODS,
@@ -1357,9 +1361,116 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasVoiceInvokeFacade = hasDeclaredCapability('voice.invoke')
   const hasVoiceStreamFacade = hasDeclaredCapability('voice.stream')
   const hasVoiceFacade = hasVoiceInvokeFacade || hasVoiceStreamFacade
+  const hasSnipasteFacade = hasDeclaredCapability('process.spawn')
+  const hasWorkspaceScriptsFacade =
+    snapshot.manifest.name === 'touch-workspace-scripts' &&
+    hasDeclaredCapability('process.workspace-scripts')
+  const hasSystemFacade = hasDeclaredCapability('system.invoke')
+  const hasBrowserOpenFacade =
+    snapshot.manifest.name === 'touch-browser-open' &&
+    hasDeclaredCapability('system.browser-open')
+  const hasWindowPresetFacade =
+    snapshot.manifest.name === 'touch-window-presets' &&
+    hasDeclaredCapability('system.window-presets')
+  const hasWindowManagerFacade =
+    snapshot.manifest.name === 'touch-window-manager' &&
+    hasDeclaredCapability('system.window-manager')
   const fixedChannelOperations = new setConstructor(${JSON.stringify(PLUGIN_CHANNEL_OPERATION_IDS)})
   const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
   const fixedFlowOperations = new setConstructor(${JSON.stringify(PLUGIN_FLOW_OPERATION_IDS)})
+  const fixedSnipasteActions = new setConstructor(${JSON.stringify(PLUGIN_SNIPASTE_ACTION_IDS)})
+  const fixedSystemActions = new setConstructor(${JSON.stringify(PLUGIN_SYSTEM_ACTION_IDS)})
+  const fixedWindowPresetActions = new setConstructor(${JSON.stringify(PLUGIN_WINDOW_PRESET_ACTION_IDS)})
+  const fixedWindowManagerActions = new setConstructor(${JSON.stringify(PLUGIN_WINDOW_MANAGER_ACTION_IDS)})
+  const isBrowserOpenToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 35 ||
+      value[0] !== 'b' ||
+      value[1] !== 'o' ||
+      value[2] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 3; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
+  const isWindowManagerToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 35 ||
+      value[0] !== 'w' ||
+      value[1] !== 'm' ||
+      value[2] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 3; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
+  const isWorkspaceToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 35 ||
+      value[0] !== 'w' ||
+      value[1] !== 's' ||
+      value[2] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 3; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
+  const isWorkspaceScriptToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 36 ||
+      value[0] !== 'w' ||
+      value[1] !== 's' ||
+      value[2] !== 's' ||
+      value[3] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 4; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
   const defineFacadeMethod = (target, name, callback) => {
     objectDefineProperty(target, name, {
       value: objectFreeze(callback),
@@ -1578,6 +1689,134 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(voiceFacade)
 
+  const snipasteFacade = objectCreate(null)
+  if (hasSnipasteFacade) {
+    defineFacadeMethod(snipasteFacade, 'runAction', (actionId) => {
+      if (typeof actionId !== 'string' || !hasSetValue(fixedSnipasteActions, actionId)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('process.spawn', { operation: 'snipaste-action', actionId }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(snipasteFacade)
+
+  const workspaceScriptsFacade = objectCreate(null)
+  if (hasWorkspaceScriptsFacade) {
+    defineFacadeMethod(workspaceScriptsFacade, 'select', () =>
+      mapCapabilityResult(
+        invokeCapability('process.workspace-scripts', { operation: 'select-workspace' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(workspaceScriptsFacade, 'list', (workspaceToken) => {
+      if (!isWorkspaceToken(workspaceToken)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('process.workspace-scripts', {
+          operation: 'list-scripts',
+          workspaceToken
+        }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+    defineFacadeMethod(workspaceScriptsFacade, 'run', (scriptToken) => {
+      if (!isWorkspaceScriptToken(scriptToken)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('process.workspace-scripts', { operation: 'run-script', scriptToken }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(workspaceScriptsFacade)
+
+  const systemFacade = objectCreate(null)
+  if (hasSystemFacade) {
+    defineFacadeMethod(systemFacade, 'runAction', (actionId) => {
+      if (typeof actionId !== 'string' || !hasSetValue(fixedSystemActions, actionId)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('system.invoke', { operation: 'run-action', actionId }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(systemFacade)
+
+  const browserOpenFacade = objectCreate(null)
+  if (hasBrowserOpenFacade) {
+    defineFacadeMethod(browserOpenFacade, 'list', () =>
+      mapCapabilityResult(
+        invokeCapability('system.browser-open', { operation: 'list' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(browserOpenFacade, 'open', (url, browserToken) => {
+      if (browserToken !== undefined && !isBrowserOpenToken(browserToken)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const request = browserToken === undefined
+        ? { operation: 'open', url: stringConstructor(url) }
+        : { operation: 'open', url: stringConstructor(url), browserToken }
+      return mapCapabilityResult(
+        invokeCapability('system.browser-open', request),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(browserOpenFacade)
+
+  const windowPresetFacade = objectCreate(null)
+  if (hasWindowPresetFacade) {
+    defineFacadeMethod(windowPresetFacade, 'status', () =>
+      mapCapabilityResult(
+        invokeCapability('system.window-presets', { operation: 'status' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(windowPresetFacade, 'runAction', (actionId) => {
+      if (typeof actionId !== 'string' || !hasSetValue(fixedWindowPresetActions, actionId)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('system.window-presets', { operation: 'run-action', actionId }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(windowPresetFacade)
+
+  const windowManagerFacade = objectCreate(null)
+  if (hasWindowManagerFacade) {
+    defineFacadeMethod(windowManagerFacade, 'list', () =>
+      mapCapabilityResult(
+        invokeCapability('system.window-manager', { operation: 'list' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(windowManagerFacade, 'act', (action, token) => {
+      if (
+        typeof action !== 'string' ||
+        !hasSetValue(fixedWindowManagerActions, action) ||
+        typeof token !== 'string' ||
+        !isWindowManagerToken(token)
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('system.window-manager', { operation: 'act', action, token }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(windowManagerFacade)
+
   const pluginFacade = objectCreate(null)
   defineFacadeMethod(pluginFacade, 'getLocale', () => snapshot.locale)
   if (hasFeatureFacade) {
@@ -1588,6 +1827,36 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   if (hasVoiceFacade) {
     objectDefineProperty(pluginFacade, 'voice', { value: voiceFacade, enumerable: true })
+  }
+  if (hasSnipasteFacade) {
+    objectDefineProperty(pluginFacade, 'snipaste', { value: snipasteFacade, enumerable: true })
+  }
+  if (hasWorkspaceScriptsFacade) {
+    objectDefineProperty(pluginFacade, 'workspaceScripts', {
+      value: workspaceScriptsFacade,
+      enumerable: true
+    })
+  }
+  if (hasSystemFacade) {
+    objectDefineProperty(pluginFacade, 'system', { value: systemFacade, enumerable: true })
+  }
+  if (hasBrowserOpenFacade) {
+    objectDefineProperty(pluginFacade, 'browser', {
+      value: browserOpenFacade,
+      enumerable: true
+    })
+  }
+  if (hasWindowPresetFacade) {
+    objectDefineProperty(pluginFacade, 'windowPresets', {
+      value: windowPresetFacade,
+      enumerable: true
+    })
+  }
+  if (hasWindowManagerFacade) {
+    objectDefineProperty(pluginFacade, 'windowManager', {
+      value: windowManagerFacade,
+      enumerable: true
+    })
   }
   objectFreeze(pluginFacade)
 
@@ -1944,6 +2213,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
       value: hasFilesystemFacade ? filesystemFacade : undefined,
       configurable: true
     },
+    system: { value: hasSystemFacade ? systemFacade : undefined, configurable: true },
     touchChannel: {
       value: hasChannelFacade ? touchChannelFacade : undefined,
       configurable: true

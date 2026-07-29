@@ -1,254 +1,150 @@
-const { plugin, clipboard, logger, TuffItemBuilder, permission, features } = globalThis
-const { execFile, spawn } = require('node:child_process')
-const os = require('node:os')
-
-const fetchImpl = globalThis.fetch
+const { plugin, clipboard, http, logger, TuffItemBuilder, features, platform: hostPlatform } = globalThis
 
 const PLUGIN_NAME = 'touch-browser-open'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
-const ACTION_ID = 'browser-open'
+const BROWSER_FEATURE_ID = 'browser-open'
 const WEB_SEARCH_FEATURE_ID = 'web-search'
 const SEARCH_ENGINE_FEATURE_PREFIX = 'search-engine-'
 const SEARCH_SETTINGS_FILE = 'search-settings.json'
 const RECENT_FILE = 'recent-browsers.json'
+const ICON = { type: 'class', value: 'i-ri-global-line' }
+const SEARCH_ICON = { type: 'class', value: 'i-ri-search-line' }
 const RECENT_MAX_ITEMS = 20
 const RECENT_SHOW_LIMIT = 5
 const RECENT_TTL_MS = 30 * 24 * 60 * 60 * 1000
-const SUGGEST_TIMEOUT_MS = 2500
 const SUGGEST_LIMIT = 6
-const SHELL_PERMISSION_ID = 'system.shell'
-const SUPPORTED_ACTION_IDS = new Set(['copy-url', 'default-open', 'search-web', 'open-browser'])
-const BROWSER_OPEN_STATUS_LABELS = {
-  'available': '可用',
-  'permission-missing': '缺少权限',
-  'unsupported': '不可用',
-}
+const SUGGEST_TEXT_LIMIT = 128
+const URL_BYTE_LIMIT = 2048
+const ACTION_IDS = new Set(['copy-url', 'default-open', 'search-web', 'open-browser'])
 
 const SEARCH_ENGINES = [
   {
     id: 'google',
     name: 'Google',
     featureName: 'Google 搜索引擎',
-    icon: { type: 'file', value: 'assets/search-engines/google.svg' },
-    keywords: ['google', 'g', '谷歌', 'google 搜索', 'Google 搜索引擎', '谷歌搜索', '谷歌 搜索'],
+    keywords: ['google', 'g', '谷歌', 'google 搜索', '谷歌搜索'],
     commands: ['google', 'g', '谷歌'],
-    buildSearchUrl: query => `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-    buildSuggestUrl: query => `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`,
-    parseSuggestions(payload) {
-      return Array.isArray(payload?.[1]) ? payload[1] : []
-    },
+    searchUrl: query => `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+    suggestUrl: query =>
+      `https://suggestqueries.google.com/complete/search?client=firefox&q=${encodeURIComponent(query)}`,
+    suggestions: payload => (Array.isArray(payload?.[1]) ? payload[1] : []),
   },
   {
     id: 'bing',
     name: 'Bing',
     featureName: 'Bing 搜索引擎',
-    icon: { type: 'file', value: 'assets/search-engines/bing.svg' },
-    keywords: ['bing', '必应', 'bing 搜索', 'Bing 搜索引擎', '必应搜索', '必应 搜索'],
+    keywords: ['bing', '必应', 'bing 搜索', '必应搜索'],
     commands: ['bing', '必应'],
-    buildSearchUrl: query => `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
-    buildSuggestUrl: query => `https://www.bing.com/osjson.aspx?query=${encodeURIComponent(query)}`,
-    parseSuggestions(payload) {
-      return Array.isArray(payload?.[1]) ? payload[1] : []
-    },
+    searchUrl: query => `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
+    suggestUrl: query => `https://www.bing.com/osjson.aspx?query=${encodeURIComponent(query)}`,
+    suggestions: payload => (Array.isArray(payload?.[1]) ? payload[1] : []),
   },
   {
     id: 'duckduckgo',
     name: 'DuckDuckGo',
     featureName: 'DuckDuckGo 搜索引擎',
-    icon: { type: 'file', value: 'assets/search-engines/duckduckgo.svg' },
-    keywords: ['duckduckgo', 'ddg', 'duck', 'DuckDuckGo 搜索引擎', 'duckduckgo 搜索', 'ddg 搜索'],
+    keywords: ['duckduckgo', 'ddg', 'duck', 'duckduckgo 搜索'],
     commands: ['duckduckgo', 'ddg', 'duck'],
-    buildSearchUrl: query => `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
-    buildSuggestUrl: query => `https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&type=list`,
-    parseSuggestions(payload) {
-      if (!Array.isArray(payload))
-        return []
-      return payload.map(item => item?.phrase)
-    },
+    searchUrl: query => `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+    suggestUrl: query => `https://duckduckgo.com/ac/?q=${encodeURIComponent(query)}&type=list`,
+    suggestions: payload => (Array.isArray(payload) ? payload.map(item => item?.phrase) : []),
   },
 ]
 
-const SEARCH_ENGINE_IDS = SEARCH_ENGINES.map(engine => engine.id)
-const DEFAULT_SEARCH_SETTINGS = {
-  defaultEngine: 'google',
-  enabledEngines: SEARCH_ENGINE_IDS,
-}
 const SEARCH_ENGINE_BY_ID = new Map(SEARCH_ENGINES.map(engine => [engine.id, engine]))
 const SEARCH_COMMAND_TO_ENGINE = new Map()
-SEARCH_ENGINES.forEach((engine) => {
-  engine.commands.forEach(command => SEARCH_COMMAND_TO_ENGINE.set(command.toLowerCase(), engine.id))
-})
-
-let dynamicSearchFeaturesInitialized = false
-let networkPermissionGranted = null
-let latestFeatureRequestSeq = 0
-let latestFeatureRequestIdentity = null
-let activeSearchMode = null
-let activeSearchRequestController = null
-let detectedBrowsersById = new Map()
-
-function getRuntimePlatform() {
-  const platform = typeof os?.platform === 'function' ? os.platform() : ''
-  if (platform === 'win32' || platform === 'darwin' || platform === 'linux')
-    return platform
-  return 'unsupported'
+for (const engine of SEARCH_ENGINES) {
+  for (const command of engine.commands) SEARCH_COMMAND_TO_ENGINE.set(command.toLowerCase(), engine.id)
 }
 
-const CURRENT_PLATFORM = getRuntimePlatform()
-
-const MAC_BROWSER_CANDIDATES = [
-  { id: 'safari', name: 'Safari', target: 'Safari' },
-  { id: 'chrome', name: 'Chrome', target: 'Google Chrome' },
-  { id: 'edge', name: 'Edge', target: 'Microsoft Edge' },
-  { id: 'firefox', name: 'Firefox', target: 'Firefox' },
-  { id: 'brave', name: 'Brave', target: 'Brave Browser' },
-  { id: 'opera', name: 'Opera', target: 'Opera' },
-]
-
-const SUPPORTED_PLATFORM_FLAGS = {
-  win32: CURRENT_PLATFORM === 'win32',
-  darwin: CURRENT_PLATFORM === 'darwin',
-  linux: CURRENT_PLATFORM === 'linux',
-}
-
-const WIN_BROWSER_CANDIDATES = [
-  {
-    id: 'edge',
-    name: 'Edge',
-    target: 'msedge.exe',
-    paths: [
-      '$env:ProgramFiles\\Microsoft\\Edge\\Application\\msedge.exe',
-      '$' + '{env:ProgramFiles(x86)}\\Microsoft\\Edge\\Application\\msedge.exe',
-    ],
-  },
-  {
-    id: 'chrome',
-    name: 'Chrome',
-    target: 'chrome.exe',
-    paths: [
-      '$env:ProgramFiles\\Google\\Chrome\\Application\\chrome.exe',
-      '$' + '{env:ProgramFiles(x86)}\\Google\\Chrome\\Application\\chrome.exe',
-      '$env:LocalAppData\\Google\\Chrome\\Application\\chrome.exe',
-    ],
-  },
-  {
-    id: 'firefox',
-    name: 'Firefox',
-    target: 'firefox.exe',
-    paths: [
-      '$env:ProgramFiles\\Mozilla Firefox\\firefox.exe',
-      '$' + '{env:ProgramFiles(x86)}\\Mozilla Firefox\\firefox.exe',
-    ],
-  },
-  {
-    id: 'brave',
-    name: 'Brave',
-    target: 'brave.exe',
-    paths: [
-      '$env:ProgramFiles\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-      '$' + '{env:ProgramFiles(x86)}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-      '$env:LocalAppData\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
-    ],
-  },
-  {
-    id: 'opera',
-    name: 'Opera',
-    target: 'opera.exe',
-    paths: [
-      '$env:LocalAppData\\Programs\\Opera\\opera.exe',
-      '$env:ProgramFiles\\Opera\\opera.exe',
-      '$' + '{env:ProgramFiles(x86)}\\Opera\\opera.exe',
-    ],
-  },
-]
+let requestSequence = 0
+let activeSearch = null
+let browsersByToken = new Map()
 
 function normalizeText(value) {
   return String(value ?? '').trim()
-}
-
-function cacheDetectedBrowsers(items) {
-  const next = new Map()
-  for (const item of items || []) {
-    const id = normalizeText(item?.id)
-    const name = normalizeText(item?.name)
-    const target = normalizeText(item?.target)
-    if (!id || !name || !target)
-      continue
-    next.set(id, { id, name, target })
-  }
-  detectedBrowsersById = next
-  return Array.from(next.values())
-}
-
-function resolveDetectedBrowser(browser) {
-  const id = normalizeText(browser?.id)
-  const target = normalizeText(browser?.target)
-  const detected = detectedBrowsersById.get(id)
-  if (!detected || detected.target !== target)
-    return null
-  return detected
-}
-
-function truncateText(value, max = 72) {
-  const text = normalizeText(value)
-  if (!text)
-    return ''
-  if (text.length <= max)
-    return text
-  return `${text.slice(0, max - 1)}…`
-}
-
-function getQueryText(query) {
-  if (typeof query === 'string')
-    return query
-  return query?.text ?? ''
 }
 
 function normalizeSearchText(value) {
   return normalizeText(value).replace(/\s+/g, ' ')
 }
 
-function uniqNormalizedTexts(values, limit = SUGGEST_LIMIT) {
-  const seen = new Set()
-  const result = []
-  for (const value of values || []) {
-    const text = normalizeSearchText(value)
-    const key = text.toLowerCase()
-    if (!text || seen.has(key))
-      continue
-    seen.add(key)
-    result.push(text)
-    if (result.length >= limit)
-      break
-  }
-  return result
+function getQueryText(query) {
+  return typeof query === 'string' ? query : (query?.text ?? '')
 }
 
-function getSearchEngine(engineId) {
-  return SEARCH_ENGINE_BY_ID.get(engineId) || SEARCH_ENGINE_BY_ID.get(DEFAULT_SEARCH_SETTINGS.defaultEngine)
+function utf8Length(value) {
+  return new TextEncoder().encode(value).byteLength
+}
+
+function containsControlCharacter(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x1F || code === 0x7F)
+      return true
+  }
+  return false
+}
+
+function normalizeUrlInput(value) {
+  let input = normalizeText(value)
+  if (!input || containsControlCharacter(input) || utf8Length(input) > URL_BYTE_LIMIT)
+    return null
+  if (!/^https?:\/\//i.test(input)) {
+    if (!/^www\./i.test(input) && !/^[\w.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(input))
+      return null
+    input = `https://${input.replace(/^\/+/, '')}`
+  }
+  try {
+    const parsed = new URL(input)
+    if (
+      (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+      || parsed.username
+      || parsed.password
+      || !parsed.hostname
+    ) {
+      return null
+    }
+    const normalized = parsed.toString()
+    return utf8Length(normalized) <= URL_BYTE_LIMIT ? normalized : null
+  }
+  catch {
+    return null
+  }
+}
+
+function truncateText(value, maximum = 80) {
+  const text = normalizeText(value)
+  return text.length <= maximum ? text : `${text.slice(0, maximum - 3)}...`
+}
+
+function currentPlatform() {
+  return typeof hostPlatform?.platform === 'string' ? hostPlatform.platform : 'unsupported'
+}
+
+function platformFlags() {
+  const current = currentPlatform()
+  const state = enabled => ({ enable: enabled, arch: [], os: [] })
+  return {
+    win: state(current === 'win32'),
+    darwin: state(current === 'darwin'),
+    linux: state(current === 'linux'),
+  }
 }
 
 function normalizeSearchSettings(raw) {
-  const payload = raw && typeof raw === 'object' ? raw : {}
-  const enabled = Array.isArray(payload.enabledEngines)
-    ? payload.enabledEngines.filter(id => SEARCH_ENGINE_BY_ID.has(id))
-    : DEFAULT_SEARCH_SETTINGS.enabledEngines
-  const enabledEngines = enabled.length > 0 ? Array.from(new Set(enabled)) : DEFAULT_SEARCH_SETTINGS.enabledEngines
-  const defaultEngine = enabledEngines.includes(payload.defaultEngine)
-    ? payload.defaultEngine
-    : enabledEngines[0] || DEFAULT_SEARCH_SETTINGS.defaultEngine
-
-  return {
-    defaultEngine,
-    enabledEngines,
-  }
+  const source = raw && typeof raw === 'object' ? raw : {}
+  const enabled = Array.isArray(source.enabledEngines)
+    ? source.enabledEngines.filter(id => SEARCH_ENGINE_BY_ID.has(id))
+    : SEARCH_ENGINES.map(engine => engine.id)
+  const enabledEngines = [...new Set(enabled)]
+  if (enabledEngines.length === 0)
+    enabledEngines.push('google')
+  const defaultEngine = enabledEngines.includes(source.defaultEngine) ? source.defaultEngine : enabledEngines[0]
+  return { defaultEngine, enabledEngines }
 }
 
 async function loadSearchSettings() {
-  if (!plugin?.storage?.getFile)
-    return normalizeSearchSettings(null)
-
   try {
     return normalizeSearchSettings(await plugin.storage.getFile(SEARCH_SETTINGS_FILE))
   }
@@ -257,1326 +153,483 @@ async function loadSearchSettings() {
   }
 }
 
-function resolveEnabledSearchEngines(settings) {
-  const normalized = normalizeSearchSettings(settings)
-  return normalized.enabledEngines
-    .map(id => SEARCH_ENGINE_BY_ID.get(id))
-    .filter(Boolean)
-}
-
-function parseSearchQuery(input, settings = DEFAULT_SEARCH_SETTINGS) {
-  const rawText = normalizeSearchText(input)
-  if (!rawText)
-    return { engine: getSearchEngine(settings.defaultEngine), query: '', explicit: false }
-
-  const [firstToken = '', ...rest] = rawText.split(' ')
-  const command = firstToken.toLowerCase()
-  const explicitEngineId = SEARCH_COMMAND_TO_ENGINE.get(command)
-  if (explicitEngineId) {
-    return {
-      engine: getSearchEngine(explicitEngineId),
-      query: normalizeSearchText(rest.join(' ')),
-      explicit: true,
-      command: firstToken,
-    }
-  }
-
-  return {
-    engine: getSearchEngine(settings.defaultEngine),
-    query: rawText,
-    explicit: false,
-  }
-}
-
-function buildSearchUrl(engineId, query) {
-  const engine = getSearchEngine(engineId)
-  const text = normalizeSearchText(query)
-  if (!engine || !text)
-    return null
-  return engine.buildSearchUrl(text)
-}
-
-function parseEngineSuggestions(engineId, payload) {
-  const engine = getSearchEngine(engineId)
-  if (!engine)
-    return []
-  return uniqNormalizedTexts(engine.parseSuggestions(payload), SUGGEST_LIMIT)
-}
-
-function getSearchEngineFeatureKeywords(engine) {
-  return engine.keywords.filter(keyword => normalizeSearchText(keyword).length > 1)
-}
-
-function getSearchEngineFeatureCommandTokens(engine) {
-  const tokens = [engine.featureName, ...engine.keywords.filter(keyword => /搜索|引擎/.test(keyword))]
-  return uniqNormalizedTexts(tokens, tokens.length)
-}
-
-function buildSearchEngineFeatures(settings = DEFAULT_SEARCH_SETTINGS) {
-  return resolveEnabledSearchEngines(settings).map(engine => ({
-    id: `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`,
-    name: engine.featureName,
-    desc: `进入 ${engine.name} 搜索模式`,
-    icon: engine.icon,
-    keywords: getSearchEngineFeatureKeywords(engine),
-    push: true,
-    priority: 8,
-    acceptedInputTypes: ['text'],
-    platform: SUPPORTED_PLATFORM_FLAGS,
-    commands: [
-      {
-        type: 'contain',
-        value: getSearchEngineFeatureCommandTokens(engine),
-      },
-    ],
-  }))
-}
-
-function resolveEngineFromFeatureId(featureId) {
-  const id = normalizeText(featureId)
-  if (!id.startsWith(SEARCH_ENGINE_FEATURE_PREFIX))
-    return null
-  return getSearchEngine(id.slice(SEARCH_ENGINE_FEATURE_PREFIX.length))
-}
-
-function stopSearchInputSession() {
-  activeSearchMode = null
-  abortActiveSearchRequest()
-  beginFeatureRequest()
-}
-
-function startSearchInputSession(featureId, engine) {
-  activeSearchMode = { featureId, engine }
-}
-
-function extractEngineModeQuery(engine, input) {
+function parseSearchQuery(input, settings) {
   const text = normalizeSearchText(input)
-  if (!engine || !text)
-    return ''
+  const [first = '', ...rest] = text.split(' ')
+  const selected = SEARCH_COMMAND_TO_ENGINE.get(first.toLowerCase())
+  const engineId = selected || settings.defaultEngine
+  return {
+    engine: SEARCH_ENGINE_BY_ID.get(engineId) || SEARCH_ENGINE_BY_ID.get('google'),
+    query: selected ? normalizeSearchText(rest.join(' ')) : text,
+  }
+}
 
+function engineFromFeature(featureId) {
+  if (!normalizeText(featureId).startsWith(SEARCH_ENGINE_FEATURE_PREFIX))
+    return null
+  return SEARCH_ENGINE_BY_ID.get(featureId.slice(SEARCH_ENGINE_FEATURE_PREFIX.length)) || null
+}
+
+function extractEngineQuery(engine, input) {
+  const text = normalizeSearchText(input)
   const lower = text.toLowerCase()
-  const tokens = Array.from(new Set([engine.featureName, ...engine.keywords, ...engine.commands]))
-    .map(token => normalizeSearchText(token))
-    .filter(Boolean)
-    .sort((left, right) => right.length - left.length)
-
+  const tokens = [...new Set([engine.featureName, ...engine.keywords, ...engine.commands])].sort(
+    (left, right) => right.length - left.length,
+  )
   for (const token of tokens) {
-    const normalizedToken = token.toLowerCase()
-    if (lower === normalizedToken)
+    const normalized = token.toLowerCase()
+    if (lower === normalized)
       return ''
-    if (lower.startsWith(`${normalizedToken} `))
+    if (lower.startsWith(`${normalized} `))
       return normalizeSearchText(text.slice(token.length))
   }
-
   return text
 }
 
-function isLikelyUrlInput(text) {
-  const value = normalizeText(text)
-  if (!value)
-    return false
-  if (/^https?:\/\//i.test(value))
-    return true
-  if (/^www\./i.test(value))
-    return true
-  return /^[\w.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(value)
+function buildSearchUrl(engine, query) {
+  const text = normalizeSearchText(query)
+  return text ? engine.searchUrl(text) : null
 }
 
-function normalizeUrlInput(rawInput) {
-  let value = normalizeText(rawInput)
-  if (!value)
-    return null
-
-  if (!/^https?:\/\//i.test(value)) {
-    if (!isLikelyUrlInput(value))
-      return null
-    value = `https://${value.replace(/^\/+/, '')}`
+function uniqueSuggestions(values) {
+  const output = []
+  const seen = new Set()
+  for (const value of Array.isArray(values) ? values : []) {
+    const text = normalizeSearchText(value)
+    const key = text.toLowerCase()
+    if (!text || utf8Length(text) > SUGGEST_TEXT_LIMIT || seen.has(key))
+      continue
+    seen.add(key)
+    output.push(text)
+    if (output.length >= SUGGEST_LIMIT)
+      break
   }
-
-  try {
-    const parsed = new URL(value)
-    const protocol = parsed.protocol.toLowerCase()
-    if (protocol !== 'http:' && protocol !== 'https:')
-      return null
-    return parsed.toString()
-  }
-  catch {
-    return null
-  }
+  return output
 }
 
-async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
-  }
-
-  try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission) {
-      return { granted: true }
-    }
-
-    const granted = await permission.request(permissionId, reason)
-    if (granted) {
-      return { granted: true }
-    }
-
-    return {
-      granted: false,
-      reason: 'permission-denied',
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-browser-open] Failed to request permission', error)
-    return {
-      granted: false,
-      reason: 'permission-request-failed',
-    }
-  }
-}
-
-async function checkPermissionStatus(permissionId) {
-  if (!permission?.check) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
-  }
-
-  try {
-    return {
-      granted: Boolean(await permission.check(permissionId)),
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-browser-open] Failed to check permission', error)
-    return {
-      granted: false,
-      reason: 'permission-check-failed',
-    }
-  }
-}
-
-function resolveBrowserOpenSupport(actionId, browserTarget = '', platform = CURRENT_PLATFORM) {
-  if (platform === 'darwin') {
-    return {
-      status: 'available',
-    }
-  }
-
-  if (platform === 'win32') {
-    return {
-      status: 'available',
-    }
-  }
-
-  if (platform === 'linux' && !browserTarget && (actionId === 'default-open' || actionId === 'search-web')) {
-    return {
-      status: 'available',
-    }
-  }
-
-  if (platform === 'linux') {
-    return {
-      status: 'unsupported',
-      reason: 'linux-specific-browser-open-unsupported',
-    }
-  }
-
-  return {
-    status: 'unsupported',
-    reason: 'unsupported-platform',
-  }
-}
-
-async function resolveBrowserOpenCapabilityState(actionId, browserTarget = '') {
-  const platformState = resolveBrowserOpenSupport(actionId, browserTarget)
-  if (platformState.status !== 'available')
-    return platformState
-
-  const permissionStatus = await checkPermissionStatus(SHELL_PERMISSION_ID)
-  if (!permissionStatus.granted) {
-    return {
-      status: 'permission-missing',
-      reason: permissionStatus.reason || 'system-shell-permission-required',
-    }
-  }
-
-  return platformState
-}
-
-function formatCapabilitySubtitle(state) {
-  const label = BROWSER_OPEN_STATUS_LABELS[state.status] || state.status
-  return state.reason ? `${label} · ${state.reason}` : label
-}
-
-function buildBrowserOpenCapability({
-  featureId,
-  actionId,
-  commandSource = 'browser-open',
-  browserTarget = '',
-  status,
-  reason,
-  requiresConfirmation = false,
-  platform = CURRENT_PLATFORM,
-} = {}) {
-  const resolved = status
-    ? { status, reason }
-    : resolveBrowserOpenSupport(actionId, browserTarget)
-  const capability = {
-    id: SHELL_PERMISSION_ID,
-    type: 'shell',
-    permission: SHELL_PERMISSION_ID,
-    status: resolved.status,
-    platform,
-    audit: {
-      pluginName: PLUGIN_NAME,
-      featureId,
-      actionId,
-      commandKind: 'browser-open',
-      commandSource,
-      browserTarget,
-      requiresConfirmation: Boolean(requiresConfirmation),
-    },
-  }
-
-  if (resolved.reason)
-    capability.reason = resolved.reason
-
-  return capability
-}
-
-async function ensureNetworkPermission() {
-  if (networkPermissionGranted !== null)
-    return networkPermissionGranted
-
-  const permissionResult = await ensurePermission('network.internet', '需要网络权限以获取搜索建议')
-  networkPermissionGranted = Boolean(permissionResult.granted)
-  return networkPermissionGranted
-}
-
-function execFileAsync(command, args) {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, { encoding: 'utf8', timeout: 10000 }, (error, stdout, stderr) => {
-      if (error) {
-        reject(new Error(stderr || error.message))
-        return
-      }
-      resolve(stdout)
-    })
-  })
-}
-
-function parseJsonSafe(text) {
-  const content = normalizeText(text)
-  if (!content)
-    return null
-
-  try {
-    return JSON.parse(content)
-  }
-  catch {}
-
-  const lines = content.split(/\r?\n/).map(item => item.trim()).filter(Boolean)
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    try {
-      return JSON.parse(lines[index])
-    }
-    catch {}
-  }
-
-  return null
-}
-
-async function runPowerShell(script) {
-  const commands = ['powershell.exe', 'powershell']
-  let lastError = null
-
-  for (const command of commands) {
-    try {
-      return await execFileAsync(command, [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        script,
-      ])
-    }
-    catch (error) {
-      lastError = error
-    }
-  }
-
-  throw lastError || new Error('PowerShell 不可用')
-}
-
-function buildWindowsOpenScript(action, payload = {}) {
-  if (action === 'default-open') {
-    const url = String(payload.url || '').replace(/'/g, `''`)
-    return [
-      '$ErrorActionPreference = "Stop"',
-      'try {',
-      `  Start-Process -FilePath '${url}' | Out-Null`,
-      '  [pscustomobject]@{ success = $true; message = "ok" } | ConvertTo-Json -Compress',
-      '} catch {',
-      '  [pscustomobject]@{ success = $false; message = $_.Exception.Message } | ConvertTo-Json -Compress',
-      '}',
-    ].join('\n')
-  }
-
-  if (action === 'open-browser') {
-    const url = String(payload.url || '').replace(/'/g, `''`)
-    const target = String(payload.target || '').replace(/'/g, `''`)
-    return [
-      '$ErrorActionPreference = "Stop"',
-      'try {',
-      `  Start-Process -FilePath '${target}' -ArgumentList '${url}' | Out-Null`,
-      '  [pscustomobject]@{ success = $true; message = "ok" } | ConvertTo-Json -Compress',
-      '} catch {',
-      '  [pscustomobject]@{ success = $false; message = $_.Exception.Message } | ConvertTo-Json -Compress',
-      '}',
-    ].join('\n')
-  }
-
-  return ''
-}
-
-function buildWindowsDetectScript() {
-  const rows = WIN_BROWSER_CANDIDATES.map((item) => {
-    const paths = item.paths.map(path => `'${path.replace(/'/g, `''`)}'`).join(', ')
-    return `@{ id='${item.id}'; name='${item.name.replace(/'/g, `''`)}'; target='${item.target.replace(/'/g, `''`)}'; paths=@(${paths}) }`
-  }).join(',\n  ')
-
-  return [
-    '$ErrorActionPreference = "SilentlyContinue"',
-    '$items = @(',
-    `  ${rows}`,
-    ')',
-    '$result = @()',
-    'foreach ($item in $items) {',
-    '  $resolvedPath = $null',
-    '  foreach ($p in $item.paths) {',
-    '    $expanded = $ExecutionContext.InvokeCommand.ExpandString($p)',
-    '    if (Test-Path $expanded) { $resolvedPath = $expanded; break }',
-    '  }',
-    '  if (-not $resolvedPath) {',
-    '    $cmd = Get-Command $item.target -ErrorAction SilentlyContinue | Select-Object -First 1',
-    '    if ($cmd) { $resolvedPath = $item.target }',
-    '  }',
-    '  if ($resolvedPath) {',
-    '    $result += [pscustomobject]@{ id = $item.id; name = $item.name; target = $resolvedPath }',
-    '  }',
-    '}',
-    '$result | ConvertTo-Json -Compress',
-  ].join('\n')
-}
-
-async function detectBrowsersMac() {
-  const result = []
-  for (const candidate of MAC_BROWSER_CANDIDATES) {
-    try {
-      await execFileAsync('open', ['-Ra', candidate.target])
-      result.push(candidate)
-    }
-    catch {}
-  }
-  return result
-}
-
-async function detectBrowsersWin() {
-  const output = await runPowerShell(buildWindowsDetectScript())
-  const parsed = parseJsonSafe(output)
-  const rows = Array.isArray(parsed) ? parsed : parsed ? [parsed] : []
-  return rows
-    .map((row) => {
-      const id = normalizeText(row.id)
-      const name = normalizeText(row.name)
-      const target = normalizeText(row.target)
-      if (!id || !name || !target)
-        return null
-      return { id, name, target }
-    })
-    .filter(Boolean)
-}
-
-async function detectBrowsers() {
-  cacheDetectedBrowsers([])
-  if (CURRENT_PLATFORM === 'darwin')
-    return cacheDetectedBrowsers(await detectBrowsersMac())
-  if (CURRENT_PLATFORM === 'win32')
-    return cacheDetectedBrowsers(await detectBrowsersWin())
-  return cacheDetectedBrowsers([])
-}
-
-function cleanupRecentBrowsers(items, now = Date.now()) {
-  const threshold = now - RECENT_TTL_MS
-  return items
-    .filter(item => item.lastUsedAt >= threshold)
-    .sort((left, right) => right.lastUsedAt - left.lastUsedAt)
-    .slice(0, RECENT_MAX_ITEMS)
-}
-
-function parseRecentBrowsers(raw) {
-  if (!raw)
-    return []
-
-  let payload = raw
-  if (typeof raw === 'string') {
-    try {
-      payload = JSON.parse(raw)
-    }
-    catch {
-      return []
-    }
-  }
-
-  const items = Array.isArray(payload?.items) ? payload.items : []
-  return items
-    .map((item) => {
-      const id = normalizeText(item.id)
-      const name = normalizeText(item.name)
-      const target = normalizeText(item.target)
-      const lastUsedAt = Number(item.lastUsedAt)
-      if (!id || !name || !target)
-        return null
-      return {
-        id,
-        name,
-        target,
-        lastUsedAt: Number.isFinite(lastUsedAt) ? lastUsedAt : 0,
-      }
-    })
-    .filter(Boolean)
-}
-
-async function loadRecentBrowsers() {
-  try {
-    const raw = await plugin.storage.getFile(RECENT_FILE)
-    return cleanupRecentBrowsers(parseRecentBrowsers(raw))
-  }
-  catch {
-    return []
-  }
-}
-
-async function saveRecentBrowsers(items) {
-  const cleaned = cleanupRecentBrowsers(items)
-  await plugin.storage.setFile(RECENT_FILE, {
-    items: cleaned,
-    updatedAt: Date.now(),
-  })
-}
-
-function mergeRecentBrowsers(availableBrowsers, recentBrowsers) {
-  const index = new Map(availableBrowsers.map(item => [item.id, item]))
-  return recentBrowsers
-    .map((item) => {
-      const candidate = index.get(item.id)
-      if (!candidate)
-        return null
-      return {
-        ...candidate,
-        lastUsedAt: item.lastUsedAt,
-      }
-    })
-    .filter(Boolean)
-    .sort((left, right) => right.lastUsedAt - left.lastUsedAt)
-    .slice(0, RECENT_SHOW_LIMIT)
-}
-
-function touchRecentBrowser(recentBrowsers, browser, now = Date.now()) {
-  const filtered = recentBrowsers.filter(item => item.id !== browser.id)
-  filtered.unshift({
-    id: browser.id,
-    name: browser.name,
-    target: browser.target,
-    lastUsedAt: now,
-  })
-  return cleanupRecentBrowsers(filtered, now)
-}
-
-function resolveGroupOrder({ quickActions, recommendedItems, recentItems, tips }) {
-  const order = []
-  if (quickActions.length)
-    order.push('quick')
-  if (recommendedItems.length)
-    order.push('recommended')
-  if (recentItems.length)
-    order.push('recent')
-  if (tips.length)
-    order.push('tips')
-  return order
-}
-
-function buildInfoItem({ id, featureId, title, subtitle, icon = ICON, capability }) {
+function buildInfoItem(id, featureId, title, subtitle, icon = ICON) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(icon)
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      ...(capability ? { capability } : {}),
-    })
+    .setMeta({ pluginName: PLUGIN_NAME, featureId })
     .build()
 }
 
-function buildSectionHeader(featureId, sectionId, title, subtitle) {
-  return buildInfoItem({
-    id: `${featureId}-section-${sectionId}`,
-    featureId,
-    title,
-    subtitle,
-  })
-}
-
-function buildActionItem({ id, featureId, title, subtitle, actionId, payload, icon = ICON, capability }) {
+function buildActionItem({ id, featureId, title, subtitle, actionId, payload, icon = ICON }) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
     .setIcon(icon)
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      defaultAction: ACTION_ID,
-      actionId,
-      payload,
-      ...(capability ? { capability } : {}),
-    })
+    .setMeta({ pluginName: PLUGIN_NAME, featureId, defaultAction: actionId })
+    .createAndAddAction(actionId, 'plugin', title, payload)
     .build()
 }
 
-function buildSearchActionItem({
-  id,
-  featureId,
-  engine,
-  query,
-  title,
-  subtitle,
-  suggestion = false,
-  capabilityState,
-}) {
-  return applyCompletion(buildActionItem({
-    id,
-    featureId,
-    title,
-    subtitle,
-    icon: engine.icon,
-    actionId: 'search-web',
-    payload: {
-      engineId: engine.id,
-      query,
-      suggestion,
-      url: buildSearchUrl(engine.id, query),
-    },
-    capability: buildBrowserOpenCapability({
-      featureId,
-      actionId: 'search-web',
-      commandSource: suggestion ? 'search-suggestion' : 'search-direct',
-      status: capabilityState?.status,
-      reason: capabilityState?.reason,
-    }),
-  }), query)
-}
-
-function buildSearchItems(featureId, engine, query, suggestions = [], options = {}) {
-  const items = []
-  const normalizedQuery = normalizeSearchText(query)
-
-  if (!normalizedQuery) {
-    items.push(buildInfoItem({
-      id: `${featureId}-search-empty`,
-      featureId,
-      title: `${engine.name} 搜索`,
-      subtitle: '继续输入关键词以获取搜索建议',
-      icon: engine.icon,
-    }))
-    return items
-  }
-
-  items.push(buildSearchActionItem({
-    id: `${featureId}-search-direct`,
-    featureId,
-    engine,
-    query: normalizedQuery,
-    title: `${engine.name} 搜索：${truncateText(normalizedQuery, 48)}`,
-    subtitle: truncateText(buildSearchUrl(engine.id, normalizedQuery), 88),
-    capabilityState: options.capabilityState,
-  }))
-
-  uniqNormalizedTexts(suggestions).forEach((suggestion, index) => {
-    if (suggestion.toLowerCase() === normalizedQuery.toLowerCase())
-      return
-    items.push(buildSearchActionItem({
-      id: `${featureId}-suggestion-${index}`,
-      featureId,
-      engine,
-      query: suggestion,
-      title: suggestion,
-      subtitle: `${engine.name} 搜索建议`,
-      suggestion: true,
-      capabilityState: options.capabilityState,
-    }))
-  })
-
-  if (options.warning) {
-    items.push(buildInfoItem({
-      id: `${featureId}-suggestion-warning`,
-      featureId,
-      title: '搜索建议不可用',
-      subtitle: truncateText(options.warning, 96),
-      icon: engine.icon,
-    }))
-  }
-
-  return items
-}
-
-function beginFeatureRequest(identity = null) {
-  latestFeatureRequestSeq += 1
-  latestFeatureRequestIdentity = identity
-    ? { ...identity, requestSeq: latestFeatureRequestSeq }
-    : null
-  return latestFeatureRequestSeq
-}
-
-function beginSearchFeatureRequest(featureId, engine, query) {
-  const normalizedQuery = normalizeSearchText(query)
-  const requestSeq = beginFeatureRequest({
-    featureId,
-    engineId: engine.id,
-    normalizedQuery,
-  })
-
-  return {
-    requestSeq,
-    featureId,
-    engineId: engine.id,
-    normalizedQuery,
-  }
-}
-
-function isCurrentFeatureRequest(request, signal) {
-  const requestSeq = typeof request === 'number' ? request : request?.requestSeq
-  if (requestSeq !== latestFeatureRequestSeq || signal?.aborted)
+async function publishItems(items, sequence) {
+  if (sequence !== requestSequence)
     return false
-
-  if (!request || typeof request === 'number')
-    return true
-
-  return latestFeatureRequestIdentity?.requestSeq === request.requestSeq
-    && latestFeatureRequestIdentity.featureId === request.featureId
-    && latestFeatureRequestIdentity.engineId === request.engineId
-    && latestFeatureRequestIdentity.normalizedQuery === request.normalizedQuery
-}
-
-async function pushFeatureItems(items, request) {
-  if (typeof request !== 'undefined' && !isCurrentFeatureRequest(request))
+  await plugin.feature.clearItems()
+  if (sequence !== requestSequence)
     return false
-  plugin.feature.clearItems()
   await plugin.feature.pushItems(items)
   return true
 }
 
-function abortActiveSearchRequest() {
-  if (!activeSearchRequestController)
-    return
-  activeSearchRequestController.abort()
-  activeSearchRequestController = null
+function nextRequest() {
+  requestSequence += 1
+  return requestSequence
 }
 
-function createSearchRequestSignal(parentSignal) {
-  abortActiveSearchRequest()
-
-  const controller = new AbortController()
-  activeSearchRequestController = controller
-
-  const abortFromParent = () => controller.abort()
-  if (parentSignal?.aborted) {
-    controller.abort()
+function parseRecentBrowsers(raw) {
+  const now = Date.now()
+  const threshold = now - RECENT_TTL_MS
+  const items = Array.isArray(raw?.items) ? raw.items : []
+  const output = []
+  const seen = new Set()
+  for (const item of items) {
+    const id = normalizeText(item?.id)
+    const name = normalizeText(item?.name)
+    const lastUsedAt = Number(item?.lastUsedAt)
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(id) || !name || name.length > 64)
+      continue
+    if (!Number.isFinite(lastUsedAt) || lastUsedAt < threshold || seen.has(id))
+      continue
+    seen.add(id)
+    output.push({ id, name, lastUsedAt: Math.trunc(lastUsedAt) })
   }
-  else {
-    parentSignal?.addEventListener?.('abort', abortFromParent, { once: true })
-  }
+  return output.sort((left, right) => right.lastUsedAt - left.lastUsedAt).slice(0, RECENT_MAX_ITEMS)
+}
 
+async function loadRecentBrowsers() {
+  try {
+    return parseRecentBrowsers(await plugin.storage.getFile(RECENT_FILE))
+  }
+  catch {
+    return []
+  }
+}
+
+async function saveRecentBrowser(browser) {
+  const recent = await loadRecentBrowsers()
+  const next = [
+    { id: browser.id, name: browser.name, lastUsedAt: Date.now() },
+    ...recent.filter(item => item.id !== browser.id),
+  ].slice(0, RECENT_MAX_ITEMS)
+  await plugin.storage.setFile(RECENT_FILE, { items: next, updatedAt: Date.now() })
+}
+
+function stableFailure(error, fallback) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+    return { status: 'blocked', reason: 'permission-denied' }
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+    return { status: 'blocked', reason: 'permission-unavailable' }
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
+    return { status: 'cancelled', reason: 'cancelled' }
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
+    return { status: 'failed', reason: 'timeout' }
+  return { status: 'failed', reason: fallback }
+}
+
+function external(result, success = false) {
   return {
-    signal: controller.signal,
-    release() {
-      parentSignal?.removeEventListener?.('abort', abortFromParent)
-      if (activeSearchRequestController === controller)
-        activeSearchRequestController = null
-    },
+    externalAction: true,
+    success,
+    status: result.status,
+    ...(result.reason ? { reason: result.reason } : {}),
   }
 }
 
-function applyCompletion(item, completion) {
-  if (item?.render && typeof completion === 'string')
-    item.render.completion = completion
-  return item
-}
-
-function openWithMac(url, browserTarget) {
-  const args = browserTarget ? ['-a', browserTarget, url] : [url]
-  const child = spawn('open', args, {
-    detached: true,
-    stdio: 'ignore',
-  })
-  child.unref()
-}
-
-async function openWithWindows(url, browserTarget) {
-  const action = browserTarget ? 'open-browser' : 'default-open'
-  const output = await runPowerShell(buildWindowsOpenScript(action, {
-    url,
-    target: browserTarget,
-  }))
-  const parsed = parseJsonSafe(output)
-  if (parsed?.success === false)
-    throw new Error(parsed.message || '打开链接失败')
-}
-
-async function executeOpenAction(url, browserTarget) {
-  if (CURRENT_PLATFORM === 'darwin') {
-    openWithMac(url, browserTarget)
-    return
-  }
-
-  if (CURRENT_PLATFORM === 'win32') {
-    await openWithWindows(url, browserTarget)
-    return
-  }
-
-  if (CURRENT_PLATFORM === 'linux' && !browserTarget) {
-    const child = spawn('xdg-open', [url], {
-      detached: true,
-      stdio: 'ignore',
-    })
-    child.unref()
-    return
-  }
-
-  throw new Error('当前平台暂不支持浏览器打开')
-}
-
-async function executeBrowserOpenAction(url, browserTarget, actionId) {
-  const support = resolveBrowserOpenSupport(actionId, browserTarget)
-  if (support.status !== 'available') {
-    return {
-      ok: false,
-      reason: support.reason || 'unsupported',
+async function listBrowsers() {
+  if (!plugin.browser || typeof plugin.browser.list !== 'function')
+    throw Object.assign(new Error('browser capability unavailable'), { code: 'CAPABILITY_UNAVAILABLE' })
+  const result = await plugin.browser.list()
+  if (result?.status !== 'available' || !Array.isArray(result.browsers))
+    return result
+  const next = new Map()
+  const browsers = []
+  for (const browser of result.browsers.slice(0, 16)) {
+    if (
+      typeof browser?.id !== 'string'
+      || typeof browser?.name !== 'string'
+      || typeof browser?.token !== 'string'
+      || !/^bo_[\w-]{32}$/.test(browser.token)
+    ) {
+      continue
     }
+    const display = { id: browser.id, name: browser.name, token: browser.token }
+    browsers.push(display)
+    next.set(browser.token, display)
   }
-
-  await executeOpenAction(url, browserTarget)
-  return {
-    ok: true,
-  }
+  browsersByToken = next
+  return { ...result, browsers }
 }
 
-async function tryCopyUrl(url) {
-  if (!clipboard?.writeText)
-    return false
+async function handleBrowserFeature(featureId, query) {
+  const sequence = nextRequest()
+  const input = getQueryText(query)
+  const url = normalizeUrlInput(input)
+  if (!url) {
+    await publishItems(
+      [
+        buildInfoItem(
+          `${featureId}-input`,
+          featureId,
+          normalizeText(input) ? 'URL 格式不正确' : '请输入 URL',
+          '支持 example.com 或 https://example.com',
+        ),
+      ],
+      sequence,
+    )
+    return true
+  }
 
-  const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制链接')
-  if (!permissionResult.granted)
-    return false
+  let result
+  try {
+    result = await listBrowsers()
+  }
+  catch (error) {
+    const failure = stableFailure(error, 'browser-list-failed')
+    await publishItems(
+      [
+        buildInfoItem(`${featureId}-blocked`, featureId, '浏览器打开不可用', failure.reason),
+        buildActionItem({
+          id: `${featureId}-copy`,
+          featureId,
+          title: '复制 URL',
+          subtitle: truncateText(url),
+          actionId: 'copy-url',
+          payload: { url },
+        }),
+      ],
+      sequence,
+    )
+    return true
+  }
 
-  clipboard.writeText(url)
+  if (result?.status !== 'available') {
+    await publishItems(
+      [buildInfoItem(`${featureId}-blocked`, featureId, '浏览器打开不可用', result?.reason || 'browser-list-failed')],
+      sequence,
+    )
+    return true
+  }
+
+  const recent = await loadRecentBrowsers()
+  const availableById = new Map(result.browsers.map(browser => [browser.id, browser]))
+  const recentBrowsers = recent
+    .map(item => availableById.get(item.id))
+    .filter(Boolean)
+    .slice(0, RECENT_SHOW_LIMIT)
+  const items = [
+    buildInfoItem(`${featureId}-quick`, featureId, '快捷动作', '默认浏览器或复制 URL'),
+    buildActionItem({
+      id: `${featureId}-default`,
+      featureId,
+      title: '默认浏览器打开',
+      subtitle: truncateText(url),
+      actionId: 'default-open',
+      payload: { url },
+    }),
+    buildActionItem({
+      id: `${featureId}-copy`,
+      featureId,
+      title: '复制 URL',
+      subtitle: truncateText(url),
+      actionId: 'copy-url',
+      payload: { url },
+    }),
+  ]
+
+  if (result.browsers.length > 0) {
+    items.push(buildInfoItem(`${featureId}-available`, featureId, '可用浏览器', '短期令牌，单次使用'))
+    result.browsers.forEach((browser, index) => {
+      items.push(
+        buildActionItem({
+          id: `${featureId}-browser-${index}`,
+          featureId,
+          title: `用 ${browser.name} 打开`,
+          subtitle: truncateText(url),
+          actionId: 'open-browser',
+          payload: { url, browserToken: browser.token },
+        }),
+      )
+    })
+  }
+  if (recentBrowsers.length > 0) {
+    items.push(buildInfoItem(`${featureId}-recent`, featureId, '最近浏览器', '已重新签发短期令牌'))
+    recentBrowsers.forEach((browser, index) => {
+      items.push(
+        buildActionItem({
+          id: `${featureId}-recent-${index}`,
+          featureId,
+          title: `最近 · ${browser.name}`,
+          subtitle: truncateText(url),
+          actionId: 'open-browser',
+          payload: { url, browserToken: browser.token },
+        }),
+      )
+    })
+  }
+  await publishItems(items, sequence)
   return true
 }
 
-async function fetchJsonWithTimeout(url, signal, timeoutMs = SUGGEST_TIMEOUT_MS) {
-  if (typeof fetchImpl !== 'function')
-    throw new Error('当前运行时不支持 fetch')
-
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-
-  const abortFromParent = () => controller.abort()
-  if (signal?.aborted)
-    controller.abort()
-  signal?.addEventListener?.('abort', abortFromParent, { once: true })
-
-  try {
-    const response = await fetchImpl(url, {
-      signal: controller.signal,
-      headers: {
-        accept: 'application/json,text/javascript,*/*;q=0.8',
-      },
-    })
-    if (!response.ok)
-      throw new Error(`建议请求失败：HTTP ${response.status}`)
-    return await response.json()
-  }
-  finally {
-    clearTimeout(timer)
-    signal?.removeEventListener?.('abort', abortFromParent)
-  }
-}
-
-async function loadSuggestions(engine, query, signal) {
-  const text = normalizeSearchText(query)
-  if (!engine || !text)
-    return []
-
-  const canUseNetwork = await ensureNetworkPermission()
-  if (!canUseNetwork)
-    throw new Error('缺少 network.internet 权限')
-
-  const payload = await fetchJsonWithTimeout(engine.buildSuggestUrl(text), signal)
-  return parseEngineSuggestions(engine.id, payload)
-}
-
-async function enterSearchEngineMode(engine, query, signal, options = {}) {
-  const text = normalizeSearchText(query)
-  const featureId = options.featureId || `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
-  const request = createSearchRequestSignal(signal)
-  const requestToken = beginSearchFeatureRequest(featureId, engine, text)
-  const capabilityState = resolveBrowserOpenSupport('search-web')
-
-  try {
-    if (!options.preserveInput) {
-      await plugin.box?.showInput?.()
-      await plugin.box?.allowInput?.()
-      await plugin.box?.setInput?.(text)
-    }
-
-    await pushFeatureItems(buildSearchItems(featureId, engine, text, [], { capabilityState }), requestToken)
-
-    if (!text)
-      return true
-
-    try {
-      const suggestions = await loadSuggestions(engine, text, request.signal)
-      if (!isCurrentFeatureRequest(requestToken, request.signal))
-        return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions, { capabilityState }), requestToken)
-    }
-    catch (error) {
-      if (!isCurrentFeatureRequest(requestToken, request.signal))
-        return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
-        capabilityState,
-        warning: error?.message || '网络请求失败，仅保留直接搜索',
-      }), requestToken)
-    }
-
-    return true
-  }
-  finally {
-    request.release()
-  }
-}
-
-async function handleWebSearchFeature(featureId, query, signal) {
-  const settings = await loadSearchSettings()
-  const parsed = parseSearchQuery(getQueryText(query), settings)
-  const engine = parsed.engine
-  const text = parsed.query
-  const request = createSearchRequestSignal(signal)
-  const requestToken = beginSearchFeatureRequest(featureId, engine, text)
-  const capabilityState = resolveBrowserOpenSupport('search-web')
-
-  try {
-    await pushFeatureItems(buildSearchItems(featureId, engine, text, [], { capabilityState }), requestToken)
-
-    if (!text)
-      return true
-
-    try {
-      const suggestions = await loadSuggestions(engine, text, request.signal)
-      if (!isCurrentFeatureRequest(requestToken, request.signal))
-        return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, suggestions, { capabilityState }), requestToken)
-    }
-    catch (error) {
-      if (!isCurrentFeatureRequest(requestToken, request.signal))
-        return true
-      await pushFeatureItems(buildSearchItems(featureId, engine, text, [], {
-        capabilityState,
-        warning: error?.message || '网络请求失败，仅保留直接搜索',
-      }), requestToken)
-    }
-
-    return true
-  }
-  finally {
-    request.release()
-  }
-}
-
-async function registerSearchEngineFeatures() {
-  if (dynamicSearchFeaturesInitialized)
-    return 0
-
-  dynamicSearchFeaturesInitialized = true
-  if (!features?.addFeature)
-    return 0
-
-  const settings = await loadSearchSettings()
-  let addedCount = 0
-  buildSearchEngineFeatures(settings).forEach((feature) => {
-    if (typeof features.getFeature === 'function' && features.getFeature(feature.id))
-      return
-    if (features.addFeature(feature))
-      addedCount += 1
+async function loadSuggestions(engine, query) {
+  if (!http || typeof http.get !== 'function')
+    throw Object.assign(new Error('http capability unavailable'), { code: 'CAPABILITY_UNAVAILABLE' })
+  const response = await http.get(engine.suggestUrl(query), {
+    responseType: 'json',
+    timeoutMs: 2500,
+    headers: { accept: 'application/json,text/javascript' },
   })
-
-  return addedCount
+  if (!response || response.ok !== true || response.status < 200 || response.status >= 300)
+    throw new Error('suggestion-request-failed')
+  return uniqueSuggestions(engine.suggestions(response.data))
 }
 
-async function handleBrowserOpenFeature(featureId, query) {
-  const requestSeq = beginFeatureRequest()
-
-  try {
-    const input = getQueryText(query)
-    const url = normalizeUrlInput(input)
-    const hasInput = normalizeText(input).length > 0
-
-    if (!url) {
-      await pushFeatureItems([
-        buildInfoItem({
-          id: `${featureId}-input-tip`,
+function buildSearchItems(featureId, engine, query, suggestions, warning) {
+  const text = normalizeSearchText(query)
+  if (!text) {
+    return [buildInfoItem(`${featureId}-empty`, featureId, `${engine.name} 搜索`, '继续输入搜索词', SEARCH_ICON)]
+  }
+  const items = []
+  const directUrl = buildSearchUrl(engine, text)
+  items.push(
+    buildActionItem({
+      id: `${featureId}-direct`,
+      featureId,
+      title: `${engine.name} 搜索：${truncateText(text, 48)}`,
+      subtitle: truncateText(directUrl),
+      actionId: 'search-web',
+      payload: { url: directUrl },
+      icon: SEARCH_ICON,
+    }),
+  )
+  suggestions
+    .filter(suggestion => suggestion.toLowerCase() !== text.toLowerCase())
+    .forEach((suggestion, index) => {
+      items.push(
+        buildActionItem({
+          id: `${featureId}-suggestion-${index}`,
           featureId,
-          title: hasInput ? 'URL 格式不正确' : '请输入 URL',
-          subtitle: hasInput ? '示例：https://example.com' : '支持 example.com 或 https://example.com',
+          title: suggestion,
+          subtitle: `${engine.name} 搜索建议`,
+          actionId: 'search-web',
+          payload: { url: buildSearchUrl(engine, suggestion) },
+          icon: SEARCH_ICON,
         }),
-        buildInfoItem({
-          id: `${featureId}-input-guide`,
-          featureId,
-          title: '快捷提示',
-          subtitle: '可输入域名后回车，自动补全 https://',
-        }),
-      ], requestSeq)
-      return true
-    }
-
-    const defaultOpenCapabilityState = await resolveBrowserOpenCapabilityState('default-open')
-    const availableBrowsers = defaultOpenCapabilityState.status === 'available'
-      ? await detectBrowsers()
-      : []
-    const recentBrowsers = await loadRecentBrowsers()
-    const recommendedItems = availableBrowsers.map((browser, index) =>
-      buildActionItem({
-        id: `${featureId}-browser-${browser.id}-${index}`,
-        featureId,
-        title: `用 ${browser.name} 打开`,
-        subtitle: truncateText(url, 72),
-        actionId: 'open-browser',
-        payload: { url, browser },
-        capability: buildBrowserOpenCapability({
-          featureId,
-          actionId: 'open-browser',
-          commandSource: 'specific-browser',
-          browserTarget: browser.target,
-          status: defaultOpenCapabilityState.status,
-          reason: defaultOpenCapabilityState.reason,
-        }),
-      }),
-    )
-
-    const recentItems = mergeRecentBrowsers(availableBrowsers, recentBrowsers).map((browser, index) =>
-      buildActionItem({
-        id: `${featureId}-recent-${browser.id}-${index}`,
-        featureId,
-        title: `最近 · ${browser.name}`,
-        subtitle: truncateText(url, 72),
-        actionId: 'open-browser',
-        payload: { url, browser },
-        capability: buildBrowserOpenCapability({
-          featureId,
-          actionId: 'open-browser',
-          commandSource: 'recent-browser',
-          browserTarget: browser.target,
-          status: defaultOpenCapabilityState.status,
-          reason: defaultOpenCapabilityState.reason,
-        }),
-      }),
-    )
-
-    const quickActions = [
-      buildActionItem({
-        id: `${featureId}-quick-default`,
-        featureId,
-        title: '默认浏览器打开',
-        subtitle: truncateText(url, 72),
-        actionId: 'default-open',
-        payload: { url },
-        capability: buildBrowserOpenCapability({
-          featureId,
-          actionId: 'default-open',
-          commandSource: 'default-browser',
-          status: defaultOpenCapabilityState.status,
-          reason: defaultOpenCapabilityState.reason,
-        }),
-      }),
-      buildActionItem({
-        id: `${featureId}-quick-copy`,
-        featureId,
-        title: '复制 URL',
-        subtitle: truncateText(url, 72),
-        actionId: 'copy-url',
-        payload: { url },
-      }),
-    ]
-
-    const tips = [
-      buildInfoItem({
-        id: `${featureId}-shell-capability`,
-        featureId,
-        title: '打开能力',
-        subtitle: formatCapabilitySubtitle(defaultOpenCapabilityState),
-        capability: buildBrowserOpenCapability({
-          featureId,
-          actionId: 'default-open',
-          commandSource: 'diagnostic',
-          status: defaultOpenCapabilityState.status,
-          reason: defaultOpenCapabilityState.reason,
-        }),
-      }),
-      buildInfoItem({
-        id: `${featureId}-tip`,
-        featureId,
-        title: '安全提示',
-        subtitle: '请先确认域名可信再打开链接',
-      }),
-    ]
-
-    if (recommendedItems.length === 0) {
-      tips.unshift(buildInfoItem({
-        id: `${featureId}-no-browser`,
-        featureId,
-        title: '未检测到可用浏览器',
-        subtitle: '可先尝试默认浏览器打开',
-      }))
-    }
-
-    const groupOrder = resolveGroupOrder({
-      quickActions,
-      recommendedItems,
-      recentItems,
-      tips,
+      )
     })
+  if (warning)
+    items.push(buildInfoItem(`${featureId}-warning`, featureId, '搜索建议不可用', warning, SEARCH_ICON))
+  return items
+}
 
-    const items = []
-    groupOrder.forEach((groupId) => {
-      if (groupId === 'quick') {
-        items.push(buildSectionHeader(featureId, 'quick', '快捷动作', '默认打开 / 复制 URL'))
-        items.push(...quickActions)
-      }
-
-      if (groupId === 'recommended') {
-        items.push(buildSectionHeader(featureId, 'recommended', '推荐浏览器', '按当前系统可用浏览器展示'))
-        items.push(...recommendedItems)
-      }
-
-      if (groupId === 'recent') {
-        items.push(buildSectionHeader(featureId, 'recent', '最近浏览器', `最多 ${RECENT_SHOW_LIMIT} 条`))
-        items.push(...recentItems)
-      }
-
-      if (groupId === 'tips') {
-        items.push(buildSectionHeader(featureId, 'tips', '提示区', '权限 / 输入 / 安全'))
-        items.push(...tips)
-      }
-    })
-
-    await pushFeatureItems(items, requestSeq)
+async function handleSearchFeature(featureId, engine, query, signal) {
+  const sequence = nextRequest()
+  const text = normalizeSearchText(query)
+  activeSearch = { featureId, engine }
+  await publishItems(buildSearchItems(featureId, engine, text, [], ''), sequence)
+  if (!text || signal?.aborted)
     return true
+  try {
+    const suggestions = await loadSuggestions(engine, text)
+    if (!signal?.aborted)
+      await publishItems(buildSearchItems(featureId, engine, text, suggestions, ''), sequence)
   }
   catch (error) {
-    logger?.error?.('[touch-browser-open] Failed to handle feature', error)
-    await pushFeatureItems([
-      buildInfoItem({
-        id: `${featureId}-error`,
-        featureId,
-        title: '浏览器打开失败',
-        subtitle: truncateText(error?.message || '未知错误', 120),
-      }),
-    ], requestSeq)
-    return true
+    if (!signal?.aborted) {
+      const failure = stableFailure(error, 'suggestions-unavailable')
+      await publishItems(buildSearchItems(featureId, engine, text, [], failure.reason), sequence)
+    }
+  }
+  return true
+}
+
+function selectedAction(item, context) {
+  const actionId = normalizeText(context?.actionId || item?.meta?.defaultAction)
+  if (!ACTION_IDS.has(actionId) || !Array.isArray(item?.actions))
+    return null
+  const action = item.actions.find(candidate => candidate?.id === actionId)
+  const payload = action?.payload
+  if (!payload || typeof payload !== 'object')
+    return null
+  const keys = Object.keys(payload)
+  const url = normalizeUrlInput(payload.url)
+  if (!url)
+    return null
+  if (actionId === 'open-browser') {
+    if (
+      keys.length !== 2
+      || !keys.includes('url')
+      || !keys.includes('browserToken')
+      || typeof payload.browserToken !== 'string'
+      || !/^bo_[\w-]{32}$/.test(payload.browserToken)
+    ) {
+      return null
+    }
+    return { actionId, url, browserToken: payload.browserToken }
+  }
+  if (keys.length !== 1 || keys[0] !== 'url')
+    return null
+  return { actionId, url }
+}
+
+async function registerSearchFeatures() {
+  if (!features || typeof features.addFeature !== 'function')
+    return
+  const settings = await loadSearchSettings()
+  for (const engineId of settings.enabledEngines) {
+    const engine = SEARCH_ENGINE_BY_ID.get(engineId)
+    if (!engine)
+      continue
+    const feature = {
+      id: `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`,
+      name: engine.featureName,
+      desc: `进入 ${engine.name} 搜索模式`,
+      icon: SEARCH_ICON,
+      keywords: engine.keywords.filter(keyword => keyword.length > 1),
+      push: true,
+      priority: 8,
+      acceptedInputTypes: ['text'],
+      platform: platformFlags(),
+      commands: [{ type: 'contain', value: [engine.featureName, `${engine.name} 搜索`] }],
+    }
+    try {
+      const current = typeof features.getFeature === 'function' ? await features.getFeature(feature.id) : null
+      if (!current)
+        await features.addFeature(feature)
+    }
+    catch {
+      // A duplicate feature remains owned by the same plugin activation.
+    }
   }
 }
 
 const pluginLifecycle = {
   async onInit() {
-    const addedCount = await registerSearchEngineFeatures()
-    if (addedCount > 0) {
-      logger?.info?.(`[touch-browser-open] Registered ${addedCount} search engine features`)
-    }
+    await registerSearchFeatures()
   },
 
   async onFeatureTriggered(featureId, query, _feature, signal) {
-    const engine = resolveEngineFromFeatureId(featureId)
-    if (engine) {
-      if (!signal)
-        return true
-      const modeFeatureId = `${SEARCH_ENGINE_FEATURE_PREFIX}${engine.id}`
-      const preserveInput = activeSearchMode?.featureId === modeFeatureId
-      startSearchInputSession(modeFeatureId, engine)
-      return enterSearchEngineMode(engine, extractEngineModeQuery(engine, getQueryText(query)), signal, {
-        featureId: modeFeatureId,
-        preserveInput,
-      })
-    }
-
+    const engine = engineFromFeature(featureId)
+    if (engine)
+      return handleSearchFeature(featureId, engine, extractEngineQuery(engine, getQueryText(query)), signal)
     if (featureId === WEB_SEARCH_FEATURE_ID) {
-      if (!signal)
-        return true
       const settings = await loadSearchSettings()
       const parsed = parseSearchQuery(getQueryText(query), settings)
-      const preserveInput = activeSearchMode?.featureId === featureId
-      startSearchInputSession(featureId, parsed.engine)
-      if (!preserveInput)
-        return handleWebSearchFeature(featureId, query, signal)
-      return enterSearchEngineMode(parsed.engine, parsed.query, signal, {
-        featureId,
-        preserveInput: true,
-      })
+      return handleSearchFeature(featureId, parsed.engine, parsed.query, signal)
     }
-
-    stopSearchInputSession()
-
-    if (featureId !== ACTION_ID)
+    activeSearch = null
+    if (featureId !== BROWSER_FEATURE_ID)
       return false
-
-    return handleBrowserOpenFeature(featureId, query)
+    return handleBrowserFeature(featureId, query)
   },
 
-  async onItemAction(item) {
-    if (item?.meta?.defaultAction !== ACTION_ID)
-      return
+  async onInputChanged(input, signal) {
+    if (!activeSearch)
+      return false
+    return handleSearchFeature(activeSearch.featureId, activeSearch.engine, getQueryText(input), signal)
+  },
 
-    const actionId = item.meta?.actionId
-    const payload = item.meta?.payload || {}
-    const url = normalizeUrlInput(payload.url)
-      || (actionId === 'search-web' ? buildSearchUrl(payload.engineId, payload.query) : null)
-    if (!actionId || !url)
-      return
-    if (!SUPPORTED_ACTION_IDS.has(actionId)) {
-      return {
-        externalAction: true,
-        status: 'blocked',
-        reason: 'unsupported-action',
-      }
-    }
-
-    const detectedBrowser = actionId === 'open-browser'
-      ? resolveDetectedBrowser(payload.browser)
-      : null
-    if (actionId === 'open-browser' && !detectedBrowser) {
-      return {
-        externalAction: true,
-        status: 'blocked',
-        reason: 'browser-target-not-allowed',
-      }
-    }
-
-    beginFeatureRequest()
-
+  async onItemAction(item, context = {}) {
+    const selected = selectedAction(item, context)
+    if (!selected)
+      return external({ status: 'blocked', reason: 'invalid-action' })
     try {
-      if (actionId === 'copy-url') {
-        const copied = await tryCopyUrl(url)
-        if (!copied) {
-          return {
-            externalAction: true,
-            status: 'blocked',
-            success: false,
-            message: '复制失败：缺少 clipboard.write 权限',
-          }
-        }
-        return { externalAction: true, status: 'started' }
+      if (selected.actionId === 'copy-url') {
+        if (!clipboard || typeof clipboard.writeText !== 'function')
+          return external({ status: 'blocked', reason: 'capability-unavailable' })
+        await clipboard.writeText(selected.url)
+        return external({ status: 'completed' }, true)
       }
-
-      const shellPermission = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以打开浏览器')
-      if (!shellPermission.granted) {
-        return {
-          externalAction: true,
-          status: 'blocked',
-          reason: shellPermission.reason || 'permission-denied',
-        }
-      }
-
-      if (actionId === 'default-open') {
-        const result = await executeBrowserOpenAction(url, null, actionId)
-        if (!result.ok)
-          return { externalAction: true, status: 'blocked', reason: result.reason }
-        return { externalAction: true, status: 'started' }
-      }
-
-      if (actionId === 'search-web') {
-        stopSearchInputSession()
-        const result = await executeBrowserOpenAction(url, null, actionId)
-        if (!result.ok)
-          return { externalAction: true, status: 'blocked', reason: result.reason }
-        plugin.box?.hide?.()
-        return { externalAction: true, status: 'started' }
-      }
-
-      if (actionId === 'open-browser') {
-        const browserTarget = detectedBrowser.target
-        const browserId = detectedBrowser.id
-        const browserName = detectedBrowser.name
-
-        const result = await executeBrowserOpenAction(url, browserTarget, actionId)
-        if (!result.ok)
-          return { externalAction: true, status: 'blocked', reason: result.reason }
-
-        if (browserId) {
-          const recent = await loadRecentBrowsers()
-          const next = touchRecentBrowser(recent, {
-            id: browserId,
-            name: browserName,
-            target: browserTarget,
-          })
-          await saveRecentBrowsers(next)
-        }
-
-        return { externalAction: true, status: 'started' }
-      }
+      if (!plugin.browser || typeof plugin.browser.open !== 'function')
+        return external({ status: 'blocked', reason: 'capability-unavailable' })
+      const browser = selected.browserToken ? browsersByToken.get(selected.browserToken) : null
+      const result = await plugin.browser.open(selected.url, selected.browserToken)
+      if (result?.status !== 'completed')
+        return external({ status: result?.status || 'failed', reason: result?.reason || 'open-failed' })
+      if (browser)
+        await saveRecentBrowser(browser)
+      activeSearch = null
+      return external({ status: 'completed' }, true)
     }
     catch (error) {
-      logger?.error?.('[touch-browser-open] Action failed', error)
-      return {
-        externalAction: true,
-        status: 'blocked',
-        success: false,
-        message: error?.message || '执行失败',
-      }
+      const failure = stableFailure(error, 'browser-open-failed')
+      logger?.error?.(`[touch-browser-open] ${failure.reason}`)
+      return external(failure)
     }
   },
 
-}
-
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    buildWindowsOpenScript,
-    cacheDetectedBrowsers,
-    buildSearchEngineFeatures,
-    buildSearchItems,
-    buildSearchUrl,
-    buildBrowserOpenCapability,
-    executeBrowserOpenAction,
-    extractEngineModeQuery,
-    formatCapabilitySubtitle,
-    isLikelyUrlInput,
-    mergeRecentBrowsers,
-    normalizeUrlInput,
-    normalizeSearchSettings,
-    parseEngineSuggestions,
-    parseSearchQuery,
-    parseRecentBrowsers,
-    resolveDetectedBrowser,
-    resolveBrowserOpenCapabilityState,
-    resolveBrowserOpenSupport,
-    resolveGroupOrder,
-    touchRecentBrowser,
+  async onDestroy() {
+    requestSequence += 1
+    activeSearch = null
+    browsersByToken.clear()
   },
 }
+
+module.exports = pluginLifecycle

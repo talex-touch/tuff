@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
+import {
+  createTrustedTestPluginContext,
+  issuePluginSecurityContext
+} from '@talex-touch/utils/transport/security/plugin-identity'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 
 type TransportDisposer = () => void
@@ -43,6 +46,13 @@ const mocks = vi.hoisted(() => {
   }
   const healthMonitor = { destroy: vi.fn() }
   const installQueue = { enqueue: vi.fn(), handleConfirmResponse: vi.fn() }
+  const mainBrowserWindow = {
+    isDestroyed: vi.fn(() => false),
+    isMinimized: vi.fn(() => false),
+    restore: vi.fn(),
+    show: vi.fn(),
+    focus: vi.fn()
+  }
 
   return {
     buildPluginManagerRuntime: vi.fn(() => ({
@@ -50,11 +60,13 @@ const mocks = vi.hoisted(() => {
       installQueue,
       healthMonitor
     })),
+    browserWindowFromId: vi.fn(),
     checkPermission: vi.fn(),
     permissionHasPermission: vi.fn(),
     permissionGetStore: vi.fn(),
     runtimeOptions: null as Record<string, unknown> | null,
     databaseGetDb: vi.fn(),
+    dialogShowMessageBox: vi.fn(),
     createClient: vi.fn(),
     disposers,
     eventBusOn: vi.fn((event: unknown, handler: (payload: unknown) => void) => {
@@ -69,13 +81,22 @@ const mocks = vi.hoisted(() => {
     healthMonitor,
     installQueue,
     isSecureStoreAvailable: vi.fn(),
+    keyResolveCurrentIdentity: vi.fn(),
+    mainBrowserWindow,
     manager,
     networkCleanup: vi.fn(),
     plugin,
     registerMainRuntime: vi.fn(),
     resolvePluginModuleIoRuntime: vi.fn(),
     runtimeDispose: vi.fn(async () => undefined),
+    runtimeResolve: vi.fn(),
     setRuntimeService: vi.fn(),
+    setSnipasteProcessCapabilityFactory: vi.fn(),
+    setSystemActionCapabilityFactory: vi.fn(),
+    setBrowserOpenCapabilityFactory: vi.fn(),
+    setWindowManagerCapabilityFactory: vi.fn(),
+    setWindowPresetCapabilityFactory: vi.fn(),
+    setWorkspaceScriptCapabilityFactory: vi.fn(),
     setSecureStoreValue: vi.fn(),
     setTransport: vi.fn(),
     startUpdateScheduler: vi.fn(),
@@ -88,11 +109,13 @@ const transport = {
   on: mocks.transportOn,
   broadcast: vi.fn(),
   broadcastPlugin: vi.fn(),
+  keyManager: { resolveCurrentIdentity: mocks.keyResolveCurrentIdentity },
   sendToWindow: vi.fn()
 }
 
 vi.mock('electron', () => ({
-  app: { getAppMetrics: vi.fn(() => []) },
+  app: { getAppMetrics: vi.fn(() => []), getPath: vi.fn(() => '/Users/test-owner') },
+  BrowserWindow: { fromId: mocks.browserWindowFromId },
   ipcMain: { handle: vi.fn(), off: vi.fn(), on: vi.fn(), removeHandler: vi.fn() },
   MessageChannelMain: class MessageChannelMain {
     port1 = {
@@ -107,6 +130,10 @@ vi.mock('electron', () => ({
       postMessage: vi.fn(),
       start: vi.fn()
     }
+  },
+  dialog: {
+    showMessageBox: mocks.dialogShowMessageBox,
+    showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] }))
   },
   shell: { openExternal: vi.fn(), openPath: vi.fn(), showItemInFolder: vi.fn() }
 }))
@@ -213,7 +240,7 @@ vi.mock('./host/plugin-runtime-service', () => ({
     }
 
     dispose = mocks.runtimeDispose
-    resolve = vi.fn()
+    resolve = mocks.runtimeResolve
   },
   resolvePluginRuntimeArtifactPath: () => '/fixture/plugin-host.js'
 }))
@@ -223,6 +250,12 @@ vi.mock('./plugin', () => ({
   TouchPlugin: class {
     static setTransport = mocks.setTransport
     static setRuntimeService = mocks.setRuntimeService
+    static setSnipasteProcessCapabilityFactory = mocks.setSnipasteProcessCapabilityFactory
+    static setSystemActionCapabilityFactory = mocks.setSystemActionCapabilityFactory
+    static setBrowserOpenCapabilityFactory = mocks.setBrowserOpenCapabilityFactory
+    static setWindowManagerCapabilityFactory = mocks.setWindowManagerCapabilityFactory
+    static setWindowPresetCapabilityFactory = mocks.setWindowPresetCapabilityFactory
+    static setWorkspaceScriptCapabilityFactory = mocks.setWorkspaceScriptCapabilityFactory
   }
 }))
 vi.mock('./plugin-installer', () => ({ PluginInstaller: class {} }))
@@ -302,12 +335,29 @@ describe('PluginModule facade', () => {
     mocks.transportOn.mockClear()
     mocks.eventBusOn.mockClear()
     mocks.buildPluginManagerRuntime.mockClear()
+    mocks.browserWindowFromId.mockReset()
+    mocks.dialogShowMessageBox.mockReset()
     mocks.getNetworkService.mockReset()
     mocks.networkCleanup.mockReset()
     mocks.registerMainRuntime.mockReset()
     mocks.runtimeDispose.mockReset()
     mocks.runtimeDispose.mockResolvedValue(undefined)
+    mocks.runtimeResolve.mockReset()
+    mocks.keyResolveCurrentIdentity.mockReset()
+    mocks.mainBrowserWindow.isDestroyed.mockReset()
+    mocks.mainBrowserWindow.isDestroyed.mockReturnValue(false)
+    mocks.mainBrowserWindow.isMinimized.mockReset()
+    mocks.mainBrowserWindow.isMinimized.mockReturnValue(false)
+    mocks.mainBrowserWindow.restore.mockReset()
+    mocks.mainBrowserWindow.show.mockReset()
+    mocks.mainBrowserWindow.focus.mockReset()
     mocks.setRuntimeService.mockReset()
+    mocks.setSnipasteProcessCapabilityFactory.mockReset()
+    mocks.setSystemActionCapabilityFactory.mockReset()
+    mocks.setBrowserOpenCapabilityFactory.mockReset()
+    mocks.setWindowManagerCapabilityFactory.mockReset()
+    mocks.setWindowPresetCapabilityFactory.mockReset()
+    mocks.setWorkspaceScriptCapabilityFactory.mockReset()
     mocks.setTransport.mockReset()
     mocks.startUpdateScheduler.mockReset()
     mocks.stopUpdateScheduler.mockReset()
@@ -346,7 +396,7 @@ describe('PluginModule facade', () => {
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
   })
 
-  it('wires the immutable 29-ID business, request/reply and voice manifest', async () => {
+  it('wires the immutable 29-ID global manifest and activation-local system factory', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockImplementation((name) =>
       name === 'calendar' ? mocks.plugin : undefined
@@ -369,8 +419,19 @@ describe('PluginModule facade', () => {
     expect(definitions?.map((definition) => definition.id)).toContain('flow.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('voice.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('voice.stream')
+    expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
     expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
+    expect(mocks.setWindowPresetCapabilityFactory.mock.calls[0]).toEqual([null])
+    expect(mocks.setBrowserOpenCapabilityFactory.mock.calls[0]).toEqual([null])
+    expect(mocks.setWindowManagerCapabilityFactory.mock.calls[0]).toEqual([null])
+    expect(mocks.setWorkspaceScriptCapabilityFactory.mock.calls[0]).toEqual([null])
+    expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
 
     const authorize = runtimeOptions?.authorizeCapability as
       | ((pluginName: string, permissionId: string) => boolean)
@@ -395,6 +456,191 @@ describe('PluginModule facade', () => {
     mocks.permissionGetStore.mockReturnValue(null)
     expect(authorize?.('calendar', 'clipboard.write')).toBe(false)
     expect(authorize?.('missing', 'clipboard.read')).toBe(false)
+
+    await module.onDestroy()
+  })
+
+  it('parents destructive confirmation only to the configured live CoreApp window', async () => {
+    const module = new PluginModule()
+    mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
+    mocks.plugin.declaredPermissions = { required: ['system.shell'], optional: [] }
+    mocks.permissionHasPermission.mockReturnValue(true)
+    await initializeModule(module)
+    const activation = Object.freeze({
+      name: 'touch-quick-actions',
+      pluginInstanceId: 'quick-actions-instance',
+      activationGeneration: 1,
+      key: 'quick-actions-key'
+    })
+    mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
+    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 7 } })
+    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+      | ((input: typeof activation) => {
+          definitions: ReadonlyArray<{
+            invoke(
+              context: ReturnType<typeof issuePluginSecurityContext>,
+              request: unknown,
+              signal: AbortSignal,
+              resources: unknown
+            ): Promise<unknown>
+          }>
+        })
+      | undefined
+    expect(factory).toEqual(expect.any(Function))
+    const definition = factory?.(activation).definitions[0]
+    const context = issuePluginSecurityContext(activation, 'plugin-host', {
+      hostGeneration: 7
+    })
+
+    mocks.browserWindowFromId.mockReturnValueOnce(null)
+    await expect(
+      definition?.invoke(
+        context,
+        { operation: 'run-action', actionId: 'restart' },
+        new AbortController().signal,
+        { register: vi.fn() }
+      )
+    ).resolves.toEqual({
+      actionId: 'restart',
+      status: 'blocked',
+      reason: 'confirmation-denied'
+    })
+    expect(mocks.dialogShowMessageBox).not.toHaveBeenCalled()
+
+    mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
+    mocks.dialogShowMessageBox.mockResolvedValue({ response: 0, checkboxChecked: false })
+    await expect(
+      definition?.invoke(
+        context,
+        { operation: 'run-action', actionId: 'shutdown' },
+        new AbortController().signal,
+        { register: vi.fn() }
+      )
+    ).resolves.toEqual({
+      actionId: 'shutdown',
+      status: 'blocked',
+      reason: 'confirmation-denied'
+    })
+    expect(mocks.browserWindowFromId).toHaveBeenLastCalledWith(42)
+    expect(mocks.dialogShowMessageBox).toHaveBeenCalledWith(
+      mocks.mainBrowserWindow,
+      expect.objectContaining({
+        title: '确认关机',
+        defaultId: 0,
+        cancelId: 0,
+        signal: expect.any(AbortSignal)
+      })
+    )
+    await module.onDestroy()
+  })
+
+  it('shows the configured main window for the current system-actions activation without shell permission', async () => {
+    const module = new PluginModule()
+    mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
+    mocks.plugin.declaredPermissions = {
+      required: ['search.root-results'],
+      optional: ['system.shell']
+    }
+    mocks.permissionHasPermission.mockReturnValue(false)
+    await initializeModule(module)
+    const activation = Object.freeze({
+      name: 'touch-system-actions',
+      pluginInstanceId: 'system-actions-instance',
+      activationGeneration: 1,
+      key: 'system-actions-key'
+    })
+    mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
+    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 9 } })
+    mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
+    mocks.mainBrowserWindow.isMinimized.mockReturnValue(true)
+    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+      | ((input: typeof activation) => {
+          definitions: ReadonlyArray<{
+            invoke(
+              context: ReturnType<typeof issuePluginSecurityContext>,
+              request: unknown,
+              signal: AbortSignal,
+              resources: unknown
+            ): Promise<unknown>
+          }>
+        })
+      | undefined
+    const definition = factory?.(activation).definitions[0]
+    const context = issuePluginSecurityContext(activation, 'plugin-host', {
+      hostGeneration: 9
+    })
+
+    await expect(
+      definition?.invoke(
+        context,
+        { operation: 'run-action', actionId: 'open-main-window' },
+        new AbortController().signal,
+        { register: vi.fn() }
+      )
+    ).resolves.toEqual({ actionId: 'open-main-window', status: 'started' })
+    expect(mocks.permissionHasPermission).not.toHaveBeenCalled()
+    expect(mocks.browserWindowFromId).toHaveBeenCalledExactlyOnceWith(42)
+    expect(mocks.mainBrowserWindow.restore).toHaveBeenCalledOnce()
+    expect(mocks.mainBrowserWindow.show).toHaveBeenCalledOnce()
+    expect(mocks.mainBrowserWindow.focus).toHaveBeenCalledOnce()
+
+    await module.onDestroy()
+  })
+
+  it('stops synchronous main-window mutations when the host generation rotates', async () => {
+    const module = new PluginModule()
+    mocks.manager.getPluginByName.mockReturnValue(mocks.plugin)
+    mocks.plugin.declaredPermissions = {
+      required: ['search.root-results'],
+      optional: ['system.shell']
+    }
+    mocks.permissionHasPermission.mockReturnValue(false)
+    await initializeModule(module)
+    const activation = Object.freeze({
+      name: 'touch-system-actions',
+      pluginInstanceId: 'system-actions-instance',
+      activationGeneration: 1,
+      key: 'system-actions-key'
+    })
+    mocks.keyResolveCurrentIdentity.mockReturnValue(activation)
+    mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 9 } })
+    mocks.browserWindowFromId.mockReturnValue(mocks.mainBrowserWindow)
+    mocks.mainBrowserWindow.isMinimized.mockReturnValue(true)
+    mocks.mainBrowserWindow.restore.mockImplementationOnce(() => {
+      mocks.runtimeResolve.mockReturnValue({ owner: { hostGeneration: 10 } })
+    })
+    const factory = mocks.setSystemActionCapabilityFactory.mock.calls.at(-1)?.[0] as
+      | ((input: typeof activation) => {
+          definitions: ReadonlyArray<{
+            invoke(
+              context: ReturnType<typeof issuePluginSecurityContext>,
+              request: unknown,
+              signal: AbortSignal,
+              resources: unknown
+            ): Promise<unknown>
+          }>
+        })
+      | undefined
+    const definition = factory?.(activation).definitions[0]
+    const context = issuePluginSecurityContext(activation, 'plugin-host', {
+      hostGeneration: 9
+    })
+
+    await expect(
+      definition?.invoke(
+        context,
+        { operation: 'run-action', actionId: 'open-main-window' },
+        new AbortController().signal,
+        { register: vi.fn() }
+      )
+    ).resolves.toEqual({
+      actionId: 'open-main-window',
+      status: 'failed',
+      reason: 'execution-failed'
+    })
+    expect(mocks.mainBrowserWindow.restore).toHaveBeenCalledOnce()
+    expect(mocks.mainBrowserWindow.show).not.toHaveBeenCalled()
+    expect(mocks.mainBrowserWindow.focus).not.toHaveBeenCalled()
 
     await module.onDestroy()
   })
@@ -505,6 +751,12 @@ describe('PluginModule facade', () => {
     expect(closeBusiness).toHaveBeenCalledOnce()
     expect(closeSqlite).toHaveBeenCalledOnce()
     expect(mocks.setRuntimeService).toHaveBeenLastCalledWith(null)
+    expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setTransport).toHaveBeenLastCalledWith(null)
     expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()

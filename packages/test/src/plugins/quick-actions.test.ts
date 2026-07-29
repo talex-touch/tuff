@@ -1,32 +1,35 @@
-import { describe, expect, it } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import fs from 'node:fs'
+import { describe, expect, it, vi } from 'vitest'
+import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
-const quickActionsPlugin = loadPluginModule(new URL('../../../../plugins/touch-quick-actions/index.js', import.meta.url))
-const { __test: quickActionsTest } = quickActionsPlugin
 const quickActionsUrl = new URL('../../../../plugins/touch-quick-actions/index.js', import.meta.url)
+const source = fs.readFileSync(quickActionsUrl, 'utf8')
 
 class FakeBuilder {
   item: Record<string, unknown>
+  basic: Record<string, unknown> = {}
 
   constructor(id: string) {
     this.item = { id }
   }
 
-  setSource() {
+  setSource(type: string, id: string, name: string) {
+    this.item.source = { type, id, name }
     return this
   }
 
   setTitle(title: string) {
-    this.item.title = title
+    this.basic.title = title
     return this
   }
 
   setSubtitle(subtitle: string) {
-    this.item.subtitle = subtitle
+    this.basic.subtitle = subtitle
     return this
   }
 
-  setIcon() {
+  setIcon(icon: unknown) {
+    this.basic.icon = icon
     return this
   }
 
@@ -35,369 +38,155 @@ class FakeBuilder {
     return this
   }
 
+  createAndAddAction(id: string, type: string, label: string, payload: unknown) {
+    this.item.actions = [{ id, type, label, payload }]
+    return this
+  }
+
   build() {
-    return this.item
+    return { ...this.item, render: { mode: 'default', basic: this.basic } }
   }
 }
 
-describe('quick actions plugin', () => {
-  function installShellRunner(pluginModule: any) {
-    pluginModule.__test.setSpawnShellCommandForTest(() => ({
-      on(event: string, callback: (code?: number) => void) {
-        if (event === 'close')
-          callback(0)
-        return this
-      },
-    }))
-  }
+interface QuickActionsPrelude {
+  onInit: () => Promise<void>
+  onFeatureTriggered: (featureId: string, query: unknown) => Promise<unknown>
+  onItemAction: (item: Record<string, unknown>, context?: Record<string, unknown>) => Promise<unknown>
+  onDestroy: () => void
+}
 
-  it('returns windows quick actions set', () => {
-    const actions = quickActionsTest.resolveActions('win32')
-    const ids = actions.map(action => action.id)
-
-    expect(ids).toContain('restart')
-    expect(ids).toContain('shutdown')
-    expect(ids).toContain('lock-screen')
-    expect(ids).toContain('mute-toggle')
-    expect(ids).toContain('notification-settings')
-    expect(ids).toContain('display-settings')
-  })
-
-  it('matches quick actions by keyword', () => {
-    const actions = quickActionsTest.resolveActions('darwin')
-    const matched = quickActionsTest.matchActions(actions, '静音')
-
-    expect(matched.some(action => action.id === 'mute-toggle')).toBe(true)
-  })
-
-  it('keeps group order instant then settings', () => {
-    const order = quickActionsTest.resolveGroupOrder([
-      { group: 'settings' },
-      { group: 'instant' },
-    ])
-
-    expect(order).toEqual(['instant', 'settings'])
-  })
-
-  it('returns all actions when keyword is empty', () => {
-    const actions = quickActionsTest.resolveActions('darwin')
-    const matched = quickActionsTest.matchActions(actions, '')
-
-    expect(matched.length).toBe(actions.length)
-  })
-
-  it('keeps restart and shutdown in common actions', () => {
-    const actions = quickActionsTest.resolveActions('darwin')
-    const common = quickActionsTest.resolveCommonActions(actions)
-    const ids = common.map(action => action.id)
-
-    expect(ids).toContain('restart')
-    expect(ids).toContain('shutdown')
-  })
-
-  it('builds dynamic features with hyphenated ids', () => {
-    const actions = quickActionsTest.resolveActions('darwin')
-    const dynamicFeatures = quickActionsTest.buildDynamicFeatures(actions, 'darwin')
-
-    expect(dynamicFeatures.every(feature => feature.id.startsWith('quick-action-'))).toBe(true)
-    expect(dynamicFeatures.every(feature => !feature.id.includes('.'))).toBe(true)
-    expect(dynamicFeatures.every(feature => feature.push === false)).toBe(true)
-    expect(dynamicFeatures[0]?.meta?.capability).toMatchObject({
-      id: 'system.shell',
-      type: 'shell',
-      platform: 'darwin',
-      permission: 'system.shell',
-      audit: {
-        pluginName: 'touch-quick-actions',
-        actionId: actions[0].id,
-      },
-    })
-  })
-
-  it('registers dynamic features during onInit and keeps idempotency', () => {
-    const added: Array<{ id: string }> = []
-    const featureMap = new Map<string, { id: string }>()
-    const globals = createPluginGlobals({
+function harness(systemResult: Record<string, unknown> = { actionId: 'lock-screen', status: 'started' }) {
+  const items: Array<Record<string, unknown>> = []
+  const features: Array<Record<string, unknown>> = []
+  const systemCalls: string[] = []
+  const module = loadPluginModule<QuickActionsPrelude>(
+    quickActionsUrl,
+    createPluginGlobals({
+      platform: { platform: 'darwin', arch: 'arm64' },
+      TuffItemBuilder: FakeBuilder,
       features: {
-        addFeature(feature: { id: string }) {
-          added.push(feature)
-          featureMap.set(feature.id, feature)
+        async addFeature(feature: Record<string, unknown>) {
+          features.push(feature)
           return true
         },
-        getFeature(id: string) {
-          return featureMap.get(id) ?? null
-        },
       },
-    })
-    const pluginModule = loadPluginModule(quickActionsUrl, globals)
-
-    pluginModule.onInit()
-    pluginModule.onInit()
-
-    const expectedIds = quickActionsTest
-      .buildDynamicFeatures(quickActionsTest.resolveActions(process.platform), process.platform)
-      .map(feature => feature.id)
-
-    expect(added.map(feature => feature.id)).toEqual(expectedIds)
-  })
-
-  it('pushes common actions directly when keyword is empty', async () => {
-    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(quickActionsUrl, globals)
-    installShellRunner(pluginModule)
-
-    await pluginModule.onFeatureTriggered('quick-actions', '')
-
-    if (!quickActionsTest.isShellPlatformSupported(process.platform)) {
-      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
-      return
-    }
-
-    const titles = items.map(item => item.title)
-    expect(titles).toContain('重启')
-    expect(titles).toContain('关机')
-    expect(titles).not.toContain('即时动作')
-    expect(items[0]?.meta?.capability?.audit).toMatchObject({
-      pluginName: 'touch-quick-actions',
-      featureId: 'quick-actions',
-      actionId: expect.any(String),
-    })
-  })
-
-  it('pushes diagnostic meta when shell permission is denied', async () => {
-    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      permission: {
-        check: async () => false,
-        request: async () => false,
-      },
-      plugin: {
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string, meta?: Record<string, any> }>) { items.push(...next) },
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(quickActionsUrl, globals)
-    installShellRunner(pluginModule)
-
-    await pluginModule.onFeatureTriggered('quick-actions', '')
-
-    if (!quickActionsTest.isShellPlatformSupported(process.platform)) {
-      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
-      return
-    }
-
-    expect(items[0]?.title).toBe('缺少 system.shell 权限')
-    expect(items[0]?.meta?.capability).toMatchObject({
-      permission: 'system.shell',
-      status: 'permission-missing',
-      reason: 'system-shell-permission-required',
-    })
-  })
-
-  it('pushes diagnostic meta when permission SDK is unavailable', async () => {
-    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      permission: withoutGlobal(),
-      plugin: {
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string, meta?: Record<string, any> }>) { items.push(...next) },
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(quickActionsUrl, globals)
-    installShellRunner(pluginModule)
-
-    await pluginModule.onFeatureTriggered('quick-actions', '')
-
-    if (!quickActionsTest.isShellPlatformSupported(process.platform)) {
-      expect(items[0]?.meta?.capability?.status).toBe('unsupported')
-      return
-    }
-
-    expect(items[0]?.title).toBe('缺少 system.shell 权限')
-    expect(items[0]?.meta?.capability).toMatchObject({
-      permission: 'system.shell',
-      status: 'permission-missing',
-      reason: 'permission-sdk-unavailable',
-    })
-  })
-
-  it('blocks quick action execution when permission SDK is unavailable', async () => {
-    const pluginModule = loadPluginModule(quickActionsUrl, createPluginGlobals({
-      permission: withoutGlobal(),
-    }))
-    installShellRunner(pluginModule)
-    const action = quickActionsTest.resolveActions(process.platform)
-      .find((candidate: { id: string }) => candidate.id === 'lock-screen')
-      ?? quickActionsTest.resolveActions(process.platform)[0]
-
-    if (!action) {
-      const result = await pluginModule.onItemAction({
-        meta: {
-          defaultAction: 'quick-actions',
-          actionId: 'run-action',
-          payload: { action: { id: 'missing', command: 'true' } },
-        },
-      })
-      expect(result?.success).toBe(false)
-      expect(result?.reason).toBe('platform:linux')
-      return
-    }
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'quick-actions',
-        actionId: 'run-action',
-        payload: { action },
-      },
-    })
-
-    expect(result?.success).toBe(false)
-    expect(result?.reason).toBe('permission-sdk-unavailable')
-    expect(result?.message).toBe('权限系统不可用，无法执行系统快捷动作')
-  })
-
-  it('blocks quick action execution when shell permission is denied', async () => {
-    const pluginModule = loadPluginModule(quickActionsUrl, createPluginGlobals({
-      permission: {
-        check: async () => false,
-        request: async () => false,
-      },
-    }))
-    installShellRunner(pluginModule)
-    const action = quickActionsTest.resolveActions(process.platform)
-      .find((candidate: { id: string }) => candidate.id === 'lock-screen')
-      ?? quickActionsTest.resolveActions(process.platform)[0]
-
-    if (!action) {
-      const result = await pluginModule.onItemAction({
-        meta: {
-          defaultAction: 'quick-actions',
-          actionId: 'run-action',
-          payload: { action: { id: 'missing', command: 'true' } },
-        },
-      })
-      expect(result?.success).toBe(false)
-      expect(result?.reason).toBe('platform:linux')
-      return
-    }
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'quick-actions',
-        actionId: 'run-action',
-        payload: { action },
-      },
-    })
-
-    expect(result?.success).toBe(false)
-    expect(result?.reason).toBe('permission-denied')
-    expect(result?.message).toBe('缺少 system.shell 权限')
-  })
-
-  it('executes dynamic feature directly without entering list mode', async () => {
-    let confirmCalls = 0
-    const globals = createPluginGlobals({
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      dialog: {
-        showMessageBox: async () => {
-          confirmCalls += 1
-          return { response: 0 }
+      system: {
+        async runAction(actionId: string) {
+          systemCalls.push(actionId)
+          return systemResult
         },
       },
       plugin: {
         feature: {
-          clearItems() {},
-          pushItems() {
-            throw new Error('dynamic feature should not push list items')
+          async clearItems() {
+            items.length = 0
+          },
+          async pushItems(next: Array<Record<string, unknown>>) {
+            items.push(...next)
           },
         },
       },
+    }),
+  )
+  return { features, items, module, systemCalls }
+}
+
+function actionItem(items: Array<Record<string, unknown>>, actionId: string) {
+  return items.find(item =>
+    (item.actions as Array<{ payload?: { actionId?: string } }> | undefined)?.some(
+      action => action.payload?.actionId === actionId,
+    ),
+  )
+}
+
+describe('quick actions isolated Prelude', () => {
+  it('contains no direct privileged or test-only child surface', () => {
+    for (const pattern of [
+      /\b__test\b/,
+      /\brequire\s*\(/,
+      /\bfetch\s*\(/,
+      /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+      /\bnode:(?:fs|child_process|sqlite|worker_threads)\b/,
+      /\bdialog\b/,
+      /\b(?:command|executable|args|cwd|env|url|script)\s*:/,
+    ]) {
+      expect(source).not.toMatch(pattern)
+    }
+  })
+
+  it('awaits dynamic feature registration with display metadata only', async () => {
+    const state = harness()
+
+    await state.module.onInit()
+
+    expect(state.features).toHaveLength(8)
+    expect(state.features.map(feature => feature.id)).toContain('quick-action-lock-screen')
+    expect(state.features[0]?.platform).toEqual({
+      win: { enable: false, arch: [], os: [] },
+      darwin: { enable: true, arch: [], os: [] },
+      linux: { enable: false, arch: [], os: [] },
     })
-    const pluginModule = loadPluginModule(quickActionsUrl, globals)
-    installShellRunner(pluginModule)
+    expect(
+      state.features.every(
+        feature =>
+          !Object.hasOwn(feature, 'command')
+          && !Object.hasOwn(feature, 'executable')
+          && !Object.hasOwn(feature, 'args')
+          && !Object.hasOwn(feature, 'cwd')
+          && !Object.hasOwn(feature, 'env'),
+      ),
+    ).toBe(true)
+  })
 
-    const result = await pluginModule.onFeatureTriggered('quick-action-restart', '')
+  it('publishes bounded item actions and invokes only the selected fixed ID', async () => {
+    const state = harness()
+    await state.module.onFeatureTriggered('quick-actions', { text: '锁屏' })
+    const item = actionItem(state.items, 'lock-screen')
+    expect(item).toBeTruthy()
 
-    expect(result).toMatchObject({
-      externalAction: true,
-      status: 'cancelled',
+    await expect(state.module.onItemAction(item!, { actionId: 'run-action' })).resolves.toMatchObject({
+      status: 'started',
+      success: true,
+    })
+    expect(state.systemCalls).toEqual(['lock-screen'])
+    expect(JSON.stringify(state.items)).not.toContain('command')
+  })
+
+  it('preserves main-owned confirmation denial as a stable blocked result', async () => {
+    const state = harness({
+      actionId: 'shutdown',
+      status: 'blocked',
+      reason: 'confirmation-denied',
+    })
+
+    await expect(state.module.onFeatureTriggered('quick-action-shutdown', { text: '' })).resolves.toMatchObject({
+      status: 'blocked',
+      reason: 'confirmation-denied',
       success: false,
-      reason: 'user-cancelled',
     })
-    expect(confirmCalls).toBe(1)
+    expect(state.systemCalls).toEqual(['shutdown'])
   })
 
-  it('requires double confirmation for dangerous actions', async () => {
-    const actions = quickActionsTest.resolveActions('darwin')
-    const restart = actions.find(action => action.id === 'restart')
-    expect(restart).toBeTruthy()
+  it('redacts capability failures and never attempts a generic command fallback', async () => {
+    const system = { runAction: vi.fn(async () => Promise.reject(new Error('/private/path'))) }
+    const state = harness()
+    const isolated = loadPluginModule<QuickActionsPrelude>(
+      quickActionsUrl,
+      createPluginGlobals({
+        platform: { platform: 'darwin', arch: 'arm64' },
+        TuffItemBuilder: FakeBuilder,
+        features: { addFeature: async () => true },
+        system,
+        plugin: { feature: { clearItems: async () => undefined, pushItems: async () => undefined } },
+      }),
+    )
 
-    const responses = [1, 0]
-    let confirmCalls = 0
-    const globals = createPluginGlobals({
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      dialog: {
-        showMessageBox: async () => {
-          confirmCalls += 1
-          return { response: responses.shift() ?? 0 }
-        },
-      },
+    await expect(isolated.onFeatureTriggered('quick-action-lock-screen', { text: '' })).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'system-action-failed',
+      message: '系统动作执行失败',
     })
-    const pluginModule = loadPluginModule(quickActionsUrl, globals)
-    installShellRunner(pluginModule)
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'quick-actions',
-        actionId: 'run-action',
-        payload: { action: restart },
-      },
-    })
-
-    expect(confirmCalls).toBe(2)
-    expect(result?.success).toBe(false)
-    expect(result?.message).toBe('操作已取消')
-  })
-
-  it('returns empty list on unsupported platform', () => {
-    const actions = quickActionsTest.resolveActions('linux')
-    expect(actions.length).toBe(0)
-  })
-
-  it('builds unsupported capability diagnostics for linux', () => {
-    const capability = quickActionsTest.buildShellCapability({
-      featureId: 'quick-actions',
-      actionId: 'list-actions',
-      platform: 'linux',
-    })
-
-    expect(capability.status).toBe('unsupported')
-    expect(capability.reason).toBe('platform:linux')
-    expect(capability.audit.commandKind).toBe('fixed-shell')
+    expect(system.runAction).toHaveBeenCalledExactlyOnceWith('lock-screen')
+    expect(JSON.stringify(state)).not.toContain('/private/path')
   })
 })

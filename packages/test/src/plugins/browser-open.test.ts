@@ -1,12 +1,11 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
 
-const browserPlugin = loadPluginModule(new URL('../../../../plugins/touch-browser-open/index.js', import.meta.url))
-const { __test: browserTest } = browserPlugin
-const browserPluginUrl = new URL('../../../../plugins/touch-browser-open/index.js', import.meta.url)
+const pluginUrl = new URL('../../../../plugins/touch-browser-open/index.js', import.meta.url)
 
 class FakeBuilder {
-  item: Record<string, unknown>
+  item: Record<string, any>
   basic: Record<string, unknown>
 
   constructor(id: string) {
@@ -14,7 +13,8 @@ class FakeBuilder {
     this.basic = {}
   }
 
-  setSource() {
+  setSource(type: string, id: string, name: string) {
+    this.item.source = { type, id, name }
     return this
   }
 
@@ -40,813 +40,148 @@ class FakeBuilder {
     return this
   }
 
+  createAndAddAction(id: string, type: string, label: string, payload: unknown) {
+    this.item.actions ||= []
+    this.item.actions.push({ id, type, label, payload })
+    return this
+  }
+
   build() {
-    this.item.render = {
-      mode: 'default',
-      basic: this.basic,
-    }
+    this.item.render = { mode: 'default', basic: this.basic }
     return this.item
   }
 }
 
-describe('browser open plugin', () => {
-  it('normalizes url input', () => {
-    expect(browserTest.normalizeUrlInput('example.com')).toBe('https://example.com/')
-    expect(browserTest.normalizeUrlInput('https://example.com/path')).toBe('https://example.com/path')
-    expect(browserTest.normalizeUrlInput('not a url')).toBeNull()
-  })
-
-  it('builds windows open scripts', () => {
-    const defaultScript = browserTest.buildWindowsOpenScript('default-open', {
-      url: 'https://example.com',
-    })
-    const browserScript = browserTest.buildWindowsOpenScript('open-browser', {
-      url: 'https://example.com',
-      target: 'chrome.exe',
-    })
-
-    expect(defaultScript).toContain('Start-Process')
-    expect(defaultScript).toContain('https://example.com')
-    expect(browserScript).toContain('chrome.exe')
-    expect(browserScript).toContain('-ArgumentList')
-  })
-
-  it('merges recent browsers with availability', () => {
-    const now = Date.now()
-    const available = [
-      { id: 'chrome', name: 'Chrome', target: 'chrome.exe' },
-      { id: 'edge', name: 'Edge', target: 'msedge.exe' },
-    ]
-    const recent = [
-      { id: 'firefox', name: 'Firefox', target: 'firefox.exe', lastUsedAt: now - 1000 },
-      { id: 'edge', name: 'Edge', target: 'msedge.exe', lastUsedAt: now - 500 },
-      { id: 'chrome', name: 'Chrome', target: 'chrome.exe', lastUsedAt: now - 200 },
-    ]
-
-    const merged = browserTest.mergeRecentBrowsers(available, recent)
-    expect(merged.length).toBe(2)
-    expect(merged[0].id).toBe('chrome')
-    expect(merged[1].id).toBe('edge')
-  })
-
-  it('keeps grouped layout order', () => {
-    const order = browserTest.resolveGroupOrder({
-      quickActions: [1],
-      recommendedItems: [1],
-      recentItems: [1],
-      tips: [1],
-    })
-
-    expect(order).toEqual(['quick', 'recommended', 'recent', 'tips'])
-  })
-
-  it('builds web search urls with encoded query', () => {
-    expect(browserTest.buildSearchUrl('google', 'hello world')).toBe('https://www.google.com/search?q=hello%20world')
-    expect(browserTest.buildSearchUrl('bing', '中文 搜索')).toBe('https://www.bing.com/search?q=%E4%B8%AD%E6%96%87%20%E6%90%9C%E7%B4%A2')
-    expect(browserTest.buildSearchUrl('duckduckgo', 'a&b')).toBe('https://duckduckgo.com/?q=a%26b')
-  })
-
-  it('parses explicit search engine commands', () => {
-    expect(browserTest.parseSearchQuery('g tuff app').engine.id).toBe('google')
-    expect(browserTest.parseSearchQuery('bing tuff app')).toMatchObject({
-      query: 'tuff app',
-      explicit: true,
-    })
-    expect(browserTest.parseSearchQuery('ddg tuff app').engine.id).toBe('duckduckgo')
-  })
-
-  it('uses normalized settings for default search engine', () => {
-    const settings = browserTest.normalizeSearchSettings({
-      defaultEngine: 'bing',
-      enabledEngines: ['bing', 'google', 'unknown'],
-    })
-
-    expect(settings).toEqual({
-      defaultEngine: 'bing',
-      enabledEngines: ['bing', 'google'],
-    })
-    expect(browserTest.parseSearchQuery('plain query', settings).engine.id).toBe('bing')
-  })
-
-  it('builds dynamic search engine features from enabled engines', () => {
-    const features = browserTest.buildSearchEngineFeatures({
-      defaultEngine: 'google',
-      enabledEngines: ['google', 'duckduckgo'],
-    })
-
-    expect(features.map(feature => feature.id)).toEqual([
-      'search-engine-google',
-      'search-engine-duckduckgo',
-    ])
-    expect(features.map(feature => feature.icon.value)).toEqual([
-      'assets/search-engines/google.svg',
-      'assets/search-engines/duckduckgo.svg',
-    ])
-    expect(features.every(feature => feature.push)).toBe(true)
-    expect(features.every(feature => feature.acceptedInputTypes.includes('text'))).toBe(true)
-  })
-
-  it('loads in plugin sandbox without process global', () => {
-    const pluginModule = loadPluginModule(browserPluginUrl, createPluginGlobals({
-      process: withoutGlobal(),
-    }))
-    const features = pluginModule.__test.buildSearchEngineFeatures({
-      defaultEngine: 'google',
-      enabledEngines: ['google'],
-    })
-
-    expect(features.map(feature => feature.id)).toEqual(['search-engine-google'])
-  })
-
-  it('keeps short engine aliases out of dynamic feature command tokens', () => {
-    const [googleFeature] = browserTest.buildSearchEngineFeatures({
-      defaultEngine: 'google',
-      enabledEngines: ['google'],
-    })
-
-    expect(googleFeature.keywords).not.toContain('g')
-    expect(googleFeature.commands[0].value).toContain('Google 搜索引擎')
-    expect(googleFeature.commands[0].value).toContain('google 搜索')
-    expect(googleFeature.commands[0].value).not.toContain('google')
-  })
-
-  it('parses search suggestions by engine', () => {
-    expect(browserTest.parseEngineSuggestions('google', ['tuff', ['tuff app', 'tuff plugin']])).toEqual([
-      'tuff app',
-      'tuff plugin',
-    ])
-    expect(browserTest.parseEngineSuggestions('bing', ['tuff', ['tuff app']])).toEqual(['tuff app'])
-    expect(browserTest.parseEngineSuggestions('duckduckgo', [{ phrase: 'tuff app' }, { phrase: 'tuff ai' }])).toEqual([
-      'tuff app',
-      'tuff ai',
-    ])
-  })
-
-  it('deduplicates and keeps direct search item before suggestions', () => {
-    const pluginModule = loadPluginModule(browserPluginUrl, createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-    }))
-    const testApi = pluginModule.__test
-    const parsed = testApi.parseSearchQuery('g tuff app')
-    const items = testApi.buildSearchItems('web-search', parsed.engine, parsed.query, [
-      'tuff app',
-      'Tuff App',
-      'tuff plugins',
-    ])
-
-    expect(items.map(item => item.title)).toEqual([
-      'Google 搜索：tuff app',
-      'tuff plugins',
-    ])
-    expect((items[0].meta as any).payload.url).toBe('https://www.google.com/search?q=tuff%20app')
-    expect((items[0] as any).render.completion).toBe('tuff app')
-    expect((items[1] as any).render.completion).toBe('tuff plugins')
-    expect((items[0] as any).render.basic.icon.value).toBe('assets/search-engines/google.svg')
-    expect((items[1] as any).render.basic.icon.value).toBe('assets/search-engines/google.svg')
-  })
-
-  it('adds shell capability metadata to search action items', () => {
-    const pluginModule = loadPluginModule(browserPluginUrl, createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-    }))
-    const testApi = pluginModule.__test
-    const parsed = testApi.parseSearchQuery('g tuff app')
-    const items = testApi.buildSearchItems('web-search', parsed.engine, parsed.query, [
-      'tuff plugin',
-    ], {
-      capabilityState: {
-        status: 'permission-missing',
-        reason: 'system-shell-permission-required',
-      },
-    })
-
-    expect((items[0].meta as any).capability).toMatchObject({
-      id: 'system.shell',
-      type: 'shell',
-      permission: 'system.shell',
-      status: 'permission-missing',
-      reason: 'system-shell-permission-required',
-      audit: {
-        pluginName: 'touch-browser-open',
-        featureId: 'web-search',
-        actionId: 'search-web',
-        commandKind: 'browser-open',
-        commandSource: 'search-direct',
-      },
-    })
-    expect((items[1].meta as any).capability.audit.commandSource).toBe('search-suggestion')
-  })
-
-  it('extracts remaining query after choosing an engine feature', () => {
-    const google = browserTest.parseSearchQuery('g test').engine
-
-    expect(browserTest.extractEngineModeQuery(google, 'Google 搜索引擎 tuff app')).toBe('tuff app')
-    expect(browserTest.extractEngineModeQuery(google, 'google tuff app')).toBe('tuff app')
-    expect(browserTest.extractEngineModeQuery(google, 'Google 搜索引擎')).toBe('')
-  })
-
-  it('registers dynamic search engine features during init', async () => {
-    const added: Array<{ id: string }> = []
-    const featureMap = new Map<string, { id: string }>()
-    const globals = createPluginGlobals({
-      features: {
-        addFeature(feature: { id: string }) {
-          added.push(feature)
-          featureMap.set(feature.id, feature)
-          return true
-        },
-        getFeature(id: string) {
-          return featureMap.get(id) ?? null
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onInit()
-
-    expect(added.map(feature => feature.id)).toEqual([
-      'search-engine-google',
-      'search-engine-bing',
-      'search-engine-duckduckgo',
-    ])
-  })
-
-  it('pushes browser-open capability diagnostics without requesting shell permission', async () => {
-    const items: Array<{ title?: string, meta?: any }> = []
-    const request = vi.fn(async () => true)
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      permission: {
-        check: async (permissionId: string) => {
-          expect(permissionId).toBe('system.shell')
-          return false
-        },
-        request,
-      },
-      plugin: {
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string, meta?: any }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onFeatureTriggered('browser-open', 'example.com')
-
-    const defaultOpen = items.find(item => item.title === '默认浏览器打开')
-    const diagnostic = items.find(item => item.title === '打开能力')
-    expect(defaultOpen?.meta?.capability).toMatchObject({
-      status: 'permission-missing',
-      reason: 'system-shell-permission-required',
-      audit: {
-        commandSource: 'default-browser',
-      },
-    })
-    expect(diagnostic?.meta?.capability.audit.commandSource).toBe('diagnostic')
-    expect(request).not.toHaveBeenCalled()
-  })
-
-  it('marks specific browser open as unsupported on linux', () => {
-    expect(browserTest.resolveBrowserOpenSupport('default-open', '', 'linux')).toMatchObject({
-      status: 'available',
-    })
-    expect(browserTest.resolveBrowserOpenSupport('open-browser', 'chrome', 'linux')).toMatchObject({
-      status: 'unsupported',
-      reason: 'linux-specific-browser-open-unsupported',
-    })
-  })
-
-  it('does not require system shell permission to copy url', async () => {
-    const requested: string[] = []
-    const writeText = vi.fn()
-    const globals = createPluginGlobals({
-      clipboard: {
-        writeText,
-      },
-      permission: {
-        check: async (permissionId: string) => permissionId === 'clipboard.write',
-        request: async (permissionId: string) => {
-          requested.push(permissionId)
-          return true
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-open',
-        actionId: 'copy-url',
-        payload: {
-          url: 'https://example.com',
-        },
-      },
-    })
-
-    expect(result).toMatchObject({ externalAction: true, status: 'started' })
-    expect(writeText).toHaveBeenCalledWith('https://example.com/')
-    expect(requested).toEqual([])
-  })
-
-  it('reports browser-open permission diagnostics when permission SDK is unavailable', async () => {
-    const items: Array<{ title?: string, meta?: any }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      permission: withoutGlobal(),
-      plugin: {
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string, meta?: any }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onFeatureTriggered('browser-open', 'example.com')
-
-    const defaultOpen = items.find(item => item.title === '默认浏览器打开')
-    const diagnostic = items.find(item => item.title === '打开能力')
-    expect(defaultOpen?.meta?.capability).toMatchObject({
-      status: 'permission-missing',
-      reason: 'permission-sdk-unavailable',
-      permission: 'system.shell',
-    })
-    expect(diagnostic?.meta?.capability).toMatchObject({
-      status: 'permission-missing',
-      reason: 'permission-sdk-unavailable',
-      permission: 'system.shell',
-    })
-  })
-
-  it('blocks browser-open actions when permission SDK is unavailable', async () => {
-    const globals = createPluginGlobals({
-      permission: withoutGlobal(),
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-open',
-        actionId: 'default-open',
-        payload: {
-          url: 'https://example.com',
-        },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      status: 'blocked',
-      reason: 'permission-sdk-unavailable',
-    })
-  })
-
-  it('blocks browser-open actions when shell permission is denied', async () => {
-    const globals = createPluginGlobals({
-      permission: {
-        check: async () => false,
-        request: async () => false,
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-open',
-        actionId: 'default-open',
-        payload: {
-          url: 'https://example.com',
-        },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      status: 'blocked',
-      reason: 'permission-denied',
-    })
-  })
-
-  it('blocks browser-open actions when shell permission request fails', async () => {
-    const globals = createPluginGlobals({
-      permission: {
-        check: async () => false,
-        request: async () => {
-          throw new Error('permission transport failed')
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-open',
-        actionId: 'default-open',
-        payload: {
-          url: 'https://example.com',
-        },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      status: 'blocked',
-      reason: 'permission-request-failed',
-    })
-  })
-
-  it('blocks copy url when clipboard permission SDK is unavailable', async () => {
-    const writeText = vi.fn()
-    const globals = createPluginGlobals({
-      clipboard: {
-        writeText,
-      },
-      permission: withoutGlobal(),
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'browser-open',
-        actionId: 'copy-url',
-        payload: {
-          url: 'https://example.com',
-        },
-      },
-    })
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      status: 'blocked',
-      success: false,
-    })
-    expect(writeText).not.toHaveBeenCalled()
-  })
-
-  it('pushes direct search and remote suggestions in engine mode', async () => {
-    const items: Array<{ title?: string }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch: vi.fn(async () => ({
-        ok: true,
-        json: async () => ['tuff', ['tuff app', 'tuff plugin']],
-      })),
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput: vi.fn(),
-          hide: vi.fn(),
-        },
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onFeatureTriggered('search-engine-google', 'google tuff app', null, new AbortController().signal)
-
-    expect(items.map(item => item.title)).toEqual([
-      'Google 搜索：tuff app',
-      'tuff plugin',
-    ])
-  })
-
-  it('does not subscribe to plugin input changes before active mode refresh', async () => {
-    const onInputChange = vi.fn()
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch: vi.fn(async () => ({
-        ok: true,
-        json: async () => ['tuff', ['tuff app']],
-      })),
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput: vi.fn(),
-          hide: vi.fn(),
-        },
-        feature: {
-          clearItems() {},
-          pushItems() {},
-          onInputChange,
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎 tuff', null, new AbortController().signal)
-
-    expect(onInputChange).not.toHaveBeenCalled()
-  })
-
-  it('keeps direct search item when suggestions fail', async () => {
-    const items: Array<{ title?: string }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch: vi.fn(async () => {
-        throw new Error('network down')
+function createHarness() {
+  const state = {
+    items: [] as Array<Record<string, any>>,
+    files: new Map<string, unknown>(),
+    opens: [] as Array<{ url: string, token?: string }>,
+    http: [] as string[],
+    features: new Map<string, Record<string, unknown>>(),
+  }
+  const token = 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+  const globals = createPluginGlobals({
+    process: withoutGlobal(),
+    require: withoutGlobal(),
+    fetch: withoutGlobal(),
+    TuffItemBuilder: FakeBuilder,
+    platform: { platform: 'darwin', arch: 'arm64' },
+    clipboard: { writeText: vi.fn(async () => undefined) },
+    http: {
+      get: vi.fn(async (url: string) => {
+        state.http.push(url)
+        return {
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          data: ['tuff', ['tuff app', 'tuff plugin']],
+          url,
+          ok: true,
+        }
       }),
-      permission: {
-        check: async () => true,
-        request: async () => true,
+    },
+    features: {
+      getFeature: async (id: string) => state.features.get(id),
+      addFeature: async (feature: Record<string, any>) => {
+        state.features.set(feature.id, feature)
+        return true
       },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput: vi.fn(),
+    },
+    plugin: {
+      getLocale: () => 'zh-CN',
+      feature: {
+        clearItems: async () => {
+          state.items.length = 0
         },
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
+        pushItems: async (items: Array<Record<string, unknown>>) => {
+          state.items.push(...items)
         },
       },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
+      storage: {
+        getFile: async (name: string) => state.files.get(name) ?? null,
+        setFile: async (name: string, value: unknown) => {
+          state.files.set(name, value)
+        },
+      },
+      browser: {
+        list: async () => ({
+          operation: 'list',
+          status: 'available',
+          defaultAvailable: true,
+          browsers: [{ id: 'chrome', name: 'Chrome', token }],
+        }),
+        open: async (url: string, browserToken?: string) => {
+          state.opens.push({ url, ...(browserToken ? { token: browserToken } : {}) })
+          return { operation: 'open', status: 'completed' }
+        },
+      },
+    },
+  })
+  const module = loadPluginModule<Record<string, (...args: any[]) => Promise<any>>>(pluginUrl, globals)
+  const action = (id: string) =>
+    state.items.find(item => item.actions?.some((entry: { id?: string }) => entry.id === id))
+  return { action, module, state, token }
+}
 
-    await pluginModule.onFeatureTriggered('search-engine-bing', 'bing tuff app', null, new AbortController().signal)
-
-    expect(items.map(item => item.title)).toEqual([
-      'Bing 搜索：tuff app',
-      '搜索建议不可用',
-    ])
+describe('isolated browser-open Prelude', () => {
+  it('contains no privileged child imports or production test export', () => {
+    const source = readFileSync(pluginUrl, 'utf8')
+    for (const pattern of [
+      /\b__test\b/,
+      /\brequire\s*\(/,
+      /\bfetch\s*\(/,
+      /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+      /\bnode:(?:fs|child_process|sqlite|worker_threads)\b/,
+      /\belectron\b/,
+    ]) {
+      expect(source).not.toMatch(pattern)
+    }
   })
 
-  it('does not replace current direct item when suggestion request is aborted', async () => {
-    const items: Array<{ title?: string }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch: vi.fn(async () => ({
-        ok: true,
-        json: async () => ['tuff', ['old suggestion']],
-      })),
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput: vi.fn(),
-        },
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
+  it('publishes token-only browser actions and persists display metadata only', async () => {
+    const harness = createHarness()
+    await harness.module.onFeatureTriggered('browser-open', 'example.com')
+    const item = harness.action('open-browser')
+    expect(item.actions[0].payload).toEqual({
+      url: 'https://example.com/',
+      browserToken: harness.token,
     })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-    const controller = new AbortController()
-    controller.abort()
+    expect(JSON.stringify(harness.state.items)).not.toMatch(/target|executable|Applications/i)
 
-    await pluginModule.onFeatureTriggered('search-engine-google', 'google tuff app', null, controller.signal)
-
-    expect(items.map(item => item.title)).toEqual(['Google 搜索：tuff app'])
+    await harness.module.onItemAction(item, { actionId: 'open-browser' })
+    expect(harness.state.opens).toEqual([{ url: 'https://example.com/', token: harness.token }])
+    const recent = harness.state.files.get('recent-browsers.json') as {
+      items: Array<Record<string, unknown>>
+    }
+    expect(recent.items[0]).toMatchObject({ id: 'chrome', name: 'Chrome' })
+    expect(recent.items[0]).not.toHaveProperty('token')
+    expect(recent.items[0]).not.toHaveProperty('target')
   })
 
-  it('keeps engine mode as search suggestions while input looks like a domain', async () => {
-    const items: Array<{ title?: string, meta?: any, render?: any }> = []
-    const setInput = vi.fn()
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch: vi.fn(async () => ({
-        ok: true,
-        json: async () => ['example.com', ['example.com pricing', 'example.com login']],
-      })),
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput,
-          hide: vi.fn(),
-        },
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string, meta?: any, render?: any }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎', null, new AbortController().signal)
-    setInput.mockClear()
-    await pluginModule.onFeatureTriggered('search-engine-google', 'example.com', null, new AbortController().signal)
-
-    expect(setInput).not.toHaveBeenCalled()
-    expect(items.map(item => item.title)).toEqual([
-      'Google 搜索：example.com',
-      'example.com pricing',
-      'example.com login',
-    ])
-    expect(items.every(item => item.meta?.actionId === 'search-web')).toBe(true)
-    expect(items.map(item => item.render?.completion)).toEqual([
-      'example.com',
-      'example.com pricing',
-      'example.com login',
-    ])
+  it('uses typed HTTP for bounded suggestions and default browser for search', async () => {
+    const harness = createHarness()
+    await harness.module.onFeatureTriggered('search-engine-google', 'google tuff', null, new AbortController().signal)
+    expect(harness.state.http).toHaveLength(1)
+    expect(harness.state.items.map(item => item.title)).toEqual(['Google 搜索：tuff', 'tuff app', 'tuff plugin'])
+    const direct = harness.action('search-web')
+    await harness.module.onItemAction(direct, { actionId: 'search-web' })
+    expect(harness.state.opens).toEqual([{ url: 'https://www.google.com/search?q=tuff' }])
   })
 
-  it('aborts stale suggestion requests when engine input changes quickly', async () => {
-    const items: Array<{ title?: string }> = []
-    const firstFetch = new Promise((_resolve, reject) => {
-      setTimeout(() => reject(new Error('stale request should be aborted')), 20)
+  it('rejects target-bearing and credential-bearing actions before opening', async () => {
+    const harness = createHarness()
+    await harness.module.onFeatureTriggered('browser-open', 'example.com')
+    const item = harness.action('default-open')
+    item.actions[0].payload = {
+      url: 'https://user:secret@example.com',
+      path: '/Applications/Calculator.app',
+    }
+
+    await expect(harness.module.onItemAction(item, { actionId: 'default-open' })).resolves.toMatchObject({
+      status: 'blocked',
+      reason: 'invalid-action',
     })
-    const fetch = vi
-      .fn()
-      .mockImplementationOnce(async () => ({
-        ok: true,
-        json: async () => ['start', []],
-      }))
-      .mockImplementationOnce(async (_url, init) => {
-        init.signal.addEventListener('abort', () => {})
-        return firstFetch
-      })
-      .mockImplementationOnce(async () => ({
-        ok: true,
-        json: async () => ['new', ['new suggestion']],
-      }))
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch,
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput: vi.fn(),
-          hide: vi.fn(),
-        },
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onFeatureTriggered('search-engine-google', 'Google 搜索引擎 start', null, new AbortController().signal)
-    const oldRefresh = pluginModule.onFeatureTriggered('search-engine-google', 'old', null, new AbortController().signal)
-    const newRefresh = pluginModule.onFeatureTriggered('search-engine-google', 'new', null, new AbortController().signal)
-
-    await vi.waitFor(() => {
-      expect(items.map(item => item.title)).toEqual([
-        'Google 搜索：new',
-        'new suggestion',
-      ])
-    })
-    await Promise.all([oldRefresh, newRefresh])
-    expect(items.map(item => item.title)).not.toContain('搜索建议不可用')
-  })
-
-  it('clears stale suggestions immediately when active query changes', async () => {
-    const items: Array<{ title?: string }> = []
-    let releaseFirstFetch: ((value: unknown) => void) | null = null
-    const fetch = vi
-      .fn()
-      .mockImplementationOnce(async () => new Promise((resolve) => {
-        releaseFirstFetch = resolve
-      }))
-      .mockImplementationOnce(async () => ({
-        ok: true,
-        json: async () => ['github 有道翻译', ['github 有道翻译 api']],
-      }))
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch,
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput: vi.fn(),
-          hide: vi.fn(),
-        },
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    const staleRefresh = pluginModule.onFeatureTriggered('search-engine-google', '有道翻译', null, new AbortController().signal)
-    await vi.waitFor(() => {
-      expect(items.map(item => item.title)).toEqual(['Google 搜索：有道翻译'])
-    })
-
-    const currentRefresh = pluginModule.onFeatureTriggered('search-engine-google', 'github 有道翻译', null, new AbortController().signal)
-    expect(items.map(item => item.title)).toEqual(['Google 搜索：github 有道翻译'])
-    releaseFirstFetch?.({
-      ok: true,
-      json: async () => ['有道翻译', ['有道翻译 官网']],
-    })
-    await Promise.all([staleRefresh, currentRefresh])
-
-    expect(items.map(item => item.title)).toEqual([
-      'Google 搜索：github 有道翻译',
-      'github 有道翻译 api',
-    ])
-  })
-
-  it('clears stale suggestions and shows engine empty state for empty active query', async () => {
-    const items: Array<{ title?: string }> = []
-    const globals = createPluginGlobals({
-      TuffItemBuilder: FakeBuilder,
-      fetch: vi.fn(async () => ({
-        ok: true,
-        json: async () => ['有道翻译', ['有道翻译 官网']],
-      })),
-      permission: {
-        check: async () => true,
-        request: async () => true,
-      },
-      plugin: {
-        box: {
-          showInput: vi.fn(),
-          allowInput: vi.fn(),
-          setInput: vi.fn(),
-          hide: vi.fn(),
-        },
-        feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string }>) { items.push(...next) },
-        },
-        storage: {
-          async getFile() { return null },
-          async setFile() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(browserPluginUrl, globals)
-
-    await pluginModule.onFeatureTriggered('search-engine-google', '有道翻译', null, new AbortController().signal)
-    expect(items.map(item => item.title)).toEqual([
-      'Google 搜索：有道翻译',
-      '有道翻译 官网',
-    ])
-
-    await pluginModule.onFeatureTriggered('search-engine-google', '', null, new AbortController().signal)
-
-    expect(items.map(item => item.title)).toEqual(['Google 搜索'])
+    expect(harness.state.opens).toEqual([])
   })
 })

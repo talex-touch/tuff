@@ -1,45 +1,20 @@
 const assert = require('node:assert/strict')
-const { EventEmitter } = require('node:events')
 const fs = require('node:fs')
 const Module = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
 
-const pushedItems = []
-let requestCount = 0
+const state = {
+  features: [],
+  items: [],
+  systemCalls: [],
+  systemResult: { actionId: 'lock-screen', status: 'started' },
+}
 
-globalThis.plugin = {
-  feature: {
-    clearItems() {
-      pushedItems.length = 0
-    },
-    pushItems(items) {
-      pushedItems.push(...items)
-    },
-  },
-}
-globalThis.dialog = {
-  async showMessageBox() {
-    return { response: 1 }
-  },
-}
-globalThis.logger = {
-  error() {},
-  warn() {},
-}
-globalThis.features = {}
-globalThis.permission = {
-  async check() {
-    return true
-  },
-  async request() {
-    requestCount += 1
-    return true
-  },
-}
-globalThis.TuffItemBuilder = class {
+class FakeBuilder {
   constructor(id) {
-    this.item = { id, meta: {} }
+    this.item = { id }
+    this.basic = {}
   }
 
   setSource(type, id, name) {
@@ -48,232 +23,151 @@ globalThis.TuffItemBuilder = class {
   }
 
   setTitle(title) {
-    this.item.title = title
+    this.basic.title = title
     return this
   }
 
   setSubtitle(subtitle) {
-    this.item.subtitle = subtitle
+    this.basic.subtitle = subtitle
     return this
   }
 
   setIcon(icon) {
-    this.item.icon = icon
+    this.basic.icon = icon
     return this
   }
 
   setMeta(meta) {
-    this.item.meta = { ...this.item.meta, ...meta }
+    this.item.meta = meta
+    return this
+  }
+
+  createAndAddAction(id, type, label, payload) {
+    this.item.actions = [{ id, type, label, payload }]
     return this
   }
 
   build() {
-    return this.item
+    return { ...this.item, render: { mode: 'default', basic: this.basic } }
   }
 }
 
-function loadPluginModule() {
-  const filename = path.join(__dirname, 'index.js')
-  const source = fs.readFileSync(filename, 'utf8')
-  const loaded = new Module(filename, module)
-  loaded.filename = filename
-  loaded.paths = Module._nodeModulePaths(__dirname)
-  loaded._compile(source, filename)
-  return loaded.exports
+globalThis.plugin = {
+  feature: {
+    async clearItems() {
+      state.items = []
+    },
+    async pushItems(items) {
+      state.items = items
+    },
+  },
 }
-
-const pluginModule = loadPluginModule()
-const {
-  buildShellCapability,
-  formatShellStatusSubtitle,
-  resolveActions,
-  resolveActionForExecution,
-  resolveShellCapabilityState,
-  runActionWithGuards,
-  runShellCommand,
-  setSpawnShellCommandForTest,
-} = pluginModule.__test
-
-function createChild({ code = 0 } = {}) {
-  const child = new EventEmitter()
-  process.nextTick(() => child.emit('close', code))
-  return child
-}
-
-test.afterEach(() => {
-  pushedItems.length = 0
-  requestCount = 0
-  globalThis.permission.check = async () => true
-  globalThis.permission.request = async () => {
-    requestCount += 1
+globalThis.features = {
+  async addFeature(feature) {
+    state.features.push(feature)
     return true
-  }
-  globalThis.dialog.showMessageBox = async () => ({ response: 1 })
-  setSpawnShellCommandForTest(null)
+  },
+}
+globalThis.system = {
+  async runAction(actionId) {
+    state.systemCalls.push(actionId)
+    return state.systemResult
+  },
+}
+globalThis.platform = { platform: 'darwin', arch: 'arm64' }
+globalThis.logger = { error() {}, info() {} }
+globalThis.TuffItemBuilder = FakeBuilder
+
+const filename = path.join(__dirname, 'index.js')
+const source = fs.readFileSync(filename, 'utf8')
+const loaded = new Module(filename, module)
+loaded.filename = filename
+loaded.paths = Module._nodeModulePaths(__dirname)
+loaded._compile(source, filename)
+const pluginModule = loaded.exports
+
+test.beforeEach(() => {
+  state.items = []
+  state.systemCalls = []
+  state.systemResult = { actionId: 'lock-screen', status: 'started' }
 })
 
-test('buildShellCapability exposes shell audit metadata', () => {
-  const capability = buildShellCapability({
-    featureId: 'quick-actions',
-    actionId: 'shutdown',
-    commandKind: 'fixed-shell',
-    requiresConfirmation: true,
-    requiresAdmin: true,
-    platform: 'darwin',
-    status: 'permission-missing',
-    reason: 'system-shell-permission-required',
+test('production Prelude has no privileged or test-only child surface', () => {
+  for (const pattern of [
+    /\b__test\b/,
+    /\brequire\s*\(/,
+    /\bfetch\s*\(/,
+    /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+    /\bnode:(?:fs|child_process|sqlite|worker_threads)\b/,
+    /\bdialog\b/,
+    /\b(?:command|executable|args|cwd|env|url|script)\s*:/,
+  ]) {
+    assert.doesNotMatch(source, pattern)
+  }
+  assert.deepEqual(Object.keys(pluginModule).sort(), ['onDestroy', 'onFeatureTriggered', 'onInit', 'onItemAction'])
+})
+
+test('onInit awaits registration of all fixed display-only features', async () => {
+  await pluginModule.onInit()
+
+  assert.equal(state.features.length, 8)
+  assert.deepEqual(
+    state.features.map(feature => feature.id),
+    [
+      'quick-action-restart',
+      'quick-action-shutdown',
+      'quick-action-lock-screen',
+      'quick-action-mute-toggle',
+      'quick-action-focus-settings',
+      'quick-action-notification-settings',
+      'quick-action-sound-settings',
+      'quick-action-display-settings',
+    ],
+  )
+  assert.deepEqual(state.features[0].platform, {
+    win: { enable: false, arch: [], os: [] },
+    darwin: { enable: true, arch: [], os: [] },
+    linux: { enable: false, arch: [], os: [] },
   })
-
-  assert.equal(capability.id, 'system.shell')
-  assert.equal(capability.type, 'shell')
-  assert.equal(capability.permission, 'system.shell')
-  assert.equal(capability.status, 'permission-missing')
-  assert.equal(capability.reason, 'system-shell-permission-required')
-  assert.equal(capability.audit.pluginName, 'touch-quick-actions')
-  assert.equal(capability.audit.featureId, 'quick-actions')
-  assert.equal(capability.audit.actionId, 'shutdown')
-  assert.equal(capability.audit.commandKind, 'fixed-shell')
-  assert.equal(capability.audit.requiresConfirmation, true)
-  assert.equal(capability.audit.requiresAdmin, true)
-})
-
-test('resolveShellCapabilityState checks permission without requesting it', async () => {
-  setSpawnShellCommandForTest(() => createChild())
-  globalThis.permission.check = async (permissionId) => {
-    assert.equal(permissionId, 'system.shell')
-    return false
-  }
-
-  const state = await resolveShellCapabilityState('darwin')
-
-  assert.equal(state.status, 'permission-missing')
-  assert.equal(state.reason, 'system-shell-permission-required')
-  assert.equal(requestCount, 0)
-})
-
-test('formatShellStatusSubtitle keeps unsupported reason visible', () => {
   assert.equal(
-    formatShellStatusSubtitle({ status: 'unsupported', reason: 'safe-shell-unavailable' }),
-    '不可用 · safe-shell-unavailable',
+    state.features.some(feature => 'command' in feature),
+    false,
   )
 })
 
-test('runActionWithGuards blocks safe-shell unavailable before requesting permission', async () => {
-  const action = resolveActions('darwin').find(item => item.id === 'lock-screen')
+test('feature trigger publishes action IDs without command payloads', async () => {
+  await pluginModule.onFeatureTriggered('quick-actions', { text: '' })
 
-  const result = await runActionWithGuards(action)
-
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'safe-shell-unavailable')
-  assert.equal(requestCount, 0)
+  assert.equal(state.items.length, 5)
+  const firstAction = state.items[0].actions[0]
+  assert.equal(firstAction.id, 'run-action')
+  assert.equal(firstAction.payload.actionId, 'restart')
+  assert.equal(JSON.stringify(state.items).includes('command'), false)
 })
 
-test('runActionWithGuards blocks unsafe payload before requesting permission', async () => {
-  setSpawnShellCommandForTest(() => createChild())
+test('safe item action invokes only the fixed system action ID', async () => {
+  await pluginModule.onFeatureTriggered('quick-actions', { text: '锁屏' })
+  const item = state.items.find(entry => entry.actions?.[0]?.payload?.actionId === 'lock-screen')
+  assert.ok(item)
 
-  const result = await runActionWithGuards({
-    id: 'bad',
-    name: 'Bad',
-    command: 'echo ok\nrm -rf /',
-  })
+  const result = await pluginModule.onItemAction(item, { actionId: 'run-action' })
 
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'unsafe-command-payload')
-  assert.equal(requestCount, 0)
-})
-
-test('runActionWithGuards starts a safe-shell action', async () => {
-  const calls = []
-  setSpawnShellCommandForTest((command, options) => {
-    calls.push({ command, options })
-    return createChild()
-  })
-
-  const result = await runActionWithGuards({
-    id: 'lock-screen',
-    name: '锁定屏幕',
-    command: '  pmset displaysleepnow  ',
-  })
-
-  assert.equal(result.status, 'started')
-  assert.equal(calls.length, 1)
-  assert.equal(calls[0].command, 'pmset displaysleepnow')
-  assert.equal(calls[0].options.windowsHide, true)
-})
-
-test('resolveActionForExecution returns canonical action command from the platform allowlist', () => {
-  const action = resolveActionForExecution({
-    id: 'lock-screen',
-    name: '篡改动作',
-    command: 'echo injected',
-  }, 'darwin')
-
-  assert.equal(action.id, 'lock-screen')
-  assert.equal(action.command, 'pmset displaysleepnow')
-})
-
-test('runShellCommand reports non-zero exit as execution failure', async () => {
-  setSpawnShellCommandForTest(() => createChild({ code: 2 }))
-
-  await assert.rejects(
-    runShellCommand('pmset displaysleepnow'),
-    /command failed with code 2/,
-  )
-})
-
-test('onFeatureTriggered shows permission diagnostics without prompting', async () => {
-  setSpawnShellCommandForTest(() => createChild())
-  globalThis.permission.check = async () => false
-
-  const handled = await pluginModule.onFeatureTriggered('quick-actions', '')
-
-  assert.equal(handled, true)
-  assert.equal(requestCount, 0)
-  assert.equal(pushedItems.length, 1)
-  assert.equal(pushedItems[0].id, 'quick-actions-no-permission')
-  assert.equal(pushedItems[0].meta.capability.status, 'permission-missing')
-  assert.equal(pushedItems[0].meta.capability.reason, 'system-shell-permission-required')
-})
-
-test('onItemAction returns explicit blocked result for invalid action payload', async () => {
-  const result = await pluginModule.onItemAction({
-    meta: {
-      defaultAction: 'quick-actions',
-      actionId: 'run-action',
-      payload: {},
-    },
-  })
-
-  assert.equal(result.externalAction, true)
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'invalid-action')
-  assert.equal(result.success, false)
-})
-
-test('onItemAction ignores injected shell command and executes the canonical action', async () => {
-  const calls = []
-  setSpawnShellCommandForTest((command, options) => {
-    calls.push({ command, options })
-    return createChild()
-  })
-
-  const result = await pluginModule.onItemAction({
-    meta: {
-      defaultAction: 'quick-actions',
-      actionId: 'run-action',
-      payload: {
-        action: {
-          id: 'lock-screen',
-          name: '锁定屏幕',
-          command: 'echo injected',
-        },
-      },
-    },
-  })
-
-  assert.equal(result.externalAction, true)
+  assert.deepEqual(state.systemCalls, ['lock-screen'])
   assert.equal(result.status, 'started')
   assert.equal(result.success, true)
-  assert.equal(calls.length, 1)
-  assert.equal(calls[0].command, 'pmset displaysleepnow')
+})
+
+test('main-owned blocked status is preserved without local execution fallback', async () => {
+  state.systemResult = {
+    actionId: 'shutdown',
+    status: 'blocked',
+    reason: 'confirmation-denied',
+  }
+
+  const result = await pluginModule.onFeatureTriggered('quick-action-shutdown', { text: '' })
+
+  assert.deepEqual(state.systemCalls, ['shutdown'])
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'confirmation-denied')
+  assert.equal(result.success, false)
 })
