@@ -14,9 +14,11 @@
 
 Tuff (formerly TalexTouch) is a local-first, AI-native, extensible desktop command center. It helps you find applications and files, run commands, automate workflows, and connect governed AI providers from one keyboard-first surface.
 
-## Platform status
+## Release and platform status
 
-Preview artifacts are produced for macOS, Windows, and Linux. Capability maturity is not identical across platforms; unsupported or degraded paths must remain explicit and fail closed. See the [current stability plan](./docs/plan-prd/TODO.md) and [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
+The repository's stable baseline is `2.4.13`, resolved from the matching [root package manifest](./package.json) and [CoreApp package manifest](./apps/core-app/package.json). Consult [GitHub Releases](https://github.com/talex-touch/tuff/releases) for published artifacts.
+
+Preview artifacts are produced for macOS, Windows, and Linux. A stable source version does not imply identical capability maturity or complete OTA acceptance across platforms; unsupported or degraded paths must remain explicit and fail closed. See the [current stability plan](./docs/plan-prd/TODO.md) and [cross-platform audit](./.trellis/tasks/07-13-search-crossplatform-audit/prd.md).
 
 ## Highlights
 
@@ -50,7 +52,7 @@ Tuff integrates a variety of practical functions to make your desktop smarter an
 - **Extensible:** Supports custom plugins ("Capabilities") to extend its functionality.
 - **Direct preview calculation:** Inline arithmetic/unit/currency/time queries now render instant cards, including scientific constants, so results are copy-ready.
 - **Bring Your Own LLM:** Allows you to connect to your own private cloud or any self-hosted Large Language Model for ultimate privacy and control.
-- **Unified Download Center:** Centralized download management with progress tracking, resume support, and automatic updates.
+- **Unified Download Center:** Centralized download management with progress tracking and resume support.
 
 ## 🍀 Simple and Easy-to-Use Operations
 
@@ -81,6 +83,11 @@ This project is open-sourced under the **MIT License**.
 Please keep in mind that developers are under no obligation to solve your Issue even in this project, as well as open source and maintenance are based on the free time of developers.
 
 ## ❤️ Contribution
+
+### Development prerequisites
+
+- Runtime, dependency, and build-tool versions are authoritative in the [root package manifest](./package.json), [CoreApp package manifest](./apps/core-app/package.json), [workspace catalog](./pnpm-workspace.yaml), and [lockfile](./pnpm-lock.yaml).
+- Use Corepack and a Node.js version allowed by the root manifest; do not rely on version numbers copied into this README.
 
 #### [Click here to learn more](./.github/docs/contribution/CONTRIBUTING.md)
 
