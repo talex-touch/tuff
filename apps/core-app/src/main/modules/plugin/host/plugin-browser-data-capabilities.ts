@@ -3,7 +3,7 @@ import type { PluginSqliteQueryResult } from '../runtime/plugin-sqlite-worker-pr
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import { Buffer } from 'node:buffer'
 import { constants as fsConstants } from 'node:fs'
-import { lstat, mkdir, mkdtemp, open, readdir, realpath, rm, stat } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, open, opendir, realpath, rm, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { types as utilTypes } from 'node:util'
 import { PluginSqliteWorkerClient } from '../runtime/plugin-sqlite-worker-client'
@@ -163,7 +163,7 @@ const FIXED_QUERIES: Readonly<Record<PluginBrowserDataFixedQueryId, string>> = O
   'chromium-history': `
     SELECT url, title, last_visit_time AS rawVisit
     FROM urls
-    WHERE last_visit_time > 0
+    WHERE last_visit_time >= ? AND last_visit_time <= ?
     ORDER BY last_visit_time DESC
     LIMIT ${PLUGIN_BROWSER_DATA_MAX_ROWS_PER_PROFILE + 1}
   `
@@ -568,10 +568,21 @@ async function canonicalDirectory(
 
 async function boundedDirectoryEntries(directory: string, signal: AbortSignal) {
   assertSignal(signal)
-  const entries = await readdir(directory, { withFileTypes: true })
+  const handle = await opendir(directory)
+  const entries = []
+  try {
+    while (entries.length < 128) {
+      assertSignal(signal)
+      const entry = await handle.read()
+      if (!entry) break
+      entries.push(entry)
+    }
+  } finally {
+    await handle.close()
+  }
   assertSignal(signal)
   entries.sort((left, right) => left.name.localeCompare(right.name))
-  return entries.slice(0, 128)
+  return entries
 }
 
 function chromiumProfileName(name: string): boolean {
@@ -944,7 +955,11 @@ export function createPluginBrowserDataSqliteQuery(): PluginBrowserDataQuery {
       signal.addEventListener('abort', onAbort, { once: true })
       removeAbort = () => signal.removeEventListener('abort', onAbort)
     })
-    const query = client.query(FIXED_QUERIES[queryId], [])
+    const now = Date.now()
+    const query = client.query(FIXED_QUERIES[queryId], [
+      CHROMIUM_EPOCH_MICROS + (now - HISTORY_WINDOW_MS) * 1_000,
+      CHROMIUM_EPOCH_MICROS + now * 1_000
+    ])
     void query.catch(() => undefined)
     try {
       return await Promise.race([query, aborted])
@@ -1083,6 +1098,7 @@ export function createFixedPluginBrowserDataService(
         let succeeded = 0
         let failed = 0
         let sourceRecords = 0
+        let resultLimited = false
         let lastCode: PluginBrowserDataDiagnosticCode = 'BROWSER_DATA_OK'
         for (const file of files) {
           try {
@@ -1091,6 +1107,7 @@ export function createFixedPluginBrowserDataService(
             succeeded += 1
             for (const record of next) {
               if (records.length >= PLUGIN_BROWSER_DATA_MAX_RECORDS) {
+                resultLimited = true
                 lastCode = 'BROWSER_DATA_RESULT_LIMIT'
                 break
               }
@@ -1113,7 +1130,7 @@ export function createFixedPluginBrowserDataService(
           }
         }
         const status: PluginBrowserDataDiagnostic['status'] =
-          succeeded > 0 && failed > 0
+          succeeded > 0 && (failed > 0 || resultLimited)
             ? 'partial'
             : succeeded > 0
               ? 'available'
