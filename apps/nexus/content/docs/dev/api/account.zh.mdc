@@ -764,6 +764,6 @@ code: |
 
 ## 相关文档
 
-- [Intelligence API](./intelligence.zh.md) - AI 能力调用
-- [Storage API](./storage.zh.md) - 插件数据持久化
-- [Plugin Context](./plugin-context.zh.md) - 插件全局上下文
+- [Intelligence API](./intelligence.zh.mdc) - AI 能力调用
+- [Storage API](./storage.zh.mdc) - 插件数据持久化
+- [Plugin Context](./plugin-context.zh.mdc) - 插件全局上下文

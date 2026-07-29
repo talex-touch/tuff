@@ -192,7 +192,7 @@ Common codes include:
 
 ## Related documentation
 
-- [Plugin Context](./plugin-context.en.md)
-- [Permission SDK](./permission.en.md)
-- [Manifest Reference](../reference/manifest.en.md)
-- [Intelligence SDK](./intelligence.en.md)
+- [Plugin Context](./plugin-context.en.mdc)
+- [Permission SDK](./permission.en.mdc)
+- [Manifest Reference](../reference/manifest.en.mdc)
+- [Intelligence SDK](./intelligence.en.mdc)

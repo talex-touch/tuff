@@ -1,434 +1,95 @@
 # Contributing to TuffEx
 
-Thank you for your interest in contributing to TuffEx! We welcome all forms of contributions, from bug reports and feature requests to code contributions and documentation improvements.
+TuffEx is the Vue component source package used by CoreApp and Nexus.
+Contributions should stay within the monorepo's component, test, build, and
+documentation boundaries.
 
-## 🌟 Ways to Contribute
+## Prerequisites
 
-### 🐛 Bug Reports
-Found a bug? Help us improve by reporting it:
-- Use our [Bug Report Template](https://github.com/talex-touch/tuff/issues/new)
-- Provide clear reproduction steps
-- Include environment details (OS, browser, Vue version)
-- Add screenshots or videos if applicable
+Use the versions declared by the repository root:
 
-### 💡 Feature Requests
-Have an idea for a new feature?
-- Use our [Feature Request Template](https://github.com/talex-touch/tuff/issues/new)
-- Describe the use case and expected behavior
-- Consider the impact on existing functionality
-- Discuss in [GitHub Discussions](https://github.com/talex-touch/tuff/discussions) first for major features
+- Node.js `>=24.15.0`
+- pnpm `10.34.4`
+- Git
 
-### 📝 Documentation
-Help improve our documentation:
-- Fix typos and grammatical errors
-- Add missing examples or clarifications
-- Translate documentation to other languages
-- Improve API documentation
-
-### 🔧 Code Contributions
-Contribute to the codebase:
-- Fix bugs and issues
-- Implement new features
-- Improve performance
-- Add or improve tests
-- Refactor code for better maintainability
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-Before you begin, ensure you have the following installed:
-- **Node.js** (v18.0.0 or higher)
-- **pnpm** (v8.0.0 or higher, recommended)
-- **Git**
-
-### Development Setup
-
-1. **Fork the repository**
-   ```bash
-   # Fork the repo on GitHub, then clone your fork
-   git clone https://github.com/YOUR_USERNAME/talex-touch.git
-   cd talex-touch
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pnpm install
-   ```
-
-3. **Start component watch build**
-   ```bash
-   # Watch the UI source package
-   pnpm dev
-   ```
-
-4. **Preview documentation in Nexus**
-   ```bash
-   pnpm -C "../../apps/nexus" run dev
-   ```
-
-5. **Run tests**
-   ```bash
-   # Run all tests
-   pnpm test
-   
-   # Run tests in watch mode
-   pnpm test:watch
-   
-   # Generate coverage report
-   pnpm test:coverage
-   ```
-
-### Project Structure
-
-```
-talex-touch/
-├── packages/
-│   ├── components/          # Component source code
-│   │   ├── button/         # Individual component
-│   │   ├── avatar/
-│   │   └── ...
-│   ├── theme/              # Theme system
-│   ├── utils/              # Utility functions
-│   └── tuffex/             # Main package entry
-├── scripts/                # Package audit scripts
-├── tests/                  # Test files
-└── tools/                  # Development tools
-```
-
-## 📋 Development Guidelines
-
-### Code Style
-
-We use ESLint and Prettier to maintain consistent code style:
+Install dependencies from the repository root:
 
 ```bash
-# Check code style
-pnpm lint
-
-# Auto-fix style issues
-pnpm lint:fix
-
-# Format code
-pnpm format
+pnpm install --frozen-lockfile
 ```
 
-**Key conventions:**
-- Use TypeScript for all new code
-- Follow Vue 3 Composition API patterns
-- Use `<script setup>` syntax
-- Prefer named exports over default exports
-- Use kebab-case for component file names
-- Use PascalCase for component names
+## Source layout
 
-### Commit Messages
+- `packages/components/src/<component>/`: component source, styles, exports,
+  and colocated tests.
+- `packages/components/src/components.ts`: component export inventory.
+- `packages/utils/`: TuffEx utilities and shared helpers.
+- `packages/script/`: package build scripts.
+- `scripts/`: export, type, and package-size audits.
+- [Nexus component docs](../../apps/nexus/content/docs/dev/components/index.en.mdc):
+  public component documentation and examples.
 
-We follow [Conventional Commits](https://conventionalcommits.org/) specification:
+Use an existing component as the directory and naming template. The
+[button component guide](packages/components/src/button/README.md) is a tracked
+example with source, styles, tests, and design notes.
 
-```
-<type>[optional scope]: <description>
+## Development workflow
 
-[optional body]
+Run package checks from the repository root:
 
-[optional footer(s)]
-```
-
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation changes
-- `style`: Code style changes (formatting, etc.)
-- `refactor`: Code refactoring
-- `test`: Adding or updating tests
-- `chore`: Maintenance tasks
-
-**Examples:**
 ```bash
-feat(button): add ripple animation effect
-fix(avatar): resolve image loading issue
-docs: update installation guide
-test(slider): add unit tests for touch events
+pnpm -C "packages/tuffex" run lint
+pnpm -C "packages/tuffex" run typecheck
+pnpm -C "packages/tuffex" run test
+pnpm -C "packages/tuffex" run build
 ```
 
-### Component Development
+For a focused test during development:
 
-When creating a new component:
-
-1. **Create component directory**
-   ```
-   packages/components/your-component/
-   ├── src/
-   │   ├── your-component.vue
-   │   ├── your-component.ts
-   │   └── types.ts
-   ├── style/
-   │   └── index.scss
-   ├── __tests__/
-   │   └── your-component.test.ts
-   └── index.ts
-   ```
-
-2. **Follow naming conventions**
-   - Component name: `TxYourComponent`
-   - File name: `your-component.vue`
-   - Props interface: `YourComponentProps`
-
-3. **Include proper TypeScript types**
-   ```typescript
-   export interface YourComponentProps {
-     size?: 'small' | 'medium' | 'large'
-     disabled?: boolean
-     // ... other props
-   }
-   ```
-
-4. **Add comprehensive tests**
-   ```typescript
-   import { mount } from '@vue/test-utils'
-   import YourComponent from '../src/your-component.vue'
-   
-   describe('YourComponent', () => {
-     it('should render correctly', () => {
-       const wrapper = mount(YourComponent)
-       expect(wrapper.exists()).toBe(true)
-     })
-   })
-   ```
-
-5. **Document the component**
-   - Add JSDoc comments for props and methods
-   - Update the Nexus TuffEx docs/showcase when public usage changes
-   - Include usage examples in the Nexus content source
-
-### Testing
-
-We use Vitest for unit testing:
-
-**Test file naming:**
-- Unit tests: `*.test.ts`
-- Component tests: `*.spec.ts`
-
-**Testing guidelines:**
-- Write tests for all new features
-- Maintain or improve test coverage
-- Test both happy path and edge cases
-- Mock external dependencies
-- Use descriptive test names
-
-### Animation Guidelines
-
-TuffEx focuses on smooth, meaningful animations:
-
-**Performance:**
-- Use `transform` and `opacity` for animations
-- Avoid animating layout properties
-- Use `will-change` sparingly
-- Prefer CSS animations over JavaScript when possible
-
-**Timing:**
-- Use consistent easing curves
-- Default duration: 200-300ms for micro-interactions
-- Longer durations (400-600ms) for complex transitions
-- Respect `prefers-reduced-motion` setting
-
-**Implementation:**
-```scss
-.tx-component {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &:hover {
-    transform: translateY(-2px);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
-}
+```bash
+pnpm -C "packages/tuffex" exec vitest run "packages/components/src/button/__tests__/button.test.ts"
 ```
 
-## 🔄 Pull Request Process
+Public package changes should also run the relevant audits:
 
-### Before Submitting
+```bash
+pnpm -C "packages/tuffex" run audit:exports
+pnpm -C "packages/tuffex" run audit:types
+pnpm -C "packages/tuffex" run audit:size
+```
 
-1. **Create a feature branch**
-   ```bash
-   git checkout -b feat/your-feature-name
-   # or
-   git checkout -b fix/issue-description
-   ```
+Preview documentation through Nexus when public usage changes:
 
-2. **Make your changes**
-   - Follow the coding guidelines
-   - Add tests for new functionality
-   - Update documentation if needed
+```bash
+pnpm -C "apps/nexus" run dev
+```
 
-3. **Test your changes**
-   ```bash
-   # Run all tests
-   pnpm test
+## Component changes
 
-   # Check types
-   pnpm typecheck
+- Keep public component names in the established `Tx*` convention.
+- Add or update colocated Vitest coverage for behavior changes.
+- Preserve keyboard, focus, ARIA, and reduced-motion behavior.
+- Export public components and types through the owning entry and inventory.
+- Update the matching Nexus page when public usage or behavior changes.
+- Reuse an existing primitive when it can own the required behavior.
 
-   # Lint code
-   pnpm lint
+## Documentation changes
 
-   # Build the project
-   pnpm build
-   ```
+Keep package build guidance in [README.md](README.md) and public component usage
+in Nexus. Relative links must point to Git-tracked targets; do not create
+placeholder pages to satisfy navigation.
 
-4. **Commit your changes**
-   ```bash
-   git add .
-   git commit -m "feat(component): add new feature"
-   ```
+## Pull requests
 
-### Submitting the PR
+1. Read the
+   [repository contribution guide](../../.github/docs/contribution/CONTRIBUTING.md).
+2. Keep the change focused and use Conventional Commit syntax.
+3. Include the exact validation commands and results in the pull request.
+4. Use the
+   [English pull request template](../../.github/PULL_REQUEST_TEMPLATE/en.md)
+   or [Chinese template](../../.github/PULL_REQUEST_TEMPLATE/zh-CN.md).
+5. Report defects with the
+   [bug report template](../../.github/ISSUE_TEMPLATE/bug_report.md).
 
-1. **Push to your fork**
-   ```bash
-   git push origin feat/your-feature-name
-   ```
-
-2. **Create Pull Request**
-   - Use our [PR template](https://github.com/talex-touch/tuff/tree/master/.github/PULL_REQUEST_TEMPLATE)
-   - Provide clear description of changes
-   - Link related issues
-   - Add screenshots for UI changes
-   - Mark as draft if work in progress
-
-3. **PR Requirements**
-   - ✅ All tests pass
-   - ✅ Code coverage maintained or improved
-   - ✅ No TypeScript errors
-   - ✅ Documentation updated
-   - ✅ Follows coding standards
-
-### Review Process
-
-1. **Automated Checks**
-   - CI/CD pipeline runs tests
-   - Code quality checks
-   - Build verification
-
-2. **Code Review**
-   - At least one maintainer review required
-   - Address feedback promptly
-   - Keep discussions constructive
-
-3. **Merge**
-   - Squash and merge for feature branches
-   - Maintain clean commit history
-
-## 🏗️ Release Process
-
-### Versioning
-
-We follow [Semantic Versioning](https://semver.org/):
-- **MAJOR**: Breaking changes
-- **MINOR**: New features (backward compatible)
-- **PATCH**: Bug fixes (backward compatible)
-
-### Release Workflow
-
-1. **Automated Releases**
-   - Publishing to npm is triggered by a version bump in `packages/tuffex/package.json` on `main`
-   - The publish workflow builds the package before releasing
-
-2. **Manual Release Steps** (for maintainers)
-   ```bash
-   # Update version (semver)
-   # Edit packages/tuffex/package.json
-
-   # Build
-   pnpm -C packages/tuffex run build
-
-   # Publish (fallback)
-   cd packages/tuffex && npm publish --access public
-   ```
-
-## 🎯 Component Design Principles
-
-### Accessibility First
-- Follow WCAG 2.1 AA guidelines
-- Support keyboard navigation
-- Provide proper ARIA attributes
-- Test with screen readers
-
-### Performance Focused
-- Minimize bundle size impact
-- Optimize for tree shaking
-- Use efficient rendering patterns
-- Profile animation performance
-
-### Developer Experience
-- Intuitive API design
-- Comprehensive TypeScript support
-- Clear error messages
-- Extensive documentation
-
-### Design System Consistency
-- Follow design tokens
-- Maintain visual consistency
-- Support theming
-- Responsive by default
-
-## 🤝 Community Guidelines
-
-### Code of Conduct
-
-We are committed to providing a welcoming and inclusive environment. Please read our [Code of Conduct](CODE_OF_CONDUCT.md).
-
-### Communication
-
-- **GitHub Issues**: Bug reports and feature requests
-- **GitHub Discussions**: General questions and ideas
-- **Discord**: Real-time community chat
-- **Email**: security@talex.cn for security issues
-
-### Recognition
-
-Contributors are recognized in:
-- README contributors section
-- Release notes
-- Annual contributor highlights
-- Special badges for significant contributions
-
-## 📚 Resources
-
-### Documentation
-- [Component API Reference](https://tuffex.tagzxia.com/docs/dev/tuffex/components)
-- [Design Guidelines](https://tuffex.tagzxia.com/docs/dev/tuffex/design)
-- [Theme Customization](https://tuffex.tagzxia.com/docs/dev/tuffex/guide/theming)
-
-### Development Tools
-- [VSCode Extension](https://marketplace.visualstudio.com/items?itemName=talex-touch.touchx-ui)
-- [Figma Design Kit](https://figma.com/@touchx-ui)
-- [CLI Tool](https://www.npmjs.com/package/@talex-touch/touchx-cli)
-
-### Learning Resources
-- [Vue 3 Documentation](https://vuejs.org/)
-- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [Vitest Documentation](https://vitest.dev/)
-
-## ❓ Getting Help
-
-Need help? Here's how to get support:
-
-1. **Check existing resources**
-   - Search [GitHub Issues](https://github.com/talex-touch/tuff/issues)
-   - Browse [Documentation](https://tuffex.tagzxia.com/docs/dev/tuffex)
-   - Read [FAQ](https://tuffex.tagzxia.com/docs/dev/tuffex/guide/faq)
-
-2. **Ask the community**
-   - [GitHub Discussions](https://github.com/talex-touch/tuff/discussions)
-   - [Discord Server](https://discord.gg/touchx-ui)
-
-3. **Report issues**
-   - Use appropriate issue templates
-   - Provide minimal reproduction
-   - Include environment details
-
----
-
-Thank you for contributing to TuffEx! Together, we're building the future of tactile web interfaces.
+Do not publish packages from a contribution branch. Package releases and
+registry credentials remain maintainer-owned workflows.

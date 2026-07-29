@@ -5,21 +5,21 @@ This catalog is used in onboarding: each built-in plugin has its own page so use
 ## Pages
 | Plugin | Feature ID | Doc |
 | --- | --- | --- |
-| Browser Open | `browser.open` | [Read](./browser-open.en.md) |
-| Browser Bookmarks | `browser.bookmarks` | [Read](./browser-bookmarks.en.md) |
-| Intelligence Ask | `intelligence.ask` | [Read](./intelligence.en.md) |
-| Translation | `touch-translate` | [Read](./translation.en.md) |
-| Code Snippets | `code-snippets.search` | [Read](./code-snippets.en.md) |
-| Text Snippets | `text-snippets.search` | [Read](./text-snippets.en.md) |
-| Batch Rename | `batch-rename` | [Read](./batch-rename.en.md) |
-| Workspace Scripts | `workspace.scripts` | [Read](./workspace-scripts.en.md) |
-| Dev Toolbox | `dev-toolbox` | [Read](./dev-toolbox.en.md) |
-| Dev Utils | `dev-utils` | [Read](./dev-utils.en.md) |
-| Window Manager | `window.app` | [Read](./window-manager.en.md) |
-| Window Presets | `window.presets` | [Read](./window-presets.en.md) |
-| System Actions | `system.actions` | [Read](./system-actions.en.md) |
-| Quick Actions | `quick.actions` | [Read](./quick-actions.en.md) |
+| Browser Open | `browser.open` | [Read](./browser-open.en.mdc) |
+| Browser Bookmarks | `browser.bookmarks` | [Read](./browser-bookmarks.en.mdc) |
+| Intelligence Ask | `intelligence.ask` | [Read](./intelligence.en.mdc) |
+| Translation | `touch-translate` | [Read](./translation.en.mdc) |
+| Code Snippets | `code-snippets.search` | [Read](./code-snippets.en.mdc) |
+| Text Snippets | `text-snippets.search` | [Read](./text-snippets.en.mdc) |
+| Batch Rename | `batch-rename` | [Read](./batch-rename.en.mdc) |
+| Workspace Scripts | `workspace.scripts` | [Read](./workspace-scripts.en.mdc) |
+| Dev Toolbox | `dev-toolbox` | [Read](./dev-toolbox.en.mdc) |
+| Dev Utils | `dev-utils` | [Read](./dev-utils.en.mdc) |
+| Window Manager | `window.app` | [Read](./window-manager.en.mdc) |
+| Window Presets | `window.presets` | [Read](./window-presets.en.mdc) |
+| System Actions | `system.actions` | [Read](./system-actions.en.mdc) |
+| Quick Actions | `quick.actions` | [Read](./quick-actions.en.mdc) |
 
 ## Suggested Reading
-- Start with [Recommended Plugin Bundles](../recommended-plugins.en.md).
+- Start with [Recommended Plugin Bundles](../recommended-plugins.en.mdc).
 - Then open individual plugin pages as needed.

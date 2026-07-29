@@ -152,7 +152,7 @@ code: |
 ---
 :::
 
-Do not store provider credentials in the command, prompt variables, plugin storage, or logs. See [Intelligence SDK](../api/intelligence.en.md) for the typed contract.
+Do not store provider credentials in the command, prompt variables, plugin storage, or logs. See [Intelligence SDK](../api/intelligence.en.mdc) for the typed contract.
 
 ## 4. Secure Plugin Views
 
@@ -210,9 +210,9 @@ When a plugin supports both sync and sharing, keep sync data, share data, and im
 
 ## Related Docs
 
-- [Quickstart](./quickstart.en.md)
-- [Manifest Reference](../reference/manifest.en.md)
-- [Plugin Context](../api/plugin-context.en.md)
-- [Storage API](../api/storage.en.md)
-- [Cloud Sync SDK](../extensions/cloud-sync.en.md)
-- [Publish Flow](../release/publish.en.md)
+- [Quickstart](./quickstart.en.mdc)
+- [Manifest Reference](../reference/manifest.en.mdc)
+- [Plugin Context](../api/plugin-context.en.mdc)
+- [Storage API](../api/storage.en.mdc)
+- [Cloud Sync SDK](../extensions/cloud-sync.en.mdc)
+- [Release and Download](../release/index.en.md)

@@ -3,7 +3,7 @@
   "name": "peripheral-docs-cleanup",
   "title": "Repair peripheral product documentation",
   "description": "Fix broken tracked product-document relative links and refresh CoreApp, Search, Nexus, DivisionBox, download API, and TuffEx documentation without overlapping root README ownership.",
-  "status": "planning",
+  "status": "completed",
   "dev_type": null,
   "scope": "documentation",
   "package": null,
@@ -11,12 +11,12 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-27",
-  "completedAt": null,
+  "completedAt": "2026-07-28",
   "branch": "TalexDreamSoul/peripheral-docs-cleanup",
-  "base_branch": "master",
+  "base_branch": "TalexDreamSoul/docs-remediation-plan",
   "worktree_path": null,
-  "commit": null,
-  "pr_url": null,
+  "commit": "934b998cca91fca06a6ec5f94663293b79703aec",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/356",
   "subtasks": [],
   "children": [],
   "parent": "07-27-converge-project-documentation-gates",
@@ -28,10 +28,5 @@
     "apps/nexus/examples/division-box/README.md",
     "packages/tuffex/CONTRIBUTING.md"
   ],
-  "notes": "Batch C excludes README.md and README.zh-CN.md, which belong to Batch B, and creates no placeholder documents to satisfy links.",
-  "meta": {
-    "nextAction": "Enumerate Git-tracked product documentation and produce a deterministic broken-relative-link inventory for the named surfaces.",
-    "blocker": "The planning PR must be available; root README findings must be routed to Batch B instead of edited here.",
-    "evidence": "prd.md acceptance criteria, tracked-link inventory, changed-Markdown validation, and the final owned-path diff."
-  }
+  "notes": "Batch C excludes README.md and README.zh-CN.md, which belong to Batch B, and creates no placeholder documents to satisfy links."
 }

@@ -1,7 +1,7 @@
 # Channel API（已退役）
 
 ::alert{type="warning"}
-**新开发已退役：** 本页只用于识别迁移期旧 Channel 代码。当前插件必须使用 [TuffTransport](./transport.zh.md)，以及 [Box SDK](./box.zh.md)、[Clipboard SDK](./clipboard.zh.md)、[Bridge Hooks](./bridge-hooks.zh.md) 等领域 SDK。
+**新开发已退役：** 本页只用于识别迁移期旧 Channel 代码。当前插件必须使用 [TuffTransport](./transport.zh.mdc)，以及 [Box SDK](./box.zh.mdc)、[Clipboard SDK](./clipboard.zh.mdc)、[Bridge Hooks](./bridge-hooks.zh.mdc) 等领域 SDK。
 ::
 
 ## 当前契约

@@ -592,5 +592,5 @@
 
 ## 延伸阅读
 
-- **[IPC 事件处理器索引（函数级）](./ipc-events-handlers.zh.md)** — 从事件名定位到具体处理方法。
-- **[SDK -> 事件 -> 处理器索引](./ipc-events-sdk-map.zh.md)** — SDK 调用链与内部/私有 transport 映射。
+- **[IPC 事件处理器索引（函数级）](./ipc-events-handlers.zh.mdc)** — 从事件名定位到具体处理方法。
+- **[SDK -> 事件 -> 处理器索引](./ipc-events-sdk-map.zh.mdc)** — SDK 调用链与内部/私有 transport 映射。

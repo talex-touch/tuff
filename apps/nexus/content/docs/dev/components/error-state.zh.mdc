@@ -69,7 +69,7 @@ code: |
 
 ## API
 
-`TxErrorState` 继承 `TxEmptyState` 除 `variant` 之外的全部 props；`variant` 始终强制为 `error`。完整基础组件契约见 [EmptyState](./empty-state.zh.md)。
+`TxErrorState` 继承 `TxEmptyState` 除 `variant` 之外的全部 props；`variant` 始终强制为 `error`。完整基础组件契约见 [EmptyState](./empty-state.zh.mdc)。
 
 ### Props
 
