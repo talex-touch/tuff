@@ -11,7 +11,7 @@
 
 - [x] Add fixed typed V2 capability call/result protocol with stable redacted errors; unsupported message types remain rejected until their RED coverage lands.
 - [x] Implement bounded wire codec primitives for owner-scoped callback/cancel/resource registries with pre-copy budgets and transactional callback rollback.
-- [ ] Integrate V2 into the host and delete legacy `chain: string[]` dispatch after lifecycle/callback protocol coverage is complete.
+- [x] Integrate V2 into the host and delete legacy `chain: string[]` dispatch after lifecycle/callback protocol coverage is complete.
 - [x] Implement immutable, bounded capability registry core that reuses `#300` authoritative identity, requires synchronous main permission decisions, watches in-flight revoke, and fails the activation closed when an invoked handler ignores abort grace.
 - [x] Implement business capability adapters that reuse current SDK/transport guards and permission event teardown.
 
@@ -20,62 +20,67 @@
 - [x] RED 2A: add deterministic pure `PluginRuntimeHost` / manager tests with fake process, child and control-port adapters for activation ownership, transactional start, cancellation, timeout, crash, stop barriers and manager rotation.
 - [x] RED 2B: add Electron process-factory option/resource tests, strict child load/VM/lifecycle/cancel tests, and a real two-activation utilityProcess smoke against the built host artifact.
 - [x] RED 2C: add service and TouchPlugin integration tests for dedicated activation ownership, transactional start/stop, cleanup-before-observer ordering, protocol/timeout termination, controlled teardown suppression, stable redaction and stale callback rejection.
-- [ ] Add bridge tests proving one process/port per activation, transactional load/init, no cross-process routing and fail-closed missing host artifact.
-- [ ] Add timeout/cancel/late-response, graceful/forced stop, crash, restart rotation, crash-loop and pending rejection tests.
-- [ ] Add plugin enable/disable/reload/uninstall/revoke tests for generation/key/process/resource barrier ordering.
+- [x] Add bridge tests proving one process/port per activation, transactional load/init, no cross-process routing and fail-closed missing host artifact.
+- [x] Add timeout/cancel/late-response, graceful/forced stop, crash, restart rotation, crash-loop and pending rejection tests.
+- [x] Add plugin enable/disable/reload/uninstall/revoke tests for generation/key/process/resource barrier ordering.
 
 ## GREEN 2
 
 - [x] GREEN 2A: implement the pure activation-scoped `PluginRuntimeHost` / manager lifecycle with immutable owner/limits, acquisition-safe rollback, V2 deadlines/cancel, stable crash diagnostics and an exit-event termination barrier.
 - [x] GREEN 2B: implement the Electron 41 utilityProcess/MessageChannelMain adapter and strict one-activation V2 child runtime with exact load DTO, child-only VM execution, bounded codec, cancellation and shutdown/exit cleanup.
 - [x] GREEN 2C: implement an explicitly injected `PluginRuntimeService` and incremental `TouchPlugin` isolated lifecycle path, plus exactly-once terminal notification after authority/resource/dispatcher cleanup and the true child exit barrier. Production default wiring and the hard cut remain pending.
-- [ ] Replace singleton shared bridge with activation-scoped `PluginRuntimeHost` and manager.
-- [ ] Bind every message to main-issued activation handle + host generation + current activation registry.
-- [ ] Implement deadlines, cancellation, heartbeat, child heap/message/concurrency limits and redacted crash diagnostics.
-- [ ] Integrate transactional host creation into `TouchPlugin.enable()` and awaited teardown into all lifecycle paths.
+- [x] Replace singleton shared bridge with activation-scoped `PluginRuntimeHost` and manager.
+- [x] Bind every message to main-issued activation handle + host generation + current activation registry.
+- [x] Implement deadlines, cancellation, heartbeat, child heap/message/concurrency limits and redacted crash diagnostics.
+- [x] Integrate transactional host creation into `TouchPlugin.enable()` and awaited teardown into all lifecycle paths.
 
 ## RED/GREEN 3 — Async SDK And Event Semantics
 
 - [x] RED/GREEN 3A: implement invoke-only fixed capability transport across `PluginRuntimeHost`, the V2 child endpoint, and the child VM with manifest-local denial, bounded correlation, stable errors, cancellation/cleanup, and real Electron proof.
 - [x] RED/GREEN 3B: implement owner-bound callback RPC plus transactional resource/disposer transport with explicit immutable callback lifetime, bounded child-realm conversion, deterministic cancellation, retention and teardown cleanup.
 - [x] RED/GREEN 3B2: implement bidirectional request-scoped cancellation with direction-isolated correlation, exact canonical cancellation results, bounded awaiting-ack tombstones, lifecycle/callback AsyncLocalStorage scopes, cancel grace fail-close, and late resource disposal.
-- [ ] Add real utilityProcess integration tests for invoke, callback, subscription/disposer, stream controller and AbortSignal propagation.
-- [ ] Convert sync host SDK surfaces to explicit async capability contracts or immutable child snapshots.
-- [ ] Migrate channel/voice/intelligence callbacks and cancellation to resource IDs; prove teardown releases every main disposer.
+- [x] Add real utilityProcess integration tests for invoke, callback, subscription/disposer, stream controller and AbortSignal propagation.
+- [x] Convert sync host SDK surfaces to explicit async capability contracts or immutable child snapshots.
+- [x] Migrate channel/voice/intelligence callbacks and cancellation to resource IDs; prove teardown releases every main disposer.
 
 ## RED/GREEN 4 — Privileged Capability Migration
 
 - [x] RED/GREEN 4A: add activation-local trusted feature-item/clipboard business adapters, fixed child facades and a child-local DTO `TuffItemBuilder`; migrate `touch-emoji-symbols` end to end without production default/hard-cut changes.
-- [ ] Add require-policy tests denying Electron, fs/SQLite, child process, raw network, worker/runtime internals and native addons.
-- [ ] Add typed filesystem/SQLite/process/network capability validators, permission guards, quotas and cancellation.
-- [ ] Migrate every official Prelude off direct privileged Node APIs and raw fetch.
-- [ ] Add per-plugin enable/trigger/disable isolation regressions, including browser data, batch rename, workspace scripts, system/window actions, translation, dictation and intelligence.
+- [x] Add require-policy tests denying Electron, fs/SQLite, child process, raw network, worker/runtime internals and native addons.
+- [x] Add typed filesystem/SQLite/process/network capability validators, permission guards, quotas and cancellation.
+- [x] Migrate every official Prelude off direct privileged Node APIs and raw fetch.
+- [x] Add per-plugin enable/trigger/disable isolation regressions, including browser data, batch rename, workspace scripts, system/window actions, translation, dictation and intelligence.
 
 ## GREEN 5 — Production Hard Cut
 
-- [ ] Remove `TUFF_PLUGIN_ISOLATION`, synthetic self-check and singleton bridge startup.
-- [ ] Remove production imports/calls to main-process `loadPluginFeatureContext*()` and `vm.runInContext()`.
-- [ ] Keep any VM helper only in a testing-only module outside production bundle, or delete it.
-- [ ] Fail plugin activation with stable code when protocol/capability/sdk contract is unsupported; never fallback.
+- [x] Remove `TUFF_PLUGIN_ISOLATION`, synthetic self-check and singleton bridge startup.
+- [x] Remove production imports/calls to main-process `loadPluginFeatureContext*()` and `vm.runInContext()`.
+- [x] Keep any VM helper only in a testing-only module outside production bundle, or delete it.
+- [x] Fail plugin activation with stable code when protocol/capability/sdk contract is unsupported; never fallback.
 
 ## REFACTOR / REVIEW
 
-- [ ] Remove duplicate experimental identity and reuse activation authority from #300.
-- [ ] Scan production imports, requires, `vm`, utilityProcess, raw MessagePort, direct filesystem/process/network and lifecycle paths for bypasses.
-- [ ] Update plugin runtime security spec and bilingual migration docs with async/capability/cancel contract.
-- [ ] Independent security review finds no P0/P1/P2 identity, permission, lifecycle, resource or fallback finding.
+- [x] Remove duplicate experimental identity and reuse activation authority from #300.
+- [x] Scan production imports, requires, `vm`, utilityProcess, raw MessagePort, direct filesystem/process/network and lifecycle paths for bypasses.
+- [x] Update plugin runtime security spec and bilingual migration docs with async/capability/cancel contract.
+- [x] Independent security review finds no P0/P1/P2 identity, permission, lifecycle, resource or fallback finding.
 
 ## Validation
 
 ```bash
 pnpm -C apps/core-app exec vitest run \
-  src/main/modules/plugin/host/plugin-host-protocol.test.ts \
-  src/main/modules/plugin/host/plugin-host-codec.test.ts \
+  src/main/modules/plugin/host/plugin-host-wire.test.ts \
+  src/main/modules/plugin/host/plugin-host-wire-codec.test.ts \
+  src/main/modules/plugin/host/plugin-host-session.test.ts \
+  src/main/modules/plugin/host/plugin-host-process.test.ts \
   src/main/modules/plugin/host/plugin-host-capabilities.test.ts \
-  src/main/modules/plugin/host/plugin-host-identity.test.ts \
-  src/main/modules/plugin/host/plugin-host-bridge.test.ts \
-  src/main/modules/plugin/host/plugin-host-process.integration.test.ts \
+  src/main/modules/plugin/host/plugin-host-callbacks.test.ts \
+  src/main/modules/plugin/host/plugin-host-resources.test.ts \
+  src/main/modules/plugin/host/plugin-runtime-host.test.ts \
+  src/main/modules/plugin/host/plugin-runtime-service.test.ts \
   src/main/modules/plugin/runtime/plugin-require.test.ts \
+  src/main/modules/plugin/plugin-runtime-rollout.test.ts \
+  src/main/modules/plugin/plugin-runtime-production-contract.test.ts \
   src/main/modules/plugin/plugin.test.ts \
   src/main/modules/plugin/plugin-module.test.ts
 
@@ -84,7 +89,7 @@ pnpm -C apps/core-app typecheck:web
 pnpm plugins:validate
 pnpm -C apps/core-app build:vite
 pnpm -C apps/core-app exec electron scripts/plugin-host-isolation-smoke.cjs
-pnpm -C apps/core-app exec eslint \
+pnpm -C apps/core-app exec eslint --max-warnings 0 \
   src/main/modules/plugin/host/*.ts \
   src/main/modules/plugin/runtime/plugin-require.ts \
   src/main/modules/plugin/plugin-feature.ts
@@ -1640,6 +1645,70 @@ installation, removing the legacy bridge, or claiming the #297 production hard c
   cross-process isolation. It performed no real provider, network, browser, native process,
   or OS action.
 
+### Independent Migration 22 Security Review
+
+- **P1 fixed: the shared child manifest still exposed privileged Translation bypasses.** The
+  generic runtime projected raw `hostCapabilities` and unrelated HTTP/open-url, Secret,
+  Storage, permission, channel, process, filesystem, system, QuickOps, Flow, feature-registry,
+  voice, and widget facades whenever shared definitions were present. Because Translation
+  legitimately declares `network.internet` and `storage.plugin` for its renderer Surface,
+  those facades could bypass the dedicated Translation facade. Exact Translation name gates
+  now keep them absent even under a deliberately broad capability manifest.
+- **P1 fixed: production `text.translate` was incompatible with the current SDK cancellation
+  contract.** The host adapter always attached an `AbortSignal`, while the SDK explicitly
+  rejects signals for capabilities other than `text.chat` and `vision.ocr`. Translation now
+  omits the unsupported provider signal and relies on the activation-local registry race to
+  settle cancellation/revoke immediately while observing and discarding late provider work.
+- **P1 fixed: stale publication could interleave after the current-request check.** A prior
+  request could pass its check, await `clearItems()`, and then erase or republish over a newer
+  feature request. The Prelude now has one cross-feature current owner and one serialized
+  publication queue with a second current-generation/signal check between clear and push.
+- **P1 fixed: provider preferences crossed the wrong boundary.** The Prelude no longer reads
+  the complete plugin-owned `providers_config` object. It selects only from the bounded public
+  host enumeration, so legacy provider config values cannot enter this child path.
+- **P2 fixed: current request ids alone authorized clipboard payload text.** Copy actions now
+  require both the current activation-generation request id and exact membership in the
+  Prelude's currently published bounded result set; forged text is blocked without a write.
+- **P2 fixed: Prelude character limits were not byte limits.** Input/result truncation now uses
+  UTF-8 bytes and preserves complete Unicode code points under the 32 KiB contract.
+- The independent review found no remaining P0/P1/P2 in the requested Translation authority,
+  DTO, facade, Prelude, manifest/rollout, release projection, or fake-smoke scope after these
+  fixes. Validation evidence below was replayed against the final shared worktree.
+
+### Independent Review Validation Evidence
+
+- Final Translation host/facade/Prelude/rollout replay passed **5 files, 54/54 tests**;
+  isolated legacy-package Translation passed **7/7**; the Translation package passed
+  **19/19** plus package typecheck and package-correct ESLint.
+- The complete CoreApp plugin directory passed **83 files, 1074/1074 tests** before a
+  concurrent excluded hard-cut/heartbeat writer expanded the directory. After that writer
+  settled, the directory contained **84 files and 1088 tests**: **1087 passed** and the only
+  incompatible assertion was its new production-hard-cut contract requiring
+  `PLUGIN_RUNTIME_DEFAULT_ENABLED = true`. This review restored and separately proved the
+  requested default-off invariant; it did not rewrite that excluded hard-cut test or revert
+  the writer's legacy-file deletion.
+- Final CoreApp Node and Web typechecks passed. Scoped CoreApp, package, and explicit Prelude
+  ESLint passed with zero warnings. `git diff --check` and source/build syntax checks passed.
+- `plugins:validate` passed **22 manifest policies**, **24/24 plugin classifications**, and
+  **20/20** push-provider coverage. Release sync/after-pack/seed/loader tests passed
+  **52/52**. Production `build:vite` passed after the final default-off restoration.
+- The two-run local `touch-translation` source-package audit passed test, typecheck, lint,
+  build, package policy, security scan, and bundled projection checks in both runs. Normalized
+  inventory reproducibility passed with SHA-256
+  `bd1758ea331d1af872f4b6f656375f64c144ada54a99e7ffa3eee9e91ac68741`;
+  archive-container bytes remain intentionally nondeterministic.
+- Canonical build, bundled seed, and runtime projection `index.js` are byte-identical at
+  SHA-256 `8e4ecefba8f67965598df2e3e4d8c3a772a98ae4652d006a525d4f12b452c82d`.
+  Valid source/build/seed/runtime and rebuilt-child scans found no forbidden privileged or
+  legacy surface.
+- Final rebuilt-artifact Electron smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK`, using
+  fake Translation/Intelligence providers and temporary fixtures only. No real provider,
+  network, browser, native process, or OS action ran.
+- The complete legacy `packages/test/src/plugins` run remained **111/168 passed**. Translation
+  **7/7** and Intelligence **66/66** were green; all 57 failures were the already documented
+  suites that still require removed `__test`, runtime permission prompts, or stale manifest
+  inventories.
+
 ### Non-Scoped Baseline Results
 
 - The whole CoreApp AI directory was also run: **39/46 files and 384/403 tests passed**. The
@@ -1653,3 +1722,128 @@ installation, removing the legacy bridge, or claiming the #297 production hard c
   left unchanged and are not counted as Translation gates.
 - No commit, push, merge, branch switch, reset, rebase, provider request, real browser action,
   or history operation was performed.
+
+## Final Production Hard Cut Addendum
+
+This addendum supersedes every earlier batch statement that kept the isolated runtime
+production default off or listed heartbeat, restart budget, legacy bridge removal, 22/22
+regression, or final security review as pending.
+
+### Final Runtime Contract
+
+- `PLUGIN_RUNTIME_DEFAULT_ENABLED` is `true` after the source-derived inventory reached
+  exactly 22/22 manifested official activations. `PluginModule` installs the real
+  `PluginRuntimeService`; there is no environment override.
+- The orphan singleton `plugin-host-bridge.ts` and legacy `plugin-host-protocol.ts` were
+  deleted. Production contains no `TUFF_PLUGIN_ISOLATION`, synthetic self-check,
+  main-process Prelude VM loader, reflective property-chain dispatch, or compatibility
+  fallback. `plugin-host-process.ts` remains the current utility-process entry and V2
+  `plugin-host-wire.ts` remains the only protocol.
+- V2 `heartbeat` / `heartbeat-result` messages are exact, directional, owner/generation
+  bound and request-correlated. Main starts one probe only after activation, keeps one
+  infrastructure heartbeat pending slot, compacts periodic request history to a monotonic
+  watermark, and clears all heartbeat state on stop/crash/startup rollback.
+- A missed heartbeat reuses canonical timeout cancellation, abort grace, authority
+  invalidation, resource cleanup, forced kill and the real child exit barrier. The child
+  endpoint answers directly without invoking Prelude lifecycle code; a blocked event loop
+  cannot acknowledge.
+- Unexpected active-process exits are plugin-scoped. Three crashes in 30 seconds block the
+  fourth explicit start before handle allocation or spawn with
+  `PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED`; normal stop and startup failure do not count,
+  the window expires, and there is no automatic restart or fallback.
+- The historical 2026-07-15 singleton/shared-process documents are explicitly marked
+  superseded. English and Chinese plugin-author migration guides document the async,
+  capability, permission, cancellation, resource and no-fallback contracts.
+
+### Final Validation
+
+- Final complete CoreApp plugin directory: **84 files, 1093/1093 tests passed**.
+- Heartbeat wire/session/host/process/service foundation passed **258/258** in its focused
+  matrix; the final heartbeat/restart/default/Translation matrix passed **204/204**.
+- CoreApp Node and Web typechecks passed. Scoped hard-cut/heartbeat ESLint passed with
+  `--max-warnings 0`; `git diff --check` passed.
+- `plugins:validate` passed **22 manifest policies**, **24/24 plugin directory
+  classifications**, and **20/20** push-provider coverage.
+- Final-source production `build:vite` passed. Built artifacts contain the endpoint
+  heartbeat and no legacy bridge/protocol/env/self-check surface or privileged child import.
+- Real Electron utility-process smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK`, including
+  distinct activation processes and generations, stale-message denial, capability/callback/
+  resource cancellation, timeout termination, and awaited cleanup. All provider, browser,
+  network, native process and OS action seams remained controlled fakes.
+- Independent final hard-cut review found **P0: 0 open, P1: 0 open, P2: 0 open** and returned
+  `INTEGRATE`.
+
+## Independent Security And Production Gate Review — Final Worktree
+
+This section supersedes the preceding **1093/1093** hard-cut validation count and its
+pre-teardown-review conclusion. The review covered the complete dirty worktree after all 22
+official Prelude migrations, including runtime authority, heartbeat/crash behavior,
+resource ownership, destructive lifecycle transitions, package/release projections and the
+final rebuilt production child artifact.
+
+### Findings Closed
+
+- **P0: none found.** Production remains one utility process per activation, with exact V2
+  owner/generation correlation, typed capabilities, no main-process Prelude VM path, no
+  legacy bridge/protocol, no environment fallback and no automatic restart.
+- **P1 fixed: cleanup failures were reported as success.** Resource-registry close now attempts
+  every disposer, waits every barrier and rejects with `PLUGIN_HOST_RESOURCE_DISPOSE_FAILED`.
+  Host and service cleanup continue authority revocation, dispatcher/resource close and real
+  child exit before returning stable host/service cleanup failures. `TouchPlugin.disable()`
+  remains `CRASHED` and returns `false` when cleanup is incomplete.
+- **P1 fixed: failed generations could be replaced.** Controlled stop, unexpected active
+  crash and startup-crash rollback now retain one non-accepting service record and its exact
+  rejected stop promise until cleanup succeeds. Explicit start, reload, unload, uninstall,
+  resolver update and module teardown cannot cross that barrier. Activation-local business
+  owners are cleared only after successful close so their own retry remains possible.
+- **P1 fixed: aggregate shutdown could forget an earlier failure.** `stopAll()` now accumulates
+  cleanup failures across active operations, remaining records and the host manager; closing
+  another record successfully cannot overwrite a prior failed operation.
+- **P1 fixed: development force-update bypassed teardown.** An active development plugin is
+  no longer deleted or overwritten when `unloadPlugin()` returns `false`; the installer
+  returns `PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED` and preserves the installed directory.
+- **P2 production-gate fixes:** the main-only pinned-address validator no longer imports
+  `node:net`, keeping network primitives out of the child shared closure, while strict IPv4
+  and standard-URL IPv6 validation reject malformed resolver output. Clipboard History
+  disables Vite's unused module-preload polyfill instead of declaring unnecessary network
+  authority, so all rebuilt packages pass policy scanning.
+- **Open scoped findings after fixes:** **P0: 0, P1: 0, P2: 0**. Result: `INTEGRATE`.
+
+### Final Validation Evidence
+
+- Complete CoreApp plugin directory: **84 files, 1104/1104 tests passed**. The final runtime
+  service suite passed **26/26**; development installer and resolver suites passed **2/2**
+  each, including RED/GREEN coverage for controlled-stop, active-crash, startup-rollback,
+  aggregate-stop, resolver replacement and development force-update cleanup failures.
+- CoreApp Node and Web typechecks passed. Task-scoped ESLint passed with
+  `--max-warnings 0`; workspace `git diff --check` passed. A full plugin-directory lint found
+  only the existing **8** `no-explicit-any` warnings in untouched
+  `runtime/plugin-window-policy.test.ts` and
+  `services/plugin-storage-transport-service.test.ts`.
+- `plugins:validate` passed **22 manifest policies**, **24/24 directory classifications** and
+  **20/20** push-provider declarations. `touch-image` and `touch-music` remain explicitly
+  manifestless Surface-only directories.
+- The previously completed official package matrix remains green: **9 packages, 83 tests**;
+  Translation/Intelligence compatibility **73 tests**; release sync/after-pack/seed/loader/
+  integrity **52 tests**. All 10 manifested plugins with build scripts rebuilt and every
+  `.tpex` scan passed with zero findings.
+- Reproducible projections for all five release targets retained matching build/resource/
+  runtime `index.js` bytes. The dirty-worktree-aware two-run source-package audit passed all
+  five targets with ephemeral local signing and no blocker; no packaged plugin source changed
+  after that audit.
+- Final production `build:vite` passed. The recursive built-child JS closure contains only
+  `out/main/plugin-host.js` and `out/main/chunks/plugin-host-session-Bwf54Gj8.js`; its allowed
+  externals are `node:async_hooks`, `node:crypto`, `node:path`, `node:process`,
+  `node:string_decoder`, `node:util` and child-only `node:vm`. Scans found no Electron,
+  filesystem, process-spawn, SQLite, worker, network module, raw fetch/WebSocket, legacy
+  bridge/protocol, environment switch or production `__test` surface.
+- Final SHA-256: `plugin-host.js`
+  `df30ff85f07ecfeb1da8b115a75f3edba2b8070bdaede2192fe6b7917c62800d`;
+  child session chunk
+  `2c20d688c75b9c8540bbc201d4e0dc5f204aa976f2059d9c65a47dac45894e99`;
+  production main `index.js`
+  `5475219bc8aeb51d90160398b4a2cce48a4f749d96eacf77af652589d5ad55c4`.
+- Final rebuilt-artifact Electron smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK`. Provider,
+  browser, network, native process and OS operations remained fixed in-memory fakes or
+  temporary fixtures; no real external request or destructive OS action ran.
+- No commit, push, issue close, branch/history operation or #476 indexing change was made.

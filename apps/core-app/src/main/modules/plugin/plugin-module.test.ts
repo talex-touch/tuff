@@ -359,6 +359,7 @@ describe('PluginModule facade', () => {
     mocks.manager.enablePlugin.mockReset()
     mocks.healthMonitor.destroy.mockReset()
     mocks.plugin.disable.mockReset()
+    mocks.plugin.disable.mockResolvedValue(true)
     mocks.plugin.declaredPermissions = {
       required: ['clipboard.read', 'search.root-results', 'storage.plugin'],
       optional: []
@@ -468,6 +469,7 @@ describe('PluginModule facade', () => {
     expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
     expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
+    expect(mocks.setRuntimeService).toHaveBeenLastCalledWith(expect.any(Object))
     expect(mocks.setWindowPresetCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setBrowserOpenCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setBrowserDataCapabilityFactory.mock.calls[0]).toEqual([null])
@@ -803,6 +805,20 @@ describe('PluginModule facade', () => {
     expect(mocks.plugin.disable).toHaveBeenCalledOnce()
     expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.networkCleanup).toHaveBeenCalledOnce()
+    expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()
+  })
+
+  it('reports an incomplete plugin disable while still running module cleanup', async () => {
+    const module = new PluginModule()
+    mocks.manager.plugins.set('calendar', mocks.plugin)
+    mocks.plugin.disable.mockResolvedValueOnce(false)
+    await initializeModule(module)
+
+    await expect(module.onDestroy()).rejects.toThrow('PLUGIN_MODULE_CLEANUP_FAILED')
+
+    expect(mocks.plugin.disable).toHaveBeenCalledOnce()
+    expect(mocks.runtimeDispose).toHaveBeenCalledOnce()
+    expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()
   })
 

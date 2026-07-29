@@ -201,6 +201,18 @@ describe('plugin Intelligence context capabilities', () => {
       capabilityId: 'text.chat',
       input: 'x',
       payload: { messages: [{ role: 'user', content: 'x' }] },
+      options: {
+        metadata: {
+          contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'continue' }
+        }
+      },
+      context: { mode: 'continue', owner: 'corebox', sessionId: 'session-1' }
+    },
+    {
+      operation: 'context.invoke',
+      capabilityId: 'text.chat',
+      input: 'x',
+      payload: { messages: [{ role: 'user', content: 'x' }] },
       context: { mode: 'new', owner: 'system' }
     },
     {

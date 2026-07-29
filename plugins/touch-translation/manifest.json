@@ -33,7 +33,7 @@
   "permissionReasons": {
     "network.internet": "供插件设置 Surface 访问用户显式配置的翻译服务；隔离 Prelude 不直接联网",
     "intelligence.basic": "通过宿主受控智能服务执行文本翻译与图片 OCR",
-    "storage.plugin": "保存已启用的公开翻译源标识，不保存密钥或端点",
+    "storage.plugin": "供插件设置 Surface 保存启用状态和非敏感翻译源配置；密钥由安全存储管理",
     "search.root-results": "将翻译状态与结果推送到 CoreBox 根搜索结果",
     "clipboard.write": "将翻译结果复制到剪贴板"
   },

@@ -7,6 +7,7 @@ const { pluginModuleMock } = vi.hoisted(() => ({
   pluginModuleMock: {
     filePath: '',
     pluginManager: {
+      plugins: new Map<string, unknown>(),
       loadPlugin: vi.fn(),
       unloadPlugin: vi.fn()
     }
@@ -30,6 +31,7 @@ async function createTempDir(prefix: string): Promise<string> {
 describe('installDevPluginFromPath', () => {
   beforeEach(() => {
     pluginModuleMock.filePath = ''
+    pluginModuleMock.pluginManager.plugins.clear()
     pluginModuleMock.pluginManager.loadPlugin.mockReset()
     pluginModuleMock.pluginManager.unloadPlugin.mockReset()
   })
@@ -76,5 +78,31 @@ describe('installDevPluginFromPath', () => {
       source: true,
       address: 'http://127.0.0.1:5174/'
     })
+  })
+
+  it('preserves the installed directory when force-update teardown is incomplete', async () => {
+    const sourceDir = await createTempDir('dev-plugin-source-')
+    const installRoot = await createTempDir('dev-plugin-install-')
+    const targetDir = path.join(installRoot, 'touch-example')
+    pluginModuleMock.filePath = installRoot
+    pluginModuleMock.pluginManager.plugins.set('touch-example', {})
+    pluginModuleMock.pluginManager.unloadPlugin.mockResolvedValue(false)
+    await fs.mkdir(targetDir)
+    await fs.writeFile(path.join(targetDir, 'index.js'), 'old-content', 'utf-8')
+    await fs.writeFile(
+      path.join(sourceDir, 'manifest.json'),
+      JSON.stringify({ name: 'touch-example', version: '2.0.0', description: 'test' }),
+      'utf-8'
+    )
+    await fs.writeFile(path.join(sourceDir, 'index.js'), 'new-content', 'utf-8')
+
+    const result = await installDevPluginFromPath(sourceDir, { forceUpdate: true })
+
+    expect(result).toEqual({
+      status: 'error',
+      error: 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED'
+    })
+    expect(await fs.readFile(path.join(targetDir, 'index.js'), 'utf-8')).toBe('old-content')
+    expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
   })
 })

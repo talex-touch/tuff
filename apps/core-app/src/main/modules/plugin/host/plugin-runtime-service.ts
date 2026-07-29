@@ -29,6 +29,8 @@ export type PluginRuntimeServiceErrorCode =
   | 'PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'
   | 'PLUGIN_RUNTIME_SERVICE_CLOSED'
   | 'PLUGIN_RUNTIME_ACTIVATION_STALE'
+  | 'PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED'
+  | 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED'
 
 export class PluginRuntimeServiceError extends Error {
   constructor(readonly code: PluginRuntimeServiceErrorCode) {
@@ -123,6 +125,8 @@ interface RuntimeKeyManager {
 
 const DEFAULT_TEARDOWN_TIMEOUT_MS = 2_000
 const MAX_TEARDOWN_TIMEOUT_MS = 60_000
+const RESTART_BUDGET_MAX_CRASHES = 3
+const RESTART_BUDGET_WINDOW_MS = 30_000
 const SNAPSHOT_MAX_DEPTH = 32
 const SNAPSHOT_MAX_MEMBERS = 10_000
 const MAX_ISSUED_ACTIVATIONS = 65_536
@@ -136,6 +140,8 @@ const RESOURCE_LIMIT_KEYS = new Set<keyof PluginRuntimeHostResourceLimits>([
   'handshakeTimeoutMs',
   'loadTimeoutMs',
   'lifecycleTimeoutMs',
+  'heartbeatIntervalMs',
+  'heartbeatTimeoutMs',
   'shutdownTimeoutMs',
   'cancelGraceMs',
   'callbackTimeoutMs',
@@ -508,6 +514,14 @@ function safeCall(callback: () => void | Promise<void>): Promise<void> {
   }
 }
 
+function isResourceCleanupFailure(error: unknown): boolean {
+  return (
+    (error instanceof PluginRuntimeServiceError &&
+      error.code === 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED') ||
+    (error instanceof PluginRuntimeHostError && error.code === 'PLUGIN_RUNTIME_HOST_CLEANUP_FAILED')
+  )
+}
+
 export function resolvePluginRuntimeArtifactPath(): string {
   return path.join(__dirname, 'plugin-host.js')
 }
@@ -528,6 +542,7 @@ export class PluginRuntimeService {
   private readonly records = new Map<string, RuntimeRecord>()
   private readonly operations = new Map<string, Promise<unknown>>()
   private readonly issuedActivationHandles = new Set<string>()
+  private readonly crashHistory = new Map<string, number[]>()
   private stopAllPromise: Promise<void> | null = null
   private disposed = false
   private stopping = false
@@ -674,13 +689,29 @@ export class PluginRuntimeService {
     this.stopAllPromise = Promise.resolve().then(async () => {
       while (true) {
         const activeOperations = [...this.operations.values()]
-        if (activeOperations.length > 0) await Promise.allSettled(activeOperations)
+        let cleanupFailed = false
+        if (activeOperations.length > 0) {
+          const results = await Promise.allSettled(activeOperations)
+          cleanupFailed = results.some(
+            (result) => result.status === 'rejected' && isResourceCleanupFailure(result.reason)
+          )
+        }
 
         const records = [...this.records.values()]
         if (records.length > 0) {
-          await Promise.all(records.map((record) => this.stopRecord(record, true)))
+          const results = await Promise.allSettled(
+            records.map((record) => this.stopRecord(record, true))
+          )
+          cleanupFailed ||= results.some((result) => result.status === 'rejected')
         }
-        await this.manager.stopAll()
+        try {
+          await this.manager.stopAll()
+        } catch {
+          cleanupFailed = true
+        }
+        if (cleanupFailed) {
+          throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+        }
         await Promise.resolve()
         if (this.operations.size === 0 && this.records.size === 0) return
       }
@@ -705,6 +736,7 @@ export class PluginRuntimeService {
       throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED')
     }
     this.assertCurrentActivation(activation)
+    this.assertRestartBudget(activation.name)
 
     const previous = this.records.get(activation.name)
     if (previous && sameActivation(previous.activation, activation)) {
@@ -787,11 +819,24 @@ export class PluginRuntimeService {
         // Crash observers cannot restore authority or expose native errors.
       }
     }
+    const stopRuntime = (): Promise<void> => {
+      if (record?.stopPromise) return record.stopPromise
+      const stopping = this.manager.stopPlugin(activation.name).catch(() => {
+        throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      })
+      record.stopPromise = stopping
+      return stopping
+    }
     const stopAndReportCrash = (): void => {
       if (crashCleanupStarted) return
       crashCleanupStarted = true
-      const stopping = this.manager.stopPlugin(activation.name)
-      void stopping.then(reportCrash, reportCrash)
+      const stopping = stopRuntime()
+      void stopping.then(() => {
+        if (this.records.get(activation.name) === record) {
+          this.records.delete(activation.name)
+        }
+        reportCrash()
+      }, reportCrash)
     }
     const handleUnexpectedTermination = (): void => {
       if (!record || this.records.get(activation.name) !== record) {
@@ -799,11 +844,11 @@ export class PluginRuntimeService {
         return
       }
       if (!record.acceptingWork) {
-        void this.manager.stopPlugin(activation.name)
+        void stopRuntime().catch(() => undefined)
         return
       }
+      this.recordUnexpectedCrash(activation.name)
       record.acceptingWork = false
-      this.records.delete(activation.name)
       stopAndReportCrash()
     }
 
@@ -856,8 +901,22 @@ export class PluginRuntimeService {
         this.keyManager.revokeKey(activation.key)
       },
       closeResources: async () => {
-        await safeCall(() => this.closeResources(activation))
-        if (options.closeResources) await safeCall(options.closeResources)
+        let cleanupFailed = false
+        try {
+          await this.closeResources(activation)
+        } catch {
+          cleanupFailed = true
+        }
+        if (options.closeResources) {
+          try {
+            await options.closeResources()
+          } catch {
+            cleanupFailed = true
+          }
+        }
+        if (cleanupFailed) {
+          throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+        }
       },
       resolveCurrentActivation: (pluginName) => this.keyManager.resolveCurrentIdentity(pluginName),
       capabilityDispatcher: dispatcher,
@@ -914,8 +973,12 @@ export class PluginRuntimeService {
       return Object.freeze({ activation, host, lifecycle })
     } catch (error) {
       record.acceptingWork = false
+      try {
+        await stopRuntime()
+      } catch {
+        throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      }
       if (this.records.get(activation.name) === record) this.records.delete(activation.name)
-      await this.manager.stopPlugin(activation.name)
       throw error
     }
   }
@@ -990,6 +1053,27 @@ export class PluginRuntimeService {
     }
   }
 
+  private assertRestartBudget(pluginName: string): void {
+    const now = Date.now()
+    const recent = (this.crashHistory.get(pluginName) ?? []).filter(
+      (timestamp) => now - timestamp < RESTART_BUDGET_WINDOW_MS
+    )
+    if (recent.length > 0) this.crashHistory.set(pluginName, recent)
+    else this.crashHistory.delete(pluginName)
+    if (recent.length >= RESTART_BUDGET_MAX_CRASHES) {
+      throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED')
+    }
+  }
+
+  private recordUnexpectedCrash(pluginName: string): void {
+    const now = Date.now()
+    const recent = (this.crashHistory.get(pluginName) ?? []).filter(
+      (timestamp) => now - timestamp < RESTART_BUDGET_WINDOW_MS
+    )
+    recent.push(now)
+    this.crashHistory.set(pluginName, recent)
+  }
+
   private stopRecord(record: RuntimeRecord, runDestroy: boolean): Promise<void> {
     if (record.stopPromise) return record.stopPromise
     record.acceptingWork = false
@@ -1004,10 +1088,14 @@ export class PluginRuntimeService {
           // Teardown is bounded; authority revocation and process exit still follow.
         }
       }
+      try {
+        await this.manager.stopPlugin(record.activation.name)
+      } catch {
+        throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      }
       if (this.records.get(record.activation.name) === record) {
         this.records.delete(record.activation.name)
       }
-      await this.manager.stopPlugin(record.activation.name)
     })
     return record.stopPromise
   }

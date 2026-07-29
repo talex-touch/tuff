@@ -408,6 +408,13 @@ function handleControlMessage(event: UtilityMessageEvent): void {
     case 'host-load':
       handleLoad(message)
       return
+    case 'heartbeat':
+      send({
+        ...owner!,
+        type: 'heartbeat-result',
+        requestId: message.requestId
+      })
+      return
     case 'lifecycle-call':
       handleLifecycle(message)
       return

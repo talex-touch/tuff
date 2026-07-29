@@ -2339,6 +2339,12 @@ describe('touchPlugin.enable', () => {
       expect(translationStart.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
         'intelligence.invoke'
       ])
+      expect(translationStart.capabilityAllowlist).toEqual([
+        'feature.items.push',
+        'feature.items.clear',
+        'clipboard.write',
+        'intelligence.invoke'
+      ])
       expect(factory).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'touch-translation', activationGeneration: 1 })
       )
@@ -2414,6 +2420,22 @@ describe('touchPlugin.enable', () => {
       const intelligenceStart = vi.mocked(runtime.startActivation).mock
         .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
       expect(intelligenceStart.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'intelligence.context.invoke',
+        'intelligence.stream'
+      ])
+      expect(intelligenceStart.capabilityAllowlist).toEqual([
+        'permission.check',
+        'feature.registry.add',
+        'feature.registry.remove',
+        'feature.registry.list',
+        'feature.items.push',
+        'feature.items.widget.push',
+        'feature.items.clear',
+        'storage.file.read',
+        'storage.file.write',
+        'storage.file.list',
+        'clipboard.write',
+        'clipboard.copy-and-paste',
         'intelligence.context.invoke',
         'intelligence.stream'
       ])
@@ -2573,6 +2595,58 @@ describe('touchPlugin.enable', () => {
       })
       expect(factory).toHaveBeenCalledTimes(2)
       expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('retains a failed activation resource so disable can retry its close barrier', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-window-manager-rollback-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock({
+        startActivation: vi.fn().mockRejectedValue(new Error('/private/plugin/start-detail'))
+      })
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: {
+          requestKey: vi.fn(() => 'window-manager-rollback-key'),
+          revokeKey: vi.fn(() => true)
+        },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const close = vi
+        .fn<() => Promise<void>>()
+        .mockRejectedValueOnce(new Error('/private/plugin/close-detail'))
+        .mockResolvedValue(undefined)
+      TouchPlugin.setWindowManagerCapabilityFactory(
+        vi.fn(() => ({
+          definitions: Object.freeze([{ id: 'system.window-manager', permission: 'system.shell' }]),
+          close
+        })) as never
+      )
+      const plugin = new TouchPlugin(
+        'touch-window-manager',
+        { type: 'class', value: 'i-ri-window-line' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(false)
+      expect(close).toHaveBeenCalledTimes(1)
+
+      await expect(plugin.disable()).resolves.toBe(true)
+      expect(close).toHaveBeenCalledTimes(2)
+      expect(plugin.status).toBe(PluginStatus.DISABLED)
+      expect(JSON.stringify(plugin.issues)).not.toMatch(/private\/plugin|start-detail|close-detail/)
     } finally {
       fse.removeSync(root)
     }
@@ -3270,6 +3344,44 @@ describe('touchPlugin.enable', () => {
     await expect(disabling).resolves.toBe(true)
     expect(plugin.status).toBe(PluginStatus.DISABLED)
     expect(plugin.getActivationIdentity().key).toBe('')
+  })
+
+  it('fails closed when the runtime termination barrier reports incomplete cleanup', async () => {
+    const runtime = createRuntimeServiceMock({
+      stopActivation: vi.fn().mockRejectedValue(new Error('/private/plugin/cleanup-detail'))
+    })
+    TouchPlugin.setTransport({
+      broadcast: vi.fn(),
+      invoke: vi.fn().mockResolvedValue(undefined),
+      keyManager: {
+        requestKey: vi.fn(() => 'activation-key-1'),
+        revokeKey: vi.fn(() => true)
+      },
+      sendToPlugin: vi.fn().mockResolvedValue(undefined)
+    } as unknown as ITuffTransportMain)
+    TouchPlugin.setRuntimeService(runtime as never)
+    const plugin = new TouchPlugin(
+      'cleanup-failure-plugin',
+      { type: 'class', value: 'i-ri-test-tube-line' },
+      '1.0.0',
+      'desc',
+      '',
+      { enable: false, address: '' },
+      '/tmp/missing-cleanup-failure-plugin',
+      {},
+      { skipDataInit: true }
+    )
+    await plugin.enable()
+
+    await expect(plugin.disable()).resolves.toBe(false)
+
+    expect(plugin.status).toBe(PluginStatus.CRASHED)
+    expect(plugin.getActivationIdentity().key).toBe('')
+    expect(plugin.issues.at(-1)).toMatchObject({
+      code: 'PLUGIN_RUNTIME_HOST_STOP_FAILED',
+      source: 'runtime:teardown'
+    })
+    expect(JSON.stringify(plugin.issues.at(-1))).not.toContain('/private/plugin/cleanup-detail')
   })
 
   it('rotates activation metadata across disable and re-enable', async () => {

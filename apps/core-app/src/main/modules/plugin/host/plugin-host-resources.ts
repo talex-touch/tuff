@@ -461,15 +461,21 @@ export class PluginHostResourceRegistry
     if (this.closePromise) return this.closePromise
     this.closed = true
     let resolveClose!: () => void
-    this.closePromise = new Promise<void>((resolve) => {
+    let rejectClose!: (error: PluginHostResourceError) => void
+    this.closePromise = new Promise<void>((resolve, reject) => {
       resolveClose = resolve
+      rejectClose = reject
     })
     const records = [...this.records.values()]
-    const started = records.map((record) => this.dropRecord(record, releaseCallbacks))
+    const started = records.map((record) => this.dropRecord(record, releaseCallbacks, true))
     const barriers = new Set([...this.activeDisposals, ...started])
-    void Promise.all([...barriers].map((barrier) => barrier.catch(() => undefined))).then(
-      resolveClose
-    )
+    void Promise.allSettled([...barriers]).then((results) => {
+      if (results.some((result) => result.status === 'rejected')) {
+        rejectClose(new PluginHostResourceError('PLUGIN_HOST_RESOURCE_DISPOSE_FAILED'))
+      } else {
+        resolveClose()
+      }
+    })
     return this.closePromise
   }
 

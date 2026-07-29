@@ -273,7 +273,21 @@ if (!isAuthoritativePluginContext(plugin)) denyPrivilegedOperation()
   construction, wire DTO normalization, business-resource ownership, canonical build
   resolution, rollout policy, and real Electron process smoke.
 
-### 2. Contracts
+### 2. Signatures
+
+```ts
+type HostHeartbeat = HostMessageBase & { type: 'heartbeat' }
+type HostHeartbeatResult = HostMessageBase & { type: 'heartbeat-result' }
+
+const heartbeatIntervalMs = 2_000
+const heartbeatTimeoutMs = 5_000
+const restartBudget = { maxCrashes: 3, windowMs: 30_000 } as const
+```
+
+`HostMessageBase` includes the V2 protocol version, main-issued activation handle,
+host generation, and request id.
+
+### 3. Contracts
 
 - The child global is a closed projection. Expose only immutable snapshots, standard
   safe intrinsics, logging, lifecycle registration, and facades derived from the
@@ -311,15 +325,30 @@ current activation authority`. A default grant, including `storage.plugin`, neve
 - Canonical Prelude resolution accepts only the declared build artifact under the
   plugin root and verifies source/build/resource/runtime projection parity where a
   release projection exists. Never silently execute a stale root or generated copy.
-- Production installation of the isolated runtime remains default-off until the
-  migration inventory is complete. Unsupported official plugins fail explicitly;
-  they do not fall through to the isolated child or gain a legacy bridge.
+- Production installs the isolated runtime by default after the exact 22/22 official
+  manifest inventory passes. There is no environment override, singleton bridge,
+  synthetic self-check, legacy protocol source, or main-process VM fallback. A new or
+  incompatible plugin fails with a stable activation error; it never restores legacy
+  execution.
+- Main starts one heartbeat only after the activation becomes active and keeps at most
+  one heartbeat request in flight. The child endpoint replies directly without invoking
+  Prelude lifecycle code. Missing acknowledgement uses the canonical request timeout,
+  cancel grace, authority invalidation, resource cleanup, forced kill, and real exit
+  barrier. Every stop/crash/startup cleanup clears heartbeat state.
+- Heartbeat requests use a dedicated single infrastructure pending slot, while business
+  calls retain their configured concurrency limit. The session stores a monotonic
+  heartbeat request-id watermark instead of retaining unbounded periodic history.
+- An unexpected active-process termination records one plugin-scoped crash. Three crashes
+  inside 30 seconds block the fourth explicit start before handle allocation or spawn with
+  `PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED`. Normal stop and startup failure do not count;
+  the budget expires after the stability window. The host never auto-restarts or falls
+  back.
 - Real Electron smoke executes every claimed compatible Prelude in at least two host
   generations. It records real child PIDs, verifies handle and generation rotation,
   and proves stale ports/messages cannot mutate storage, clipboard, open, HTTP, or
   published feature state after stop/reload.
 
-### 3. Validation Matrix
+### 4. Validation Matrix
 
 | Condition                                                 | Required result                                                       |
 | --------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -330,11 +359,27 @@ current activation authority`. A default grant, including `storage.plugin`, neve
 | Clipboard/open/HTTP operation fails without a denial code | Stable operational failure, not `permission-denied`                   |
 | Host denial code is returned                              | Stable `permission-denied`; no native detail or stack                 |
 | Item contains file icon/path or host object               | Reject or project to a portable DTO before child publication          |
-| Runtime rollout environment is absent                     | Isolated runtime service is not installed by default                  |
-| Resolver sees stale root projection                       | Select the canonical declared build or fail closed                    |
+| Runtime service is initialized                           | Install the activation-scoped isolated runtime by default                |
+| Official manifest inventory changes                      | Rollout contract test fails until the new Prelude is migrated            |
+| Heartbeat result has wrong owner/generation/direction    | Protocol violation; no request completion                                |
+| Heartbeat result is duplicate, late, or unknown          | Stable session rejection; no request-id reuse                            |
+| Active child misses the heartbeat deadline               | Cancel, revoke, cleanup, kill, await exit, and report one stable crash    |
+| Fourth explicit start after three recent crashes         | `PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED`; no spawn                       |
+| Normal stop or failed startup                            | Do not consume restart budget                                             |
+| Resolver sees stale root projection                       | Select the canonical declared build or fail closed                        |
 | Old handle/port emits after generation rotation           | Ignore/reject; no stale side effect                                   |
 
-### 4. Tests Required
+### 5. Good / Base / Bad Cases
+
+- Good: an active child answers endpoint heartbeats while async plugin work is pending;
+  disable clears the timer, revokes authority, releases resources, and waits for exit.
+- Base: a child event loop becomes stuck after lifecycle completion; the missed heartbeat
+  follows timeout/cancel grace and force-kill without affecting another activation.
+- Bad: rely only on lifecycle deadlines, keep an environment kill switch or main VM
+  fallback, retain every heartbeat id forever, or automatically restart an unbounded crash
+  loop.
+
+### 6. Tests Required
 
 - Child-realm RED tests replace `Uint8Array.prototype.set`, typed-array iterators, and
   related getters, then exercise random values, encoding/decoding, digest, and wire
@@ -352,20 +397,29 @@ current activation authority`. A default grant, including `storage.plugin`, neve
   bounded, clipboard placeholders read only when needed, and public payloads exclude
   sensitive content and credentials.
 - Resolver/release tests cover canonical source selection, projection cleanup, and
-  SHA-256 parity. Rollout tests prove production default-off and explicit inventory
-  failure for every unconverted official plugin.
+  SHA-256 parity. Rollout tests prove the exact 22/22 inventory, production default-on,
+  and fail-closed behavior for any future incompatible official plugin.
+- Wire/session tests cover heartbeat direction, exact keys, owner/generation binding,
+  duplicate/late/unknown responses, the dedicated pending slot, request-id watermark,
+  and business pending limits.
+- Host/process tests cover active-only scheduling, direct child acknowledgement, one
+  in-flight heartbeat, missed-ack timeout through the real termination barrier, timer
+  cleanup, cross-activation isolation, and no crash report on normal stop.
+- Service tests cover three crashes in 30 seconds, fourth-start denial before spawn,
+  plugin-name isolation, stability-window recovery, and exclusion of normal stop/startup
+  failure.
 - Real Electron smoke executes the complete claimed compatibility set twice and
   asserts PID/handle/generation rotation plus stale message and stale side-effect
   denial after the first host is stopped.
 
-### 5. Wrong vs Correct
+### 7. Wrong vs Correct
 
 #### Wrong
 
 ```ts
 if (permissionStore.hasPermission(pluginName, permissionId, sdkapi)) allow()
-const bytes = Array.from(new Uint8Array(value.buffer))
-target.set(hostRandomBytes)
+setInterval(() => child.postMessage({ type: 'ping' }), interval)
+if (childExited) restartPluginWithoutLimit()
 ```
 
 #### Correct
@@ -373,6 +427,14 @@ target.set(hostRandomBytes)
 ```ts
 if (!manifestDeclares(plugin, permissionId)) deny()
 if (!permissionStore.hasPermission(pluginName, permissionId, sdkapi)) deny()
+const heartbeat = session.request(ownerBoundHeartbeat, heartbeatTimeoutMs)
+await heartbeat // timeout uses canonical cancellation and termination
+assertRestartBudget(pluginName, { maxCrashes: 3, windowMs: 30_000 })
+```
+
+The byte-codec boundary additionally captures intrinsic getters before plugin code runs:
+
+```ts
 const { byteLength, view } = readByteViewWithCapturedGetters(value)
 assertWireByteLimit(byteLength)
 const bytes = copyByBoundedIndex(view, byteLength)
@@ -3113,4 +3175,233 @@ try {
 } finally {
   await resource.dispose()
 }
+```
+
+## Scenario: Activation-Bound Translation Prelude
+
+### 1. Scope / Trigger
+
+- Trigger: the exact isolated `touch-translation` activation needs text translation,
+  screenshot OCR-to-text, public provider enumeration, feature-item publication, and an
+  explicit copy action.
+- This boundary does not authorize direct network access, provider configuration, provider
+  credentials, generic Intelligence, image translation output, or window/control-plane APIs.
+
+### 2. Signatures
+
+```ts
+type PluginTranslationFacade = Readonly<{
+  translate(payload: { text: string; sourceLang?: string; targetLang: string }, options?: {
+    preferredProviderId?: string
+    modelPreference?: readonly string[]
+    metadata?: TranslationDiagnosticMetadata
+  }): Promise<ProjectedTranslationResult>
+  ocr(payload: {
+    source: { type: 'data-url'; dataUrl: string }
+    language?: string
+    includeLayout?: boolean
+    includeKeywords?: boolean
+  }, options?: { metadata?: TranslationDiagnosticMetadata }): Promise<ProjectedOcrResult>
+  listProviders(): Promise<readonly PublicTranslationProvider[]>
+}>
+```
+
+### 3. Contracts
+
+- Main installs `intelligence.invoke` only into the exact current `touch-translation`
+  activation, bound to its main-issued activation identity and host generation, and limits it
+  to `text.translate`, `vision.ocr`, and public `text.translate` provider enumeration.
+- The child exposes a frozen null-prototype `plugin.translation` facade only when both the
+  manifest name and declaration match. For Translation, raw `hostCapabilities`, generic
+  Intelligence, HTTP/open-url, Secret, Storage, permission, channel, process, filesystem,
+  system, QuickOps, Flow, feature-registry, voice, and widget facades remain absent even if
+  shared host definitions exist in the activation manifest.
+- Translation options admit only provider/model preference plus exact diagnostic metadata.
+  OCR options admit diagnostic metadata only. Caller, credentials, endpoints, headers,
+  tokens, quota identity, prompt templates/variables, and generic AI command fields fail
+  before service work.
+- OCR accepts only canonical bounded PNG/JPEG/WebP base64 data URLs with matching signatures.
+  Main returns OCR text only; source bytes, layout blocks, raw provider data, usage, reasoning,
+  native errors, and stacks do not cross back to the child.
+- `text.translate` cancellation is contained by the activation-local capability registry.
+  The current Intelligence SDK does not accept a provider signal for this capability, so the
+  host adapter must not pass one; cancel/revoke releases the host await and discards observed
+  late settlement. OCR continues to receive the supported host signal.
+- The Prelude owns one current request across all Translation features. Every item publication
+  is serialized and rechecks request/generation/signal after `clearItems()` and before
+  `pushItems()`, preventing an old request from erasing or replacing newer output.
+- Input and result bounds are UTF-8 byte bounds, not JavaScript code-unit counts. Screenshot
+  results contain OCR/translation text only and never the source image or translated image.
+- A copy action is accepted only when its activation-generation request id and exact bounded
+  text match a currently published result retained by the Prelude. Clipboard writes are
+  awaited; forged text, stale generations, denial, and operational failure remain distinct.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Wrong plugin name, undeclared capability, stale activation/host generation | Reject before provider enumeration or invocation |
+| Prompt/control-plane option, caller, credential, endpoint, header, token, or extra DTO field | Invalid request before service work |
+| Non-canonical, oversized, mismatched-signature, or unsupported image data URL | Invalid request before OCR/provider work |
+| Permission revoke or lifecycle cancellation during provider wait | Stable cancellation/permission result; late value discarded |
+| Older feature request settles after a newer feature begins | No old clear/push or copy authority may affect current output |
+| Forged copy text with a current request id | `invalid-payload`; no clipboard write |
+| Previous activation-generation copy item | `stale-request`; no clipboard write |
+| SDK result contains usage/reasoning/raw OCR/provider internals | Reject or project them away before child delivery |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a current Translation activation uses only the fixed facade, awaits serialized item
+  publication and accepts copy only for its own generation-bound result.
+- Base: a denied provider or unsupported OCR input returns a stable blocked result without
+  feature mutation, provider detail or native image output.
+- Bad: expose generic Intelligence/network/storage, let the child select a credential or
+  endpoint, reuse a prior generation request id, or return source image bytes.
+
+### 6. Tests Required
+
+- Host DTO tests cover exact translate/OCR/provider-list requests and projections, multibyte
+  bounds, hostile records/arrays, extra control fields, authority, permission, revoke,
+  cancellation, and late settlement.
+- Child tests declare unrelated shared capabilities deliberately and still prove only the
+  Translation-specific facade plus required feature/clipboard surfaces are reachable.
+- Prelude tests cover text, multi-source cap, screenshot OCR-to-text, cross-feature races,
+  serialized clear/push, forged/stale copy actions, destroy invalidation, redaction, and UTF-8
+  bounds.
+- Real Electron smoke runs two activation generations with fake providers only and proves
+  generation rotation, stale action rejection, no image return, no network/native action,
+  and awaited shutdown.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const config = await plugin.storage.getFile('providers_config')
+return tuffIntelligence.invoke('text.translate', payload, { ...options, signal })
+```
+
+#### Correct
+
+```ts
+const providers = await plugin.translation.listProviders()
+const result = await activationRegistry.dispatch('intelligence.invoke', exactRequest, signal)
+if (isCurrentRequest()) await serializedPublish(result)
+```
+
+## Scenario: Production Plugin Prelude Hard Cut
+
+### 1. Scope / Trigger
+
+- Trigger: all 22 manifested official Preludes satisfy the isolated contract and CoreApp
+  installs the activation-scoped utility-process runtime as the only production Prelude path.
+- This cut covers rollout policy, legacy-source removal, fixed artifact packaging, heartbeat
+  containment, crash behavior and activation teardown. It does not claim an OS sandbox beyond
+  Electron `utilityProcess` plus the closed child projection.
+
+### 2. Signatures
+
+```ts
+const PLUGIN_RUNTIME_DEFAULT_ENABLED = true
+shouldInstallPluginRuntimeServiceByDefault(): true
+
+PluginRuntimeHostResourceLimits = {
+  heartbeatIntervalMs: number
+  heartbeatTimeoutMs: number
+  maxOldSpaceMb: number
+  // existing wire, request, callback, resource and lifecycle limits
+}
+```
+
+### 3. Contracts
+
+- Production always injects `PluginRuntimeService` into `TouchPlugin`; there is no environment
+  flag, compatibility profile, main-process VM fallback or synthetic self-check.
+- Every activation, including an empty Prelude, owns one fresh process, control port,
+  activation key, opaque handle and host generation. Reload/re-enable rotates all authority.
+- `plugin-host-bridge.ts` and the legacy reflective `plugin-host-protocol.ts` do not exist in
+  the production source graph. Main never accepts `chain: string[]` dispatch.
+- The only child artifact is the fixed bundled `out/main/plugin-host.js`; a missing, malformed
+  or non-file artifact fails activation before plugin script execution.
+- Heartbeat starts only after activation commit, permits one in-flight probe and uses the
+  ordinary correlated request timeout/cancel-grace/real-exit barrier. Startup rollback and
+  controlled stop leave no heartbeat timer.
+- Automatic crash restart budget is zero. Unexpected exit, heartbeat timeout or protocol
+  violation invalidates authority, rejects work, disposes resources and leaves the plugin
+  `CRASHED`; only an explicit enable/reload may create a new generation. Therefore an
+  unattended crash loop cannot spawn replacement processes.
+- Disable, reload, unload, uninstall and module teardown revoke authority first and await
+  capability/resource cleanup plus the actual child exit before their barrier settles.
+- Resource close attempts every disposer and waits every barrier. Any failure is reduced to a
+  stable `PLUGIN_HOST_RESOURCE_DISPOSE_FAILED`, `PLUGIN_RUNTIME_HOST_CLEANUP_FAILED`, or
+  `PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED` result only after remaining cleanup and child exit.
+- A failed controlled stop, active crash, or startup rollback leaves its service record
+  non-accepting and retains the exact rejected stop promise. It cannot be replaced by another
+  generation, reloaded, uninstalled, or force-updated. Activation-local business resource
+  owners are cleared only after their own close succeeds so a later disable can retry them.
+- `stopAll()` accumulates cleanup failures across concurrent operations, records and the host
+  manager; a later successful barrier must never overwrite an earlier cleanup failure.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Runtime default evaluated in production | Isolated service installed; no alternate branch |
+| Fixed child artifact missing or malformed | Stable activation failure; no VM fallback |
+| Heartbeat reply missing | Timeout, cancel grace, forced termination and real exit barrier |
+| Wrong/duplicate/stale heartbeat result | Protocol rejection scoped to that activation |
+| Unexpected child exit | One redacted crash notification after cleanup; no automatic restart |
+| Explicit re-enable after crash | Fresh key, handle, host generation and process |
+| Controlled disable during heartbeat | Clear timer/request and await normal/forced exit |
+| Any disposer or activation close fails | Continue all cleanup and child exit, then reject with a stable cleanup code |
+| Cleanup fails during stop, crash, or startup rollback | Retain a non-accepting failed record; reject generation replacement |
+| Reload, uninstall, resolver update, or dev force-update sees failed teardown | Preserve the current generation/files and return failure |
+| Concurrent stop operation fails before other records close | `stopAll()` retains the earlier failure after all barriers settle |
+| Legacy bridge/protocol import or `TUFF_PLUGIN_ISOLATION` appears | Production contract test fails |
+
+### 5. Good / Base / Bad Cases
+
+- Good: 22 official activations run in distinct processes, a hung child is killed without
+  blocking a healthy child, and explicit re-enable rotates every authority value only after
+  the previous cleanup barrier succeeds.
+- Base: an empty Prelude loads an empty lifecycle in its own child and shuts down through the
+  same barrier.
+- Bad: default-off rollout, main `vm.runInContext`, shared singleton child, environment
+  fallback, reflective chain dispatch, automatic unbounded restart, swallowing disposer
+  failures, deleting runtime records before cleanup succeeds, or overwriting an earlier
+  `stopAll()` failure with a later successful barrier.
+
+### 6. Tests Required
+
+- Static production-contract tests assert default-on, legacy-source absence, no VM loader,
+  no environment flag and fixed packaged artifact binding.
+- Host/session/process tests cover strict heartbeat directions, duplicate/stale correlation,
+  one in-flight probe, timeout, startup rollback, controlled stop and real exit barriers.
+- TouchPlugin/PluginModule tests prove default runtime injection, one crash notification,
+  no automatic replacement, fresh explicit re-enable authority, failed-resource retention,
+  stable cleanup errors, and blocked reload/unload/uninstall replacement.
+- Service tests prove controlled-stop, unexpected-crash and startup-rollback cleanup failures
+  retain their generation; concurrent `stopAll()` failures cannot be overwritten. Resolver
+  and development installer tests prove plugin files are preserved after incomplete teardown.
+- Complete plugin tests, Node/Web typechecks, scoped lint, 24/24 validation, production build,
+  built-child forbidden scan, `git diff --check` and real Electron two-generation smoke are
+  required before the hard cut is committed.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const runtime = process.env.TUFF_PLUGIN_ISOLATION ? isolated : mainVmFallback
+runtime.restartOnExit()
+```
+
+#### Correct
+
+```ts
+TouchPlugin.setRuntimeService(pluginRuntimeService)
+const stopped = await plugin.disable()
+if (!stopped) throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+await replacePluginFiles()
+// Crash cleanup is terminal. A later generation starts only after cleanup succeeds.
 ```

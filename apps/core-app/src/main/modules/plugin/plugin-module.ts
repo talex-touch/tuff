@@ -1054,11 +1054,17 @@ function createPluginModuleInternal(
       const _enabled =
         plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
-      if (plugin.status !== PluginStatus.LOAD_FAILED) {
-        await plugin.disable()
+      if (
+        plugin.status !== PluginStatus.DISABLED &&
+        plugin.status !== PluginStatus.LOADED &&
+        !(await plugin.disable())
+      ) {
+        throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
       }
 
-      await unloadPlugin(pluginName)
+      if (!(await unloadPlugin(pluginName))) {
+        throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      }
 
       logDebug('Waiting 0.200s before reloading plugin...', pluginTag(pluginName))
       await sleep(200)
@@ -1244,6 +1250,18 @@ function createPluginModuleInternal(
     const plugin = plugins.get(pluginName)
     if (!plugin) return false
 
+    if (plugin.status !== PluginStatus.DISABLED && plugin.status !== PluginStatus.LOADED) {
+      try {
+        if (!(await plugin.disable())) {
+          logWarn('Plugin unload blocked by incomplete teardown:', pluginTag(pluginName))
+          return false
+        }
+      } catch (error) {
+        logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
+        return false
+      }
+    }
+
     const currentPluginPath = path.resolve(pluginPath, pluginName)
     localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
 
@@ -1252,14 +1270,6 @@ function createPluginModuleInternal(
 
     if (pluginNameIndex.get(plugin.name) === pluginName) {
       pluginNameIndex.delete(plugin.name)
-    }
-
-    try {
-      if (plugin.status !== PluginStatus.DISABLED && plugin.status !== PluginStatus.LOADED) {
-        await plugin.disable()
-      }
-    } catch (error) {
-      logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
     }
     await pluginSqliteResources?.closePlugin(plugin.name)
 
@@ -1311,10 +1321,13 @@ function createPluginModuleInternal(
     const manifestName = pluginInstance?.name ?? identifier
     const pluginDir = path.resolve(pluginPath, folderName)
 
-    // Report uninstall to store (fire and forget, use folder name as slug)
-    reportPluginUninstall(folderName).catch(() => {})
+    if (!(await unloadPlugin(folderName))) {
+      logWarn('Plugin uninstall blocked by incomplete teardown:', pluginTag(folderName))
+      return false
+    }
 
-    await unloadPlugin(folderName)
+    // Report uninstall to store only after the runtime and resources are closed.
+    reportPluginUninstall(folderName).catch(() => {})
     try {
       await purgePluginSecrets?.(manifestName)
     } catch {
@@ -1568,8 +1581,11 @@ function createPluginModuleInternal(
             const _enabled =
               plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
-            await plugin.disable()
-            await unloadPlugin(pluginName)
+            if (!(await plugin.disable())) {
+              logWarn('Plugin reload blocked by incomplete teardown:', pluginTag(pluginName))
+              return
+            }
+            if (!(await unloadPlugin(pluginName))) return
 
             await loadPlugin(pluginName)
 
@@ -2462,7 +2478,8 @@ export class PluginModule extends BaseModule {
 
     const disableResults = await Promise.allSettled(
       [...(this.pluginManager?.plugins.values() ?? [])].map(async (plugin) => {
-        await plugin.disable()
+        if (plugin.status === PluginStatus.DISABLED || plugin.status === PluginStatus.LOADED) return
+        if (!(await plugin.disable())) throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
       })
     )
     for (const result of disableResults) {

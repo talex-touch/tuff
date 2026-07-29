@@ -54,16 +54,16 @@
 
 ## Acceptance Criteria
 
-- [ ] 真实插件加载路径默认且仅使用一 activation 一 `utilityProcess`；仓库不存在 `TUFF_PLUGIN_ISOLATION`、synthetic self-check 或生产 main VM fallback。
-- [ ] Prelude 不能直接导入 Electron、main objects、fs/SQLite、child process、raw network 或 worker internals。
-- [ ] protocol 无任意属性链 dispatch；所有 host access 使用固定 typed capability，并逐调用验证 authoritative activation、permission、schema 和 lifecycle。
-- [ ] callback、subscription/disposer、Abort/cancel、timeout 与迟到 response 有覆盖测试和确定性资源回收。
-- [ ] malformed/oversized/deep/cyclic message、unknown capability、duplicate ID、stale/cross-plugin/cross-generation请求 fail closed。
-- [ ] child crash、hang、heap pressure或 crash loop 不终止/阻塞 main，也不影响其他插件；restart rotation 不接受旧消息。
-- [ ] disable、reload、unload、uninstall、permission revoke 和 runtime error 会 await 对应 generation 的 termination/cleanup barrier。
-- [ ] 所有官方插件移除 direct privileged Node access并通过隔离模式 enable/trigger/disable 回归；24/24 validation通过。
-- [ ] CoreApp node/web typecheck、focused tests、production build、真实 Electron utilityProcess smoke、scoped lint 与 `git diff --check` 通过。
-- [ ] 独立安全 review 未发现 P0/P1/P2 identity、permission、resource 或 fallback bypass。
+- [x] 真实插件加载路径默认且仅使用一 activation 一 `utilityProcess`；仓库不存在 `TUFF_PLUGIN_ISOLATION`、synthetic self-check 或生产 main VM fallback。
+- [x] Prelude 不能直接导入 Electron、main objects、fs/SQLite、child process、raw network 或 worker internals。
+- [x] protocol 无任意属性链 dispatch；所有 host access 使用固定 typed capability，并逐调用验证 authoritative activation、permission、schema 和 lifecycle。
+- [x] callback、subscription/disposer、Abort/cancel、timeout 与迟到 response 有覆盖测试和确定性资源回收。
+- [x] malformed/oversized/deep/cyclic message、unknown capability、duplicate ID、stale/cross-plugin/cross-generation请求 fail closed。
+- [x] child crash、hang、heap pressure或 crash loop 不终止/阻塞 main，也不影响其他插件；restart rotation 不接受旧消息。
+- [x] disable、reload、unload、uninstall、permission revoke 和 runtime error 会 await 对应 generation 的 termination/cleanup barrier。
+- [x] 所有官方插件移除 direct privileged Node access并通过隔离模式 enable/trigger/disable 回归；24/24 validation通过。
+- [x] CoreApp node/web typecheck、focused tests、production build、真实 Electron utilityProcess smoke、scoped lint 与 `git diff --check` 通过。
+- [x] 独立安全 review 未发现 P0/P1/P2 identity、permission、resource 或 fallback bypass。
 
 ## Out Of Scope
 

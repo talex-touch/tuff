@@ -1382,11 +1382,12 @@ const CONTEXT_BOOTSTRAP = String.raw`
     hasBasicIntelligenceFacade ||
     hasIntelligenceContextInvokeFacade ||
     hasIntelligenceContextStreamFacade
-  const hasSnipasteFacade = hasDeclaredCapability('process.spawn')
+  const hasSnipasteFacade =
+    !isTranslationPrelude && hasDeclaredCapability('process.spawn')
   const hasWorkspaceScriptsFacade =
     snapshot.manifest.name === 'touch-workspace-scripts' &&
     hasDeclaredCapability('process.workspace-scripts')
-  const hasSystemFacade = hasDeclaredCapability('system.invoke')
+  const hasSystemFacade = !isTranslationPrelude && hasDeclaredCapability('system.invoke')
   const hasBrowserDataFacade =
     snapshot.manifest.name === 'touch-browser-data' &&
     hasDeclaredCapability('browser-data.scan')

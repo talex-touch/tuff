@@ -117,6 +117,14 @@ export interface HostReady extends HostMessageBase {
   handshakeNonce: string
 }
 
+export interface HostHeartbeat extends HostMessageBase {
+  type: 'heartbeat'
+}
+
+export interface HostHeartbeatResult extends HostMessageBase {
+  type: 'heartbeat-result'
+}
+
 export interface HostLoad extends HostMessageBase {
   type: 'host-load'
   payload: unknown
@@ -216,6 +224,8 @@ export type HostCallbackResult = HostCallbackSuccess | HostCallbackFailure
 export type HostWireMessage =
   | HostInit
   | HostReady
+  | HostHeartbeat
+  | HostHeartbeatResult
   | HostLoad
   | HostLoadResult
   | HostLifecycleCall
@@ -428,6 +438,18 @@ function parseHostMessageInternal(
       }
       assertIdentifier(readDataField(value, 'handshakeNonce'))
       return value as unknown as HostReady
+    case 'heartbeat':
+      assertDirection(direction, 'main-to-child')
+      if (!hasExactKeys(value, COMMON_KEYS)) {
+        throw new HostProtocolError('PLUGIN_HOST_INVALID_MESSAGE')
+      }
+      return value as unknown as HostHeartbeat
+    case 'heartbeat-result':
+      assertDirection(direction, 'child-to-main')
+      if (!hasExactKeys(value, COMMON_KEYS)) {
+        throw new HostProtocolError('PLUGIN_HOST_INVALID_MESSAGE')
+      }
+      return value as unknown as HostHeartbeatResult
     case 'host-load':
       assertDirection(direction, 'main-to-child')
       if (!hasExactKeys(value, [...COMMON_KEYS, 'payload'])) {

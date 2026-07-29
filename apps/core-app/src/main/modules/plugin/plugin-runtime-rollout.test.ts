@@ -37,7 +37,7 @@ function officialManifestNames(): string[] {
 }
 
 describe('plugin runtime production rollout gate', () => {
-  it('computes the disabled default from 22 compatible of 22 manifested activations', () => {
+  it('enables the production default only after all 22 manifested activations are compatible', () => {
     const official = officialManifestNames()
     const compatible = new Set<string>(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
@@ -69,7 +69,7 @@ describe('plugin runtime production rollout gate', () => {
     ])
     expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
     expect(unmigrated).toHaveLength(0)
-    expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(false)
+    expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(true)
   })
 
   it('excludes the two manifestless Surface directories from activation success', () => {

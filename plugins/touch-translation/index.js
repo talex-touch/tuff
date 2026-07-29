@@ -7,48 +7,53 @@ const COPY_ACTION_ID = 'copy-translation'
 const MAX_INPUT_LENGTH = 32 * 1024
 const MAX_RESULT_LENGTH = 32 * 1024
 const MAX_PROVIDERS = 3
-const SUPPORTED_FEATURES = new Set([
-  'touch-translate',
-  'multi-source-translate',
-  'screenshot-translate',
-])
+const SUPPORTED_FEATURES = new Set(['touch-translate', 'multi-source-translate', 'screenshot-translate'])
 
 const requestSequence = new Map()
-const activeRequests = new Map()
+let activeRequest = null
 const approvedCopies = new Map()
 let publishQueue = Promise.resolve()
 let runtimeGeneration = 1
 const activationGeneration = Number.isSafeInteger(pluginManifest?.activationGeneration)
   ? pluginManifest.activationGeneration
   : 0
+const textEncoder = new TextEncoder()
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function truncateText(value, maximum) {
+function truncateText(value, maximumBytes) {
   const text = normalizeText(value)
-  if (text.length <= maximum)
-    return text
-  return `${text.slice(0, maximum - 1)}…`
+  if (textEncoder.encode(text).byteLength <= maximumBytes) return text
+
+  const suffix = '…'
+  const budget = maximumBytes - textEncoder.encode(suffix).byteLength
+  let output = ''
+  let size = 0
+  for (const character of text) {
+    const characterBytes = textEncoder.encode(character).byteLength
+    if (size + characterBytes > budget) break
+    output += character
+    size += characterBytes
+  }
+  return `${output}${suffix}`
 }
 
 function queryText(query) {
-  if (typeof query === 'string')
-    return query
-  return query && typeof query === 'object' && typeof query.text === 'string'
-    ? query.text
-    : ''
+  if (typeof query === 'string') return query
+  return query && typeof query === 'object' && typeof query.text === 'string' ? query.text : ''
 }
 
 function queryImage(query) {
-  if (!query || typeof query !== 'object' || !Array.isArray(query.inputs))
-    return ''
-  const input = query.inputs.find(candidate =>
-    candidate
-    && candidate.type === 'image'
-    && typeof candidate.content === 'string'
-    && candidate.content.startsWith('data:image/'))
+  if (!query || typeof query !== 'object' || !Array.isArray(query.inputs)) return ''
+  const input = query.inputs.find(
+    candidate =>
+      candidate &&
+      candidate.type === 'image' &&
+      typeof candidate.content === 'string' &&
+      candidate.content.startsWith('data:image/'),
+  )
   return input ? input.content : ''
 }
 
@@ -61,8 +66,7 @@ function targetLanguage(sourceLanguage) {
 }
 
 function stableFailureCode(error) {
-  if (!error || typeof error !== 'object')
-    return 'TRANSLATION_FAILED'
+  if (!error || typeof error !== 'object') return 'TRANSLATION_FAILED'
   const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
   return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
     ? descriptor.value
@@ -73,8 +77,7 @@ function failureKind(error) {
   const code = stableFailureCode(error)
   if (code.includes('PERMISSION'))
     return { title: '翻译权限未授予', subtitle: '请在插件权限设置中授予 intelligence.basic' }
-  if (code.includes('CANCEL'))
-    return { title: '翻译已取消', subtitle: '请求已安全停止' }
+  if (code.includes('CANCEL')) return { title: '翻译已取消', subtitle: '请求已安全停止' }
   return { title: '翻译失败', subtitle: '翻译服务暂不可用，请稍后重试' }
 }
 
@@ -110,36 +113,40 @@ function resultItem(featureId, requestId, index, sourceText, result) {
 }
 
 function isCurrent(featureId, requestId, generation) {
-  return runtimeGeneration === generation && activeRequests.get(featureId) === requestId
+  return (
+    runtimeGeneration === generation && activeRequest?.featureId === featureId && activeRequest?.requestId === requestId
+  )
 }
 
 function publish(featureId, requestId, generation, items, signal) {
   const task = publishQueue
     .catch(() => undefined)
     .then(async () => {
-      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
-        return false
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return false
       await plugin.feature.clearItems()
-      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
-        return false
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return false
       await plugin.feature.pushItems(items)
       return true
     })
-  publishQueue = task.then(() => undefined, () => undefined)
+  publishQueue = task.then(
+    () => undefined,
+    () => undefined,
+  )
   return task
 }
 
 async function publicProviders() {
   const listed = await plugin.translation.listProviders()
-  if (!Array.isArray(listed))
-    return []
+  if (!Array.isArray(listed)) return []
   return listed
-    .filter(provider =>
-      provider
-      && typeof provider.providerId === 'string'
-      && provider.available === true
-      && Array.isArray(provider.capabilities)
-      && provider.capabilities.includes('text.translate'))
+    .filter(
+      provider =>
+        provider &&
+        typeof provider.providerId === 'string' &&
+        provider.available === true &&
+        Array.isArray(provider.capabilities) &&
+        provider.capabilities.includes('text.translate'),
+    )
     .slice(0, 32)
 }
 
@@ -150,14 +157,11 @@ async function selectedProviders(featureId) {
 
 async function resolveInput(featureId, query, requestId) {
   const directText = truncateText(queryText(query), MAX_INPUT_LENGTH)
-  if (directText)
-    return directText
-  if (featureId !== 'screenshot-translate')
-    return ''
+  if (directText) return directText
+  if (featureId !== 'screenshot-translate') return ''
 
   const image = queryImage(query)
-  if (!image)
-    return ''
+  if (!image) return ''
   const ocr = await plugin.translation.ocr(
     {
       source: { type: 'data-url', dataUrl: image },
@@ -197,53 +201,62 @@ async function translateWithProvider(featureId, requestId, text, provider) {
 
 const lifecycle = {
   async onFeatureTriggered(featureId, query, _feature, signal) {
-    if (!SUPPORTED_FEATURES.has(featureId))
-      return false
+    if (!SUPPORTED_FEATURES.has(featureId)) return false
 
     const sequence = (requestSequence.get(featureId) || 0) + 1
     requestSequence.set(featureId, sequence)
     const generation = runtimeGeneration
     const requestId = `${featureId}-${activationGeneration}-${generation}-${sequence}`
-    activeRequests.set(featureId, requestId)
-    approvedCopies.delete(featureId)
+    activeRequest = { featureId, requestId }
+    approvedCopies.clear()
 
     try {
-      if (signal?.aborted)
-        return true
-      await publish(featureId, requestId, generation, [
-        infoItem(`${featureId}-pending`, featureId, '正在翻译', '正在通过受控智能服务处理'),
-      ], signal)
+      if (signal?.aborted) return true
+      await publish(
+        featureId,
+        requestId,
+        generation,
+        [infoItem(`${featureId}-pending`, featureId, '正在翻译', '正在通过受控智能服务处理')],
+        signal,
+      )
 
       const text = await resolveInput(featureId, query, requestId)
-      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
-        return true
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return true
       if (!text) {
-        await publish(featureId, requestId, generation, [
-          infoItem(
-            `${featureId}-empty`,
-            featureId,
-            featureId === 'screenshot-translate' ? '未识别到图片文字' : '请输入要翻译的文本',
-            '没有可翻译内容',
-          ),
-        ], signal)
+        await publish(
+          featureId,
+          requestId,
+          generation,
+          [
+            infoItem(
+              `${featureId}-empty`,
+              featureId,
+              featureId === 'screenshot-translate' ? '未识别到图片文字' : '请输入要翻译的文本',
+              '没有可翻译内容',
+            ),
+          ],
+          signal,
+        )
         return true
       }
 
       const providers = await selectedProviders(featureId)
-      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
-        return true
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return true
       if (providers.length === 0) {
-        await publish(featureId, requestId, generation, [
-          infoItem(`${featureId}-unavailable`, featureId, '翻译服务不可用', '没有可用的受控翻译模型'),
-        ], signal)
+        await publish(
+          featureId,
+          requestId,
+          generation,
+          [infoItem(`${featureId}-unavailable`, featureId, '翻译服务不可用', '没有可用的受控翻译模型')],
+          signal,
+        )
         return true
       }
 
       const settled = await Promise.allSettled(
         providers.map(provider => translateWithProvider(featureId, requestId, text, provider)),
       )
-      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
-        return true
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return true
 
       const items = []
       const copyTexts = []
@@ -251,12 +264,13 @@ const lifecycle = {
         const result = settled[index]
         if (result.status === 'fulfilled' && typeof result.value?.result === 'string') {
           const translatedText = truncateText(result.value.result, MAX_RESULT_LENGTH)
-          items.push(resultItem(featureId, requestId, index, text, {
-            ...result.value,
-            result: translatedText,
-          }))
-          if (translatedText)
-            copyTexts.push(translatedText)
+          items.push(
+            resultItem(featureId, requestId, index, text, {
+              ...result.value,
+              result: translatedText,
+            }),
+          )
+          if (translatedText) copyTexts.push(translatedText)
         }
       }
       if (items.length === 0) {
@@ -269,17 +283,18 @@ const lifecycle = {
         approvedCopies.set(featureId, { requestId, texts: new Set(copyTexts) })
       }
       return true
-    }
-    catch (error) {
-      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
-        return true
+    } catch (error) {
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted) return true
       const failure = failureKind(error)
       try {
-        await publish(featureId, requestId, generation, [
-          infoItem(`${featureId}-failed`, featureId, failure.title, failure.subtitle),
-        ], signal)
-      }
-      catch {
+        await publish(
+          featureId,
+          requestId,
+          generation,
+          [infoItem(`${featureId}-failed`, featureId, failure.title, failure.subtitle)],
+          signal,
+        )
+      } catch {
         logger?.error?.('[touch-translation] Failed to publish translation state')
       }
       return true
@@ -288,7 +303,7 @@ const lifecycle = {
 
   async onItemAction(item) {
     const featureId = normalizeText(item?.meta?.featureId)
-    const currentRequestId = activeRequests.get(featureId)
+    const currentRequestId = activeRequest?.featureId === featureId ? activeRequest.requestId : ''
     const actionId = normalizeText(item?.meta?.actionId || item?.meta?.defaultAction)
     if (!featureId || actionId !== COPY_ACTION_ID)
       return { externalAction: true, status: 'ignored', reason: 'action-unsupported' }
@@ -308,8 +323,7 @@ const lifecycle = {
     try {
       await clipboard.writeText(text)
       return { externalAction: true, status: 'started' }
-    }
-    catch (error) {
+    } catch (error) {
       if (stableFailureCode(error).includes('PERMISSION')) {
         return {
           externalAction: true,
@@ -329,7 +343,7 @@ const lifecycle = {
 
   async onDestroy() {
     runtimeGeneration += 1
-    activeRequests.clear()
+    activeRequest = null
     approvedCopies.clear()
     requestSequence.clear()
     return true

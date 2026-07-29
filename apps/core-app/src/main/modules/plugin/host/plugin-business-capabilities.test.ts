@@ -470,6 +470,18 @@ describe('plugin business capability adapters', () => {
       ...feature('chained-widget'),
       interaction: { type: 'widget', rendererFeatureId: 'renderer-alias' }
     } as never)
+    fixture.featureStore.set('ambiguous-renderer', {
+      ...feature('ambiguous-renderer'),
+      interaction: {
+        type: 'widget',
+        path: 'ambiguous-panel',
+        rendererFeatureId: 'intelligence-ask'
+      }
+    } as never)
+    fixture.featureStore.set('ambiguous-widget', {
+      ...feature('ambiguous-widget'),
+      interaction: { type: 'widget', rendererFeatureId: 'ambiguous-renderer' }
+    } as never)
     const { business, registry } = createRegistry(fixture)
     const item = {
       id: 'intelligence-widget',
@@ -591,6 +603,14 @@ describe('plugin business capability adapters', () => {
         render: {
           ...item.render,
           custom: { ...item.render.custom, content: 'touch-intelligence::renderer-alias' }
+        }
+      },
+      {
+        ...item,
+        meta: { ...item.meta, featureId: 'ambiguous-widget' },
+        render: {
+          ...item.render,
+          custom: { ...item.render.custom, content: 'touch-intelligence::ambiguous-renderer' }
         }
       },
       { ...item, meta: { ...item.meta, featureId: 'unknown-feature' } }

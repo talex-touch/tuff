@@ -216,6 +216,46 @@ describe('plugin host fixed request/reply capabilities', () => {
     ).not.toMatch(/host-only-token|authorization|cookie|api.?key/i)
   })
 
+  it('accepts only strict IPv4 or parsed IPv6 resolver results before pinned requests', async () => {
+    const createService = (addresses: readonly string[]) => {
+      const requestPinned = vi.fn(async (request: PluginHostNexusRequest) => ({
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        data: null,
+        url: request.url,
+        ok: true
+      }))
+      return {
+        requestPinned,
+        service: createPluginHostNexusService({
+          getBaseUrl: () => 'https://nexus.example.test',
+          getCredential: () => null,
+          resolveAddresses: async () => addresses,
+          requestPinned
+        })
+      }
+    }
+
+    for (const address of ['203.0.113.10', '2001:db8::1', '::ffff:192.0.2.1']) {
+      const { requestPinned, service } = createService([address])
+      await expect(
+        service.listSnippets({ limit: 1 }, new AbortController().signal)
+      ).resolves.toBeNull()
+      expect(requestPinned).toHaveBeenCalledWith(
+        expect.objectContaining({ resolvedAddresses: [address] })
+      )
+    }
+
+    for (const address of ['nexus.example.test', '127.1', '01.2.3.4', '256.1.1.1', '1::2::3']) {
+      const { requestPinned, service } = createService([address])
+      await expect(
+        service.listSnippets({ limit: 1 }, new AbortController().signal)
+      ).rejects.toThrow('PLUGIN_HOST_OPERATION_UNAVAILABLE')
+      expect(requestPinned).not.toHaveBeenCalled()
+    }
+  })
+
   it.each([
     {
       operation: 'snippets.cloud.list',
