@@ -81,4 +81,19 @@ describe('txAgentItem', () => {
 
     expect(wrapper.emitted('select')).toBeUndefined()
   })
+
+  it('keeps role=option on a disabled row so the listbox stays valid', () => {
+    const wrapper = mount(TxAgentItem, {
+      props: {
+        id: 'archived-agent',
+        name: 'Archived Agent',
+        disabled: true,
+      },
+    })
+
+    // A disabled row must keep role="option" (not drop to a bare div) while it
+    // still carries aria-disabled — otherwise the parent role="listbox" is invalid.
+    expect(wrapper.attributes('role')).toBe('option')
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+  })
 })

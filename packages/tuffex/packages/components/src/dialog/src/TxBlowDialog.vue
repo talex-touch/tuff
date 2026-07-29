@@ -26,6 +26,7 @@ import {
 
   provide,
   ref,
+  useId,
 
 } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
@@ -48,6 +49,10 @@ const isClosing = ref(false)
 const renderComp = ref<Component | null>(null)
 const dialogWrapper = ref<HTMLElement | null>(null)
 const zIndex = ref(getZIndex())
+// Instance-scoped ids (mirroring Bottom/TouchTip) so the dialog announces both its
+// title and its message, and stacked dialogs never collide on a hard-coded id.
+const titleId = useId()
+const contentId = useId()
 let previouslyFocusedElement: HTMLElement | null = null
 let didApplyBackgroundBlur = false
 
@@ -155,17 +160,18 @@ provide('destroy', destroy)
       :style="{ zIndex }"
       role="dialog"
       aria-modal="true"
-      :aria-labelledby="title ? 'tx-blow-dialog-title' : undefined"
+      :aria-labelledby="title ? titleId : undefined"
+      :aria-describedby="(message || messageHtml) ? contentId : undefined"
       @keydown.esc="destroy"
     >
       <div class="tx-blow-dialog__container">
         <component :is="renderComp" v-if="renderComp" />
         <component :is="comp" v-else-if="comp" />
         <template v-else>
-          <p v-if="title" id="tx-blow-dialog-title" class="tx-blow-dialog__title">
+          <p v-if="title" :id="titleId" class="tx-blow-dialog__title">
             {{ title }}
           </p>
-          <div v-if="message || messageHtml" class="tx-blow-dialog__content">
+          <div v-if="message || messageHtml" :id="contentId" class="tx-blow-dialog__content">
             <!-- eslint-disable-next-line vue/no-v-html -->
             <span v-if="messageHtml" v-html="messageHtml" />
             <span v-else>{{ message }}</span>

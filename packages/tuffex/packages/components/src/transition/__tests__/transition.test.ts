@@ -98,6 +98,28 @@ describe('txTransition', () => {
     expect(wrapper.text()).toBe('Sized panel')
   })
 
+  it('merges caller class and style into the smooth-size preset', () => {
+    const wrapper = mountTransition(TxTransition, {
+      props: {
+        preset: 'smooth-size',
+        duration: 240,
+      },
+      attrs: {
+        class: 'external-smooth',
+        style: 'color: red;',
+      },
+      slots: {
+        default: '<span>Sized</span>',
+      },
+    })
+
+    const transition = wrapper.find('.tx-transition')
+
+    expect(transition.classes()).toContain('external-smooth')
+    expect(transition.attributes('style')).toContain('color: red')
+    expect(transition.attributes('style')).toContain('--tx-transition-duration: 240ms')
+  })
+
   it('forwards smooth-size sizing props through TxAutoSizer', () => {
     const wrapper = mountTransition(TxTransitionSmoothSize, {
       props: {
@@ -137,6 +159,25 @@ describe('txTransition', () => {
       name: 'tx-rebound',
       appear: false,
       mode: 'in-out',
+    })
+  })
+
+  it('degrades smooth-size to tx-fade inside a TransitionGroup instead of a dead name', () => {
+    const wrapper = mountTransition(TxTransition, {
+      props: {
+        preset: 'smooth-size',
+        group: true,
+        tag: 'ul',
+      },
+      slots: {
+        default: '<li>Alpha</li><li>Beta</li>',
+      },
+    })
+
+    // tx-smooth-size-* classes don't exist, so a grouped smooth-size must fall back to a
+    // real, -move-capable name rather than emitting a silent no-op transition.
+    expect(wrapper.findComponent({ name: 'TransitionGroup' }).props()).toMatchObject({
+      name: 'tx-fade',
     })
   })
 

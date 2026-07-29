@@ -30,6 +30,8 @@ function handleClick() {
   <button
     type="button"
     class="tx-tab-item fake-background"
+    role="tab"
+    :aria-selected="active"
     :class="{ 'is-active': active, 'is-disabled': disabled }"
     :disabled="disabled"
     @click="handleClick"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import type { LoadingOverlayProps } from '../index'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { TxSpinner } from '../../spinner'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
@@ -25,19 +25,57 @@ const overlayStyle = computed<CSSProperties>(() => {
   } as CSSProperties
 })
 
+const overlayRef = ref<HTMLElement | null>(null)
+let restoreFocus: HTMLElement | null = null
+
 watch(
   () => props.loading && props.fullscreen,
   (open) => {
-    if (open)
+    if (open) {
       zIndex.value = nextZIndex()
+      // Park focus on the blocking overlay so keyboard users can't Tab to the page
+      // behind a fullscreen loading state, and remember where to return afterwards.
+      restoreFocus = (document.activeElement as HTMLElement | null) ?? null
+      nextTick(() => {
+        overlayRef.value?.focus()
+      })
+    }
+    else if (restoreFocus) {
+      restoreFocus.focus?.()
+      restoreFocus = null
+    }
   },
   { immediate: true },
 )
+
+function onFullscreenKeydown(event: KeyboardEvent) {
+  // The fullscreen overlay has no interactive content, so trap Tab to keep focus
+  // parked here — the flow "cannot continue in parallel" while loading.
+  if (event.key === 'Tab')
+    event.preventDefault()
+}
+
+onBeforeUnmount(() => {
+  if (restoreFocus) {
+    restoreFocus.focus?.()
+    restoreFocus = null
+  }
+})
 </script>
 
 <template>
   <teleport v-if="fullscreen" to="body">
-    <div v-if="loading" class="tx-loading-overlay tx-loading-overlay--fullscreen" :style="[overlayStyle, { zIndex }]">
+    <div
+      v-if="loading"
+      ref="overlayRef"
+      class="tx-loading-overlay tx-loading-overlay--fullscreen"
+      :style="[overlayStyle, { zIndex }]"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      tabindex="-1"
+      @keydown="onFullscreenKeydown"
+    >
       <div class="tx-loading-overlay__inner">
         <TxSpinner :size="spinnerSize" />
         <div v-if="text" class="tx-loading-overlay__text">
@@ -47,9 +85,15 @@ watch(
     </div>
   </teleport>
 
-  <div v-else class="tx-loading-overlay__container">
+  <div v-else class="tx-loading-overlay__container" :aria-busy="loading || undefined">
     <slot />
-    <div v-if="loading" class="tx-loading-overlay" :style="overlayStyle">
+    <div
+      v-if="loading"
+      class="tx-loading-overlay"
+      :style="overlayStyle"
+      role="status"
+      aria-live="polite"
+    >
       <div class="tx-loading-overlay__inner">
         <TxSpinner :size="spinnerSize" />
         <div v-if="text" class="tx-loading-overlay__text">

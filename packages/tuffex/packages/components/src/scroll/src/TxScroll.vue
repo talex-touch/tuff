@@ -247,7 +247,11 @@ async function initBetterScroll() {
   })
 
   bs.on('scroll', (pos: { x: number, y: number }) => {
-    emitScroll(Math.abs(pos.y), Math.abs(pos.x))
+    // BetterScroll reports position as a translate offset: content scrolled down
+    // makes pos.y negative. Over-scroll bounce past the top makes pos.y positive;
+    // clamp (rather than Math.abs) so a top bounce reports scrollTop 0 instead of
+    // a mirrored positive offset.
+    emitScroll(Math.max(0, -pos.y), Math.max(0, -pos.x))
   })
 
   if (shouldUsePullDown) {
@@ -410,8 +414,8 @@ defineExpose({
     if (bs && wrapperRef.value) {
       const el = wrapperRef.value
       return {
-        scrollTop: Math.abs(bs.y || 0),
-        scrollLeft: Math.abs(bs.x || 0),
+        scrollTop: Math.max(0, -(bs.y || 0)),
+        scrollLeft: Math.max(0, -(bs.x || 0)),
         scrollHeight: el.scrollHeight,
         scrollWidth: el.scrollWidth,
         clientHeight: el.clientHeight,
@@ -490,8 +494,16 @@ watch(
   },
 )
 
+// Watch a stable serialized signature rather than an array of raw values. A raw
+// array getter returns a fresh reference every run, so consumers passing inline
+// object literals (`:options="{ ... }"` / `:pull-down-refresh="{ ... }"`) would
+// trigger a full BetterScroll destroy+rebuild on every parent re-render — losing
+// scroll position and re-attaching wheel listeners — even when the content is
+// unchanged. Serializing collapses content-equal objects to the same string, so
+// only real config changes rebuild. (`deep: true` is intentionally dropped: it
+// only made the churn worse by firing on every effect re-run.)
 watch(
-  () => [
+  () => JSON.stringify([
     props.direction,
     props.scrollbar,
     props.scrollbarFade,
@@ -507,7 +519,7 @@ watch(
     props.pullUpLoad,
     props.pullUpThreshold,
     props.options,
-  ],
+  ]),
   async () => {
     if (isNativeMode.value)
       return
@@ -519,7 +531,6 @@ watch(
     setupResizeObserver()
     setupMutationObserver()
   },
-  { deep: true },
 )
 </script>
 

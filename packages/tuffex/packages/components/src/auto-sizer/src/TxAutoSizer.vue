@@ -39,29 +39,32 @@ const inner = ref<HTMLElement | null>(null)
 
 let opSeq = 0
 
+// Pass reactive props as getters so useAutoResize/useFlip read the current value
+// on every consumption instead of freezing the setup-time snapshot (issue #366).
+// Constant options stay plain values.
 const { refresh, measure, size, setEnabled } = useAutoResize(outer, inner, {
-  width: props.width,
-  height: props.height,
+  width: () => props.width,
+  height: () => props.height,
   applyStyle: true,
   applyMode: 'auto',
   styleTarget: 'outer',
-  observeTarget: props.observeTarget,
-  rounding: props.rounding,
-  immediate: props.immediate,
-  rafBatch: props.rafBatch,
-  durationMs: props.durationMs,
-  easing: props.easing,
+  observeTarget: () => props.observeTarget,
+  rounding: () => props.rounding,
+  immediate: () => props.immediate,
+  rafBatch: () => props.rafBatch,
+  durationMs: () => props.durationMs,
+  easing: () => props.easing,
   clearStyleOnFinish: true,
 })
 
 const { flip: rawFlip } = useFlip(outer, {
   mode: 'size',
-  duration: props.durationMs,
-  easing: props.easing,
+  duration: () => props.durationMs,
+  easing: () => props.easing,
   includeScale: false,
   size: {
-    width: props.width,
-    height: props.height,
+    width: () => props.width,
+    height: () => props.height,
   },
 })
 

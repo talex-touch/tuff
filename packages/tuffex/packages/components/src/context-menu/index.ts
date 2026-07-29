@@ -1,4 +1,4 @@
-import type { ContextMenuDividerProps, ContextMenuItemProps, ContextMenuPanelProps, ContextMenuProps } from './src/types'
+import type { ContextMenuAnchorMode, ContextMenuDividerProps, ContextMenuItemProps, ContextMenuOpenTarget, ContextMenuPanelBackground, ContextMenuPanelProps, ContextMenuPanelShadow, ContextMenuPanelVariant, ContextMenuPoint, ContextMenuProps, ContextMenuTrigger } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
 import TxContextMenu from './src/TxContextMenu.vue'
 import TxContextMenuDivider from './src/TxContextMenuDivider.vue'
@@ -20,7 +20,7 @@ export {
   TxContextMenuItem,
   TxContextMenuPanel,
 }
-export type { ContextMenuDividerProps, ContextMenuItemProps, ContextMenuPanelProps, ContextMenuProps }
+export type { ContextMenuAnchorMode, ContextMenuDividerProps, ContextMenuItemProps, ContextMenuOpenTarget, ContextMenuPanelBackground, ContextMenuPanelProps, ContextMenuPanelShadow, ContextMenuPanelVariant, ContextMenuPoint, ContextMenuProps, ContextMenuTrigger }
 export type TxContextMenuInstance = InstanceType<typeof TxContextMenu>
 export type TxContextMenuDividerInstance = InstanceType<typeof TxContextMenuDivider>
 export type TxContextMenuItemInstance = InstanceType<typeof TxContextMenuItem>

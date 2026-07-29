@@ -24,10 +24,14 @@ export interface TxFlatRadioContext {
   multiple: Ref<boolean>
   disabled: Ref<boolean>
   size: Ref<TxFlatRadioSize>
+  /** Virtual-focus cursor for multi-select keyboard navigation. */
+  focusedValue: Ref<TxFlatRadioValue | null>
   registerItem: (value: TxFlatRadioValue, el: HTMLElement) => void
   unregisterItem: (value: TxFlatRadioValue) => void
   select: (value: TxFlatRadioValue) => void
   isSelected: (value: TxFlatRadioValue) => boolean
+  /** Stable per-value element id so the container can point aria-activedescendant at it. */
+  getItemId: (value: TxFlatRadioValue) => string
 }
 
 export const FLAT_RADIO_KEY: InjectionKey<TxFlatRadioContext>

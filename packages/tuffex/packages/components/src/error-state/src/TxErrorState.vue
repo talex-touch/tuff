@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ErrorStateProps } from './types'
+import type { ErrorStateEmits, ErrorStateProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -7,10 +7,16 @@ defineOptions({
 })
 
 const props = defineProps<ErrorStateProps>()
+const emit = defineEmits<ErrorStateEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="error">
+  <TxEmptyState
+    v-bind="props"
+    variant="error"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

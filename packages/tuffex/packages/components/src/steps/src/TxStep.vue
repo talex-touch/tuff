@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StepsContext, StepStatus } from './types'
-import { computed, getCurrentInstance, inject, onBeforeUnmount } from 'vue'
+import { computed, getCurrentInstance, inject, onBeforeUnmount, useId } from 'vue'
 import { TxIcon } from '../../icon'
 
 interface Props {
@@ -25,6 +25,10 @@ const props = withDefaults(defineProps<Props>(), {
 const steps = inject<StepsContext>('steps')
 const instance = getCurrentInstance()
 const stepKey = `tx-step-${instance?.uid ?? props.step ?? props.title ?? 'item'}`
+// The clickable head wraps only the number/icon; point its accessible name at the
+// sibling title (and description) so screen readers hear "Start" rather than "1".
+const titleId = useId()
+const descId = useId()
 
 steps?.registerStep(stepKey)
 
@@ -32,8 +36,8 @@ onBeforeUnmount(() => {
   steps?.unregisterStep(stepKey)
 })
 
-const direction = computed(() => steps?.direction || 'horizontal')
-const size = computed(() => steps?.size || 'medium')
+const direction = computed(() => steps?.direction.value || 'horizontal')
+const size = computed(() => steps?.size.value || 'medium')
 const orderIndex = computed(() => steps?.stepKeys.value.indexOf(stepKey) ?? 0)
 const effectiveStep = computed(() => props.step ?? orderIndex.value)
 
@@ -94,6 +98,8 @@ function handleClick() {
       :type="clickable ? 'button' : undefined"
       :disabled="clickable ? disabled : undefined"
       :aria-current="isActive ? 'step' : undefined"
+      :aria-labelledby="title ? titleId : undefined"
+      :aria-describedby="description ? descId : undefined"
       @click="handleClick"
     >
       <div class="tx-step__icon" :class="`tx-step__icon--${status}`">
@@ -106,10 +112,10 @@ function handleClick() {
     </component>
 
     <div class="tx-step__content">
-      <div class="tx-step__title">
+      <div :id="titleId" class="tx-step__title">
         {{ title }}
       </div>
-      <div v-if="description" class="tx-step__description">
+      <div v-if="description" :id="descId" class="tx-step__description">
         {{ description }}
       </div>
     </div>
@@ -236,13 +242,16 @@ function handleClick() {
   margin-left: 0;
 }
 
-.tx-step--small .tx-step--vertical .tx-step__line {
+/* Size + direction modifiers sit on the same `.tx-step` node, so these must be compound
+   (no space) — a descendant combinator would look for a nested vertical step that never
+   exists, leaving the medium offsets in place for small/large vertical steps. */
+.tx-step--small.tx-step--vertical .tx-step__line {
   left: 9px;
   top: 20px;
   height: 20px;
 }
 
-.tx-step--large .tx-step--vertical .tx-step__line {
+.tx-step--large.tx-step--vertical .tx-step__line {
   left: 13px;
   top: 28px;
   height: 28px;

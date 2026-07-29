@@ -74,7 +74,7 @@ describe('flatInput', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['next'])
   })
 
-  it('renders password input and shows Caps Lock hint only in password mode', async () => {
+  it('shows the Caps Lock hint only while CapsLock is active in password mode', async () => {
     const password = mount(FlatInput, {
       props: {
         password: true,
@@ -82,18 +82,36 @@ describe('flatInput', () => {
     })
 
     expect(password.find('input').attributes('type')).toBe('password')
-    await password.find('input').trigger('keydown', {
-      keyCode: 65,
-      shiftKey: false,
-    })
+
+    // Regression (issue #399): the old keyCode-range check lit the hint for every
+    // unshifted letter (keyCode 65-90), a false positive even with CapsLock off.
+    await password.find('input').trigger('keydown', { keyCode: 65, shiftKey: false })
+    expect(password.find('.flat-input__caps').exists()).toBe(false)
+
+    // The hint appears only when the live CapsLock modifier state is actually on.
+    await password.find('input').trigger('keydown', { key: 'A', modifierCapsLock: true })
     expect(password.find('.flat-input__caps').exists()).toBe(true)
 
+    // Non-password inputs never show the hint, even with CapsLock on.
     const text = mount(FlatInput)
-    await text.find('input').trigger('keydown', {
-      keyCode: 65,
-      shiftKey: false,
-    })
+    await text.find('input').trigger('keydown', { key: 'A', modifierCapsLock: true })
     expect(text.find('.flat-input__caps').exists()).toBe(false)
+  })
+
+  it('clears the Caps Lock hint on keyup when CapsLock is toggled off (issue #399)', async () => {
+    const wrapper = mount(FlatInput, {
+      props: {
+        password: true,
+      },
+    })
+
+    // CapsLock on -> hint shown.
+    await wrapper.find('input').trigger('keydown', { key: 'A', modifierCapsLock: true })
+    expect(wrapper.find('.flat-input__caps').exists()).toBe(true)
+
+    // Releasing CapsLock (keyup reports the modifier now off) must hide the hint.
+    await wrapper.find('input').trigger('keyup', { key: 'CapsLock', modifierCapsLock: false })
+    expect(wrapper.find('.flat-input__caps').exists()).toBe(false)
   })
 
   it('registers the component through install', () => {

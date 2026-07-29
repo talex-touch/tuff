@@ -3,9 +3,12 @@ import type {
   ChatComposerEmits,
   ChatComposerProps,
   ChatListProps,
+  ChatMessageAttachment,
+  ChatMessageAttachmentImage,
   ChatMessageEmits,
   ChatMessageModel,
   ChatMessageProps,
+  ChatMessageRole,
   TypingIndicatorProps,
 } from './src/types'
 import { withInstall } from '../../../utils/withInstall'
@@ -34,9 +37,12 @@ export type {
   ChatComposerEmits,
   ChatComposerProps,
   ChatListProps,
+  ChatMessageAttachment,
+  ChatMessageAttachmentImage,
   ChatMessageEmits,
   ChatMessageModel,
   ChatMessageProps,
+  ChatMessageRole,
   TypingIndicatorProps,
 }
 

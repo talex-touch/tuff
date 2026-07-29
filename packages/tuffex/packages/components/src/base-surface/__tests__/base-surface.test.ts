@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { defineComponent, nextTick } from 'vue'
+import { computed, defineComponent, nextTick, reactive, ref } from 'vue'
+import { useBaseSurfaceMotion } from '../src/base-surface-motion'
 import TxBaseSurface from '../src/TxBaseSurface.vue'
 
 const GlassSurfaceStub = defineComponent({
@@ -218,5 +219,103 @@ describe('txBaseSurface', () => {
     expect(removeEventListener).toHaveBeenCalledWith('transitionstart', expect.any(Function))
     expect(disconnect).toHaveBeenCalled()
     vi.unstubAllGlobals()
+  })
+})
+
+/**
+ * The auto-detect MutationObserver watches the root element *and every ancestor*
+ * up to <html>, so an unrelated inline-style write on an ancestor used to end the
+ * motion state while the surface was still transforming. flip-overlay's body
+ * scroll lock (`body.style.overflow = 'hidden'`) triggers exactly that.
+ *
+ * These drive the observer callback directly — the suite above stubs
+ * MutationObserver without ever invoking it, so this branch had no coverage.
+ */
+describe('txBaseSurface auto-detect motion end', () => {
+  let fireMutations: ((records: Array<Partial<MutationRecord>>) => void) | null = null
+
+  function mountMotionHarness() {
+    fireMutations = null
+    vi.stubGlobal('MutationObserver', vi.fn((cb: MutationCallback) => {
+      fireMutations = records => cb(records as MutationRecord[], {} as MutationObserver)
+      return { observe: vi.fn(), disconnect: vi.fn() }
+    }))
+
+    const Harness = defineComponent({
+      setup() {
+        const rootRef = ref<HTMLElement | null>(null)
+        const props = reactive({ moving: false, autoDetect: true, mode: 'pure' })
+        const { isMoving } = useBaseSurfaceMotion({
+          props: props as any,
+          rootRef,
+          needsFallback: computed(() => true),
+          settleDelayMs: computed(() => 0),
+          refractionRecoveryBlendDurationMs: computed(() => 0),
+          refractionRecoveryTotalDurationMs: computed(() => 0),
+        })
+        return { rootRef, isMoving }
+      },
+      template: '<div ref="rootRef" />',
+    })
+
+    return mount(Harness, { attachTo: document.body })
+  }
+
+  afterEach(() => {
+    document.body.style.overflow = ''
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('keeps the motion state while an ancestor writes an unrelated inline style', async () => {
+    const wrapper = mountMotionHarness()
+    await nextTick()
+
+    const el = wrapper.element as HTMLElement
+    el.style.transform = 'translateX(8px)'
+    fireMutations!([{ type: 'attributes', attributeName: 'style', target: el }])
+    await nextTick()
+    expect(wrapper.vm.isMoving).toBe(true)
+
+    // What flip-overlay's body scroll lock does. body is an observed ancestor.
+    document.body.style.overflow = 'hidden'
+    fireMutations!([{ type: 'attributes', attributeName: 'style', target: document.body }])
+    await nextTick()
+
+    expect(wrapper.vm.isMoving).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('ends the motion state once nothing under observation is transforming', async () => {
+    const wrapper = mountMotionHarness()
+    await nextTick()
+
+    const el = wrapper.element as HTMLElement
+    el.style.transform = 'translateX(8px)'
+    fireMutations!([{ type: 'attributes', attributeName: 'style', target: el }])
+    await nextTick()
+    expect(wrapper.vm.isMoving).toBe(true)
+
+    // Guards against the fix over-blocking and wedging the surface as "moving".
+    el.style.transform = ''
+    fireMutations!([{ type: 'attributes', attributeName: 'style', target: el }])
+    await nextTick()
+
+    expect(wrapper.vm.isMoving).toBe(false)
+
+    wrapper.unmount()
+  })
+})
+
+describe('txBaseSurface fake background', () => {
+  it('emits a fake background variable for blur/glass/refraction fake modes', () => {
+    // pure/mask already emitted it; blur/glass/refraction left the `::before`
+    // painting an empty `background: var(--tx-surface-fake-bg)`.
+    const glass = mountSurface({ props: { fake: true, mode: 'glass' } })
+    expect(glass.attributes('style')).toContain('--tx-surface-fake-bg')
+
+    const refraction = mountSurface({ props: { fake: true, mode: 'refraction' } })
+    expect(refraction.attributes('style')).toContain('--tx-surface-fake-bg')
   })
 })

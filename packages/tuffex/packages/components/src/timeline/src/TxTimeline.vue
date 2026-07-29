@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { TimelineContext, TimelineLayout } from './types'
-import { provide } from 'vue'
+import { provide, reactive, toRef } from 'vue'
+
+defineOptions({ name: 'TxTimeline' })
 
 interface Props {
   layout?: TimelineLayout
@@ -10,9 +12,9 @@ const props = withDefaults(defineProps<Props>(), {
   layout: 'vertical',
 })
 
-provide<TimelineContext>('timeline', {
-  layout: props.layout,
-})
+provide<TimelineContext>('timeline', reactive({
+  layout: toRef(props, 'layout'),
+}))
 </script>
 
 <template>

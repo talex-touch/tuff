@@ -18,6 +18,10 @@ const props = withDefaults(
     disabled?: boolean
     readonly?: boolean
     controls?: boolean
+    /** Accessible label for the decrement button. Localize by passing e.g. '减少'. */
+    decreaseLabel?: string
+    /** Accessible label for the increment button. Localize by passing e.g. '增加'. */
+    increaseLabel?: string
   }>(),
   {
     modelValue: null,
@@ -29,6 +33,8 @@ const props = withDefaults(
     disabled: false,
     readonly: false,
     controls: true,
+    decreaseLabel: 'Decrease value',
+    increaseLabel: 'Increase value',
   },
 )
 
@@ -42,6 +48,9 @@ const emit = defineEmits<{
 const attrs = useAttrs()
 const inputRef = ref<HTMLInputElement | null>(null)
 const isFocused = ref(false)
+// Raw text while the user is typing. Kept unclamped so intermediate states
+// ("5" on the way to "50", "-", "1.") survive until blur re-normalizes.
+const rawValue = ref('')
 
 const inputAttrs = computed(() => {
   const { class: _class, style: _style, ...rest } = attrs
@@ -50,11 +59,12 @@ const inputAttrs = computed(() => {
 
 const wrapperStyle = computed(() => attrs.style as StyleValue)
 
-const displayValue = computed({
-  get: () => props.modelValue ?? '',
-  set: (value: string | number) => {
-    commitValue(parseValue(String(value)), true)
-  },
+// While focused, mirror exactly what was typed so keystrokes are never
+// rewritten mid-edit; when blurred, follow the normalized model value.
+const displayValue = computed(() => {
+  if (isFocused.value)
+    return rawValue.value
+  return props.modelValue ?? ''
 })
 
 const canDecrease = computed(() => {
@@ -65,11 +75,8 @@ const canIncrease = computed(() => {
   return !props.disabled && !props.readonly && (props.max === undefined || (props.modelValue ?? 0) < props.max)
 })
 
-function parseValue(raw: string): number | null {
-  if (raw.trim() === '')
-    return null
-  const value = Number(raw)
-  return Number.isFinite(value) ? normalizeValue(value) : props.modelValue ?? null
+function applyPrecision(value: number): number {
+  return props.precision === undefined ? value : Number(value.toFixed(props.precision))
 }
 
 function normalizeValue(value: number): number {
@@ -78,15 +85,30 @@ function normalizeValue(value: number): number {
     next = Math.max(props.min, next)
   if (props.max !== undefined)
     next = Math.min(props.max, next)
-  if (props.precision !== undefined)
-    next = Number(next.toFixed(props.precision))
-  return next
+  return applyPrecision(next)
 }
 
 function commitValue(value: number | null, emitChange: boolean) {
   emit('update:modelValue', value)
   if (emitChange)
     emit('change', value)
+}
+
+function handleInput(event: Event) {
+  const raw = (event.target as HTMLInputElement).value
+  rawValue.value = raw
+  const trimmed = raw.trim()
+  // A `type="number"` field sanitizes any partial or invalid input ("-", "1.",
+  // "abc", an overflowing exponent) down to an empty string before it reaches
+  // us, so an empty buffer is the only non-numeric state and it clears the
+  // model. Min/max clamping is intentionally deferred to blur/step, so a value
+  // like "5" (min 10) can be typed on the way to "50" without being rewritten
+  // to "10" mid-keystroke.
+  if (trimmed === '') {
+    commitValue(null, true)
+    return
+  }
+  commitValue(applyPrecision(Number(trimmed)), true)
 }
 
 function stepBy(direction: 1 | -1) {
@@ -98,12 +120,26 @@ function stepBy(direction: 1 | -1) {
 
 function handleFocus(event: FocusEvent) {
   isFocused.value = true
+  rawValue.value = props.modelValue == null ? '' : String(props.modelValue)
   emit('focus', event)
 }
 
 function handleBlur(event: FocusEvent) {
   isFocused.value = false
-  commitValue(parseValue(inputRef.value?.value ?? ''), true)
+  const trimmed = rawValue.value.trim()
+  let resolved: number | null
+  if (trimmed === '') {
+    resolved = null
+  }
+  else {
+    const value = Number(trimmed)
+    // Leftover intermediate text ("-", "1.") falls back to the current model.
+    resolved = Number.isFinite(value) ? normalizeValue(value) : props.modelValue ?? null
+  }
+  // Only commit when blur actually changed the value: a focus/tab-away round trip on an
+  // untouched field must not dirty the model or fire a spurious change.
+  if (resolved !== (props.modelValue ?? null))
+    commitValue(resolved, true)
   emit('blur', event)
 }
 
@@ -133,14 +169,14 @@ defineExpose({
       type="button"
       class="tx-number-input__control"
       :disabled="!canDecrease"
-      aria-label="Decrease value"
+      :aria-label="decreaseLabel"
       @click="stepBy(-1)"
     >
       -
     </button>
     <input
       ref="inputRef"
-      v-model="displayValue"
+      :value="displayValue"
       class="tx-number-input__field"
       type="number"
       :min="min"
@@ -150,6 +186,7 @@ defineExpose({
       :disabled="disabled"
       :readonly="readonly"
       v-bind="inputAttrs"
+      @input="handleInput"
       @focus="handleFocus"
       @blur="handleBlur"
     >
@@ -158,7 +195,7 @@ defineExpose({
       type="button"
       class="tx-number-input__control"
       :disabled="!canIncrease"
-      aria-label="Increase value"
+      :aria-label="increaseLabel"
       @click="stepBy(1)"
     >
       +

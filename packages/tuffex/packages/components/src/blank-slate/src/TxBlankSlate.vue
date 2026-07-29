@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BlankSlateProps } from './types'
+import type { BlankSlateEmits, BlankSlateProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -11,10 +11,16 @@ const props = withDefaults(defineProps<BlankSlateProps>(), {
   layout: 'vertical',
   surface: 'plain',
 })
+const emit = defineEmits<BlankSlateEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="blank-slate">
+  <TxEmptyState
+    v-bind="props"
+    variant="blank-slate"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

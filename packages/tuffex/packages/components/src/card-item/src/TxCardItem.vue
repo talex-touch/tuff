@@ -23,9 +23,29 @@ const props = withDefaults(defineProps<CardItemProps>(), {
   disabled: false,
 })
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void
 }>()
+
+function onActivateKey(event: KeyboardEvent) {
+  // Only the row itself activates; ignore Enter/Space bubbling up from controls
+  // in the right slot so their own keyboard handling is preserved.
+  //
+  // Key matching is left to Vue's `.enter` / `.space` modifiers rather than
+  // comparing `event.key` here: the modifiers normalise the name, so they match
+  // both a browser's `"Enter"` / `" "` and the `"enter"` / `"space"` that
+  // `@vue/test-utils` produces for `trigger('keydown.enter')`.
+  //
+  // preventDefault lives here rather than in a `.prevent` modifier: the modifier
+  // fires unconditionally before this guard, so a Space typed into an input in
+  // the right slot would be swallowed before we could decline to handle it.
+  if (event.target !== event.currentTarget)
+    return
+  if (props.disabled || !props.clickable)
+    return
+  event.preventDefault()
+  emit('click', event as unknown as MouseEvent)
+}
 
 const avatarStyle = computed(() => {
   const size = `${props.avatarSize}px`
@@ -48,8 +68,10 @@ const avatarStyle = computed(() => {
     }"
     :role="clickable ? role : undefined"
     :tabindex="(clickable && !disabled) ? 0 : undefined"
+    :aria-disabled="(clickable && disabled) ? true : undefined"
     @click="!disabled && clickable && $emit('click', $event)"
-    @keydown.enter="!disabled && clickable && $emit('click', $event as any)"
+    @keydown.enter="onActivateKey"
+    @keydown.space="onActivateKey"
   >
     <div v-if="$slots.avatar || avatarUrl || iconClass || avatarText" class="tx-card-item__left" :style="avatarStyle">
       <slot name="avatar">

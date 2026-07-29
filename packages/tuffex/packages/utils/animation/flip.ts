@@ -1,17 +1,19 @@
-import type { Ref } from 'vue'
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import type { MaybeRefOrGetter, Ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref, toValue } from 'vue'
 
 export type FlipMode = 'transform' | 'size'
 
 export interface FlipSizeOptions {
-  width?: boolean
-  height?: boolean
+  width?: MaybeRefOrGetter<boolean>
+  height?: MaybeRefOrGetter<boolean>
 }
 
 export interface FlipOptions {
-  duration?: number
+  // duration/easing accept refs/getters and are resolved lazily at flip time so
+  // they stay live after mount (issue #366). The remaining options are unchanged.
+  duration?: MaybeRefOrGetter<number>
 
-  easing?: string
+  easing?: MaybeRefOrGetter<string>
 
   mode?: FlipMode
 
@@ -33,9 +35,10 @@ export interface UseFlipReturn {
 export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = {}): UseFlipReturn {
   const running = ref(false)
 
-  const opt: Required<FlipOptions> = {
-    duration: opts.duration ?? 200,
-    easing: opts.easing ?? 'cubic-bezier(0.2, 0, 0, 1)',
+  const opt = {
+    // Lazy: re-read on every access so a ref/getter caller stays reactive (#366).
+    get duration() { return toValue(opts.duration) ?? 200 },
+    get easing() { return toValue(opts.easing) ?? 'cubic-bezier(0.2, 0, 0, 1)' },
     mode: opts.mode ?? 'transform',
     includeScale: opts.includeScale ?? true,
     size: opts.size ?? { width: true, height: true },
@@ -158,8 +161,8 @@ export function useFlip(targetRef: Ref<HTMLElement | null>, opts: FlipOptions = 
       return
     }
 
-    const shouldWidth = opt.size?.width ?? true
-    const shouldHeight = opt.size?.height ?? true
+    const shouldWidth = toValue(opt.size?.width) ?? true
+    const shouldHeight = toValue(opt.size?.height) ?? true
 
     const prevTransitionProperty = el.style.transitionProperty
     const prevTransitionDuration = el.style.transitionDuration

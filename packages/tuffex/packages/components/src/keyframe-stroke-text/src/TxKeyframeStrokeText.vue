@@ -23,6 +23,7 @@ const textLength = ref(100)
 const viewBox = ref('0 0 100 100')
 const textX = ref(0)
 const textY = ref(0)
+const viewHeight = ref(0)
 
 const renderedText = computed(() => props.text || '\u00A0')
 
@@ -43,19 +44,28 @@ function syncMetrics() {
   textX.value = padding - bbox.x
   textY.value = padding - bbox.y
   viewBox.value = `0 0 ${width + padding * 2} ${height + padding * 2}`
+  viewHeight.value = height + padding * 2
   textLength.value = Math.max(1, el.getComputedTextLength())
 }
 
-const styleVars = computed<CSSProperties>(() => ({
-  '--tx-kf-stroke-color': props.strokeColor,
-  '--tx-kf-fill-color': props.fillColor,
-  '--tx-kf-duration': `${props.durationMs}ms`,
-  '--tx-kf-stroke-width': `${props.strokeWidth}`,
-  '--tx-kf-stroke-length': `${textLength.value}`,
-  '--tx-kf-font-size': toCssUnit(props.fontSize),
-  '--tx-kf-font-weight': String(props.fontWeight),
-  '--tx-kf-font-family': props.fontFamily,
-}))
+const styleVars = computed<CSSProperties>(() => {
+  const vars: CSSProperties = {
+    '--tx-kf-stroke-color': props.strokeColor,
+    '--tx-kf-fill-color': props.fillColor,
+    '--tx-kf-duration': `${props.durationMs}ms`,
+    '--tx-kf-stroke-width': `${props.strokeWidth}`,
+    '--tx-kf-stroke-length': `${textLength.value}`,
+    '--tx-kf-font-size': toCssUnit(props.fontSize),
+    '--tx-kf-font-weight': String(props.fontWeight),
+    '--tx-kf-font-family': props.fontFamily,
+  }
+  // Size the SVG from the measured viewBox so the glyph renders at font-size
+  // regardless of stroke padding; pinning height to font-size uniformly rescaled
+  // the whole drawing (text included) whenever strokeWidth changed.
+  if (viewHeight.value > 0)
+    vars['--tx-kf-view-height'] = `${viewHeight.value}px`
+  return vars
+})
 
 watch(
   () => [renderedText.value, props.fontSize, props.fontWeight, props.fontFamily, props.strokeWidth],
@@ -116,7 +126,7 @@ onMounted(async () => {
 .tx-keyframe-stroke-text {
   display: inline-block;
   width: auto;
-  height: var(--tx-kf-font-size, 64px);
+  height: var(--tx-kf-view-height, var(--tx-kf-font-size, 64px));
   overflow: visible;
 }
 

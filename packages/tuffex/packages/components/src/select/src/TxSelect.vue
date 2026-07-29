@@ -192,10 +192,25 @@ const renderedOptionGroups = computed(() => {
 })
 
 const shouldRenderPropOptions = computed(() => hasPropOptions.value)
+
+// In slot mode each TuffSelectItem hides itself (v-show) when it does not match
+// the search query, using this same query. Mirror that filter here so the
+// emptyText state can appear when nothing matches — counting the raw registered
+// list (which is never pruned by search) would keep emptyText permanently hidden.
+const visibleSlotOptionCount = computed(() => {
+  const q = (props.remote ? '' : searchQuery.value).trim().toLowerCase()
+  if (!q)
+    return registeredOptionList.value.length
+  return registeredOptionList.value.reduce(
+    (count, opt) => count + (opt.label.toLowerCase().includes(q) ? 1 : 0),
+    0,
+  )
+})
+
 const hasVisibleOptions = computed(() => {
   if (shouldRenderPropOptions.value)
     return renderedOptionGroups.value.some(group => group.options.length > 0)
-  return registeredOptionList.value.length > 0
+  return visibleSlotOptionCount.value > 0
 })
 
 const normalizedCreateLabel = computed(() => activeQuery.value.trim())
@@ -644,6 +659,9 @@ onBeforeUnmount(() => {
             :placeholder="placeholder"
             :readonly="!isEditable"
             :disabled="disabled"
+            role="combobox"
+            aria-haspopup="listbox"
+            :aria-expanded="isOpen"
             @focus="openFromFocus"
           >
             <template #suffix>
@@ -662,7 +680,7 @@ onBeforeUnmount(() => {
         class="tuff-select__panel"
         :style="panelStyle"
       >
-        <div v-if="searchable && !isEditable" class="tuff-select__search">
+        <div v-if="searchable && !isEditable && !isMultiInputEnabled" class="tuff-select__search">
           <TxSearchInput
             ref="searchInputRef"
             v-model="searchQuery"
@@ -670,7 +688,7 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <div class="tuff-select__list">
+        <div class="tuff-select__list" role="listbox" :aria-multiselectable="multiple || undefined">
           <template v-if="shouldRenderPropOptions">
             <template v-for="group in renderedOptionGroups" :key="group.key">
               <div v-if="group.label" class="tuff-select__group-label">
@@ -686,9 +704,11 @@ onBeforeUnmount(() => {
                   'is-selected': isValueSelected(opt.value),
                   'is-disabled': opt.disabled,
                 }"
-                :clickable="!opt.disabled"
+                role="option"
+                :clickable="true"
                 :active="isValueSelected(opt.value)"
                 :disabled="!!opt.disabled"
+                :aria-selected="isValueSelected(opt.value)"
                 @click="!opt.disabled && handleSelect(opt.value, opt.label)"
               >
                 <template #title>

@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import { nextTick } from 'vue'
 import TxSplitter from '../src/TxSplitter.vue'
+import txSplitterSource from '../src/TxSplitter.vue?raw'
 
 function mockRect(el: Element, rect: Partial<DOMRect>) {
   Object.defineProperty(el, 'getBoundingClientRect', {
@@ -51,6 +52,10 @@ describe('txSplitter', () => {
     expect(bar.attributes('role')).toBe('separator')
     expect(bar.attributes('aria-orientation')).toBe('vertical')
     expect(bar.attributes('tabindex')).toBe('0')
+    // A focusable separator is a widget: it must report its position range.
+    expect(bar.attributes('aria-valuenow')).toBe('35')
+    expect(bar.attributes('aria-valuemin')).toBe('10')
+    expect(bar.attributes('aria-valuemax')).toBe('90')
   })
 
   it('renders vertical direction with horizontal separator orientation', () => {
@@ -96,6 +101,31 @@ describe('txSplitter', () => {
 
     expect(wrapper.emitted('drag-end')).toHaveLength(1)
     expect(wrapper.classes()).not.toContain('is-dragging')
+  })
+
+  it('keeps snapped values within min and max bounds', async () => {
+    const wrapper = mount(TxSplitter, {
+      props: {
+        modelValue: 0.5,
+        min: 0.1,
+        max: 0.9,
+        snap: 0.3,
+      },
+    })
+    mockRect(wrapper.element, { width: 400 })
+
+    // Drag to the far left: raw ratio ~0.025 snaps to grid 0, which must not
+    // escape below min (would otherwise collapse pane A to 0).
+    await wrapper.find('.tx-splitter__bar').trigger('pointerdown', {
+      clientX: 10,
+      pointerId: 1,
+    })
+
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([0.1])
+    expect(wrapper.emitted('change')?.[0]).toEqual([0.1])
+
+    window.dispatchEvent(pointerWindowEvent('pointerup'))
+    await nextTick()
   })
 
   it('updates vertical ratio from pointer y coordinate', async () => {
@@ -181,5 +211,36 @@ describe('txSplitter', () => {
     expect(wrapper.emitted('drag-start')).toHaveLength(1)
     expect(wrapper.emitted('drag-end')).toHaveLength(1)
     expect(wrapper.classes()).not.toContain('is-dragging')
+  })
+
+  it('ends the drag on pointercancel so a cancelled touch does not wedge dragging', async () => {
+    const wrapper = mount(TxSplitter, {
+      props: {
+        modelValue: 0.5,
+      },
+    })
+    mockRect(wrapper.element, { width: 400 })
+
+    await wrapper.find('.tx-splitter__bar').trigger('pointerdown', {
+      clientX: 200,
+      pointerId: 1,
+    })
+    expect(wrapper.classes()).toContain('is-dragging')
+
+    window.dispatchEvent(pointerWindowEvent('pointercancel'))
+    await nextTick()
+
+    expect(wrapper.emitted('drag-end')).toHaveLength(1)
+    expect(wrapper.classes()).not.toContain('is-dragging')
+
+    // A stray move after the cancel must not keep resizing with no button held.
+    const movesBefore = wrapper.emitted('update:modelValue')?.length ?? 0
+    window.dispatchEvent(pointerWindowEvent('pointermove', { clientX: 40 }))
+    await nextTick()
+    expect(wrapper.emitted('update:modelValue')?.length ?? 0).toBe(movesBefore)
+  })
+
+  it('marks the bar touch-action: none so touch drags resize instead of scrolling', () => {
+    expect(txSplitterSource).toContain('touch-action: none')
   })
 })

@@ -119,6 +119,69 @@ describe('txDataTable', () => {
     expect(wrapper.emitted('rowClick')).toHaveLength(2)
   })
 
+  it('makes rows keyboard-reachable automatically when a rowClick listener is attached', async () => {
+    const onRowClick = () => {}
+    const wrapper = mount(TxDataTable, {
+      // A rowClick listener but no interactiveRows: keyboard access must be automatic.
+      props: { columns, data, onRowClick },
+    })
+
+    const row = wrapper.find('tbody .tx-data-table__row')
+    expect(row.attributes('tabindex')).toBe('0')
+    expect(row.classes()).toContain('is-interactive')
+
+    await row.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('rowClick')).toHaveLength(1)
+    expect(wrapper.emitted('rowClick')?.[0]?.[0]).toEqual({ row: data[0], index: 0 })
+  })
+
+  it('does not emit rowClick when toggling a row selection checkbox', async () => {
+    const wrapper = mount(TxDataTable, {
+      props: {
+        columns,
+        data,
+        selectable: true,
+        rowKey: 'id',
+        selectedKeys: [],
+      },
+    })
+
+    const checkbox = wrapper.find('.tx-data-table__cell--select .tx-checkbox')
+    await checkbox.trigger('click')
+
+    // Selection still fires from the checkbox...
+    expect(wrapper.emitted('update:selectedKeys')?.[0]?.[0]).toEqual([1])
+    // ...but the row-level click must not (checkbox is selection, not navigation).
+    expect(wrapper.emitted('rowClick')).toBeUndefined()
+  })
+
+  it('does not roll back a user sort when defaultSort prop identity changes', async () => {
+    const sortableColumns = [
+      { key: 'name', title: 'Name', sortable: true },
+      { key: 'age', title: 'Age', sortable: true },
+    ]
+    const wrapper = mount(TxDataTable, {
+      props: {
+        columns: sortableColumns,
+        data,
+        defaultSort: { key: 'name', order: 'asc' },
+      },
+    })
+
+    const nameHeader = wrapper.findAll('thead th')[0]
+    // Default is asc → one click flips it to desc (Bob before Alice).
+    await nameHeader.find('.tx-data-table__sort-button').trigger('click')
+    expect(nameHeader.attributes('aria-sort')).toBe('descending')
+    expect(wrapper.findAll('tbody tr')[0].findAll('td')[0].text()).toBe('Bob')
+
+    // A parent re-render passes a fresh defaultSort object with identical content.
+    await wrapper.setProps({ defaultSort: { key: 'name', order: 'asc' } })
+
+    // The user's descending sort must survive the spurious identity change.
+    expect(nameHeader.attributes('aria-sort')).toBe('descending')
+    expect(wrapper.findAll('tbody tr')[0].findAll('td')[0].text()).toBe('Bob')
+  })
+
   it('applies layout, nowrap, auto width, and fixed column styles', () => {
     const wrapper = mount(TxDataTable, {
       props: {

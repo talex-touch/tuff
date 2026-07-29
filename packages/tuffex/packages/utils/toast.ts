@@ -31,6 +31,16 @@ function generateId() {
   return `tx-toast-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+const dismissTimers = new Map<string, ReturnType<typeof globalThis.setTimeout>>()
+
+function clearDismissTimer(id: string): void {
+  const timer = dismissTimers.get(id)
+  if (timer !== undefined) {
+    globalThis.clearTimeout(timer)
+    dismissTimers.delete(id)
+  }
+}
+
 export function toast(options: TxToastOptions): string {
   toastStore.zIndex = nextZIndex()
   const id = options.id ?? generateId()
@@ -38,6 +48,7 @@ export function toast(options: TxToastOptions): string {
 
   const existingIndex = toastStore.items.findIndex(t => t.id === id)
   if (existingIndex !== -1) {
+    clearDismissTimer(id)
     toastStore.items.splice(existingIndex, 1)
   }
 
@@ -53,15 +64,17 @@ export function toast(options: TxToastOptions): string {
   toastStore.items.push(item)
 
   if (duration > 0) {
-    globalThis.setTimeout(() => {
+    const timer = globalThis.setTimeout(() => {
       dismissToast(id)
     }, duration)
+    dismissTimers.set(id, timer)
   }
 
   return id
 }
 
 export function dismissToast(id: string): void {
+  clearDismissTimer(id)
   const index = toastStore.items.findIndex(t => t.id === id)
   if (index !== -1) {
     toastStore.items.splice(index, 1)
@@ -69,5 +82,7 @@ export function dismissToast(id: string): void {
 }
 
 export function clearToasts(): void {
+  dismissTimers.forEach(timer => globalThis.clearTimeout(timer))
+  dismissTimers.clear()
   toastStore.items.splice(0, toastStore.items.length)
 }

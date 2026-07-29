@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { DataTableColumn, DataTableEmits, DataTableKey, DataTableProps, DataTableSortOrder, DataTableSortState } from './types'
-import { computed, ref, watch } from 'vue'
+import { computed, getCurrentInstance, ref, watch } from 'vue'
 import { TxCheckbox } from '../../checkbox'
 import { TxEmptyState } from '../../empty-state'
 import { TxSpinner } from '../../spinner'
@@ -25,11 +25,23 @@ const props = withDefaults(defineProps<DataTableProps<any>>(), {
 
 const emit = defineEmits<DataTableEmits<any>>()
 
+// A row is keyboard-interactive when explicitly opted in, or whenever a rowClick
+// listener is attached — so the documented rowClick event is reachable by keyboard
+// (Tab + Enter/Space), not only by mouse. rowClick is a declared emit, so its
+// listener is read from the component vnode rather than $attrs.
+const instance = getCurrentInstance()
+const rowInteractive = computed(() => props.interactiveRows || !!instance?.vnode.props?.onRowClick)
+
 const localSort = ref<DataTableSortState | null>(props.defaultSort ?? null)
 
 watch(
-  () => props.defaultSort,
-  (next) => {
+  // Track the sort by value, not by object reference. Consumers routinely pass
+  // an inline `:default-sort="{ ... }"` literal, so any unrelated parent
+  // re-render produces a brand-new object; a reference watcher would then
+  // silently roll a user's active sort back to the default on every render.
+  [() => props.defaultSort?.key, () => props.defaultSort?.order],
+  () => {
+    const next = props.defaultSort
     if (!next) {
       localSort.value = null
       return
@@ -252,7 +264,7 @@ function emitRowClick(row: any, index: number) {
 }
 
 function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
-  if (!props.interactiveRows || event.target !== event.currentTarget)
+  if (!rowInteractive.value || event.target !== event.currentTarget)
     return
   if (event.key !== 'Enter' && event.key !== ' ')
     return
@@ -327,12 +339,12 @@ function handleRowKeydown(event: KeyboardEvent, row: any, index: number) {
           v-for="(row, index) in displayRows"
           :key="getRowKey(row, index)"
           class="tx-data-table__row"
-          :class="{ 'is-interactive': interactiveRows }"
-          :tabindex="interactiveRows ? 0 : undefined"
+          :class="{ 'is-interactive': rowInteractive }"
+          :tabindex="rowInteractive ? 0 : undefined"
           @click="emitRowClick(row, index)"
           @keydown="handleRowKeydown($event, row, index)"
         >
-          <td v-if="selectable" class="tx-data-table__cell tx-data-table__cell--select">
+          <td v-if="selectable" class="tx-data-table__cell tx-data-table__cell--select" @click.stop>
             <TxCheckbox
               :model-value="selectedSet.has(getRowKey(row, index))"
               aria-label="Select row"

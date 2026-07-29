@@ -108,6 +108,44 @@ describe('txCard', () => {
     expect(wrapper.emitted('click')).toHaveLength(1)
   })
 
+  it('exposes button semantics and keyboard activation when clickable', async () => {
+    const wrapper = mountCard({
+      props: { clickable: true },
+    })
+
+    // A clickable card must be tab-reachable and announce button semantics.
+    expect(wrapper.attributes('role')).toBe('button')
+    expect(wrapper.attributes('tabindex')).toBe('0')
+
+    // Enter and Space both activate through the same guard as a mouse click.
+    await wrapper.trigger('keydown', { key: 'Enter' })
+    await wrapper.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toHaveLength(2)
+
+    // Disabled leaves the tab order and blocks keyboard activation.
+    await wrapper.setProps({ disabled: true })
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    await wrapper.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('click')).toHaveLength(2)
+  })
+
+  it('does not turn a non-clickable card into a button or hijack nested keys', async () => {
+    const wrapper = mountCard({
+      props: { clickable: true },
+      slots: { default: '<input class="inner" />' },
+    })
+
+    // Space typed inside a focusable child must not activate the card.
+    await wrapper.find('.inner').trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toBeUndefined()
+
+    // A plain card carries no interactive semantics (no over-blocking).
+    const plain = mountCard()
+    expect(plain.attributes('role')).toBeUndefined()
+    expect(plain.attributes('tabindex')).toBeUndefined()
+  })
+
   it('renders loading overlay and forwards spinner size', () => {
     const wrapper = mountCard({
       props: {
@@ -191,5 +229,34 @@ describe('txCard', () => {
       refractionLightY: 1,
     })
     expect(surfaceProps.refractionAngle).toBeCloseTo(119.25)
+  })
+
+  it('does not start surface motion on mouseleave when disabled', async () => {
+    const wrapper = mountCard({
+      props: {
+        disabled: true,
+        inertial: true,
+        background: 'glass',
+      },
+    })
+
+    await wrapper.trigger('mouseleave')
+
+    // A disabled card must stay fully inert: no moving=true flash to the surface.
+    expect(wrapper.findComponent(BaseSurfaceStub).props('moving')).toBe(false)
+  })
+
+  it('still starts return motion on mouseleave when enabled', async () => {
+    const wrapper = mountCard({
+      props: {
+        inertial: true,
+        background: 'glass',
+      },
+    })
+
+    await wrapper.trigger('mouseleave')
+
+    // Guard must not over-block: an enabled inertial card still returns to rest.
+    expect(wrapper.findComponent(BaseSurfaceStub).props('moving')).toBe(true)
   })
 })

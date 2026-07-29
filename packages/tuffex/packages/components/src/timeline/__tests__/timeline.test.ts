@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { TxTimeline as InstalledTimeline, TxTimelineItem as InstalledTimelineItem } from '../index'
 import TxTimelineItem from '../src/TxTimelineItem.vue'
 import TxTimeline from '../src/TxTimeline.vue'
 
@@ -69,5 +70,36 @@ describe('txTimeline', () => {
 
     expect(wrapper.classes()).toContain('tx-timeline-item--active')
     expect(wrapper.find('.tx-timeline-item__dot').classes()).toContain('tx-timeline-item__dot--active')
+  })
+
+  it('propagates layout changes to timeline items', async () => {
+    const wrapper = mount(TxTimeline, {
+      props: {
+        layout: 'vertical',
+      },
+      slots: {
+        default: '<TxTimelineItem title="Build" />',
+      },
+      global: {
+        components: { TxTimelineItem },
+      },
+    })
+
+    expect(wrapper.find('.tx-timeline-item').classes()).toContain('tx-timeline-item--vertical')
+
+    await wrapper.setProps({ layout: 'horizontal' })
+
+    expect(wrapper.find('.tx-timeline-item').classes()).toContain('tx-timeline-item--horizontal')
+    expect(wrapper.find('.tx-timeline-item').classes()).not.toContain('tx-timeline-item--vertical')
+  })
+
+  it('registers timeline components through install', () => {
+    const app = { component: vi.fn() }
+
+    InstalledTimeline.install?.(app as any)
+    InstalledTimelineItem.install?.(app as any)
+
+    expect(app.component).toHaveBeenCalledWith('TxTimeline', InstalledTimeline)
+    expect(app.component).toHaveBeenCalledWith('TxTimelineItem', InstalledTimelineItem)
   })
 })

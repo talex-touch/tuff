@@ -85,4 +85,27 @@ describe('txSplitButton', () => {
     await wrapper.find('button.tx-split-button__menu').trigger('click')
     expect(spy).toHaveBeenCalled()
   })
+
+  it('keeps keyboard activation working after an aborted menu press', async () => {
+    const spy = vi.fn()
+    const wrapper = mount(SplitButton, {
+      attrs: { onMenuOpenChange: spy },
+      slots: {
+        default: 'Run',
+        menu: () => 'Menu',
+      },
+      global: { stubs: { TxPopover: PopoverStub } },
+    })
+
+    const menuBtn = wrapper.find('button.tx-split-button__menu')
+
+    // Aborted press: pointerdown opens the menu, but the release happens
+    // off-target so no paired click is ever dispatched on the button.
+    await menuBtn.trigger('pointerdown')
+    expect(spy).toHaveBeenLastCalledWith(true)
+
+    // Keyboard activation must still toggle — a wedged click-guard used to swallow it.
+    await menuBtn.trigger('keydown', { key: 'Enter' })
+    expect(spy).toHaveBeenLastCalledWith(false)
+  })
 })

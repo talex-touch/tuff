@@ -1,22 +1,13 @@
 <script setup lang="ts">
+import type { GridItemProps } from './types'
 import { computed } from 'vue'
 
 defineOptions({ name: 'TxGridItem' })
 
-const props = withDefaults(
-  defineProps<{
-    colSpan?: number
-    rowSpan?: number
-    justifySelf?: string
-    alignSelf?: string
-  }>(),
-  {
-    colSpan: 1,
-    rowSpan: 1,
-    justifySelf: '',
-    alignSelf: '',
-  },
-)
+const props = withDefaults(defineProps<GridItemProps>(), {
+  colSpan: 1,
+  rowSpan: 1,
+})
 
 const style = computed<Record<string, string>>(() => {
   const out: Record<string, string> = {

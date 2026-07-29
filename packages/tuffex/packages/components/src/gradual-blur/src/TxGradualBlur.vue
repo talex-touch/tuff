@@ -125,7 +125,10 @@ const config = computed(() => {
     }
   }
 
-  return resolved as Required<GradualBlurProps>
+  // Only the keys in DEFAULT_CONFIG are guaranteed defined; casting the whole
+  // object to Required<GradualBlurProps> would lie about width/hoverIntensity/
+  // mobileHeight/etc (no defaults), typing them non-undefined when they are not.
+  return resolved as Required<Pick<GradualBlurProps, keyof typeof DEFAULT_CONFIG>> & GradualBlurProps
 })
 
 function getGradientDirection(position: GradualBlurProps['position']): string {
@@ -145,6 +148,13 @@ function debounce<T extends (...a: any[]) => void>(fn: T, wait: number) {
       clearTimeout(timeout)
     timeout = setTimeout(() => fn(...args), wait)
   }
+}
+
+function parseDurationMs(duration: string): number {
+  const value = Number.parseFloat(duration)
+  if (Number.isNaN(value))
+    return 0
+  return /ms$/i.test(duration.trim()) ? value : value * 1000
 }
 
 function updateResponsiveDimensions() {
@@ -182,8 +192,19 @@ function updateResponsiveDimensions() {
 }
 
 let intersectionObserver: IntersectionObserver | null = null
+let animationCompleteTimeout: ReturnType<typeof setTimeout> | undefined
+
+function teardownIntersectionObserver() {
+  if (intersectionObserver) {
+    intersectionObserver.disconnect()
+    intersectionObserver = null
+  }
+}
 
 function setupIntersectionObserver() {
+  // Idempotent: drop any previous observer first so a re-run (e.g. animated toggled back
+  // to 'scroll') doesn't leak a second observer on the same element.
+  teardownIntersectionObserver()
   if (config.value.animated !== 'scroll')
     return
   if (!containerRef.value)
@@ -294,10 +315,29 @@ const containerStyle = computed((): StyleValue => {
 
 const debouncedResize = debounce(updateResponsiveDimensions, 100)
 
+// Track attachment explicitly so cleanup keys off "did we add it", not the current
+// `responsive` value — otherwise toggling responsive off before unmount would leak the
+// listener (the old `if (config.responsive)` cleanup skipped removal).
+let resizeListenerAttached = false
+
+function attachResizeListener() {
+  if (!hasWindow() || resizeListenerAttached)
+    return
+  window.addEventListener('resize', debouncedResize)
+  resizeListenerAttached = true
+}
+
+function detachResizeListener() {
+  if (!resizeListenerAttached)
+    return
+  window.removeEventListener('resize', debouncedResize)
+  resizeListenerAttached = false
+}
+
 onMounted(() => {
   if (config.value.responsive) {
     updateResponsiveDimensions()
-    window.addEventListener('resize', debouncedResize)
+    attachResizeListener()
   }
 
   if (config.value.animated === 'scroll') {
@@ -307,19 +347,41 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (config.value.responsive) {
-    window.removeEventListener('resize', debouncedResize)
-  }
+  detachResizeListener()
+  teardownIntersectionObserver()
 
-  if (intersectionObserver) {
-    intersectionObserver.disconnect()
-    intersectionObserver = null
+  if (animationCompleteTimeout) {
+    clearTimeout(animationCompleteTimeout)
+    animationCompleteTimeout = undefined
+  }
+})
+
+// Keep the resize listener and IntersectionObserver in sync when `responsive` / `animated`
+// change after mount; onMounted alone would leave a later toggle silently inert.
+watch(() => config.value.responsive, (isResponsive) => {
+  if (isResponsive) {
+    updateResponsiveDimensions()
+    attachResizeListener()
+  }
+  else {
+    detachResizeListener()
+  }
+})
+
+watch(() => config.value.animated, (animated) => {
+  if (animated === 'scroll') {
+    isVisible.value = false
+    setupIntersectionObserver()
+  }
+  else {
+    teardownIntersectionObserver()
+    isVisible.value = true
   }
 })
 
 watch(
   () => isVisible.value,
-  (newVisible) => {
+  (newVisible, _oldVisible, onCleanup) => {
     if (!newVisible)
       return
     if (config.value.animated !== 'scroll')
@@ -327,11 +389,17 @@ watch(
     if (!props.onAnimationComplete)
       return
 
-    const timeout = setTimeout(() => {
+    animationCompleteTimeout = setTimeout(() => {
+      animationCompleteTimeout = undefined
       props.onAnimationComplete?.()
-    }, Number.parseFloat(config.value.duration) * 1000)
+    }, parseDurationMs(config.value.duration))
 
-    return () => clearTimeout(timeout)
+    onCleanup(() => {
+      if (animationCompleteTimeout) {
+        clearTimeout(animationCompleteTimeout)
+        animationCompleteTimeout = undefined
+      }
+    })
   },
 )
 </script>

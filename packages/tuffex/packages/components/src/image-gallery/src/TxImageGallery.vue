@@ -9,6 +9,13 @@ defineOptions({
 
 const props = withDefaults(defineProps<ImageGalleryProps>(), {
   startIndex: 0,
+  previousLabel: 'Previous image',
+  nextLabel: 'Next image',
+  previousText: 'Prev',
+  nextText: 'Next',
+  previewTitle: 'Preview',
+  itemLabelFormatter: (index: number) => `Image ${index + 1}`,
+  openLabelFormatter: (label: string) => `Open ${label} preview`,
 })
 
 const emit = defineEmits<ImageGalleryEmits>()
@@ -48,7 +55,7 @@ function clampIndex(value: number): number {
 }
 
 function getItemLabel(item: ImageGalleryItem, i: number): string {
-  return item.name || `Image ${i + 1}`
+  return item.name || props.itemLabelFormatter(i)
 }
 
 function openAt(i: number): void {
@@ -86,28 +93,28 @@ function next(): void {
         :key="item.id"
         type="button"
         class="tx-image-gallery__thumb"
-        :aria-label="`Open ${getItemLabel(item, i)} preview`"
+        :aria-label="openLabelFormatter(getItemLabel(item, i))"
         @click="openAt(i)"
       >
         <img :src="item.url" :alt="item.name || ''" loading="lazy">
       </button>
     </div>
 
-    <TxModal v-model="visible" :title="current?.name || 'Preview'" width="min(92vw, 880px)" @close="close">
+    <TxModal v-model="visible" :title="current?.name || previewTitle" width="min(92vw, 880px)" @close="close">
       <div v-if="current" class="tx-image-gallery__viewer">
         <img :src="current.url" :alt="current.name || ''">
       </div>
 
       <template #footer>
         <div class="tx-image-gallery__footer">
-          <button type="button" class="tx-image-gallery__nav" aria-label="Previous image" :disabled="index <= 0" @click="prev">
-            Prev
+          <button type="button" class="tx-image-gallery__nav" :aria-label="previousLabel" :disabled="index <= 0" @click="prev">
+            {{ previousText }}
           </button>
           <div class="tx-image-gallery__count">
             {{ index + 1 }} / {{ list.length }}
           </div>
-          <button type="button" class="tx-image-gallery__nav" aria-label="Next image" :disabled="index >= list.length - 1" @click="next">
-            Next
+          <button type="button" class="tx-image-gallery__nav" :aria-label="nextLabel" :disabled="index >= list.length - 1" @click="next">
+            {{ nextText }}
           </button>
         </div>
       </template>

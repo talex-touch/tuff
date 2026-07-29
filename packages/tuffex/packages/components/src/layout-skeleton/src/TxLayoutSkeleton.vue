@@ -7,7 +7,7 @@ const contentLineWidths = ['72%', '58%', '84%', '46%', '67%', '76%', '52%', '63%
 </script>
 
 <template>
-  <div class="tx-layout-skeleton">
+  <div class="tx-layout-skeleton" aria-hidden="true">
     <div class="tx-layout-skeleton__container">
       <div class="tx-layout-skeleton__header">
         <div class="tx-layout-skeleton__line tx-layout-skeleton__header-line" />

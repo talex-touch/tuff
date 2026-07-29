@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends SortableListItem">
 import type { SortableListEmits, SortableListItem, SortableListProps } from './types'
 import { computed, ref } from 'vue'
 
@@ -6,12 +6,16 @@ defineOptions({
   name: 'TxSortableList',
 })
 
-const props = withDefaults(defineProps<SortableListProps>(), {
+const props = withDefaults(defineProps<SortableListProps<T>>(), {
   disabled: false,
   handle: false,
 })
 
-const emit = defineEmits<SortableListEmits>()
+const emit = defineEmits<SortableListEmits<T>>()
+
+defineSlots<{
+  item?: (props: { item: T, dragging: boolean }) => any
+}>()
 
 const draggingId = ref<string | null>(null)
 const overId = ref<string | null>(null)
@@ -22,7 +26,7 @@ function findIndex(id: string): number {
   return items.value.findIndex(i => i.id === id)
 }
 
-function move<T extends SortableListItem>(arr: T[], from: number, to: number): T[] {
+function move<U extends SortableListItem>(arr: U[], from: number, to: number): U[] {
   const next = arr.slice()
   const picked = next.splice(from, 1)[0]
   if (!picked)
@@ -67,6 +71,12 @@ function onDragOver(e: DragEvent, id: string): void {
 }
 
 function onDrop(e: DragEvent, id: string): void {
+  if (props.disabled) {
+    draggingId.value = null
+    overId.value = null
+    return
+  }
+
   e.preventDefault()
 
   const fromId = draggingId.value
@@ -82,7 +92,7 @@ function onDrop(e: DragEvent, id: string): void {
   if (from < 0 || to < 0 || from === to)
     return
 
-  const next = move(items.value as any, from, to)
+  const next = move(items.value, from, to)
   emit('update:modelValue', next)
   emit('reorder', { from, to, items: next })
 }

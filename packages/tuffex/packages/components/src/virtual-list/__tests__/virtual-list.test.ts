@@ -1,8 +1,19 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import TxVirtualList from '../src/TxVirtualList.vue'
 
 describe('txVirtualList', () => {
+  it('applies items/height defaults without missing-required-prop warnings', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const wrapper = mount(TxVirtualList, { props: { itemHeight: 20 } })
+
+    expect(wrapper.findAll('.tx-virtual-list__item')).toHaveLength(0)
+    expect(warn.mock.calls.some(call => String(call[0]).includes('Missing required prop'))).toBe(false)
+
+    warn.mockRestore()
+  })
+
   it('renders visible items based on height', () => {
     const wrapper = mount(TxVirtualList, {
       props: {

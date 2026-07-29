@@ -1,15 +1,12 @@
 <script lang="ts" setup>
+import type { FlatButtonProps } from './types'
+
 defineOptions({
   name: 'TuffFlatButton',
 })
 
 const props = withDefaults(
-  defineProps<{
-    primary?: boolean
-    mini?: boolean
-    disabled?: boolean
-    loading?: boolean
-  }>(),
+  defineProps<FlatButtonProps>(),
   {
     primary: false,
     mini: false,
@@ -33,6 +30,7 @@ function handleClick(event: MouseEvent) {
   <button
     type="button"
     :disabled="disabled || loading"
+    :aria-busy="loading || undefined"
     class="tuff-flat-button" :class="[
       {
         'is-primary': primary,
@@ -44,7 +42,7 @@ function handleClick(event: MouseEvent) {
     ]"
     @click="handleClick"
   >
-    <span v-if="loading" class="tx-flat-button__loading">
+    <span v-if="loading" class="tx-flat-button__loading" aria-hidden="true">
       <svg class="tx-flat-button__spinner" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
       </svg>

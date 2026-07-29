@@ -163,4 +163,27 @@ describe('txSortableList', () => {
 
     expect(wrapper.find('.tx-sortable-list__item--dragging').exists()).toBe(false)
   })
+
+  it('does not reorder or emit when disabled mid-drag before drop', async () => {
+    const wrapper = mount(TxSortableList, {
+      props: {
+        modelValue: items,
+      },
+    })
+    const rows = wrapper.findAll('.tx-sortable-list__item')
+
+    // Start a real drag while enabled so draggingId is actually set (the
+    // existing disabled test only ever blocks at dragstart, masking onDrop).
+    await rows[0]?.element.dispatchEvent(dragEvent('dragstart', rows[0]?.element))
+    expect(rows[0]?.classes()).toContain('tx-sortable-list__item--dragging')
+
+    // Flip to disabled mid-drag, then drop on another item.
+    await wrapper.setProps({ disabled: true })
+    await rows[2]?.element.dispatchEvent(dragEvent('drop', rows[2]?.element))
+
+    // Drop must be fully ignored while disabled, and drag state cleared.
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.emitted('reorder')).toBeUndefined()
+    expect(wrapper.find('.tx-sortable-list__item--dragging').exists()).toBe(false)
+  })
 })

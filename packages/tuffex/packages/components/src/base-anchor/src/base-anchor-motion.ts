@@ -59,6 +59,11 @@ interface BaseAnchorMotionOptions {
   applyLiquidFrame: (p: number, velocity?: number) => void
   /** Clear per-item inline opacity; hide the stage when the anchor ends up closed. */
   settleLiquid: (open: boolean) => void
+  /**
+   * True when the user asked for reduced motion. The gsap-driven types (transfer,
+   * boom, opacity) snap to their end state; liquid handles this inside prepareLiquid.
+   */
+  prefersReducedMotion: () => boolean
 }
 
 /** `drip` and `bead` share one engine; only the sheet's width behaviour differs. */
@@ -501,6 +506,13 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       return
     }
 
+    // Reduced motion: snap straight to the open end state instead of running a
+    // gsap timeline (liquid already handles this inside runLiquid via prepareLiquid).
+    if (options.prefersReducedMotion()) {
+      finishOpen(currentRunId)
+      return
+    }
+
     const gsap = await loadGsap()
     if (!options.isCurrentRun(currentRunId))
       return
@@ -606,6 +618,12 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       clip.style.overflow = 'visible'
       clip.style.clipPath = 'none'
       runLiquid(currentRunId, 'close')
+      return
+    }
+
+    // Reduced motion: snap straight to the closed end state instead of tweening.
+    if (options.prefersReducedMotion()) {
+      finishClose(currentRunId)
       return
     }
 

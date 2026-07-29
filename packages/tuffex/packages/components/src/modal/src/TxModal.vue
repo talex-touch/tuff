@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onUnmounted, ref, useId, watch } from 'vue'
+import { hasDocument } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({
@@ -38,7 +39,8 @@ watch(
   (v) => {
     if (v) {
       zIndex.value = nextZIndex()
-      previouslyFocusedElement = document.activeElement as HTMLElement
+      if (hasDocument())
+        previouslyFocusedElement = document.activeElement as HTMLElement
       nextTick(() => {
         overlayRef.value?.focus()
       })
@@ -48,12 +50,47 @@ watch(
       previouslyFocusedElement = null
     }
   },
-  { flush: 'sync' },
+  // `immediate` so a modal mounted already open (`modelValue: true`) still
+  // focuses the overlay and records the previously focused element — otherwise
+  // Escape (bound on the overlay) and focus restoration never engage.
+  { immediate: true, flush: 'sync' },
 )
 
 function close() {
   visible.value = false
   emit('close')
+}
+
+// Focus trap: aria-modal="true" promises the background is inert, so Tab must cycle
+// within the dialog instead of walking into the page behind it.
+function trapFocus(event: KeyboardEvent) {
+  const root = overlayRef.value
+  if (!root)
+    return
+  const focusable = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  )
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (!first || !last) {
+    // Nothing tabbable inside — keep focus on the dialog itself.
+    event.preventDefault()
+    root.focus()
+    return
+  }
+  const active = hasDocument() ? document.activeElement : null
+  if (event.shiftKey) {
+    if (active === first || active === root) {
+      event.preventDefault()
+      last.focus()
+    }
+  }
+  else if (active === last) {
+    event.preventDefault()
+    first.focus()
+  }
 }
 
 onUnmounted(() => {
@@ -77,6 +114,7 @@ onUnmounted(() => {
         :style="{ zIndex }"
         @click.self="close"
         @keydown.esc="close"
+        @keydown.tab="trapFocus"
       >
         <div class="tx-modal__content" :style="{ width }">
           <header v-if="title || $slots.header" class="tx-modal__header">

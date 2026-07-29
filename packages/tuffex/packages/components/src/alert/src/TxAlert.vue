@@ -56,6 +56,7 @@ function handleClose() {
     <button
       v-if="closable"
       class="tx-alert__close"
+      type="button"
       aria-label="Close"
       @click="handleClose"
     >

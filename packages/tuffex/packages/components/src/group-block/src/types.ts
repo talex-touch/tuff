@@ -42,15 +42,16 @@ export interface GroupBlockProps {
   collapsible?: boolean
 
   /**
-   * External collapsed state.
-   * When provided, initial expanded state follows this unless user has interacted.
+   * External collapsed state. Provides the initial expanded state as `!collapsed`
+   * when `defaultExpand` is unset, and is re-applied when it changes — unless the
+   * user has toggled or a persisted (`memoryName`) state exists.
    * @default false
    */
   collapsed?: boolean
 
   /**
-   * Initial expanded state.
-   * @default true
+   * Initial expanded state. Takes precedence over `collapsed`; when unset the
+   * block falls back to `!collapsed` (expanded by default).
    */
   defaultExpand?: boolean
 

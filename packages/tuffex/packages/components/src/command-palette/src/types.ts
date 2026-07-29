@@ -22,6 +22,8 @@ export interface CommandPaletteProps {
   closeOnSelect?: boolean
   overlayClass?: CommandPaletteClassValue
   panelClass?: CommandPaletteClassValue
+  /** Accessible name for the palette's `role="dialog"` and command listbox. @default 'Command palette' */
+  ariaLabel?: string
 }
 
 export interface CommandPaletteEmits {

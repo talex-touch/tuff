@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxFlatRadioProps, TxFlatRadioSize, TxFlatRadioValue } from './types'
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, provide, ref, toRefs, watch } from 'vue'
 import { FLAT_RADIO_KEY } from './types'
 
 defineOptions({ name: 'TxFlatRadio' })
@@ -78,15 +78,34 @@ function select(value: TxFlatRadioValue) {
   }
 }
 
+// Virtual-focus cursor for multi-select keyboard navigation. Exposed via the
+// context so items can render it (is-focused) and the container can announce it
+// through aria-activedescendant.
+const focusedValue = ref<TxFlatRadioValue | null>(null)
+
+const uid = getCurrentInstance()?.uid ?? 0
+const idMap = new Map<TxFlatRadioValue, string>()
+let idSeq = 0
+function getItemId(value: TxFlatRadioValue): string {
+  let id = idMap.get(value)
+  if (id == null) {
+    id = `tx-flat-radio-${uid}-item-${idSeq++}`
+    idMap.set(value, id)
+  }
+  return id
+}
+
 provide(FLAT_RADIO_KEY, {
   modelValue: computed(() => props.modelValue),
   multiple: computed(() => props.multiple),
   disabled: computed(() => props.disabled),
   size: computed(() => props.size as TxFlatRadioSize),
+  focusedValue,
   registerItem,
   unregisterItem,
   select,
   isSelected,
+  getItemId,
 })
 
 // --- Indicator (single-select only) ---
@@ -162,9 +181,6 @@ function getEnabledValues(): TxFlatRadioValue[] {
     return el && !el.hasAttribute('disabled')
   })
 }
-
-// Track focused value for multi-select keyboard navigation
-const focusedValue = ref<TxFlatRadioValue | null>(null)
 
 function handleKeydown(e: KeyboardEvent) {
   if (props.disabled) return
@@ -244,6 +260,11 @@ const cssVars = computed(() => ({
   '--tx-flat-radio-radius': sizeConfig.value.radius,
   '--tx-flat-radio-item-radius': sizeConfig.value.itemRadius,
 }))
+
+// Announce the multi-select virtual-focus cursor to assistive tech.
+const activeDescendantId = computed(() =>
+  props.multiple && focusedValue.value != null ? getItemId(focusedValue.value) : undefined,
+)
 </script>
 
 <template>
@@ -259,6 +280,7 @@ const cssVars = computed(() => ({
     :role="multiple ? 'group' : 'radiogroup'"
     :tabindex="disabled ? -1 : 0"
     :aria-disabled="disabled"
+    :aria-activedescendant="activeDescendantId"
     @keydown="handleKeydown"
   >
     <span

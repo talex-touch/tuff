@@ -293,4 +293,41 @@ describe('txContextMenu', () => {
 
     expect(close).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps the menu open when pointer down originates inside its own panel', async () => {
+    const wrapper = mountMenu({ modelValue: true, closeOnAnyPointerDown: true })
+    await nextTick()
+
+    const panel = document.body.querySelector<HTMLElement>('.tx-context-menu-panel')
+    expect(panel).not.toBeNull()
+    expect(panel?.getAttribute('data-tx-context-menu-layer')).toBe('true')
+
+    panel!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await nextTick()
+
+    const closeEmissions = (wrapper.emitted('update:modelValue') ?? []).filter(([value]) => value === false)
+    expect(closeEmissions).toHaveLength(0)
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('reflects closeOnSelect prop changes to descendant menu items', async () => {
+    const close = vi.fn()
+    const wrapper = mount(TxContextMenuPanel, {
+      props: { close, closeOnSelect: true },
+      slots: {
+        default: '<TxContextMenuItem>Nested</TxContextMenuItem>',
+      },
+      global: {
+        components: { TxContextMenuItem },
+      },
+    })
+
+    await wrapper.setProps({ closeOnSelect: false })
+    await wrapper.findComponent(TxContextMenuItem).trigger('click')
+    expect(close).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ closeOnSelect: true })
+    await wrapper.findComponent(TxContextMenuItem).trigger('click')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
 })

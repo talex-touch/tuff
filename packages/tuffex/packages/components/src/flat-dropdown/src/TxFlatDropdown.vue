@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import type { TxFlatDropdownContentSlotProps, TxFlatDropdownProps, TxFlatDropdownTriggerSlotProps } from './types'
 import { autoUpdate, flip, offset as offsetMw, shift, size, useFloating } from '@floating-ui/vue'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
 
 defineOptions({ name: 'TxFlatDropdown' })
 
@@ -32,6 +32,8 @@ const emit = defineEmits<{
 const referenceRef = ref<HTMLElement | null>(null)
 const floatingRef = ref<HTMLElement | null>(null)
 const internalOpen = ref(false)
+// Stable id so the trigger can advertise the panel it controls via aria-controls.
+const panelId = useId()
 
 const open = computed<boolean>({
   get: () => (typeof props.modelValue === 'boolean' ? props.modelValue : internalOpen.value),
@@ -233,7 +235,8 @@ watch(open, (value) => {
   if (typeof document === 'undefined')
     return
   if (value) {
-    if (props.closeOnClickOutside)
+    // `manual` hands closing entirely to the host — outside clicks must not dismiss it.
+    if (props.closeOnClickOutside && props.trigger !== 'manual')
       document.addEventListener('pointerdown', onDocumentPointerDown, true)
     if (props.closeOnEsc)
       document.addEventListener('keydown', onDocumentKeydown)
@@ -263,6 +266,9 @@ onBeforeUnmount(() => {
     ref="referenceRef"
     class="tx-flat-dropdown"
     :class="{ 'is-open': open, 'is-disabled': disabled }"
+    aria-haspopup="true"
+    :aria-expanded="open"
+    :aria-controls="panelId"
     @mouseenter="onTriggerEnter"
     @mouseleave="onTriggerLeave"
     @focusin="onTriggerEnter"
@@ -275,6 +281,7 @@ onBeforeUnmount(() => {
       <Transition name="tx-flat-dropdown">
         <div
           v-if="open"
+          :id="panelId"
           ref="floatingRef"
           class="tx-flat-dropdown__panel"
           :class="panelClass"

@@ -9,11 +9,13 @@ const props = withDefaults(
     markdown?: boolean
     compact?: boolean
     showAvatar?: boolean
+    typingLabel?: string
   }>(),
   {
     markdown: true,
     compact: false,
     showAvatar: false,
+    typingLabel: 'AI is typing',
   },
 )
 
@@ -60,10 +62,13 @@ const statusLabel = computed(() => {
     ]"
     :data-role="message.role"
   >
-    <div v-if="showAvatar" class="tx-ai-message__avatar" aria-hidden="true">
+    <!-- Only the built-in fallback (decorative image / initial) is hidden from AT;
+         hiding the whole wrapper would also strip a custom `avatar` slot that may
+         hold meaningful or interactive content. -->
+    <div v-if="showAvatar" class="tx-ai-message__avatar">
       <slot name="avatar" :message="message">
-        <img v-if="message.avatar" :src="message.avatar" alt="">
-        <span v-else>{{ roleLabel.slice(0, 1).toUpperCase() }}</span>
+        <img v-if="message.avatar" :src="message.avatar" alt="" aria-hidden="true">
+        <span v-else aria-hidden="true">{{ roleLabel.slice(0, 1).toUpperCase() }}</span>
       </slot>
     </div>
 
@@ -75,7 +80,7 @@ const statusLabel = computed(() => {
 
       <div class="tx-ai-message__content">
         <slot :message="message">
-          <div v-if="(message.status === 'pending' || message.status === 'streaming') && !message.content" class="tx-ai-message__typing" aria-label="AI is typing">
+          <div v-if="(message.status === 'pending' || message.status === 'streaming') && !message.content" class="tx-ai-message__typing" role="status" :aria-label="typingLabel">
             <span />
             <span />
             <span />

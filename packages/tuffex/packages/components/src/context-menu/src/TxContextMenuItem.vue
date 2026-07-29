@@ -51,7 +51,6 @@ function onClick() {
     :disabled="disabled"
     :aria-disabled="disabled ? 'true' : undefined"
     @click="onClick"
-    @keydown.space.prevent="onClick"
   >
     <template v-if="$slots.avatar" #avatar>
       <slot name="avatar" />

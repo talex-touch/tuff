@@ -38,7 +38,7 @@ function handleSelect() {
     class="tx-agent-item"
     :class="rootClass"
     role="option"
-    :clickable="!disabled"
+    :clickable="true"
     :disabled="disabled"
     :active="selected"
     :avatar-size="34"
@@ -46,7 +46,6 @@ function handleSelect() {
     :aria-selected="selected"
     :aria-disabled="disabled"
     @click="handleSelect"
-    @keydown.space.prevent="handleSelect"
   >
     <template #avatar>
       <div class="tx-agent-item__icon" aria-hidden="true">

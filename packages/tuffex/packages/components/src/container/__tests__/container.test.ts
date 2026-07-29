@@ -113,6 +113,51 @@ describe('container layout primitives', () => {
     setViewportWidth(1300)
     await wrapper.vm.$nextTick()
 
-    expect(col.attributes('style')).toContain('flex: 0 0 100%')
+    // No xl/lg/md declared, so the span cascades down to the nearest smaller
+    // breakpoint (sm: 12 -> 50%) instead of collapsing back to the raw span.
+    expect(col.attributes('style')).toContain('flex: 0 0 50%')
+    expect(col.attributes('style')).toContain('max-width: 50%')
+  })
+
+  it('cascades responsive span down to the nearest smaller breakpoint', async () => {
+    setViewportWidth(400)
+    const wrapper = mount(TxCol, {
+      props: {
+        span: 24,
+        xs: 6,
+        sm: 12,
+        md: 18,
+      },
+    })
+    const col = wrapper.find('.tx-col')
+
+    // xs (400): exact match on xs -> 6/24 = 25%
+    expect(col.attributes('style')).toContain('flex: 0 0 25%')
+
+    setViewportWidth(1100)
+    await wrapper.vm.$nextTick()
+
+    // lg (1100): no lg declared -> cascade down to md (18/24 = 75%), not span
+    expect(col.attributes('style')).toContain('flex: 0 0 75%')
+
+    setViewportWidth(1300)
+    await wrapper.vm.$nextTick()
+
+    // xl (1300): still cascade down to md, never widening back to 100%
+    expect(col.attributes('style')).toContain('flex: 0 0 75%')
+  })
+
+  it('falls back to span when only larger breakpoints are declared', async () => {
+    setViewportWidth(400)
+    const wrapper = mount(TxCol, {
+      props: {
+        span: 8,
+        lg: 4,
+      },
+    })
+    const col = wrapper.find('.tx-col')
+
+    // xs (400): only lg declared (larger), no upward cascade -> raw span 8/24
+    expect(col.attributes('style')).toContain('flex: 0 0 33.33333333333333%')
   })
 })

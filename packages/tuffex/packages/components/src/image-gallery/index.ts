@@ -6,5 +6,6 @@ const ImageGallery = withInstall(TxImageGallery)
 
 export { ImageGallery, TxImageGallery }
 export type { ImageGalleryEmits, ImageGalleryItem, ImageGalleryProps }
+export type TxImageGalleryInstance = InstanceType<typeof TxImageGallery>
 
 export default ImageGallery

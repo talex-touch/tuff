@@ -62,6 +62,7 @@ const props = withDefaults(defineProps<MarkdownEditorProps>(), {
   toolbar: true,
   minHeight: 220,
   maxHeight: undefined,
+  ariaLabel: 'Markdown editor',
 })
 
 const emit = defineEmits<MarkdownEditorEmits>()
@@ -383,10 +384,16 @@ function setupThemeObserver() {
   themeObserver = new MutationObserver(() => {
     syncAutoTheme()
   })
-  themeObserver.observe(document.documentElement, {
+  const observerInit: MutationObserverInit = {
     attributes: true,
     attributeFilter: ['class', 'data-theme'],
-  })
+  }
+  themeObserver.observe(document.documentElement, observerInit)
+  // resolveAutoTheme also reads theme signals off <body>, so a body-driven dark-mode
+  // toggle has to be observed too — otherwise it silently leaves the editor on the stale
+  // theme (the read surface and the watched surface must match).
+  if (document.body)
+    themeObserver.observe(document.body, observerInit)
 }
 
 watch(
@@ -489,7 +496,7 @@ defineExpose({
         </button>
       </div>
 
-      <div class="tx-markdown-editor__modes" role="tablist" aria-label="Markdown editor mode">
+      <div class="tx-markdown-editor__modes" role="group" aria-label="Markdown editor mode">
         <button
           v-for="mode in editorModes"
           :key="mode"
@@ -498,9 +505,8 @@ defineExpose({
           :class="{ 'is-active': resolvedMode === mode }"
           :aria-label="modeMeta[mode].label"
           :title="modeMeta[mode].label"
-          :aria-selected="resolvedMode === mode"
+          :aria-pressed="resolvedMode === mode"
           :disabled="disabled"
-          role="tab"
           @click="setMode(mode)"
         >
           <TxIcon :name="modeMeta[mode].icon" :size="16" />
@@ -518,6 +524,7 @@ defineExpose({
         :data-empty="isEmpty ? 'true' : 'false'"
         role="textbox"
         aria-multiline="true"
+        :aria-label="ariaLabel"
         v-html="editorHtml"
         @input="syncFromEditor"
         @focus="handleFocus"
@@ -532,6 +539,7 @@ defineExpose({
         ref="sourceRef"
         v-model="sourceValue"
         class="tx-markdown-editor__source"
+        :aria-label="ariaLabel"
         :placeholder="placeholder"
         :disabled="disabled"
         :readonly="readonly"

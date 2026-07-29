@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { defineComponent, h, ref, toValue } from 'vue'
 import TxAutoSizer from '../src/TxAutoSizer.vue'
 
 const measure = vi.fn(async () => ({ width: 120, height: 48 }))
@@ -92,30 +92,77 @@ describe('txAutoSizer', () => {
       },
     })
 
-    expect(autoResizeOptions[0]).toMatchObject({
-      width: false,
-      height: true,
-      applyStyle: true,
-      applyMode: 'auto',
-      styleTarget: 'outer',
-      observeTarget: 'both',
-      rounding: 'floor',
-      immediate: false,
-      rafBatch: false,
-      durationMs: 320,
-      easing: 'linear',
-      clearStyleOnFinish: true,
-    })
-    expect(flipOptions[0]).toMatchObject({
-      mode: 'size',
-      duration: 320,
-      easing: 'linear',
-      includeScale: false,
-      size: {
-        width: false,
-        height: true,
+    // Reactive scalar options are now forwarded as getters (issue #366), so they
+    // are read through toValue() instead of being compared as literals. Constant
+    // options stay plain. Resolved values match what the old snapshot asserted.
+    const arOpts = autoResizeOptions[0]
+    expect(toValue(arOpts.width)).toBe(false)
+    expect(toValue(arOpts.height)).toBe(true)
+    expect(toValue(arOpts.durationMs)).toBe(320)
+    expect(toValue(arOpts.easing)).toBe('linear')
+    expect(toValue(arOpts.rounding)).toBe('floor')
+    expect(toValue(arOpts.immediate)).toBe(false)
+    expect(toValue(arOpts.rafBatch)).toBe(false)
+    expect(toValue(arOpts.observeTarget)).toBe('both')
+    expect(arOpts.applyStyle).toBe(true)
+    expect(arOpts.applyMode).toBe('auto')
+    expect(arOpts.styleTarget).toBe('outer')
+    expect(arOpts.clearStyleOnFinish).toBe(true)
+
+    const fOpts = flipOptions[0]
+    expect(fOpts.mode).toBe('size')
+    expect(fOpts.includeScale).toBe(false)
+    expect(toValue(fOpts.duration)).toBe(320)
+    expect(toValue(fOpts.easing)).toBe('linear')
+    expect(toValue(fOpts.size.width)).toBe(false)
+    expect(toValue(fOpts.size.height)).toBe(true)
+  })
+
+  it('keeps forwarded options reactive after setProps (issue #366)', async () => {
+    const wrapper = mount(TxAutoSizer, {
+      props: {
+        width: true,
+        height: false,
+        durationMs: 200,
+        easing: 'ease',
+        rounding: 'ceil',
+        observeTarget: 'inner',
       },
     })
+
+    const arOpts = autoResizeOptions[0]
+    const fOpts = flipOptions[0]
+
+    // Baseline: the captured option getters resolve to the initial props.
+    expect(toValue(arOpts.rounding)).toBe('ceil')
+    expect(toValue(arOpts.observeTarget)).toBe('inner')
+    expect(toValue(arOpts.durationMs)).toBe(200)
+    expect(toValue(fOpts.duration)).toBe(200)
+    expect(toValue(fOpts.easing)).toBe('ease')
+    expect(toValue(fOpts.size.width)).toBe(true)
+    expect(toValue(fOpts.size.height)).toBe(false)
+
+    await wrapper.setProps({
+      durationMs: 500,
+      easing: 'linear',
+      width: false,
+      height: true,
+      rounding: 'floor',
+      observeTarget: 'both',
+    })
+
+    // Same captured objects now resolve to the updated props. With the old
+    // by-value forwarding these would still read 200 / 'ceil' / 'inner' etc.
+    // useAutoResize path: rounding / observeTarget (plus duration / easing).
+    expect(toValue(arOpts.rounding)).toBe('floor')
+    expect(toValue(arOpts.observeTarget)).toBe('both')
+    expect(toValue(arOpts.durationMs)).toBe(500)
+    expect(toValue(arOpts.easing)).toBe('linear')
+    // useFlip path: duration / easing / width / height.
+    expect(toValue(fOpts.duration)).toBe(500)
+    expect(toValue(fOpts.easing)).toBe('linear')
+    expect(toValue(fOpts.size.width)).toBe(false)
+    expect(toValue(fOpts.size.height)).toBe(true)
   })
 
   it('uses inline layout automatically for width-only sizing', () => {
@@ -225,5 +272,81 @@ describe('txAutoSizer', () => {
     expect(result.payload).toBe(42)
     expect(result.before.attrs['data-before']).toBe('1')
     expect(result.after.attrs['data-before']).toBe('2')
+  })
+
+  // The tests above use mocked composables, so they only prove TxAutoSizer forwards
+  // live getters. These two use the real composables to prove the getter-based `opt`
+  // is re-read on each consumption rather than frozen at construction (issue #366).
+
+  it('re-reads useAutoResize options after construction (issue #366 lazy read)', async () => {
+    const { useAutoResize } = await vi.importActual<
+      typeof import('../../../../utils/animation/auto-resize')
+    >('../../../../utils/animation/auto-resize')
+
+    const rounding = ref<'ceil' | 'floor'>('ceil')
+    let api: any = null
+
+    const Host = defineComponent({
+      setup() {
+        const outer = ref<HTMLElement | null>(null)
+        const inner = ref<HTMLElement | null>(null)
+        api = useAutoResize(outer, inner, {
+          rounding: () => rounding.value,
+          styleTarget: 'inner',
+          immediate: false,
+          rafBatch: false,
+          applyStyle: false,
+        })
+        return () => h('div', { ref: outer }, [h('div', { ref: inner, class: 'measured' })])
+      },
+    })
+
+    const wrapper = mount(Host)
+    const innerEl = wrapper.find('.measured').element as HTMLElement
+    Object.defineProperty(innerEl, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ width: 10.4, height: 5.6, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON() {} }),
+    })
+
+    // 'ceil' rounds the fractional rect up.
+    expect(await api.measure()).toEqual({ width: 11, height: 6 })
+
+    // Changing the source must change the result: the option is read lazily, not
+    // frozen at construction. A by-value `opt` would keep rounding up here.
+    rounding.value = 'floor'
+    expect(await api.measure()).toEqual({ width: 10, height: 5 })
+
+    wrapper.unmount()
+  })
+
+  it('re-reads useFlip duration on each flip (issue #366 lazy read)', async () => {
+    const { useFlip } = await vi.importActual<
+      typeof import('../../../../utils/animation/flip')
+    >('../../../../utils/animation/flip')
+
+    const durationSpy = vi.fn(() => 180)
+    let api: any = null
+
+    const Host = defineComponent({
+      setup() {
+        const target = ref<HTMLElement | null>(null)
+        api = useFlip(target, {
+          mode: 'transform',
+          duration: durationSpy,
+        })
+        return () => h('div', { ref: target }, 'x')
+      },
+    })
+
+    const wrapper = mount(Host)
+    const callsAfterMount = durationSpy.mock.calls.length
+
+    await api.flip(() => {})
+
+    // The duration getter must be invoked at flip time. A by-value `opt` would have
+    // stored the getter function itself and never call it (calls stay flat).
+    expect(durationSpy.mock.calls.length).toBeGreaterThan(callsAfterMount)
+
+    wrapper.unmount()
   })
 })

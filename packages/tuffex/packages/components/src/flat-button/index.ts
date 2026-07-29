@@ -1,9 +1,10 @@
-import type { App } from 'vue'
+import type { FlatButtonProps } from './src/types'
+import { withInstall } from '../../../utils/withInstall'
 import TuffFlatButton from './src/TxFlatButton.vue'
 
-TuffFlatButton.install = (app: App) => {
-  app.component(TuffFlatButton.name || 'TuffFlatButton', TuffFlatButton)
-}
+withInstall(TuffFlatButton)
 
 export { TuffFlatButton }
+export type { FlatButtonProps }
+export type TuffFlatButtonInstance = InstanceType<typeof TuffFlatButton>
 export default TuffFlatButton

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MarkdownViewProps } from './types'
-import { marked } from 'marked'
+import { Marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { hasDocument } from '@talex-touch/utils/env'
 
@@ -13,7 +13,9 @@ const props = withDefaults(defineProps<MarkdownViewProps>(), {
   theme: 'auto',
 })
 
-marked.setOptions({
+// A per-component parser rather than mutating the shared global `marked` singleton,
+// which would override parser config for every other `marked` consumer app-wide.
+const markedInstance = new Marked({
   gfm: true,
   breaks: true,
 })
@@ -23,12 +25,13 @@ const sanitizerReady = ref(false)
 const autoTheme = ref<'light' | 'dark'>('light')
 let themeObserver: MutationObserver | null = null
 
-onMounted(async () => {
-  if (!props.sanitize) {
-    sanitizerReady.value = true
-    return
-  }
+let sanitizerLoading = false
 
+async function ensureSanitizer(): Promise<void> {
+  if (sanitizer.value || sanitizerLoading)
+    return
+
+  sanitizerLoading = true
   try {
     const mod = await import('dompurify')
     const dp = mod.default
@@ -39,8 +42,21 @@ onMounted(async () => {
   }
   finally {
     sanitizerReady.value = true
+    sanitizerLoading = false
   }
-})
+}
+
+watch(
+  () => props.sanitize,
+  (next) => {
+    if (!next) {
+      sanitizerReady.value = true
+      return
+    }
+    ensureSanitizer()
+  },
+  { immediate: true },
+)
 
 function resolveAutoTheme(): 'light' | 'dark' {
   if (!hasDocument())
@@ -109,7 +125,7 @@ onBeforeUnmount(() => {
 })
 
 const rawHtml = computed(() => {
-  return marked.parse(props.content ?? '') as string
+  return markedInstance.parse(props.content ?? '') as string
 })
 
 const safeHtml = computed(() => {

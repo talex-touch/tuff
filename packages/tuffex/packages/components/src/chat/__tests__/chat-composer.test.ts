@@ -167,11 +167,49 @@ describe('txChatComposer', () => {
     expect(wrapper.emitted('attachmentClick')).toHaveLength(1)
   })
 
+  it('caps textarea height at maxRows via a CSS variable (maxRows was previously unbound)', () => {
+    const wrapper = mount(TxChatComposer, {
+      props: {
+        minRows: 3,
+        maxRows: 8,
+      },
+    })
+
+    const style = wrapper.find('textarea').attributes('style') ?? ''
+    expect(style).toContain('--tx-chat-composer-max-rows: 8')
+  })
+
+  it('floors the maxRows cap at minRows so the ceiling never drops below the resting height', () => {
+    const wrapper = mount(TxChatComposer, {
+      props: {
+        minRows: 5,
+        maxRows: 2,
+      },
+    })
+
+    const style = wrapper.find('textarea').attributes('style') ?? ''
+    expect(style).toContain('--tx-chat-composer-max-rows: 5')
+  })
+
   it('registers the component through install', () => {
     const app = { component: vi.fn() }
 
     ChatComposer.install?.(app as any)
 
     expect(app.component).toHaveBeenCalledWith('TxChatComposer', ChatComposer)
+  })
+
+  it('names the textarea, defaulting to the placeholder, so it is never unnamed', () => {
+    // Pre-fix the textarea had only a placeholder and no aria-label; default
+    // fallthrough routed any host aria-label onto the root div instead.
+    const fallback = mount(TxChatComposer, {
+      props: { placeholder: 'Ask anything' },
+    })
+    expect(fallback.find('textarea').attributes('aria-label')).toBe('Ask anything')
+
+    const explicit = mount(TxChatComposer, {
+      props: { placeholder: 'Ask anything', ariaLabel: '消息输入框' },
+    })
+    expect(explicit.find('textarea').attributes('aria-label')).toBe('消息输入框')
   })
 })

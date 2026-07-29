@@ -58,6 +58,20 @@ const messageId = useId()
 let previouslyFocusedElement: HTMLElement | null = null
 
 /**
+ * Pending auto-click countdown timers, tracked so they can be cancelled
+ * when the buttons change or the dialog unmounts.
+ */
+const countdownTimers: Array<ReturnType<typeof setTimeout>> = []
+
+/**
+ * Cancels all pending button countdown timers.
+ */
+function clearCountdownTimers(): void {
+  countdownTimers.forEach(timer => clearTimeout(timer))
+  countdownTimers.length = 0
+}
+
+/**
  * Utility function to sleep for a specified duration.
  * @param ms - Duration in milliseconds
  */
@@ -88,7 +102,9 @@ async function clickBtn(btn: { value: ButtonState }): Promise<void> {
 /**
  * Watches for button prop changes and initializes button states.
  */
-watchEffect(() => {
+watchEffect((onCleanup) => {
+  onCleanup(clearCountdownTimers)
+
   const array: Array<{ value: ButtonState }> = []
 
   ;[...props.btns].forEach((btn: DialogButton) => {
@@ -113,7 +129,7 @@ watchEffect(() => {
       const _clickBtn = clickBtn
 
       function refresh(): void {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
           if (obj.value.time && obj.value.time > 0) {
             obj.value.time -= 1
             if (obj.value.time <= 0) {
@@ -123,6 +139,7 @@ watchEffect(() => {
             refresh()
           }
         }, 1000)
+        countdownTimers.push(timer)
       }
 
       refresh()
@@ -152,6 +169,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', scrollListener)
+  clearCountdownTimers()
   if (previouslyFocusedElement) {
     previouslyFocusedElement.focus()
   }
@@ -265,6 +283,8 @@ async function forClose(): Promise<void> {
     text-align: center;
     font-size: 14px;
     color: var(--tx-text-color-secondary, #909399);
+    // Match Blow/Popper/TouchTip so plain `message` preserves line breaks (docs contract).
+    white-space: pre-line;
   }
 
   &__buttons {

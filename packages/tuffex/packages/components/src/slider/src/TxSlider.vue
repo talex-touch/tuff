@@ -114,6 +114,15 @@ const tooltipText = computed(() => {
   return displayValue.value
 })
 
+// Expose a human-readable value to AT only when a custom formatter is in play;
+// otherwise aria-valuenow (the raw number) already conveys it and a duplicate
+// aria-valuetext would just be read out twice.
+const valueText = computed(() => {
+  if (props.tooltipFormatter || props.formatValue)
+    return tooltipText.value
+  return undefined
+})
+
 const shouldShowTooltip = computed(() => {
   if (!props.showTooltip)
     return false
@@ -576,6 +585,9 @@ onBeforeUnmount(() => {
         :step="step"
         :disabled="disabled"
         :value="clampedValue"
+        :aria-label="ariaLabel"
+        :aria-labelledby="ariaLabelledby"
+        :aria-valuetext="valueText"
         @pointerdown="startDragging"
         @pointercancel="stopDragging"
         @blur="stopDragging"

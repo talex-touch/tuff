@@ -120,6 +120,18 @@ describe('txDatePicker', () => {
     expect(pickerProps(aboveMax).modelValue).toEqual([2020, 1, 1])
   })
 
+  it('emits the clamped value when the model starts out of range', () => {
+    const wrapper = mountDatePicker({
+      modelValue: '2024-12-31',
+      min: '2025-05-10',
+    })
+
+    // Clamping for display alone would leave the parent holding an out-of-range
+    // date; the picker must push the rendered value back up.
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2025-05-10'])
+    expect(wrapper.emitted('change')?.[0]).toEqual(['2025-05-10'])
+  })
+
   it('disables month and day options outside the active bounds', () => {
     const wrapper = mountDatePicker({
       modelValue: '2025-05-15',
@@ -200,6 +212,25 @@ describe('txDatePicker', () => {
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['2026-05-25'])
     expect(wrapper.emitted('change')?.[0]).toEqual(['2026-05-25'])
+  })
+
+  it('names each calendar day with its full date and owns cells with aria rows', () => {
+    const wrapper = mountDatePicker({
+      variant: 'field',
+      modelValue: '2026-05-20',
+    })
+
+    const cells = wrapper.findAll('.tx-date-picker-calendar__cell')
+    // Every day cell now announces the full YYYY-MM-DD (pre-fix only the bare day).
+    const selected = cells.find(cell => cell.attributes('aria-label') === '2026-05-20')
+    expect(selected).toBeTruthy()
+    expect(selected!.text()).toBe('20')
+
+    // gridcells are owned by role="row" rows (ARIA requires the row layer, and a
+    // month renders exactly six weeks of seven days).
+    const rows = wrapper.findAll('[role="row"]')
+    expect(rows).toHaveLength(6)
+    expect(rows[0].findAll('[role="gridcell"]')).toHaveLength(7)
   })
 
   it('switches adaptive variant to field on desktop viewport', async () => {

@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { FlatInputEmits, FlatInputProps } from './types'
 import { computed, ref } from 'vue'
 import { TxTag } from '../../tag/index'
 
@@ -7,14 +8,7 @@ defineOptions({
 })
 
 const props = withDefaults(
-  defineProps<{
-    modelValue?: string
-    placeholder?: string
-    icon?: string
-    password?: boolean
-    nonWin?: boolean
-    area?: boolean
-  }>(),
+  defineProps<FlatInputProps>(),
   {
     modelValue: '',
     placeholder: '',
@@ -25,9 +19,7 @@ const props = withDefaults(
   },
 )
 
-const emit = defineEmits<{
-  'update:modelValue': [value: string]
-}>()
+const emit = defineEmits<FlatInputEmits>()
 
 const value = computed({
   get: () => props.modelValue,
@@ -36,15 +28,15 @@ const value = computed({
 
 const capsLockOn = ref(false)
 
-function onKeyDown(e: KeyboardEvent) {
+function syncCapsLock(e: KeyboardEvent) {
   if (!props.password)
     return
 
-  const keyCode = (e as any).keyCode ? (e as any).keyCode : (e as any).which
-  const shift = (e as any).shiftKey ? (e as any).shiftKey : keyCode === 16
-
-  capsLockOn.value
-    = ((keyCode >= 65 && keyCode <= 90) && !shift) || ((keyCode >= 97 && keyCode <= 122) && shift)
+  // Read the live CapsLock modifier state. Inferring it from keyCode ranges on a
+  // keydown event was wrong: keydown keyCodes are always uppercase (65-90), so any
+  // unshifted letter falsely lit the hint. keyup keeps the hint in sync when the
+  // user toggles CapsLock off.
+  capsLockOn.value = e.getModifierState?.('CapsLock') ?? false
 }
 </script>
 
@@ -52,7 +44,8 @@ function onKeyDown(e: KeyboardEvent) {
   <div
     class="flat-input fake-background"
     :class="{ 'none-prefix': !$slots?.default && !icon, 'win': nonWin !== true, area }"
-    @keydown="onKeyDown"
+    @keydown="syncCapsLock"
+    @keyup="syncCapsLock"
   >
     <span v-if="$slots.default || icon" class="flat-input__prefix">
       <slot>

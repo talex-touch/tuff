@@ -89,6 +89,29 @@ describe('dialog components', () => {
     wrapper.unmount()
   })
 
+  it('cancels BottomDialog button countdown timers on unmount', async () => {
+    const onClick = vi.fn(() => true)
+    const close = vi.fn()
+    const wrapper = mount(TxBottomDialog, {
+      props: {
+        title: 'Confirm',
+        close,
+        btns: [{ content: 'Auto', time: 2, onClick }],
+      },
+      attachTo: document.body,
+    })
+
+    // Countdown ticks from 2 -> 1; not fired yet.
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(onClick).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+
+    // Push well past the remaining countdown; the timer must be dead.
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(onClick).not.toHaveBeenCalled()
+  })
+
   it('renders TouchTip dialog semantics on the focused container', () => {
     const wrapper = mount(TxTouchTip, {
       props: {
@@ -206,6 +229,31 @@ describe('dialog components', () => {
     content = document.body.querySelector<HTMLElement>('.tx-blow-dialog__content')
     expect(content?.querySelector('em')?.textContent).toBe('Trusted')
     htmlWrapper.unmount()
+  })
+
+  it('links BlowDialog title and message with instance-scoped ids', () => {
+    const close = vi.fn()
+    const wrapper = mount(TxBlowDialog, {
+      props: {
+        title: 'Heads up',
+        message: 'Your session will expire soon.',
+        close,
+      },
+      attachTo: document.body,
+    })
+
+    const dialog = document.body.querySelector<HTMLElement>('.tx-blow-dialog')
+    const labelledBy = dialog?.getAttribute('aria-labelledby')
+    const describedBy = dialog?.getAttribute('aria-describedby')
+
+    // Pre-fix BlowDialog set only aria-labelledby (a hard-coded id) and never
+    // exposed the message via aria-describedby.
+    expect(labelledBy).toBeTruthy()
+    expect(describedBy).toBeTruthy()
+    expect(document.getElementById(labelledBy ?? '')?.textContent).toBe('Heads up')
+    expect(document.getElementById(describedBy ?? '')?.textContent?.trim()).toBe('Your session will expire soon.')
+
+    wrapper.unmount()
   })
 
   it('blocks TouchTip close when button returns false', async () => {

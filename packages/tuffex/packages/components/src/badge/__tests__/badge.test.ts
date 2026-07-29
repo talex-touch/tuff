@@ -54,4 +54,19 @@ describe('txBadge', () => {
     expect(wrapper.attributes('style')).toContain('--tx-badge-bg: #111827')
     expect(wrapper.attributes('style')).toContain('--tx-badge-text: #ffffff')
   })
+
+  it('keeps a custom-color dot visible via a dedicated dot color variable', () => {
+    const wrapper = mount(TxBadge, {
+      props: {
+        dot: true,
+        color: '#22c55e',
+      },
+    })
+
+    // Before the fix the dot inherited the forced white text color and vanished
+    // against the white-filled badge. Its color must derive from the custom color.
+    expect(wrapper.attributes('style')).toContain('--tx-badge-dot: #22c55e')
+    expect(wrapper.attributes('style')).toContain('--tx-badge-bg: #22c55e')
+    expect(wrapper.find('.tx-badge__dot').exists()).toBe(true)
+  })
 })

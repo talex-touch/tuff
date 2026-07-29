@@ -110,6 +110,21 @@ describe('txVersionCapsule', () => {
     expect(wrapper.find('.history-slot').exists()).toBe(false)
   })
 
+  it('binds dismiss listeners when mounted with a panel already open', async () => {
+    // Regression: with a controlled panel open on first render, the activePanel
+    // watch never fires, so the outside-pointerdown / Escape listeners were never
+    // bound and closeOnClickOutside silently did nothing until a manual toggle.
+    const wrapper = mountCapsule({ panel: 'download' })
+    expect(wrapper.find('.download-slot').exists()).toBe(true)
+
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:panel')?.[0]).toEqual([null])
+
+    wrapper.unmount()
+  })
+
   it('does not open while disabled, and closes when disabled mid-flight', async () => {
     const disabled = mountCapsule({ disabled: true })
     await disabled.find('.tx-version-capsule__segment--download').trigger('click')
@@ -239,5 +254,27 @@ describe('txVersionHistoryPanel', () => {
     const wrapper = mount(TxVersionHistoryPanel, { props: { emptyText: 'No releases' } })
 
     expect(wrapper.find('.tx-version-history-panel__empty').text()).toBe('No releases')
+  })
+
+  it('renders no-href latest and rows as keyboard-reachable buttons', () => {
+    const wrapper = mount(TxVersionHistoryPanel, { props: { latest, entries } })
+
+    // These were bare <div>s with a click handler (mouse-only). They must now be
+    // real <button>s so `select` is reachable by keyboard, matching the download panel.
+    const latestEl = wrapper.find('.tx-version-history-panel__latest')
+    expect(latestEl.element.tagName).toBe('BUTTON')
+    expect(latestEl.attributes('type')).toBe('button')
+
+    const rows = wrapper.findAll('.tx-version-history-panel__row')
+    for (const row of rows) {
+      expect(row.element.tagName).toBe('BUTTON')
+      expect(row.attributes('type')).toBe('button')
+    }
+
+    // A row that carries an href stays an anchor (no over-conversion).
+    const linked = mount(TxVersionHistoryPanel, {
+      props: { entries: [{ id: '9', tag: 'v1.0.0', tone: 'preview' as const, href: '/releases/1' }] },
+    })
+    expect(linked.find('.tx-version-history-panel__row').element.tagName).toBe('A')
   })
 })

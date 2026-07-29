@@ -38,7 +38,9 @@ function snapValue(v: number) {
 const value = computed({
   get: () => clamp01(Number.isFinite(props.modelValue) ? (props.modelValue as number) : 0.5),
   set: (v: number) => {
-    const next = snapValue(clamp(v, props.min ?? 0.1, props.max ?? 0.9))
+    const min = props.min ?? 0.1
+    const max = props.max ?? 0.9
+    const next = clamp(snapValue(clamp(v, min, max)), min, max)
     emit('update:modelValue', next)
     emit('change', next)
   },
@@ -80,6 +82,9 @@ function onPointerDown(e: PointerEvent) {
   setByPointer(e)
   window.addEventListener('pointermove', onWindowPointerMove)
   window.addEventListener('pointerup', onWindowPointerUp)
+  // A browser-cancelled pointer (touch scroll, gesture takeover) never fires pointerup,
+  // so without this the drag would wedge `dragging=true` with the window listeners live.
+  window.addEventListener('pointercancel', onWindowPointerUp)
 }
 
 function onWindowPointerMove(e: PointerEvent) {
@@ -95,6 +100,7 @@ function endDrag() {
   emit('drag-end')
   window.removeEventListener('pointermove', onWindowPointerMove)
   window.removeEventListener('pointerup', onWindowPointerUp)
+  window.removeEventListener('pointercancel', onWindowPointerUp)
 }
 
 function onWindowPointerUp() {
@@ -157,6 +163,9 @@ onBeforeUnmount(() => {
       :tabindex="disabled ? -1 : 0"
       role="separator"
       :aria-orientation="dir === 'horizontal' ? 'vertical' : 'horizontal'"
+      :aria-valuenow="Math.round(value * 100)"
+      :aria-valuemin="Math.round((min ?? 0.1) * 100)"
+      :aria-valuemax="Math.round((max ?? 0.9) * 100)"
       aria-label="Resize"
       @pointerdown="onPointerDown"
       @keydown="onKeyDown"
@@ -207,6 +216,9 @@ onBeforeUnmount(() => {
   position: relative;
   outline: none;
   background: transparent;
+  // Claim the pointer so a touch drag resizes the pane instead of scrolling the page
+  // (which would otherwise fire pointercancel and abort the drag).
+  touch-action: none;
 
   &::before {
     content: '';

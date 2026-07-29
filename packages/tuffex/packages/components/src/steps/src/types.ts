@@ -5,8 +5,8 @@ export type StepsSize = 'small' | 'medium' | 'large'
 export type StepStatus = 'wait' | 'active' | 'completed' | 'error'
 
 export interface StepsContext {
-  direction: StepsDirection
-  size: StepsSize
+  direction: { value: StepsDirection }
+  size: { value: StepsSize }
   activeStep: { value: number | string }
   stepKeys: { value: string[] }
   registerStep: (key: string) => void

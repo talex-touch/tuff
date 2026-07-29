@@ -12,6 +12,7 @@ const customStyle = computed(() => {
     return {
       '--tx-badge-bg': props.color,
       '--tx-badge-text': '#ffffff',
+      '--tx-badge-dot': props.color,
     }
   }
   return {}
@@ -90,6 +91,6 @@ const customStyle = computed(() => {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--tx-badge-dot, currentColor);
 }
 </style>

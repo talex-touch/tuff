@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { BaseAnchorClassValue } from '../../base-anchor/src/types'
 import type { PopoverProps } from './types'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, watch } from 'vue'
 import { TxBaseAnchor } from '../../base-anchor'
 
 defineOptions({ name: 'TxPopover' })
@@ -34,6 +34,14 @@ const props = withDefaults(defineProps<PopoverProps>(), {
   closeOnClickOutside: true,
   closeOnEsc: true,
 })
+const emit = defineEmits<{
+  (e: 'update:modelValue', v: boolean): void
+  (e: 'open'): void
+  (e: 'close'): void
+}>()
+// Stable id so the reference can advertise the popover panel it controls.
+const uid = getCurrentInstance()?.uid ?? 0
+const panelId = `tx-popover-${uid}`
 
 const resolvedOffset = computed(() => {
   if (typeof props.offset === 'number')
@@ -42,12 +50,6 @@ const resolvedOffset = computed(() => {
     return Math.max(8, Math.round((props.arrowSize ?? 12) * 0.5) + 2)
   return 2
 })
-
-const emit = defineEmits<{
-  (e: 'update:modelValue', v: boolean): void
-  (e: 'open'): void
-  (e: 'close'): void
-}>()
 
 const internalOpen = ref(false)
 
@@ -199,6 +201,9 @@ onBeforeUnmount(() => {
       <div
         class="tx-popover__reference"
         :class="{ 'is-full-width': props.referenceFullWidth }"
+        aria-haspopup="dialog"
+        :aria-expanded="open"
+        :aria-controls="panelId"
         @mouseenter="onReferenceEnter"
         @mouseleave="onReferenceLeave"
         @focusin="onReferenceEnter"
@@ -210,7 +215,9 @@ onBeforeUnmount(() => {
 
     <template #default="{ side }">
       <div
+        :id="panelId"
         class="tx-popover__content"
+        role="dialog"
         :data-side="side"
         @mouseenter="onFloatingEnter"
         @mouseleave="onFloatingLeave"

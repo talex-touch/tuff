@@ -20,4 +20,10 @@ export interface StatCardProps {
   variant?: StatCardVariant
   progress?: number
   meta?: string
+  /**
+   * Explicit accessible name for the card's `role="group"`. When omitted the
+   * name is derived from the visible label via `aria-labelledby`, so each card
+   * is distinguishable instead of all announcing the same static string.
+   */
+  ariaLabel?: string
 }
