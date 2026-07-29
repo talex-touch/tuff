@@ -1,0 +1,8 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend package boundaries and pre-development checklist for CoreApp/Nexus work."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Localized release notes must cross main/renderer through typed contracts and runtime normalizers."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Defines SQLite host ownership and renderer/cache boundaries for acknowledgement and history state."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"What's Changed modal and Update history require TuffEx, accessibility, and i18n conventions."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Startup display logic and SDK subscriptions must follow composable lifecycle patterns."}
+{"file":".trellis/spec/frontend/release-testing.md","reason":"Release gates, Nexus/GitHub parity, packaged resources, and OTA trust constraints apply."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Feature spans author files, scripts, Actions, Nexus, transport, SQLite, and renderer UI."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"One parser/normalizer must own Markdown and localized payload projections."}

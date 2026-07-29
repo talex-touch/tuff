@@ -1,0 +1,11 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "docs/encoded#hash.md": "# Encoded Hash Target\n\nThis filename contains a literal hash character.\n",
+    "docs/url-edges.md": "# URL Edges\n\n- [Raw query and fragment](guide.md?from=fixture#section)\n- [Encoded hash target](encoded%23hash.md?download=1#details)\n"
+  },
+  "trackedAdd": [
+    "docs/encoded#hash.md",
+    "docs/url-edges.md"
+  ]
+}

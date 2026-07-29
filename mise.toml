@@ -11,6 +11,10 @@ description = "Release AI docs validation"
 depends = ["ai-docs:dev"]
 run = "git diff --check -- mise.toml scripts/ai-docs docs/plan-prd/04-implementation docs/plan-prd/03-features docs/plan-prd/TODO.md docs/INDEX.md"
 
+[tasks."docs:verify"]
+description = "Deterministic read-only documentation verification"
+run = "node scripts/docs/run-docs-verify.mjs"
+
 [tasks."intelligence:dev"]
 description = "Fast deterministic intelligence validation"
 run = "node scripts/intelligence/verify-intelligence.mjs dev"

@@ -69,7 +69,7 @@ code: |
 
 ## API
 
-`TxErrorState` inherits all props from `TxEmptyState` except `variant`, which is always forced to `error`. See [EmptyState](./empty-state.en.md) for the full base component contract.
+`TxErrorState` inherits all props from `TxEmptyState` except `variant`, which is always forced to `error`. See [EmptyState](./empty-state.en.mdc) for the full base component contract.
 
 ### Props
 

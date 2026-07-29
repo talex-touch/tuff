@@ -22,5 +22,9 @@
   "parent": "07-27-batch-commit-release-v2-4-14-beta-1",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete release inputs, validation, and the parent batch gate before publishing v2.4.14-beta.1.",
+    "blocker": "The parent release batch has unresolved child acceptance; publishing is not authorized.",
+    "evidence": "parent task map, prd.md, and release validation artifacts define the publication gate."
+  }
 }

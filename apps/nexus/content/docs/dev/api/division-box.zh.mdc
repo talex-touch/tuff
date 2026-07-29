@@ -539,5 +539,5 @@ stateDiagram-v2
 
 ## 相关文档
 
-- [Flow Transfer API](./flow-transfer.zh.md) - 插件间数据流转
-- [Plugin Manifest](../reference/manifest.zh.md) - 插件配置
+- [Flow Transfer API](./flow-transfer.zh.mdc) - 插件间数据流转
+- [Plugin Manifest](../reference/manifest.zh.mdc) - 插件配置

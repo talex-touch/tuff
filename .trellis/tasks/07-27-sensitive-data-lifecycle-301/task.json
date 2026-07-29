@@ -22,5 +22,9 @@
   "parent": "07-27-resolve-open-github-issues",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Define the retained-data, export, deletion, remote-processing, backup, and uninstall acceptance contract before implementation begins.",
+    "blocker": "The task remains in planning without an approved lifecycle design or verification evidence.",
+    "evidence": "prd.md and the #301 parent issue task map define the required lifecycle scope."
+  }
 }

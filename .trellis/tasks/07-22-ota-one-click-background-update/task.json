@@ -22,5 +22,9 @@
   "parent": "07-17-unify-ota-update-flow",
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Obtain the remaining official macOS trusted-package silent-update, restart, and health-ack runtime evidence.",
+    "blocker": "The official trusted macOS package acceptance criterion remains unchecked.",
+    "evidence": "prd.md acceptance criteria distinguish completed focused/package checks from the pending official runtime proof."
+  }
 }

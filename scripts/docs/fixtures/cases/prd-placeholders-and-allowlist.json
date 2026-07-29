@@ -1,0 +1,10 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    ".trellis/tasks/07-27-documentation-quality-gates/prd.md": "# Production PRD Placeholder\n\nProduction task PRDs cannot self-allowlist unresolved placeholders.\n\n## Evidence\n\nTBD\n<evidence>\nTODO: fill\n",
+    ".trellis/tasks/active-doc-task/prd.md": "# Active Documentation Task\n\n## Goal\n\nTBD\n\n## Evidence\n\n<evidence>\n\n## Next Action\n\nTODO: fill\n\n## Chinese Sentinel\n\n待补充\n\nThe ordinary UI placeholder attribute is not unresolved work.\n"
+  },
+  "trackedAdd": [
+    ".trellis/tasks/07-27-documentation-quality-gates/prd.md"
+  ]
+}

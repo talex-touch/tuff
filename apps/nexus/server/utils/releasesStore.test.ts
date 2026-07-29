@@ -434,6 +434,61 @@ describe('releasesStore', () => {
     })
   })
 
+  it('orders release history by publication time with stable fallbacks', async () => {
+    state.db = null
+    const baseRelease = {
+      name: 'Release',
+      channel: 'RELEASE',
+      notes: { zh: '发布', en: 'Release' },
+      notesHtml: null,
+      status: 'published',
+      minAppVersion: null,
+      isCritical: false,
+      createdBy: 'admin',
+      updatedAt: '2026-07-05T00:00:00.000Z',
+      rollbackFromVersion: '2.4.0',
+      rollbackCompatible: true
+    }
+    state.storage.set('app:releases', [
+      {
+        ...baseRelease,
+        id: 'release-c',
+        tag: 'v2.4.3',
+        version: '2.4.3',
+        publishedAt: '2026-07-03T00:00:00.000Z',
+        createdAt: '2026-07-05T00:00:00.000Z'
+      },
+      {
+        ...baseRelease,
+        id: 'release-a',
+        tag: 'v2.4.1',
+        version: '2.4.1',
+        publishedAt: '2026-07-04T00:00:00.000Z',
+        createdAt: '2026-07-01T00:00:00.000Z'
+      },
+      {
+        ...baseRelease,
+        id: 'release-b',
+        tag: 'v2.4.2',
+        version: '2.4.2',
+        publishedAt: '2026-07-04T00:00:00.000Z',
+        createdAt: '2026-07-02T00:00:00.000Z'
+      }
+    ])
+    const { listReleases } = await import('./releasesStore')
+
+    const releases = await listReleases(event, {
+      channel: 'RELEASE',
+      status: 'published'
+    })
+
+    expect(releases.map((release) => release.tag)).toEqual([
+      'v2.4.2',
+      'v2.4.1',
+      'v2.4.3'
+    ])
+  })
+
   it('rejects new releases without rollbackFromVersion before creating a record', async () => {
     const { createRelease, getReleaseByTag } = await import('./releasesStore')
     const {

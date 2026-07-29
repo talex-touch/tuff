@@ -1053,7 +1053,8 @@ Added host-only immediate cancellation containment for Intelligence chat/OCR inv
 
 ### Main Changes
 
-(Add details)
+- Added host-only cancellation containment for isolated Intelligence chat/OCR calls.
+- Preserved stable redaction and explicit success commit-point behavior.
 
 ### Git Commits
 
@@ -1063,7 +1064,45 @@ Added host-only immediate cancellation containment for Intelligence chat/OCR inv
 
 ### Testing
 
-- [OK] (Add test results)
+- [OK] Focused cancellation and Intelligence SDK regressions passed.
+- [OK] Independent review found no P0/P1/P2 findings in the scoped change.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Continue task #297 with production Intelligence/Translation migration and the final hard cut.
+
+
+## Session 27: Repair peripheral product documentation
+
+**Date**: 2026-07-28
+**Task**: Repair peripheral product documentation
+**Branch**: `TalexDreamSoul/peripheral-docs-cleanup`
+
+### Summary
+
+Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Nexus/DivisionBox/TuffEx guidance, added reproducible AST inventory evidence, opened stacked PR #356, and synchronized the advanced planning base without rebase or force push.
+
+### Main Changes
+
+- Repaired 663 broken product-documentation relative links across CoreApp, Search, Download, bilingual Nexus API/component/guide/release navigation, DivisionBox, and TuffEx; stale `.md` destinations now resolve to their tracked canonical `.mdc` files or exact maintained documentation.
+- Added the reviewed AST inventory and reproducible audit helper, refreshed the owned product guidance, and removed no unrelated content, placeholders, redirect-only, or empty documents.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `05aa394a3` | (see git log) |
+
+### Testing
+
+- [OK] AST audit: 1121 tracked Markdown/MDC documents, 586 in-scope sources, 841 inspected relative links/images, and 0 broken or repository-escape findings.
+- [OK] Repair selection: 674 newly selected URLs resolve to 427 unique tracked files; no directory aliases were selected.
+- [OK] Default `markdownlint-cli` passed on the nine rewritten/new core documents; baseline-aware legacy diagnostics changed from 3171 to 3165 (added=0, removed=6).
+- [OK] `git diff --check`, `git diff --cached --check`, stacked branch-range, and ownership/excluded-path checks passed.
 
 ### Status
 

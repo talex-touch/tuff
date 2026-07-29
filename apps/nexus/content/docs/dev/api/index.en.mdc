@@ -18,32 +18,32 @@ code: |
 :::
 
 ## API Reference
-
-| Module                                                     | Import                                         | Description                                                |
-| ---------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
-| [Plugin Context](./plugin-context.en.md)                   | `IPluginContext` / `context.utils`             | Canonical lifecycle capability facade                      |
-| [Box SDK](./box.en.md)                                     | `useBox()`                                     | Control CoreBox window                                     |
-| [Clipboard SDK](./clipboard.en.md)                         | `useClipboard()` / `system.captureSelection()` | Clipboard, selected text, and history                      |
-| [TempFile SDK](./temp-file.en.md)                          | `useTempPluginFiles()`                         | Create and clean temp files                                |
-| [Storage SDK](./storage.en.md)                             | `usePluginStorage()`                           | Plugin data persistence                                    |
-| [Download SDK](./download.en.md)                           | `useDownloadSdk()`                             | Download task management                                   |
-| [Platform Capabilities SDK](./platform-capabilities.en.md) | `usePlatformSdk()`                             | Platform capability catalog                                |
-| [Screenshot SDK](./screenshot.en.md)                       | `screenshot` / `plugin.screenshot`             | Permission-gated display, cursor, and region capture       |
-| [PowerSDK](./power.en.md)                                  | `usePowerSDK()`                                | Low-power status for plugin adaptation                     |
-| [RecommendSDK](./recommend.en.md)                          | `recommend`                                    | Custom recommendation provider registration                |
-| [**Account SDK**](./account.en.md)                         | `accountSDK`                                   | **User info, subscription, quota**                         |
-| [**TuffTransport**](./transport.en.md)                     | `useTuffTransport()`                           | **Next-gen IPC (recommended)**                             |
-| [Feature SDK](./feature.en.md)                             | `useFeature()`                                 | Search result management                                   |
-| [Search / Indexed Source SDK](./search.en.md)              | `@talex-touch/utils/search`                    | Search providers and indexed-source lifecycle contracts    |
-| [QuickActions SDK](./quick-actions.en.md)                  | `quickActions` / `plugin.quickActions`         | MetaK global actions and native share                      |
-| [QuickOps SDK](./quickops.en.md)                           | `quickOps` / `plugin.quickOps`                 | Bounded, policy-aware host facade for built-in local tools |
-| [DivisionBox SDK](./division-box.en.md)                    | `useDivisionBox()`                             | Independent window management                              |
-| [Flow SDK](./flow-transfer.en.md)                          | `createFlowSDK()`                              | Inter-plugin data transfer                                 |
-| [Intelligence SDK](./intelligence.en.md)                   | `useIntelligenceSdk()` / `plugin.intelligence` | AI capabilities and provider discovery                     |
-| [Localization SDK](./i18n.en.md)                           | `usePluginI18n()` / `plugin.i18n`              | Host locale, localized text, and scoped Domain Lexicon     |
-
+<!-- markdownlint-disable MD060 -->
+| Module                                                      | Import                                         | Description                                                |
+| ----------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| [Plugin Context](./plugin-context.en.mdc)                   | `IPluginContext` / `context.utils`             | Canonical lifecycle capability facade                      |
+| [Box SDK](./box.en.mdc)                                     | `useBox()`                                     | Control CoreBox window                                     |
+| [Clipboard SDK](./clipboard.en.mdc)                         | `useClipboard()` / `system.captureSelection()` | Clipboard, selected text, and history                      |
+| [TempFile SDK](./temp-file.en.mdc)                          | `useTempPluginFiles()`                         | Create and clean temp files                                |
+| [Storage SDK](./storage.en.mdc)                             | `usePluginStorage()`                           | Plugin data persistence                                    |
+| [Download SDK](./download.en.mdc)                           | `useDownloadSdk()`                             | Download task management                                   |
+| [Platform Capabilities SDK](./platform-capabilities.en.mdc) | `usePlatformSdk()`                             | Platform capability catalog                                |
+| [Screenshot SDK](./screenshot.en.mdc)                       | `screenshot` / `plugin.screenshot`             | Permission-gated display, cursor, and region capture       |
+| [PowerSDK](./power.en.mdc)                                  | `usePowerSDK()`                                | Low-power status for plugin adaptation                     |
+| [RecommendSDK](./recommend.en.mdc)                          | `recommend`                                    | Custom recommendation provider registration                |
+| [**Account SDK**](./account.en.mdc)                         | `accountSDK`                                   | **User info, subscription, quota**                         |
+| [**TuffTransport**](./transport.en.mdc)                     | `useTuffTransport()`                           | **Next-gen IPC (recommended)**                             |
+| [Feature SDK](./feature.en.mdc)                             | `useFeature()`                                 | Search result management                                   |
+| [Search / Indexed Source SDK](./search.en.mdc)              | `@talex-touch/utils/search`                    | Search providers and indexed-source lifecycle contracts    |
+| [QuickActions SDK](./quick-actions.en.mdc)                  | `quickActions` / `plugin.quickActions`         | MetaK global actions and native share                      |
+| [QuickOps SDK](./quickops.en.mdc)                           | `quickOps` / `plugin.quickOps`                 | Bounded, policy-aware host facade for built-in local tools |
+| [DivisionBox SDK](./division-box.en.mdc)                    | `useDivisionBox()`                             | Independent window management                              |
+| [Flow SDK](./flow-transfer.en.mdc)                          | `createFlowSDK()`                              | Inter-plugin data transfer                                 |
+| [Intelligence SDK](./intelligence.en.mdc)                   | `useIntelligenceSdk()` / `plugin.intelligence` | AI capabilities and provider discovery                     |
+| [Localization SDK](./i18n.en.mdc)                           | `usePluginI18n()` / `plugin.i18n`              | Host locale, localized text, and scoped Domain Lexicon     |
+<!-- markdownlint-enable MD060 -->
 ::alert{type="info"}
-**New:** [TuffTransport](./transport.en.md) is the recommended IPC API for new plugins. It provides type-safe events, automatic batching, and streaming support. See also [TuffTransport Internals](./transport-internals.en.md) for technical details.
+**New:** [TuffTransport](./transport.en.mdc) is the recommended IPC API for new plugins. It provides type-safe events, automatic batching, and streaming support. See also [TuffTransport Internals](./transport-internals.en.mdc) for technical details.
 ::
 
 ---
@@ -188,6 +188,6 @@ code: |
 
 ## Related Documentation
 
-- [Plugin Development Quick Start](../getting-started/quickstart.en.md)
-- [Manifest Configuration](../reference/manifest.en.md)
-- [Build Tool Unplugin](../extensions/unplugin-export-plugin.en.md)
+- [Plugin Development Quick Start](../getting-started/quickstart.en.mdc)
+- [Manifest Configuration](../reference/manifest.en.mdc)
+- [Build Tool Unplugin](../extensions/unplugin-export-plugin.en.mdc)

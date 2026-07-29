@@ -125,9 +125,9 @@ No public instance methods are exposed.
 
 ## Related Primitives
 
-- `TxChatComposer` covers text entry, attachments, send guards, and toolbar slots. See [ChatComposer](./chat-composer.en.md).
-- `TxTypingIndicator` covers pending assistant states. See [TypingIndicator](./typing-indicator.en.md).
-- New AI transcript surfaces that need `tool` messages or streaming states should prefer [AI Elements](./ai-elements.en.md).
+- `TxChatComposer` covers text entry, attachments, send guards, and toolbar slots. See [ChatComposer](./chat-composer.en.mdc).
+- `TxTypingIndicator` covers pending assistant states. See [TypingIndicator](./typing-indicator.en.mdc).
+- New AI transcript surfaces that need `tool` messages or streaming states should prefer [AI Elements](./ai-elements.en.mdc).
 
 ## Best Practices
 

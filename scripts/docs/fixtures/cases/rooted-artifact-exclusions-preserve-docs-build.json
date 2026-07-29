@@ -1,0 +1,13 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    "build/nul-poison.md": "# Poison\n\nRooted build artifacts are excluded even with a NUL byte: \u0000\n",
+    "dist/nul-poison.md": "# Poison\n\nRooted dist artifacts are excluded even with a NUL byte: \u0000\n",
+    "docs/reference/build/nul-byte.md": "# Docs Build Term\n\nA product documentation path may legitimately contain build in its name and still be linted: \u0000\n"
+  },
+  "trackedAdd": [
+    "build/nul-poison.md",
+    "dist/nul-poison.md",
+    "docs/reference/build/nul-byte.md"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "caseBase": "valid-final-contract",
+  "files": {
+    ".trellis/tasks/active-doc-task/prd.md": "# Active Documentation Task\n\n## Goal\n\n## Evidence\n\n- Fixture evidence exists.\n\n```md\n## Code Fence Empty Section\n```\n\n## Acceptance Criteria\n\n- The empty Goal section is reported while the fenced heading is ignored.\n"
+  }
+}

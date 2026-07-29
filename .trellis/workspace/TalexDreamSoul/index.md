@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 27 | 2026-07-28 | Repair peripheral product documentation | `05aa394a3` | `TalexDreamSoul/peripheral-docs-cleanup` |
 | 26 | 2026-07-28 | Contain isolated Intelligence invoke cancellation | `f1cdd7772` | `master` |
 | 25 | 2026-07-28 | 分批提交并推送工作区代码 | `ad8c54944`, `6bee9f5f3`, `d0caa9073`, `3030bcee5`, `b584ef96b`, `1a118b73e`, `e8cb3d393`, `0474cdb5a`, `21484fd3f` | `master` |
 | 24 | 2026-07-27 | 修复 Nexus 文档侧边栏空白与 Hero 中文断行 | `a7a6daad8` | `master` |

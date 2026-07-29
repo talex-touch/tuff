@@ -206,6 +206,6 @@ code: |
 
 ## Related Docs
 
-- [Plugin Context](./plugin-context.en.md)
-- [Flow Transfer API](./flow-transfer.en.md)
-- [Platform Capabilities SDK](./platform-capabilities.en.md)
+- [Plugin Context](./plugin-context.en.mdc)
+- [Flow Transfer API](./flow-transfer.en.mdc)
+- [Platform Capabilities SDK](./platform-capabilities.en.mdc)

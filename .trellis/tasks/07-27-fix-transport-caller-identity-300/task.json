@@ -22,5 +22,9 @@
   "parent": "07-27-resolve-open-github-issues",
   "relatedFiles": [],
   "notes": "Authoritative sender/port/plugin-host/local identity contract is implemented and consumed by #299 SQLite/Secret guards. Storage rejects structural `verified` contexts, payload mismatch, stale generation and SDK mismatch before resource access. #300 remains independently in review; this does not claim #297 process isolation complete.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete independent review of the authoritative sender/port identity contract and its storage consumers before closing #300.",
+    "blocker": "The task remains in review; #297 process isolation is intentionally outside this review scope.",
+    "evidence": "task.json notes, prd.md, and focused transport/storage guard tests provide the review evidence."
+  }
 }

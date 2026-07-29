@@ -1,0 +1,33 @@
+{
+  "id": "docs-sot-convergence",
+  "name": "docs-sot-convergence",
+  "title": "Converge documentation source of truth",
+  "description": "Make TODO and active Trellis state truthful, migrate the root search-index plan into an owned child task, archive only proven completions, and normalize retained-task metadata.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "documentation",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-28",
+  "branch": "TalexDreamSoul/docs-sot-convergence",
+  "base_branch": "TalexDreamSoul/docs-remediation-plan",
+  "worktree_path": "/Users/tagzixian/orca/workspaces/talex-touch/docs-sot-convergence",
+  "commit": "e1a9911f1255c63eb8d1e07f8e7424d0c2708d75",
+  "pr_url": "https://github.com/talex-touch/tuff/pull/357",
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-converge-project-documentation-gates",
+  "relatedFiles": [
+    "docs/plan-prd/TODO.md",
+    ".trellis/tasks/07-13-search-crossplatform-audit/task.json"
+  ],
+  "notes": "Batch A reviewed on the stacked planning base; archived-task inventory and retained-task metadata audit are recorded in evidence/batch-a-archive-inventory.md.",
+  "meta": {
+    "nextAction": "Complete review and integrate this stacked Batch A PR only after the planning base is ready for its parent integration path.",
+    "blocker": "PR #357 is intentionally stacked on TalexDreamSoul/docs-remediation-plan; canonical verify passes, while the Cloudflare Pages check currently fails and must be resolved by its owning deployment path.",
+    "evidence": "PR #357 at implementation head e1a9911f1; evidence/batch-a-archive-inventory.md; task.py validation; mise run ai-docs:dev; git diff --check; GitHub verify passes; Cloudflare Pages currently fails."
+  }
+}

@@ -26,5 +26,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "",
-  "meta": {}
+  "meta": {
+    "nextAction": "Coordinate the Translation, Intelligence, and Clipboard child plans and define cross-plugin acceptance before implementation starts.",
+    "blocker": "All three child workstreams remain planning tasks without approved scoped acceptance evidence.",
+    "evidence": "prd.md, design.md, implement.md, and the three-child task map define the program boundary."
+  }
 }

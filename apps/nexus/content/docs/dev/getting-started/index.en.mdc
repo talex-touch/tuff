@@ -4,7 +4,7 @@
 For newcomers to plugin development, focusing on structure and essential workflow.
 
 ## Suggested order
-- [Development overview](./overview.en.md)
-- [Plugin quick start](./quickstart.en.md)
-- [Composing Tuffex interfaces](./tuffex-composition.en.md)
-- [Plugin development workflow](./plugin-workflow.en.md)
+- [Development overview](./overview.en.mdc)
+- [Plugin quick start](./quickstart.en.mdc)
+- [Composing Tuffex interfaces](./tuffex-composition.en.mdc)
+- [Plugin development workflow](./plugin-workflow.en.mdc)

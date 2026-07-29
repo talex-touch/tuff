@@ -1,0 +1,19 @@
+{
+  "caseBase": "valid-final-contract",
+  "skipAiDocs": false,
+  "files": {
+    "docs/plan-prd/03-features/ai-2.5.0-plan-prd.md": "# AI 2.5.0 Plan\n\nStable 只承诺 **CoreBox 文本 + OCR + provider routing + 明确失败路径**.\n\nCoreBox AI Ask is in scope.\n\n默认 Nexus AI provider remains the default route.\n\nThe --requireCurrentVersion gate remains mandatory before release.\n\nCurrent CoreApp 2.4.14 packaged evidence is complete.\n",
+    "docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md": "# AI 2.5.3 Local Knowledge Retrieval\n\nSQLite / FTS5 / metadata\n\nContext Builder\n\n不把 embeddings 或向量数据库作为第一优先级\n",
+    "docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md": "# AI 2.5.4 Context Hygiene Memory\n\nSession / Checkpoint / Memory / Compression / ContextPackage\n\n默认轻上下文\n\n旧 session 原文不默认注入 prompt\n",
+    "docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md": "# AI 2.5.5 Local Model Runtime\n\n不强依赖 Ollama\n\n内置 GGUF runtime\n\n模型权重按需下载\n",
+    "docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md": "# AI 2.5.8 ASR Provider Runtime\n\nwhisper.cpp\n\nlocal-only\n\n不做 TTS\n",
+    "docs/plan-prd/04-implementation/AI-2.5x-Execution-Plan-2026-06-16.md": "# AI 2.5x Execution Plan\n\n2.5.0 可见体验证据 remains tracked.\n\n2.5.3 Context Builder 基座 remains tracked.\n\n2.5.4 ContextHygiene remains tracked.\n\n2.5.5 / 2.5.8 非当前抢占范围 remains tracked.\n\n验证门禁 remains tracked.\n\n后续切片 remains tracked.\n\nCurrent recapture open with --requireCurrentVersion before release. Historical 13/13 visible AI evidence proves current packaged evidence is complete.\n",
+    "docs/plan-prd/TODO.md": "# TODO\n\n- Active task reference: [active-doc-task](../../.trellis/tasks/active-doc-task/prd.md)\n- R2 AI Stable: historical 13/13 / current recapture open with --requireCurrentVersion before release.\n- R9.2 ContextHygiene\n- R8-F CatalogService MVP\n"
+  },
+  "trackedAdd": [
+    "docs/plan-prd/03-features/ai-2.5.3-local-knowledge-retrieval-prd.md",
+    "docs/plan-prd/03-features/ai-2.5.4-context-hygiene-memory-prd.md",
+    "docs/plan-prd/03-features/ai-2.5.5-local-model-runtime-prd.md",
+    "docs/plan-prd/03-features/ai-2.5.8-asr-provider-runtime-prd.md"
+  ]
+}

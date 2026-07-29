@@ -24,8 +24,8 @@
 - [`reports/coreapp-visible-ai-stable-2026-06-18/`](./reports/coreapp-visible-ai-stable-2026-06-18/)：AI visible evidence。
 - [`reports/r3-indexing-runtime-2026-06-25/`](./reports/r3-indexing-runtime-2026-06-25/)：R3 indexing evidence。
 - [`reports/release-integrity-2026-06-22/`](./reports/release-integrity-2026-06-22/)：发布完整性 evidence。
-- [`reports/nexus-performance-2026-06-21/`](./reports/nexus-performance-2026-06-21/)：Nexus 性能工作表与摘要。
-- [`reports/optimization-dry-run-2026-07-11/`](./reports/optimization-dry-run-2026-07-11/)：全仓优化审计摘要。
+- [`reports/nexus-performance-2026-06-21/pending-components-worktable.md`](./reports/nexus-performance-2026-06-21/pending-components-worktable.md)：Nexus 性能工作表与摘要。
+- [`reports/optimization-dry-run-2026-07-11/index.html`](./reports/optimization-dry-run-2026-07-11/index.html)：全仓优化审计摘要。
 
 ## 维护规则
 

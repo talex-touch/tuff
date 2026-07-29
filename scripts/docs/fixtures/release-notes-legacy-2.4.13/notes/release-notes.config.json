@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "legacyThrough": {
+    "RELEASE": "2.4.13",
+    "BETA": "2.4.13-beta.23"
+  }
+}

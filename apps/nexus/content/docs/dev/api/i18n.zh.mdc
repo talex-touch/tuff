@@ -192,7 +192,7 @@ code: |
 
 ## 相关文档
 
-- [Plugin Context](./plugin-context.zh.md)
-- [Permission SDK](./permission.zh.md)
-- [Manifest 参考](../reference/manifest.zh.md)
-- [Intelligence SDK](./intelligence.zh.md)
+- [Plugin Context](./plugin-context.zh.mdc)
+- [Permission SDK](./permission.zh.mdc)
+- [Manifest 参考](../reference/manifest.zh.mdc)
+- [Intelligence SDK](./intelligence.zh.mdc)
