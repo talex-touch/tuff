@@ -2615,3 +2615,101 @@ const url = parseAllowedHttpUrl(request.url)
 await assertCurrentPermissions(['system.shell', 'network.internet'])
 await fixedBrowserHost.open(target, url)
 ```
+
+## Scenario: Activation-Bound Browser Data Scan
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated `touch-browser-data` Prelude needs local Chromium bookmarks or a bounded recent-history window.
+- The boundary spans the exact `browser-data.scan` DTO, main-owned platform roots, temporary SQLite copies, activation permissions, child result projection, and cleanup barriers.
+
+### 2. Signatures
+
+```ts
+type BrowserDataScanRequest = {
+  operation: 'scan'
+  sources: readonly ('bookmarks' | 'history')[]
+  browser?: 'chrome' | 'edge' | 'brave' | 'arc'
+}
+
+type BrowserDataRecord = {
+  source: 'bookmarks' | 'history'
+  browser: 'chrome' | 'edge' | 'brave' | 'arc'
+  browserName: string
+  profile: string
+  title: string
+  url: string
+  folder?: string
+  visitedAt?: number
+}
+
+type BrowserDataScanResult =
+  | { operation: 'scan'; status: 'completed'; records: BrowserDataRecord[]; diagnostics: BrowserDataDiagnostic[] }
+  | {
+      operation: 'scan'
+      status: 'blocked'
+      code: 'BROWSER_DATA_SOURCE_DISABLED' | 'BROWSER_DATA_PLATFORM_UNSUPPORTED'
+      records: []
+      diagnostics: []
+    }
+```
+
+The child projection is exactly `plugin.browserData.scan(sources, browser?)`. It exists only for the immutable manifest name `touch-browser-data` with the declared `browser-data.scan` ID.
+
+### 3. Contracts
+
+- Child input contains only a non-empty unique source list and an optional fixed browser id. Paths, SQL, profile names, platform, time windows, limits, temp roots, and permission decisions remain in main.
+- Main derives fixed Chromium roots from `home`, platform config data, and Windows `LOCALAPPDATA`. Canonical roots and profile directories must be non-symlink directories with stable `dev`/`ino` identity inside those main-owned parents.
+- Bookmarks are read through an `O_NOFOLLOW` handle, bounded to 4 MiB, and revalidated before return. Parsing is iterative and bounded by depth/member/record limits.
+- History never queries the live browser database. Main copies the regular database plus bounded `-wal`/`-shm` sidecars into a private temp directory, then a worker executes only the fixed `chromium-history` query against that owned copy.
+- Worker `readOnly` means query-only protocol admission. It does not rely on unsupported libSQL `?mode=ro` URI behavior; the original browser file remains protected because only the temporary copy is opened.
+- Every temp directory is removed after success, failure, cancellation, revoke, and close. Cleanup failure is a stable terminal error and must not be swallowed, including copy-acquisition rollback.
+- `fs.read` is required for every scan. `fs.index` is required only when an enabled history source is admitted; disabling history must not block bookmarks.
+- Activation, host generation, permission, and enabled-source state are rechecked before and after privileged work. Revoke/disable aborts the fixed query and `close()` waits for active cleanup.
+- Return at most 500 records and 768 KiB. Results contain only bounded display fields, canonical public HTTP(S) URLs, safe visit timestamps, and stable diagnostics; no path, SQL, native error, `dev`/`ino`, database name, or temp identity crosses to the child.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                          | Required result                                                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Extra field, duplicate source, path, SQL, profile, platform, or unknown browser    | Invalid request before filesystem/query work                                   |
+| Source disabled by current main registry                                           | Omit it; if none remain, `BROWSER_DATA_SOURCE_DISABLED`                        |
+| `fs.read` missing/unavailable                                                      | Stable permission result; no file open                                         |
+| Enabled history with `fs.index` missing/unavailable                                | Stable permission result; bookmarks remain available when requested separately |
+| Root/profile/file is symlinked, non-canonical, non-regular, replaced, or oversized | Per-source safe diagnostic; no leaked path/native error                        |
+| SQLite rows exceed the fixed per-profile limit                                     | `BROWSER_DATA_RESULT_LIMIT`; discard that profile                              |
+| Caller abort, permission revoke, stale generation, or close                        | Abort query, remove temp copy, await cleanup barrier                           |
+| Temp cleanup fails during success or rollback                                      | `BROWSER_DATA_TEMP_CLEANUP_FAILED`; never silently leave browser data          |
+| Arc requested on Linux or another unavailable fixed browser                        | Stable `BROWSER_DATA_PLATFORM_UNSUPPORTED`; no arbitrary fallback              |
+
+### 5. Good / Base / Bad Cases
+
+- Good: Chrome history is copied to one private temp directory, queried with fixed SQL, projected to bounded URL/title/time fields, then removed before the capability settles.
+- Base: history is disabled or lacks `fs.index`; bookmarks still scan through the fixed JSON path with no history query.
+- Bad: pass a child path or SQL string, query the live database, inherit arbitrary browser profile locations, open a SQLite URI selected by the child, or swallow temp cleanup failure.
+
+### 6. Tests Required
+
+- DTO tests reject authority fields, paths, SQL, duplicate/unknown sources, extra keys, accessors, proxies, and malformed results before host work.
+- Filesystem tests cover fixed macOS/Windows/Linux roots, unsupported Arc on Linux, symlink/non-regular/oversized inputs, database/WAL/SHM copy, row/result bounds, and path/native-field exclusion.
+- Permission/lifecycle tests cover disabled history without index permission, read/index denial, revoke during query, stale activation, close waiting, and cleanup after success/failure/cancel.
+- Worker tests prove `readOnly` owners can query the owned copy, reject execute/transaction operations, preserve ordinary plugin SQLite behavior, and retain the 64 MiB quota.
+- Child tests prove exact manifest/declaration gating, frozen null-prototype facade, fixed browser/source membership, constructor containment, and no filesystem/SQLite/process surface.
+- Real Electron smoke loads the actual Prelude in two generations using only temporary fixtures and a fake fixed query. It proves deny/grant, bookmarks/history, action dispatch, revoke cancellation, temp cleanup, generation rotation, stale-port denial, and no real browser/network/OS action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const database = request.path ?? path.join(process.env.HOME!, request.profile, 'History')
+return sqlite.prepare(request.sql).all()
+```
+
+#### Correct
+
+```ts
+const profile = await resolveFixedCanonicalProfile(owner, request.browser)
+const copy = await copyBoundedBrowserDatabase(profile.history, owner.tempRoot, signal)
+return await withOwnedTemporaryCopy(copy, () => fixedReadOnlyQuery(copy.databasePath, 'chromium-history', signal))
+```

@@ -1226,3 +1226,43 @@ The exact three unmigrated official activations are:
 - `touch-translation`
 
 Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22 regression, complete final security review, and the complete hard cut remain release blockers. No unrelated plugin migration, rollout gate flip, legacy removal, commit, branch/history change, or real external action was performed in this batch.
+
+## Migration 20/22: Browser Data
+
+### Delivered Boundary
+
+- Added activation-local `browser-data.scan` with exact source/browser DTOs. The child facade is frozen, null-prototype, declaration/name gated, and exposes only `plugin.browserData.scan(sources, browser?)` for fixed Chromium sources and browser IDs.
+- Main owns platform roots: macOS Application Support, Windows `LOCALAPPDATA`, and Linux Electron config data. Canonical profile directories reject symlinks and identity drift; the child cannot provide a path, profile, platform, SQL statement, time window, limit, or temp destination.
+- Bookmarks use an `O_NOFOLLOW`, 4 MiB bounded JSON reader. History copies the regular database plus bounded WAL/SHM sidecars into a private main-owned temp directory and executes only the fixed `chromium-history` query through a query-only SQLite worker owner. The live browser database is never opened by the worker.
+- The worker protocol's `readOnly` mode rejects execute/transaction operations while keeping ordinary plugin SQLite unchanged. It intentionally opens the owned copy through the supported plain libSQL file URL; unsupported `?mode=ro` URI behavior had caused all reads to fail.
+- `fs.read` is required on every scan. `fs.index` is required only after an enabled history source is admitted, so disabling history does not block bookmarks. Permission revoke, activation rotation, caller abort, disable, crash, and module teardown abort work and await temp cleanup.
+- The official Prelude contains no `require`, process, filesystem, SQLite, raw fetch, Electron, privileged path/SQL field, or `__test`. It publishes bounded canonical feature items, keeps open/copy optional and permission-gated, and maintains only the requested indexed source on rebuild/clear.
+- Rollout is exactly **20 of 22** manifested activations. `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains false with no environment bypass.
+
+### Security Review
+
+- **P0: none found.** No child-selected path, SQL, profile, temp root, browser installation, native identity, or database handle reaches main work.
+- **P1 fixed:** copy-acquisition rollback swallowed a failed temp-directory removal and could leave sensitive browser data behind. Cleanup failure now returns `BROWSER_DATA_TEMP_CLEANUP_FAILED` and cannot be silently discarded.
+- **P1 fixed:** Windows initially used Electron roaming `appData`; fixed browser roots require main-owned `LOCALAPPDATA` (with a canonical home fallback). Linux uses the main-supplied config root and reports unsupported fixed browsers without fallback.
+- **P1 fixed:** the first worker implementation used libSQL `?mode=ro`, which made valid reads unavailable. Read-only authority now comes from the query-only worker protocol plus the owned temporary copy, not an unsupported URI option.
+- **P2 fixed:** history permission is checked only after current enabled-source filtering; a disabled history source cannot deny a valid bookmark scan. Single-test quota timing was raised to 15 seconds because its unchanged 700-write/64 MiB proof exceeded Vitest's default five-second wall under full-suite load.
+- No known P0/P1/P2 remains in the Browser Data DTO, fixed roots, file-copy/query, permission, lifecycle, child facade, Prelude, rollout, or fake-only smoke scope. The independent complete #297 security review remains pending.
+
+### Validation Evidence
+
+- Browser Data capability **9/9**, child facade **2/2**, official Prelude **7/7**, SQLite worker integration **6/6**, and client **6/6** passed.
+- The 20/22 tracked plugin-host/TouchPlugin/PluginModule/rollout baseline, explicitly excluding the concurrent unfinished Intelligence Context RED files, passed **43 files, 752/752 tests**. An earlier all-host run passed the same business assertions and exposed only the quota test's former five-second timing budget.
+- CoreApp Node typecheck passed. Scoped host/plugin/runtime/smoke ESLint passed with `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 plugin classification**, and **20/20 search-provider coverage**.
+- Production `build:vite` passed and emitted the updated `plugin-host.js` and `plugin-sqlite-worker.js`. Existing Vite chunking and third-party annotation warnings remain non-blocking.
+- Real Electron utility-process smoke passed: `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It loads the actual Browser Data Prelude, proves bookmark/history scan, open/copy actions, permission revoke cancellation, temp cleanup, two-generation rotation and stale-port denial using only temporary fixtures and a fake fixed query. No real browser profile, network request, browser launch, or OS action ran.
+- Code commit: `c3ca65e61 feat(plugin): isolate browser data Prelude [task 297]`.
+
+### Remaining Scope
+
+The exact two unmigrated official activations are:
+
+- `touch-intelligence`
+- `touch-translation`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22 regression, complete independent security review, and the hard cut remain release blockers. The concurrent Intelligence Context Stage 2B RED work was explicitly excluded from this migration commit and validation claim.
