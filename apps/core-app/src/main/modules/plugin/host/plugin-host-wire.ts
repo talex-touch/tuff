@@ -42,6 +42,7 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'process.spawn',
   'process.workspace-scripts',
   'system.invoke',
+  'browser-data.scan',
   'system.browser-open',
   'system.window-presets',
   'system.window-manager'

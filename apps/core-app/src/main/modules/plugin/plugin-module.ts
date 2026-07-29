@@ -83,6 +83,12 @@ import {
 } from './host/plugin-business-capabilities'
 import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
 import {
+  createFixedPluginBrowserDataService,
+  createPluginBrowserDataCapabilities,
+  createPluginBrowserDataSqliteQuery,
+  type PluginBrowserDataSourceId
+} from './host/plugin-browser-data-capabilities'
+import {
   createFixedPluginBrowserOpenService,
   createPluginBrowserOpenCapabilities,
   createPluginBrowserOpenProcess
@@ -1686,6 +1692,7 @@ export class PluginModule extends BaseModule {
     TouchPlugin.setSnipasteProcessCapabilityFactory(null)
     TouchPlugin.setSystemActionCapabilityFactory(null)
     TouchPlugin.setBrowserOpenCapabilityFactory(null)
+    TouchPlugin.setBrowserDataCapabilityFactory(null)
     TouchPlugin.setWindowManagerCapabilityFactory(null)
     TouchPlugin.setWindowPresetCapabilityFactory(null)
     TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
@@ -2033,6 +2040,44 @@ export class PluginModule extends BaseModule {
         confirmation: systemActionConfirmation,
         window: systemActionWindow
       })
+    const browserDataService = createFixedPluginBrowserDataService({
+      platform: process.platform,
+      homeDirectory: app.getPath('home'),
+      appDataDirectory:
+        process.platform === 'win32'
+          ? (process.env.LOCALAPPDATA ?? path.join(app.getPath('home'), 'AppData', 'Local'))
+          : app.getPath('appData'),
+      tempDirectory: path.join(app.getPath('temp'), 'talex-touch', 'plugin-browser-data'),
+      query: createPluginBrowserDataSqliteQuery()
+    })
+    const createBrowserDataCapability = (activation: PluginActivationIdentity) =>
+      createPluginBrowserDataCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        resolveEnabledSources: (pluginName) => {
+          const plugin = this.pluginManager?.getPluginByName(pluginName)
+          if (!(plugin instanceof TouchPlugin)) return Object.freeze([])
+          const providers: readonly [PluginBrowserDataSourceId, string][] = [
+            ['bookmarks', 'touch-browser-data.browser-bookmarks'],
+            ['history', 'touch-browser-data.browser-history']
+          ]
+          return Object.freeze(
+            providers
+              .filter(([, providerId]) => plugin.isSearchProviderEnabledForHost(providerId))
+              .map(([source]) => source)
+          )
+        },
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        authorizeIndex: (pluginName) => authorizePluginCapability(pluginName, 'fs.index'),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        watchIndexPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.index', onRevoke),
+        service: browserDataService
+      })
     const browserOpenService = createFixedPluginBrowserOpenService({
       platform: process.platform,
       homeDirectory: app.getPath('home'),
@@ -2253,6 +2298,9 @@ export class PluginModule extends BaseModule {
     TouchPlugin.setBrowserOpenCapabilityFactory((activation) =>
       createBrowserOpenCapability(activation)
     )
+    TouchPlugin.setBrowserDataCapabilityFactory((activation) =>
+      createBrowserDataCapability(activation)
+    )
     TouchPlugin.setWindowManagerCapabilityFactory((activation) =>
       createWindowManagerCapability(activation)
     )
@@ -2393,6 +2441,7 @@ export class PluginModule extends BaseModule {
     runCleanup(() => TouchPlugin.setSnipasteProcessCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setSystemActionCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setBrowserOpenCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setBrowserDataCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setWindowManagerCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setWindowPresetCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setWorkspaceScriptCapabilityFactory(null))

@@ -1367,6 +1367,9 @@ const CONTEXT_BOOTSTRAP = String.raw`
     snapshot.manifest.name === 'touch-workspace-scripts' &&
     hasDeclaredCapability('process.workspace-scripts')
   const hasSystemFacade = hasDeclaredCapability('system.invoke')
+  const hasBrowserDataFacade =
+    snapshot.manifest.name === 'touch-browser-data' &&
+    hasDeclaredCapability('browser-data.scan')
   const hasBrowserOpenFacade =
     snapshot.manifest.name === 'touch-browser-open' &&
     hasDeclaredCapability('system.browser-open')
@@ -1841,6 +1844,47 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(systemFacade)
 
+  const browserDataFacade = objectCreate(null)
+  if (hasBrowserDataFacade) {
+    defineFacadeMethod(browserDataFacade, 'scan', (sources, browser) => {
+      if (!arrayIsArray(sources) || sources.length < 1 || sources.length > 2) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const normalizedSources = []
+      for (let index = 0; index < sources.length; index += 1) {
+        if (!objectHasOwn(sources, index)) {
+          return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+        }
+        const source = sources[index]
+        let duplicate = false
+        for (let previous = 0; previous < normalizedSources.length; previous += 1) {
+          if (normalizedSources[previous] === source) duplicate = true
+        }
+        if ((source !== 'bookmarks' && source !== 'history') || duplicate) {
+          return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+        }
+        normalizedSources.push(source)
+      }
+      if (
+        browser !== undefined &&
+        browser !== 'chrome' &&
+        browser !== 'edge' &&
+        browser !== 'brave' &&
+        browser !== 'arc'
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const request = browser === undefined
+        ? { operation: 'scan', sources: normalizedSources }
+        : { operation: 'scan', sources: normalizedSources, browser }
+      return mapCapabilityResult(
+        invokeCapability('browser-data.scan', request),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(browserDataFacade)
+
   const browserOpenFacade = objectCreate(null)
   if (hasBrowserOpenFacade) {
     defineFacadeMethod(browserOpenFacade, 'list', () =>
@@ -1937,6 +1981,12 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   if (hasSystemFacade) {
     objectDefineProperty(pluginFacade, 'system', { value: systemFacade, enumerable: true })
+  }
+  if (hasBrowserDataFacade) {
+    objectDefineProperty(pluginFacade, 'browserData', {
+      value: browserDataFacade,
+      enumerable: true
+    })
   }
   if (hasBrowserOpenFacade) {
     objectDefineProperty(pluginFacade, 'browser', {

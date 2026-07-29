@@ -2150,6 +2150,7 @@ describe('touchPlugin.enable', () => {
     TouchPlugin.setSnipasteProcessCapabilityFactory(null)
     TouchPlugin.setSystemActionCapabilityFactory(null)
     TouchPlugin.setBrowserOpenCapabilityFactory(null)
+    TouchPlugin.setBrowserDataCapabilityFactory(null)
     TouchPlugin.setWindowManagerCapabilityFactory(null)
     TouchPlugin.setWindowPresetCapabilityFactory(null)
     TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
@@ -2561,6 +2562,71 @@ describe('touchPlugin.enable', () => {
       expect(second.activation).toMatchObject({
         activationGeneration: 2,
         key: 'browser-open-key-2'
+      })
+      expect(factory).toHaveBeenCalledTimes(2)
+      expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
+    } finally {
+      fse.removeSync(root)
+    }
+  })
+
+  it('injects a generation-local browser-data definition and awaited close barrier', async () => {
+    const root = fse.mkdtempSync(path.join(os.tmpdir(), 'tuff-browser-data-activation-'))
+    try {
+      fse.writeFileSync(path.join(root, 'index.js'), 'module.exports = {}')
+      const runtime = createRuntimeServiceMock()
+      const requestKey = vi
+        .fn()
+        .mockReturnValueOnce('browser-data-key-1')
+        .mockReturnValueOnce('browser-data-key-2')
+      TouchPlugin.setTransport({
+        broadcast: vi.fn(),
+        invoke: vi.fn().mockResolvedValue(undefined),
+        keyManager: { requestKey, revokeKey: vi.fn(() => true) },
+        sendToPlugin: vi.fn().mockResolvedValue(undefined)
+      } as unknown as ITuffTransportMain)
+      TouchPlugin.setRuntimeService(runtime as never)
+      const closes: Array<ReturnType<typeof vi.fn>> = []
+      const factory = vi.fn((_activation: PluginRuntimeActivationOptions['activation']) => {
+        const close = vi.fn(async () => undefined)
+        closes.push(close)
+        return {
+          definitions: Object.freeze([{ id: 'browser-data.scan', permission: 'fs.read' }]),
+          close
+        }
+      })
+      TouchPlugin.setBrowserDataCapabilityFactory(factory as never)
+      const plugin = new TouchPlugin(
+        'touch-browser-data',
+        { type: 'emoji', value: 'browser' },
+        '1.0.0',
+        'desc',
+        '',
+        { enable: false, address: '' },
+        root,
+        {},
+        { skipDataInit: true }
+      )
+      plugin.setPreludeContract({ main: 'index.js' })
+
+      await expect(plugin.enable()).resolves.toBe(true)
+      const first = vi.mocked(runtime.startActivation).mock
+        .calls[0]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(first.capabilityDefinitions?.map((definition) => definition.id)).toEqual([
+        'browser-data.scan'
+      ])
+      expect(first.capabilityDefinitions?.[0]?.permission).toBe('fs.read')
+      expect(first.closeResources).toEqual(expect.any(Function))
+      await expect(first.closeResources?.()).resolves.toBeUndefined()
+      expect(closes[0]).toHaveBeenCalledOnce()
+
+      await expect(plugin.disable()).resolves.toBe(true)
+      await expect(plugin.enable()).resolves.toBe(true)
+      const second = vi.mocked(runtime.startActivation).mock
+        .calls[1]?.[0] as unknown as PluginRuntimeActivationOptions
+      expect(second.activation).toMatchObject({
+        activationGeneration: 2,
+        key: 'browser-data-key-2'
       })
       expect(factory).toHaveBeenCalledTimes(2)
       expect(factory.mock.calls[0]?.[0]).not.toEqual(factory.mock.calls[1]?.[0])
