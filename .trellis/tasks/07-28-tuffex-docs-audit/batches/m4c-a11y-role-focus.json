@@ -1,0 +1,227 @@
+[
+ {
+  "component": "base-anchor",
+  "category": "a11y",
+  "summary": "`prefers-reduced-motion: reduce` is honoured only on the liquid path — `prefersReducedMotion()` has exactly one caller, inside `prepareLiquid` — so the default `transfer` animation plus `boom` and `opacity` still run their full GSAP timelines for users who asked for reduced motion.",
+  "evidenceFile": "packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue",
+  "evidenceLine": 573,
+  "evidenceQuote": "  return !prefersReducedMotion()",
+  "suggestion": "Consult the same `reducedMotion` flag in `useBaseAnchorMotion.animateOpen` / `animateClose` (e.g. treat it as `type === 'none'` and go straight to `finishOpen` / `finishClose`), and widen the doc bullet at zh:405 / en:405 from \"`liquid` snaps to its end state\" to cover every animation type."
+ },
+ {
+  "component": "form",
+  "category": "a11y",
+  "summary": "TxFormItem's `<label>` has no `for`, the control gets no `aria-invalid`, and the error `<div>` has no `role=\"alert\"`/`aria-live`, so validation failures are never announced to screen readers.",
+  "evidenceFile": "packages/tuffex/packages/components/src/form/src/TxFormItem.vue",
+  "evidenceLine": 133,
+  "evidenceQuote": "      <div v-if=\"showMessage && errorMessage\" class=\"tx-form-item__error\">",
+  "suggestion": "Generate a stable id (e.g. `useId()`), expose it through the item slot props so controls can bind `:id`/`:aria-describedby`/`:aria-invalid`, bind `for` on the `<label>`, and add `role=\"alert\"` to the error node. Then extend the Review Notes beyond the current `for`/`id` caveat."
+ },
+ {
+  "component": "flip-overlay",
+  "category": "a11y",
+  "summary": "TxFlipOverlay is a modal card (body scroll lock + full-screen mask) but renders no `role=\"dialog\"`/`aria-modal`, has no Escape-to-close handler, and never traps or restores focus.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
+  "evidenceLine": 629,
+  "evidenceQuote": "      <div ref=\"cardRef\" :class=\"cardClassName\" :style=\"props.cardStyle\" @click.stop>",
+  "suggestion": "Add `role=\"dialog\" aria-modal=\"true\"` on the card, wire `aria-labelledby`/`aria-describedby` to the built-in header title/desc nodes, add a keydown listener that routes Escape through the same guard as `handleMaskClick` (so `preventAccidentalClose` still warns), and move focus into the card on open / restore it to `source` on close."
+ },
+ {
+  "component": "select",
+  "category": "a11y",
+  "summary": "The dropdown list has no `role=\"listbox\"`, options carry no `role=\"option\"`/`aria-selected` (TxCardItem's `role` prop is never passed), and the single-select trigger input has no `role=\"combobox\"`/`aria-expanded` — only the multi-select trigger declares combobox semantics.",
+  "evidenceFile": "packages/tuffex/packages/components/src/select/src/TxSelect.vue",
+  "evidenceLine": 673,
+  "evidenceQuote": "<div class=\"tuff-select__list\">",
+  "suggestion": "Add `role=\"listbox\"` to `.tuff-select__list`, pass `role=\"option\"` plus `:aria-selected=\"isValueSelected(opt.value)\"` to the TxCardItem options (and to TxSelectItem), and give the single-select TuffInput trigger `role=\"combobox\"`, `aria-haspopup=\"listbox\"` and `:aria-expanded=\"isOpen\"` to match the multi trigger at line 572-574."
+ },
+ {
+  "component": "toast",
+  "category": "a11y",
+  "summary": "The toast region is `role=\"region\"` only — it has no `aria-live` and individual toasts carry no `role=\"status\"`/`role=\"alert\"`, so screen readers never announce a toast that appears while focus is elsewhere.",
+  "evidenceFile": "packages/tuffex/packages/components/src/toast/src/TxToastHost.vue",
+  "evidenceLine": 15,
+  "evidenceQuote": "    <div class=\"tx-toast-host\" role=\"region\" aria-label=\"Notifications\" :style=\"{ zIndex }\">",
+  "suggestion": "Add `aria-live=\"polite\"` and `aria-atomic=\"false\"` to the host region, and give each `.tx-toast` `role=\"status\"` (or `role=\"alert\"` when `variant === 'danger'`); then move the current \"Accessibility note\" out of the Review Notes since it would no longer apply."
+ },
+ {
+  "component": "flat-button",
+  "category": "a11y",
+  "summary": "The loading state exposes nothing to assistive tech: the button gets no `aria-busy`, and the decorative spinner SVG has no `aria-hidden=\"true\"`, so a screen reader user only perceives that the button became disabled with no explanation — despite the docs asserting an accessibility review.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue",
+  "evidenceLine": 47,
+  "evidenceQuote": "    <span v-if=\"loading\" class=\"tx-flat-button__loading\">\n      <svg class=\"tx-flat-button__spinner\" viewBox=\"0 0 24 24\">",
+  "suggestion": "Bind `:aria-busy=\"loading || undefined\"` on the `<button>` and add `aria-hidden=\"true\"` (or `role=\"presentation\"`) to the spinner wrapper/SVG. Then extend the accessibility bullet in flat-button.zh.mdc:120 / .en.mdc:120 to state the loading contract instead of only the disabled one."
+ },
+ {
+  "component": "flat-dropdown",
+  "category": "a11y",
+  "summary": "`TxFlatDropdown` emits zero ARIA: the trigger wrapper has no `aria-expanded`/`aria-haspopup`/`aria-controls` and the floating panel has no `role` or `id`, so assistive tech gets no signal that a panel opened.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-dropdown/src/TxFlatDropdown.vue",
+  "evidenceLine": 265,
+  "evidenceQuote": "    :class=\"{ 'is-open': open, 'is-disabled': disabled }\"",
+  "suggestion": "Generate a panel id with `useId()`, put `:aria-expanded=\"open\"`, `aria-haspopup=\"true\"` and `:aria-controls=\"panelId\"` on the reference div (or expose them through `triggerSlotProps` so consumers can bind them to their own button), and give the panel `:id=\"panelId\"`. Document the resulting slot props in the Slots table of both locale docs."
+ },
+ {
+  "component": "command-palette",
+  "category": "a11y",
+  "summary": "`disabled` commands only receive an `is-disabled` CSS class — the `<button>` keeps no `disabled`/`aria-disabled` attribute, so it stays Tab-focusable and clickable, and ArrowUp/ArrowDown stop on it where Enter silently does nothing.",
+  "evidenceFile": "packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue",
+  "evidenceLine": 243,
+  "evidenceQuote": "                'is-disabled': cmd.disabled,",
+  "suggestion": "Add `:aria-disabled=\"cmd.disabled\"` and `:tabindex=\"cmd.disabled ? -1 : 0\"` on the item button, and make the ArrowUp/ArrowDown handlers skip entries whose `disabled` is true so keyboard focus never parks on an unselectable command."
+ },
+ {
+  "component": "nav-bar",
+  "category": "a11y",
+  "summary": "Because `left`/`right` slot content is always wrapped in a native `<button>`, any consumer placing a button or link in those zones emits invalid nested interactive markup — the component's own test does exactly that with `<button class=\"custom-left\">Menu</button>`, contradicting the docs' \"do not nest another interactive button\" rule.",
+  "evidenceFile": "packages/tuffex/packages/components/src/nav-bar/__tests__/nav-bar.test.ts",
+  "evidenceLine": 53,
+  "evidenceQuote": "        left: '<button class=\"custom-left\">Menu</button>',",
+  "suggestion": "Either render the action zones as a plain `<div>` when a slot is provided (and let the slot own the interactive element), or add a `leftAsButton`/`rightAsButton` escape hatch; update the test fixtures to use `<span>`/`<TxIcon>` so they no longer encode the anti-pattern the docs forbid."
+ },
+ {
+  "component": "gradient-border",
+  "category": "a11y",
+  "summary": "The rotating gradient runs as an unconditional `infinite` CSS animation with no `@media (prefers-reduced-motion: reduce)` guard, so every instance keeps animating for users who have requested reduced motion.",
+  "evidenceFile": "packages/tuffex/packages/components/src/gradient-border/src/TxGradientBorder.vue",
+  "evidenceLine": 72,
+  "evidenceQuote": "  animation: tx-gradient-border-rotate var(--tx-gradient-duration) linear infinite;",
+  "suggestion": "Wrap the animation in a `@media (prefers-reduced-motion: no-preference)` block, or add `@media (prefers-reduced-motion: reduce) { .tx-gradient-border::before { animation: none; } }` so the border settles at a static gradient angle, and document the behavior in the docs' Best Practices."
+ },
+ {
+  "component": "modal",
+  "category": "a11y",
+  "summary": "TxModal declares `aria-modal=\"true\"` but implements no focus trap, so Tab from inside the dialog walks straight into the page behind it while assistive tech is told the background is inert.",
+  "evidenceFile": "packages/tuffex/packages/components/src/modal/src/TxModal.vue",
+  "evidenceLine": 74,
+  "evidenceQuote": "        aria-modal=\"true\"",
+  "suggestion": "Add a `@keydown.tab` handler on the overlay that cycles focus between the first/last tabbable descendants (or apply `inert` to the app root while open), and document the behavior in the Interaction Contract section alongside the existing focus-restore bullet (modal.en.mdc:74)."
+ },
+ {
+  "component": "input",
+  "category": "a11y",
+  "summary": "The CapsLock warning is conveyed only by a decorative SVG plus a hardcoded English `title=\"CapsLock is on\"`, with no `aria-live`/`role=\"status\"` and no i18n hook, so screen-reader users and non-English UIs get no warning at all.",
+  "evidenceFile": "packages/tuffex/packages/components/src/input/src/TxInput.vue",
+  "evidenceLine": 155,
+  "evidenceQuote": "    <span v-if=\"showCapsLock\" class=\"tx-input__capslock\" title=\"CapsLock is on\">",
+  "suggestion": "Give the span `role=\"status\"` + `aria-live=\"polite\"` and an `aria-label`, and expose the message text via a prop (e.g. `capsLockText`) or the library's locale layer instead of a hardcoded English string — the clear button at line 165 already uses an explicit `aria-label`, so follow that pattern."
+ },
+ {
+  "component": "corner-overlay",
+  "category": "a11y",
+  "summary": "覆盖层节点硬编码 aria-hidden=\"true\" 且无法关闭，但文档明确建议在 overlay 插槽里放可聚焦的 <button>，会产生「可聚焦元素位于 aria-hidden 子树内」的 WCAG 4.1.2 违规。",
+  "evidenceFile": "packages/tuffex/packages/components/src/corner-overlay/src/TxCornerOverlay.vue",
+  "evidenceLine": 56,
+  "evidenceQuote": "    <span v-if=\"$slots.overlay\" class=\"tx-corner-overlay__overlay\" :style=\"overlayStyle\" aria-hidden=\"true\">",
+  "suggestion": "把 aria-hidden 与 overlayPointerEvents 联动（:aria-hidden=\"overlayPointerEvents === 'auto' ? undefined : 'true'\"），或新增 overlayDecorative?: boolean 显式控制；同步修改 zh/en 文档「可点击覆盖层」示例说明。"
+ },
+ {
+  "component": "agents",
+  "category": "a11y",
+  "summary": "Disabled `TxAgentItem` rows lose `role=\"option\"` because `TxCardItem` only applies its `role` prop when `clickable` is true, so a `role=\"listbox\"` container ends up holding role-less `<div>`s that still carry `aria-selected` and `aria-disabled` — invalid ARIA, and it contradicts the docs' own interaction contract.",
+  "evidenceFile": "packages/tuffex/packages/components/src/agents/src/TxAgentItem.vue",
+  "evidenceLine": 41,
+  "evidenceQuote": ":clickable=\"!disabled\"",
+  "suggestion": "Either always pass the role through (change TxCardItem.vue:49 `:role=\"clickable ? role : undefined\"` to `:role=\"role\"`), or have `TxAgentItem` keep the row focusable-and-labelled when disabled (`role=\"option\"` + `tabindex=\"-1\"` + `aria-disabled`). Add an assertion to agents.test.ts that a disabled row still reports `role === 'option'`."
+ },
+ {
+  "component": "layout-skeleton",
+  "category": "a11y",
+  "summary": "TxLayoutSkeleton renders 15+ empty pulsing divs with no `aria-hidden`, `role=\"status\"` or `aria-busy`, so assistive tech sees a meaningless node cluster and no loading announcement.",
+  "evidenceFile": "packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue",
+  "evidenceLine": 10,
+  "evidenceQuote": "  <div class=\"tx-layout-skeleton\">",
+  "suggestion": "Add `aria-hidden=\"true\"` to the root (the shapes are purely decorative) and let the host own the live-region status, or add `role=\"status\" aria-busy=\"true\" aria-label=\"Loading\"` to the root. Then document the chosen contract in the `## Interaction Contract` section (layout-skeleton.en.mdc:69-73), which currently only describes counts."
+ },
+ {
+  "component": "tree",
+  "category": "a11y",
+  "summary": "The tree renders a flattened list, but `role=\"treeitem\"` rows are nested under an un-roled `<div class=\"tx-tree__list\">` inside `role=\"tree\"`, and the flattened items carry neither `role=\"group\"` wrappers nor `aria-setsize`/`aria-posinset`, so assistive tech cannot convey \"item N of M at this level\".",
+  "evidenceFile": "packages/tuffex/packages/components/src/tree/src/TxTree.vue",
+  "evidenceLine": 288,
+  "evidenceQuote": "<div v-else class=\"tx-tree__list\">",
+  "suggestion": "Add `role=\"presentation\"` (or `role=\"none\"`) to `.tx-tree__list` so treeitems remain owned by the tree, and compute per-level sibling counts in `flatItems` to bind `:aria-setsize` and `:aria-posinset` on each row alongside the existing `aria-level`."
+ },
+ {
+  "component": "tree-select",
+  "category": "a11y",
+  "summary": "The dropdown panel declares `role=\"listbox\"` (and the trigger declares `aria-haspopup=\"listbox\"`) but its only content is `TxTree`, which renders `role=\"tree\"` with `role=\"treeitem\"` rows — a listbox with zero `option` children is an invalid ARIA structure, and the combobox trigger has no `aria-controls` pointing at the popup.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue",
+  "evidenceLine": 190,
+  "evidenceQuote": "    <div class=\"tx-tree-select__panel\" role=\"listbox\" :style=\"{ maxHeight: `${dropdownMaxHeight}px` }\">",
+  "suggestion": "Drop `role=\"listbox\"` from `.tx-tree-select__panel` and change the trigger's `aria-haspopup` to `\"tree\"`, letting `TxTree`'s own `role=\"tree\"`/`role=\"treeitem\"` carry the semantics. Add a generated id on the panel and reference it from the trigger via `aria-controls`, then update `## Interaction Contract` (tree-select.en.mdc:186) to state the popup exposes a tree, not a listbox."
+ },
+ {
+  "component": "tab-bar",
+  "category": "a11y",
+  "summary": "Each item declares `role=\"tab\"` inside `role=\"tablist\"` but there is no `aria-controls`/tabpanel association and no arrow-key roving focus, so screen readers announce \"tab 1 of 3\" while ArrowLeft/ArrowRight do nothing; the `role=\"tablist\"` on the `<nav>` also destroys the navigation landmark.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tab-bar/src/TxTabBar.vue",
+  "evidenceLine": 56,
+  "evidenceQuote": "        role=\"tab\"",
+  "suggestion": "Either implement the full APG tablist pattern (roving `tabindex`, ArrowLeft/ArrowRight/Home/End keydown handling, `aria-controls` per tab, `aria-orientation=\"horizontal\"` on the list) or drop the tab roles and keep the semantics of a `<nav>` with `aria-current=\"page\"` on the active button — which is what bottom navigation actually is."
+ },
+ {
+  "component": "splitter",
+  "category": "a11y",
+  "summary": "The separator is focusable and arrow-key resizable but exposes no `aria-valuenow` / `aria-valuemin` / `aria-valuemax`, so assistive tech announces \"Resize separator\" with no position feedback while the user steps the ratio.",
+  "evidenceFile": "packages/tuffex/packages/components/src/splitter/src/TxSplitter.vue",
+  "evidenceLine": 158,
+  "evidenceQuote": "      role=\"separator\"",
+  "suggestion": "Bind `:aria-valuenow=\"Math.round(value * 100)\"`, `:aria-valuemin=\"Math.round(min * 100)\"`, `:aria-valuemax=\"Math.round(max * 100)\"` on the bar (a focusable `role=\"separator\"` is a widget and ARIA requires these). The docs already flag the gap at splitter.en.mdc:89 — fix the component rather than only documenting it."
+ },
+ {
+  "component": "icon",
+  "category": "a11y",
+  "summary": "TxIcon unconditionally renders `role=\"img\"` with `:title=\"alt\"`, and `alt` defaults to `''`, so every decorative icon becomes a nameless image node that screen readers announce as an unlabeled graphic.",
+  "evidenceFile": "packages/tuffex/packages/components/src/icon/src/TxIcon.vue",
+  "evidenceLine": 242,
+  "evidenceQuote": "    :title=\"alt\"\n    role=\"img\"",
+  "suggestion": "Render `role=\"img\"` only when `alt` is non-empty, and emit `aria-hidden=\"true\"` (with no `role`/`title`) otherwise, so decorative icons drop out of the accessibility tree. This also makes the doc's Accessibility note at icon.zh.mdc:294 actually enforceable."
+ },
+ {
+  "component": "skeleton",
+  "category": "a11y",
+  "summary": "TxSkeleton renders bare empty `<div>`s with no `aria-busy`, `role=\"status\"`, or `aria-hidden`, so a screen reader hears nothing during loading and the placeholder nodes are silently exposed in the accessibility tree.",
+  "evidenceFile": "packages/tuffex/packages/components/src/skeleton/src/TxSkeleton.vue",
+  "evidenceLine": 55,
+  "evidenceQuote": "  <div v-else class=\"tx-skeleton\" :style=\"rootStyle\">",
+  "suggestion": "Add `role=\"status\"` + `aria-busy=\"true\"` (with an sr-only loading label) on `.tx-skeleton`, or at minimum `aria-hidden=\"true\"` on the shimmer items so they do not pollute the a11y tree. Then document the choice in the `## 交互契约` section (skeleton.zh.mdc:87)."
+ },
+ {
+  "component": "transition",
+  "category": "a11y",
+  "summary": "The library's central motion primitive has no `@media (prefers-reduced-motion: reduce)` override for any of its four presets, even though CONTRIBUTING.md mandates it and eight sibling components (rating, glow-text, flat-dropdown, version-capsule, ...) implement it.",
+  "evidenceFile": "packages/tuffex/packages/components/src/transition/src/TxTransition.vue",
+  "evidenceLine": 96,
+  "evidenceQuote": ".tx-fade-enter-active,",
+  "suggestion": "Append a reduced-motion block to the global style in TxTransition.vue that sets `transition-duration: 0.01ms` (or `transition: none`) and neutralizes the `translateY`/`scale` in `.tx-slide-fade-*` and `.tx-rebound-*` enter/leave states, mirroring the pattern in CONTRIBUTING.md:243."
+ },
+ {
+  "component": "rating",
+  "category": "a11y",
+  "summary": "`getStarAriaChecked` marks every star at or below the score as `aria-checked=\"true\"`, so a `role=\"radiogroup\"` reports N simultaneously checked radios instead of exactly one.",
+  "evidenceFile": "packages/tuffex/packages/components/src/rating/src/TxRating.vue",
+  "evidenceLine": 131,
+  "evidenceQuote": "return rating.value >= star",
+  "suggestion": "Either make `aria-checked` exclusive (`Math.ceil(rating) === star`) and add arrow-key roving-tabindex navigation, or drop the radio roles and expose the group as a single `role=\"slider\"` with `aria-valuenow`/`aria-valuemin`/`aria-valuemax`. Also make the hardcoded English `aria-label=\"Rate N stars\"` (line 206) overridable/localizable."
+ },
+ {
+  "component": "tag",
+  "category": "a11y",
+  "summary": "Every TxTag root renders `role=\"status\"`, which is an implicit `aria-live=\"polite\"` region — a list of tags turns each tag into a live region and screen readers re-announce them on any content change.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tag/src/TxTag.vue",
+  "evidenceLine": 116,
+  "evidenceQuote": "role=\"status\"",
+  "suggestion": "Drop `role=\"status\"` from the default rendering (a tag is static metadata, not a status message). If a live-region variant is genuinely needed, gate it behind an explicit prop such as `announce` / `role` and document it; also give clickable tags `role=\"button\"` + `tabindex=\"0\"` + keydown handling instead of a bare span click."
+ },
+ {
+  "component": "markdown-editor",
+  "category": "a11y",
+  "summary": "The mode switcher uses `role=\"tablist\"` / `role=\"tab\"` but the editing surfaces carry no `role=\"tabpanel\"` and the tabs have no `aria-controls`, producing an incomplete tab pattern.",
+  "evidenceFile": "packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue",
+  "evidenceLine": 492,
+  "evidenceQuote": "      <div class=\"tx-markdown-editor__modes\" role=\"tablist\" aria-label=\"Markdown editor mode\">",
+  "suggestion": "Either add `:id`/`aria-controls` pairs plus `role=\"tabpanel\"` (and roving `tabindex`) on the three surfaces, or drop the tablist/tab roles and expose the buttons as a plain toggle group with `aria-pressed`. Verified: tab attrs render as `{role:'tab', aria-selected:'true'|'false'}` with no `aria-controls`, and `wrapper.findAll('[role=\"tabpanel\"]').length` is `0`."
+ }
+]

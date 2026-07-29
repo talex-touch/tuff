@@ -1,0 +1,38 @@
+[
+ {
+  "component": "base-anchor",
+  "category": "type-mismatch",
+  "summary": "The `panelCard` row types the prop as `Partial<TxCardProps>`, but the real type is `BaseAnchorPanelCardProps` — a `Partial<Pick<TxCardProps, ...>>` restricted to 15 glass/mask/refraction keys — and any `variant`/`background`/`shadow`/`radius`/`padding` passed through it is silently overwritten by the dedicated props.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-anchor.zh.mdc",
+  "evidenceLine": 329,
+  "evidenceQuote": "| `panelCard` | `Partial<TxCardProps>` | `undefined` | 透传 `TxCard` 高级参数（如 `maskOpacity`、`fallbackMaskOpacity`、`surfaceMoving`、`refraction*`） |",
+  "suggestion": "Change the type cell in both zh:329 and en:329 to `BaseAnchorPanelCardProps` and add a sentence that it is a whitelist of glass/mask/refraction keys only, and that `variant / background / shadow / radius / padding` must go through `panelVariant / panelBackground / panelShadow / panelRadius / panelPadding` because `panelCardProps` (TxBaseAnchor.vue:198-205) spreads `panelCard` first and then overrides those five keys."
+ },
+ {
+  "component": "base-anchor",
+  "category": "type-mismatch",
+  "summary": "The `modelValue` row lists default `false`, but `withDefaults` sets it to `undefined`, and that `undefined` is the sentinel that selects uncontrolled mode — a reader who follows the doc and binds a literal `false` gets a permanently-closed anchor.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-anchor.zh.mdc",
+  "evidenceLine": 307,
+  "evidenceQuote": "| `modelValue` | `boolean` | `false` | 是否打开（v-model） |",
+  "suggestion": "Set the default cell to `undefined` in zh:307 / en:307 and note that leaving `modelValue` unset keeps the anchor uncontrolled (internal state), whereas passing any boolean — including `false` — switches it to controlled mode, per `open`'s getter at TxBaseAnchor.vue:58."
+ },
+ {
+  "component": "card-item",
+  "category": "type-leak",
+  "summary": "TxCardItem 的 `click` emit 声明为 `MouseEvent`，但 Enter 键路径用 `$event as any` 把 KeyboardEvent 从同一通道抛出，消费方按 MouseEvent 用（clientX / instanceof）会拿到错的东西。",
+  "evidenceFile": "packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue",
+  "evidenceLine": 52,
+  "evidenceQuote": "@keydown.enter=\"!disabled && clickable && $emit('click', $event as any)\"",
+  "suggestion": "把 emit 签名改成 `(e: 'click', event: MouseEvent | KeyboardEvent): void`，去掉 `as any`；并在文档 Events 表把 payload 写成 `MouseEvent | KeyboardEvent`，而不是现在这句含糊的“Enter 激活在运行时复用同一事件通道”。"
+ },
+ {
+  "component": "collapse",
+  "category": "type-leak",
+  "summary": "`CollapseContext` is public API but is provided incorrectly: `accordion` is unwrapped to a plain boolean at setup time so it is a permanently stale snapshot when the prop changes, and `activeNames` is typed as `{ value: string[] }` instead of `Ref<string[]>`, hiding the reactive contract from anyone writing a custom collapse item.",
+  "evidenceFile": "packages/tuffex/packages/components/src/collapse/src/TxCollapse.vue",
+  "evidenceLine": 83,
+  "evidenceQuote": "accordion: props.accordion,",
+  "suggestion": "Provide `accordion: computed(() => props.accordion)` (or the whole `props` via `toRefs`) and retype `CollapseContext` as `{ activeNames: Ref<string[]>; accordion: ComputedRef<boolean>; handleItemClick: (name: string) => void }`, then use a typed `InjectionKey<CollapseContext>` instead of the raw `'collapse'` string."
+ }
+]

@@ -1,0 +1,272 @@
+[
+ {
+  "component": "base-anchor",
+  "category": "missing-export",
+  "summary": "`base-anchor/index.ts` only re-exports `BaseAnchorProps` / `BaseAnchorAnimationOptions` / `BaseAnchorAnimationType`, so the four type names the Props table uses as prop types — `BaseAnchorPlacement`, `BaseAnchorClassValue`, `BaseAnchorVirtualReference`, and the real `panelCard` type `BaseAnchorPanelCardProps` — cannot be imported by any consumer.",
+  "evidenceFile": "packages/tuffex/packages/components/src/base-anchor/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { BaseAnchorAnimationOptions, BaseAnchorAnimationType, BaseAnchorProps }",
+  "suggestion": "Extend line 8 to `export type { BaseAnchorAnimationOptions, BaseAnchorAnimationType, BaseAnchorClassValue, BaseAnchorPanelCardProps, BaseAnchorPlacement, BaseAnchorProps, BaseAnchorSurfaceMotionAdaptation, BaseAnchorVirtualReference }` so every type named in the docs' Props table is reachable from the package entry (`packages/components/src/components.ts:7` only forwards this file)."
+ },
+ {
+  "component": "timeline",
+  "category": "missing-export",
+  "summary": "timeline/index.ts re-exports the raw SFCs via `export * from './src'` without `withInstall`, unlike every other component (badge/card/tree/tabs/blank-slate), so the library's `install()` loop in src/index.ts calls `app.use(TxTimeline)` on a plain options object — Vue warns and TxTimeline/TxTimelineItem are never globally registered.",
+  "evidenceFile": "packages/tuffex/packages/components/src/timeline/index.ts",
+  "evidenceLine": 1,
+  "evidenceQuote": "export * from './src'",
+  "suggestion": "Mirror the tabs pattern: in timeline/index.ts import both SFCs, wrap them with `withInstall` from '../../../utils/withInstall', and export the wrapped `TxTimeline`/`TxTimelineItem` plus `TxTimelineInstance`/`TxTimelineItemInstance` types. Add a test like blank-slate.test.ts:95-101 asserting `install?.(app)` calls `app.component('TxTimeline', ...)`."
+ },
+ {
+  "component": "card-item",
+  "category": "missing-export",
+  "summary": "`CardItemAvatarShape` 只在 src/types.ts 里导出，card-item/index.ts 只 re-export 了 `CardItemProps`，而包入口是 `export * from './card-item/index'`，外部无法 `import type { CardItemAvatarShape }`——但文档 Source 段把它当成可用类型宣传。",
+  "evidenceFile": "packages/tuffex/packages/components/src/card-item/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { CardItemProps }",
+  "suggestion": "按 empty-state/index.ts 的写法（同时导出 EmptyStateAlign / EmptyStateSize 等）补上 `CardItemAvatarShape`：`import type { CardItemAvatarShape, CardItemProps } from './src/types'` 并 `export type { CardItemAvatarShape, CardItemProps }`。"
+ },
+ {
+  "component": "kbd",
+  "category": "missing-export",
+  "summary": "kbd has no `src/types.ts` and `index.ts` exports neither a `Kbd` install alias nor a `KbdProps` type, so consumers cannot type a wrapper's props — unlike spinner/form/flip-overlay which all export their props interfaces.",
+  "evidenceFile": "packages/tuffex/packages/components/src/kbd/index.ts",
+  "evidenceLine": 6,
+  "evidenceQuote": "export { TxKbd }\nexport type TxKbdInstance = InstanceType<typeof component>",
+  "suggestion": "Add `src/types.ts` with `export interface KbdProps { size?: 'sm' | 'md'; tone?: 'default' | 'primary' }`, switch TxKbd.vue to `withDefaults(defineProps<KbdProps>(), {...})`, and export `Kbd` (withInstall alias) plus `KbdProps` from index.ts to match the sibling components; then add them to the `## Source` export-alias bullet."
+ },
+ {
+  "component": "tooltip",
+  "category": "missing-export",
+  "summary": "`TooltipAnchorProps` is declared in tooltip/src/types.ts and is the actual type of the public `anchor` prop, but tooltip/index.ts only re-exports `TooltipProps`, so consumers cannot type an anchor config object without reaching into internal paths.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tooltip/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { TooltipProps }",
+  "suggestion": "Add `TooltipAnchorProps` to the type re-export (`export type { TooltipAnchorProps, TooltipProps }`) so `const anchor: TooltipAnchorProps = { ... }` works from `@talex-touch/tuffex`."
+ },
+ {
+  "component": "flat-button",
+  "category": "missing-export",
+  "summary": "flat-button/index.ts exports only the component value — no props interface, no `TuffFlatButtonInstance` type, and it hand-rolls `.install` instead of using the shared `withInstall`, unlike every sibling in this shard (base-surface, search-empty and search-select all export their types).",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-button/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export { TuffFlatButton }\nexport default TuffFlatButton",
+  "suggestion": "Extract the inline `defineProps` shape into `src/types.ts` as `FlatButtonProps`, switch to `withInstall(...)` for consistency, and export `{ FlatButtonProps }` plus `export type TuffFlatButtonInstance = InstanceType<typeof TuffFlatButton>` so external consumers can type props and template refs."
+ },
+ {
+  "component": "command-palette",
+  "category": "missing-export",
+  "summary": "`CommandPaletteClassValue` is declared and exported in `src/types.ts` and named in both docs' Props type column and Source section, but `index.ts` re-exports only `CommandPaletteEmits`/`CommandPaletteItem`/`CommandPaletteProps`, so consumers cannot import it from the package entry.",
+  "evidenceFile": "packages/tuffex/packages/components/src/command-palette/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps }",
+  "suggestion": "Add `CommandPaletteClassValue` to the type re-export list in `index.ts` (and to the top-level components barrel) so the type named in the docs is actually importable."
+ },
+ {
+  "component": "radio",
+  "category": "missing-export",
+  "summary": "`TxRadioType` and `TxRadioIndicatorVariant` are declared in src/types.ts but never re-exported from radio/index.ts, so consumers cannot import them — the docs' own playground snippet and the real demo both have to redeclare the unions by hand.",
+  "evidenceFile": "packages/tuffex/packages/components/src/radio/index.ts",
+  "evidenceLine": 10,
+  "evidenceQuote": "export type { TxRadioGroupProps, TxRadioProps, TxRadioValue }",
+  "suggestion": "Change line 1 and line 10 to also pull through `TxRadioType` and `TxRadioIndicatorVariant`, then replace the hand-written `type GroupType` / `type IndicatorVariant` unions in radio.zh.mdc:166-167, radio.en.mdc:166-167, and RadioRadioGroupPlaygroundDemo.vue:7-8 with the imported types."
+ },
+ {
+  "component": "grid",
+  "category": "missing-export",
+  "summary": "grid/index.ts 只导出组件与别名，未导出任何类型（无 GridProps / GridItemProps / Breakpoint / Responsive），外部无法对 TxGrid 的 props 做类型标注，与 corner-overlay、status-badge 等同级组件的导出约定不一致。",
+  "evidenceFile": "packages/tuffex/packages/components/src/grid/index.ts",
+  "evidenceLine": 13,
+  "evidenceQuote": "export { TxGrid, TxGridItem }",
+  "suggestion": "把 TxGrid / TxGridItem 的 props 抽到 grid/src/types.ts（GridProps、GridItemProps、Breakpoint、Responsive、GridGap），在 index.ts 加 `export type { ... }` 并补 TxGridInstance / TxGridItemInstance，改用 withInstall 统一安装方式。"
+ },
+ {
+  "component": "agents",
+  "category": "missing-export",
+  "summary": "`AgentsListGroup` is defined in `agents/src/types.ts` and named in both docs' type-contract notes, but `agents/index.ts` re-exports only `AgentItemProps` and `AgentsListProps`, so it cannot be imported from the package.",
+  "evidenceFile": "packages/tuffex/packages/components/src/agents/index.ts",
+  "evidenceLine": 10,
+  "evidenceQuote": "export type { AgentItemProps, AgentsListProps }",
+  "suggestion": "Add `AgentsListGroup` to the type import on line 1 and to the `export type { ... }` on line 10 of agents/index.ts (and it will then flow through components.ts → the package root), or drop it from the Review Notes in agents.zh.mdc:106 / agents.en.mdc:106 if it is meant to stay internal."
+ },
+ {
+  "component": "context-menu",
+  "category": "missing-export",
+  "summary": "context-menu/index.ts re-exports only the four Props interfaces; the public union types `ContextMenuTrigger`, `ContextMenuAnchorMode`, `ContextMenuPanelVariant/Background/Shadow`, `ContextMenuPoint` and `ContextMenuOpenTarget` are unreachable from `@talex-touch/tuffex/context-menu`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/context-menu/index.ts",
+  "evidenceLine": 23,
+  "evidenceQuote": "export type { ContextMenuDividerProps, ContextMenuItemProps, ContextMenuPanelProps, ContextMenuProps }",
+  "suggestion": "Add the missing type re-exports (and `ContextMenuContext` if the injection contract is public). Confirmed against the built entry `packages/tuffex/dist/es/context-menu/index.d.ts:553`, which exports the same four names only — so a consumer typing `const mode: ContextMenuAnchorMode` after `import type { ... } from '@talex-touch/tuffex/context-menu'` fails, even though the docs' Review Notes (context-menu.zh.mdc:420) claim these enums are part of the type contract."
+ },
+ {
+  "component": "avatar",
+  "category": "missing-export",
+  "summary": "`AvatarShape` and `AvatarPresetSize` are public prop types but are not re-exported from avatar/index.ts, so consumers cannot type a `shape` value from the package entry.",
+  "evidenceFile": "packages/tuffex/packages/components/src/avatar/index.ts",
+  "evidenceLine": 10,
+  "evidenceQuote": "export type { AvatarEmits, AvatarGroupProps, AvatarProps, AvatarSize, AvatarStatus }",
+  "suggestion": "Add `AvatarShape` (and `AvatarPresetSize`) to both `avatar/index.ts:10` and `avatar/src/index.ts:3`. Confirmed against the built `packages/tuffex/dist/es/avatar/index.d.ts:81`, which even references `import('./src/types').AvatarShape` internally while never exporting the name."
+ },
+ {
+  "component": "collapse",
+  "category": "missing-export",
+  "summary": "collapse/index.ts re-exports the raw SFCs with no `withInstall` wrapper, no `.install` method and no default export, so the library's global `install()` (which calls `app.use()` over every export of components.ts) skips TxCollapse/TxCollapseItem with a Vue plugin warning and never registers them — unlike drawer/stagger/tree which all expose `install`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/collapse/index.ts",
+  "evidenceLine": 1,
+  "evidenceQuote": "export * from './src'",
+  "suggestion": "Mirror the sibling pattern: `const Collapse = withInstall(TxCollapse)`, `const CollapseItem = withInstall(TxCollapseItem)`, export both plus `TxCollapseInstance`/`TxCollapseItemInstance` types and a default export, so `app.use(TuffEx)` and the `@talex-touch/tuffex/collapse` subpath both resolve."
+ },
+ {
+  "component": "stagger",
+  "category": "missing-export",
+  "summary": "`StaggerEasing` is defined and used by `StaggerProps.easing` but stagger/index.ts only re-exports `StaggerProps`, so the union type is unreachable from the package entry (`components.ts` does `export * from './stagger/index'`) even though the docs' ## Source section advertises it.",
+  "evidenceFile": "packages/tuffex/packages/components/src/stagger/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { StaggerProps }",
+  "suggestion": "Change to `export type { StaggerEasing, StaggerProps }` and import `StaggerEasing` from './src/types' alongside `StaggerProps`, so consumers typing an `easing` binding can import it from '@talex-touch/tuffex'."
+ },
+ {
+  "component": "chat",
+  "category": "missing-export",
+  "summary": "`ChatMessageAttachment` (and `ChatMessageRole`) are documented as public data models in the `## API` → `Data Models` section but are not re-exported from `chat/index.ts`, so consumers of `@talex-touch/tuffex/chat` cannot import the attachment type they are told to construct.",
+  "evidenceFile": "packages/tuffex/packages/components/src/chat/index.ts",
+  "evidenceLine": 32,
+  "evidenceQuote": "export type {",
+  "suggestion": "Add `ChatMessageAttachment`, `ChatMessageAttachmentImage`, and `ChatMessageRole` to the `import type { ... } from './src/types'` list and to the `export type { ... }` block in `chat/index.ts`, matching the `#### ChatMessageAttachment` table documented at chat.zh.mdc:69 / chat.en.mdc:69."
+ },
+ {
+  "component": "splitter",
+  "category": "missing-export",
+  "summary": "`SplitterDirection` is defined in types.ts and is the declared type of the `direction` prop, but `splitter/index.ts` only re-exports `SplitterEmits` and `SplitterProps`, so external consumers cannot import it from the package entry or the `@talex-touch/tuffex/splitter` subpath.",
+  "evidenceFile": "packages/tuffex/packages/components/src/splitter/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { SplitterEmits, SplitterProps }",
+  "suggestion": "Add `SplitterDirection` to the type re-export (`export type { SplitterDirection, SplitterEmits, SplitterProps }`). Confirmed unreachable: `dist/es/splitter/index.d.ts` does not export it either, and splitter.zh.mdc:96 advertises it as a public type."
+ },
+ {
+  "component": "tab-bar",
+  "category": "missing-export",
+  "summary": "`TabBarValue` is named in both docs as the payload type of `update:modelValue` / `change`, but `tab-bar/index.ts` re-exports only `TabBarEmits`, `TabBarItem`, and `TabBarProps`, so callers cannot type their handler parameter with it.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tab-bar/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { TabBarEmits, TabBarItem, TabBarProps }",
+  "suggestion": "Add `TabBarValue` to the re-export list. Confirmed unreachable from the built entry (`dist/es/tab-bar/index.d.ts` only references it via `import('./src/types')`), while tab-bar.en.mdc:68-69 documents it as the public payload type."
+ },
+ {
+  "component": "popover",
+  "category": "missing-export",
+  "summary": "`PopoverPlacement` is the documented type of the `placement` prop but is not re-exported from `popover/index.ts`, so `import type { PopoverPlacement }` from the package entry fails.",
+  "evidenceFile": "packages/tuffex/packages/components/src/popover/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { PopoverProps }",
+  "suggestion": "Change to `export type { PopoverPlacement, PopoverProps }`. `src/types.ts:3` already exports `PopoverPlacement`, and `components.ts:76` only forwards whatever `popover/index.ts` re-exports, so today the type name in the docs table (popover.zh.mdc:181) is unimportable."
+ },
+ {
+  "component": "skeleton",
+  "category": "missing-export",
+  "summary": "The `## Source` section claims types.ts exports `SkeletonProps` and `SkeletonVariant`, but `skeleton/index.ts` re-exports only `SkeletonProps`, so `SkeletonVariant` is unreachable from the package entry.",
+  "evidenceFile": "packages/tuffex/packages/components/src/skeleton/index.ts",
+  "evidenceLine": 12,
+  "evidenceQuote": "export type { SkeletonProps }",
+  "suggestion": "Change to `export type { SkeletonProps, SkeletonVariant }`. `src/types.ts:1` defines `SkeletonVariant` and `components.ts:87` only forwards `skeleton/index.ts`, so the claim at skeleton.zh.mdc:141 / skeleton.en.mdc:141 is currently false for consumers."
+ },
+ {
+  "component": "stack",
+  "category": "missing-export",
+  "summary": "`## Source` claims types.ts exports `StackProps` and `StackDirection`, but `stack/index.ts` re-exports only `StackProps`, so `StackDirection` cannot be imported from the package entry.",
+  "evidenceFile": "packages/tuffex/packages/components/src/stack/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { StackProps }",
+  "suggestion": "Change to `export type { StackDirection, StackProps }`. `src/types.ts:1` defines `StackDirection` and `components.ts:92` only forwards `stack/index.ts`, so the Source claim at stack.zh.mdc:125 / stack.en.mdc:125 does not hold for consumers."
+ },
+ {
+  "component": "divider",
+  "category": "missing-export",
+  "summary": "TxDivider declares its props and the `DividerGradient` union inline in the SFC and index.ts exports only the component plus `TxDividerInstance`, so consumers cannot import `DividerProps` / `DividerGradient` — unlike every sibling in this shard (flex, auto-sizer, pagination, transition all ship a types.ts).",
+  "evidenceFile": "packages/tuffex/packages/components/src/divider/index.ts",
+  "evidenceLine": 6,
+  "evidenceQuote": "export { TxDivider }",
+  "suggestion": "Add `packages/tuffex/packages/components/src/divider/src/types.ts` exporting `DividerGradient` and `DividerProps`, have TxDivider.vue use `defineProps<DividerProps>()` (replacing the inline `type DividerGradient = ...` at TxDivider.vue:4), and re-export both types from index.ts."
+ },
+ {
+  "component": "rating",
+  "category": "missing-export",
+  "summary": "`rating/index.ts` re-exports the raw SFC without `withInstall`, so `TxRating` has no `install()` and no default export — the library-level `install()` in components/src/index.ts silently fails to register it globally.",
+  "evidenceFile": "packages/tuffex/packages/components/src/rating/src/index.ts",
+  "evidenceLine": 1,
+  "evidenceQuote": "export { default as TxRating } from './TxRating.vue'",
+  "suggestion": "Mirror tag/tuff-logo-stroke: `const Rating = withInstall(TxRating); export { Rating, TxRating }; export default Rating`, and also re-export the `RatingIcon` type (currently only `RatingEmits`/`RatingProps` leave `src/index.ts`, so `RatingIcon` is unreachable from the package entry despite the docs' Source section naming it)."
+ },
+ {
+  "component": "gradual-blur",
+  "category": "missing-export",
+  "summary": "`gradual-blur/index.ts` re-exports only `GradualBlurProps`, so the `GradualBlurPosition`, `GradualBlurCurve`, `GradualBlurAnimated` and `GradualBlurTarget` union types declared in `src/types.ts` are unreachable from the package barrel.",
+  "evidenceFile": "packages/tuffex/packages/components/src/gradual-blur/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { GradualBlurProps }",
+  "suggestion": "Extend the line to `export type { GradualBlurAnimated, GradualBlurCurve, GradualBlurPosition, GradualBlurProps, GradualBlurTarget }` so consumers building wrapper components can type `position`/`curve`/`target` values."
+ },
+ {
+  "component": "image-gallery",
+  "category": "missing-export",
+  "summary": "`image-gallery/index.ts` exports the component and its types but omits `TxImageGalleryInstance`, unlike every sibling audited here (empty, flat-select, gradual-blur, segmented-slider), so consumers cannot type a template ref to the gallery.",
+  "evidenceFile": "packages/tuffex/packages/components/src/image-gallery/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { ImageGalleryEmits, ImageGalleryItem, ImageGalleryProps }",
+  "suggestion": "Add `export type TxImageGalleryInstance = InstanceType<typeof TxImageGallery>` after the type re-export, matching the pattern in packages/tuffex/packages/components/src/empty/index.ts line 9."
+ },
+ {
+  "component": "flat-radio",
+  "category": "missing-export",
+  "summary": "`TxFlatRadioSize` and `TxFlatRadioContext` are declared in src/types.ts but omitted from the flat-radio barrel's type re-export list, even though `FLAT_RADIO_KEY` itself is exported — consumers can inject the context but cannot type it or type a `size` variable.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-radio/index.ts",
+  "evidenceLine": 10,
+  "evidenceQuote": "export type { TxFlatRadioItemProps, TxFlatRadioProps, TxFlatRadioValue }",
+  "suggestion": "Extend the export to `export type { TxFlatRadioContext, TxFlatRadioItemProps, TxFlatRadioProps, TxFlatRadioSize, TxFlatRadioValue }` so `export * from './flat-radio/index'` in components.ts surfaces them package-wide."
+ },
+ {
+  "component": "icon-button",
+  "category": "missing-export",
+  "summary": "icon-button declares its props inline in the SFC with no src/types.ts and exports no `TxIconButtonProps`, so consumers wrapping the component (unlike file-uploader and flat-radio) cannot reuse or extend its prop types.",
+  "evidenceFile": "packages/tuffex/packages/components/src/icon-button/index.ts",
+  "evidenceLine": 6,
+  "evidenceQuote": "export { TxIconButton }",
+  "suggestion": "Extract the prop shape into `src/types.ts` as `TxIconButtonProps`, consume it via `defineProps<TxIconButtonProps>()`, and add `export type { TxIconButtonProps }` to the barrel."
+ },
+ {
+  "component": "cascader",
+  "category": "missing-export",
+  "summary": "`CascaderPath` / `CascaderKey` are documented as part of the public value contract but `cascader/index.ts` only re-exports `CascaderEmits`, `CascaderNode`, `CascaderProps`, `CascaderValue`, so consumers cannot import them.",
+  "evidenceFile": "packages/tuffex/packages/components/src/cascader/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { CascaderEmits, CascaderNode, CascaderProps, CascaderValue }",
+  "suggestion": "Add `CascaderKey` and `CascaderPath` to the `export type { ... }` list in `cascader/index.ts` (they already exist in src/types.ts:3-4), since cascader.en.mdc:171 tells readers `CascaderValue` is `CascaderPath | CascaderPath[]`."
+ },
+ {
+  "component": "date-picker",
+  "category": "missing-export",
+  "summary": "`DatePickerVariant` is declared and referenced by the documented `variant` prop union but `date-picker/index.ts` re-exports only `DatePickerEmits` and `DatePickerProps`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/date-picker/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export type { DatePickerEmits, DatePickerProps }",
+  "suggestion": "Add `DatePickerVariant` to the type re-export so the doc's Source claim (date-picker.en.mdc:148: \"types.ts exports DatePickerProps, DatePickerEmits, and DatePickerVariant\") holds at the package entry consumers actually import from."
+ },
+ {
+  "component": "flat-input",
+  "category": "missing-export",
+  "summary": "`flat-input/index.ts` exports only the component (plus the `TxFlatInput` alias) — there is no `types.ts` and no exported `FlatInputProps` / instance type, so downstream wrappers cannot type the props that the doc's API table describes.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-input/index.ts",
+  "evidenceLine": 9,
+  "evidenceQuote": "export { FlatInput }",
+  "suggestion": "Extract the inline `defineProps` shape (FlatInput.vue:10-17) into `src/types.ts` as `FlatInputProps` / `FlatInputEmits`, re-export them from index.ts, and add `export type TxFlatInputInstance = InstanceType<typeof FlatInput>` to match the pattern used by cascader/date-picker."
+ },
+ {
+  "component": "progress",
+  "category": "missing-export",
+  "summary": "`progress/index.ts` exports only the component value — no props type and no `TuffProgressInstance` — because `TxProgress.vue` declares props inline instead of in a `src/types.ts`, unlike every sibling in this shard (stat-card / tag-input / transfer / text-transformer all export `XxxProps` plus `TxXxxInstance`).",
+  "evidenceFile": "packages/tuffex/packages/components/src/progress/index.ts",
+  "evidenceLine": 8,
+  "evidenceQuote": "export { TuffProgress }\nexport default TuffProgress",
+  "suggestion": "Extract the prop shape into `progress/src/types.ts` as `ProgressProps`, use the shared `withInstall` helper instead of the hand-rolled `.install` assignment, and export `ProgressProps` + `TuffProgressInstance` from `index.ts`."
+ }
+]

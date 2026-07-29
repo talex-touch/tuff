@@ -1,0 +1,137 @@
+[
+ {
+  "component": "chat-composer",
+  "category": "logic-bug",
+  "summary": "`maxRows` is declared and defaulted to 6 but never referenced anywhere in TxChatComposer; the textarea is bound only to `minRows`, so setting `maxRows` has no effect.",
+  "evidenceFile": "packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue",
+  "evidenceLine": 124,
+  "evidenceQuote": "        :rows=\"minRows\"",
+  "suggestion": "Either implement auto-grow between minRows and maxRows (bind a computed max-height from `maxRows * lineHeight`) or remove `maxRows` from ChatComposerProps and both Props tables; a prop documented as \"reserved for consumers\" (zh line 51) is indistinguishable from a broken one."
+ },
+ {
+  "component": "splitter",
+  "category": "logic-bug",
+  "summary": "`onPointerDown` registers only `pointermove` / `pointerup`; there is no `pointercancel` handler and the bar has no `touch-action: none`, so a browser-cancelled pointer (touch scroll, gesture takeover) leaves `dragging=true` and the window listeners attached — the splitter then keeps resizing on every subsequent pointer move with no button held.",
+  "evidenceFile": "packages/tuffex/packages/components/src/splitter/src/TxSplitter.vue",
+  "evidenceLine": 82,
+  "evidenceQuote": "  window.addEventListener('pointerup', onWindowPointerUp)",
+  "suggestion": "Also listen for `pointercancel` (and `lostpointercapture`) and route it to `endDrag()`; add `touch-action: none` to `.tx-splitter__bar` so touch drags resize instead of scrolling."
+ },
+ {
+  "component": "pagination",
+  "category": "logic-bug",
+  "summary": "When `currentPage` exceeds the computed page count (e.g. after a filter change), the Previous/First buttons stay enabled because they only check `currentPage <= 1`, but handlePageChange rejects the resulting page — the user sees enabled controls that do nothing and no active page.",
+  "evidenceFile": "packages/tuffex/packages/components/src/pagination/src/TxPagination.vue",
+  "evidenceLine": 71,
+  "evidenceQuote": "  if (page < 1 || page > totalPages.value)",
+  "suggestion": "Clamp reads of the current page, e.g. `const safePage = computed(() => Math.min(Math.max(props.currentPage, 1), totalPages.value))`, use it for the active class, aria-current, and disabled checks, and emit a corrective `update:currentPage` when the incoming prop is out of range — instead of relying on the Best Practices note that tells callers to reset to 1 themselves."
+ },
+ {
+  "component": "transition",
+  "category": "logic-bug",
+  "summary": "`preset=\"smooth-size\"` combined with `group=true` renders a TransitionGroup with `name=\"tx-smooth-size\"`, but no `.tx-smooth-size-*` classes exist in the style block — the result is a completely silent no-op with zero animation.",
+  "evidenceFile": "packages/tuffex/packages/components/src/transition/src/TxTransition.vue",
+  "evidenceLine": 30,
+  "evidenceQuote": "    return 'tx-smooth-size'",
+  "suggestion": "Fall back to `'tx-fade'` when `preset === 'smooth-size' && group` (and optionally warn in dev), so grouped lists still animate. The style block only defines tx-fade / tx-slide-fade / tx-rebound and their `-move` variants (lines 96-141); the Review Notes already call this combination \"not recommended\", so making it degrade gracefully is safer than emitting a dead transition name."
+ },
+ {
+  "component": "gradual-blur",
+  "category": "logic-bug",
+  "summary": "The resize listener and IntersectionObserver are wired only inside `onMounted` and torn down behind `if (config.value.responsive)`, so toggling `responsive`/`animated` after mount either silently disables the feature or leaks the debounced resize handler on unmount.",
+  "evidenceFile": "packages/tuffex/packages/components/src/gradual-blur/src/TxGradualBlur.vue",
+  "evidenceLine": 310,
+  "evidenceQuote": "  if (config.value.responsive) {",
+  "suggestion": "Unconditionally `window.removeEventListener('resize', debouncedResize)` in `onUnmounted`, and add `watch(() => config.value.responsive, ...)` / `watch(() => config.value.animated, ...)` to attach or detach the listener and IntersectionObserver when those props change."
+ },
+ {
+  "component": "flat-select",
+  "category": "logic-bug",
+  "summary": "`close()` schedules a bare 200 ms `setTimeout` that is never stored or cleared, so a trigger click during the closing animation is swallowed (toggle still sees `isOpen === true` and re-closes) and the timer keeps running after unmount.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue",
+  "evidenceLine": 125,
+  "evidenceQuote": "  setTimeout(() => {",
+  "suggestion": "Keep the handle in a `closeTimer` ref, clear it at the top of `open()` and in `onBeforeUnmount`, and let `open()` cancel a pending close so a rapid click reopens the dropdown instead of being dropped."
+ },
+ {
+  "component": "steps",
+  "category": "logic-bug",
+  "summary": "The small/large vertical connector-line rules use a descendant combinator (`.tx-step--small .tx-step--vertical`) but both modifier classes sit on the same `.tx-step` element, so those offsets are dead CSS.",
+  "evidenceFile": "packages/tuffex/packages/components/src/steps/src/TxStep.vue",
+  "evidenceLine": 239,
+  "evidenceQuote": ".tx-step--small .tx-step--vertical .tx-step__line {",
+  "suggestion": "Change lines 239 and 245 to compound selectors: `.tx-step--small.tx-step--vertical .tx-step__line` and `.tx-step--large.tx-step--vertical .tx-step__line`. Verified from rendered markup: a step renders `class=\"tx-step tx-step--horizontal tx-step--medium ...\"` — both modifiers on one node — so the documented `StepsStepsDemo` block using `direction=\"vertical\" size=\"small\"` keeps the medium offsets (left 11px / top 24px / height 24px) instead of (9px / 20px / 20px)."
+ },
+ {
+  "component": "markdown-editor",
+  "category": "logic-bug",
+  "summary": "`resolveAutoTheme` reads theme signals off both `document.documentElement` and `document.body`, but `setupThemeObserver` only observes `documentElement`, so a body-driven dark-mode toggle never updates the editor.",
+  "evidenceFile": "packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue",
+  "evidenceLine": 386,
+  "evidenceQuote": "  themeObserver.observe(document.documentElement, {",
+  "suggestion": "Also observe `document.body` with the same `attributeFilter: ['class','data-theme']`, or drop the body checks from `resolveAutoTheme` (lines 360/366) so the read and watch surfaces match. Verified with `theme=\"auto\"`: adding `.dark` to `document.body` leaves `data-theme=\"light\"`, while adding `.dark` to `documentElement` correctly flips it to `dark`."
+ },
+ {
+  "component": "progress-bar",
+  "category": "logic-bug",
+  "summary": "The `complete` watcher lacks `immediate: true`, so a bar mounted already at 100 (e.g. `<TxProgressBar :percentage=\"100\" />` for an already-finished task) never emits `complete`, contradicting the documented 'emitted once per completion cycle when resolved progress reaches 100'.",
+  "evidenceFile": "packages/tuffex/packages/components/src/progress-bar/src/TxProgressBar.vue",
+  "evidenceLine": 199,
+  "evidenceQuote": "  () => resolvedPercentage.value,",
+  "suggestion": "Add `{ immediate: true }` to the watcher (the loading/indeterminate guard already prevents spurious emits), or document explicitly that `complete` only fires on a transition into 100 and never on initial mount. Add a test mounting at `percentage: 100`."
+ },
+ {
+  "component": "picker",
+  "category": "logic-bug",
+  "summary": "The `columns` watcher re-normalizes `localValue` without emitting `update:modelValue`, so when columns change and the current value becomes invalid, the parent's v-model silently keeps the stale/invalid value.",
+  "evidenceFile": "packages/tuffex/packages/components/src/picker/src/TxPicker.vue",
+  "evidenceLine": 81,
+  "evidenceQuote": "    localValue.value = normalizeValue(localValue.value)",
+  "suggestion": "After normalizing on a columns change, compare with `props.modelValue` and emit `update:modelValue` (and `change`) when the normalized array differs, so the parent state matches what the picker displays."
+ },
+ {
+  "component": "container",
+  "category": "logic-bug",
+  "summary": "TxRow's responsive gutter fallback chain `g[bp] ?? g.md ?? g.sm ?? g.xs` is non-monotonic — with the documented `{ xs: 8, sm: 16, md: 24, lg: 32 }` object the gutter is 32px at lg but shrinks back to 24px at xl.",
+  "evidenceFile": "packages/tuffex/packages/components/src/container/src/TxRow.vue",
+  "evidenceLine": 44,
+  "evidenceQuote": "const v = g[bp] ?? g.md ?? g.sm ?? g.xs ?? 0",
+  "suggestion": "Walk the breakpoint list downward from the active breakpoint (xl -> lg -> md -> sm -> xs) so a missing larger breakpoint inherits the largest defined smaller one, keeping gutters monotonic as the viewport grows."
+ },
+ {
+  "component": "file-uploader",
+  "category": "logic-bug",
+  "summary": "`onDragLeave` clears `dropActive` on any bubbled dragleave from a child node, so the `is-dragging` highlight flickers while the cursor crosses the inner button/span boundaries of the drop zone.",
+  "evidenceFile": "packages/tuffex/packages/components/src/file-uploader/src/TxFileUploader.vue",
+  "evidenceLine": 96,
+  "evidenceQuote": "function onDragLeave() {",
+  "suggestion": "Use a drag-enter/leave depth counter, or ignore the event when `e.relatedTarget` is still contained by the root element (`if (rootEl.contains(e.relatedTarget as Node)) return`)."
+ },
+ {
+  "component": "number-input",
+  "category": "logic-bug",
+  "summary": "`handleBlur` unconditionally re-commits and emits `update:modelValue` + `change` even when the user never edited the field, so a focus/tab-away round trip marks forms dirty and fires a spurious `change`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue",
+  "evidenceLine": 106,
+  "evidenceQuote": "commitValue(parseValue(inputRef.value?.value ?? ''), true)",
+  "suggestion": "Compare the normalized result against `props.modelValue` and skip `commitValue` when unchanged; also stop emitting `change` from the per-keystroke setter so `change` keeps native commit semantics, and document that in the Events table."
+ },
+ {
+  "component": "tag-input",
+  "category": "logic-bug",
+  "summary": "The chip `v-for` keys on the tag string itself, so enabling `allowDuplicates` produces duplicate Vue keys (dev warning plus incorrect DOM reuse when a duplicate is removed).",
+  "evidenceFile": "packages/tuffex/packages/components/src/tag-input/src/TxTagInput.vue",
+  "evidenceLine": 129,
+  "evidenceQuote": ":key=\"tag\"",
+  "suggestion": "Use `v-for=\"(tag, index) in tags\" :key=\"`${index}-${tag}`\"` (or an internal id list) so duplicates stay uniquely keyed."
+ },
+ {
+  "component": "stat-card",
+  "category": "logic-bug",
+  "summary": "`.tx-stat-card:hover` sets `cursor: pointer` for every card, which makes the `--clickable` rule redundant and gives non-clickable cards a false click affordance, contradicting the documented `clickable` contract (\"Enables hover/press states\").",
+  "evidenceFile": "packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue",
+  "evidenceLine": 353,
+  "evidenceQuote": ".tx-stat-card:hover {\n  cursor: pointer;\n  --fake-opacity: 0.75;",
+  "suggestion": "Scope the hover block to `.tx-stat-card--clickable:hover` (or at least remove `cursor: pointer` from the generic `:hover` rule) so only `clickable` cards signal interactivity."
+ }
+]
