@@ -22,5 +22,9 @@
   "parent": null,
   "relatedFiles": [],
   "notes": "2026-07-27: 从 Clipboard History 优化范围移出；单一消费者不足以支撑通用 SDK，等待第二个真实消费者后重启规划。",
-  "meta": {}
+  "meta": {
+    "nextAction": "Reassess the SDK only when a second real plugin consumer exists and then restart scoped planning.",
+    "blocker": "Only one real consumer exists, so a generic SearchSDK abstraction would be premature.",
+    "evidence": "task.json notes and prd.md record the single-consumer deferral rationale."
+  }
 }

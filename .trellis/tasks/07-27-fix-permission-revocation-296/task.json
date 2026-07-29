@@ -22,5 +22,9 @@
   "parent": "07-27-resolve-open-github-issues",
   "relatedFiles": [],
   "notes": "Core atomic revoke and committed revoke event implemented; #299 now consumes the event through an awaited storage teardown barrier and closes the exact activation before broadcast. Revoke/revokeAll, lifecycle, timeout and worker recovery tests pass. Ready for final review; no commit/push or GitHub close performed.",
-  "meta": {}
+  "meta": {
+    "nextAction": "Complete final review of the atomic revoke, session invalidation, and post-commit event evidence before closing #296.",
+    "blocker": "The task remains in review; completion requires review disposition rather than additional unverified implementation.",
+    "evidence": "task.json notes, prd.md, and focused revoke/lifecycle test output provide the review evidence."
+  }
 }
