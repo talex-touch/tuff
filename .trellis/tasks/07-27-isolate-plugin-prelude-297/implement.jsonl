@@ -1,5 +1,1 @@
-{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Defines the owner-bound Workspace Scripts token, canonical filesystem, confirmation, fixed execution, process teardown, and trust-boundary contracts for activation 18."}
-{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"Defines activation-owned native resource lifecycle, revocation, cancellation, and real termination barriers reused by the workspace-script process capability."}
-{"file":".trellis/spec/frontend/type-safety.md","reason":"Defines exact typed boundaries and validation expectations for the fixed child facade and capability DTOs."}
-{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Defines required focused tests, cross-platform verification, and scoped quality gates for this migration."}
-{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Covers the child-to-main-to-filesystem/process data flow and authority review required by this cross-layer capability."}
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
