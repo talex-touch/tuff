@@ -321,7 +321,7 @@ code: |
 
 ## 相关文档
 
-- [TuffTransport](./transport.zh.md)
-- [Flow SDK](./flow-transfer.zh.md)
-- [Permission SDK](./permission.zh.md)
-- [Tuff QuickOps 用户指南](../../guide/features/quickops.zh.md)
+- [TuffTransport](./transport.zh.mdc)
+- [Flow SDK](./flow-transfer.zh.mdc)
+- [Permission SDK](./permission.zh.mdc)
+- [Tuff QuickOps 用户指南](../../guide/features/quickops.zh.mdc)

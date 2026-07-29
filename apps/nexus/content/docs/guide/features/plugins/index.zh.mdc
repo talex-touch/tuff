@@ -5,21 +5,21 @@
 ## 文档列表
 | 插件 | Feature ID | 文档 |
 | --- | --- | --- |
-| 浏览器打开 | `browser.open` | [查看文档](./browser-open.zh.md) |
-| 浏览器收藏 | `browser.bookmarks` | [查看文档](./browser-bookmarks.zh.md) |
-| 智能问答 | `intelligence.ask` | [查看文档](./intelligence.zh.md) |
-| 翻译 | `touch-translate` | [查看文档](./translation.zh.md) |
-| 代码片段库 | `code-snippets.search` | [查看文档](./code-snippets.zh.md) |
-| 文本片段库 | `text-snippets.search` | [查看文档](./text-snippets.zh.md) |
-| 批量重命名 | `batch-rename` | [查看文档](./batch-rename.zh.md) |
-| 工作区脚本 | `workspace.scripts` | [查看文档](./workspace-scripts.zh.md) |
-| 开发工具箱 | `dev-toolbox` | [查看文档](./dev-toolbox.zh.md) |
-| 程序员工具 | `dev-utils` | [查看文档](./dev-utils.zh.md) |
-| 窗口管理 | `window.app` | [查看文档](./window-manager.zh.md) |
-| 窗口预设 | `window.presets` | [查看文档](./window-presets.zh.md) |
-| 系统操作 | `system.actions` | [查看文档](./system-actions.zh.md) |
-| 系统快捷动作 | `quick.actions` | [查看文档](./quick-actions.zh.md) |
+| 浏览器打开 | `browser.open` | [查看文档](./browser-open.zh.mdc) |
+| 浏览器收藏 | `browser.bookmarks` | [查看文档](./browser-bookmarks.zh.mdc) |
+| 智能问答 | `intelligence.ask` | [查看文档](./intelligence.zh.mdc) |
+| 翻译 | `touch-translate` | [查看文档](./translation.zh.mdc) |
+| 代码片段库 | `code-snippets.search` | [查看文档](./code-snippets.zh.mdc) |
+| 文本片段库 | `text-snippets.search` | [查看文档](./text-snippets.zh.mdc) |
+| 批量重命名 | `batch-rename` | [查看文档](./batch-rename.zh.mdc) |
+| 工作区脚本 | `workspace.scripts` | [查看文档](./workspace-scripts.zh.mdc) |
+| 开发工具箱 | `dev-toolbox` | [查看文档](./dev-toolbox.zh.mdc) |
+| 程序员工具 | `dev-utils` | [查看文档](./dev-utils.zh.mdc) |
+| 窗口管理 | `window.app` | [查看文档](./window-manager.zh.mdc) |
+| 窗口预设 | `window.presets` | [查看文档](./window-presets.zh.mdc) |
+| 系统操作 | `system.actions` | [查看文档](./system-actions.zh.mdc) |
+| 系统快捷动作 | `quick.actions` | [查看文档](./quick-actions.zh.mdc) |
 
 ## 推荐阅读
-- 先看《[推荐插件组合](../recommended-plugins.zh.md)》拿到场景化组合。
+- 先看《[推荐插件组合](../recommended-plugins.zh.mdc)》拿到场景化组合。
 - 再按你用到的插件逐篇看细节。

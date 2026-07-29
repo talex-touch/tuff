@@ -10,10 +10,10 @@ verified: true
 
 ## Sections
 
-- **[Product Guide](./guide/index.en.md)**: installation, onboarding, CoreBox workflows, and built-in capabilities.
-- **[Quick Start](./guide/start.en.md)**: the shortest path from install to first productive run.
-- **[Developer Hub](./dev/index.en.md)**: plugin manifests, SDK APIs, publishing, and architecture notes.
-- **[Tuffex Components](./dev/components/index.en.md)**: component demos and API reference for Nexus and dashboard surfaces.
+- **[Product Guide](./guide/index.en.mdc)**: installation, onboarding, CoreBox workflows, and built-in capabilities.
+- **[Quick Start](./guide/start.en.mdc)**: the shortest path from install to first productive run.
+- **[Developer Hub](./dev/index.en.mdc)**: plugin manifests, SDK APIs, publishing, and architecture notes.
+- **[Tuffex Components](./dev/components/index.en.mdc)**: component demos and API reference for Nexus and dashboard surfaces.
 
 ## Recommended Path
 

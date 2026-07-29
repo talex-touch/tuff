@@ -3,45 +3,45 @@
 > 构建插件、扩展功能，融入 Tuff 生态系统。
 
 ## 快速入门
-1. **[开发概览](./getting-started/overview.zh.md)** — 了解插件模型和架构。
-2. **[快速开始](./getting-started/quickstart.zh.md)** — 几分钟内搭建你的第一个插件。
-3. **[插件开发任务流](./getting-started/plugin-workflow.zh.md)** — 从 Manifest、先导脚本、SDK 选择到构建发布的端到端路径。
-4. **[Manifest 参考](./reference/manifest.zh.md)** — 配置功能和权限。
-5. **[旧版插件迁移](./release/migration.zh.md)** — 从旧版插件升级到新 SDK 体系。
+1. **[开发概览](./getting-started/overview.zh.mdc)** — 了解插件模型和架构。
+2. **[快速开始](./getting-started/quickstart.zh.mdc)** — 几分钟内搭建你的第一个插件。
+3. **[插件开发任务流](./getting-started/plugin-workflow.zh.mdc)** — 从 Manifest、先导脚本、SDK 选择到构建发布的端到端路径。
+4. **[Manifest 参考](./reference/manifest.zh.mdc)** — 配置功能和权限。
+5. **[发布与下载](./release/index.zh.md)** — 查看当前维护的发布路由、桌面下载说明与插件发布入口。
 
 ## 深入学习
 - **[API 参考](./api/)** — 存储、通道和 UI 的类型化接口。
-- **[搜索匹配 API / SemanticAliasSDK](./api/search.zh.md)** — 使用 `App Semantic Alias Catalog / 应用语义别名目录` 标记和 `sdkapi: 260626` 接入语义别名。
-- **[QuickOps SDK](./api/quickops.zh.md)** — 读取内置本地快捷工具能力、会话和最近审计摘要，并通过 Flow 组合扩展。
+- **[搜索匹配 API / SemanticAliasSDK](./api/search.zh.mdc)** — 使用 `App Semantic Alias Catalog / 应用语义别名目录` 标记和 `sdkapi: 260626` 接入语义别名。
+- **[QuickOps SDK](./api/quickops.zh.mdc)** — 读取内置本地快捷工具能力、会话和最近审计摘要，并通过 Flow 组合扩展。
 - **[扩展开发](./extensions/)** — 复杂集成的高级模式。
-- **[插件包与内容包边界](./getting-started/plugin-workflow.zh.md#插件包与内容包边界)** — 区分 `.tpex`、CloudShare 内容包与 CloudSync 私有同步。
-- **[Core App 启动链路与运行时变量](./reference/runtime-startup-env.zh.md)** — 启动 gate、dev.source 降级、环境变量与清理候选。
-- **[示例与常用代码](./reference/examples.zh.md)** — 以 `apps/nexus/examples/` 为源的示例入口。
-- **[代码片段](./reference/snippets.zh.md)** — 常见任务的复制粘贴示例。
+- **[插件包与内容包边界](./getting-started/plugin-workflow.zh.mdc#插件包与内容包边界)** — 区分 `.tpex`、CloudShare 内容包与 CloudSync 私有同步。
+- **[Core App 启动链路与运行时变量](./reference/runtime-startup-env.zh.mdc)** — 启动 gate、dev.source 降级、环境变量与清理候选。
+- **[示例与常用代码](./reference/examples.zh.mdc)** — 以 `apps/nexus/examples/` 为源的示例入口。
+- **[代码片段](./reference/snippets.zh.mdc)** — 常见任务的复制粘贴示例。
 
 ## 运行时行为
-- **[CoreBox 窗口与 UI View 缓存](./architecture/corebox-and-views.zh.md)** — 伸缩逻辑、推荐请求与 WebContentsView 缓存。
-- **[CoreBox 系统落地图](./architecture/corebox-system.zh.md)** — CoreBox 组件/IPC/渲染层落地文件。
-- **[DeviceIdleService 与后台扫描调度](./architecture/device-idle-service.zh.md)** — 空闲与电量策略统一入口。
-- **[APP 技术原理](./architecture/app-tech-principles.zh.md)** — 进程模型、模块体系与工程目录结构。
-- **[核心模块落地图（含 SearchEngine）](./architecture/module-map.zh.md)** — CoreBox/SearchEngine/插件/通道/存储等模块落地到目录文件。
-- **[SearchEngine 落地图](./architecture/search-engine.zh.md)** — Provider 清单、推荐系统与关键流程。
-- **[插件系统落地图](./architecture/plugin-system.zh.md)** — Provider/Adapter/Widget 管线与加载链路。
-- **[通道与 IPC 事件表](./architecture/transport-events.zh.md)** — 事件分组与定义文件定位。
-- **[IPC 事件清单（事件名级别）](./architecture/ipc-events-detail.zh.md)** — 逐事件枚举与处理入口。
-- **[IPC 事件处理器索引（函数级）](./architecture/ipc-events-handlers.zh.md)** — 事件 → 具体处理方法。
-- **[SDK -> 事件 -> 处理器索引](./architecture/ipc-events-sdk-map.zh.md)** — SDK 调用链与内部/私有 transport。
-- **[DivisionBox 落地图](./architecture/division-box.zh.md)** — 会话、窗口与 IPC 结构。
-- **[AI/Intelligence 模块落地图](./architecture/intelligence-module.zh.md)** — 能力、配额与 Agent 结构。
-- **[Storage & Database 落地图](./architecture/storage-and-db.zh.md)** — 存储/数据库模块与更新链路。
+- **[CoreBox 窗口与 UI View 缓存](./architecture/corebox-and-views.zh.mdc)** — 伸缩逻辑、推荐请求与 WebContentsView 缓存。
+- **[CoreBox 系统落地图](./architecture/corebox-system.zh.mdc)** — CoreBox 组件/IPC/渲染层落地文件。
+- **[DeviceIdleService 与后台扫描调度](./architecture/device-idle-service.zh.mdc)** — 空闲与电量策略统一入口。
+- **[APP 技术原理](./architecture/app-tech-principles.zh.mdc)** — 进程模型、模块体系与工程目录结构。
+- **[核心模块落地图（含 SearchEngine）](./architecture/module-map.zh.mdc)** — CoreBox/SearchEngine/插件/通道/存储等模块落地到目录文件。
+- **[SearchEngine 落地图](./architecture/search-engine.zh.mdc)** — Provider 清单、推荐系统与关键流程。
+- **[插件系统落地图](./architecture/plugin-system.zh.mdc)** — Provider/Adapter/Widget 管线与加载链路。
+- **[通道与 IPC 事件表](./architecture/transport-events.zh.mdc)** — 事件分组与定义文件定位。
+- **[IPC 事件清单（事件名级别）](./architecture/ipc-events-detail.zh.mdc)** — 逐事件枚举与处理入口。
+- **[IPC 事件处理器索引（函数级）](./architecture/ipc-events-handlers.zh.mdc)** — 事件 → 具体处理方法。
+- **[SDK -> 事件 -> 处理器索引](./architecture/ipc-events-sdk-map.zh.mdc)** — SDK 调用链与内部/私有 transport。
+- **[DivisionBox 落地图](./architecture/division-box.zh.mdc)** — 会话、窗口与 IPC 结构。
+- **[AI/Intelligence 模块落地图](./architecture/intelligence-module.zh.mdc)** — 能力、配额与 Agent 结构。
+- **[Storage & Database 落地图](./architecture/storage-and-db.zh.mdc)** — 存储/数据库模块与更新链路。
 
 ## 开发工具
-- **[TUFF CLI](./tools/tuff-cli.zh.md)** — 命令行工具，快速创建和管理插件项目。
-- **[TuffEx](./tools/tuffex.zh.md)** — Vue3 组件库，统一设计语言和交互体验。
-- **[Tuffex 组件中心](./components/index.zh.md)** — 组件清单、Demo 与 API（塔芙）。
+- **[TUFF CLI](./tools/tuff-cli.zh.mdc)** — 命令行工具，快速创建和管理插件项目。
+- **[TuffEx](./tools/tuffex.zh.mdc)** — Vue3 组件库，统一设计语言和交互体验。
+- **[Tuffex 组件中心](./components/index.zh.mdc)** — 组件清单、Demo 与 API（塔芙）。
 
 ## 发布
-- **[发布流程](./release/publish.zh.md)** — 将插件提交到市场。
+- **[插件开发任务流](./getting-started/plugin-workflow.zh.mdc)** — 校验、构建并发布插件包。
 
 ## 资源
 - 加入 Discord 开发者社区获取实时支持。
