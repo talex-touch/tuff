@@ -275,9 +275,11 @@ describe('isolated browser-data capability', () => {
     })
 
     expect(result).toMatchObject({
-      records: expect.arrayContaining([{ source: 'bookmarks', title: 'Tuff 0' }]),
       diagnostics: [{ profileCount: 8, recordCount: 8 }]
     })
+    expect((result as { records: unknown[] }).records).toEqual(
+      expect.arrayContaining([expect.objectContaining({ source: 'bookmarks', title: 'Tuff 0' })])
+    )
     expect((result as { records: unknown[] }).records).toHaveLength(8)
   })
 
