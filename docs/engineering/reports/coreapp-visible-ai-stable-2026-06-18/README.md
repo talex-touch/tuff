@@ -2,11 +2,11 @@
 
 > 日期：2026-06-18
 > 范围：Tuff 2.5.0 AI Stable 的 CoreBox 文本/OCR、provider routing 与固定失败路径 evidence 采集清单。
-> 状态：historical manifest 的 13/13 required surfaces 与 77 个 artifact 已通过 schema/tag/path/file gate；其 `baselineVersion=2.4.12-beta.8`，当前 CoreApp 版本以 `apps/core-app/package.json` 为准。`--requireCurrentVersion` 当前 fail-closed，完成全量新版本 recapture 前不得称为当前全局 strict gate 已通过。
+> 状态：2026-06-24 historical manifest 的 13/13 required surfaces 与 72 个 artifact 已通过 schema/tag/path/file gate；2026-07-13 `2.4.13-beta.4` checkpoint 新增 5 个当时版本的 partial AI Command artifacts，使混合版本 manifest 总数为 77。当前 CoreApp 版本以 `apps/core-app/package.json` 为准；`--requireCurrentVersion` 当前 fail-closed，完成全量新版本 recapture 前不得称为当前全局 strict gate 已通过。
 
 ## 当前结论
 
-- Historical packaged artifact 集覆盖 `2.4.12-beta.8`、`2.4.12-beta.10` 与 `2.4.13-beta.1`；当前 `apps/core-app/package.json` 版本尚未完成全量复采，不能把现有 `apps/core-app/dist` 或旧 notes 自动视为当前版本 evidence。2026-07-13 仅新增 AI Command editor/save/dynamic feature 的 current-version partial evidence。
+- Historical packaged artifact 集覆盖 `2.4.12-beta.8`、`2.4.12-beta.10` 与 `2.4.13-beta.1`；2026-07-13 `2.4.13-beta.4` checkpoint 仅新增 5 个当时版本的 partial AI Command editor/save/dynamic feature artifacts，不构成全量复采。当前 `apps/core-app/package.json` 版本尚未完成全量复采，不能把现有 `apps/core-app/dist` 或旧 notes 自动视为当前版本 evidence。
 - Packaged hot startup benchmark 已采到：`../startup-packaged-hot-runs-2026-06-21/汇总报告.md` 记录 10/10 PASS、Startup health P50 `552ms`、P95 `810ms`、0 WARN、0 ERROR。
 - Packaged cold startup benchmark 已采到：`../startup-packaged-cold-runs-2026-06-21/汇总报告.md` 记录 10/10 PASS、per-run isolated userData、Startup health P50 `572ms`、P95 `615ms`、0 WARN、0 ERROR；long-tail note 为 `startup-packaged-cold-long-tail-notes.md`。
 - Packaged startup first-screen 已采到：`startup-first-screen-settings.png` / `startup-first-screen-settings-dom.json` / `startup-health-summary.png` / `startup-health-summary-dom.json` 证明 2026-06-21 `2.4.12-beta.8` packaged app 首个主 CoreApp Settings/onboarding surface 可用、不是空白/阻塞加载，且 Settings/About 中版本、构建信息与 Startup health summary 可达。
@@ -32,7 +32,7 @@
 - `assistant-screenshot-translate` manifest 已更新为 `passed`：packaged Assistant image translate evidence 覆盖 Settings 开关、剪贴板图片翻译入口、结果窗口、空剪贴板与 provider fallback。
 - `workflow-use-model-review-queue` manifest 已更新为 `passed`：packaged evidence 覆盖 Use Model output 入 Review Queue、pending/failed 队列态、成本/trace 信号与失败恢复文案。
 - `provider-registry-observability` manifest 已更新为 `passed`：packaged evidence 覆盖 provider health、scene latest run/recent failure、状态 filter 与 next-action hint。
-- Historical global artifact gate：13/13 required surfaces `passed`，manifest artifact 总引用 77 次；current-version gate 仍因 baseline mismatch 开放。
+- Historical global artifact gate：2026-06-24 的 13/13 required surfaces `passed`、72 个 artifact refs；2026-07-13 `2.4.13-beta.4` checkpoint 的 5 个当时版本的 partial AI Command artifacts 使 mixed-version manifest 总引用为 77，current-version gate 仍因 baseline mismatch 开放。
 
 ## Strict visible gate 闭环
 
@@ -44,9 +44,9 @@
 | `workflow-use-model-review-queue` | workflow  |              3 | passed：pending / failed queue 与 probe JSON evidence 已绑定。                                                   |
 | `provider-registry-observability` | provider  |              3 | passed：provider health 与 scene run evidence 已绑定。                                                           |
 
-## R2 evidence artifact inventory
+## R2 evidence artifact inventory（72 个 historical + 5 个 beta.4 partial）
 
-2026-06-24 inventory 校验 `coreapp-visible-experience-manifest.json` 当前引用：13 个 surfaces 全部 `passed`，manifest artifact 总引用 72 次，去重后 72 个唯一文件。所有 manifest 引用文件均存在、非空，JSON artifact 均可解析，`evidenceTagArtifacts` 没有指向 unknown artifact。
+2026-06-24 historical inventory checkpoint 记录 72 个引用，13/13 surfaces 均 `passed`，且 72 个路径唯一、存在、非空，JSON artifact 均可解析，`evidenceTagArtifacts` 没有指向 unknown artifact。2026-07-13 `2.4.13-beta.4` checkpoint 新增 5 个当时版本的 partial AI Command artifacts：`packaged-ai-command-editor-2026-07-13.png`、`packaged-ai-command-editor-2026-07-13-probe.json`、`packaged-ai-command-preset-preview-2026-07-13.png`、`packaged-ai-command-dynamic-feature-2026-07-13.png` 与 `packaged-ai-command-dynamic-widget-2026-07-13.png`；mixed-version manifest 因此总计 77，但这五项不关闭全量 current-version strict gate。
 
 | Passed surface                    | Unique artifacts | 类型分布                   |
 | --------------------------------- | ---------------: | -------------------------- |
@@ -56,7 +56,7 @@
 | `corebox-search-states`           |               11 | 4 PNG + 7 JSON             |
 | `app-index-workbench`             |                6 | 2 PNG + 4 JSON             |
 | `browser-login-recovery`          |                4 | 2 PNG + 2 JSON             |
-| `corebox-ai-ask`                  |               20 | 10 PNG + 10 JSON           |
+| `corebox-ai-ask`                  |               25 | 14 PNG + 11 JSON           |
 | `omnipanel-writing-tools`         |                3 | 3 PNG                      |
 | `provider-migration-evidence`     |                1 | 1 markdown dry-run summary |
 | `assistant-floating-ball-entry`   |                5 | 4 PNG + 1 JSON             |
