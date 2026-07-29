@@ -3,7 +3,7 @@
   "name": "resolve-open-github-issues",
   "title": "收口全部开放 GitHub Issues",
   "description": "逐项核验、修复或基于证据关闭当前开放 GitHub Issues，并完成回归与 Issue 状态收口。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
