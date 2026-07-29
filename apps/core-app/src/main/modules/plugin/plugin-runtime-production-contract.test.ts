@@ -9,6 +9,14 @@ function read(relativePath: string): string {
 }
 
 describe('plugin Prelude production hard cut', () => {
+  it('installs the isolated runtime by default with no legacy bridge source', () => {
+    const rolloutSource = read('plugin-runtime-rollout.ts')
+
+    expect(rolloutSource).toContain('PLUGIN_RUNTIME_DEFAULT_ENABLED = true')
+    expect(() => read('host/plugin-host-bridge.ts')).toThrow()
+    expect(() => read('host/plugin-host-protocol.ts')).toThrow()
+  })
+
   it('has no singleton isolation flag or synthetic self-check in PluginModule', () => {
     const source = read('plugin-module.ts')
 

@@ -151,6 +151,8 @@ function createHarness(
     watchPermissionRevoked?: PluginRuntimeServiceOptions['watchPermissionRevoked']
     resourceLimits?: {
       lifecycleTimeoutMs?: number
+      heartbeatIntervalMs?: number
+      heartbeatTimeoutMs?: number
       cancelGraceMs?: number
       shutdownTimeoutMs?: number
     }
@@ -545,6 +547,34 @@ describe('PluginRuntimeService', () => {
     expect(stopped).toBe(true)
   })
 
+  it('fails stop after process exit when activation resource cleanup does not complete', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    await harness.start(identity)
+    harness.closeResources.mockRejectedValue(new Error('/private/plugin/resource-detail'))
+
+    const stopping = harness.service.stopActivation(identity, { runDestroy: true })
+
+    await expect(stopping).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    expect(harness.children[0].exited).toBe(true)
+    expect(harness.service.resolve(identity)).toBeUndefined()
+    expect(JSON.stringify(await stopping.catch((error: unknown) => error))).not.toContain(
+      '/private/plugin/resource-detail'
+    )
+
+    const replacement = activation('plugin.alpha', 2, 'replacement-key')
+    harness.setCurrent(replacement)
+    await expect(harness.start(replacement)).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    expect(harness.spawn).toHaveBeenCalledTimes(1)
+    await expect(harness.service.stopAll()).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+  })
+
   it('reports a stable crash and rotates process, handle, generation and key on re-enable', async () => {
     const harness = createHarness()
     const firstIdentity = activation('plugin.alpha', 1, 'first-key')
@@ -578,6 +608,86 @@ describe('PluginRuntimeService', () => {
     expect(second.host.owner.hostGeneration).not.toBe(first.host.owner.hostGeneration)
     expect(harness.service.resolve(firstIdentity)).toBeUndefined()
     expect(harness.service.resolve(secondIdentity)).toBe(second.host)
+
+    await harness.service.dispose()
+  })
+
+  it('retains an unexpected-crash cleanup failure and blocks generation replacement', async () => {
+    const harness = createHarness()
+    const crashedIdentity = activation('plugin.alpha', 1, 'crashed-key')
+    const onCrash = vi.fn()
+    await harness.start(crashedIdentity, { onCrash })
+    harness.closeResources.mockRejectedValue(new Error('/private/plugin/resource-detail'))
+
+    harness.children[0].emitExit()
+    await vi.waitFor(() => expect(onCrash).toHaveBeenCalledOnce())
+
+    await expect(harness.service.stopActivation(crashedIdentity)).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    await expect(harness.start(activation('plugin.alpha', 2, 'replacement-key'))).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    expect(harness.spawn).toHaveBeenCalledTimes(1)
+    await expect(harness.service.stopAll()).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    expect(
+      JSON.stringify(await harness.service.stopAll().catch((error: unknown) => error))
+    ).not.toContain('/private/plugin/resource-detail')
+  })
+
+  it('retains a startup-crash cleanup failure for later teardown barriers', async () => {
+    const harness = createHarness()
+    const identity = activation()
+    const initBarrier = deferred<void>()
+    harness.setNextInitBarrier(initBarrier)
+    harness.closeResources.mockRejectedValue(new Error('/private/plugin/startup-cleanup-detail'))
+
+    const starting = harness.start(identity)
+    await vi.waitFor(() => expect(harness.ports).toHaveLength(1))
+    harness.children[0].emitExit()
+
+    await expect(starting).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    await expect(harness.service.stopActivation(identity)).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    await expect(harness.service.stopAll()).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+  })
+
+  it('blocks the fourth explicit restart after three crashes in 30 seconds', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const harness = createHarness({
+      resourceLimits: {
+        heartbeatIntervalMs: 60_000,
+        heartbeatTimeoutMs: 60_000
+      }
+    })
+
+    for (let generation = 1; generation <= 3; generation += 1) {
+      const crashed = deferred<void>()
+      await harness.start(activation('plugin.alpha', generation), {
+        onCrash: () => crashed.resolve()
+      })
+      harness.children[generation - 1].emitExit()
+      await crashed.promise
+      vi.setSystemTime(1_000 + generation * 1_000)
+    }
+
+    await expect(harness.start(activation('plugin.alpha', 4))).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED')
+    )
+    expect(harness.spawn).toHaveBeenCalledTimes(3)
+
+    vi.setSystemTime(34_001)
+    const recovered = await harness.start(activation('plugin.alpha', 5))
+    expect(recovered.host.state).toBe('active')
+    expect(harness.spawn).toHaveBeenCalledTimes(4)
 
     await harness.service.dispose()
   })
@@ -655,6 +765,35 @@ describe('PluginRuntimeService', () => {
         snapshot: { platform: 'darwin', arch: 'arm64', locale: 'zh-CN', manifest: {} }
       })
     ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED'))
+  })
+
+  it('preserves an operation cleanup failure while stopAll closes another record', async () => {
+    const harness = createHarness()
+    const failingIdentity = activation('plugin.alpha')
+    const liveIdentity = activation('plugin.beta')
+    const cleanupBarrier = deferred<void>()
+    harness.closeResources.mockImplementation((identity: PluginActivationIdentity) =>
+      identity.name === failingIdentity.name ? cleanupBarrier.promise : Promise.resolve()
+    )
+    await harness.start(failingIdentity)
+    await harness.start(liveIdentity)
+
+    const failedStop = harness.service.stopActivation(failingIdentity, { runDestroy: false })
+    await vi.waitFor(() => expect(harness.closeResources).toHaveBeenCalledWith(failingIdentity))
+
+    const stoppingAll = harness.service.stopAll()
+    const failedStopResult = expect(failedStop).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    const stopAllResult = expect(stoppingAll).rejects.toEqual(
+      new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+    )
+    cleanupBarrier.reject(new Error('/private/plugin/resource-detail'))
+
+    await failedStopResult
+    await stopAllResult
+    expect(harness.children.every((child) => child.exited)).toBe(true)
+    expect(harness.service.resolve(liveIdentity)).toBeUndefined()
   })
 
   it('reports asynchronous protocol termination only after cleanup completes', async () => {
@@ -885,6 +1024,35 @@ describe('PluginRuntimeService', () => {
     expect(betaLoad.payload.capabilityManifest).toEqual([])
 
     await harness.service.dispose()
+  })
+
+  it('filters the merged manifest through an exact activation capability allowlist', async () => {
+    const base = stringCapabilityDefinition({ id: 'storage.file.read' })
+    const local = stringCapabilityDefinition({ id: 'intelligence.invoke' })
+    const harness = createHarness({ capabilityDefinitions: [base] })
+
+    await harness.start(activation(), {
+      capabilityDefinitions: [local],
+      capabilityAllowlist: ['intelligence.invoke']
+    })
+
+    const load = harness.ports[0].sent.find(
+      (message) => (message as { type?: string }).type === 'host-load'
+    ) as { payload: { capabilityManifest: Array<{ id: string }> } }
+    expect(load.payload.capabilityManifest.map((entry) => entry.id)).toEqual([
+      'intelligence.invoke'
+    ])
+
+    await harness.service.dispose()
+  })
+
+  it('rejects an allowlist capability that is absent from the merged manifest', async () => {
+    const harness = createHarness()
+
+    await expect(
+      harness.start(activation(), { capabilityAllowlist: ['intelligence.invoke'] })
+    ).rejects.toEqual(new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'))
+    expect(harness.spawn).not.toHaveBeenCalled()
   })
 
   it('rejects duplicate base and activation definitions before spawning a process', async () => {

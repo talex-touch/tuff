@@ -9,12 +9,16 @@ const scriptContent = readFileSync(path.join(pluginsRoot, 'touch-translation', '
 const capabilities = [
   'feature.items.push',
   'feature.items.clear',
-  'storage.file.read',
   'clipboard.write',
   'intelligence.invoke'
 ] as const satisfies readonly PluginHostCapability[]
 
-function createHarness(generation: number) {
+interface HarnessOptions {
+  waitForTranslation?: (text: string) => Promise<void>
+  translateResult?: (text: string, provider: string, generation: number) => string
+}
+
+function createHarness(generation: number, options: HarnessOptions = {}) {
   const state = {
     clipboard: [] as string[],
     items: [] as Array<Record<string, unknown>>,
@@ -30,16 +34,6 @@ function createHarness(generation: number) {
       if (capability === 'feature.items.push') {
         state.items = (payload as { items: Array<Record<string, unknown>> }).items
         return { ok: true }
-      }
-      if (capability === 'storage.file.read') {
-        return {
-          found: true,
-          value: {
-            'provider-a': { enabled: true },
-            'provider-b': { enabled: true },
-            ignored: { enabled: true, apiKey: 'must-not-cross' }
-          }
-        }
       }
       if (capability === 'clipboard.write') {
         state.clipboard.push((payload as { content: { text: string } }).content.text)
@@ -79,9 +73,12 @@ function createHarness(generation: number) {
       if (request.capabilityId === 'text.translate') {
         const text = (request.payload as { text: string }).text
         const provider = (request.options as { preferredProviderId: string }).preferredProviderId
+        await options.waitForTranslation?.(text)
         return {
           operation: 'capability.invoke',
-          result: `${provider}:${text}:generation-${generation}`,
+          result:
+            options.translateResult?.(text, provider, generation) ??
+            `${provider}:${text}:generation-${generation}`,
           providerId: provider,
           modelId: `${provider}-model`,
           traceId: `translate-${generation}`,
@@ -169,5 +166,51 @@ describe('official touch-translation Prelude isolation regression', () => {
       expect.objectContaining<Partial<PluginHostChildError>>({ code: 'PLUGIN_HOST_CHILD_CLOSED' })
     )
     second.runtime.shutdown()
+  })
+
+  it('prevents an older feature request from replacing the latest feature output', async () => {
+    let releaseSlow!: () => void
+    const slowBarrier = new Promise<void>((resolve) => {
+      releaseSlow = resolve
+    })
+    const harness = createHarness(1, {
+      waitForTranslation: (text) => (text === 'slow' ? slowBarrier : Promise.resolve())
+    })
+
+    const slow = harness.runtime.callLifecycle('onFeatureTriggered', [
+      'touch-translate',
+      'slow'
+    ]).promise
+    await vi.waitFor(() => expect(JSON.stringify(harness.state.requests)).toContain('slow'))
+    await harness.runtime.callLifecycle('onFeatureTriggered', ['multi-source-translate', 'latest'])
+      .promise
+    releaseSlow()
+    await slow
+
+    expect(JSON.stringify(harness.state.items)).toContain('provider-a:latest:generation-1')
+    expect(JSON.stringify(harness.state.items)).not.toContain('provider-a:slow:generation-1')
+    harness.runtime.shutdown()
+  })
+
+  it('bounds multibyte input and result text by UTF-8 bytes', async () => {
+    const harness = createHarness(1, {
+      translateResult: () => '汉'.repeat(20_000)
+    })
+
+    await harness.runtime.callLifecycle('onFeatureTriggered', [
+      'touch-translate',
+      '汉'.repeat(20_000)
+    ]).promise
+
+    const translateRequest = harness.state.requests.find(
+      (request) =>
+        request.operation === 'capability.invoke' && request.capabilityId === 'text.translate'
+    )!
+    const requestText = (translateRequest.payload as { text: string }).text
+    const item = copyItem(harness.state.items)
+    const title = (item.render as { basic: { title: string } }).basic.title
+    expect(Buffer.byteLength(requestText, 'utf8')).toBeLessThanOrEqual(32 * 1024)
+    expect(Buffer.byteLength(title, 'utf8')).toBeLessThanOrEqual(32 * 1024)
+    harness.runtime.shutdown()
   })
 })

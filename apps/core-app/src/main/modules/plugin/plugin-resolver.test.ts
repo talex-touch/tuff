@@ -2,14 +2,14 @@ import type { IManifest } from '@talex-touch/utils/plugin'
 import path from 'node:path'
 import { tmpdir } from 'node:os'
 import fse from 'fs-extra'
-import { CURRENT_SDK_VERSION } from '@talex-touch/utils/plugin'
+import { CURRENT_SDK_VERSION, PluginStatus } from '@talex-touch/utils/plugin'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { pluginModuleMock } = vi.hoisted(() => ({
   pluginModuleMock: {
     filePath: '',
     pluginManager: {
-      getPluginByName: vi.fn(() => null),
+      getPluginByName: vi.fn<() => unknown>(() => null),
       loadPlugin: vi.fn(),
       unloadPlugin: vi.fn()
     }
@@ -79,5 +79,43 @@ describe('PluginResolver', () => {
     )
     await expect(fse.pathExists(path.join(installRoot, manifest.name))).resolves.toBe(false)
     expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
+  })
+
+  it('preserves an installed plugin when force-update teardown is incomplete', async () => {
+    const root = await fse.mkdtemp(path.join(tmpdir(), 'plugin-resolver-update-test-'))
+    createdRoots.push(root)
+    const manifest: IManifest = {
+      name: 'touch-example',
+      version: '2.0.0',
+      description: 'example',
+      icon: 'logo.svg',
+      author: 'Talex',
+      main: 'index.js',
+      sdkapi: CURRENT_SDK_VERSION,
+      features: []
+    }
+    const sourceDir = await createSourcePluginDir(root, manifest)
+    const installRoot = path.join(root, 'installed-plugins')
+    const targetDir = path.join(installRoot, manifest.name)
+    await fse.ensureDir(targetDir)
+    await fse.writeFile(path.join(targetDir, 'index.js'), 'old-content', 'utf-8')
+    pluginModuleMock.filePath = installRoot
+    const disable = vi.fn().mockResolvedValue(false)
+    pluginModuleMock.pluginManager.getPluginByName.mockReturnValue({
+      status: PluginStatus.ACTIVE,
+      disable
+    })
+    const callback = vi.fn()
+
+    await new PluginResolver(sourceDir).install(manifest, callback, { forceUpdate: true })
+
+    expect(disable).toHaveBeenCalledOnce()
+    expect(pluginModuleMock.pluginManager.unloadPlugin).not.toHaveBeenCalled()
+    expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
+    expect(callback).toHaveBeenCalledWith(
+      'Failed to remove old plugin: PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED',
+      'error'
+    )
+    expect(await fse.readFile(path.join(targetDir, 'index.js'), 'utf-8')).toBe('old-content')
   })
 })

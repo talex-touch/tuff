@@ -164,6 +164,12 @@ export function createPluginIntelligenceContextCapabilities(
     return current
   }
 
+  const validateEphemeralRequest = (value: unknown): PluginIntelligenceContextRequest => {
+    const request = validatePluginIntelligenceContextRequest(value)
+    if (request.context.mode === 'continue') invalid()
+    return request
+  }
+
   const definition: PluginHostCapabilityDefinition<
     PluginIntelligenceContextRequest,
     PluginIntelligenceContextResult
@@ -174,7 +180,7 @@ export function createPluginIntelligenceContextCapabilities(
     maxConcurrency: 2,
     callbackLifetime: 'transient',
     callbackFields: Object.freeze([]),
-    validateRequest: validatePluginIntelligenceContextRequest,
+    validateRequest: validateEphemeralRequest,
     validateResult: validatePluginIntelligenceContextResult,
     invoke: async (context, request, signal) => {
       const current = assertAuthority(context)

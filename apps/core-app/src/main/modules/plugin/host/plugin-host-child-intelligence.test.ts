@@ -111,6 +111,7 @@ describe('plugin Prelude Intelligence facade', () => {
                 permissionType: typeof permission,
                 featuresType: typeof features,
                 filesystemType: typeof filesystem,
+                snipasteType: typeof plugin.snipaste,
                 systemType: typeof system,
                 quickOpsType: typeof quickOps,
                 flowType: typeof flow,
@@ -136,6 +137,7 @@ describe('plugin Prelude Intelligence facade', () => {
             'permission.check',
             'feature.registry.list',
             'filesystem.write',
+            'process.spawn',
             'system.invoke',
             'quick-ops.invoke',
             'flow.invoke'
@@ -163,6 +165,7 @@ describe('plugin Prelude Intelligence facade', () => {
       permissionType: 'undefined',
       featuresType: 'undefined',
       filesystemType: 'undefined',
+      snipasteType: 'undefined',
       systemType: 'undefined',
       quickOpsType: 'undefined',
       flowType: 'undefined',

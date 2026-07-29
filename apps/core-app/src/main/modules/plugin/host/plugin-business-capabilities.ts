@@ -2021,11 +2021,12 @@ export function createPluginBusinessCapabilities(
       'forceMax'
     ])
     if (requiredField(interaction, 'type') !== 'widget') invalid()
-    const rendererFeatureId = Object.hasOwn(interaction, 'rendererFeatureId')
+    const ownsPath = Object.hasOwn(interaction, 'path')
+    const hasRendererFeatureId = Object.hasOwn(interaction, 'rendererFeatureId')
+    if (ownsPath === hasRendererFeatureId) invalid()
+    const rendererFeatureId = hasRendererFeatureId
       ? boundedString(interaction.rendererFeatureId, MAX_IDENTIFIER_BYTES)
-      : Object.hasOwn(interaction, 'path')
-        ? featureId
-        : invalid()
+      : featureId
     const rendererFeature = features.get(rendererFeatureId)
     if (!rendererFeature || !Object.hasOwn(rendererFeature, 'interaction')) invalid()
     const rendererInteraction = exactRecord(rendererFeature.interaction, [
@@ -2040,7 +2041,8 @@ export function createPluginBusinessCapabilities(
     ])
     if (
       requiredField(rendererInteraction, 'type') !== 'widget' ||
-      !Object.hasOwn(rendererInteraction, 'path')
+      !Object.hasOwn(rendererInteraction, 'path') ||
+      Object.hasOwn(rendererInteraction, 'rendererFeatureId')
     ) {
       invalid()
     }

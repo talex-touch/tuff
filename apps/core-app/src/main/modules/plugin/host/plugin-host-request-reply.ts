@@ -1,6 +1,5 @@
 import type { PluginActivationIdentity, PluginSecurityContext } from '@talex-touch/utils/transport'
 import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
-import { isIP } from 'node:net'
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 
@@ -202,6 +201,22 @@ function boundedString(value: unknown, maximumBytes: number, allowEmpty = false)
   if (typeof value !== 'string' || (!allowEmpty && value.length === 0)) invalid()
   if (utf8Bytes(value) > maximumBytes) invalid()
   return value
+}
+
+function isIpAddress(value: string): boolean {
+  if (!value.includes(':')) {
+    const parts = value.split('.')
+    return (
+      parts.length === 4 &&
+      parts.every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number.parseInt(part, 10) <= 255)
+    )
+  }
+  try {
+    const hostname = new URL(`http://[${value}]/`).hostname
+    return hostname.startsWith('[') && hostname.endsWith(']')
+  } catch {
+    return false
+  }
 }
 
 function boundedInteger(value: unknown, minimum: number, maximum: number): number {
@@ -885,7 +900,7 @@ export function createPluginHostNexusService(
     }
     const addresses = snapshotArray(addressValues, MAX_ADDRESSES).map((address) => {
       const value = boundedString(address, MAX_IDENTIFIER_BYTES)
-      if (!isIP(value)) unavailable()
+      if (!isIpAddress(value)) unavailable()
       return value
     })
     if (addresses.length === 0) unavailable()

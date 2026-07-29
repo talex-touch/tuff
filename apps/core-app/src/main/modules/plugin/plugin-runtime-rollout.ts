@@ -23,7 +23,7 @@ export const PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'touch-workspace-scripts'
 ] as const)
 
-const PLUGIN_RUNTIME_DEFAULT_ENABLED = false
+const PLUGIN_RUNTIME_DEFAULT_ENABLED = true
 
 export function shouldInstallPluginRuntimeServiceByDefault(): boolean {
   return PLUGIN_RUNTIME_DEFAULT_ENABLED

@@ -1,5 +1,11 @@
 # 安全加固交接 Backlog — 2026-07-15
 
+> **历史交接快照。** 其中 C1-B 插件隔离的 singleton bridge、环境开关、synthetic
+> self-check、共享 utility process、宽松 require 与“默认关闭”描述已由 #297 的 V2
+> activation-scoped runtime 取代，不得用于当前实现或发布判断。当前 source of truth 是
+> `.trellis/spec/frontend/plugin-runtime-security.md` 和
+> `.trellis/tasks/07-27-isolate-plugin-prelude-297/`；下文其他审计内容仍按当前代码逐项复核。
+
 > 一轮全项目安全审计 + 修复的交接文档。目的：让下一轮（尤其能真机操作 app 的环境）无缝接手剩余项。
 > 提交、push、worktree 与并行修改描述均为 2026-07-15 生成时快照；执行前必须读取当前仓库状态。技术结论与剩余 backlog 仍需按当前代码逐项复核。
 

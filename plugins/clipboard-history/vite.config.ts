@@ -4,6 +4,9 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   base: './',
+  build: {
+    modulePreload: { polyfill: false },
+  },
   resolve: {
     alias: {
       '~/': `${fileURLToPath(new URL('./src', import.meta.url))}/`,

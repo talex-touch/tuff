@@ -79,8 +79,11 @@ export async function installDevPluginFromPath(
         return { status: 'exists', manifest }
       }
       const manager = pluginModule.pluginManager
-      if (manager?.unloadPlugin) {
-        await manager.unloadPlugin(manifest.name)
+      if (manager?.unloadPlugin && manager.plugins.has(manifest.name)) {
+        const unloaded = await manager.unloadPlugin(manifest.name)
+        if (!unloaded) {
+          return { status: 'error', error: 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED' }
+        }
       }
       await fse.remove(targetDir)
     }
