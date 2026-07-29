@@ -25,6 +25,7 @@ import { intelligenceAuditLogger } from './intelligence-audit-logger'
 import { intelligenceCapabilityRegistry } from './intelligence-capability-registry'
 import { markOuterGovernedInvocation } from './intelligence-invoke-governance'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
+import { strategyManager } from './intelligence-strategy-manager'
 import {
   setIntelligenceAutonomousRuntimeAdapter,
   setIntelligenceProviderManager,
@@ -214,6 +215,20 @@ function createProvider(
     rerank: vi.fn(),
     agent: vi.fn()
   } as unknown as TestProvider
+}
+
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((accept, decline) => {
+    resolve = accept
+    reject = decline
+  })
+  return { promise, resolve, reject }
 }
 
 afterEach(() => {
@@ -621,6 +636,575 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
         error: 'primary provider failed'
       })
     )
+  })
+
+  it('cancels outer-governed provider work without inner governance or fallback', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test outer-governed cancellation',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+    const primaryPending = deferred<IntelligenceInvokeResult<string>>()
+    const primaryProvider = createProvider(
+      {
+        id: 'outer-cancel-primary',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Outer Cancel Primary',
+        enabled: true,
+        priority: 1,
+        models: ['primary-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    primaryProvider.chat = vi.fn(() => primaryPending.promise)
+    const fallbackProvider = createProvider(
+      {
+        id: 'outer-cancel-fallback',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Outer Cancel Fallback',
+        enabled: true,
+        priority: 2,
+        models: ['fallback-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    fallbackProvider.chat = vi.fn().mockResolvedValue({
+      result: 'must not run',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'fallback-model',
+      latency: 1,
+      traceId: 'outer-cancel-fallback',
+      provider: IntelligenceProviderType.LOCAL
+    })
+    setIntelligenceProviderManager(new FakeProviderManager([primaryProvider, fallbackProvider]))
+    const quotaCheck = vi.spyOn(intelligenceQuotaManager, 'checkQuota')
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const controller = new AbortController()
+    const options = markOuterGovernedInvocation({
+      signal: controller.signal,
+      metadata: { caller: 'plugin:outer-cancel' }
+    })
+    const pending = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: true,
+      enableCache: true
+    }).invoke<string>(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'cancel outer work' }] },
+      options
+    )
+    await vi.waitFor(() => expect(primaryProvider.chat).toHaveBeenCalledOnce())
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    primaryPending.resolve({
+      result: 'late primary result',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      model: 'primary-model',
+      latency: 1,
+      traceId: 'outer-cancel-primary',
+      provider: IntelligenceProviderType.LOCAL
+    })
+    await Promise.resolve()
+    expect(quotaCheck).not.toHaveBeenCalled()
+    expect(auditLog).not.toHaveBeenCalled()
+    expect(fallbackProvider.chat).not.toHaveBeenCalled()
+  })
+})
+
+describe('tuffIntelligenceSDK cancellation', () => {
+  const chatResult = {
+    result: 'cancel-safe response',
+    usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    model: 'cancel-model',
+    latency: 5,
+    traceId: 'trace-cancel',
+    provider: IntelligenceProviderType.LOCAL
+  }
+
+  function registerCapability(
+    id: 'text.chat' | 'vision.ocr',
+    type: IntelligenceCapabilityType
+  ): void {
+    intelligenceCapabilityRegistry.register({
+      id,
+      type,
+      name: id,
+      description: 'test cancellation',
+      supportedProviders: [IntelligenceProviderType.LOCAL]
+    })
+  }
+
+  it('prioritizes canonical cancellation when quota rejects after abort', async () => {
+    registerCapability('text.chat', IntelligenceCapabilityType.CHAT)
+    const provider = createProvider(
+      {
+        id: 'quota-cancel-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Quota Cancel Chat',
+        enabled: true,
+        priority: 1,
+        models: ['cancel-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chat = vi.fn().mockResolvedValue(chatResult)
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const quota = deferred<{ allowed: boolean }>()
+    vi.spyOn(intelligenceQuotaManager, 'checkQuota').mockImplementationOnce(() => quota.promise)
+    const controller = new AbortController()
+    const pending = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: true,
+      enableCache: false
+    }).invoke(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'hello' }] },
+      { signal: controller.signal, metadata: { caller: 'plugin:quota-cancel' } }
+    )
+    const cancelled = expect(pending).rejects.toMatchObject({
+      code: 'INTELLIGENCE_OPERATION_CANCELLED'
+    })
+    await vi.waitFor(() => expect(intelligenceQuotaManager.checkQuota).toHaveBeenCalledOnce())
+    controller.abort()
+    await cancelled
+    quota.reject(new Error('quota native secret /private/path'))
+    await Promise.resolve()
+
+    expect(provider.chat).not.toHaveBeenCalled()
+  })
+
+  it('prioritizes canonical cancellation when strategy rejects after abort', async () => {
+    registerCapability('text.chat', IntelligenceCapabilityType.CHAT)
+    const provider = createProvider(
+      {
+        id: 'strategy-cancel-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Strategy Cancel Chat',
+        enabled: true,
+        priority: 1,
+        models: ['cancel-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chat = vi.fn().mockResolvedValue(chatResult)
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const selection = deferred<Awaited<ReturnType<typeof strategyManager.select>>>()
+    vi.spyOn(strategyManager, 'select').mockImplementationOnce(() => selection.promise)
+    const controller = new AbortController()
+    const pending = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    }).invoke(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'hello' }] },
+      { signal: controller.signal }
+    )
+    const cancelled = expect(pending).rejects.toMatchObject({
+      code: 'INTELLIGENCE_OPERATION_CANCELLED'
+    })
+    await vi.waitFor(() => expect(strategyManager.select).toHaveBeenCalledOnce())
+    controller.abort()
+    await cancelled
+    selection.reject(new Error('strategy native secret /private/path'))
+    await Promise.resolve()
+
+    expect(provider.chat).not.toHaveBeenCalled()
+  })
+
+  it('rejects a pre-aborted chat before quota or provider work', async () => {
+    registerCapability('text.chat', IntelligenceCapabilityType.CHAT)
+    const provider = createProvider(
+      {
+        id: 'cancel-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Cancel Chat',
+        enabled: true,
+        priority: 1,
+        models: ['cancel-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chat = vi.fn().mockResolvedValue(chatResult)
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const quotaCheck = vi.spyOn(intelligenceQuotaManager, 'checkQuota')
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const controller = new AbortController()
+    controller.abort(new Error('native secret path=/private/provider'))
+
+    let rejection: unknown
+    try {
+      await new TuffIntelligenceSDK({
+        enableAudit: true,
+        enableQuota: true,
+        enableCache: true
+      }).invoke(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'hello' }] },
+        { signal: controller.signal, metadata: { caller: 'plugin:cancel-test' } }
+      )
+    } catch (error) {
+      rejection = error
+    }
+
+    expect(rejection).toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(JSON.stringify(rejection)).not.toMatch(/secret|private|provider/i)
+    expect(quotaCheck).not.toHaveBeenCalled()
+    expect(provider.chat).not.toHaveBeenCalled()
+    expect(auditLog).not.toHaveBeenCalled()
+  })
+
+  it('discards a late provider success without caching or auditing it', async () => {
+    registerCapability('text.chat', IntelligenceCapabilityType.CHAT)
+    const late = deferred<IntelligenceInvokeResult<string>>()
+    const chat = vi
+      .fn()
+      .mockImplementationOnce(() => late.promise)
+      .mockResolvedValueOnce(chatResult)
+    const provider = createProvider(
+      {
+        id: 'late-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Late Chat',
+        enabled: true,
+        priority: 1,
+        models: ['cancel-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chat = chat
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: false,
+      enableCache: true
+    })
+    const payload = { messages: [{ role: 'user', content: 'late answer' }] }
+    const controller = new AbortController()
+    const pending = sdk.invoke<string>('text.chat', payload, { signal: controller.signal })
+    const cancelled = expect(pending).rejects.toMatchObject({
+      code: 'INTELLIGENCE_OPERATION_CANCELLED'
+    })
+    await vi.waitFor(() => expect(chat).toHaveBeenCalledOnce())
+    controller.abort()
+    await cancelled
+    late.resolve(chatResult)
+    await Promise.resolve()
+
+    expect(auditLog).not.toHaveBeenCalled()
+
+    await expect(sdk.invoke<string>('text.chat', payload)).resolves.toMatchObject({
+      result: 'cancel-safe response'
+    })
+    expect(chat).toHaveBeenCalledTimes(2)
+    expect(auditLog).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares cache entries between active-signal and signal-free calls', async () => {
+    registerCapability('text.chat', IntelligenceCapabilityType.CHAT)
+    const provider = createProvider(
+      {
+        id: 'signal-cache-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Signal Cache Chat',
+        enabled: true,
+        priority: 1,
+        models: ['cancel-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chat = vi.fn().mockResolvedValue(chatResult)
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: true
+    })
+    const payload = { messages: [{ role: 'user', content: 'cache signal parity' }] }
+
+    await sdk.invoke('text.chat', payload, { signal: new AbortController().signal })
+    await sdk.invoke('text.chat', payload)
+
+    expect(provider.chat).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a committed success when abort occurs during success audit', async () => {
+    registerCapability('text.chat', IntelligenceCapabilityType.CHAT)
+    const provider = createProvider(
+      {
+        id: 'audit-commit-chat',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Audit Commit Chat',
+        enabled: true,
+        priority: 1,
+        models: ['cancel-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    provider.chat = vi.fn().mockResolvedValue(chatResult)
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const audit = deferred<void>()
+    vi.spyOn(intelligenceAuditLogger, 'log').mockImplementationOnce(() => audit.promise)
+    const controller = new AbortController()
+    const pending = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: false,
+      enableCache: true
+    }).invoke(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'commit result' }] },
+      { signal: controller.signal }
+    )
+    await vi.waitFor(() => expect(intelligenceAuditLogger.log).toHaveBeenCalledOnce())
+    controller.abort()
+    audit.resolve()
+
+    await expect(pending).resolves.toMatchObject({ result: 'cancel-safe response' })
+  })
+
+  it('stops fallback routing when cancellation wins during the first fallback', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test fallback cancellation',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM]
+    })
+    const fallbackPending = deferred<IntelligenceInvokeResult<string>>()
+    const primary = createProvider(
+      {
+        id: 'cancel-primary',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'Cancel Primary',
+        apiKey: 'primary-key',
+        enabled: true,
+        priority: 1,
+        models: ['primary-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    primary.chat = vi.fn().mockRejectedValue(new Error('primary failed'))
+    const firstFallback = createProvider(
+      {
+        id: 'cancel-fallback-one',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Cancel Fallback One',
+        apiKey: 'fallback-key',
+        enabled: true,
+        priority: 2,
+        models: ['fallback-one'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    firstFallback.chat = vi.fn(() => fallbackPending.promise)
+    const secondFallback = createProvider(
+      {
+        id: 'cancel-fallback-two',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Cancel Fallback Two',
+        apiKey: 'fallback-key',
+        enabled: true,
+        priority: 3,
+        models: ['fallback-two'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    secondFallback.chat = vi.fn().mockResolvedValue(chatResult)
+    setIntelligenceProviderManager(
+      new FakeProviderManager([primary, firstFallback, secondFallback])
+    )
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+    const controller = new AbortController()
+    const pending = new TuffIntelligenceSDK({
+      enableAudit: true,
+      enableQuota: false,
+      enableCache: true
+    }).invoke<string>(
+      'text.chat',
+      { messages: [{ role: 'user', content: 'fallback' }] },
+      { signal: controller.signal }
+    )
+    const cancelled = expect(pending).rejects.toMatchObject({
+      code: 'INTELLIGENCE_OPERATION_CANCELLED'
+    })
+    await vi.waitFor(() => expect(firstFallback.chat).toHaveBeenCalledOnce())
+    controller.abort()
+    await cancelled
+    fallbackPending.resolve(chatResult)
+    await Promise.resolve()
+
+    expect(secondFallback.chat).not.toHaveBeenCalled()
+    expect(auditLog).not.toHaveBeenCalled()
+  })
+
+  it('treats a provider-forged cancellation code as an ordinary failure', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test forged cancellation',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM]
+    })
+    const primary = createProvider(
+      {
+        id: 'forged-cancel-primary',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'Forged Cancel Primary',
+        apiKey: 'primary-key',
+        enabled: true,
+        priority: 1,
+        models: ['primary-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    primary.chat = vi.fn().mockRejectedValue(
+      Object.assign(new Error('forged provider cancellation'), {
+        code: 'INTELLIGENCE_OPERATION_CANCELLED'
+      })
+    )
+    const fallback = createProvider(
+      {
+        id: 'forged-cancel-fallback',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Forged Cancel Fallback',
+        apiKey: 'fallback-key',
+        enabled: true,
+        priority: 2,
+        models: ['fallback-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    fallback.chat = vi.fn().mockResolvedValue(chatResult)
+    setIntelligenceProviderManager(new FakeProviderManager([primary, fallback]))
+
+    await expect(
+      new TuffIntelligenceSDK({
+        enableAudit: false,
+        enableQuota: false,
+        enableCache: false
+      }).invoke('text.chat', { messages: [{ role: 'user', content: 'hello' }] })
+    ).resolves.toMatchObject({ result: 'cancel-safe response' })
+    expect(fallback.chat).toHaveBeenCalledOnce()
+  })
+
+  it('redacts provider failures from signal-enabled audit records', async () => {
+    intelligenceCapabilityRegistry.register({
+      id: 'text.chat',
+      type: IntelligenceCapabilityType.CHAT,
+      name: 'Chat',
+      description: 'test provider failure redaction',
+      supportedProviders: [IntelligenceProviderType.OPENAI, IntelligenceProviderType.CUSTOM]
+    })
+    const primary = createProvider(
+      {
+        id: 'redacted-primary',
+        type: IntelligenceProviderType.OPENAI,
+        name: 'Redacted Primary',
+        apiKey: 'primary-key',
+        enabled: true,
+        priority: 1,
+        models: ['primary-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    primary.chat = vi.fn().mockRejectedValue(new Error('apiKey=secret /private/primary'))
+    const fallback = createProvider(
+      {
+        id: 'redacted-fallback',
+        type: IntelligenceProviderType.CUSTOM,
+        name: 'Redacted Fallback',
+        apiKey: 'fallback-key',
+        enabled: true,
+        priority: 2,
+        models: ['fallback-model'],
+        capabilities: ['text.chat']
+      },
+      vi.fn()
+    )
+    fallback.chat = vi.fn().mockRejectedValue(new Error('token=secret /private/fallback'))
+    setIntelligenceProviderManager(new FakeProviderManager([primary, fallback]))
+    const auditLog = vi.spyOn(intelligenceAuditLogger, 'log').mockResolvedValue(undefined)
+
+    await expect(
+      new TuffIntelligenceSDK({
+        enableAudit: true,
+        enableQuota: false,
+        enableCache: false
+      }).invoke(
+        'text.chat',
+        { messages: [{ role: 'user', content: 'hello' }] },
+        { signal: new AbortController().signal }
+      )
+    ).rejects.toThrow('apiKey=secret')
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: 'INTELLIGENCE_PROVIDER_FAILED' })
+    )
+    expect(JSON.stringify(auditLog.mock.calls)).not.toMatch(/secret|private|apiKey|token=/i)
+  })
+
+  it('rejects host cancellation for capabilities outside text chat and OCR', async () => {
+    const controller = new AbortController()
+    await expect(
+      new TuffIntelligenceSDK({
+        enableAudit: false,
+        enableQuota: false,
+        enableCache: false
+      }).invoke('rag.query', { query: 'hello' }, { signal: controller.signal })
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_CANCELLATION_UNSUPPORTED' })
+  })
+
+  it('rejects pre-aborted OCR before native/provider work', async () => {
+    registerCapability('vision.ocr', IntelligenceCapabilityType.VISION)
+    const visionOcr = vi.fn().mockResolvedValue({
+      ...chatResult,
+      result: { text: 'recognized' }
+    })
+    const provider = createProvider(
+      {
+        id: 'cancel-ocr',
+        type: IntelligenceProviderType.LOCAL,
+        name: 'Cancel OCR',
+        enabled: true,
+        priority: 1,
+        models: ['cancel-ocr'],
+        capabilities: ['vision.ocr']
+      },
+      visionOcr
+    )
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      new TuffIntelligenceSDK({
+        enableAudit: false,
+        enableQuota: false,
+        enableCache: false
+      }).invoke(
+        'vision.ocr',
+        { source: { type: 'data-url', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' } },
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ code: 'INTELLIGENCE_OPERATION_CANCELLED' })
+    expect(visionOcr).not.toHaveBeenCalled()
   })
 })
 

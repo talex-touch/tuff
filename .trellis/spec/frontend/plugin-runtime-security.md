@@ -570,25 +570,45 @@ interface PluginIntelligenceHostProjection {
   Before returning, it drops usage, reasoning, provider configuration, raw OCR blocks,
   credentials, native errors, and stacks. Capability validation rejects an unprojected
   service result instead of silently copying unknown fields.
-- Service methods are snapshotted at capability creation. Permission revoke, caller
-  abort, activation rotation, and host-generation mismatch reject the invocation and
-  discard late results. Until the underlying Intelligence SDK has a real cancellation
-  contract, this foundation must not be described as stopping provider computation.
+- Service methods are snapshotted at capability creation. Permission revoke, activation
+  rotation, and host-generation mismatch reject the invocation and discard late results.
+- Cancellation authority is a CoreApp-private `AbortSignal` injected after capability DTO
+  validation; `IntelligenceInvokeOptions` and child requests never contain `signal`. Only
+  normalized `text.chat` and `vision.ocr` may use this host cancellation path. Other
+  capabilities fail with `INTELLIGENCE_CANCELLATION_UNSUPPORTED` rather than inheriting
+  unreviewed partial-side-effect semantics.
+- Quota, strategy, primary provider, and each fallback run through an abort-listener
+  boundary. Abort immediately settles the host SDK call with
+  `INTELLIGENCE_OPERATION_CANCELLED`; attached handlers still observe and discard late
+  provider settlement. This releases plugin-host concurrency but does not claim to stop
+  provider computation or billing until provider interfaces accept the same signal.
+- The final abort check before cache/audit is the success commit point. Abort before it
+  writes neither cache nor audit and cannot start another fallback. Abort after it does not
+  rewrite an already committed success while its success audit is settling. Signal is
+  excluded from cache identity, so active-signal and signal-free calls share cache keys.
+- Provider-supplied cancellation codes are ordinary provider failures; only the captured
+  signal is authoritative. Signal-enabled quota/provider/fallback logs and failure audit
+  use stable redacted codes and never persist native messages, causes, paths, or secrets.
 - Context invoke/stream, memory, and handoff/session require separate owner-bound
   contracts. Never add them as generic operations or expose host-only session IDs.
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Unknown operation or capability ID | Invalid request before service work |
-| Child supplies caller, identity, endpoint, or credential field | Invalid request before service work |
-| Metadata capability/provider/model disagrees with options | Invalid request |
-| OCR MIME is remote, non-image, malformed base64, wrong magic, or over 640 KiB | Invalid request |
-| Permission denied or revoked | Stable permission error; late result discarded |
-| Activation or host generation is stale | Stable stale/handler failure; no service work |
-| Service returns usage, reasoning, raw data, credential, or stack fields | Fail closed as unprojected handler result |
-| Native service throws | Stable redacted handler failure |
+| Condition                                                                     | Required result                                                                                   |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Unknown operation or capability ID                                            | Invalid request before service work                                                               |
+| Child supplies caller, identity, endpoint, or credential field                | Invalid request before service work                                                               |
+| Metadata capability/provider/model disagrees with options                     | Invalid request                                                                                   |
+| OCR MIME is remote, non-image, malformed base64, wrong magic, or over 640 KiB | Invalid request                                                                                   |
+| Permission denied or revoked                                                  | Stable permission error; late result discarded                                                    |
+| Host signal is pre-aborted or aborts during quota/strategy/provider/fallback  | `INTELLIGENCE_OPERATION_CANCELLED` settles immediately; late settlement is observed and discarded |
+| Host signal is attached to any capability except normalized chat/OCR          | `INTELLIGENCE_CANCELLATION_UNSUPPORTED` before provider work                                      |
+| Provider throws a forged cancellation code                                    | Treat as ordinary provider failure/fallback; never as host cancellation                           |
+| Abort occurs after the cache/audit commit point                               | Complete the already committed success; do not rewrite it as cancelled                            |
+| Signal-enabled native quota/provider failure                                  | Stable redacted log/audit code; no native message/cause/path/secret                               |
+| Activation or host generation is stale                                        | Stable stale/handler failure; no service work                                                     |
+| Service returns usage, reasoning, raw data, credential, or stack fields       | Fail closed as unprojected handler result                                                         |
+| Native service throws                                                         | Stable redacted handler failure                                                                   |
 
 ### 5. Good / Base / Bad Cases
 
@@ -603,6 +623,15 @@ interface PluginIntelligenceHostProjection {
 
 - Authority tests cover forged context, stale activation, host-generation mismatch,
   permission denial/revoke, caller abort, and late success after revoke.
+- Cancellation tests must settle the SDK rejection before resolving/rejecting deferred
+  quota, strategy, primary provider, and fallback Promises. Assert canonical errors,
+  no unhandled late rejection, no fallback after abort, no cache/audit write before the
+  commit point, outer-governed containment, and committed success during audit-time abort.
+- Cache tests prove signal is excluded from key identity. Redaction tests prove
+  signal-enabled quota/provider/fallback logs and failure audits contain only stable codes;
+  provider-forged cancellation codes must still take ordinary fallback.
+- Scope tests reject host signal on every non-chat/OCR capability and prove the public
+  Intelligence option DTO has no `signal` field.
 - DTO tests cover extra keys, proxies, accessors, sparse arrays, cycles, classes,
   prototype keys, message/byte bounds, metadata consistency, and caller spoofing.
 - OCR tests cover PNG/JPEG/WebP magic, MIME mismatch, canonical base64, remote/file

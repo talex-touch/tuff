@@ -362,6 +362,27 @@ It does not claim the #297 production hard cut.
   commits and later landed in separate commits; integrated validation includes it but
   the Voice security review does not claim its scope.
 
+## Stage 1 Intelligence Invoke Cancellation
+
+- CoreApp now injects cancellation through a private host-only intersection type; the shared
+  `IntelligenceInvokeOptions` and child capability DTO remain signal-free. Only normalized
+  `text.chat` and `vision.ocr` accept this path.
+- Quota, strategy, primary provider, and each fallback use an abort-listener race. Abort
+  immediately settles the SDK await as `INTELLIGENCE_OPERATION_CANCELLED`, while attached
+  handlers observe and discard late success/failure without cache, audit, fallback, or
+  unhandled-rejection effects. This is containment, not physical provider cancellation.
+- The final pre-cache/audit abort check is the success commit point. Abort during a committed
+  success audit does not rewrite the result. Signal is excluded from cache identity.
+- Provider-forged cancellation codes remain ordinary failures. Signal-enabled quota/provider/
+  fallback logs and failure audit use stable redacted codes; native messages, causes, paths,
+  credentials, and secrets are not persisted.
+- Focused SDK/governance/plugin-adapter validation passed **117/117 tests**; the final SDK
+  file passed **55/55**, including strict late-settlement and outer-governed cancellation.
+  CoreApp Node/Web typechecks, scoped ESLint with zero warnings, and `git diff --check` passed.
+- Independent final review returned **INTEGRATE** with **P0: 0, P1: 0, P2: 0** in this Stage 1
+  scope. Provider interfaces still do not accept `AbortSignal`, so underlying compute/billing
+  may continue after host cancellation and must not be described as physically stopped.
+
 ## Release Gate
 
 Do not mark review, commit, publish or close #297 until every real plugin Prelude uses a dedicated utilityProcess, all privileged access is typed and per-call authorized, official plugins pass isolated regression, and real Electron smoke proves crash/hang/resource violations cannot block main or cross activation boundaries.
