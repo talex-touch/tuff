@@ -1,0 +1,37 @@
+{
+  "id": "roadmap-release-docs",
+  "name": "roadmap-release-docs",
+  "title": "Refresh roadmap and release documentation",
+  "description": "Align roadmap, evidence matrices, CHANGES, and root READMEs with stable 2.4.13 and exact historical/current/packaged/production evidence boundaries.",
+  "status": "planning",
+  "dev_type": null,
+  "scope": "documentation",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": null,
+  "branch": "TalexDreamSoul/roadmap-release-docs",
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-converge-project-documentation-gates",
+  "relatedFiles": [
+    "README.md",
+    "README.zh-CN.md",
+    "docs/plan-prd/01-project/CHANGES.md",
+    "docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md",
+    "docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md",
+    "docs/plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md"
+  ],
+  "notes": "Batch B owns both root READMEs. It does not own What's Changed or stable release-note files from the concurrent bilingual task.",
+  "meta": {
+    "nextAction": "Audit active roadmap, AI/release evidence, CHANGES, and root README claims against authoritative stable 2.4.13 sources.",
+    "blocker": "The planning PR must be available; user-facing What's Changed and stable release-note paths remain owned by the concurrent bilingual task.",
+    "evidence": "prd.md acceptance criteria, AI docs verifier output, focused Markdown/link checks, and the final owned-path diff."
+  }
+}

@@ -1,0 +1,6 @@
+{"file":"docs/plan-prd/04-implementation/Evidence-Matrix-AI-Stable-2026-06-18.md","reason":"Check that historical, current-source, and packaged AI claims remain distinct."}
+{"file":"docs/engineering/reports/coreapp-visible-ai-stable-2026-06-18/README.md","reason":"Historical visible-evidence source used to reject accidental current-version promotion."}
+{"file":"docs/plan-prd/04-implementation/Evidence-Matrix-Release-Integrity-2026-06-21.md","reason":"Check exact Gate E evidence and residual OTA boundaries."}
+{"file":"docs/plan-prd/03-features/download-update/update-regression-checklist.md","reason":"Check that release-integrity wording does not stand in for OTA lifecycle acceptance."}
+{"file":"README.md","reason":"Check English stable status and release wording."}
+{"file":"README.zh-CN.md","reason":"Check Chinese parity and removal of duplicated dependency versions."}

@@ -1,0 +1,7 @@
+{"file":"apps/core-app/README.md","reason":"Check CoreApp claims and canonical links without overlapping the root README."}
+{"file":"apps/core-app/src/main/modules/box-tool/search-engine/README.md","reason":"Check that link repairs do not claim unfinished search-index split behavior."}
+{"file":"apps/nexus/content/docs/dev/api/download.en.mdc","reason":"Check English route/link accuracy."}
+{"file":"apps/nexus/content/docs/dev/api/download.zh.mdc","reason":"Check Chinese route/link parity."}
+{"file":"apps/nexus/examples/division-box/README.md","reason":"Check all setup, source, and asset targets exist and are semantically correct."}
+{"file":"packages/tuffex/CONTRIBUTING.md","reason":"Check contribution commands and package references against maintained documentation."}
+{"file":"docs/INDEX.md","reason":"Check repaired peripheral links use canonical repository navigation where appropriate."}
