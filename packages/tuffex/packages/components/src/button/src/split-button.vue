@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SplitButtonEmits, SplitButtonProps } from './split-button'
-import { computed, ref, useSlots, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import TxPopover from '../../popover/src/TxPopover.vue'
 import Spinner from '../../spinner'
 
@@ -52,6 +52,15 @@ const classList = computed(() => {
 const interactiveDisabled = computed(() => props.disabled || props.loading)
 const menuDisabled = computed(() => interactiveDisabled.value || props.menuDisabled)
 const ignoreNextMenuClick = ref(false)
+let menuClickGuardTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearMenuClickGuard() {
+  ignoreNextMenuClick.value = false
+  if (menuClickGuardTimer != null) {
+    clearTimeout(menuClickGuardTimer)
+    menuClickGuardTimer = null
+  }
+}
 
 function handlePrimaryClick(event: MouseEvent) {
   if (interactiveDisabled.value)
@@ -68,13 +77,21 @@ function toggleMenu() {
 function handleMenuPointerDown() {
   if (menuDisabled.value)
     return
+  // Toggle on pointerdown for snappy feedback, then swallow the click the
+  // browser fires from this same press.
   ignoreNextMenuClick.value = true
+  if (menuClickGuardTimer != null)
+    clearTimeout(menuClickGuardTimer)
+  // Defensive reset: if the press is aborted (released off-target) no paired
+  // click arrives to clear the guard, so drop it on the next tick instead of
+  // letting it wedge and swallow a later activation.
+  menuClickGuardTimer = setTimeout(clearMenuClickGuard, 0)
   toggleMenu()
 }
 
 function handleMenuClick() {
   if (ignoreNextMenuClick.value) {
-    ignoreNextMenuClick.value = false
+    clearMenuClickGuard()
     return
   }
   toggleMenu()
@@ -83,6 +100,8 @@ function handleMenuClick() {
 function closeMenu() {
   open.value = false
 }
+
+onBeforeUnmount(clearMenuClickGuard)
 </script>
 
 <template>
@@ -127,8 +146,8 @@ function closeMenu() {
             :aria-expanded="open || undefined"
             @pointerdown="handleMenuPointerDown"
             @click="handleMenuClick"
-            @keydown.enter.prevent="handleMenuClick"
-            @keydown.space.prevent="handleMenuClick"
+            @keydown.enter.prevent="toggleMenu"
+            @keydown.space.prevent="toggleMenu"
           >
             <slot name="menu-icon">
               <i class="tx-split-button__menu-icon" :class="menuIcon" />

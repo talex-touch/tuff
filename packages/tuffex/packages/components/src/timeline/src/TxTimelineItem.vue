@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { TimelineContext, TimelineItemColor } from './types'
-import { inject } from 'vue'
+import { computed, inject } from 'vue'
 import { TxIcon } from '../../icon'
+
+defineOptions({ name: 'TxTimelineItem' })
 
 interface Props {
   title?: string
@@ -17,7 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const timeline = inject<TimelineContext>('timeline', { layout: 'vertical' })
-const layout = timeline.layout
+const layout = computed(() => timeline.layout)
 </script>
 
 <template>

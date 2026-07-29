@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
-import { defineComponent, h } from 'vue'
+import { describe, expect, it, vi } from 'vitest'
+import { defineComponent, h, nextTick } from 'vue'
 import TxTooltip from '../src/TxTooltip.vue'
 
 const BaseAnchorStub = defineComponent({
@@ -98,5 +98,67 @@ describe('txTooltip', () => {
     })
 
     expect(manualWrapper.findComponent(BaseAnchorStub).props('closeOnClickOutside')).toBe(false)
+  })
+
+  it('honors an explicit max-height even when a content slot is present (#466)', () => {
+    const wrapper = mount(TxTooltip, {
+      props: { maxHeight: 320 },
+      slots: {
+        default: '<button>reference</button>',
+        content: '<div>Body</div>',
+      },
+      global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
+    })
+
+    // 320 used to double as the "unset" sentinel, so an explicit 320 with a content
+    // slot was silently turned into `none` and the panel grew unbounded.
+    expect(wrapper.find('.tx-tooltip').attributes('style')).toContain('--tx-tooltip-max-height: 320px')
+  })
+
+  it('leaves height unconstrained by default when a content slot is present', () => {
+    const wrapper = mount(TxTooltip, {
+      slots: {
+        default: '<button>reference</button>',
+        content: '<div>Body</div>',
+      },
+      global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
+    })
+
+    expect(wrapper.find('.tx-tooltip').attributes('style')).toContain('--tx-tooltip-max-height: none')
+  })
+
+  it('links the reference to the tooltip body via aria-describedby while open (#7)', () => {
+    const wrapper = mount(TxTooltip, {
+      props: { modelValue: true },
+      slots: { default: '<button>reference</button>', content: '<div>Hint</div>' },
+      global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
+    })
+
+    const id = wrapper.find('.tx-tooltip').attributes('id')
+    expect(id).toBeTruthy()
+    // The reference must describe itself with the tooltip body while it is open.
+    expect(wrapper.find('.tx-tooltip__reference').attributes('aria-describedby')).toBe(id)
+  })
+
+  it('opens on keyboard focus in the default hover mode (#7)', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mount(TxTooltip, {
+        props: { openDelay: 0 },
+        slots: { default: '<button>reference</button>' },
+        global: { stubs: { TxBaseAnchor: BaseAnchorStub } },
+      })
+
+      // Default trigger is hover; focus alone must still open the tooltip.
+      await wrapper.find('.tx-tooltip__reference').trigger('focusin')
+      vi.runAllTimers()
+      await nextTick()
+
+      expect(wrapper.emitted('open')).toBeTruthy()
+      expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([true])
+    }
+    finally {
+      vi.useRealTimers()
+    }
   })
 })

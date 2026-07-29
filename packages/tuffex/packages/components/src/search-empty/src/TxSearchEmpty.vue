@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SearchEmptyProps } from './types'
+import type { SearchEmptyEmits, SearchEmptyProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -7,10 +7,16 @@ defineOptions({
 })
 
 const props = defineProps<SearchEmptyProps>()
+const emit = defineEmits<SearchEmptyEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="search-empty">
+  <TxEmptyState
+    v-bind="props"
+    variant="search-empty"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

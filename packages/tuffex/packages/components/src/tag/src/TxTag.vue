@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<TagProps>(), {
   border: '',
   size: 'sm',
   closable: false,
+  closeAriaLabel: 'Remove tag',
   disabled: false,
   pill: false,
 })
@@ -113,7 +114,6 @@ function handleClose(event: MouseEvent): void {
       },
     ]"
     :style="styleVars"
-    role="status"
     @click="handleClick"
   >
     <i v-if="icon" :class="icon" class="tx-tag__icon" aria-hidden="true" />
@@ -125,7 +125,7 @@ function handleClose(event: MouseEvent): void {
       type="button"
       class="tx-tag__close"
       :disabled="disabled"
-      aria-label="Remove tag"
+      :aria-label="closeAriaLabel"
       @click="handleClose"
     >
       <svg

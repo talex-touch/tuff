@@ -239,8 +239,9 @@ watch(
 <template>
   <span
     class="tuff-icon"
-    :title="alt"
-    role="img"
+    :title="alt || undefined"
+    :role="alt ? 'img' : undefined"
+    :aria-hidden="alt ? undefined : true"
     :data-icon-type="safeIcon.type"
     :data-icon-value="safeIcon.value"
     :style="{ fontSize: size ? `${size}px` : undefined, color: iconColor }"

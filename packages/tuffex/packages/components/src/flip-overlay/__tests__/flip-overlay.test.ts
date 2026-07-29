@@ -618,4 +618,80 @@ describe('txFlipOverlay', () => {
     firstWrapper.unmount()
     secondWrapper.unmount()
   })
+
+  it('重复触发误关警示时会真正重置类以重放动画', async () => {
+    const wrapper = mount(TxFlipOverlay, {
+      props: {
+        modelValue: true,
+        preventAccidentalClose: true,
+      },
+      slots: {
+        default: '<div>content</div>',
+      },
+    })
+    const mask = wrapper.find('.TxFlipOverlay-Mask')
+    const card = () => wrapper.find('.TxFlipOverlay-Card')
+
+    // 首次误关：警示态激活。
+    await mask.trigger('click')
+    await nextTick()
+    await nextTick()
+    expect(card().classes()).toContain('is-close-guard-warning')
+
+    // 警示态仍在时再次误关：必须让标志经过一次真实的 DOM 移除，动画才能重放；
+    // 修复前 false→true 在同一 tick 合并，类始终存在、动画不重启。
+    mask.trigger('click')
+    await nextTick()
+    expect(card().classes()).not.toContain('is-close-guard-warning')
+    await nextTick()
+    expect(card().classes()).toContain('is-close-guard-warning')
+
+    wrapper.unmount()
+  })
+
+  it('exposes dialog semantics and closes on Escape', async () => {
+    const wrapper = mount(TxFlipOverlay, {
+      props: { modelValue: true, headerTitle: 'Overlay Title' },
+      slots: { default: '<div>content</div>' },
+    })
+    await nextTick()
+
+    const card = wrapper.find('.TxFlipOverlay-Card')
+    expect(card.attributes('role')).toBe('dialog')
+    expect(card.attributes('aria-modal')).toBe('true')
+    const labelledby = card.attributes('aria-labelledby')
+    expect(labelledby).toBeTruthy()
+    expect(wrapper.find('.TxFlipOverlay-HeaderTitle').attributes('id')).toBe(labelledby)
+
+    // Escape is routed through the same guard as a mask click, so a dismissible
+    // overlay closes (and preventAccidentalClose would warn instead).
+    card.element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await nextTick()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('自定义 maskClass 不会在 DOM 上重复', async () => {
+    const wrapper = mount(TxFlipOverlay, {
+      props: {
+        modelValue: true,
+        maskClass: 'alpha beta',
+      },
+      slots: {
+        default: '<div>content</div>',
+      },
+    })
+
+    await nextTick()
+
+    // Pre-fix pushed the whole string a second time on top of the token split, so
+    // the mask rendered `... alpha beta alpha beta`.
+    const classAttr = wrapper.find('.TxFlipOverlay-Mask').attributes('class') ?? ''
+    const tokens = classAttr.split(/\s+/).filter(Boolean)
+    expect(tokens.filter(token => token === 'alpha')).toHaveLength(1)
+    expect(tokens.filter(token => token === 'beta')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
 })

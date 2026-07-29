@@ -9,7 +9,7 @@ const items = [
 ]
 
 describe('txTabBar', () => {
-  it('renders tablist semantics, active item, icons, and badges', () => {
+  it('renders navigation semantics, active item, icons, and badges', () => {
     const wrapper = mount(TxTabBar, {
       props: {
         modelValue: 'search',
@@ -18,7 +18,10 @@ describe('txTabBar', () => {
       },
     })
 
-    expect(wrapper.attributes('role')).toBe('tablist')
+    // Bottom navigation is a nav landmark, not a tablist: there are no tabpanels, so
+    // role="tablist"/"tab" would be an incomplete pattern and would erase the landmark.
+    expect(wrapper.element.tagName).toBe('NAV')
+    expect(wrapper.attributes('role')).toBeUndefined()
     expect(wrapper.classes()).toContain('is-fixed')
     expect(wrapper.attributes('style')).toContain('--tx-tab-bar-z-index: 3001')
     expect(wrapper.find('.tx-tab-bar__safe').exists()).toBe(true)
@@ -26,8 +29,9 @@ describe('txTabBar', () => {
     const buttons = wrapper.findAll('button')
 
     expect(buttons).toHaveLength(3)
-    expect(buttons[0].attributes('aria-selected')).toBe('false')
-    expect(buttons[1].attributes('aria-selected')).toBe('true')
+    // The active destination is marked with aria-current="page"; others carry none.
+    expect(buttons[0].attributes('aria-current')).toBeUndefined()
+    expect(buttons[1].attributes('aria-current')).toBe('page')
     expect(buttons[1].classes()).toContain('is-active')
     expect(buttons[1].find('.i-carbon-search').exists()).toBe(true)
     expect(buttons[1].find('.tx-tab-bar__badge').text()).toBe('3')

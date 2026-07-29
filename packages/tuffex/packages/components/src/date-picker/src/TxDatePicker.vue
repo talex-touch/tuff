@@ -134,6 +134,12 @@ const maxDate = computed(() => {
 const localParts = ref<DateParts>({ y: 2025, m: 1, d: 1 })
 const calendarMonth = ref<Pick<DateParts, 'y' | 'm'>>({ y: 2025, m: 1 })
 
+function emitModel(parts: DateParts): void {
+  const s = formatYmd(parts.y, parts.m, parts.d)
+  emit('update:modelValue', s)
+  emit('change', s)
+}
+
 function setFromModel(v: string) {
   const parsed = parseYmd(v)
   const base = parsed ?? (() => {
@@ -141,8 +147,14 @@ function setFromModel(v: string) {
     return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() }
   })()
 
-  localParts.value = clampDate(base, minDate.value, maxDate.value)
-  calendarMonth.value = { y: localParts.value.y, m: localParts.value.m }
+  const clamped = clampDate(base, minDate.value, maxDate.value)
+  localParts.value = clamped
+  calendarMonth.value = { y: clamped.y, m: clamped.m }
+
+  // A valid but out-of-bounds value is clamped for display; converge the parent
+  // model to the rendered value instead of silently disagreeing with it.
+  if (parsed && compareDateParts(clamped, parsed) !== 0)
+    emitModel(clamped)
 }
 
 watch(
@@ -152,8 +164,13 @@ watch(
 )
 
 watch([minDate, maxDate], () => {
-  localParts.value = clampDate(localParts.value, minDate.value, maxDate.value)
-  calendarMonth.value = { y: localParts.value.y, m: localParts.value.m }
+  const clamped = clampDate(localParts.value, minDate.value, maxDate.value)
+  const changed = compareDateParts(clamped, localParts.value) !== 0
+  localParts.value = clamped
+  calendarMonth.value = { y: clamped.y, m: clamped.m }
+  // Tightened bounds can pull the current value in-range; keep the parent in sync.
+  if (changed)
+    emitModel(clamped)
 })
 
 const years = computed(() => {
@@ -337,6 +354,15 @@ const calendarCells = computed<CalendarCell[]>(() => {
   })
 })
 
+// ARIA requires every gridcell to be owned by a row, so group the flat 42-cell
+// list into weeks of 7 for the role="row" wrappers.
+const calendarWeeks = computed<CalendarCell[][]>(() => {
+  const weeks: CalendarCell[][] = []
+  for (let i = 0; i < calendarCells.value.length; i += 7)
+    weeks.push(calendarCells.value.slice(i, i + 7))
+  return weeks
+})
+
 const calendarTitle = computed(() => {
   const { y, m } = calendarMonth.value
   return `${y}-${pad2(m)}`
@@ -449,23 +475,31 @@ function onCancel() {
       </div>
 
       <div class="tx-date-picker-calendar__grid" role="grid">
-        <button
-          v-for="cell in calendarCells"
-          :key="cell.key"
-          type="button"
-          class="tx-date-picker-calendar__cell"
-          :class="{
-            'is-outside-month': !cell.inCurrentMonth,
-            'is-selected': cell.selected,
-            'is-today': cell.today,
-          }"
-          :disabled="disabled || cell.disabled"
-          :aria-selected="cell.selected"
-          role="gridcell"
-          @click="selectCalendarDate(cell.parts)"
+        <div
+          v-for="(week, weekIndex) in calendarWeeks"
+          :key="weekIndex"
+          class="tx-date-picker-calendar__row"
+          role="row"
         >
-          {{ cell.label }}
-        </button>
+          <button
+            v-for="cell in week"
+            :key="cell.key"
+            type="button"
+            class="tx-date-picker-calendar__cell"
+            :class="{
+              'is-outside-month': !cell.inCurrentMonth,
+              'is-selected': cell.selected,
+              'is-today': cell.today,
+            }"
+            :disabled="disabled || cell.disabled"
+            :aria-selected="cell.selected"
+            :aria-label="cell.key"
+            role="gridcell"
+            @click="selectCalendarDate(cell.parts)"
+          >
+            {{ cell.label }}
+          </button>
+        </div>
       </div>
     </div>
   </TxPopover>
@@ -585,6 +619,12 @@ function onCancel() {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
+}
+
+/* The ARIA row wrappers must not disturb the 7-column grid: `display: contents`
+   keeps each week's cells as direct grid items while still exposing role="row". */
+.tx-date-picker-calendar__row {
+  display: contents;
 }
 
 .tx-date-picker-calendar__weekdays {

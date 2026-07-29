@@ -1,13 +1,12 @@
 <script setup lang="ts">
+import type { KbdProps } from './types'
+
 defineOptions({
   name: 'TxKbd',
 })
 
 withDefaults(
-  defineProps<{
-    size?: 'sm' | 'md'
-    tone?: 'default' | 'primary'
-  }>(),
+  defineProps<KbdProps>(),
   {
     size: 'sm',
     tone: 'default',

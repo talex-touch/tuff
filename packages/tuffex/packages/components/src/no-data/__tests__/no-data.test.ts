@@ -71,6 +71,17 @@ describe('txNoData', () => {
     expect(wrapper.find('.custom-action').text()).toBe('Create')
   })
 
+  it('re-emits primary and secondary from EmptyState', () => {
+    const wrapper = mountNoData()
+    const empty = wrapper.findComponent(EmptyStateStub)
+
+    empty.vm.$emit('primary')
+    empty.vm.$emit('secondary')
+
+    expect(wrapper.emitted('primary')).toHaveLength(1)
+    expect(wrapper.emitted('secondary')).toHaveLength(1)
+  })
+
   it('registers the component through install', () => {
     const app = { component: vi.fn() }
 

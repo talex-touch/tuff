@@ -152,7 +152,10 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(floati
           style.minWidth = `${minW}px`
         }
 
-        style.maxWidth = `${props.maxWidth}px`
+        // An explicit `width` is a deliberate override and must not be silently
+        // re-clamped by the default `maxWidth` (360): `:width="480"` should render
+        // 480, not 360. Only bound derived widths (reference-matched / min / intrinsic).
+        style.maxWidth = props.width > 0 ? '' : `${props.maxWidth}px`
         if (isUnlimitedHeight.value) {
           elements.floating.style.setProperty('--tx-ba-max-height', 'none')
           return
@@ -401,6 +404,7 @@ const {
   prepareLiquid,
   applyLiquidFrame,
   settleLiquid,
+  prefersReducedMotion,
 })
 
 /* ─── liquid drop ─── */

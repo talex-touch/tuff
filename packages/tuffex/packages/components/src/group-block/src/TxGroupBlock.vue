@@ -15,7 +15,9 @@ const props = withDefaults(defineProps<GroupBlockProps>(), {
   iconSize: 22,
   collapsible: true,
   collapsed: false,
-  defaultExpand: true,
+  // Intentionally undefined: lets resolveDefaultExpand() fall back to `!collapsed`
+  // on first render when the host only supplies `collapsed`.
+  defaultExpand: undefined,
   memoryName: '',
 })
 

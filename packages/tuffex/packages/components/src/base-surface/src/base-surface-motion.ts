@@ -253,7 +253,20 @@ export function useBaseSurfaceMotion(options: UseBaseSurfaceMotionOptions) {
     }
   }
 
-  function hasTransformChanged(el: HTMLElement) {
+  /**
+   * Whether `el` currently carries an *inline* transform.
+   *
+   * Inline-only on purpose. Computed style would report transforms that have
+   * nothing to do with motion — a permanently `translateZ`-ed ancestor, say —
+   * and would pin the surface as moving forever. The tradeoff is that the
+   * MutationObserver path only tracks inline-transform motion (FLIP-style
+   * animations, which is what `autoDetect` exists for); class- and
+   * stylesheet-driven transitions are handled by the `transitionstart` /
+   * `transitionend` listeners instead.
+   *
+   * Note this checks *presence*, not change — the name predates that behaviour.
+   */
+  function hasInlineTransform(el: HTMLElement) {
     const transform = el.style.transform || el.style.getPropertyValue('transform')
     return transform && transform !== 'none' && transform !== ''
   }
@@ -282,10 +295,15 @@ export function useBaseSurfaceMotion(options: UseBaseSurfaceMotionOptions) {
       for (const mutation of mutations) {
         if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
           const target = mutation.target as HTMLElement
-          if (hasTransformChanged(target)) {
+          if (hasInlineTransform(target)) {
             onTransformStart()
           }
-          else if (autoMoving.value) {
+          // A style write on a non-transforming element only ends the motion once
+          // nothing under observation is transforming any more. Checking just the
+          // mutated element would let an unrelated write cancel an in-flight
+          // transition — flip-overlay's body scroll lock sets `body.style.overflow`,
+          // and body is an observed ancestor.
+          else if (autoMoving.value && !targets.some(hasInlineTransform)) {
             onTransformEnd()
           }
         }

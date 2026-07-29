@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import type { CodeEditorToolbarAction, CodeEditorToolbarActionKey } from './types'
+import type { CodeEditorToolbarAction, CodeEditorToolbarActionKey, CodeEditorToolbarEmits, CodeEditorToolbarProps } from './types'
 import { computed } from 'vue'
-import type { PropType } from 'vue'
 import { TxIcon } from '../../icon'
 
 defineOptions({
@@ -24,18 +23,12 @@ const defaultActions: CodeEditorToolbarAction[] = [
   { key: 'copy' },
 ]
 
-const props = defineProps({
-  actions: {
-    type: Array as PropType<CodeEditorToolbarAction[]>,
-    default: () => [],
-  },
-  compact: {
-    type: Boolean,
-    default: false,
-  },
+const props = withDefaults(defineProps<CodeEditorToolbarProps>(), {
+  actions: () => [],
+  compact: false,
 })
 
-const emit = defineEmits(['action'])
+const emit = defineEmits<CodeEditorToolbarEmits>()
 
 const resolvedActions = computed(() => {
   return props.actions?.length ? props.actions : defaultActions

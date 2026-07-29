@@ -76,4 +76,24 @@ describe('txGridLayout', () => {
 
     expect((item.element as HTMLElement).style.getPropertyValue('--tx-grid-op')).toBe('')
   })
+
+  it('clears a lit spotlight when interactive is turned off while hovered', async () => {
+    const wrapper = mountGrid()
+    const item = wrapper.find('.tx-grid-layout__item')
+
+    Object.defineProperty(item.element, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 10, top: 20, right: 110, bottom: 120, width: 100, height: 100 }),
+    })
+
+    // Light the items up while interactive.
+    dispatchMouseMove(wrapper.find('.tx-grid-layout').element, 40, 65)
+    await wrapper.vm.$nextTick()
+    expect((item.element as HTMLElement).style.getPropertyValue('--tx-grid-op')).toBe('0.2')
+
+    // Toggling interactivity off must reset the already-lit vars, not leave them stuck.
+    await wrapper.setProps({ interactive: false })
+
+    expect((item.element as HTMLElement).style.getPropertyValue('--tx-grid-op')).toBe('0')
+  })
 })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxRadioGroupProps, TxRadioIndicatorVariant, TxRadioValue } from './types'
-import { computed, provide, ref, toRefs } from 'vue'
+import { computed, provide, ref, shallowRef, toRefs } from 'vue'
 import { TxGlassSurface } from '../../glass-surface'
 import { useRadioGroupIndicator } from './radio-group-indicator'
 import { useRadioGroupModel } from './radio-group-model'
@@ -89,10 +89,39 @@ const {
   commitPendingModelValue,
 })
 
+interface RadioTabRegistration {
+  value: TxRadioValue
+  isDisabled: () => boolean
+}
+
+// shallowRef so the registration objects stay raw (no reactive proxy): identity
+// stays stable for unregister, while `.value` reassignment drives tabStopValue.
+const radioRegistry = shallowRef<RadioTabRegistration[]>([])
+
+function registerRadio(registration: RadioTabRegistration): () => void {
+  radioRegistry.value = [...radioRegistry.value, registration]
+  return () => {
+    radioRegistry.value = radioRegistry.value.filter(entry => entry !== registration)
+  }
+}
+
+// The single roving tab stop (ARIA radiogroup): the selected radio when it is
+// enabled, otherwise the first enabled radio, so the group stays reachable with
+// one Tab even before anything is chosen.
+const tabStopValue = computed<TxRadioValue | undefined>(() => {
+  const list = radioRegistry.value
+  const selected = list.find(entry => entry.value === model.value && !entry.isDisabled())
+  if (selected)
+    return selected.value
+  return list.find(entry => !entry.isDisabled())?.value
+})
+
 const ctx = {
   model,
   disabled: computed(() => disabled.value),
   type: computed(() => type.value),
+  tabStopValue,
+  registerRadio,
 }
 
 provide('tx-radio-group', ctx)

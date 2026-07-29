@@ -109,7 +109,9 @@ watch(
 
 provide('txDropdownMenu', {
   close,
-  closeOnSelect: props.closeOnSelect,
+  get closeOnSelect() {
+    return props.closeOnSelect
+  },
 })
 </script>
 

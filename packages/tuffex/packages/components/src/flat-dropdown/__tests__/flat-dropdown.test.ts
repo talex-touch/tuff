@@ -166,6 +166,45 @@ describe('txFlatDropdown', () => {
     expect(wrapper.find('.tx-flat-dropdown__panel').exists()).toBe(false)
   })
 
+  it('keeps a manual dropdown open when the user clicks outside', async () => {
+    const wrapper = mount(TxFlatDropdown, {
+      attachTo: document.body,
+      props: { teleport: false, trigger: 'manual' },
+      slots: {
+        trigger: ({ show }: any) => h('button', { class: 'trigger-button', onClick: () => show() }, 'trigger'),
+        default: () => h('span', { class: 'panel-content' }, 'x'),
+      },
+    })
+
+    // Manual mode never opens on hover/click by itself — the host opens it imperatively.
+    await wrapper.find('.trigger-button').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.tx-flat-dropdown__panel').exists()).toBe(true)
+
+    // An outside pointerdown must not dismiss it: manual hands closing to the host.
+    document.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(wrapper.find('.tx-flat-dropdown__panel').exists()).toBe(true)
+  })
+
+  it('advertises the panel through aria on the reference and links it by id', async () => {
+    const wrapper = mountDropdown({ trigger: 'click' })
+    const reference = wrapper.find('.tx-flat-dropdown')
+
+    expect(reference.attributes('aria-haspopup')).toBe('true')
+    expect(reference.attributes('aria-expanded')).toBe('false')
+    const panelId = reference.attributes('aria-controls')
+    expect(panelId).toBeTruthy()
+
+    await wrapper.trigger('click')
+    await wrapper.vm.$nextTick()
+
+    expect(reference.attributes('aria-expanded')).toBe('true')
+    expect(wrapper.find('.tx-flat-dropdown__panel').attributes('id')).toBe(panelId)
+  })
+
   it('registers the component through install', () => {
     const app = createApp({})
     const component = vi.spyOn(app, 'component')

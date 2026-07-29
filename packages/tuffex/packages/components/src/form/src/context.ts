@@ -9,8 +9,8 @@ export interface FormItemContext {
 }
 
 export interface FormContext {
-  model?: Record<string, any>
-  rules?: FormRules
+  model: ComputedRef<Record<string, any> | undefined>
+  rules: ComputedRef<FormRules | undefined>
   labelPosition: ComputedRef<FormLabelPosition>
   labelWidth: ComputedRef<string | number | undefined>
   size: ComputedRef<FormSize>

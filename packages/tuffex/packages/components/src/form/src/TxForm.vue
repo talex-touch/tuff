@@ -16,6 +16,8 @@ const emit = defineEmits<FormEmits>()
 
 const items = ref(new Set<FormItemContext>())
 
+const model = computed(() => props.model)
+const rules = computed(() => props.rules)
 const labelPosition = computed(() => props.labelPosition ?? 'left')
 const labelWidth = computed(() => props.labelWidth)
 const size = computed(() => props.size ?? 'medium')
@@ -47,8 +49,8 @@ function clearValidate() {
 }
 
 provide(TX_FORM_CONTEXT_KEY, {
-  model: props.model,
-  rules: props.rules,
+  model,
+  rules,
   labelPosition,
   labelWidth,
   size,

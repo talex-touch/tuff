@@ -44,7 +44,14 @@ const normalizedMessages = computed(() =>
         :markdown="markdown"
         :compact="compact"
         :show-avatar="showAvatar"
-      />
+      >
+        <template v-if="$slots.default" #default="slotProps">
+          <slot v-bind="slotProps" />
+        </template>
+        <template v-if="$slots.avatar" #avatar="slotProps">
+          <slot name="avatar" v-bind="slotProps" />
+        </template>
+      </TxAiMessage>
     </div>
   </section>
 </template>

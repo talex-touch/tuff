@@ -59,4 +59,14 @@ describe('txAlert', () => {
 
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
+
+  it('renders the close button with an explicit button type', () => {
+    const wrapper = mount(TxAlert, {
+      props: {
+        message: 'Dismiss me',
+      },
+    })
+
+    expect(wrapper.find('.tx-alert__close').attributes('type')).toBe('button')
+  })
 })

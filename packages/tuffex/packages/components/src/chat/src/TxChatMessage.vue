@@ -17,9 +17,12 @@ const props = withDefaults(
       attachments?: Array<{ type: 'image', url: string, name?: string }>
     }
     markdown?: boolean
+    /** Accessible label for an image attachment thumbnail whose `name` is absent. */
+    attachmentLabel?: string
   }>(),
   {
     markdown: true,
+    attachmentLabel: 'Open image attachment',
   },
 )
 
@@ -83,9 +86,12 @@ function onImageClick(url: string, name?: string): void {
             :key="idx"
             type="button"
             class="tx-chat-message__thumb"
+            :aria-label="a.name || attachmentLabel"
             @click="onImageClick(a.url, a.name)"
           >
-            <img :src="a.url" :alt="a.name || ''" loading="lazy">
+            <!-- The button carries the accessible name; keep the image decorative
+                 so an omitted `name` never leaves the button unlabeled. -->
+            <img :src="a.url" alt="" loading="lazy">
           </button>
         </div>
       </div>

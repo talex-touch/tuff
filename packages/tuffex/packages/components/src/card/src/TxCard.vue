@@ -369,6 +369,8 @@ function onMouseMove(ev: MouseEvent) {
 }
 
 function onMouseLeave() {
+  if (props.disabled)
+    return
   if (refractionLightFollowMouse.value && background.value === 'refraction') {
     lightTargetX = 0.5
     lightTargetY = 0.5
@@ -435,6 +437,19 @@ function onClick(ev: MouseEvent) {
     return
   emit('click', ev)
 }
+
+function onKeydown(ev: KeyboardEvent) {
+  // Only activate from keys on the card itself; ignore Enter/Space bubbling up
+  // from focusable slot content so typing in nested controls stays untouched.
+  if (ev.target !== ev.currentTarget)
+    return
+  if (props.disabled || !props.clickable)
+    return
+  if (ev.key !== 'Enter' && ev.key !== ' ')
+    return
+  ev.preventDefault()
+  emit('click', ev as unknown as MouseEvent)
+}
 </script>
 
 <template>
@@ -459,7 +474,11 @@ function onClick(ev: MouseEvent) {
       '--tx-card-dy': `${motionY}px`,
       '--tx-surface-refraction-mask-color': 'var(--tx-card-fake-background, var(--tx-bg-color-overlay, #fff))',
     }"
+    :role="clickable ? 'button' : undefined"
+    :tabindex="clickable && !disabled ? 0 : undefined"
+    :aria-disabled="clickable && disabled ? true : undefined"
     @click="onClick"
+    @keydown="onKeydown"
     @mousemove="onMouseMove"
     @mouseleave="onMouseLeave"
   >
@@ -559,6 +578,11 @@ function onClick(ev: MouseEvent) {
 
   &.is-clickable {
     cursor: pointer;
+  }
+
+  &.is-clickable:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+    outline-offset: 2px;
   }
 
   &.is-disabled {

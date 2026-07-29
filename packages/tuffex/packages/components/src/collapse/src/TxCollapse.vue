@@ -2,6 +2,8 @@
 import type { CollapseContext } from './types'
 import { provide, ref, watch } from 'vue'
 
+defineOptions({ name: 'TxCollapse' })
+
 interface Props {
   accordion?: boolean
   modelValue?: string | string[]

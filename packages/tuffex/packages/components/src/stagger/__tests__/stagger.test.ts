@@ -1,6 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { Comment, h } from 'vue'
+import { Comment, defineComponent, h, TransitionGroup } from 'vue'
 import TxStagger from '../src/TxStagger.vue'
 
 describe('txStagger', () => {
@@ -49,6 +49,12 @@ describe('txStagger', () => {
       slots: {
         default: h('span', { key: 'item' }, 'Item'),
       },
+      // Render the real TransitionGroup (VTU stubs it and surfaces its props as
+      // attributes): in production it consumes name/appear as props, so they must
+      // not land on the rendered root element.
+      global: {
+        stubs: { 'transition-group': false },
+      },
     })
 
     expect(wrapper.attributes('name')).toBeUndefined()
@@ -70,5 +76,39 @@ describe('txStagger', () => {
     expect(items).toHaveLength(2)
     expect(items[0].attributes('style')).toContain('--tx-stagger-index: 0')
     expect(items[1].attributes('style')).toContain('--tx-stagger-index: 1')
+  })
+
+  it('flattens template v-for fragments so each element receives a stagger index', () => {
+    const Host = defineComponent({
+      components: { TxStagger },
+      data: () => ({ items: ['a', 'b', 'c'] }),
+      template: `
+        <TxStagger>
+          <div v-for="item in items" :key="item" class="row">{{ item }}</div>
+        </TxStagger>
+      `,
+    })
+    const wrapper = mount(Host)
+    const rows = wrapper.findAll('.row')
+
+    expect(rows).toHaveLength(3)
+    expect(rows[0].attributes('style')).toContain('--tx-stagger-index: 0')
+    expect(rows[1].attributes('style')).toContain('--tx-stagger-index: 1')
+    expect(rows[2].attributes('style')).toContain('--tx-stagger-index: 2')
+  })
+
+  it('passes appear and name to TransitionGroup on the initial render so appear can run', () => {
+    const wrapper = mount(TxStagger, {
+      props: { appear: true, name: 'fade-list' },
+      slots: {
+        default: h('span', { key: 'x' }, 'X'),
+      },
+    })
+
+    // Read the first render: TransitionGroup only runs its appear transition on
+    // initial mount, so withholding these until after mount permanently skipped it.
+    const group = wrapper.getComponent(TransitionGroup)
+    expect(group.props('appear')).toBe(true)
+    expect(group.props('name')).toBe('fade-list')
   })
 })

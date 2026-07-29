@@ -21,6 +21,8 @@ describe('txSkeleton', () => {
     })
 
     expect(wrapper.find('.tx-skeleton').attributes('style')).toContain('--tx-skeleton-gap: 6px;')
+    // The placeholder shapes are decorative, so they are hidden from the a11y tree.
+    expect(wrapper.find('.tx-skeleton').attributes('aria-hidden')).toBe('true')
     expect(wrapper.findAll('.tx-skeleton__item')).toHaveLength(3)
     expect(wrapper.find('.tx-skeleton__item').attributes('style')).toContain('--tx-skeleton-width: 120px;')
     expect(wrapper.find('.tx-skeleton__item').attributes('style')).toContain('--tx-skeleton-height: 1rem;')

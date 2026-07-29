@@ -267,4 +267,20 @@ describe('txDropdownMenu', () => {
     expect(wrapper.attributes('aria-disabled')).toBe('true')
     expect(wrapper.attributes('tabindex')).toBeUndefined()
   })
+
+  it('reflects closeOnSelect prop changes after mount', async () => {
+    const wrapper = mountMenu({ modelValue: true, closeOnSelect: true })
+    await nextTick()
+
+    // closeOnSelect=true: selecting an item closes the parent dropdown.
+    await wrapper.find('.rename-item').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+
+    // Flip the prop after mount; a snapshot provide would ignore this and keep closing.
+    await wrapper.setProps({ closeOnSelect: false })
+    await nextTick()
+
+    await wrapper.find('.rename-item').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
 })

@@ -30,7 +30,7 @@ describe('txTypingIndicator', () => {
     expect(dot.attributes('style')).toContain('height: 9px')
   })
 
-  it('hides the label while preserving status semantics', () => {
+  it('hides the visible label but keeps the live region non-empty for screen readers', () => {
     const wrapper = mount(TxTypingIndicator, {
       props: {
         showText: false,
@@ -39,8 +39,22 @@ describe('txTypingIndicator', () => {
     })
 
     expect(wrapper.attributes('role')).toBe('status')
+    // The visible label is gone, but a visually-hidden copy keeps the
+    // role="status" region from being empty (pre-fix it announced nothing).
     expect(wrapper.find('.tx-typing-indicator__text').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Generating')
+    expect(wrapper.find('.tx-typing-indicator__sr-text').text()).toBe('Generating')
+  })
+
+  it('lets ariaLabel override the screen-reader text when the label is hidden', () => {
+    const wrapper = mount(TxTypingIndicator, {
+      props: {
+        showText: false,
+        text: 'Generating',
+        ariaLabel: 'AI is responding',
+      },
+    })
+
+    expect(wrapper.find('.tx-typing-indicator__sr-text').text()).toBe('AI is responding')
   })
 
   it('renders the ai variant with scoped mask and loader size variables', () => {

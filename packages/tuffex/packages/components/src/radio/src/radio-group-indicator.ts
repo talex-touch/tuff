@@ -61,8 +61,11 @@ export function useRadioGroupIndicator(options: UseRadioGroupIndicatorOptions) {
   let cleanupDarkMode: (() => void) | undefined
 
   const motionActive = computed(() => isDragging.value || isAnimating.value)
-  const stiffnessIdle = computed(() => props.stiffness ?? 150)
-  const dampingIdle = computed(() => props.damping ?? 8)
+  // Fallbacks match TxRadioGroup's withDefaults (110/12); the group always passes
+  // defaulted props so these never fire at runtime, but the `?? ` keeps the idle
+  // spring typed `number` against the optional prop type.
+  const stiffnessIdle = computed(() => props.stiffness ?? 110)
+  const dampingIdle = computed(() => props.damping ?? 12)
 
   function updateDarkMode(): (() => void) | undefined {
     if (!hasWindow()) {

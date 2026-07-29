@@ -101,9 +101,11 @@ function handleClick() {
     v-show="visible"
     class="tuff-select-item"
     :class="{ 'is-selected': isSelected, 'is-disabled': disabled }"
-    :clickable="!disabled"
+    role="option"
+    :clickable="true"
     :active="isSelected"
     :disabled="disabled"
+    :aria-selected="isSelected"
     @click="handleClick"
   >
     <template #title>

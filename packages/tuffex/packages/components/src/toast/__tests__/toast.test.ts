@@ -51,6 +51,24 @@ describe('toast', () => {
     expect(toastStore.items).toHaveLength(0)
   })
 
+  it('cancels the previous auto-dismiss timer when replacing the same id', () => {
+    toast({ id: 'sync', title: 'First', duration: 5000 })
+
+    vi.advanceTimersByTime(4000)
+    toast({ id: 'sync', title: 'Second', duration: 5000 })
+
+    // The original 5s timer fires here; it must not dismiss the replacement.
+    vi.advanceTimersByTime(1000)
+    expect(toastStore.items).toHaveLength(1)
+    expect(toastStore.items[0]).toMatchObject({ id: 'sync', title: 'Second' })
+
+    // The replacement keeps its own full duration.
+    vi.advanceTimersByTime(3999)
+    expect(toastStore.items).toHaveLength(1)
+    vi.advanceTimersByTime(1)
+    expect(toastStore.items).toHaveLength(0)
+  })
+
   it('does not auto dismiss persistent toasts', () => {
     toast({
       id: 'persistent',
@@ -73,6 +91,17 @@ describe('toast', () => {
     expect(toastStore.items).toHaveLength(0)
   })
 
+  it('escalates danger toasts to an assertive alert role', () => {
+    toast({ id: 'err', title: 'Failed', variant: 'danger', duration: 0 })
+
+    const wrapper = mount(TxToastHost, { attachTo: document.body })
+    const item = document.body.querySelector('.tx-toast')
+
+    expect(item?.getAttribute('role')).toBe('alert')
+
+    wrapper.unmount()
+  })
+
   it('renders host notifications and accessible close buttons', async () => {
     toast({
       id: 'visible',
@@ -92,6 +121,10 @@ describe('toast', () => {
 
     expect(host?.getAttribute('role')).toBe('region')
     expect(host?.getAttribute('aria-label')).toBe('Notifications')
+    // The host is a polite live region so toasts announce while focus is elsewhere.
+    expect(host?.getAttribute('aria-live')).toBe('polite')
+    // Non-danger toasts rely on the host region and carry no nested live-region role.
+    expect(item?.getAttribute('role')).toBeNull()
     expect(item?.classList.contains('tx-toast--warning')).toBe(true)
     expect(item?.textContent).toContain('Visible')
     expect(item?.textContent).toContain('Visible description')

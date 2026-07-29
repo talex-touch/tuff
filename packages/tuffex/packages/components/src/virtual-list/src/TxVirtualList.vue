@@ -1,16 +1,20 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T">
 import type { VirtualListEmits, VirtualListKey, VirtualListProps } from './types'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 defineOptions({ name: 'TxVirtualList' })
 
-const props = withDefaults(defineProps<VirtualListProps<any>>(), {
+const props = withDefaults(defineProps<VirtualListProps<T>>(), {
   items: () => [],
   height: 320,
   overscan: 4,
 })
 
 const emit = defineEmits<VirtualListEmits>()
+
+defineSlots<{
+  item?: (props: { item: T, index: number }) => any
+}>()
 
 const containerRef = ref<HTMLElement | null>(null)
 const scrollTop = ref(0)

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { StyleValue } from 'vue'
 import type { ContextMenuContext, ContextMenuPanelProps } from './types'
-import { computed, provide, ref } from 'vue'
+import { computed, provide, reactive, ref, toRef } from 'vue'
 import { TX_CONTEXT_MENU_INJECTION_KEY } from './types'
 
 defineOptions({ name: 'TxContextMenuPanel' })
@@ -39,9 +39,13 @@ function close() {
 }
 
 function getEnabledItems(): HTMLElement[] {
-  if (!panelRef.value || props.role !== 'menu')
+  if (!panelRef.value)
     return []
-  return Array.from(panelRef.value.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+  // Keyboard navigation only applies to real menu/listbox roles; `none` opts out.
+  const itemRole = props.role === 'listbox' ? 'option' : props.role === 'menu' ? 'menuitem' : null
+  if (!itemRole)
+    return []
+  return Array.from(panelRef.value.querySelectorAll<HTMLElement>(`[role="${itemRole}"]`))
     .filter(item => item.getAttribute('aria-disabled') !== 'true')
 }
 
@@ -75,10 +79,10 @@ function handleKeydown(event: KeyboardEvent): void {
   items[nextIndex]?.focus()
 }
 
-provide<ContextMenuContext>(TX_CONTEXT_MENU_INJECTION_KEY, {
+provide<ContextMenuContext>(TX_CONTEXT_MENU_INJECTION_KEY, reactive({
   close,
-  closeOnSelect: props.closeOnSelect,
-})
+  closeOnSelect: toRef(props, 'closeOnSelect'),
+}))
 
 defineExpose({ focusFirstItem })
 </script>

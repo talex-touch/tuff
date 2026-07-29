@@ -21,18 +21,27 @@ export default defineComponent({
       const extraCount = typeof props.max === 'number' ? Math.max(0, nodes.length - maxVisible) : 0
       const visible = nodes.slice(0, maxVisible)
 
+      // Scoped styles never reach slot content (the avatars belong to the parent's
+      // scope), so the group ring must be injected inline alongside the layout offsets.
+      // Only the border is injected: an inline border-radius would outrank TxAvatar's
+      // own `shape` classes (square 8px / rounded 12px) and silently force every
+      // grouped avatar circular. The border follows whatever radius the avatar sets.
+      const ringStyle = {
+        border: '2px solid var(--tx-avatar-group-border, #fff)',
+      }
+
       const children = visible.map((vnode, index) => {
         const rawProps = (vnode as any).props ?? {}
         const className = rawProps.class
         const style = rawProps.style
 
-        const mergedStyle = index === 0
-          ? [style, { zIndex: 1 }]
-          : [style, { marginLeft: `calc(${overlapPx.value} * -1)`, zIndex: index + 1 }]
+        const layoutStyle = index === 0
+          ? { zIndex: 1 }
+          : { marginLeft: `calc(${overlapPx.value} * -1)`, zIndex: index + 1 }
 
         const injectedProps: Record<string, any> = {
           class: [className, 'tx-avatar-group__item'],
-          style: mergedStyle,
+          style: [ringStyle, style, layoutStyle],
         }
 
         if (props.size && rawProps.size == null) {
@@ -50,9 +59,12 @@ export default defineComponent({
             {
               size: props.size,
               class: ['tx-avatar-group__item', 'tx-avatar-group__more'],
-              style: index === 0
-                ? [{ zIndex: 1 }]
-                : [{ marginLeft: `calc(${overlapPx.value} * -1)`, zIndex: index + 1 }],
+              style: [
+                ringStyle,
+                index === 0
+                  ? { zIndex: 1 }
+                  : { marginLeft: `calc(${overlapPx.value} * -1)`, zIndex: index + 1 },
+              ],
             },
             {
               default: () => `+${extraCount}`,
@@ -80,11 +92,6 @@ export default defineComponent({
 .tx-avatar-group {
   display: inline-flex;
   align-items: center;
-}
-
-.tx-avatar-group__item {
-  border: 2px solid var(--tx-avatar-group-border, #fff);
-  border-radius: 50%;
 }
 
 .tx-avatar-group__more {

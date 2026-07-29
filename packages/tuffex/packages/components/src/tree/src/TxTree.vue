@@ -139,16 +139,21 @@ interface FlatItem {
   level: number
   hasChildren: boolean
   expanded: boolean
+  posInSet: number
+  setSize: number
 }
 
 function flatten(nodes: TreeNode[], level: number, out: FlatItem[]) {
-  for (const node of nodes) {
+  // Each `nodes` array is one sibling group, so its length and index give the
+  // aria-setsize / aria-posinset a screen reader needs to say "item N of M".
+  const setSize = nodes.length
+  nodes.forEach((node, index) => {
     const hasChildren = node.leaf === false || !!node.children?.length
     const expanded = hasChildren && effectiveExpanded.value.has(node.key)
-    out.push({ node, level, hasChildren, expanded })
+    out.push({ node, level, hasChildren, expanded, posInSet: index + 1, setSize })
     if (hasChildren && expanded)
       flatten(node.children ?? [], level + 1, out)
-  }
+  })
 }
 
 const flatItems = computed(() => {
@@ -232,9 +237,15 @@ async function handleItemKeydown(event: KeyboardEvent, item: FlatItem): Promise<
   switch (event.key) {
     case 'Enter':
     case ' ':
+      // Space scrolls the page by default, so consume it whenever a treeitem holds
+      // focus — even in a non-selectable tree. Enter has no scroll default and may
+      // keep bubbling when selection is off.
+      if (event.key === ' ')
+        event.preventDefault()
       if (!props.selectable)
         return
-      event.preventDefault()
+      if (event.key === 'Enter')
+        event.preventDefault()
       toggleSelect(item.node)
       return
     case 'ArrowDown':
@@ -285,7 +296,7 @@ function itemPadding(level: number): string {
         No results
       </slot>
     </div>
-    <div v-else class="tx-tree__list">
+    <div v-else class="tx-tree__list" role="presentation">
       <div
         v-for="item in flatItems"
         :key="item.node.key"
@@ -295,6 +306,8 @@ function itemPadding(level: number): string {
         role="treeitem"
         :tabindex="isItemDisabled(item) ? -1 : (tabStopKey === item.node.key ? 0 : -1)"
         :aria-level="item.level + 1"
+        :aria-setsize="item.setSize"
+        :aria-posinset="item.posInSet"
         :aria-expanded="item.hasChildren ? item.expanded : undefined"
         :aria-selected="selectable ? selectedSet.has(item.node.key) : undefined"
         :aria-disabled="isItemDisabled(item) || undefined"

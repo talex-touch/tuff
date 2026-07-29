@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PaginationProps } from './types'
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { TxIcon } from '../../icon'
 
 interface Props extends PaginationProps {}
@@ -17,6 +17,11 @@ const props = withDefaults(defineProps<Props>(), {
   nextIcon: 'i-carbon-chevron-right',
   showInfo: false,
   showFirstLast: false,
+  ariaLabel: 'Pagination',
+  firstLabel: 'First page',
+  prevLabel: 'Previous page',
+  nextLabel: 'Next page',
+  lastLabel: 'Last page',
 })
 
 const emit = defineEmits<Emits>()
@@ -27,6 +32,20 @@ const totalPages = computed(() => {
   }
   return props.totalPages || 1
 })
+
+// `currentPage` can arrive outside [1, totalPages] — e.g. the row count shrank after a
+// filter change. Every display / disabled / navigation read goes through this clamp so
+// the controls never show an enabled button that navigates nowhere or a page with no
+// active item.
+const safePage = computed(() => Math.min(Math.max(props.currentPage, 1), totalPages.value))
+
+// Self-correct the parent's v-model when the incoming page is out of range instead of
+// leaving it pointing at a page that no longer exists (and relying on callers to reset).
+watch([() => props.currentPage, totalPages], () => {
+  if (props.currentPage !== safePage.value) {
+    emit('update:currentPage', safePage.value)
+  }
+}, { immediate: true })
 
 const visiblePages = computed(() => {
   const pages: (number | string)[] = []
@@ -77,15 +96,16 @@ function handlePageChange(page: number) {
 </script>
 
 <template>
-  <nav class="tx-pagination" aria-label="Pagination">
+  <nav class="tx-pagination" :aria-label="ariaLabel">
     <ul class="tx-pagination__list">
       <!-- First button -->
       <li v-if="showFirstLast" class="tx-pagination__item">
         <button
           class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--disabled': currentPage <= 1 }"
-          :disabled="currentPage <= 1"
-          aria-label="First page"
+          :class="{ 'tx-pagination__button--disabled': safePage <= 1 }"
+          type="button"
+          :disabled="safePage <= 1"
+          :aria-label="firstLabel"
           @click="handlePageChange(1)"
         >
           &laquo;
@@ -96,10 +116,11 @@ function handlePageChange(page: number) {
       <li class="tx-pagination__item">
         <button
           class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--disabled': currentPage <= 1 }"
-          :disabled="currentPage <= 1"
-          aria-label="Previous page"
-          @click="handlePageChange(currentPage - 1)"
+          :class="{ 'tx-pagination__button--disabled': safePage <= 1 }"
+          type="button"
+          :disabled="safePage <= 1"
+          :aria-label="prevLabel"
+          @click="handlePageChange(safePage - 1)"
         >
           <TxIcon :name="prevIcon" />
         </button>
@@ -114,8 +135,9 @@ function handlePageChange(page: number) {
         <button
           v-if="page !== '...'"
           class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--active': page === currentPage }"
-          :aria-current="page === currentPage ? 'page' : undefined"
+          :class="{ 'tx-pagination__button--active': page === safePage }"
+          type="button"
+          :aria-current="page === safePage ? 'page' : undefined"
           @click="handlePageChange(page as number)"
         >
           {{ page }}
@@ -127,10 +149,11 @@ function handlePageChange(page: number) {
       <li class="tx-pagination__item">
         <button
           class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--disabled': currentPage >= totalPages }"
-          :disabled="currentPage >= totalPages"
-          aria-label="Next page"
-          @click="handlePageChange(currentPage + 1)"
+          :class="{ 'tx-pagination__button--disabled': safePage >= totalPages }"
+          type="button"
+          :disabled="safePage >= totalPages"
+          :aria-label="nextLabel"
+          @click="handlePageChange(safePage + 1)"
         >
           <TxIcon :name="nextIcon" />
         </button>
@@ -140,9 +163,10 @@ function handlePageChange(page: number) {
       <li v-if="showFirstLast" class="tx-pagination__item">
         <button
           class="tx-pagination__button"
-          :class="{ 'tx-pagination__button--disabled': currentPage >= totalPages }"
-          :disabled="currentPage >= totalPages"
-          aria-label="Last page"
+          :class="{ 'tx-pagination__button--disabled': safePage >= totalPages }"
+          type="button"
+          :disabled="safePage >= totalPages"
+          :aria-label="lastLabel"
           @click="handlePageChange(totalPages)"
         >
           &raquo;
@@ -152,8 +176,8 @@ function handlePageChange(page: number) {
 
     <!-- Page info -->
     <div v-if="showInfo" class="tx-pagination__info">
-      <slot name="info" :current-page="currentPage" :total-pages="totalPages" :total="total">
-        Page {{ currentPage }} of {{ totalPages }}
+      <slot name="info" :current-page="safePage" :total-pages="totalPages" :total="total">
+        Page {{ safePage }} of {{ totalPages }}
         <span v-if="total">({{ total }} items)</span>
       </slot>
     </div>

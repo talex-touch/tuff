@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import type { Slots } from 'vue'
 import type { BaseAnchorProps } from '../../base-anchor/src/types'
 import type { TooltipProps } from './types'
-import type { Slots } from 'vue'
-import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
+import { computed, getCurrentInstance, onBeforeUnmount, ref, useSlots, watch } from 'vue'
 import { TxBaseAnchor } from '../../base-anchor'
 
 defineOptions({ name: 'TxTooltip' })
@@ -14,7 +14,6 @@ const props = withDefaults(defineProps<TooltipProps>(), {
   trigger: 'hover',
   openDelay: 200,
   closeDelay: 120,
-  maxHeight: 320,
   referenceFullWidth: false,
   interactive: false,
   keepAliveContent: false,
@@ -28,7 +27,15 @@ const emit = defineEmits<{
   (e: 'open'): void
   (e: 'close'): void
 }>()
+
+/** Default panel max-height (px), applied only when `maxHeight` is left unset and there is no content slot. */
+const DEFAULT_MAX_HEIGHT = 320
+
 const slots: Slots = useSlots()
+
+// Stable id so the reference can point at the tooltip body via aria-describedby.
+const uid = getCurrentInstance()?.uid ?? 0
+const tooltipId = `tx-tooltip-${uid}`
 
 const internalOpen = ref(false)
 
@@ -92,13 +99,15 @@ function onLeave() {
 }
 
 function onFocusIn() {
-  if (props.trigger !== 'focus')
+  // WAI-APG tooltip pattern: keyboard focus opens the tooltip too, so hover-mode
+  // tooltips are reachable without a pointer (focus alone, or hover).
+  if (props.trigger !== 'hover' && props.trigger !== 'focus')
     return
   scheduleOpen()
 }
 
 function onFocusOut() {
-  if (props.trigger !== 'focus')
+  if (props.trigger !== 'hover' && props.trigger !== 'focus')
     return
   scheduleClose()
 }
@@ -125,14 +134,14 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
   const closeOnClickOutside = typeof props.closeOnClickOutside === 'boolean'
     ? props.closeOnClickOutside
     : typeof anchor.closeOnClickOutside === 'boolean'
-    ? anchor.closeOnClickOutside
-    : props.trigger === 'click'
+      ? anchor.closeOnClickOutside
+      : props.trigger === 'click'
 
   const toggleOnReferenceClick = typeof props.toggleOnReferenceClick === 'boolean'
     ? props.toggleOnReferenceClick
     : typeof anchor.toggleOnReferenceClick === 'boolean'
-    ? anchor.toggleOnReferenceClick
-    : props.trigger === 'click'
+      ? anchor.toggleOnReferenceClick
+      : props.trigger === 'click'
 
   const animation = {
     type: 'transfer' as const,
@@ -166,11 +175,18 @@ const resolvedAnchorProps = computed<BaseAnchorProps>(() => {
 })
 
 const tooltipVars = computed<Record<string, string>>(() => {
-  const maxHeight: string = props.maxHeight <= 0
-    ? 'none'
-    : (slots.content && props.maxHeight === 320 ? 'none' : `${props.maxHeight}px`)
+  const { maxHeight } = props
+  let resolved: string
+  if (maxHeight === undefined)
+    // Unset: let a content slot grow freely, but cap plain-text tooltips.
+    resolved = slots.content ? 'none' : `${DEFAULT_MAX_HEIGHT}px`
+  else if (maxHeight <= 0)
+    resolved = 'none'
+  else
+    resolved = `${maxHeight}px`
+
   return {
-    '--tx-tooltip-max-height': maxHeight,
+    '--tx-tooltip-max-height': resolved,
   }
 })
 
@@ -199,6 +215,7 @@ onBeforeUnmount(() => {
       <span
         class="tx-tooltip__reference"
         :class="{ 'is-full-width': props.referenceFullWidth }"
+        :aria-describedby="open ? tooltipId : undefined"
         @mouseenter="onEnter"
         @mouseleave="onLeave"
         @focusin="onFocusIn"
@@ -210,6 +227,7 @@ onBeforeUnmount(() => {
 
     <template #default="{ side }">
       <div
+        :id="tooltipId"
         class="tx-tooltip"
         :data-side="side"
         role="tooltip"

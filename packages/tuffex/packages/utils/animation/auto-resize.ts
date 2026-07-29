@@ -1,5 +1,5 @@
-import type { Ref } from 'vue'
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import type { MaybeRefOrGetter, Ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, toValue } from 'vue'
 
 export interface AutoResizeSize {
   width: number
@@ -17,29 +17,31 @@ export type AutoResizeRounding = 'none' | 'round' | 'floor' | 'ceil'
 export type AutoResizeApplyMode = 'sync' | 'transition' | 'waapi' | 'auto'
 
 export interface UseAutoResizeOptions {
-  width?: boolean
+  // Scalar options accept refs/getters so callers can keep them reactive after
+  // mount. They are resolved lazily via toValue() at each consumption point.
+  width?: MaybeRefOrGetter<boolean>
 
-  height?: boolean
+  height?: MaybeRefOrGetter<boolean>
 
-  applyStyle?: boolean
+  applyStyle?: MaybeRefOrGetter<boolean>
 
-  applyMode?: AutoResizeApplyMode
+  applyMode?: MaybeRefOrGetter<AutoResizeApplyMode>
 
-  durationMs?: number
+  durationMs?: MaybeRefOrGetter<number>
 
-  easing?: string
+  easing?: MaybeRefOrGetter<string>
 
-  clearStyleOnFinish?: boolean
+  clearStyleOnFinish?: MaybeRefOrGetter<boolean>
 
-  styleTarget?: 'outer' | 'inner'
+  styleTarget?: MaybeRefOrGetter<'outer' | 'inner'>
 
-  observeTarget?: 'inner' | 'outer' | 'both'
+  observeTarget?: MaybeRefOrGetter<'inner' | 'outer' | 'both'>
 
-  rounding?: AutoResizeRounding
+  rounding?: MaybeRefOrGetter<AutoResizeRounding>
 
-  immediate?: boolean
+  immediate?: MaybeRefOrGetter<boolean>
 
-  rafBatch?: boolean
+  rafBatch?: MaybeRefOrGetter<boolean>
 
   onResize?: (e: AutoResizeEvent) => void
 
@@ -67,19 +69,23 @@ export function useAutoResize(
   innerRef: Ref<HTMLElement | null>,
   options: UseAutoResizeOptions = {},
 ): UseAutoResizeReturn {
-  const opt: Required<UseAutoResizeOptions> = {
-    width: options.width ?? true,
-    height: options.height ?? false,
-    applyStyle: options.applyStyle ?? true,
-    applyMode: options.applyMode ?? 'sync',
-    styleTarget: options.styleTarget ?? 'outer',
-    observeTarget: options.observeTarget ?? 'inner',
-    rounding: options.rounding ?? 'ceil',
-    immediate: options.immediate ?? true,
-    rafBatch: options.rafBatch ?? true,
-    durationMs: options.durationMs ?? 200,
-    easing: options.easing ?? 'ease',
-    clearStyleOnFinish: options.clearStyleOnFinish ?? true,
+  // Resolve scalar options lazily. Each access re-reads the source via toValue(),
+  // so refs/getters passed by the caller stay live after mount instead of being
+  // frozen into a one-shot snapshot at construction time (issue #366). Callbacks
+  // are kept as-is: toValue() would mistake a plain callback for a getter.
+  const opt = {
+    get width() { return toValue(options.width) ?? true },
+    get height() { return toValue(options.height) ?? false },
+    get applyStyle() { return toValue(options.applyStyle) ?? true },
+    get applyMode() { return toValue(options.applyMode) ?? 'sync' },
+    get styleTarget() { return toValue(options.styleTarget) ?? 'outer' },
+    get observeTarget() { return toValue(options.observeTarget) ?? 'inner' },
+    get rounding() { return toValue(options.rounding) ?? 'ceil' },
+    get immediate() { return toValue(options.immediate) ?? true },
+    get rafBatch() { return toValue(options.rafBatch) ?? true },
+    get durationMs() { return toValue(options.durationMs) ?? 200 },
+    get easing() { return toValue(options.easing) ?? 'ease' },
+    get clearStyleOnFinish() { return toValue(options.clearStyleOnFinish) ?? true },
     onResize: options.onResize ?? (() => {}),
     onBeforeApply: options.onBeforeApply ?? (() => {}),
     onAfterApply: options.onAfterApply ?? (() => {}),

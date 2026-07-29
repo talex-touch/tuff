@@ -91,4 +91,25 @@ describe('txFlatRadio', () => {
     await root.trigger('keydown', { key: ' ' })
     expect((wrapper.vm as any).value).toEqual(['a'])
   })
+
+  it('exposes the multi-select focus cursor via is-focused and aria-activedescendant (#18)', async () => {
+    const wrapper = mountMultipleFlatRadio()
+    const root = wrapper.findComponent(TxFlatRadio)
+    const container = wrapper.find('.tx-flat-radio')
+    const items = wrapper.findAll('.tx-flat-radio-item')
+
+    // No virtual-focus cursor before any keyboard navigation.
+    expect(container.attributes('aria-activedescendant')).toBeUndefined()
+
+    await root.trigger('keydown', { key: 'ArrowRight' })
+
+    // The cursor lands on the first enabled item after 'a' (disabled 'b' skipped) → 'c'.
+    const focused = items[2]
+    expect(focused.classes()).toContain('is-focused')
+    const id = focused.attributes('id')
+    expect(id).toBeTruthy()
+    // The container announces the same item through aria-activedescendant.
+    expect(container.attributes('aria-activedescendant')).toBe(id)
+    expect(items[0].classes()).not.toContain('is-focused')
+  })
 })

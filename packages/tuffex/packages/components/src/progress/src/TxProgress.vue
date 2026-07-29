@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import type { ProgressProps } from './types'
 import { TxProgressBar } from '../../progress-bar'
 
 defineOptions({
@@ -6,14 +7,7 @@ defineOptions({
 })
 
 const props = withDefaults(
-  defineProps<{
-    percentage?: number
-    status?: 'success' | 'error' | 'warning' | ''
-    strokeWidth?: number
-    showText?: boolean
-    indeterminate?: boolean
-    format?: (percentage: number) => string
-  }>(),
+  defineProps<ProgressProps>(),
   {
     percentage: 0,
     status: '',

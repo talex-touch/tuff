@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import TxImageUploader from '../src/TxImageUploader.vue'
+import imageUploaderSource from '../src/TxImageUploader.vue?raw'
 
 function createFile(name: string, type = 'image/png') {
   return new File(['image'], name, { type })
@@ -48,6 +49,25 @@ describe('txImageUploader', () => {
     expect(wrapper.find('img').attributes('src')).toBe('/a.png')
     expect(wrapper.find('img').attributes('alt')).toBe('A')
     expect(wrapper.find('.tx-image-uploader__remove').attributes('aria-label')).toBe('Remove A')
+  })
+
+  it('renders custom uploadText and removeLabel for localization', () => {
+    const localized = mount(TxImageUploader, {
+      props: {
+        modelValue: [{ id: 'a', url: '/a.png', name: 'A' }],
+        uploadText: '上传',
+        removeLabel: (name?: string) => `删除 ${name || '图片'}`,
+      },
+    })
+    expect(localized.find('.tx-image-uploader__add-text').text()).toBe('上传')
+    expect(localized.find('.tx-image-uploader__remove').attributes('aria-label')).toBe('删除 A')
+
+    // Defaults stay English so existing hosts are unaffected.
+    const defaults = mount(TxImageUploader, {
+      props: { modelValue: [{ id: 'b', url: '/b.png', name: 'B' }] },
+    })
+    expect(defaults.find('.tx-image-uploader__add-text').text()).toBe('Upload')
+    expect(defaults.find('.tx-image-uploader__remove').attributes('aria-label')).toBe('Remove B')
   })
 
   it('adds selected files up to max and resets input value', async () => {
@@ -113,6 +133,21 @@ describe('txImageUploader', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:one.png')
     expect(wrapper.emitted('remove')?.[0]?.[0]).toMatchObject({ id: added[0].id, value: [] })
     expect(wrapper.emitted('change')?.at(-1)?.[0]).toEqual([])
+  })
+
+  it('keeps the remove control keyboard-visible via focus CSS, not only hover', () => {
+    const wrapper = mount(TxImageUploader, {
+      props: { modelValue: [{ id: 'a', url: '/a.png', name: 'A' }] },
+    })
+
+    // The focus target must be a real, tab-reachable button.
+    expect(wrapper.find('.tx-image-uploader__remove').element.tagName).toBe('BUTTON')
+
+    // The reveal is static scoped CSS (opacity), which this jsdom setup (css:false)
+    // cannot evaluate at runtime, so guard the focus rules directly: a keyboard
+    // user tabbing to the remove button must never focus an invisible control.
+    expect(imageUploaderSource).toMatch(/:focus-within \.tx-image-uploader__remove/)
+    expect(imageUploaderSource).toMatch(/\.tx-image-uploader__remove:focus-visible/)
   })
 
   it('blocks remove while disabled', async () => {

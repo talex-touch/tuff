@@ -14,6 +14,18 @@ describe('txTree', () => {
     })
 
     expect(wrapper.text()).toContain('Alpha-1')
+
+    // The list wrapper is presentational so role="tree" directly owns its treeitems.
+    expect(wrapper.find('.tx-tree__list').attributes('role')).toBe('presentation')
+
+    // aria-setsize / aria-posinset convey "item N of M" within each sibling group.
+    const items = wrapper.findAll('[role="treeitem"]')
+    expect(items[0].attributes('aria-setsize')).toBe('2')
+    expect(items[0].attributes('aria-posinset')).toBe('1')
+    expect(items[1].attributes('aria-setsize')).toBe('1') // Alpha-1 is an only child
+    expect(items[1].attributes('aria-posinset')).toBe('1')
+    expect(items[2].attributes('aria-setsize')).toBe('2')
+    expect(items[2].attributes('aria-posinset')).toBe('2')
   })
 
   it('emits selection', async () => {
@@ -105,5 +117,28 @@ describe('txTree', () => {
 
     expect(wrapper.find('.tx-tree__caret').attributes('tabindex')).toBe('-1')
     expect(wrapper.find('.tx-checkbox').attributes('tabindex')).toBe('-1')
+  })
+
+  it('consumes Space so a focused treeitem never scrolls, even when not selectable', () => {
+    const wrapper = mount(TxTree, {
+      attachTo: document.body,
+      props: { nodes, selectable: false },
+    })
+
+    const item = wrapper.find<HTMLElement>('[role="treeitem"]').element
+    item.focus()
+
+    const space = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })
+    item.dispatchEvent(space)
+    // Space is consumed to stop the page from scrolling, but selection stays off.
+    expect(space.defaultPrevented).toBe(true)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+
+    // Enter has no scroll default, so a non-selectable tree lets it keep bubbling.
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    item.dispatchEvent(enter)
+    expect(enter.defaultPrevented).toBe(false)
+
+    wrapper.unmount()
   })
 })

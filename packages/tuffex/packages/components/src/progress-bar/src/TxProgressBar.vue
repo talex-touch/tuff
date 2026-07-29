@@ -207,6 +207,9 @@ watch(
     if (v < 100)
       completedEmitted.value = false
   },
+  // `immediate` so a bar mounted already at 100 (an already-finished task) still emits
+  // `complete`; the loading/indeterminate guard above keeps it from firing spuriously.
+  { immediate: true },
 )
 </script>
 

@@ -11,6 +11,8 @@ export interface ImageUploaderProps {
   accept?: string
   disabled?: boolean
   max?: number
+  uploadText?: string
+  removeLabel?: (name?: string) => string
 }
 
 export interface ImageUploaderEmits {

@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxStatCard from '../src/TxStatCard.vue'
+import txStatCardSource from '../src/TxStatCard.vue?raw'
 
 vi.mock('@number-flow/vue', () => ({
   __esModule: true,
@@ -47,13 +48,27 @@ describe('txStatCard', () => {
     })
 
     expect(wrapper.attributes('role')).toBe('group')
-    expect(wrapper.attributes('aria-label')).toBe('Stat card')
+    // The group name now derives from the visible label via aria-labelledby (so
+    // each card is distinguishable and localizable) instead of a hardcoded string.
+    expect(wrapper.attributes('aria-label')).toBeUndefined()
+    const labelledby = wrapper.attributes('aria-labelledby')
+    expect(labelledby).toBeTruthy()
+    expect(wrapper.get(`[id="${labelledby}"]`).text()).toBe('Status')
     expect(wrapper.classes()).toContain('tx-stat-card--clickable')
     expect(wrapper.find('.tx-stat-card__value').text()).toBe('Ready')
     expect(wrapper.find('.tx-stat-card__label').text()).toBe('Status')
     expect(wrapper.find('.tx-stat-card__icon-layer').exists()).toBe(true)
     expect(wrapper.find('.tx-stat-card__decoration').exists()).toBe(true)
     expect(wrapper.find('.tx-stat-card__icon').classes()).toContain('i-carbon-checkmark')
+  })
+
+  it('signals click affordance only on clickable cards (no pointer cursor on the generic hover)', () => {
+    const hoverRule = txStatCardSource.match(/\.tx-stat-card:hover\s*\{([\s\S]*?)\}/)
+    expect(hoverRule).not.toBeNull()
+    // The generic hover must not imply clickability...
+    expect(hoverRule![1]).not.toContain('cursor: pointer')
+    // ...that cursor belongs to the clickable modifier.
+    expect(txStatCardSource).toContain('.tx-stat-card--clickable {')
   })
 
   it('renders custom value and label slots without replacing the card shell', () => {
@@ -170,5 +185,15 @@ describe('txStatCard', () => {
     })
 
     expect(wrapper.find('.tx-stat-card__meta .custom-meta').text()).toBe('Updated now')
+  })
+
+  it('honors an explicit ariaLabel override for the group name', () => {
+    const wrapper = mount(TxStatCard, {
+      props: { value: 42, label: 'Revenue', ariaLabel: '营收卡片' },
+    })
+
+    // An explicit prop wins; pre-fix the name was always the hardcoded 'Stat card'.
+    expect(wrapper.attributes('aria-label')).toBe('营收卡片')
+    expect(wrapper.attributes('aria-labelledby')).toBeUndefined()
   })
 })

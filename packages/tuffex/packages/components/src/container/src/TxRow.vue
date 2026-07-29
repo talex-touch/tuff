@@ -40,9 +40,18 @@ function getBp(w: number): Breakpoint {
 function resolveGutter(g: Gutter): number {
   if (typeof g === 'number')
     return Math.max(0, g)
-  const bp = getBp(width.value)
-  const v = g[bp] ?? g.md ?? g.sm ?? g.xs ?? 0
-  return Math.max(0, Number(v))
+
+  // Cascade from the active breakpoint down to the nearest smaller declared one,
+  // matching TxCol. The previous `g[bp] ?? g.md ?? g.sm ?? g.xs ?? 0` preferred
+  // `md` over `lg`/`xl` — so the gutter shrank as the viewport grew — and never
+  // consulted `lg`/`xl` at all.
+  const order: Breakpoint[] = ['xs', 'sm', 'md', 'lg', 'xl']
+  for (const key of order.slice(0, order.indexOf(getBp(width.value)) + 1).reverse()) {
+    const candidate = g[key]
+    if (candidate != null)
+      return Math.max(0, Number(candidate))
+  }
+  return 0
 }
 
 function onResize() {

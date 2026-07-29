@@ -7,7 +7,7 @@
  */
 import type { TxIconSource } from '../../icon'
 import type { BlockSlotEmits, BlockSlotProps } from './types'
-import { computed } from 'vue'
+import { computed, getCurrentInstance } from 'vue'
 import { TuffIcon } from '../../icon'
 
 defineOptions({
@@ -30,6 +30,25 @@ function handleClick(event: MouseEvent): void {
   if (props.disabled)
     return
   emit('click', event)
+}
+
+// The row is keyboard-interactive whenever a click listener is attached, so its
+// documented row/guidance action is reachable by keyboard, not only by mouse.
+// `click` is a declared emit, so the listener is read from the component vnode.
+const instance = getCurrentInstance()
+const interactive = computed(() => !!instance?.vnode.props?.onClick)
+
+function handleKeydown(event: KeyboardEvent): void {
+  // Only the row itself activates; ignore Enter/Space bubbling up from controls
+  // in the slot so their own keyboard handling is preserved.
+  if (event.target !== event.currentTarget)
+    return
+  if (props.disabled || !interactive.value)
+    return
+  if (event.key !== 'Enter' && event.key !== ' ')
+    return
+  event.preventDefault()
+  emit('click', event as unknown as MouseEvent)
 }
 
 function toIcon(icon?: IconValue): TxIconSource | null {
@@ -61,7 +80,11 @@ const currentIcon = computed(() => {
   <div
     class="tx-block-slot TBlockSlot-Container TBlockSelection fake-background index-fix"
     :class="{ 'tx-block-slot--disabled': disabled, disabled }"
+    :role="interactive ? 'button' : undefined"
+    :tabindex="interactive && !disabled ? 0 : undefined"
+    :aria-disabled="interactive && disabled ? true : undefined"
     @click="handleClick"
+    @keydown="handleKeydown"
   >
     <div class="tx-block-slot__content TBlockSlot-Content TBlockSelection-Content">
       <slot name="icon" :active="active">
@@ -196,6 +219,11 @@ const currentIcon = computed(() => {
 
   &:active:not(.disabled):not(.tx-block-slot--disabled) {
     transform: scale(0.985);
+  }
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+    outline-offset: -2px;
   }
 }
 
