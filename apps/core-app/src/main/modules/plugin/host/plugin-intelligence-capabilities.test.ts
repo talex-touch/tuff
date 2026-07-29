@@ -28,8 +28,11 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function createHarness(options: { authorize?: boolean } = {}) {
-  let current = activation
+function createHarness(
+  options: { authorize?: boolean; activation?: PluginActivationIdentity } = {}
+) {
+  const initialActivation = options.activation ?? activation
+  let current = initialActivation
   let hostGeneration = owner.hostGeneration
   let revoke: (() => void) | undefined
   const service: PluginIntelligenceHostService = {
@@ -47,19 +50,20 @@ function createHarness(options: { authorize?: boolean } = {}) {
         providerType: 'openai',
         models: ['public-model'],
         defaultModel: 'public-model',
-        capabilities: ['text.chat', 'vision.ocr'],
+        capabilities: ['text.chat'],
         available: true
       }
     ])
   }
   const capabilities = createPluginIntelligenceCapabilities({
+    ...(options.activation ? { activation: initialActivation } : {}),
     resolveCurrentActivation: () => current,
     resolveHostGeneration: () => hostGeneration,
     service
   })
   const registry = new PluginHostCapabilityRegistry({
     owner,
-    activation,
+    activation: initialActivation,
     resolveCurrentActivation: () => current,
     authorize: () => options.authorize ?? true,
     watchPermissionRevoked: (_plugin, _permission, onRevoke) => {
@@ -156,6 +160,128 @@ describe('plugin intelligence capabilities', () => {
     })
   })
 
+  it('projects bounded text.translate requests with host-derived caller and public provider preference', async () => {
+    const { registry, service } = createHarness()
+    ;(service.invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      result: '你好',
+      provider: 'public-provider',
+      model: 'public-model',
+      traceId: 'translate-trace',
+      latency: 9
+    })
+
+    await expect(
+      registry.dispatch('intelligence.invoke', {
+        operation: 'capability.invoke',
+        capabilityId: 'text.translate',
+        payload: { text: 'hello', sourceLang: 'en', targetLang: 'zh' },
+        options: {
+          preferredProviderId: 'public-provider',
+          modelPreference: ['public-model'],
+          metadata: {
+            entry: 'touch-translate',
+            requestId: 'translation-1',
+            capabilityId: 'text.translate',
+            selectedProviderId: 'public-provider',
+            selectedModel: 'public-model'
+          }
+        }
+      })
+    ).resolves.toEqual({
+      operation: 'capability.invoke',
+      result: '你好',
+      providerId: 'public-provider',
+      modelId: 'public-model',
+      traceId: 'translate-trace',
+      latency: 9
+    })
+    expect(service.invoke).toHaveBeenCalledWith(
+      'text.translate',
+      { text: 'hello', sourceLang: 'en', targetLang: 'zh' },
+      expect.objectContaining({ preferredProviderId: 'public-provider' }),
+      expect.any(AbortSignal),
+      'plugin:touch-intelligence'
+    )
+  })
+
+  it('rejects generic prompt and provider controls from the bound Translation profile', async () => {
+    const translationActivation = {
+      ...activation,
+      name: 'touch-translation',
+      pluginInstanceId: 'translation-instance',
+      key: 'translation-key'
+    }
+    const { registry, service } = createHarness({ activation: translationActivation })
+
+    for (const request of [
+      {
+        operation: 'capability.invoke',
+        capabilityId: 'text.translate',
+        payload: { text: 'hello', targetLang: 'zh' },
+        options: { promptTemplate: '{{text}}', promptVariables: { text: 'hello' } }
+      },
+      {
+        operation: 'capability.invoke',
+        capabilityId: 'vision.ocr',
+        payload: {
+          source: { type: 'data-url', dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }
+        },
+        options: { preferredProviderId: 'provider-public' }
+      },
+      {
+        operation: 'capability.invoke',
+        capabilityId: 'text.translate',
+        payload: { text: 'hello', targetLang: 'zh' },
+        options: { metadata: { inputKinds: ['text'] } }
+      }
+    ]) {
+      await expect(registry.dispatch('intelligence.invoke', request)).rejects.toMatchObject({
+        code: 'PLUGIN_HOST_CAPABILITY_INVALID_REQUEST'
+      })
+    }
+    expect(service.invoke).not.toHaveBeenCalled()
+  })
+
+  it('lists only bounded public text.translate provider models', async () => {
+    const { registry, service } = createHarness()
+    ;(service.listProviderModels as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      {
+        providerId: 'translate-provider',
+        providerName: 'Translate Provider',
+        providerType: 'host',
+        models: ['translate-model'],
+        defaultModel: 'translate-model',
+        capabilities: ['text.translate'],
+        available: true
+      }
+    ])
+    await expect(
+      registry.dispatch('intelligence.invoke', {
+        operation: 'provider-models.list',
+        capabilityId: 'text.translate'
+      })
+    ).resolves.toEqual({
+      operation: 'provider-models.list',
+      capabilityId: 'text.translate',
+      providers: [
+        {
+          providerId: 'translate-provider',
+          providerName: 'Translate Provider',
+          providerType: 'host',
+          models: ['translate-model'],
+          defaultModel: 'translate-model',
+          capabilities: ['text.translate'],
+          available: true
+        }
+      ]
+    })
+    expect(service.listProviderModels).toHaveBeenCalledWith(
+      'text.translate',
+      expect.any(AbortSignal),
+      'plugin:touch-intelligence'
+    )
+  })
+
   it('lists only bounded public text.chat provider models', async () => {
     const { registry, service } = createHarness()
     await expect(
@@ -165,6 +291,7 @@ describe('plugin intelligence capabilities', () => {
       })
     ).resolves.toEqual({
       operation: 'provider-models.list',
+      capabilityId: 'text.chat',
       providers: [
         {
           providerId: 'public-provider',

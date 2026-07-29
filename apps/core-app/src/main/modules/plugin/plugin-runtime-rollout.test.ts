@@ -9,10 +9,7 @@ import {
 const workspaceRoot = path.resolve(__dirname, '../../../../../..')
 const pluginsRoot = path.join(workspaceRoot, 'plugins')
 
-const EXPECTED_UNMIGRATED = Object.freeze({
-  'touch-intelligence': 'top-level require',
-  'touch-translation': 'top-level require'
-})
+const EXPECTED_UNMIGRATED = Object.freeze({})
 
 interface OfficialManifest {
   build?: { index?: { entry?: unknown } }
@@ -40,7 +37,7 @@ function officialManifestNames(): string[] {
 }
 
 describe('plugin runtime production rollout gate', () => {
-  it('computes the disabled default from 20 compatible of 22 manifested activations', () => {
+  it('computes the disabled default from 22 compatible of 22 manifested activations', () => {
     const official = officialManifestNames()
     const compatible = new Set<string>(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES)
     const unmigrated = official.filter((name) => !compatible.has(name))
@@ -57,6 +54,7 @@ describe('plugin runtime production rollout gate', () => {
       'touch-dev-utils',
       'touch-dictation',
       'touch-emoji-symbols',
+      'touch-intelligence',
       'touch-quick-actions',
       'touch-quickops',
       'touch-snipaste',
@@ -64,13 +62,14 @@ describe('plugin runtime production rollout gate', () => {
       'touch-system-actions',
       'touch-text-snippets',
       'touch-text-tools',
+      'touch-translation',
       'touch-window-manager',
       'touch-window-presets',
       'touch-workspace-scripts'
     ])
     expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
-    expect(unmigrated).toHaveLength(2)
-    expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(unmigrated.length === 0)
+    expect(unmigrated).toHaveLength(0)
+    expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(false)
   })
 
   it('excludes the two manifestless Surface directories from activation success', () => {
@@ -138,6 +137,13 @@ describe('plugin runtime production rollout gate', () => {
       const source = fs.readFileSync(sourcePath, 'utf8')
       for (const pattern of forbidden) expect(source).not.toMatch(pattern)
     }
+
+    const intelligenceSource = fs.readFileSync(
+      path.join(pluginsRoot, 'touch-intelligence', 'index.js'),
+      'utf8'
+    )
+    expect(intelligenceSource).not.toMatch(/\btouchChannel\b/)
+    expect(intelligenceSource).not.toMatch(/\bpermission\s*\.\s*request\s*\(/)
   })
 
   it('declares every capability permission used by compatible Preludes', () => {
@@ -178,6 +184,38 @@ describe('plugin runtime production rollout gate', () => {
         'clipboard.write',
         'search.root-results'
       ])
+    )
+
+    const intelligence = manifests.get('touch-intelligence')?.permissions
+    const intelligencePermissions = [
+      ...(Array.isArray(intelligence?.required) ? intelligence.required : []),
+      ...(Array.isArray(intelligence?.optional) ? intelligence.optional : [])
+    ]
+    expect(intelligencePermissions).toEqual(
+      expect.arrayContaining([
+        'intelligence.basic',
+        'search.root-results',
+        'storage.plugin',
+        'clipboard.write'
+      ])
+    )
+
+    const translation = manifests.get('touch-translation')?.permissions
+    const translationPermissions = [
+      ...(Array.isArray(translation?.required) ? translation.required : []),
+      ...(Array.isArray(translation?.optional) ? translation.optional : [])
+    ]
+    expect(translationPermissions).toEqual(
+      expect.arrayContaining([
+        'network.internet',
+        'intelligence.basic',
+        'storage.plugin',
+        'search.root-results',
+        'clipboard.write'
+      ])
+    )
+    expect(translationPermissions).not.toEqual(
+      expect.arrayContaining(['window.create', 'clipboard.read'])
     )
 
     const snippets = manifests.get('touch-snippets')?.permissions

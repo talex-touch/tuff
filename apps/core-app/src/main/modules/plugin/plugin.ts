@@ -88,6 +88,8 @@ import type { PluginBatchRenameFilesystemCapability } from './host/plugin-filesy
 import { createPluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
 import type { PluginBrowserOpenCapabilities } from './host/plugin-browser-open-capabilities'
 import type { PluginBrowserDataCapabilities } from './host/plugin-browser-data-capabilities'
+import type { PluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
+import type { PluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
 import type { PluginSnipasteProcessCapability } from './host/plugin-process-capabilities'
 import type { PluginSystemActionCapabilities } from './host/plugin-system-capabilities'
 import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
@@ -467,6 +469,12 @@ export class TouchPlugin implements ITouchPlugin {
   private static _browserDataCapabilityFactory:
     | ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities)
     | null = null
+  private static _translationCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities)
+    | null = null
+  private static _intelligenceContextCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
+    | null = null
   private static _windowManagerCapabilityFactory:
     | ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities)
     | null = null
@@ -507,6 +515,20 @@ export class TouchPlugin implements ITouchPlugin {
     factory: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
   ): void {
     TouchPlugin._browserDataCapabilityFactory = factory
+  }
+
+  static setTranslationCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
+  ): void {
+    TouchPlugin._translationCapabilityFactory = factory
+  }
+
+  static setIntelligenceContextCapabilityFactory(
+    factory:
+      | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
+      | null
+  ): void {
+    TouchPlugin._intelligenceContextCapabilityFactory = factory
   }
 
   static setWindowManagerCapabilityFactory(
@@ -2067,6 +2089,32 @@ export class TouchPlugin implements ITouchPlugin {
     return factory(activation)
   }
 
+  private createTranslationCapability(
+    activation: PluginActivationIdentity
+  ): PluginIntelligenceCapabilities | null {
+    if (this.name !== 'touch-translation') return null
+    const factory = TouchPlugin._translationCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createIntelligenceContextCapability(
+    activation: PluginActivationIdentity
+  ): PluginIntelligenceContextCapabilities | null {
+    if (this.name !== 'touch-intelligence') return null
+    const factory = TouchPlugin._intelligenceContextCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
   private createWindowManagerCapability(
     activation: PluginActivationIdentity
   ): PluginWindowManagerCapabilities | null {
@@ -2161,6 +2209,9 @@ export class TouchPlugin implements ITouchPlugin {
       const filesystemCapability = this.createBatchRenameFilesystemCapability(currentActivation)
       const browserOpenCapability = this.createBrowserOpenCapability(currentActivation)
       const browserDataCapability = this.createBrowserDataCapability(currentActivation)
+      const translationCapability = this.createTranslationCapability(currentActivation)
+      const intelligenceContextCapability =
+        this.createIntelligenceContextCapability(currentActivation)
       const snipasteProcessCapability = this.createSnipasteProcessCapability(currentActivation)
       const systemActionCapability = this.createSystemActionCapability(currentActivation)
       const windowManagerCapability = this.createWindowManagerCapability(currentActivation)
@@ -2262,6 +2313,8 @@ export class TouchPlugin implements ITouchPlugin {
         ...(filesystemCapability ? filesystemCapability.definitions : []),
         ...(browserOpenCapability ? browserOpenCapability.definitions : []),
         ...(browserDataCapability ? browserDataCapability.definitions : []),
+        ...(translationCapability ? translationCapability.definitions : []),
+        ...(intelligenceContextCapability ? intelligenceContextCapability.definitions : []),
         ...(snipasteProcessCapability ? snipasteProcessCapability.definitions : []),
         ...(systemActionCapability ? systemActionCapability.definitions : []),
         ...(windowManagerCapability ? windowManagerCapability.definitions : []),

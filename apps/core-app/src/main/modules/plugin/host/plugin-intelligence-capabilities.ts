@@ -3,8 +3,15 @@ import { isAuthoritativePluginContext } from '@talex-touch/utils/transport/secur
 import { types as utilTypes } from 'node:util'
 import type { PluginHostCapabilityDefinition } from './plugin-host-capabilities'
 
-export type PluginIntelligenceCapabilityId = 'text.chat' | 'vision.ocr'
+export type PluginIntelligenceCapabilityId = 'text.chat' | 'text.translate' | 'vision.ocr'
+export type PluginIntelligenceProviderCapabilityId = 'text.chat' | 'text.translate'
 export type PluginIntelligenceChatRole = 'system' | 'user' | 'assistant'
+
+export interface PluginIntelligenceTranslatePayload {
+  readonly text: string
+  readonly sourceLang?: string
+  readonly targetLang: string
+}
 
 export interface PluginIntelligenceChatPayload {
   readonly messages: readonly {
@@ -55,26 +62,32 @@ export interface PluginIntelligenceProviderModel {
   readonly providerType: string
   readonly models: readonly string[]
   readonly defaultModel: string | null
-  readonly capabilities: readonly ['text.chat']
+  readonly capabilities: readonly PluginIntelligenceProviderCapabilityId[]
   readonly available: boolean
 }
 
 export interface PluginIntelligenceHostService {
   invoke(
     capabilityId: PluginIntelligenceCapabilityId,
-    payload: PluginIntelligenceChatPayload | PluginIntelligenceOcrPayload,
+    payload:
+      | PluginIntelligenceChatPayload
+      | PluginIntelligenceTranslatePayload
+      | PluginIntelligenceOcrPayload,
     options: PluginIntelligenceInvokeOptions | undefined,
     signal: AbortSignal,
     caller: string
   ): PluginIntelligenceInvokeServiceResult | Promise<PluginIntelligenceInvokeServiceResult>
   listProviderModels(
-    capabilityId: 'text.chat',
+    capabilityId: PluginIntelligenceProviderCapabilityId,
     signal: AbortSignal,
     caller: string
   ): readonly unknown[] | Promise<readonly unknown[]>
 }
 
 export interface PluginIntelligenceCapabilityOptions {
+  activation?: PluginActivationIdentity
+  invokeCapabilities?: readonly PluginIntelligenceCapabilityId[]
+  providerModelCapabilities?: readonly PluginIntelligenceProviderCapabilityId[]
   resolveCurrentActivation(pluginName: string): PluginActivationIdentity | undefined
   resolveHostGeneration(activation: PluginActivationIdentity): number | undefined
   service: PluginIntelligenceHostService
@@ -88,10 +101,16 @@ type IntelligenceRequest =
   | {
       readonly operation: 'capability.invoke'
       readonly capabilityId: PluginIntelligenceCapabilityId
-      readonly payload: PluginIntelligenceChatPayload | PluginIntelligenceOcrPayload
+      readonly payload:
+        | PluginIntelligenceChatPayload
+        | PluginIntelligenceTranslatePayload
+        | PluginIntelligenceOcrPayload
       readonly options?: PluginIntelligenceInvokeOptions
     }
-  | { readonly operation: 'provider-models.list'; readonly capabilityId: 'text.chat' }
+  | {
+      readonly operation: 'provider-models.list'
+      readonly capabilityId: PluginIntelligenceProviderCapabilityId
+    }
 
 type IntelligenceResult =
   | {
@@ -104,6 +123,7 @@ type IntelligenceResult =
     }
   | {
       readonly operation: 'provider-models.list'
+      readonly capabilityId: PluginIntelligenceProviderCapabilityId
       readonly providers: readonly PluginIntelligenceProviderModel[]
     }
 
@@ -252,6 +272,18 @@ function validateChatPayload(value: unknown): PluginIntelligenceChatPayload {
   return Object.freeze({ messages: Object.freeze(projected) })
 }
 
+function validateTranslatePayload(value: unknown): PluginIntelligenceTranslatePayload {
+  const record = exactRecord(value, ['text', 'sourceLang', 'targetLang'], ['text', 'targetLang'])
+  const text = boundedString(required(record, 'text'), MAX_CHAT_BYTES)
+  const sourceLang = optionalString(record, 'sourceLang', 64)
+  const targetLang = boundedString(required(record, 'targetLang'), 64)
+  return Object.freeze({
+    text,
+    ...(sourceLang === undefined ? {} : { sourceLang }),
+    targetLang
+  })
+}
+
 function hasImageSignature(kind: string, bytes: Buffer): boolean {
   if (kind === 'png') {
     return (
@@ -359,19 +391,25 @@ function validatePromptVariables(value: unknown): Readonly<Record<string, string
 }
 
 function validateMetadata(
-  value: unknown
+  value: unknown,
+  translationProfile = false
 ): NonNullable<PluginIntelligenceInvokeOptions['metadata']> {
-  const record = exactRecord(value, [
-    'entry',
-    'featureId',
-    'requestId',
-    'inputKinds',
-    'aiCommandId',
-    'aiCommandVersion',
-    'capabilityId',
-    'selectedProviderId',
-    'selectedModel'
-  ])
+  const record = exactRecord(
+    value,
+    translationProfile
+      ? ['entry', 'featureId', 'requestId', 'capabilityId', 'selectedProviderId', 'selectedModel']
+      : [
+          'entry',
+          'featureId',
+          'requestId',
+          'inputKinds',
+          'aiCommandId',
+          'aiCommandVersion',
+          'capabilityId',
+          'selectedProviderId',
+          'selectedModel'
+        ]
+  )
   const entry = optionalString(record, 'entry', MAX_IDENTIFIER_BYTES)
   const featureId = optionalString(record, 'featureId', MAX_IDENTIFIER_BYTES)
   const requestId = optionalString(record, 'requestId', MAX_IDENTIFIER_BYTES)
@@ -380,7 +418,12 @@ function validateMetadata(
   const capabilityId = Object.hasOwn(record, 'capabilityId')
     ? required(record, 'capabilityId')
     : undefined
-  if (capabilityId !== undefined && capabilityId !== 'text.chat' && capabilityId !== 'vision.ocr') {
+  if (
+    capabilityId !== undefined &&
+    capabilityId !== 'text.chat' &&
+    capabilityId !== 'text.translate' &&
+    capabilityId !== 'vision.ocr'
+  ) {
     invalid()
   }
   const selectedProviderId = optionalString(record, 'selectedProviderId', MAX_IDENTIFIER_BYTES)
@@ -401,14 +444,17 @@ function validateMetadata(
   })
 }
 
-function validateOptions(value: unknown): PluginIntelligenceInvokeOptions {
-  const record = exactRecord(value, [
-    'preferredProviderId',
-    'modelPreference',
-    'promptTemplate',
-    'promptVariables',
-    'metadata'
-  ])
+function validateOptions(
+  value: unknown,
+  capabilityId: PluginIntelligenceCapabilityId,
+  translationProfile = false
+): PluginIntelligenceInvokeOptions {
+  const allowedKeys = translationProfile
+    ? capabilityId === 'text.translate'
+      ? ['preferredProviderId', 'modelPreference', 'metadata']
+      : ['metadata']
+    : ['preferredProviderId', 'modelPreference', 'promptTemplate', 'promptVariables', 'metadata']
+  const record = exactRecord(value, allowedKeys)
   const preferredProviderId = optionalString(record, 'preferredProviderId', MAX_IDENTIFIER_BYTES)
   const modelPreference = Object.hasOwn(record, 'modelPreference')
     ? stringArray(record.modelPreference, 8, MAX_IDENTIFIER_BYTES)
@@ -417,7 +463,9 @@ function validateOptions(value: unknown): PluginIntelligenceInvokeOptions {
   const promptVariables = Object.hasOwn(record, 'promptVariables')
     ? validatePromptVariables(record.promptVariables)
     : undefined
-  const metadata = Object.hasOwn(record, 'metadata') ? validateMetadata(record.metadata) : undefined
+  const metadata = Object.hasOwn(record, 'metadata')
+    ? validateMetadata(record.metadata, translationProfile)
+    : undefined
   return Object.freeze({
     ...(preferredProviderId === undefined ? {} : { preferredProviderId }),
     ...(modelPreference === undefined ? {} : { modelPreference }),
@@ -427,7 +475,7 @@ function validateOptions(value: unknown): PluginIntelligenceInvokeOptions {
   })
 }
 
-function validateRequest(value: unknown): IntelligenceRequest {
+function validateRequest(value: unknown, translationProfile = false): IntelligenceRequest {
   const record = exactRecord(
     value,
     ['operation', 'capabilityId', 'payload', 'options'],
@@ -437,7 +485,7 @@ function validateRequest(value: unknown): IntelligenceRequest {
   const capabilityId = required(record, 'capabilityId')
   if (operation === 'provider-models.list') {
     if (
-      capabilityId !== 'text.chat' ||
+      (capabilityId !== 'text.chat' && capabilityId !== 'text.translate') ||
       Object.hasOwn(record, 'payload') ||
       Object.hasOwn(record, 'options')
     ) {
@@ -447,7 +495,9 @@ function validateRequest(value: unknown): IntelligenceRequest {
   }
   if (
     operation !== 'capability.invoke' ||
-    (capabilityId !== 'text.chat' && capabilityId !== 'vision.ocr')
+    (capabilityId !== 'text.chat' &&
+      capabilityId !== 'text.translate' &&
+      capabilityId !== 'vision.ocr')
   ) {
     invalid()
   }
@@ -455,8 +505,12 @@ function validateRequest(value: unknown): IntelligenceRequest {
   const payload =
     capabilityId === 'text.chat'
       ? validateChatPayload(record.payload)
-      : validateOcrPayload(record.payload)
-  const options = Object.hasOwn(record, 'options') ? validateOptions(record.options) : undefined
+      : capabilityId === 'text.translate'
+        ? validateTranslatePayload(record.payload)
+        : validateOcrPayload(record.payload)
+  const options = Object.hasOwn(record, 'options')
+    ? validateOptions(record.options, capabilityId, translationProfile)
+    : undefined
   const metadata = options?.metadata
   if (metadata?.capabilityId !== undefined && metadata.capabilityId !== capabilityId) invalid()
   if (
@@ -509,7 +563,10 @@ function validateInvokeResult(
   })
 }
 
-function validateProvider(value: unknown): PluginIntelligenceProviderModel {
+function validateProvider(
+  value: unknown,
+  capabilityId: PluginIntelligenceProviderCapabilityId
+): PluginIntelligenceProviderModel {
   const record = exactRecord(
     value,
     [
@@ -532,7 +589,10 @@ function validateProvider(value: unknown): PluginIntelligenceProviderModel {
     ]
   )
   const capabilities = stringArray(required(record, 'capabilities'), 16, 64)
-  if (!capabilities.includes('text.chat') || new Set(capabilities).size !== capabilities.length) {
+  if (!capabilities.includes(capabilityId) || new Set(capabilities).size !== capabilities.length) {
+    invalid()
+  }
+  if (capabilities.some((value) => value !== 'text.chat' && value !== 'text.translate')) {
     invalid()
   }
   const available = required(record, 'available')
@@ -545,7 +605,7 @@ function validateProvider(value: unknown): PluginIntelligenceProviderModel {
     providerType: boundedString(required(record, 'providerType'), 64),
     models: stringArray(required(record, 'models'), MAX_MODELS, MAX_IDENTIFIER_BYTES),
     defaultModel: defaultModel === null ? null : boundedString(defaultModel, MAX_IDENTIFIER_BYTES),
-    capabilities: Object.freeze(['text.chat'] as const),
+    capabilities: Object.freeze([...capabilities] as PluginIntelligenceProviderCapabilityId[]),
     available
   })
 }
@@ -553,7 +613,16 @@ function validateProvider(value: unknown): PluginIntelligenceProviderModel {
 function validateResult(value: unknown): IntelligenceResult {
   const record = exactRecord(
     value,
-    ['operation', 'result', 'providerId', 'modelId', 'traceId', 'latency', 'providers'],
+    [
+      'operation',
+      'capabilityId',
+      'result',
+      'providerId',
+      'modelId',
+      'traceId',
+      'latency',
+      'providers'
+    ],
     ['operation']
   )
   if (record.operation === 'capability.invoke') {
@@ -584,9 +653,21 @@ function validateResult(value: unknown): IntelligenceResult {
     })
   }
   if (record.operation === 'provider-models.list') {
-    const projected = exactRecord(value, ['operation', 'providers'], ['operation', 'providers'])
-    const providers = exactArray(projected.providers, MAX_PROVIDERS).map(validateProvider)
-    return Object.freeze({ operation: 'provider-models.list', providers: Object.freeze(providers) })
+    const projected = exactRecord(
+      value,
+      ['operation', 'capabilityId', 'providers'],
+      ['operation', 'capabilityId', 'providers']
+    )
+    const capabilityId = required(projected, 'capabilityId')
+    if (capabilityId !== 'text.chat' && capabilityId !== 'text.translate') invalid()
+    const providers = exactArray(projected.providers, MAX_PROVIDERS).map((provider) =>
+      validateProvider(provider, capabilityId)
+    )
+    return Object.freeze({
+      operation: 'provider-models.list',
+      capabilityId,
+      providers: Object.freeze(providers)
+    })
   }
   invalid()
 }
@@ -621,7 +702,14 @@ export function createPluginIntelligenceCapabilities(
 ): PluginIntelligenceCapabilities {
   const options = exactRecord(
     rawOptions,
-    ['resolveCurrentActivation', 'resolveHostGeneration', 'service'],
+    [
+      'activation',
+      'invokeCapabilities',
+      'providerModelCapabilities',
+      'resolveCurrentActivation',
+      'resolveHostGeneration',
+      'service'
+    ],
     ['resolveCurrentActivation', 'resolveHostGeneration', 'service']
   )
   if (
@@ -644,6 +732,44 @@ export function createPluginIntelligenceCapabilities(
     utilTypes.isProxy(serviceRecord.listProviderModels)
   ) {
     invalid()
+  }
+  const boundActivation = Object.hasOwn(options, 'activation')
+    ? snapshotActivation(options.activation)
+    : undefined
+  const invokeCapabilities = Object.freeze(
+    (Object.hasOwn(options, 'invokeCapabilities')
+      ? exactArray(options.invokeCapabilities, 3)
+      : ['text.chat', 'text.translate', 'vision.ocr']
+    ).map((value) => {
+      if (value !== 'text.chat' && value !== 'text.translate' && value !== 'vision.ocr') invalid()
+      return value
+    })
+  )
+  const providerModelCapabilities = Object.freeze(
+    (Object.hasOwn(options, 'providerModelCapabilities')
+      ? exactArray(options.providerModelCapabilities, 2)
+      : ['text.chat', 'text.translate']
+    ).map((value) => {
+      if (value !== 'text.chat' && value !== 'text.translate') invalid()
+      return value
+    })
+  )
+  if (
+    invokeCapabilities.length === 0 ||
+    new Set(invokeCapabilities).size !== invokeCapabilities.length ||
+    new Set(providerModelCapabilities).size !== providerModelCapabilities.length
+  ) {
+    invalid()
+  }
+  const translationProfile = boundActivation?.name === 'touch-translation'
+  const validateCapabilityRequest = (value: unknown): IntelligenceRequest => {
+    const request = validateRequest(value, translationProfile)
+    if (request.operation === 'provider-models.list') {
+      if (!providerModelCapabilities.includes(request.capabilityId)) invalid()
+    } else if (!invokeCapabilities.includes(request.capabilityId)) {
+      invalid()
+    }
+    return request
   }
   const resolveCurrentActivation =
     options.resolveCurrentActivation as PluginIntelligenceCapabilityOptions['resolveCurrentActivation']
@@ -677,6 +803,7 @@ export function createPluginIntelligenceCapabilities(
     ) {
       invalid()
     }
+    if (boundActivation && !sameActivation(current, boundActivation)) invalid()
     return current
   }
 
@@ -688,18 +815,22 @@ export function createPluginIntelligenceCapabilities(
       maxConcurrency: 4,
       callbackLifetime: 'transient',
       callbackFields: Object.freeze([]),
-      validateRequest,
+      validateRequest: validateCapabilityRequest,
       validateResult,
       invoke: async (context, request, signal) => {
         const current = assertAuthority(context)
         const caller = `plugin:${current.name}`
         if (request.operation === 'provider-models.list') {
           const providers = await Reflect.apply(listProviderModels, undefined, [
-            'text.chat',
+            request.capabilityId,
             signal,
             caller
           ])
-          return validateResult({ operation: 'provider-models.list', providers })
+          return validateResult({
+            operation: 'provider-models.list',
+            capabilityId: request.capabilityId,
+            providers
+          })
         }
         const result = await Reflect.apply(invokeService, undefined, [
           request.capabilityId,

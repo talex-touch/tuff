@@ -11,6 +11,7 @@ import {
 } from './plugin-intelligence-context-host-service'
 
 export interface PluginIntelligenceContextCapabilityOptions {
+  readonly activation: PluginActivationIdentity
   resolveCurrentActivation(pluginName: string): PluginActivationIdentity | undefined
   resolveHostGeneration(activation: PluginActivationIdentity): number | undefined
   service: PluginIntelligenceContextHostService
@@ -111,9 +112,11 @@ export function createPluginIntelligenceContextCapabilities(
 ): PluginIntelligenceContextCapabilities {
   const options = exactRecord(
     rawOptions,
-    ['resolveCurrentActivation', 'resolveHostGeneration', 'service'],
-    ['resolveCurrentActivation', 'resolveHostGeneration', 'service']
+    ['activation', 'resolveCurrentActivation', 'resolveHostGeneration', 'service'],
+    ['activation', 'resolveCurrentActivation', 'resolveHostGeneration', 'service']
   )
+  const activation = snapshotActivation(options.activation)
+  if (activation.name !== 'touch-intelligence') invalid()
   if (
     typeof options.resolveCurrentActivation !== 'function' ||
     utilTypes.isProxy(options.resolveCurrentActivation) ||
@@ -141,22 +144,20 @@ export function createPluginIntelligenceContextCapabilities(
     const identity = context.identity
     if (
       identity.authority !== 'plugin-host' ||
-      context.name !== identity.pluginName ||
+      identity.pluginName !== activation.name ||
+      identity.pluginInstanceId !== activation.pluginInstanceId ||
+      identity.activationGeneration !== activation.activationGeneration ||
+      context.name !== activation.name ||
+      context.uniqueKey !== activation.key ||
       !Number.isSafeInteger(identity.hostGeneration) ||
       Number(identity.hostGeneration) < 1
     ) {
       invalid()
     }
-    const current = snapshotActivation(resolveCurrentActivation(identity.pluginName))
-    const expected = Object.freeze({
-      name: identity.pluginName,
-      pluginInstanceId: identity.pluginInstanceId,
-      activationGeneration: identity.activationGeneration,
-      key: context.uniqueKey
-    })
+    const current = snapshotActivation(resolveCurrentActivation(activation.name))
     if (
-      !sameActivation(current, expected) ||
-      resolveHostGeneration(current) !== identity.hostGeneration
+      !sameActivation(current, activation) ||
+      resolveHostGeneration(activation) !== identity.hostGeneration
     ) {
       invalid()
     }

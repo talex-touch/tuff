@@ -4,10 +4,9 @@ import type {
   IntelligenceInvokeOptions
 } from '@talex-touch/utils/types/intelligence'
 import { types as utilTypes } from 'node:util'
-import {
-  intelligenceContextExecutionService,
-  type IntelligenceContextActor,
-  type IntelligenceContextExecutionHostOptions
+import type {
+  IntelligenceContextActor,
+  IntelligenceContextExecutionHostOptions
 } from '../../ai/intelligence-context-execution'
 
 export type PluginIntelligenceContextHostServiceErrorCode =
@@ -323,6 +322,12 @@ function snapshotEntrypoint(value: unknown): Readonly<Record<string, string>> {
   const mode = required(record, 'mode', code)
   if (owner !== 'corebox' && owner !== 'assistant') fail(code)
   if (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') fail(code)
+  if (
+    (id !== 'corebox.ai-ask' || owner !== 'corebox') &&
+    (id !== 'assistant.voice' || owner !== 'assistant')
+  ) {
+    fail(code)
+  }
   return Object.freeze({ id, owner, mode })
 }
 
@@ -371,6 +376,8 @@ function snapshotMetadata(
   }
   if (Object.hasOwn(record, 'contextEntrypoint')) {
     output.contextEntrypoint = snapshotEntrypoint(record.contextEntrypoint)
+  } else if (value !== undefined) {
+    fail(code)
   }
   if (caller !== undefined) output.caller = caller
   return Object.freeze(output)
@@ -478,10 +485,10 @@ export function validatePluginIntelligenceContextRequest(
     : snapshotOptions(undefined, caller)
   const context = snapshotContext(required(record, 'context', code))
   const entrypoint = options?.metadata?.contextEntrypoint
-  if (entrypoint && typeof entrypoint === 'object') {
-    const projected = entrypoint as { owner?: unknown; mode?: unknown }
-    if ((context.owner ?? 'corebox') !== projected.owner || context.mode !== projected.mode)
-      fail(code)
+  if (!entrypoint || typeof entrypoint !== 'object') fail(code)
+  const projected = entrypoint as { owner?: unknown; mode?: unknown }
+  if ((context.owner ?? 'corebox') !== projected.owner || context.mode !== projected.mode) {
+    fail(code)
   }
   return Object.freeze({
     operation: 'context.invoke',
@@ -555,6 +562,12 @@ function projectSummary(value: unknown): PluginIntelligenceContextSummary {
   })
 }
 
+export function validatePluginIntelligenceContextSummary(
+  value: unknown
+): PluginIntelligenceContextSummary {
+  return projectSummary(value)
+}
+
 function projectExecutionResult(value: unknown): PluginIntelligenceContextResult {
   const code = 'PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID'
   const resultRecord = exactRecord(
@@ -589,6 +602,73 @@ function projectExecutionResult(value: unknown): PluginIntelligenceContextResult
   })
 }
 
+function assertEphemeralContext(
+  value: unknown,
+  projected: PluginIntelligenceContextSummary
+): PluginIntelligenceContextSummary {
+  const code = 'PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID'
+  const rawContext = exactRecord(
+    value,
+    [
+      'mode',
+      'scope',
+      'sessionId',
+      'turnId',
+      'packageId',
+      'traceId',
+      'checkpoint',
+      'continuation',
+      'itemCount',
+      'tokenBudget',
+      'tokenEstimate',
+      'sourceTypes',
+      'retrievalItemCount',
+      'citationCount',
+      'degradedReason'
+    ],
+    [
+      'mode',
+      'scope',
+      'itemCount',
+      'tokenBudget',
+      'tokenEstimate',
+      'sourceTypes',
+      'retrievalItemCount',
+      'citationCount',
+      'degradedReason'
+    ],
+    code
+  )
+  for (const key of ['sessionId', 'turnId', 'packageId', 'traceId', 'checkpoint', 'continuation']) {
+    if (Object.hasOwn(rawContext, key)) fail(code)
+  }
+  if (
+    (projected.mode !== 'new' && projected.mode !== 'stateless') ||
+    projected.itemCount !== 1 ||
+    projected.sourceTypes.length !== 1 ||
+    projected.sourceTypes[0] !== 'current_input' ||
+    projected.retrievalItemCount !== 0 ||
+    projected.citationCount !== 0 ||
+    projected.degradedReason !== 'isolated_context_persistence_unavailable'
+  ) {
+    fail(code)
+  }
+  return projected
+}
+
+function projectEphemeralExecutionResult(value: unknown): PluginIntelligenceContextResult {
+  const code = 'PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID'
+  const resultRecord = exactRecord(
+    value,
+    ['invocation', 'context'],
+    ['invocation', 'context'],
+    code
+  )
+  const projected = projectExecutionResult(value)
+  assertEphemeralContext(required(resultRecord, 'context', code), projected.context)
+  return projected
+}
+
 export function validatePluginIntelligenceContextResult(
   value: unknown
 ): PluginIntelligenceContextResult {
@@ -606,6 +686,8 @@ export function validatePluginIntelligenceContextResult(
     ['result', 'providerId', 'modelId', 'traceId', 'latency'],
     code
   )
+  const rawContext = required(record, 'context', code)
+  const context = assertEphemeralContext(rawContext, projectSummary(rawContext))
   return Object.freeze({
     operation: 'context.invoke',
     invocation: Object.freeze({
@@ -624,7 +706,7 @@ export function validatePluginIntelligenceContextResult(
       traceId: boundedString(required(invocation, 'traceId', code), MAX_IDENTIFIER_BYTES, code),
       latency: boundedNumber(required(invocation, 'latency', code), 300_000, code)
     }),
-    context: projectSummary(required(record, 'context', code))
+    context
   })
 }
 
@@ -654,12 +736,8 @@ function cancelled(): never {
   })
 }
 
-const productionDependencies: PluginIntelligenceContextHostServiceDependencies = Object.freeze({
-  invoke: intelligenceContextExecutionService.invoke.bind(intelligenceContextExecutionService)
-})
-
 export function createPluginIntelligenceContextHostService(
-  rawDependencies: PluginIntelligenceContextHostServiceDependencies = productionDependencies
+  rawDependencies: PluginIntelligenceContextHostServiceDependencies
 ): PluginIntelligenceContextHostService {
   const code = 'PLUGIN_INTELLIGENCE_CONTEXT_HOST_DEPENDENCIES_INVALID'
   const dependencies = exactRecord(rawDependencies, ['invoke'], ['invoke'], code)
@@ -686,7 +764,7 @@ export function createPluginIntelligenceContextHostService(
         const pending = Reflect.apply(invoke, undefined, [
           executionRequest,
           actor,
-          { signal }
+          Object.freeze({ signal, persistence: 'ephemeral' })
         ]) as Promise<IntelligenceContextExecutionResult<unknown>>
         result = await pending
       } catch (error) {
@@ -694,7 +772,7 @@ export function createPluginIntelligenceContextHostService(
         throw error
       }
       if (signal.aborted) cancelled()
-      return projectExecutionResult(result)
+      return projectEphemeralExecutionResult(result)
     }
   })
 }

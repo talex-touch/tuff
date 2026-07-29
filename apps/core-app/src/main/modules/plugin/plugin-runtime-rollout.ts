@@ -9,6 +9,7 @@ export const PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'touch-dev-utils',
   'touch-dictation',
   'touch-emoji-symbols',
+  'touch-intelligence',
   'touch-quick-actions',
   'touch-quickops',
   'touch-snipaste',
@@ -16,6 +17,7 @@ export const PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES = Object.freeze([
   'touch-system-actions',
   'touch-text-snippets',
   'touch-text-tools',
+  'touch-translation',
   'touch-window-manager',
   'touch-window-presets',
   'touch-workspace-scripts'

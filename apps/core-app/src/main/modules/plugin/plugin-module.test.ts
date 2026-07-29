@@ -95,6 +95,8 @@ const mocks = vi.hoisted(() => {
     setSystemActionCapabilityFactory: vi.fn(),
     setBrowserOpenCapabilityFactory: vi.fn(),
     setBrowserDataCapabilityFactory: vi.fn(),
+    setTranslationCapabilityFactory: vi.fn(),
+    setIntelligenceContextCapabilityFactory: vi.fn(),
     setWindowManagerCapabilityFactory: vi.fn(),
     setWindowPresetCapabilityFactory: vi.fn(),
     setWorkspaceScriptCapabilityFactory: vi.fn(),
@@ -213,6 +215,12 @@ vi.mock('../voice/voice-service', () => ({
     streamDictation: vi.fn()
   }
 }))
+vi.mock('../ai/intelligence-context-execution', () => ({
+  intelligenceContextExecutionService: Object.freeze({
+    invoke: vi.fn(),
+    stream: vi.fn()
+  })
+}))
 vi.mock('./host/plugin-intelligence-host-service', () => ({
   createPluginIntelligenceHostService: () =>
     Object.freeze({
@@ -227,6 +235,18 @@ vi.mock('./host/plugin-intelligence-context-host-service', () => ({
     }),
   validatePluginIntelligenceContextRequest: vi.fn((value) => value),
   validatePluginIntelligenceContextResult: vi.fn((value) => value)
+}))
+vi.mock('./host/plugin-intelligence-context-stream-capabilities', () => ({
+  createPluginIntelligenceContextStreamCapabilities: () =>
+    Object.freeze({
+      definitions: Object.freeze([Object.freeze({ id: 'intelligence.stream' })])
+    })
+}))
+vi.mock('./host/plugin-intelligence-context-stream-host-service', () => ({
+  createPluginIntelligenceContextStreamHostService: () =>
+    Object.freeze({
+      contextStream: vi.fn()
+    })
 }))
 vi.mock('../network', () => ({ getNetworkService: mocks.getNetworkService }))
 vi.mock('../permission', () => ({
@@ -270,6 +290,8 @@ vi.mock('./plugin', () => ({
     static setSystemActionCapabilityFactory = mocks.setSystemActionCapabilityFactory
     static setBrowserOpenCapabilityFactory = mocks.setBrowserOpenCapabilityFactory
     static setBrowserDataCapabilityFactory = mocks.setBrowserDataCapabilityFactory
+    static setTranslationCapabilityFactory = mocks.setTranslationCapabilityFactory
+    static setIntelligenceContextCapabilityFactory = mocks.setIntelligenceContextCapabilityFactory
     static setWindowManagerCapabilityFactory = mocks.setWindowManagerCapabilityFactory
     static setWindowPresetCapabilityFactory = mocks.setWindowPresetCapabilityFactory
     static setWorkspaceScriptCapabilityFactory = mocks.setWorkspaceScriptCapabilityFactory
@@ -373,6 +395,8 @@ describe('PluginModule facade', () => {
     mocks.setSystemActionCapabilityFactory.mockReset()
     mocks.setBrowserOpenCapabilityFactory.mockReset()
     mocks.setBrowserDataCapabilityFactory.mockReset()
+    mocks.setTranslationCapabilityFactory.mockReset()
+    mocks.setIntelligenceContextCapabilityFactory.mockReset()
     mocks.setWindowManagerCapabilityFactory.mockReset()
     mocks.setWindowPresetCapabilityFactory.mockReset()
     mocks.setWorkspaceScriptCapabilityFactory.mockReset()
@@ -414,7 +438,7 @@ describe('PluginModule facade', () => {
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
   })
 
-  it('wires the immutable 31-ID global manifest and activation-local system factory', async () => {
+  it('wires the immutable 30-ID global manifest and activation-local capability factories', async () => {
     const module = new PluginModule()
     mocks.manager.getPluginByName.mockImplementation((name) =>
       name === 'calendar' ? mocks.plugin : undefined
@@ -428,7 +452,7 @@ describe('PluginModule facade', () => {
     const definitions = runtimeOptions?.capabilityDefinitions as
       | ReadonlyArray<{ id: string }>
       | undefined
-    expect(definitions).toHaveLength(31)
+    expect(definitions).toHaveLength(30)
     expect(definitions?.map((definition) => definition.id)).toContain('plugin.info.get')
     expect(definitions?.map((definition) => definition.id)).toContain('permission.check')
     expect(definitions?.map((definition) => definition.id)).toContain('http.request')
@@ -437,27 +461,53 @@ describe('PluginModule facade', () => {
     expect(definitions?.map((definition) => definition.id)).toContain('flow.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('voice.invoke')
     expect(definitions?.map((definition) => definition.id)).toContain('voice.stream')
-    expect(
-      definitions?.filter((definition) => definition.id === 'intelligence.invoke')
-    ).toHaveLength(1)
-    expect(
-      definitions?.filter((definition) => definition.id === 'intelligence.context.invoke')
-    ).toHaveLength(1)
+    expect(definitions?.map((definition) => definition.id)).not.toContain('intelligence.invoke')
+    expect(definitions?.map((definition) => definition.id)).not.toContain(
+      'intelligence.context.invoke'
+    )
     expect(definitions?.map((definition) => definition.id)).not.toContain('system.invoke')
     expect(Object.isFrozen(definitions)).toBe(true)
     expect(mocks.setRuntimeService).toHaveBeenCalledWith(null)
     expect(mocks.setWindowPresetCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setBrowserOpenCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setBrowserDataCapabilityFactory.mock.calls[0]).toEqual([null])
+    expect(mocks.setTranslationCapabilityFactory.mock.calls[0]).toEqual([null])
+    expect(mocks.setIntelligenceContextCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setWindowManagerCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setWorkspaceScriptCapabilityFactory.mock.calls[0]).toEqual([null])
     expect(mocks.setSnipasteProcessCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setTranslationCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+    expect(mocks.setIntelligenceContextCapabilityFactory).toHaveBeenLastCalledWith(
+      expect.any(Function)
+    )
     expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
     expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(expect.any(Function))
+
+    const contextFactory = mocks.setIntelligenceContextCapabilityFactory.mock.calls.at(-1)?.[0] as
+      | ((activation: {
+          name: string
+          pluginInstanceId: string
+          activationGeneration: number
+          key: string
+        }) => { definitions: ReadonlyArray<{ id: string }> })
+      | undefined
+    const intelligenceActivation = Object.freeze({
+      name: 'touch-intelligence',
+      pluginInstanceId: 'intelligence-instance',
+      activationGeneration: 1,
+      key: 'intelligence-key'
+    })
+    expect(contextFactory?.(intelligenceActivation).definitions.map((entry) => entry.id)).toEqual([
+      'intelligence.context.invoke',
+      'intelligence.stream'
+    ])
+    expect(() => contextFactory?.({ ...intelligenceActivation, name: 'calendar' })).toThrow(
+      'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_INVALID'
+    )
 
     const authorize = runtimeOptions?.authorizeCapability as
       | ((pluginName: string, permissionId: string) => boolean)
@@ -781,6 +831,8 @@ describe('PluginModule facade', () => {
     expect(mocks.setSystemActionCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setBrowserOpenCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setBrowserDataCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setTranslationCapabilityFactory).toHaveBeenLastCalledWith(null)
+    expect(mocks.setIntelligenceContextCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setWindowManagerCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setWindowPresetCapabilityFactory).toHaveBeenLastCalledWith(null)
     expect(mocks.setWorkspaceScriptCapabilityFactory).toHaveBeenLastCalledWith(null)

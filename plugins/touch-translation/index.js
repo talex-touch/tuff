@@ -1,1630 +1,339 @@
-const {
-  plugin,
-  clipboard,
-  http,
-  channel,
-  logger,
-  URLSearchParams,
-  TuffItemBuilder,
-  permission,
-} = globalThis
-
-const crypto = require('node:crypto')
-const {
-  DEFAULT_ENABLED_PROVIDER_IDS,
-  NO_INPUT_OCR_MESSAGE,
-  NO_INPUT_SCREENSHOT_MESSAGE,
-  NO_INPUT_TEXT_MESSAGE,
-  PERMISSION_DENIED_MESSAGE,
-  detectLanguage,
-  getEnabledProviderIds,
-  getTranslationProviderLabel,
-  normalizeCallFailureMessage,
-  normalizeTranslationErrorMessage,
-  parseImageDataUrl,
-  resolveTargetLanguage,
-  toImageDataUrl,
-} = require('../../packages/utils/plugin/translation.cjs')
+const { plugin, clipboard, logger, TuffItemBuilder, manifest: pluginManifest } = globalThis
 
 const PLUGIN_NAME = 'touch-translation'
 const SOURCE_ID = 'plugin-features'
-const SUPPORTED_TRANSLATION_FEATURES = new Set(['touch-translate', 'screenshot-translate'])
-const TUFF_INTELLIGENCE_PROVIDER_ID = 'tuffintelligence'
-const TEXT_TRANSLATE_CAPABILITY_ID = 'text.translate'
-const IMAGE_TRANSLATION_ITEM_ID = 'image-translation-widget'
-const IMAGE_TRANSLATION_TARGET_LANG = 'zh'
-const DETACHED_PAYLOAD_STATE_KEY = 'detachedPayload'
-const PROVIDER_SECRET_FIELDS = {
-  deepl: ['apiKey'],
-  bing: ['apiKey'],
-  custom: ['apiKey'],
-  baidu: ['secretKey'],
-  tencent: ['secretId', 'secretKey'],
-  caiyun: ['token'],
-}
+const ICON = { type: 'class', value: 'i-ri-translate-2' }
+const COPY_ACTION_ID = 'copy-translation'
+const MAX_INPUT_LENGTH = 32 * 1024
+const MAX_RESULT_LENGTH = 32 * 1024
+const MAX_PROVIDERS = 3
+const SUPPORTED_FEATURES = new Set([
+  'touch-translate',
+  'multi-source-translate',
+  'screenshot-translate',
+])
 
-let createIntelligenceClientLoader = null
-let makeWidgetIdLoader = null
-
-function getCreateIntelligenceClient() {
-  if (!createIntelligenceClientLoader) {
-    ({ createIntelligenceClient: createIntelligenceClientLoader } = require('@talex-touch/tuff-intelligence/client'))
-  }
-  return createIntelligenceClientLoader
-}
-
-function getMakeWidgetId() {
-  if (!makeWidgetIdLoader) {
-    try {
-      ;({ makeWidgetId: makeWidgetIdLoader } = require('@talex-touch/utils/plugin/widget'))
-    }
-    catch {
-      makeWidgetIdLoader = (pluginName, featureId) => `${pluginName}::${featureId}`
-    }
-  }
-  return makeWidgetIdLoader
-}
+const requestSequence = new Map()
+const activeRequests = new Map()
+const approvedCopies = new Map()
+let publishQueue = Promise.resolve()
+let runtimeGeneration = 1
+const activationGeneration = Number.isSafeInteger(pluginManifest?.activationGeneration)
+  ? pluginManifest.activationGeneration
+  : 0
 
 function normalizeText(value) {
-  return String(value ?? '').trim()
+  return typeof value === 'string' ? value.trim() : ''
 }
 
-function truncateText(value, max = 96) {
+function truncateText(value, maximum) {
   const text = normalizeText(value)
-  if (!text)
-    return ''
-  if (text.length <= max)
+  if (text.length <= maximum)
     return text
-  return `${text.slice(0, max - 1)}…`
+  return `${text.slice(0, maximum - 1)}…`
 }
 
+function queryText(query) {
+  if (typeof query === 'string')
+    return query
+  return query && typeof query === 'object' && typeof query.text === 'string'
+    ? query.text
+    : ''
+}
 
-function buildInfoItem({ id, featureId, title, subtitle }) {
+function queryImage(query) {
+  if (!query || typeof query !== 'object' || !Array.isArray(query.inputs))
+    return ''
+  const input = query.inputs.find(candidate =>
+    candidate
+    && candidate.type === 'image'
+    && typeof candidate.content === 'string'
+    && candidate.content.startsWith('data:image/'))
+  return input ? input.content : ''
+}
+
+function detectLanguage(text) {
+  return /[\u3400-\u9FFF]/u.test(text) ? 'zh' : 'auto'
+}
+
+function targetLanguage(sourceLanguage) {
+  return sourceLanguage === 'zh' ? 'en' : 'zh'
+}
+
+function stableFailureCode(error) {
+  if (!error || typeof error !== 'object')
+    return 'TRANSLATION_FAILED'
+  const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
+  return descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
+    ? descriptor.value
+    : 'TRANSLATION_FAILED'
+}
+
+function failureKind(error) {
+  const code = stableFailureCode(error)
+  if (code.includes('PERMISSION'))
+    return { title: '翻译权限未授予', subtitle: '请在插件权限设置中授予 intelligence.basic' }
+  if (code.includes('CANCEL'))
+    return { title: '翻译已取消', subtitle: '请求已安全停止' }
+  return { title: '翻译失败', subtitle: '翻译服务暂不可用，请稍后重试' }
+}
+
+function infoItem(id, featureId, title, subtitle) {
   return new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
-    .setIcon({ type: 'file', value: 'assets/logo.svg' })
+    .setIcon(ICON)
     .setMeta({ pluginName: PLUGIN_NAME, featureId })
     .build()
 }
-const WIDGET_ITEM_ID = 'translation-widget'
 
-const latestRequestSeqByFeature = new Map()
-
-const debounceTimersByFeature = new Map()
-const abortControllersByFeature = new Map()
-const lastQueryByFeature = new Map()
-const widgetStateByFeature = new Map()
-
-let networkPermissionState = null
-let aiPermissionState = null
-
-function resolveRuntimeChannel() {
-  return globalThis.touchChannel || globalThis.$touchChannel || channel || globalThis.channel
+function resultItem(featureId, requestId, index, sourceText, result) {
+  const translatedText = truncateText(result.result, MAX_RESULT_LENGTH)
+  const providerName = truncateText(result.provider || 'host', 96)
+  const modelName = truncateText(result.model || 'default', 96)
+  return new TuffItemBuilder(`${featureId}-translation-${index}`)
+    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
+    .setTitle(translatedText || '翻译结果为空')
+    .setSubtitle(`${providerName} · ${modelName} · 原文：${truncateText(sourceText, 160)}`)
+    .setIcon(ICON)
+    .setMeta({
+      pluginName: PLUGIN_NAME,
+      featureId,
+      defaultAction: COPY_ACTION_ID,
+    })
+    .createAndAddAction(COPY_ACTION_ID, 'plugin', '复制译文', {
+      requestId,
+      text: translatedText,
+    })
+    .build()
 }
 
-function getProviderSecretKey(providerId, field) {
-  return `providers.${providerId}.${field}`
+function isCurrent(featureId, requestId, generation) {
+  return runtimeGeneration === generation && activeRequests.get(featureId) === requestId
 }
 
-function stripProviderSecrets(providerId, config) {
-  const next = { ...(config || {}) }
-  for (const field of PROVIDER_SECRET_FIELDS[providerId] || []) {
-    delete next[field]
-  }
-  return next
-}
-
-async function mergeProviderSecrets(providerId, config) {
-  const next = { ...(config || {}) }
-  if (!plugin.secret) {
-    return next
-  }
-  for (const field of PROVIDER_SECRET_FIELDS[providerId] || []) {
-    const stored = await plugin.secret.get(getProviderSecretKey(providerId, field))
-    if (stored) {
-      next[field] = stored
-    }
-  }
-  return next
-}
-
-async function ensureNetworkPermission() {
-  if (!permission?.check || !permission?.request)
-    return false
-
-  if (networkPermissionState === true)
-    return true
-
-  try {
-    const hasNetwork = await permission.check('network.internet')
-    if (hasNetwork) {
-      networkPermissionState = true
+function publish(featureId, requestId, generation, items, signal) {
+  const task = publishQueue
+    .catch(() => undefined)
+    .then(async () => {
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
+        return false
+      await plugin.feature.clearItems()
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
+        return false
+      await plugin.feature.pushItems(items)
       return true
-    }
-
-    const granted = await permission.request('network.internet', '需要网络权限以访问翻译服务')
-    if (granted) {
-      networkPermissionState = true
-      return true
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-translation] Failed to request network permission', error)
-  }
-
-  return false
+    })
+  publishQueue = task.then(() => undefined, () => undefined)
+  return task
 }
 
-async function ensureAiPermission() {
-  if (!permission?.check || !permission?.request)
-    return false
-
-  if (aiPermissionState === true)
-    return true
-
-  try {
-    const hasAi = await permission.check('intelligence.basic')
-    if (hasAi) {
-      aiPermissionState = true
-      return true
-    }
-
-    const granted = await permission.request('intelligence.basic', '需要 AI 权限以使用智能翻译')
-    if (granted) {
-      aiPermissionState = true
-      return true
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-translation] Failed to request AI permission', error)
-  }
-
-  return false
+async function publicProviders() {
+  const listed = await plugin.translation.listProviders()
+  if (!Array.isArray(listed))
+    return []
+  return listed
+    .filter(provider =>
+      provider
+      && typeof provider.providerId === 'string'
+      && provider.available === true
+      && Array.isArray(provider.capabilities)
+      && provider.capabilities.includes('text.translate'))
+    .slice(0, 32)
 }
 
-async function ensureClipboardWritePermission() {
-  if (!permission?.check || !permission?.request)
-    return false
-
-  try {
-    const hasClipboardWrite = await permission.check('clipboard.write')
-    if (hasClipboardWrite)
-      return true
-    const granted = await permission.request('clipboard.write', '需要剪贴板写入权限以复制翻译结果')
-    return Boolean(granted)
-  }
-  catch (error) {
-    logger?.warn?.('[touch-translation] Failed to request clipboard permission', error)
-    return false
-  }
+async function selectedProviders(featureId) {
+  const available = await publicProviders()
+  return available.slice(0, featureId === 'multi-source-translate' ? MAX_PROVIDERS : 1)
 }
 
-function extractQueryText(query) {
-  if (typeof query === 'string') {
-    return query
-  }
-  if (query && typeof query === 'object' && typeof query.text === 'string') {
-    return query.text
-  }
-  return ''
-}
+async function resolveInput(featureId, query, requestId) {
+  const directText = truncateText(queryText(query), MAX_INPUT_LENGTH)
+  if (directText)
+    return directText
+  if (featureId !== 'screenshot-translate')
+    return ''
 
-function extractImageDataUrl(query) {
-  if (!query || typeof query !== 'object' || !Array.isArray(query.inputs)) {
-    return null
-  }
-
-  const imageInput = query.inputs.find(input =>
-    input?.type === 'image'
-    && typeof input?.content === 'string'
-    && input.content.startsWith('data:image/'))
-  return imageInput?.content || null
-}
-
-async function resolveTextToTranslate(featureId, query) {
-  const textQuery = extractQueryText(query).trim()
-  if (textQuery) {
-    return { text: textQuery }
-  }
-
-  if (featureId !== 'screenshot-translate') {
-    return { text: '', error: NO_INPUT_TEXT_MESSAGE }
-  }
-
-  const imageDataUrl = extractImageDataUrl(query)
-  if (!imageDataUrl) {
-    return { text: '', error: NO_INPUT_SCREENSHOT_MESSAGE }
-  }
-
-  const hasAiPermission = await ensureAiPermission()
-  if (!hasAiPermission) {
-    return { text: '', error: PERMISSION_DENIED_MESSAGE }
-  }
-
-  try {
-    const aiClient = getCreateIntelligenceClient()()
-    const ocrResult = await aiClient.invoke('vision.ocr', {
-      source: {
-        type: 'data-url',
-        dataUrl: imageDataUrl,
-      },
+  const image = queryImage(query)
+  if (!image)
+    return ''
+  const ocr = await plugin.translation.ocr(
+    {
+      source: { type: 'data-url', dataUrl: image },
       language: 'zh-CN',
       includeLayout: false,
       includeKeywords: false,
-    })
-    const ocrText = typeof ocrResult?.result?.text === 'string'
-      ? ocrResult.result.text.trim()
-      : ''
-    if (!ocrText) {
-      return { text: '', error: NO_INPUT_OCR_MESSAGE }
-    }
-    return { text: ocrText }
-  }
-  catch (error) {
-    return { text: '', error: normalizeCallFailureMessage(error instanceof Error ? error.message : '') }
-  }
-}
-
-async function resolveTuffIntelligenceAuthToken() {
-  const runtimeChannel = resolveRuntimeChannel()
-  if (!runtimeChannel?.send) {
-    return ''
-  }
-
-  try {
-    let eventName = 'account:auth:get-token'
-    try {
-      const { AccountEvents } = require('@talex-touch/utils/transport/events')
-      eventName = AccountEvents.auth.getToken.toEventName()
-    }
-    catch {
-      // Keep the root CommonJS prelude usable in sandboxed plugin loaders.
-    }
-    const token = await runtimeChannel.send(eventName)
-    return typeof token === 'string' ? token.trim() : ''
-  }
-  catch {
-    return ''
-  }
-}
-
-async function canUseTuffIntelligenceProvider() {
-  const token = await resolveTuffIntelligenceAuthToken()
-  if (!token || token === 'guest') {
-    return false
-  }
-  return hasAvailableTextTranslateCapability()
-}
-
-async function hasAvailableTextTranslateCapability() {
-  try {
-    const client = getCreateIntelligenceClient()(resolveRuntimeChannel())
-    if (typeof client.getCapabilityStatus !== 'function') {
-      return true
-    }
-
-    const status = await client.getCapabilityStatus({
-      capabilityId: TEXT_TRANSLATE_CAPABILITY_ID,
-    })
-    return Boolean(status?.available)
-  }
-  catch (error) {
-    logger?.warn?.('[touch-translation] Failed to check Intelligence text.translate availability', error)
-    return false
-  }
-}
-
-async function filterAuthorizedProviderConfigs(providersToShow, guards = {
-  canUseTuffIntelligenceProvider,
-}) {
-  if (!providersToShow.some(provider => provider.id === TUFF_INTELLIGENCE_PROVIDER_ID)) {
-    return providersToShow
-  }
-
-  if (await guards.canUseTuffIntelligenceProvider()) {
-    return providersToShow
-  }
-
-  return providersToShow.filter(provider => provider.id !== TUFF_INTELLIGENCE_PROVIDER_ID)
-}
-
-async function loadEnabledProviderConfigs() {
-  const providersConfig = await plugin.storage.getFile('providers_config')
-  const enabledProviderIds = getEnabledProviderIds(providersConfig)
-  const providerConfigs = await Promise.all(enabledProviderIds.map(async (providerId) => {
-    const providerConfig = providersConfig && typeof providersConfig === 'object' ? providersConfig[providerId] : null
-    const rawConfig = providerConfig && typeof providerConfig === 'object'
-      ? providerConfig.config
-      : null
-    return {
-      id: providerId,
-      enabled: providerConfig?.enabled,
-      config: await mergeProviderSecrets(providerId, rawConfig),
-      metadata: stripProviderSecrets(providerId, rawConfig),
-    }
-  }))
-
-  return filterAuthorizedProviderConfigs(providerConfigs)
-}
-
-async function startTranslationRequest(textToTranslate, featureId, signal, nextSeq) {
-  const detectedLang = detectLanguage(textToTranslate)
-  const targetLang = resolveTargetLanguage(detectedLang)
-  const requestId = `translation-${Date.now()}-${nextSeq}`
-
-  const providersToShow = await loadEnabledProviderConfigs()
-  const state = createWidgetState(
-    featureId,
-    textToTranslate,
-    detectedLang,
-    targetLang,
-    providersToShow,
-    requestId,
-    nextSeq,
-  )
-
-  const usesNetworkProviders = providersToShow.some(provider => provider.id !== 'tuffintelligence')
-  if (usesNetworkProviders && !(await ensureNetworkPermission())) {
-    state.error = PERMISSION_DENIED_MESSAGE
-    upsertWidgetItem(featureId)
-    return
-  }
-
-  upsertWidgetItem(featureId)
-  Promise.resolve().then(() => translateAndUpsertResults(textToTranslate, featureId, signal, nextSeq, providersToShow, detectedLang, targetLang))
-}
-
-/**
- * Creates an MD5 hash of the given string.
- * @param {string} string The string to hash.
- * @returns {string} The MD5 hash.
- */
-function md5(string) {
-  return crypto.createHash('md5').update(string).digest('hex')
-}
-
-function upsertFeatureItem(item) {
-  try {
-    plugin.feature.updateItem(item.id, item)
-    return
-  }
-  catch {
-    // ignore and fallback to pushItems
-  }
-
-  plugin.feature.pushItems([item])
-}
-
-function resolveWidgetStatus(state) {
-  if (!state.query) {
-    return 'idle'
-  }
-  if (state.error) {
-    return 'error'
-  }
-  const hasPending = state.providers.some(provider => provider.status === 'pending')
-  return hasPending ? 'running' : 'complete'
-}
-
-function buildWidgetPayload(state) {
-  return {
-    requestId: state.requestId,
-    query: state.query,
-    detectedLang: state.detectedLang,
-    targetLang: state.targetLang,
-    status: resolveWidgetStatus(state),
-    providers: state.providers,
-    error: state.error || undefined,
-    updatedAt: Date.now(),
-  }
-}
-
-function buildWidgetItem(featureId, state) {
-  const status = resolveWidgetStatus(state)
-  const statusLabel = status === 'idle'
-    ? '等待输入'
-    : status === 'running'
-      ? '翻译中'
-      : status === 'complete'
-        ? '翻译完成'
-        : '翻译失败'
-
-  return new TuffItemBuilder(WIDGET_ITEM_ID)
-    .setSource('plugin', 'plugin-features', PLUGIN_NAME)
-    .setTitle(state.query ? `翻译：${state.query}` : '翻译')
-    .setSubtitle(statusLabel)
-    .setIcon({ type: 'file', value: 'assets/logo.svg' })
-    .setCustomRender('vue', getMakeWidgetId()(PLUGIN_NAME, featureId), buildWidgetPayload(state))
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      pluginType: 'translation',
-      keepCoreBoxOpen: true,
-    })
-    .build()
-}
-
-function buildImageTranslationItem(featureId, payload) {
-  const title = payload.status === 'complete' ? '图片翻译完成' : '图片翻译失败'
-  const subtitle = payload.status === 'complete'
-    ? '已生成译文图片'
-    : payload.error || '无法完成图片翻译'
-
-  return new TuffItemBuilder(IMAGE_TRANSLATION_ITEM_ID)
-    .setSource('plugin', 'plugin-features', PLUGIN_NAME)
-    .setTitle(title)
-    .setSubtitle(subtitle)
-    .setIcon({ type: 'file', value: 'assets/logo.svg' })
-    .setCustomRender('vue', getMakeWidgetId()(PLUGIN_NAME, featureId), payload)
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      pluginType: 'translation',
-      keepCoreBoxOpen: true,
-    })
-    .build()
-}
-
-function buildDetachedFeatureUrl(item, query, pluginId) {
-  const params = new URLSearchParams({
-    itemId: item.id,
-    query,
-    source: pluginId,
-    providerSource: item.source?.id || 'plugin-features',
-  })
-  return `tuff://detached?${params.toString()}`
-}
-
-function buildDetachedPayload(item, query) {
-  return {
-    item: JSON.parse(JSON.stringify(item)),
-    query,
-  }
-}
-
-async function openImageTranslationDivisionBox(featureId, payload) {
-  const item = buildImageTranslationItem(featureId, payload)
-  if (!plugin?.divisionBox?.open) {
-    upsertFeatureItem(item)
-    return false
-  }
-
-  const detachedPayload = buildDetachedPayload(item, '')
-  const session = await plugin.divisionBox.open({
-    url: buildDetachedFeatureUrl(item, '', PLUGIN_NAME),
-    title: '图片翻译',
-    icon: { type: 'file', value: 'assets/logo.svg' },
-    size: 'expanded',
-    keepAlive: true,
-    pluginId: PLUGIN_NAME,
-    header: { show: false },
-    ui: { showInput: false, initialInput: '' },
-    initialState: {
-      [DETACHED_PAYLOAD_STATE_KEY]: detachedPayload,
     },
-  })
-
-  if (!session?.sessionId) {
-    throw new Error('DivisionBox session was not created')
-  }
-
-  if (typeof plugin.divisionBox.updateState === 'function') {
-    await plugin.divisionBox.updateState(session.sessionId, DETACHED_PAYLOAD_STATE_KEY, detachedPayload)
-  }
-
-  return true
-}
-
-async function presentImageTranslationResult(featureId, payload) {
-  try {
-    const opened = await openImageTranslationDivisionBox(featureId, payload)
-    if (!opened) {
-      upsertFeatureItem(buildImageTranslationItem(featureId, payload))
-    }
-  }
-  catch (error) {
-    logger?.warn?.('Failed to open image translation DivisionBox:', error)
-    upsertFeatureItem(buildImageTranslationItem(featureId, payload))
-  }
-}
-
-async function translateImageFromClipboardInput(featureId, query) {
-  const imageDataUrl = extractImageDataUrl(query)
-  if (!imageDataUrl) {
-    return false
-  }
-
-  const parsed = parseImageDataUrl(imageDataUrl)
-  if (!parsed) {
-    return false
-  }
-
-  const requestId = `image-translation-${Date.now()}`
-  const hasAiPermission = await ensureAiPermission()
-  if (!hasAiPermission) {
-    await presentImageTranslationResult(featureId, {
-      mode: 'image-translation',
-      requestId,
-      status: 'error',
-      sourceImageDataUrl: imageDataUrl,
-      error: PERMISSION_DENIED_MESSAGE,
-      updatedAt: Date.now(),
-    })
-    return true
-  }
-
-  try {
-    const aiClient = getCreateIntelligenceClient()()
-    const response = await aiClient.invoke(
-      'image.translate.e2e',
-      {
-        imageBase64: parsed.base64,
-        imageMimeType: parsed.mime,
-        targetLang: IMAGE_TRANSLATION_TARGET_LANG,
-        metadata: {
-          caller: PLUGIN_NAME,
-          entry: featureId,
-        },
-      },
-      {
-        metadata: {
-          caller: PLUGIN_NAME,
-          entry: featureId,
-        },
-      },
-    )
-
-    const result = response?.result
-    if (!result?.translatedImageBase64) {
-      throw new Error('EMPTY_IMAGE_TRANSLATE_RESULT')
-    }
-
-    await presentImageTranslationResult(featureId, {
-      mode: 'image-translation',
-      requestId,
-      status: 'complete',
-      sourceImageDataUrl: imageDataUrl,
-      translatedImageDataUrl: toImageDataUrl(result.translatedImageBase64, result.imageMimeType),
-      sourceText: result.sourceText,
-      targetText: result.targetText,
-      provider: response.provider,
-      model: response.model,
-      traceId: response.traceId,
-      updatedAt: Date.now(),
-    })
-  }
-  catch (error) {
-    const errorPayload = {
-      mode: 'image-translation',
-      requestId,
-      status: 'error',
-      sourceImageDataUrl: imageDataUrl,
-      error: normalizeCallFailureMessage(describeRuntimeError(error)),
-      updatedAt: Date.now(),
-    }
-    await presentImageTranslationResult(featureId, errorPayload)
-  }
-
-  return true
-}
-
-function describeRuntimeError(error) {
-  if (error instanceof Error) {
-    return error.message.trim() || error.name || 'Unknown error'
-  }
-
-  if (typeof error === 'string') {
-    return error.trim() || 'Unknown error'
-  }
-
-  if (error && typeof error === 'object') {
-    try {
-      const serialized = JSON.stringify(error)
-      if (serialized && serialized !== '{}') {
-        return serialized
-      }
-    }
-    catch {
-      // Ignore serialization errors and fall through to the default message.
-    }
-  }
-
-  return 'Unknown error'
-}
-
-function upsertRequestErrorWidget(featureId, textToTranslate, nextSeq, error) {
-  const normalizedQuery = normalizeText(textToTranslate)
-  const detectedLang = normalizedQuery ? detectLanguage(normalizedQuery) : ''
-  const targetLang = detectedLang ? resolveTargetLanguage(detectedLang) : ''
-  const existing = widgetStateByFeature.get(featureId)
-  const state = existing || createWidgetState(
-    featureId,
-    normalizedQuery,
-    detectedLang,
-    targetLang,
-    [],
-    `translation-error-${Date.now()}-${nextSeq}`,
-    nextSeq,
+    { metadata: { entry: featureId, featureId, requestId, capabilityId: 'vision.ocr' } },
   )
-
-  state.requestSeq = nextSeq
-  state.requestId = state.requestId || `translation-error-${Date.now()}-${nextSeq}`
-  state.query = normalizedQuery
-  state.detectedLang = detectedLang
-  state.targetLang = targetLang
-  state.error = normalizeCallFailureMessage(describeRuntimeError(error))
-  state.updatedAt = Date.now()
-
-  widgetStateByFeature.set(featureId, state)
-  upsertWidgetItem(featureId)
+  return truncateText(ocr && ocr.result && ocr.result.text, MAX_INPUT_LENGTH)
 }
 
-function upsertWidgetItem(featureId) {
-  const state = widgetStateByFeature.get(featureId)
-  if (!state) {
-    return
-  }
-  state.updatedAt = Date.now()
-  upsertFeatureItem(buildWidgetItem(featureId, state))
-}
-
-function ensureIdleWidget(featureId) {
-  const state = {
-    requestId: `idle-${Date.now()}`,
-    requestSeq: latestRequestSeqByFeature.get(featureId) || 0,
-    query: '',
-    detectedLang: '',
-    targetLang: '',
-    providers: [],
-    error: null,
-    updatedAt: Date.now(),
-  }
-  widgetStateByFeature.set(featureId, state)
-  upsertWidgetItem(featureId)
-}
-
-function createWidgetState(featureId, textToTranslate, detectedLang, targetLang, providersToShow, requestId, requestSeq) {
-  const state = {
-    requestId,
-    requestSeq,
-    query: textToTranslate,
-    detectedLang,
-    targetLang,
-    providers: providersToShow.map(provider => ({
-      id: provider.id,
-      name: getTranslationProviderLabel(provider.id),
-      status: 'pending',
-    })),
-    error: null,
-    updatedAt: Date.now(),
-  }
-
-  widgetStateByFeature.set(featureId, state)
-  return state
-}
-
-function updateProviderState(featureId, providerId, patch) {
-  const state = widgetStateByFeature.get(featureId)
-  if (!state) {
-    return
-  }
-
-  const provider = state.providers.find(item => item.id === providerId)
-  if (!provider) {
-    return
-  }
-
-  Object.assign(provider, patch)
-  upsertWidgetItem(featureId)
-}
-
-/**
- * @param {string} originalText
- * @param {string} featureId
- * @param {string} service
- * @param {string} from
- * @param {string} to
- * @returns {import('@talex-touch/utils').TuffItem}
- */
-/**
- * Runs translation asynchronously and upserts final results.
- * @param {string} textToTranslate
- * @param {string} featureId
- * @param {AbortSignal} signal
- * @param {number} requestSeq
- */
-async function translateAndUpsertResults(textToTranslate, featureId, signal, requestSeq, providersToUse, detectedLang, targetLang) {
-  try {
-    if (signal?.aborted) {
-      return
-    }
-
-    if (latestRequestSeqByFeature.get(featureId) !== requestSeq) {
-      return
-    }
-
-    const state = widgetStateByFeature.get(featureId)
-    if (!state || state.requestSeq !== requestSeq) {
-      return
-    }
-
-    const runProvider = async (provider) => {
-      if (signal?.aborted)
-        return
-      if (latestRequestSeqByFeature.get(featureId) !== requestSeq)
-        return
-
-      let result = null
-      switch (provider.id) {
-        case 'tuffintelligence':
-          if (!(await ensureAiPermission())) {
-            updateProviderState(featureId, provider.id, {
-              status: 'error',
-              error: PERMISSION_DENIED_MESSAGE,
-            })
-            return
-          }
-          result = await translateWithTuffIntelligence(textToTranslate, detectedLang, targetLang)
-          break
-        case 'google':
-          result = await translateWithGoogle(textToTranslate, 'auto', targetLang, signal)
-          break
-        case 'deepl':
-          result = await translateWithDeepL(
-            textToTranslate,
-            'auto',
-            targetLang,
-            provider.config?.apiKey,
-            signal,
-          )
-          break
-        case 'bing':
-          result = await translateWithBing(
-            textToTranslate,
-            'auto',
-            targetLang,
-            provider.config?.apiKey,
-            provider.config?.region,
-            signal,
-          )
-          break
-        case 'baidu':
-          result = await translateWithBaidu(
-            textToTranslate,
-            'auto',
-            targetLang,
-            provider.config?.appId,
-            provider.config?.secretKey,
-            signal,
-          )
-          break
-        case 'tencent':
-          result = await translateWithTencent(
-            textToTranslate,
-            'auto',
-            targetLang,
-            provider.config?.secretId,
-            provider.config?.secretKey,
-            signal,
-          )
-          break
-        case 'caiyun':
-          result = await translateWithCaiyun(
-            textToTranslate,
-            'auto',
-            targetLang,
-            provider.config?.token,
-            signal,
-          )
-          break
-        case 'custom':
-          result = await translateWithCustom(textToTranslate, 'auto', targetLang, provider.config, signal)
-          break
-        case 'mymemory':
-          result = await translateWithMyMemory(textToTranslate, 'auto', targetLang, signal)
-          break
-        default:
-          return
-      }
-
-      if (signal?.aborted)
-        return
-      if (latestRequestSeqByFeature.get(featureId) !== requestSeq)
-        return
-
-      if (!result || result.error) {
-        const errorMessage = normalizeCallFailureMessage(result?.error || '')
-        updateProviderState(featureId, provider.id, {
-          status: 'error',
-          error: errorMessage,
-        })
-        return
-      }
-
-      updateProviderState(featureId, provider.id, {
-        status: 'success',
-        translatedText: result.text,
-        from: result.from || detectedLang,
-        to: result.to || targetLang,
-        provider: result.provider,
-        model: result.model,
-        traceId: result.traceId,
-      })
-    }
-
-    await Promise.allSettled(providersToUse.map(runProvider))
-  }
-  catch (error) {
-    if (!signal?.aborted) {
-      logger?.error?.('Error processing translation feature (async):', error)
-    }
-    const state = widgetStateByFeature.get(featureId)
-    if (state) {
-      state.error = normalizeCallFailureMessage(error instanceof Error ? error.message : '')
-      upsertWidgetItem(featureId)
-    }
-  }
-}
-
-async function translateWithTuffIntelligence(text, from = 'auto', to = 'zh') {
-  try {
-    const client = getCreateIntelligenceClient()()
-
-    const payload = {
+async function translateWithProvider(featureId, requestId, text, provider) {
+  const sourceLang = detectLanguage(text)
+  const targetLang = targetLanguage(sourceLang)
+  const defaultModel = typeof provider.defaultModel === 'string' ? provider.defaultModel : undefined
+  return plugin.translation.translate(
+    {
       text,
-      targetLang: to,
-    }
-
-    if (from && from !== 'auto') {
-      payload.sourceLang = from
-    }
-
-    const response = await client.invoke('text.translate', payload)
-    const translatedText = response?.result
-    if (typeof translatedText !== 'string') {
-      throw new TypeError('Invalid intelligence translate result')
-    }
-
-    return {
-      text: translatedText.trim() || text,
-      from,
-      to,
-      service: 'tuffintelligence',
-      provider: response?.provider,
-      model: response?.model,
-      traceId: response?.traceId,
-    }
-  }
-  catch (error) {
-    logger?.error?.('TuffIntelligence Translate error:', error)
-    return {
-      text: `[TuffIntelligence Failed] ${text}`,
-      from,
-      to,
-      service: 'tuffintelligence',
-      error: error.message,
-    }
-  }
+      ...(sourceLang === 'auto' ? {} : { sourceLang }),
+      targetLang,
+    },
+    {
+      preferredProviderId: provider.providerId,
+      ...(defaultModel ? { modelPreference: [defaultModel] } : {}),
+      metadata: {
+        entry: featureId,
+        featureId,
+        requestId,
+        capabilityId: 'text.translate',
+        selectedProviderId: provider.providerId,
+        ...(defaultModel ? { selectedModel: defaultModel } : {}),
+      },
+    },
+  )
 }
 
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithGoogle(text, from = 'auto', to = 'zh', signal) {
-  try {
-    const params = new URLSearchParams({
-      client: 'gtx',
-      sl: from,
-      tl: to,
-      dt: 't',
-      q: text,
-    })
-
-    const url = `https://translate.googleapis.com/translate_a/single?${params.toString()}`
-
-    const response = await http.get(url, {
-      signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-    })
-
-    const data = response.data || response
-
-    if (!data || !Array.isArray(data) || !data[0]) {
-      throw new Error('Invalid Google Translate API response format')
-    }
-
-    let translatedText = ''
-    if (Array.isArray(data[0])) {
-      translatedText = data[0].map(item => (item && item[0] ? item[0] : '')).join('')
-    }
-    else {
-      translatedText = data[0] || text
-    }
-
-    const detectedLang = data[2] || from
-
-    return {
-      text: translatedText.trim() || text,
-      from: detectedLang,
-      to,
-      service: 'google',
-    }
-  }
-  catch (error) {
-    logger?.error?.('Google Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'google',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {string} apiKey
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithDeepL(text, from = 'auto', to = 'zh', apiKey, signal) {
-  const headers = {
-    'Content-Type': 'application/json',
-  }
-  if (apiKey) {
-    headers.Authorization = `DeepL-Auth-Key ${apiKey}`
-  }
-
-  try {
-    const response = await http.post(
-      'https://api-free.deepl.com/v2/translate',
-      {
-        text: [text],
-        source_lang: from === 'auto' ? undefined : from.toUpperCase(),
-        target_lang: to.toUpperCase(),
-      },
-      {
-        signal,
-        headers,
-      },
-    )
-
-    const data = response.data
-    if (!data || !data.translations || data.translations.length === 0) {
-      throw new Error('Invalid DeepL API response format')
-    }
-
-    return {
-      text: data.translations[0].text,
-      from: data.translations[0].detected_source_language,
-      to,
-      service: 'deepl',
-    }
-  }
-  catch (error) {
-    logger?.error?.('DeepL Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'deepl',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {string} apiKey
- * @param {string} region
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithBing(text, from = 'auto', to = 'zh', apiKey, region, signal) {
-  if (!apiKey) {
-    return {
-      text: '[Bing API Key Not Configured]',
-      from,
-      to,
-      service: 'bing',
-      error: 'API Key is missing.',
-    }
-  }
-
-  const params = new URLSearchParams({
-    'api-version': '3.0',
-    to,
-  })
-
-  if (from !== 'auto') {
-    params.append('from', from)
-  }
-
-  try {
-    const response = await http.post(
-      `https://api.cognitive.microsofttranslator.com/translate?${params.toString()}`,
-      [{ text }],
-      {
-        signal,
-        headers: {
-          'Ocp-Apim-Subscription-Key': apiKey,
-          'Ocp-Apim-Subscription-Region': region,
-          'Content-Type': 'application/json',
-        },
-      },
-    )
-
-    const data = response.data
-    const translation = data[0]?.translations[0]
-
-    if (!translation) {
-      throw new Error('Invalid Bing API response format')
-    }
-
-    return {
-      text: translation.text,
-      from: data[0]?.detectedLanguage?.language || from,
-      to,
-      service: 'bing',
-    }
-  }
-  catch (error) {
-    logger?.error?.('Bing Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'bing',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {string} appId
- * @param {string} appKey
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithBaidu(text, from = 'auto', to = 'zh', appId, appKey, signal) {
-  if (!appId || !appKey) {
-    return {
-      text: '[Baidu API Key Not Configured]',
-      from,
-      to,
-      service: 'baidu',
-      error: 'App ID or App Key is missing.',
-    }
-  }
-
-  const salt = Date.now()
-  const sign = md5(appId + text + salt + appKey)
-  const params = new URLSearchParams({
-    q: text,
-    from,
-    to,
-    appid: appId,
-    salt,
-    sign,
-  })
-
-  try {
-    const response = await http.get(
-      `https://api.fanyi.baidu.com/api/trans/vip/translate?${params.toString()}`,
-      {
-        signal,
-      },
-    )
-
-    const data = response.data
-    if (data.error_code) {
-      throw new Error(`Baidu API Error: ${data.error_msg} (code: ${data.error_code})`)
-    }
-
-    const translation = data.trans_result[0]
-    return {
-      text: translation.dst,
-      from: translation.from,
-      to: translation.to,
-      service: 'baidu',
-    }
-  }
-  catch (error) {
-    logger?.error?.('Baidu Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'baidu',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {string} secretId
- * @param {string} secretKey
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithTencent(text, from = 'auto', to = 'zh', secretId, secretKey, signal) {
-  if (!secretId || !secretKey) {
-    return {
-      text: '[Tencent API Key Not Configured]',
-      from,
-      to,
-      service: 'tencent',
-      error: 'Secret ID or Secret Key is missing.',
-    }
-  }
-
-  const host = 'tmt.tencentcloudapi.com'
-  const service = 'tmt'
-  const version = '2018-03-21'
-  const action = 'TextTranslate'
-  const region = 'ap-guangzhou'
-  const timestamp = Math.floor(Date.now() / 1000)
-
-  const payload = JSON.stringify({
-    SourceText: text,
-    Source: from,
-    Target: to,
-    ProjectId: 0,
-  })
-
-  // 1. Create canonical request
-  const hashedRequestPayload = crypto.createHash('sha256').update(payload).digest('hex')
-  const httpRequestMethod = 'POST'
-  const canonicalURI = '/'
-  const canonicalQueryString = ''
-  const canonicalHeaders = `content-type:application/json\nhost:${host}\n`
-  const signedHeaders = 'content-type;host'
-  const canonicalRequest = `${httpRequestMethod}\n${canonicalURI}\n${canonicalQueryString}\n${canonicalHeaders}\n${signedHeaders}\n${hashedRequestPayload}`
-
-  // 2. Create string to sign
-  const algorithm = 'TC3-HMAC-SHA256'
-  const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
-  const credentialScope = `${date}/${service}/tc3_request`
-  const hashedCanonicalRequest = crypto.createHash('sha256').update(canonicalRequest).digest('hex')
-  const stringToSign = `${algorithm}\n${timestamp}\n${credentialScope}\n${hashedCanonicalRequest}`
-
-  // 3. Calculate signature
-  const secretDate = crypto.createHmac('sha256', `TC3${secretKey}`).update(date).digest()
-  const secretService = crypto.createHmac('sha256', secretDate).update(service).digest()
-  const secretSigning = crypto.createHmac('sha256', secretService).update('tc3_request').digest()
-  const signature = crypto.createHmac('sha256', secretSigning).update(stringToSign).digest('hex')
-
-  // 4. Construct Authorization header
-  const authorization = `${algorithm} Credential=${secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
-
-  try {
-    const response = await http.post(`https://${host}`, payload, {
-      signal,
-      headers: {
-        'Authorization': authorization,
-        'Content-Type': 'application/json',
-        'Host': host,
-        'X-TC-Action': action,
-        'X-TC-Timestamp': timestamp.toString(),
-        'X-TC-Version': version,
-        'X-TC-Region': region,
-      },
-    })
-
-    const data = response.data
-    if (data.Response.Error) {
-      throw new Error(
-        `Tencent API Error: ${data.Response.Error.Message} (code: ${data.Response.Error.Code})`,
-      )
-    }
-
-    return {
-      text: data.Response.TargetText,
-      from: data.Response.Source,
-      to: data.Response.Target,
-      service: 'tencent',
-    }
-  }
-  catch (error) {
-    logger?.error?.('Tencent Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'tencent',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {string} token
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithCaiyun(text, from = 'auto', to = 'zh', token, signal) {
-  const headers = {
-    'Content-Type': 'application/json',
-  }
-  if (token) {
-    headers['x-authorization'] = `token ${token}`
-  }
-
-  const source = [text]
-  const transType = from === 'auto' ? 'auto' : `${from}2${to}` // e.g., 'en2zh'
-
-  try {
-    const response = await http.post(
-      'http://api.interpreter.caiyunai.com/v1/translator',
-      {
-        source,
-        trans_type: transType,
-        request_id: 'touch_plugin',
-        detect: from === 'auto',
-      },
-      {
-        signal,
-        headers,
-      },
-    )
-
-    const data = response.data
-    if (data.message) {
-      throw new Error(`Caiyun API Error: ${data.message}`)
-    }
-
-    return {
-      text: data.target[0],
-      from,
-      to,
-      service: 'caiyun',
-    }
-  }
-  catch (error) {
-    logger?.error?.('Caiyun Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'caiyun',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {any} config
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithCustom(text, from = 'auto', to = 'zh', config, signal) {
-  if (!config || !config.url) {
-    return {
-      text: '[Custom] URL not configured',
-      from,
-      to,
-      service: 'custom',
-      error: 'URL is missing in Custom provider config.',
-    }
-  }
-
-  try {
-    // Replace placeholders in URL, headers, and body
-    const url = config.url
-      .replace('{{text}}', encodeURIComponent(text))
-      .replace('{{from}}', from)
-      .replace('{{to}}', to)
-
-    const headers = JSON.parse(
-      JSON.stringify(config.headers || {})
-        .replace('{{text}}', text)
-        .replace('{{from}}', from)
-        .replace('{{to}}', to),
-    )
-
-    const body = JSON.parse(
-      JSON.stringify(config.body || {})
-        .replace('{{text}}', text)
-        .replace('{{from}}', from)
-        .replace('{{to}}', to),
-    )
-
-    const response = await http.post(url, body, { signal, headers })
-
-    const data = response.data
-    // User needs to specify the path to the translated text in the config
-    const resultPath = config.responsePath || 'text'
-    const translatedText = resultPath.split('.').reduce((o, i) => (o ? o[i] : undefined), data)
-
-    if (!translatedText) {
-      throw new Error('Invalid or missing translated text in Custom AI response.')
-    }
-
-    return {
-      text: translatedText,
-      from,
-      to,
-      service: 'custom',
-    }
-  }
-  catch (error) {
-    logger?.error?.('Custom Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'custom',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} text
- * @param {string} from
- * @param {string} to
- * @param {AbortSignal} signal
- * @returns {Promise<any>}
- */
-async function translateWithMyMemory(text, from = 'auto', to = 'zh', signal) {
-  const langPair = `${from}|${to}`
-  const params = new URLSearchParams({
-    q: text,
-    langpair: langPair,
-  })
-
-  try {
-    const response = await http.get(
-      `https://api.mymemory.translated.net/get?${params.toString()}`,
-      {
-        signal,
-      },
-    )
-
-    const data = response.data
-    if (data.responseStatus !== 200) {
-      throw new Error(`MyMemory API Error: ${data.responseDetails}`)
-    }
-
-    return {
-      text: data.responseData.translatedText,
-      from,
-      to,
-      service: 'mymemory',
-    }
-  }
-  catch (error) {
-    logger?.error?.('MyMemory Translate error:', error)
-    return {
-      text: `[Translation Failed] ${text}`,
-      from,
-      to,
-      service: 'mymemory',
-      error: error.message,
-    }
-  }
-}
-
-/**
- * @param {string} originalText
- * @param {any} translationResult
- * @returns {import('@talex-touch/utils').TuffItem}
- */
-/**
- * @param {string} textToTranslate
- * @param {string} featureId
- * @param {AbortSignal} signal
- */
-const pluginLifecycle = {
-  /**
-   * @param {string} featureId
-   * @param {string} query
-   * @param {any} feature
-   * @param {AbortSignal} signal
-   * @returns {Promise<void>}
-   */
+const lifecycle = {
   async onFeatureTriggered(featureId, query, _feature, signal) {
+    if (!SUPPORTED_FEATURES.has(featureId))
+      return false
+
+    const sequence = (requestSequence.get(featureId) || 0) + 1
+    requestSequence.set(featureId, sequence)
+    const generation = runtimeGeneration
+    const requestId = `${featureId}-${activationGeneration}-${generation}-${sequence}`
+    activeRequests.set(featureId, requestId)
+    approvedCopies.delete(featureId)
+
     try {
-      if (SUPPORTED_TRANSLATION_FEATURES.has(featureId)) {
-        if (featureId === 'screenshot-translate' && await translateImageFromClipboardInput(featureId, query)) {
-          return true
-        }
+      if (signal?.aborted)
+        return true
+      await publish(featureId, requestId, generation, [
+        infoItem(`${featureId}-pending`, featureId, '正在翻译', '正在通过受控智能服务处理'),
+      ], signal)
 
-        const resolvedInput = await resolveTextToTranslate(featureId, query)
-        const textToTranslate = resolvedInput.text.trim()
-
-        if (!textToTranslate) {
-          lastQueryByFeature.delete(featureId)
-          ensureIdleWidget(featureId)
-          if (resolvedInput.error) {
-            const state = widgetStateByFeature.get(featureId)
-            if (state) {
-              state.error = resolvedInput.error
-              upsertWidgetItem(featureId)
-            }
-          }
-          return true
-        }
-
-        // Check if query is the same as last query - if so, skip to avoid duplicate searches
-        const lastQuery = lastQueryByFeature.get(featureId)
-        if (lastQuery === textToTranslate) {
-          // Same query, don't trigger new search
-          return true
-        }
-
-        // Update last query
-        lastQueryByFeature.set(featureId, textToTranslate)
-
-        const nextSeq = (latestRequestSeqByFeature.get(featureId) || 0) + 1
-        latestRequestSeqByFeature.set(featureId, nextSeq)
-
-        const detectedLang = detectLanguage(textToTranslate)
-        const targetLang = resolveTargetLanguage(detectedLang)
-        const providersToShow = await loadEnabledProviderConfigs()
-        createWidgetState(
-          featureId,
-          textToTranslate,
-          detectedLang,
-          targetLang,
-          providersToShow,
-          `translation-${Date.now()}-${nextSeq}`,
-          nextSeq,
-        )
-        upsertWidgetItem(featureId)
-
-        const prevTimer = debounceTimersByFeature.get(featureId)
-        if (prevTimer) {
-          clearTimeout(prevTimer)
-        }
-
-        const prevController = abortControllersByFeature.get(featureId)
-        if (prevController) {
-          prevController.abort()
-        }
-
-        const controller = new AbortController()
-        abortControllersByFeature.set(featureId, controller)
-
-        if (signal) {
-          if (signal.aborted) {
-            controller.abort()
-          }
-          else {
-            signal.addEventListener('abort', () => controller.abort(), { once: true })
-          }
-        }
-
-        const timer = setTimeout(() => {
-          if (latestRequestSeqByFeature.get(featureId) !== nextSeq) {
-            return
-          }
-          if (controller.signal.aborted) {
-            return
-          }
-          startTranslationRequest(textToTranslate, featureId, controller.signal, nextSeq).catch((error) => {
-            const message = describeRuntimeError(error)
-            logger?.error?.('Error starting translation request (debounced):', message, error)
-            upsertRequestErrorWidget(featureId, textToTranslate, nextSeq, error)
-          })
-        }, 200)
-        debounceTimersByFeature.set(featureId, timer)
-
+      const text = await resolveInput(featureId, query, requestId)
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
+        return true
+      if (!text) {
+        await publish(featureId, requestId, generation, [
+          infoItem(
+            `${featureId}-empty`,
+            featureId,
+            featureId === 'screenshot-translate' ? '未识别到图片文字' : '请输入要翻译的文本',
+            '没有可翻译内容',
+          ),
+        ], signal)
         return true
       }
+
+      const providers = await selectedProviders(featureId)
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
+        return true
+      if (providers.length === 0) {
+        await publish(featureId, requestId, generation, [
+          infoItem(`${featureId}-unavailable`, featureId, '翻译服务不可用', '没有可用的受控翻译模型'),
+        ], signal)
+        return true
+      }
+
+      const settled = await Promise.allSettled(
+        providers.map(provider => translateWithProvider(featureId, requestId, text, provider)),
+      )
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
+        return true
+
+      const items = []
+      const copyTexts = []
+      for (let index = 0; index < settled.length; index += 1) {
+        const result = settled[index]
+        if (result.status === 'fulfilled' && typeof result.value?.result === 'string') {
+          const translatedText = truncateText(result.value.result, MAX_RESULT_LENGTH)
+          items.push(resultItem(featureId, requestId, index, text, {
+            ...result.value,
+            result: translatedText,
+          }))
+          if (translatedText)
+            copyTexts.push(translatedText)
+        }
+      }
+      if (items.length === 0) {
+        const rejected = settled.find(result => result.status === 'rejected')
+        const failure = failureKind(rejected && rejected.status === 'rejected' ? rejected.reason : null)
+        items.push(infoItem(`${featureId}-failed`, featureId, failure.title, failure.subtitle))
+      }
+      const published = await publish(featureId, requestId, generation, items, signal)
+      if (published && isCurrent(featureId, requestId, generation) && copyTexts.length > 0) {
+        approvedCopies.set(featureId, { requestId, texts: new Set(copyTexts) })
+      }
+      return true
     }
     catch (error) {
-      logger?.error?.('Error processing translation feature:', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          id: `${featureId}-error`,
-          featureId,
-          title: '加载失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
-        }),
-      ])
+      if (!isCurrent(featureId, requestId, generation) || signal?.aborted)
+        return true
+      const failure = failureKind(error)
+      try {
+        await publish(featureId, requestId, generation, [
+          infoItem(`${featureId}-failed`, featureId, failure.title, failure.subtitle),
+        ], signal)
+      }
+      catch {
+        logger?.error?.('[touch-translation] Failed to publish translation state')
+      }
       return true
     }
   },
 
   async onItemAction(item) {
+    const featureId = normalizeText(item?.meta?.featureId)
+    const currentRequestId = activeRequests.get(featureId)
+    const actionId = normalizeText(item?.meta?.actionId || item?.meta?.defaultAction)
+    if (!featureId || actionId !== COPY_ACTION_ID)
+      return { externalAction: true, status: 'ignored', reason: 'action-unsupported' }
+
+    const action = Array.isArray(item?.actions)
+      ? item.actions.find(candidate => candidate && candidate.id === COPY_ACTION_ID)
+      : null
+    const payload = action && typeof action.payload === 'object' ? action.payload : null
+    const requestId = normalizeText(payload?.requestId)
+    const text = truncateText(payload?.text, MAX_RESULT_LENGTH)
+    const approved = approvedCopies.get(featureId)
+    if (!requestId || requestId !== currentRequestId || approved?.requestId !== requestId)
+      return { externalAction: true, status: 'ignored', reason: 'stale-request' }
+    if (!text || !approved.texts.has(text))
+      return { externalAction: true, status: 'blocked', reason: 'invalid-payload' }
+
     try {
-      if (item.meta?.defaultAction === 'copy') {
-        const copyAction = item.actions.find(action => action.id === 'copy-translation' || action.type === 'copy')
-        if (copyAction && copyAction.payload) {
-          const canCopy = await ensureClipboardWritePermission()
-          if (!canCopy) {
-            return {
-              externalAction: true,
-              success: false,
-              status: 'blocked',
-              reason: 'permission-denied',
-              message: '缺少 clipboard.write 权限',
-            }
-          }
-
-          const payloadText = typeof copyAction.payload === 'object'
-            ? copyAction.payload.text
-            : copyAction.payload
-          if (!payloadText) {
-            return {
-              externalAction: true,
-              success: false,
-              status: 'blocked',
-              reason: 'invalid-payload',
-              message: '复制内容为空',
-            }
-          }
-
-          clipboard.writeText(payloadText)
-          logger?.log?.('Copied to clipboard:', payloadText)
-
-          const isFeatureExecution = Boolean(item.meta?.featureId)
-          if (!isFeatureExecution) {
-            plugin.box.hide()
-          }
-          return { externalAction: true, status: 'started' }
-        }
-        else {
-          logger?.warn?.('No copy action or payload found for item:', item)
-        }
-      }
+      await clipboard.writeText(text)
+      return { externalAction: true, status: 'started' }
     }
     catch (error) {
-      logger?.error?.('[touch-translation] Action failed', error)
+      if (stableFailureCode(error).includes('PERMISSION')) {
+        return {
+          externalAction: true,
+          success: false,
+          status: 'blocked',
+          reason: 'permission-denied',
+        }
+      }
+      return {
+        externalAction: true,
+        success: false,
+        status: 'failed',
+        reason: 'clipboard-write-failed',
+      }
     }
+  },
+
+  async onDestroy() {
+    runtimeGeneration += 1
+    activeRequests.clear()
+    approvedCopies.clear()
+    requestSequence.clear()
+    return true
   },
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    DEFAULT_ENABLED_PROVIDER_IDS,
-    md5,
-    detectLanguage,
-    getEnabledProviderIds,
-    getProviderSecretKey,
-    ensureNetworkPermission,
-    ensureClipboardWritePermission,
-    getTranslationProviderLabel,
-    canUseTuffIntelligenceProvider,
-    filterAuthorizedProviderConfigs,
-    hasAvailableTextTranslateCapability,
-    mergeProviderSecrets,
-    normalizeCallFailureMessage,
-    normalizeErrorMessage: normalizeTranslationErrorMessage,
-    parseImageDataUrl,
-    resolveRuntimeChannel,
-    resolveTargetLanguage,
-    resolveTuffIntelligenceAuthToken,
-    stripProviderSecrets,
-    toImageDataUrl,
-  },
-}
+module.exports = lifecycle

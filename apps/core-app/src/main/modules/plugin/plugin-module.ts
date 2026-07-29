@@ -63,6 +63,7 @@ import {
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
+import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
 import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
 import { flowBus } from '../flow-bus/flow-bus'
 import { getNetworkService } from '../network'
@@ -103,6 +104,8 @@ import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence
 import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
 import { createPluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
 import { createPluginIntelligenceContextHostService } from './host/plugin-intelligence-context-host-service'
+import { createPluginIntelligenceContextStreamCapabilities } from './host/plugin-intelligence-context-stream-capabilities'
+import { createPluginIntelligenceContextStreamHostService } from './host/plugin-intelligence-context-stream-host-service'
 import {
   createFixedPluginSnipasteDiscovery,
   createFixedPluginSnipasteExecutor,
@@ -1695,6 +1698,8 @@ export class PluginModule extends BaseModule {
     TouchPlugin.setSystemActionCapabilityFactory(null)
     TouchPlugin.setBrowserOpenCapabilityFactory(null)
     TouchPlugin.setBrowserDataCapabilityFactory(null)
+    TouchPlugin.setTranslationCapabilityFactory(null)
+    TouchPlugin.setIntelligenceContextCapabilityFactory(null)
     TouchPlugin.setWindowManagerCapabilityFactory(null)
     TouchPlugin.setWindowPresetCapabilityFactory(null)
     TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
@@ -1875,20 +1880,48 @@ export class PluginModule extends BaseModule {
         }
       })
     })
-    const intelligenceCapabilities = createPluginIntelligenceCapabilities({
-      resolveCurrentActivation: (pluginName) =>
-        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
-      resolveHostGeneration: (activation) =>
-        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
-      service: createPluginIntelligenceHostService()
+    const intelligenceHostService = createPluginIntelligenceHostService()
+    const createTranslationCapability = (activation: PluginActivationIdentity) =>
+      createPluginIntelligenceCapabilities({
+        activation,
+        invokeCapabilities: Object.freeze(['text.translate', 'vision.ocr']),
+        providerModelCapabilities: Object.freeze(['text.translate']),
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        service: intelligenceHostService
+      })
+    const intelligenceContextHostService = createPluginIntelligenceContextHostService({
+      invoke: intelligenceContextExecutionService.invoke.bind(intelligenceContextExecutionService)
     })
-    const intelligenceContextCapabilities = createPluginIntelligenceContextCapabilities({
-      resolveCurrentActivation: (pluginName) =>
-        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
-      resolveHostGeneration: (activation) =>
-        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
-      service: createPluginIntelligenceContextHostService()
+    const intelligenceContextStreamHostService = createPluginIntelligenceContextStreamHostService({
+      stream: intelligenceContextExecutionService.stream.bind(intelligenceContextExecutionService)
     })
+    const createIntelligenceContextCapability = (activation: PluginActivationIdentity) => {
+      const invokeCapabilities = createPluginIntelligenceContextCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        service: intelligenceContextHostService
+      })
+      const streamCapabilities = createPluginIntelligenceContextStreamCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        service: intelligenceContextStreamHostService
+      })
+      return Object.freeze({
+        definitions: Object.freeze([
+          ...invokeCapabilities.definitions,
+          ...streamCapabilities.definitions
+        ])
+      })
+    }
     const authorizePluginCapability = (pluginName: string, permissionId: string): boolean => {
       try {
         const permissionModule = getPermissionModule()
@@ -2289,9 +2322,7 @@ export class PluginModule extends BaseModule {
       capabilityDefinitions: Object.freeze([
         ...this.pluginBusinessCapabilities.definitions,
         ...requestReplyCapabilities.definitions,
-        ...voiceCapabilities.definitions,
-        ...intelligenceCapabilities.definitions,
-        ...intelligenceContextCapabilities.definitions
+        ...voiceCapabilities.definitions
       ]),
       authorizeCapability: authorizePluginCapability,
       watchPermissionRevoked: watchPluginPermissionRevoked,
@@ -2310,6 +2341,12 @@ export class PluginModule extends BaseModule {
     )
     TouchPlugin.setBrowserDataCapabilityFactory((activation) =>
       createBrowserDataCapability(activation)
+    )
+    TouchPlugin.setTranslationCapabilityFactory((activation) =>
+      createTranslationCapability(activation)
+    )
+    TouchPlugin.setIntelligenceContextCapabilityFactory((activation) =>
+      createIntelligenceContextCapability(activation)
     )
     TouchPlugin.setWindowManagerCapabilityFactory((activation) =>
       createWindowManagerCapability(activation)
@@ -2452,6 +2489,8 @@ export class PluginModule extends BaseModule {
     runCleanup(() => TouchPlugin.setSystemActionCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setBrowserOpenCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setBrowserDataCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setTranslationCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setIntelligenceContextCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setWindowManagerCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setWindowPresetCapabilityFactory(null))
     runCleanup(() => TouchPlugin.setWorkspaceScriptCapabilityFactory(null))

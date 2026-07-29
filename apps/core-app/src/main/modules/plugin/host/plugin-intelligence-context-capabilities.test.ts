@@ -9,10 +9,6 @@ import type {
 } from './plugin-intelligence-context-host-service'
 import { HOST_PROTOCOL_VERSION, type HostMessageOwner } from './plugin-host-wire'
 
-vi.mock('../../ai/intelligence-context-execution', () => ({
-  intelligenceContextExecutionService: { invoke: vi.fn() }
-}))
-
 vi.mock('../../sentry/sentry-service', () => {
   class SentryServiceModule {
     isTelemetryEnabled = vi.fn(() => false)
@@ -53,6 +49,11 @@ function request(): unknown {
     capabilityId: 'text.chat',
     input: 'hello',
     payload: { messages: [{ role: 'user', content: 'hello' }] },
+    options: {
+      metadata: {
+        contextEntrypoint: { id: 'corebox.ai-ask', owner: 'corebox', mode: 'stateless' }
+      }
+    },
     context: { mode: 'stateless', owner: 'corebox', scope: 'light' }
   }
 }
@@ -75,19 +76,28 @@ function result(): PluginIntelligenceContextResult {
       tokenEstimate: 4,
       sourceTypes: ['current_input'],
       retrievalItemCount: 0,
-      citationCount: 0
+      citationCount: 0,
+      degradedReason: 'isolated_context_persistence_unavailable'
     }
   }
 }
 
-function createHarness(options: { authorize?: boolean } = {}) {
+function createHarness(
+  options: {
+    authorize?: boolean
+    service?: PluginIntelligenceContextHostService
+  } = {}
+) {
   let current = activation
   let hostGeneration = owner.hostGeneration
   let revoke: (() => void) | undefined
-  const service: PluginIntelligenceContextHostService = {
-    contextInvoke: vi.fn(async () => result())
-  }
+  const service: PluginIntelligenceContextHostService =
+    options.service ??
+    Object.freeze({
+      contextInvoke: vi.fn(async (_request, _signal, _caller) => result())
+    })
   const capabilities = createPluginIntelligenceContextCapabilities({
+    activation,
     resolveCurrentActivation: () => current,
     resolveHostGeneration: () => hostGeneration,
     service
@@ -140,6 +150,21 @@ describe('plugin Intelligence context capabilities', () => {
       expect.any(AbortSignal),
       'plugin:touch-intelligence'
     )
+  })
+
+  it('rejects a forged other-plugin activation before host service work', () => {
+    const service: PluginIntelligenceContextHostService = {
+      contextInvoke: vi.fn(async () => result())
+    }
+    expect(() =>
+      createPluginIntelligenceContextCapabilities({
+        activation: { ...activation, name: 'other-plugin' },
+        resolveCurrentActivation: () => ({ ...activation, name: 'other-plugin' }),
+        resolveHostGeneration: () => owner.hostGeneration,
+        service
+      })
+    ).toThrow('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_INVALID')
+    expect(service.contextInvoke).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -273,11 +298,12 @@ describe('plugin Intelligence context capabilities', () => {
     const harness = createHarness()
     vi.mocked(harness.service.contextInvoke).mockImplementationOnce(() => late.promise)
     const pending = harness.registry.dispatch('intelligence.context.invoke', request())
-    harness.revoke()
-    late.resolve(result())
-    await expect(pending).rejects.toMatchObject({
+    const rejected = expect(pending).rejects.toMatchObject({
       code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
     })
+    harness.revoke()
+    late.resolve(result())
+    await rejected
 
     const failed = createHarness()
     vi.mocked(failed.service.contextInvoke).mockRejectedValueOnce(
