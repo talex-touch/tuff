@@ -28,10 +28,5 @@
     "apps/nexus/examples/division-box/README.md",
     "packages/tuffex/CONTRIBUTING.md"
   ],
-  "notes": "Batch C excludes README.md and README.zh-CN.md, which belong to Batch B, and creates no placeholder documents to satisfy links.",
-  "meta": {
-    "nextAction": "Enumerate Git-tracked product documentation and produce a deterministic broken-relative-link inventory for the named surfaces.",
-    "blocker": "The planning PR must be available; root README findings must be routed to Batch B instead of edited here.",
-    "evidence": "prd.md acceptance criteria, tracked-link inventory, changed-Markdown validation, and the final owned-path diff."
-  }
+  "notes": "Batch C excludes README.md and README.zh-CN.md, which belong to Batch B, and creates no placeholder documents to satisfy links."
 }
