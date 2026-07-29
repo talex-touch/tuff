@@ -5,13 +5,17 @@ import { createPluginIntelligenceCapabilities } from './plugin-intelligence-capa
 import { createPluginIntelligenceHostService } from './plugin-intelligence-host-service'
 import { HOST_PROTOCOL_VERSION, type HostMessageOwner } from './plugin-host-wire'
 
-const productionMocks = vi.hoisted(() => ({
-  invoke: vi.fn(),
-  getProviderModelOptions: vi.fn()
-}))
+const productionMocks = vi.hoisted(() => {
+  const invoke = vi.fn()
+  return {
+    invoke,
+    intelligence: { invoke },
+    getProviderModelOptions: vi.fn()
+  }
+})
 
 vi.mock('../../ai/intelligence-sdk', () => ({
-  tuffIntelligence: { invoke: productionMocks.invoke }
+  tuffIntelligence: productionMocks.intelligence
 }))
 vi.mock('../../ai/intelligence-provider-model-options', () => ({
   getProviderModelOptions: productionMocks.getProviderModelOptions
@@ -42,13 +46,10 @@ function sdkResult(result: unknown) {
 }
 
 function createDependencies() {
-  const intelligence = {
+  return {
     invoke: vi.fn(async (_capabilityId: string, _payload?: unknown, _options?: unknown) =>
       sdkResult('answer')
-    )
-  }
-  return {
-    intelligence,
+    ),
     getProviderModelOptions: vi.fn(() => [
       {
         providerId: 'provider-public',
@@ -90,7 +91,66 @@ describe('plugin intelligence host service', () => {
       )
     ).resolves.toEqual([])
     expect(productionMocks.invoke).toHaveBeenCalledOnce()
+    expect(productionMocks.invoke.mock.instances[0]).toBe(productionMocks.intelligence)
     expect(productionMocks.getProviderModelOptions).toHaveBeenCalledExactlyOnceWith('text.chat')
+  })
+
+  it('rejects accessor, proxy, class, and invalid direct dependencies without executing getters', () => {
+    const directGetter = vi.fn(() => vi.fn())
+    const directAccessor = Object.defineProperty(
+      { getProviderModelOptions: vi.fn(() => []) },
+      'invoke',
+      {
+        enumerable: true,
+        get: directGetter
+      }
+    )
+    const legacyGetter = vi.fn(() => vi.fn())
+    const legacyIntelligence = Object.defineProperty({}, 'invoke', {
+      enumerable: true,
+      get: legacyGetter
+    })
+    class DependencyRecord {
+      invoke = vi.fn()
+      getProviderModelOptions = vi.fn(() => [])
+    }
+    class InvokeDependency {}
+
+    const dependencies = [
+      directAccessor,
+      {
+        intelligence: legacyIntelligence,
+        getProviderModelOptions: vi.fn(() => [])
+      },
+      new Proxy(
+        {
+          invoke: vi.fn(),
+          getProviderModelOptions: vi.fn(() => [])
+        },
+        {}
+      ),
+      new DependencyRecord(),
+      {
+        invoke: new Proxy(vi.fn(), {}),
+        getProviderModelOptions: vi.fn(() => [])
+      },
+      {
+        invoke: InvokeDependency,
+        getProviderModelOptions: vi.fn(() => [])
+      },
+      {
+        invoke: null,
+        getProviderModelOptions: vi.fn(() => [])
+      }
+    ]
+
+    for (const candidate of dependencies) {
+      expect(() => createPluginIntelligenceHostService(candidate as never)).toThrow(
+        'PLUGIN_INTELLIGENCE_HOST_DEPENDENCIES_INVALID'
+      )
+    }
+    expect(directGetter).not.toHaveBeenCalled()
+    expect(legacyGetter).not.toHaveBeenCalled()
   })
 
   it('overwrites caller metadata, forwards the host signal, and projects chat results', async () => {
@@ -121,7 +181,7 @@ describe('plugin intelligence host service', () => {
       latency: 17
     })
 
-    expect(dependencies.intelligence.invoke).toHaveBeenCalledWith(
+    expect(dependencies.invoke).toHaveBeenCalledWith(
       'text.chat',
       { messages: [{ role: 'user', content: 'hello' }] },
       expect.objectContaining({
@@ -131,13 +191,13 @@ describe('plugin intelligence host service', () => {
         signal
       })
     )
-    const forwardedOptions = dependencies.intelligence.invoke.mock.calls[0]?.[2]
+    const forwardedOptions = dependencies.invoke.mock.calls[0]?.[2]
     expect(JSON.stringify(forwardedOptions)).not.toContain('host:forged')
   })
 
   it('forwards canonical SDK cancellation without converting it to a native failure', async () => {
     const dependencies = createDependencies()
-    dependencies.intelligence.invoke.mockImplementationOnce(
+    dependencies.invoke.mockImplementationOnce(
       async (_capabilityId: string, _payload: unknown, options: unknown) => {
         const signal = (options as { signal?: AbortSignal }).signal
         await new Promise<void>((_resolve, reject) => {
@@ -171,7 +231,7 @@ describe('plugin intelligence host service', () => {
 
   it('projects OCR text and strips raw blocks, usage, reasoning, and provider internals', async () => {
     const dependencies = createDependencies()
-    dependencies.intelligence.invoke.mockResolvedValueOnce(
+    dependencies.invoke.mockResolvedValueOnce(
       sdkResult({
         text: 'recognized',
         confidence: 0.99,
@@ -212,7 +272,7 @@ describe('plugin intelligence host service', () => {
         'plugin:touch-intelligence'
       )
 
-    dependencies.intelligence.invoke.mockResolvedValueOnce({
+    dependencies.invoke.mockResolvedValueOnce({
       ...sdkResult('answer'),
       apiKey: 'host-secret'
     } as never)
@@ -220,7 +280,7 @@ describe('plugin intelligence host service', () => {
       code: 'PLUGIN_INTELLIGENCE_HOST_RESULT_INVALID'
     })
 
-    dependencies.intelligence.invoke.mockResolvedValueOnce(sdkResult({ text: 'not-chat' }))
+    dependencies.invoke.mockResolvedValueOnce(sdkResult({ text: 'not-chat' }))
     await expect(request()).rejects.toMatchObject({
       code: 'PLUGIN_INTELLIGENCE_HOST_RESULT_INVALID'
     })
@@ -228,10 +288,10 @@ describe('plugin intelligence host service', () => {
 
   it('projects only public text model fields and snapshots callable dependencies', async () => {
     const dependencies = createDependencies()
-    const originalInvoke = dependencies.intelligence.invoke
+    const originalInvoke = dependencies.invoke
     const originalModels = dependencies.getProviderModelOptions
     const service = createPluginIntelligenceHostService(dependencies)
-    dependencies.intelligence.invoke = vi.fn(async () => sdkResult('replacement'))
+    dependencies.invoke = vi.fn(async () => sdkResult('replacement'))
     dependencies.getProviderModelOptions = vi.fn(() => [])
 
     await expect(
@@ -262,12 +322,12 @@ describe('plugin intelligence host service', () => {
     expect(originalModels).toHaveBeenCalledExactlyOnceWith('text.chat')
     expect(originalInvoke).toHaveBeenCalledOnce()
     expect(dependencies.getProviderModelOptions).not.toHaveBeenCalled()
-    expect(dependencies.intelligence.invoke).not.toHaveBeenCalled()
+    expect(dependencies.invoke).not.toHaveBeenCalled()
   })
 
   it('contains native failures at the existing capability registry boundary', async () => {
     const dependencies = createDependencies()
-    dependencies.intelligence.invoke.mockRejectedValueOnce(
+    dependencies.invoke.mockRejectedValueOnce(
       new Error('apiKey=host-secret stack=/private/provider/path')
     )
     const service = createPluginIntelligenceHostService(dependencies)

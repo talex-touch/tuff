@@ -31,17 +31,15 @@ type HostIntelligenceInvokeOptions = IntelligenceInvokeOptions & {
   readonly signal: AbortSignal
 }
 
-interface IntelligenceSdkDependency {
-  invoke(
-    capabilityId: string,
-    payload: unknown,
-    options: HostIntelligenceInvokeOptions
-  ): Promise<IntelligenceInvokeResult<unknown>>
-}
+type IntelligenceInvokeDependency = (
+  capabilityId: string,
+  payload: unknown,
+  options: HostIntelligenceInvokeOptions
+) => Promise<IntelligenceInvokeResult<unknown>>
 
 export interface PluginIntelligenceHostServiceDependencies {
-  intelligence: IntelligenceSdkDependency
-  getProviderModelOptions(capabilityId: string): readonly IntelligenceProviderModelOption[]
+  invoke: IntelligenceInvokeDependency
+  getProviderModelOptions: (capabilityId: string) => readonly IntelligenceProviderModelOption[]
 }
 
 const MAX_MESSAGES = 64
@@ -138,6 +136,15 @@ function exactRecord(
     if (!Object.hasOwn(descriptors, key)) fail(code)
   }
   return output
+}
+
+function isDirectFunction(value: unknown): value is (...args: unknown[]) => unknown {
+  if (typeof value !== 'function' || utilTypes.isProxy(value)) return false
+  try {
+    return !/^class\s/.test(Function.prototype.toString.call(value))
+  } catch {
+    return false
+  }
 }
 
 function selectedRecord(
@@ -483,8 +490,11 @@ function cancelled(): never {
   })
 }
 
+const productionInvoke: IntelligenceInvokeDependency =
+  tuffIntelligence.invoke.bind(tuffIntelligence)
+
 const productionDependencies: PluginIntelligenceHostServiceDependencies = Object.freeze({
-  intelligence: tuffIntelligence,
+  invoke: productionInvoke,
   getProviderModelOptions
 })
 
@@ -494,21 +504,13 @@ export function createPluginIntelligenceHostService(
   const code = 'PLUGIN_INTELLIGENCE_HOST_DEPENDENCIES_INVALID'
   const dependencies = exactRecord(
     rawDependencies,
-    ['intelligence', 'getProviderModelOptions'],
-    ['intelligence', 'getProviderModelOptions'],
+    ['invoke', 'getProviderModelOptions'],
+    ['invoke', 'getProviderModelOptions'],
     code
   )
-  const intelligence = dependencies.intelligence
-  if (!intelligence || typeof intelligence !== 'object' || utilTypes.isProxy(intelligence))
-    fail(code)
-  const invoke = Reflect.get(intelligence, 'invoke')
+  const invoke = dependencies.invoke
   const listProviderModels = dependencies.getProviderModelOptions
-  if (
-    typeof invoke !== 'function' ||
-    utilTypes.isProxy(invoke) ||
-    typeof listProviderModels !== 'function' ||
-    utilTypes.isProxy(listProviderModels)
-  ) {
+  if (!isDirectFunction(invoke) || !isDirectFunction(listProviderModels)) {
     fail(code)
   }
 
@@ -518,7 +520,7 @@ export function createPluginIntelligenceHostService(
       const projectedPayload =
         capabilityId === 'text.chat' ? snapshotChatPayload(payload) : snapshotOcrPayload(payload)
       const projectedOptions = snapshotOptions(options, caller, signal)
-      const result = await Reflect.apply(invoke, intelligence, [
+      const result = await Reflect.apply(invoke, undefined, [
         capabilityId,
         projectedPayload,
         projectedOptions
