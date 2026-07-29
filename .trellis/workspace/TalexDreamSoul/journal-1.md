@@ -1039,3 +1039,36 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: Contain isolated Intelligence invoke cancellation
+
+**Date**: 2026-07-28
+**Task**: Contain isolated Intelligence invoke cancellation
+**Branch**: `master`
+
+### Summary
+
+Added host-only immediate cancellation containment for Intelligence chat/OCR invokes, stable redaction and commit-point semantics; focused and strict tests passed and independent review found no P0/P1/P2. Task #297 remains active for production Intelligence/Translation migration and final hard cut.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f1cdd7772` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

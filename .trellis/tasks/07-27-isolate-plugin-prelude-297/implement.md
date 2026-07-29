@@ -362,6 +362,810 @@ It does not claim the #297 production hard cut.
   commits and later landed in separate commits; integrated validation includes it but
   the Voice security review does not claim its scope.
 
+## Batch E Batch Rename Filesystem Migration
+
+This section supersedes the earlier rollout count for the reviewed Batch Rename worktree.
+It does not claim the #297 production hard cut.
+
+### Implemented Contracts
+
+- `touch-batch-rename` is the 12th isolated-runtime compatible activation. Its production
+  Prelude has no `__test`, `require`, raw `fetch`, `process`, Electron, filesystem/path
+  import, privileged dialog, or reflective host surface. Apply and undo both await the
+  fixed `filesystem.renameBatch()` facade and publish only standard typed plugin actions.
+- The activation-local `filesystem.write` definition accepts only the exact
+  `{ operation: 'rename-batch', entries }` transaction. It binds absolute canonical
+  regular-file sources to lifecycle file inputs, requires declared/current `fs.read` and
+  `fs.write`, rejects hostile/accessor/proxy/sparse/oversized DTOs, symlinks, device and
+  ADS names, escapes, existing targets, duplicate sources, and case/Unicode collisions.
+- Rename execution uses a same-device two-phase temporary transaction. Cancellation,
+  permission revoke, and activation rotation are checked before and after every
+  privileged filesystem mutation, including the final commit point; every tested losing
+  race rolls back to the original files. Teardown closes admission, awaits active operations, and
+  clears activation-owned path authority before the runtime barrier settles.
+- The child exposes only a frozen null-prototype `filesystem` object with one frozen
+  `renameBatch` method when `filesystem.write` is declared. No generic read/write/stat,
+  constructor escape, raw capability surface, or undeclared fallback is exposed.
+- `TouchPlugin` creates this definition only for `touch-batch-rename`, approves lifecycle
+  inputs before isolated feature dispatch, and closes it through enable rollback,
+  disable, crash, and runtime resource barriers. The manifest adds only `storage.plugin`
+  for the bounded undo journal and retains `fs.read`, `fs.write`, and
+  `search.root-results`.
+- Rollout is exactly **12 of 22** manifested official activations.
+  `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains `false` with no environment bypass.
+
+### Review Findings
+
+- **P0:** none found.
+- **P1 closed:** custom `actionId` metadata was rejected by the real business DTO. Batch
+  Rename now uses `TuffItemBuilder.createAndAddAction()` and the Electron smoke exercises
+  the actual accepted action shape.
+- **P1 closed:** lifecycle approval previously stored only a canonical path string, so a
+  same-path inode replacement or parent swap could inherit authority. Approval now snapshots the
+  exact file and parent `dev/ino`, rejects hard links and non-regular inputs, revalidates both
+  identities before each mutation, and drops stale lifecycle-derived grants on the next input.
+- **P1 closed:** target absence was checked only during preparation and the later `rename()` could
+  overwrite a file created by a racing writer. The transaction now uses same-device hard-link plus
+  unlink moves, which fail atomically on an existing target and preserve swap/cycle semantics.
+- **P1 closed:** a successful link followed by verification failure was not represented in the
+  rollback state. State now advances immediately after the atomic link; failed rollback state is
+  retained and retried by the awaited close barrier, with stable redacted failure behavior.
+- **P1 closed:** cancel/revoke/rotation during the final target rename could return a
+  terminal failure after files had committed. Authority checks now cover all eight mutation
+  boundaries and keep the operation inside rollback through its final commit point.
+- **P2 closed:** relative source paths, Windows ADS/reserved characters and device names (including
+  `CONIN$`/`CONOUT$` and superscript COM/LPT forms), control characters, stale lifecycle grants,
+  duplicate inode sources, hard links, and macOS Unicode-equivalent target collisions now fail
+  before unsafe filesystem mutation.
+- No known P0/P1/P2 remains in the delegated Batch Rename filesystem, facade, lifecycle,
+  Prelude, rollout, or Electron-fixture scope.
+
+### Final Validation
+
+- Complete plugin-host suite: **21 files, 420/420 tests passed**.
+- Plugin/module/rollout/resolver/Prelude resolver/require/production-contract/integrity
+  suite: **8 files, 94/94 tests passed**.
+- Batch Rename production Prelude regression: **6/6 passed**; focused real-filesystem
+  capability suite: **12/12 passed**, including hostile/exact/oversized DTOs, inode and
+  parent provenance, hard links, symlinks, target races, swaps/cycles, old-generation undo
+  denial, all eight mutation-boundary cancel/revoke/rotation rollbacks, post-link verification,
+  rollback-close recovery, and close barrier behavior.
+- CoreApp Node and Web typechecks passed. Task-scoped CoreApp and plugin ESLint passed
+  with `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Final-source `build:vite`, Batch Prelude and built-child forbidden-surface scans, syntax
+  checks, real Electron smoke (`PLUGIN_HOST_ISOLATION_SMOKE_OK`), and `git diff --check`
+  passed. Existing Vite chunking and third-party warnings remain non-blocking.
+
+### Remaining Scope
+
+The exact ten unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-browser-open`
+- `touch-intelligence`
+- `touch-quick-actions`
+- `touch-snipaste`
+- `touch-system-actions`
+- `touch-translation`
+- `touch-window-manager`
+- `touch-window-presets`
+- `touch-workspace-scripts`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+regression, final independent security review, and the complete hard cut remain release
+blockers.
+
+## Batch F Quick Actions System Capability Migration
+
+This section supersedes the Batch E rollout count for the reviewed Quick Actions worktree.
+It does not enable the production runtime default or claim the complete #297 hard cut.
+
+### Implemented Contracts
+
+- `touch-quick-actions` is the 13th isolated-runtime compatible activation. Its Prelude
+  contains no `__test`, `require`, raw `fetch`, `process`, Electron, dialog authority,
+  shell command, executable, argument vector, or generic process surface. It submits only
+  one of eight fixed action IDs through `system.runAction()` and publishes host-valid
+  dynamic feature and item DTOs.
+- The activation-local `system.invoke` definition accepts only exact
+  `{ operation: 'run-action', actionId }` requests. Main owns fixed macOS/Windows executable
+  mappings, per-call `system.shell` authorization, current activation and host-generation
+  checks, timeout/cancellation, restart/shutdown double confirmation, and stable redacted
+  results. No child field can select a command, executable, arguments, environment, URL,
+  script, or working directory.
+- Started processes are activation-owned resources. Cancel, timeout, permission revoke,
+  disable, crash, and activation rotation close admission, issue at most one kill, and await
+  the real process exit barrier. Destructive confirmation receives the same AbortSignal and
+  is always parented to a live Electron BrowserWindow; absence of a valid parent fails closed.
+- The child exposes a frozen null-prototype `system` / `plugin.system` facade only when
+  `system.invoke` is declared. It locally rejects every unknown action ID and exposes no
+  generic invoke or `process` escape. `TouchPlugin` creates this definition only for
+  `touch-quick-actions` and rotates it per activation.
+- Rollout is exactly **13 of 22** manifested official activations.
+  `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains `false` with no environment bypass.
+
+### Review Findings
+
+- **P0:** none found.
+- **P1 closed:** the activation-local system definition was not pinned to the activation
+  that created it, so a retained factory could validate against whichever activation was
+  current at call time. The factory now snapshots the exact plugin instance, activation
+  generation, key, and host generation, and rechecks that authority after confirmation,
+  immediately after spawn, and after the real process exit.
+- **P1 closed:** destructive confirmation was not strictly bound to the configured CoreApp
+  window and current activation. Production now resolves only `BrowserWindow.fromId()` for
+  the module's main window ID, fails closed for a missing/destroyed parent, projects the
+  fixed dialog DTO, propagates the same AbortSignal, and revalidates activation before any
+  process starts.
+- **P1 closed:** malformed process adapters could treat an `error`, a rejected/false kill,
+  or a rejected/forged `wait()` result as termination and settle while a spawned process
+  remained live. Only the real child `exit` event now proves exit; kill is idempotent,
+  registration rollback terminates the process, adapter failures trigger one termination
+  attempt, and cancellation/revoke/disable/timeout await the shared exit barrier.
+- **P2 closed:** action membership, process/result adapters, confirmation results, and
+  constructor/accessor/proxy surfaces are snapshotted and exact-validated. The fixed
+  macOS/Windows table is covered for all 16 platform/action mappings, and unknown or
+  child-supplied executable/script/args/env/cwd/URL/dialog fields fail before execution.
+- **P2 closed:** the first real Electron smoke rejected the Prelude's legacy boolean
+  platform DTO during dynamic feature registration. The Prelude now emits the canonical
+  `IPlatform` `{ enable, arch, os }` shape and both plugin-local suites assert it.
+- **P2 closed:** independent review found that cancellation during native destructive
+  confirmation needed to dismiss the visible dialog as well as terminate the capability.
+  The confirmation DTO now requires Electron's `MessageBoxOptions.signal`, production uses
+  the parent-window overload required by macOS, and no-parent operation fails closed.
+  Cancel/revoke/disable/timeout confirmation tests prove the executor is never reached.
+- Final independent review, including the installed Electron 41 API declaration, reports
+  no remaining P0/P1/P2 identity, permission, confirmation, cancellation, process-resource,
+  facade, redaction, or destructive-test finding in this migration scope.
+
+### Final Validation
+
+- Focused host/service/TouchPlugin/rollout/official-Prelude suite: **16 files, 358/358 tests
+  passed**. Quick Actions plugin-local suites passed **5/5** under both `node:test` and the
+  package Vitest harness.
+- CoreApp Node and Web typechecks passed. Task-scoped CoreApp ESLint passed with
+  `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Final-source production `build:vite`, Quick Actions source and built-child forbidden-surface
+  scans, syntax checks, real Electron smoke (`PLUGIN_HOST_ISOLATION_SMOKE_OK`), and
+  `git diff --check` passed. The smoke uses a fake fixed-ID executor and runs no OS system
+  action. Existing Vite chunking and third-party warnings remain non-blocking.
+- Strict migration-13 recheck on the final reviewed source passed **27 files, 548/548 tests**
+  across the complete plugin-host directory plus TouchPlugin, PluginModule, and rollout;
+  the focused migration slice passed **113/113**. Both Quick Actions local suites passed
+  **5/5**, CoreApp Node/Web typechecks passed, task-scoped CoreApp/plugin/package ESLint
+  passed with zero warnings, and `pnpm plugins:validate` passed **22 manifest policies**,
+  **24/24 directory classification**, and **20/20 search-provider coverage**.
+- Final-source `pnpm -C apps/core-app build`, valid forbidden-child/shell-interpolation scans,
+  exact `13/22` plus default-disabled checks, Electron smoke
+  (`PLUGIN_HOST_ISOLATION_SMOKE_OK`), and `git diff --check` passed. The reviewed smoke path
+  injects an in-memory fixed-ID executor; no OS action or native command was executed.
+- Final strict-review severity is **P0: 0 open, P1: 0 open, P2: 0 open**. No commit, push,
+  branch switch, reset, rebase, or history change was performed.
+
+### Remaining Scope
+
+The exact nine unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-browser-open`
+- `touch-intelligence`
+- `touch-snipaste`
+- `touch-system-actions`
+- `touch-translation`
+- `touch-window-manager`
+- `touch-window-presets`
+- `touch-workspace-scripts`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+regression, complete final security review, and the complete #297 hard cut remain release
+blockers. No other plugin migration, rollout gate flip, legacy deletion, commit, push, or
+history change was performed in this batch.
+
+## Batch G System Actions Migration
+
+This section supersedes the Batch F rollout count for the reviewed System Actions worktree.
+It does not enable the production runtime default or claim the complete #297 hard cut.
+
+### Implemented Contracts
+
+- `touch-system-actions` is the 14th isolated-runtime compatible activation. Its Prelude
+  contains no `__test`, `require`, raw `fetch`, `process`, Electron, safe-shell,
+  `pinyin-pro`, dialog authority, arbitrary URL flow, executable, argument vector,
+  environment, working directory, script, or child-owned confirmation surface.
+- The reviewed `system.invoke` capability now accepts the existing Quick Actions IDs plus
+  `volume-up`, `volume-down`, `brightness-up`, `brightness-down`, and
+  `open-main-window`. Static plugin metadata canonicalizes legacy `mute` to the existing
+  fixed `mute-toggle` ID; no second mute alias or arbitrary action fallback exists.
+- Action authorization is activation-name scoped. `touch-quick-actions` retains only its
+  original eight IDs; `touch-system-actions` receives only power/audio/brightness/window
+  IDs. Unknown, extra-field, cross-plugin, and unsupported-platform requests fail before
+  host work. Windows brightness returns stable `platform-unsupported` without spawning.
+- Every shell-backed action requires the manifest-declared current `system.shell` grant.
+  Permission watch installation precedes authorization; revoke aborts confirmation or
+  process work, kills at most once, and awaits the real child `exit` barrier. Restart and
+  shutdown retain the two-step main-owned, parent-window confirmation with the same
+  cancellation signal.
+- `open-main-window` bypasses shell permission only through an injected host method. The
+  method receives the captured activation, rechecks current identity around restore/show/
+  focus, uses only the configured CoreApp window ID, and exposes no BrowserWindow object
+  to the child. `system.shell` is optional in the System Actions manifest so this safe
+  action remains usable without granting shell execution.
+- The Prelude publishes only bounded standard plugin items and fixed `run-action`
+  payloads, awaits clear/push/system calls, uses static bilingual keywords, and preserves
+  stable blocked/cancelled/failed/success results. All production and Electron tests use
+  fake executor/show-window services; no real OS action was run.
+- Rollout is exactly **14 of 22** manifested official activations.
+  `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains `false` with no environment bypass.
+
+### Review Findings
+
+- **P0:** none found.
+- **P1 closed:** definition-wide `permission: system.shell` would also deny the safe
+  `open-main-window` action. Permission enforcement now occurs per fixed action, with
+  manual revoke propagation and the existing cancellation/exit barrier.
+- **P1 closed:** extending one shared fixed-ID facade could have let Quick Actions invoke
+  the new window/brightness IDs or System Actions invoke unrelated settings IDs. Main now
+  validates an immutable plugin-name-specific action allowlist after exact DTO parsing.
+- **P1 closed:** main-window execution previously lived in the child and could reach host
+  globals directly. It now uses one activation-bound injected host projection with current
+  identity checks before every synchronous window mutation.
+- **P2 closed:** the legacy System Actions `mute` ID conflicted with reviewed
+  `mute-toggle`; the migrated script and tests use only `mute-toggle`. Platform-specific
+  brightness has an explicit stable unsupported result and never falls through to spawn.
+- Final scoped review found no remaining P0/P1/P2 identity, permission, confirmation,
+  process-resource, window-authority, facade, redaction, or destructive-test finding.
+
+### Final Validation
+
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite: **27 files,
+  561/561 tests passed**. System Actions plugin-local production-script suite: **7/7
+  passed**.
+- CoreApp Node and Web typechecks passed. CoreApp/plugin/package scoped ESLint passed
+  with `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Final-source production `build:vite`, source/built-child forbidden-surface scans,
+  exact `14/22` plus default-disabled assertion, syntax checks, and `git diff --check`
+  passed. Existing Vite chunking and third-party annotation warnings remain non-blocking.
+- Real Electron two-generation utility-process smoke passed:
+  `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It loads the actual System Actions Prelude, proves
+  shell deny/grant, safe main-window dispatch without shell permission, unique process/
+  handle/generation rotation, stale old-port rejection, teardown/listener cleanup, and
+  uses only in-memory fake executor/show-window services.
+- No commit, push, merge, branch switch, reset, rebase, or history change was performed.
+
+### Remaining Scope
+
+The exact eight unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-browser-open`
+- `touch-intelligence`
+- `touch-snipaste`
+- `touch-translation`
+- `touch-window-manager`
+- `touch-window-presets`
+- `touch-workspace-scripts`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+regression, complete final security review, and the complete hard cut remain release
+blockers. No other plugin migration or rollout gate flip was performed in this batch.
+
+## Batch H Snipaste Fixed Process Migration
+
+This section supersedes the Batch G rollout count for the reviewed Snipaste worktree.
+It does not enable the production runtime default or claim the complete #297 hard cut.
+
+### Implemented Contracts
+
+- `touch-snipaste` is the 15th isolated-runtime compatible activation. Its Prelude
+  contains no `__test`, `require`, `child_process`, path/process/env access, raw fetch,
+  Electron, custom executable, custom argument, or settings-based process authority.
+  The seven built-in launch/snip/full-snip/paste/color/toggle/docs workflows remain.
+- The activation-local `process.spawn` definition accepts only exact
+  `{ operation: 'snipaste-action', actionId }` with seven fixed IDs. Child input cannot
+  provide executable, path, command, args, env, cwd, detached, shell, or platform.
+- Main discovers canonical absolute regular executables only at fixed platform roots
+  and a bounded user `Applications` root derived in Electron main. It rejects
+  symlinks, non-files, root escapes and PATH command lookup, maps fixed args, and
+  spawns with no shell/interpolation, fixed cwd, ignored stdio and minimal env.
+- Each call checks authoritative activation, host generation, manifest declaration and
+  current `system.shell` before/after discovery and spawn. Started processes remain
+  activation-owned after the RPC returns; cancel, timeout, revoke, disable, crash and
+  rotation kill at most once and await the real exit barrier.
+- Child exposes only frozen null-prototype `plugin.snipaste.runAction()` when
+  `process.spawn` is declared. Unknown IDs are rejected locally; no global process,
+  spawn, executable, path, native error or resource handle is exposed.
+- `SNIPASTE_PATH`, `settings.json.snipastePath`, custom actions/args, config-init and
+  config-open were removed because they cannot satisfy the fixed boundary. The plugin
+  README documents this explicit migration incompatibility; there is no silent argument
+  forwarding or insecure compatibility path.
+- Rollout is exactly **15 of 22** manifested official activations.
+  `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains `false` with no environment bypass.
+
+### Review Findings
+
+- **P0:** none found.
+- **P1 closed:** `process.spawn` accepted any structurally compatible main discovery
+  adapter, so a later caller could bypass the fixed candidate inventory without changing
+  the child DTO. Discovery is now compile-time branded by the fixed factory and runtime
+  signed through a module-private identity registry. Arbitrary adapters, structural
+  copies, and proxies fail during capability construction before permission watchers,
+  discovery, or process work.
+- **P1:** none open in the delegated fixed-process, discovery, permission, lifecycle,
+  child-facade, Prelude, rollout, or fake-smoke scope.
+- **P2:** none open. The initial Electron smoke exposed a real business item DTO mismatch
+  caused by diagnostic capability metadata; the Prelude now emits only canonical item
+  fields and the real business registry accepts it.
+- Scope tradeoff: arbitrary executable paths and custom argument actions are intentionally
+  no longer supported. Supporting them would reintroduce child-selected process authority;
+  the fixed seven workflows were preserved instead.
+
+### Final Validation
+
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite: **29 files,
+  607/607 tests passed**. The focused signed-discovery/process suite passed **41/41**
+  and the child Snipaste facade suite passed **2/2**; Snipaste plugin-local suite:
+  **7/7**; packages/test: **3/3**.
+- CoreApp Node and Web typechecks passed. CoreApp/plugin/package scoped ESLint passed
+  with `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Final-source production `build:vite`, source/built-child forbidden-surface scans,
+  syntax checks, exact `15/22` plus default-disabled assertion, and `git diff --check`
+  passed. Existing Vite chunking and third-party annotation warnings remain non-blocking.
+- Real Electron utility-process smoke passed: `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It loads
+  the actual Snipaste Prelude in two generations, proves shell deny/grant, fixed action
+  dispatch, process close barriers, PID/handle/generation rotation and stale old-port
+  rejection. The Snipaste executor/discovery are in-memory fakes; no real Snipaste or OS
+  process/action was started.
+- Final strict-review severity is **P0: 0 open, P1: 0 open, P2: 0 open**.
+- No commit, push, merge, branch switch, reset, rebase, or history change was performed.
+
+### Remaining Scope
+
+The exact seven unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-browser-open`
+- `touch-intelligence`
+- `touch-translation`
+- `touch-window-manager`
+- `touch-window-presets`
+- `touch-workspace-scripts`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+regression, complete final security review, and the complete hard cut remain release
+blockers. No other plugin migration or rollout gate flip was performed in this batch.
+
+## Batch I Window Presets Migration
+
+This section supersedes the Batch H rollout count for the reviewed Window Presets
+worktree. It does not enable the production runtime or claim the #297 hard cut.
+
+### Implemented Contracts
+
+- `touch-window-presets` now uses a purpose-built `system.window-presets` capability
+  for `status`, `preset-two-column`, `preset-dev-split`, and
+  `preset-clear-topmost`. The child facade is projected only for the exact manifest
+  name plus declaration, is frozen/null-prototype, and exposes only `status()` and
+  fixed-ID `runAction()`; generic `system.invoke` is not exposed to this plugin.
+- All PowerShell, executable/arguments/cwd/environment, Win32 interop, window
+  enumeration, PID/handle/title processing, deterministic pair selection, coordinates,
+  layout, and topmost cleanup remain in Electron main. The child DTO cannot select or
+  observe any of them.
+- Main accepts only canonical Windows drive roots, signs the fixed executor factory and
+  process adapters, uses `shell: false`, bounds stdout to 256 KiB and enumeration to 128
+  windows, validates exact hostile DTOs/results, and emits only stable redacted counts,
+  affected-window totals, and failure reasons.
+- Every call requires authoritative plugin/activation/host-generation state plus current
+  `system.shell`. Caller cancellation, permission revoke, timeout, disable, crash,
+  startup rollback, and generation rotation kill each owned process at most once and
+  await its real exit event before cleanup settles.
+- The production Prelude uses only the frozen platform snapshot, feature facade,
+  `TuffItemBuilder`, logger, and the fixed window-presets facade. It awaits clear/push,
+  status, and action work, publishes bounded canonical items, and contains no `require`,
+  `child_process`, global `process`, PowerShell, raw handle/coordinate/path detail,
+  permission SDK call, generic system facade, or production `__test` export.
+- Rollout is exactly **16 of 22** manifested official activations.
+  `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains `false` with no environment bypass.
+
+### Review Findings
+
+- **P0:** none found.
+- **P1:** none open in fixed executor authority, per-call permission, host/activation
+  ownership, child containment, process exit barriers, Prelude, rollout, or smoke scope.
+- **P2:** none open. Hostile requests/results, split multibyte stdout, stdout/window
+  bounds, malformed handles, duplicate windows, cancellation/revoke races, copied/proxied
+  executor/process objects, stale generations, and unsupported platforms are covered.
+- Scope tradeoff: arbitrary scripts, handles, coordinates, executable paths, arguments,
+  custom layouts, and child-selected window matching are intentionally unsupported.
+
+### Final Validation
+
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite: **31 files,
+  629/629 tests passed**. The focused Window Presets migration suite passed **88/88**;
+  plugin-local Node suite passed **4/4** and packages/test passed **3/3**.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp/package ESLint passed with
+  `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Final-source production `build:vite`, source and built-child forbidden-surface scans,
+  exact `16/22` plus default-disabled assertions, and `git diff --check` passed. Existing
+  Vite chunking and third-party annotation warnings remain non-blocking.
+- Real Electron utility-process smoke passed: `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It loads
+  the actual Window Presets Prelude in two generations, proves shell deny/grant,
+  status/layout/topmost workflows, process/handle/host-generation rotation, stale old-port
+  rejection, and awaited cleanup. Enumeration and execution are in-memory fixed fakes;
+  no real PowerShell, Win32, window mutation, or OS process/action was run.
+- Final strict-review severity is **P0: 0 open, P1: 0 open, P2: 0 open**.
+- No commit, push, merge, branch switch, reset, rebase, or history change was performed.
+
+### Remaining Scope
+
+The exact six unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-browser-open`
+- `touch-intelligence`
+- `touch-translation`
+- `touch-window-manager`
+- `touch-workspace-scripts`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+regression, complete final security review, and the complete hard cut remain release
+blockers. No other plugin migration, legacy-code deletion, or rollout gate flip was
+performed in this batch.
+
+## Independent Migration 16 Strict Check Addendum
+
+This addendum records the final independent review after the Batch I implementation.
+It does not enable the production runtime or claim the complete #297 hard cut.
+
+### Findings Closed
+
+- **P1 closed:** `close()` could settle before a process acquired through a synchronously
+  re-entrant fixed spawn seam reached its real exit barrier. Window Presets now registers
+  an operation before process acquisition, rejects a process acquired after close/revoke,
+  and makes close await both owned-process termination and the operation-idle barrier.
+- **P2 closed:** output overflow and overlapping explicit teardown could issue two native
+  kill requests. The process adapter now shares one kill latch and still waits for the
+  real `exit` event before settling.
+- **P2 closed:** `PluginModule.onInit()` reset the Snipaste and System Action factories but
+  could retain a stale Window Presets factory from an earlier module runtime until new
+  initialization completed. It now clears all three activation-local factories before
+  constructing manager/runtime services.
+- Added executable regressions proving enumerated process names/titles never enter a
+  mutation script, cross-plugin authoritative contexts fail before status host work,
+  re-entrant close remains pending through true process exit, and overflow/teardown sends
+  one kill request.
+- Final strict-review severity is **P0: 0 open, P1: 0 open, P2: 0 open**.
+
+### Final Verification
+
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite: **31 files,
+  633/633 tests passed**. Window Presets capability tests pass **22/22** and child facade
+  tests pass **2/2**.
+- Official Window Presets Prelude suites pass **4/4** under `node:test` and **3/3** in
+  `packages/test`.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp host/plugin/smoke ESLint passed
+  with `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Production `build:vite`, source and built-child forbidden-surface scans, exact
+  `16/22` plus default-disabled assertions, workspace `git diff --check`, and real
+  Electron smoke passed. Smoke result: `PLUGIN_HOST_ISOLATION_SMOKE_OK`.
+- Window enumeration/execution in every test and smoke remained in-memory fixed fakes;
+  no PowerShell, Win32 mutation, native window action, or other real OS action ran.
+- No commit, push, branch switch, reset, rebase, or history change was performed.
+
+## Batch J Window Manager Token Migration
+
+This section supersedes the migration-16 rollout count for the reviewed Window Manager
+worktree. It does not enable the production runtime or claim the #297 hard cut.
+
+### Implemented Contracts
+
+- `touch-window-manager` is the 17th isolated-runtime compatible activation. Its Prelude
+  contains no `__test`, `require`, `child_process`, `process`, PowerShell, AppleScript,
+  executable, script, argument, environment, raw handle/PID, application path, permission
+  SDK, arbitrary app name, or generic system/window-presets surface.
+- The purpose-built `system.window-manager` capability accepts exactly `list` and `act`.
+  `act` accepts only one of `activate`, `snap-left`, `snap-right`, `topmost-toggle`,
+  `close`, `hide`, `quit`, or `launch` plus one opaque owner token. The child facade is
+  frozen, null-prototype, manifest-name/declaration gated, and exposes only `list()` and
+  `act(action, token)`.
+- Main owns bounded Windows PowerShell/Win32 and macOS JXA inventory. Native output is
+  exact-validated and projected to bounded display names/titles/state plus random 192-bit
+  tokens; HWND, PID, start identity, bundle ID, application path, scripts and native
+  failures never cross to the child.
+- Tokens bind to one activation, host generation, list epoch, native identity and 10-second
+  TTL. Every list retires the prior epoch; every act consumes once. Unknown, foreign,
+  expired, replayed, stale-generation and reused-handle/replaced-process tokens fail before
+  mutation.
+- Act reenumerates and matches the current PID/native ID/start/app identity before running
+  one fixed operation. Names and titles never enter mutation scripts. Every list/action
+  process is permission/current-authority checked before and after start/exit; cancellation,
+  revoke, disable, crash and rotation retire tokens, kill at most once and await the real
+  process exit barrier.
+- Launch is intentionally limited to a still-running app in the current main-owned
+  inventory. Windows rechecks PID/start identity inside the fixed mutation script before
+  activating the current main window; macOS rechecks PID/launch time/Bundle ID in fixed
+  JXA before activating the exact `NSRunningApplication`. Arbitrary text/path launch and
+  the old persisted recent-window list were removed because short-lived activation tokens
+  cannot safely survive list epochs or restarts.
+- `TouchPlugin` creates and closes the capability per exact Window Manager generation.
+  `PluginModule` installs one branded fixed service factory and clears it on init/destroy.
+  Rollout is exactly **17 of 22**; `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains false with no
+  environment bypass.
+
+### Review Findings
+
+- **P0:** none found.
+- **P1 closed:** the first owner-token launch design passed a host-inventory executable path
+  to fixed `Start-Process`. A path replacement after identity validation could select a
+  different binary. Launch now performs no path execution: it reopens/activates only the
+  currently revalidated running process through PID or bundle ID.
+- **P1:** none open in activation/host ownership, token epoch/TTL/replay, native identity,
+  permission, fixed execution, process barrier, child facade, Prelude, rollout or smoke scope.
+- **P2:** none open. Hostile authority fields, malformed/proxied/oversized inventory,
+  intrinsic mutation, title interpolation, structural service copies, unsupported actions,
+  revoke/cancel races and output overflow are covered.
+- Compatibility tradeoff: arbitrary application-name/path launch and persisted recent
+  windows are intentionally unsupported. Supporting either would bypass current inventory
+  ownership or pretend an expired token remains authoritative.
+
+### Final Validation
+
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite: **33 files,
+  654/654 tests passed**. Focused Window Manager capability/child/Prelude/lifecycle/rollout
+  suite passed **89/89**; plugin-local suites passed **4/4** and **3/3**.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp/plugin/package ESLint passed with
+  `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Final-source `build:vite`, source/built-child forbidden-surface scans, exact `17/22`
+  plus default-disabled assertions, syntax checks, and `git diff --check` passed. Existing
+  Vite chunking and third-party annotation warnings remain non-blocking.
+- Real Electron utility-process smoke passed: `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It loads
+  the actual Window Manager Prelude in two generations, proves shell deny/grant, redacted
+  list plus snap/launch actions, distinct process/handle/generation rotation, stale old-port
+  rejection and awaited cleanup. Inventory and execution are in-memory fixed fakes; no
+  PowerShell, AppleScript, Win32, native window mutation, application launch, or other real
+  OS action ran.
+- Final scoped severity is **P0: 0 open, P1: 0 open, P2: 0 open**. No commit, push,
+  merge, branch switch, reset, rebase, or history change was performed.
+
+### Remaining Scope
+
+The exact five unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-browser-open`
+- `touch-intelligence`
+- `touch-translation`
+- `touch-workspace-scripts`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+regression, complete final security review, and the complete hard cut remain release
+blockers. No other plugin migration or rollout gate flip was performed in this batch.
+
+## Independent migration 17 strict-check addendum (2026-07-28)
+
+### Severity report
+
+- **P0:** none found.
+- **P1 (fixed):** inventory revalidation and native mutation previously ran in separate
+  processes, so PID/HWND/bundle replacement could win after the inventory result but before
+  the mutation. Windows action scripts now recheck process start identity and the current
+  main-window handle inside the mutation process. macOS inventory now records
+  `NSRunningApplication.launchDate`, and every macOS mutation, including launch and quit,
+  rechecks PID, launch time, and Bundle ID inside fixed JXA before acting. The former
+  `/usr/bin/open -b` and `/bin/kill` mutation paths were removed.
+- **P2 (fixed):** exact TTL expiry now rejects at `now >= expiresAt`; regression coverage
+  exercises the boundary millisecond. Result array snapshots now reject sparse arrays,
+  accessors/proxies, and extra properties without invoking hostile getters.
+- **P2 (external gate blocker, not caused by migration 17):** a final concurrent rerun of
+  `typecheck:web` failed in the unrelated dirty
+  `packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue` because its newly
+  added template binding references undeclared `ariaLabel`. That file changed at 19:57:24
+  while the final gate was running and was left untouched. The same web typecheck passed
+  earlier in this strict-check cycle before that concurrent edit.
+
+### Security decisions and evidence
+
+- Tokens use 192-bit `randomBytes`, an active plus bounded retired no-reuse set, a 10-second
+  TTL, per-list epoch replacement, activation-local capability state, and consume-before-act
+  single use. Unknown, expired, prior-epoch, cross-plugin, cross-generation, cross-host, and
+  replayed tokens are rejected.
+- Request validation failures do **not** consume a valid token because no action was
+  admitted. Once an action request is valid and admitted, the token is consumed before any
+  native revalidation or mutation; unsupported/native-replaced/transient native failures
+  therefore cannot replay it. Concurrent list/action admission is serialized so a list
+  epoch rotation cannot interleave with action admission.
+- Launch accepts only an opaque token for a current main-owned application inventory entry.
+  No child-selected title, app name, path, command, script, or executable reaches a native
+  action. Windows and macOS scripts are fixed source and receive only validated host-owned
+  identity/action arguments.
+- Branded service/executor instances, permission and activation checks, bounded output,
+  strict descriptor-safe result snapshots, cancellation, revoke/disable barriers, child
+  facade containment, and awaited official Prelude operations were reviewed and covered by
+  focused regressions. Reentrant close waits for the real exit barrier of a process acquired
+  synchronously during spawn.
+- No real OS enumeration or mutation ran during this check. Capability tests and Electron
+  isolation smoke used fake branded native services/executors only.
+
+### Final verification
+
+- `pnpm -C apps/core-app exec vitest run src/main/modules/plugin/host src/main/modules/plugin/plugin.test.ts src/main/modules/plugin/plugin-module.test.ts src/main/modules/plugin/plugin-runtime-rollout.test.ts`
+  -> **33 files, 658/658 tests passed**.
+- Focused Window Manager capability plus child facade coverage -> **23/23 passed** within
+  the host suite.
+- `node --test plugins/touch-window-manager/index.test.cjs` -> **4/4 passed**.
+- `pnpm -C packages/test exec vitest run src/plugins/window-manager.test.ts` -> **3/3 passed**.
+- `pnpm -C apps/core-app typecheck:node` -> passed.
+- Scoped CoreApp/plugin/package ESLint with `--max-warnings 0` -> passed.
+- `pnpm plugins:validate` -> **22 manifest policies, 24/24 plugin classifications, and 20/20
+  search-provider coverage passed**.
+- `pnpm -C apps/core-app build:vite` -> passed with existing non-blocking Vite chunking and
+  third-party annotation warnings.
+- Built child forbidden-surface scan and official Prelude source scan -> passed.
+- `pnpm -C apps/core-app exec electron scripts/plugin-host-isolation-smoke.cjs` ->
+  `PLUGIN_HOST_ISOLATION_SMOKE_OK`.
+- Rollout assertion -> **17/22**, includes `touch-window-manager`, default remains disabled.
+- `git diff --check` -> passed.
+
+## Batch K Workspace Scripts Migration
+
+This section supersedes the migration-17 rollout count for the reviewed Workspace Scripts
+worktree. It does not enable the production runtime or claim the #297 hard cut.
+
+### Implemented Contracts
+
+- `touch-workspace-scripts` is the 18th isolated-runtime compatible activation. Its Prelude
+  contains no privileged Node import, process global, direct filesystem/path/safe-shell,
+  dialog/permission SDK, command parser, persisted workspace path/config, arbitrary
+  cwd/command/executable/args/env authority, or production `__test` export.
+- The purpose-built `process.workspace-scripts` capability accepts exactly main-owned
+  selection, workspace-token listing, and script-token execution. The child facade is
+  frozen, null-prototype, exact manifest-name/declaration gated, and exposes only
+  `select()`, `list(workspaceToken)`, and `run(scriptToken)`.
+- Main owns directory selection and confirmation. It accepts only canonical non-symlink
+  roots and regular `package.json` files, retains `dev`/`ino` identities, reads at most
+  256 KiB through a no-follow handle, parses at most 128 bounded script names, and keeps
+  every absolute path and script body in main.
+- Workspace and script DTOs contain only display names and random 192-bit tokens. Workspace
+  tokens have a five-minute TTL and 32-use limit; script tokens have a two-minute TTL,
+  rotate on list, bind a SHA-256 script digest, consume once, and use a bounded no-reuse
+  history. Selection/list epoch rotation retires stale tokens.
+- Every call requires current activation/host authority plus `fs.read`; run also requires
+  current `system.shell`. Main revalidates root/package identities and the script digest
+  before and after confirmation. Denial, drift, replacement, stale authority, permission
+  failure, token failure, or process-limit failure performs no spawn.
+- Execution is fixed to `pnpm run <host-owned scriptName>`, `shell: false`, ignored stdio,
+  canonical cwd, and a bounded environment snapshot. Windows uses the fixed
+  `%SystemRoot%\\System32\\cmd.exe /d /s /c pnpm.cmd run <host-owned scriptName>` shape
+  because Node 24 cannot directly execute `.cmd` files with `shell: false`; the child
+  controls no command-line field.
+- Processes are activation-owned and capped at two. Caller cancellation, permission revoke,
+  disable, crash, restart, and module destroy retire tokens, request each kill at most once,
+  and await the real process `exit` barrier. Enable rollback closes generation-local
+  capability state.
+- Rollout is exactly **18 of 22**. `PLUGIN_RUNTIME_DEFAULT_ENABLED` remains false with no
+  environment bypass; no global/default Workspace Scripts capability was installed.
+
+### Security Review
+
+- **P0:** none found.
+- **P1 fixed:** the initial fixed host selected `pnpm.cmd` directly on Windows. Node 24 does
+  not reliably execute `.cmd` files with `shell: false`, so real Windows runs could fail
+  despite fake-adapter tests. Main now selects a validated fixed System32 `cmd.exe` and a
+  fixed `/d /s /c pnpm.cmd run` argument prefix; only the already validated host-owned
+  script name is appended. A dedicated Windows invocation regression covers the contract.
+- **P1:** none open in activation/host ownership, permission, canonical filesystem identity,
+  token epoch/TTL/replay, confirmation, fixed execution, process barriers, facade gating,
+  Prelude surface, rollout, or smoke scope.
+- **P2:** none open. Hostile authority fields, symlink/replacement/drift, exact TTL expiry,
+  replay/no-reuse, confirmation denial, permission deny/revoke, caller cancellation,
+  structural host/process copies, spawn acknowledgement, process limits, idempotent kill,
+  and true exit barriers have focused regression coverage.
+- Trust tradeoff: main does not expose or trust script bodies in the child, but an explicitly
+  confirmed `package.json` script is project-owned code and may perform arbitrary actions
+  with the application process privileges. Digest revalidation narrows drift before spawn;
+  defending against a concurrently malicious local filesystem owner requires an immutable
+  workspace snapshot or OS sandbox and is outside this utility-process boundary.
+
+### Final Validation
+
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite: **35 files, 681/681
+  tests passed**. Focused Workspace Scripts capability/child coverage: **21/21 passed**;
+  focused capability/child/lifecycle/rollout rerun: **80/80 passed**.
+- Official Workspace Scripts Prelude suites passed **5/5** under `node:test` and **3/3** in
+  `packages/test`.
+- CoreApp Node and Web typechecks passed. Scoped CoreApp/plugin/package ESLint passed with
+  `--max-warnings 0`.
+- `pnpm plugins:validate` passed **22 manifest policies**, **24/24 directory
+  classification**, and **20/20 search-provider coverage**.
+- Production `build:vite`, source and built-child forbidden-surface scans, exact **18/22**
+  plus default-disabled assertion, syntax checks, and workspace `git diff --check` passed.
+  Existing Vite chunking and third-party annotation warnings remain non-blocking.
+- Real Electron utility-process smoke passed: `PLUGIN_HOST_ISOLATION_SMOKE_OK`. It loads the
+  actual Workspace Scripts Prelude in two generations and proves read/shell deny/grant,
+  fake select/list/run, opaque payloads, process/generation rotation, stale old-port denial,
+  and awaited cleanup. Selection, confirmation, and process execution are in-memory fixed
+  fakes; no real package script or package manager ran.
+- Final scoped severity before the strict addendum was **P0: 0 open, P1: 0 open, P2: 0 open**.
+  No commit, push, merge, branch switch, reset, rebase, or history change was performed.
+
+### Strict Migration 18/22 Review Addendum
+
+This addendum supersedes the invocation and validation details above after the final strict
+Workspace Scripts audit. The rollout remains exactly **18 of 22** and the production default
+remains disabled.
+
+- **P0: 0 open.** Child DTOs remain token-only; activation/host authority, token TTL/epochs,
+  single-use and bounded no-reuse behavior, permission checks, main-owned confirmation,
+  cancellation, revoke, close and real-exit barriers remain intact.
+- **P1 fixed: package-manager search authority.** The previous host invoked `pnpm` through the
+  inherited PATH and Windows `cmd.exe` could resolve a workspace-local `pnpm.cmd` before PATH.
+  Main now removes relative/empty PATH entries and `PNPM_HOME`/`PATHEXT` overrides, resolves a
+  regular executable from the main-owned absolute PATH to a canonical absolute path, and uses
+  that absolute path for every invocation. Missing or unsafe resolution fails closed.
+- **P1 fixed: Windows command-line semantics.** Windows now uses fixed System32 `cmd.exe` with
+  `shell: false`, `windowsVerbatimArguments: true`, and one fixed `/d /s /c` command string of
+  the form `""<absolute-pnpm.cmd>" run <validated-host-script-name>"`. Unsafe executable-path
+  expansion/metacharacter characters are rejected and the child controls no command-line or
+  environment field.
+- **P1 fixed: filesystem replacement through spawn.** Async package reads now compare size,
+  mtime and ctime and finish with root/package canonical `dev`/`ino` checks. Confirmation-time
+  replacement returns a stable blocked result. The branded spawn adapter receives the retained
+  workspace identity rather than a bare cwd and rechecks root/package identity synchronously
+  immediately before spawn and again after the real spawn acknowledgement; drift kills once,
+  awaits the real exit barrier and returns a redacted blocked result.
+- **P2: 0 open.** Added regressions cover absolute package-manager discovery, relative PATH and
+  environment spoof removal, the exact Windows command string, confirmation-time package
+  replacement and workspace replacement inside the fake spawn window. No test or smoke path
+  started a real package manager or project script.
+
+Validation after the strict fixes:
+
+- Complete plugin-host plus TouchPlugin/PluginModule/rollout suite: **35 files, 684/684 tests
+  passed**. Focused Workspace Scripts capability/child coverage: **24/24 passed**.
+- Official Workspace Scripts Prelude: **5/5** `node:test` and **3/3** package tests passed;
+  forbidden production surfaces were absent and feature clear/push operations remain awaited.
+- CoreApp Node typecheck, scoped package-correct ESLint with `--max-warnings 0`, Prettier,
+  `plugins:validate` (22 policies, 24/24 plugins, 20/20 search providers), production
+  `build:vite`, syntax checks, source scan, exact 18/22 rollout assertion, Electron fake-only
+  smoke (`PLUGIN_HOST_ISOLATION_SMOKE_OK`) and `git diff --check` passed.
+- CoreApp Web typecheck is currently blocked by unrelated concurrent TuffEx errors in
+  `TxSearchInput.vue`, `sortable-list/index.ts` and `virtual-list/index.ts`. These files are
+  outside migration 18 and were not modified as part of this review.
+
+Residual trust is explicit: the main process startup environment and the canonical pnpm
+installation it names are host authority, and a user-confirmed package script is project-owned
+code that may perform arbitrary actions. The pre/post-spawn identity checks close ordinary
+symlink/replacement races, but defending against a same-user adversary that can continuously
+replace workspace objects in the final OS scheduling window requires an immutable workspace
+snapshot or OS sandbox and remains outside this utility-process migration boundary.
+
+### Remaining Scope
+
+The exact four unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-browser-open`
+- `touch-intelligence`
+- `touch-translation`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22
+regression, complete final security review, and the complete hard cut remain release
+blockers. No unrelated plugin migration, TuffEx fix, or rollout gate flip was performed in
+this batch.
+
 ## Stage 1 Intelligence Invoke Cancellation
 
 - CoreApp now injects cancellation through a private host-only intersection type; the shared
@@ -386,3 +1190,38 @@ It does not claim the #297 production hard cut.
 ## Release Gate
 
 Do not mark review, commit, publish or close #297 until every real plugin Prelude uses a dedicated utilityProcess, all privileged access is typed and per-call authorized, official plugins pass isolated regression, and real Electron smoke proves crash/hang/resource violations cannot block main or cross activation boundaries.
+
+## Migration 19/22: Browser Open
+
+### Delivered Boundary
+
+- Added fixed `system.browser-open` with exact `list` and `open` DTOs. Main owns trusted browser discovery, native identity, opaque token issuance/rotation, HTTP(S) URL policy, fixed shell-free launchers, permission checks, process ownership, cancellation, revoke, and real exit barriers.
+- Added the manifest/name-gated, frozen null-prototype `plugin.browser` child facade exposing only `list()` and `open(url, browserToken?)`. Tokens are activation-, generation-, inventory-epoch-, TTL-, and single-use-bound and are never persisted.
+- Rewrote the official `touch-browser-open` Prelude without `require`, `child_process`, `process`, raw `fetch`, Electron, privileged Node imports, privileged targets, or `__test`. URL/search, suggestions, default/specific browser, clipboard, storage, and recent-browser workflows remain; suggestions continue through bounded `http.request`, and recent storage contains display data only before relisting for fresh authority.
+- Integrated activation-local construction and teardown into `TouchPlugin` and `PluginModule`, including enable rollback, disable/crash cleanup, host-generation rotation, and module teardown. Rollout is exactly **19/22** and the production isolated-runtime default remains disabled.
+
+### Security Review
+
+- **P0: 0 open.** No child-selected executable, browser path, arguments, command, shell, platform, environment, cwd, or native identity reaches the host. Browser/network/OS work is fake-only in tests and smoke.
+- **P1: 0 open.** URL validation rejects non-HTTP(S), credentials, control characters, malformed and oversized input. Specific-browser launch revalidates trusted native `dev`/`ino` identity; permission revoke and activation/generation changes retire authority before new launches.
+- **P1 fixed during final review:** concurrent inventory refreshes previously shared the mutable current epoch when issuing tokens, so a late older `list` could issue authority valid in the newer epoch. Each request now captures its own epoch and a late stale response fails closed before token issuance; a regression test covers the interleaving.
+- **P2: 0 open.** DTO, facade, token, launcher, permission, cancellation, process barrier, Prelude, integration, rollout, manifest, package, and Electron-generation regressions are covered.
+- Tradeoff: opening an allowed public HTTP(S) URL delegates content handling to the selected browser and its profile/extensions. Linux currently exposes default-browser opening only; adding a specific-browser inventory needs a separate platform threat review. Process cancellation can terminate the fixed launcher, but cannot guarantee that an already handed-off browser tab closes.
+
+### Validation Evidence
+
+- Complete plugin-host plus `TouchPlugin`/`PluginModule`/rollout suite: **37 files, 709/709 tests passed**. Browser-focused CoreApp slice: **49/49 passed**.
+- Official Browser Open Prelude: **7/7** `node:test`; package Browser Open suite: **4/4**; resolver, production-contract, integrity, require and network suite: **39/39**.
+- CoreApp Node and Web typechecks passed. Scoped package-correct ESLint passed with `--max-warnings 0`; syntax checks, forbidden-source scan, and scoped `git diff --check` passed.
+- `plugins:validate` passed 22 manifest policies, 24/24 directory classification, and 20/20 search-provider coverage. Production `build:vite` passed; built-child forbidden-surface scan passed and the artifact contains the declaration-gated `system.browser-open` facade.
+- Real Electron fake-only smoke passed with `PLUGIN_HOST_ISOLATION_SMOKE_OK`, including two generations, deny/grant, default/specific/search, opaque token rotation, stale-port rejection, and cleanup. It executed no real browser, network, discovery, or OS launcher action.
+
+### Remaining Scope
+
+The exact three unmigrated official activations are:
+
+- `touch-browser-data`
+- `touch-intelligence`
+- `touch-translation`
+
+Production default enablement, heartbeat/restart budget, legacy bridge removal, 22/22 regression, complete final security review, and the complete hard cut remain release blockers. No unrelated plugin migration, rollout gate flip, legacy removal, commit, branch/history change, or real external action was performed in this batch.
