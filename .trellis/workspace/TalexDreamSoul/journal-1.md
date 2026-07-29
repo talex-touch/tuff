@@ -1111,3 +1111,39 @@ Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Ne
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: Complete Prelude utility-process isolation
+
+**Date**: 2026-07-29
+**Task**: Complete Prelude utility-process isolation
+**Branch**: `master`
+
+### Summary
+
+Completed and pushed the #297 production hard cut: all 22 official manifested Preludes run in activation-scoped utility processes with typed capabilities, default-on rollout, heartbeat and restart-budget containment, no legacy fallback, 1104 passing plugin tests, production build and Electron smoke evidence; archived #297 and cleaned 15 stale completed task entries from the active task list.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1bcbca825` | (see git log) |
+| `a0a2091a5` | (see git log) |
+| `997b246f5` | (see git log) |
+| `24be46329` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
