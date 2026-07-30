@@ -1076,3 +1076,34 @@ Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Ne
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: CoreBox 与 Nexus 端到端调试及 Issue 发布
+
+**Date**: 2026-07-29
+**Task**: CoreBox 与 Nexus 端到端调试及 Issue 发布
+**Branch**: `master`
+
+### Summary
+
+完成 CoreBox/Nexus 全链路调试与去重，发布并验证 #477、#478、#479；复用 #323/#324/#327/#329/#332，未修改产品源码。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
