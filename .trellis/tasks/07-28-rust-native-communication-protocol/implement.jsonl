@@ -1,0 +1,6 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Map Rust core, N-API carrier, main NativeTransport, outer typed transport, and renderer resource boundaries before implementation."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Keep protocol decoding, limits, error mapping, and lifecycle ownership centralized instead of duplicating them per addon."}
+{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"Reconcile the existing metadata-only native callback rule with the approved bounded Rust-to-main attachment lane; renderer/plugin boundaries must remain metadata-only."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Preserve authoritative caller identity and permission checks above NativeTransport; never accept caller-authored identity in Rust payloads."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Own cross-layer protocol models and runtime normalization at one boundary without raw channel names or repeated casts."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Apply fail-closed native availability, typed boundary, privacy, focused test, and node typecheck requirements."}

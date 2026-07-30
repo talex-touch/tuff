@@ -1,0 +1,16 @@
+{"file":".trellis/spec/frontend/index.md","reason":"CoreApp frontend pre-development checklist and ownership rules"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Vue/TuffEx semantic controls, accessibility, styling, and i18n"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Main-owned session state versus renderer transient state"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Typed transport events, shared contracts, and runtime normalization"}
+{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"Screenshot attachment-to-main and descriptor-only renderer boundary"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Verified plugin identity, permission gates, and hardened overlay/window boundaries"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Focused UI/main tests and evidence boundaries"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Session data flow across native, main, transport, renderer, and caller layers"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing window, shortcut, transport, and selection abstractions"}
+{"file":".trellis/tasks/07-28-rust-screenshot-mvp/research/pixpin-scrollsnap-feature-audit.md","reason":"Prior screenshot product/competitor findings and bounded MVP choices"}
+{"file":".trellis/tasks/07-29-macos-screenshot-capture-core/research/macos-window-multidisplay-best-practices.md","reason":"Overlay, ScreenCaptureKit, multi-display, and self-exclusion constraints"}
+{"file":"apps/core-app/src/main/modules/screenshot-session/session-manager.ts","reason":"Single-session same-overlay copy/save/Done lifecycle, lazy composition, invalidation, authorization, and teardown"}
+{"file":"apps/core-app/src/renderer/src/views/screenshot/ScreenshotOverlay.vue","reason":"Inline selection editing, safe-area controls, managed frozen frame, output actions, and Save-sheet Escape suppression"}
+{"file":"/tmp/tuff-screenshot-demo/screenshot-tool-demo.mp4","reason":"Final isolated real Electron direct-edit workflow recording; H.264/yuv420p, 4096x2648, 18.883333 seconds, 258 frames"}
+{"file":"/tmp/tuff-screenshot-demo/video-contact-sheet-direct.png","reason":"Visual evidence that the final workflow stays in the overlay and contains no editor popup, DevTools, or personal content"}
+{"file":"/tmp/tuff-screenshot-demo/inline-save-confirmed-20260730.png","reason":"Real overlay-parented Save confirmation output; valid 1800x1080 RGBA PNG retained the 900x540 selection until Done"}
