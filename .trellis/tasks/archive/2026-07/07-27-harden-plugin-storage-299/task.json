@@ -1,0 +1,30 @@
+{
+  "id": "harden-plugin-storage-299",
+  "name": "harden-plugin-storage-299",
+  "title": "加固插件 SQLite 与 Secret #299",
+  "description": "实现 fail-closed 鉴权、数据库边界、危险 SQL 限制、资源配额与生命周期清理。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-30",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "b95f9bd9c",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-resolve-open-github-issues",
+  "relatedFiles": [],
+  "notes": "Plugin SQLite and Secret boundaries are complete: authoritative identity, fail-closed permissions, canonical roots, dual SQL policy, resource limits, real worker timeout/termination, atomic Secret storage, and revoke/disable/uninstall cleanup. GitHub #299 is closed after built-worker integration, 271/271 joint regression, production build, and independent zero-P0/P1/P2 review.",
+  "meta": {
+    "nextAction": "Proceed with parent #302 closure.",
+    "blocker": "",
+    "evidence": "GitHub #299 closure comment; implementation commit b95f9bd9c; built worker, joint regression/build, and independent review evidence."
+  }
+}
