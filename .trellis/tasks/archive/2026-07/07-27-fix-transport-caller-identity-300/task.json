@@ -1,0 +1,30 @@
+{
+  "id": "fix-transport-caller-identity-300",
+  "name": "fix-transport-caller-identity-300",
+  "title": "修正 Transport 调用身份 #300",
+  "description": "以 sender-bound authoritative identity 替代 uniqueKey presence verification。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "frontend",
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-30",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "4b88e9550",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-resolve-open-github-issues",
+  "relatedFiles": [],
+  "notes": "Authoritative transport caller identity is complete across raw IPC, ipcMain.handle, local invoke, MessagePort, plugin-host, and privileged handlers. Forged/stale/unregistered callers fail closed. GitHub #300 is closed after Utils/CoreApp joint regressions, Node/Web typecheck, production build, dual Electron smoke, and independent zero-P0/P1/P2 review.",
+  "meta": {
+    "nextAction": "Proceed with parent #302 closure.",
+    "blocker": "",
+    "evidence": "GitHub #300 closure comment; implementation commit 4b88e9550; joint identity/security regressions and independent review evidence."
+  }
+}
