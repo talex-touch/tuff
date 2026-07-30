@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check evidence strength, redaction, and supported runtime claims"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check typed transport and event boundary conclusions"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Check plugin view and caller trust conclusions"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check complete CoreBox data-flow coverage"}
+{"file":".trellis/tasks/archive/2026-07/07-28-debug-corebox-nexus/research/audit-baseline.md","reason":"Check findings against baseline and canonical Issue map"}
+{"file":".trellis/tasks/07-13-search-crossplatform-audit/prd.md","reason":"Check deduplication against living search backlog"}

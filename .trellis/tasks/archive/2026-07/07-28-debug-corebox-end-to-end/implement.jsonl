@@ -1,0 +1,7 @@
+{"file":".trellis/spec/frontend/index.md","reason":"CoreApp frontend ownership and mandatory pre-development checks"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Evidence strength, privacy, and CoreApp verification boundaries"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Typed transport and cross-layer payload contracts used by CoreBox"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"CoreBox hosted plugin view and caller trust boundaries"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace window, transport, renderer, search, and execution round trips"}
+{"file":".trellis/tasks/archive/2026-07/07-28-debug-corebox-nexus/research/audit-baseline.md","reason":"Exact baseline, access limits, canonical Issues, and planning leads"}
+{"file":".trellis/tasks/07-13-search-crossplatform-audit/prd.md","reason":"Living search backlog and existing CoreBox acceptance ownership"}
