@@ -6,9 +6,11 @@ const path = require('node:path')
 const process = require('node:process')
 
 const rootDir = path.resolve(__dirname, '..')
+const workspaceDir = rootDir
 const crateDir = path.join(rootDir, 'native-screenshot')
-const releaseDir = path.join(crateDir, 'target', 'release')
+const releaseDir = path.join(workspaceDir, 'target', 'release')
 const outDir = path.join(rootDir, 'build', 'Release')
+const macosDeploymentTarget = '12.3'
 
 const platformLibraryName
   = process.platform === 'win32'
@@ -17,25 +19,67 @@ const platformLibraryName
       ? 'libtuff_native_screenshot.dylib'
       : 'libtuff_native_screenshot.so'
 
-const result = spawnSync('cargo', ['build', '--release'], {
-  cwd: crateDir,
-  stdio: 'inherit',
-  env: process.env,
-})
-
-if (result.status !== 0) {
-  process.exit(result.status ?? 1)
+const requestedFeatures = []
+if (process.env.TUFF_SCREENSHOT_PROTOCOL_TEST_BACKEND === '1') {
+  requestedFeatures.push('protocol-test-backend')
 }
 
-fs.mkdirSync(outDir, { recursive: true })
-const outNodePath = path.join(outDir, 'tuff_native_screenshot.node')
-fs.copyFileSync(path.join(releaseDir, platformLibraryName), outNodePath)
+const cargoEnv = { ...process.env }
+if (process.platform === 'darwin' && !cargoEnv.MACOSX_DEPLOYMENT_TARGET) {
+  cargoEnv.MACOSX_DEPLOYMENT_TARGET = macosDeploymentTarget
+}
 
-// macOS/Apple Silicon: cargo emits the dylib ad-hoc *linker-signed* (codesign
-// flags 0x20002). A byte-identical copy of a linker-signed Mach-O is SIGKILLed by
-// AMFI on load ("Killed: 9") from any path other than where it was built — which
-// breaks the pnpm-managed core-app copy of this package. Re-sign with a plain
-// ad-hoc signature (flags 0x2) so every copy loads from any path.
+const outNodePath = path.join(outDir, 'tuff_native_screenshot.node')
+
+function build(features) {
+  const cargoArgs = ['build', '--release', '--manifest-path', path.join(crateDir, 'Cargo.toml')]
+  if (features.length > 0) {
+    cargoArgs.push('--features', features.join(','))
+  }
+  const result = spawnSync('cargo', cargoArgs, {
+    cwd: workspaceDir,
+    stdio: 'inherit',
+    env: cargoEnv,
+  })
+  if (result.status !== 0) {
+    process.exit(result.status ?? 1)
+  }
+}
+
+function installBuild() {
+  fs.mkdirSync(outDir, { recursive: true })
+  fs.copyFileSync(path.join(releaseDir, platformLibraryName), outNodePath)
+  // cargo emits a path-bound linker signature. Re-sign the installed copy so
+  // pnpm/Electron can load byte-identical package copies from other paths.
+  if (process.platform === 'darwin') {
+    execFileSync('codesign', ['--force', '--sign', '-', outNodePath], { stdio: 'inherit' })
+  }
+}
+
+function probeDlopen() {
+  return spawnSync(
+    process.execPath,
+    ['-e', 'process.dlopen(module, process.argv[1])', outNodePath],
+    { encoding: 'utf8' },
+  )
+}
+
+build(requestedFeatures)
+installBuild()
+
 if (process.platform === 'darwin') {
-  execFileSync('codesign', ['--force', '--sign', '-', outNodePath], { stdio: 'inherit' })
+  let probe = probeDlopen()
+  const probeOutput = `${probe.stdout || ''}${probe.stderr || ''}`
+  if (probe.status !== 0 && probeOutput.includes('mis-aligned LINKEDIT string pool')) {
+    // Apple CLT ld-27034 may place the string pool at 4-byte alignment when the
+    // indirect symbol count is odd. A real external data relocation changes
+    // that link layout; no bytes are patched after linking.
+    build([...requestedFeatures, 'linkedit-align-pad'])
+    installBuild()
+    probe = probeDlopen()
+  }
+  if (probe.status !== 0) {
+    process.stderr.write(probe.stderr || probe.stdout || 'Screenshot addon dlopen probe failed\n')
+    process.exit(probe.status ?? 1)
+  }
 }

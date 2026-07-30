@@ -91,7 +91,6 @@ export interface NativeScreenshotRegion {
 }
 
 export type NativeScreenshotCaptureTarget = 'cursor-display' | 'display' | 'region'
-export type NativeScreenshotCaptureOutput = 'tfile' | 'data-url'
 
 export interface NativeScreenshotCaptureRequest {
   target?: NativeScreenshotCaptureTarget
@@ -101,14 +100,12 @@ export interface NativeScreenshotCaptureRequest {
     y: number
   }
   region?: NativeScreenshotRegion
-  output?: NativeScreenshotCaptureOutput
+  cursor?: 'hidden' | 'system'
   writeClipboard?: boolean
 }
 
 export interface NativeScreenshotCaptureResult {
-  tfileUrl?: string
-  dataUrl?: string
-  path?: string
+  tfileUrl: string
   mimeType: 'image/png' | string
   width: number
   height: number

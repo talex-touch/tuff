@@ -6,8 +6,9 @@ const path = require('node:path')
 const process = require('node:process')
 
 const rootDir = path.resolve(__dirname, '..')
+const workspaceDir = rootDir
 const crateDir = path.join(rootDir, 'native-audio')
-const releaseDir = path.join(crateDir, 'target', 'release')
+const releaseDir = path.join(workspaceDir, 'target', 'release')
 const outDir = path.join(rootDir, 'build', 'Release')
 
 const platformLibraryName
@@ -17,8 +18,8 @@ const platformLibraryName
       ? 'libtuff_native_audio.dylib'
       : 'libtuff_native_audio.so'
 
-const result = spawnSync('cargo', ['build', '--release'], {
-  cwd: crateDir,
+const result = spawnSync('cargo', ['build', '--release', '--manifest-path', path.join(crateDir, 'Cargo.toml')], {
+  cwd: workspaceDir,
   stdio: 'inherit',
   env: process.env,
 })

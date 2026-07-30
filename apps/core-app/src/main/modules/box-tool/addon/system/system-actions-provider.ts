@@ -21,7 +21,7 @@ import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
 import { installDevPluginFromPath } from '../../../plugin/dev-plugin-installer'
 import { pluginModule } from '../../../plugin/plugin-module'
-import { getNativeScreenshotService } from '../../../native-capabilities/screenshot-service'
+import { screenshotSessionModule } from '../../../screenshot-session'
 import { appProvider } from '../apps/app-provider'
 import { fileProvider } from '../files/file-provider'
 
@@ -472,11 +472,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
           break
         }
         case 'screenshot-cursor-display': {
-          await getNativeScreenshotService().capture({
-            target: 'cursor-display',
-            output: 'tfile',
-            writeClipboard: true
-          })
+          await screenshotSessionModule.startStandalone('system-action')
           break
         }
       }

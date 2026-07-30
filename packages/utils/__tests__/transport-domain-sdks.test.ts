@@ -567,8 +567,6 @@ describe("transport domain sdk mappings", () => {
     const transport = createTransportMock();
     const captureResult = {
       tfileUrl: "tfile:///tmp/native/shot.png",
-      dataUrl: "data:image/png;base64,c2NyZWVuc2hvdA==",
-      path: "/private/tmp/native/shot.png",
       mimeType: "image/png",
       width: 1280,
       height: 720,
@@ -597,7 +595,6 @@ describe("transport domain sdk mappings", () => {
         target: "region",
         displayId: "display-1",
         region: { x: 10, y: 20, width: 300, height: 200 },
-        output: "data-url",
       }),
     ).resolves.toEqual(captureResult);
 
@@ -616,7 +613,6 @@ describe("transport domain sdk mappings", () => {
         target: "region",
         displayId: "display-1",
         region: { x: 10, y: 20, width: 300, height: 200 },
-        output: "data-url",
       },
     );
   });

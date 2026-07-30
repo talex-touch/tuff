@@ -10,7 +10,8 @@ export type AppEntranceMode =
   | 'Assistant'
   | 'AssistantFloatingBall'
   | 'AssistantVoicePanel'
-  | 'AssistantRegionSelector'
+  | 'ScreenshotOverlay'
+  | 'ScreenshotEditor'
 
 type LogDetails = Record<string, unknown>
 
@@ -39,8 +40,10 @@ function getModeStyle(mode: AppEntranceMode): string {
       return 'background:#06b6d4;color:#083344;'
     case 'AssistantVoicePanel':
       return 'background:#22d3ee;color:#083344;'
-    case 'AssistantRegionSelector':
-      return 'background:#f97316;color:#431407;'
+    case 'ScreenshotOverlay':
+      return 'background:#0f766e;color:#ccfbf1;'
+    case 'ScreenshotEditor':
+      return 'background:#334155;color:#f8fafc;'
     case 'MainApp':
     default:
       return 'background:#22c55e;color:#052e16;'

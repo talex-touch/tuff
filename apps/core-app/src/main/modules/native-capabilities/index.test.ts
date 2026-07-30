@@ -1,4 +1,4 @@
-import type { ModuleInitContext } from '@talex-touch/utils'
+import type { ModuleDestroyContext, ModuleInitContext } from '@talex-touch/utils'
 import type { HandlerContext } from '@talex-touch/utils/transport/main'
 import { createTrustedTestPluginContext } from '@talex-touch/utils/transport/security/plugin-identity'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
@@ -25,7 +25,13 @@ const mocks = vi.hoisted(() => ({
     sizeBytes: 1,
     wroteClipboard: false
   })),
-  getSupport: vi.fn(() => ({ supported: true, platform: 'darwin', engine: 'xcap' })),
+  getSupport: vi.fn(() => ({
+    supported: true,
+    platform: 'darwin',
+    engine: 'screen-capture-kit'
+  })),
+  getFeatures: vi.fn(() => ['display', 'region', 'frames']),
+  initializeScreenshot: vi.fn(async () => undefined),
   listDisplays: vi.fn(() => []),
   getIndexingStatus: vi.fn(() => ({
     isInitializing: false,
@@ -131,6 +137,10 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
+vi.mock('@talex-touch/tuff-native/screenshot-protocol', () => ({
+  loadScreenshotCarrier: vi.fn(() => ({ carrier: null, reason: 'binding-unavailable' }))
+}))
+
 vi.mock('@talex-touch/utils/transport/main', () => ({
   getTuffTransportMain: vi.fn(() => ({
     on: vi.fn((event, handler) => {
@@ -208,7 +218,9 @@ vi.mock('./native-file-service', () => ({
 
 vi.mock('./screenshot-service', () => ({
   getNativeScreenshotService: vi.fn(() => ({
+    initialize: mocks.initializeScreenshot,
     getSupport: mocks.getSupport,
+    getFeatures: mocks.getFeatures,
     listDisplays: mocks.listDisplays,
     capture: mocks.capture
   }))
@@ -277,6 +289,33 @@ describe('NativeCapabilitiesModule', () => {
     expect(mocks.enforcePermission).toHaveBeenCalledWith(
       'demo.plugin',
       'native:screenshot:capture',
+      resolvedPluginSdkapi
+    )
+  })
+
+  it('requires clipboard.write when a plugin requests screenshot clipboard mutation', async () => {
+    const { NativeCapabilitiesModule } = await import('./index')
+    const module = new NativeCapabilitiesModule()
+
+    const resolvedPluginSdkapi = 260713
+    mocks.enforcePermission.mockClear()
+    initNativeModule(module)
+    const handler = mocks.handlers.get(NativeEvents.screenshot.capture.toEventName())
+    await handler?.(
+      { target: 'cursor-display', writeClipboard: true },
+      createContext('demo.plugin', resolvedPluginSdkapi)
+    )
+
+    expect(mocks.enforcePermission).toHaveBeenNthCalledWith(
+      1,
+      'demo.plugin',
+      'native:screenshot:capture',
+      resolvedPluginSdkapi
+    )
+    expect(mocks.enforcePermission).toHaveBeenNthCalledWith(
+      2,
+      'demo.plugin',
+      'clipboard:write',
       resolvedPluginSdkapi
     )
   })
@@ -359,6 +398,25 @@ describe('NativeCapabilitiesModule', () => {
     )
     expect(mocks.stat).toHaveBeenCalledWith({ path: '/tmp/a.png' })
     expect(mocks.probeMedia).toHaveBeenCalledWith({ path: '/tmp/a.png' })
+  })
+
+  it('owns one injected protocol transport across module init and destroy', async () => {
+    const [{ NativeCapabilitiesModule }, { NativeTransport }] = await Promise.all([
+      import('./index'),
+      import('./native-transport')
+    ])
+    const protocolTransport = new NativeTransport({ carriers: [] })
+    const initialize = vi.spyOn(protocolTransport, 'initialize')
+    const dispose = vi.spyOn(protocolTransport, 'dispose')
+    const module = new NativeCapabilitiesModule(protocolTransport)
+
+    await module.onInit({} as ModuleInitContext<TalexEvents>)
+    expect(module.getNativeTransport()).toBe(protocolTransport)
+    expect(initialize).toHaveBeenCalledOnce()
+
+    await module.onDestroy({} as ModuleDestroyContext<TalexEvents>)
+    expect(dispose).toHaveBeenCalledOnce()
+    expect(protocolTransport.getState()).toBe('disposed')
   })
 
   it('reports media thumbnail degradation when video support is unavailable', async () => {

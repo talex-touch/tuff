@@ -65,6 +65,7 @@ type ShortcutWithStatus = Shortcut & { status?: ShortcutStatus }
 type MainShortcutRegisterOptions = {
   enabled?: boolean
   owner?: string
+  legacyDefaultAccelerators?: string[]
 }
 type MainTriggerRegisterOptions = {
   enabled?: boolean
@@ -221,6 +222,12 @@ export class ShortcutModule extends BaseModule {
           enabled: options?.enabled ?? true
         }
       })
+    } else if (
+      existingShortcut.meta?.author === SYSTEM_SHORTCUT_AUTHOR &&
+      options?.legacyDefaultAccelerators?.includes(existingShortcut.accelerator) &&
+      existingShortcut.accelerator !== defaultAccelerator
+    ) {
+      this.storage!.updateShortcutAccelerator(id, defaultAccelerator)
     }
 
     shortconLog.success(`Main shortcut registered: ${id} (${defaultAccelerator})`)
