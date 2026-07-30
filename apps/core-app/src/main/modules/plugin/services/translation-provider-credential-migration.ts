@@ -224,8 +224,10 @@ export async function migrateTranslationProviderCredentials(
         throw new Error('TRANSLATION_CREDENTIAL_LIMIT_EXCEEDED')
       }
       const key = pluginSecretKey(providerId, field)
+      const previous = await readSecret(dependencies, key)
+      if (previous && previous.trim()) continue
       writes.push({ key, value: raw })
-      rollback.push({ key, value: await readSecret(dependencies, key) })
+      rollback.push({ key, value: previous })
     }
   }
 

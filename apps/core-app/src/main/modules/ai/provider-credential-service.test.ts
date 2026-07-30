@@ -244,10 +244,52 @@ describe('providerCredentialService', () => {
     const service = createProviderCredentialService({ surfaces: [main, legacy], vault, report })
 
     await expect(service.initialize()).rejects.toThrow('PROVIDER_CREDENTIAL_ROLLBACK_FAILED')
+    expect(service.resolve(provider())).toBeUndefined()
     expect(report).toHaveBeenCalledWith(
       'PROVIDER_CREDENTIAL_ROLLBACK_FAILED',
       expect.objectContaining({ surface: 'legacy-db' })
     )
+  })
+
+  it('clears cached runtime credentials when a save rollback cannot restore every surface', async () => {
+    const key = providerCredentialSecureStoreKey('openai-default')
+    const main = createSurface(
+      {
+        providers: [
+          provider({
+            enabled: false,
+            hasCredential: true,
+            authRef: 'provider-credential:openai-default'
+          })
+        ]
+      },
+      { id: 'main-config', failWrites: [2] }
+    )
+    const legacy = createSurface(
+      {
+        providers: [
+          provider({
+            enabled: false,
+            hasCredential: true,
+            authRef: 'provider-credential:openai-default'
+          })
+        ]
+      },
+      { id: 'legacy-db', failWrites: [1] }
+    )
+    const vault = createVault({ [key]: 'synthetic-previous-secret' })
+    const service = createProviderCredentialService({ surfaces: [main, legacy], vault })
+    await service.initialize()
+
+    await expect(
+      service.saveProvider({
+        provider: provider({ enabled: true }),
+        credential: { action: 'set', value: SECRET }
+      })
+    ).rejects.toThrow('PROVIDER_CREDENTIAL_ROLLBACK_FAILED')
+
+    expect(vault.values.get(key)).toBe('synthetic-previous-secret')
+    expect(service.resolve(provider())).toBeUndefined()
   })
 
   it('is idempotent across restart and hydrates runtime credentials main-side', async () => {

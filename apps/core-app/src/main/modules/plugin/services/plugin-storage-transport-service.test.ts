@@ -311,6 +311,34 @@ describe('plugin privileged storage transport', () => {
     })
   })
 
+  it('keeps Secret fallback fail-closed for an activation after migration rollback fails', async () => {
+    const harness = createHarness('touch-translation')
+    harness.setPluginFile({
+      tencent: {
+        enabled: true,
+        config: {
+          secretId: 'synthetic-legacy-id',
+          secretKey: 'synthetic-legacy-key'
+        }
+      }
+    })
+    secureStoreMock.applySecureStoreBatch.mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    harness.plugin.savePluginFile.mockReturnValueOnce({ success: false })
+    const getFile = harness.handler(PluginEvents.storage.getFile)
+    const getSecret = harness.handler(PluginEvents.storage.getSecret)
+
+    await expect(
+      getFile({ fileName: 'providers_config' }, { plugin: harness.trusted })
+    ).resolves.toEqual({ tencent: { enabled: true, config: {} } })
+    const secret = await getSecret(
+      { key: 'providers.tencent.secretKey' },
+      { plugin: harness.trusted }
+    )
+
+    expect(secret).toMatchObject({ success: false, code: 'PLUGIN_SECRET_UNAVAILABLE' })
+    expect(JSON.stringify(secret)).not.toContain('synthetic-legacy-key')
+  })
+
   it('requires authoritative identity and fail-closed permission for secret health', async () => {
     const harness = createHarness()
     const health = harness.handler(PluginEvents.storage.getSecretHealth)

@@ -501,6 +501,34 @@ describe('plugin data disposition coordinator RED 4', () => {
     expect(harness.dependencies.closeAdmission).not.toHaveBeenCalled()
   })
 
+  it('stops before the next destructive stage when the exact owner generation changes', async () => {
+    const harness = createHarness()
+    harness.dependencies.purgeSecrets.mockImplementationOnce(async () => {
+      harness.calls.push('secrets')
+      harness.setCurrentOwner({
+        ...owner,
+        pluginInstanceId: 'replacement-instance',
+        activationGeneration: owner.activationGeneration + 1
+      })
+      return 'completed'
+    })
+
+    const result = await harness.coordinator.uninstall(request)
+
+    expectFailed(result)
+    expect(result.code).toBe('PLUGIN_UNINSTALL_CLEANUP_FAILED')
+    expect(harness.dependencies.deleteData).not.toHaveBeenCalled()
+    expect(harness.dependencies.deleteCache).not.toHaveBeenCalled()
+    expect(harness.dependencies.deletePluginData).not.toHaveBeenCalled()
+    expect(harness.dependencies.deleteCode).not.toHaveBeenCalled()
+    expect(result.stages).toContainEqual({
+      stage: 'verification',
+      status: 'failed',
+      code: 'PLUGIN_UNINSTALL_RESIDUALS_FOUND',
+      retryable: true
+    })
+  })
+
   it('never reports Store uninstall before complete local success', async () => {
     const harness = createHarness()
     harness.dependencies.finalize.mockImplementationOnce(async () => {

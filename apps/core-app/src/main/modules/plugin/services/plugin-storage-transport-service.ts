@@ -67,6 +67,7 @@ export function registerPluginStorageTransportHandlers(
   } = context
   const disposers: TransportDisposer[] = []
   const translationMigrationPromises = new Map<string, Promise<Record<string, unknown>>>()
+  const translationMigrationFatalFailures = new Set<string>()
 
   const currentActivationKey = (plugin: TouchPlugin): string => {
     const activation = plugin.getActivationIdentity()
@@ -87,6 +88,9 @@ export function registerPluginStorageTransportHandlers(
     rawConfig: unknown
   ): Promise<Record<string, unknown>> => {
     const activationKey = currentActivationKey(plugin)
+    if (translationMigrationFatalFailures.has(activationKey)) {
+      return Promise.reject(new Error('TRANSLATION_CREDENTIAL_ROLLBACK_FAILED'))
+    }
     const existing = translationMigrationPromises.get(activationKey)
     if (existing) return existing
     const migration = migrateTranslationProviderCredentials({
@@ -103,7 +107,18 @@ export function registerPluginStorageTransportHandlers(
         ),
       persistConfig: async (config) =>
         plugin.savePluginFile('providers_config', config, { broadcast: false }).success
-    }).then((result) => result.config)
+    }).then(
+      (result) => {
+        translationMigrationFatalFailures.delete(activationKey)
+        return result.config
+      },
+      (error) => {
+        if (error instanceof Error && error.message === 'TRANSLATION_CREDENTIAL_ROLLBACK_FAILED') {
+          translationMigrationFatalFailures.add(activationKey)
+        }
+        throw error
+      }
+    )
     translationMigrationPromises.set(activationKey, migration)
     void migration
       .finally(() => {
@@ -120,13 +135,20 @@ export function registerPluginStorageTransportHandlers(
     allowFailure = false
   ): Promise<void> => {
     const activationKey = currentActivationKey(plugin)
+    if (translationMigrationFatalFailures.has(activationKey)) {
+      throw new Error('TRANSLATION_CREDENTIAL_ROLLBACK_FAILED')
+    }
     const migration = translationMigrationPromises.get(activationKey)
     if (migration) {
       try {
         await migration
       } catch (error) {
-        if (!allowFailure) throw error
+        const code = error instanceof Error ? error.message : ''
+        if (!allowFailure || code === 'TRANSLATION_CREDENTIAL_ROLLBACK_FAILED') throw error
       }
+    }
+    if (translationMigrationFatalFailures.has(activationKey)) {
+      throw new Error('TRANSLATION_CREDENTIAL_ROLLBACK_FAILED')
     }
     assertCurrentActivation(plugin, activationKey)
   }

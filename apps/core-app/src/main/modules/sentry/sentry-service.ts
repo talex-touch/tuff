@@ -64,7 +64,6 @@ interface SearchMetrics {
   providerTimings: Record<string, number>
   providerResults: Record<string, number>
   sortingDuration: number
-  queryText: string
   inputTypes: string[]
   resultCount: number
   sessionId: string
@@ -996,7 +995,6 @@ export class SentryServiceModule extends BaseModule {
             Object.entries(providerTotalTimes).map(([p, t]) => [p, Math.round(t / totalSearches)])
           ),
           sample_queries: this.searchMetricsBuffer.slice(-5).map((m) => ({
-            text: m.queryText.substring(0, 100), // Truncate for privacy
             inputTypes: m.inputTypes,
             duration: m.totalDuration,
             results: m.resultCount

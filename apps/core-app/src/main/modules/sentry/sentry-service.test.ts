@@ -164,6 +164,7 @@ describe('SentryServiceModule telemetry sanitizer', () => {
       metadata: {
         action: 'execute',
         sourceType: 'app',
+        sourceName: '/Users/private/CANARY_SOURCE_NAME',
         featureId: 'feature-1',
         email: 'user@example.com',
         token: 'secret'
@@ -180,6 +181,23 @@ describe('SentryServiceModule telemetry sanitizer', () => {
       sourceType: 'app',
       featureId: 'feature-1'
     })
+    expect(JSON.stringify(event)).not.toContain('CANARY_SOURCE_NAME')
+  })
+
+  it('accepts only identifier-shaped performance reasons', () => {
+    const redacted = sanitizeNexusTelemetryEvent({
+      eventType: 'performance',
+      metadata: { reason: '/Users/private/CANARY_NATIVE_REASON' },
+      isAnonymous: true
+    })
+    const stable = sanitizeNexusTelemetryEvent({
+      eventType: 'performance',
+      metadata: { reason: 'startup_timeout' },
+      isAnonymous: true
+    })
+
+    expect(redacted?.metadata).toBeUndefined()
+    expect(stable?.metadata).toEqual({ reason: 'startup_timeout' })
   })
 
   it('removes Sentry request details, breadcrumbs and stack frame paths before upload', () => {
