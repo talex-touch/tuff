@@ -1,0 +1,10 @@
+[package]
+name = "tuff-native-napi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+napi = { workspace = true, features = ["tokio_rt"] }
+napi-derive.workspace = true
+tuff-native-core = { path = "../native-core" }

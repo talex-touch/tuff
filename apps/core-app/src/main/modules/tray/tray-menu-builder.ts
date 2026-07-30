@@ -10,6 +10,7 @@ import { app, Menu, shell } from 'electron'
 import { t } from '../../utils/i18n-helper'
 import { setQuitIntent } from '../../core/quit-intent'
 import { coreBoxManager } from '../box-tool/core-box/manager'
+import { screenshotSessionModule } from '../screenshot-session'
 
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
@@ -126,6 +127,30 @@ export class TrayMenuBuilder {
         click: () => {
           coreBoxManager.trigger(true, { triggeredByShortcut: true })
         }
+      },
+      {
+        label: t('tray.screenshot'),
+        submenu: [
+          {
+            label: t('tray.screenshotNow'),
+            accelerator: process.platform === 'darwin' ? 'Cmd+Shift+S' : 'Ctrl+Shift+S',
+            click: () => {
+              void screenshotSessionModule.startStandalone('tray', 0).catch(() => {})
+            }
+          },
+          {
+            label: t('tray.screenshotDelay3'),
+            click: () => {
+              void screenshotSessionModule.startStandalone('tray', 3000).catch(() => {})
+            }
+          },
+          {
+            label: t('tray.screenshotDelay5'),
+            click: () => {
+              void screenshotSessionModule.startStandalone('tray', 5000).catch(() => {})
+            }
+          }
+        ]
       },
       {
         label:

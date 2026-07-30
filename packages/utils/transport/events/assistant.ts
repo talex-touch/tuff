@@ -4,6 +4,7 @@ import type {
   NativeScreenshotDisplay,
   NativeScreenshotRegion,
 } from "./types";
+import type { ScreenshotManagedResource } from "./screenshot-session";
 import { defineEvent } from "../event/builder";
 
 export interface AssistantRuntimeConfig {
@@ -104,13 +105,16 @@ export interface AssistantClipboardImageTranslateResponse {
 export type AssistantScreenshotCaptureTarget =
   | "cursor-display"
   | "display"
-  | "region";
+  | "region"
+  | "resource";
 export type AssistantScreenshotDisplay = NativeScreenshotDisplay;
 
 export interface AssistantScreenshotTargetPayload {
   target?: AssistantScreenshotCaptureTarget;
   displayId?: string;
   region?: NativeScreenshotRegion;
+  tfileUrl?: string;
+  resource?: ScreenshotManagedResource;
 }
 
 export type AssistantScreenshotTranslatePayload =
@@ -136,6 +140,7 @@ export interface AssistantScreenshotRegionSelectionResponse {
   region?: NativeScreenshotRegion;
   displayId?: string;
   displayName?: string;
+  resource?: ScreenshotManagedResource;
   error?: string;
   code?: AssistantScreenshotRegionSelectionErrorCode;
 }
@@ -175,7 +180,7 @@ export interface AssistantScreenshotTranslateResponse {
 
 export interface AssistantScreenshotCaptureResponse {
   success: boolean;
-  dataUrl?: string;
+  tfileUrl?: string;
   mimeType?: string;
   width?: number;
   height?: number;
@@ -188,7 +193,6 @@ export interface AssistantScreenshotCaptureResponse {
 export interface AssistantScreenshotSaveResponse {
   success: boolean;
   canceled?: boolean;
-  path?: string;
   mimeType?: string;
   width?: number;
   height?: number;
@@ -278,15 +282,5 @@ export const AssistantEvents = {
         AssistantScreenshotTranslatePayload | void,
         AssistantScreenshotTranslateResponse
       >(),
-  },
-  regionSelection: {
-    submit: defineEvent("assistant")
-      .module("region-selection")
-      .event("submit")
-      .define<NativeScreenshotRegion, { accepted: boolean }>(),
-    cancel: defineEvent("assistant")
-      .module("region-selection")
-      .event("cancel")
-      .define<void, { accepted: boolean }>(),
   },
 } as const;

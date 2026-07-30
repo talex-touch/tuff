@@ -30,7 +30,9 @@ const mocks = vi.hoisted(() => ({
       mocks.screenListeners.delete(event)
     }
   }),
-  copyFile: vi.fn(() => Promise.resolve()),
+  copyCaptureResource: vi.fn(() => Promise.resolve()),
+  writeCaptureResourceToClipboard: vi.fn(() => Promise.resolve(true)),
+  readCaptureResource: vi.fn(() => Promise.resolve(Buffer.from('screenshot-image'))),
   showSaveDialog: vi.fn<() => Promise<{ canceled: boolean; filePath?: string }>>(() =>
     Promise.resolve({
       canceled: false,
@@ -70,7 +72,7 @@ const mocks = vi.hoisted(() => ({
   createCaptureResult: (
     overrides: Partial<NativeScreenshotCaptureResult> = {}
   ): NativeScreenshotCaptureResult => ({
-    dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdC1pbWFnZQ==',
+    tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
     mimeType: 'image/png',
     width: 12,
     height: 8,
@@ -97,6 +99,9 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
   listDisplays: vi.fn<() => NativeScreenshotDisplay[]>(),
   getSupport: vi.fn(),
+  getActiveScreenshotSessionId: vi.fn<() => string | null>(),
+  startScreenshotSession: vi.fn(),
+  waitForScreenshotResult: vi.fn(),
   getCursorScreenPoint: vi.fn<() => ScreenPoint>(() => ({ x: 0, y: 0 })),
   getDisplayNearestPoint: vi.fn<(point: ScreenPoint) => FloatingBallDisplay>(() => ({
     workArea: { x: 0, y: 0, width: 1440, height: 900 }
@@ -136,12 +141,6 @@ const mocks = vi.hoisted(() => ({
     success: vi.fn(),
     child: vi.fn(),
     time: vi.fn(() => ({ end: vi.fn(), split: vi.fn() }))
-  }
-}))
-
-vi.mock('node:fs/promises', () => ({
-  default: {
-    copyFile: mocks.copyFile
   }
 }))
 
@@ -217,7 +216,6 @@ vi.mock('../../core/touch-window', () => ({
 
 vi.mock('../../config/default', () => ({
   AssistantFloatingBallWindowOption: {},
-  AssistantRegionSelectorWindowOption: {},
   AssistantVoicePanelWindowOption: {}
 }))
 
@@ -225,6 +223,14 @@ vi.mock('../../utils/renderer-url', () => ({
   getCoreBoxRendererPath: vi.fn(() => '/tmp/index.html'),
   getCoreBoxRendererUrl: vi.fn(() => 'http://localhost:5173'),
   isDevMode: vi.fn(() => true)
+}))
+
+vi.mock('../screenshot-session', () => ({
+  getScreenshotSessionManager: vi.fn(() => ({
+    getActiveSessionId: mocks.getActiveScreenshotSessionId,
+    start: mocks.startScreenshotSession,
+    waitForResult: mocks.waitForScreenshotResult
+  }))
 }))
 
 vi.mock('../storage', () => ({
@@ -291,6 +297,9 @@ vi.mock('../ai/intelligence-sdk', () => ({
 vi.mock('../native-capabilities/screenshot-service', () => ({
   getNativeScreenshotService: vi.fn(() => ({
     capture: mocks.capture,
+    copyCaptureResource: mocks.copyCaptureResource,
+    writeCaptureResourceToClipboard: mocks.writeCaptureResourceToClipboard,
+    readCaptureResource: mocks.readCaptureResource,
     getSupport: mocks.getSupport,
     listDisplays: mocks.listDisplays
   }))
@@ -346,7 +355,10 @@ describe('AssistantModule screenshot translation', () => {
     vi.resetModules()
     mocks.handlers.clear()
     mocks.screenListeners.clear()
-    mocks.copyFile.mockClear()
+    mocks.copyCaptureResource.mockClear()
+    mocks.copyCaptureResource.mockResolvedValue(undefined)
+    mocks.readCaptureResource.mockClear()
+    mocks.readCaptureResource.mockResolvedValue(Buffer.from('screenshot-image'))
     mocks.showSaveDialog.mockClear()
     mocks.showSaveDialog.mockResolvedValue({
       canceled: false,
@@ -357,6 +369,23 @@ describe('AssistantModule screenshot translation', () => {
     mocks.capture.mockResolvedValue(mocks.createCaptureResult())
     mocks.listDisplays.mockReturnValue([])
     mocks.getSupport.mockReturnValue({ supported: true, platform: 'darwin' })
+    mocks.getActiveScreenshotSessionId.mockReturnValue(null)
+    mocks.startScreenshotSession.mockResolvedValue({
+      accepted: true,
+      sessionId: 'screenshot-session:assistant',
+      state: 'started'
+    })
+    mocks.waitForScreenshotResult.mockResolvedValue({
+      status: 'completed',
+      sessionId: 'screenshot-session:assistant',
+      resource: {
+        tfileUrl: 'tfile:///tmp/native/screenshots/interactive.png',
+        mimeType: 'image/png',
+        width: 320,
+        height: 180,
+        sizeBytes: 1024
+      }
+    })
     mocks.touchWindows.length = 0
     mocks.getCursorScreenPoint.mockReset()
     mocks.getCursorScreenPoint.mockReturnValue({ x: 0, y: 0 })
@@ -816,7 +845,6 @@ describe('AssistantModule screenshot translation', () => {
     })
     expect(mocks.capture).toHaveBeenCalledWith({
       target: 'cursor-display',
-      output: 'data-url',
       writeClipboard: false
     })
     expect(mocks.translateImageBase64).toHaveBeenCalledWith('c2NyZWVuc2hvdC1pbWFnZQ==', 'ja', {
@@ -873,8 +901,8 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
-  it('maps missing screenshot image payload to SCREENSHOT_UNAVAILABLE', async () => {
-    mocks.capture.mockResolvedValue(mocks.createCaptureResult({ dataUrl: undefined }))
+  it('maps unreadable screenshot resources to SCREENSHOT_UNAVAILABLE', async () => {
+    mocks.readCaptureResource.mockRejectedValue(new Error('Screenshot resource is invalid'))
     const { handler, module } = await createInitializedModule()
 
     const result = await handler(undefined, {} as HandlerContext)
@@ -1166,7 +1194,7 @@ describe('AssistantModule screenshot translation', () => {
 
     expect(result).toEqual({
       success: true,
-      dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdC1pbWFnZQ==',
+      tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
       mimeType: 'image/png',
       width: 12,
       height: 8,
@@ -1175,7 +1203,6 @@ describe('AssistantModule screenshot translation', () => {
     })
     expect(mocks.capture).toHaveBeenCalledWith({
       target: 'cursor-display',
-      output: 'data-url',
       writeClipboard: true
     })
     expect(mocks.translateImageBase64).not.toHaveBeenCalled()
@@ -1192,7 +1219,6 @@ describe('AssistantModule screenshot translation', () => {
     expect(mocks.capture).toHaveBeenCalledWith({
       target: 'display',
       displayId: 'display-external',
-      output: 'data-url',
       writeClipboard: true
     })
 
@@ -1220,8 +1246,7 @@ describe('AssistantModule screenshot translation', () => {
   it('saves a screenshot through the system save dialog without invoking image translate', async () => {
     mocks.capture.mockResolvedValue(
       mocks.createCaptureResult({
-        path: '/tmp/source-screenshot.png',
-        dataUrl: undefined,
+        tfileUrl: 'tfile:///tmp/native/screenshots/source-screenshot.png',
         sizeBytes: 128
       })
     )
@@ -1233,16 +1258,15 @@ describe('AssistantModule screenshot translation', () => {
 
     expect(result).toMatchObject({
       success: true,
-      path: '/tmp/tuff-screenshot.png',
       mimeType: 'image/png',
       width: 12,
       height: 8,
       displayName: 'Display',
       sizeBytes: 128
     })
+    expect(result).not.toHaveProperty('path')
     expect(mocks.capture).toHaveBeenCalledWith({
       target: 'cursor-display',
-      output: 'tfile',
       writeClipboard: false
     })
     expect(mocks.showSaveDialog).toHaveBeenCalledWith(
@@ -1251,8 +1275,8 @@ describe('AssistantModule screenshot translation', () => {
         filters: [{ name: 'PNG Image', extensions: ['png'] }]
       })
     )
-    expect(mocks.copyFile).toHaveBeenCalledWith(
-      '/tmp/source-screenshot.png',
+    expect(mocks.copyCaptureResource).toHaveBeenCalledWith(
+      'tfile:///tmp/native/screenshots/source-screenshot.png',
       '/tmp/tuff-screenshot.png'
     )
     expect(mocks.translateImageBase64).not.toHaveBeenCalled()
@@ -1263,8 +1287,7 @@ describe('AssistantModule screenshot translation', () => {
   it('returns a canceled screenshot save without copying the temporary file', async () => {
     mocks.capture.mockResolvedValue(
       mocks.createCaptureResult({
-        path: '/tmp/source-screenshot.png',
-        dataUrl: undefined
+        tfileUrl: 'tfile:///tmp/native/screenshots/source-screenshot.png'
       })
     )
     mocks.showSaveDialog.mockResolvedValue({
@@ -1280,7 +1303,7 @@ describe('AssistantModule screenshot translation', () => {
       success: false,
       canceled: true
     })
-    expect(mocks.copyFile).not.toHaveBeenCalled()
+    expect(mocks.copyCaptureResource).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
   })
@@ -1299,7 +1322,7 @@ describe('AssistantModule screenshot translation', () => {
       error: 'Screen recording permission denied'
     })
     expect(mocks.showSaveDialog).not.toHaveBeenCalled()
-    expect(mocks.copyFile).not.toHaveBeenCalled()
+    expect(mocks.copyCaptureResource).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
   })
@@ -1323,133 +1346,41 @@ describe('AssistantModule screenshot translation', () => {
     await module.onDestroy({} as never)
   })
 
-  it('accepts only the selector sender, maps a clamped local region to global DIP coordinates, and captures it natively', async () => {
-    const display: NativeScreenshotDisplay = {
-      id: 'display-external',
-      name: 'External Display',
-      friendlyName: 'Studio Display',
-      x: 1400,
-      y: -120,
-      width: 800,
-      height: 600,
-      scaleFactor: 2,
-      rotation: 0,
-      isPrimary: false
-    }
-    mocks.listDisplays.mockReturnValue([display])
+  it('routes Assistant region selection through the canonical screenshot session manager', async () => {
     const { module } = await createInitializedModule()
     const selectHandler = mocks.handlers.get(
       AssistantEvents.voice.selectScreenshotRegion.toEventName()
     )
-    const submitHandler = mocks.handlers.get(AssistantEvents.regionSelection.submit.toEventName())
-    const captureHandler = mocks.handlers.get(AssistantEvents.voice.captureScreenshot.toEventName())
-    if (!selectHandler || !submitHandler || !captureHandler) {
-      throw new Error('Screenshot region transport handlers were not registered')
+    if (!selectHandler) {
+      throw new Error('Screenshot session handler was not registered')
     }
 
-    const selectionPromise = Promise.resolve(
-      selectHandler({ target: 'display', displayId: display.id }, {} as HandlerContext)
-    )
-    await Promise.resolve()
-    const selectorWindow = mocks.touchWindows[mocks.touchWindows.length - 1]
-    if (!selectorWindow) {
-      throw new Error('Screenshot region selector window was not opened')
-    }
+    const selection = await selectHandler(undefined, {} as HandlerContext)
 
-    expect(selectorWindow.options).toMatchObject({
-      x: display.x,
-      y: display.y,
-      width: display.width,
-      height: display.height
+    expect(mocks.startScreenshotSession).toHaveBeenCalledWith({
+      entrypoint: 'assistant',
+      ownerKey: 'internal:assistant-region',
+      completionMode: 'return-resource',
+      delayMs: 0,
+      initialTarget: 'free-region'
     })
-
-    const localRegion = { x: -20, y: 570, width: 900, height: 100 }
-    expect(
-      await submitHandler(localRegion, { sender: { id: -1 } } as unknown as HandlerContext)
-    ).toEqual({ accepted: false })
-    expect(
-      await submitHandler(localRegion, {
-        sender: { id: selectorWindow.window.webContents.id }
-      } as unknown as HandlerContext)
-    ).toEqual({ accepted: true })
-
-    const selection = await selectionPromise
+    expect(mocks.waitForScreenshotResult).toHaveBeenCalledWith(
+      'screenshot-session:assistant',
+      'internal:assistant-region'
+    )
     expect(selection).toEqual({
       success: true,
-      displayId: display.id,
-      displayName: 'Studio Display',
-      region: { x: 1400, y: 450, width: 800, height: 30 }
+      resource: {
+        tfileUrl: 'tfile:///tmp/native/screenshots/interactive.png',
+        mimeType: 'image/png',
+        width: 320,
+        height: 180,
+        sizeBytes: 1024
+      }
     })
-    expect(selectorWindow.window.destroy).toHaveBeenCalledTimes(1)
-
-    await captureHandler(
-      {
-        target: 'region',
-        displayId: display.id,
-        region: { x: 1400, y: 450, width: 800, height: 30 }
-      },
-      {} as HandlerContext
-    )
-
-    expect(mocks.capture).toHaveBeenLastCalledWith({
-      target: 'region',
-      displayId: display.id,
-      region: { x: 1400, y: 450, width: 800, height: 30 },
-      output: 'data-url',
-      writeClipboard: true
-    })
+    expect(mocks.touchWindows).toHaveLength(1)
 
     await module.onDestroy({} as never)
-  })
-
-  it('cancels and tears down pending selections without leaving selector windows alive', async () => {
-    const display: NativeScreenshotDisplay = {
-      id: 'display-primary',
-      name: 'Primary Display',
-      x: 0,
-      y: 0,
-      width: 1440,
-      height: 900,
-      scaleFactor: 2,
-      rotation: 0,
-      isPrimary: true
-    }
-    mocks.listDisplays.mockReturnValue([display])
-    const { module } = await createInitializedModule()
-    const selectHandler = mocks.handlers.get(
-      AssistantEvents.voice.selectScreenshotRegion.toEventName()
-    )
-    const cancelHandler = mocks.handlers.get(AssistantEvents.regionSelection.cancel.toEventName())
-    if (!selectHandler || !cancelHandler) {
-      throw new Error('Screenshot region cancellation handlers were not registered')
-    }
-
-    const canceledSelection = Promise.resolve(selectHandler(undefined, {} as HandlerContext))
-    await Promise.resolve()
-    const canceledWindow = mocks.touchWindows[mocks.touchWindows.length - 1]
-    if (!canceledWindow) {
-      throw new Error('Screenshot region selector window was not opened')
-    }
-
-    expect(
-      await cancelHandler(undefined, {
-        sender: { id: canceledWindow.window.webContents.id }
-      } as unknown as HandlerContext)
-    ).toEqual({ accepted: true })
-    expect(await canceledSelection).toEqual({ success: false, canceled: true })
-    expect(canceledWindow.window.destroy).toHaveBeenCalledTimes(1)
-
-    const destroyedSelection = Promise.resolve(selectHandler(undefined, {} as HandlerContext))
-    await Promise.resolve()
-    const destroyedWindow = mocks.touchWindows[mocks.touchWindows.length - 1]
-    if (!destroyedWindow) {
-      throw new Error('Screenshot region selector window was not reopened')
-    }
-
-    await module.onDestroy({} as never)
-
-    expect(await destroyedSelection).toEqual({ success: false, canceled: true })
-    expect(destroyedWindow.window.destroy).toHaveBeenCalledTimes(1)
   })
 
   it('persists floating ball drag position immediately after the debounce window', async () => {

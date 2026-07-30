@@ -1,0 +1,182 @@
+{
+  "clientHello": {
+    "kind": "client_hello",
+    "protocol": { "major": 1, "minMinor": 0, "maxMinor": 0 },
+    "client": { "name": "core-app", "version": "2.4.13" },
+    "requestedFeatures": ["attachments", "stream-credit-v1"]
+  },
+  "serverHello": {
+    "kind": "server_hello",
+    "protocol": { "major": 1, "minor": 0 },
+    "runtime": {
+      "addonId": "fixture-native-protocol",
+      "addonVersion": "0.1.0",
+      "target": "aarch64-apple-darwin",
+      "platform": "darwin",
+      "arch": "arm64",
+      "buildProfile": "debug"
+    },
+    "carrierFeatures": ["attachments", "stream-credit-v1"],
+    "limits": {
+      "maxControlBytes": 1048576,
+      "maxAttachmentCount": 8,
+      "maxAttachmentBytes": 67108864,
+      "maxPacketAttachmentBytes": 134217728,
+      "maxInFlightUnary": 64,
+      "maxOpenStreams": 16,
+      "maxStreamWindow": 8,
+      "cancelGraceMs": 1000,
+      "disposeGraceMs": 3000
+    },
+    "capabilities": [
+      {
+        "id": "fixture.echo",
+        "version": "1.0.0",
+        "engine": "fixture",
+        "state": "available",
+        "features": ["buffer-round-trip"],
+        "operations": [
+          {
+            "name": "echo",
+            "mode": "unary",
+            "cancellation": "cooperative",
+            "acceptsAttachments": true,
+            "emitsAttachments": true
+          }
+        ]
+      }
+    ]
+  },
+  "unaryRequest": {
+    "kind": "request",
+    "protocol": { "major": 1, "minor": 0 },
+    "requestId": "nt-fixture-1",
+    "capability": "fixture.echo",
+    "operation": "echo",
+    "deadlineUnixMs": 1893456000000,
+    "payload": { "label": "golden" },
+    "attachments": [
+      {
+        "id": "input",
+        "index": 0,
+        "byteLength": 4,
+        "mediaType": "application/octet-stream",
+        "purpose": "fixture"
+      }
+    ]
+  },
+  "unarySuccess": {
+    "kind": "response",
+    "protocol": { "major": 1, "minor": 0 },
+    "requestId": "nt-fixture-1",
+    "ok": true,
+    "payload": { "label": "golden" },
+    "attachments": [
+      {
+        "id": "output",
+        "index": 0,
+        "byteLength": 4,
+        "mediaType": "application/octet-stream",
+        "purpose": "fixture"
+      }
+    ],
+    "meta": {
+      "durationMs": 1,
+      "engine": "fixture",
+      "cancellation": "cooperative",
+      "counters": { "attachmentCount": 1 }
+    }
+  },
+  "unaryError": {
+    "kind": "response",
+    "protocol": { "major": 1, "minor": 0 },
+    "requestId": "nt-fixture-2",
+    "ok": false,
+    "error": {
+      "code": "OPERATION_NOT_FOUND",
+      "category": "not_found",
+      "message": "Native operation is not available",
+      "retryable": false,
+      "details": { "operation": "missing" }
+    },
+    "attachments": [],
+    "meta": { "durationMs": 0 }
+  },
+  "streamOpenRequest": {
+    "kind": "request",
+    "protocol": { "major": 1, "minor": 0 },
+    "requestId": "nt-fixture-3",
+    "capability": "fixture.counter",
+    "operation": "count",
+    "payload": {
+      "streamId": "ns-fixture-1",
+      "initialWindow": 2,
+      "input": { "count": 2 }
+    },
+    "attachments": []
+  },
+  "streamAccepted": {
+    "kind": "response",
+    "protocol": { "major": 1, "minor": 0 },
+    "requestId": "nt-fixture-3",
+    "ok": true,
+    "payload": {
+      "streamId": "ns-fixture-1",
+      "effectiveWindow": 2,
+      "cancellation": "cooperative"
+    },
+    "attachments": [],
+    "meta": {
+      "durationMs": 0,
+      "engine": "fixture",
+      "cancellation": "cooperative"
+    }
+  },
+  "streamData": {
+    "kind": "stream_data",
+    "protocol": { "major": 1, "minor": 0 },
+    "streamId": "ns-fixture-1",
+    "sequence": 1,
+    "payload": { "value": 1 },
+    "attachments": []
+  },
+  "streamEnd": {
+    "kind": "stream_end",
+    "protocol": { "major": 1, "minor": 0 },
+    "streamId": "ns-fixture-1",
+    "sequence": 3,
+    "payload": { "emitted": 2 },
+    "attachments": []
+  },
+  "streamError": {
+    "kind": "stream_error",
+    "protocol": { "major": 1, "minor": 0 },
+    "streamId": "ns-fixture-2",
+    "sequence": 1,
+    "error": {
+      "code": "CANCELLED",
+      "category": "cancelled",
+      "message": "Native stream was cancelled",
+      "retryable": false
+    },
+    "attachments": []
+  },
+  "streamAck": {
+    "kind": "stream_ack",
+    "protocol": { "major": 1, "minor": 0 },
+    "streamId": "ns-fixture-1",
+    "ackSequence": 1
+  },
+  "cancelRequest": {
+    "kind": "cancel",
+    "protocol": { "major": 1, "minor": 0 },
+    "target": { "type": "request", "id": "nt-fixture-1" },
+    "reason": "caller"
+  },
+  "cancelStream": {
+    "kind": "cancel",
+    "protocol": { "major": 1, "minor": 0 },
+    "target": { "type": "stream", "id": "ns-fixture-1" },
+    "reason": "dispose"
+  }
+}

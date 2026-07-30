@@ -32,10 +32,12 @@
 | macOS 原生库（dylib） | N/A | ✅ | N/A | N-API / sidecar | 检查签名/公证 |
 | Linux 原生库（so） | N/A | N/A | ✅ | N-API / sidecar | 检查 glibc/架构 |
 | Everything 搜索 | ✅ | ❌ | ❌ | Everything CLI (`es.exe`) | 检查 `es.exe` |
+| Native screenshot protocol | ⚠️ | ✅ | ⚠️ | 独立 N-API addon + Native Protocol v1 | handshake capability state + permission probe |
 | 系统指令（关机/重启等） | ✅ | ✅ | ✅ | `exec` 系统命令 | 权限/提示可用 |
 
 说明：
-- ✅：默认支持；⚠️：可选支持（需资源/配置）；❌：不支持。
+- ✅：默认支持；⚠️：能力受平台/backend 约束；❌：不支持。
+- Screenshot 在 Windows 与 Linux X11 仅提供 xcap `display`/单屏 `region` 基础能力，并报告 `degraded/basic-backend-only`；Linux Wayland 因 xcap 坐标/缩放合同不足而报告 `unavailable/wayland-unsupported`，无 `DISPLAY` 的 headless Linux 报告 `unavailable/display-server-unavailable`。
 - 运行时需要区分 `x64/arm64` 架构，构建时应提供对应资产。
 
 ---
@@ -51,12 +53,15 @@
 | macOS dylib 未签名 | 禁用原生库 | 提示“签名/公证校验失败” |
 | Linux so 依赖缺失 | 禁用原生库 | 提示“系统依赖缺失” |
 | Everything 不可用 | 使用 File Provider（macOS/Linux）/跳过 | 提示“Everything 未安装或不可用” |
+| Screenshot addon/backend/权限不可用 | capability 保持 unavailable/degraded；禁止 legacy/xcap runtime fallback | 返回稳定 reason 与非提示 permission probe 状态 |
 | 系统指令权限不足 | 返回错误并不中断主流程 | 提示“需要管理员权限” |
 
 ---
 
 ## 3) 兼容性与回归注意
 
+- Screenshot 在 macOS 以 ScreenCaptureKit 为权威 backend；renderer/plugin 只接收 `tfile://` descriptor，不接收 raw path、base64、Buffer、attachment 或 addon binding。
+- Screenshot 的 Windows/Linux xcap backend 只广告 `display`/单屏 `region`；window、UI element、cursor-system、self exception、跨屏 region 与 frames 必须稳定返回 unsupported。Linux Wayland 初始化直接 unavailable，不使用 xcap 的全局 max-scale 坐标猜测。
 - 降级必须不影响主流程：搜索/插件功能仍可运行。
 - 不改变现有 IPC 事件名与调用方式，仅新增能力时扩展。
 - 更新包与运行时资产版本绑定，避免跨版本 ABI 不兼容。

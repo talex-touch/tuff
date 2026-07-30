@@ -46,6 +46,7 @@ files:
   # Runtime only loads build/Release/*.node (native-loader.js); native-{screenshot,audio}/target/ is build-only output.
   - '!**/native-screenshot/target/**'
   - '!**/native-audio/target/**'
+  - '!**/tuff-native/target/**'
   - '!**/*.rlib'
   - '!**/*.rmeta'
   # Keep js-tiktoken ESM runtime files: @langchain/core imports js-tiktoken/lite via ESM,

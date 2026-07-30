@@ -9,6 +9,7 @@ import type {
   NativeCapabilityStatus,
   NativeFileIndexQueryRequest
 } from '@talex-touch/utils/transport/events/types'
+import { loadScreenshotCarrier } from '@talex-touch/tuff-native/screenshot-protocol'
 import type {
   HandlerContext,
   ITuffTransportMain,
@@ -26,9 +27,29 @@ import { fileProvider } from '../box-tool/addon/files/file-provider'
 import { getVideoThumbnailSupport } from '../box-tool/addon/files/thumbnail-service'
 import { nativeFileService } from './native-file-service'
 import { getPermissionModule } from '../permission'
-import { getNativeScreenshotService } from './screenshot-service'
+import { getNativeScreenshotService, type NativeScreenshotService } from './screenshot-service'
+import { NativeTransport } from './native-transport'
 
 const nativeLog = createLogger('NativeCapabilities')
+
+function createNativeProtocolTransport(): NativeTransport {
+  const screenshot = loadScreenshotCarrier({
+    clientName: 'core-app',
+    clientVersion: process.env.npm_package_version ?? '0.0.0'
+  })
+  if (!screenshot.carrier) {
+    nativeLog.warn('Native screenshot protocol carrier unavailable', {
+      meta: { reason: screenshot.reason }
+    })
+  }
+  return new NativeTransport({
+    carriers: screenshot.carrier ? [screenshot.carrier] : [],
+    logger: {
+      info: (message, metadata) => nativeLog.info(message, { meta: metadata }),
+      warn: (message, metadata) => nativeLog.warn(message, { meta: metadata })
+    }
+  })
+}
 
 type CodedError = Error & { code?: string }
 
@@ -126,16 +147,20 @@ export class NativeCapabilitiesModule extends BaseModule {
   name: ModuleKey = NativeCapabilitiesModule.key
 
   private transport: ITuffTransportMain | null = null
+  private readonly nativeProtocolTransport: NativeTransport
+  private readonly screenshotService: NativeScreenshotService
   private readonly disposers: Array<() => void> = []
 
-  constructor() {
+  constructor(nativeProtocolTransport: NativeTransport = createNativeProtocolTransport()) {
     super(NativeCapabilitiesModule.key, {
       create: true,
       dirName: 'native-capabilities'
     })
+    this.nativeProtocolTransport = nativeProtocolTransport
+    this.screenshotService = getNativeScreenshotService(nativeProtocolTransport)
   }
 
-  onInit(ctx: ModuleInitContext<TalexEvents>): void {
+  async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const runtime = resolveMainRuntime(ctx, 'NativeCapabilitiesModule.onInit')
     this.transport = runtime.transport
     this.registerCapabilityHandlers()
@@ -143,21 +168,28 @@ export class NativeCapabilitiesModule extends BaseModule {
     this.registerFileIndexHandlers()
     this.registerFileHandlers()
     this.registerMediaHandlers()
+    const snapshot = await this.nativeProtocolTransport.initialize()
+    await this.screenshotService.initialize(snapshot)
     nativeLog.success('Native capabilities module initialized')
   }
 
-  onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): void {
+  async onDestroy(_ctx: ModuleDestroyContext<TalexEvents>): Promise<void> {
     while (this.disposers.length > 0) {
       this.disposers.pop()?.()
     }
     this.transport = null
+    await this.nativeProtocolTransport.dispose()
+  }
+
+  getNativeTransport(): NativeTransport {
+    return this.nativeProtocolTransport
   }
 
   private registerScreenshotHandlers(): void {
     const transport = this.transport
     if (!transport) return
 
-    const service = getNativeScreenshotService()
+    const service = this.screenshotService
     this.disposers.push(
       transport.on(NativeEvents.screenshot.getSupport, (_payload, context) => {
         enforceNativePermission(context, 'native:screenshot:get-support')
@@ -169,6 +201,9 @@ export class NativeCapabilitiesModule extends BaseModule {
       }),
       transport.on(NativeEvents.screenshot.capture, async (payload, context) => {
         enforceNativePermission(context, 'native:screenshot:capture')
+        if (payload?.writeClipboard === true) {
+          enforceNativePermission(context, 'clipboard:write')
+        }
         return await service.capture(payload ?? {})
       })
     )
@@ -299,7 +334,7 @@ export class NativeCapabilitiesModule extends BaseModule {
   }
 
   private getCapabilityStatus(id: string, context: HandlerContext): NativeCapabilityStatus {
-    const screenshotSupport = () => getNativeScreenshotService().getSupport()
+    const screenshotSupport = () => this.screenshotService.getSupport()
     const everythingStatus = () => everythingProvider.getStatusSnapshot()
 
     switch (id) {
@@ -315,7 +350,7 @@ export class NativeCapabilitiesModule extends BaseModule {
           permission: toPermissionState(context, 'native:screenshot:capture'),
           degraded: !support.supported,
           reason: support.reason,
-          features: ['display', 'region', 'cursor-display']
+          features: this.screenshotService.getFeatures()
         }
       }
       case 'file-index.local':

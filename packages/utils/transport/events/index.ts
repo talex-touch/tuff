@@ -594,6 +594,7 @@ import { MetaOverlayEvents } from "./meta-overlay";
 
 // Re-export all types for convenience
 export * from "./types";
+export * from "./screenshot-session";
 
 // ============================================================================
 // Download Events

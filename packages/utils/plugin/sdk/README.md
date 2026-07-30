@@ -226,19 +226,21 @@ contextSessionId = execution.context.sessionId;
 
 插件 lifecycle 可通过 `context.utils.screenshot` 或同对象镜像 `context.utils.plugin.screenshot` 查询 native 支持、枚举显示器，并捕获 cursor-display / display / region。facade 复用 typed `NativeEvents.screenshot.*`，不要自行拼 raw channel。
 
-manifest 必须声明并获得高风险 `window.capture`；宿主还会要求 verified plugin context。需要截图后 OCR 时，再独立声明 `intelligence.basic` 并调用 `context.utils.intelligence.vision.ocr()`。
+manifest 必须声明并获得高风险 `window.capture`；宿主还会要求 verified plugin context。传入 `writeClipboard: true` 时还必须声明并获得 `clipboard.write`。需要截图后 OCR 时，再独立声明 `intelligence.basic` 并调用 `context.utils.intelligence.vision.ocr()`。
 
 ```typescript
 const displays = await context.utils.screenshot.listDisplays();
 const capture = await context.utils.screenshot.capture({
   target: "display",
   displayId: displays[0]?.id,
-  output: "data-url",
   writeClipboard: false,
 });
+
+// Renderer/plugin receives only a managed resource URL.
+image.src = capture.tfileUrl;
 ```
 
-plugin facade 不返回 native 临时文件原始 `path`，只暴露安全的 `tfileUrl` / `dataUrl` 与显示器、尺寸、耗时、大小、剪贴板状态 metadata。截图、OCR 文本和 AI payload 不得写入普通日志或同步数据。
+plugin facade 只返回必填的 `tfileUrl` 与显示器、尺寸、耗时、大小、剪贴板状态 metadata；不接受 output selector，也不返回 native 临时文件原始 `path`、base64、`dataUrl`、Buffer 或 attachment。截图、OCR 文本和 AI payload 不得写入普通日志或同步数据。
 
 ### 5. LocalizationSDK - 主机语言与领域词库
 
