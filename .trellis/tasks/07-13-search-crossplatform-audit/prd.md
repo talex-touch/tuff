@@ -88,9 +88,11 @@
 
 ### 🟠 高危工程风险
 
-- [ ] **R1 — Rust 截图模块疑似未接入 CI/安装构建链**
-  - 位置：`packages/tuff-native/scripts/build-screenshot.js`（手动脚本）、`scripts/build-target/build-target.js:169`（`verifyNativeOcrModule` 只验 OCR）；`gypfile:true` 只触发 node-gyp（OCR+Everything），不含 cargo。
-  - 风险：打包产物可能缺 `tuff_native_screenshot.node` → 截图静默降级 `ERR_NATIVE_SCREENSHOT_UNAVAILABLE`。**需实际打包验证**。
+- [x] **R1 — Rust 截图模块已接入 CI/安装构建链** ✅ 已修（`07-29-macos-screenshot-capture-core`）
+  - 修复：`native-protocol.yml` 在 macOS/Windows/Linux 安装 xcap 所需 Linux build deps，构建 ordinary screenshot addon，执行真实 dlopen/export contracts；随后构建 deterministic addon 跑 `.node -> NapiCarrier -> NativeTransport` integration，并在结束前恢复 ordinary addon。
+  - 包合同：`@talex-touch/tuff-native.files` 显式包含 macOS/AX/stream/xcap production backend 源码与 `build/Release/tuff_native_screenshot.node`，继续排除 fixture、contract test backend 和 Cargo target。
+  - 证据：本地 ordinary/deterministic 双构建、普通 addon strict macOS integration、31/31 Node contracts 和 `pnpm pack --dry-run` 通过；tarball 包含 addon 与全部 production backend，未包含 `test_backend.rs`/contract fixtures/target。
+  - 边界：Windows/Linux authoritative native build 由新增 CI matrix 执行；signed Electron packaged runtime evidence 仍由 `07-29-screenshot-packaged-evidence` 独立承接。
 
 - [ ] **R2 — macOS 打包未签名 + 仅 arm64 + dir target，与 electron-updater 路径冲突**
   - 位置：`electron-builder.yml:100-119`（`sign/notarize/hardenedRuntime:false`、`identity:null`、`target:dir`、无 Intel）

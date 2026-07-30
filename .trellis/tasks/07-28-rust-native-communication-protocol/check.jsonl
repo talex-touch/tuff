@@ -1,0 +1,6 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Audit exact formats, validation owners, state identities, and error propagation at every protocol layer."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check that decoders, limits, terminal guards, and error maps have one owner and no per-carrier drift."}
+{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"Verify bounded attachments stop at main, are promoted to controlled local resources, and never cross renderer/plugin transport as bytes."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Verify plugin identity, permission, lifecycle revocation, and sensitive metadata remain main-process policy."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify shared protocol types, runtime guards, producer/consumer fixtures, and typed main APIs stay aligned."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Run fail-closed, privacy, focused tests, lint, typecheck, and diff checks required for main/transport work."}
