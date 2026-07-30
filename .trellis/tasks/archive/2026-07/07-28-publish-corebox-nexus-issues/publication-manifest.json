@@ -1,0 +1,38 @@
+{
+  "repository": "talex-touch/tuff",
+  "auditedCommit": "784377c499899529145c0dac7f1d0000329e0794",
+  "approvalStatus": "approved",
+  "approvedAt": "2026-07-29",
+  "publicationStatus": "verified",
+  "publishedAt": "2026-07-29",
+  "issues": [
+    {
+      "id": "corebox-duplicate-canonical-handlers",
+      "title": "CoreBox: prevent duplicate IPC handlers from superseding programmatic searches",
+      "severity": "P1",
+      "labels": ["bug"],
+      "deduplication": "new",
+      "bodyFile": "drafts/corebox-duplicate-canonical-handlers.md",
+      "publishedUrl": "https://github.com/talex-touch/tuff/issues/477"
+    },
+    {
+      "id": "nexus-docs-directory-index-ssr",
+      "title": "Docs: restore SSR status and prerendering for directory index routes",
+      "severity": "P0",
+      "labels": ["bug"],
+      "deduplication": "new",
+      "bodyFile": "drafts/nexus-docs-directory-index-ssr.md",
+      "publishedUrl": "https://github.com/talex-touch/tuff/issues/478"
+    },
+    {
+      "id": "nexus-server-api-test-files",
+      "title": "Build: keep Nexus test files outside the server API route tree",
+      "severity": "P1",
+      "labels": ["bug"],
+      "deduplication": "new",
+      "bodyFile": "drafts/nexus-server-api-test-files.md",
+      "publishedUrl": "https://github.com/talex-touch/tuff/issues/479"
+    }
+  ],
+  "existingIssues": [323, 324, 327, 329, 332]
+}

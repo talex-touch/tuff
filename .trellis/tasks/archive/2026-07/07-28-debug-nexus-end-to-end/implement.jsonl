@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Nexus frontend ownership and mandatory pre-development checks"}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"SSR, local-versus-production evidence, privacy, and Nexus verification rules"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace browser, Nuxt, API, service, and binding round trips"}
+{"file":".trellis/tasks/archive/2026-07/07-28-debug-corebox-nexus/research/audit-baseline.md","reason":"Exact baseline, public-read-only access limit, and canonical Issues"}
+{"file":"docs/plan-prd/TODO-nexus.md","reason":"Existing Nexus runtime/performance evidence and deployed-only blockers"}

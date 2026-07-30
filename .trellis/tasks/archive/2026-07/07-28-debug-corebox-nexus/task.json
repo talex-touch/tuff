@@ -1,0 +1,30 @@
+{
+  "id": "debug-corebox-nexus",
+  "name": "debug-corebox-nexus",
+  "title": "Detailed CoreBox and Nexus debugging",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-28",
+  "completedAt": "2026-07-29",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-28-debug-corebox-end-to-end",
+    "07-28-debug-nexus-end-to-end",
+    "07-28-publish-corebox-nexus-issues"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}
