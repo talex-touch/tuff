@@ -3,7 +3,7 @@
   "name": "sensitive-data-lifecycle-301",
   "title": "实现敏感数据生命周期控制 #301",
   "description": "定义并实现敏感数据保留、导出、删除、远程处理、备份恢复与卸载语义。",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -11,11 +11,11 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-07-27",
-  "completedAt": null,
+  "completedAt": "2026-07-30",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
-  "commit": null,
+  "commit": "5bf6e08b4",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Commit the verified #301 closure, publish GitHub evidence, close the issue, then archive the child and synchronize parent #302.",
+    "nextAction": "Synchronize and complete parent #302.",
     "blocker": "",
-    "evidence": "implement.md records the 2026-07-31 independent closure findings, fixes, 324-test matrix, static gates, production build, and isolated Electron smoke."
+    "evidence": "Issue #301 is closed. Commit 5bf6e08b4 records the implementation; implement.md records the 324-test closure matrix, static gates, production build, isolated Electron smoke, and independent no-open-P0/P1/P2 review."
   }
 }
