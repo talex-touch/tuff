@@ -220,6 +220,43 @@ corepack pnpm -C apps/core-app smoke:privacy-lifecycle
 - The older RED/GREEN 4 note that Privacy smoke was a placeholder is historical; the later isolated production-built smoke exists and passed again in this review.
 - Final status: no open P0/P1/P2 privacy, deletion, backup, authority, or redaction finding in the #301 closure slice. Residual product constraints remain intentional: dynamic custom Provider credentials are non-portable without a fixed allowlist, Memory bulk deletion stays in its own lifecycle, and plugin persistent data is deleted only through generation-bound uninstall.
 
+## Post-Archive Independent Re-review
+
+A separate final review continued after commit `5bf6e08b4` and found additional concrete issues. The task was archived and #301 was marked closed by a parallel session while this review was still running; that state transition was not performed by this reviewer. The earlier "no open P0/P1/P2" statement is superseded again by the findings below.
+
+### Findings Fixed
+
+- **P1 - existing ordinary export and Secret backup targets had replacement windows.** Existing approved targets now move to same-directory recovery, temporary output commits through a no-clobber hard link, identities are revalidated, and a concurrent replacement is never overwritten. The approved original remains recoverable if rollback cannot reclaim the target path.
+- **P1 - synchronous lifecycle reentrancy could bypass operation serialization.** Admission now increments before invoking the first operation; a clock/dependency that synchronously reenters `getPolicy()` remains serialized.
+- **P1 - Provider compensation failure still published an unprovable runtime credential cache.** Any config/vault rollback failure clears cached credentials. Initialization preserves legacy runtime usability only when compensation state is provable.
+- **P1 - plugin-controlled Temp extensions could escape the registered namespace.** `TempFileService.createFile()` now accepts only empty or bounded alphanumeric extensions before filesystem work. Retention cleanup binds the namespace root and candidate file identities, quarantines before unlink, and preserves raced replacements/recovery residuals.
+- **P1 - Plugin uninstall checked generation only at admission and deleted directories after path-only checks.** Every incomplete stage and residual inspection now re-resolves exact plugin generation. Production captures data/code root `dev`/`ino`, quarantines the admitted directory by atomic same-parent rename, verifies the moved identity, and never deletes a replacement root.
+- **P2 - Search epoch-day retention skipped the previous bucket at an exact UTC-midnight cutoff.** Day cutoff now uses `floor(cutoffMs / DAY_MS)`, preserving equality while deleting every prior day bucket.
+- **P2 - owner requests admitted undeclared fields and lifecycle projected an unused `deadlineMs`.** Exact enumerable data-property DTO validation now rejects unknown fields, accessors, proxies, symbols, and policy extensions. Timeout authority remains the shared `AbortSignal` only.
+- **P2 - Privacy operational reporting could forward native causes.** Lifecycle reports now contain stable public/owner codes only; native paths, SQL, and error text cannot enter ordinary logs or remote detail sinks.
+- **P2 - Translation migration could overwrite a newer secure value from a stale legacy mirror, and rollback-fatal activations could later regain legacy fallback.** Non-blank secure values are authoritative. Rollback failure blocks migration and Secret fallback for that exact activation until a new generation/restart.
+- **P2 - Sentry search aggregation still constructed raw sample query text and feature telemetry allowed display `sourceName`.** Query text no longer enters the Sentry scope/buffer projection; `sourceName` is dropped and performance reasons must be identifier-shaped.
+- **P2 - archiving broke executable inventory evidence.** The Search evidence reference now points to the archived task path; inventory verification again resolves all 26 references.
+
+### Final Re-review Evidence
+
+- Core Privacy/Provider/Plugin/Telemetry/UI/Temp matrix: `261/261`.
+- Intelligence Provider runtime/config/SDK: `70/70`.
+- Shared Privacy/uninstall/Secret/credential SDK: `39/39`.
+- Official Translation: `2/2`; injected Plugin Secret feature-util: `1/1`.
+- Clipboard/Native/Storage/Common/Assistant/Startup Analytics regression set: `87/87`.
+- Total non-overlapping executed tests in this re-review: `460/460`.
+- `typecheck:node` and `typecheck:web` passed. Scoped ESLint passed with zero warnings; scoped Prettier and `git diff --check` passed.
+- `plugins:validate` passed `24/24`. `privacy:inventory:verify` passed with 13 entries, 3 portable, 10 non-portable, and 26 structurally verified references.
+- Production `build:vite` passed and emitted `plugin-host.js`, `plugin-sqlite-worker.js`, and `privacy-lifecycle-smoke.js`; only the repository's existing bundler/dependency warnings remained.
+- Built Electron Privacy smoke passed all 13 exact handlers, isolated profile/artifact cleanup, policy/summary/preview/delete/export/disclosure/backup/restore evidence, and canary redaction. Plugin-host isolation smoke returned `PLUGIN_HOST_ISOLATION_SMOKE_OK`.
+- Corrected forbidden scans passed: no raw Privacy/uninstall transport duplicates outside typed definitions/tests, and no non-undefined `searchQuery`, Sentry query substring, or telemetry `sourceName` projection remains.
+- `tuffex.md` was not read, edited, staged, or otherwise touched by this review. No commit, push, issue-close, or real provider/user-profile destructive operation was performed by this reviewer.
+
+### Closure State
+
+No open P0/P1/P2 finding remains in the reviewed working tree. The fixes above are uncommitted by request. Technical closure is recommended only after the current scoped diff and this evidence are committed together. Administrative closure is currently inconsistent because a parallel session archived the task and marked #301 closed before this review completed; reconcile that external state without discarding these fixes.
+
 ## Validation
 
 The exact final commands, test counts, smoke evidence level, build warnings, and residual-risk statement are recorded in the REFACTOR / DOCUMENTATION evidence above. All listed gates passed on the final working tree.

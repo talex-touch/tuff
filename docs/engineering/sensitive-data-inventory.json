@@ -151,7 +151,7 @@
       "migrationStatus": "owner-bound",
       "evidence": [
         "apps/core-app/src/main/modules/privacy/owners/search-retention-owner.ts#symbol=createSearchRetentionOwner",
-        ".trellis/tasks/07-27-sensitive-data-lifecycle-301/research/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
+        ".trellis/tasks/archive/2026-07/07-27-sensitive-data-lifecycle-301/research/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
       ]
     },
     {

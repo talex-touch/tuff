@@ -1545,7 +1545,6 @@ export class SearchEngineCore
           providerTimings,
           providerResults,
           sortingDuration,
-          queryText: '',
           inputTypes,
           resultCount,
           sessionId

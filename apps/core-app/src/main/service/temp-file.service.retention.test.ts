@@ -1,8 +1,18 @@
 import { Buffer } from 'node:buffer'
 import { constants } from 'node:fs'
-import { access, mkdir, mkdtemp, rm, symlink, utimes, writeFile } from 'node:fs/promises'
+import {
+  access,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  utimes,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { TempFileService } from './temp-file.service'
@@ -116,6 +126,83 @@ describe('tempFileService retention RED 2A', () => {
       service.createFile({ namespace: 'unregistered/private', text: 'CANARY_UNREGISTERED' })
     ).rejects.toThrow('TEMP_NAMESPACE_NOT_REGISTERED')
     expect(await exists(join(root, 'unregistered'))).toBe(false)
+  })
+
+  it('rejects hostile extensions before creating a namespace directory', async () => {
+    const { service, root } = await createService()
+    service.registerNamespace({ namespace: NAMESPACE, retentionMs: RETENTION_MS })
+
+    await expect(
+      service.createFile({
+        namespace: NAMESPACE,
+        ext: '../../../../CANARY_ESCAPE',
+        text: 'CANARY_OUTSIDE_NAMESPACE'
+      })
+    ).rejects.toThrow('TEMP_FILE_EXTENSION_INVALID')
+
+    expect(await exists(join(root, 'native'))).toBe(false)
+    expect(await exists(join(root, 'CANARY_ESCAPE'))).toBe(false)
+  })
+
+  it('preserves a file replaced after retention collection', async () => {
+    const { service } = await createService()
+    service.registerNamespace({ namespace: NAMESPACE, retentionMs: RETENTION_MS })
+    const candidate = await service.createFile({ namespace: NAMESPACE, text: 'original' })
+    await utimes(candidate.path, new Date(CUTOFF_MS - 1), new Date(CUTOFF_MS - 1))
+
+    const harness = service as unknown as {
+      resolveNamespaceDirectory: (namespace: string, create: boolean) => Promise<string | null>
+    }
+    const resolveNamespaceDirectory = harness.resolveNamespaceDirectory.bind(service)
+    let readCount = 0
+    harness.resolveNamespaceDirectory = async (namespace, create) => {
+      const resolved = await resolveNamespaceDirectory(namespace, create)
+      if (!create && ++readCount === 2) {
+        await rm(candidate.path)
+        await writeFile(candidate.path, 'replacement-must-survive')
+        await utimes(candidate.path, new Date(CUTOFF_MS - 1), new Date(CUTOFF_MS - 1))
+      }
+      return resolved
+    }
+
+    const result = await service.cleanupNamespace(NAMESPACE, { cutoffMs: CUTOFF_MS })
+
+    expect(result).toMatchObject({ deletedItemCount: 0, failedItemCount: 1 })
+    await expect(readFile(candidate.path, 'utf8')).resolves.toBe('replacement-must-survive')
+  })
+
+  it('stops cleanup when the namespace root identity changes after collection', async () => {
+    const { service, root } = await createService()
+    service.registerNamespace({ namespace: NAMESPACE, retentionMs: RETENTION_MS })
+    const candidate = await service.createFile({ namespace: NAMESPACE, text: 'original' })
+    await utimes(candidate.path, new Date(CUTOFF_MS - 1), new Date(CUTOFF_MS - 1))
+    const namespaceRoot = service.resolveNamespaceDir(NAMESPACE)
+    const parkedRoot = join(root, 'parked-original-namespace')
+
+    const harness = service as unknown as {
+      resolveNamespaceDirectory: (namespace: string, create: boolean) => Promise<string | null>
+    }
+    const resolveNamespaceDirectory = harness.resolveNamespaceDirectory.bind(service)
+    let readCount = 0
+    harness.resolveNamespaceDirectory = async (namespace, create) => {
+      const resolved = await resolveNamespaceDirectory(namespace, create)
+      if (!create && ++readCount === 2) {
+        await rename(namespaceRoot, parkedRoot)
+        await mkdir(namespaceRoot, { recursive: true })
+        await writeFile(join(namespaceRoot, 'replacement-must-survive'), 'replacement')
+      }
+      return resolved
+    }
+
+    const result = await service.cleanupNamespace(NAMESPACE, { cutoffMs: CUTOFF_MS })
+
+    expect(result).toMatchObject({ deletedItemCount: 0, failedItemCount: 1 })
+    await expect(readFile(join(parkedRoot, basename(candidate.path)), 'utf8')).resolves.toBe(
+      'original'
+    )
+    await expect(readFile(join(namespaceRoot, 'replacement-must-survive'), 'utf8')).resolves.toBe(
+      'replacement'
+    )
   })
 
   it('rejects unregistered namespace cleanup and traversal before filesystem work', async () => {

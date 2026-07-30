@@ -153,6 +153,19 @@ function dispositionMatches(
   )
 }
 
+function currentOwnerMatches(
+  dependencies: PluginDataDispositionDependencies,
+  owner: PluginDataDispositionOwner
+): boolean {
+  const current = dependencies.resolveCurrentOwner(owner.pluginName)
+  return Boolean(
+    current &&
+    current.pluginName === owner.pluginName &&
+    current.pluginInstanceId === owner.pluginInstanceId &&
+    current.activationGeneration === owner.activationGeneration
+  )
+}
+
 function stageResult(
   stage: PluginUninstallStage,
   status: PluginUninstallStageResult['status'],
@@ -236,6 +249,9 @@ export function createPluginDataDispositionCoordinator(
   ): Promise<'completed' | 'failed' | 'cancelled' | 'no-data' | 'residual'> {
     if (state.completedStages.has(stage)) return 'completed'
     try {
+      if (!currentOwnerMatches(dependencies, state.owner)) {
+        throw new Error('PLUGIN_OWNER_CHANGED')
+      }
       const outcome = await operation()
       if (outcome === 'cancelled') {
         const code =
@@ -358,6 +374,9 @@ export function createPluginDataDispositionCoordinator(
 
     let residuals: PluginDataDispositionResiduals
     try {
+      if (!currentOwnerMatches(dependencies, owner)) {
+        throw new Error('PLUGIN_OWNER_CHANGED')
+      }
       residuals = await dependencies.inspectResiduals(owner)
     } catch {
       residuals = {

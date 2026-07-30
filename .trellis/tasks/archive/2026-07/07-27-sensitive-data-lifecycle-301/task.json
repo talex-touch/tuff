@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Synchronize and complete parent #302.",
+    "nextAction": "Synchronize and complete parent #302 security tracker.",
     "blocker": "",
-    "evidence": "Issue #301 is closed. Commit 5bf6e08b4 records the implementation; implement.md records the 324-test closure matrix, static gates, production build, isolated Electron smoke, and independent no-open-P0/P1/P2 review."
+    "evidence": "implement.md records the superseding post-archive findings, 460-test matrix, static gates, production build, Privacy/plugin-host smokes, inventory repair, and no open P0/P1/P2 review finding."
   }
 }

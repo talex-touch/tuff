@@ -6,6 +6,9 @@ import type {
   PluginDataDispositionStepOutcome
 } from './plugin-data-disposition'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { lstatSync, realpathSync } from 'node:fs'
+import { rename } from 'node:fs/promises'
 import { dialog } from 'electron'
 import fse from 'fs-extra'
 import {
@@ -73,6 +76,119 @@ export interface ProductionPluginDataDispositionOptions {
   readonly reportLocalError?: (code: string) => void
 }
 
+interface DirectoryIdentity {
+  readonly state: 'ordinary' | 'missing' | 'invalid'
+  readonly dev?: number
+  readonly ino?: number
+}
+
+interface DirectoryQuarantineState {
+  recoveryPath?: string
+}
+
+const DATA_ROOT_IDENTITY = Symbol('plugin-data-root-identity')
+const CODE_ROOT_IDENTITY = Symbol('plugin-code-root-identity')
+
+interface PinnedProductionPluginDataDispositionOwner extends ProductionPluginDataDispositionOwner {
+  readonly [DATA_ROOT_IDENTITY]: DirectoryIdentity
+  readonly [CODE_ROOT_IDENTITY]: DirectoryIdentity
+}
+
+function captureDirectoryIdentity(targetPath: string): DirectoryIdentity {
+  try {
+    const stat = lstatSync(targetPath)
+    if (!stat.isDirectory() || stat.isSymbolicLink()) return Object.freeze({ state: 'invalid' })
+    if (realpathSync(targetPath) !== path.resolve(targetPath)) {
+      return Object.freeze({ state: 'invalid' })
+    }
+    return Object.freeze({ state: 'ordinary', dev: Number(stat.dev), ino: Number(stat.ino) })
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? Object.freeze({ state: 'missing' })
+      : Object.freeze({ state: 'invalid' })
+  }
+}
+
+function pinOwner(
+  owner: ProductionPluginDataDispositionOwner
+): PinnedProductionPluginDataDispositionOwner {
+  return Object.freeze({
+    ...owner,
+    [DATA_ROOT_IDENTITY]: captureDirectoryIdentity(owner.dataRootPath),
+    [CODE_ROOT_IDENTITY]: captureDirectoryIdentity(owner.codePath)
+  })
+}
+
+function asPinnedOwner(
+  owner: PluginDataDispositionOwner
+): PinnedProductionPluginDataDispositionOwner {
+  return owner as PinnedProductionPluginDataDispositionOwner
+}
+
+async function assertPinnedDirectory(
+  targetPath: string,
+  expected: DirectoryIdentity,
+  allowMissing: boolean
+): Promise<boolean> {
+  if (expected.state === 'invalid') throw new Error('PLUGIN_DISPOSITION_OWNER_PATH_INVALID')
+  const stat = await fse.lstat(targetPath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT') return null
+    throw error
+  })
+  if (!stat) {
+    if (expected.state === 'ordinary' && !allowMissing) {
+      throw new Error('PLUGIN_DISPOSITION_OWNER_PATH_CHANGED')
+    }
+    return false
+  }
+  if (expected.state !== 'ordinary' || !stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error('PLUGIN_DISPOSITION_OWNER_PATH_CHANGED')
+  }
+  const canonical = await fse.realpath(targetPath)
+  if (
+    canonical !== path.resolve(targetPath) ||
+    Number(stat.dev) !== expected.dev ||
+    Number(stat.ino) !== expected.ino
+  ) {
+    throw new Error('PLUGIN_DISPOSITION_OWNER_PATH_CHANGED')
+  }
+  return true
+}
+
+async function deletePinnedDirectory(
+  targetPath: string,
+  expected: DirectoryIdentity,
+  quarantine: DirectoryQuarantineState
+): Promise<void> {
+  if (quarantine.recoveryPath) {
+    if (await entryExists(quarantine.recoveryPath)) {
+      await assertPinnedDirectory(quarantine.recoveryPath, expected, false)
+      await fse.remove(quarantine.recoveryPath)
+      if (await entryExists(quarantine.recoveryPath)) {
+        throw new Error('PLUGIN_DISPOSITION_OWNER_DELETE_FAILED')
+      }
+    }
+    quarantine.recoveryPath = undefined
+  }
+
+  if (!(await assertPinnedDirectory(targetPath, expected, true))) return
+  const recoveryPath = `${targetPath}.uninstall-${randomUUID()}.recovery`
+  quarantine.recoveryPath = recoveryPath
+  try {
+    await rename(targetPath, recoveryPath)
+  } catch (error) {
+    quarantine.recoveryPath = undefined
+    throw error
+  }
+
+  await assertPinnedDirectory(recoveryPath, expected, false)
+  await fse.remove(recoveryPath)
+  if (await entryExists(recoveryPath)) {
+    throw new Error('PLUGIN_DISPOSITION_OWNER_DELETE_FAILED')
+  }
+  quarantine.recoveryPath = undefined
+}
+
 function asProductionOwner(
   owner: PluginDataDispositionOwner
 ): ProductionPluginDataDispositionOwner {
@@ -91,47 +207,6 @@ async function entryExists(targetPath: string): Promise<boolean> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
     throw error
   }
-}
-
-async function assertOrdinaryDirectory(targetPath: string): Promise<void> {
-  const stat = await fse.lstat(targetPath).catch((error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT') return null
-    throw error
-  })
-  if (!stat) return
-  if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw new Error('PLUGIN_DISPOSITION_OWNER_PATH_INVALID')
-  }
-  const canonical = await fse.realpath(targetPath)
-  if (canonical !== path.resolve(targetPath)) {
-    throw new Error('PLUGIN_DISPOSITION_OWNER_PATH_INVALID')
-  }
-}
-
-async function deleteDurableData(owner: ProductionPluginDataDispositionOwner): Promise<void> {
-  const root = owner.dataRootPath
-  await assertOrdinaryDirectory(root)
-  if (!(await entryExists(root))) return
-  const entries = await fse.readdir(root)
-  for (const name of entries) {
-    if (name === 'cache' || name === 'temp') continue
-    await fse.remove(path.join(root, name))
-  }
-}
-
-async function removeEmptyOwnerRoot(root: string): Promise<void> {
-  try {
-    await fse.rmdir(root)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code !== 'ENOENT' && code !== 'ENOTEMPTY' && code !== 'EEXIST') throw error
-  }
-}
-
-async function deleteOwnedChild(root: string, childName: 'cache' | 'temp'): Promise<void> {
-  await assertOrdinaryDirectory(root)
-  if (!(await entryExists(root))) return
-  await fse.remove(path.join(root, childName))
 }
 
 function pluginSecretCatalog(pluginName: string): readonly PortableSecretCatalogEntry[] {
@@ -175,15 +250,37 @@ export function createProductionPluginDataDispositionCoordinator(
     showOpenDialog: async () => Object.freeze({ canceled: true, filePaths: Object.freeze([]) })
   })
 
+  const quarantineByOwner = new Map<
+    string,
+    { readonly data: DirectoryQuarantineState; readonly code: DirectoryQuarantineState }
+  >()
+  const quarantineFor = (owner: ProductionPluginDataDispositionOwner) => {
+    const key = `${owner.pluginName}:${owner.pluginInstanceId}:${owner.activationGeneration}`
+    let state = quarantineByOwner.get(key)
+    if (!state) {
+      state = { data: {}, code: {} }
+      quarantineByOwner.set(key, state)
+    }
+    return { key, state }
+  }
+
   return createPluginDataDispositionCoordinator({
-    resolveCurrentOwner: options.resolveOwner,
+    resolveCurrentOwner: (pluginName) => {
+      const owner = options.resolveOwner(pluginName)
+      return owner ? pinOwner(owner) : null
+    },
     ...(options.canStart
       ? {
           canStart: (owner: PluginDataDispositionOwner) =>
             options.canStart!(asProductionOwner(owner))
         }
       : {}),
-    closeAdmission: (owner) => options.closeAdmission(asProductionOwner(owner)),
+    closeAdmission: async (owner) => {
+      const current = asPinnedOwner(owner)
+      await assertPinnedDirectory(current.dataRootPath, current[DATA_ROOT_IDENTITY], false)
+      await assertPinnedDirectory(current.codePath, current[CODE_ROOT_IDENTITY], false)
+      return await options.closeAdmission(current)
+    },
     closeRuntime: (owner) => options.closeRuntime(asProductionOwner(owner)),
     closeSqlite: async (owner) => {
       const current = asProductionOwner(owner)
@@ -192,7 +289,8 @@ export function createProductionPluginDataDispositionCoordinator(
     },
     closeLogger: (owner) => options.closeLogger(asProductionOwner(owner)),
     exportOrdinary: async (owner) => {
-      const current = asProductionOwner(owner)
+      const current = asPinnedOwner(owner)
+      await assertPinnedDirectory(current.dataRootPath, current[DATA_ROOT_IDENTITY], false)
       const rows = await options.dbUtils.listPluginData(current.pluginName)
       const result = await exportPluginOrdinaryData(ordinaryExporter, {
         pluginId: current.pluginName,
@@ -211,6 +309,7 @@ export function createProductionPluginDataDispositionCoordinator(
           })
         ])
       })
+      await assertPinnedDirectory(current.dataRootPath, current[DATA_ROOT_IDENTITY], false)
       return result.cancelled ? 'cancelled' : 'completed'
     },
     backupPortableSecrets: async (owner, password) => {
@@ -278,18 +377,19 @@ export function createProductionPluginDataDispositionCoordinator(
       return 'completed'
     },
     deleteData: async (owner) => {
-      await deleteDurableData(asProductionOwner(owner))
+      const current = asPinnedOwner(owner)
+      const { state } = quarantineFor(current)
+      await deletePinnedDirectory(current.dataRootPath, current[DATA_ROOT_IDENTITY], state.data)
       return 'completed'
     },
     deleteCache: async (owner) => {
-      const current = asProductionOwner(owner)
-      await deleteOwnedChild(current.dataRootPath, 'cache')
-      await removeEmptyOwnerRoot(current.dataRootPath)
+      const current = asPinnedOwner(owner)
+      await assertPinnedDirectory(current.dataRootPath, current[DATA_ROOT_IDENTITY], true)
       return 'completed'
     },
     deleteTemp: async (owner) => {
-      const current = asProductionOwner(owner)
-      await deleteOwnedChild(current.dataRootPath, 'temp')
+      const current = asPinnedOwner(owner)
+      await assertPinnedDirectory(current.dataRootPath, current[DATA_ROOT_IDENTITY], true)
       await purgePluginTempNamespace(options.tempFileService, current.pluginName)
       return 'completed'
     },
@@ -303,13 +403,14 @@ export function createProductionPluginDataDispositionCoordinator(
       return 'completed'
     },
     deleteCode: async (owner) => {
-      const current = asProductionOwner(owner)
-      await assertOrdinaryDirectory(current.codePath)
-      await fse.remove(current.codePath)
+      const current = asPinnedOwner(owner)
+      const { state } = quarantineFor(current)
+      await deletePinnedDirectory(current.codePath, current[CODE_ROOT_IDENTITY], state.code)
       return 'completed'
     },
     inspectResiduals: async (owner) => {
-      const current = asProductionOwner(owner)
+      const current = asPinnedOwner(owner)
+      const { state } = quarantineFor(current)
       const sqliteFilePaths = [
         path.join(current.dataRootPath, 'plugin-sdk.sqlite'),
         path.join(current.dataRootPath, 'plugin-sdk.sqlite-wal'),
@@ -324,7 +425,9 @@ export function createProductionPluginDataDispositionCoordinator(
         cache,
         data,
         pluginDataCount,
-        code
+        code,
+        dataRecovery,
+        codeRecovery
       ] = await Promise.all([
         Promise.all(sqliteFilePaths.map(entryExists)),
         options.inspectAuthorityResiduals(current),
@@ -340,7 +443,9 @@ export function createProductionPluginDataDispositionCoordinator(
         entryExists(path.join(current.dataRootPath, 'cache')),
         entryExists(current.dataRootPath),
         options.dbUtils.countPluginData(current.pluginName),
-        entryExists(current.codePath)
+        entryExists(current.codePath),
+        state.data.recoveryPath ? entryExists(state.data.recoveryPath) : Promise.resolve(false),
+        state.code.recoveryPath ? entryExists(state.code.recoveryPath) : Promise.resolve(false)
       ])
       return Object.freeze({
         runtime: authorityResiduals.runtime,
@@ -351,12 +456,19 @@ export function createProductionPluginDataDispositionCoordinator(
         secrets: secretCount > 0,
         temp: tempNamespaceResidual || localTemp,
         cache,
-        data,
+        data: data || dataRecovery,
         pluginData: pluginDataCount > 0,
-        code
+        code: code || codeRecovery
       })
     },
-    finalize: (owner) => options.finalize(asProductionOwner(owner)),
+    finalize: async (owner) => {
+      const current = asProductionOwner(owner)
+      const result = await options.finalize(current)
+      if (result === 'completed') {
+        quarantineByOwner.delete(quarantineFor(current).key)
+      }
+      return result
+    },
     reportUninstall: (owner) => options.reportUninstall(asProductionOwner(owner))
   })
 }

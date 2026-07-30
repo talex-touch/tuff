@@ -91,6 +91,25 @@ describe('translation provider credential migration', () => {
     })
   })
 
+  it('keeps an existing secure credential authoritative while removing its legacy mirror', async () => {
+    const harness = createHarness()
+    harness.secure.set(
+      'plugin.touch-translation.providers.tencent.secretId',
+      'synthetic-current-secure-id'
+    )
+
+    const result = await migrateTranslationProviderCredentials(harness.dependencies)
+
+    expect(result.migrated).toBe(1)
+    expect(harness.secure.get('plugin.touch-translation.providers.tencent.secretId')).toBe(
+      'synthetic-current-secure-id'
+    )
+    expect(harness.secure.get('plugin.touch-translation.providers.tencent.secretKey')).toBe(
+      'synthetic-legacy-key'
+    )
+    expect(JSON.stringify(harness.persisted)).not.toContain('synthetic-legacy')
+  })
+
   it('preserves the legacy config when the secure batch fails', async () => {
     const harness = createHarness({ secureFails: true })
 

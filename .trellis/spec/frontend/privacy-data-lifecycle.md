@@ -136,6 +136,7 @@ interface PrivacyDataOwner {
 }
 
 TempFileService.registerNamespace({ namespace, retentionMs, automaticCleanup? }): void
+TempFileService.createFile({ namespace, ext?, text?, buffer?, base64?, prefix? }): Promise<TempFileCreateResult>
 TempFileService.inspectNamespace(namespace, options): Promise<TempNamespaceInspection>
 TempFileService.cleanupNamespace(namespace, options): Promise<TempNamespaceCleanupResult>
 ```
@@ -153,7 +154,8 @@ Migration `0034_privacy_retention_indexes` owns `clipboard_history.retention_pro
 - Intelligence audit retention removes detail rows and prevents pending rows below the retention floor from being reinserted. Context cleanup deletes only archived/expired, unpinned session roots; active sessions, Memory/tombstones, quota/usage aggregates, provider config, prompts/templates, workflows, and knowledge remain.
 - Diagnostics cleanup composes fixed DB/telemetry/log owners. Core log deletion is restricted to the canonical captured root, known rotated CoreApp names, and crash dumps; symlinks, foreign roots, plugin logs, download logs, and workflow roots are not authority.
 - Temp create/inspect/cleanup requires prior trusted namespace registration. Plugin Temp access derives an activation-scoped namespace from authoritative plugin identity; plugin payloads cannot select another owner's namespace or retention.
-- Domain ingress persists/transmits metadata-only Intelligence audit, analytics, and telemetry failure projections. Stable codes replace prompts, messages, endpoints, paths, stacks, and native errors.
+- Temp extensions are empty or one optional leading dot plus 1-16 ASCII alphanumeric characters; validate them before directory creation. Retention collection captures namespace-root and file `dev`/`ino` plus file size/mtime/ctime. Cleanup revalidates both identities, renames the candidate to a random same-directory recovery name, verifies the moved inode, and only then unlinks it. A raced replacement is restored with a no-clobber hard link when possible; otherwise its hidden `.recovery` remains an explicit failed residual and is never collected as ordinary Temp data.
+- Domain ingress persists/transmits metadata-only Intelligence audit, analytics, and telemetry failure projections. Stable codes replace prompts, messages, endpoints, paths, stacks, and native errors. Sentry search aggregation never receives query text, and feature telemetry drops display `sourceName`; final event sanitization remains defense in depth.
 
 ### 4. Validation & Error Matrix
 
@@ -167,6 +169,9 @@ Migration `0034_privacy_retention_indexes` owns `clipboard_history.retention_pro
 | OCR pending/processing job or user source path                        | Preserve                                                                                 |
 | Search detail cleanup                                                 | Preserve pins, File/App/index/static embedding/config rows byte-for-byte                 |
 | Unregistered/traversal/symlinked/replaced Temp namespace              | Reject before create/read/delete outside canonical owner root                            |
+| Empty or simple Temp extension                                        | Use `.tmp` or bounded alphanumeric suffix                                                |
+| Temp extension contains separators/traversal                          | `TEMP_FILE_EXTENSION_INVALID` before namespace filesystem work                           |
+| Temp root/file identity changes after collection                      | Preserve replacement; return failed item/residual; never unlink by stale path            |
 | Diagnostics foreign filename/root/symlink                             | Ignore or stable resource failure; never unlink it                                       |
 | Domain metadata contains sensitive canary                             | Drop/project to stable code before persistence, queueing, remote send, or normal logging |
 | Migration statement fails                                             | Roll back schema/journal/data atomically; no cleanup runs inside migration               |
@@ -175,12 +180,12 @@ Migration `0034_privacy_retention_indexes` owns `clipboard_history.retention_pro
 
 - Good: an old unprotected Clipboard root is removed in one scheduled page, FK children cascade, caches evict, and the owned image unlink is awaited without returning its path.
 - Base: a 30-day Search run removes stale completion/usage/cache rows while a pinned result and its source index remain available.
-- Bad: one coordinator executes caller-selected SQL, uses `OFFSET` while deleting, treats `<= cutoff` as expired, deletes a Context child table directly, or recursively removes a caller-selected log directory.
+- Bad: one coordinator executes caller-selected SQL, uses `OFFSET` while deleting, treats `<= cutoff` as expired, deletes a Context child table directly, recursively removes a caller-selected log directory, accepts `ext: '../../../../escape'`, or unlinks a Temp path without comparing the collected inode.
 
 ### 6. Tests Required
 
 - Real migrated temporary libSQL tests cover primary/auxiliary routing, strict boundaries, more than two pages, cancellation, retry exhaustion, FK cascades, migration rollback, and `EXPLAIN QUERY PLAN` index use.
-- Real Temp filesystem tests cover registration, canonical containment, symlinks/directory replacement, eager release, strict mtime, paging, cancellation, and idempotence.
+- Real Temp filesystem tests cover registration, extension traversal rejection before filesystem work, canonical containment, symlinks, namespace/file replacement, recovery residuals, eager release, strict mtime, paging, cancellation, and idempotence.
 - Clipboard tests preserve favorite/host-important rows and prove arbitrary metadata has no protection authority.
 - Search tests preserve producer/index/static embedding/config/pin rows and invalidate detail caches on every committed-exit path.
 - Intelligence tests preserve active/pinned Context, Memory, quota/config/prompt/workflow/knowledge and prevent old pending audit reinsertion.
@@ -200,6 +205,7 @@ await db.execute(`DELETE FROM ${request.table} WHERE timestamp <= ?`, [cutoff])
 ```ts
 await owner.applyRetention(normalizedPolicy, operationNowMs, signal)
 // The fixed owner pages `stored < cutoff` through scheduler/retry and preserves protected roots.
+// Temp deletion additionally revalidates captured root/file identities before unlink.
 ```
 
 ---
@@ -261,19 +267,19 @@ Ordinary export format is `talex.touch.privacy-export/v1`. Secret files use the 
 
 ### 4. Validation & Error Matrix
 
-| Condition                                                             | Required result                                                                     |
-| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Plugin/forged context or malformed request/result                     | `PRIVACY_REQUEST_INVALID` before service/owner/dialog work                          |
-| Unknown/unowned or independently governed Memory/plugin-data category      | Reject before service/owner work; use the independent typed lifecycle                         |
-| Category delete preview ID is missing, expired, replayed, or category-mismatched | `PRIVACY_REQUEST_INVALID` before policy load/delete; never trust confirmation alone             |
-| Timeout/caller abort/destroy                                          | Abort linked work, clean temp/plan state, drain admission, return cancellation code |
-| Export owner emits forbidden/oversized/partial data                   | Fail export, remove temp, preserve target                                           |
-| Target identity changes or exists at finalization                     | Fail closed; never overwrite the replacement                                        |
-| Backup/restore file is symlinked, replaced, oversized, or non-regular | Reject before crypto/commit and expose no path                                      |
-| Restore ID expired/replayed/policy-mismatched/store-revision changed  | Stable invalid/conflict result; no mutation                                         |
-| Wrong password or envelope tampering                                  | One redacted authentication failure class                                           |
-| Provider contains custom endpoint/key/request fields                  | Return only generic safe disclosure projection                                      |
-| Module init fails after partial registration                          | Dispose handlers/coordinator/service and reject startup                             |
+| Condition                                                                        | Required result                                                                     |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Plugin/forged context or malformed request/result                                | `PRIVACY_REQUEST_INVALID` before service/owner/dialog work                          |
+| Unknown/unowned or independently governed Memory/plugin-data category            | Reject before service/owner work; use the independent typed lifecycle               |
+| Category delete preview ID is missing, expired, replayed, or category-mismatched | `PRIVACY_REQUEST_INVALID` before policy load/delete; never trust confirmation alone |
+| Timeout/caller abort/destroy                                                     | Abort linked work, clean temp/plan state, drain admission, return cancellation code |
+| Export owner emits forbidden/oversized/partial data                              | Fail export, remove temp, preserve target                                           |
+| Target identity changes or exists at finalization                                | Fail closed; never overwrite the replacement                                        |
+| Backup/restore file is symlinked, replaced, oversized, or non-regular            | Reject before crypto/commit and expose no path                                      |
+| Restore ID expired/replayed/policy-mismatched/store-revision changed             | Stable invalid/conflict result; no mutation                                         |
+| Wrong password or envelope tampering                                             | One redacted authentication failure class                                           |
+| Provider contains custom endpoint/key/request fields                             | Return only generic safe disclosure projection                                      |
+| Module init fails after partial registration                                     | Dispose handlers/coordinator/service and reject startup                             |
 
 ### 5. Good/Base/Bad Cases
 
@@ -307,11 +313,7 @@ await privacySdk.category.delete(selectedCategories, 'delete-selected-data')
 ```ts
 const preview = await privacySdk.category.previewDelete(selectedCategories)
 if (!preview.ok) return preview
-return privacySdk.category.delete(
-  selectedCategories,
-  'delete-selected-data',
-  preview.data.previewId,
-)
+return privacySdk.category.delete(selectedCategories, 'delete-selected-data', preview.data.previewId)
 // Main consumes the short-lived category-bound ID once before owner work.
 ```
 
@@ -346,12 +348,12 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 ### 3. Contracts
 
 - Intelligence initialization completes credential migration before creating or loading Provider runtime instances. Runtime config, Provider test, and model fetch resolve saved credentials in main by Provider ID; Nexus auth continues to use the main-owned login token path.
-- For each legacy ordinary config surface: validate the complete Provider list, snapshot prior secure values, apply one atomic secure-store batch, durably persist the sanitized document, then publish the new in-memory credential cache. Secure failure leaves ordinary config unchanged. Config failure restores every prior secure value. Rollback failure emits only a stable local code and fails startup/action closed.
-- Migration and save/delete operations are single-flight/serialized. Durable config writes use the current storage revision. A stale writer cannot overwrite a newer Provider document; replacement/deletion restores the prior secure value when metadata persistence fails.
+- For each legacy ordinary config surface: validate the complete Provider list, snapshot prior secure values, apply one atomic secure-store batch, durably persist the sanitized document, then publish the new in-memory credential cache. Secure failure leaves ordinary config unchanged. Config failure restores every prior secure value. Rollback failure emits only a stable local code, clears the runtime credential cache, and fails startup/action closed.
+- Migration and save/delete operations are single-flight/serialized. Durable config writes use the current storage revision. A stale writer cannot overwrite a newer Provider document; replacement/deletion restores the prior secure value when metadata persistence fails. Any failed compensation clears cached credentials because persisted secure/config state is no longer provable.
 - Generic Storage IPC projects Intelligence config through `redactProviderConfigDocument()` and rejects any incoming Provider object with an own `apiKey` field. Renderer state never uses `apiKey` as a persisted availability flag.
 - The Provider settings credential field is local transient state. Blur submits the typed main action; success immediately clears the input and updates only `authRef`/`hasCredential`. Explicitly editing the field to empty means `clear`; an untouched empty field means preserve.
-- Official Translation legacy migration runs in the main Plugin Storage handler. It atomically writes all fixed Secret fields before saving sanitized `providers_config`; config failure restores prior Secret values. Concurrent reads share one migration Promise, and restart retries are idempotent.
-- If Translation migration cannot commit, the legacy file remains unchanged. `getFile` still returns a sanitized projection, while authorized `secret.get` may resolve a legacy field main-side as a temporary compatibility fallback. No legacy credential is returned through ordinary Plugin Storage.
+- Official Translation legacy migration runs in the main Plugin Storage handler. A non-blank secure value is authoritative and is never overwritten by its legacy mirror; remaining fixed legacy fields are written atomically before saving sanitized `providers_config`. Config failure restores prior Secret values. Concurrent reads share one migration Promise, and restart retries are idempotent.
+- If Translation migration cannot commit but compensation succeeds, the legacy file remains unchanged. `getFile` still returns a sanitized projection, while authorized `secret.get` may resolve a legacy field main-side as a temporary compatibility fallback. Rollback failure marks that activation fatal: Secret fallback and further migration stay fail-closed until a new activation/restart. No legacy credential is returned through ordinary Plugin Storage.
 - New multi-field Plugin Secret changes use typed `set-secret-batch`; main validates authoritative activation identity, permission, count, exact keys, duplicate keys, and every value before one secure-store mutation.
 - `PORTABLE_SECRET_CATALOG_V1` contains only fixed product-approved credentials. Nexus/session/account tokens, sync keys, machine seeds, device identity, dynamic custom Provider keys, unknown Plugin Secrets, and caller-selected secure-store names are non-portable.
 - `docs/engineering/sensitive-data-inventory.json` is the executable source for sensitive owners, physical storage, writers/readers, export, deletion, retention, renderer exposure, portability, migration status, and evidence. Any affected code change updates the inventory and passes `corepack pnpm privacy:inventory:verify`.
@@ -359,31 +361,33 @@ The typed credential mutation is exactly `preserve`, `set(value)`, or `clear`. P
 
 ### 4. Validation & Error Matrix
 
-| Condition                                                        | Required result                                                                   |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Fresh install without credentials                                | No secure mutation and no ordinary config rewrite                                 |
-| Valid legacy Provider/Translation credentials                    | One atomic secure write, then sanitized durable config, then runtime availability |
-| Secure-store batch fails                                         | Legacy ordinary file/row remains byte-usable; stable local failure only           |
-| Sanitized config persistence fails                               | Restore previous secure values and retain legacy config                           |
-| Two concurrent startup reads or mutations                        | One migration or serialized revision-aware mutation; no partial state             |
-| Restart after completed migration                                | No repeat write; hydrate main runtime credential from secure store                |
-| Renderer Storage payload owns `apiKey`                           | Reject before cache/persistence; return no credential in projection/error         |
-| Provider replacement or deletion metadata write fails            | Restore previous credential and report action failure                             |
-| Translation migration is deferred                                | Sanitize `getFile`; authorized Secret SDK may use main-side legacy fallback       |
-| Catalog request names Nexus/session/sync/machine/custom identity | Reject as forbidden/non-portable                                                  |
-| Inventory entry/evidence/lifecycle field missing                 | Verifier exits non-zero                                                           |
-| Smoke fixture touches real account/network/native user data      | Fail the harness before lifecycle action                                          |
+| Condition                                                        | Required result                                                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Fresh install without credentials                                | No secure mutation and no ordinary config rewrite                                           |
+| Valid legacy Provider/Translation credentials                    | One atomic secure write, then sanitized durable config, then runtime availability           |
+| Secure-store batch fails                                         | Legacy ordinary file/row remains byte-usable; stable local failure only                     |
+| Sanitized config persistence fails                               | Restore previous secure values and retain legacy config                                     |
+| Provider/Translation rollback fails                              | Stable rollback code; clear/block runtime credential use for the current process/activation |
+| Existing non-blank Translation Secret conflicts with legacy      | Keep secure value authoritative; sanitize legacy mirror without overwriting it              |
+| Two concurrent startup reads or mutations                        | One migration or serialized revision-aware mutation; no partial state                       |
+| Restart after completed migration                                | No repeat write; hydrate main runtime credential from secure store                          |
+| Renderer Storage payload owns `apiKey`                           | Reject before cache/persistence; return no credential in projection/error                   |
+| Provider replacement or deletion metadata write fails            | Restore previous credential and report action failure                                       |
+| Translation migration is deferred                                | Sanitize `getFile`; authorized Secret SDK may use main-side legacy fallback                 |
+| Catalog request names Nexus/session/sync/machine/custom identity | Reject as forbidden/non-portable                                                            |
+| Inventory entry/evidence/lifecycle field missing                 | Verifier exits non-zero                                                                     |
+| Smoke fixture touches real account/network/native user data      | Fail the harness before lifecycle action                                                    |
 
 ### 5. Good/Base/Bad Cases
 
-- Good: startup finds a legacy OpenAI key, writes the allowlisted secure entry, commits a revision-bound config containing `hasCredential`, and injects the key only while constructing the main Provider runtime.
+- Good: startup finds a legacy OpenAI key, writes the allowlisted secure entry, commits a revision-bound config containing `hasCredential`, and injects the key only while constructing the main Provider runtime. A Translation legacy mirror is removed without replacing a newer secure value.
 - Base: a fresh install has disabled Providers and no secure entries; initialization performs no writes.
-- Bad: autosave `apiKey` on each keystroke, sanitize the only legacy copy after a failed Secret write, expose a secure-store key to renderer, or add login/sync/machine material to the portable catalog.
+- Bad: autosave `apiKey` on each keystroke, sanitize the only legacy copy after a failed Secret write, republish a credential cache after rollback failure, overwrite a non-blank secure Translation Secret from legacy config, expose a secure-store key to renderer, or add login/sync/machine material to the portable catalog.
 
 ### 6. Tests Required
 
-- Provider tests cover fresh, legacy, secure failure, config failure plus rollback, restart idempotency, concurrent initialization, replacement, deletion, strict save DTO validation, renderer/config redaction, and sensitive canaries in errors/results.
-- Translation tests cover fixed-field extraction, one batch, secure failure, config failure plus rollback, restart, sanitized projection, main-side legacy fallback, duplicate batch denial, and renderer Secret-SDK-only loading.
+- Provider tests cover fresh, legacy, secure failure, config failure plus rollback, rollback-failure cache clearing, restart idempotency, concurrent initialization, replacement, deletion, strict save DTO validation, renderer/config redaction, and sensitive canaries in errors/results.
+- Translation tests cover fixed-field extraction, secure-value authority, one batch, secure failure, config failure plus rollback, activation-fatal rollback failure, restart, sanitized projection, main-side legacy fallback, duplicate batch denial, and renderer Secret-SDK-only loading.
 - Storage/SDK tests cover typed provider save/delete, typed Plugin Secret batch, ordinary `apiKey` rejection, redacted get/getVersioned, runtime injection, and no raw Privacy/uninstall event duplicates.
 - Inventory verification and scoped lint/typecheck/tests are mandatory. Production Electron smoke is an evidence level above mocked service tests; a smoke blocked by environment must be reported as blocked, never silently counted as passed.
 
@@ -406,7 +410,8 @@ await intelligenceSdk.saveProviderConfig({
 })
 
 await secret.setMany(fixedCredentialEntries)
-// Main migration/save owns atomic secure mutation, sanitized persistence, and rollback.
+// Main migration/save owns atomic secure mutation, sanitized persistence, rollback,
+// and fail-closed cache/activation state when compensation cannot be proved.
 ```
 
 ---
@@ -443,7 +448,8 @@ pluginSDK.uninstall(request: PluginApiUninstallRequest): Promise<PluginApiUninst
 
 ### 3. Contracts
 
-- Uninstall binds the exact loaded plugin name, instance ID, and activation generation before teardown. Identity drift, stale UI state, reload, or replacement fails closed before export, backup, deletion, or code removal.
+- Uninstall binds the exact loaded plugin name, instance ID, and activation generation before teardown, then re-resolves that identity before every incomplete stage and residual inspection. Identity drift, stale UI state, reload, or replacement fails closed before the next export, backup, deletion, or code removal.
+- Production captures canonical data/code root `dev`/`ino` before admission. Persistent root deletion renames the exact directory to a random same-parent recovery path, verifies the moved identity, and only then recursively removes it. A mismatched replacement is never deleted or overwritten; its recovery path counts as a residual. Data-root deletion occurs after optional export, code remains last.
 - Main ordering is admission stop, runtime/resource exit, optional ordinary export, optional encrypted portable-Secret backup, logger flush, plugin-wide SQLite close/verification, permission/authority invalidation, fixed Secret namespaces, Temp/cache/data/plugin row, code removal last, then exact residual verification.
 - Export cancellation/failure and Secret backup failure are non-destructive. Post-barrier cleanup failure retains stopped installed retry ownership and blocks replacement admission; success is reported only after no exact plugin data, SQLite owner/file, Secret prefix, Temp/cache namespace, plugin row, or code remains.
 - Disable preserves durable data and Secrets. Permission revoke invalidates authority and clears capability-owned resources/Temp only. Neither path reuses uninstall deletion semantics.
@@ -456,30 +462,31 @@ pluginSDK.uninstall(request: PluginApiUninstallRequest): Promise<PluginApiUninst
 
 ### 4. Validation & Error Matrix
 
-| Condition                                                        | Required result                                                                        |
-| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| Plugin instance/generation differs from the confirmation snapshot | Stable stale-identity failure; no export, backup, delete, or code removal              |
-| Optional export or encrypted backup is cancelled/fails           | Keep plugin stopped and installed; report cancellation/failure, never success          |
-| SQLite/Secret/data/plugin-row/code/residual stage fails           | Await safe later cleanup, retain retry ownership, return stable aggregate stage/status |
-| Disable or permission revoke                                     | Preserve durable plugin data and Secrets                                               |
-| Category delete lacks exact current preview or valid main-issued ID  | Keep confirmation blocked; reject before policy/owner work; consume valid IDs once              |
-| Password is short, malformed, stale, or mismatched                | Reject locally/main-side as appropriate; clear transient authority                     |
-| Provider disclosure contains unsafe fields                        | Reject/project before renderer; render no unsafe value                                 |
-| Dialog closes during pending operation                             | Keep operation state authoritative; prevent duplicate action and stale focus mutation  |
-| Legacy Privacy-owned `storage:cleanup:*` channel is reintroduced  | Source-contract test fails                                                             |
+| Condition                                                           | Required result                                                                        |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Plugin instance/generation differs from the confirmation snapshot   | Stable stale-identity failure; no next export, backup, delete, or code removal         |
+| Data/code root `dev`/`ino` differs from the admitted snapshot       | Stable stage failure; preserve replacement/recovery and retain retry ownership         |
+| Optional export or encrypted backup is cancelled/fails              | Keep plugin stopped and installed; report cancellation/failure, never success          |
+| SQLite/Secret/data/plugin-row/code/residual stage fails             | Await safe later cleanup, retain retry ownership, return stable aggregate stage/status |
+| Disable or permission revoke                                        | Preserve durable plugin data and Secrets                                               |
+| Category delete lacks exact current preview or valid main-issued ID | Keep confirmation blocked; reject before policy/owner work; consume valid IDs once     |
+| Password is short, malformed, stale, or mismatched                  | Reject locally/main-side as appropriate; clear transient authority                     |
+| Provider disclosure contains unsafe fields                          | Reject/project before renderer; render no unsafe value                                 |
+| Dialog closes during pending operation                              | Keep operation state authoritative; prevent duplicate action and stale focus mutation  |
+| Legacy Privacy-owned `storage:cleanup:*` channel is reintroduced    | Source-contract test fails                                                             |
 
 ### 5. Good/Base/Bad Cases
 
-- Good: the user previews exact Clipboard deletion impact, confirms through the typed SDK, and the fixed owner deletes eligible roots while protected counts remain visible and no path/SQL reaches renderer.
+- Good: the user previews exact Clipboard deletion impact, confirms through the typed SDK, and the fixed owner deletes eligible roots while protected counts remain visible and no path/SQL reaches renderer. Plugin uninstall quarantines and verifies the admitted data/code inode before recursive removal.
 - Base: the user uninstalls the current plugin generation with ordinary export selected; main exports, tears down, deletes, verifies residuals, then reports success.
-- Bad: pass only a plugin name, reuse a retention preview for delete-all, keep a password in a store, call `sendRaw('storage:cleanup:clipboard')`, or remove plugin code before data/Secret/SQLite verification.
+- Bad: pass only a plugin name, check generation only once, recursively remove a path after a separate `realpath` check, reuse a retention preview for delete-all, keep a password in a store, call `sendRaw('storage:cleanup:clipboard')`, or remove plugin code before data/Secret/SQLite verification.
 
 ### 6. Tests Required
 
 - Settings component tests cover defaults/options, summary refresh, protected-item guidance, separate cleanup/delete previews, export cancellation, backup/restore conflicts, password clearing, pending state, focus trap/restoration, keyboard operation, and `aria-live` output.
 - Integration/source tests prove one direct storage-page mount, visibility outside Advanced mode, typed SDK ownership, and absence of overlapping raw logs/Temp/Clipboard/OCR/analytics/usage/Intelligence cleanup channels.
 - i18n tests prove English/Chinese key parity and reject hardcoded visible copy.
-- Plugin UI/transport/coordinator tests cover exact identity/generation, export/backup choices, cancellation, every ordered failure, retry ownership, disable/revoke distinction, code-last deletion, and residual verification.
+- Plugin UI/transport/coordinator tests cover exact identity/generation at every stage, export/backup choices, cancellation, every ordered failure, retry ownership, disable/revoke distinction, code-last deletion, and residual verification. Production filesystem tests replace admitted data/code roots and prove both replacement and original recovery survive without deletion.
 - Controlled Electron smoke uses an isolated generated profile and fake providers/dialogs; it proves every typed Privacy handler and removes all artifacts without touching a real provider or user profile.
 
 ### 7. Wrong vs Correct
@@ -496,11 +503,7 @@ await pluginSDK.uninstall({ name: plugin.name })
 ```ts
 const impact = await privacySdk.category.previewDelete(['clipboard-history'])
 if (impact.ok && isCurrentCompleteImpact(impact.data)) {
-  await privacySdk.category.delete(
-    ['clipboard-history'],
-    'delete-selected-data',
-    impact.data.previewId,
-  )
+  await privacySdk.category.delete(['clipboard-history'], 'delete-selected-data', impact.data.previewId)
 }
 
 await pluginSDK.uninstall({
@@ -509,4 +512,5 @@ await pluginSDK.uninstall({
   confirmed: true,
   disposition: { ordinaryExport: true },
 })
+// Main rechecks generation before each stage and quarantines only the admitted root inode.
 ```

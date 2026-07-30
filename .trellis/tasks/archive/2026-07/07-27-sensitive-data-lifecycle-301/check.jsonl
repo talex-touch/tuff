@@ -2,3 +2,4 @@
 {"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check accessible settings controls, i18n, fail-closed behavior and evidence strength."}
 {"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Check plugin disable/revoke/uninstall data barriers, Secret handling and authoritative owner cleanup."}
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check each category round-trip, error boundary and source-of-truth owner across layers."}
+{"file":".trellis/spec/frontend/privacy-data-lifecycle.md","reason":"Check executable retention, export, credential, telemetry, Temp identity and generation-bound uninstall contracts."}

@@ -67,10 +67,15 @@ const tempLog = createLogger('TempFile')
 const pollingService = PollingService.getInstance()
 
 function ensureExt(ext?: string): string {
-  if (!ext) return ''
-  const trimmed = ext.trim()
-  if (!trimmed) return ''
-  return trimmed.startsWith('.') ? trimmed : `.${trimmed}`
+  if (ext === undefined) return ''
+  if (typeof ext !== 'string') throw new Error('TEMP_FILE_EXTENSION_INVALID')
+  const raw = ext.trim()
+  if (!raw) return ''
+  const trimmed = raw.replace(/^\./, '')
+  if (!/^[A-Za-z0-9]{1,16}$/.test(trimmed)) {
+    throw new Error('TEMP_FILE_EXTENSION_INVALID')
+  }
+  return `.${trimmed}`
 }
 
 function safeBasename(value?: string): string {
@@ -106,6 +111,93 @@ async function safeUnlink(filePath: string): Promise<boolean> {
     return true
   } catch {
     return false
+  }
+}
+
+interface TempDirectoryIdentity {
+  readonly path: string
+  readonly dev: number
+  readonly ino: number
+}
+
+interface TempFileCandidate {
+  readonly path: string
+  readonly size: number
+  readonly dev: number
+  readonly ino: number
+  readonly mtimeMs: number
+  readonly ctimeMs: number
+}
+
+function sameDirectoryIdentity(
+  expected: TempDirectoryIdentity,
+  actual: Awaited<ReturnType<typeof fs.lstat>>
+): boolean {
+  return (
+    actual.isDirectory() &&
+    !actual.isSymbolicLink() &&
+    expected.dev === Number(actual.dev) &&
+    expected.ino === Number(actual.ino)
+  )
+}
+
+function sameFileIdentity(
+  expected: TempFileCandidate,
+  actual: Awaited<ReturnType<typeof fs.lstat>>
+): boolean {
+  return (
+    actual.isFile() &&
+    !actual.isSymbolicLink() &&
+    expected.dev === Number(actual.dev) &&
+    expected.ino === Number(actual.ino) &&
+    expected.size === Number(actual.size) &&
+    expected.mtimeMs === Number(actual.mtimeMs) &&
+    expected.ctimeMs === Number(actual.ctimeMs)
+  )
+}
+
+function sameMovedFileIdentity(
+  expected: TempFileCandidate,
+  actual: Awaited<ReturnType<typeof fs.lstat>>
+): boolean {
+  return (
+    actual.isFile() &&
+    !actual.isSymbolicLink() &&
+    expected.dev === Number(actual.dev) &&
+    expected.ino === Number(actual.ino) &&
+    expected.size === Number(actual.size) &&
+    expected.mtimeMs === Number(actual.mtimeMs)
+  )
+}
+
+async function unlinkIdentifiedFile(
+  candidate: TempFileCandidate
+): Promise<'deleted' | 'missing' | 'changed' | 'failed'> {
+  const recoveryPath = path.join(
+    path.dirname(candidate.path),
+    `.${path.basename(candidate.path)}.${crypto.randomUUID()}.recovery`
+  )
+  try {
+    await fs.rename(candidate.path, recoveryPath)
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'failed'
+  }
+
+  try {
+    const moved = await fs.lstat(recoveryPath)
+    if (!sameMovedFileIdentity(candidate, moved)) {
+      try {
+        await fs.link(recoveryPath, candidate.path)
+        await fs.unlink(recoveryPath)
+      } catch {
+        // Keep the raced replacement recoverable without overwriting a newer path.
+      }
+      return 'changed'
+    }
+    await fs.unlink(recoveryPath)
+    return 'deleted'
+  } catch {
+    return 'failed'
   }
 }
 
@@ -292,13 +384,13 @@ export class TempFileService {
 
   async createFile(request: TempFileCreateRequest): Promise<TempFileCreateResult> {
     const namespace = this.requireNamespace(request.namespace)
+    const ext = ensureExt(request.ext)
     const namespaceDir = await this.resolveNamespaceDirectory(namespace, true)
     if (!namespaceDir) throw new Error('TEMP_NAMESPACE_PATH_INVALID')
 
     const createdAt = Date.now()
     const prefix = safeBasename(request.prefix)
     const rand = crypto.randomBytes(6).toString('hex')
-    const ext = ensureExt(request.ext)
     const fileName = `${createdAt}-${prefix}-${rand}${ext || '.tmp'}`
     const filePath = path.join(namespaceDir, fileName)
 
@@ -405,22 +497,32 @@ export class TempFileService {
         break
       }
       try {
+        const namespaceRoot = await this.resolveNamespaceDirectory(normalized, false)
+        if (!namespaceRoot || !candidates.rootIdentity) {
+          failedItemCount += 1
+          break
+        }
+        const rootStat = await fs.lstat(namespaceRoot)
+        if (
+          namespaceRoot !== candidates.rootIdentity.path ||
+          !sameDirectoryIdentity(candidates.rootIdentity, rootStat)
+        ) {
+          failedItemCount += 1
+          break
+        }
+
         const current = await fs.lstat(file.path)
-        if (!current.isFile() || current.isSymbolicLink()) {
+        if (!sameFileIdentity(file, current)) {
           failedItemCount += 1
           continue
         }
-        if (!Number.isFinite(current.mtimeMs) || current.mtimeMs >= options.cutoffMs) continue
-        if (await this.deleteFileFromNamespaces(file.path, [normalized])) {
+        const deletion = await unlinkIdentifiedFile(file)
+        if (deletion === 'deleted') {
           deletedItemCount += 1
-          deletedByteCount += Math.max(0, current.size)
-        } else {
-          try {
-            await fs.lstat(file.path)
-            failedItemCount += 1
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') failedItemCount += 1
-          }
+          deletedByteCount += file.size
+          await this.cleanupEmptyParents(path.dirname(file.path))
+        } else if (deletion !== 'missing') {
+          failedItemCount += 1
         }
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') failedItemCount += 1
@@ -476,17 +578,24 @@ export class TempFileService {
     maxRows: number,
     signal?: AbortSignal
   ): Promise<{
-    files: Array<{ path: string; size: number }>
+    files: TempFileCandidate[]
+    rootIdentity: TempDirectoryIdentity | null
     failedItemCount: number
     bounded: boolean
     cancelled: boolean
   }> {
-    const files: Array<{ path: string; size: number }> = []
+    const files: TempFileCandidate[] = []
     let failedItemCount = 0
     let bounded = false
     let cancelled = false
     const root = await this.resolveNamespaceDirectory(namespace, false)
-    if (!root) return { files, failedItemCount, bounded, cancelled }
+    if (!root) return { files, rootIdentity: null, failedItemCount, bounded, cancelled }
+    const rootStat = await fs.lstat(root)
+    const rootIdentity: TempDirectoryIdentity = {
+      path: root,
+      dev: Number(rootStat.dev),
+      ino: Number(rootStat.ino)
+    }
 
     const visit = async (directory: string): Promise<void> => {
       if (signal?.aborted) {
@@ -524,6 +633,10 @@ export class TempFileService {
           continue
         }
         if (!entry.isFile()) continue
+        if (entry.name.startsWith('.') && entry.name.endsWith('.recovery')) {
+          failedItemCount += 1
+          continue
+        }
         try {
           const directStat = await fs.lstat(fullPath)
           if (!directStat.isFile() || directStat.isSymbolicLink()) continue
@@ -543,7 +656,11 @@ export class TempFileService {
             }
             files.push({
               path: canonicalFile,
-              size: Number.isFinite(stat.size) ? Math.max(0, stat.size) : 0
+              size: Number.isFinite(stat.size) ? Math.max(0, stat.size) : 0,
+              dev: Number(stat.dev),
+              ino: Number(stat.ino),
+              mtimeMs: Number(stat.mtimeMs),
+              ctimeMs: Number(stat.ctimeMs)
             })
           }
         } catch {
@@ -553,7 +670,7 @@ export class TempFileService {
     }
 
     await visit(root)
-    return { files, failedItemCount, bounded, cancelled }
+    return { files, rootIdentity, failedItemCount, bounded, cancelled }
   }
 
   formatMeta(meta: Record<string, unknown>): Record<string, Primitive> {

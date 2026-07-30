@@ -424,6 +424,10 @@ export class ProviderCredentialService {
     try {
       await this.commitSurfaceChanges(states, vaultRollback)
     } catch (error) {
+      if (error instanceof Error && error.message === 'PROVIDER_CREDENTIAL_ROLLBACK_FAILED') {
+        this.credentials.clear()
+        throw error
+      }
       this.publishCredentials(selected)
       throw error
     }
@@ -455,6 +459,7 @@ export class ProviderCredentialService {
       const vaultRollbackSucceeded =
         vaultRollback.length === 0 || (await this.applyVault(vaultRollback))
       if (!configRollback || !vaultRollbackSucceeded) {
+        this.credentials.clear()
         this.report('PROVIDER_CREDENTIAL_ROLLBACK_FAILED', failureSurface, providerId)
         throw new Error('PROVIDER_CREDENTIAL_ROLLBACK_FAILED')
       }
