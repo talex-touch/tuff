@@ -33,8 +33,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Complete evidence review for each open-issue child and close only the issues whose scoped acceptance and regression evidence are complete.",
-    "blocker": "Several child tasks remain in planning, implementation, or review; issue closure is gated on each child disposition.",
-    "evidence": "prd.md, child-task map, and each child task's focused evidence are the issue-closure source of truth."
+    "nextAction": "Publish final baseline disposition evidence to #302, close the tracker, then archive this parent task and record the session journal.",
+    "blocker": "",
+    "evidence": "All 12 baseline issues have evidence-backed dispositions; #43/#46/#54/#295/#296-#301 are closed, #213 has a concrete diagnostic request and remains externally blocked, and the final #301/parent integration gates passed."
   }
 }

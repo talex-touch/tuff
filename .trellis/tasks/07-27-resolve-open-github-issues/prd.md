@@ -23,18 +23,18 @@
 
 | Issue | 当前结论 | Trellis 交付项 | 关键证据/阻塞 |
 | --- | --- | --- | --- |
-| #295 | 已有多轮修复，验证后关闭 | `07-27-verify-close-issue-295` | `DbWriteScheduler`、AppProvider 分块提交、search split 与 app icon 自愈已有提交；focused Vitest 75/75 通过，仍需复核打包运行证据 |
-| #213 | 信息不足，先请求最新版复现 | `07-27-diagnose-ubuntu-startup-213` | Issue 只有 Ubuntu 24.04/Xorg/GNOME 46 与旧截图；当前 CI 和 builder 已产出 AppImage/deb，缺版本、启动命令、stderr 与主进程日志 |
+| #295 | 已验证并证据关闭 | `07-27-verify-close-issue-295` | DbWriteScheduler/AppProvider 分块提交、search split 与 app icon 自愈证据已复核，focused regression 和运行证据满足 closure |
+| #213 | 已请求报告者补充最新版复现资料，保持开放 | `07-27-diagnose-ubuntu-startup-213` | 已提供 v2.4.13 release/Linux CI，并请求包类型、`uname`、desktop/session、stderr、main log 与 sandbox 对照；等待外部回复 |
 | #43 | 已实现，建议证据关闭 | `07-27-close-superseded-legacy-issues` | `apps/core-app/src/preload/index.ts` 已有启动品牌动画、progress、资源加载事件与淡出状态机 |
 | #46 | 核心已实现、云端能力已被现代路线替代 | `07-27-close-superseded-legacy-issues` | CoreApp/Nexus/plugin SDK 已有统一 i18n/localized metadata；签名 Catalog 由 2.6.0 专项承接 |
 | #54 | 已有现代等价实现，建议证据关闭 | `07-27-close-superseded-legacy-issues` | Nexus 已聚合双语开发者文档、导航、搜索和 docs APIs |
-| #296 | confirmed，需修复 | `07-27-fix-permission-revocation-296` | `permission-store.ts` 的 revoke/revokeAll 未清 `sessionGrants` |
-| #297 | confirmed，需完成 | `07-27-isolate-plugin-prelude-297` | `TUFF_PLUGIN_ISOLATION` 默认关闭，Prelude 仍在 Electron main 的 `vm` 中执行 |
-| #298 | confirmed，需完成 | `07-27-secure-plugin-views-298` | compat profile 仍启用 Node、关闭 sandbox/context isolation；安全模式默认关闭 |
-| #299 | confirmed，需修复 | `07-27-harden-plugin-storage-299` | SQLite/Secret permission runtime 缺失时 fail-open；raw SQL 可越界且无资源上限 |
-| #300 | confirmed contract defect，需修复 | `07-27-fix-transport-caller-identity-300` | `verified` 仍由调用方 `uniqueKey` 非空派生，未表达 sender-bound proof |
-| #301 | 产品与工程加固，需实现 | `07-27-sensitive-data-lifecycle-301` | 已有 telemetry/错误脱敏和 secret 加密，但缺统一保留、删除、导出、卸载及远程处理控制 |
-| #302 | tracker，最后收口 | 父任务集成验收 | 依赖 #296-#301 的验收结论 |
+| #296 | 已完成并证据关闭 | `07-27-fix-permission-revocation-296` | 原子撤销 persistent/session grants；#299 awaited resource teardown 消费同一事件；提交 `8c52bf5b4` |
+| #297 | 已完成并证据关闭 | `07-27-isolate-plugin-prelude-297` | 22/22 官方 Prelude 默认运行于 activation-scoped utilityProcess；typed capability、heartbeat/restart budget、legacy removal、1104 tests、production build 与 Electron smoke 通过；提交 `997b246f5` |
+| #298 | 已完成并证据关闭 | `07-27-secure-plugin-views-298` | hardened Electron preferences、bridge v1、sender-bound resource/navigation policy 与 real preload smoke；提交 `3365c2340`、`ef4fba34b` |
+| #299 | 已完成并证据关闭 | `07-27-harden-plugin-storage-299` | fail-closed identity/permission、canonical root、dual SQL policy、resource limits、worker termination 与 lifecycle cleanup；提交 `b95f9bd9c` |
+| #300 | 已完成并证据关闭 | `07-27-fix-transport-caller-identity-300` | runtime-branded sender/port/instance/generation identity 覆盖 IPC/local/MessagePort/plugin-host；提交 `4b88e9550` |
+| #301 | 已完成并证据关闭 | `07-27-sensitive-data-lifecycle-301` | owner-bound retention、typed Privacy SDK、atomic export/Secret backup、generation-bound uninstall、Settings controls、inventory 与 smoke；提交 `5bf6e08b4` |
+| #302 | tracker，集成验收通过，待关闭 | 父任务集成验收 | 原始 12-issue baseline 已重新查询；#296-#301 一致，#213 外部阻塞已记录 |
 
 ## Requirements
 
@@ -64,12 +64,12 @@
 
 ## Acceptance Criteria
 
-- [ ] 12 个开放 Issue 均有仓库证据支持的处置结论和对应 Trellis 交付项。
-- [ ] 所有“需修复”项的相关测试、类型检查和构建验证通过，原始失败模式有回归覆盖。
-- [ ] 所有“已实现/可关闭”或“过时/替代”项均在 GitHub 留有可复核说明后关闭。
-- [ ] 所有“需报告者补充信息”项均已请求具体诊断资料并记录当前阻塞条件。
-- [ ] #296-#301 的安全边界、撤销、隔离、调用身份和隐私生命周期验收与 #302 总跟踪一致。
-- [ ] 最终重新查询 GitHub，确认没有遗漏本次规划基线中的开放 Issue；执行期间新增 Issue 被记录但不自动扩张本任务范围。
+- [x] 12 个开放 Issue 均有仓库证据支持的处置结论和对应 Trellis 交付项。
+- [x] 所有“需修复”项的相关测试、类型检查和构建验证通过，原始失败模式有回归覆盖。
+- [x] 所有“已实现/可关闭”或“过时/替代”项均在 GitHub 留有可复核说明后关闭。
+- [x] 所有“需报告者补充信息”项均已请求具体诊断资料并记录当前阻塞条件。
+- [x] #296-#301 的安全边界、撤销、隔离、调用身份和隐私生命周期验收与 #302 总跟踪一致。
+- [x] 最终重新查询 GitHub，确认没有遗漏本次规划基线中的开放 Issue；执行期间新增 Issue 被记录但不自动扩张本任务范围。
 
 ## Product Decisions
 
