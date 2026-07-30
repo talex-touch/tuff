@@ -1147,3 +1147,37 @@ Completed and pushed the #297 production hard cut: all 22 official manifested Pr
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: Close sensitive data lifecycle and issue baseline
+
+**Date**: 2026-07-30
+**Task**: Close sensitive data lifecycle and issue baseline
+**Branch**: `master`
+
+### Summary
+
+Implemented and independently reviewed #301 sensitive-data lifecycle, closed and archived #301, reconciled stale security child tasks, closed #302 with evidence, and preserved #213 as an externally blocked diagnostic issue.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5bf6e08b4` | (see git log) |
+| `70c65575f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
