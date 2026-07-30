@@ -127,6 +127,16 @@ export class ClipboardHistoryPersistence {
     this.options.onChange?.()
   }
 
+  public evictCommittedRetentionIds(ids: readonly number[]): void {
+    if (ids.length === 0) return
+    const deleted = new Set(ids)
+    this.memoryCache = this.memoryCache.filter(
+      (item) => typeof item.id !== 'number' || !deleted.has(item.id)
+    )
+    for (const id of deleted) this.forgetFreshness(id)
+    this.notifyChange()
+  }
+
   private deleteImageFile(filePath: string): void {
     this.options.deleteImageFile?.(filePath)
   }

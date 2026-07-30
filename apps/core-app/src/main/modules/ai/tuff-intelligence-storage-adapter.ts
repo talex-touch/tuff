@@ -20,6 +20,7 @@ import {
   type IntelligenceAuditLogEntry
 } from './intelligence-audit-logger'
 import { intelligenceQuotaManager } from './intelligence-quota-manager'
+import { redactProviderConfigDocument } from './provider-credential-service'
 
 const CONFIG_KEYS = {
   providers: 'intelligence/providers',
@@ -161,17 +162,22 @@ export class DbTuffIntelligenceStorageAdapter implements TuffIntelligenceStorage
   }
 
   async saveProviderConfig(cfg: IntelligenceProviderConfig): Promise<void> {
+    if (Object.hasOwn(cfg, 'apiKey')) {
+      throw new Error('PROVIDER_CREDENTIAL_ORDINARY_STORAGE_FORBIDDEN')
+    }
     const list = await this.listProviders()
     const idx = list.findIndex((p) => p.id === cfg.id)
     if (idx >= 0) list[idx] = cfg
     else list.push(cfg)
 
-    await upsertConfig(CONFIG_KEYS.providers, list)
+    const safeDocument = redactProviderConfigDocument({ providers: list })
+    await upsertConfig(CONFIG_KEYS.providers, safeDocument.providers)
   }
 
   async listProviders(): Promise<IntelligenceProviderConfig[]> {
     const raw = await readConfigValue(CONFIG_KEYS.providers)
-    return parseJson<IntelligenceProviderConfig[]>(raw, [])
+    const providers = parseJson<IntelligenceProviderConfig[]>(raw, [])
+    return redactProviderConfigDocument({ providers }).providers as IntelligenceProviderConfig[]
   }
 
   async saveCapabilityConfig(cfg: IntelligenceCapabilityConfig): Promise<void> {

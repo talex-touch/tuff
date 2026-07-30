@@ -16,6 +16,7 @@
 - [`monorepo-standards.md`](./monorepo-standards.md)：monorepo 工程约束。
 - [`coreapp-ui-contract.md`](./coreapp-ui-contract.md)：CoreApp renderer 与 TuffEx 使用边界。
 - [`cloud-sync-sdk-usage.md`](./cloud-sync-sdk-usage.md)：Cloud Sync SDK 使用说明。
+- [`sensitive-data-inventory.md`](./sensitive-data-inventory.md)：敏感数据 owner、存储、导出、删除、保留与迁移清单；机器可读源为 [`sensitive-data-inventory.json`](./sensitive-data-inventory.json)。
 - [`tuff-intelligence-rollout-todo.md`](./tuff-intelligence-rollout-todo.md)：Intelligence rollout 专题。
 
 ## Evidence 与报告

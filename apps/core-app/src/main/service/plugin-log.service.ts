@@ -73,6 +73,7 @@ const toErrorMessage = (error: unknown) => (error instanceof Error ? error.messa
 export class PluginLogModule extends BaseModule {
   private subscriptions: Map<string, Set<WebContents>> = new Map()
   private transport: ReturnType<typeof getTuffTransportMain> | null = null
+  private uninstallInvalidatorDisposer: (() => void) | null = null
 
   static key: symbol = Symbol.for('PluginLog')
   name: ModuleKey = PluginLogModule.key
@@ -421,9 +422,17 @@ export class PluginLogModule extends BaseModule {
       (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
     this.setupIpcHandlers(getTuffTransportMain(channel, keyManager))
     this.listenToLogEvents()
+    this.uninstallInvalidatorDisposer = pluginModule.registerUninstallAuthorityInvalidator(
+      (pluginName) => {
+        this.subscriptions.delete(pluginName)
+      }
+    )
   }
 
   async onDestroy(): Promise<void> {
+    this.uninstallInvalidatorDisposer?.()
+    this.uninstallInvalidatorDisposer = null
+    this.subscriptions.clear()
     pluginLogServiceLog.info('Stopped accepting plugin log stream subscriptions')
   }
 }

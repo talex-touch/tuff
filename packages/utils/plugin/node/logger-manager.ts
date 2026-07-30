@@ -104,9 +104,9 @@ export class PluginLoggerManager {
   /**
    * Stops the flush interval and ensures remaining logs are written.
    */
-  destroy(): void {
+  async destroy(): Promise<void> {
     this.pollingService.unregister(this.flushTaskId)
-    void this.flush().catch(() => {})
+    await this.flush()
   }
 
   /**

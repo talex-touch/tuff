@@ -6,6 +6,7 @@ const sdkMocks = vi.hoisted(() => ({
     get: vi.fn(),
     health: vi.fn(),
     set: vi.fn(),
+    setMany: vi.fn(),
   },
   storage: {
     getFile: vi.fn(),
@@ -31,47 +32,45 @@ describe('touch-translation provider secret storage', () => {
     sdkMocks.secret.get.mockReset()
     sdkMocks.secret.health.mockReset()
     sdkMocks.secret.set.mockReset()
+    sdkMocks.secret.setMany.mockReset()
     sdkMocks.storage.getFile.mockReset()
     sdkMocks.storage.setFile.mockReset()
   })
 
-  it('sanitizes legacy provider secrets even when secure-store migration fails', async () => {
+  it('loads main-migrated provider credentials only through the Secret SDK', async () => {
     vi.resetModules()
-    sdkMocks.secret.get.mockResolvedValue('')
-    sdkMocks.secret.set.mockResolvedValue({ success: false })
+    sdkMocks.secret.get.mockImplementation(async (key: string) => {
+      if (key === 'providers.tencent.secretId')
+        return 'synthetic-secure-id'
+      if (key === 'providers.tencent.secretKey')
+        return 'synthetic-secure-key'
+      return ''
+    })
     sdkMocks.storage.getFile.mockResolvedValue({
       tencent: {
         enabled: true,
         config: {
           apiUrl: 'https://tmt.tencentcloudapi.com',
           region: 'ap-shanghai',
-          secretId: 'legacy-id',
-          secretKey: 'legacy-key',
         },
       },
     })
-    sdkMocks.storage.setFile.mockResolvedValue(undefined)
 
     const { useTranslationProvider } = await import('./src/composables/useTranslationProvider')
-    useTranslationProvider()
+    const translationProvider = useTranslationProvider()
     await flushAsyncInit()
 
-    expect(sdkMocks.secret.set).toHaveBeenCalledWith('providers.tencent.secretId', 'legacy-id')
-    expect(sdkMocks.secret.set).toHaveBeenCalledWith('providers.tencent.secretKey', 'legacy-key')
-    expect(sdkMocks.storage.setFile).toHaveBeenCalledWith('providers_config', expect.objectContaining({
-      tencent: {
-        enabled: true,
-        config: {
-          apiUrl: 'https://tmt.tencentcloudapi.com',
-          region: 'ap-shanghai',
-        },
-      },
-    }))
+    expect(sdkMocks.secret.setMany).not.toHaveBeenCalled()
+    expect(sdkMocks.storage.setFile).not.toHaveBeenCalled()
+    expect(translationProvider.getProvider('tencent')?.config).toMatchObject({
+      secretId: 'synthetic-secure-id',
+      secretKey: 'synthetic-secure-key',
+    })
   })
 
   it('keeps failed secret updates out of runtime config and normal storage', async () => {
     sdkMocks.secret.get.mockResolvedValue('')
-    sdkMocks.secret.set.mockResolvedValue({ success: false, error: 'secure-store-unavailable' })
+    sdkMocks.secret.setMany.mockResolvedValue({ success: false, error: 'secure-store-unavailable' })
     sdkMocks.storage.getFile.mockResolvedValue(undefined)
     sdkMocks.storage.setFile.mockResolvedValue(undefined)
 
@@ -82,13 +81,15 @@ describe('touch-translation provider secret storage', () => {
     translationProvider.updateProviderConfig('tencent', {
       apiUrl: 'https://tmt.tencentcloudapi.com',
       region: 'ap-shanghai',
-      secretId: 'next-id',
-      secretKey: 'next-key',
+      secretId: '  next-id  ',
+      secretKey: '  next-key  ',
     })
     await flushAsyncInit()
 
-    expect(sdkMocks.secret.set).toHaveBeenCalledWith('providers.tencent.secretId', 'next-id')
-    expect(sdkMocks.secret.set).toHaveBeenCalledWith('providers.tencent.secretKey', 'next-key')
+    expect(sdkMocks.secret.setMany).toHaveBeenCalledWith([
+      { key: 'providers.tencent.secretId', value: '  next-id  ' },
+      { key: 'providers.tencent.secretKey', value: '  next-key  ' },
+    ])
     expect(sdkMocks.storage.setFile).not.toHaveBeenCalled()
 
     const provider = translationProvider.getProvider('tencent')
@@ -96,7 +97,7 @@ describe('touch-translation provider secret storage', () => {
       apiUrl: 'https://tmt.tencentcloudapi.com',
       region: 'ap-shanghai',
     })
-    expect(provider?.config?.secretId).not.toBe('next-id')
-    expect(provider?.config?.secretKey).not.toBe('next-key')
+    expect(provider?.config?.secretId).not.toBe('  next-id  ')
+    expect(provider?.config?.secretKey).not.toBe('  next-key  ')
   })
 })

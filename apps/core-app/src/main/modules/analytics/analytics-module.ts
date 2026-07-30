@@ -43,10 +43,15 @@ import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { pluginModule } from '../plugin/plugin-module'
 import { getMainConfig } from '../storage'
 import { SystemSampler } from './collectors/system-sampler'
+import {
+  sanitizeAnalyticsReportMessage,
+  sanitizePluginAnalyticsIdentifier,
+  sanitizePluginAnalyticsMetadata,
+  sanitizePluginAnalyticsNumber
+} from './analytics-report-sanitizer'
 import { AnalyticsCore } from './core/analytics-core'
 import { getAnalyticsMessageStore } from './message-store'
 import { DbStore } from './storage/db-store'
-import { DEFAULT_RETENTION_MS } from './storage/memory-store'
 
 const analyticsLog = createLogger('Analytics')
 const MESSAGE_REPORT_BASE_DELAY_MS = 2 * 60_000
@@ -70,7 +75,6 @@ const getKeyManager = (value: unknown): unknown => {
   if (!('keyManager' in value)) return undefined
   return (value as { keyManager?: unknown }).keyManager
 }
-const ANALYTICS_CLEANUP_TASK_ID = 'analytics.cleanup'
 
 const pollingService = PollingService.getInstance()
 
@@ -137,6 +141,11 @@ export class AnalyticsModule extends BaseModule {
       coreDb: databaseModule.getDb()
     })
     this.core = new AnalyticsCore({ dbStore: this.dbStore })
+    this.disposers.push(
+      pluginModule.registerUninstallAuthorityInvalidator((pluginName) => {
+        this.core.clearPluginRuntimeState(pluginName)
+      })
+    )
     this.sampler = new SystemSampler((sample) => this.core.recordSystemSample(sample))
     this.messageStore = getAnalyticsMessageStore()
     if (this.messageStore) {
@@ -156,18 +165,13 @@ export class AnalyticsModule extends BaseModule {
     this.registerHandlers()
     this.startReportHealthLogging()
 
-    // 将非关键操作延迟到启动窗口之后，避免在启动高峰期触发 DB 写入和采样
-    // hydrateStartupMetrics → recordAndPersist → DB INSERT
-    // sampler.start → collect → recordSystemSample → DB INSERT
-    // startCleanup → DB DELETE
-    // 这三个操作在启动期同时触发会导致 dbWriteScheduler 队列积压 + SQLite WAL checkpoint
+    // hydrateStartupMetrics and the sampler both write snapshots, so defer them past startup.
     setTimeout(() => {
       const startup = getStartupAnalytics().getCurrentMetrics()
       this.core.hydrateStartupMetrics(startup)
 
       // SystemSampler 首次采样延迟 15 秒，给启动任务留出空间
       this.sampler.start({ initialDelayMs: 15_000 })
-      this.startCleanup()
       analyticsLog.info('Analytics deferred startup tasks executed')
     }, 3_000)
 
@@ -177,7 +181,6 @@ export class AnalyticsModule extends BaseModule {
   onDestroy(): MaybePromise<void> {
     this.sampler.stop()
     setIpcTracer(null)
-    pollingService.unregister(ANALYTICS_CLEANUP_TASK_ID)
     pollingService.unregister(ANALYTICS_REPORT_HEALTH_TASK_ID)
     if (this.messageReportTimer) {
       clearTimeout(this.messageReportTimer)
@@ -260,18 +263,23 @@ export class AnalyticsModule extends BaseModule {
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName) return { ok: true }
-          const lowerName = payload.eventName.toLowerCase()
+          const featureId = payload.featureId
+            ? sanitizePluginAnalyticsIdentifier(payload.featureId)
+            : undefined
+          const eventType = sanitizePluginAnalyticsIdentifier(payload.eventName)
+          const metadata = sanitizePluginAnalyticsMetadata(payload.metadata)
+          const lowerName = eventType.toLowerCase()
           const forceKeep = /error|fail|timeout|crash|exception/.test(lowerName)
           if (!this.shouldSampleSdkEvent(forceKeep)) {
             return { ok: true }
           }
-          this.core.trackPluginEvent(pluginName, payload.featureId, payload.metadata)
+          this.core.trackPluginEvent(pluginName, featureId, metadata)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
-            featureId: payload.featureId,
-            eventType: payload.eventName,
-            metadata: payload.metadata,
+            featureId,
+            eventType,
+            metadata,
             timestamp: Date.now()
           })
           return { ok: true }
@@ -285,17 +293,22 @@ export class AnalyticsModule extends BaseModule {
         async (payload, context) => {
           const { pluginName, pluginVersion } = this.resolvePluginInfo(payload, context)
           if (!pluginName) return { ok: true }
-          const forceKeep = payload.durationMs >= 1_500
+          const featureId = payload.featureId
+            ? sanitizePluginAnalyticsIdentifier(payload.featureId)
+            : undefined
+          const durationMs = Math.max(0, sanitizePluginAnalyticsNumber(payload.durationMs))
+          const operationName = sanitizePluginAnalyticsIdentifier(payload.operationName)
+          const forceKeep = durationMs >= 1_500
           if (!this.shouldSampleSdkEvent(forceKeep)) {
             return { ok: true }
           }
-          this.core.trackPluginDuration(pluginName, payload.featureId, payload.durationMs)
+          this.core.trackPluginDuration(pluginName, featureId, durationMs)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
-            featureId: payload.featureId,
-            eventType: payload.operationName,
-            metadata: { durationMs: payload.durationMs },
+            featureId,
+            eventType: operationName,
+            metadata: { durationMs },
             timestamp: Date.now()
           })
           return { ok: true }
@@ -330,7 +343,10 @@ export class AnalyticsModule extends BaseModule {
         (payload) => {
           const pluginName = this.resolvePluginName(payload)
           if (!pluginName) return { count: 0, avgDuration: 0 }
-          return this.core.getPluginFeatureStats(pluginName, payload.featureId)
+          return this.core.getPluginFeatureStats(
+            pluginName,
+            sanitizePluginAnalyticsIdentifier(payload.featureId)
+          )
         }
       )
     )
@@ -355,12 +371,15 @@ export class AnalyticsModule extends BaseModule {
           if (!this.shouldSampleSdkEvent(false)) {
             return { ok: true }
           }
-          this.core.incrementPluginCounter(pluginName, payload.name, payload.value)
+          const name = sanitizePluginAnalyticsIdentifier(payload.name)
+          const value =
+            payload.value === undefined ? 1 : sanitizePluginAnalyticsNumber(payload.value)
+          this.core.incrementPluginCounter(pluginName, name, value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
             eventType: 'counter',
-            metadata: { name: payload.name, value: payload.value },
+            metadata: { name, value },
             timestamp: Date.now()
           })
           return { ok: true }
@@ -377,12 +396,14 @@ export class AnalyticsModule extends BaseModule {
           if (!this.shouldSampleSdkEvent(false)) {
             return { ok: true }
           }
-          this.core.setPluginGauge(pluginName, payload.name, payload.value)
+          const name = sanitizePluginAnalyticsIdentifier(payload.name)
+          const value = sanitizePluginAnalyticsNumber(payload.value)
+          this.core.setPluginGauge(pluginName, name, value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
             eventType: 'gauge',
-            metadata: { name: payload.name, value: payload.value },
+            metadata: { name, value },
             timestamp: Date.now()
           })
           return { ok: true }
@@ -399,12 +420,14 @@ export class AnalyticsModule extends BaseModule {
           if (!this.shouldSampleSdkEvent(false)) {
             return { ok: true }
           }
-          this.core.recordPluginHistogram(pluginName, payload.name, payload.value)
+          const name = sanitizePluginAnalyticsIdentifier(payload.name)
+          const value = sanitizePluginAnalyticsNumber(payload.value)
+          this.core.recordPluginHistogram(pluginName, name, value)
           await this.dbStore?.insertPluginEvent({
             pluginName,
             pluginVersion,
             eventType: 'histogram',
-            metadata: { name: payload.name, value: payload.value },
+            metadata: { name, value },
             timestamp: Date.now()
           })
           return { ok: true }
@@ -424,10 +447,19 @@ export class AnalyticsModule extends BaseModule {
     payload: { pluginName?: string; pluginVersion?: string },
     context?: { plugin?: { name?: string } }
   ): { pluginName?: string; pluginVersion?: string } {
-    const pluginName = payload.pluginName || context?.plugin?.name
+    const rawPluginName = context?.plugin?.name ?? payload.pluginName
+    if (typeof rawPluginName !== 'string' || !rawPluginName) return {}
+    const pluginName = sanitizePluginAnalyticsIdentifier(rawPluginName)
+    const contextVersion = context?.plugin
+      ? Object.getOwnPropertyDescriptor(context.plugin, 'version')?.value
+      : undefined
+    const rawPluginVersion = context?.plugin
+      ? (contextVersion ?? pluginModule.pluginManager?.getPluginByName(pluginName)?.version)
+      : (payload.pluginVersion ?? pluginModule.pluginManager?.getPluginByName(pluginName)?.version)
     const pluginVersion =
-      payload.pluginVersion ||
-      (pluginName ? pluginModule.pluginManager?.getPluginByName(pluginName)?.version : undefined)
+      typeof rawPluginVersion === 'string'
+        ? sanitizePluginAnalyticsIdentifier(rawPluginVersion)
+        : undefined
     return { pluginName, pluginVersion }
   }
 
@@ -482,7 +514,7 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private reportMessage(message: AnalyticsMessage): void {
-    this.enqueueMessageReport(message)
+    this.enqueueMessageReport(sanitizeAnalyticsReportMessage(message))
   }
 
   private enqueueMessageReport(message: AnalyticsMessage): void {
@@ -609,18 +641,6 @@ export class AnalyticsModule extends BaseModule {
           id: entry.message.id,
           source: entry.message.source,
           severity: entry.message.severity,
-          title: entry.message.title,
-          message: entry.message.message,
-          meta: config.anonymous
-            ? undefined
-            : {
-                ...entry.message.meta,
-                count: entry.count,
-                firstAt: entry.firstSeenAt,
-                lastAt: entry.lastSeenAt,
-                avgIntervalMs: Math.round(entry.avgIntervalMs),
-                lastAttemptAt: entry.lastAttemptAt ?? entry.createdAt
-              },
           status: entry.message.status,
           createdAt: entry.message.createdAt,
           platform: process.platform,
@@ -650,15 +670,15 @@ export class AnalyticsModule extends BaseModule {
       this.messageReportSuppressedFailures = 0
       this.messageReportLastFailureLogAt = 0
       this.messageReportLastError = ''
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+    } catch {
+      const errorCode = 'ANALYTICS_MESSAGE_REPORT_FAILED'
       this.messageReportFailureCount += 1
       for (const entry of batch) {
         entry.attempts += 1
         entry.lastAttemptAt = now
         entry.message.meta = {
           ...entry.message.meta,
-          lastError: errorMessage
+          lastError: errorCode
         }
       }
       this.messageReportConsecutiveFailures += 1
@@ -679,7 +699,7 @@ export class AnalyticsModule extends BaseModule {
           ? Math.max(this.messageReportBackoffMs, this.messageReportCircuitOpenUntil - now)
           : this.messageReportBackoffMs
 
-      this.logMessageReportFailure(errorMessage, {
+      this.logMessageReportFailure(errorCode, {
         batchSize: batch.length,
         attempt: batch[0]?.attempts ?? 0,
         nextRetryMs,
@@ -728,7 +748,7 @@ export class AnalyticsModule extends BaseModule {
   }
 
   private logMessageReportFailure(
-    error: string,
+    _error: string,
     meta: {
       batchSize: number
       attempt: number
@@ -742,19 +762,19 @@ export class AnalyticsModule extends BaseModule {
 
     if (!shouldLogNow) {
       this.messageReportSuppressedFailures += 1
-      this.messageReportLastError = error
+      this.messageReportLastError = 'ANALYTICS_MESSAGE_REPORT_FAILED'
       return
     }
 
     analyticsLog.warn('Failed to report analytics messages', {
-      error,
       meta: {
         ...meta,
+        code: 'ANALYTICS_MESSAGE_REPORT_FAILED',
         suppressedFailures:
           this.messageReportSuppressedFailures > 0
             ? this.messageReportSuppressedFailures
             : undefined,
-        lastSuppressedError:
+        lastSuppressedCode:
           this.messageReportSuppressedFailures > 0 ? this.messageReportLastError : undefined
       }
     })
@@ -846,28 +866,6 @@ export class AnalyticsModule extends BaseModule {
     this.messageReportSucceededItems = 0
     this.sdkEventSampleAcceptedCount = 0
     this.sdkEventSampledOutCount = 0
-  }
-
-  private startCleanup(): void {
-    if (!this.dbStore) return
-    // 清理操作不需要立即执行，注册定时任务即可
-    // 首次清理延迟 5 分钟，避免在启动期增加 DB 负载
-    pollingService.register(
-      ANALYTICS_CLEANUP_TASK_ID,
-      () =>
-        this.dbStore
-          ?.cleanup(DEFAULT_RETENTION_MS, () => Date.now())
-          .catch((error) => {
-            const message = error instanceof Error ? error.message : String(error)
-            analyticsLog.warn('Analytics DB cleanup failed', { error: message })
-          }),
-      {
-        interval: 60 * 60 * 1000,
-        unit: 'milliseconds',
-        initialDelayMs: 5 * 60 * 1000
-      }
-    )
-    pollingService.start()
   }
 
   recordSearchMetrics(totalDurationMs: number, providerTimings: Record<string, number>): void {

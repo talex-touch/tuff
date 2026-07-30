@@ -65,6 +65,10 @@ export * from './platform'
 
 // Plugin domain types
 export * from './plugin'
+export * from './plugin-uninstall'
+
+// Privacy domain types
+export * from './privacy'
 
 // QuickOps domain types
 export * from './quick-ops'

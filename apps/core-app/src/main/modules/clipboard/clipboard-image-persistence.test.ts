@@ -47,7 +47,7 @@ vi.mock('electron', () => ({
 vi.mock('../../service/temp-file.service', () => ({
   tempFileService: {
     createFile: mocks.createFile,
-    deleteFile: mocks.deleteFile,
+    deleteFileFromNamespaces: mocks.deleteFile,
     isWithinBaseDir: mocks.isWithinBaseDir,
     registerNamespace: mocks.registerNamespace,
     resolveNamespaceDir: mocks.resolveNamespaceDir,
@@ -107,10 +107,17 @@ import {
 } from './clipboard-image-persistence'
 
 function createDb(imagePaths: string[]) {
+  let candidateIndex = 0
   return {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
-        where: vi.fn(async () => imagePaths.map((content) => ({ content })))
+        where: vi.fn(() => ({
+          limit: vi.fn(async () => {
+            const referenced = candidateIndex < imagePaths.length
+            candidateIndex += 1
+            return referenced ? [{ id: candidateIndex }] : []
+          })
+        }))
       }))
     }))
   }
@@ -171,18 +178,74 @@ describe('clipboard-image-persistence', () => {
     expect(mocks.createFromPath).toHaveBeenCalledWith('/tmp/tuff/image.png')
   })
 
+  it('advances deterministic orphan pages past referenced files', async () => {
+    const db = createDb(['/tmp/tuff/clipboard/images/a.png', '/tmp/tuff/clipboard/images/b.png'])
+    const persistence = createPersistence(db)
+    mocks.readdir.mockResolvedValue([
+      { name: 'c.png', isDirectory: () => false, isFile: () => true },
+      { name: 'b.png', isDirectory: () => false, isFile: () => true },
+      { name: 'a.png', isDirectory: () => false, isFile: () => true }
+    ])
+
+    await expect(persistence.cleanupOrphanClipboardImages(undefined, 1)).resolves.toMatchObject({
+      deletedCount: 0,
+      bounded: true
+    })
+    await expect(persistence.cleanupOrphanClipboardImages(undefined, 1)).resolves.toMatchObject({
+      deletedCount: 0,
+      bounded: true
+    })
+    await expect(persistence.cleanupOrphanClipboardImages(undefined, 1)).resolves.toMatchObject({
+      deletedCount: 1,
+      bounded: false
+    })
+
+    expect(mocks.deleteFile).toHaveBeenCalledOnce()
+    expect(mocks.deleteFile).toHaveBeenCalledWith('/tmp/tuff/clipboard/images/c.png', [
+      'clipboard/images'
+    ])
+  })
+
+  it('reports cancellation while deleting owned references', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      createPersistence().deleteOwnedImageReferences(
+        ['/tmp/tuff/clipboard/images/cancelled.png'],
+        controller.signal
+      )
+    ).resolves.toMatchObject({ deletedCount: 0, failedCount: 0, cancelled: true })
+    expect(mocks.stat).not.toHaveBeenCalled()
+    expect(mocks.deleteFile).not.toHaveBeenCalled()
+  })
+
+  it('treats a concurrent ENOENT after stat as idempotent success', async () => {
+    const missing = Object.assign(new Error('gone'), { code: 'ENOENT' })
+    mocks.stat.mockResolvedValueOnce({ mtimeMs: 1, size: 8 }).mockRejectedValueOnce(missing)
+    mocks.deleteFile.mockResolvedValueOnce(false)
+
+    await expect(
+      createPersistence().deleteOwnedImageReferences([
+        '/tmp/tuff/clipboard/images/concurrent-delete.png'
+      ])
+    ).resolves.toMatchObject({ deletedCount: 0, failedCount: 0 })
+  })
+
   it('cleans only old unreferenced clipboard image files', async () => {
-    const db = createDb(['/tmp/tuff/clipboard/images/keep.png'])
+    const db = createDb(['/tmp/tuff/clipboard/images/a-keep.png'])
     const persistence = createPersistence(db)
     mocks.readdir.mockResolvedValueOnce([
-      { name: 'keep.png', isDirectory: () => false, isFile: () => true },
-      { name: 'delete.png', isDirectory: () => false, isFile: () => true }
+      { name: 'a-keep.png', isDirectory: () => false, isFile: () => true },
+      { name: 'z-delete.png', isDirectory: () => false, isFile: () => true }
     ])
 
     await persistence.cleanupOrphanClipboardImages()
 
     expect(mocks.deleteFile).toHaveBeenCalledTimes(1)
-    expect(mocks.deleteFile).toHaveBeenCalledWith('/tmp/tuff/clipboard/images/delete.png')
+    expect(mocks.deleteFile).toHaveBeenCalledWith('/tmp/tuff/clipboard/images/z-delete.png', [
+      'clipboard/images'
+    ])
     expect(mocks.logInfo).toHaveBeenCalledWith('Cleaned orphaned clipboard images', {
       meta: { cleanedCount: 1, cleanedBytes: 8 }
     })

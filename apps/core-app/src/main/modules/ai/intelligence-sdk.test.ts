@@ -633,7 +633,7 @@ describe('tuffIntelligenceSDK outer-governed invokes', () => {
       expect.objectContaining({
         success: false,
         provider: 'failing-primary-chat',
-        error: 'primary provider failed'
+        error: 'INTELLIGENCE_PROVIDER_FAILED'
       })
     )
   })
@@ -1407,6 +1407,48 @@ describe('tuffIntelligenceSDK invoke', () => {
       message: 'NETWORK_COOLDOWN_ACTIVE:3'
     })
     expect(result.message).not.toContain('Network guard cooldown')
+  })
+
+  it('redacts provider-controlled success and unknown failure detail', async () => {
+    const secretCanary = 'sk-sensitive-provider-canary'
+    const nativeCanary = `/Users/private/provider.json?apiKey=${secretCanary}`
+    const providerConfig = {
+      id: 'chat-redaction',
+      type: IntelligenceProviderType.CUSTOM,
+      name: 'Chat Redaction',
+      enabled: true,
+      apiKey: 'test-key',
+      priority: 1,
+      models: ['chat-redaction'],
+      capabilities: ['text.chat']
+    }
+    const provider = createProvider(providerConfig, vi.fn())
+    provider.chat = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: 'ok',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+        model: secretCanary,
+        latency: 10,
+        traceId: 'trace-redaction',
+        provider: IntelligenceProviderType.CUSTOM
+      })
+      .mockRejectedValueOnce(new Error(nativeCanary))
+    setIntelligenceProviderManager(new FakeProviderManager([provider]))
+
+    const sdk = new TuffIntelligenceSDK({
+      enableAudit: false,
+      enableQuota: false,
+      enableCache: false
+    })
+
+    const success = await sdk.testProvider(providerConfig)
+    const failure = await sdk.testProvider(providerConfig)
+
+    expect(success).toMatchObject({ success: true, message: 'Connection successful' })
+    expect(failure).toMatchObject({ success: false, message: 'Connection failed' })
+    expect(JSON.stringify([success, failure])).not.toContain(secretCanary)
+    expect(JSON.stringify([success, failure])).not.toContain('/Users/private')
   })
 
   it('falls back to secondary provider when primary provider fails', async () => {

@@ -7,6 +7,7 @@ import { computed, onMounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import ViewTemplate from '~/components/base/template/ViewTemplate.vue'
 import { formatBytesShort } from '~/components/plugin/runtime/format'
+import PrivacyDataSection from './PrivacyDataSection.vue'
 
 interface StorageUsageNode {
   key: string
@@ -321,44 +322,10 @@ const databaseSizeKnown = computed(() => {
   return tables.every((table) => table.sizeKnown)
 })
 
-const moduleRowActions: Record<string, CleanupAction[]> = {
-  logs: [
-    {
-      key: 'logs-30d',
-      label: '清理 30 天前',
-      channel: 'storage:cleanup:logs',
-      payload: { beforeDays: 30 },
-      confirm: {
-        title: '清理日志',
-        message: '将删除 30 天前的日志文件，是否继续？',
-        type: 'warning'
-      }
-    },
-    {
-      key: 'logs-all',
-      label: '全部清空',
-      channel: 'storage:cleanup:logs',
-      confirm: {
-        title: '清空日志',
-        message: '将删除全部日志文件，是否继续？',
-        type: 'error'
-      }
-    }
-  ],
-  temp: [
-    {
-      key: 'temp-all',
-      label: '清空临时文件',
-      channel: 'storage:cleanup:temp',
-      confirm: {
-        title: '清空临时文件',
-        message: '将删除所有临时文件，可能影响正在使用的内容，是否继续？',
-        type: 'warning'
-      }
-    }
-  ]
-}
+const moduleRowActions: Record<string, CleanupAction[]> = {}
 
+// Privacy-owned categories are managed exclusively through PrivacyDataSection's
+// typed preview/cleanup/delete flows. Keep only unrelated maintenance actions here.
 const databaseGroupActions: Record<string, CleanupAction[]> = {
   'file-index': [
     {
@@ -385,64 +352,6 @@ const databaseGroupActions: Record<string, CleanupAction[]> = {
       note: '应用与文件索引会在后台重建'
     }
   ],
-  clipboard: [
-    {
-      key: 'clipboard-7d',
-      label: '清理 7 天前',
-      channel: 'storage:cleanup:clipboard',
-      payload: { beforeDays: 7, type: 'all' },
-      confirm: {
-        title: '清理剪贴板数据',
-        message: '将删除 7 天前的剪贴板记录与对应图片文件，是否继续？',
-        type: 'warning'
-      }
-    },
-    {
-      key: 'clipboard-30d',
-      label: '清理 30 天前',
-      channel: 'storage:cleanup:clipboard',
-      payload: { beforeDays: 30, type: 'all' },
-      confirm: {
-        title: '清理剪贴板数据',
-        message: '将删除 30 天前的剪贴板记录与对应图片文件，是否继续？',
-        type: 'warning'
-      }
-    },
-    {
-      key: 'clipboard-all',
-      label: '全部清空',
-      channel: 'storage:cleanup:clipboard',
-      payload: { type: 'all' },
-      confirm: {
-        title: '清空剪贴板数据',
-        message: '将删除全部剪贴板记录与图片文件，是否继续？',
-        type: 'error'
-      }
-    }
-  ],
-  ocr: [
-    {
-      key: 'ocr-30d',
-      label: '清理 30 天前',
-      channel: 'storage:cleanup:ocr',
-      payload: { beforeDays: 30 },
-      confirm: {
-        title: '清理 OCR 数据',
-        message: '将删除 30 天前的 OCR 任务与结果，是否继续？',
-        type: 'warning'
-      }
-    },
-    {
-      key: 'ocr-all',
-      label: '全部清空',
-      channel: 'storage:cleanup:ocr',
-      confirm: {
-        title: '清空 OCR 数据',
-        message: '将删除全部 OCR 任务与结果，是否继续？',
-        type: 'error'
-      }
-    }
-  ],
   downloads: [
     {
       key: 'downloads-30d',
@@ -462,64 +371,6 @@ const databaseGroupActions: Record<string, CleanupAction[]> = {
       confirm: {
         title: '清空下载记录',
         message: '将删除全部下载记录与分片数据，是否继续？',
-        type: 'error'
-      }
-    }
-  ],
-  analytics: [
-    {
-      key: 'analytics-30d',
-      label: '清理 30 天前',
-      channel: 'storage:cleanup:analytics',
-      payload: { beforeDays: 30 },
-      confirm: {
-        title: '清理分析数据',
-        message: '将删除 30 天前的分析与遥测数据，是否继续？',
-        type: 'warning'
-      }
-    },
-    {
-      key: 'analytics-all',
-      label: '全部清空',
-      channel: 'storage:cleanup:analytics',
-      confirm: {
-        title: '清空分析数据',
-        message: '将删除全部分析与遥测数据，是否继续？',
-        type: 'error'
-      }
-    }
-  ],
-  usage: [
-    {
-      key: 'usage-all',
-      label: '全部清空',
-      channel: 'storage:cleanup:usage',
-      confirm: {
-        title: '清空使用统计',
-        message: '将删除全部使用统计与推荐缓存，是否继续？',
-        type: 'error'
-      }
-    }
-  ],
-  intelligence: [
-    {
-      key: 'intelligence-30d',
-      label: '清理 30 天前',
-      channel: 'storage:cleanup:intelligence',
-      payload: { beforeDays: 30 },
-      confirm: {
-        title: '清理智能数据',
-        message: '将删除 30 天前的智能日志与用量数据，是否继续？',
-        type: 'warning'
-      }
-    },
-    {
-      key: 'intelligence-all',
-      label: '全部清空',
-      channel: 'storage:cleanup:intelligence',
-      confirm: {
-        title: '清空智能数据',
-        message: '将删除全部智能日志与用量数据，是否继续？',
         type: 'error'
       }
     }
@@ -636,6 +487,8 @@ onMounted(() => {
   <div class="Storagable-Page">
     <ViewTemplate title="$I18n:router.storagable">
       <div class="Storagable-Container">
+        <PrivacyDataSection />
+
         <div class="header">
           <div class="title">存储占用</div>
           <div class="actions">

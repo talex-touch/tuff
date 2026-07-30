@@ -1,1 +1,4 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check exact DTOs, typed SDK use, clone safety and absence of raw sensitive payloads."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check accessible settings controls, i18n, fail-closed behavior and evidence strength."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Check plugin disable/revoke/uninstall data barriers, Secret handling and authoritative owner cleanup."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check each category round-trip, error boundary and source-of-truth owner across layers."}

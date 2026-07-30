@@ -90,14 +90,17 @@ function mergeProviderFromNexus(record: IntelligenceProviderSyncRecord): void {
   const resolvedProviderId = nexusPreferred ? TUFF_NEXUS_PROVIDER_ID : record.id
   const existing = providers.value.find((item) => item.id === resolvedProviderId)
   const hasCredential =
-    normalizedType === IntelligenceProviderType.LOCAL || nexusPreferred || Boolean(existing?.apiKey)
+    normalizedType === IntelligenceProviderType.LOCAL ||
+    nexusPreferred ||
+    Boolean(existing?.hasCredential)
 
   const nextProvider: IntelligenceProviderConfig = {
     id: resolvedProviderId,
     type: normalizedType,
     name: record.name || record.id,
     enabled: record.enabled && hasCredential,
-    apiKey: existing?.apiKey,
+    hasCredential: existing?.hasCredential,
+    authRef: existing?.authRef,
     baseUrl: record.baseUrl || undefined,
     models: Array.isArray(record.models) ? record.models : [],
     defaultModel: record.defaultModel || undefined,
@@ -198,8 +201,14 @@ async function syncProvidersFromNexus(): Promise<void> {
 
 function createProviderCopy(provider: IntelligenceProviderConfig): IntelligenceProviderConfig {
   const id = `custom-${Date.now()}`
+  const {
+    apiKey: _apiKey,
+    authRef: _authRef,
+    hasCredential: _hasCredential,
+    ...copyableProvider
+  } = provider
   return {
-    ...provider,
+    ...copyableProvider,
     id,
     name: `${provider.name} Copy`,
     enabled: false,
@@ -282,14 +291,12 @@ async function handleTestProvider(): Promise<void> {
   }
 }
 
-function handleDeleteProvider(): void {
+async function handleDeleteProvider(): Promise<void> {
   if (!selectedProvider.value) return
   const deletedId = selectedProvider.value.id
 
-  // Find current index before deletion
   const currentIndex = providers.value.findIndex((p) => p.id === deletedId)
-
-  // Remove the provider
+  await aiClient.deleteProviderConfig({ providerId: deletedId })
   removeProvider(deletedId)
 
   // Smoothly select next provider after deletion

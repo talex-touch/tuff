@@ -1,9 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
+import { PluginStatus, type IPluginManager, type ITouchPlugin } from '@talex-touch/utils/plugin'
+import type { PluginApiUninstallRequest } from '@talex-touch/utils/transport/events/types'
 import {
   createTrustedTestPluginContext,
   issuePluginSecurityContext
 } from '@talex-touch/utils/transport/security/plugin-identity'
 import { PluginEvents } from '@talex-touch/utils/transport/events'
+import { teardownPluginStorage } from './runtime/plugin-storage-lifecycle'
+
+interface CapturedManagerFactory {
+  (
+    pluginRootDir: string,
+    transport: unknown,
+    channel: unknown,
+    mainWindowId: number
+  ): IPluginManager
+}
 
 type TransportDisposer = () => void
 
@@ -11,6 +24,9 @@ const mocks = vi.hoisted(() => {
   const handlers = new Map<unknown, (payload: unknown, context: unknown) => unknown>()
   const disposers: TransportDisposer[] = []
   const eventHandlers = new Map<unknown, (event: unknown) => void>()
+  const removedPaths = new Set<string>()
+  const symbolicPaths = new Set<string>()
+  let capturedManagerFactory: CapturedManagerFactory | null = null
   const transportOn = vi.fn(
     (channel: unknown, handler: (payload: unknown, context: unknown) => unknown) => {
       handlers.set(channel, handler)
@@ -42,7 +58,16 @@ const mocks = vi.hoisted(() => {
   const manager = {
     plugins: new Map<string, typeof plugin>(),
     getPluginByName: vi.fn<(name: string) => typeof plugin | undefined>(),
-    enablePlugin: vi.fn<(name: string) => Promise<boolean>>()
+    enablePlugin: vi.fn<(name: string) => Promise<boolean>>(),
+    reloadPlugin: vi.fn<(name: string) => Promise<void>>(),
+    uninstallPlugin: vi.fn<(request: PluginApiUninstallRequest) => Promise<unknown>>()
+  }
+  const dbUtils = {
+    countPluginData: vi.fn<(pluginName: string) => Promise<number>>(),
+    deletePluginData: vi.fn<(pluginName: string) => Promise<void>>(),
+    getPluginData: vi.fn(),
+    listPluginData: vi.fn(),
+    setPluginData: vi.fn()
   }
   const healthMonitor = { destroy: vi.fn() }
   const installQueue = { enqueue: vi.fn(), handleConfirmResponse: vi.fn() }
@@ -55,19 +80,27 @@ const mocks = vi.hoisted(() => {
   }
 
   return {
-    buildPluginManagerRuntime: vi.fn(() => ({
-      pluginManager: manager,
-      installQueue,
-      healthMonitor
-    })),
+    buildPluginManagerRuntime: vi.fn((options: { createManager: CapturedManagerFactory }) => {
+      capturedManagerFactory = options.createManager
+      return {
+        pluginManager: manager,
+        installQueue,
+        healthMonitor
+      }
+    }),
     browserWindowFromId: vi.fn(),
     checkPermission: vi.fn(),
-    permissionHasPermission: vi.fn(),
-    permissionGetStore: vi.fn(),
-    runtimeOptions: null as Record<string, unknown> | null,
-    databaseGetDb: vi.fn(),
-    dialogShowMessageBox: vi.fn(),
     createClient: vi.fn(),
+    createDbUtils: vi.fn(() => dbUtils),
+    countSecureStoreValuesByPrefixes: vi.fn(),
+    databaseGetDb: vi.fn(),
+    dbUtils,
+    deleteSecureStoreValuesByPrefix: vi.fn(),
+    removedPaths,
+    symbolicPaths,
+    devWatcherRemovePlugin: vi.fn(),
+    dialogShowMessageBox: vi.fn(),
+    dialogShowSaveDialog: vi.fn(),
     disposers,
     eventBusOn: vi.fn((event: unknown, handler: (payload: unknown) => void) => {
       eventHandlers.set(event, handler)
@@ -76,32 +109,50 @@ const mocks = vi.hoisted(() => {
       eventHandlers.delete(event)
     }),
     eventHandlers,
+    fsPathExists: vi.fn(),
+    fsRemove: vi.fn(),
+    getCapturedManagerFactory: () => capturedManagerFactory,
     getNetworkService: vi.fn(),
     handlers,
     healthMonitor,
     installQueue,
     isSecureStoreAvailable: vi.fn(),
     keyResolveCurrentIdentity: vi.fn(),
+    localProviderTrackFile: vi.fn(),
+    localProviderUntrackFile: vi.fn(),
     mainBrowserWindow,
     manager,
     networkCleanup: vi.fn(),
+    permissionClearDeclaredPermissions: vi.fn(),
+    permissionGetStore: vi.fn(),
+    permissionHasPermission: vi.fn(),
+    permissionRevokeAll: vi.fn(),
     plugin,
     registerMainRuntime: vi.fn(),
+    reportPluginUninstall: vi.fn(),
+    tempCleanupNamespace: vi.fn(),
+    tempGetNamespaceConfig: vi.fn(),
+    tempInspectNamespace: vi.fn(),
+    tempRegisterNamespace: vi.fn(),
+    resetCapturedManagerFactory: () => {
+      capturedManagerFactory = null
+    },
     resolvePluginModuleIoRuntime: vi.fn(),
     runtimeDispose: vi.fn(async () => undefined),
+    runtimeOptions: null as Record<string, unknown> | null,
     runtimeResolve: vi.fn(),
+    setBrowserDataCapabilityFactory: vi.fn(),
+    setBrowserOpenCapabilityFactory: vi.fn(),
+    setIntelligenceContextCapabilityFactory: vi.fn(),
     setRuntimeService: vi.fn(),
+    setSecureStoreValue: vi.fn(),
     setSnipasteProcessCapabilityFactory: vi.fn(),
     setSystemActionCapabilityFactory: vi.fn(),
-    setBrowserOpenCapabilityFactory: vi.fn(),
-    setBrowserDataCapabilityFactory: vi.fn(),
     setTranslationCapabilityFactory: vi.fn(),
-    setIntelligenceContextCapabilityFactory: vi.fn(),
+    setTransport: vi.fn(),
     setWindowManagerCapabilityFactory: vi.fn(),
     setWindowPresetCapabilityFactory: vi.fn(),
     setWorkspaceScriptCapabilityFactory: vi.fn(),
-    setSecureStoreValue: vi.fn(),
-    setTransport: vi.fn(),
     startUpdateScheduler: vi.fn(),
     stopUpdateScheduler: vi.fn(),
     transportOn
@@ -136,9 +187,41 @@ vi.mock('electron', () => ({
   },
   dialog: {
     showMessageBox: mocks.dialogShowMessageBox,
-    showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] }))
+    showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
+    showSaveDialog: mocks.dialogShowSaveDialog
   },
   shell: { openExternal: vi.fn(), openPath: vi.fn(), showItemInFolder: vi.fn() }
+}))
+
+vi.mock('fs-extra', () => ({
+  default: {
+    ensureDir: vi.fn(),
+    existsSync: vi.fn(() => false),
+    lstat: vi.fn(async (target: string) => {
+      if (mocks.removedPaths.has(target) || !(await mocks.fsPathExists(target))) {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }
+      const symbolic = mocks.symbolicPaths.has(target)
+      return {
+        isDirectory: () => !symbolic,
+        isSymbolicLink: () => symbolic
+      }
+    }),
+    pathExists: mocks.fsPathExists,
+    readFileSync: vi.fn(),
+    readdir: vi.fn(async () => ['config']),
+    realpath: vi.fn(async (target: string) => target),
+    remove: vi.fn(async (target: string) => {
+      await mocks.fsRemove(target)
+      mocks.removedPaths.add(target)
+    }),
+    rmdir: vi.fn(async (target: string) => {
+      await mocks.fsRemove(target)
+      mocks.removedPaths.add(target)
+    }),
+    writeFile: vi.fn(),
+    writeJSON: vi.fn()
+  }
 }))
 
 vi.mock('@libsql/client', () => ({ createClient: mocks.createClient }))
@@ -168,14 +251,14 @@ vi.mock('../../core/runtime-accessor', () => ({
 
 vi.mock('../../core/touch-window', () => ({ TouchWindow: class {} }))
 vi.mock('../../core/window-security-profile', () => ({ buildWindowWebPreferences: vi.fn() }))
-vi.mock('../../db/utils', () => ({ createDbUtils: vi.fn() }))
+vi.mock('../../db/utils', () => ({ createDbUtils: mocks.createDbUtils }))
 vi.mock('../../hooks/use-electron-guard', () => ({
   useAliveTarget: vi.fn(),
   useAliveWebContents: vi.fn()
 }))
 vi.mock('../../service/file-watch.service', () => ({ fileWatchService: {} }))
 vi.mock('../../service/store-api.service', () => ({
-  reportPluginUninstall: vi.fn(),
+  reportPluginUninstall: mocks.reportPluginUninstall,
   startUpdateScheduler: mocks.startUpdateScheduler,
   stopUpdateScheduler: mocks.stopUpdateScheduler,
   triggerUpdateCheck: vi.fn()
@@ -199,8 +282,26 @@ vi.mock('../../utils/logger', () => ({
     warn: vi.fn()
   })
 }))
+vi.mock('../../service/temp-file.service', () => ({
+  tempFileService: {
+    cleanupNamespace: mocks.tempCleanupNamespace,
+    getNamespaceConfig: mocks.tempGetNamespaceConfig,
+    inspectNamespace: mocks.tempInspectNamespace,
+    registerNamespace: mocks.tempRegisterNamespace
+  }
+}))
+
 vi.mock('../../utils/secure-store', () => ({
-  deleteSecureStoreValuesByPrefix: vi.fn(),
+  countSecureStoreValuesByPrefixes: mocks.countSecureStoreValuesByPrefixes,
+  deleteSecureStoreValuesByPrefix: mocks.deleteSecureStoreValuesByPrefix,
+  deleteSecureStoreValuesByPrefixes: vi.fn(
+    async (rootPath: string, prefixes: readonly string[]) => {
+      for (const prefix of prefixes) {
+        await mocks.deleteSecureStoreValuesByPrefix(rootPath, prefix)
+      }
+      return prefixes.length
+    }
+  ),
   getSecureStoreHealth: vi.fn(),
   getSecureStoreValue: vi.fn(),
   getSecureStoreValueStrict: vi.fn(),
@@ -262,10 +363,16 @@ vi.mock('../permission', () => ({
       transport.on(event, callback),
   getPermissionModule: () => ({
     checkPermission: mocks.checkPermission,
-    getStore: mocks.permissionGetStore
+    clearDeclaredPermissions: mocks.permissionClearDeclaredPermissions,
+    getStore: mocks.permissionGetStore,
+    revokeAll: mocks.permissionRevokeAll
   })
 }))
-vi.mock('./dev-server-monitor', () => ({ DevServerHealthMonitor: class {} }))
+vi.mock('./dev-server-monitor', () => ({
+  DevServerHealthMonitor: class {
+    removePlugin = mocks.devWatcherRemovePlugin
+  }
+}))
 vi.mock('./host/plugin-runtime-electron-process', () => ({
   ElectronPluginRuntimeProcessFactory: class {}
 }))
@@ -281,7 +388,12 @@ vi.mock('./host/plugin-runtime-service', () => ({
   resolvePluginRuntimeArtifactPath: () => '/fixture/plugin-host.js'
 }))
 vi.mock('./plugin-content-installer', () => ({ installPluginContentPackageToLocalPlugin: vi.fn() }))
-vi.mock('./install-queue', () => ({ PluginInstallQueue: class {} }))
+vi.mock('./install-queue', () => ({
+  PluginInstallQueue: class {
+    enqueue = vi.fn()
+    handleConfirmResponse = vi.fn()
+  }
+}))
 vi.mock('./plugin', () => ({
   TouchPlugin: class {
     static setTransport = mocks.setTransport
@@ -312,7 +424,13 @@ vi.mock('./plugin-preflight-helper', () => ({
   buildRuntimeDriftPreflightFailure: vi.fn()
 }))
 vi.mock('./plugin-runtime-integrity', () => ({ mergePackagedManifestMetadata: vi.fn() }))
-vi.mock('./providers/local-provider', () => ({ LocalPluginProvider: class {} }))
+vi.mock('./providers/local-provider', () => ({
+  LocalPluginProvider: class {
+    scan = vi.fn(async () => [])
+    trackFile = mocks.localProviderTrackFile
+    untrackFile = mocks.localProviderUntrackFile
+  }
+}))
 vi.mock('./runtime/plugin-injections', () => ({ usePluginInjections: vi.fn() }))
 vi.mock('./runtime/plugin-view-security-profile', () => ({
   resolvePluginViewSecurityProfile: vi.fn()
@@ -320,6 +438,14 @@ vi.mock('./runtime/plugin-view-security-profile', () => ({
 vi.mock('./runtime/plugin-runtime-repair', () => ({ inspectPluginRuntimeDrift: vi.fn() }))
 vi.mock('./runtime/plugin-runtime-tracker', () => ({ pluginRuntimeTracker: {} }))
 vi.mock('./sdkapi-hard-cut-gate', () => ({ getPluginSdkHardCutGate: vi.fn() }))
+vi.mock('./services/dev-plugin-watcher', () => ({
+  DevPluginWatcher: class {
+    addPlugin = vi.fn()
+    removePlugin = mocks.devWatcherRemovePlugin
+    start = vi.fn()
+    stop = vi.fn()
+  }
+}))
 vi.mock('./services/plugin-io-service', () => ({
   resolvePluginModuleIoRuntime: mocks.resolvePluginModuleIoRuntime
 }))
@@ -327,6 +453,7 @@ vi.mock('./services/plugin-manager-orchestrator', () => ({
   buildPluginManagerRuntime: mocks.buildPluginManagerRuntime
 }))
 
+import { TouchPlugin } from './plugin'
 import { PluginModule } from './plugin-module'
 
 function invokeTransportHandler(channel: unknown, payload: unknown, context: unknown): unknown {
@@ -348,6 +475,109 @@ function initializeModule(module: PluginModule): Promise<void> {
   )
 }
 
+type PluginUninstallDisposition = {
+  confirmation: 'delete-plugin-and-data'
+  ordinaryExport: { enabled: false } | { enabled: true }
+  portableSecretBackup: { enabled: false } | { enabled: true; password: string }
+}
+
+type PluginFixture = ITouchPlugin & {
+  getActivationIdentity: ReturnType<typeof vi.fn>
+}
+
+interface ActualManagerHarness {
+  module: PluginModule
+  manager: IPluginManager
+  plugin: PluginFixture
+  loggerDestroy: ReturnType<typeof vi.fn>
+  sqliteClosePlugin: ReturnType<typeof vi.fn>
+  sqliteHasPlugin: ReturnType<typeof vi.fn>
+}
+
+async function createActualManagerHarness(order: string[] = []): Promise<ActualManagerHarness> {
+  const module = new PluginModule()
+  module.registerUninstallAuthorityInvalidator(() => {
+    order.push('authority-invalidate')
+  })
+  mocks.devWatcherRemovePlugin.mockImplementation(() => {
+    order.push('admission-close')
+  })
+  const sqliteClosePlugin = vi.fn(async () => {
+    order.push('sqlite-close')
+    return true
+  })
+  const sqliteHasPlugin = vi.fn(() => false)
+  Reflect.set(module, 'pluginSqliteResources', {
+    acquire: vi.fn(),
+    closeActivation: vi.fn(async () => false),
+    closeAll: vi.fn(async () => undefined),
+    closePlugin: sqliteClosePlugin,
+    hasActivation: vi.fn(() => false),
+    hasPlugin: sqliteHasPlugin
+  })
+  await initializeModule(module)
+
+  const factory = mocks.getCapturedManagerFactory()
+  if (!factory) throw new Error('PluginModule did not expose its real manager factory')
+  const manager = factory('/fixture/plugins', transport, { broadcastPlugin: vi.fn() }, 42)
+  const loggerDestroy = vi.fn(() => {
+    order.push('logger-flush')
+  })
+  const plugin = Object.assign(Object.create(TouchPlugin.prototype), {
+    name: 'calendar',
+    version: '1.0.0',
+    sdkapi: 260215,
+    status: PluginStatus.ACTIVE,
+    dev: { enable: false },
+    declaredPermissions: { required: ['storage.plugin'], optional: [] },
+    logger: {
+      getManager: () => ({ destroy: loggerDestroy })
+    },
+    disable: vi.fn(async function (this: ITouchPlugin) {
+      order.push('runtime-resource-exit')
+      this.status = PluginStatus.DISABLED
+      return true
+    }),
+    getActivationIdentity: vi.fn(() => ({
+      name: 'calendar',
+      pluginInstanceId: 'calendar-instance',
+      activationGeneration: 3,
+      key: 'synthetic-key'
+    })),
+    getConfigPath: vi.fn(() => '/fixture/plugin-data/calendar/config')
+  }) as PluginFixture
+  manager.plugins.set('calendar', plugin)
+  manager.enabledPlugins.add('calendar')
+
+  return { module, manager, plugin, loggerDestroy, sqliteClosePlugin, sqliteHasPlugin }
+}
+
+async function uninstallWithDisposition(
+  manager: IPluginManager,
+  disposition: Omit<PluginUninstallDisposition, 'confirmation'>
+): Promise<unknown> {
+  const plugin = manager.plugins.get('calendar') as PluginFixture | undefined
+  if (!plugin) throw new Error('Canonical uninstall fixture is missing')
+  const identity = plugin.getActivationIdentity()
+  const request: PluginApiUninstallRequest = {
+    version: 1,
+    plugin: {
+      name: identity.name,
+      pluginInstanceId: identity.pluginInstanceId,
+      activationGeneration: identity.activationGeneration
+    },
+    disposition: {
+      confirmation: 'delete-plugin-and-data',
+      ...disposition
+    }
+  }
+  return await manager.uninstallPlugin(request)
+}
+
+function expectOnlyTemporaryFilesystemCleanup(): void {
+  expect(mocks.fsRemove).toHaveBeenCalledExactlyOnceWith('/fixture/plugin-data/calendar/temp')
+}
+
 describe('PluginModule facade', () => {
   beforeEach(() => {
     mocks.handlers.clear()
@@ -357,6 +587,58 @@ describe('PluginModule facade', () => {
     Reflect.deleteProperty(mocks.manager, 'pendingPermissionPlugins')
     mocks.manager.getPluginByName.mockReset()
     mocks.manager.enablePlugin.mockReset()
+    mocks.manager.reloadPlugin.mockReset()
+    mocks.manager.uninstallPlugin.mockReset()
+    mocks.resetCapturedManagerFactory()
+    mocks.createDbUtils.mockClear()
+    mocks.countSecureStoreValuesByPrefixes.mockReset()
+    mocks.countSecureStoreValuesByPrefixes.mockResolvedValue(0)
+    mocks.removedPaths.clear()
+    mocks.symbolicPaths.clear()
+    mocks.dbUtils.countPluginData.mockReset()
+    mocks.dbUtils.countPluginData.mockResolvedValue(0)
+    mocks.dbUtils.deletePluginData.mockReset()
+    mocks.dbUtils.deletePluginData.mockResolvedValue(undefined)
+    mocks.dbUtils.getPluginData.mockReset()
+    mocks.dbUtils.listPluginData.mockReset()
+    mocks.dbUtils.listPluginData.mockResolvedValue([])
+    mocks.dbUtils.setPluginData.mockReset()
+    mocks.dbUtils.setPluginData.mockResolvedValue(undefined)
+    mocks.deleteSecureStoreValuesByPrefix.mockReset()
+    mocks.deleteSecureStoreValuesByPrefix.mockResolvedValue(true)
+    mocks.devWatcherRemovePlugin.mockReset()
+    mocks.fsPathExists.mockReset()
+    mocks.fsPathExists.mockImplementation(async (target: string) => {
+      return !path.basename(target).startsWith('plugin-sdk.sqlite')
+    })
+    mocks.fsRemove.mockReset()
+    mocks.fsRemove.mockResolvedValue(undefined)
+    mocks.localProviderTrackFile.mockReset()
+    mocks.localProviderUntrackFile.mockReset()
+    mocks.permissionClearDeclaredPermissions.mockReset()
+    mocks.permissionRevokeAll.mockReset()
+    mocks.permissionRevokeAll.mockResolvedValue([])
+    mocks.reportPluginUninstall.mockReset()
+    mocks.reportPluginUninstall.mockResolvedValue(undefined)
+    mocks.tempCleanupNamespace.mockReset()
+    mocks.tempCleanupNamespace.mockResolvedValue({
+      deletedItemCount: 0,
+      deletedByteCount: 0,
+      failedItemCount: 0,
+      bounded: false,
+      cancelled: false
+    })
+    mocks.tempGetNamespaceConfig.mockReset()
+    mocks.tempGetNamespaceConfig.mockReturnValue({ namespace: 'fixture' })
+    mocks.tempInspectNamespace.mockReset()
+    mocks.tempInspectNamespace.mockResolvedValue({
+      itemCount: 0,
+      byteCount: 0,
+      failedItemCount: 0,
+      bounded: false,
+      cancelled: false
+    })
+    mocks.tempRegisterNamespace.mockReset()
     mocks.healthMonitor.destroy.mockReset()
     mocks.plugin.disable.mockReset()
     mocks.plugin.disable.mockResolvedValue(true)
@@ -367,7 +649,11 @@ describe('PluginModule facade', () => {
     mocks.checkPermission.mockReset()
     mocks.permissionHasPermission.mockReset()
     mocks.permissionGetStore.mockReset()
-    mocks.permissionGetStore.mockReturnValue({ hasPermission: mocks.permissionHasPermission })
+    mocks.permissionGetStore.mockReturnValue({
+      getPluginPermissions: () => [],
+      hasPermission: mocks.permissionHasPermission,
+      hasSessionPermission: () => false
+    })
     mocks.runtimeOptions = null
     mocks.createClient.mockReset()
     mocks.isSecureStoreAvailable.mockReset()
@@ -377,6 +663,8 @@ describe('PluginModule facade', () => {
     mocks.buildPluginManagerRuntime.mockClear()
     mocks.browserWindowFromId.mockReset()
     mocks.dialogShowMessageBox.mockReset()
+    mocks.dialogShowSaveDialog.mockReset()
+    mocks.dialogShowSaveDialog.mockResolvedValue({ canceled: true, filePath: undefined })
     mocks.getNetworkService.mockReset()
     mocks.networkCleanup.mockReset()
     mocks.registerMainRuntime.mockReset()
@@ -437,6 +725,77 @@ describe('PluginModule facade', () => {
     expect(mocks.manager.enablePlugin).toHaveBeenCalledWith('calendar')
     expect(pendingPermissionPlugins.has('calendar')).toBe(false)
     expect(mocks.setTransport).toHaveBeenCalledWith(transport)
+  })
+
+  it('awaits SQLite and Temp cleanup for permission revocation without deleting durable data', async () => {
+    const module = new PluginModule()
+    const closePlugin = vi.fn(async () => true)
+    Reflect.set(module, 'pluginSqliteResources', {
+      acquire: vi.fn(),
+      closeActivation: vi.fn(async () => false),
+      closeAll: vi.fn(async () => undefined),
+      closePlugin,
+      hasActivation: vi.fn(() => false),
+      hasPlugin: vi.fn(() => false)
+    })
+
+    await initializeModule(module)
+    await teardownPluginStorage('calendar')
+
+    expect(closePlugin).toHaveBeenCalledExactlyOnceWith('calendar')
+    expect(mocks.tempCleanupNamespace).toHaveBeenCalledOnce()
+    expect(mocks.tempInspectNamespace).toHaveBeenCalledOnce()
+    expect(mocks.deleteSecureStoreValuesByPrefix).not.toHaveBeenCalled()
+    expect(mocks.dbUtils.deletePluginData).not.toHaveBeenCalled()
+    expect(mocks.fsRemove).not.toHaveBeenCalled()
+  })
+
+  it('continues permission Temp cleanup and exposes only a stable aggregate when SQLite close fails', async () => {
+    const module = new PluginModule()
+    const closePlugin = vi.fn(async () => {
+      throw new Error('native SQLite path /private/plugin-sdk.sqlite')
+    })
+    Reflect.set(module, 'pluginSqliteResources', {
+      acquire: vi.fn(),
+      closeActivation: vi.fn(async () => false),
+      closeAll: vi.fn(async () => undefined),
+      closePlugin,
+      hasActivation: vi.fn(() => false),
+      hasPlugin: vi.fn(() => true)
+    })
+
+    await initializeModule(module)
+    const result = await teardownPluginStorage('calendar').catch((error: unknown) => error)
+
+    expect(closePlugin).toHaveBeenCalledExactlyOnceWith('calendar')
+    expect(mocks.tempCleanupNamespace).toHaveBeenCalledOnce()
+    expect(result).toBeInstanceOf(AggregateError)
+    expect((result as Error).message).toBe('PLUGIN_PERMISSION_RESOURCE_TEARDOWN_FAILED')
+    expect((result as Error).message).not.toMatch(/private|sqlite path/i)
+  })
+
+  it('closes capability-owned SQLite on permission revoke without deleting durable data', async () => {
+    const module = new PluginModule()
+    const closePlugin = vi.fn(async () => true)
+    Reflect.set(module, 'pluginSqliteResources', {
+      acquire: vi.fn(),
+      closeActivation: vi.fn(async () => false),
+      closeAll: vi.fn(async () => undefined),
+      closePlugin,
+      hasActivation: vi.fn(() => false),
+      hasPlugin: vi.fn(() => false)
+    })
+
+    await initializeModule(module)
+    const permissionRevoked = mocks.eventHandlers.get('permission-revoked')
+    if (!permissionRevoked) throw new Error('PluginModule did not subscribe to permission revokes')
+
+    permissionRevoked({ pluginId: 'calendar', permissionIds: ['storage.sqlite'] })
+    await vi.waitFor(() => expect(closePlugin).toHaveBeenCalledExactlyOnceWith('calendar'))
+
+    expect(mocks.deleteSecureStoreValuesByPrefix).not.toHaveBeenCalled()
+    expect(mocks.dbUtils.deletePluginData).not.toHaveBeenCalled()
+    expect(mocks.fsRemove).not.toHaveBeenCalled()
   })
 
   it('wires the immutable 30-ID global manifest and activation-local capability factories', async () => {
@@ -855,5 +1214,717 @@ describe('PluginModule facade', () => {
     expect(mocks.setTransport).toHaveBeenLastCalledWith(null)
     expect(mocks.healthMonitor.destroy).toHaveBeenCalledOnce()
     expect(mocks.stopUpdateScheduler).toHaveBeenCalledOnce()
+  })
+
+  it('passes the exact uninstall identity and disposition through the typed handler', async () => {
+    const module = new PluginModule()
+    const request: PluginApiUninstallRequest = {
+      version: 1,
+      plugin: {
+        name: 'calendar',
+        pluginInstanceId: 'calendar-instance',
+        activationGeneration: 3
+      },
+      disposition: {
+        confirmation: 'delete-plugin-and-data',
+        ordinaryExport: { enabled: false },
+        portableSecretBackup: { enabled: false }
+      }
+    }
+    const result = {
+      version: 1,
+      success: true,
+      status: 'completed',
+      code: 'PLUGIN_UNINSTALL_COMPLETED',
+      retryable: false,
+      installed: false,
+      stages: [
+        {
+          stage: 'verification',
+          status: 'completed',
+          code: 'PLUGIN_UNINSTALL_VERIFIED',
+          retryable: false
+        }
+      ]
+    }
+    mocks.manager.uninstallPlugin.mockResolvedValue(result)
+    await initializeModule(module)
+    await module.start()
+
+    await expect(invokeTransportHandler(PluginEvents.api.uninstall, request, {})).resolves.toEqual(
+      result
+    )
+    expect(mocks.manager.uninstallPlugin).toHaveBeenCalledExactlyOnceWith(request)
+  })
+
+  it('rejects plugin callers before uninstall owner resolution', async () => {
+    const module = new PluginModule()
+    const request: PluginApiUninstallRequest = {
+      version: 1,
+      plugin: {
+        name: 'calendar',
+        pluginInstanceId: 'calendar-instance',
+        activationGeneration: 3
+      },
+      disposition: {
+        confirmation: 'delete-plugin-and-data',
+        ordinaryExport: { enabled: false },
+        portableSecretBackup: { enabled: false }
+      }
+    }
+    await initializeModule(module)
+    await module.start()
+
+    await expect(
+      invokeTransportHandler(PluginEvents.api.uninstall, request, {
+        plugin: createTrustedTestPluginContext({
+          name: 'calendar',
+          pluginInstanceId: 'calendar-instance',
+          activationGeneration: 3,
+          uniqueKey: 'calendar-key'
+        })
+      })
+    ).rejects.toThrow('PLUGIN_UNINSTALL_HOST_ONLY')
+    expect(mocks.manager.uninstallPlugin).not.toHaveBeenCalled()
+  })
+
+  it('rejects legacy or hostile uninstall payloads at the main transport boundary', async () => {
+    const module = new PluginModule()
+    await initializeModule(module)
+    await module.start()
+
+    await expect(
+      invokeTransportHandler(PluginEvents.api.uninstall, { name: 'calendar' }, {})
+    ).rejects.toThrow('PLUGIN_UNINSTALL_REQUEST_INVALID')
+    await expect(
+      invokeTransportHandler(
+        PluginEvents.api.uninstall,
+        Object.defineProperty({}, 'version', {
+          enumerable: true,
+          get: () => 1
+        }),
+        {}
+      )
+    ).rejects.toThrow('PLUGIN_UNINSTALL_REQUEST_INVALID')
+    expect(mocks.manager.uninstallPlugin).not.toHaveBeenCalled()
+  })
+
+  it('does not turn a retryable aggregate uninstall failure into success', async () => {
+    const module = new PluginModule()
+    const result = {
+      version: 1,
+      success: false,
+      status: 'failed',
+      code: 'PLUGIN_UNINSTALL_CLEANUP_FAILED',
+      retryable: true,
+      installed: true,
+      stages: [
+        {
+          stage: 'secret-backup',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_SECRET_BACKUP_FAILED',
+          retryable: true
+        },
+        {
+          stage: 'sqlite',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_SQLITE_CLOSE_FAILED',
+          retryable: true
+        }
+      ]
+    }
+    mocks.manager.uninstallPlugin.mockResolvedValue(result)
+    await initializeModule(module)
+    await module.start()
+
+    const response = await invokeTransportHandler(
+      PluginEvents.api.uninstall,
+      {
+        version: 1,
+        plugin: {
+          name: 'calendar',
+          pluginInstanceId: 'calendar-instance',
+          activationGeneration: 3
+        },
+        disposition: {
+          confirmation: 'delete-plugin-and-data',
+          ordinaryExport: { enabled: false },
+          portableSecretBackup: { enabled: false }
+        }
+      },
+      {}
+    )
+
+    expect(response).toEqual(result)
+    expect(JSON.stringify(response)).not.toMatch(
+      /(?:synthetic-secret|private\/|params|stack|SELECT|DELETE\s+FROM)/i
+    )
+  })
+
+  it('keeps disable non-destructive while closing active runtime and SQLite resources', async () => {
+    const { manager, plugin, loggerDestroy, sqliteClosePlugin } = await createActualManagerHarness()
+
+    await expect(manager.disablePlugin('calendar')).resolves.toBe(true)
+
+    expect(plugin.disable).toHaveBeenCalledOnce()
+    expect(sqliteClosePlugin).toHaveBeenCalledWith('calendar')
+    expect(loggerDestroy).not.toHaveBeenCalled()
+    expect(mocks.deleteSecureStoreValuesByPrefix).not.toHaveBeenCalled()
+    expect(mocks.dbUtils.deletePluginData).not.toHaveBeenCalled()
+    expect(mocks.fsRemove).not.toHaveBeenCalled()
+    expect(mocks.permissionRevokeAll).not.toHaveBeenCalled()
+    expect(manager.plugins.get('calendar')).toBe(plugin)
+  })
+
+  it('orders uninstall barriers before destructive cleanup and removes code last', async () => {
+    const order: string[] = []
+    const { manager, sqliteClosePlugin } = await createActualManagerHarness(order)
+    mocks.deleteSecureStoreValuesByPrefix.mockImplementation(async (_root, prefix: string) => {
+      order.push(prefix.startsWith('plugin.v2.') ? 'secret-v2' : 'secret-legacy')
+      return true
+    })
+    mocks.permissionRevokeAll.mockImplementation(async () => {
+      order.push('permission-revoke-all')
+      return ['storage.plugin']
+    })
+    transport.broadcast.mockImplementation((event: unknown, payload: unknown) => {
+      if (
+        event === PluginEvents.push.stateChanged &&
+        typeof payload === 'object' &&
+        payload !== null &&
+        Reflect.get(payload, 'type') === 'removed'
+      ) {
+        order.push('finalize')
+      }
+    })
+    mocks.reportPluginUninstall.mockImplementation(async () => {
+      order.push('analytics-uninstall-report')
+    })
+    mocks.fsRemove.mockImplementation(async (target: string) => {
+      if (target === '/fixture/plugin-data/calendar/cache') order.push('cache-remove')
+      else if (target === '/fixture/plugin-data/calendar/temp') order.push('temp-remove')
+      else if (target === '/fixture/plugin-data/calendar') order.push('data-root-remove')
+      else if (target.startsWith('/fixture/plugin-data/calendar/')) order.push('data-remove')
+      else if (target === '/fixture/plugins/calendar') order.push('code-remove')
+    })
+    mocks.dbUtils.deletePluginData.mockImplementation(async () => {
+      order.push('plugin-row-remove')
+    })
+    mocks.dbUtils.countPluginData.mockImplementation(async () => {
+      order.push('residual-verification')
+      return 0
+    })
+
+    await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(sqliteClosePlugin).toHaveBeenCalledExactlyOnceWith('calendar')
+    expect(order).toEqual([
+      'admission-close',
+      'runtime-resource-exit',
+      'logger-flush',
+      'temp-remove',
+      'sqlite-close',
+      'permission-revoke-all',
+      'authority-invalidate',
+      'secret-legacy',
+      'secret-v2',
+      'data-remove',
+      'cache-remove',
+      'data-root-remove',
+      'plugin-row-remove',
+      'code-remove',
+      'residual-verification',
+      'finalize',
+      'analytics-uninstall-report'
+    ])
+  })
+
+  it('awaits logger final flush before SQLite and filesystem teardown', async () => {
+    const { manager, loggerDestroy } = await createActualManagerHarness()
+    let releaseLogger: (() => void) | undefined
+    loggerDestroy.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseLogger = resolve
+        })
+    )
+
+    const uninstalling = uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+    await vi.waitFor(() => expect(loggerDestroy).toHaveBeenCalledOnce())
+
+    expect(mocks.fsRemove).not.toHaveBeenCalled()
+    releaseLogger?.()
+    await uninstalling
+  })
+
+  it('treats ordinary export cancellation as retryable and leaves the stopped plugin installed', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: true },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(mocks.dialogShowSaveDialog).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      status: 'cancelled',
+      code: 'PLUGIN_UNINSTALL_CANCELLED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'ordinary-export',
+          status: 'cancelled',
+          code: 'PLUGIN_UNINSTALL_ORDINARY_EXPORT_CANCELLED',
+          retryable: true
+        })
+      ])
+    })
+    expect(manager.plugins.get('calendar')).toBe(plugin)
+    expectOnlyTemporaryFilesystemCleanup()
+    expect(mocks.dbUtils.deletePluginData).not.toHaveBeenCalled()
+  })
+
+  it('blocks activation, reload, load, and install while cancelled uninstall owns retry', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: true },
+      portableSecretBackup: { enabled: false }
+    })
+    expect(result).toMatchObject({ success: false, status: 'cancelled', installed: true })
+
+    await expect(manager.enablePlugin('calendar')).resolves.toBe(false)
+    await expect(manager.loadPlugin('calendar')).resolves.toBe(false)
+    await expect(manager.reloadPlugin('calendar')).resolves.toBeUndefined()
+    await expect(manager.installFromSource({ source: '/fixture/update.tpex' })).rejects.toThrow(
+      'PLUGIN_UNINSTALL_INCOMPLETE'
+    )
+    expect(manager.setActivePlugin('calendar')).toBe(false)
+    expect(plugin.disable).toHaveBeenCalledOnce()
+    expect(manager.plugins.get('calendar')).toBe(plugin)
+  })
+
+  it('treats encrypted Secret backup with no allowlisted entries as stable no-data', async () => {
+    const { manager } = await createActualManagerHarness()
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: {
+        enabled: true,
+        password: 'correct horse battery staple'
+      }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: true,
+      status: 'completed',
+      code: 'PLUGIN_UNINSTALL_COMPLETED',
+      retryable: false,
+      installed: false,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'secret-backup',
+          status: 'skipped',
+          code: 'PLUGIN_UNINSTALL_SECRET_BACKUP_NO_DATA',
+          retryable: false
+        })
+      ])
+    })
+    expect(mocks.dialogShowSaveDialog).not.toHaveBeenCalled()
+  })
+
+  it('blocks deletion when requested backup finds only non-portable plugin Secrets', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    mocks.countSecureStoreValuesByPrefixes.mockResolvedValue(1)
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: {
+        enabled: true,
+        password: 'correct horse battery staple'
+      }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      status: 'failed',
+      code: 'PLUGIN_UNINSTALL_EXPORT_FAILED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'secret-backup',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_SECRET_BACKUP_FAILED',
+          retryable: true
+        })
+      ])
+    })
+    expect(manager.plugins.get('calendar')).toBe(plugin)
+    expect(mocks.deleteSecureStoreValuesByPrefix).not.toHaveBeenCalled()
+    expectOnlyTemporaryFilesystemCleanup()
+    expect(JSON.stringify(result)).not.toMatch(/catalog|prefix|correct horse|native/i)
+  })
+
+  it('retains retry ownership when one Secret namespace purge fails', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    mocks.deleteSecureStoreValuesByPrefix
+      .mockRejectedValueOnce(new Error('synthetic Secret store failure'))
+      .mockResolvedValue(true)
+
+    const first = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+    const ownerRetained = manager.plugins.get('calendar') === plugin
+    const retry = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect({ first, ownerRetained, retry }).toMatchObject({
+      first: {
+        version: 1,
+        success: false,
+        status: 'failed',
+        retryable: true,
+        installed: true,
+        stages: expect.arrayContaining([
+          expect.objectContaining({
+            stage: 'secrets',
+            status: 'failed',
+            code: 'PLUGIN_UNINSTALL_SECRET_PURGE_FAILED'
+          })
+        ])
+      },
+      ownerRetained: true,
+      retry: { version: 1, success: true, status: 'completed', installed: false }
+    })
+  })
+
+  it('returns a stable runtime failure without starting destructive cleanup', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    vi.mocked(plugin.disable).mockResolvedValueOnce(false)
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      status: 'failed',
+      code: 'PLUGIN_UNINSTALL_TEARDOWN_FAILED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'runtime',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_RUNTIME_TEARDOWN_FAILED'
+        })
+      ])
+    })
+    expectOnlyTemporaryFilesystemCleanup()
+    expect(mocks.deleteSecureStoreValuesByPrefix).not.toHaveBeenCalled()
+  })
+
+  it('redacts logger close failure and performs no persistent deletion', async () => {
+    const { manager, loggerDestroy } = await createActualManagerHarness()
+    loggerDestroy.mockImplementationOnce(() => {
+      throw new Error('synthetic logger native failure')
+    })
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      code: 'PLUGIN_UNINSTALL_TEARDOWN_FAILED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'logger',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_LOGGER_CLOSE_FAILED'
+        })
+      ])
+    })
+    expect(JSON.stringify(result)).not.toContain('synthetic logger native failure')
+    expectOnlyTemporaryFilesystemCleanup()
+  })
+
+  it('projects SQLite close failure without leaking the native rejection', async () => {
+    const { manager, sqliteClosePlugin } = await createActualManagerHarness()
+    sqliteClosePlugin.mockRejectedValueOnce(new Error('synthetic SQLite native failure'))
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      code: 'PLUGIN_UNINSTALL_TEARDOWN_FAILED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'sqlite',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_SQLITE_CLOSE_FAILED'
+        })
+      ])
+    })
+    expect(JSON.stringify(result)).not.toContain('synthetic SQLite native failure')
+    expectOnlyTemporaryFilesystemCleanup()
+  })
+
+  it('fails closed when any plugin SQLite owner remains after close', async () => {
+    const { manager, sqliteHasPlugin } = await createActualManagerHarness()
+    sqliteHasPlugin.mockReturnValue(true)
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      code: 'PLUGIN_UNINSTALL_TEARDOWN_FAILED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'sqlite',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_SQLITE_RESIDUAL'
+        })
+      ])
+    })
+    expectOnlyTemporaryFilesystemCleanup()
+    expect(mocks.dbUtils.deletePluginData).not.toHaveBeenCalled()
+  })
+
+  it('blocks deletion when committed permission revocation fails', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    mocks.permissionRevokeAll.mockRejectedValueOnce(new Error('synthetic permission failure'))
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      code: 'PLUGIN_UNINSTALL_TEARDOWN_FAILED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'permissions',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_PERMISSION_REVOKE_FAILED'
+        })
+      ])
+    })
+    expect(manager.plugins.get('calendar')).toBe(plugin)
+    expect(mocks.deleteSecureStoreValuesByPrefix).not.toHaveBeenCalled()
+    expectOnlyTemporaryFilesystemCleanup()
+  })
+
+  it('refuses a symlinked plugin code owner and never follows it during uninstall', async () => {
+    const { manager } = await createActualManagerHarness()
+    mocks.symbolicPaths.add('/fixture/plugins/calendar')
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'PLUGIN_UNINSTALL_CLEANUP_FAILED',
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'code',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_CODE_DELETE_FAILED'
+        })
+      ])
+    })
+    expect(mocks.fsRemove).not.toHaveBeenCalledWith('/fixture/plugins/calendar')
+    expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['code', 'PLUGIN_UNINSTALL_CODE_DELETE_FAILED'],
+    ['data', 'PLUGIN_UNINSTALL_DATA_DELETE_FAILED'],
+    ['plugin-data', 'PLUGIN_UNINSTALL_PLUGIN_DATA_DELETE_FAILED']
+  ] as const)(
+    'reports %s deletion failure after attempting later safe cleanup stages',
+    async (failedStage, code) => {
+      const { manager } = await createActualManagerHarness()
+      if (failedStage === 'code' || failedStage === 'data') {
+        mocks.fsRemove.mockImplementation(async (target: string) => {
+          if (
+            (failedStage === 'code' && target === '/fixture/plugins/calendar') ||
+            (failedStage === 'data' && target === '/fixture/plugin-data/calendar/config')
+          ) {
+            throw new Error(`synthetic ${failedStage} delete failure`)
+          }
+        })
+      } else {
+        mocks.dbUtils.deletePluginData.mockRejectedValueOnce(
+          new Error('synthetic plugin row delete failure')
+        )
+      }
+
+      const result = await uninstallWithDisposition(manager, {
+        ordinaryExport: { enabled: false },
+        portableSecretBackup: { enabled: false }
+      })
+
+      expect(mocks.fsRemove).toHaveBeenCalledTimes(failedStage === 'code' ? 5 : 4)
+      expect(mocks.dbUtils.deletePluginData).toHaveBeenCalledWith('calendar')
+      expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
+      expect(manager.plugins.has('calendar')).toBe(true)
+      expect(result).toMatchObject({
+        version: 1,
+        success: false,
+        status: 'failed',
+        code: 'PLUGIN_UNINSTALL_CLEANUP_FAILED',
+        retryable: true,
+        installed: true,
+        stages: expect.arrayContaining([
+          expect.objectContaining({ stage: failedStage, status: 'failed', code })
+        ])
+      })
+      expect(JSON.stringify(result)).not.toContain('synthetic')
+    }
+  )
+
+  it('retains code and retry owner when enabled-state persistence fails', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    mocks.dbUtils.setPluginData.mockRejectedValueOnce(
+      new Error('synthetic enabled-state persistence failure')
+    )
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      success: false,
+      code: 'PLUGIN_UNINSTALL_CLEANUP_FAILED',
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'plugin-data',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_PLUGIN_DATA_DELETE_FAILED'
+        })
+      ])
+    })
+    expect(mocks.fsRemove).not.toHaveBeenCalledWith('/fixture/plugins/calendar')
+    expect(manager.plugins.get('calendar')).toBe(plugin)
+    expect(mocks.reportPluginUninstall).not.toHaveBeenCalled()
+  })
+
+  it('fails residual verification and retains the stopped owner for retry', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    mocks.dbUtils.countPluginData.mockResolvedValueOnce(1)
+    const pending = (
+      manager as IPluginManager & {
+        pendingPermissionPlugins: Map<string, { pluginName: string; autoRetry: boolean }>
+      }
+    ).pendingPermissionPlugins
+    pending.set('calendar', { pluginName: 'calendar', autoRetry: true })
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(result).toMatchObject({
+      version: 1,
+      success: false,
+      status: 'failed',
+      code: 'PLUGIN_UNINSTALL_VERIFICATION_FAILED',
+      retryable: true,
+      installed: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'verification',
+          status: 'failed',
+          code: 'PLUGIN_UNINSTALL_RESIDUALS_FOUND'
+        })
+      ])
+    })
+    expect(manager.plugins.get('calendar')).toBe(plugin)
+    expect(pending.has('calendar')).toBe(false)
+  })
+
+  it('proves successful uninstall clears exact owner surfaces and pending authority', async () => {
+    const { manager, plugin } = await createActualManagerHarness()
+    const existing = new Set(['/fixture/plugins/calendar', '/fixture/plugin-data/calendar'])
+    mocks.fsPathExists.mockImplementation(async (target: string) => existing.has(target))
+    mocks.fsRemove.mockImplementation(async (target: string) => {
+      existing.delete(target)
+    })
+    const pending = (
+      manager as IPluginManager & {
+        pendingPermissionPlugins: Map<string, { pluginName: string; autoRetry: boolean }>
+      }
+    ).pendingPermissionPlugins
+    pending.set('calendar', { pluginName: 'calendar', autoRetry: true })
+
+    const result = await uninstallWithDisposition(manager, {
+      ordinaryExport: { enabled: false },
+      portableSecretBackup: { enabled: false }
+    })
+
+    expect(plugin.getActivationIdentity).toHaveBeenCalled()
+    expect(mocks.deleteSecureStoreValuesByPrefix).toHaveBeenCalledTimes(2)
+    expect(mocks.dbUtils.deletePluginData).toHaveBeenCalledWith('calendar')
+    expect(existing).toEqual(new Set())
+    expect(pending.has('calendar')).toBe(false)
+    expect(mocks.reportPluginUninstall).toHaveBeenCalledOnce()
+    expect(result).toMatchObject({
+      version: 1,
+      success: true,
+      status: 'completed',
+      code: 'PLUGIN_UNINSTALL_COMPLETED',
+      retryable: false,
+      installed: false,
+      stages: expect.arrayContaining([
+        expect.objectContaining({
+          stage: 'verification',
+          status: 'completed',
+          code: 'PLUGIN_UNINSTALL_VERIFIED',
+          retryable: false
+        })
+      ])
+    })
   })
 })

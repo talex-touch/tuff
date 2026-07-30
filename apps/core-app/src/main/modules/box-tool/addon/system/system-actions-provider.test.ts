@@ -214,7 +214,7 @@ describe('SystemActionsProvider app index actions', () => {
 
     expect(mocks.captureScreenshot).toHaveBeenCalledWith({
       target: 'cursor-display',
-      output: 'tfile',
+      output: 'data-url',
       writeClipboard: true
     })
   })

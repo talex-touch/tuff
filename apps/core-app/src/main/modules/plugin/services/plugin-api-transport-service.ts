@@ -1,5 +1,9 @@
 import type { IPluginManager, ITouchPlugin } from '@talex-touch/utils/plugin'
-import type { PluginPerformanceGetPathsResponse } from '@talex-touch/utils/transport/events/types'
+import type {
+  PluginApiUninstallRequest,
+  PluginPerformanceGetPathsResponse
+} from '@talex-touch/utils/transport/events/types'
+import { normalizePluginUninstallRequest } from '@talex-touch/utils/transport/events/types'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import path from 'node:path'
 import { PluginStatus } from '@talex-touch/utils/plugin'
@@ -370,23 +374,15 @@ export function registerPluginApiTransportHandlers(
       return { success: false, error: result?.message ?? 'INSTALL_FAILED' }
     }),
 
-    transport.on(PluginEvents.api.uninstall, async (payload) => {
-      try {
-        const name = payload?.name
-        if (!name) {
-          return { success: false, error: 'Plugin name is required' }
+    transport.on(
+      PluginEvents.api.uninstall,
+      async (payload: PluginApiUninstallRequest, handlerContext) => {
+        if (isRecord(handlerContext) && isRecord(handlerContext.plugin)) {
+          throw new Error('PLUGIN_UNINSTALL_HOST_ONLY')
         }
-
-        const success = await manager.uninstallPlugin(name)
-        if (!success) {
-          return { success: false, error: `Plugin ${name} not found` }
-        }
-        return { success: true }
-      } catch (error) {
-        logIpcHandlerError('plugin:api:uninstall', error)
-        return { success: false, error: toErrorMessage(error) }
+        return manager.uninstallPlugin(normalizePluginUninstallRequest(payload))
       }
-    })
+    )
   )
 
   disposers.push(

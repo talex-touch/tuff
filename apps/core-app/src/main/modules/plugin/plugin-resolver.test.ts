@@ -11,7 +11,8 @@ const { pluginModuleMock } = vi.hoisted(() => ({
     pluginManager: {
       getPluginByName: vi.fn<() => unknown>(() => null),
       loadPlugin: vi.fn(),
-      unloadPlugin: vi.fn()
+      unloadPlugin: vi.fn(),
+      uninstallPlugin: vi.fn()
     }
   }
 }))
@@ -111,6 +112,7 @@ describe('PluginResolver', () => {
 
     expect(disable).toHaveBeenCalledOnce()
     expect(pluginModuleMock.pluginManager.unloadPlugin).not.toHaveBeenCalled()
+    expect(pluginModuleMock.pluginManager.uninstallPlugin).not.toHaveBeenCalled()
     expect(pluginModuleMock.pluginManager.loadPlugin).not.toHaveBeenCalled()
     expect(callback).toHaveBeenCalledWith(
       'Failed to remove old plugin: PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED',

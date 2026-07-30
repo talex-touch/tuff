@@ -1,0 +1,256 @@
+{
+  "schema": "talex.touch.sensitive-data-inventory/v1",
+  "updatedAt": "2026-07-30",
+  "verificationCommand": "corepack pnpm privacy:inventory:verify",
+  "entries": [
+    {
+      "id": "core-provider-credentials",
+      "classification": "credential",
+      "owner": "IntelligenceModule/ProviderCredentialService",
+      "storageLocations": ["secure-store.json: provider.<sha256(providerId)>.api-key"],
+      "writers": [
+        "intelligence:api:provider-config:save",
+        "legacy aisdk-config migration",
+        "legacy intelligence/providers migration"
+      ],
+      "readers": ["main-side provider runtime", "main-side provider test/model fetch"],
+      "exportPolicy": "encrypted-portable-allowlist for four fixed built-in provider IDs; dynamic custom providers excluded",
+      "deletionPolicy": "typed provider-config:delete clears the secure entry before config deletion and rolls back on failure",
+      "retentionPolicy": "until explicit replacement, clear, provider deletion, or app-data reset",
+      "rendererExposure": "transient input/test only; ordinary renderer storage receives authRef and hasCredential",
+      "portable": true,
+      "migrationStatus": "transactional-main-owned",
+      "evidence": [
+        "apps/core-app/src/main/modules/ai/provider-credential-service.test.ts#test=moves a legacy credential to secure storage without changing whitespace",
+        "apps/core-app/src/main/modules/ai/provider-credential-runtime.ts#symbol=initializeProviderCredentialLifecycle"
+      ]
+    },
+    {
+      "id": "translation-provider-credentials",
+      "classification": "credential",
+      "owner": "PluginStorageTransport/touch-translation",
+      "storageLocations": ["secure-store.json: plugin.touch-translation.providers.*"],
+      "writers": ["plugin:storage:set-secret-batch", "main-side providers_config migration"],
+      "readers": ["Plugin Secret SDK"],
+      "exportPolicy": "encrypted-portable-allowlist for fixed official Translation secret fields",
+      "deletionPolicy": "Plugin Secret batch clear, plugin uninstall disposition, or app-data reset",
+      "retentionPolicy": "until explicit replacement, clear, plugin uninstall, or app-data reset",
+      "rendererExposure": "Secret SDK runtime value only; providers_config projection is sanitized",
+      "portable": true,
+      "migrationStatus": "transactional-main-owned-with-legacy-runtime-fallback",
+      "evidence": [
+        "apps/core-app/src/main/modules/plugin/services/translation-provider-credential-migration.test.ts#test=atomically migrates legacy fields and persists only sanitized config",
+        "plugins/touch-translation/translation-provider-secret.test.ts#test=loads main-migrated provider credentials only through the Secret SDK"
+      ]
+    },
+    {
+      "id": "nexus-auth-session",
+      "classification": "identity-session",
+      "owner": "AuthModule",
+      "storageLocations": ["secure-store.json: auth-token", "main-memory session state"],
+      "writers": ["main-owned auth lifecycle"],
+      "readers": ["main-side Nexus runtime injection"],
+      "exportPolicy": "never portable and never ordinary export",
+      "deletionPolicy": "logout or app-data reset",
+      "retentionPolicy": "session/account lifecycle",
+      "rendererExposure": "redacted auth state only",
+      "portable": false,
+      "migrationStatus": "secure-main-owned",
+      "evidence": [
+        "apps/core-app/src/main/modules/ai/provider-runtime.ts#symbol=normalizeProviderForRuntime",
+        "apps/core-app/src/main/modules/privacy/portable-secret-catalog.ts#symbol=PORTABLE_SECRET_CATALOG_V1"
+      ]
+    },
+    {
+      "id": "sync-payload-key",
+      "classification": "cryptographic-key",
+      "owner": "SyncModule",
+      "storageLocations": ["secure-store.json: sync-payload-key"],
+      "writers": ["main-owned sync key lifecycle"],
+      "readers": ["main-owned sync encrypt/decrypt"],
+      "exportPolicy": "never portable and never ordinary export",
+      "deletionPolicy": "account reset or app-data reset",
+      "retentionPolicy": "account/device lifecycle",
+      "rendererExposure": "none",
+      "portable": false,
+      "migrationStatus": "secure-main-owned",
+      "evidence": [
+        "apps/core-app/src/main/modules/sync/index.ts#symbol=SyncModule",
+        "apps/core-app/src/main/modules/privacy/portable-secret-catalog.ts#symbol=PORTABLE_SECRET_CATALOG_V1"
+      ]
+    },
+    {
+      "id": "machine-seed",
+      "classification": "device-identity",
+      "owner": "SecureStore",
+      "storageLocations": ["local-secret.v1.key", "OS/local secure backend material"],
+      "writers": ["main-owned secure-store initialization"],
+      "readers": ["secure-store envelope crypto"],
+      "exportPolicy": "never portable and never ordinary export",
+      "deletionPolicy": "app-data reset/uninstall data removal",
+      "retentionPolicy": "device installation lifecycle",
+      "rendererExposure": "none",
+      "portable": false,
+      "migrationStatus": "local-only",
+      "evidence": [
+        "apps/core-app/src/main/utils/secure-store.ts#symbol=LOCAL_SECRET_FILE",
+        "apps/core-app/src/main/modules/privacy/portable-secret-catalog.ts#symbol=PORTABLE_SECRET_CATALOG_V1"
+      ]
+    },
+    {
+      "id": "clipboard-history",
+      "classification": "user-content",
+      "owner": "ClipboardPrivacyDataOwner",
+      "storageLocations": ["auxiliary database: clipboard_history and FK children", "owned clipboard image assets"],
+      "writers": ["Clipboard capture pipeline"],
+      "readers": ["Clipboard UI/search owner"],
+      "exportPolicy": "ordinary bounded allowlisted export; no native paths",
+      "deletionPolicy": "typed category delete or retention paging; favorites and host-protected roots survive",
+      "retentionPolicy": "user policy with strict stored < cutoff boundary",
+      "rendererExposure": "product content views and bounded Privacy summary",
+      "portable": false,
+      "migrationStatus": "owner-bound",
+      "evidence": [
+        "apps/core-app/src/main/modules/privacy/owners/clipboard-retention-owner.ts#symbol=createClipboardRetentionOwner",
+        "apps/core-app/src/main/modules/privacy/privacy-lifecycle-service.test.ts#test=keeps summary, retention preview, manual preview and delete counts consistent"
+      ]
+    },
+    {
+      "id": "ocr-history-and-assets",
+      "classification": "user-content",
+      "owner": "OcrPrivacyDataOwner/TempFileService",
+      "storageLocations": [
+        "auxiliary database: ocr_jobs and ocr_results",
+        "registered ocr/intermediate and native/screenshots temp namespaces"
+      ],
+      "writers": ["OCR pipeline", "screenshot runtime"],
+      "readers": ["OCR UI/runtime"],
+      "exportPolicy": "ordinary bounded metadata export; no image bytes or paths",
+      "deletionPolicy": "terminal job-root deletion plus owned temp cleanup; pending jobs and user source files survive",
+      "retentionPolicy": "user policy; temp fallback 24 hours",
+      "rendererExposure": "OCR results through product DTOs; Privacy summary is metadata only",
+      "portable": false,
+      "migrationStatus": "owner-bound",
+      "evidence": [
+        "apps/core-app/src/main/modules/privacy/owners/ocr-screenshot-retention-owner.ts#symbol=createOcrScreenshotRetentionOwner",
+        "apps/core-app/src/main/service/temp-file.service.ts#symbol=TempFileService"
+      ]
+    },
+    {
+      "id": "search-history-and-usage",
+      "classification": "behavioral-metadata",
+      "owner": "SearchPrivacyDataOwner",
+      "storageLocations": ["primary/auxiliary database search detail tables", "in-memory search detail caches"],
+      "writers": ["Search completion/context/usage pipelines"],
+      "readers": ["Search ranking and diagnostics"],
+      "exportPolicy": "ordinary bounded allowlisted metadata export",
+      "deletionPolicy": "typed category delete/retention; pins, source index, static embeddings, config, and task state survive",
+      "retentionPolicy": "user policy with strict cutoff and keyset paging",
+      "rendererExposure": "search UI and bounded Privacy DTOs",
+      "portable": false,
+      "migrationStatus": "owner-bound",
+      "evidence": [
+        "apps/core-app/src/main/modules/privacy/owners/search-retention-owner.ts#symbol=createSearchRetentionOwner",
+        ".trellis/tasks/07-27-sensitive-data-lifecycle-301/research/retention-surfaces.md#heading=3. Search detail, contextual behavior, and caches"
+      ]
+    },
+    {
+      "id": "intelligence-audit-context-memory",
+      "classification": "behavioral-and-user-content",
+      "owner": "IntelligencePrivacyDataOwner",
+      "storageLocations": ["primary database: intelligence audit/context/memory tables"],
+      "writers": ["Intelligence runtime metadata projections"],
+      "readers": ["Intelligence runtime and audit UI"],
+      "exportPolicy": "ordinary bounded metadata export; prompts/responses/endpoints/native errors forbidden",
+      "deletionPolicy": "audit detail and archived/expired unpinned context roots only; memory has independent explicit lifecycle",
+      "retentionPolicy": "user policy for audit/context; active/pinned context and memory/tombstones protected",
+      "rendererExposure": "typed product/audit DTOs with sensitive-field redaction",
+      "portable": false,
+      "migrationStatus": "owner-bound",
+      "evidence": [
+        "apps/core-app/src/main/modules/privacy/owners/intelligence-retention-owner.ts#symbol=createIntelligenceRetentionOwner",
+        "apps/core-app/src/main/modules/ai/intelligence-audit-logger.ts#symbol=sanitizeIntelligenceAuditEntry"
+      ]
+    },
+    {
+      "id": "analytics-telemetry-diagnostics",
+      "classification": "operational-metadata",
+      "owner": "DiagnosticsPrivacyDataOwner/OperationalErrorService",
+      "storageLocations": [
+        "auxiliary analytics/telemetry tables",
+        "captured innerRoot/logs CoreApp files",
+        "crash dump directory"
+      ],
+      "writers": ["metadata-only analytics, telemetry, and operational error projections"],
+      "readers": ["diagnostics UI and opted-in report sinks"],
+      "exportPolicy": "bounded safe metadata only; paths, stacks, endpoints, prompts and payloads forbidden",
+      "deletionPolicy": "typed category delete/retention within fixed DB owners and captured canonical log root",
+      "retentionPolicy": "user policy and fixed log rotation; foreign/plugin/download/workflow roots excluded",
+      "rendererExposure": "aggregates and stable error codes",
+      "portable": false,
+      "migrationStatus": "owner-bound-redacted",
+      "evidence": [
+        "apps/core-app/src/main/modules/privacy/owners/diagnostics-retention-owner.ts#symbol=createDiagnosticsRetentionOwner",
+        "apps/core-app/src/main/modules/observability/operational-error-service.ts#symbol=OperationalErrorService"
+      ]
+    },
+    {
+      "id": "plugin-ordinary-data",
+      "classification": "plugin-user-data",
+      "owner": "PluginDataDispositionProduction",
+      "storageLocations": [
+        "plugin config/data roots",
+        "plugin SQLite resources",
+        "plugin logs and activation-scoped temp namespaces"
+      ],
+      "writers": ["typed Plugin Storage SDK"],
+      "readers": ["owning plugin through authoritative activation identity"],
+      "exportPolicy": "optional ordinary export selected during typed uninstall disposition; Secrets excluded",
+      "deletionPolicy": "typed uninstall disposition after generation-bound confirmation",
+      "retentionPolicy": "plugin installation lifecycle unless owner policy states otherwise",
+      "rendererExposure": "owning plugin scoped SDK and host plugin-storage UI",
+      "portable": false,
+      "migrationStatus": "generation-bound-uninstall",
+      "evidence": [
+        "apps/core-app/src/main/modules/plugin/plugin-data-disposition-production.ts#symbol=createProductionPluginDataDispositionCoordinator",
+        "apps/core-app/src/renderer/src/components/plugin/PluginInfo.uninstall-disposition.test.ts#test=sends an exact generation-bound export plan, disables pending controls, and dismisses on success"
+      ]
+    },
+    {
+      "id": "plugin-secrets",
+      "classification": "credential",
+      "owner": "PluginStorageTransport",
+      "storageLocations": ["secure-store.json: plugin.<authoritative-plugin-name>.*"],
+      "writers": ["typed Plugin Secret SDK set/setMany/delete"],
+      "readers": ["owning plugin through authoritative activation identity and permission"],
+      "exportPolicy": "not ordinary export; encrypted backup only for exact portable catalog entries",
+      "deletionPolicy": "Secret clear, plugin uninstall disposition, or app-data reset",
+      "retentionPolicy": "plugin installation lifecycle",
+      "rendererExposure": "operation-local Secret SDK values only; no ordinary plugin config mirror",
+      "portable": true,
+      "migrationStatus": "secure-authoritative-owner",
+      "evidence": [
+        "apps/core-app/src/main/modules/plugin/services/plugin-storage-transport-service.ts#symbol=registerPluginStorageTransportHandlers",
+        "packages/utils/plugin/sdk/secret.ts#symbol=usePluginSecret"
+      ]
+    },
+    {
+      "id": "temporary-files",
+      "classification": "transient-user-content",
+      "owner": "TempFileService",
+      "storageLocations": ["registered fixed namespaces below canonical temp root"],
+      "writers": ["trusted main owners and activation-scoped plugin temp SDK"],
+      "readers": ["owning operation only"],
+      "exportPolicy": "none",
+      "deletionPolicy": "eager owner release, namespace cleanup, cancellation, or startup fallback cleanup",
+      "retentionPolicy": "fixed namespace retention; unregistered/traversal/symlink targets rejected",
+      "rendererExposure": "opaque operation results, never arbitrary native paths",
+      "portable": false,
+      "migrationStatus": "namespace-registered",
+      "evidence": [
+        "apps/core-app/src/main/service/temp-file.service.ts#symbol=TempFileService",
+        "apps/core-app/src/main/modules/privacy/privacy-production-wiring.test.ts#test=routes auxiliary and core tables to their exact production clients"
+      ]
+    }
+  ]
+}

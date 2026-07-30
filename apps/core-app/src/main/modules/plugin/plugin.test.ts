@@ -1163,11 +1163,15 @@ describe('touchPlugin.triggerFeature', () => {
 
   it('exposes plugin secret API through the injected feature util', async () => {
     const transport = {
-      invoke: vi.fn().mockResolvedValueOnce({ success: true }).mockResolvedValueOnce({
-        backend: 'local-secret',
-        available: true,
-        degraded: false
-      }),
+      invoke: vi
+        .fn()
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({ success: true })
+        .mockResolvedValueOnce({
+          backend: 'local-secret',
+          available: true,
+          degraded: false
+        }),
       on: vi.fn(() => vi.fn()),
       keyManager: {
         requestKey: vi.fn(),
@@ -1190,6 +1194,10 @@ describe('touchPlugin.triggerFeature', () => {
     )
 
     await plugin.getFeatureUtil().plugin.secret.set('providers.baidu.secretKey', 'secret-value')
+    await plugin.getFeatureUtil().plugin.secret.setMany([
+      { key: 'providers.tencent.secretId', value: 'synthetic-id' },
+      { key: 'providers.tencent.secretKey', value: 'synthetic-key' }
+    ])
     await plugin.getFeatureUtil().plugin.secret.health()
 
     expect(transport.invoke).toHaveBeenCalledWith(
@@ -1198,6 +1206,22 @@ describe('touchPlugin.triggerFeature', () => {
         pluginName: 'test-plugin',
         key: 'providers.baidu.secretKey',
         value: 'secret-value'
+      },
+      {
+        plugin: {
+          name: 'test-plugin',
+          uniqueKey: expect.any(String)
+        }
+      }
+    )
+    expect(transport.invoke).toHaveBeenCalledWith(
+      PluginEvents.storage.setSecretBatch,
+      {
+        pluginName: 'test-plugin',
+        entries: [
+          { key: 'providers.tencent.secretId', value: 'synthetic-id' },
+          { key: 'providers.tencent.secretKey', value: 'synthetic-key' }
+        ]
       },
       {
         plugin: {

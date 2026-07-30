@@ -68,7 +68,7 @@ const isModelConfigDisabled = computed(() => {
   if (localProvider.value.type === 'local') {
     return false
   }
-  return !localProvider.value.apiKey || localProvider.value.apiKey.trim().length === 0
+  return !isNexusManagedProvider.value && !localProvider.value.hasCredential
 })
 
 const isNexusManagedProvider = computed(() => {

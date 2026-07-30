@@ -711,6 +711,117 @@ export class ContextHygieneService {
     })
   }
 
+  private async withRetentionWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
+      priority: 'background',
+      dropPolicy: 'none',
+      maxQueueWaitMs: 15_000
+    })
+  }
+
+  public async cleanupRetentionPage(
+    cutoffMs: number,
+    batchSize: number,
+    signal: AbortSignal,
+    cursor?: { updatedAtMs: number; id: string },
+    includeProtected = false
+  ): Promise<{
+    deletedCount: number
+    hasMore: boolean
+    cancelled: boolean
+    cursor?: { updatedAtMs: number; id: string }
+  }> {
+    if (signal.aborted) return { deletedCount: 0, hasMore: false, cancelled: true }
+    if (!Number.isSafeInteger(cutoffMs) || !Number.isFinite(batchSize)) {
+      throw new Error('CONTEXT_RETENTION_REQUEST_INVALID')
+    }
+    const client = this.requireClient()
+    const limit = Math.min(200, Math.max(1, Math.floor(batchSize)))
+    const protectionClause = includeProtected
+      ? `AND status IN ('archived', 'expired')`
+      : `AND status IN ('archived', 'expired')
+         AND COALESCE(is_pinned, 0) = 0`
+    const candidates = await client.execute({
+      sql: `SELECT id, updated_at
+              FROM intelligence_context_sessions
+             WHERE 1 = 1
+               ${protectionClause}
+               AND updated_at < ?
+               AND (updated_at > ? OR (updated_at = ? AND id > ?))
+             ORDER BY updated_at, id
+             LIMIT ?`,
+      args: [
+        cutoffMs,
+        cursor?.updatedAtMs ?? -1,
+        cursor?.updatedAtMs ?? -1,
+        cursor?.id ?? '',
+        limit + 1
+      ]
+    })
+    const selectedRows = candidates.rows.slice(0, limit)
+    const ids = selectedRows.map((row) => String(row.id))
+    if (ids.length === 0) {
+      return { deletedCount: 0, hasMore: false, cancelled: false }
+    }
+    if (signal.aborted) {
+      return { deletedCount: 0, hasMore: true, cancelled: true }
+    }
+    const deletion = await this.withRetentionWrite('intelligence.context.retention', () =>
+      client.execute({
+        sql: `DELETE FROM intelligence_context_sessions
+               WHERE id IN (${ids.map(() => '?').join(', ')})
+                 ${protectionClause}
+                 AND updated_at < ?
+             RETURNING id`,
+        args: [...ids, cutoffMs]
+      })
+    )
+    const lastRow = selectedRows.at(-1)
+    return {
+      deletedCount: deletion.rows.length,
+      hasMore: candidates.rows.length > limit,
+      cancelled: false,
+      cursor: lastRow ? { updatedAtMs: Number(lastRow.updated_at), id: String(lastRow.id) } : cursor
+    }
+  }
+
+  public async archiveSession(sessionId: string, nowMs = Date.now()): Promise<boolean> {
+    const client = this.requireClient()
+    const result = await this.withDbWrite('intelligence.context.archiveSession', () =>
+      client.execute({
+        sql: `UPDATE intelligence_context_sessions
+                 SET status = 'archived', archived_at = ?, updated_at = ?
+               WHERE id = ? AND status = 'active'`,
+        args: [nowMs, nowMs, sessionId]
+      })
+    )
+    return Number(result.rowsAffected ?? 0) > 0
+  }
+
+  public async expireSession(sessionId: string, nowMs = Date.now()): Promise<boolean> {
+    const client = this.requireClient()
+    const result = await this.withDbWrite('intelligence.context.expireSession', () =>
+      client.execute({
+        sql: `UPDATE intelligence_context_sessions
+                 SET status = 'expired', updated_at = ?
+               WHERE id = ? AND status != 'expired'`,
+        args: [nowMs, sessionId]
+      })
+    )
+    return Number(result.rowsAffected ?? 0) > 0
+  }
+
+  public async setSessionPinned(sessionId: string, pinned: boolean): Promise<boolean> {
+    const client = this.requireClient()
+    const result = await this.withDbWrite('intelligence.context.setSessionPinned', () =>
+      client.execute({
+        sql: `UPDATE intelligence_context_sessions SET is_pinned = ? WHERE id = ?`,
+        args: [pinned ? 1 : 0, sessionId]
+      })
+    )
+    return Number(result.rowsAffected ?? 0) > 0
+  }
+
   private async persistMemory(
     client: Client,
     memory: MemoryItem,

@@ -259,7 +259,7 @@ const canFetchModels = computed(() => {
     return true
   }
 
-  const hasApiKey = !!props.modelValue.apiKey?.trim()
+  const hasApiKey = Boolean(props.modelValue.hasCredential)
   return hasApiKey
 })
 
@@ -324,7 +324,6 @@ async function handleFetchModels() {
       type: props.modelValue.type,
       name: props.modelValue.name,
       enabled: true,
-      apiKey: props.modelValue.apiKey,
       baseUrl: props.modelValue.baseUrl,
       models: [...localModels.value],
       timeout: props.modelValue.timeout || 30000

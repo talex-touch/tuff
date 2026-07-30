@@ -95,6 +95,7 @@ const mocks = vi.hoisted(() => ({
   persistMainConfig: vi.fn(() => Promise.resolve()),
   subscribeMainConfig: vi.fn(() => vi.fn()),
   capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
+  releaseTempArtifact: vi.fn(() => Promise.resolve(true)),
   listDisplays: vi.fn<() => NativeScreenshotDisplay[]>(),
   getSupport: vi.fn(),
   getCursorScreenPoint: vi.fn<() => ScreenPoint>(() => ({ x: 0, y: 0 })),
@@ -291,6 +292,7 @@ vi.mock('../ai/intelligence-sdk', () => ({
 vi.mock('../native-capabilities/screenshot-service', () => ({
   getNativeScreenshotService: vi.fn(() => ({
     capture: mocks.capture,
+    releaseTempArtifact: mocks.releaseTempArtifact,
     getSupport: mocks.getSupport,
     listDisplays: mocks.listDisplays
   }))
@@ -1255,6 +1257,7 @@ describe('AssistantModule screenshot translation', () => {
       '/tmp/source-screenshot.png',
       '/tmp/tuff-screenshot.png'
     )
+    expect(mocks.releaseTempArtifact).toHaveBeenCalledWith('/tmp/source-screenshot.png')
     expect(mocks.translateImageBase64).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
@@ -1281,6 +1284,7 @@ describe('AssistantModule screenshot translation', () => {
       canceled: true
     })
     expect(mocks.copyFile).not.toHaveBeenCalled()
+    expect(mocks.releaseTempArtifact).toHaveBeenCalledWith('/tmp/source-screenshot.png')
 
     await module.onDestroy({} as never)
   })
