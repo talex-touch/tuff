@@ -2027,15 +2027,14 @@ export class TuffIntelligenceSDK {
 
   private getAuditMeta(
     promptTemplate?: string,
-    promptVariables?: Record<string, unknown>
+    _promptVariables?: Record<string, unknown>
   ): { promptHash?: string; metadata?: Record<string, unknown> } {
     if (!promptTemplate) {
       return {}
     }
 
     return {
-      promptHash: intelligenceAuditLogger.generatePromptHash(promptTemplate),
-      metadata: { promptTemplate, promptVariables }
+      promptHash: intelligenceAuditLogger.generatePromptHash(promptTemplate)
     }
   }
 
@@ -2096,6 +2095,14 @@ export class TuffIntelligenceSDK {
       promptVariables
     } = params
     const auditMeta = this.getAuditMeta(promptTemplate, promptVariables)
+    const candidateCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined
+    const errorCode =
+      typeof candidateCode === 'string' && /^[A-Za-z][A-Za-z0-9_:-]{0,63}$/.test(candidateCode)
+        ? candidateCode
+        : 'INTELLIGENCE_PROVIDER_FAILED'
 
     await this.logAudit({
       traceId: intelligenceAuditLogger.generateTraceId(),
@@ -2106,7 +2113,7 @@ export class TuffIntelligenceSDK {
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       latency: Date.now() - startTime,
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorCode,
       caller,
       userId,
       ...auditMeta
@@ -2608,7 +2615,7 @@ export class TuffIntelligenceSDK {
       }
 
       // Test the provider with timeout
-      const result = await Promise.race([
+      await Promise.race([
         provider.chat(testPayload, { timeout, testRun: true }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), timeout)
@@ -2619,7 +2626,7 @@ export class TuffIntelligenceSDK {
 
       return {
         success: true,
-        message: `Connection successful. Model: ${result.model}`,
+        message: 'Connection successful',
         latency,
         timestamp
       }
@@ -2651,8 +2658,6 @@ export class TuffIntelligenceSDK {
           message = 'Provider service error - try again later'
         } else if (error.message.includes('network') || error.message.includes('fetch')) {
           message = 'Network error - check your internet connection'
-        } else {
-          message = error.message
         }
       }
 

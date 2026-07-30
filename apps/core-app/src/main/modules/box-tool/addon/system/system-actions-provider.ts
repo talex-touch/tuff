@@ -474,7 +474,7 @@ export class SystemActionsProvider implements ISearchProvider<ProviderContext> {
         case 'screenshot-cursor-display': {
           await getNativeScreenshotService().capture({
             target: 'cursor-display',
-            output: 'tfile',
+            output: 'data-url',
             writeClipboard: true
           })
           break

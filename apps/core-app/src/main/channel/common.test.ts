@@ -444,7 +444,7 @@ vi.mock('../service/temp-file.service', () => ({
     registerNamespace: tempFileRegisterNamespaceMock,
     startCleanup: vi.fn(),
     createFile: tempFileCreateFileMock,
-    deleteFile: tempFileDeleteFileMock
+    deleteFileFromNamespaces: tempFileDeleteFileMock
   }
 }))
 
@@ -1211,7 +1211,7 @@ describe('CommonChannelModule private helpers', () => {
           prefix: 'tufficon',
           retentionMs: 1000
         },
-        {}
+        { plugin: { name: 'demo-plugin' } }
       )
     ).resolves.toEqual({
       url: 'tfile:///tmp/tuff-plugin-temp/example.txt',
@@ -1220,21 +1220,32 @@ describe('CommonChannelModule private helpers', () => {
       createdAt: 123
     })
     await expect(
-      deleteHandler?.({ url: 'tfile:///tmp/tuff-plugin-temp/example.txt' }, {})
+      deleteHandler?.(
+        { url: 'tfile:///tmp/tuff-plugin-temp/example.txt' },
+        { plugin: { name: 'demo-plugin' } }
+      )
     ).resolves.toEqual({ success: true })
 
+    await expect(createHandler?.({ text: 'unowned' }, {})).rejects.toThrow(
+      'PLUGIN_CONTEXT_REQUIRED'
+    )
+
+    expect(tempFileRegisterNamespaceMock).toHaveBeenCalledTimes(1)
     expect(tempFileRegisterNamespaceMock).toHaveBeenCalledWith({
-      namespace: 'icons/svg',
-      retentionMs: 1000
+      namespace: 'plugins/runtime/demo-plugin-88ecfcc7',
+      retentionMs: 24 * 60 * 60 * 1000,
+      automaticCleanup: true
     })
     expect(tempFileCreateFileMock).toHaveBeenCalledWith({
-      namespace: 'icons/svg',
+      namespace: 'plugins/runtime/demo-plugin-88ecfcc7',
       ext: 'svg',
       text: 'hello',
       base64: undefined,
       prefix: 'tufficon'
     })
-    expect(tempFileDeleteFileMock).toHaveBeenCalledWith('/tmp/tuff-plugin-temp/example.txt')
+    expect(tempFileDeleteFileMock).toHaveBeenCalledWith('/tmp/tuff-plugin-temp/example.txt', [
+      'plugins/runtime/demo-plugin-88ecfcc7'
+    ])
   })
 
   it('marks native-share as unsupported on Windows while keeping mail-only fallback out of capability support', async () => {

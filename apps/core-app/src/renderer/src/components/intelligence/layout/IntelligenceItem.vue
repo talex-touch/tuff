@@ -28,6 +28,8 @@ interface IntelligenceProviderConfig {
   enabled: boolean
   metadata?: Record<string, unknown>
   apiKey?: string
+  authRef?: string
+  hasCredential?: boolean
   baseUrl?: string
   models?: string[]
   defaultModel?: string
@@ -65,7 +67,7 @@ const hasConfigError = computed(() => {
   if (
     props.provider.type !== IntelligenceProviderType.LOCAL &&
     !isNexusManagedProvider(props.provider) &&
-    !props.provider.apiKey
+    !props.provider.hasCredential
   ) {
     return true
   }

@@ -1,5 +1,6 @@
 import type { IntelligenceProviderConfig } from '@talex-touch/tuff-intelligence'
 import { getAuthToken } from '../auth'
+import { resolveProviderCredential } from './provider-credential-runtime'
 import { isNexusManagedProvider, TUFF_NEXUS_PROVIDER_ID } from './provider-runtime-shared'
 
 export { isNexusManagedProvider, TUFF_NEXUS_PROVIDER_ID }
@@ -15,7 +16,15 @@ export function normalizeProviderForRuntime(
   provider: IntelligenceProviderConfig
 ): IntelligenceProviderConfig {
   if (!isNexusManagedProvider(provider)) {
-    return provider
+    const secureCredential = resolveProviderCredential(provider)
+    const transientCredential =
+      typeof provider.apiKey === 'string' && provider.apiKey.trim() ? provider.apiKey : undefined
+    const credential = secureCredential ?? transientCredential
+    if (!credential || credential === provider.apiKey) return provider
+    return {
+      ...provider,
+      apiKey: credential
+    }
   }
 
   const authToken = toNexusApiKey(getAuthToken())

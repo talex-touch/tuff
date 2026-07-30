@@ -232,6 +232,7 @@ vi.mock('@talex-touch/utils/transport/main', () => ({
 vi.mock('electron', () => ({
   app: {
     getLocale: vi.fn(() => 'en-US'),
+    getPath: vi.fn(() => '/tmp'),
     commandLine: {
       appendSwitch: vi.fn()
     }

@@ -92,6 +92,7 @@ import { buildVerificationModule } from '../modules/build-verification'
 import { databaseModule } from '../modules/database'
 import { operationalErrorService } from '../modules/observability'
 import { pluginModule } from '../modules/plugin/plugin-module'
+import { resolvePluginTempNamespace } from '../modules/plugin/plugin-temp-namespace'
 import { createDbUtils } from '../db/utils'
 import {
   applyCapabilityRuntimePatch,
@@ -136,7 +137,6 @@ const READ_FILE_CACHE_MAX_BYTES = 256 * 1024
 const READ_FILE_CACHE_TOTAL_BYTES = 2 * 1024 * 1024
 const DIALOG_APPROVED_TTL_MS = 10 * 60 * 1000
 const DIALOG_APPROVED_MAX = 200
-const PLUGIN_TEMP_NAMESPACE = 'plugins/runtime'
 const PLUGIN_TEMP_RETENTION_MS = 24 * 60 * 60 * 1000
 const TUFF_CLI_CAPABILITY: PlatformCapability = {
   id: 'platform.tuff-cli',
@@ -222,14 +222,6 @@ function normalizeSafeNamespaceSegment(value: string): string {
     .replace(/-+/g, '-')
     .replace(/^[-.]+|[-.]+$/g, '')
   return normalized || 'unknown'
-}
-
-function normalizeSafeNamespacePath(value: string): string {
-  return value
-    .split(/[\\/]+/)
-    .map((segment) => normalizeSafeNamespaceSegment(segment))
-    .filter(Boolean)
-    .join('/')
 }
 
 // Preset import/export events
@@ -1178,18 +1170,23 @@ export class CommonChannelModule extends BaseModule {
     this.registerPresetTransportHandlers(transport, registerSafeHandler)
   }
 
+  private resolvePluginTempNamespace(context?: HandlerContext): string {
+    const pluginName = context?.plugin?.name
+    if (!pluginName) throw new Error('PLUGIN_CONTEXT_REQUIRED')
+    return resolvePluginTempNamespace(pluginName)
+  }
+
   private registerPluginTempFileTransportHandlers(
     transport: NonNullable<CommonChannelModule['transport']>
   ): void {
     this.transportDisposers.push(
-      transport.on(PluginEvents.tempFile.create, async (payload) => {
-        const retentionMs =
-          typeof payload?.retentionMs === 'number' && Number.isFinite(payload.retentionMs)
-            ? Math.max(0, Math.trunc(payload.retentionMs))
-            : PLUGIN_TEMP_RETENTION_MS
-        const namespace = normalizeSafeNamespacePath(payload?.namespace ?? PLUGIN_TEMP_NAMESPACE)
-
-        tempFileService.registerNamespace({ namespace, retentionMs })
+      transport.on(PluginEvents.tempFile.create, async (payload, context) => {
+        const namespace = this.resolvePluginTempNamespace(context)
+        tempFileService.registerNamespace({
+          namespace,
+          retentionMs: PLUGIN_TEMP_RETENTION_MS,
+          automaticCleanup: true
+        })
 
         const result = await tempFileService.createFile({
           namespace,
@@ -1206,9 +1203,12 @@ export class CommonChannelModule extends BaseModule {
           createdAt: result.createdAt
         }
       }),
-      transport.on(PluginEvents.tempFile.delete, async (payload) => {
+      transport.on(PluginEvents.tempFile.delete, async (payload, context) => {
         const target = resolveTfilePath(payload?.url ?? '')
-        const success = target ? await tempFileService.deleteFile(target) : false
+        const namespace = this.resolvePluginTempNamespace(context)
+        const success = target
+          ? await tempFileService.deleteFileFromNamespaces(target, [namespace])
+          : false
         return { success }
       })
     )

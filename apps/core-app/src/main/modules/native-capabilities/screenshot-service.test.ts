@@ -80,12 +80,16 @@ const mocks = vi.hoisted(() => ({
     durationMs: 8
   })),
   registerNamespace: vi.fn(),
+  getNamespaceConfig: vi.fn<
+    () => { namespace: string; retentionMs: number | null; automaticCleanup: boolean } | null
+  >(() => null),
   startCleanup: vi.fn(),
   createFile: vi.fn(async () => ({
     path: '/tmp/tuff/native/screenshots/shot.png',
     sizeBytes: 8,
     createdAt: 1
   })),
+  deleteFileFromNamespaces: vi.fn(async () => true),
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -123,8 +127,10 @@ vi.mock('./native-screenshot-addon', () => ({
 vi.mock('../../service/temp-file.service', () => ({
   tempFileService: {
     registerNamespace: mocks.registerNamespace,
+    getNamespaceConfig: mocks.getNamespaceConfig,
     startCleanup: mocks.startCleanup,
-    createFile: mocks.createFile
+    createFile: mocks.createFile,
+    deleteFileFromNamespaces: mocks.deleteFileFromNamespaces
   }
 }))
 
@@ -141,6 +147,21 @@ describe('NativeScreenshotService', () => {
       platform: 'darwin',
       engine: 'xcap'
     }))
+  })
+
+  it('does not overwrite a retention namespace already configured by its owner', async () => {
+    mocks.getNamespaceConfig.mockReturnValueOnce({
+      namespace: 'native/screenshots',
+      retentionMs: null,
+      automaticCleanup: false
+    })
+    const { NativeScreenshotService } = await import('./screenshot-service')
+    const service = new NativeScreenshotService()
+
+    await service.capture({ output: 'data-url' })
+
+    expect(mocks.registerNamespace).not.toHaveBeenCalled()
+    expect(mocks.startCleanup).toHaveBeenCalledOnce()
   })
 
   it('normalizes display metadata to Electron global DIP coordinates', async () => {
@@ -191,7 +212,8 @@ describe('NativeScreenshotService', () => {
     })
     expect(mocks.registerNamespace).toHaveBeenCalledWith({
       namespace: 'native/screenshots',
-      retentionMs: 30 * 60_000
+      retentionMs: 24 * 60 * 60 * 1000,
+      automaticCleanup: false
     })
     expect(mocks.createFile).toHaveBeenCalledWith({
       namespace: 'native/screenshots',
@@ -239,6 +261,19 @@ describe('NativeScreenshotService', () => {
       }
     })
     expect(mocks.createFile).not.toHaveBeenCalled()
+  })
+
+  it('releases screenshot artifacts only through the screenshot namespace', async () => {
+    const { NativeScreenshotService } = await import('./screenshot-service')
+    const service = new NativeScreenshotService()
+
+    await expect(
+      service.releaseTempArtifact('/tmp/tuff/native/screenshots/shot.png')
+    ).resolves.toBe(true)
+    expect(mocks.deleteFileFromNamespaces).toHaveBeenCalledWith(
+      '/tmp/tuff/native/screenshots/shot.png',
+      ['native/screenshots']
+    )
   })
 
   it('returns unsupported support when native module reports disabled', async () => {

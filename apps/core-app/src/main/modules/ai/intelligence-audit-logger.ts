@@ -4,13 +4,13 @@ import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
 import crypto from 'node:crypto'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { and, desc, eq, gte, lte, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, gte, inArray, lt, lte, or, sql } from 'drizzle-orm'
 import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import { intelligenceAuditLogs, intelligenceUsageStats } from '../../db/schema'
 import { withSqliteRetry } from '../../db/sqlite-retry'
-import { databaseModule } from '../database'
-import { enterPerfContext } from '../../utils/perf-context'
 import { createLogger } from '../../utils/logger'
+import { enterPerfContext } from '../../utils/perf-context'
+import { databaseModule } from '../database'
 
 /**
  * Extended audit log with additional tracking fields
@@ -146,6 +146,92 @@ const MODEL_COSTS: Record<string, ModelCostConfig> = {
 }
 
 const auditLog = createLogger('AuditLogger')
+const AUDIT_IDENTIFIER_PATTERN = /^[\w.:/-]{1,128}$/
+const AUDIT_ERROR_CODE_PATTERN = /^(?:INTELLIGENCE|NEXUS|OCR|PROVIDER)_[A-Z\d_]{1,55}$/
+const AUDIT_METADATA_IDENTIFIER_PATTERN = /^[\w.:-]{1,128}$/
+const AUDIT_METADATA_KEYS = new Set([
+  'promptId',
+  'operation',
+  'source',
+  'retryCount',
+  'batchSize',
+  'cacheHit',
+  'fallbackUsed'
+])
+
+function boundedAuditIdentifier(value: unknown, fallback: string): string {
+  if (typeof value !== 'string' || !AUDIT_IDENTIFIER_PATTERN.test(value)) return fallback
+  if (
+    value.startsWith('/') ||
+    /^[A-Za-z]:\//.test(value) ||
+    /^[A-Za-z][A-Za-z\d+.-]*:\/\//.test(value) ||
+    value.split('/').some((segment) => segment === '.' || segment === '..')
+  ) {
+    return fallback
+  }
+  return value
+}
+
+function boundedAuditNumber(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function sanitizeAuditMetadata(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined
+  const output: Record<string, unknown> = {}
+  try {
+    for (const key of AUDIT_METADATA_KEYS) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key)
+      if (!descriptor || !('value' in descriptor)) continue
+      const item = descriptor.value
+      if (typeof item === 'boolean') {
+        output[key] = item
+      } else if (typeof item === 'number' && Number.isFinite(item)) {
+        output[key] = item
+      } else if (typeof item === 'string' && AUDIT_METADATA_IDENTIFIER_PATTERN.test(item)) {
+        output[key] = item
+      }
+    }
+  } catch {
+    return undefined
+  }
+  return Object.keys(output).length > 0 ? output : undefined
+}
+
+export function sanitizeIntelligenceAuditEntry(
+  entry: IntelligenceAuditLogEntry
+): IntelligenceAuditLogEntry {
+  const success = entry.success === true
+  const error =
+    !success && typeof entry.error === 'string' && AUDIT_ERROR_CODE_PATTERN.test(entry.error)
+      ? entry.error
+      : !success
+        ? 'INTELLIGENCE_INVOCATION_FAILED'
+        : undefined
+  return {
+    traceId: boundedAuditIdentifier(entry.traceId, 'trace-redacted'),
+    timestamp: boundedAuditNumber(entry.timestamp),
+    capabilityId: boundedAuditIdentifier(entry.capabilityId, 'unknown'),
+    provider: boundedAuditIdentifier(entry.provider, 'unknown'),
+    model: boundedAuditIdentifier(entry.model, 'unknown'),
+    promptHash:
+      typeof entry.promptHash === 'string' && /^[a-f0-9]{16,64}$/i.test(entry.promptHash)
+        ? entry.promptHash
+        : undefined,
+    caller: entry.caller ? boundedAuditIdentifier(entry.caller, 'unknown') : undefined,
+    userId: entry.userId ? boundedAuditIdentifier(entry.userId, 'unknown') : undefined,
+    usage: {
+      promptTokens: boundedAuditNumber(entry.usage?.promptTokens),
+      completionTokens: boundedAuditNumber(entry.usage?.completionTokens),
+      totalTokens: boundedAuditNumber(entry.usage?.totalTokens)
+    },
+    latency: boundedAuditNumber(entry.latency),
+    success,
+    error,
+    estimatedCost: boundedAuditNumber(entry.estimatedCost),
+    metadata: sanitizeAuditMetadata(entry.metadata)
+  }
+}
 
 /**
  * IntelligenceAuditLogger - Manages audit logging and usage statistics
@@ -167,6 +253,7 @@ export class IntelligenceAuditLogger {
   private readonly usageStatsErrorThrottleMs = 60_000
   private lastUsageStatsErrorLogAt = 0
   private suppressedUsageStatsErrorCount = 0
+  private retentionFloorMs = Number.NEGATIVE_INFINITY
 
   constructor() {
     this.startFlushInterval()
@@ -208,19 +295,22 @@ export class IntelligenceAuditLogger {
    * Log an audit entry
    */
   async log(entry: IntelligenceAuditLogEntry): Promise<void> {
-    // Calculate cost if not provided
-    if (entry.estimatedCost === undefined) {
-      entry.estimatedCost = this.estimateCost(entry.model, entry.usage)
+    const estimatedCost = entry.estimatedCost ?? this.estimateCost(entry.model, entry.usage)
+    const sanitized = sanitizeIntelligenceAuditEntry({ ...entry, estimatedCost })
+    if (sanitized.traceId === 'trace-redacted') {
+      sanitized.traceId = this.generateTraceId()
     }
 
+    if (sanitized.timestamp < this.retentionFloorMs) return
+
     // Add to memory cache
-    this.memoryLogs.push(entry)
+    this.memoryLogs.push(sanitized)
     if (this.memoryLogs.length > this.maxMemoryLogs) {
       this.memoryLogs.shift()
     }
 
     // Add to buffered batch for persistence
-    this.pendingLogs.push(entry)
+    this.pendingLogs.push(sanitized)
 
     // Flush if batch is full
     if (this.pendingLogs.length >= this.flushBatchSize) {
@@ -242,11 +332,7 @@ export class IntelligenceAuditLogger {
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
 
-  private toErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error)
-  }
-
-  private logFlushError(error: unknown, batchSize: number): void {
+  private logFlushError(_error: unknown, batchSize: number): void {
     const now = Date.now()
     if (now - this.lastFlushErrorLogAt < this.flushErrorThrottleMs) {
       this.suppressedFlushErrorCount += 1
@@ -256,7 +342,7 @@ export class IntelligenceAuditLogger {
     auditLog.warn('Failed to flush logs', {
       meta: {
         batchSize,
-        error: this.toErrorMessage(error),
+        code: 'INTELLIGENCE_AUDIT_FLUSH_FAILED',
         suppressed: this.suppressedFlushErrorCount > 0 ? this.suppressedFlushErrorCount : undefined
       }
     })
@@ -265,7 +351,7 @@ export class IntelligenceAuditLogger {
     this.suppressedFlushErrorCount = 0
   }
 
-  private logUsageStatsError(key: string, error: unknown): void {
+  private logUsageStatsError(_key: string, _error: unknown): void {
     const now = Date.now()
     if (now - this.lastUsageStatsErrorLogAt < this.usageStatsErrorThrottleMs) {
       this.suppressedUsageStatsErrorCount += 1
@@ -274,8 +360,7 @@ export class IntelligenceAuditLogger {
 
     auditLog.warn('Failed to update usage stats', {
       meta: {
-        key,
-        error: this.toErrorMessage(error),
+        code: 'INTELLIGENCE_USAGE_STATS_UPDATE_FAILED',
         suppressed:
           this.suppressedUsageStatsErrorCount > 0 ? this.suppressedUsageStatsErrorCount : undefined
       }
@@ -318,6 +403,11 @@ export class IntelligenceAuditLogger {
     }
   }
 
+  private requeueAfterRetention(logs: IntelligenceAuditLogEntry[]): void {
+    const retained = logs.filter((entry) => entry.timestamp >= this.retentionFloorMs)
+    if (retained.length > 0) this.pendingLogs.unshift(...retained)
+  }
+
   private async flushBatch(logsToFlush: IntelligenceAuditLogEntry[]): Promise<boolean> {
     let metadataBytes = 0
     const disposeSerialize = enterPerfContext('IntelligenceAudit.serialize', {
@@ -349,14 +439,14 @@ export class IntelligenceAuditLogger {
           metadata
         }
       })
-    } catch (error) {
+    } catch {
       auditLog.warn('Failed to serialize logs', {
         meta: {
           count: logsToFlush.length,
-          error: this.toErrorMessage(error)
+          code: 'INTELLIGENCE_AUDIT_SERIALIZE_FAILED'
         }
       })
-      this.pendingLogs.unshift(...logsToFlush)
+      this.requeueAfterRetention(logsToFlush)
       return false
     } finally {
       disposeSerialize()
@@ -379,7 +469,7 @@ export class IntelligenceAuditLogger {
       return true
     } catch (error) {
       this.logFlushError(error, logsToFlush.length)
-      this.pendingLogs.unshift(...logsToFlush)
+      this.requeueAfterRetention(logsToFlush)
       return false
     } finally {
       disposeFlush()
@@ -570,18 +660,101 @@ export class IntelligenceAuditLogger {
     return stats[0] || null
   }
 
+  async cleanupRetentionPage(
+    cutoffMs: number,
+    batchSize: number,
+    signal: AbortSignal,
+    cursor?: { readonly timestampMs: number; readonly id: number },
+    admissionFloorMs = cutoffMs
+  ): Promise<{
+    deletedCount: number
+    hasMore: boolean
+    cancelled: boolean
+    cursor?: { readonly timestampMs: number; readonly id: number }
+  }> {
+    if (
+      !Number.isSafeInteger(cutoffMs) ||
+      !Number.isSafeInteger(admissionFloorMs) ||
+      !Number.isFinite(batchSize)
+    ) {
+      throw new Error('INTELLIGENCE_AUDIT_RETENTION_INVALID')
+    }
+    this.retentionFloorMs = Math.max(this.retentionFloorMs, admissionFloorMs)
+    this.pendingLogs = this.pendingLogs.filter((entry) => entry.timestamp >= cutoffMs)
+    this.memoryLogs = this.memoryLogs.filter((entry) => entry.timestamp >= cutoffMs)
+    await this.flushToDB()
+    if (signal.aborted) return { deletedCount: 0, hasMore: false, cancelled: true }
+
+    const limit = Math.min(200, Math.max(1, Math.floor(batchSize)))
+    const db = this.getDb()
+    const cursorCondition = cursor
+      ? or(
+          gt(intelligenceAuditLogs.timestamp, cursor.timestampMs),
+          and(
+            eq(intelligenceAuditLogs.timestamp, cursor.timestampMs),
+            gt(intelligenceAuditLogs.id, cursor.id)
+          )
+        )
+      : undefined
+    const candidates = await db
+      .select({ id: intelligenceAuditLogs.id, timestamp: intelligenceAuditLogs.timestamp })
+      .from(intelligenceAuditLogs)
+      .where(and(lt(intelligenceAuditLogs.timestamp, cutoffMs), cursorCondition))
+      .orderBy(asc(intelligenceAuditLogs.timestamp), asc(intelligenceAuditLogs.id))
+      .limit(limit + 1)
+    const page = candidates.slice(0, limit)
+    const ids = page.map((row) => row.id)
+    if (ids.length === 0) {
+      return { deletedCount: 0, hasMore: false, cancelled: false, cursor }
+    }
+    if (signal.aborted) return { deletedCount: 0, hasMore: false, cancelled: true, cursor }
+
+    const result = await dbWriteScheduler.schedule(
+      'intelligence.audit.retention',
+      () =>
+        withSqliteRetry(
+          () =>
+            db
+              .delete(intelligenceAuditLogs)
+              .where(
+                and(
+                  inArray(intelligenceAuditLogs.id, ids),
+                  lt(intelligenceAuditLogs.timestamp, cutoffMs)
+                )
+              ),
+          { label: 'intelligence.audit.retention' }
+        ),
+      {
+        priority: 'background',
+        dropPolicy: 'none',
+        maxQueueWaitMs: 15_000
+      }
+    )
+    const last = page.at(-1)
+    return {
+      deletedCount: Number(result.rowsAffected ?? 0),
+      hasMore: candidates.length > limit,
+      cancelled: false,
+      cursor: last ? { timestampMs: last.timestamp, id: last.id } : cursor
+    }
+  }
+
   /**
    * Clear old audit logs (retention policy)
    */
   async cleanupOldLogs(retentionDays: number = 30): Promise<number> {
-    const db = this.getDb()
-    const cutoffTime = Date.now() - retentionDays * 24 * 60 * 60 * 1000
-
-    const result = await db
-      .delete(intelligenceAuditLogs)
-      .where(lte(intelligenceAuditLogs.timestamp, cutoffTime))
-
-    return result.rowsAffected || 0
+    const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+    const signal = new AbortController().signal
+    let deletedCount = 0
+    let cursor: { readonly timestampMs: number; readonly id: number } | undefined
+    let hasMore = true
+    while (hasMore) {
+      const page = await this.cleanupRetentionPage(cutoffMs, 100, signal, cursor)
+      cursor = page.cursor ?? cursor
+      deletedCount += page.deletedCount
+      hasMore = page.hasMore
+    }
+    return deletedCount
   }
 
   /**

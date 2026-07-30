@@ -70,6 +70,50 @@ describe('pluginSqliteResourceOwnerRegistry', () => {
     expect(close).toHaveBeenCalledOnce()
   })
 
+  it('retains exact retry ownership when activation close fails', async () => {
+    const close = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error('synthetic close failure'))
+      .mockResolvedValue(undefined)
+    const registry = new PluginSqliteResourceOwnerRegistry({
+      createClient: () => ({
+        execute: vi.fn(),
+        query: vi.fn(),
+        transaction: vi.fn(),
+        close
+      })
+    })
+    const owner = identity('alpha')
+    await registry.acquire(owner, await createPluginDataPath('alpha'))
+
+    await expect(registry.closeActivation(owner)).rejects.toThrow('synthetic close failure')
+    expect(registry.hasActivation(owner)).toBe(true)
+    expect(registry.hasPlugin('alpha')).toBe(true)
+    expect(registry.size).toBe(1)
+
+    await expect(registry.closeActivation(owner)).resolves.toBe(true)
+    expect(registry.hasActivation(owner)).toBe(false)
+    expect(registry.hasPlugin('alpha')).toBe(false)
+  })
+
+  it('does not close a SQLite worker through a stale generation identity', async () => {
+    const close = vi.fn()
+    const registry = new PluginSqliteResourceOwnerRegistry({
+      createClient: () => ({
+        execute: vi.fn(),
+        query: vi.fn(),
+        transaction: vi.fn(),
+        close
+      })
+    })
+    const owner = identity('alpha', 'instance-1', 3)
+    await registry.acquire(owner, await createPluginDataPath('alpha'))
+
+    await expect(registry.closeActivation(identity('alpha', 'instance-1', 2))).resolves.toBe(false)
+    expect(close).not.toHaveBeenCalled()
+    expect(registry.hasActivation(owner)).toBe(true)
+  })
+
   it('single-flights concurrent acquire and lazily replaces a poisoned owner', async () => {
     const clients: Array<{
       isClosed: boolean

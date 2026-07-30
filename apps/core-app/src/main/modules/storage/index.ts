@@ -22,6 +22,10 @@ import { databaseModule } from '../database'
 import { mainStorageRegistry, resolveMainStorageValue } from './main-storage-registry'
 import { ApplicationConfigRepository, type AppConfigRecord } from './app-config-repository'
 import { buildSearchEngineLogsSettingMigrationPlan } from './search-engine-logs-setting-transfer'
+import {
+  providerConfigDocumentContainsCredential,
+  redactProviderConfigDocument
+} from '../ai/provider-credential-service'
 import { StorageCache } from './storage-cache'
 import { StorageFrequencyMonitor } from './storage-frequency-monitor'
 import { StorageLRUManager } from './storage-lru-manager'
@@ -184,6 +188,7 @@ export class StorageModule extends BaseModule {
     StorageList.OPENERS
   ])
   private persistedContent = new Map<string, string>()
+  private persistQueues = new Map<string, Promise<number>>()
   private configRepository: ApplicationConfigRepository | null = null
   private deletedConfigs = new Set<string>()
   private transport: ITuffTransportMain | null = null
@@ -424,6 +429,26 @@ export class StorageModule extends BaseModule {
     }
   }
 
+  private projectConfigForRenderer(name: string, value: object): object {
+    if (name === StorageList.IntelligenceConfig) {
+      return redactProviderConfigDocument(value)
+    }
+    return value
+  }
+
+  private containsProviderCredential(name: string, payload: unknown): boolean {
+    if (name !== StorageList.IntelligenceConfig) return false
+    let value = payload
+    if (typeof value === 'string') {
+      try {
+        value = JSON.parse(value)
+      } catch {
+        return false
+      }
+    }
+    return providerConfigDocumentContainsCredential(value)
+  }
+
   private registerTransportHandlers(): void {
     if (!this.transport) {
       return
@@ -434,7 +459,7 @@ export class StorageModule extends BaseModule {
         if (!request?.key || typeof request.key !== 'string') {
           return {}
         }
-        return this.getConfig(request.key)
+        return this.projectConfigForRenderer(request.key, this.getConfig(request.key))
       })
     )
 
@@ -443,13 +468,22 @@ export class StorageModule extends BaseModule {
         if (!request?.key || typeof request.key !== 'string') {
           return null
         }
-        return this.getConfigWithVersion(request.key)
+        const versioned = this.getConfigWithVersion(request.key)
+        if (!versioned) return null
+        return {
+          data: this.projectConfigForRenderer(request.key, versioned.data),
+          version: versioned.version
+        }
       })
     )
 
     this.transportDisposers.push(
       this.transport.on(StorageEvents.app.set, (request, context) => {
         if (!request?.key || typeof request.key !== 'string') {
+          return
+        }
+        if (this.containsProviderCredential(request.key, request.value)) {
+          storageLog.warn('Rejected plaintext credential in Intelligence config storage set')
           return
         }
         this.saveConfig(
@@ -469,6 +503,10 @@ export class StorageModule extends BaseModule {
           return { success: false, version: 0 }
         }
         const payload = typeof request.content === 'string' ? request.content : request.value
+        if (this.containsProviderCredential(request.key, payload)) {
+          storageLog.warn('Rejected plaintext credential in Intelligence config storage save')
+          return { success: false, version: this.cache.getVersion(request.key) }
+        }
 
         const previousValue = request.persist === true ? this.getConfig(request.key) : null
         const result = this.saveConfig(
@@ -769,10 +807,53 @@ export class StorageModule extends BaseModule {
     }
   }
 
+  async saveConfigDurable(
+    name: string,
+    payload: unknown,
+    options?: { force?: boolean; sourceWebContentsId?: number; version?: number }
+  ): Promise<{ success: boolean; version: number; conflict?: boolean }> {
+    const previousValue = this.getConfig(name)
+    const result = this.saveConfig(
+      name,
+      payload,
+      false,
+      options?.force,
+      options?.sourceWebContentsId,
+      options?.version
+    )
+    if (!result.success) return result
+
+    try {
+      await this.persistConfigNow(name)
+      return result
+    } catch {
+      if (this.cache.getVersion(name) === result.version) {
+        this.saveConfig(name, previousValue, false, true, options?.sourceWebContentsId)
+      }
+      return { success: false, version: this.cache.getVersion(name) }
+    }
+  }
+
   /**
    * Persist config to the active primary backend (called by polling service)
    */
-  private async persistConfig(name: string): Promise<number> {
+  private persistConfig(name: string): Promise<number> {
+    const previous = this.persistQueues.get(name) ?? Promise.resolve(this.cache.getVersion(name))
+    const queued = previous
+      .catch(() => this.cache.getVersion(name))
+      .then(async () => {
+        return await this.persistConfigUnlocked(name)
+      })
+    this.persistQueues.set(name, queued)
+    void queued
+      .finally(() => {
+        if (this.persistQueues.get(name) === queued) this.persistQueues.delete(name)
+      })
+      .catch(() => {})
+    return queued
+  }
+
+  private async persistConfigUnlocked(name: string): Promise<number> {
     if (!this.configRepository) {
       throw new Error('Configuration repository is not initialized')
     }
@@ -1153,6 +1234,15 @@ export function saveMainConfig<K extends MainStorageKey>(
     options?.sourceWebContentsId,
     options?.version
   )
+}
+
+export async function saveMainConfigDurable<K extends MainStorageKey>(
+  key: K,
+  value: MainStorageSchema[K],
+  options?: MainStorageSaveOptions
+): Promise<{ success: boolean; version: number; conflict?: boolean }> {
+  const entry = mainStorageRegistry[key]
+  return useMainStorage().saveConfigDurable(entry.key, value, options)
 }
 
 export function subscribeMainConfig<K extends MainStorageKey>(

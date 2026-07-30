@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { IntelligenceProviderType } from '@talex-touch/tuff-intelligence'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchProviderModels } from './provider-models'
 
 const networkMocks = vi.hoisted(() => ({
@@ -31,6 +31,28 @@ describe('fetchProviderModels', () => {
 
     expect(models).toEqual(['gpt-4o-mini', 'gpt-4o'])
     expect(networkMocks.request).not.toHaveBeenCalled()
+  })
+
+  it('preserves provider credential whitespace in model requests', async () => {
+    networkMocks.request.mockResolvedValueOnce({ data: { data: [{ id: 'gpt-test' }] } })
+
+    await fetchProviderModels({
+      id: 'openai-default',
+      type: IntelligenceProviderType.OPENAI,
+      name: 'OpenAI',
+      enabled: true,
+      priority: 1,
+      apiKey: '  synthetic-provider-key  ',
+      baseUrl: 'https://api.example.invalid/v1'
+    })
+
+    expect(networkMocks.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer   synthetic-provider-key  '
+        })
+      })
+    )
   })
 
   it('fetches local Ollama models from /api/tags without an API key', async () => {

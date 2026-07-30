@@ -1,1 +1,4 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Owns typed transport, runtime validation, sensitive payload and cross-layer contract rules."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Owns CoreApp UI, permission, evidence, redaction and verification quality gates."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Defines authoritative plugin lifecycle, resource teardown, Secret/SQLite and uninstall security boundaries reused by #301."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides the policy-to-owner-to-transport-to-settings data flow and validation ownership."}

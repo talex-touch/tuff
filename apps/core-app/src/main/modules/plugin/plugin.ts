@@ -729,6 +729,8 @@ export class TouchPlugin implements ITouchPlugin {
   toJSONObject(): object {
     return {
       name: this.name,
+      pluginInstanceId: this._runtimeInstanceId,
+      activationGeneration: this._activationGeneration,
       displayName: this.displayName,
       localizedName: this.localizedName,
       localizedDescription: this.localizedDescription,
@@ -2759,6 +2761,15 @@ export class TouchPlugin implements ITouchPlugin {
         transport.invoke(
           PluginEvents.storage.setSecret,
           { pluginName, key, value },
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>,
+
+      setMany: (
+        entries: Array<{ key: string; value: string | null }>
+      ): Promise<{ success: boolean; error?: string }> =>
+        transport.invoke(
+          PluginEvents.storage.setSecretBatch,
+          { pluginName, entries },
           createPluginContext()
         ) as Promise<{ success: boolean; error?: string }>,
 

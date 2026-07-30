@@ -197,6 +197,69 @@ describe('PluginInstallQueue permission confirmation', () => {
     expect(installer.discardPrepared).not.toHaveBeenCalled()
   })
 
+  it('rechecks uninstall admission after confirmation and before final package mutation', async () => {
+    const installRequest: PluginInstallRequest = {
+      source: 'https://example.com/plugin.tpex',
+      metadata: { trusted: true }
+    }
+    const prepared = {
+      request: installRequest,
+      providerResult: {
+        provider: 'tpex',
+        official: false,
+        metadata: {}
+      },
+      manifest: {
+        name: 'touch-demo',
+        version: '1.0.0',
+        sdkapi: CURRENT_SDK_VERSION
+      }
+    } as unknown as PreparedPluginInstall
+    const installer = {
+      prepareInstall: vi.fn().mockResolvedValue(prepared),
+      finalizeInstall: vi.fn(),
+      discardPrepared: vi.fn().mockResolvedValue(undefined)
+    } as unknown as PluginInstaller
+    let queue: PluginInstallQueue
+    let uninstallBlocked = false
+    const transport = {
+      sendToWindow: vi.fn().mockImplementation(async (_windowId, event, payload) => {
+        if (event === PluginEvents.install.confirm) {
+          queue.handleConfirmResponse({
+            taskId: (payload as PluginInstallConfirmRequest).taskId,
+            decision: 'accept',
+            grantMode: 'always'
+          })
+        }
+      })
+    } as unknown as ITuffTransportMain
+    queue = new PluginInstallQueue(installer, transport, 1, {
+      resolvePermissionConfirmation: () => ({
+        taskId: '',
+        kind: 'permissions',
+        pluginId: 'touch-demo',
+        pluginName: 'touch-demo',
+        permissions: {
+          required: ['fs.read'],
+          optional: [],
+          reasons: { 'fs.read': 'read plugin files' }
+        }
+      }),
+      onPermissionConfirmed: () => {
+        uninstallBlocked = true
+      },
+      assertInstallAdmission: () => {
+        if (uninstallBlocked) throw new Error('PLUGIN_UNINSTALL_INCOMPLETE')
+      }
+    })
+
+    const result = await queue.enqueue(installRequest)
+
+    expect(result).toEqual({ status: 'error', message: 'PLUGIN_UNINSTALL_INCOMPLETE' })
+    expect(installer.finalizeInstall).not.toHaveBeenCalled()
+    expect(installer.discardPrepared).toHaveBeenCalledWith(prepared)
+  })
+
   it('fails install when permission confirmation is rejected', async () => {
     const { queue, confirmRequests, installRequest, installer } = createQueue()
     const installPromise = queue.enqueue(installRequest)

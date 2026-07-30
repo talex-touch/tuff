@@ -17,6 +17,7 @@ import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/a
 import { openersOriginData } from '@talex-touch/utils/common/storage/entity/openers'
 import { shortcutSettingOriginData } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { createDefaultStoreSourcesPayload } from '@talex-touch/utils/store'
+import { redactProviderConfigDocument } from '../ai/provider-credential-service'
 
 export interface EverythingSettings {
   enabled?: boolean
@@ -148,7 +149,8 @@ export const mainStorageRegistry = {
   [StorageList.IntelligenceConfig]: defineEntry<IntelligenceSDKPersistedConfig>({
     key: StorageList.IntelligenceConfig,
     defaultValue: {} as IntelligenceSDKPersistedConfig,
-    normalize: normalizeObject
+    normalize: (value) =>
+      redactProviderConfigDocument(value) as unknown as IntelligenceSDKPersistedConfig
   }),
   [StorageList.STORE_SOURCES]: defineEntry<StoreSourcesPayload>({
     key: StorageList.STORE_SOURCES,

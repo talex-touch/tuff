@@ -29,6 +29,8 @@ import type {
   PluginApiRegisterWidgetResponse,
   PluginApiOperationRequest,
   PluginApiOperationResponse,
+  PluginApiUninstallRequest,
+  PluginApiUninstallResponse,
   PluginApiSaveManifestRequest,
   PluginApiSaveManifestResponse,
   PluginApiSaveWidgetFileRequest,
@@ -48,6 +50,11 @@ import type {
   PluginReconnectDevServerRequest,
   PluginReconnectDevServerResponse,
 } from '../../events/types'
+import {
+  normalizePluginApiOperationRequest,
+  normalizePluginUninstallRequest,
+  normalizePluginUninstallResponse,
+} from '../../events/types'
 import type { ITuffTransport } from '../../types'
 import { PluginEvents } from '../../events'
 
@@ -60,7 +67,7 @@ export interface PluginSdk {
   disable: (request: PluginApiOperationRequest) => Promise<PluginApiOperationResponse>
   reload: (request: PluginApiOperationRequest) => Promise<PluginApiOperationResponse>
   install: (request: PluginApiInstallRequest) => Promise<PluginApiInstallResponse>
-  uninstall: (request: PluginApiOperationRequest) => Promise<PluginApiOperationResponse>
+  uninstall: (request: PluginApiUninstallRequest) => Promise<PluginApiUninstallResponse>
 
   triggerFeature: (request: PluginApiTriggerFeatureRequest) => Promise<unknown>
   registerWidget: (request: PluginApiRegisterWidgetRequest) => Promise<PluginApiRegisterWidgetResponse>
@@ -99,11 +106,14 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     get: async request => transport.send(PluginEvents.api.get, request),
     getStatus: async request => transport.send(PluginEvents.api.getStatus, request),
 
-    enable: async request => transport.send(PluginEvents.api.enable, request),
-    disable: async request => transport.send(PluginEvents.api.disable, request),
-    reload: async request => transport.send(PluginEvents.api.reload, request),
+    enable: async request => transport.send(PluginEvents.api.enable, normalizePluginApiOperationRequest(request)),
+    disable: async request => transport.send(PluginEvents.api.disable, normalizePluginApiOperationRequest(request)),
+    reload: async request => transport.send(PluginEvents.api.reload, normalizePluginApiOperationRequest(request)),
     install: async request => transport.send(PluginEvents.api.install, request),
-    uninstall: async request => transport.send(PluginEvents.api.uninstall, request),
+    uninstall: async request => {
+      const response = await transport.send(PluginEvents.api.uninstall, normalizePluginUninstallRequest(request))
+      return normalizePluginUninstallResponse(response)
+    },
 
     triggerFeature: async request => transport.send(PluginEvents.api.triggerFeature, request),
     registerWidget: async request => transport.send(PluginEvents.api.registerWidget, request),
@@ -126,23 +136,23 @@ export function createPluginSdk(transport: ITuffTransport): PluginSdk {
     getDevServerStatus: async request => transport.send(PluginEvents.devServer.status, request),
 
     onStateChanged: handler =>
-      transport.on(PluginEvents.push.stateChanged, (payload) => {
+      transport.on(PluginEvents.push.stateChanged, payload => {
         handler(payload)
       }),
     onStatusUpdated: handler =>
-      transport.on(PluginEvents.push.statusUpdated, (payload) => {
+      transport.on(PluginEvents.push.statusUpdated, payload => {
         handler(payload)
       }),
 
     onInstallProgress: handler =>
-      transport.on(PluginEvents.install.progress, (payload) => {
+      transport.on(PluginEvents.install.progress, payload => {
         handler(payload)
       }),
     onInstallConfirm: handler =>
-      transport.on(PluginEvents.install.confirm, (payload) => {
+      transport.on(PluginEvents.install.confirm, payload => {
         handler(payload)
       }),
-    sendInstallConfirmResponse: async (payload) => {
+    sendInstallConfirmResponse: async payload => {
       await transport.send(PluginEvents.install.confirmResponse, payload)
     },
 

@@ -17,6 +17,8 @@ import type {
 } from '@talex-touch/utils/transport/main'
 import type {
   PluginApiGetFileTreeResponse,
+  PluginApiUninstallRequest,
+  PluginApiUninstallResponse,
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { PluginWithSource } from '../../service/store-api.service'
@@ -38,6 +40,7 @@ import {
   QuickOpsEvents,
   StoreEvents
 } from '@talex-touch/utils/transport/events'
+import { normalizePluginUninstallRequest } from '@talex-touch/utils/transport/events/types'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   PluginInstallCompletedEvent,
@@ -56,10 +59,17 @@ import {
 import { performStoreHttpRequest } from '../../service/store-http.service'
 import { createLogger } from '../../utils/logger'
 import {
-  deleteSecureStoreValuesByPrefix,
+  deleteSecureStoreValuesByPrefixes,
   getSecureStoreValueStrict,
   setSecureStoreValue
 } from '../../utils/secure-store'
+import { tempFileService } from '../../service/temp-file.service'
+import type { PluginDataDispositionCoordinator } from './plugin-data-disposition'
+import {
+  createProductionPluginDataDispositionCoordinator,
+  type ProductionPluginDataDispositionOwner
+} from './plugin-data-disposition-production'
+import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
@@ -589,16 +599,20 @@ function createPluginModuleInternal(
   _channel: PluginLifecycleChannel,
   mainWindowId: number,
   pluginSqliteResources?: PluginSqliteResourceOwnerRegistry,
-  purgePluginSecrets?: (pluginName: string) => Promise<void>
+  purgePluginSecrets?: (pluginName: string) => Promise<void>,
+  secureStoreRootPath?: string,
+  invalidatePluginAuthority?: (pluginName: string) => Promise<void>
 ): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
   const enabledPlugins = new Set<string>()
   const loadingPlugins = new Set<string>()
   const reloadingPlugins = new Set<string>()
+  const unloadingPlugins = new Set<string>()
   const pendingPermissionPlugins = new Map<string, { pluginName: string; autoRetry: boolean }>()
   const pluginNameIndex: Map<string, string> = new Map()
   const issueSnapshots = new Map<string, Map<string, string>>()
+  let pluginDataDispositionCoordinator: PluginDataDispositionCoordinator | null = null
   let issueFullResyncTimer: NodeJS.Timeout | null = null
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
@@ -769,6 +783,11 @@ function createPluginModuleInternal(
   }
 
   const installQueue = new PluginInstallQueue(installer, transport, mainWindowId, {
+    assertInstallAdmission: () => {
+      if (pluginDataDispositionCoordinator?.hasBlockedOperations()) {
+        throw new Error('PLUGIN_UNINSTALL_INCOMPLETE')
+      }
+    },
     onInstallCompleted: async ({ request, manifest, providerResult }) => {
       await persistInstallSourceMetadata({ request, manifest, providerResult })
       const pluginName = manifest?.name
@@ -781,6 +800,9 @@ function createPluginModuleInternal(
     },
     resolvePermissionConfirmation: async ({ request, manifest, clientMetadata }) => {
       if (!manifest?.name) return null
+      if (pluginDataDispositionCoordinator?.isBlocked(manifest.name)) {
+        throw new Error('PLUGIN_UNINSTALL_INCOMPLETE')
+      }
       const sdkGate = getPluginSdkHardCutGate(manifest.name, manifest.sdkapi)
       if (sdkGate.blocked) {
         throw new Error(sdkGate.message)
@@ -872,6 +894,7 @@ function createPluginModuleInternal(
   }
 
   const setActivePlugin = (pluginName: string): boolean => {
+    if (pluginName && pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
     // Handle deactivation of currently active plugin
     if (active && active !== pluginName) {
       const previousPlugin = plugins.get(active)
@@ -969,6 +992,7 @@ function createPluginModuleInternal(
     pluginName: string,
     skipPermissionCheck = false
   ): Promise<boolean> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
     let plugin = plugins.get(pluginName)
     if (!plugin) return false
 
@@ -1033,6 +1057,10 @@ function createPluginModuleInternal(
   }
 
   const reloadPlugin = async (pluginName: string): Promise<void> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) {
+      logWarn('Plugin reload blocked by incomplete uninstall:', pluginTag(pluginName))
+      return
+    }
     if (reloadingPlugins.has(pluginName)) {
       logDebug('Skip reload because plugin already reloading:', pluginTag(pluginName))
       return
@@ -1109,6 +1137,7 @@ function createPluginModuleInternal(
   }
 
   const loadPlugin = async (pluginName: string): Promise<boolean> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
     if (INTERNAL_PLUGIN_NAMES.has(pluginName)) {
       logDebug('Skipping disk load for internal plugin', pluginTag(pluginName))
       return true
@@ -1247,57 +1276,67 @@ function createPluginModuleInternal(
   }
 
   const unloadPlugin = async (pluginName: string): Promise<boolean> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
+    if (unloadingPlugins.has(pluginName)) return false
     const plugin = plugins.get(pluginName)
     if (!plugin) return false
 
-    if (plugin.status !== PluginStatus.DISABLED && plugin.status !== PluginStatus.LOADED) {
-      try {
-        if (!(await plugin.disable())) {
-          logWarn('Plugin unload blocked by incomplete teardown:', pluginTag(pluginName))
+    unloadingPlugins.add(pluginName)
+    try {
+      if (plugin.status !== PluginStatus.DISABLED && plugin.status !== PluginStatus.LOADED) {
+        try {
+          if (!(await plugin.disable())) {
+            logWarn('Plugin unload blocked by incomplete teardown:', pluginTag(pluginName))
+            return false
+          }
+        } catch (error) {
+          logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
           return false
         }
-      } catch (error) {
-        logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
-        return false
       }
+
+      const currentPluginPath = path.resolve(pluginPath, pluginName)
+      localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
+
+      devWatcherInstance.removePlugin(pluginName)
+      stopHealthMonitoring(pluginName)
+
+      if (pluginNameIndex.get(plugin.name) === pluginName) {
+        pluginNameIndex.delete(plugin.name)
+      }
+      await pluginSqliteResources?.closePlugin(plugin.name)
+
+      try {
+        plugin.logger.getManager().destroy()
+      } catch (error) {
+        logWarn('Error destroying plugin logger:', pluginTag(pluginName), error)
+      }
+
+      clearPluginDeclaredPermissions(plugin.name)
+      clearIssueSnapshot(plugin.name)
+      clearPluginLocalizationEntries(plugin.name)
+      plugins.delete(pluginName)
+      enabledPlugins.delete(pluginName)
+
+      logWarn('Plugin unloaded', pluginTag(pluginName))
+
+      transport.broadcast(PluginEvents.push.stateChanged, {
+        type: 'removed',
+        name: pluginName
+      })
+
+      return true
+    } finally {
+      unloadingPlugins.delete(pluginName)
     }
-
-    const currentPluginPath = path.resolve(pluginPath, pluginName)
-    localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
-
-    devWatcherInstance.removePlugin(pluginName)
-    stopHealthMonitoring(pluginName)
-
-    if (pluginNameIndex.get(plugin.name) === pluginName) {
-      pluginNameIndex.delete(plugin.name)
-    }
-    await pluginSqliteResources?.closePlugin(plugin.name)
-
-    try {
-      plugin.logger.getManager().destroy()
-    } catch (error) {
-      logWarn('Error destroying plugin logger:', pluginTag(pluginName), error)
-    }
-
-    clearPluginDeclaredPermissions(plugin.name)
-    clearIssueSnapshot(plugin.name)
-    clearPluginLocalizationEntries(plugin.name)
-    plugins.delete(pluginName)
-    enabledPlugins.delete(pluginName)
-
-    logWarn('Plugin unloaded', pluginTag(pluginName))
-
-    transport.broadcast(PluginEvents.push.stateChanged, {
-      type: 'removed',
-      name: pluginName
-    })
-
-    return true
   }
 
   const installFromSource = async (
     request: PluginInstallRequest
   ): Promise<PluginInstallSummary> => {
+    if (pluginDataDispositionCoordinator?.hasBlockedOperations()) {
+      throw new Error('PLUGIN_UNINSTALL_INCOMPLETE')
+    }
     const summary = await installer.install(request)
     return summary
   }
@@ -1307,54 +1346,159 @@ function createPluginModuleInternal(
     return pluginNameIndex.get(identifier)
   }
 
-  const uninstallPlugin = async (identifier: string): Promise<boolean> => {
+  const resolveDispositionOwner = (
+    identifier: string
+  ): ProductionPluginDataDispositionOwner | null => {
     const folderName = resolvePluginFolderName(identifier)
-
-    if (!folderName) {
-      logWarn('Cannot uninstall plugin, not found:', pluginTag(identifier))
-      return false
-    }
-
-    const pluginInstance = plugins.get(folderName) as TouchPlugin | undefined
-    const dataDir =
-      pluginInstance instanceof TouchPlugin ? path.dirname(pluginInstance.getConfigPath()) : null
-    const manifestName = pluginInstance?.name ?? identifier
-    const pluginDir = path.resolve(pluginPath, folderName)
-
-    if (!(await unloadPlugin(folderName))) {
-      logWarn('Plugin uninstall blocked by incomplete teardown:', pluginTag(folderName))
-      return false
-    }
-
-    // Report uninstall to store only after the runtime and resources are closed.
-    reportPluginUninstall(folderName).catch(() => {})
-    try {
-      await purgePluginSecrets?.(manifestName)
-    } catch {
-      logWarn('Failed to purge plugin secrets', pluginTag(folderName))
-      return false
-    }
-
-    if (await fse.pathExists(pluginDir)) {
-      await fse.remove(pluginDir).catch((error) => {
-        logWarn('Failed to remove plugin directory', pluginTag(folderName), error)
-      })
-    }
-
-    if (dataDir && (await fse.pathExists(dataDir))) {
-      await fse.remove(dataDir).catch((error) => {
-        logWarn('Failed to remove plugin data directory', pluginTag(folderName), error)
-      })
-    }
-
-    await dbUtils.deletePluginData(manifestName).catch((error) => {
-      logWarn('Failed to delete plugin data records', pluginTag(folderName), error)
+    if (!folderName || INTERNAL_PLUGIN_NAMES.has(folderName)) return null
+    const plugin = plugins.get(folderName)
+    if (!(plugin instanceof TouchPlugin)) return null
+    const identity = plugin.getActivationIdentity()
+    const dataRootPath =
+      typeof plugin.getDataPath === 'function'
+        ? plugin.getDataPath()
+        : path.dirname(plugin.getConfigPath())
+    return Object.freeze({
+      pluginName: plugin.name,
+      folderName,
+      pluginInstanceId: identity.pluginInstanceId,
+      activationGeneration: identity.activationGeneration,
+      dataRootPath,
+      codePath: path.resolve(pluginPath, folderName)
     })
+  }
 
-    await persistEnabledPlugins()
+  pluginDataDispositionCoordinator = createProductionPluginDataDispositionCoordinator({
+    secureStoreRootPath: secureStoreRootPath ?? '',
+    dbUtils,
+    tempFileService,
+    sqliteResources: pluginSqliteResources,
+    purgeSecrets: purgePluginSecrets,
+    resolveOwner: (pluginName) => resolveDispositionOwner(pluginName),
+    canStart: (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      return Boolean(
+        plugin &&
+        !loadingPlugins.has(owner.folderName) &&
+        !reloadingPlugins.has(owner.folderName) &&
+        !unloadingPlugins.has(owner.folderName) &&
+        plugin.status !== PluginStatus.LOADING &&
+        plugin.status !== PluginStatus.DISABLING
+      )
+    },
+    closeAdmission: async (owner) => {
+      stopHealthMonitoring(owner.folderName)
+      devWatcherInstance.removePlugin(owner.folderName)
+      localProvider.untrackFile(path.resolve(owner.codePath, 'README.md'))
+      return 'completed'
+    },
+    closeRuntime: async (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      if (!(plugin instanceof TouchPlugin)) throw new Error('PLUGIN_OWNER_NOT_FOUND')
+      const identity = plugin.getActivationIdentity()
+      if (
+        identity.pluginInstanceId !== owner.pluginInstanceId ||
+        identity.activationGeneration !== owner.activationGeneration
+      ) {
+        throw new Error('PLUGIN_OWNER_CHANGED')
+      }
+      if (plugin.status === PluginStatus.DISABLED || plugin.status === PluginStatus.LOADED) {
+        return 'completed'
+      }
+      if (!(await plugin.disable())) throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      return 'completed'
+    },
+    closeLogger: async (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      if (!(plugin instanceof TouchPlugin)) throw new Error('PLUGIN_OWNER_NOT_FOUND')
+      await plugin.logger.getManager().destroy()
+      return 'completed'
+    },
+    revokePermissions: async (owner) => {
+      const permissionModule = getPermissionModule()
+      if (!permissionModule) throw new Error('PLUGIN_PERMISSION_RUNTIME_UNAVAILABLE')
+      await permissionModule.revokeAll(owner.pluginName)
+    },
+    invalidateAuthority: async (owner) => {
+      pendingPermissionPlugins.delete(owner.pluginName)
+      pendingPermissionPlugins.delete(owner.folderName)
+      if (active === owner.folderName || active === owner.pluginName) active = ''
+      await invalidatePluginAuthority?.(owner.pluginName)
+    },
+    inspectAuthorityResiduals: async (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      const currentIdentity = transport.keyManager?.resolveCurrentIdentity?.(owner.pluginName)
+      const runtime = Boolean(
+        (plugin &&
+          plugin.status !== PluginStatus.DISABLED &&
+          plugin.status !== PluginStatus.LOADED) ||
+        (currentIdentity &&
+          currentIdentity.pluginInstanceId === owner.pluginInstanceId &&
+          currentIdentity.activationGeneration === owner.activationGeneration)
+      )
+      const permissionModule = getPermissionModule()
+      const store = permissionModule?.getStore()
+      const declared = plugin
+        ? [
+            ...(plugin.declaredPermissions?.required ?? []),
+            ...(plugin.declaredPermissions?.optional ?? [])
+          ]
+        : []
+      const permissions = Boolean(
+        store &&
+        (store.getPluginPermissions(owner.pluginName).length > 0 ||
+          declared.some((permissionId) =>
+            store.hasSessionPermission(owner.pluginName, permissionId)
+          ))
+      )
+      return Object.freeze({
+        runtime,
+        permissions,
+        pendingAuthority:
+          pendingPermissionPlugins.has(owner.pluginName) ||
+          pendingPermissionPlugins.has(owner.folderName)
+      })
+    },
+    deletePluginRow: async (owner) => {
+      const nextEnabled = [...enabledPlugins].filter(
+        (name) => name !== owner.folderName && name !== owner.pluginName
+      )
+      await dbUtils.deletePluginData(owner.pluginName)
+      await dbUtils.setPluginData('internal:plugin-module', 'enabled_plugins', nextEnabled)
+    },
+    finalize: async (owner) => {
+      enabledPlugins.delete(owner.folderName)
+      enabledPlugins.delete(owner.pluginName)
+      if (pluginNameIndex.get(owner.pluginName) === owner.folderName) {
+        pluginNameIndex.delete(owner.pluginName)
+      }
+      clearPluginDeclaredPermissions(owner.pluginName)
+      clearIssueSnapshot(owner.pluginName)
+      clearPluginLocalizationEntries(owner.pluginName)
+      plugins.delete(owner.folderName)
+      try {
+        transport.broadcast(PluginEvents.push.stateChanged, {
+          type: 'removed',
+          name: owner.folderName
+        })
+      } catch {
+        logWarn('Failed to broadcast plugin removal', pluginTag(owner.folderName))
+      }
+      logModuleInfo('Plugin uninstalled successfully', pluginTag(owner.folderName))
+      return 'completed'
+    },
+    reportUninstall: async (owner) => {
+      await reportPluginUninstall(owner.pluginName)
+      return 'completed'
+    },
+    reportLocalError: (code) => pluginLog.warn(code)
+  })
 
-    logModuleInfo('Plugin uninstalled successfully', pluginTag(folderName))
-    return true
+  const uninstallPlugin = async (
+    input: PluginApiUninstallRequest
+  ): Promise<PluginApiUninstallResponse> => {
+    const request = normalizePluginUninstallRequest(input)
+    return pluginDataDispositionCoordinator!.uninstall(request)
   }
 
   /**
@@ -1691,6 +1835,28 @@ export class PluginModule extends BaseModule {
   private pluginBusinessCapabilities: PluginBusinessCapabilities | null = null
   private runtimeService: PluginRuntimeService | null = null
   private secureStoreRootPath = ''
+  private uninstallAuthorityInvalidators = new Set<(pluginName: string) => void | Promise<void>>()
+
+  registerUninstallAuthorityInvalidator(
+    invalidator: (pluginName: string) => void | Promise<void>
+  ): () => void {
+    this.uninstallAuthorityInvalidators.add(invalidator)
+    return () => this.uninstallAuthorityInvalidators.delete(invalidator)
+  }
+
+  private async invalidatePluginAuthority(pluginName: string): Promise<void> {
+    const results = await Promise.allSettled(
+      [...this.uninstallAuthorityInvalidators].map(async (invalidator) => {
+        await invalidator(pluginName)
+      })
+    )
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : []
+    )
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'PLUGIN_UNINSTALL_AUTHORITY_INVALIDATION_FAILED')
+    }
+  }
 
   static key: symbol = Symbol.for('PluginModule')
   name: ModuleKey = PluginModule.key
@@ -1735,25 +1901,14 @@ export class PluginModule extends BaseModule {
           async (pluginName) => {
             const reportFailure = (message: string): void =>
               pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
-            const results = await Promise.allSettled([
-              deleteSecureStoreValuesByPrefix(
-                this.secureStoreRootPath,
-                `plugin.${pluginName}.`,
-                reportFailure
-              ),
-              deleteSecureStoreValuesByPrefix(
-                this.secureStoreRootPath,
-                pluginBusinessSecretPrefix(pluginName),
-                reportFailure
-              )
-            ])
-            const failures = results.flatMap((result) =>
-              result.status === 'rejected' ? [result.reason] : []
+            await deleteSecureStoreValuesByPrefixes(
+              this.secureStoreRootPath,
+              [`plugin.${pluginName}.`, pluginBusinessSecretPrefix(pluginName)],
+              reportFailure
             )
-            if (failures.length > 0) {
-              throw new AggregateError(failures, 'PLUGIN_SECRET_CLEANUP_FAILED')
-            }
-          }
+          },
+          this.secureStoreRootPath,
+          (pluginName) => this.invalidatePluginAuthority(pluginName)
         ),
       createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
     })
@@ -2378,7 +2533,16 @@ export class PluginModule extends BaseModule {
     )
     this.storageTeardownDisposer?.()
     this.storageTeardownDisposer = registerPluginStorageTeardown(async (pluginName) => {
-      await this.pluginSqliteResources.closePlugin(pluginName)
+      const results = await Promise.allSettled([
+        this.pluginSqliteResources.closePlugin(pluginName),
+        purgePluginTempNamespace(tempFileService, pluginName)
+      ])
+      const failures = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : []
+      )
+      if (failures.length > 0) {
+        throw new AggregateError(failures, 'PLUGIN_PERMISSION_RESOURCE_TEARDOWN_FAILED')
+      }
     })
 
     if (!this.networkStatusCleanup) {
@@ -2521,6 +2685,7 @@ export class PluginModule extends BaseModule {
     }
     runCleanup(() => this.healthMonitor?.destroy())
     runCleanup(() => stopUpdateScheduler())
+    this.uninstallAuthorityInvalidators.clear()
 
     if (cleanupErrors.length > 0) {
       throw new AggregateError(cleanupErrors, 'PLUGIN_MODULE_CLEANUP_FAILED')

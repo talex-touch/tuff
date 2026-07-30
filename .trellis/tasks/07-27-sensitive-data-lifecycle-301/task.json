@@ -3,7 +3,7 @@
   "name": "sensitive-data-lifecycle-301",
   "title": "实现敏感数据生命周期控制 #301",
   "description": "定义并实现敏感数据保留、导出、删除、远程处理、备份恢复与卸载语义。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Define the retained-data, export, deletion, remote-processing, backup, and uninstall acceptance contract before implementation begins.",
-    "blocker": "The task remains in planning without an approved lifecycle design or verification evidence.",
-    "evidence": "prd.md and the #301 parent issue task map define the required lifecycle scope."
+    "nextAction": "Commit the verified #301 closure, publish GitHub evidence, close the issue, then archive the child and synchronize parent #302.",
+    "blocker": "",
+    "evidence": "implement.md records the 2026-07-31 independent closure findings, fixes, 324-test matrix, static gates, production build, and isolated Electron smoke."
   }
 }

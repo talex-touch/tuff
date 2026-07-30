@@ -198,9 +198,10 @@ export class StartupAnalytics {
       if (history && Array.isArray(history.entries)) {
         return history
       }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      analyticsLog.warn('Failed to load startup history', { meta: { error: errorMessage } })
+    } catch {
+      analyticsLog.warn('Failed to load startup history', {
+        meta: { code: 'STARTUP_HISTORY_LOAD_FAILED' }
+      })
     }
 
     return {
@@ -240,9 +241,10 @@ export class StartupAnalytics {
           historyCount: history.entries.length
         }
       })
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      analyticsLog.error('Failed to save metrics to history', { meta: { error: errorMessage } })
+    } catch {
+      analyticsLog.error('Failed to save metrics to history', {
+        meta: { code: 'STARTUP_HISTORY_SAVE_FAILED' }
+      })
     }
   }
 
@@ -332,9 +334,9 @@ export class StartupAnalytics {
     this.pollingService.register(
       STARTUP_OUTBOX_FLUSH_TASK_ID,
       () =>
-        this.flushQueuedReports(this.startupReportEndpoint || endpoint).catch((error) => {
+        this.flushQueuedReports(this.startupReportEndpoint || endpoint).catch(() => {
           analyticsLog.warn('Startup analytics outbox flush failed', {
-            meta: { error: error instanceof Error ? error.message : String(error) }
+            meta: { code: 'STARTUP_ANALYTICS_FLUSH_FAILED' }
           })
         }),
       {
@@ -387,10 +389,9 @@ export class StartupAnalytics {
 
       attempted += 1
       try {
-        const target = item.endpoint || endpoint
         await getNetworkService().request<string>({
           method: 'POST',
-          url: target,
+          url: endpoint,
           headers: { 'Content-Type': 'application/json' },
           body: item.payload,
           responseType: 'text',
@@ -423,7 +424,7 @@ export class StartupAnalytics {
       attempted,
       succeeded,
       skipped,
-      error: firstError
+      code: 'STARTUP_ANALYTICS_FLUSH_FAILED'
     }
     if (shouldDowngradeStartupReportFailure(firstError)) {
       analyticsLog.info('Queued startup analytics flush deferred (network unavailable)', { meta })
@@ -461,10 +462,9 @@ export class StartupAnalytics {
 
       attempted += 1
       try {
-        const target = item.endpoint || endpoint
         await getNetworkService().request<string>({
           method: 'POST',
-          url: target,
+          url: endpoint,
           headers: { 'Content-Type': 'application/json' },
           body: item.payload,
           responseType: 'text',
@@ -494,7 +494,7 @@ export class StartupAnalytics {
       attempted,
       succeeded,
       skipped,
-      error: firstError
+      code: 'STARTUP_ANALYTICS_FLUSH_FAILED'
     }
     if (shouldDowngradeStartupReportFailure(firstError)) {
       analyticsLog.info('Queued startup analytics flush deferred (db, network unavailable)', {
@@ -658,20 +658,19 @@ export class StartupAnalytics {
       const store = this.getReportQueueStore()
       if (store) {
         await store.insert({ payload, endpoint: url, createdAt: Date.now() })
-        analyticsLog.info('Queued startup analytics for async flush (db)', {
-          meta: { endpoint: url }
-        })
+        analyticsLog.info('Queued startup analytics for async flush (db)')
       } else {
         const queue = this.loadReportQueue()
         queue.push({ payload, endpoint: url, createdAt: Date.now() })
         this.saveReportQueue(queue)
         analyticsLog.info('Queued startup analytics for async flush', {
-          meta: { queueSize: queue.length, endpoint: url }
+          meta: { queueSize: queue.length }
         })
       }
-    } catch (queueError) {
-      const queueMessage = queueError instanceof Error ? queueError.message : String(queueError)
-      analyticsLog.warn('Failed to queue startup analytics', { meta: { error: queueMessage } })
+    } catch {
+      analyticsLog.warn('Failed to queue startup analytics', {
+        meta: { code: 'STARTUP_ANALYTICS_QUEUE_FAILED' }
+      })
       return
     }
 
@@ -686,10 +685,9 @@ export class StartupAnalytics {
     this.autoFinalizePromise = (async () => {
       await this.saveToHistory()
       await this.reportMetrics()
-    })().catch((error) => {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+    })().catch(() => {
       analyticsLog.warn('Failed to auto finalize startup analytics', {
-        meta: { error: errorMessage }
+        meta: { code: 'STARTUP_ANALYTICS_FINALIZE_FAILED' }
       })
     })
   }

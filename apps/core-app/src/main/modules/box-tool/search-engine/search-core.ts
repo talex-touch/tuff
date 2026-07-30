@@ -372,6 +372,16 @@ export class SearchEngineCore
     return this.recommendationEngine
   }
 
+  public async preparePrivacyRetentionCleanup(): Promise<void> {
+    await this.searchUsageService.flush()
+  }
+
+  public completePrivacyRetentionCleanup(): void {
+    this.searchUsageService.invalidateRetentionCaches()
+    this.searchCache.clear()
+    this.recommendationEngine?.invalidateCache()
+  }
+
   registerIndexCommitStream(context: StreamContext<CoreBoxSearchIndexCommitPayload>): void {
     if (context.signal.aborted) return
     this.indexCommitStreams.add(context)
@@ -1808,12 +1818,6 @@ export class SearchEngineCore
 
   maintain(): void {
     this.providerHealthService.prune()
-
-    if (this.queryCompletionService) {
-      void this.queryCompletionService.cleanupOldCompletions().catch((error) => {
-        searchEngineLog.error('Failed to cleanup query completions', { error })
-      })
-    }
   }
 
   private startMaintenance(): void {
@@ -1944,7 +1948,7 @@ export class SearchEngineCore
     // 初始化并启动使用统计汇总服务
     instance.usageSummaryService = new UsageSummaryService(instance.dbUtils, {
       retentionDays: 30,
-      autoCleanup: true,
+      autoCleanup: false,
       summaryInterval: 24 * 60 * 60 * 1000 // 24 小时
     })
 

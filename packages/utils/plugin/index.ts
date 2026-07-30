@@ -1,10 +1,7 @@
 import type { FSWatcher } from 'chokidar'
 import type { TuffFooterHints } from '../core-box/tuff/tuff-dsl'
 import type { LocalizedListValue, LocalizedTextValue } from '../i18n'
-import type {
-  ManifestPermissionReasons,
-  ManifestPermissions,
-} from '../permission/types'
+import type { ManifestPermissionReasons, ManifestPermissions } from '../permission/types'
 import type {
   FeatureSearchTokenInput,
   IndexedSourceDescriptor,
@@ -14,13 +11,11 @@ import type {
   SemanticAliasManifestEntry,
 } from '../search'
 import type { ITuffIcon } from '../types/icon'
+import type { PluginApiUninstallRequest, PluginApiUninstallResponse } from '../transport/events/types/plugin-uninstall'
 import type { Arch, SupportOS } from './../base/index'
 
 import type { IPluginLogger } from './log/types'
-import type {
-  PluginInstallRequest,
-  PluginInstallSummary,
-} from './providers/types'
+import type { PluginInstallRequest, PluginInstallSummary } from './providers/types'
 
 import type { WidgetPrecompiledManifestEntry, WidgetRuntime } from './widget'
 
@@ -130,6 +125,9 @@ export interface IPluginBuildInfo {
 export type SdkApiVersion = number
 
 export interface ITouchPlugin extends IPluginBaseInfo {
+  /** Safe public identity used to bind destructive lifecycle requests. */
+  readonly pluginInstanceId?: string
+  readonly activationGeneration?: number
   dev: IPluginDev
   pluginPath: string
   logger: IPluginLogger<any>
@@ -197,17 +195,14 @@ export interface ITouchPlugin extends IPluginBaseInfo {
     fileName: string,
     content: object,
     options?: { broadcast?: boolean },
-  ) => { success: boolean, error?: string }
+  ) => { success: boolean; error?: string }
 
   /**
    * Delete the plugin file.
    * @param fileName The name of the file.
    * @returns The result of the delete operation.
    */
-  deletePluginFile: (
-    fileName: string,
-    options?: { broadcast?: boolean },
-  ) => { success: boolean, error?: string }
+  deletePluginFile: (fileName: string, options?: { broadcast?: boolean }) => { success: boolean; error?: string }
 
   /**
    * List all files in the plugin.
@@ -226,20 +221,11 @@ export interface ITouchPlugin extends IPluginBaseInfo {
    * @param content The configuration content.
    * @returns The result of the save operation.
    */
-  savePluginConfig: (content: object) => { success: boolean, error?: string }
+  savePluginConfig: (content: object) => { success: boolean; error?: string }
 }
 
 export interface IFeatureCommand {
-  type:
-    | 'match'
-    | 'contain'
-    | 'regex'
-    | 'function'
-    | 'over'
-    | 'image'
-    | 'files'
-    | 'directory'
-    | 'window'
+  type: 'match' | 'contain' | 'regex' | 'function' | 'over' | 'image' | 'files' | 'directory' | 'window'
   value: string | string[] | RegExp | FeatureCommandMatcher
   /** Optional trigger callback - not serialized over IPC */
   onTrigger?: () => void
@@ -390,12 +376,7 @@ export interface IFeatureLifeCycle {
    * @param signal - An AbortSignal to cancel the operation
    * @returns If returns false, the feature will not enter activation state (e.g., just opens browser and exits)
    */
-  onFeatureTriggered: (
-    id: string,
-    data: any,
-    feature: IPluginFeature,
-    signal?: AbortSignal,
-  ) => boolean | void
+  onFeatureTriggered: (id: string, data: any, feature: IPluginFeature, signal?: AbortSignal) => boolean | void
 
   /**
    * Called when user input changes within this feature’s input box.
@@ -427,7 +408,10 @@ export interface IFeatureLifeCycle {
    * @param context Optional execution context, including the selected action id.
    * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?: (item: any, context?: { actionId?: string }) => Promise<{
+  onItemAction?: (
+    item: any,
+    context?: { actionId?: string },
+  ) => Promise<{
     /** Whether the action executed an external operation (e.g., opened browser) */
     externalAction?: boolean
     /** Whether the feature should be activated after this action */
@@ -496,7 +480,10 @@ export interface ITargetFeatureLifeCycle {
    * @param context Optional execution context, including the selected action id.
    * @returns Object indicating whether to activate the feature and any activation data
    */
-  onItemAction?: (item: any, context?: { actionId?: string }) => Promise<{
+  onItemAction?: (
+    item: any,
+    context?: { actionId?: string },
+  ) => Promise<{
     /** Whether the action executed an external operation (e.g., opened browser) */
     externalAction?: boolean
     /** Whether the feature should be activated after this action */
@@ -548,10 +535,8 @@ export interface IPluginManager {
   listPlugins: () => Promise<Array<string>>
   loadPlugin: (pluginName: string) => Promise<boolean>
   unloadPlugin: (pluginName: string) => Promise<boolean>
-  installFromSource: (
-    request: PluginInstallRequest,
-  ) => Promise<PluginInstallSummary>
-  uninstallPlugin: (pluginName: string) => Promise<boolean>
+  installFromSource: (request: PluginInstallRequest) => Promise<PluginInstallSummary>
+  uninstallPlugin: (request: PluginApiUninstallRequest) => Promise<PluginApiUninstallResponse>
   /**
    * Register an internal plugin that is created in code (no manifest / scanning).
    * Internal plugins are always hidden from user-facing plugin lists.
