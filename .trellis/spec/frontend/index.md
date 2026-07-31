@@ -24,18 +24,19 @@ Use these guidelines together with the package-level `AGENTS.md` files:
 
 ## Guidelines Index
 
-| Guide                                                       | Description                                                                          | Status |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------ |
-| [Directory Structure](./directory-structure.md)             | Module organization and file layout                                                  | Filled |
-| [Component Guidelines](./component-guidelines.md)           | Component patterns, props, composition                                               | Filled |
-| [Hook Guidelines](./hook-guidelines.md)                     | Custom composables, lifecycle, data access                                           | Filled |
-| [State Management](./state-management.md)                   | Local state, Pinia, host/server state                                                | Filled |
-| [Quality Guidelines](./quality-guidelines.md)               | Code standards, forbidden patterns, verification                                     | Filled |
-| [Type Safety](./type-safety.md)                             | TypeScript, runtime guards, typed transport                                          | Filled |
-| [Plugin Runtime Security](./plugin-runtime-security.md)     | Privileged plugin handlers, views, preload, and Electron policy                      | Filled |
-| [Privacy Data Lifecycle](./privacy-data-lifecycle.md)       | Typed Privacy transport, retention/export, and main-owned credential transactions    | Filled |
-| [Release Acceptance Testing](./release-testing.md)          | Downloaded release, integrity, trust, and isolated packaged-runtime gates            | Filled |
-| [Native Resource Protocols](./native-resource-protocols.md) | Protocol data-plane rules, path-only native callbacks, and macOS app-icon extraction | Filled |
+| Guide                                                         | Description                                                                          | Status |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------ |
+| [Directory Structure](./directory-structure.md)               | Module organization and file layout                                                  | Filled |
+| [Component Guidelines](./component-guidelines.md)             | Component patterns, props, composition                                               | Filled |
+| [Hook Guidelines](./hook-guidelines.md)                       | Custom composables, lifecycle, data access                                           | Filled |
+| [State Management](./state-management.md)                     | Local state, Pinia, host/server state                                                | Filled |
+| [Quality Guidelines](./quality-guidelines.md)                 | Code standards, forbidden patterns, verification                                     | Filled |
+| [Type Safety](./type-safety.md)                               | TypeScript, runtime guards, typed transport                                          | Filled |
+| [Plugin Runtime Security](./plugin-runtime-security.md)       | Privileged plugin handlers, views, preload, and Electron policy                      | Filled |
+| [Privacy Data Lifecycle](./privacy-data-lifecycle.md)         | Typed Privacy transport, retention/export, and main-owned credential transactions    | Filled |
+| [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) | Cloudflare Preview Secret inventory, deploy preflight, runtime policy, and evidence  | Filled |
+| [Release Acceptance Testing](./release-testing.md)            | Downloaded release, integrity, trust, and isolated packaged-runtime gates            | Filled |
+| [Native Resource Protocols](./native-resource-protocols.md)   | Protocol data-plane rules, path-only native callbacks, and macOS app-icon extraction | Filled |
 
 ---
 
@@ -51,9 +52,10 @@ Before editing frontend code:
 6. Read [Type Safety](./type-safety.md) before changing payloads, event kinds, SDK domains, manifest shapes, or JSON evidence.
 7. Read [Plugin Runtime Security](./plugin-runtime-security.md) before changing plugin windows, hosted plugin views, permission handlers, preload bridges, or plugin Electron preferences.
 8. Read [Privacy Data Lifecycle](./privacy-data-lifecycle.md) before changing Privacy SDK payloads, retention/export owners, Provider or Plugin credential persistence/runtime resolution, Secret backup envelopes, portable credential catalogs, secure-store batch mutation, the sensitive-data inventory, or the isolated Privacy lifecycle smoke.
-9. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
-10. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
-11. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
+9. Read [Nexus Preview Secrets](./nexus-preview-secret-deployment.md) before changing Preview variables, Cloudflare Pages credentials, auth/emergency runtime secrets, deployment commands, or Preview evidence.
+10. Read [Native Resource Protocols](./native-resource-protocols.md) before adding native media/file callbacks, worker/IPC byte payloads, custom protocol consumers, or macOS application-icon extraction.
+11. Read [Quality Guidelines](./quality-guidelines.md) before finishing, and run the smallest relevant tests plus `git diff --check`.
+12. Read [Release Acceptance Testing](./release-testing.md) whenever the user says “发版测试”, asks to validate a published build, or requests download/update acceptance.
 
 Also read shared thinking guides when the trigger applies:
 
