@@ -15,12 +15,12 @@
 
 ## Acceptance Criteria
 
-- [ ] `wrangler.toml` 不包含 Preview credential 值或默认占位值。
-- [ ] 确定性测试覆盖缺失库存、完整库存、占位值拒绝、无 Secret 值日志。
-- [ ] 远程 Preview 部署入口在缺失必需 Secret 时失败。
-- [ ] 本地 Pages 模拟保留明确 local-only 默认值。
-- [ ] Preview auth、app JWT 与 emergency-control 运行时只接受平台 Secret。
-- [ ] Nexus focused tests、typecheck、scoped lint、配置扫描与 `git diff --check` 通过。
+- [x] `wrangler.toml` 不包含 Preview credential 值或默认占位值。
+- [x] 确定性测试覆盖缺失库存、完整库存、占位值拒绝、无 Secret 值日志。
+- [x] 远程 Preview 部署入口在缺失必需 Secret 时失败。
+- [x] 本地 Pages 模拟保留明确 local-only 默认值。
+- [x] Preview auth、app JWT 与 emergency-control 运行时只接受平台 Secret。
+- [x] Nexus focused tests、typecheck、scoped lint、配置扫描与 `git diff --check` 通过。
 
 ## Out of Scope
 
