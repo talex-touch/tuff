@@ -28,6 +28,7 @@
 - Nexus: [TODO-nexus.md](./TODO-nexus.md)
 - Long-term debt: [docs/TODO-BACKLOG-LONG-TERM.md](./docs/TODO-BACKLOG-LONG-TERM.md)
 - Historical completion facts: [01-project/CHANGES.md](./01-project/CHANGES.md)
+- 2026-07-30 maintenance audit: [actionable report](../engineering/reports/maintenance-audit-2026-07-30.md).
 
 ## Topical guardrails
 

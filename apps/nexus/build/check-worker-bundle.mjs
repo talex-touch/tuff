@@ -687,9 +687,9 @@ function checkAuthHandlerSingleton() {
   const requiredSnippets = [
     'const createRequestAuthEvent = () => createAuthEvent()',
     'let cachedAuthHandler',
-    'function getCachedAuthHandler()',
-    'cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions())',
-    'const authHandler = getCachedAuthHandler()',
+    'function getCachedAuthHandler(event: H3Event)',
+    'cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions(resolveSessionAuthSecret(event)))',
+    'const authHandler = getCachedAuthHandler(event)',
   ]
   const forbiddenSnippets = [
     'NuxtAuthHandler(getAuthOptions(event))',

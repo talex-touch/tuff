@@ -1,0 +1,8 @@
+{"file":"apps/nexus/AGENTS.md","reason":"Owns Nexus deployment, secret, evidence and validation boundaries."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Owns secret redaction, fail-closed runtime and evidence requirements."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides config-to-deploy-to-runtime validation ownership."}
+{"file":"wrangler.toml","reason":"Contains the deployable preview variables that must stop carrying credentials."}
+{"file":"apps/nexus/package.json","reason":"Owns local preview and remote deployment commands."}
+{"file":"apps/nexus/server/utils/auth.ts","reason":"Owns app JWT secret selection and production fallback behavior."}
+{"file":"apps/nexus/server/utils/adminEmergencyToken.ts","reason":"Owns emergency JWT secret validation."}
+{"file":"apps/nexus/server/utils/adminEmergencyStore.ts","reason":"Owns control-plane pepper validation."}

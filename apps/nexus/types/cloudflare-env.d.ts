@@ -11,6 +11,7 @@ declare global {
     PLUGIN_PACKAGES?: R2Bucket
     APP_AUTH_JWT_SECRET?: string
     AUTH_SECRET?: string
+    NUXT_INTELLIGENCE_ENCRYPT_KEY?: string
     RELEASE_SIGNATURE_PUBLIC_KEY?: string
     UPDATE_SIGNATURE_PUBLIC_KEY?: string
     PLUGIN_ATTESTATION_PRIVATE_KEY_PEM?: string
@@ -25,6 +26,7 @@ declare global {
     ADMIN_OOB_MTLS_FINGERPRINTS?: string
     ADMIN_EMERGENCY_JWT_SECRET?: string
     ADMIN_CONTROL_PLANE_PEPPER?: string
+    NEXUS_LOCAL_PAGES_PREVIEW?: string
   }
 }
 

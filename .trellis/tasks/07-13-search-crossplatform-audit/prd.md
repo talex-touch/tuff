@@ -90,16 +90,16 @@
 
 - [ ] **R1 — Rust 截图模块疑似未接入 CI/安装构建链**
   - 位置：`packages/tuff-native/scripts/build-screenshot.js`（手动脚本）、`scripts/build-target/build-target.js:169`（`verifyNativeOcrModule` 只验 OCR）；`gypfile:true` 只触发 node-gyp（OCR+Everything），不含 cargo。
-  - 风险：打包产物可能缺 `tuff_native_screenshot.node` → 截图静默降级 `ERR_NATIVE_SCREENSHOT_UNAVAILABLE`。**需实际打包验证**。
+  - 风险：打包产物可能缺 `tuff_native_screenshot.node` → 截图静默降级 `ERR_NATIVE_SCREENSHOT_UNAVAILABLE`。**需实际打包验证**。跟踪：[ #321](https://github.com/talex-touch/tuff/issues/321)。
 
 - [ ] **R2 — macOS 打包未签名 + 仅 arm64 + dir target，与 electron-updater 路径冲突**
   - 位置：`electron-builder.yml:100-119`（`sign/notarize/hardenedRuntime:false`、`identity:null`、`target:dir`、无 Intel）
   - 风险：Gatekeeper 拦截；`mac-auto-updater-adapter.ts` 依赖 app-update.yml + 签名 zip，实际不可用；`update-asset-utils.ts:33-38` 仍在给不产出的 .dmg/.pkg 打分。**需产品决策**（是否签名/公证/保留 Intel）。
-  - 2026-07-21 进展（`07-21-enable-macos-notarization`）：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；同时移除 Resources 中越界 pnpm symlink，阻止公证后被本地后处理 ad-hoc 重签。R2 仍保持 open：Intel/Universal 产物与 `dir`/updater 目标冲突尚未解决。
+  - 2026-07-21 进展（`07-21-enable-macos-notarization`）：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；同时移除 Resources 中越界 pnpm symlink，阻止公证后被本地后处理 ad-hoc 重签。R2 仍保持 open：Intel/Universal 产物与 `dir`/updater 目标冲突尚未解决。跟踪：[ #311](https://github.com/talex-touch/tuff/issues/311)。
 
 - [ ] **R3 — 大目录扫描/对账内存峰值**
   - 位置：`addon/files/workers/file-scan-worker.ts:82`（scanDirectory 全物化）、`file-scan-worker-client.ts:132`（client 再累积）、`addon/files/services/file-provider-reconciliation-run-service.ts:122`（磁盘全集 + DB 全集 `LIKE` 无 LIMIT）
-  - 风险：同一文件列表约 3 份同存，无分块流式落库；百万级根目录（整个 home）OOM。
+  - 风险：同一文件列表约 3 份同存，无分块流式落库；百万级根目录（整个 home）OOM。尚无 GitHub issue：当前无登录浏览器会话，需在可认证会话中补建独立 issue。
 
 ### 🟡 中危架构债
 
