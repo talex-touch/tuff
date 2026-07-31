@@ -1,5 +1,7 @@
 # Windows 文件搜索 PRD
 
+> ⚠️ **Historical（历史快照，停止维护）**：2026-01 版本，已被 03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md 与 Windows Everything 任务树承接。当前事实源以 `ROADMAP.md`、`docs/plan-prd/TODO.md` 与 Trellis 任务为准。
+
 ## 背景与问题
 
 ### 当前问题

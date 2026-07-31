@@ -16,7 +16,7 @@
 
 ## 关联入口
 
-- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/PRD-QUALITY-BASELINE.md`
 - `.github/workflows/README.md`
 - `docs/plan-prd/04-implementation/Roadmap-vNext-2026-06-18.md`
 - `docs/plan-prd/TODO.md`

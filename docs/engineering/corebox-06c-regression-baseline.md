@@ -51,4 +51,4 @@ npm exec --yes pnpm -- -C "apps/core-app" exec vitest run "src/main/modules/box-
 ## 5. 变更清单
 
 - `apps/core-app/src/main/modules/box-tool/search-engine/search-core.regression-baseline.test.ts`
-- `docs/plan-prd/docs/COREBOX-ROADMAP-06C-REGRESSION-BASELINE.md`
+- `docs/engineering/corebox-06c-regression-baseline.md`

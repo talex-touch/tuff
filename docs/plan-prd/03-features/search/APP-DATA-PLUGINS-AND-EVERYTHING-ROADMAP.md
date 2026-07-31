@@ -140,4 +140,4 @@ Epic 的定义需要先锁定：Epic Games Launcher 项目、Unreal/Epic Marketp
 - R3 收口清单：`docs/plan-prd/TODO-R3.md`
 - Windows 文件搜索 PRD：`docs/plan-prd/03-features/search/WINDOWS-FILE-SEARCH-PRD.md`
 - 当前执行清单：`docs/plan-prd/TODO.md`
-- 质量基线：`docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- 质量基线：`docs/plan-prd/PRD-QUALITY-BASELINE.md`

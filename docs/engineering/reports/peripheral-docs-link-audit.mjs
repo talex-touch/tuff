@@ -32,7 +32,7 @@ const excludedPrefixes = [
   '.trellis/',
   'notes/',
   'docs/engineering/reports/',
-  'docs/plan-prd/report/'
+  'docs/engineering/reports/cross-platform-audit-2026-06/'
 ]
 const excludedSegments = new Set([
   '.nuxt',

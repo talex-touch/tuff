@@ -1,5 +1,7 @@
 # Left（任务梳理）
 
+> ⚠️ **Historical（历史快照，停止维护）**：2026-01 个人任务梳理草稿，清单状态早已漂移。当前事实源以 `ROADMAP.md`、`docs/plan-prd/TODO.md` 与 Trellis 任务为准。
+
 ## 已完成
 - SQLite BUSY 重试封装与接入（OCR / Analytics 写入）。
 - 搜索链路性能埋点（usageStats/completion/sort 耗时上报）。
