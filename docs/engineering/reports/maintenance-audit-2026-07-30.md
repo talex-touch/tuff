@@ -14,7 +14,7 @@
 - **迁移准备度未以真实数据库执行** — `search:index-migration:preflight` 是只读命令但必须提供 `--db <sqlite.db>`；当前没有可审计的 real-profile 或隔离 DB preflight 产物。`0034_privacy_retention_indexes` 已记录在 Drizzle journal，相关迁移测试已通过；这不构成运行时数据库 readiness 证据。
 - **Rust 截图原生模块缺少干净 CI/打包/加载验收** — 现有发布链不证明 Cargo addon 被构建、复制、打包并被 production loader 加载；缺失时会退化为 `ERR_NATIVE_SCREENSHOT_UNAVAILABLE`。跟踪：#321。
 - **macOS 发行范围未决** — Intel/Universal 产物与现有 `dir` 目标/updater 路径仍未统一决策。跟踪：#311。
-- **大目录扫描与对账可触发 OOM** — scan worker、client 与 reconciliation 同时物化完整文件集合；百万级目录约三份列表并存。尚未找到重复 GitHub issue；尝试新建时浏览器重定向到 GitHub 登录页，需认证会话补建带 `file:line` 证据与流式落库验收的独立 issue。
+- **大目录扫描与对账可触发 OOM** — scan worker、client 与 reconciliation 同时物化完整文件集合；百万级目录约三份列表并存。已建 GitHub issue，要求以流式落库与有界内存验收：#480。
 
 ## 安全、功能与文档质量
 
