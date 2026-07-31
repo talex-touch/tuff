@@ -74,6 +74,24 @@ describe('txGrid', () => {
     expect(wrapper.find('.tx-grid').attributes('style')).toContain('row-gap: 20px;')
   })
 
+  it('cascades responsive values to the nearest smaller breakpoint, not a distant one', async () => {
+    setWindowWidth(1400)
+    const wrapper = mount(TxGrid, {
+      props: {
+        cols: { sm: 2, md: 3, lg: 4 },
+        gap: { sm: 8, md: 12, lg: 20 },
+      },
+    })
+
+    // xl viewport with no xl declared: the nearest smaller breakpoint is lg
+    // (4 cols / 20px gap). The value must not shrink to a distant md as the
+    // viewport grows.
+    const style = wrapper.find('.tx-grid').attributes('style')
+    expect(style).toContain('grid-template-columns: repeat(4, minmax(0, 1fr));')
+    expect(style).toContain('row-gap: 20px;')
+    expect(style).not.toContain('repeat(3, minmax(0, 1fr))')
+  })
+
   it('removes the resize listener on unmount', () => {
     const add = vi.spyOn(window, 'addEventListener')
     const remove = vi.spyOn(window, 'removeEventListener')

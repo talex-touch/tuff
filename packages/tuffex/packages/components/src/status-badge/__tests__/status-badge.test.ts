@@ -75,4 +75,26 @@ describe('txStatusBadge', () => {
     await wrapper.trigger('click')
     expect(wrapper.emitted('click')?.[0][0]).toBeInstanceOf(MouseEvent)
   })
+
+  it('becomes a keyboard-reachable button when a click listener is attached', async () => {
+    const onClick = () => {}
+    const wrapper = mount(TxStatusBadge, {
+      props: { text: 'Open', status: 'info', onClick },
+    })
+
+    // A clickable badge is a button: reachable and Enter/Space-activatable.
+    expect(wrapper.attributes('role')).toBe('button')
+    expect(wrapper.attributes('tabindex')).toBe('0')
+
+    await wrapper.trigger('keydown', { key: 'Enter' })
+    await wrapper.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toHaveLength(2)
+  })
+
+  it('stays a passive status region without a click listener', () => {
+    const wrapper = mount(TxStatusBadge, { props: { text: 'Idle', status: 'muted' } })
+    // No over-blocking: a non-interactive badge is a status region, out of the tab order.
+    expect(wrapper.attributes('role')).toBe('status')
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
+  })
 })

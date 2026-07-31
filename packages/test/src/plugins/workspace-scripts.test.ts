@@ -1,19 +1,19 @@
-import { describe, expect, it } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import { describe, expect, it, vi } from 'vitest'
+import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
-const scriptsPlugin = loadPluginModule(new URL('../../../../plugins/touch-workspace-scripts/index.js', import.meta.url))
-const { __test: scriptsTest } = scriptsPlugin
 const scriptsUrl = new URL('../../../../plugins/touch-workspace-scripts/index.js', import.meta.url)
+const WORKSPACE_TOKEN = 'ws_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+const SCRIPT_TOKEN = 'wss_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'
 
-// Shared FakeBuilder — single source of truth for TuffItemBuilder mock
 class FakeTuffItemBuilder {
-  item: Record<string, unknown>
+  item: Record<string, any>
 
   constructor(id: string) {
-    this.item = { id, meta: {} }
+    this.item = { id, meta: {}, actions: [] }
   }
 
-  setSource() {
+  setSource(type: string, id: string, name: string) {
+    this.item.source = { type, id, name }
     return this
   }
 
@@ -27,12 +27,18 @@ class FakeTuffItemBuilder {
     return this
   }
 
-  setIcon() {
+  setIcon(icon: unknown) {
+    this.item.icon = icon
     return this
   }
 
   setMeta(meta: Record<string, unknown>) {
-    this.item.meta = { ...(this.item.meta as object), ...meta }
+    this.item.meta = { ...this.item.meta, ...meta }
+    return this
+  }
+
+  createAndAddAction(id: string, type: string, label: string, payload: unknown) {
+    this.item.actions.push({ id, type, label, payload })
     return this
   }
 
@@ -41,196 +47,115 @@ class FakeTuffItemBuilder {
   }
 }
 
-describe('workspace scripts plugin', () => {
-  function installShellRunner(pluginModule: any, onRun?: () => void) {
-    pluginModule.__test.setSpawnShellCommandForTest(() => {
-      onRun?.()
-      return { pid: 1234, unref() {} }
-    })
-  }
-
-  // -----------------------------------------------------------------------
-  // Config
-  // -----------------------------------------------------------------------
-  it('uses defaults when config is empty', () => {
-    const config = scriptsTest.parseScriptsConfig(null)
-    expect(config.workspacePath).toBe('')
-    expect(Array.isArray(config.commands)).toBe(true)
-    expect(config.commands.length).toBe(0)
+function createHarness() {
+  const items: Array<Record<string, any>> = []
+  const calls: Array<Record<string, unknown>> = []
+  const run = vi.fn(async (scriptToken: string) => {
+    calls.push({ operation: 'run', scriptToken })
+    return { operation: 'run-script', status: 'started', scriptName: 'lint' }
   })
-
-  it('parses package scripts map', () => {
-    const scripts = scriptsTest.parsePackageScriptsMap({
-      lint: 'pnpm lint',
-      test: 'pnpm test',
-      empty: '',
-      bad: null,
-    })
-    expect(scripts.length).toBe(2)
-    expect(scripts[0].id).toBe('script:lint')
-    expect(scripts[0].command).toBe('pnpm lint')
-    expect(scripts[1].id).toBe('script:test')
-  })
-
-  it('resolves command cwd', () => {
-    expect(scriptsTest.resolveCommandCwd('.', '/tmp/project')).toBe('/tmp/project')
-    expect(scriptsTest.resolveCommandCwd('apps/core', '/tmp/project')).toBe('/tmp/project/apps/core')
-    expect(scriptsTest.resolveCommandCwd('/opt/repo', '/tmp/project')).toBe('/opt/repo')
-  })
-
-  // -----------------------------------------------------------------------
-  // Shell injection blocking (#1)
-  // -----------------------------------------------------------------------
-  it('blocks commands with shell injection characters', () => {
-    expect(scriptsTest.validateCommandRequest('echo ok; rm -rf /', '/tmp').ok).toBe(false)
-    expect(scriptsTest.validateCommandRequest('echo ok | sh', '/tmp').ok).toBe(false)
-    expect(scriptsTest.validateCommandRequest('echo $(id)', '/tmp').ok).toBe(false)
-  })
-
-  it('allows normal structured dev commands and blocks shell chaining', () => {
-    expect(scriptsTest.validateCommandRequest('pnpm test', '/tmp').ok).toBe(true)
-    expect(scriptsTest.validateCommandRequest('pnpm lint && pnpm test', '/tmp')).toMatchObject({
-      ok: false,
-      reason: 'unsupported-shell-syntax',
-    })
-    expect(scriptsTest.validateCommandRequest('vite build --mode production', '/tmp').ok).toBe(true)
-  })
-
-  // -----------------------------------------------------------------------
-  // Shell capability diagnostics
-  // -----------------------------------------------------------------------
-  it('builds user-shell diagnostics for runnable commands', async () => {
-    const items: Array<{ title?: string, meta?: Record<string, any> }> = []
-    const globals = createPluginGlobals({
+  const pluginModule = loadPluginModule(
+    scriptsUrl,
+    createPluginGlobals({
       TuffItemBuilder: FakeTuffItemBuilder,
-      permission: { check: async () => true, request: async () => true },
       plugin: {
+        getLocale: () => 'en-US',
         feature: {
-          clearItems() { items.length = 0 },
-          pushItems(next: Array<{ title?: string, meta?: Record<string, any> }>) { items.push(...next) },
+          async clearItems() {
+            calls.push({ operation: 'clear' })
+            items.length = 0
+          },
+          async pushItems(next: Array<Record<string, any>>) {
+            calls.push({ operation: 'push' })
+            items.push(...next)
+          },
         },
-        storage: {
-          async getFile() { return { workspacePath: '', commands: [{ title: 'Lint', command: 'pnpm lint' }] } },
-          async setFile() {},
-          async openFolder() {},
-        },
-      },
-    })
-    const pluginModule = loadPluginModule(scriptsUrl, globals)
-    installShellRunner(pluginModule)
-
-    // Clear caches before testing
-    pluginModule.__test.cacheInvalidate()
-    await pluginModule.onFeatureTriggered('workspace-scripts', 'lint')
-
-    const commandItem = items.find(item => item.title === 'Lint')
-    expect(commandItem?.meta?.capability).toMatchObject({
-      id: 'system.shell',
-      type: 'shell',
-      permission: 'system.shell',
-      audit: {
-        pluginName: 'touch-workspace-scripts',
-        featureId: 'workspace-scripts',
-        actionId: 'run-command',
-        commandKind: 'user-shell',
-        requiresConfirmation: true,
-      },
-    })
-  })
-
-  it('marks permission sdk unavailable in shell capability diagnostics', async () => {
-    const pluginModule = loadPluginModule(scriptsUrl, createPluginGlobals({ permission: withoutGlobal() }))
-    installShellRunner(pluginModule)
-    pluginModule.__test.cacheInvalidate()
-    expect(await pluginModule.__test.resolveShellCapabilityState()).toMatchObject({
-      status: 'permission-missing',
-      reason: 'permission-sdk-unavailable',
-    })
-  })
-
-  // -----------------------------------------------------------------------
-  // Command execution permission blocking
-  // -----------------------------------------------------------------------
-  it('blocks command execution when permission sdk is unavailable', async () => {
-    let ran = 0
-    let confirmations = 0
-    const pluginModule = loadPluginModule(scriptsUrl, createPluginGlobals({
-      permission: withoutGlobal(),
-      dialog: {
-        showMessageBox: async () => {
-          confirmations += 1
-          return { response: 1 }
+        workspaceScripts: {
+          async select() {
+            calls.push({ operation: 'select' })
+            return {
+              operation: 'select-workspace',
+              status: 'selected',
+              workspace: { token: WORKSPACE_TOKEN, name: 'fixture' },
+            }
+          },
+          async list(workspaceToken: string) {
+            calls.push({ operation: 'list', workspaceToken })
+            return {
+              operation: 'list-scripts',
+              status: 'available',
+              workspace: { token: WORKSPACE_TOKEN, name: 'fixture' },
+              scripts: [{ token: SCRIPT_TOKEN, name: 'lint' }],
+            }
+          },
+          run,
         },
       },
-    }))
-    installShellRunner(pluginModule, () => {
-      ran += 1
-    })
+    }),
+  )
+  return { calls, items, pluginModule, run }
+}
 
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'workspace-scripts', actionId: 'run-command', payload: { command: 'pnpm test', cwd: '.' } },
-    })
+describe('workspace scripts isolated Prelude', () => {
+  it('publishes select first, then host-listed script token actions', async () => {
+    const harness = createHarness()
+    await expect(harness.pluginModule.onFeatureTriggered('workspace-scripts', '')).resolves.toBe(
+      true,
+    )
+    const selectItem = harness.items.find(item => item.meta.defaultAction === 'select-workspace')
+    await expect(
+      harness.pluginModule.onItemAction(selectItem, { actionId: 'select-workspace' }),
+    ).resolves.toMatchObject({ success: true, status: 'completed' })
 
-    expect(result).toMatchObject({ externalAction: true, status: 'blocked', reason: 'permission-sdk-unavailable' })
-    expect(confirmations).toBe(0)
-    expect(ran).toBe(0)
-  })
-
-  it('blocks command execution when shell permission is denied', async () => {
-    let ran = 0
-    let confirmations = 0
-    const pluginModule = loadPluginModule(scriptsUrl, createPluginGlobals({
-      permission: { check: async () => false, request: async () => false },
-      dialog: {
-        showMessageBox: async () => {
-          confirmations += 1
-          return { response: 1 }
-        },
+    expect(harness.calls.map(call => call.operation)).toEqual([
+      'clear',
+      'push',
+      'select',
+      'list',
+      'clear',
+      'push',
+    ])
+    const scriptItem = harness.items.find(item => item.title === 'lint')
+    expect(scriptItem?.actions).toEqual([
+      {
+        id: 'run-script',
+        type: 'plugin',
+        label: 'Run',
+        payload: { scriptToken: SCRIPT_TOKEN },
       },
-    }))
-    installShellRunner(pluginModule, () => {
-      ran += 1
-    })
-
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'workspace-scripts', actionId: 'run-command', payload: { command: 'pnpm test', cwd: '.' } },
-    })
-
-    expect(result).toMatchObject({ externalAction: true, status: 'blocked', reason: 'permission-denied' })
-    expect(confirmations).toBe(0)
-    expect(ran).toBe(0)
+    ])
+    expect(JSON.stringify(harness.items)).not.toMatch(/command|cwd|path|executable|args|env/i)
   })
 
-  // -----------------------------------------------------------------------
-  // Safe command fallback
-  // -----------------------------------------------------------------------
-  it('marks safe command fallback as unsupported when unavailable', () => {
-    const capability = scriptsTest.buildShellCapability({ featureId: 'workspace-scripts', actionId: 'run-command' })
-    expect(['available', 'unsupported']).toContain(capability.status)
-    expect(capability.permission).toBe('system.shell')
-    expect(capability.audit.commandKind).toBe('user-shell')
+  it('dispatches only the opaque token selected from a standard action', async () => {
+    const harness = createHarness()
+    await harness.pluginModule.onFeatureTriggered('workspace-scripts', '')
+    const selectItem = harness.items.find(item => item.meta.defaultAction === 'select-workspace')
+    await harness.pluginModule.onItemAction(selectItem, { actionId: 'select-workspace' })
+    const scriptItem = harness.items.find(item => item.title === 'lint')
+
+    await expect(
+      harness.pluginModule.onItemAction(scriptItem, { actionId: 'run-script' }),
+    ).resolves.toMatchObject({ success: true, status: 'started' })
+    expect(harness.run).toHaveBeenCalledExactlyOnceWith(SCRIPT_TOKEN)
   })
 
-  // -----------------------------------------------------------------------
-  // Cache behavior (#4)
-  // -----------------------------------------------------------------------
-  it('caches shell capability state across calls', async () => {
-    let checkCalls = 0
-    const pluginModule = loadPluginModule(scriptsUrl, createPluginGlobals({
-      permission: {
-        check: async () => {
-          checkCalls++
-          return true
+  it('does not dispatch forged path, command or token payloads', async () => {
+    const harness = createHarness()
+    await expect(
+      harness.pluginModule.onItemAction(
+        {
+          meta: { defaultAction: 'run-script' },
+          actions: [
+            {
+              id: 'run-script',
+              payload: { scriptToken: 'pnpm test', cwd: '/tmp', command: 'calc' },
+            },
+          ],
         },
-      },
-    }))
-    installShellRunner(pluginModule)
-    pluginModule.__test.cacheInvalidate()
-
-    await pluginModule.__test.resolveShellCapabilityState()
-    expect(checkCalls).toBe(1)
-    await pluginModule.__test.resolveShellCapabilityState()
-    // Second call should use cache — no additional check
-    expect(checkCalls).toBe(1)
+        { actionId: 'run-script' },
+      ),
+    ).resolves.toMatchObject({ status: 'blocked', reason: 'invalid-action' })
+    expect(harness.run).not.toHaveBeenCalled()
   })
 })

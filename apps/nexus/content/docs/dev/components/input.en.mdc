@@ -11,6 +11,8 @@ verified: true
 
 # Input
 
+A lightweight single-line or `textarea` field for form rows, toolbars, and list filtering. Reach for `TxSearchInput` when Enter-to-search or debounced remote search is part of the contract, and `TxNumberInput` when the field needs stepper buttons for numeric entry.
+
 ## Basic Usage
 
 ### Basic Input
@@ -89,7 +91,7 @@ code: |
 
 ### Props
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: modelValue / v-model
@@ -128,12 +130,16 @@ rows:
     description: 'Suffix icon class'
     type: 'string'
     default: "''"
+  - name: capsLockText
+    description: 'Localizable label/title for the CapsLock warning on password inputs; announced via role="status".'
+    type: 'string'
+    default: "'CapsLock is on'"
 ---
 :::
 
 ### Events
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: update:modelValue
@@ -161,7 +167,7 @@ rows:
 
 ### Exposes
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: focus
@@ -193,7 +199,7 @@ rows:
 
 ### Slots
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: prefix

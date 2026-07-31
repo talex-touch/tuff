@@ -75,6 +75,16 @@ const currentValue = computed({
 
 const displayText = computed(() => selectedLabel.value || props.placeholder)
 
+// Point the combobox at the active option (arrow keys move the selected value, so
+// the active descendant is whichever registered item matches the current value)
+// while DOM focus stays on the trigger — otherwise the navigation is silent to AT.
+const activeDescendantId = computed(() => {
+  if (!isOpen.value)
+    return undefined
+  const entry = itemEntries.value.find(e => e.value === currentValue.value)
+  return entry?.el.id || undefined
+})
+
 // --- Dropdown clip-path animation ---
 const dropdownTop = ref('0px')
 const dropdownClip = ref('inset(50% 0 50% 0 round 10px)')
@@ -97,8 +107,21 @@ function calcClipClosed(): string {
   return `inset(${rect.top}px 0 ${total - rect.top - rect.height}px 0 round 10px)`
 }
 
+// Handle for the close animation's settle timer so a re-open (or unmount) can cancel it
+// instead of letting a stale timer slam the dropdown shut a beat later.
+let closeTimer: ReturnType<typeof setTimeout> | null = null
+
 function open() {
-  if (props.disabled || isOpen.value) return
+  if (props.disabled)
+    return
+  // Bail only when fully open; if a close is still settling (closeTimer pending) this
+  // click should re-open rather than be swallowed.
+  if (isOpen.value && closeTimer == null)
+    return
+  if (closeTimer != null) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
 
   const rect = getSelectedItemRect()
   // Position dropdown so selected item overlaps the trigger
@@ -117,19 +140,22 @@ function open() {
 }
 
 function close() {
-  if (!isOpen.value) return
+  if (!isOpen.value || closeTimer != null) return
 
   isAnimating.value = true
   dropdownClip.value = calcClipClosed()
 
-  setTimeout(() => {
+  closeTimer = setTimeout(() => {
     isOpen.value = false
     isAnimating.value = false
+    closeTimer = null
   }, 200)
 }
 
 function toggle() {
-  if (isOpen.value) close()
+  // A pending closeTimer means we're mid-close (still visually open); treat the click as
+  // a re-open instead of scheduling yet another close.
+  if (isOpen.value && closeTimer == null) close()
   else open()
 }
 
@@ -191,7 +217,9 @@ watch(
   () => props.modelValue,
   (val) => {
     const entry = itemEntries.value.find(e => e.value === val)
-    if (entry) selectedLabel.value = entry.label
+    // Reset to '' when the value is cleared or unmatched so the trigger falls
+    // back to the placeholder instead of stranding the previous label.
+    selectedLabel.value = entry ? entry.label : ''
   },
   { immediate: true },
 )
@@ -202,6 +230,10 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (closeTimer != null) {
+    clearTimeout(closeTimer)
+    closeTimer = null
+  }
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('keydown', handleKeydown)
 })
@@ -222,6 +254,7 @@ onBeforeUnmount(() => {
       role="combobox"
       :aria-expanded="isOpen"
       :aria-controls="dropdownId"
+      :aria-activedescendant="activeDescendantId"
       :disabled="disabled"
       @click="toggle"
     >
@@ -244,6 +277,7 @@ onBeforeUnmount(() => {
       ref="dropdownRef"
       class="tx-flat-select__dropdown"
       role="listbox"
+      :aria-label="placeholder || undefined"
       :class="{
         'is-visible': isOpen,
         'is-animating': isAnimating,

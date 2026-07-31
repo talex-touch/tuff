@@ -30,6 +30,10 @@ const isSelected = computed(() => {
 })
 const isDisabled = computed(() => props.disabled || ctx?.disabled.value)
 const isMultiple = computed(() => ctx?.multiple.value ?? false)
+// The multi-select virtual-focus cursor: rendered visibly and pointed at by the
+// container's aria-activedescendant so keyboard users can see and hear it.
+const isFocused = computed(() => !!ctx && ctx.multiple.value && ctx.focusedValue.value === props.value)
+const itemId = computed(() => ctx?.getItemId(props.value))
 
 function handleClick() {
   if (isDisabled.value) return
@@ -49,6 +53,7 @@ onBeforeUnmount(() => {
 
 <template>
   <button
+    :id="itemId"
     ref="itemRef"
     class="tx-flat-radio-item"
     type="button"
@@ -57,6 +62,7 @@ onBeforeUnmount(() => {
       'is-selected': isSelected,
       'is-disabled': isDisabled,
       'is-multiple-selected': isMultiple && isSelected,
+      'is-focused': isFocused,
     }"
     :aria-checked="isSelected"
     :disabled="isDisabled || undefined"
@@ -107,6 +113,10 @@ onBeforeUnmount(() => {
     box-shadow:
       0 1px 3px rgba(0, 0, 0, 0.08),
       0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  &.is-focused {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--tx-color-primary, #409eff) 55%, transparent);
   }
 
   &.is-disabled {

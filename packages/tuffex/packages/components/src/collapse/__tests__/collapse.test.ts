@@ -1,5 +1,7 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { TxCollapse as InstalledCollapse, TxCollapseItem as InstalledCollapseItem } from '../index'
 import TxCollapseItem from '../src/TxCollapseItem.vue'
 import TxCollapse from '../src/TxCollapse.vue'
 
@@ -98,5 +100,43 @@ describe('txCollapse', () => {
     await header.trigger('click')
 
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('drives the panel height in JS so the disclosure can animate', async () => {
+    const wrapper = mount({
+      components: { TxCollapse, TxCollapseItem },
+      template: `
+        <TxCollapse v-model="active">
+          <TxCollapseItem title="First" name="first">First content</TxCollapseItem>
+        </TxCollapse>
+      `,
+      data: () => ({ active: [] as string[] }),
+    }, {
+      attachTo: document.body,
+      // Render the real Transition (VTU stubs it) so the JS enter hook actually runs.
+      global: { stubs: { transition: false } },
+    })
+
+    await wrapper.find('.tx-collapse-item__header').trigger('click')
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(() => resolve(null)))
+    await nextTick()
+
+    const content = wrapper.find('.tx-collapse-item__content')
+    // The enter hook writes an explicit inline height (CSS cannot tween 0 <-> auto);
+    // pre-fix there was no JS hook, so no inline height was ever set.
+    expect((content.element as HTMLElement).style.height).not.toBe('')
+
+    wrapper.unmount()
+  })
+
+  it('registers collapse components through install', () => {
+    const app = { component: vi.fn() }
+
+    InstalledCollapse.install?.(app as any)
+    InstalledCollapseItem.install?.(app as any)
+
+    expect(app.component).toHaveBeenCalledWith('TxCollapse', InstalledCollapse)
+    expect(app.component).toHaveBeenCalledWith('TxCollapseItem', InstalledCollapseItem)
   })
 })

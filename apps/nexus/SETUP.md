@@ -3,6 +3,7 @@
 > 本文档描述了如何让 `tuff-nexus` 在 Cloudflare Pages 上运行，并接入 D1 数据库与 R2 对象存储。按照顺序完成即可完成迁移。
 
 ## 0. 前置准备
+
 - 安装最新版本的 `pnpm`（项目使用 `pnpm@10.13.1`）。
 - 全局或项目内安装 `wrangler`（已经添加到 `devDependencies`，执行 `pnpm install` 同步依赖）。
 - 确保本地已登录 Cloudflare：`npx wrangler login`。
@@ -12,6 +13,7 @@
   - R2 Bucket（生产/预览可共用，也可以创建两个）。
 
 ## 1. 初始化依赖
+
 ```bash
 pnpm install
 ```
@@ -19,6 +21,7 @@ pnpm install
 > 这一步会同步 `wrangler`、`@cloudflare/workers-types` 等新依赖，并更新 `pnpm-lock.yaml`。
 
 ## 2. 配置 wrangler
+
 编辑根目录的 `wrangler.toml`：
 
 ```toml
@@ -42,6 +45,7 @@ preview_bucket_name = "tuff-nexus-assets-preview"
 - 若需要额外的 R2 绑定（例如 `ASSETS`），可按相同格式追加。
 
 ### 2.1 启用 TuffIntelligence KV（TUFF_INTELLIGENCE_RUNTIME）
+
 当需要启用会话协调、租约锁、恢复游标和热点缓存时，执行以下步骤：
 
 1. 创建 KV namespace（生产 + 预览）：
@@ -56,7 +60,9 @@ preview_bucket_name = "tuff-nexus-assets-preview"
 4. 同步检查 `apps/nexus/types/cloudflare-env.d.ts` 中 `TUFF_INTELLIGENCE_RUNTIME` 类型声明是否与绑定一致。
 
 ## 3. 准备 D1 表结构
+
 1. 将下面的示例 SQL 保存为 `database/schema.sql`（可根据需求调整字段）：
+
    ```sql
    CREATE TABLE IF NOT EXISTS metrics (
      key TEXT PRIMARY KEY,
@@ -91,6 +97,7 @@ preview_bucket_name = "tuff-nexus-assets-preview"
      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
    );
    ```
+
 2. 创建迁移（一次即可）：
    ```bash
    npx wrangler d1 migrations create DB init
@@ -101,6 +108,7 @@ preview_bucket_name = "tuff-nexus-assets-preview"
    ```
 
 ## 4. 上传 R2 资源
+
 - 将安装包、插件、截图等文件上传到指定的 R2 bucket：
   ```bash
   npx wrangler r2 object put tuff-nexus-assets/releases/tuff-1.0.0.dmg --file=./downloads/tuff-1.0.0.dmg
@@ -111,6 +119,7 @@ preview_bucket_name = "tuff-nexus-assets-preview"
 ## 5. 本地开发/预览
 
 ### 5.1 传统本地开发
+
 ```bash
 pnpm dev
 ```
@@ -118,49 +127,65 @@ pnpm dev
 > 默认本地不启用 Cloudflare 运行时绑定；如需启用 D1/R2，请设置 `NUXT_USE_CLOUDFLARE_DEV=true`（或 `NITRO_PRESET=cloudflare-pages`），开发服务器会通过 Wrangler 注入 Cloudflare 的运行时绑定，因此本地也会直连远端数据库。首次运行若提示未登录，请执行 `npx wrangler login`。如需切换到特定 Pages 环境，可在启动前设置 `CLOUDFLARE_DEV_ENVIRONMENT=<env>`。
 
 ### 5.2 模拟 Cloudflare Pages
+
 ```bash
 pnpm preview:cf
 ```
-命令会先执行 `pnpm build`，再调用 `wrangler pages dev`，使用 `dist` 与 Nitro 产出的 Functions 进行本地模拟。`wrangler pages dev` 的 Worker runtime 不会自动继承 Nuxt build 阶段读取的 `.env` / `.env.local`，因此 `preview:cf` 会把本地默认 `AUTH_ORIGIN`、`AUTH_SECRET`、`APP_AUTH_JWT_SECRET` 和 `NUXT_INTELLIGENCE_ENCRYPT_KEY` 作为 Wrangler `--binding` 注入。需要覆盖时直接在命令前设置同名环境变量：
+
+命令会先执行 `pnpm build`，再调用 `wrangler pages dev`，使用 `dist` 与 Nitro 产出的 Functions 进行本地模拟。`wrangler pages dev` 的 Worker runtime 不会自动继承 Nuxt build 阶段读取的 `.env` / `.env.local`，因此 `preview:cf` 会注入 `NEXUS_LOCAL_PAGES_PREVIEW=true`，并仅在该本地入口提供 `AUTH_ORIGIN`、`AUTH_SECRET`、`APP_AUTH_JWT_SECRET` 和 `NUXT_INTELLIGENCE_ENCRYPT_KEY` 的 local-only 默认值。远端 Preview 配置和非本地 runtime 会拒绝这些默认值。
+
+需要覆盖本地值时，在运行命令前通过当前 shell 或未提交的 `.env.local` 设置同名环境变量。不要把本地默认值复制到 Cloudflare Pages：
 
 ```bash
-AUTH_ORIGIN=http://127.0.0.1:8791 pnpm preview:cf -- --port 8791
-```
-
-直接手动调用 Wrangler 时也必须显式传入生产必需变量：
-
-```bash
-npx wrangler pages dev dist \
-  --compatibility-date=2024-08-14 \
-  --port 8791 \
-  --binding AUTH_ORIGIN=http://127.0.0.1:8791 \
-  --binding AUTH_SECRET=replace-with-local-secret \
-  --binding APP_AUTH_JWT_SECRET=replace-with-local-app-secret \
-  --binding NUXT_INTELLIGENCE_ENCRYPT_KEY=replace-with-local-encrypt-key
+export AUTH_ORIGIN
+export AUTH_SECRET
+export APP_AUTH_JWT_SECRET
+export NUXT_INTELLIGENCE_ENCRYPT_KEY
+pnpm preview:cf -- --port 8791
 ```
 
 > 如提示未登录 Cloudflare，运行 `npx wrangler login` 或提供 `CLOUDFLARE_API_TOKEN`。
-> 只传 shell 环境变量或 `--env-file .env.local` 但不传 `--binding`，当前 Wrangler Pages dev 仍可能在 Worker 启动阶段报 `AUTH_NO_ORIGIN`。
+> 只传 shell 环境变量或 `--env-file .env.local` 但不通过 `preview:cf` 注入 binding，当前 Wrangler Pages dev 仍可能在 Worker 启动阶段报 `AUTH_NO_ORIGIN`。
 
 ## 6. 部署流水线建议
+
 1. 在 Cloudflare Pages 的 **Build settings** 中配置：
    - Build command: `pnpm install --frozen-lockfile && pnpm nexus:build`
    - Build output directory: `apps/nexus/dist`
 2. 在 Pages 项目的 **Settings → Functions** 区域开启 Functions，并填写与 `wrangler.toml` 一致的绑定。
-3. 在 **Settings → Environment variables** 中补充：
-   - `NITRO_PRESET=cloudflare-pages`（冗余保险，Nuxt 会读取）
-   - 自定义的 `NUXT_PUBLIC_*` 或其他应用变量。
+3. 在 **Preview** 环境中把以下固定库存配置为 Cloudflare Pages Secrets（`secret_text`），不要写入 `wrangler.toml`：
+   - `AUTH_SECRET`
+   - `APP_AUTH_JWT_SECRET`
+   - `ADMIN_EMERGENCY_JWT_SECRET`
+   - `ADMIN_CONTROL_PLANE_PEPPER`
+
+   `shared/security/preview-secret-inventory.json` 还维护完整的 feature-gated 与 optional 凭据名称。它们在对应功能关闭时 may be absent，不阻塞基础 Preview 部署；但只要出现在 Preview 环境中，就 must use `secret_text`，不能使用 `plain_text`。目录覆盖 OAuth、Turnstile、admin bootstrap、OOB Cloudflare Access、SMTP URL、AI/Provider/Notification/Storage 加密密钥、插件签名私钥、汇率 API、Sentry 上传 token、文档/下载签名覆盖项与 legacy `RESEND_API_KEY`。公开 client ID、origin、site key、public key 和 key ID 不属于 Secret。
+
+   在 Cloudflare Dashboard 中打开 **Workers & Pages → tuff → Settings → Variables and Secrets**，选择 **Preview** 环境，逐个添加上述名称，将类型设为 **Secret**，并在 Dashboard 中录入值。当前安装的 Wrangler `pages secret put` 没有 `--env` 选项，不能用它声称 Secret 已写入 Preview。
+
+   使用只校验 Preview 名称和类型的预检：
+
+   ```bash
+   export CLOUDFLARE_ACCOUNT_ID
+   export CLOUDFLARE_API_TOKEN
+   pnpm check:preview-secrets
+   ```
+
+   缺失固定库存时命令返回 `PREVIEW_SECRET_INVENTORY_MISSING`（exit code `78`）；目录内任意凭据使用非 Secret 类型时返回 `PREVIEW_SECRET_BINDING_TYPE_INVALID`（exit code `78`），且只列名称；远端存在 `NEXUS_LOCAL_PAGES_PREVIEW` binding 时返回 `PREVIEW_LOCAL_MARKER_REMOTE_BINDING`。`deploy:cf` 会在 build 前和固定 `preview` 分支部署前各执行一次预检，并拒绝命令行覆盖部署参数；该流程不会读取、输出或写入 Secret 值。
+
 4. 若需要在部署后同步 R2 或运行 D1 迁移，可以：
    - 使用 Cloudflare Pages 的 `Post-deployment hooks` 调用 webhook。
    - 或者在仓库的 CI（例如 GitHub Actions）中执行 `wrangler d1 migrations apply` 与 R2 上传。
 
 ## 7. 代码中的 Cloudflare 适配点
+
 - `nuxt.config.ts` 使用 `nitro.preset = 'cloudflare-pages'`，构建时会生成 Pages Functions。
 - `server/utils/cloudflare.ts` 提供 `readCloudflareBindings` 与 `requireCloudflareBindings`，在 API 中读取 `env.DB`/`env.R2`。
 - `server/api/pageview.ts` 示例：优先写入 D1 的 `metrics` 表；未绑定 D1 时退回内存计数。
 - 新增 `types/cloudflare-env.d.ts` 以补全 `TuffCloudflareBindings` 类型，`tsconfig.json` 已引入该声明。
 
 ## 8. 后续扩展思路
+
 1. **版本/下载 API**
    - 创建 `server/api/releases.get.ts` 返回最新版本及下载链接。
    - 创建 `server/api/download/[key].get.ts` 从 D1 校验 `key`，再调用 `env.R2.get` 生成一次性签名 URL。
@@ -172,27 +197,20 @@ npx wrangler pages dev dist \
    - 在 Wrangler 中开启 tail，将关键日志 `console.log` 输送到 Cloudflare Dashboard。
 
 ## 9. 常见问题
+
 - **D1 报错 `no such table`**：确认迁移是否执行；`pageview` API 会尝试自动建表，但推荐提前迁移。
 - **本地 `wrangler pages dev` 找不到输出**：确保已执行 `pnpm build`，命令自动处理；如路径变更，更新 `pages_build_output_dir`。
 - **`better-sqlite3` 编译失败**：依赖已移除，如本地缓存仍存在，删除 `node_modules` 后重新安装。
 
 ## 10. 集成 NuxtAuth 身份认证
+
 1. 使用 `@sidebase/nuxt-auth` + `@auth/core` 接管认证，部署仍在 Cloudflare Pages。
-2. 在项目根目录创建/更新 `.env`（或 `.env.local`）：
-   ```bash
-   AUTH_SECRET=your_auth_secret
-   AUTH_ORIGIN=https://tuff.tagzxia.com
-
-   GITHUB_CLIENT_ID=xxx
-   GITHUB_CLIENT_SECRET=xxx
-
-   AUTH_EMAIL_SERVER=smtp://placeholder
-   AUTH_EMAIL_FROM="Tuff <noreply@tuff.chat>"
-   ```
-3. 将 `AUTH_SECRET`、`APP_AUTH_JWT_SECRET`、`GITHUB_CLIENT_SECRET` 作为 **Secrets** 写入 Cloudflare Pages；其余变量可作为普通环境变量注入。`APP_AUTH_JWT_SECRET` 必须在生产/预览部署中保持稳定一致，否则 CLI / App JWT 会出现刚签发即被其他 API 拒绝的情况。邮件发送统一走通知渠道配置：Resend 是 `notification_channel` 的 `providerType: "resend"`，API Key 需通过 `secure://notifications/*` 通知凭据保存，不再使用渠道外 `RESEND_API_KEY` 兜底。
+2. 在项目根目录的未提交 `.env.local` 中配置 `AUTH_SECRET`、`AUTH_ORIGIN`、OAuth client id/secret 与邮件登录配置。凭据值必须由密码管理器或密码学安全生成器创建，不要使用文档占位值或 `preview:cf` 的 local-only 默认值。
+3. 远端 Cloudflare Pages 的 `AUTH_SECRET`、`APP_AUTH_JWT_SECRET`、OAuth client secret 及其他 credential 必须作为 **Secrets** 写入对应环境，不能作为普通变量或进入 `wrangler.toml`。`APP_AUTH_JWT_SECRET` 必须在同一环境的部署/isolates 间保持稳定，否则 CLI / App JWT 会出现刚签发即被其他 API 拒绝的情况。邮件发送统一走通知渠道配置：Resend 是 `notification_channel` 的 `providerType: "resend"`，API Key 需通过 `secure://notifications/*` 通知凭据保存，不再使用渠道外 `RESEND_API_KEY` 兜底。
 4. `/sign-in` 与 `/sign-up` 为自定义表单，支持邮箱密码、GitHub、Magic Link、Passkeys（仅 Web 端）。登录后可进入 `Dashboard` 管理账号与设备。
 
 ## 11. Drizzle ORM 方案评估
+
 - **引入价值**：Drizzle 提供基于 TypeScript 的 schema 定义与类型安全查询，可减少手写 SQL 时的拼写错误，并提升编辑器提示体验。其 `drizzle-orm/d1` 适配器基于 SQLite 方言，已经在 Cloudflare 官方示例中使用，语法特性与当前 D1 功能保持一致。
 - **局限/成本**：现有 `pluginsStore` 与 `dashboardStore` 中包含大量多表查询、动态排序与事务逻辑，引入 Drizzle 需要为这些表补充 schema 与 relations，短期内迁移成本较高；另外需额外安装 `drizzle-orm` 与 `drizzle-kit`，并配置生成步骤。
 - **推荐做法**：可以先为新增的表或 API 采用 Drizzle，逐步抽离已有模块（例如先迁移 dashboard/update，再处理 plugins）；迁移时保持 D1 迁移脚本仍由 Wrangler 管理，Drizzle schema 作为类型安全层；后续若需要自动生成 SQL，可在 CI 中加入 `drizzle-kit generate` 校验。

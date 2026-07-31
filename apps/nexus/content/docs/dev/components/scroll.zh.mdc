@@ -2,6 +2,9 @@
 title: "Scroll 滚动"
 description: "基于 `@better-scroll/scroll-bar` 的当前 `TxScroll` 滚动容器，提供更一致的滚动条体验。"
 category: Layout
+status: beta
+since: 1.0.0
+tags: [scroll, layout, better-scroll]
 syncStatus: reviewed
 verified: true
 ---
@@ -252,28 +255,28 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `native` | `boolean` | `false` | 使用原生滚动 |
+| `native` | `boolean` | `false` | 强制使用浏览器原生滚动，跳过 BetterScroll 初始化 |
 | `unified` | `boolean` | `false` | 强制由 BetterScroll 接管滚动（跨环境统一行为，会覆盖 Safari/Chromium 自动原生；`native=true` 仍优先生效） |
 | `nativeAutoFallback` | `boolean` | `true` | 控制 macOS + Chromium `145+` 自动回退原生滚动；不影响 macOS Safari 的原生优先策略 |
-| `noPadding` | `boolean` | `false` | 禁用内边距 |
+| `noPadding` | `boolean` | `false` | 移除默认内容内边距；horizontal 与 both 轴模式还会把内容宽度设为 `max-content` |
 | `scrollChaining` | `boolean` | `false` | 是否允许滚动链（到边界后继续带动父级滚动）；不建议默认开启，仅在明确需要父子联动时启用 |
-| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 滚动方向 |
-| `scrollbar` | `boolean` | `true` | 是否启用 BetterScroll 滚动条 |
-| `scrollbarFade` | `boolean` | `true` | 滚动条自动淡出 |
-| `scrollbarInteractive` | `boolean` | `true` | 滚动条是否可拖拽 |
-| `scrollbarAlwaysVisible` | `boolean` | `false` | 强制滚动条常显（用于 bounce/无边界场景） |
-| `scrollbarMinSize` | `number` | `18` | 指示器最小尺寸（px） |
+| `direction` | `'vertical' \| 'horizontal' \| 'both'` | `'vertical'` | 选择滚动轴向；native 模式映射为 `overflow-x/y`，BetterScroll 映射为 `scrollX`、`scrollY` 与 `freeScroll` |
+| `scrollbar` | `boolean` | `true` | 启用 BetterScroll 滚动条插件；native 模式使用浏览器滚动条 |
+| `scrollbarFade` | `boolean` | `true` | 启用 `scrollbar` 时，透传 BetterScroll 滚动条的淡出行为 |
+| `scrollbarInteractive` | `boolean` | `true` | 启用 `scrollbar` 时，允许拖拽 BetterScroll 滚动条 |
+| `scrollbarAlwaysVisible` | `boolean` | `false` | 让 BetterScroll 保持滚动条常显状态（用于 bounce/无边界场景） |
+| `scrollbarMinSize` | `number` | `18` | 通过 `--tx-scrollbar-min-size` 设置 BetterScroll 滚动条滑块的最小尺寸 |
 | `probeType` | `0 \| 1 \| 2 \| 3` | `3` | BetterScroll `probeType` |
-| `bounce` | `boolean` | `true` | 是否开启边界回弹 |
-| `click` | `boolean` | `true` | 是否派发 click（BetterScroll 选项） |
-| `wheel` | `boolean` | `true` | 是否拦截滚轮并驱动 BetterScroll |
-| `refreshOnContentChange` | `boolean` | `true` | 内容变更时自动 refresh |
-| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | 下拉刷新（BetterScroll 模式为原生能力；native 模式为降级触发） |
-| `pullDownThreshold` | `number` | `70` | 下拉触发阈值（px） |
-| `pullDownStop` | `number` | `56` | 下拉停留距离（px，仅 BetterScroll） |
-| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | 上拉加载更多（BetterScroll 模式为原生能力；native 模式为降级触发） |
-| `pullUpThreshold` | `number` | `0` | 距离底部阈值（px） |
-| `options` | `Record<string, unknown>` | `{}` | BetterScroll 初始化参数（兜底，会覆盖部分默认值） |
+| `bounce` | `boolean` | `true` | 启用 BetterScroll 边界回弹与本地滚轮 overshoot 行为 |
+| `click` | `boolean` | `true` | 透传 BetterScroll 的 click 处理 |
+| `wheel` | `boolean` | `true` | 为 BetterScroll 模式启用本地滚轮桥接；忽略 `ctrl` 滚轮手势 |
+| `refreshOnContentChange` | `boolean` | `true` | 监听内容变更，并在变更后调用 BetterScroll 的 `refresh()` |
+| `pullDownRefresh` | `boolean \| Record<string, unknown>` | `false` | 启用下拉刷新；BetterScroll 模式接收插件选项，native 模式发出基于阈值的触发 |
+| `pullDownThreshold` | `number` | `70` | `pulling-down` 的最小原生触摸位移与 BetterScroll 插件阈值 |
+| `pullDownStop` | `number` | `56` | BetterScroll 下拉停留位置；native 模式不使用该值 |
+| `pullUpLoad` | `boolean \| Record<string, unknown>` | `false` | 启用上拉加载；BetterScroll 模式接收插件选项，native 模式在到达底部阈值时发出 |
+| `pullUpThreshold` | `number` | `0` | `pulling-up` 的原生距底阈值与 BetterScroll 插件阈值 |
+| `options` | `Record<string, unknown>` | `{}` | 额外的 BetterScroll 选项；`wheelOvershoot` 会在透传前被本地消费；macOS 上当 `wheel` 与 `bounce` 同时开启时，会默认注入 `useTransition: false`，在 `options` 里显式传 `useTransition` 可覆盖 |
 
 ### Events
 

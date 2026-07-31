@@ -144,4 +144,90 @@ describe('StorageModule', () => {
 
     await storage.onDestroy()
   })
+
+  it('rejects direct and nested provider credentials from ordinary Intelligence storage', async () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), 'tuff-storage-provider-secret-'))
+    const storage = new StorageModule()
+    await storage.init({
+      app: { channel: {} },
+      file: { create: true, dirName: 'config', dirPath: configDir }
+    } as unknown as Parameters<StorageModule['init']>[0])
+
+    const registration = (
+      transportMocks.on.mock.calls as unknown as Array<readonly [unknown, unknown]>
+    ).find(([event]) => event === StorageEvents.app.save)
+    const handler = registration?.[1] as
+      | ((request: {
+          key: string
+          value: object
+          persist?: boolean
+        }) => Promise<{ success: boolean; error?: string }>)
+      | undefined
+    const baseProvider = {
+      id: 'openai-default',
+      type: 'openai',
+      name: 'OpenAI',
+      enabled: true
+    }
+
+    for (const provider of [
+      { ...baseProvider, apiKey: 'synthetic-provider-secret' },
+      { ...baseProvider, metadata: { token: 'synthetic-provider-secret' } }
+    ]) {
+      await expect(
+        handler?.({
+          key: StorageList.IntelligenceConfig,
+          value: { providers: [provider] },
+          persist: true
+        })
+      ).resolves.toMatchObject({ success: false, version: 0 })
+    }
+
+    await storage.onDestroy()
+  })
+
+  it('serializes durable writes per key so a stale revision cannot overwrite the latest value', async () => {
+    const configDir = mkdtempSync(path.join(tmpdir(), 'tuff-storage-race-'))
+    const storage = new StorageModule()
+    await storage.init({
+      app: { channel: {} },
+      file: { create: true, dirName: 'config', dirPath: configDir }
+    } as unknown as Parameters<StorageModule['init']>[0])
+
+    let releaseFirst: (() => void) | undefined
+    const firstBarrier = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const repository = (
+      storage as unknown as {
+        configRepository: {
+          persist: (record: { revision: number; serialized: string }) => Promise<void>
+        }
+      }
+    ).configRepository
+    const persisted: Array<{ revision: number; serialized: string }> = []
+    vi.spyOn(repository, 'persist').mockImplementation(async (record) => {
+      persisted.push({ revision: record.revision, serialized: record.serialized })
+      if (persisted.length === 1) await firstBarrier
+    })
+
+    const key = 'privacy-retention-race.json'
+    storage.saveConfig(key, { value: 1 }, false, true)
+    const first = storage.persistConfigNow(key)
+    await vi.waitFor(() => expect(persisted).toHaveLength(1))
+    storage.saveConfig(key, { value: 2 }, false, true)
+    const second = storage.persistConfigNow(key)
+    await Promise.resolve()
+    expect(persisted).toHaveLength(1)
+
+    releaseFirst?.()
+    await Promise.all([first, second])
+    expect(persisted.map((entry) => JSON.parse(entry.serialized))).toEqual([
+      { value: 1 },
+      { value: 2 }
+    ])
+    expect(persisted[1]?.revision).toBeGreaterThan(persisted[0]?.revision ?? 0)
+
+    await storage.onDestroy()
+  })
 })

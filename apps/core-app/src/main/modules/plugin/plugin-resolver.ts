@@ -1,4 +1,4 @@
-import type { IManifest } from '@talex-touch/utils/plugin'
+import { PluginStatus, type IManifest } from '@talex-touch/utils/plugin'
 import os from 'node:os'
 import path from 'node:path'
 import compressing from 'compressing'
@@ -115,13 +115,28 @@ export class PluginResolver {
         const existingPluginInstance = pluginModule.pluginManager?.getPluginByName(manifest.name)
         if (existingPluginInstance) {
           // Check if plugin was enabled before update
-          wasEnabled = existingPluginInstance.status === 4 || existingPluginInstance.status === 5 // ENABLED or ACTIVE
+          wasEnabled =
+            existingPluginInstance.status === PluginStatus.ENABLED ||
+            existingPluginInstance.status === PluginStatus.ACTIVE
 
-          // Disable the plugin first
-          await existingPluginInstance.disable()
+          // Disable and unload must complete before replacing any plugin files.
+          if (
+            existingPluginInstance.status !== PluginStatus.DISABLED &&
+            existingPluginInstance.status !== PluginStatus.LOADED &&
+            !(await existingPluginInstance.disable())
+          ) {
+            return cb(
+              'Failed to remove old plugin: PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED',
+              'error'
+            )
+          }
 
-          // Unload the plugin from manager
-          await pluginModule.pluginManager!.unloadPlugin(manifest.name)
+          if (!(await pluginModule.pluginManager!.unloadPlugin(manifest.name))) {
+            return cb(
+              'Failed to remove old plugin: PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED',
+              'error'
+            )
+          }
         }
 
         // Remove old plugin files

@@ -27,13 +27,14 @@
     }
   },
   "permissions": {
-    "required": ["intelligence.basic", "search.root-results"],
+    "required": ["intelligence.basic", "search.root-results", "storage.plugin"],
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
     "intelligence.basic": "调用智能能力完成问答",
     "clipboard.write": "复制 AI 回答或将回答替换到当前应用的选中文本",
-    "search.root-results": "将智能问答入口与回答状态推送到 CoreBox 根搜索结果"
+    "search.root-results": "将智能问答入口与回答状态推送到 CoreBox 根搜索结果",
+    "storage.plugin": "保存本地对话历史与自定义 AI 命令配置"
   },
   "searchProviders": [
     {
@@ -136,9 +137,7 @@
         "darwin": true,
         "linux": true
       },
-      "commands": [
-        { "type": "match", "value": ["summarize", "summary", "总结", "摘要"] }
-      ]
+      "commands": [{ "type": "match", "value": ["summarize", "summary", "总结", "摘要"] }]
     },
     {
       "id": "intelligence-explain",

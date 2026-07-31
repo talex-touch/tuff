@@ -81,16 +81,39 @@ code: |
 
 Use `TxLoadingOverlay` for short waits that block one data container while it refreshes. Do not use it as a replacement for first-load screens; use `TxLoadingState` for first-load states. For table refreshes or task queue recalculation, keep the underlying content visible so the layout does not jump.
 
-::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified local LoadingOverlay with Toast / Tooltip / Spinner."}
+:::TuffDemoWrapper{demo="ComponentsFeedbackTaskCenterDemo" code-lang="vue" title="Dashboard task feedback center" description="A screenshot-verified local LoadingOverlay with Toast / Tooltip / Spinner."}
 ---
 code: |
+  <script setup lang="ts">
+  import { toast } from '@talex-touch/tuffex/utils'
+  import { ref } from 'vue'
+
+  const syncing = ref(true)
+
+  function notify() {
+    toast({ id: 'nexus-task-center', title: 'Sync task queued', variant: 'warning', duration: 0 })
+  }
+  </script>
+
   <template>
-    <TxLoadingOverlay :loading="true" text="Refreshing task queue…" :spinner-size="22">
-      <section class="grid gap-2">
-        <TxProgressBar :percentage="72" status="warning" />
-        <TxProgressBar :percentage="96" status="success" />
-      </section>
-    </TxLoadingOverlay>
+    <section class="grid gap-3">
+      <TxToastHost />
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <TxTooltip content="Tooltip explains the current action only.">
+          <TxButton size="sm" icon="i-carbon-information" @click="notify">Hint details</TxButton>
+        </TxTooltip>
+        <span style="display: inline-flex; align-items: center; gap: 6px;">
+          <TxSpinner :size="14" />
+          Inline wait
+        </span>
+      </div>
+      <TxLoadingOverlay :loading="syncing" text="Refreshing task queue…" :spinner-size="22">
+        <section class="grid gap-2">
+          <TxProgressBar :percentage="72" status="warning" />
+          <TxProgressBar :percentage="96" status="success" />
+        </section>
+      </TxLoadingOverlay>
+    </section>
   </template>
 ---
 :::
@@ -104,7 +127,7 @@ code: |
 
 ## Review Notes
 
-- **Accessibility note:** `TxLoadingOverlay` blocks pointer interaction visually but does not expose `role="status"`, `aria-live`, focus trapping, or modal semantics. Keep it for short blocking waits and announce long-running async work with surrounding page copy when necessary.
+- **Accessibility note:** The overlay carries `role="status"` and `aria-live="polite"`, so `text` is announced by screen readers — **you do not need to announce it separately**. Fullscreen mode also parks focus on the overlay, traps Tab, and restores the previously focused element on close. The one thing it lacks is modal semantics (no `aria-modal`), so it is never treated as a dialog; reach for `TxModal` or `TxDialog` when you need a real modal.
 - **Verified coverage:** `loading-overlay.test.ts` checks local overlay rendering, custom background/spinner size/text, closed-state slot preservation, fullscreen teleport, and absence of the local container in fullscreen mode.
 
 ## Source

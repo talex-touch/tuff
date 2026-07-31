@@ -34,6 +34,11 @@ export class SearchUsageService {
     this.pinnedCache = null
   }
 
+  invalidateRetentionCaches(): void {
+    this.statsCache?.clear()
+    this.invalidatePinnedCache()
+  }
+
   async recordSearch(sessionId: string, query: TuffQuery): Promise<void> {
     const dbUtils = this.deps.getDbUtils()
     if (!dbUtils) return

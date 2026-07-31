@@ -1,0 +1,137 @@
+[
+ {
+  "component": "base-anchor",
+  "category": "logic-bug",
+  "summary": "The `size` middleware writes `style.maxWidth = props.maxWidth` unconditionally, so an explicit `width` larger than the default `maxWidth` of 360 is silently clamped — `:width=\"480\"` renders a 360px panel, and neither the `width` nor `maxWidth` doc row mentions the interaction.",
+  "evidenceFile": "packages/tuffex/packages/components/src/base-anchor/src/TxBaseAnchor.vue",
+  "evidenceLine": 155,
+  "evidenceQuote": "        style.maxWidth = `${props.maxWidth}px`",
+  "suggestion": "Skip the `maxWidth` write when `props.width > 0` (an explicit width is a deliberate override), or keep the clamp and state it in both docs: \"`width` is still bounded by `maxWidth`; raise `maxWidth` alongside any `width` above 360\"."
+ },
+ {
+  "component": "form",
+  "category": "logic-bug",
+  "summary": "`labelPosition=\"right\"` is a documented, typed value but no stylesheet rule exists for `tx-form--label-right` / `tx-form-item--label-right`, so it renders identically to `left`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/form/src/TxFormItem.vue",
+  "evidenceLine": 146,
+  "evidenceQuote": "  &--label-top {\n    flex-direction: column;\n    gap: 6px;\n  }",
+  "suggestion": "Add `.tx-form-item--label-right .tx-form-item__label { text-align: right; }` (and the matching `.tx-form--label-right` rule in TxForm.vue) so the third documented value has an effect, or drop `'right'` from `FormLabelPosition` in types.ts and from both Props tables."
+ },
+ {
+  "component": "flip-overlay",
+  "category": "logic-bug",
+  "summary": "`maskClassName` appends `props.maskClass` twice — once token-split, then again as the whole string — so a custom mask class is emitted duplicated in the DOM.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
+  "evidenceLine": 165,
+  "evidenceQuote": "  if (props.maskClass)\n    classes.push(props.maskClass)\n  return classes",
+  "suggestion": "Delete the second `if (props.maskClass) classes.push(props.maskClass)` block at lines 164-165; the split-and-push at lines 153-159 already covers single and multi-token values. With `mask-class=\"a b\"` the current code renders `class=\"TxFlipOverlay-Mask a b a b\"`."
+ },
+ {
+  "component": "flip-overlay",
+  "category": "logic-bug",
+  "summary": "`triggerBlockedCloseWarning` relies on a brace-less `if (hasWindow())` whose body is only the reflow read, and the false→true toggle happens synchronously in the same tick, so Vue never flushes the removed class and a repeated blocked close plays no warning animation.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flip-overlay/src/TxFlipOverlay.vue",
+  "evidenceLine": 302,
+  "evidenceQuote": "  if (hasWindow())\n    void cardRef.value?.offsetWidth\n    blockedCloseWarning.value = true",
+  "suggestion": "Add braces to make the intent explicit and restart the animation on a real DOM boundary: set `blockedCloseWarning.value = false`, `await nextTick()`, force the reflow on `cardRef.value`, then set it back to `true` — otherwise clicking the mask twice within the 720ms window (preventAccidentalClose=true) gives the user no second visual feedback."
+ },
+ {
+  "component": "keyframe-stroke-text",
+  "category": "logic-bug",
+  "summary": "The rendered glyph size does not equal `fontSize`: the root SVG's CSS height is pinned to `fontSize` while the viewBox height is `bbox.height + 2 * max(4, strokeWidth * 3)`, so the whole drawing is uniformly rescaled and grows/shrinks whenever `strokeWidth` or the text's bbox changes.",
+  "evidenceFile": "packages/tuffex/packages/components/src/keyframe-stroke-text/src/TxKeyframeStrokeText.vue",
+  "evidenceLine": 45,
+  "evidenceQuote": "viewBox.value = `0 0 ${width + padding * 2} ${height + padding * 2}`",
+  "suggestion": "Set the root height from the measured viewBox (e.g. expose `--tx-kf-view-height` and use `height: calc(var(--tx-kf-font-size) * var(--tx-kf-view-ratio))`), or drop the fixed `height: var(--tx-kf-font-size)` on line 119 and size the SVG from the viewBox so raising `strokeWidth` from 2 to 10 no longer visually shrinks the text."
+ },
+ {
+  "component": "base-surface",
+  "category": "logic-bug",
+  "summary": "`fake` pseudo-element rendering only emits `--tx-surface-fake-bg`/`--tx-surface-fake-opacity` for pure and mask modes, so `fake` combined with blur/glass/refraction silently renders an empty `::before` (invalid `background: var(--tx-surface-fake-bg)`) while the normal layers still paint — and the appearance flips only when motion fallback happens to switch activeMode to mask.",
+  "evidenceFile": "packages/tuffex/packages/components/src/base-surface/src/TxBaseSurface.vue",
+  "evidenceLine": 646,
+  "evidenceQuote": "    if (mode === 'pure') {\n      vars['--tx-surface-fake-bg'] = props.color || 'var(--tx-fill-color-lighter, #fafafa)'",
+  "suggestion": "Either restrict `fake` at runtime (warn/no-op the `tx-base-surface--fake` class for blur/glass/refraction) or always emit a sensible `--tx-surface-fake-bg` fallback. Also state the pure/mask-only limitation in the \"Fake 伪元素模式\" doc section (base-surface.zh.mdc:96)."
+ },
+ {
+  "component": "command-palette",
+  "category": "logic-bug",
+  "summary": "Closing the palette clears the internal `query` ref without emitting `update:query`, so a parent listening on `@update:query` retains the last typed string and never learns the search box was reset.",
+  "evidenceFile": "packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue",
+  "evidenceLine": 62,
+  "evidenceQuote": "    query.value = ''\n    activeIndex.value = 0",
+  "suggestion": "Route the reset through `onInput('')` or add an explicit `emit('update:query', '')` next to `query.value = ''` in the close branch so the emitted query always mirrors the internal state."
+ },
+ {
+  "component": "nav-bar",
+  "category": "logic-bug",
+  "summary": "`zIndex` writes `--tx-nav-bar-z-index` and applies `z-index` on the base `.tx-nav-bar` rule, but `position` is only set (to `sticky`) under `.is-fixed`, so with the default `fixed: false` the documented `zIndex` prop is inert on a statically positioned element.",
+  "evidenceFile": "packages/tuffex/packages/components/src/nav-bar/src/TxNavBar.vue",
+  "evidenceLine": 113,
+  "evidenceQuote": "  z-index: var(--tx-nav-bar-z-index, 2000);\n\n  &.is-fixed {\n    position: sticky;",
+  "suggestion": "Move the `z-index` declaration inside the `&.is-fixed` block (or add `position: relative` to the base rule) so the prop actually has an effect, and note in the Props table that `zIndex` only applies when `fixed` is true."
+ },
+ {
+  "component": "copy-button",
+  "category": "logic-bug",
+  "summary": "In the `execCommand` fallback path, `document.body.removeChild(textarea)` is only reached on the success path — if `document.execCommand('copy')` throws, the hidden textarea stays appended to `<body>` forever, accumulating one orphan node per failed attempt.",
+  "evidenceFile": "packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue",
+  "evidenceLine": 59,
+  "evidenceQuote": "  const ok = document.execCommand('copy')\n  document.body.removeChild(textarea)",
+  "suggestion": "Wrap the select/execCommand block in `try { ... } finally { document.body.removeChild(textarea) }` so the node is always removed, then throw `new Error('Copy command failed')` from the `try` when `ok` is false."
+ },
+ {
+  "component": "ai-elements",
+  "category": "logic-bug",
+  "summary": "TxAiConversation renders TxAiMessage without forwarding the `default` and `avatar` slots, so the message customization the docs recommend is unreachable through the conversation component.",
+  "evidenceFile": "packages/tuffex/packages/components/src/ai-elements/src/TxAiConversation.vue",
+  "evidenceLine": 40,
+  "evidenceQuote": "      <TxAiMessage\n        v-for=\"message in normalizedMessages\"\n        :key=\"message.id\"\n        :message=\"message\"",
+  "suggestion": "Forward scoped slots, e.g. `<template #default=\"slotProps\"><slot name=\"message\" v-bind=\"slotProps\" /></template>` and the same for `avatar`, and document them under \"TxAiConversation Slots\". Today ai-elements.en.mdc:107 tells readers to \"Use the `default` slot for tool cards or attachments\", but the only documented entry point (TxAiConversation, the sole demo) drops those slots."
+ },
+ {
+  "component": "stagger",
+  "category": "logic-bug",
+  "summary": "The `appear` prop (default `true`, documented as \"Enables appear transition after mount\") can never fire: both `name` and `appear` are withheld as `undefined` on the first render, and by the time `isMounted` flips true the wrapped TransitionGroup's own transition state is already mounted, so the appear hooks are permanently skipped.",
+  "evidenceFile": "packages/tuffex/packages/components/src/stagger/src/TxStagger.vue",
+  "evidenceLine": 53,
+  "evidenceQuote": "appear: isMounted.value ? props.appear : undefined,",
+  "suggestion": "Either pass `name`/`appear` on the initial render (the leakage the deferral guards against is already prevented because TransitionGroup consumes them as props, not fallthrough attrs — the existing 'does not leak transition props' test passes with `appear: false`), or drop the `appear` prop and document that TxStagger only animates enter/leave after mount."
+ },
+ {
+  "component": "collapse",
+  "category": "logic-bug",
+  "summary": "The collapse height animation never runs: `.tx-collapse-item__content` has no explicit height at rest, so the transition interpolates between `height: 0` and `height: auto`, which CSS cannot animate — the panel snaps open/closed despite the docs claiming \"过渡类负责高度动画\" / \"transition classes animate height\".",
+  "evidenceFile": "packages/tuffex/packages/components/src/collapse/src/TxCollapseItem.vue",
+  "evidenceLine": 139,
+  "evidenceQuote": "height: 0 !important;",
+  "suggestion": "Use JS transition hooks (`@enter`/`@leave` on the `<Transition>` that set `el.style.height = el.scrollHeight + 'px'` then back to `0`), or switch to `grid-template-rows: 0fr → 1fr` on a wrapper, so the disclosure actually animates. Alternatively drop the height transition and document that the panel toggles instantly."
+ },
+ {
+  "component": "tree-select",
+  "category": "logic-bug",
+  "summary": "The internal search text `query` is never cleared when the dropdown closes, so after searching + picking a node, reopening the dropdown still shows the previous filter; the `open` watcher's `if (v && props.searchable) { await nextTick() }` branch is dead code that does nothing.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue",
+  "evidenceLine": 98,
+  "evidenceQuote": "    if (v && props.searchable) {",
+  "suggestion": "In the `open` watcher, reset `query.value = ''` when `v === false`, and either finish the intended autofocus (add a `ref` to the search `TuffInput` and call `.focus()` after `nextTick()`) or delete the empty `await nextTick()` branch. Then document the reset behaviour in the `## 交互契约` / `## Interaction Contract` section, which currently says nothing about search-state lifetime."
+ },
+ {
+  "component": "grid-layout",
+  "category": "logic-bug",
+  "summary": "`cancelColor()` early-returns when `interactive` is false, so spotlight variables written while `interactive` was true (`--tx-grid-op: 0.2`) are never cleared if the prop is toggled off while the pointer is inside the grid — items stay permanently lit.",
+  "evidenceFile": "packages/tuffex/packages/components/src/grid-layout/src/TxGridLayout.vue",
+  "evidenceLine": 44,
+  "evidenceQuote": "  if (!props.interactive)",
+  "suggestion": "Remove the `!props.interactive` guard from `cancelColor()` (keep it only in `handleMove`) and additionally `watch(() => props.interactive, v => { if (!v) cancelColor() })` so switching to static mode always resets `--tx-grid-op` to `0`. The existing test at grid-layout.test.ts:72 sidesteps this by manually calling `removeProperty('--tx-grid-op')`, so add an assertion covering the toggle-while-hovered path."
+ },
+ {
+  "component": "markdown-view",
+  "category": "logic-bug",
+  "summary": "`marked.setOptions({ gfm, breaks })` runs in setup on the shared global `marked` singleton, so every TxMarkdownView instance mutates parser config app-wide for any other `marked` consumer.",
+  "evidenceFile": "packages/tuffex/packages/components/src/markdown-view/src/TxMarkdownView.vue",
+  "evidenceLine": 16,
+  "evidenceQuote": "marked.setOptions({",
+  "suggestion": "Stop mutating the global: use a per-component instance (`const parser = new Marked({ gfm: true, breaks: true })`) or pass options per call (`marked.parse(src, { gfm: true, breaks: true })`) so host apps that configure `marked` differently are not silently overridden."
+ }
+]

@@ -196,8 +196,7 @@ export class PermissionModule extends BaseModule {
     transport.on(PermissionEvents.api.revokeAll, async (payload) => {
       if (!payload?.pluginId) return { success: false }
       try {
-        const revokedPermissionIds = await this.store.revokeAll(payload.pluginId)
-        await this.publishRevocation(payload.pluginId, revokedPermissionIds, true)
+        await this.revokeAll(payload.pluginId)
         return { success: true, backendState: this.store.getBackendStatus() }
       } catch (error) {
         return this.buildMutationFailure(error)
@@ -264,7 +263,7 @@ export class PermissionModule extends BaseModule {
     permissionIds: readonly string[],
     all: boolean
   ): Promise<void> {
-    if (all || permissionIds.includes('storage.sqlite')) {
+    if (all || permissionIds.length > 0) {
       await teardownPluginStorage(pluginId)
     }
     if (permissionIds.length > 0) {
@@ -281,6 +280,15 @@ export class PermissionModule extends BaseModule {
    */
   private broadcastUpdate(pluginId: string): void {
     this.transport?.broadcast(PermissionEvents.push.updated, { pluginId })
+  }
+
+  /**
+   * Revoke all grants and await capability-owned storage/resource teardown.
+   */
+  async revokeAll(pluginId: string): Promise<readonly string[]> {
+    const revokedPermissionIds = await this.store.revokeAll(pluginId)
+    await this.publishRevocation(pluginId, revokedPermissionIds, true)
+    return Object.freeze([...revokedPermissionIds])
   }
 
   /**

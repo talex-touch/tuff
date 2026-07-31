@@ -2,6 +2,8 @@
 title: "TextTransformer 文本变换"
 description: "用于短文本变化的 fade + blur 过渡组件，会保留旧文本颜色，暴露 scoped text slot，并适合与 TxAutoSizer 组合做尺寸跟随。"
 category: Effects
+status: beta
+since: 1.0.0
 tags: [text, transition, autosize, live-region]
 syncStatus: reviewed
 verified: true

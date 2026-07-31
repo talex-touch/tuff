@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PickerColumn, PickerEmits, PickerProps, PickerValue } from './types'
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 
 defineOptions({ name: 'TxPicker' })
@@ -67,6 +67,12 @@ function normalizeValue(v: PickerValue): PickerValue {
   return out
 }
 
+function valuesEqual(a: PickerValue, b: PickerValue): boolean {
+  if (a.length !== b.length)
+    return false
+  return a.every((val, i) => val === b[i])
+}
+
 watch(
   () => props.modelValue,
   (v) => {
@@ -78,7 +84,16 @@ watch(
 watch(
   columns,
   () => {
-    localValue.value = normalizeValue(localValue.value)
+    const normalized = normalizeValue(localValue.value)
+    localValue.value = normalized
+    // A columns change can invalidate the current selection; when normalization actually
+    // altered it, push the corrected value back through v-model so the parent doesn't keep
+    // a stale/invalid value the picker is no longer displaying.
+    const current = Array.isArray(props.modelValue) ? props.modelValue : []
+    if (!valuesEqual(normalized, current)) {
+      emit('update:modelValue', normalized)
+      emit('change', normalized)
+    }
   },
   { flush: 'sync' },
 )
@@ -157,6 +172,8 @@ function settleScroll(colIndex: number) {
 }
 
 function setValueAt(colIndex: number, v: any) {
+  if (props.disabled)
+    return
   const next = localValue.value.slice()
   next[colIndex] = v
   localValue.value = normalizeValue(next)
@@ -165,7 +182,76 @@ function setValueAt(colIndex: number, v: any) {
   emit('change', localValue.value)
 }
 
+// --- Accessibility: listbox keyboard contract ---
+// Each column scroller is a `role="listbox"` and every option a `role="option"`.
+// The option buttons are pulled out of the tab sequence (`tabindex="-1"`) so focus
+// stays on the listbox and `aria-activedescendant` conveys the active option;
+// arrow keys then move the selection instead of stepping through every button.
+const pickerId = `tx-picker-${useId()}`
+
+function optionId(colIndex: number, optIndex: number): string {
+  return `${pickerId}-c${colIndex}-o${optIndex}`
+}
+
+function activeDescendant(colIndex: number): string | undefined {
+  const opts = columns.value[colIndex]?.options ?? []
+  const idx = opts.findIndex(o => o.value === localValue.value[colIndex])
+  return idx >= 0 ? optionId(colIndex, idx) : undefined
+}
+
+// Nearest non-disabled option walking from `from` in `step` direction; -1 if none.
+function findEnabledIndex(colIndex: number, from: number, step: number): number {
+  const opts = columns.value[colIndex]?.options ?? []
+  for (let i = from; i >= 0 && i < opts.length; i += step) {
+    if (!opts[i]?.disabled)
+      return i
+  }
+  return -1
+}
+
+function onKeydown(colIndex: number, event: KeyboardEvent) {
+  // Mirror the scroll path's disabled guard: an inert picker never moves.
+  if (props.disabled)
+    return
+
+  const opts = columns.value[colIndex]?.options ?? []
+  if (opts.length === 0)
+    return
+
+  const current = getIndexForValue(colIndex, localValue.value[colIndex])
+  let target = -1
+
+  switch (event.key) {
+    case 'ArrowDown':
+      target = findEnabledIndex(colIndex, current + 1, 1)
+      break
+    case 'ArrowUp':
+      target = findEnabledIndex(colIndex, current - 1, -1)
+      break
+    case 'Home':
+      target = findEnabledIndex(colIndex, 0, 1)
+      break
+    case 'End':
+      target = findEnabledIndex(colIndex, opts.length - 1, -1)
+      break
+    default:
+      return
+  }
+
+  // Arrow/Home/End scroll the listbox and the page natively; consume them even at
+  // a boundary so the surrounding page never scrolls under the picker.
+  event.preventDefault()
+
+  if (target < 0 || target === current)
+    return
+
+  scrollToIndex(colIndex, target, 'smooth')
+  setValueAt(colIndex, opts[target]?.value)
+}
+
 function onScroll(colIndex: number) {
+  if (props.disabled)
+    return
   ensureStates()
   const state = scrollStates.value[colIndex]
   if (!state)
@@ -272,6 +358,14 @@ defineExpose({
   toggle: () => (open.value = !open.value),
 })
 
+onMounted(() => {
+  // Popup mode syncs on open via the `open` watcher; inline mode has no such
+  // trigger, so a picker mounted with a non-first modelValue would render the
+  // highlight over the wrong option without this initial sync.
+  if (!props.popup)
+    syncScrollPositions('auto')
+})
+
 onBeforeUnmount(() => {
   for (const s of scrollStates.value) {
     if (s.rafId != null)
@@ -296,7 +390,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
-    <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px` }">
+    <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}` }">
       <div class="tx-picker__highlight" aria-hidden="true" />
 
       <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
@@ -304,8 +398,10 @@ onBeforeUnmount(() => {
           :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
           class="tx-picker__scroller"
           role="listbox"
-          tabindex="-1"
+          :tabindex="disabled ? -1 : 0"
+          :aria-activedescendant="activeDescendant(colIndex)"
           @scroll.passive="onScroll(colIndex)"
+          @keydown="onKeydown(colIndex, $event)"
           @pointerdown="onPointerDown"
           @pointerup="onPointerUp"
           @pointercancel="onPointerUp"
@@ -313,10 +409,14 @@ onBeforeUnmount(() => {
           <div class="tx-picker__pad" aria-hidden="true" />
 
           <button
-            v-for="opt in col.options"
+            v-for="(opt, optIndex) in col.options"
+            :id="optionId(colIndex, optIndex)"
             :key="String(opt.value)"
             type="button"
             class="tx-picker__item"
+            role="option"
+            tabindex="-1"
+            :aria-selected="localValue[colIndex] === opt.value"
             :class="{ 'is-disabled': !!opt.disabled, 'is-selected': localValue[colIndex] === opt.value }"
             :disabled="disabled || !!opt.disabled"
             @click="scrollToIndex(colIndex, clampIndex(colIndex, col.options.findIndex(o => o.value === opt.value)), 'smooth')"
@@ -348,7 +448,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px` }">
+          <div class="tx-picker__columns" :style="{ '--tx-picker-item-height': `${itemHeightPx}px`, '--tx-picker-padding-y': `${paddingY}px`, '--tx-picker-visible-count': `${visibleCount}` }">
             <div class="tx-picker__highlight" aria-hidden="true" />
 
             <div v-for="(col, colIndex) in columns" :key="col.key ?? colIndex" class="tx-picker__col">
@@ -356,8 +456,10 @@ onBeforeUnmount(() => {
                 :ref="(el) => (colRefs[colIndex] = el as HTMLElement)"
                 class="tx-picker__scroller"
                 role="listbox"
-                tabindex="-1"
+                :tabindex="disabled ? -1 : 0"
+                :aria-activedescendant="activeDescendant(colIndex)"
                 @scroll.passive="onScroll(colIndex)"
+                @keydown="onKeydown(colIndex, $event)"
                 @pointerdown="onPointerDown"
                 @pointerup="onPointerUp"
                 @pointercancel="onPointerUp"
@@ -365,10 +467,14 @@ onBeforeUnmount(() => {
                 <div class="tx-picker__pad" aria-hidden="true" />
 
                 <button
-                  v-for="opt in col.options"
+                  v-for="(opt, optIndex) in col.options"
+                  :id="optionId(colIndex, optIndex)"
                   :key="String(opt.value)"
                   type="button"
                   class="tx-picker__item"
+                  role="option"
+                  tabindex="-1"
+                  :aria-selected="localValue[colIndex] === opt.value"
                   :class="{ 'is-disabled': !!opt.disabled, 'is-selected': localValue[colIndex] === opt.value }"
                   :disabled="disabled || !!opt.disabled"
                   @click="scrollToIndex(colIndex, clampIndex(colIndex, col.options.findIndex(o => o.value === opt.value)), 'smooth')"
@@ -444,7 +550,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   width: 100%;
-  height: calc(var(--tx-picker-item-height) * 5);
+  height: calc(var(--tx-picker-item-height) * var(--tx-picker-visible-count, 5));
 }
 
 .tx-picker__col {
@@ -554,5 +660,10 @@ onBeforeUnmount(() => {
 
 .is-disabled {
   opacity: 0.7;
+}
+
+.is-disabled .tx-picker__scroller {
+  pointer-events: none;
+  overflow: hidden;
 }
 </style>

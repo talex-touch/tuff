@@ -66,4 +66,38 @@ describe('txBreadcrumb', () => {
     await disabled.trigger('click')
     expect(wrapper.emitted('click')).toBeUndefined()
   })
+
+  it('renders a no-href clickable crumb as a keyboard-reachable button', async () => {
+    const wrapper = mount(TxBreadcrumb, {
+      props: { items },
+    })
+
+    const links = wrapper.findAll('.tx-breadcrumb__link')
+    // items[1] = { label: 'Library' }: no href, not current. Previously a bare
+    // <span> with a click handler (mouse-only); now a native <button>, which the
+    // browser makes Enter/Space-activatable for free.
+    const middle = links[1]
+    expect(middle.element.tagName).toBe('BUTTON')
+    expect(middle.attributes('type')).toBe('button')
+
+    await middle.trigger('click')
+    expect(wrapper.emitted('click')?.[0]).toEqual([items[1], 1])
+
+    // Link crumbs stay anchors; the current crumb stays an inert span.
+    expect(links[0].element.tagName).toBe('A')
+    expect(links[2].element.tagName).toBe('SPAN')
+  })
+
+  it('defaults to a resolvable separator icon', () => {
+    const wrapper = mount(TxBreadcrumb, {
+      props: { items },
+    })
+
+    const separatorIcon = wrapper.find('.tx-breadcrumb__separator .tuff-icon')
+    expect(separatorIcon.exists()).toBe(true)
+    // A bare name like `chevron-right` renders an empty <i>; the default must be a
+    // UnoCSS-resolvable token so the separator is actually drawn.
+    expect(separatorIcon.attributes('data-icon-value')).toBe('i-carbon-chevron-right')
+    expect(separatorIcon.attributes('data-icon-value')?.startsWith('i-')).toBe(true)
+  })
 })

@@ -1,0 +1,306 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
+import {
+  PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES,
+  shouldInstallPluginRuntimeServiceByDefault
+} from './plugin-runtime-rollout'
+
+const workspaceRoot = path.resolve(__dirname, '../../../../../..')
+const pluginsRoot = path.join(workspaceRoot, 'plugins')
+
+const EXPECTED_UNMIGRATED = Object.freeze({})
+
+interface OfficialManifest {
+  build?: { index?: { entry?: unknown } }
+  main?: unknown
+  name?: unknown
+  permissions?: { required?: unknown; optional?: unknown }
+}
+
+function readOfficialManifests(): Map<string, OfficialManifest> {
+  return new Map(
+    fs
+      .readdirSync(pluginsRoot)
+      .flatMap((directory) => {
+        const manifestPath = path.join(pluginsRoot, directory, 'manifest.json')
+        if (!fs.existsSync(manifestPath)) return []
+        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as OfficialManifest
+        return typeof manifest.name === 'string' ? [[manifest.name, manifest] as const] : []
+      })
+      .sort(([left], [right]) => left.localeCompare(right))
+  )
+}
+
+function officialManifestNames(): string[] {
+  return [...readOfficialManifests().keys()]
+}
+
+describe('plugin runtime production rollout gate', () => {
+  it('enables the production default only after all 22 manifested activations are compatible', () => {
+    const official = officialManifestNames()
+    const compatible = new Set<string>(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES)
+    const unmigrated = official.filter((name) => !compatible.has(name))
+
+    expect(official).toHaveLength(22)
+    expect(PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES).toEqual([
+      'clipboard-history',
+      'touch-batch-rename',
+      'touch-browser-bookmarks',
+      'touch-browser-data',
+      'touch-browser-open',
+      'touch-code-snippets',
+      'touch-dev-toolbox',
+      'touch-dev-utils',
+      'touch-dictation',
+      'touch-emoji-symbols',
+      'touch-intelligence',
+      'touch-quick-actions',
+      'touch-quickops',
+      'touch-snipaste',
+      'touch-snippets',
+      'touch-system-actions',
+      'touch-text-snippets',
+      'touch-text-tools',
+      'touch-translation',
+      'touch-window-manager',
+      'touch-window-presets',
+      'touch-workspace-scripts'
+    ])
+    expect(unmigrated).toEqual(Object.keys(EXPECTED_UNMIGRATED).sort())
+    expect(unmigrated).toHaveLength(0)
+    expect(shouldInstallPluginRuntimeServiceByDefault()).toBe(true)
+  })
+
+  it('excludes the two manifestless Surface directories from activation success', () => {
+    const official = new Set(officialManifestNames())
+    for (const name of ['touch-image', 'touch-music']) {
+      expect(fs.existsSync(path.join(pluginsRoot, name))).toBe(true)
+      expect(fs.existsSync(path.join(pluginsRoot, name, 'manifest.json'))).toBe(false)
+      expect(official.has(name)).toBe(false)
+    }
+    expect(fs.existsSync(path.join(pluginsRoot, 'touch-music', 'preload.js'))).toBe(true)
+  })
+
+  it('requires clipboard-history canonical build input and declared root scripts for Batch A', () => {
+    const manifests = readOfficialManifests()
+    const clipboardManifest = manifests.get('clipboard-history')
+    expect(clipboardManifest?.main).toBeUndefined()
+    expect(clipboardManifest?.build?.index?.entry).toBe('index/main.ts')
+    expect(
+      fs.readFileSync(path.join(pluginsRoot, 'clipboard-history', 'index', 'main.ts'), 'utf8')
+    ).toBe(
+      ';(globalThis as unknown as { module: { exports: Record<string, never> } }).module.exports = {}\n'
+    )
+
+    for (const name of [
+      'touch-batch-rename',
+      'touch-browser-bookmarks',
+      'touch-browser-data',
+      'touch-browser-open',
+      'touch-code-snippets',
+      'touch-dev-toolbox',
+      'touch-dev-utils',
+      'touch-dictation',
+      'touch-emoji-symbols',
+      'touch-quick-actions',
+      'touch-quickops',
+      'touch-snipaste',
+      'touch-snippets',
+      'touch-system-actions',
+      'touch-text-snippets',
+      'touch-text-tools',
+      'touch-window-manager',
+      'touch-window-presets',
+      'touch-workspace-scripts'
+    ]) {
+      expect(manifests.get(name)?.main).toBe('index.js')
+      expect(fs.existsSync(path.join(pluginsRoot, name, 'index.js'))).toBe(true)
+    }
+  })
+
+  it('keeps migrated scripts free of child-side privileged or test-only surfaces', () => {
+    const forbidden = [
+      /\b__test\b/,
+      /\bfetch\s*\(/,
+      /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+      /\btypeof\s+process\b/,
+      /\brequire\s*\(/,
+      /\bnode:(?:fs(?:\/promises)?|child_process|sqlite|worker_threads)\b/,
+      /\belectron\b/
+    ]
+    for (const name of PLUGIN_RUNTIME_COMPATIBLE_OFFICIAL_PRELUDES) {
+      const sourcePath =
+        name === 'clipboard-history'
+          ? path.join(pluginsRoot, name, 'index', 'main.ts')
+          : path.join(pluginsRoot, name, 'index.js')
+      const source = fs.readFileSync(sourcePath, 'utf8')
+      for (const pattern of forbidden) expect(source).not.toMatch(pattern)
+    }
+
+    const intelligenceSource = fs.readFileSync(
+      path.join(pluginsRoot, 'touch-intelligence', 'index.js'),
+      'utf8'
+    )
+    expect(intelligenceSource).not.toMatch(/\btouchChannel\b/)
+    expect(intelligenceSource).not.toMatch(/\bpermission\s*\.\s*request\s*\(/)
+  })
+
+  it('declares every capability permission used by compatible Preludes', () => {
+    const manifests = readOfficialManifests()
+    for (const name of [
+      'touch-batch-rename',
+      'touch-browser-bookmarks',
+      'touch-dev-toolbox',
+      'touch-snippets'
+    ]) {
+      const permissions = manifests.get(name)?.permissions
+      const declared = [
+        ...(Array.isArray(permissions?.required) ? permissions.required : []),
+        ...(Array.isArray(permissions?.optional) ? permissions.optional : [])
+      ]
+      expect(declared, `${name} must explicitly declare storage.plugin`).toContain('storage.plugin')
+    }
+
+    const browserData = manifests.get('touch-browser-data')?.permissions
+    const browserDataPermissions = [
+      ...(Array.isArray(browserData?.required) ? browserData.required : []),
+      ...(Array.isArray(browserData?.optional) ? browserData.optional : [])
+    ]
+    expect(browserDataPermissions).toEqual(
+      expect.arrayContaining(['fs.read', 'fs.index', 'search.root-results'])
+    )
+
+    const browserOpen = manifests.get('touch-browser-open')?.permissions
+    const browserOpenPermissions = [
+      ...(Array.isArray(browserOpen?.required) ? browserOpen.required : []),
+      ...(Array.isArray(browserOpen?.optional) ? browserOpen.optional : [])
+    ]
+    expect(browserOpenPermissions).toEqual(
+      expect.arrayContaining([
+        'storage.plugin',
+        'system.shell',
+        'network.internet',
+        'clipboard.write',
+        'search.root-results'
+      ])
+    )
+
+    const intelligence = manifests.get('touch-intelligence')?.permissions
+    const intelligencePermissions = [
+      ...(Array.isArray(intelligence?.required) ? intelligence.required : []),
+      ...(Array.isArray(intelligence?.optional) ? intelligence.optional : [])
+    ]
+    expect(intelligencePermissions).toEqual(
+      expect.arrayContaining([
+        'intelligence.basic',
+        'search.root-results',
+        'storage.plugin',
+        'clipboard.write'
+      ])
+    )
+
+    const translation = manifests.get('touch-translation')?.permissions
+    const translationPermissions = [
+      ...(Array.isArray(translation?.required) ? translation.required : []),
+      ...(Array.isArray(translation?.optional) ? translation.optional : [])
+    ]
+    expect(translationPermissions).toEqual(
+      expect.arrayContaining([
+        'network.internet',
+        'intelligence.basic',
+        'storage.plugin',
+        'search.root-results',
+        'clipboard.write'
+      ])
+    )
+    expect(translationPermissions).not.toEqual(
+      expect.arrayContaining(['window.create', 'clipboard.read'])
+    )
+
+    const snippets = manifests.get('touch-snippets')?.permissions
+    const snippetPermissions = [
+      ...(Array.isArray(snippets?.required) ? snippets.required : []),
+      ...(Array.isArray(snippets?.optional) ? snippets.optional : [])
+    ]
+    expect(snippetPermissions).toContain('network.internet')
+
+    const quickOps = manifests.get('touch-quickops')?.permissions
+    const quickOpsPermissions = [
+      ...(Array.isArray(quickOps?.required) ? quickOps.required : []),
+      ...(Array.isArray(quickOps?.optional) ? quickOps.optional : [])
+    ]
+    expect(quickOpsPermissions).toContain('storage.shared')
+
+    const quickActions = manifests.get('touch-quick-actions')?.permissions
+    const quickActionPermissions = [
+      ...(Array.isArray(quickActions?.required) ? quickActions.required : []),
+      ...(Array.isArray(quickActions?.optional) ? quickActions.optional : [])
+    ]
+    expect(quickActionPermissions).toContain('system.shell')
+
+    const snipaste = manifests.get('touch-snipaste')?.permissions
+    const snipastePermissions = [
+      ...(Array.isArray(snipaste?.required) ? snipaste.required : []),
+      ...(Array.isArray(snipaste?.optional) ? snipaste.optional : [])
+    ]
+    expect(snipastePermissions).toContain('system.shell')
+
+    const windowManager = manifests.get('touch-window-manager')?.permissions
+    const windowManagerPermissions = [
+      ...(Array.isArray(windowManager?.required) ? windowManager.required : []),
+      ...(Array.isArray(windowManager?.optional) ? windowManager.optional : [])
+    ]
+    expect(windowManagerPermissions).toContain('system.shell')
+
+    const windowPresets = manifests.get('touch-window-presets')?.permissions
+    const windowPresetPermissions = [
+      ...(Array.isArray(windowPresets?.required) ? windowPresets.required : []),
+      ...(Array.isArray(windowPresets?.optional) ? windowPresets.optional : [])
+    ]
+    expect(windowPresetPermissions).toContain('system.shell')
+
+    const workspaceScripts = manifests.get('touch-workspace-scripts')?.permissions
+    const workspaceScriptPermissions = [
+      ...(Array.isArray(workspaceScripts?.required) ? workspaceScripts.required : []),
+      ...(Array.isArray(workspaceScripts?.optional) ? workspaceScripts.optional : [])
+    ]
+    expect(workspaceScriptPermissions).toEqual(
+      expect.arrayContaining(['fs.read', 'system.shell', 'search.root-results'])
+    )
+
+    const systemActions = manifests.get('touch-system-actions')?.permissions
+    expect(systemActions?.required).not.toContain('system.shell')
+    expect(systemActions?.optional).toContain('system.shell')
+
+    const dictation = manifests.get('touch-dictation')?.permissions
+    const dictationPermissions = [
+      ...(Array.isArray(dictation?.required) ? dictation.required : []),
+      ...(Array.isArray(dictation?.optional) ? dictation.optional : [])
+    ]
+    expect(dictationPermissions).toEqual(
+      expect.arrayContaining([
+        'voice.dictation',
+        'search.root-results',
+        'clipboard.read',
+        'clipboard.write'
+      ])
+    )
+  })
+
+  it('keeps every current top-level require plugin in the explicit failure inventory', () => {
+    const manifests = readOfficialManifests()
+    const requirePlugins = [...manifests].flatMap(([name, manifest]) => {
+      if (typeof manifest.main !== 'string') return []
+      const source = fs.readFileSync(path.join(pluginsRoot, name, manifest.main), 'utf8')
+      return /\brequire\s*\(/.test(source) ? [name] : []
+    })
+
+    expect(requirePlugins.sort()).toEqual(
+      Object.entries(EXPECTED_UNMIGRATED)
+        .filter(([, reason]) => reason === 'top-level require')
+        .map(([name]) => name)
+        .sort()
+    )
+  })
+})

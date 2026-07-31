@@ -1,0 +1,416 @@
+[
+ {
+  "component": "card",
+  "category": "stale-demo-code",
+  "summary": "The inline code for `CardCardBackgroundsScrollDemo` is 27 lines behind the real demo file: it omits the entire `refractionTone` feature (the `RefractionTone` type, the `tone` field on all 7 presets, the `refractionTone` ref, the tone `TxRadioGroup` control, and the `:refraction-tone` binding on `TxCard`).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/card.zh.mdc",
+  "evidenceLine": 601,
+  "evidenceQuote": "const refractionStrength = ref(62)\n  const refractionProfile = ref<RefractionProfile>('filmic')\n  const refractionAngle = ref(-24)",
+  "suggestion": "Regenerate the inline `code:` block from `apps/nexus/app/components/content/demos/CardCardBackgroundsScrollDemo.vue` (808 lines) — the doc snippet is stuck at 781 lines. This matters because `refractionTone` is a documented prop (zh/en line 1669) yet the string `refractionTone` appears exactly once in each doc — only in the Props table, never in any inline example. A reader copying the flagship backgrounds demo gets a version that cannot exercise tone at all, and the demo's meta line still reads `bg={{ bg }} · {{ refractionProfile }}` instead of the real `bg={{ bg }} · {{ refractionProfile }} / {{ refractionTone }}`. The same staleness exists identically in card.en.mdc."
+ },
+ {
+  "component": "base-anchor",
+  "category": "stale-demo-code",
+  "summary": "The \"多种动画 / Multiple Animations\" section inlines a single `boom` anchor, while the demo actually rendered above it (`BaseAnchorAnimationDemo.vue`) builds four anchors over `['transfer', 'boom', 'opacity', 'none']` with a per-mode `resolveAnimation()`, so the snippet does not reproduce what the reader sees.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/BaseAnchorAnimationDemo.vue",
+  "evidenceLine": 52,
+  "evidenceQuote": "const modes: AnchorAnimationType[] = ['transfer', 'boom', 'opacity', 'none']",
+  "suggestion": "Replace the inline snippet at zh:131-157 / en:131-157 with the demo's actual shape — a `v-for=\"mode in modes\"` over the four types bound to `:animation=\"resolveAnimation(mode)\"` — or retitle the section to \"聚焦缩放 / Focus Scale\" so the heading matches the one-mode snippet."
+ },
+ {
+  "component": "fusion",
+  "category": "stale-demo-code",
+  "summary": "The inline `code:` snippets for five Fusion demos (TwoButtons, TwoOptions, TwoChips, TwoStatusDots, TwoIconButtons) show a `ref<Record<Variant, boolean>>` seeded to all `true` with different variant hint strings, while the demos actually rendered (`FusionFusion*Demo.vue`) use `reactive<...>` seeded to all `false` with different hints.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/fusion.zh.mdc",
+  "evidenceLine": 211,
+  "evidenceQuote": "  const active = ref<Record<Variant, boolean>>({\n    membrane: true,\n    glass: true,\n    gummy: true,\n  })",
+  "suggestion": "The doc's inline snippet is a byte-for-byte copy of the orphaned `apps/nexus/app/components/content/demos/FusionTwoButtonsDemo.vue` (lines 1-17), while `TuffDemoWrapper{demo=\"FusionFusionTwoButtonsDemo\"}` renders `FusionFusionTwoButtonsDemo.vue` whose setup block is `reactive<Record<FusionVariantKey, boolean>>({ membrane: false, glass: false, gummy: false })` with hints 'Soft gradient blend' / 'Translucent blur' / 'Vibrant tint'. Readers see all three fusions un-fused on screen while the code says they start fused. Regenerate the inline snippets from the `FusionFusion*Demo.vue` files and delete the 9 orphaned `Fusion*Demo.vue` duplicates (FusionBasicDemo, FusionButtonTooltipDemo, FusionTwoButtonsDemo, FusionTwoOptionsDemo, FusionTwoChipsDemo, FusionTwoStatusDotsDemo, FusionTwoIconButtonsDemo, FusionAvatarBadgeDemo, FusionChipIconDemo, FusionMiniCardFabDemo), which are referenced by zero doc pages and are the source of this drift."
+ },
+ {
+  "component": "tabs",
+  "category": "stale-demo-code",
+  "summary": "The inline `code:` block for `ComponentsNavigationShellDemo` is a ~24-line stub that omits nearly everything the rendered 338-line demo shows — no `nav-min-width`/`indicator-motion`/`auto-height`/`animation` props, empty DropdownMenu, an empty self-closing TxDrawer with no body or footer, and none of the ProgressBar/StatusBadge/Tag/Switch content.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/tabs.zh.mdc",
+  "evidenceLine": 474,
+  "evidenceQuote": "    <TxDrawer v-model:visible=\"drawerVisible\" title=\"发布策略\" />",
+  "suggestion": "Replace the hand-written snippet in tabs.zh.mdc:445-477 and tabs.en.mdc with the real template from apps/nexus/app/components/content/demos/ComponentsNavigationShellDemo.vue (at minimum the `<TxTabs>` block at lines 140-172 with its actual `:nav-min-width=\"176\"`, `indicator-variant=\"pill\"`, `indicator-motion=\"glide\"`, `auto-height` and `:animation` bindings), or have TuffDemoWrapper read the demo source directly instead of duplicating it."
+ },
+ {
+  "component": "tabs",
+  "category": "stale-demo-code",
+  "summary": "The inline `code:` for `TabsIndicatorVariantsMotionsDemo` shows only a `motion` select and a Next button, while the rendered demo also has a `content` motion select and an indicator on/off toggle bound to `:show-indicator`, and uses a different animation config than the snippet.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/tabs.zh.mdc",
+  "evidenceLine": 144,
+  "evidenceQuote": "    :animation=\"{ indicator: { durationMs: 180 }, content: true }\"",
+  "suggestion": "Sync the snippet with TabsIndicatorVariantsMotionsDemo.vue: add the `contentMotion` TuffSelect (demo lines 96-105) and the `showIndicator` toggle (lines 107-112), and correct the binding to `:show-indicator=\"showIndicator\"` plus `:animation=\"{ indicator: { durationMs: 350 }, content: { type: contentMotion, durationRatio: 0.5 } }\"` (demo lines 144-147)."
+ },
+ {
+  "component": "timeline",
+  "category": "stale-demo-code",
+  "summary": "The `## 后台审计流程` section's inline `code:` shows a bare 12-line `<TxTimeline>` with three items, but the referenced ComponentsPermissionOrchestrationDemo renders a 362-line panel where the timeline is one sidebar column beside TxTree, TxTreeSelect, TxTransfer, TxSearchInput, TxTag and TxStatusBadge.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/timeline.zh.mdc",
+  "evidenceLine": 36,
+  "evidenceQuote": "::TuffDemoWrapper{demo=\"ComponentsPermissionOrchestrationDemo\" code-lang=\"vue\" title=\"权限编排面板\" description=\"截图验证的授权审计时间线。\"}",
+  "suggestion": "Either point this section at a timeline-only demo whose source matches the snippet, or replace the snippet with the actual `<aside class=\"permission-demo__panel--timeline\">` block from ComponentsPermissionOrchestrationDemo.vue:247-260 (the `v-for` over `labels.timeline` with `:active=\"index === 1\"`) so readers can map the rendered panel to the code."
+ },
+ {
+  "component": "slider",
+  "category": "stale-demo-code",
+  "summary": "SliderSliderDemo / SliderSliderShowValueDemo / SliderSliderDisabledDemo all initialize the v-model ref to `''` instead of the documented `ref(30)` / `ref(60)` / `ref(42)`; `Number.isFinite('')` is false so TxSlider clamps to `min` (0) and the demo's `Value: {{ value }}` line renders blank.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/SliderSliderDemo.vue",
+  "evidenceLine": 4,
+  "evidenceQuote": "const value = ref('')",
+  "suggestion": "Initialize each demo ref with the numeric value shown in the doc's inline `code:` block (30 / 60 / 42). Also collapse the identical `v-if=\"locale === 'zh'\"` / `v-else` branches in these four files — both arms render byte-identical markup."
+ },
+ {
+  "component": "select",
+  "category": "stale-demo-code",
+  "summary": "The `## 远程搜索` / `## Remote Search` inline snippet declares options via `:options=\"options\"` plus `:loading` / `loading-text`, but SelectSelectRemoteSearchableDemo.vue actually registers options with `<TuffSelectItem v-for>` children and passes no loading props — a different registration path than the rendered demo.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/select.zh.mdc",
+  "evidenceLine": 103,
+  "evidenceQuote": "    :options=\"options\"",
+  "suggestion": "Rewrite the inline snippet to mirror SelectSelectRemoteSearchableDemo.vue (slot `TuffSelectItem` children driven by the `search` handler), or change the demo to the `options` prop form so the copy-pasteable snippet and the live demo demonstrate the same remote pattern."
+ },
+ {
+  "component": "toast",
+  "category": "stale-demo-code",
+  "summary": "The `后台反馈中心` / `Dashboard Feedback Center` inline snippet is a ~15-line stub (one tooltip, one overlay, one spinner) while ComponentsFeedbackTaskCenterDemo.vue actually renders a full task panel with two toasts, TuffSwitch, TxStatusBadge, TxTag and TxProgressBar rows.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/toast.zh.mdc",
+  "evidenceLine": 99,
+  "evidenceQuote": "::TuffDemoWrapper{demo=\"ComponentsFeedbackTaskCenterDemo\" code-lang=\"vue\" title=\"后台任务反馈中心\" description=\"截图验证的 Toast / Tooltip / LoadingOverlay / Spinner 组合。\"}",
+  "suggestion": "Either sync the `code:` block with the real demo's toast-related excerpt (the two `toast({ id: 'nexus-feedback-task-center...' })` calls plus `<TxToastHost />`) or drop the inline `code:` entirely and let TuffDemoWrapper show the actual demo source."
+ },
+ {
+  "component": "toast",
+  "category": "stale-demo-code",
+  "summary": "The Basic Usage snippet calls `toast(...)` straight from the template with no `<script setup>` block, while the real ToastToastDemo.vue imports `toast` from `@talex-touch/tuffex/utils` — copy-pasting the snippet yields a `toast is not defined` render error.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/toast.zh.mdc",
+  "evidenceLine": 25,
+  "evidenceQuote": "    <TxButton @click=\"toast({ title: 'Saved', description: 'Your changes have been saved.' })\">",
+  "suggestion": "Prepend `<script setup>\\nimport { toast } from '@talex-touch/tuffex/utils'\\n</script>` to the snippet in both toast.zh.mdc and toast.en.mdc so the first example is self-contained."
+ },
+ {
+  "component": "button",
+  "category": "stale-demo-code",
+  "summary": "The Split Button snippet binds `:loading=\"splitLoading\"` and `@click=\"handleRun\"` with no `<script setup>` block, while ButtonSplitDemo.vue names the ref `loading`; the snippet cannot run as written and the identifier does not match the demo.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/button.zh.mdc",
+  "evidenceLine": 322,
+  "evidenceQuote": "      :loading=\"splitLoading\"",
+  "suggestion": "Rename `splitLoading` to `loading` and add the demo's `<script setup>` (the `loading` ref plus the async `handleRun`) to the snippet in both button.zh.mdc and button.en.mdc."
+ },
+ {
+  "component": "base-surface",
+  "category": "stale-demo-code",
+  "summary": "The \"模式对比 / Mode Comparison\" section claims five modes and the real BaseSurfaceModesDemo renders five surfaces, but the inline snippet stops at `glass` and never shows `mode=\"refraction\"`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-surface.zh.mdc",
+  "evidenceLine": 42,
+  "evidenceQuote": "      <TxBaseSurface mode=\"glass\" :blur=\"12\" :saturation=\"1.8\" style=\"width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;\">",
+  "suggestion": "Append the refraction surface to the snippet so it matches BaseSurfaceModesDemo.vue:47 (`<TxBaseSurface mode=\"refraction\" :blur=\"11\" :displace=\"0.8\" :distortion-scale=\"-200\" ...>`). Same fix in base-surface.en.mdc:42."
+ },
+ {
+  "component": "base-surface",
+  "category": "stale-demo-code",
+  "summary": "The motion-fallback prose says clicking the button makes \"blur and glass cards\" degrade to mask, but BaseSurfaceFallbackDemo renders six cards across blur/glass/refraction and half of them intentionally pass `:moving=\"false\"` so they do NOT degrade — the whole point of the demo (side-by-side with/without fallback) is invisible in the docs.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-surface.zh.mdc",
+  "evidenceLine": 122,
+  "evidenceQuote": "点击按钮后，blur 和 glass 卡片会真正进行 `transform` 位移，同时自动降级到 mask 模式。卡片内部内容可滚动。",
+  "suggestion": "Rewrite the prose to describe the actual A/B grid (blur/glass/refraction × with-fallback/no-fallback) and update the snippet to show two surfaces differing only in `:moving`, matching BaseSurfaceFallbackDemo.vue:46-53 and :158. Mirror in base-surface.en.mdc:122."
+ },
+ {
+  "component": "search-empty",
+  "category": "stale-demo-code",
+  "summary": "The \"基础用法 / Basic Usage\" snippet shows only `title` and `description`, but SearchEmptySearchEmptyDemo.vue also passes `surface=\"card\"` and a `:primary-action` — so the rendered demo has a bordered card and a \"Reset filters\" button that appear nowhere in the code the reader is shown.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/search-empty.zh.mdc",
+  "evidenceLine": 22,
+  "evidenceQuote": "    <TxSearchEmpty title=\"没有匹配结果\" description=\"换一个关键词、清空筛选条件，或扩大搜索范围。\" />",
+  "suggestion": "Either add `surface=\"card\"` and `:primary-action=\"{ label: '重置筛选', type: 'primary', icon: 'i-carbon-reset' }\"` to the snippet, or strip them from SearchEmptySearchEmptyDemo.vue so the plain variant is the basic demo and the card+action variant stays exclusive to the Dashboard Filter Toolbar section. Same fix in search-empty.en.mdc:22."
+ },
+ {
+  "component": "flat-button",
+  "category": "stale-demo-code",
+  "summary": "The Basic Usage snippet wraps the buttons in `<div class=\"tuff-demo-row\">` (a real class deep-styled by TuffDemoWrapper.vue:451), but FlatButtonFlatButtonDemo.vue uses bare `<div v-if=\"locale === 'zh'\">` with no class, so the rendered demo loses the row layout/gap the snippet promises.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/flat-button.zh.mdc",
+  "evidenceLine": 26,
+  "evidenceQuote": "    <div class=\"tuff-demo-row\">",
+  "suggestion": "Add `class=\"tuff-demo-row\"` to both locale branches in apps/nexus/app/components/content/demos/FlatButtonFlatButtonDemo.vue (lines 6 and 18) so the live demo matches the documented markup in both flat-button.zh.mdc:26 and flat-button.en.mdc:26."
+ },
+ {
+  "component": "sortable-list",
+  "category": "stale-demo-code",
+  "summary": "The live demo `SortableListSortableListDemo.vue` initialises `const list = ref([])`, so the rendered demo is an empty list with nothing to drag, while the doc's inline `code:` block shows a 3-item list that also demonstrates the `dragging` slot prop.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/SortableListSortableListDemo.vue",
+  "evidenceLine": 4,
+  "evidenceQuote": "const list = ref([])",
+  "suggestion": "Seed the demo with the same three items the docs show (`{ id: 'one', title: 'One' }`, …) and render `{{ item.title }}` plus the `dragging` class binding, matching sortable-list.zh.mdc:25-40 / .en.mdc:25-40 so the demo actually exercises drag reordering."
+ },
+ {
+  "component": "command-palette",
+  "category": "stale-demo-code",
+  "summary": "The inline `code:` block for `CommandPaletteCommandPaletteDemo` shows a `tx-demo`/`TxCard` layout with 4 commands, while the real demo file renders a two-column `command-palette-demo` preview panel with i18n `labels` and 5 commands (it adds `sync-settings`).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/command-palette.zh.mdc",
+  "evidenceLine": 80,
+  "evidenceQuote": "    <div class=\"tx-demo tx-demo__col tx-demo--max-520\">",
+  "suggestion": "Regenerate the inline `code:` block from `apps/nexus/app/components/content/demos/CommandPaletteCommandPaletteDemo.vue` (or trim the demo to match the doc), so the rendered preview and the shown source describe the same command set and layout."
+ },
+ {
+  "component": "loading-overlay",
+  "category": "stale-demo-code",
+  "summary": "The inline `code:` for `ComponentsFeedbackTaskCenterDemo` shows only a `TxLoadingOverlay` wrapping two `TxProgressBar`s, but the block's own title/description promise \"Toast / Tooltip / Spinner\" and the real demo renders `TxToastHost`, `TxTooltip`, `TxStatusBadge`, `TxTag`, `TxSpinner`, and `TuffSwitch`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/loading-overlay.en.mdc",
+  "evidenceLine": 88,
+  "evidenceQuote": "    <TxLoadingOverlay :loading=\"true\" text=\"Refreshing task queue…\" :spinner-size=\"22\">",
+  "suggestion": "Either trim the block description to what the snippet actually shows (\"local LoadingOverlay over a progress list\"), or extend the inline snippet with the `TxToastHost` / `TxTooltip` / `TxSpinner` pieces from apps/nexus/app/components/content/demos/ComponentsFeedbackTaskCenterDemo.vue lines 99-140 so the snippet matches its own caption."
+ },
+ {
+  "component": "status-badge",
+  "category": "stale-demo-code",
+  "summary": "ComponentsOperationsStatusDemo 的内联示例只有 4 行（3 个徽标 + 1 个进度条），而实际渲染的 demo 是含 TxStatCard / TuffSwitch / TxButton / 三条 TxProgressBar 的完整看板，正文提到的 TxStatCard 在示例代码里根本不出现。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/status-badge.zh.mdc",
+  "evidenceLine": 43,
+  "evidenceQuote": "    <section class=\"grid gap-3\">",
+  "suggestion": "要么把内联 code 换成 ComponentsOperationsStatusDemo.vue 里 operations-demo__badges + operations-demo__cards 的真实片段（含 TxStatCard），要么把这个大看板 demo 换成一个只演示徽标组合的小 demo，让「看到的」和「读到的」一致。"
+ },
+ {
+  "component": "avatar-variants",
+  "category": "stale-demo-code",
+  "summary": "内联示例声明了 'All' 分类页签且 activeTab 默认 'All'（isActive 对所有卡片返回 true），但页面实际渲染的 AvatarVariantsAvatarVariantsGalleryDemo.vue 没有 All 页签、默认只显示 Status 分类，读者复制代码得到的交互与所见完全不同。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/avatar-variants.zh.mdc",
+  "evidenceLine": 24,
+  "evidenceQuote": "  const tabs: Category[] = ['All', 'Status', 'Activity', 'Platform', 'System', 'Social', 'Context']",
+  "suggestion": "内联代码同步为真实 demo 的 setup（tabs 无 All、activeTab 默认 'Status'、isActive 为严格相等），zh/en 两份都要改；或者反过来给真实 demo 补回 All 页签。"
+ },
+ {
+  "component": "version-capsule",
+  "category": "stale-demo-code",
+  "summary": "The Channel Tones inline snippet passes `<TxVersionHistoryPanel :title=\"item.channel\" />` with no `latest` and no `entries`, so copying it renders four empty-state panels — it demonstrates none of the per-entry tone resolution the surrounding prose claims, and the real demo passes `:latest=\"item.latest\"` plus a separate `historyTitle`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/version-capsule.zh.mdc",
+  "evidenceLine": 79,
+  "evidenceQuote": "<TxVersionHistoryPanel :title=\"item.channel\" @select=\"close\" />",
+  "suggestion": "Sync the inline `code:` block in both version-capsule.zh.mdc (line 79) and version-capsule.en.mdc (line 79) with VersionCapsuleChannelTonesDemo.vue: add a `latest` entry per capsule carrying `tone`/`channel`/`date`/`note`, and use a dedicated `historyTitle` instead of reusing `item.channel` as the panel heading."
+ },
+ {
+  "component": "index",
+  "category": "stale-demo-code",
+  "summary": "Several inline `code:` snippets on the hub page reference variables that the snippet never declares — the Workflow Panel snippet binds `:columns=\"columns\" :data=\"rows\"` while its `<script setup>` only declares `query`, `selectedKeys`, `automationEnabled`; the Data Operations and Permission Orchestration snippets have the same problem with `columns`/`pagedRows`/`page`/`rows` and `scopeNodes`/`teamNodes`/`resources`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/index.zh.mdc",
+  "evidenceLine": 54,
+  "evidenceQuote": "<TxDataTable v-model:selected-keys=\"selectedKeys\" :columns=\"columns\" :data=\"rows\" row-key=\"id\" selectable />",
+  "suggestion": "Either add the missing declarations to each snippet (the real demo defines them — ComponentsWorkflowPanelDemo.vue:66 `const columns = computed<DataTableColumn<WorkflowRow>[]>(...)` and :78 `const filteredRows = computed(...)`), or trim the snippets to the sub-tree that is actually self-contained. Apply to index.zh.mdc lines 44-56 / 164-170 / 185-195 and the matching index.en.mdc blocks."
+ },
+ {
+  "component": "layout-skeleton",
+  "category": "stale-demo-code",
+  "summary": "The \"Dashboard Data Operations\" section renders `ComponentsDataOperationsDemo` (a full DataTable + pagination + selection dashboard) but its inline `code:` block shows only `<div style=\"height: 190px;\"><TxLayoutSkeleton /></div>`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/layout-skeleton.zh.mdc",
+  "evidenceLine": 79,
+  "evidenceQuote": ":::TuffDemoWrapper{demo=\"ComponentsDataOperationsDemo\" code-lang=\"vue\" title=\"数据运维面板\" description=\"布局骨架用于侧栏/详情区域，表格主体继续由 DataTable 管理。\"}",
+  "suggestion": "Either replace the inline snippet with the real composition from ComponentsDataOperationsDemo.vue (DataTable + TxPagination + the skeleton region), or drop this whole section from layout-skeleton docs and keep the shared dashboard demo on a composition page. Same divergence exists at layout-skeleton.en.mdc:79."
+ },
+ {
+  "component": "avatar",
+  "category": "stale-demo-code",
+  "summary": "`AvatarSizesDemo.vue` renders four image avatars and omits the `:size=\"56\"` custom numeric size case that the doc's inline snippet advertises as the point of the example.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/AvatarSizesDemo.vue",
+  "evidenceLine": 3,
+  "evidenceQuote": "    <TxAvatar size=\"small\" src=\"https://avatars.githubusercontent.com/u/1?v=4\" />",
+  "suggestion": "Update AvatarSizesDemo.vue to match the documented snippet (`name=\"Small\"` … plus `<TxAvatar :size=\"56\" name=\"Custom Size\" />`), so the only demonstration of the custom-size normalization path (TxAvatar.vue:27-49) is actually rendered. Doc snippet: avatar.zh.mdc:42-46 / avatar.en.mdc:42-46."
+ },
+ {
+  "component": "context-menu",
+  "category": "stale-demo-code",
+  "summary": "The inline ContextMenu snippet drops `:anchor-mode`, `:toggle-on-reference-click=\"false\"` and `reference-full-width` that the real demo needs for the submenu, and declares `animationMode`/`lastAction` state that the snippet template never renders.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/context-menu.zh.mdc",
+  "evidenceLine": 106,
+  "evidenceQuote": "          <TxPopover v-model=\"popoverOpen\" placement=\"right-start\" :close-on-click-outside=\"false\" :show-arrow=\"false\">",
+  "suggestion": "Sync the inline `code:` block with ContextMenuContextMenuDemo.vue:143-154 (add `:toggle-on-reference-click=\"false\"`, `reference-full-width`, `:offset=\"8\"`) and either render the animation/anchor-mode selectors and the `lastAction` status line, or delete those unused refs from the snippet. As written, a reader copying the snippet gets a submenu whose reference click toggles the popover against the `@select=\"popoverOpen = true\"` handler. Same in context-menu.en.mdc:106."
+ },
+ {
+  "component": "drawer",
+  "category": "stale-demo-code",
+  "summary": "The `### Slots / effects / mobile / close controls` inline sample only demonstrates the header/footer slots plus `mask-effect=\"opacity\"` and `panel-transparent`, while the referenced DrawerSlotsEffectsDemo.vue actually renders nine drawers covering all three mask effects, `show-header`/`show-footer` off, `mobile-adapt` on/off, and the `close-on-click-mask`/`close-on-press-escape`/`show-close` combination — a reader copying the snippet gets none of the mobile or close-control behavior the heading promises.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/drawer.zh.mdc",
+  "evidenceLine": 92,
+  "evidenceQuote": "### Slots / effects / mobile / close controls",
+  "suggestion": "Either narrow the heading to \"Header / Footer slots\" and move mask/mobile/close coverage into their own snippets, or extend the inline `code:` block to include the `:mobile-adapt=\"false\"` and `:close-on-click-mask=\"false\" :close-on-press-escape=\"false\" :show-close=\"false\"` drawers that the demo file actually renders. Apply the same fix to drawer.en.mdc line 92."
+ },
+ {
+  "component": "search-input",
+  "category": "stale-demo-code",
+  "summary": "The `SearchInput (remote)` inline snippet shows an `async onSearch` that awaits a 200ms fetch, filters a fixed 12-item result list and sets `open.value = true`, but the real `SearchInputSearchInputRemoteDemo.vue` runs synchronously, synthesizes 3 results from the term and never opens the popover from `onSearch` — so the rendered demo can never show the snippet's `Loading...` or `No results` states.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/search-input.zh.mdc",
+  "evidenceLine": 66,
+  "evidenceQuote": "    await new Promise(resolve => setTimeout(resolve, 200))",
+  "suggestion": "Make `SearchInputSearchInputRemoteDemo.vue` async (await a short timer, toggle `loading`, set `open = true` after results arrive, and filter a fixed candidate list so an empty-result case is reachable), then copy that implementation verbatim into the inline `code:` blocks of search-input.zh.mdc and search-input.en.mdc."
+ },
+ {
+  "component": "search-input",
+  "category": "stale-demo-code",
+  "summary": "The `后台筛选工具栏` / `Dashboard Filter Toolbar` inline snippet passes `remote` with no `@search` listener and no `:search-debounce`, teaching a no-op pattern, whereas the real `ComponentsSearchFiltersDemo.vue` wires `:search-debounce=\"180\"` and `@search=\"onSearch\"` and also filters by scope, not just keyword.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/search-input.zh.mdc",
+  "evidenceLine": 147,
+  "evidenceQuote": "      <TxSearchInput v-model=\"query\" remote placeholder=\"搜索插件 / 文档 / 任务\" />",
+  "suggestion": "Update the inline snippet in both languages to mirror the real demo: add `:search-debounce=\"180\"` and `@search=\"onSearch\"` with a small `onSearch` handler, and include the scope-aware `filteredRecords` predicate — or drop `remote` from the snippet if the point is purely local filtering."
+ },
+ {
+  "component": "markdown-view",
+  "category": "stale-demo-code",
+  "summary": "The Theme Preview inline snippet renders two bare TxMarkdownView instances inside `grid md:grid-cols-2` with an undefined `richContent`, while MarkdownViewLightDarkDemo.vue wraps each view in explicit light (#fff) and dark (#0d1117) panels — copying the snippet renders dark markdown on a light page.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/markdown-view.zh.mdc",
+  "evidenceLine": 68,
+  "evidenceQuote": "  <div class=\"grid gap-4 md:grid-cols-2\">",
+  "suggestion": "Sync the snippet with the demo in both language files: include the `richContent` definition and the two wrapper elements carrying matching light/dark backgrounds, since the component only themes its own text and never paints a surface."
+ },
+ {
+  "component": "alert",
+  "category": "stale-demo-code",
+  "summary": "The Alert Variants inline example wraps the four alerts in `<div class=\"tuff-demo-stack\">`, but the real demo uses a bare `<div>` with no class — and `tuff-demo-stack` is defined nowhere in the repo (it appears only in these two doc files).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/alert.zh.mdc",
+  "evidenceLine": 26,
+  "evidenceQuote": "    <div class=\"tuff-demo-stack\">",
+  "suggestion": "Either drop the class from the inline code in alert.zh.mdc:26 and alert.en.mdc:26 so it matches AlertAlertVariantsDemo.vue:6-11, or better, use `<TxStack :gap=\"12\">` in both the inline code and the demo file so readers see a real, spaced layout rather than a phantom utility class."
+ },
+ {
+  "component": "auto-sizer",
+  "category": "stale-demo-code",
+  "summary": "All 7 AutoSizer demo files mutate state directly and carry an undeclared `ref=\"sizerRef\"`, while every inline `code:` block in the docs wraps mutations in `sizerRef.value?.action?.(...)` — the exact pattern Best Practices tells readers to use.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/AutoSizerAutoSizerHeightDemo.vue",
+  "evidenceLine": 6,
+  "evidenceQuote": "const setTab = (next: 'a' | 'b') => {\n  active.value = next\n}",
+  "suggestion": "Update the demo files to declare `const sizerRef = ref<any>(null)` and wrap mutations in `sizerRef.value?.action?.(() => { ... })` so the rendered demo matches the published snippet, or drop the `action()` wrapper from the inline snippets and the Best Practices bullet. Also remove the dangling `ref=\"sizerRef\"` binding in the demos that keep the direct-mutation form."
+ },
+ {
+  "component": "rating",
+  "category": "stale-demo-code",
+  "summary": "The `## 样式定制` prose promises three appearances (orange / green readonly / violet compact) but the inline code block shows only one TxRating; the same truncation applies to RatingIconDemo (2 of 3) and RatingAnimationDemo (2 of 3).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/rating.zh.mdc",
+  "evidenceLine": 36,
+  "evidenceQuote": "通过 `filled-color`、`empty-color`、`hover-color`、`text-color`、`size` 与 `gap` 调整视觉样式。下面包含橙色、绿色只读与紫色紧凑三种外观。",
+  "suggestion": "Regenerate the inline `code:` blocks from the actual demo files (RatingStyleDemo/RatingIconDemo/RatingAnimationDemo) so all three variants — including the `#text` slot usage in the readonly green example — appear in the copied snippet."
+ },
+ {
+  "component": "gradual-blur",
+  "category": "stale-demo-code",
+  "summary": "The en doc's Positions snippet shows fully English body copy, but GradualBlurPositionsDemo.vue hardcodes mixed Chinese text (no i18n branch), so English readers see \"Headline content stays sharp，向上滚动时才看到模糊层。\" rendered next to an all-English code block.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/GradualBlurPositionsDemo.vue",
+  "evidenceLine": 10,
+  "evidenceQuote": "          Headline content stays sharp，向上滚动时才看到模糊层。",
+  "suggestion": "Localise the demo with `useI18n()` the way EmptyEmptyDemo.vue does (a `labels` computed keyed off `locale`), or replace all four paragraphs with the English strings used in gradual-blur.en.mdc so the rendered demo matches whichever snippet is shown."
+ },
+ {
+  "component": "flat-select",
+  "category": "stale-demo-code",
+  "summary": "FlatSelectBasicDemo.vue hardcodes the Chinese placeholder \"选择格式\" and adds a TxCard \"selected:\" readout, neither of which appears in the zh or en inline snippet; the en doc shows `placeholder=\"Select format\"` while the live demo renders Chinese.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/FlatSelectBasicDemo.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "    <TxFlatSelect v-model=\"value\" placeholder=\"选择格式\">",
+  "suggestion": "Localise the placeholder via `useI18n()` (as EmptyEmptyDemo.vue does) and either add the TxCard readout to the doc snippets or drop it from the demo so the copy-pasteable code matches what renders."
+ },
+ {
+  "component": "loading-state",
+  "category": "stale-demo-code",
+  "summary": "The \"Dashboard Recovery States\" section's inline code shows a `<TxLoadingState>`, but `ComponentsRecoveryStatesDemo` initialises `mode` to `'empty'`, so the embedded demo first paints a `TxEmptyState variant=\"no-data\"` instead.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/ComponentsRecoveryStatesDemo.vue",
+  "evidenceLine": 5,
+  "evidenceQuote": "const mode = ref<'loading' | 'empty' | 'error'>('empty')",
+  "suggestion": "On the LoadingState page either default the demo to `mode = 'loading'`, or change the inline `code:` block to show the segmented-control composition (`v-if=\"mode === 'loading'\"` plus the empty/error branches) so the code block matches what the reader actually sees."
+ },
+ {
+  "component": "steps",
+  "category": "stale-demo-code",
+  "summary": "The single demo's inline `code:` block shows only the 3-step numeric horizontal example, while `StepsStepsDemo.vue` also renders a second vertical, string-keyed TxSteps that is the only demonstration of `direction`, `size`, `status=\"completed\"`, `icon`, and `disabled`.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/StepsStepsDemo.vue",
+  "evidenceLine": 49,
+  "evidenceQuote": "      <TxSteps direction=\"vertical\" size=\"small\" active=\"review\">",
+  "suggestion": "Extend the `code:` blocks in steps.zh.mdc (lines 22-28) and steps.en.mdc to include the vertical string-keyed block, or split the demo into two `::TuffDemoWrapper` sections (`## Usage` numeric + `## Examples` vertical/string-keyed) so every rendered behaviour has matching source."
+ },
+ {
+  "component": "progress-bar",
+  "category": "stale-demo-code",
+  "summary": "The '后台运营进度 / Dashboard Operations Progress' inline snippet shows three bare `TxProgressBar`s, but the referenced `ComponentsOperationsStatusDemo` renders a full dashboard (header, TuffSwitch, TxButton, 3x TxStatCard, 3x TxStatusBadge) and uses `mask-variant=\"dashed\"` on the first bar.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/progress-bar.zh.mdc",
+  "evidenceLine": 58,
+  "evidenceQuote": "    <section class=\"grid gap-3\">",
+  "suggestion": "Either replace this entry with a ProgressBar-owned demo (e.g. a new `ProgressBarOperationsDemo`) whose snippet matches 1:1, or paste the real `ComponentsOperationsStatusDemo` progress section verbatim (including `mask-variant=\"dashed\"`) and state in prose that the surrounding dashboard chrome is omitted."
+ },
+ {
+  "component": "container",
+  "category": "stale-demo-code",
+  "summary": "The inline code shown for `ContainerContainerDemo` is a plain 2-column Left/Right grid, but the real demo file renders a titled header plus three breakpoint-driven cards with `max-width=\"680px\"`, `:padding=\"18\"` and an object gutter.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/container.zh.mdc",
+  "evidenceLine": 23,
+  "evidenceQuote": "      <TxContainer :padding=\"16\">",
+  "suggestion": "Replace the inline `code:` block in both container.zh.mdc and container.en.mdc with the actual template from apps/nexus/app/components/content/demos/ContainerContainerDemo.vue (lines 37-60), or simplify the demo to match the snippet."
+ },
+ {
+  "component": "flat-radio",
+  "category": "stale-demo-code",
+  "summary": "FlatRadioKeyboardDemo tells users of the single-select group to \"confirm with Enter/Space\", but `handleKeydown` only handles Enter/Space when `props.multiple` is true, so both keys are no-ops in single mode.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/FlatRadioKeyboardDemo.vue",
+  "evidenceLine": 20,
+  "evidenceQuote": "focus with Tab, move with Arrow keys, confirm with Enter/Space",
+  "suggestion": "Change the single-mode hint to \"focus with Tab, arrow keys select immediately\" (matching TxFlatRadio.vue:206 and the docs' keyboard table), or make Enter/Space re-select the current value in single mode."
+ },
+ {
+  "component": "icon-button",
+  "category": "stale-demo-code",
+  "summary": "The inline snippet shows a single circle star button, while IconButtonIconButtonDemo actually renders four buttons that also exercise `shape=\"square\"`, `shape=\"pill\" size=\"lg\"`, and `disabled` — three variants the revealed code never mentions.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/icon-button.zh.mdc",
+  "evidenceLine": 30,
+  "evidenceQuote": "    <TxIconButton",
+  "suggestion": "Expand the `code:` block in icon-button.zh.mdc / .en.mdc to include all four buttons from apps/nexus/app/components/content/demos/IconButtonIconButtonDemo.vue (lines 21-32), or trim the demo to the single pinned toggle."
+ },
+ {
+  "component": "cascader",
+  "category": "stale-demo-code",
+  "summary": "`CascaderCascaderDemo.vue` initializes `options` to an empty array, so the rendered demo shows two empty cascaders, while the doc's inline code block ships a full Zhejiang/Jiangsu option tree.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/CascaderCascaderDemo.vue",
+  "evidenceLine": 4,
+  "evidenceQuote": "const options = ref([])",
+  "suggestion": "Port the option tree from cascader.zh.mdc:27-55 into the demo file, and change the model refs to match the documented shapes (`value1 = ref<CascaderValue>(undefined)`, `value2 = ref<CascaderPath[]>([])`) instead of the current `ref('')`, which is not a valid `CascaderValue` for the `multiple` instance."
+ },
+ {
+  "component": "flat-input",
+  "category": "stale-demo-code",
+  "summary": "The Basic Usage inline code shows two fields (text + password) while the rendered `FlatInputFlatInputDemo` also renders a third `area :non-win=\"true\"` textarea.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/FlatInputFlatInputDemo.vue",
+  "evidenceLine": 30,
+  "evidenceQuote": "    <FlatInput v-model=\"note\" :placeholder=\"labels.note\" area :non-win=\"true\" />",
+  "suggestion": "Add the `note` ref and the textarea line to the inline `code:` block in flat-input.zh.mdc:22-32 and flat-input.en.mdc:22-32 so the copyable snippet matches what the reader sees rendered."
+ },
+ {
+  "component": "switch",
+  "category": "stale-demo-code",
+  "summary": "The Custom Colors inline code shows two switches overridden via `.custom-switch--success/.custom-switch--warning` classes, while the real demo renders three switches (success/warning/violet) styled through a `--switch-demo-color` CSS variable on `:deep(.tuff-switch.is-active)`.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/SwitchCustomColorDemo.vue",
+  "evidenceLine": 56,
+  "evidenceQuote": ".switch-custom-color-demo__item :deep(.tuff-switch.is-active) {",
+  "suggestion": "Replace the inline snippet in switch.zh.mdc:125-149 / switch.en.mdc:125-149 with the demo's actual pattern (per-wrapper `--switch-demo-color` custom property + `:deep(.tuff-switch.is-active)`), including the third violet example, so the documented override technique is the one shipped."
+ },
+ {
+  "component": "switch",
+  "category": "stale-demo-code",
+  "summary": "The \"Labels Before and After\" inline code declares `const autoSync = ref(true)` but never uses it and renders a single label row, while the real demo renders a second card row bound to `autoSync`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/switch.zh.mdc",
+  "evidenceLine": 107,
+  "evidenceQuote": "  const autoSync = ref(true)",
+  "suggestion": "Add the second `<label>` row (label + state text + `<TuffSwitch v-model=\"autoSync\" />`) to the inline snippet in both zh/en, or drop the unused `autoSync` ref — as written the snippet has a dangling variable and does not match the two-row demo."
+ },
+ {
+  "component": "stat-card",
+  "category": "stale-demo-code",
+  "summary": "The inline snippet for `ComponentsOperationsStatusDemo` shows one stat card, one badge and one progress bar, while the rendered 262-line demo is a full panel with a `TuffSwitch` header, three progress-variant cards and three progress bars using `flow-effect`, `indicator-effect` and `mask-variant`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/stat-card.zh.mdc",
+  "evidenceLine": 179,
+  "evidenceQuote": "::TuffDemoWrapper{demo=\"ComponentsOperationsStatusDemo\" code-lang=\"vue\" title=\"运营状态面板\" description=\"指标卡、状态徽标与进度条的后台组合示例。\"}",
+  "suggestion": "Either sync the inline `code:` block with the real demo (at least the three metric cards it describes in the prose) or drop the inline snippet and let TuffDemoWrapper source the code from the demo file."
+ },
+ {
+  "component": "transfer",
+  "category": "stale-demo-code",
+  "summary": "The `ComponentsPermissionOrchestrationDemo` prose says the panel splits work across `TxTree`, `TxTreeSelect`, `TxTimeline` and `TxTransfer`, but the inline snippet contains only `<TxTransfer>`, while the real 362-line demo renders all four.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/transfer.zh.mdc",
+  "evidenceLine": 55,
+  "evidenceQuote": "::TuffDemoWrapper{demo=\"ComponentsPermissionOrchestrationDemo\" code-lang=\"vue\" title=\"权限编排面板\" description=\"截图验证的资源授权穿梭框。\"}",
+  "suggestion": "Either trim the prose to describe only the transfer portion, or extend the inline snippet with the `TxTree` / `TxTreeSelect` / `TxTimeline` skeleton so the code matches what the reader sees rendered."
+ }
+]

@@ -11,6 +11,8 @@ verified: true
 
 # Input 输入
 
+轻量单行 / 多行文本输入，用于表单行、工具栏和列表筛选。需要 Enter 触发搜索或防抖远程搜索时改用 `TxSearchInput`；需要带步进按钮的数值录入时用 `TxNumberInput`。
+
 ## 基础用法
 
 ### 基础输入
@@ -89,7 +91,7 @@ code: |
 
 ### Props
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: modelValue / v-model
@@ -128,12 +130,16 @@ rows:
     description: '后缀图标类名'
     type: 'string'
     default: "''"
+  - name: capsLockText
+    description: '密码输入框大写锁定提示的可本地化文案/title；通过 role="status" 播报。'
+    type: 'string'
+    default: "'CapsLock is on'"
 ---
 :::
 
 ### Events
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: update:modelValue
@@ -161,7 +167,7 @@ rows:
 
 ### Exposes
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: focus
@@ -193,7 +199,7 @@ rows:
 
 ### Slots
 
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: prefix

@@ -11,8 +11,7 @@ verified: true
 
 # Tooltip 提示
 
-> 小而轻的提示，不打断流程但能提供必要信息。  
-> **状态**：Beta
+> 小而轻的提示，不打断流程但能提供必要信息。
 
 Tooltip 是 `TxBaseAnchor` 的语义封装：
 - Tooltip 负责触发和提示内容；
@@ -119,7 +118,7 @@ code: |
 | `keepAliveContent` | `boolean` | `false` | 透传给 `TxBaseAnchor`，关闭后仍保留浮层内容挂载。 |
 | `closeOnClickOutside` | `boolean` | `trigger === 'click'` | 覆盖点击外部关闭行为；其次使用 anchor 配置，click 模式默认 `true`。 |
 | `toggleOnReferenceClick` | `boolean` | `trigger === 'click'` | 覆盖点击 reference 切换行为；其次使用 anchor 配置，click 模式默认 `true`。 |
-| `anchor` | `Partial<BaseAnchorProps>` | `{}` | 透传给 `TxBaseAnchor` 的配置；tooltip 会先提供定位、箭头、面板和动画默认值。 |
+| `anchor` | `Partial<TooltipAnchorProps>` | `{}` | 透传给 `TxBaseAnchor` 的配置；`modelValue` / `disabled` 由 Tooltip 自身管理（请用 `v-model` / `disabled` prop 设置），不能通过 `anchor` 传入；tooltip 会先提供定位、箭头、面板和动画默认值。 |
 
 ### Events
 

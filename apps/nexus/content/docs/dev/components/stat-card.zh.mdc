@@ -2,6 +2,9 @@
 title: "StatCard 指标卡片"
 description: "用于展示核心数字、趋势洞察与进度摘要的指标卡片。"
 category: Data
+status: beta
+since: 1.0.0
+tags: [stat, metric, dashboard]
 syncStatus: reviewed
 verified: true
 ---
@@ -180,7 +183,7 @@ code: |
 ---
 code: |
   <template>
-    <section class="grid gap-3">
+    <section class="grid gap-3" style="grid-template-columns: repeat(3, minmax(0, 1fr));">
       <TxStatCard
         variant="progress"
         value="99.9%"
@@ -189,8 +192,22 @@ code: |
         :progress="99"
         icon-class="i-carbon-cloud-monitoring text-[var(--tx-color-success)]"
       />
-      <TxStatusBadge text="审阅完成" status="success" size="sm" />
-      <TxProgressBar :percentage="86" status="success" show-text />
+      <TxStatCard
+        variant="progress"
+        :value="18"
+        label="待处理队列"
+        meta="关注"
+        :progress="64"
+        icon-class="i-carbon-queued text-[var(--tx-color-warning)]"
+      />
+      <TxStatCard
+        variant="progress"
+        :value="2"
+        label="告警"
+        meta="阻塞"
+        :progress="22"
+        icon-class="i-carbon-warning-alt text-[var(--tx-color-danger)]"
+      />
     </section>
   </template>
 ---

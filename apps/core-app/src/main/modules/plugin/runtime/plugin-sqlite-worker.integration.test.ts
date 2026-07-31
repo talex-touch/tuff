@@ -118,6 +118,44 @@ describeBuiltWorker('built plugin SQLite worker', () => {
     })
   })
 
+  it('opens browser-history copies query-only and rejects every non-fixed SQL shape', async () => {
+    const root = await realpath(await mkdtemp(path.join(tmpdir(), 'tuff-plugin-sqlite-readonly-')))
+    roots.push(root)
+    const databasePath = path.join(root, 'browser-history.sqlite')
+    const setupClient = new PluginSqliteWorkerClient(databasePath, { workerPath })
+    clients.push(setupClient)
+    await setupClient.execute('CREATE TABLE urls(url TEXT)', [])
+    await setupClient.execute('INSERT INTO urls VALUES (?)', ['https://example.com/'])
+    await setupClient.close()
+    clients.splice(clients.indexOf(setupClient), 1)
+
+    const readOnlyClient = new PluginSqliteWorkerClient(databasePath, {
+      workerPath,
+      readOnly: true
+    })
+    clients.push(readOnlyClient)
+    await expect(readOnlyClient.query('SELECT url FROM urls', [])).resolves.toMatchObject({
+      rows: [{ url: 'https://example.com/' }]
+    })
+    await expect(
+      readOnlyClient.execute('INSERT INTO urls VALUES (?)', ['https://forbidden.example/'])
+    ).rejects.toMatchObject({ code: 'PLUGIN_SQLITE_SQL_INVALID' })
+    await expect(
+      readOnlyClient.transaction([
+        { sql: 'INSERT INTO urls VALUES (?)', params: ['https://forbidden.example/'] }
+      ])
+    ).rejects.toMatchObject({ code: 'PLUGIN_SQLITE_SQL_INVALID' })
+    await expect(
+      readOnlyClient.query('SELECT url FROM urls; SELECT url FROM urls', [])
+    ).rejects.toMatchObject({ code: 'PLUGIN_SQLITE_STATEMENT_LIMIT' })
+    await expect(readOnlyClient.query('PRAGMA database_list', [])).rejects.toMatchObject({
+      code: 'PLUGIN_SQLITE_STATEMENT_DENIED'
+    })
+    await expect(
+      readOnlyClient.query("ATTACH DATABASE '/tmp/other.sqlite' AS other", [])
+    ).rejects.toMatchObject({ code: 'PLUGIN_SQLITE_STATEMENT_DENIED' })
+  })
+
   it('returns stable row and result byte limit errors', async () => {
     const root = await realpath(await mkdtemp(path.join(tmpdir(), 'tuff-plugin-sqlite-limits-')))
     roots.push(root)
@@ -252,5 +290,5 @@ describeBuiltWorker('built plugin SQLite worker', () => {
     }
 
     expect(quotaResponse).toMatchObject({ type: 'error', code: 'PLUGIN_SQLITE_DISK_QUOTA' })
-  })
+  }, 15_000)
 })

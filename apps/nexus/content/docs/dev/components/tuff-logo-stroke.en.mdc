@@ -2,6 +2,8 @@
 title: "TuffLogoStroke"
 description: "Animated SVG stroke treatment for the Tuff logo with once, breathe, hover, and loop modes."
 category: Effects
+status: beta
+since: 1.0.0
 tags: [logo, svg, animation]
 syncStatus: reviewed
 verified: true

@@ -52,7 +52,7 @@ code: |
 
 后台授权场景里，`TxTransfer` 只负责“可分配资源 ↔ 已授权资源”的受控移动；权限域由 `TxTree` 选择，归属团队由 `TxTreeSelect` 选择，审计进度由 `TxTimeline` 呈现，这样每个组件职责都更清晰。
 
-::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的资源授权穿梭框。"}
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="权限编排面板" description="截图验证的资源授权穿梭框。"}
 ---
 code: |
   <script setup lang="ts">
@@ -64,6 +64,7 @@ code: |
     { key: 'publish-notes', label: '发布日志' },
     { key: 'manage-assets', label: '管理资源' },
     { key: 'rotate-keys', label: '轮换密钥', disabled: true },
+    { key: 'view-billing', label: '查看账单' },
   ]
   </script>
 
@@ -75,6 +76,8 @@ code: |
       filterable
       filter-placeholder="筛选资源"
       empty-text="暂无资源"
+      add-aria-label="添加选中资源"
+      remove-aria-label="移除选中资源"
     />
   </template>
 ---

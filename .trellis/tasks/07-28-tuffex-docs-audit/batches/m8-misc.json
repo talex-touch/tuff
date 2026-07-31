@@ -1,0 +1,137 @@
+[
+ {
+  "component": "typing-indicator",
+  "category": "stale-source-ref",
+  "summary": "`<TuffDocSourceLink />` is used with no `path` prop, so it auto-derives `packages/tuffex/packages/components/src/typing-indicator/index.ts` from the route slug — a directory that does not exist, since TxTypingIndicator lives in `src/chat/`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/typing-indicator.zh.mdc",
+  "evidenceLine": 127,
+  "evidenceQuote": "<TuffDocSourceLink />",
+  "suggestion": "TuffDocSourceLink.vue:16-22 builds `packages/tuffex/packages/components/src/${slug}/index.ts` from the `/docs/dev/components/:slug` route, and `ls packages/tuffex/packages/components/src/*typing*` returns no match. Both the 'View source' GitHub link and the printed path are wrong (404). Pass the explicit path on both locales: `<TuffDocSourceLink path=\"packages/tuffex/packages/components/src/chat/index.ts\" />` in typing-indicator.zh.mdc:127 and typing-indicator.en.mdc:127. Check other sub-component doc pages (chat-composer, avatar-variants) for the same auto-derivation trap."
+ },
+ {
+  "component": "timeline",
+  "category": "stale-source-ref",
+  "summary": "Both timeline docs cite a screenshot at `.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`, but the `.codex-screenshots/` directory does not exist anywhere in the repo and is not gitignored.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/timeline.zh.mdc",
+  "evidenceLine": 125,
+  "evidenceQuote": "- 截图:`.codex-screenshots/nexus-timeline-permission-orchestration-demo-playwright-2026-05-28.png`。",
+  "suggestion": "Either commit the screenshot (and gitignore-exempt the directory) or drop the screenshot bullet from timeline.zh.mdc:125 and timeline.en.mdc:125. Note this pattern is repo-wide (tag-input, cascader, transfer, segmented-slider docs cite the same missing directory), so a sweep is warranted."
+ },
+ {
+  "component": "spinner",
+  "category": "broken-mdc-block",
+  "summary": "The `后台行内等待` / `Dashboard Inline Waiting` demo block opens with a 2-colon `::TuffDemoWrapper` but closes with a 3-colon `:::`, unlike every other demo block in the same file which uses `:::`/`:::`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/spinner.zh.mdc",
+  "evidenceLine": 127,
+  "evidenceQuote": "::TuffDemoWrapper{demo=\"ComponentsFeedbackTaskCenterDemo\" code-lang=\"vue\" title=\"后台任务反馈中心\" description=\"Spinner 与 Toast / Tooltip / LoadingOverlay 的截图验证组合。\"}",
+  "suggestion": "Change line 127 of spinner.zh.mdc and line 127 of spinner.en.mdc to `:::TuffDemoWrapper{...}` so the opening fence matches the `:::` closer on line 137; otherwise the YAML `code:` payload and the closing fence risk rendering as literal text/thematic breaks instead of a demo."
+ },
+ {
+  "component": "spinner",
+  "category": "behavior-mismatch",
+  "summary": "The Interaction Contract claims the spinner inherits ambient text color via `currentColor`, but `.tx-spinner` hard-sets `color: var(--tx-text-color-secondary, #909399)` on its own root, so a parent's `color` never tints it.",
+  "evidenceFile": "packages/tuffex/packages/components/src/spinner/src/TxSpinner.vue",
+  "evidenceLine": 151,
+  "evidenceQuote": "  color: var(--tx-text-color-secondary, #909399);",
+  "suggestion": "Either change the rule to `color: inherit` (or `var(--tx-spinner-color, currentColor)`) so ambient color really cascades, or fix the bullet in spinner.zh.mdc:121 / spinner.en.mdc:121 to say the spinner defaults to the secondary text color and must be tinted by setting `color` on the `TxSpinner` element itself (e.g. `<TxSpinner style=\"color: var(--tx-color-primary)\" />`)."
+ },
+ {
+  "component": "dialog",
+  "category": "stale-source-ref",
+  "summary": "`BottomDialogProps.stay` and `.icon` carry JSDoc promising behavior the template never implements (auto-close timer, icon rendering); the published docs correctly call them \"reserved\"/\"not rendered\", so IDE intellisense contradicts the docs.",
+  "evidenceFile": "packages/tuffex/packages/components/src/dialog/src/types.ts",
+  "evidenceLine": 96,
+  "evidenceQuote": "   * Duration in milliseconds before the dialog auto-closes.\n   * Set to 0 to disable auto-close.",
+  "suggestion": "Update both JSDoc blocks to match dialog.en.mdc:193/196 (\"Reserved auto-close duration prop; current runtime does not start a timer from `stay` alone\" and \"Legacy icon class prop; not rendered by the current template\"), mark them `@deprecated`, or implement them in TxBottomDialog.vue."
+ },
+ {
+  "component": "loading-overlay",
+  "category": "broken-mdc-fence",
+  "summary": "The `ComponentsFeedbackTaskCenterDemo` block opens with a 2-colon `::TuffDemoWrapper` but is closed with a 3-colon `:::` at line 96 in both zh and en, leaving an unmatched container fence that swallows the trailing `## 最佳实践` / `## 审阅说明` / `## Source` sections.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/loading-overlay.zh.mdc",
+  "evidenceLine": 84,
+  "evidenceQuote": "::TuffDemoWrapper{demo=\"ComponentsFeedbackTaskCenterDemo\" code-lang=\"vue\" title=\"后台任务反馈中心\" description=\"局部 LoadingOverlay 与 Toast / Tooltip / Spinner 的截图验证组合。\"}",
+  "suggestion": "Change line 84 to `:::TuffDemoWrapper{...}` so the opening fence matches the `:::` closer on line 96, matching the two demo blocks already at lines 24 and 39 in the same file. Apply the identical fix to loading-overlay.en.mdc:84."
+ },
+ {
+  "component": "tree-select",
+  "category": "stale-source-ref",
+  "summary": "The Review Notes cite `.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png` as the verification artifact, but neither that file nor the `.codex-screenshots/` directory exists anywhere in the repo (and it is not gitignored), so the claimed screenshot evidence is unverifiable.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/tree-select.zh.mdc",
+  "evidenceLine": 208,
+  "evidenceQuote": "- 截图参考：`.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`。",
+  "suggestion": "Either commit the screenshot to a real tracked path (e.g. `apps/nexus/public/docs/...`) and update the reference in both tree-select.zh.mdc:208 and tree-select.en.mdc:208, or remove the screenshot bullet. The same dangling `.codex-screenshots/` path appears in 18 component docs, so this is worth fixing corpus-wide in one pass."
+ },
+ {
+  "component": "floating",
+  "category": "doc-behavior-mismatch",
+  "summary": "Both language docs state pointer coordinates are measured from the container's top-left corner, but `syncPointerOffset()` subtracts `rect.width/2` and `rect.height/2`, i.e. the origin is the container **centre** — so readers computing expected offsets get double the real value and the wrong sign on the left/top half.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/floating.en.mdc",
+  "evidenceLine": 66,
+  "evidenceQuote": "- Pointer coordinates are measured relative to the floating container's top-left corner.",
+  "suggestion": "Change floating.en.mdc:66 and floating.zh.mdc:66 to say the offset is measured from the container centre (`TxFloating.vue:92-93`: `pointerOffset.x = pointerClient.x - rect.left - rect.width / 2`). The test suite already names this contract explicitly ('keeps elements at rest while the pointer sits on the container centre')."
+ },
+ {
+  "component": "stack",
+  "category": "invalid-demo-usage",
+  "summary": "The \"行内堆叠 / Inline Stack\" example nests `<TxStack>` inside a `<p>`, but TxStack's root is a `<div>` (TxStack.vue:30) — invalid HTML that browsers fix by closing the `<p>` early, so the example does not render as the inline flow it demonstrates.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/stack.zh.mdc",
+  "evidenceLine": 51,
+  "evidenceQuote": "  <p>\n    状态：\n    <TxStack inline direction=\"horizontal\" align=\"center\" gap=\"0.5rem\">",
+  "suggestion": "Replace `<p>` with `<span>` (or a `<div>` with `display: inline`) in both stack.zh.mdc:51 and stack.en.mdc:51, or give TxStack a `tag`/`as` prop so `inline` can render a `<span>` root and legitimately live inside a paragraph."
+ },
+ {
+  "component": "rating",
+  "category": "invalid-demo-usage",
+  "summary": "`RatingRatingDemo.vue` binds `ref('')` (a string) to `v-model` of a `number` `modelValue` while `show-text` is on, which crashes rendering with `rating.toFixed is not a function`.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/RatingRatingDemo.vue",
+  "evidenceLine": 4,
+  "evidenceQuote": "const score = ref('')",
+  "suggestion": "Either delete the file (no doc references it — it is an orphan alongside GlassSurfaceControlsDemo.vue) or change it to `const score = ref(3.5)`. Verified by probe: mounting TxRating with `modelValue: ''` and `showText: true` throws `$setup.rating.toFixed is not a function`."
+ },
+ {
+  "component": "checkbox",
+  "category": "stale-source-ref",
+  "summary": "The `## Source` / Review Notes sections claim `checkbox.test.ts` verifies keyboard toggles, but the test file contains no keydown/keyup trigger at all (only `trigger('click')`).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/checkbox.en.mdc",
+  "evidenceLine": 188,
+  "evidenceQuote": "- Coverage: `packages/tuffex/packages/components/src/checkbox/__tests__/checkbox.test.ts` verifies click and keyboard toggles, ARIA labelling, slot precedence, variant classes, and disabled blocking.",
+  "suggestion": "Either add a keyboard test to `checkbox.test.ts` (Enter/Space on the native button, plus a disabled case) or drop 'keyboard toggles' from the coverage claim in both checkbox.en.mdc:188 and checkbox.zh.mdc:188 and instead note that keyboard activation is inherited from the native `<button>` element."
+ },
+ {
+  "component": "outline-border",
+  "category": "misleading-demo",
+  "summary": "The Mask Clipping demo pairs `variant=\"ring\"` with `clip-shape=\"hexagon\"`, but the ring is a `box-shadow` on the root (which keeps `border-radius: 9999px` from the default `shape=\"circle\"`) while only the inner content layer is hexagon-masked, so the outline does not follow the hexagon.",
+  "evidenceFile": "apps/nexus/app/components/content/demos/OutlineBorderMaskClipDemo.vue",
+  "evidenceLine": 6,
+  "evidenceQuote": "    clip-mode=\"mask\"",
+  "suggestion": "Either drop the ring from this demo (`variant=\"border\"` has the same problem — use no outline, or a hexagon-shaped drop-shadow filter) or state in the doc's Mask note that ring/border outlines always follow `border-radius` and cannot trace `clipShape=\"hexagon\"`. Update the identical snippet in outline-border.zh.mdc:40-48 and .en.mdc:40-48."
+ },
+ {
+  "component": "outline-border",
+  "category": "undocumented-behavior",
+  "summary": "`clipShape=\"squircle\"` combined with `clipMode=\"clipPath\"` silently falls back to `inset(0 round var(--tx-outline-radius))` (a plain rounded rect), but the docs only call out the rounded/rect fallback and advertise `squircle` as a first-class clip shape.",
+  "evidenceFile": "packages/tuffex/packages/components/src/outline-border/src/TxOutlineBorder.vue",
+  "evidenceLine": 148,
+  "evidenceQuote": "  return 'inset(0 round var(--tx-outline-radius))'",
+  "suggestion": "Add a bullet to the Interaction Contract in both languages: `clipShape=\"squircle\"` is only honoured by `clipMode=\"mask\"`; under `clipPath` it degrades to a rounded inset. Alternatively emit an actual squircle `path()` in `resolveClipPath`."
+ },
+ {
+  "component": "container",
+  "category": "css-precedence",
+  "summary": "`fluid` and `responsive` used together silently cancel `fluid`: `.tx-container.is-responsive` has equal specificity to `.is-fluid` but is declared later, so max-width is re-capped at 640/768/1024/1280px instead of `none`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/container/src/TxContainer.vue",
+  "evidenceLine": 73,
+  "evidenceQuote": ".tx-container.is-responsive {",
+  "suggestion": "Either scope the responsive rules with `.tx-container.is-responsive:not(.is-fluid)` so `fluid` always wins, or document in the props table that `fluid` is ignored when `responsive` is set."
+ },
+ {
+  "component": "switch",
+  "category": "stale-source-ref",
+  "summary": "Review Notes claim `switch.test.ts` covers \"keyboard emissions\" and \"disabled tabindex state\", but the test file has no Enter/Space keydown case and instead asserts tabindex is never rendered.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/switch.zh.mdc",
+  "evidenceLine": 246,
+  "evidenceQuote": "- **实测覆盖:** `switch.test.ts` 覆盖 active aria 状态、尺寸 class、点击与键盘派发、禁用阻断，以及禁用时的 tabindex/aria 状态。",
+  "suggestion": "Either add real keyboard cases to switch.test.ts (native button click semantics for Enter/Space) or correct the coverage line in both zh/en to say the suite covers aria state, size classes, click emission, and disabled blocking only."
+ }
+]

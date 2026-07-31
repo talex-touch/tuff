@@ -1,12 +1,11 @@
-const { plugin, clipboard, logger, permission, TuffItemBuilder } = globalThis
-const { Buffer } = require('node:buffer')
-const crypto = require('node:crypto')
+const { plugin, clipboard, logger, TuffItemBuilder } = globalThis
 
 const PLUGIN_NAME = 'touch-text-tools'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
+const ICON = { type: 'class', value: 'i-ri-text' }
 const COPY_ACTION_ID = 'copy'
 const BASE64_PATTERN = /^[\d+/a-z]+={0,2}$/i
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 
 function getQueryText(query) {
   if (typeof query === 'string')
@@ -18,50 +17,59 @@ function normalizeText(value) {
   return String(value ?? '').trim()
 }
 
-function truncateText(value, max = 96) {
-  const text = normalizeText(value)
-  if (!text)
-    return ''
-  if (text.length <= max)
-    return text
-  return `${text.slice(0, max - 1)}…`
-}
-
-async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
-  }
-
-  try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission)
-      return { granted: true }
-    const granted = await permission.request(permissionId, reason)
-    return granted
-      ? { granted: true }
-      : {
-          granted: false,
-          reason: 'permission-denied',
-        }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-text-tools] Failed to request permission', error)
-    return {
-      granted: false,
-      reason: 'permission-request-failed',
-    }
-  }
-}
-
 function isProbablyBase64(text) {
   if (!text)
     return false
   if (text.length % 4 !== 0)
     return false
   return BASE64_PATTERN.test(text)
+}
+
+function bytesToBase64(value) {
+  const bytes = new Uint8Array(value)
+  let output = ''
+  for (let index = 0; index < bytes.length; index += 3) {
+    const a = bytes[index]
+    const hasB = index + 1 < bytes.length
+    const hasC = index + 2 < bytes.length
+    const b = hasB ? bytes[index + 1] : 0
+    const c = hasC ? bytes[index + 2] : 0
+    const chunk = (a << 16) | (b << 8) | c
+    output += BASE64_ALPHABET[(chunk >>> 18) & 63]
+    output += BASE64_ALPHABET[(chunk >>> 12) & 63]
+    output += hasB ? BASE64_ALPHABET[(chunk >>> 6) & 63] : '='
+    output += hasC ? BASE64_ALPHABET[chunk & 63] : '='
+  }
+  return output
+}
+
+function base64ToBytes(value) {
+  const normalized = String(value)
+  const bytes = []
+  for (let index = 0; index < normalized.length; index += 4) {
+    const a = BASE64_ALPHABET.indexOf(normalized[index])
+    const b = BASE64_ALPHABET.indexOf(normalized[index + 1])
+    const c = normalized[index + 2] === '=' ? 0 : BASE64_ALPHABET.indexOf(normalized[index + 2])
+    const d = normalized[index + 3] === '=' ? 0 : BASE64_ALPHABET.indexOf(normalized[index + 3])
+    if (a < 0 || b < 0 || c < 0 || d < 0)
+      throw new TypeError('INVALID_BASE64')
+    const chunk = (a << 18) | (b << 12) | (c << 6) | d
+    bytes.push((chunk >>> 16) & 0xFF)
+    if (normalized[index + 2] !== '=')
+      bytes.push((chunk >>> 8) & 0xFF)
+    if (normalized[index + 3] !== '=')
+      bytes.push(chunk & 0xFF)
+  }
+  return Uint8Array.from(bytes)
+}
+
+async function digestHex(algorithm, text) {
+  if (typeof globalThis.crypto?.digest !== 'function')
+    throw new TypeError('CRYPTO_DIGEST_UNAVAILABLE')
+  const digest = new Uint8Array(
+    await globalThis.crypto.digest(algorithm, new TextEncoder().encode(text)),
+  )
+  return Array.from(digest, value => value.toString(16).padStart(2, '0')).join('')
 }
 
 function toTitleCase(text) {
@@ -115,7 +123,7 @@ const pluginLifecycle = {
     try {
       const rawText = normalizeText(getQueryText(query))
       if (!rawText.trim()) {
-        plugin.feature.clearItems()
+        await plugin.feature.clearItems()
         return true
       }
 
@@ -162,7 +170,7 @@ const pluginLifecycle = {
         featureId,
         title: 'Base64 编码',
         subtitle: '复制编码后的文本',
-        output: Buffer.from(rawText, 'utf8').toString('base64'),
+        output: bytesToBase64(new TextEncoder().encode(rawText)),
       })
 
       const base64Candidate = rawText.replace(/\s+/g, '')
@@ -172,7 +180,7 @@ const pluginLifecycle = {
           featureId,
           title: 'Base64 解码',
           subtitle: '复制解码后的文本',
-          output: Buffer.from(base64Candidate, 'base64').toString('utf8'),
+          output: new TextDecoder().decode(base64ToBytes(base64Candidate)),
         })
       }
 
@@ -238,7 +246,7 @@ const pluginLifecycle = {
         featureId,
         title: 'MD5',
         subtitle: '复制 MD5 哈希',
-        output: crypto.createHash('md5').update(rawText).digest('hex'),
+        output: await digestHex('MD5', rawText),
       })
 
       addCopyItem(items, seen, {
@@ -246,7 +254,7 @@ const pluginLifecycle = {
         featureId,
         title: 'SHA1',
         subtitle: '复制 SHA1 哈希',
-        output: crypto.createHash('sha1').update(rawText).digest('hex'),
+        output: await digestHex('SHA-1', rawText),
       })
 
       addCopyItem(items, seen, {
@@ -254,25 +262,34 @@ const pluginLifecycle = {
         featureId,
         title: 'SHA256',
         subtitle: '复制 SHA256 哈希',
-        output: crypto.createHash('sha256').update(rawText).digest('hex'),
+        output: await digestHex('SHA-256', rawText),
       })
 
-      plugin.feature.clearItems()
-      plugin.feature.pushItems(items)
+      if (signal?.aborted)
+        return true
+
+      await plugin.feature.clearItems()
+      await plugin.feature.pushItems(items)
       return true
     }
-    catch (error) {
-      logger?.error?.('[touch-text-tools] Failed to process feature:', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          id: `${featureId}-error`,
-          featureId,
-          title: '加载失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
-        }),
-      ])
-      return true
+    catch {
+      logger?.error?.('[touch-text-tools] Failed to handle feature')
+      try {
+        await plugin.feature.clearItems()
+        await plugin.feature.pushItems([
+          buildInfoItem({
+            id: `${featureId}-error`,
+            featureId,
+            title: '加载失败',
+            subtitle: '插件运行失败',
+          }),
+        ])
+        return true
+      }
+      catch {
+        logger?.error?.('[touch-text-tools] Failed to publish fallback')
+        return false
+      }
     }
   },
 
@@ -290,17 +307,6 @@ const pluginLifecycle = {
       if (typeof payloadText !== 'string')
         return
 
-      const permissionResult = await ensurePermission('clipboard.write', '需要剪贴板写入权限以复制文本工具结果')
-      if (!permissionResult.granted) {
-        return {
-          externalAction: true,
-          success: false,
-          status: 'blocked',
-          reason: permissionResult.reason || 'permission-denied',
-          message: '缺少 clipboard.write 权限',
-        }
-      }
-
       if (typeof clipboard?.writeText !== 'function') {
         return {
           externalAction: true,
@@ -312,30 +318,21 @@ const pluginLifecycle = {
       }
 
       await clipboard.writeText(payloadText)
-      logger?.log?.('[touch-text-tools] Copied to clipboard')
-
-      const isFeatureExecution = Boolean(item.meta?.featureId)
-      if (!isFeatureExecution)
-        plugin.box.hide()
+      logger?.info?.('[touch-text-tools] Copied to clipboard')
       return { externalAction: true, status: 'started' }
     }
     catch (error) {
-      logger?.error?.('[touch-text-tools] Action failed', error)
+      logger?.error?.('[touch-text-tools] Action failed')
+      const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
       return {
         externalAction: true,
         success: false,
         status: 'blocked',
-        reason: 'clipboard-write-failed',
-        message: error?.message || '复制失败',
+        reason: permissionDenied ? 'permission-denied' : 'clipboard-write-failed',
+        message: permissionDenied ? '缺少 clipboard.write 权限' : '复制失败',
       }
     }
   },
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    isProbablyBase64,
-    toTitleCase,
-  },
-}
+module.exports = pluginLifecycle

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StatCardProps } from './types.ts'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 
 defineOptions({
   name: 'TxStatCard',
@@ -11,6 +11,12 @@ const props = withDefaults(defineProps<StatCardProps>(), {
   clickable: false,
   variant: 'default',
 })
+
+// Name the role="group" from its own visible label so each card is
+// distinguishable and localizable, rather than every card announcing the same
+// hardcoded "Stat card". Both label nodes (top/bottom) are mutually exclusive,
+// so they can share this id — exactly one is ever in the DOM.
+const labelId = useId()
 
 const isProgressVariant = computed(() => {
   if (props.variant === 'progress')
@@ -212,7 +218,8 @@ watch(
       'tx-stat-card--progress': isProgressVariant,
     }"
     role="group"
-    aria-label="Stat card"
+    :aria-label="ariaLabel || undefined"
+    :aria-labelledby="ariaLabel ? undefined : labelId"
   >
     <div v-if="iconClass && !isProgressVariant" class="tx-stat-card__icon-layer" aria-hidden="true">
       <i ref="iconRef" class="tx-stat-card__icon" :class="iconClass" />
@@ -231,7 +238,7 @@ watch(
     </div>
 
     <div class="tx-stat-card__content">
-      <div v-if="hasInsight || isProgressVariant" class="tx-stat-card__label tx-stat-card__label--top">
+      <div v-if="hasInsight || isProgressVariant" :id="labelId" class="tx-stat-card__label tx-stat-card__label--top">
         <slot name="label">
           {{ label }}
         </slot>
@@ -243,7 +250,7 @@ watch(
         </slot>
       </div>
 
-      <div v-if="!hasInsight && !isProgressVariant" class="tx-stat-card__label">
+      <div v-if="!hasInsight && !isProgressVariant" :id="labelId" class="tx-stat-card__label">
         <slot name="label">
           {{ label }}
         </slot>
@@ -350,8 +357,9 @@ watch(
   cursor: pointer;
 }
 
+/* Only clickable cards signal interactivity: the pointer cursor lives on
+   .tx-stat-card--clickable, not the generic hover, so a static card doesn't imply a click. */
 .tx-stat-card:hover {
-  cursor: pointer;
   --fake-opacity: 0.75;
   border-color: var(--tx-border-color, #dcdfe6);
 }

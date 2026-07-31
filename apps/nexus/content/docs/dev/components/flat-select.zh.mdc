@@ -10,7 +10,7 @@ verified: true
 ---
 # FlatSelect 平铺下拉选择器
 
-ComboBox 风格的下拉选择器（`TxFlatSelect` + `TxFlatSelectItem`）。点击触发器后，选项列表覆盖触发器展开，选中项锚定在触发器位置，通过 `clip-path` 实现丝滑的展开/收起动画。
+`TxFlatSelect` 用于选项少而稳定（约 3–6 个）的单选——设置页、工具栏里那种一眼能看完的下拉。它以 ComboBox 方式让选项覆盖触发器、当前选中项留在原位，不做搜索、远程数据或分组；需要这些能力或选项更多时，改用 `TxSelect`。
 
 ## 基础用法
 
@@ -146,16 +146,16 @@ code: |
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |--------|------|------|--------|
-| modelValue / v-model | 绑定值 | `string \| number` | `''` |
-| placeholder | 占位文本 | `string` | `''` |
-| disabled | 是否禁用 | `boolean` | `false` |
+| modelValue / v-model | 当前选中值；与某个 `TxFlatSelectItem` 的 `value` 匹配，未选中时显示占位。 | `string \| number` | `''` |
+| placeholder | 未选中时触发器显示的文本。 | `string` | `''` |
+| disabled | 整组禁用：触发器变为 disabled button，下拉不再展开，键盘导航同时失效。 | `boolean` | `false` |
 
 #### Events
 
 | 事件名 | 说明 | 回调参数 |
 |--------|------|----------|
-| update:modelValue | 值更新时触发 | `(value: string \| number) => void` |
-| change | 值变化时触发 | `(value: string \| number) => void` |
+| update:modelValue | 提交新值时触发，用于 v-model。 | `(value: string \| number) => void` |
+| change | 与 `update:modelValue` 同时触发（含 ArrowUp/ArrowDown 键盘导航提交）；两者当前语义一致，选其一监听即可。 | `(value: string \| number) => void` |
 
 #### Slots
 
@@ -169,9 +169,9 @@ code: |
 
 | 属性名 | 说明 | 类型 | 默认值 |
 |--------|------|------|--------|
-| value | 当前项的值 | `string \| number` | - |
-| label | 显示文本 | `string` | - |
-| disabled | 是否禁用（单项） | `boolean` | `false` |
+| value | 选项值；必须稳定且唯一，父级注册表按它匹配选中项。 | `string \| number` | - |
+| label | 触发器与选项显示的文本；用 default 插槽可覆盖。 | `string` | - |
+| disabled | 禁用单个选项：不可选，键盘导航会跳过。 | `boolean` | `false` |
 
 #### Slots
 

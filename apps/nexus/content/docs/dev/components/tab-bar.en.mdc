@@ -2,6 +2,8 @@
 title: "TabBar"
 description: "Bottom tab navigation with icons, badges, fixed positioning, and safe-area support."
 category: Navigation
+status: beta
+since: 1.0.0
 tags: [navigation, tabs, mobile]
 syncStatus: reviewed
 verified: true
@@ -70,7 +72,7 @@ No slots. Render tabs through `items`.
 
 ## Interaction Contract
 
-- The root is a `nav` with `role="tablist"`; each item is a `button` with `role="tab"` and `aria-selected` derived from `modelValue`.
+- The root is a `nav` landmark; it is site navigation, not a tab widget, so there is no `role="tablist"`. Each item is a `button`, and the active destination carries `aria-current="page"` derived from `modelValue`.
 - Selecting a disabled item, or selecting any item while `disabled=true`, emits nothing.
 - Selecting the already-active item still emits `update:modelValue` and `change`; debounce duplicate handling in the caller if needed.
 - `safeAreaBottom` only controls the spacer node. It can be used with both fixed and non-fixed layouts.
@@ -88,7 +90,7 @@ No slots. Render tabs through `items`.
 
 - **Model contract:** `TxTabBar` emits `update:modelValue` and `change` only when an enabled item is picked while the bar itself is enabled. Disabled items render native disabled buttons.
 - **Layout note:** `fixed=true` pins the bar to the viewport and `safeAreaBottom=true` adds an `env(safe-area-inset-bottom)` spacer. Turn both off inside previews, modals, and embedded shells.
-- **Verified coverage:** `tab-bar.test.ts` covers tablist semantics, selected item state, icons, badges, z-index CSS variable, fixed/safe-area toggles, enabled emissions, and disabled bar/item blocking.
+- **Verified coverage:** `tab-bar.test.ts` covers navigation semantics (nav landmark with no `role`), the `aria-current="page"` active item, icons, badges, z-index CSS variable, fixed/safe-area toggles, enabled emissions, and disabled bar/item blocking.
 
 ## Source
 

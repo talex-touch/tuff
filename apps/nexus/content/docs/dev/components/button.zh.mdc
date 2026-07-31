@@ -314,12 +314,26 @@ code: |
 ::TuffDemoWrapper{demo="ButtonSplitDemo" code-lang="vue"}
 ---
 code: |
+  <script setup lang="ts">
+  import { ref } from 'vue'
+
+  const loading = ref(false)
+
+  async function handleRun() {
+    if (loading.value)
+      return
+    loading.value = true
+    await new Promise(resolve => setTimeout(resolve, 1200))
+    loading.value = false
+  }
+  </script>
+
   <template>
     <TxSplitButton
       variant="primary"
       size="sm"
       icon="i-ri-play-fill"
-      :loading="splitLoading"
+      :loading="loading"
       @click="handleRun"
     >
       RUN

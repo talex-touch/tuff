@@ -1,3 +1,28 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+
+const { locale } = useI18n()
+
+// The four panes carry locale-specific body copy; resolve it here so the rendered
+// demo matches whichever language doc snippet the reader sees (the en snippet is
+// fully English; the zh snippet keeps its original copy).
+const labels = computed(() =>
+  locale.value === 'zh'
+    ? {
+        top: 'Headline content stays sharp，向上滚动时才看到模糊层。',
+        bottom: '适合卡片底部补强，底部 CTA 始终可读。',
+        left: '侧边栏文字 + 图标列表，模糊处理外侧图片。',
+        right: '可保护右侧媒体或聊天面板，避免抢占焦点。',
+      }
+    : {
+        top: 'Headline content stays sharp while the top edge fades the scrolled content behind it.',
+        bottom: 'A bottom fade keeps footer actions readable over long card content.',
+        left: 'Sidebar text and icon grids stay readable while the outside edge is softened.',
+        right: 'Useful for media rails or chat panes where the right edge should not steal focus.',
+      },
+)
+</script>
+
 <template>
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 620px;">
     <section style="position: relative; height: 220px; overflow: hidden; border-radius: 16px; border: 1px solid var(--tx-border-color); background: linear-gradient(180deg, rgba(125,211,252,.24), rgba(255,255,255,0));">
@@ -7,7 +32,7 @@
           <span style="font-size: 20px;">↑</span>
         </div>
         <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-          Headline content stays sharp，向上滚动时才看到模糊层。
+          {{ labels.top }}
         </p>
         <div style="height: 160px;" />
         <p style="color: var(--tx-text-color-secondary); margin: 0;">
@@ -24,7 +49,7 @@
           <span style="font-size: 20px;">↓</span>
         </div>
         <p style="color: var(--tx-text-color-secondary); line-height: 1.6; margin: 0;">
-          适合卡片底部补强，底部 CTA 始终可读。
+          {{ labels.bottom }}
         </p>
         <div style="height: 200px;" />
         <p style="color: var(--tx-text-color-secondary); margin: 0;">
@@ -41,7 +66,7 @@
           <span style="font-size: 20px;">←</span>
         </div>
         <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-          侧边栏文字 + 图标列表，模糊处理外侧图片。
+          {{ labels.left }}
         </p>
         <div style="flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
           <div style="height: 48px; border-radius: 8px; background: rgba(125,211,252,.35);" />
@@ -59,7 +84,7 @@
           <span style="font-size: 20px;">→</span>
         </div>
         <p style="color: var(--tx-text-color-secondary); line-height: 1.5; margin: 0;">
-          可保护右侧媒体或聊天面板，避免抢占焦点。
+          {{ labels.right }}
         </p>
         <div style="flex: 1; display: flex; gap: 6px;">
           <div style="flex: 1; border-radius: 10px; background: rgba(248,113,113,.15);" />

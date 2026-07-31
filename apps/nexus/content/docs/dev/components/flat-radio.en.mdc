@@ -226,7 +226,7 @@ When the container is focused:
 
 | Prop | Description | Type | Default |
 |------|-------------|------|---------|
-| `modelValue` / `v-model` | Selected value in single mode, or selected value array in `multiple` mode. | `string \| number \| (string \| number)[]` | - |
+| `modelValue` / `v-model` | Selected value in single mode, or selected value array in `multiple` mode. | `string \| number \| (string \| number)[]` | *required* |
 | `multiple` | Enables checkbox-like multi-select behavior. The sliding single-select indicator is hidden in this mode. | `boolean` | `false` |
 | `disabled` | Disables the entire group, removes focusability, and blocks click / keyboard changes. | `boolean` | `false` |
 | `size` | Size variant. | `'sm' \| 'md' \| 'lg'` | `'md'` |

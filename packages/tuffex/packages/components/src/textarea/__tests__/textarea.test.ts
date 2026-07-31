@@ -61,4 +61,17 @@ describe('txTextarea', () => {
     expect(typeof wrapper.vm.focus).toBe('function')
     expect(typeof wrapper.vm.blur).toBe('function')
   })
+
+  it('keeps the character counter out of the textarea accessible name', () => {
+    const wrapper = mount(TxTextarea, {
+      props: { modelValue: 'hello', maxLength: 20, showCount: true },
+    })
+
+    const count = wrapper.find('.tx-textarea__count')
+    // The root <label> names the textarea; pre-fix the un-hidden counter made the
+    // field's accessible name the count text and its aria-live re-announced it on
+    // every keystroke.
+    expect(count.attributes('aria-hidden')).toBe('true')
+    expect(count.attributes('aria-live')).toBeUndefined()
+  })
 })

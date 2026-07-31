@@ -117,7 +117,7 @@ async function save() {
 
 - 已核对 `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`、`index.ts` 与 `flat-button.test.ts`。
 - **实测覆盖:** 原生按钮渲染、默认插槽内容、非 primary 的 `fake-background`、primary 与 mini class、可用点击发出原始 `MouseEvent`、disabled/loading 原生语义、默认不提交表单类型，以及插件安装注册。
-- 可访问性说明:组件保留原生按钮语义并固定 `type="button"`;`disabled` 与 `loading` 设置原生 `disabled` 属性,可用状态下的键盘/焦点行为交给浏览器处理。
+- 可访问性说明:组件保留原生按钮语义并固定 `type="button"`;`disabled` 与 `loading` 设置原生 `disabled` 属性,`loading` 还会置 `aria-busy="true"` 并用 `aria-hidden="true"` 隐藏装饰性 spinner;可用状态下的键盘/焦点行为交给浏览器处理。
 
 ## Source
 

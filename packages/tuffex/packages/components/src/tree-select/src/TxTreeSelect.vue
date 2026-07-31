@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TreeSelectEmits, TreeSelectKey, TreeSelectNode, TreeSelectProps, TreeSelectValue } from './types'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import TxCardItem from '../../card-item/src/TxCardItem.vue'
 import TxCheckbox from '../../checkbox/src/TxCheckbox.vue'
 import TuffInput from '../../input/src/TxInput.vue'
@@ -30,6 +30,8 @@ const emit = defineEmits<TreeSelectEmits>()
 const open = ref(false)
 const query = ref('')
 const triggerRef = ref<HTMLElement | null>(null)
+// Stable id so the combobox trigger can point aria-controls at the popup.
+const panelId = useId()
 
 function walk(nodes: TreeSelectNode[], cb: (n: TreeSelectNode) => void) {
   for (const n of nodes) {
@@ -90,14 +92,15 @@ function onTreeUpdate(value: TreeSelectValue) {
 
 watch(
   open,
-  async (v) => {
-    if (v)
+  (v) => {
+    if (v) {
       emit('open')
-    else
-      emit('close')
-    if (v && props.searchable) {
-      await nextTick()
+      return
     }
+    emit('close')
+    // Reset the search filter so reopening the dropdown starts clean instead of
+    // showing the previous query.
+    query.value = ''
   },
   { flush: 'post' },
 )
@@ -144,8 +147,9 @@ defineExpose({
         :class="{ 'is-open': open, 'is-disabled': disabled }"
         :tabindex="disabled ? -1 : 0"
         role="combobox"
-        aria-haspopup="listbox"
+        aria-haspopup="tree"
         :aria-expanded="open"
+        :aria-controls="panelId"
         @keydown="onTriggerKeydown"
       >
         <div class="tx-tree-select__value">
@@ -187,7 +191,7 @@ defineExpose({
       </div>
     </template>
 
-    <div class="tx-tree-select__panel" role="listbox" :style="{ maxHeight: `${dropdownMaxHeight}px` }">
+    <div :id="panelId" class="tx-tree-select__panel" :style="{ maxHeight: `${dropdownMaxHeight}px` }">
       <div v-if="searchable" class="tx-tree-select__search">
         <TuffInput v-model="query" placeholder="Search" clearable />
       </div>

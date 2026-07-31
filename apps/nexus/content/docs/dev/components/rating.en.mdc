@@ -2,6 +2,9 @@
 title: Rating
 description: Star rating input
 category: Form
+status: beta
+since: 1.0.0
+tags: [rating, star, feedback]
 syncStatus: reviewed
 verified: true
 ---
@@ -41,19 +44,51 @@ code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const score = ref(4)
+  const warmScore = ref(4)
+  const greenScore = ref(3.5)
+  const violetScore = ref(2.5)
   </script>
 
   <template>
+    <!-- Orange / large -->
     <TxRating
-      v-model="score"
-      :size="28"
-      :gap="6"
+      v-model="warmScore"
+      :size="30"
+      :gap="8"
       :precision="0.5"
       filled-color="#f97316"
-      empty-color="rgba(148, 163, 184, 0.34)"
+      empty-color="rgba(249, 115, 22, 0.2)"
       hover-color="#fb923c"
-      text-color="var(--tx-color-warning)"
+      text-color="#f97316"
+      show-text
+    />
+
+    <!-- Green / readonly with a custom #text slot -->
+    <TxRating
+      v-model="greenScore"
+      :size="22"
+      :gap="5"
+      :precision="0.5"
+      readonly
+      show-text
+      filled-color="#22c55e"
+      empty-color="rgba(34, 197, 94, 0.18)"
+      text-color="#22c55e"
+    >
+      <template #text="{ value, max }">
+        {{ value }} / {{ max }} readonly
+      </template>
+    </TxRating>
+
+    <!-- Violet / compact -->
+    <TxRating
+      v-model="violetScore"
+      :precision="0.5"
+      :size="18"
+      filled-color="#a78bfa"
+      empty-color="rgba(167, 139, 250, 0.2)"
+      hover-color="#c4b5fd"
+      text-color="#a78bfa"
       show-text
     />
   </template>
@@ -70,12 +105,25 @@ code: |
   <script setup lang="ts">
   import { ref } from 'vue'
 
-  const mood = ref(3)
+  const diamond = ref(3)
   const hearts = ref(4.5)
+  const faces = ref(2.5)
   </script>
 
   <template>
-    <TxRating v-model="mood" icon="💎" :size="26" filled-color="#38bdf8" show-text />
+    <!-- Single emoji icon -->
+    <TxRating
+      v-model="diamond"
+      icon="💎"
+      :size="26"
+      filled-color="#38bdf8"
+      empty-color="rgba(56, 189, 248, 0.2)"
+      hover-color="#7dd3fc"
+      text-color="#38bdf8"
+      show-text
+    />
+
+    <!-- Iconify class icon -->
     <TxRating
       v-model="hearts"
       :precision="0.5"
@@ -83,6 +131,22 @@ code: |
       icon="i-carbon-favorite-filled"
       filled-color="#f43f5e"
       empty-color="rgba(244, 63, 94, 0.18)"
+      hover-color="#fb7185"
+      text-color="#f43f5e"
+      show-text
+    />
+
+    <!-- Separate filled / empty icons -->
+    <TxRating
+      v-model="faces"
+      :precision="0.5"
+      :size="26"
+      filled-icon="😍"
+      empty-icon="😶"
+      filled-color="#f59e0b"
+      empty-color="rgba(148, 163, 184, 0.5)"
+      hover-color="#fbbf24"
+      text-color="#f59e0b"
       show-text
     />
   </template>
@@ -100,11 +164,28 @@ code: |
   import { ref } from 'vue'
 
   const animated = ref(2)
+  const heart = ref(3)
   const still = ref(2)
   </script>
 
   <template>
-    <TxRating v-model="animated" :precision="0.5" show-text />
+    <!-- Default bounce + glow + ripple -->
+    <TxRating v-model="animated" :precision="0.5" :size="28" :gap="6" show-text />
+
+    <!-- Heart pop -->
+    <TxRating
+      v-model="heart"
+      icon="i-carbon-favorite-filled"
+      :size="30"
+      :gap="7"
+      filled-color="#f43f5e"
+      empty-color="rgba(244, 63, 94, 0.18)"
+      hover-color="#fb7185"
+      text-color="#f43f5e"
+      show-text
+    />
+
+    <!-- Animation off -->
     <TxRating v-model="still" :animated="false" filled-color="#a78bfa" show-text />
   </template>
 ---
@@ -117,7 +198,7 @@ Rating exposes the star group as a radio group. `disabled` and `readonly` both b
 ## API
 
 ### Props
-::TuffPropsTable
+:::TuffPropsTable
 ---
 rows:
   - name: modelValue
@@ -188,6 +269,10 @@ rows:
     type: boolean
     default: 'true'
     description: Play the click pop / ripple animation after selection.
+  - name: starLabel
+    type: "(star: number) => string"
+    default: '-'
+    description: Localizable accessible label for each star button. Defaults to English "Rate N star(s)".
 ---
 :::
 

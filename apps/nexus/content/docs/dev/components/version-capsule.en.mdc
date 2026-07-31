@@ -2,6 +2,9 @@
 title: "VersionCapsule"
 description: "Split release pill: download the build on the left, open history on the right"
 category: Navigation
+status: beta
+since: 2.5.0
+tags: [version, release, download, history]
 syncStatus: reviewed
 verified: true
 ---
@@ -59,10 +62,10 @@ The capsule always names its channel and colours it by `tone`, so it never compe
 code: |
   <script setup lang="ts">
   const capsules = [
-    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: 'STABLE' },
-    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: 'BETA' },
-    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: 'NIGHTLY' },
-    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: 'ARCHIVED' },
+    { key: 'stable', tone: 'stable', version: 'v2.4.12', channel: 'STABLE', historyTitle: 'Version history', latest: { id: 's1', tag: 'v2.4.12', channel: 'RELEASE', tone: 'stable', date: 'Jun 23', note: 'Certified build with signing and regression complete.' } },
+    { key: 'preview', tone: 'preview', version: 'v2.4.13-beta.19', channel: 'BETA', historyTitle: 'Version history', latest: { id: 'p1', tag: 'v2.4.13-beta.19', channel: 'BETA', tone: 'preview', date: 'Jul 21', note: 'Preview channel for early adopters.' } },
+    { key: 'nightly', tone: 'nightly', version: 'v2.4.14-nightly.5', channel: 'NIGHTLY', historyTitle: 'Version history', latest: { id: 'n1', tag: 'v2.4.14-nightly.5', channel: 'NIGHTLY', tone: 'nightly', date: 'Today', note: 'Automated build, may be unstable.' } },
+    { key: 'neutral', tone: 'neutral', version: 'v1.9.8', channel: 'ARCHIVED', historyTitle: 'Version history', latest: { id: 'a1', tag: 'v1.9.8', channel: 'LEGACY', tone: 'neutral', date: '2024', note: 'Legacy build, no longer maintained.' } },
   ]
   </script>
 
@@ -74,9 +77,10 @@ code: |
         :version="item.version"
         :channel="item.channel"
         :tone="item.tone"
+        history-label="History"
       >
         <template #history="{ close }">
-          <TxVersionHistoryPanel :title="item.channel" @select="close" />
+          <TxVersionHistoryPanel :title="item.historyTitle" :latest="item.latest" @select="close" />
         </template>
       </TxVersionCapsule>
     </div>

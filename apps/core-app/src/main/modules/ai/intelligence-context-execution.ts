@@ -17,9 +17,9 @@ import {
   contextHygieneService,
   isContextInputProviderSafe
 } from './intelligence-context-hygiene'
-import { tuffIntelligence } from './intelligence-sdk'
+import { renderPromptTemplate, tuffIntelligence } from './intelligence-sdk'
 import { inheritOuterGovernance } from './intelligence-invoke-governance'
-import { normalizeContextTokenBudget } from './intelligence-token-estimate'
+import { estimateContextTokens, normalizeContextTokenBudget } from './intelligence-token-estimate'
 
 const log = createLogger('IntelligenceContextExecution')
 const DEFAULT_CONTEXT_TOKEN_BUDGET = 1_600
@@ -31,20 +31,29 @@ export interface IntelligenceContextActor {
 
 interface PreparedContextExecution {
   payload: IntelligenceChatPayload
-  options: IntelligenceInvokeOptions
+  options: HostContextExecutionInvokeOptions
   summary: IntelligenceContextExecutionSummary
+}
+
+type HostContextExecutionInvokeOptions = IntelligenceInvokeOptions & {
+  readonly signal?: AbortSignal
+}
+
+export interface IntelligenceContextExecutionHostOptions {
+  readonly signal?: AbortSignal
+  readonly persistence?: 'full' | 'ephemeral'
 }
 
 interface ContextExecutionRuntime {
   invoke<T = unknown>(
     capabilityId: string,
     payload: unknown,
-    options?: IntelligenceInvokeOptions
+    options?: HostContextExecutionInvokeOptions
   ): Promise<IntelligenceInvokeResult<T>>
   stream<T = unknown>(
     capabilityId: string,
     payload: unknown,
-    options?: IntelligenceInvokeOptions
+    options?: HostContextExecutionInvokeOptions
   ): AsyncIterable<IntelligenceStreamEvent<T>>
 }
 
@@ -52,6 +61,44 @@ interface ContextExecutionHygiene {
   prepareTurn: ContextHygieneService['prepareTurn']
   revalidatePackageMemories: ContextHygieneService['revalidatePackageMemories']
   appendAssistantTurn: ContextHygieneService['appendAssistantTurn']
+}
+
+class IntelligenceContextOperationCancelledError extends Error {
+  readonly code = 'INTELLIGENCE_OPERATION_CANCELLED' as const
+
+  constructor() {
+    super('INTELLIGENCE_OPERATION_CANCELLED')
+    this.name = 'IntelligenceContextOperationCancelledError'
+  }
+}
+
+function throwIfContextCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new IntelligenceContextOperationCancelledError()
+}
+
+async function awaitContextOperation<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return await operation
+  throwIfContextCancelled(signal)
+  return await new Promise<T>((resolve, reject) => {
+    let settled = false
+    const finish = (result: T | undefined, error?: unknown): void => {
+      if (settled) return
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      if (error !== undefined) reject(error)
+      else resolve(result as T)
+    }
+    const onAbort = (): void => finish(undefined, new IntelligenceContextOperationCancelledError())
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) {
+      onAbort()
+      return
+    }
+    void operation.then(
+      (result) => finish(result),
+      (error) => finish(undefined, error)
+    )
+  })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -62,15 +109,21 @@ function canUseRequestedOwner(
   request: IntelligenceContextExecutionRequest,
   actor: IntelligenceContextActor
 ): boolean {
-  const owner = request.context.owner ?? 'corebox'
-  if (actor.type === 'host' || owner === 'corebox') return true
+  if (actor.type === 'host') return true
+  if (actor.id !== 'plugin:touch-intelligence') return false
 
+  const owner = request.context.owner ?? 'corebox'
   const entrypoint = request.options?.metadata?.contextEntrypoint
+  if (
+    !isRecord(entrypoint) ||
+    entrypoint.owner !== owner ||
+    entrypoint.mode !== request.context.mode
+  ) {
+    return false
+  }
   return (
-    actor.id === 'plugin:touch-intelligence' &&
-    owner === 'assistant' &&
-    isRecord(entrypoint) &&
-    entrypoint.id === 'assistant.voice'
+    (owner === 'corebox' && entrypoint.id === 'corebox.ai-ask') ||
+    (owner === 'assistant' && entrypoint.id === 'assistant.voice')
   )
 }
 
@@ -142,10 +195,9 @@ function safeContextSummary(
     citationCount: contextPackage.items.filter(
       (item) => item.sourceType === 'retrieval' && isRecord(item.metadata?.citation)
     ).length,
-    degradedReason:
-      typeof retrievalMetadata?.degradedReason === 'string'
-        ? retrievalMetadata.degradedReason
-        : undefined
+    ...(typeof retrievalMetadata?.degradedReason === 'string'
+      ? { degradedReason: retrievalMetadata.degradedReason }
+      : {})
   }
 }
 
@@ -251,24 +303,102 @@ export class IntelligenceContextExecutionService {
   private withContextOptions(
     request: IntelligenceContextExecutionRequest,
     actor: IntelligenceContextActor,
-    summary: IntelligenceContextExecutionSummary
-  ): IntelligenceInvokeOptions {
-    const options: IntelligenceInvokeOptions = {
+    summary: IntelligenceContextExecutionSummary,
+    signal?: AbortSignal
+  ): HostContextExecutionInvokeOptions {
+    const options: HostContextExecutionInvokeOptions = {
       ...(request.options ?? {}),
       metadata: {
         ...(request.options?.metadata ?? {}),
         caller: actor.id,
         contextExecution: summary
-      }
+      },
+      ...(signal ? { signal } : {})
     }
     return inheritOuterGovernance(request.options, options)
   }
 
+  private async prepareEphemeral(
+    request: IntelligenceContextExecutionRequest,
+    actor: IntelligenceContextActor,
+    signal?: AbortSignal
+  ): Promise<PreparedContextExecution> {
+    throwIfContextCancelled(signal)
+    this.validateRequest(request, actor)
+    if (request.context.mode === 'continue') {
+      throw new Error('CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED')
+    }
+    if (!isContextInputProviderSafe(request.input)) {
+      throw new Error('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+    }
+    const payload = this.assembler.currentOnly(request)
+    for (const message of payload.messages) {
+      if (!isContextInputProviderSafe(message.content)) {
+        throw new Error('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+      }
+    }
+    const promptTemplate = request.options?.promptTemplate
+    const promptVariables = request.options?.promptVariables
+    if (promptVariables) {
+      for (const value of Object.values(promptVariables)) {
+        if (typeof value !== 'string' || !isContextInputProviderSafe(value)) {
+          throw new Error('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+        }
+      }
+    }
+    if (promptTemplate) {
+      let renderedTemplate = promptTemplate
+      try {
+        renderedTemplate = await renderPromptTemplate(promptTemplate, promptVariables)
+      } catch {
+        // The SDK falls back to the raw template on render failure.
+      }
+      const policyRenderedTemplate = promptTemplate.replace(
+        /\{\{\s*([\w.]+)\s*\}\}/g,
+        (_match, key: string) => {
+          const value = promptVariables?.[key]
+          return typeof value === 'string' ? value : ''
+        }
+      )
+      if (
+        !isContextInputProviderSafe(renderedTemplate) ||
+        !isContextInputProviderSafe(policyRenderedTemplate)
+      ) {
+        throw new Error('CONTEXT_CURRENT_INPUT_POLICY_BLOCKED')
+      }
+    }
+    throwIfContextCancelled(signal)
+
+    const tokenBudget = normalizeContextTokenBudget(
+      request.context.tokenBudget,
+      DEFAULT_CONTEXT_TOKEN_BUDGET
+    )
+    const summary: IntelligenceContextExecutionSummary = {
+      mode: request.context.mode,
+      scope: resolveScope(request),
+      itemCount: 1,
+      tokenBudget,
+      tokenEstimate: estimateContextTokens(request.input),
+      sourceTypes: ['current_input'],
+      retrievalItemCount: 0,
+      citationCount: 0,
+      degradedReason: 'isolated_context_persistence_unavailable'
+    }
+    return {
+      payload,
+      options: this.withContextOptions(request, actor, summary, signal),
+      summary
+    }
+  }
+
   private async prepare(
     request: IntelligenceContextExecutionRequest,
-    actor: IntelligenceContextActor
+    actor: IntelligenceContextActor,
+    signal?: AbortSignal
   ): Promise<PreparedContextExecution> {
+    throwIfContextCancelled(signal)
     this.validateRequest(request, actor)
+    throwIfContextCancelled(signal)
     const mode: IntelligenceContextMode = request.context.mode
     const requestedSessionId = request.context.sessionId?.trim()
     const startNewSession = mode !== 'continue' || !requestedSessionId
@@ -293,8 +423,13 @@ export class IntelligenceContextExecutionService {
           noHistory: mode === 'stateless'
         }
       })
+      // prepareTurn persists the governed user turn. Cancellation observed after this
+      // non-cancellable await prevents provider work but cannot roll that commit back.
+      throwIfContextCancelled(signal)
       contextPackage = await this.hygiene.revalidatePackageMemories(prepared.package)
-    } catch (error) {
+      throwIfContextCancelled(signal)
+    } catch (_error) {
+      if (signal?.aborted) throw new IntelligenceContextOperationCancelledError()
       if (!isContextInputProviderSafe(request.input)) {
         log.warn('Context prepare failed; blocked unsafe current-input fallback', {
           meta: {
@@ -310,12 +445,12 @@ export class IntelligenceContextExecutionService {
         meta: {
           actorId: actor.id,
           mode,
-          reason: error instanceof Error ? error.message : 'unknown'
+          reason: 'context_prepare_failed'
         }
       })
       return {
         payload: this.assembler.currentOnly(request),
-        options: this.withContextOptions(request, actor, summary),
+        options: this.withContextOptions(request, actor, summary, signal),
         summary
       }
     }
@@ -323,7 +458,7 @@ export class IntelligenceContextExecutionService {
     const summary = safeContextSummary(request, contextPackage, prepared)
     return {
       payload: this.assembler.assemble(contextPackage, request.payload),
-      options: this.withContextOptions(request, actor, summary),
+      options: this.withContextOptions(request, actor, summary, signal),
       summary
     }
   }
@@ -331,40 +466,66 @@ export class IntelligenceContextExecutionService {
   private async finalizeAssistantTurn(
     summary: IntelligenceContextExecutionSummary,
     content: string,
-    traceId?: string
+    traceId?: string,
+    signal?: AbortSignal
   ): Promise<IntelligenceContextExecutionSummary> {
-    if (!summary.sessionId || !content.trim()) return summary
-    try {
-      await this.hygiene.appendAssistantTurn({
-        sessionId: summary.sessionId,
-        content,
-        metadata: traceId ? { traceId } : undefined
-      })
-      return summary
-    } catch (error) {
-      log.warn('Context assistant turn finalize failed', {
-        meta: {
-          sessionId: summary.sessionId,
-          reason: error instanceof Error ? error.message : 'unknown'
-        }
-      })
-      return { ...summary, degradedReason: 'context_finalize_failed' }
-    }
+    throwIfContextCancelled(signal)
+    const sessionId = summary.sessionId
+    if (!sessionId || !content.trim()) return summary
+
+    const outcome = await awaitContextOperation(
+      Promise.resolve()
+        .then(() =>
+          this.hygiene.appendAssistantTurn({
+            sessionId,
+            content,
+            metadata: traceId ? { traceId } : undefined
+          })
+        )
+        .then(
+          () => ({ status: 'completed' as const }),
+          () => ({ status: 'failed' as const })
+        ),
+      signal
+    )
+
+    if (outcome.status === 'completed') return summary
+    if (signal?.aborted) throw new IntelligenceContextOperationCancelledError()
+    log.warn('Context assistant turn finalize failed', {
+      meta: { reason: 'context_finalize_failed' }
+    })
+    return { ...summary, degradedReason: 'context_finalize_failed' }
   }
 
   async invoke<T = unknown>(
     request: IntelligenceContextExecutionRequest,
-    actor: IntelligenceContextActor
+    actor: IntelligenceContextActor,
+    hostOptions: IntelligenceContextExecutionHostOptions = {}
   ): Promise<IntelligenceContextExecutionResult<T>> {
-    const execution = await this.prepare(request, actor)
+    const signal = hostOptions.signal
+    const persistence = hostOptions.persistence ?? 'full'
+    if (persistence !== 'full' && persistence !== 'ephemeral') {
+      throw new Error('INVALID_CONTEXT_EXECUTION_PERSISTENCE')
+    }
+    throwIfContextCancelled(signal)
+    const execution =
+      persistence === 'ephemeral'
+        ? await this.prepareEphemeral(request, actor, signal)
+        : await this.prepare(request, actor, signal)
+    throwIfContextCancelled(signal)
     const invocation = await this.runtime.invoke<T>(
       request.capabilityId,
       execution.payload,
       execution.options
     )
+    throwIfContextCancelled(signal)
+    if (persistence === 'ephemeral') {
+      return { invocation, context: execution.summary }
+    }
+    const assistantContent = extractInvocationText(invocation.result)
     const context = await this.finalizeAssistantTurn(
       execution.summary,
-      extractInvocationText(invocation.result),
+      assistantContent,
       invocation.traceId
     )
     return { invocation, context }
@@ -372,43 +533,69 @@ export class IntelligenceContextExecutionService {
 
   async *stream<T = unknown>(
     request: IntelligenceContextExecutionRequest,
-    actor: IntelligenceContextActor
+    actor: IntelligenceContextActor,
+    hostOptions: IntelligenceContextExecutionHostOptions = {}
   ): AsyncGenerator<IntelligenceContextStreamEvent<T>> {
-    const execution = await this.prepare(request, actor)
-    let accumulated = ''
-    let finalized = false
-
-    for await (const event of this.runtime.stream<T>(
+    const signal = hostOptions.signal
+    throwIfContextCancelled(signal)
+    const execution = await this.prepare(request, actor, signal)
+    throwIfContextCancelled(signal)
+    const iterable = this.runtime.stream<T>(
       request.capabilityId,
       execution.payload,
       execution.options
-    )) {
-      if (event.delta) accumulated += event.delta
-      if (typeof event.content === 'string') accumulated = event.content
+    )
+    const iterator = iterable[Symbol.asyncIterator]()
+    let accumulated = ''
+    let finalized = false
+    let completed = false
 
-      if (event.type === 'end') {
-        const content = extractInvocationText(event.result) || event.content || accumulated
-        execution.summary = await this.finalizeAssistantTurn(
-          execution.summary,
-          content,
-          event.traceId
-        )
-        finalized = true
-      }
-
-      if (event.type === 'start' || event.type === 'end') {
-        yield {
-          ...event,
-          context: execution.summary,
-          metadata: { ...(event.metadata ?? {}), contextExecution: execution.summary }
+    try {
+      while (true) {
+        throwIfContextCancelled(signal)
+        const step = await awaitContextOperation(iterator.next(), signal)
+        throwIfContextCancelled(signal)
+        if (step.done) {
+          completed = true
+          break
         }
-      } else {
-        yield event
-      }
-    }
+        const event = step.value
+        if (event.delta) accumulated += event.delta
+        if (typeof event.content === 'string') accumulated = event.content
 
-    if (!finalized && accumulated) {
-      await this.finalizeAssistantTurn(execution.summary, accumulated)
+        if (event.type === 'end') {
+          const content = extractInvocationText(event.result) || event.content || accumulated
+          execution.summary = await this.finalizeAssistantTurn(
+            execution.summary,
+            content,
+            event.traceId,
+            signal
+          )
+          finalized = true
+        }
+
+        if (event.type === 'start' || event.type === 'end') {
+          yield {
+            ...event,
+            context: execution.summary,
+            metadata: { ...(event.metadata ?? {}), contextExecution: execution.summary }
+          }
+        } else {
+          yield event
+        }
+      }
+
+      if (!finalized && accumulated) {
+        await this.finalizeAssistantTurn(execution.summary, accumulated, undefined, signal)
+      }
+    } finally {
+      if (!completed && typeof iterator.return === 'function') {
+        try {
+          await iterator.return()
+        } catch {
+          // Cleanup failure cannot replace the original stream outcome.
+        }
+      }
     }
   }
 }

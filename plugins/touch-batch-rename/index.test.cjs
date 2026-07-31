@@ -1,51 +1,60 @@
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
-const fsp = require('node:fs/promises')
 const Module = require('node:module')
-const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 
-const permissionState = {
-  async check() { return true },
-  async request() { return true },
-}
-const dialogCalls = []
+const permissionChecks = []
+const featureCalls = []
 const storageCalls = []
-let renameCalls = 0
-const originalRename = fsp.rename
+const filesystemCalls = []
+const logCalls = []
+let storedUndo = null
 
-fsp.rename = async () => {
-  renameCalls += 1
-  throw new Error('rename must remain blocked')
-}
-
-globalThis.permission = permissionState
-globalThis.dialog = {
-  async showMessageBox(options) {
-    dialogCalls.push(options)
-    return { response: 1 }
+globalThis.permission = {
+  async check(permissionId) {
+    permissionChecks.push(permissionId)
+    return true
   },
 }
-globalThis.logger = {}
+globalThis.filesystem = {
+  async renameBatch(entries) {
+    filesystemCalls.push(entries)
+    return entries.map((_, index) => ({ index, status: 'renamed' }))
+  },
+}
+globalThis.logger = {
+  error(message) {
+    logCalls.push(message)
+  },
+  warn(message) {
+    logCalls.push(message)
+  },
+}
 globalThis.plugin = {
   feature: {
-    clearItems() {},
-    pushItems() {},
+    async clearItems() {
+      featureCalls.push({ type: 'clear' })
+    },
+    async pushItems(items) {
+      featureCalls.push({ type: 'push', items })
+    },
   },
   storage: {
-    async getFile(filename) {
-      storageCalls.push({ type: 'get', filename })
-      return { items: [] }
+    async getFile(name) {
+      storageCalls.push({ type: 'get', name })
+      return storedUndo
     },
-    async setFile(filename, value) {
-      storageCalls.push({ type: 'set', filename, value })
+    async setFile(name, value) {
+      storageCalls.push({ type: 'set', name, value })
+      storedUndo = value
     },
   },
 }
 globalThis.TuffItemBuilder = class {
   constructor(id) {
     this.item = { id, meta: {} }
+    this.basic = {}
   }
 
   setSource(type, id, name) {
@@ -54,17 +63,17 @@ globalThis.TuffItemBuilder = class {
   }
 
   setTitle(title) {
-    this.item.title = title
+    this.basic.title = title
     return this
   }
 
   setSubtitle(subtitle) {
-    this.item.subtitle = subtitle
+    this.basic.subtitle = subtitle
     return this
   }
 
   setIcon(icon) {
-    this.item.icon = icon
+    this.basic.icon = icon
     return this
   }
 
@@ -73,8 +82,17 @@ globalThis.TuffItemBuilder = class {
     return this
   }
 
+  createAndAddAction(id, type, label, payload) {
+    this.item.actions ??= []
+    this.item.actions.push({ id, type, label, payload, primary: this.item.actions.length === 0 })
+    return this
+  }
+
   build() {
-    return this.item
+    return {
+      ...this.item,
+      render: { mode: 'default', basic: { ...this.basic } },
+    }
   }
 }
 
@@ -87,126 +105,168 @@ function loadPluginModule(filename) {
   return mod.exports
 }
 
-const lifecycle = loadPluginModule(path.join(__dirname, 'index.js'))
+const pluginPath = path.join(__dirname, 'index.js')
+const source = fs.readFileSync(pluginPath, 'utf8')
+const lifecycle = loadPluginModule(pluginPath)
 
-test.afterEach(() => {
-  permissionState.check = async () => true
-  permissionState.request = async () => true
-  dialogCalls.length = 0
-  storageCalls.length = 0
-  renameCalls = 0
-})
-
-test.after(() => {
-  fsp.rename = originalRename
-})
-
-async function createRenameFixture(featureId) {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tuff-batch-rename-'))
-  const sourcePath = path.join(tempDir, 'original.txt')
-  const targetPath = path.join(tempDir, 'renamed-original.txt')
-  fs.writeFileSync(sourcePath, 'content')
-
-  permissionState.check = async (permissionId) => {
-    assert.equal(permissionId, 'fs.read')
-    return true
-  }
-
-  await lifecycle.onFeatureTriggered(featureId, {
-    text: 'prefix:renamed-',
-    inputs: [{ type: 'files', content: JSON.stringify([sourcePath]) }],
-  })
-
-  return { sourcePath, targetPath }
+function latestItems() {
+  return featureCalls.findLast(call => call.type === 'push')?.items ?? []
 }
 
-function applyAction(featureId) {
+function action(featureId, actionId) {
   return lifecycle.onItemAction({
     meta: {
       defaultAction: 'batch-rename',
-      actionId: 'apply',
       featureId,
     },
+    actions: [{ id: actionId, type: 'plugin', label: actionId, primary: true }],
   })
 }
 
-function assertApplyBlocked(result, reason, fixture) {
+async function preview(featureId, files = ['/approved/alpha.txt']) {
+  await lifecycle.onFeatureTriggered(featureId, {
+    text: 'prefix:renamed-',
+    inputs: [{ type: 'files', content: JSON.stringify(files) }],
+  })
+}
+
+test.afterEach(() => {
+  permissionChecks.length = 0
+  featureCalls.length = 0
+  storageCalls.length = 0
+  filesystemCalls.length = 0
+  logCalls.length = 0
+  storedUndo = null
+  globalThis.permission.check = async (permissionId) => {
+    permissionChecks.push(permissionId)
+    return true
+  }
+  globalThis.filesystem.renameBatch = async (entries) => {
+    filesystemCalls.push(entries)
+    return entries.map((_, index) => ({ index, status: 'renamed' }))
+  }
+})
+
+test('production Prelude has no privileged imports, raw host surface or test export', () => {
+  for (const pattern of [
+    /\b__test\b/,
+    /\brequire\s*\(/,
+    /\bfetch\s*\(/,
+    /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+    /\bnode:(?:fs(?:\/promises)?|child_process|sqlite|worker_threads)\b/,
+    /\belectron\b/,
+    /showOpenDialog|showMessageBox/,
+  ]) {
+    assert.doesNotMatch(source, pattern)
+  }
+  assert.deepEqual(Object.keys(lifecycle).sort(), ['onDestroy', 'onFeatureTriggered', 'onItemAction'])
+})
+
+test('feature trigger awaits read permission and ordered item publication', async () => {
+  await preview('batch-rename-preview', ['/approved/alpha.txt', '/approved/beta.md'])
+
+  assert.deepEqual(permissionChecks, ['fs.read'])
+  assert.deepEqual(
+    featureCalls.map(call => call.type),
+    ['clear', 'push'],
+  )
+  const items = latestItems()
+  assert.equal(
+    items.some(item => item.actions?.[0]?.id === 'apply'),
+    true,
+  )
+  assert.equal(
+    items.some(item => item.actions?.[0]?.id === 'undo'),
+    true,
+  )
+  assert.equal(
+    items.some(item => Object.hasOwn(item.meta, 'actionId')),
+    false,
+  )
+  assert.equal(
+    items.some(item => item.render.basic.subtitle === 'renamed-alpha.txt'),
+    true,
+  )
+  assert.equal(
+    items.some(item => item.render.basic.subtitle === 'renamed-beta.md'),
+    true,
+  )
+  assert.equal(
+    items.every(item => item.render.basic.icon.type === 'class'),
+    true,
+  )
+})
+
+test('apply sends one exact rename transaction before persisting bounded undo entries', async () => {
+  await preview('batch-rename-apply', ['/approved/alpha.txt', '/approved/beta.md'])
+  featureCalls.length = 0
+  permissionChecks.length = 0
+
+  const result = await action('batch-rename-apply', 'apply')
+
   assert.deepEqual(result, {
     externalAction: true,
-    success: false,
-    status: 'blocked',
-    reason,
-    message: '缺少 fs.write 权限',
+    success: true,
+    status: 'completed',
   })
-  assert.equal(fs.existsSync(fixture.sourcePath), true)
-  assert.equal(fs.existsSync(fixture.targetPath), false)
-  assert.equal(renameCalls, 0)
-  assert.equal(dialogCalls.length, 0)
-  assert.equal(storageCalls.length, 0)
-}
-
-test('apply blocks before rename when permission sdk is unavailable', async () => {
-  const featureId = 'batch-rename-sdk-unavailable'
-  const fixture = await createRenameFixture(featureId)
-  permissionState.check = undefined
-  permissionState.request = undefined
-
-  const result = await applyAction(featureId)
-
-  assertApplyBlocked(result, 'permission-sdk-unavailable', fixture)
+  assert.deepEqual(permissionChecks, ['fs.write'])
+  assert.deepEqual(filesystemCalls, [
+    [
+      { source: '/approved/alpha.txt', targetName: 'renamed-alpha.txt' },
+      { source: '/approved/beta.md', targetName: 'renamed-beta.md' },
+    ],
+  ])
+  assert.equal(storageCalls.length, 1)
+  assert.deepEqual(storageCalls[0].value.items, [
+    { source: '/approved/renamed-alpha.txt', targetName: 'alpha.txt' },
+    { source: '/approved/renamed-beta.md', targetName: 'beta.md' },
+  ])
 })
 
-test('apply blocks before rename when fs.write permission is denied', async () => {
-  const featureId = 'batch-rename-denied'
-  const fixture = await createRenameFixture(featureId)
-  permissionState.check = async permissionId => permissionId !== 'fs.write'
-  permissionState.request = async () => false
+test('write denial blocks before filesystem and storage work', async () => {
+  await preview('batch-rename-denied')
+  filesystemCalls.length = 0
+  storageCalls.length = 0
+  globalThis.permission.check = async permissionId => permissionId !== 'fs.write'
 
-  const result = await applyAction(featureId)
-
-  assertApplyBlocked(result, 'permission-denied', fixture)
-})
-
-test('apply blocks before rename when permission check fails', async () => {
-  const featureId = 'batch-rename-check-failed'
-  const fixture = await createRenameFixture(featureId)
-  permissionState.check = async () => {
-    throw new Error('permission check failed')
-  }
-
-  const result = await applyAction(featureId)
-
-  assertApplyBlocked(result, 'permission-request-failed', fixture)
-})
-
-test('apply blocks before rename when permission request fails', async () => {
-  const featureId = 'batch-rename-request-failed'
-  const fixture = await createRenameFixture(featureId)
-  permissionState.check = async () => false
-  permissionState.request = async () => {
-    throw new Error('permission request failed')
-  }
-
-  const result = await applyAction(featureId)
-
-  assertApplyBlocked(result, 'permission-request-failed', fixture)
-})
-
-test('undo blocks before reading records when fs.write permission is denied', async () => {
-  permissionState.check = async permissionId => permissionId !== 'fs.write'
-  permissionState.request = async () => false
-
-  const result = await lifecycle.onItemAction({
-    meta: {
-      defaultAction: 'batch-rename',
-      actionId: 'undo',
-      featureId: 'batch-rename-undo-denied',
-    },
-  })
+  const result = await action('batch-rename-denied', 'apply')
 
   assert.equal(result.status, 'blocked')
   assert.equal(result.reason, 'permission-denied')
-  assert.equal(renameCalls, 0)
-  assert.equal(dialogCalls.length, 0)
+  assert.equal(filesystemCalls.length, 0)
   assert.equal(storageCalls.length, 0)
+})
+
+test('filesystem failures expose only a stable code and never native detail', async () => {
+  await preview('batch-rename-failure')
+  filesystemCalls.length = 0
+  globalThis.filesystem.renameBatch = async () => {
+    throw Object.assign(new Error('/private/owner/secret.txt'), {
+      code: 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED',
+    })
+  }
+
+  const result = await action('batch-rename-failure', 'apply')
+
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'PLUGIN_HOST_CAPABILITY_HANDLER_FAILED')
+  assert.doesNotMatch(JSON.stringify(result), /private|secret\.txt/)
+  assert.deepEqual(logCalls, ['[touch-batch-rename] PLUGIN_HOST_CAPABILITY_HANDLER_FAILED'])
+  assert.equal(storageCalls.length, 0)
+})
+
+test('undo reads the journal, runs the same fixed transaction and clears it after success', async () => {
+  storedUndo = {
+    items: [{ source: '/approved/renamed-alpha.txt', targetName: 'alpha.txt' }],
+  }
+
+  const result = await action('batch-rename-undo', 'undo')
+
+  assert.equal(result.success, true)
+  assert.deepEqual(filesystemCalls, [[{ source: '/approved/renamed-alpha.txt', targetName: 'alpha.txt' }]])
+  assert.deepEqual(
+    storageCalls.map(call => call.type),
+    ['get', 'set'],
+  )
+  assert.deepEqual(storedUndo.items, [])
 })

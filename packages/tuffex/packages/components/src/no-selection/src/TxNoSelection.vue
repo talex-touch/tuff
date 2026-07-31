@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NoSelectionProps } from './types'
+import type { NoSelectionEmits, NoSelectionProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -7,10 +7,16 @@ defineOptions({
 })
 
 const props = defineProps<NoSelectionProps>()
+const emit = defineEmits<NoSelectionEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="no-selection">
+  <TxEmptyState
+    v-bind="props"
+    variant="no-selection"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

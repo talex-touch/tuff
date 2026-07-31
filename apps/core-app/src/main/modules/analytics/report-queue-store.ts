@@ -18,15 +18,21 @@ export interface ReportQueueItem {
 interface ReportQueueStoreDeps {
   auxDb: LibSQLDatabase<typeof schema>
   coreDb?: LibSQLDatabase<typeof schema>
+  maxItems?: number
 }
 
 export class ReportQueueStore {
   private auxDb: LibSQLDatabase<typeof schema>
   private coreDb: LibSQLDatabase<typeof schema> | null
+  private readonly maxItems: number
 
-  constructor({ auxDb, coreDb }: ReportQueueStoreDeps) {
+  constructor({ auxDb, coreDb, maxItems }: ReportQueueStoreDeps) {
     this.auxDb = auxDb
     this.coreDb = coreDb && coreDb !== auxDb ? coreDb : null
+    this.maxItems =
+      typeof maxItems === 'number' && Number.isFinite(maxItems)
+        ? Math.min(1_000, Math.max(1, Math.floor(maxItems)))
+        : 120
   }
 
   private async withDbWrite<T>(
@@ -47,8 +53,8 @@ export class ReportQueueStore {
       },
       {
         priority: 'best_effort',
-        dropPolicy: 'drop',
-        maxQueueWaitMs: 10_000
+        dropPolicy: 'none',
+        maxQueueWaitMs: 15_000
       }
     )
   }
@@ -97,16 +103,34 @@ export class ReportQueueStore {
     createdAt: number
   }): Promise<void> {
     await this.withDbWrite('analytics.report-queue.insert', (db) =>
-      db.insert(dbSchema.analyticsReportQueue).values({
-        endpoint: entry.endpoint,
-        payload: JSON.stringify(entry.payload),
-        createdAt: entry.createdAt,
-        retryCount: 0
+      db.transaction(async (tx) => {
+        await tx.insert(dbSchema.analyticsReportQueue).values({
+          endpoint: entry.endpoint,
+          payload: JSON.stringify(entry.payload),
+          createdAt: entry.createdAt,
+          retryCount: 0
+        })
+        await tx.run(sql`
+          DELETE FROM ${dbSchema.analyticsReportQueue}
+          WHERE ${dbSchema.analyticsReportQueue.id} IN (
+            SELECT ${dbSchema.analyticsReportQueue.id}
+            FROM ${dbSchema.analyticsReportQueue}
+            ORDER BY ${dbSchema.analyticsReportQueue.createdAt} DESC,
+                     ${dbSchema.analyticsReportQueue.id} DESC
+            LIMIT -1 OFFSET ${this.maxItems}
+          )
+        `)
       })
     )
   }
 
   async markAttempt(id: number, error?: string): Promise<void> {
+    const lastError =
+      typeof error === 'string' && /^[A-Za-z][A-Za-z0-9_:-]{0,63}$/.test(error)
+        ? error
+        : error
+          ? 'ANALYTICS_REPORT_FAILED'
+          : null
     await this.withDbWrite(
       'analytics.report-queue.mark-attempt',
       (db) =>
@@ -115,7 +139,7 @@ export class ReportQueueStore {
           .set({
             retryCount: sql`${dbSchema.analyticsReportQueue.retryCount} + 1`,
             lastAttemptAt: Date.now(),
-            lastError: error ?? null
+            lastError
           })
           .where(eq(dbSchema.analyticsReportQueue.id, id)),
       { mirrorCore: true }
@@ -131,8 +155,8 @@ export class ReportQueueStore {
     )
   }
 
-  async prune(cutoff: number): Promise<void> {
-    await this.withDbWrite(
+  async prune(cutoff: number): Promise<number> {
+    const result = await this.withDbWrite(
       'analytics.report-queue.prune',
       (db) =>
         db
@@ -140,6 +164,7 @@ export class ReportQueueStore {
           .where(lt(dbSchema.analyticsReportQueue.createdAt, cutoff)),
       { mirrorCore: true }
     )
+    return Number(result.rowsAffected ?? 0)
   }
 }
 

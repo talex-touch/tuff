@@ -2,7 +2,7 @@ import type { ComputedRef, Ref } from 'vue'
 import type { BaseAnchorAnimationOptions, BaseAnchorAnimationType } from './types'
 import { computed } from 'vue'
 import { hasWindow } from '../../../../utils/env'
-import { clamp01, LIQUID_DEFAULTS, normalizedVelocity, peelAt, resolveLiquidEase } from './base-anchor-liquid'
+import { clamp01, LIQUID_DEFAULTS, liquidVelocityAt, resolveLiquidEase } from './base-anchor-liquid'
 
 type BaseAnchorSide = 'top' | 'bottom' | 'left' | 'right'
 
@@ -59,6 +59,11 @@ interface BaseAnchorMotionOptions {
   applyLiquidFrame: (p: number, velocity?: number) => void
   /** Clear per-item inline opacity; hide the stage when the anchor ends up closed. */
   settleLiquid: (open: boolean) => void
+  /**
+   * True when the user asked for reduced motion. The gsap-driven types (transfer,
+   * boom, opacity) snap to their end state; liquid handles this inside prepareLiquid.
+   */
+  prefersReducedMotion: () => boolean
 }
 
 /** `drip` and `bead` share one engine; only the sheet's width behaviour differs. */
@@ -229,6 +234,9 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     content.style.transformOrigin = ''
     content.style.opacity = ''
     content.style.filter = ''
+    // liquid bounds the content by the necked sheet while the drop runs; a clip
+    // left behind would keep cropping the panel long after it settled.
+    content.style.clipPath = ''
     content.style.willChange = 'auto'
   }
 
@@ -306,10 +314,25 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       : resolveLiquidEase(animation.closeEase, LIQUID_DEFAULTS.closeEase)
 
     const startedAt = performance.now()
-    let previousP = isOpening ? 0 : 1
-    let previousT = 0
-    let liquidVelocity = 0
-    options.applyLiquidFrame(previousP, 0)
+
+    /**
+     * One frame, derived entirely from `t`.
+     *
+     * The bead's velocity is evaluated analytically rather than differenced
+     * against the previous frame, so the seed frame reports the speed the drop
+     * actually leaves at instead of a standing start, nothing lags a frame
+     * behind the geometry it belongs to, and rAF pacing drops out of the result.
+     */
+    const writeFrame = (t: number, settled: boolean) => {
+      // Closing runs its own shorter ease-out curve consumed in reverse position,
+      // never the open curve played backwards.
+      const eased = ease(t)
+      const p = isOpening ? eased : 1 - eased
+      // The motion has stopped, so the drop is no longer reporting any speed.
+      options.applyLiquidFrame(p, settled ? 0 : liquidVelocityAt(p, t, ease))
+    }
+
+    writeFrame(0, false)
 
     const step = () => {
       liquidFrame = null
@@ -317,28 +340,8 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
         return
 
       const t = clamp01((performance.now() - startedAt) / durMs)
-      // Closing runs its own shorter ease-out curve consumed in reverse position,
-      // never the open curve played backwards.
-      const eased = ease(t)
-      const p = isOpening ? eased : 1 - eased
-
-      // Normalised against elapsed *timeline fraction*, so the pinch is identical
-      // at any duration or refresh rate. Two frames can land inside one clock
-      // tick; carrying the last reading keeps that from flashing the sheet back
-      // to full width for a frame.
-      const dt = t - previousT
-      if (dt > 0) {
-        // Measured off the peel, not off p: p is linear, so its derivative is a
-        // constant and would pin the pinch open forever. The peel decelerates to
-        // a dead stop at the detach, which is the fall the bead is reporting.
-        liquidVelocity = normalizedVelocity(peelAt(p) - peelAt(previousP), dt)
-        previousP = p
-        previousT = t
-      }
-
       const settled = t >= 1
-      // The motion has stopped, so the drop is no longer reporting any speed.
-      options.applyLiquidFrame(p, settled ? 0 : liquidVelocity)
+      writeFrame(t, settled)
 
       if (settled) {
         finish()
@@ -503,6 +506,13 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       return
     }
 
+    // Reduced motion: snap straight to the open end state instead of running a
+    // gsap timeline (liquid already handles this inside runLiquid via prepareLiquid).
+    if (options.prefersReducedMotion()) {
+      finishOpen(currentRunId)
+      return
+    }
+
     const gsap = await loadGsap()
     if (!options.isCurrentRun(currentRunId))
       return
@@ -611,6 +621,12 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
       return
     }
 
+    // Reduced motion: snap straight to the closed end state instead of tweening.
+    if (options.prefersReducedMotion()) {
+      finishClose(currentRunId)
+      return
+    }
+
     const startCloseMotion = async () => {
       if (!options.isCurrentRun(currentRunId) || options.isOpen.value)
         return
@@ -691,6 +707,12 @@ export function useBaseAnchorMotion(options: BaseAnchorMotionOptions) {
     bouncePad,
     clearTimeline,
     effectiveAnimationType,
+    /**
+     * True while the drop owns the frame loop. The follow watcher uses this to
+     * stay out of the way: `runLiquid` already re-measures and rewrites the whole
+     * stage every frame, so refreshing it from a second loop is pure duplicate work.
+     */
+    hasActiveLiquidRun: () => liquidFrame !== null,
     hasActiveTimeline: () => tl !== null || liquidFrame !== null,
     resolvedAnimation,
     settleOpenVisualStateForFollow,

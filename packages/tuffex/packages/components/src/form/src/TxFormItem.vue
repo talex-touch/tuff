@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FormItemEmits, FormItemProps, FormRule } from './types'
-import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { TX_FORM_CONTEXT_KEY } from './context'
 
 defineOptions({ name: 'TxFormItem' })
@@ -17,16 +17,19 @@ const emit = defineEmits<FormItemEmits>()
 const form = inject(TX_FORM_CONTEXT_KEY, null)
 const errorMessage = ref('')
 const initialValue = ref<any>(undefined)
+const fieldId = useId()
+const errorId = useId()
 
 const fieldValue = computed(() => {
-  if (!form?.model || !props.prop)
+  const model = form?.model.value
+  if (!model || !props.prop)
     return undefined
-  return form.model[props.prop]
+  return model[props.prop]
 })
 
 const resolvedRules = computed<FormRule[]>(() => {
   const local = props.rules
-  const fromForm = props.prop ? form?.rules?.[props.prop] : undefined
+  const fromForm = props.prop ? form?.rules.value?.[props.prop] : undefined
   const merged = local ?? fromForm
   if (!merged)
     return []
@@ -40,6 +43,15 @@ const isRequired = computed(() => {
 })
 
 const labelText = computed(() => props.label || props.prop || '')
+
+// Exposed so a slotted control can wire full labelling:
+//   <TxFormItem #default="{ id, ariaInvalid, ariaDescribedby }">
+//     <input :id="id" :aria-invalid="ariaInvalid" :aria-describedby="ariaDescribedby">
+const fieldSlotProps = computed(() => ({
+  id: fieldId,
+  ariaInvalid: errorMessage.value ? 'true' : undefined,
+  ariaDescribedby: errorMessage.value ? errorId : undefined,
+}))
 
 function isEmpty(value: any): boolean {
   if (value === null || value === undefined || value === '')
@@ -59,7 +71,7 @@ async function runRule(rule: FormRule): Promise<string | null> {
   }
 
   if (rule.validator) {
-    const result = await rule.validator(value, rule, form?.model ?? {})
+    const result = await rule.validator(value, rule, form?.model.value ?? {})
     if (result === false)
       return message
     if (typeof result === 'string')
@@ -88,8 +100,9 @@ function clearValidate() {
 }
 
 function reset() {
-  if (form?.model && props.prop)
-    form.model[props.prop] = initialValue.value
+  const model = form?.model.value
+  if (model && props.prop)
+    model[props.prop] = initialValue.value
   clearValidate()
 }
 
@@ -107,8 +120,9 @@ const labelStyle = computed(() => {
 })
 
 onMounted(() => {
-  if (form?.model && props.prop)
-    initialValue.value = form.model[props.prop]
+  const model = form?.model.value
+  if (model && props.prop)
+    initialValue.value = model[props.prop]
   form?.registerItem(itemContext)
 })
 
@@ -125,12 +139,12 @@ onBeforeUnmount(() => {
       { 'is-error': !!errorMessage, 'is-required': isRequired, 'is-inline': inline },
     ]"
   >
-    <label v-if="labelText" class="tx-form-item__label" :style="labelStyle">
+    <label v-if="labelText" class="tx-form-item__label" :for="fieldId" :style="labelStyle">
       {{ labelText }}
     </label>
     <div class="tx-form-item__content">
-      <slot />
-      <div v-if="showMessage && errorMessage" class="tx-form-item__error">
+      <slot v-bind="fieldSlotProps" />
+      <div v-if="showMessage && errorMessage" :id="errorId" class="tx-form-item__error" role="alert">
         {{ errorMessage }}
       </div>
     </div>
@@ -146,6 +160,12 @@ onBeforeUnmount(() => {
   &--label-top {
     flex-direction: column;
     gap: 6px;
+  }
+
+  // Give the documented `labelPosition="right"` an actual effect; without this it
+  // rendered identically to the default `left`.
+  &--label-right .tx-form-item__label {
+    text-align: right;
   }
 
   &.is-inline {

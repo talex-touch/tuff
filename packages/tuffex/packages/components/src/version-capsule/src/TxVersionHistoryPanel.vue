@@ -53,11 +53,12 @@ function toneClass(entry: TxVersionHistoryEntry) {
       </p>
 
       <component
-        :is="latest.href ? 'a' : 'div'"
+        :is="latest.href ? 'a' : 'button'"
         v-if="latest"
         class="tx-version-history-panel__latest"
         :class="toneClass(latest)"
         :href="latest.href"
+        :type="latest.href ? undefined : 'button'"
         @click="emit('select', latest)"
       >
         <div class="tx-version-history-panel__latest-top">
@@ -96,12 +97,13 @@ function toneClass(entry: TxVersionHistoryEntry) {
       </component>
 
       <component
-        :is="entry.href ? 'a' : 'div'"
+        :is="entry.href ? 'a' : 'button'"
         v-for="entry in entries"
         :key="entry.id"
         class="tx-version-history-panel__row"
         :class="toneClass(entry)"
         :href="entry.href"
+        :type="entry.href ? undefined : 'button'"
         @click="emit('select', entry)"
       >
         <span class="tx-version-history-panel__row-main">
@@ -201,12 +203,22 @@ function toneClass(entry: TxVersionHistoryEntry) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  width: 100%;
   padding: 12px;
+  box-sizing: border-box;
   border: 1px solid color-mix(in srgb, var(--tx-version-entry-tone) 24%, transparent);
   border-radius: 12px;
   background: var(--tx-fill-color);
   color: inherit;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.tx-version-history-panel__latest:focus-visible {
+  outline: 2px solid var(--tx-version-panel-accent);
+  outline-offset: -2px;
 }
 
 .tx-version-history-panel__latest-top {
@@ -297,10 +309,17 @@ function toneClass(entry: TxVersionHistoryEntry) {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  width: 100%;
   padding: 8px 10px;
+  box-sizing: border-box;
+  border: 0;
   border-radius: 10px;
+  background: transparent;
   color: inherit;
+  font: inherit;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
   transition: background-color var(--tx-transition-duration-fast, 0.2s) var(--tx-transition-function, ease-in-out);
 }
 

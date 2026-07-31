@@ -54,6 +54,44 @@ describe('plugin Secret SDK', () => {
     await expect(usePluginSecret().set('token', 'value')).resolves.toBe(denied)
   })
 
+  it('preserves credential bytes and rejects hostile batches before transport', async () => {
+    mocks.send.mockResolvedValue({ success: true })
+    const secret = usePluginSecret()
+
+    await expect(secret.setMany([{ key: 'providers.tencent.secretId', value: '  synthetic-id  ' }])).resolves.toEqual({
+      success: true,
+    })
+    expect(mocks.send).toHaveBeenCalledWith(PluginEvents.storage.setSecretBatch, {
+      pluginName: 'demo-plugin',
+      entries: [{ key: 'providers.tencent.secretId', value: '  synthetic-id  ' }],
+    })
+    mocks.send.mockClear()
+
+    const getter = vi.fn(() => 'synthetic')
+    const accessor = Object.defineProperty({ key: 'token' }, 'value', { enumerable: true, get: getter })
+    for (const entries of [
+      Array.from({ length: 2 }),
+      [accessor],
+      [{ key: 'token', value: 'value', extra: true }],
+      [{ key: 'token', value: 'x'.repeat(64 * 1024 + 1) }],
+    ]) {
+      await expect(secret.setMany(entries as never)).rejects.toBeInstanceOf(TypeError)
+    }
+    expect(getter).not.toHaveBeenCalled()
+    expect(mocks.send).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed or oversized secret responses', async () => {
+    const secret = usePluginSecret()
+    for (const response of [undefined, '   ', 'x'.repeat(64 * 1024 + 1)]) {
+      mocks.send.mockResolvedValueOnce(response)
+      await expect(secret.get('token')).rejects.toMatchObject({
+        name: 'PluginStorageError',
+        operation: 'secret:get',
+      })
+    }
+  })
+
   it('does not conflate rejected access with a missing secret', async () => {
     mocks.send.mockResolvedValue({
       success: false,

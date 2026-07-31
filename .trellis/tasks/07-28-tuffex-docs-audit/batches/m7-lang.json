@@ -1,0 +1,155 @@
+[
+ {
+  "component": "card",
+  "category": "lang-parity",
+  "summary": "The zh Props row for `loadingSpinnerSize` omits the effective default of `12` that the en row documents, and the same zh rows for `clickable`/`loading`/`disabled`/`inertial` drop the behavioral detail present in en.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/card.zh.mdc",
+  "evidenceLine": 1678,
+  "evidenceQuote": "| loadingSpinnerSize | `number` | - | loading spinner 大小（px） |",
+  "suggestion": "Bring the zh row in line with en:1678 (\"Spinner size in px. Defaults to `12` when omitted.\"), which matches `resolvedSpinnerSize` in TxCard.vue:93-97. The gap is systematic across zh rows 1676-1682: zh `disabled` says only \"是否禁用\" while en:1679 states it \"blocks card click emission and pointer-driven motion updates\"; zh `inertialRebound` omits the `0..1` clamp that en:1682 states. Also normalize formatting — zh rows 1654-1666 wrap prop names in backticks but rows 1667-1682 do not, an inconsistency absent from en."
+ },
+ {
+  "component": "card",
+  "category": "lang-parity",
+  "summary": "The zh doc has a stray marketing sentence rendered *inside* the Vue code block of the Layout Examples section, after `</template>`, referencing the obsolete product name \"TouchX UI\"; the en doc does not have it.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/card.zh.mdc",
+  "evidenceLine": 1782,
+  "evidenceQuote": "  TouchX UI 的 Card 组件提供了灵活的内容展示方案，结合玻璃拟态效果创造出现代感十足的用户界面。",
+  "suggestion": "Delete line 1782. It sits between `</template>` (line 1780) and the closing `---` (line 1783) of a `:::TuffCodeBlock{lang=\"vue\"}` block, so it renders as syntax-highlighted Vue source — prose leaked into a code sample. It is also the sole reason zh is 1802 lines vs en's 1800. The name \"TouchX UI\" is stale for this library (TuffEx); the only other occurrences repo-wide are in container.zh.mdc / container.en.mdc, which should be swept separately."
+ },
+ {
+  "component": "group-block",
+  "category": "lang-drift",
+  "summary": "zh 与 en 的 frontmatter description 及正文首段语义漂移：en 讲「用来组织 settings / account options / 紧凑偏好行」并给出使用场景，zh 只重复了一句「可折叠分组容器，带有平滑动画效果」，强调点变成了动画。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/group-block.zh.mdc",
+  "evidenceLine": 13,
+  "evidenceQuote": "用于组织相关内容的可折叠分组容器，带有平滑动画效果。",
+  "suggestion": "把 zh frontmatter description 与首段对齐 en 语义，例如「用于组织设置、账号选项与紧凑偏好行的可折叠分组容器，统一图标、标签与控件布局」；首段不要与 frontmatter description 逐字重复。"
+ },
+ {
+  "component": "image-uploader",
+  "category": "i18n-hardcoded",
+  "summary": "The add tile label `Upload` and the `Remove {name}` aria-label are hardcoded English string literals in the template, and the component exposes neither slots nor label props, so a zh-locale host cannot localize the only visible text the component renders.",
+  "evidenceFile": "packages/tuffex/packages/components/src/image-uploader/src/TxImageUploader.vue",
+  "evidenceLine": 115,
+  "evidenceQuote": "<span class=\"tx-image-uploader__add-text\">Upload</span>",
+  "suggestion": "Add optional `uploadText?: string` and `removeLabel?: (name?: string) => string` props (or an `add` slot) defaulting to the current English strings, and document them in the Props table of image-uploader.zh.mdc / .en.mdc — the Slots table currently states no customization point exists at all."
+ },
+ {
+  "component": "glow-text",
+  "category": "lang-drift",
+  "summary": "The zh intro paragraph only repeats the frontmatter description, while the en intro adds concrete mode-selection guidance (\"Use mode=\\\"text-clip\\\" when the shine should be clipped to glyphs; keep the default adaptive mode for container-level shimmer\").",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/glow-text.zh.mdc",
+  "evidenceLine": 13,
+  "evidenceQuote": "用于在文本或任意内容（包括图片/卡片）上叠加“高光扫过”的动效。",
+  "suggestion": "Translate the en opening paragraph into zh so both languages state what the component is for and which mode to pick, e.g. \"`TxGlowText` 为文本、徽章、图片预览等紧凑表面叠加扫光。需要扫光裁切到字形时使用 `mode=\\\"text-clip\\\"`，容器级微光保持默认的 `adaptive`。\""
+ },
+ {
+  "component": "button",
+  "category": "lang-drift",
+  "summary": "In the Primary + Ghost example the English snippet labels the ghost button \"Learn More\" while the Chinese snippet says \"次要操作\" and ButtonPrimaryGhostDemo.vue renders \"Secondary action\" / \"次要操作\", so the en doc alone describes a different affordance than what the demo shows.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/button.en.mdc",
+  "evidenceLine": 350,
+  "evidenceQuote": "    <TxButton variant=\"ghost\">Learn More</TxButton>",
+  "suggestion": "Change the en snippet label to `Secondary action` to match ButtonPrimaryGhostDemo.vue and the zh snippet."
+ },
+ {
+  "component": "search-select",
+  "category": "lang-drift",
+  "summary": "The zh intro claims the dropdown was migrated to a `TxPopover → TxTooltip → TxBaseAnchor` chain, which has no en counterpart (en says \"hosted by TxPopover with full-width reference anchoring\") and is not backed by source — TxPopover.vue imports and renders TxBaseAnchor directly, with no TxTooltip in between.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/search-select.zh.mdc",
+  "evidenceLine": 15,
+  "evidenceQuote": "下拉层已统一迁移到 `TxPopover → TxTooltip → TxBaseAnchor` 链路，浮层行为与其他选择类组件保持一致。",
+  "suggestion": "Replace the zh sentence with a translation of the en one (\"下拉层由 TxPopover 承载，参考元素全宽锚定，且不响应参考元素点击切换\"), matching TxPopover.vue:5 (`import { TxBaseAnchor } from '../../base-anchor'`) and TxSearchSelect.vue:179-180 (`:reference-full-width=\"true\"`, `:toggle-on-reference-click=\"false\"`)."
+ },
+ {
+  "component": "scroll",
+  "category": "lang-drift",
+  "summary": "The zh Props table descriptions have drifted behind the en ones: zh `options` says only \"BetterScroll 初始化参数（兜底，会覆盖部分默认值）\" and drops the `wheelOvershoot` interception that en documents; `noPadding`, `wheel`, `bounce`, `direction`, `scrollbar*` and `pullDown*` rows are likewise reduced to bare labels in zh.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/scroll.zh.mdc",
+  "evidenceLine": 276,
+  "evidenceQuote": "| `options` | `Record<string, unknown>` | `{}` | BetterScroll 初始化参数（兜底，会覆盖部分默认值） |",
+  "suggestion": "Re-translate the en Props table into scroll.zh.mdc row by row so behavioral details (`wheelOvershoot` consumed locally, ctrl-wheel ignored, native vs BetterScroll threshold semantics) exist in both languages."
+ },
+ {
+  "component": "loading-overlay",
+  "category": "lang-drift",
+  "summary": "The zh intro paragraph is a verbatim repeat of the frontmatter `description` (\"用于在内容区域或全屏展示加载遮罩。\") while the en intro states when to reach for the component; the zh reader gets no design-purpose guidance.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/loading-overlay.zh.mdc",
+  "evidenceLine": 13,
+  "evidenceQuote": "用于在内容区域或全屏展示加载遮罩。",
+  "suggestion": "Replace line 13 with a translation of the en intro, e.g. \"当内容已经存在、只需要在加载/保存/同步期间临时阻塞时使用 LoadingOverlay；首屏内容尚未存在时改用 TxLoadingState。\""
+ },
+ {
+  "component": "avatar-variants",
+  "category": "lang-parity",
+  "summary": "英文文档正文首段被清洗成空句：只剩 \"`TxAvatar` + `TxOutlineBorder` + `TxCornerOverlay` “”\"，中文同位置是完整的设计目的陈述，英文读者拿不到任何页面用途说明。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/avatar-variants.en.mdc",
+  "evidenceLine": 10,
+  "evidenceQuote": "`TxAvatar` + `TxOutlineBorder` + `TxCornerOverlay` “”",
+  "suggestion": "把英文首段补成 frontmatter description 的完整句式，例如 \"A recipe gallery that composes TxAvatar, TxOutlineBorder, and TxCornerOverlay into status, activity, platform, system, social, and contextual avatar badges.\"，并删掉遗留的全角引号。"
+ },
+ {
+  "component": "dropdown-menu",
+  "category": "lang-drift",
+  "summary": "The zh page's lead paragraph is a verbatim copy of its frontmatter description (\"基于 Popover 的下拉菜单（Windows 风格）\"), while the en lead explains trigger slot, v-model control, and TxDropdownItem usage.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/dropdown-menu.zh.mdc",
+  "evidenceLine": 10,
+  "evidenceQuote": "基于 Popover 的下拉菜单（Windows 风格）。",
+  "suggestion": "Translate the en lead into zh: 说明 TxDropdownMenu 从 trigger 插槽渲染紧凑操作菜单、用 v-model 控制开合、菜单行使用 TxDropdownItem，并删除对 description 的重复。"
+ },
+ {
+  "component": "empty-state",
+  "category": "lang-parity",
+  "summary": "The zh doc's opening line just repeats the frontmatter `description` verbatim, dropping the en doc's two-sentence design guidance (which surfaces/panes it is for, and the \"pick a preset variant first, override copy only when local context needs it\" rule).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/empty-state.zh.mdc",
+  "evidenceLine": 13,
+  "evidenceQuote": "通用空态/引导组件，适用于页面为空、未选择、无权限等场景。",
+  "suggestion": "Translate empty-state.en.mdc:13 into the zh doc, e.g. \"`TxEmptyState` 为页面、表格、详情面板和引导流程渲染紧凑的反馈面板。常见状态先选预设 `variant`，只有本地上下文需要更具体的文案时才覆盖文字、图标或操作。\""
+ },
+ {
+  "component": "popover",
+  "category": "lang-drift",
+  "summary": "The zh Events table collapses all three event descriptions to bare verbs (\"打开\" / \"关闭\" / \"v-model 更新\") and drops the controlled-vs-uncontrolled semantics that the en table spells out.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/popover.zh.mdc",
+  "evidenceLine": 212,
+  "evidenceQuote": "| `open` | - | 打开 |",
+  "suggestion": "Translate the en descriptions rather than abbreviating: `open` → \"内部或非受控状态打开时触发\", `close` → \"内部或非受控状态关闭时触发\", `update:modelValue` → \"Popover 请求变更打开状态时触发（受控/非受控均会发出）\", matching popover.en.mdc:212-214."
+ },
+ {
+  "component": "transition",
+  "category": "lang-drift",
+  "summary": "The zh intro is a single bare sentence about X/Y switching, while the en intro is a three-clause purpose statement explaining that TxTransition centralizes Tuffex motion presets, wraps Vue Transition/TransitionGroup, maps timing props to CSS variables, and delegates to TxTransitionSmoothSize.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/transition.zh.mdc",
+  "evidenceLine": 11,
+  "evidenceQuote": "用于内容切换（X）与列表增删（Y）的通用过渡封装。",
+  "suggestion": "Translate the en paragraph (transition.en.mdc:11) into zh, e.g. \"`TxTransition` 统一了 Tuffex 组件使用的动效预设：它封装 Vue `Transition` / `TransitionGroup`，把时长与缓动映射为 CSS 变量，并在需要尺寸感知时切换到 `TxTransitionSmoothSize`。\""
+ },
+ {
+  "component": "segmented-slider",
+  "category": "lang-parity",
+  "summary": "Both segmented-slider demos branch on `locale === 'zh'` but the `v-else` (English) branch duplicates the Chinese copy verbatim (\"当前值\", \"价格档位选择\", \"评分选择\", \"星\"), while the en doc snippets show \"Current value\", \"Price tier selection\", \"Rating selection\", \"stars\".",
+  "evidenceFile": "apps/nexus/app/components/content/demos/SegmentedSliderSegmentedSliderDemo.vue",
+  "evidenceLine": 23,
+  "evidenceQuote": "            当前值: {{ value }}",
+  "suggestion": "Replace the duplicated `v-if`/`v-else` blocks with a single template plus a `labels` computed keyed off `locale` (as EmptyEmptyDemo.vue does), using the English strings from segmented-slider.en.mdc for the non-zh branch."
+ },
+ {
+  "component": "cascader",
+  "category": "lang-parity",
+  "summary": "The zh intro is a one-line feature list copied from the frontmatter description, dropping the single-vs-multiple value shape and the \"search is local to the loaded tree\" contract that the en intro states.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/cascader.zh.mdc",
+  "evidenceLine": 13,
+  "evidenceQuote": "用于选择具有层级关系的数据，支持搜索、单选/多选与异步加载子节点。",
+  "suggestion": "Translate the three-sentence en intro (cascader.en.mdc:13) into zh: state that single mode stores one path array, multiple mode stores an array of path arrays, search only covers already-loaded nodes, and `load` fires for non-leaf nodes without `children`."
+ },
+ {
+  "component": "stat-card",
+  "category": "lang-drift",
+  "summary": "The EN `value` prop description claims numeric values \"can animate through NumberFlow when available\", but `TxStatCard.vue` has no NumberFlow dependency at all (it formats with `Intl.NumberFormat`); the ZH row correctly says \"会使用默认数字格式化\".",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/stat-card.en.mdc",
+  "evidenceLine": 205,
+  "evidenceQuote": "| `value` | `number \\| string` | - | Primary value shown in the card; numeric values can animate through NumberFlow when available. |",
+  "suggestion": "Rewrite the EN row to match the code and the ZH doc: \"Primary value; numbers are formatted with the built-in number formatter. Use the `value` slot to render NumberFlow or custom units yourself.\""
+ }
+]

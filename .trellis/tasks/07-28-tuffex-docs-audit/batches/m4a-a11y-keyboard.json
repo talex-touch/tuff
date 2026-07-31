@@ -1,0 +1,164 @@
+[
+ {
+  "component": "card",
+  "category": "a11y",
+  "summary": "A `clickable` card renders `cursor: pointer` and emits `click` from a bare `<div>` with no `tabindex`, `role=\"button\"`, or keydown handler, so the interaction is entirely keyboard- and screen-reader-inaccessible; `disabled` also never sets `aria-disabled`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/card/src/TxCard.vue",
+  "evidenceLine": 462,
+  "evidenceQuote": "    @click=\"onClick\"\n    @mousemove=\"onMouseMove\"\n    @mouseleave=\"onMouseLeave\"",
+  "suggestion": "When `clickable` is true, bind `:tabindex=\"disabled ? -1 : 0\"`, `role=\"button\"`, `:aria-disabled=\"disabled || undefined\"`, and add `@keydown.enter.prevent=\"onClick\"` / `@keydown.space.prevent=\"onClick\"` routed through the same `onClick` guard. `grep -c 'tabindex|role=|keydown|aria-disabled'` over TxCard.vue returns 0, confirming none of these exist. The docs acknowledge the div is non-semantic (zh:1705) but that guidance does not make a keyboard user able to activate a card built with `clickable` + `@click`, which is the component's own advertised selection/navigation pattern."
+ },
+ {
+  "component": "breadcrumb",
+  "category": "a11y",
+  "summary": "Breadcrumb items without `href` — the documented 'manual click target' pattern — render as a plain `<span>` carrying a click handler, with no `tabindex`, `role=\"button\"`, or keydown handler, so they are unreachable by keyboard.",
+  "evidenceFile": "packages/tuffex/packages/components/src/breadcrumb/src/TxBreadcrumb.vue",
+  "evidenceLine": 43,
+  "evidenceQuote": "          :is=\"isInteractive(item, index) ? 'a' : 'span'\"",
+  "suggestion": "`isInteractive` (line 21-23) requires `item.href`, so every no-href, non-current, non-disabled item becomes a `<span>` with `@click=\"handleClick(...)\"` (line 52) and no focusability. The basic-usage demo relies on exactly this (`{ label: 'Library' }` with `@click`), so its middle crumb cannot be activated without a mouse. Render clickable no-href items as `<button type=\"button\">` (or add `tabindex=\"0\"`, `role=\"button\"`, and an Enter/Space keydown handler) while keeping current/disabled items as inert `<span>`."
+ },
+ {
+  "component": "fusion",
+  "category": "a11y",
+  "summary": "`trigger=\"click\"` attaches a click handler to a bare root `<div>` with no `role`, `tabindex`, or keydown handler, so the click-toggle mode is entirely keyboard-inaccessible.",
+  "evidenceFile": "packages/tuffex/packages/components/src/fusion/src/TxFusion.vue",
+  "evidenceLine": 83,
+  "evidenceQuote": "    @click=\"onClick\"",
+  "suggestion": "The root element (lines 78-84) is a `<div class=\"tx-fusion\">` with `@mouseenter`/`@mouseleave`/`@click` and no interactive semantics. A keyboard-only user can never toggle a `trigger=\"click\"` Fusion, and the base demo (fusion.zh.mdc:73) ships exactly that configuration. When `trigger === 'click'`, add `role=\"button\"`, `tabindex=\"0\"`, `:aria-pressed=\"active\"`, and an Enter/Space keydown handler that calls `onClick`; leave the root inert for `hover`/`manual`. Alternatively, document `trigger=\"click\"` as decorative-only and route activation through a real control in the slots."
+ },
+ {
+  "component": "card-item",
+  "category": "a11y",
+  "summary": "clickable 行只绑定了 Enter，没有 Space 键；`disabled` 时也只移除 tabindex、不设 `aria-disabled`，而文档 Interaction Contract 又建议传 `role=\"button\"`，此时 ARIA button 规范要求 Enter 与 Space 都能激活。",
+  "evidenceFile": "packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue",
+  "evidenceLine": 49,
+  "evidenceQuote": ":role=\"clickable ? role : undefined\"\n    :tabindex=\"(clickable && !disabled) ? 0 : undefined\"",
+  "suggestion": "补 `@keydown.space.prevent` 走同一激活路径（Space 需要 preventDefault 阻止页面滚动），并在 `clickable && disabled` 时输出 `aria-disabled=\"true\"`；文档「交互契约」相应补一条 Space 激活说明。"
+ },
+ {
+  "component": "group-block",
+  "category": "a11y",
+  "summary": "TxBlockSlot 的可点击根节点是裸 `div` + `@click`，没有 role / tabindex / 键盘处理；guidance 模式的 TxBlockSwitch 只剩一个 `aria-hidden` 箭头，整行导航对键盘和读屏用户完全不可达。",
+  "evidenceFile": "packages/tuffex/packages/components/src/group-block/src/TxBlockSlot.vue",
+  "evidenceLine": 64,
+  "evidenceQuote": "    :class=\"{ 'tx-block-slot--disabled': disabled, disabled }\"\n    @click=\"handleClick\"",
+  "suggestion": "参考同包的 TxGroupBlock（用真实 `<button>` 叠层）或 TxBlockLine（link 时渲染 `button type=\"button\"`）：在有 `click` 监听/guidance 时给根节点加 `role=\"button\"`、`tabindex=\"0\"`、`aria-disabled`，并绑定 Enter/Space；文档「交互契约」补充键盘激活说明。"
+ },
+ {
+  "component": "image-uploader",
+  "category": "a11y",
+  "summary": "The per-image remove button is `opacity: 0` and is only revealed by `.tx-image-uploader__item:hover`; there is no `:focus-visible` / `:focus-within` rule, so a keyboard user who tabs onto the remove button focuses a completely invisible control.",
+  "evidenceFile": "packages/tuffex/packages/components/src/image-uploader/src/TxImageUploader.vue",
+  "evidenceLine": 209,
+  "evidenceQuote": "opacity: 0;",
+  "suggestion": "Add `.tx-image-uploader__remove:focus-visible, .tx-image-uploader__item:focus-within .tx-image-uploader__remove { opacity: 1; }` alongside the existing hover rule at line 213, and give the button a visible focus ring."
+ },
+ {
+  "component": "tooltip",
+  "category": "a11y",
+  "summary": "With the default `trigger=\"hover\"` the tooltip never opens on keyboard focus (`onFocusIn` early-returns unless `trigger === 'focus'`), and the floating body carries `role=\"tooltip\"` with no `id`/`aria-describedby` link back to the reference, so keyboard and screen-reader users never receive the hint.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tooltip/src/TxTooltip.vue",
+  "evidenceLine": 95,
+  "evidenceQuote": "  if (props.trigger !== 'focus')\n    return",
+  "suggestion": "Let hover mode also respond to `focusin`/`focusout` (WAI-APG tooltip pattern: hover OR focus opens), generate a stable `id` for the `role=\"tooltip\"` node, and bind `aria-describedby` on the `.tx-tooltip__reference` wrapper while open."
+ },
+ {
+  "component": "search-select",
+  "category": "a11y",
+  "summary": "The dropdown has no combobox semantics and no keyboard path: the reference wrapper/input carries no role=\"combobox\"/aria-expanded/aria-controls, option rows have no role=\"option\", and the only key handler is `@keydown.enter=\"onEnter\"` which merely emits `search` — so ArrowDown/ArrowUp/Enter-to-select/Escape do nothing and options are mouse-only.",
+  "evidenceFile": "packages/tuffex/packages/components/src/search-select/src/TxSearchSelect.vue",
+  "evidenceLine": 188,
+  "evidenceQuote": "        <div class=\"tx-search-select__reference\">\n          <TuffInput\n            ref=\"inputRef\"",
+  "suggestion": "Add an `activeIndex` ref driven by ArrowDown/ArrowUp, make Enter pick the active option (falling back to `emitSearch` in remote mode), close on Escape, and wire `role=\"combobox\" aria-expanded aria-controls aria-activedescendant` on the input plus `role=\"listbox\"`/`role=\"option\" aria-selected` on the panel and rows. The docs' claim that slots are internal \"so keyboard and Popover behavior stay consistent\" (search-select.en.mdc:187) currently has nothing behind it."
+ },
+ {
+  "component": "loading-overlay",
+  "category": "a11y",
+  "summary": "The fullscreen overlay is a plain `<div>` with no `role=\"status\"`/`aria-busy`, no focus trap, and no keyboard blocking, so Tab still reaches the page behind it — contradicting the doc's guidance to use `fullscreen` for flows \"that cannot continue in parallel\".",
+  "evidenceFile": "packages/tuffex/packages/components/src/loading-overlay/src/TxLoadingOverlay.vue",
+  "evidenceLine": 40,
+  "evidenceQuote": "    <div v-if=\"loading\" class=\"tx-loading-overlay tx-loading-overlay--fullscreen\" :style=\"[overlayStyle, { zIndex }]\">",
+  "suggestion": "Add `role=\"status\"` + `aria-live=\"polite\"` on the overlay card and `aria-busy=\"true\"` on the local container; for the fullscreen branch either apply `inert` to `document.body` children while open or set `tabindex=\"-1\"` on the overlay and focus it, so keyboard users are actually blocked as the Best Practices section claims (loading-overlay.en.mdc:101)."
+ },
+ {
+  "component": "radio",
+  "category": "a11y",
+  "summary": "TxRadioGroup implements no roving tabindex: every child renders as a natively focusable `<button role=\"radio\">` with no `tabindex`, so Tab steps through every option instead of entering the group once and using arrow keys, violating the ARIA radiogroup pattern the component otherwise adopts.",
+  "evidenceFile": "packages/tuffex/packages/components/src/radio/src/TxRadio.vue",
+  "evidenceLine": 50,
+  "evidenceQuote": "    role=\"radio\"",
+  "suggestion": "Bind `:tabindex=\"isChecked ? 0 : -1\"` on the radio button (falling back to the first enabled radio when nothing is checked) so only one item is in the tab order, and document the resulting Tab-in/arrow-to-move behavior next to the existing keyboard bullet at radio.en.mdc:190."
+ },
+ {
+  "component": "status-badge",
+  "category": "a11y",
+  "summary": "TxStatusBadge 根节点是带 @click 的 div 且只有 role=\"status\"，没有 tabindex / keydown / button 语义，点击态徽标键盘完全不可达。",
+  "evidenceFile": "packages/tuffex/packages/components/src/status-badge/src/TxStatusBadge.vue",
+  "evidenceLine": 117,
+  "evidenceQuote": "    @click=\"handleClick\"",
+  "suggestion": "新增 clickable 类 prop：为 false 时保持 role=\"status\" 且不绑定 click；为 true 时渲染 <button type=\"button\">（或补 tabindex=\"0\" + role=\"button\" + Enter/Space keydown），并在文档「交互契约」里写清楚只有 clickable 模式才发 click。"
+ },
+ {
+  "component": "version-capsule",
+  "category": "a11y",
+  "summary": "`TxVersionHistoryPanel` renders history rows and the featured `latest` card as a plain `<div>` when `href` is absent while still attaching `@click=\"emit('select', entry)\"`, so those rows are mouse-only — no `role=\"button\"`, no `tabindex`, and the `:focus-visible` outline defined for `.tx-version-history-panel__row` can never fire.",
+  "evidenceFile": "packages/tuffex/packages/components/src/version-capsule/src/TxVersionHistoryPanel.vue",
+  "evidenceLine": 99,
+  "evidenceQuote": ":is=\"entry.href ? 'a' : 'div'\"",
+  "suggestion": "Mirror `TxVersionDownloadPanel`, which falls back to `<button>` (`:is=\"build.href ? 'a' : 'button'\"` at TxVersionDownloadPanel.vue:79): change both `<component :is>` expressions in the history panel to `entry.href ? 'a' : 'button'` (with `:type=\"entry.href ? undefined : 'button'\"`) so `select` is keyboard-reachable."
+ },
+ {
+  "component": "avatar",
+  "category": "a11y",
+  "summary": "`clickable` TxAvatar attaches a click handler to a plain `<div>` with no `role=\"button\"`, `tabindex`, or Enter/Space handler, so the interaction is mouse-only.",
+  "evidenceFile": "packages/tuffex/packages/components/src/avatar/src/TxAvatar.vue",
+  "evidenceLine": 125,
+  "evidenceQuote": "    @click=\"handleClick\"",
+  "suggestion": "When `clickable` is true, bind `role=\"button\"`, `:tabindex=\"0\"` and `@keydown.enter/@keydown.space.prevent=\"handleClick\"` on the root (the sibling TxCardItem already does exactly this at TxCardItem.vue:49-52). The docs acknowledge the gap as an \"Accessibility boundary\" (avatar.en.mdc:211) but the prop still ships a non-reachable affordance."
+ },
+ {
+  "component": "tree",
+  "category": "a11y",
+  "summary": "In `handleItemKeydown` the Enter/Space branch returns before `event.preventDefault()` when `selectable` is false, so pressing Space on a focused treeitem in a non-selectable tree scrolls the page instead of being consumed — treeitems are still in the roving tab sequence because `tabStopKey` does not consider `selectable`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tree/src/TxTree.vue",
+  "evidenceLine": 235,
+  "evidenceQuote": "if (!props.selectable)",
+  "suggestion": "Move `event.preventDefault()` above the `selectable` guard for the `' '` key (Enter can still bubble), so Space never scrolls while a treeitem holds focus. Add a test asserting `defaultPrevented` is true for Space when `selectable: false`."
+ },
+ {
+  "component": "popover",
+  "category": "a11y",
+  "summary": "Neither TxPopover's reference wrapper nor the TxBaseAnchor panel carries `aria-expanded`, `aria-haspopup`, `aria-controls`, or a panel `role`/`id`, so keyboard and screen-reader users get no signal that the trigger opens a popover and the body-teleported panel is announced out of context.",
+  "evidenceFile": "packages/tuffex/packages/components/src/popover/src/TxPopover.vue",
+  "evidenceLine": 200,
+  "evidenceQuote": "        class=\"tx-popover__reference\"\n        :class=\"{ 'is-full-width': props.referenceFullWidth }\"\n        @mouseenter=\"onReferenceEnter\"",
+  "suggestion": "Bind `aria-haspopup=\"dialog\"`, `:aria-expanded=\"open\"`, and `:aria-controls=\"panelId\"` on `.tx-popover__reference`, and give the TxBaseAnchor panel a matching `:id` plus `role=\"dialog\"`/`role=\"tooltip\"`. TxBaseAnchor currently only sets `aria-hidden=\"true\"` on the arrow and liquid decorations (TxBaseAnchor.vue:913, 927, 1072) — nothing on the panel itself."
+ },
+ {
+  "component": "data-table",
+  "category": "a11y",
+  "summary": "Rows emit `rowClick` on every click but only receive `tabindex`/keydown handling when `interactiveRows` is set, so the documented `rowClick` event is mouse-only by default.",
+  "evidenceFile": "packages/tuffex/packages/components/src/data-table/src/TxDataTable.vue",
+  "evidenceLine": 331,
+  "evidenceQuote": "          :tabindex=\"interactiveRows ? 0 : undefined\"",
+  "suggestion": "Derive interactivity from whether a `rowClick` listener is attached (`!!attrs.onRowClick`) so keyboard access is automatic, or stop emitting `rowClick` from the pointer handler when `interactiveRows` is false. Verified: with default props, clicking a row emits `rowClick` while `row.attributes('tabindex')` is `undefined`."
+ },
+ {
+  "component": "picker",
+  "category": "a11y",
+  "summary": "Each column scroller declares `role=\"listbox\"` but its children are plain `<button>` elements with no `role=\"option\"`/`aria-selected`, the listbox itself is `tabindex=\"-1\"`, and there is no arrow-key handling.",
+  "evidenceFile": "packages/tuffex/packages/components/src/picker/src/TxPicker.vue",
+  "evidenceLine": 306,
+  "evidenceQuote": "          role=\"listbox\"",
+  "suggestion": "Give the option buttons `role=\"option\"` with `:aria-selected=\"localValue[colIndex] === opt.value\"`, make the listbox focusable (`tabindex=\"0\"`) with `aria-activedescendant`, and handle ArrowUp/ArrowDown/Home/End to move the selection. Apply to both the inline (line 306) and popup (line 358) render paths."
+ },
+ {
+  "component": "flat-radio",
+  "category": "a11y",
+  "summary": "In `multiple` mode the arrow-key cursor `focusedValue` is tracked internally but never rendered or exposed — it is not provided to items, not styled, and not surfaced via `aria-activedescendant`, so keyboard users move an invisible cursor before Enter/Space toggles an item they cannot identify.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-radio/src/TxFlatRadio.vue",
+  "evidenceLine": 222,
+  "evidenceQuote": "focusedValue.value = nextValue",
+  "suggestion": "Add `focusedValue` to the provided `TxFlatRadioContext`, render an `is-focused` outline on the matching item, give items stable ids and set `aria-activedescendant` on the container so the virtual focus is both visible and announced."
+ }
+]

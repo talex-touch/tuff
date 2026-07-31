@@ -42,8 +42,8 @@ code: |
 
 | 属性名 | 类型 | 默认值 | 说明 |
 |------|------|---------|------|
-| `size` | `'sm' \| 'md'` | `'sm'` | 快捷键 token 尺寸。 |
-| `tone` | `'default' \| 'primary'` | `'default'` | 视觉色调。 |
+| `size` | `'sm' \| 'md'` | `'sm'` | Token 尺寸：`sm`（默认）用于行内帮助与菜单快捷键；`md` 字号更大，用于独立展示的快捷键。 |
+| `tone` | `'default' \| 'primary'` | `'default'` | 视觉色调：`primary` 仅用于页面或命令的主快捷键，同屏不宜超过一组。 |
 
 ### Events
 

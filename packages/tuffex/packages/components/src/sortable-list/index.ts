@@ -6,6 +6,8 @@ const SortableList = withInstall(TxSortableList)
 
 export { SortableList, TxSortableList }
 export type { SortableListEmits, SortableListItem, SortableListProps }
-export type TxSortableListInstance = InstanceType<typeof TxSortableList>
+// TxSortableList is a generic SFC (breaks `InstanceType<typeof …>`) and exposes
+// no instance methods via defineExpose, so its public ref surface is empty.
+export type TxSortableListInstance = Record<string, never>
 
 export default SortableList

@@ -128,135 +128,6 @@ code: |
 ---
 :::
 
-### Pull-down Content Height Follow (Filters/Search)
-
-### AutoSizer height for dropdown
-:::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightForDropdownDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const open = ref(false)
-  const mode = ref<'short' | 'long'>('short')
-  const sizerRef = ref<any>(null)
-
-  function toggleOpen() {
-    void sizerRef.value?.action?.(() => {
-      open.value = !open.value
-    })
-  }
-
-  function toggleItems() {
-    void sizerRef.value?.action?.(() => {
-      mode.value = mode.value === 'short' ? 'long' : 'short'
-    })
-  }
-  </script>
-
-  <template>
-    <div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <TxButton @click="toggleOpen">
-          Toggle dropdown
-        </TxButton>
-        <TxButton @click="toggleItems">
-          Toggle items
-        </TxButton>
-      </div>
-
-      <div style="height: 10px;" />
-
-      <div style="width: 320px; max-width: 100%; border: 1px solid var(--tx-border-color); border-radius: 12px; overflow: hidden;">
-        <div style="padding: 10px 12px; font-weight: 600;">
-          Dropdown Panel (mock)
-        </div>
-        <TxAutoSizer ref="sizerRef" :width="false" :height="true" outer-class="overflow-hidden" style="padding: 8px 12px;">
-          <div v-if="open" style="display: flex; flex-direction: column; gap: 8px;">
-            <TxButton variant="secondary" style="justify-content: flex-start;">
-              Item A
-            </TxButton>
-            <TxButton variant="secondary" style="justify-content: flex-start;">
-              Item B
-            </TxButton>
-            <TxButton v-if="mode === 'long'" variant="secondary" style="justify-content: flex-start;">
-              Item C
-            </TxButton>
-            <TxButton v-if="mode === 'long'" variant="secondary" style="justify-content: flex-start;">
-              Item D
-            </TxButton>
-            <TxButton v-if="mode === 'long'" variant="secondary" style="justify-content: flex-start;">
-              Item E
-            </TxButton>
-          </div>
-        </TxAutoSizer>
-      </div>
-    </div>
-  </template>
----
-:::
-
-### Dialog Content Height Follow (Simulated)
-
-### AutoSizer height for dialog
-:::TuffDemoWrapper{demo="AutoSizerAutoSizerHeightForDialogDemo" code-lang="vue"}
----
-code: |
-  <script setup lang="ts">
-  import { ref } from 'vue'
-
-  const mode = ref<'short' | 'long'>('short')
-  const sizerRef = ref<any>(null)
-
-  function toggle() {
-    void sizerRef.value?.action?.(() => {
-      mode.value = mode.value === 'short' ? 'long' : 'short'
-    })
-  }
-  </script>
-
-  <template>
-    <div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <TxButton @click="toggle">
-          Toggle content
-        </TxButton>
-      </div>
-
-      <div style="height: 10px;" />
-
-      <div style="width: 420px; max-width: 100%; border: 1px solid var(--tx-border-color); border-radius: 16px; overflow: hidden;">
-        <div style="padding: 12px 14px; font-weight: 600;">
-          Dialog (mock)
-        </div>
-
-        <TxAutoSizer ref="sizerRef" :width="false" :height="true" outer-class="overflow-hidden" style="padding: 12px 14px;">
-          <div v-if="mode === 'short'" style="color: var(--tx-text-color-secondary); line-height: 1.6;">
-            Short content.
-          </div>
-          <div v-else style="color: var(--tx-text-color-secondary); line-height: 1.6;">
-            Long content. Long content. Long content. Long content. Long content.
-            <div style="height: 12px;" />
-            More lines. More lines. More lines.
-          </div>
-        </TxAutoSizer>
-
-        <div
-          style="padding: 12px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--tx-border-color);"
-        >
-          <TxButton variant="secondary">
-            Cancel
-          </TxButton>
-          <TxButton variant="primary">
-            Confirm
-          </TxButton>
-        </div>
-      </div>
-    </div>
-  </template>
----
-:::
-
 ### Width Only (Recommended for Button Content Changes)
 
 ### AutoSizer width
@@ -446,9 +317,9 @@ code: |
 | `refresh()` | `() => Promise<void>` | Manually remeasures the configured target. |
 | `flip(action)` | `(action: () => void \| Promise<void>) => Promise<void>` | Runs an action while auto-resize is paused, then performs a size FLIP transition and remeasures. |
 | `action(fn, options?)` | `(fn: (el: HTMLElement) => void \| Promise<void>, options?: AutoSizerActionOptions \| detect) => Promise<any>` | Runs a mutation against the inner or outer element and returns before / after snapshots with changed keys. |
-| `size` | `Ref<{ width: number; height: number } \| null>` | Latest measured size from the auto-resize utility. |
+| `size` | `{ width: number; height: number } \| null` | Latest measured size from the auto-resize utility. |
 | `focus()` | `() => void` | Focuses the outer wrapper when it is focusable. |
-| `outerEl` | `Ref<HTMLElement \| null>` | Outer wrapper element ref for advanced integration. |
+| `outerEl` | `HTMLElement \| null` | Outer wrapper element for advanced integration. |
 
 ## Interaction Contract
 

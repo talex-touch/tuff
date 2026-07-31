@@ -1,13 +1,13 @@
 <script lang="ts" name="PluginInfo" setup>
 import type { ITouchPlugin } from '@talex-touch/utils/plugin'
 import { TxSplitButton } from '@talex-touch/tuffex/button'
-import { TxBottomDialog } from '@talex-touch/tuffex/dialog'
 import { TxTabItem, TxTabs } from '@talex-touch/tuffex/tabs'
 import { PluginStatus as EPluginStatus } from '@talex-touch/utils'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
-import { computed, ref, toRef, watch } from 'vue'
+import { isPrivacySecretPasswordValid } from '@talex-touch/utils/transport/events/types/privacy'
+import { computed, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
 import { useRoute } from 'vue-router'
@@ -19,6 +19,7 @@ import { usePluginExternalLinks } from '~/composables/plugin/usePluginExternalLi
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { pluginSDK } from '~/modules/sdk/plugin-sdk'
 import { createRendererLogger } from '~/utils/renderer-log'
+import { focusModalDialog, handleModalDialogKeydown } from '~/utils/modal-dialog'
 import PluginDetails from './tabs/PluginDetails.vue'
 import PluginFeatures from './tabs/PluginFeatures.vue'
 import PluginIssues from './tabs/PluginIssues.vue'
@@ -208,41 +209,249 @@ function openNexusPublishPage(): void {
   void appSdk.openExternal(nexusPublishUrl.value)
 }
 
-// Uninstall confirmation
+// Uninstall data disposition
+interface UninstallIdentitySnapshot {
+  readonly name: string
+  readonly pluginInstanceId: string
+  readonly activationGeneration: number
+}
+
 const uninstallConfirmVisible = ref(false)
+const uninstallOrdinaryExport = ref(false)
+const uninstallSecretBackup = ref(false)
+const uninstallFinalImpact = ref(false)
+const uninstallPassword = ref('')
+const uninstallPasswordConfirmation = ref('')
+const uninstallPasswordError = ref('')
+const uninstallStatus = ref('')
+const uninstallCanRetry = ref(true)
+const uninstallDialogElement = ref<HTMLElement | null>(null)
+let uninstallDialogIdentity: UninstallIdentitySnapshot | null = null
+let uninstallRequestRevision = 0
+let uninstallDisposed = false
+let uninstallTrigger: HTMLElement | null = null
 
-function requestUninstall(): void {
-  uninstallConfirmVisible.value = true
-}
-
-function closeUninstallConfirm(): void {
-  uninstallConfirmVisible.value = false
-}
-
-async function confirmUninstall(): Promise<boolean> {
-  if (!props.plugin) return true
-
-  loadingStates.value.uninstall = true
-  try {
-    const success = await pluginSDK.uninstall(props.plugin.name)
-    if (success) {
-      toast.success(t('plugin.uninstall.success', { name: props.plugin.name }))
-    } else {
-      toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
-    }
-  } catch (error) {
-    pluginInfoLog.error('Failed to uninstall plugin:', error)
-    toast.error(t('plugin.uninstall.failed', { name: props.plugin.name }))
-  } finally {
-    loadingStates.value.uninstall = false
+function snapshotUninstallIdentity(): UninstallIdentitySnapshot | null {
+  const { name, pluginInstanceId, activationGeneration } = props.plugin
+  if (
+    typeof name !== 'string' ||
+    name.length === 0 ||
+    typeof pluginInstanceId !== 'string' ||
+    pluginInstanceId.length === 0 ||
+    !Number.isSafeInteger(activationGeneration) ||
+    Number(activationGeneration) < 0
+  ) {
+    return null
   }
-  return true
+  return Object.freeze({
+    name,
+    pluginInstanceId,
+    activationGeneration: Number(activationGeneration)
+  })
 }
 
-async function handleUninstallPlugin(): Promise<void> {
-  if (!props.plugin || loadingStates.value.uninstall) return
-  requestUninstall()
+function isSameUninstallIdentity(
+  left: UninstallIdentitySnapshot | null,
+  right: UninstallIdentitySnapshot | null
+): boolean {
+  return (
+    left !== null &&
+    right !== null &&
+    left.name === right.name &&
+    left.pluginInstanceId === right.pluginInstanceId &&
+    left.activationGeneration === right.activationGeneration
+  )
 }
+
+function isCurrentUninstallRequest(revision: number, identity: UninstallIdentitySnapshot): boolean {
+  return (
+    !uninstallDisposed &&
+    revision === uninstallRequestRevision &&
+    isSameUninstallIdentity(uninstallDialogIdentity, identity) &&
+    isSameUninstallIdentity(snapshotUninstallIdentity(), identity)
+  )
+}
+
+function clearUninstallPasswords(): void {
+  uninstallPassword.value = ''
+  uninstallPasswordConfirmation.value = ''
+}
+
+function resetUninstallForm(): void {
+  uninstallOrdinaryExport.value = false
+  uninstallSecretBackup.value = false
+  uninstallFinalImpact.value = false
+  uninstallPasswordError.value = ''
+  uninstallStatus.value = ''
+  uninstallCanRetry.value = true
+  clearUninstallPasswords()
+}
+
+function requestUninstall(trigger: HTMLElement | null): void {
+  resetUninstallForm()
+  uninstallDialogIdentity = snapshotUninstallIdentity()
+  uninstallTrigger = trigger
+  uninstallConfirmVisible.value = true
+  if (!uninstallDialogIdentity) {
+    uninstallCanRetry.value = false
+    uninstallStatus.value = t('plugin.uninstall.identityUnavailable')
+  }
+  void nextTick(() => focusModalDialog(uninstallDialogElement.value))
+}
+
+function restoreUninstallTriggerFocus(): void {
+  const trigger = uninstallTrigger
+  uninstallTrigger = null
+  void nextTick(() => {
+    if (trigger?.isConnected && !trigger.matches(':disabled')) trigger.focus()
+  })
+}
+
+function closeUninstallConfirm(allowPending = false): void {
+  if (!allowPending && loadingStates.value.uninstall) return
+  uninstallConfirmVisible.value = false
+  uninstallDialogIdentity = null
+  resetUninstallForm()
+  restoreUninstallTriggerFocus()
+}
+
+function handleUninstallDialogKeydown(event: KeyboardEvent): void {
+  handleModalDialogKeydown(event, uninstallDialogElement.value, {
+    close: () => closeUninstallConfirm(),
+    pending: loadingStates.value.uninstall
+  })
+}
+
+async function confirmUninstall(): Promise<void> {
+  const identity = uninstallDialogIdentity
+  if (
+    !identity ||
+    loadingStates.value.uninstall ||
+    !uninstallCanRetry.value ||
+    !uninstallFinalImpact.value ||
+    !isSameUninstallIdentity(identity, snapshotUninstallIdentity())
+  ) {
+    if (uninstallConfirmVisible.value && !loadingStates.value.uninstall) {
+      uninstallCanRetry.value = false
+      uninstallStatus.value = t('plugin.uninstall.identityUnavailable')
+      clearUninstallPasswords()
+    }
+    return
+  }
+
+  uninstallPasswordError.value = ''
+  uninstallStatus.value = ''
+  if (uninstallSecretBackup.value) {
+    if (!isPrivacySecretPasswordValid(uninstallPassword.value)) {
+      clearUninstallPasswords()
+      uninstallPasswordError.value = t('plugin.uninstall.passwordMinimum')
+      return
+    }
+    if (uninstallPassword.value !== uninstallPasswordConfirmation.value) {
+      clearUninstallPasswords()
+      uninstallPasswordError.value = t('plugin.uninstall.passwordMismatch')
+      return
+    }
+  }
+
+  const ordinaryExportEnabled = uninstallOrdinaryExport.value
+  const secretBackupEnabled = uninstallSecretBackup.value
+  const revision = ++uninstallRequestRevision
+  loadingStates.value.uninstall = true
+  uninstallFinalImpact.value = false
+  try {
+    const request = pluginSDK.uninstall({
+      version: 1,
+      plugin: identity,
+      disposition: {
+        confirmation: 'delete-plugin-and-data',
+        ordinaryExport: { enabled: ordinaryExportEnabled },
+        portableSecretBackup: secretBackupEnabled
+          ? { enabled: true, password: uninstallPassword.value }
+          : { enabled: false }
+      }
+    })
+    clearUninstallPasswords()
+    const result = await request
+    if (!isCurrentUninstallRequest(revision, identity)) return
+
+    if (result.success) {
+      loadingStates.value.uninstall = false
+      toast.success(t('plugin.uninstall.success', { name: identity.name }))
+      closeUninstallConfirm(true)
+      return
+    }
+
+    if (!result.installed && result.code === 'PLUGIN_UNINSTALL_NOT_FOUND') {
+      loadingStates.value.uninstall = false
+      toast.info(t('plugin.uninstall.alreadyRemoved', { name: identity.name }))
+      closeUninstallConfirm(true)
+      return
+    }
+
+    uninstallCanRetry.value = result.retryable
+    uninstallStatus.value = t(
+      result.status === 'cancelled'
+        ? 'plugin.uninstall.cancelled'
+        : result.retryable
+          ? 'plugin.uninstall.retryableFailure'
+          : 'plugin.uninstall.terminalFailure'
+    )
+  } catch {
+    clearUninstallPasswords()
+    if (!isCurrentUninstallRequest(revision, identity)) return
+    uninstallCanRetry.value = true
+    uninstallStatus.value = t('plugin.uninstall.outcomeUnknown')
+    pluginInfoLog.error('Plugin uninstall request outcome is unknown')
+    toast.error(t('plugin.uninstall.outcomeUnknown'))
+  } finally {
+    clearUninstallPasswords()
+    loadingStates.value.uninstall = false
+    if (!uninstallDisposed && !uninstallConfirmVisible.value && uninstallDialogIdentity === null) {
+      restoreUninstallTriggerFocus()
+    }
+  }
+}
+
+async function handleUninstallPlugin(event?: MouseEvent): Promise<void> {
+  if (!props.plugin || loadingStates.value.uninstall) return
+  requestUninstall(event?.currentTarget instanceof HTMLElement ? event.currentTarget : null)
+}
+
+watch(uninstallSecretBackup, (enabled) => {
+  if (!enabled) {
+    uninstallPasswordError.value = ''
+    clearUninstallPasswords()
+  }
+})
+
+watch(
+  [
+    () => props.plugin.name,
+    () => props.plugin.pluginInstanceId,
+    () => props.plugin.activationGeneration
+  ],
+  () => {
+    if (!uninstallConfirmVisible.value && !loadingStates.value.uninstall) return
+    const wasPending = loadingStates.value.uninstall
+    uninstallRequestRevision += 1
+    uninstallConfirmVisible.value = false
+    uninstallDialogIdentity = null
+    resetUninstallForm()
+    if (!wasPending) restoreUninstallTriggerFocus()
+  },
+  { flush: 'sync' }
+)
+
+onBeforeUnmount(() => {
+  uninstallDisposed = true
+  uninstallRequestRevision += 1
+  loadingStates.value.uninstall = false
+  uninstallConfirmVisible.value = false
+  uninstallDialogIdentity = null
+  resetUninstallForm()
+  uninstallTrigger = null
+})
 
 type PrimaryAction = 'run' | 'stop' | 'reload' | 'reconnect' | 'none'
 
@@ -455,14 +664,17 @@ async function handlePrimaryAction(): Promise<void> {
                   <i v-else class="i-ri-loader-4-line animate-spin" />
                   <span>{{ t('plugin.actions.openDevTools') }}</span>
                 </div>
-                <div
+                <button
+                  type="button"
+                  data-testid="plugin-uninstall-action"
                   class="action-item danger"
                   :class="{ disabled: loadingStates.uninstall }"
+                  :disabled="loadingStates.uninstall"
                   @click="
-                    () => {
+                    (event) => {
                       if (loadingStates.uninstall) return
                       close()
-                      void handleUninstallPlugin()
+                      void handleUninstallPlugin(event)
                     }
                   "
                 >
@@ -473,7 +685,7 @@ async function handlePrimaryAction(): Promise<void> {
                       ? t('plugin.actions.uninstalling')
                       : t('plugin.actions.uninstall')
                   }}</span>
-                </div>
+                </button>
               </div>
             </template>
           </TxSplitButton>
@@ -549,16 +761,123 @@ async function handlePrimaryAction(): Promise<void> {
       </template>
     </FlipDialog>
 
-    <TxBottomDialog
+    <div
       v-if="uninstallConfirmVisible"
-      :title="t('plugin.uninstall.confirmTitle')"
-      :message="t('plugin.uninstall.confirmMessage', { name: plugin.name })"
-      :btns="[
-        { content: t('plugin.uninstall.cancelButton'), type: 'info', onClick: () => true },
-        { content: t('plugin.uninstall.confirmButton'), type: 'error', onClick: confirmUninstall }
-      ]"
-      :close="closeUninstallConfirm"
-    />
+      class="PluginInfo-UninstallBackdrop"
+      role="presentation"
+      @click.self="closeUninstallConfirm()"
+    >
+      <section
+        ref="uninstallDialogElement"
+        class="PluginInfo-UninstallDialog"
+        data-testid="plugin-uninstall-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="plugin-uninstall-title"
+        aria-describedby="plugin-uninstall-description"
+        :aria-busy="loadingStates.uninstall"
+        tabindex="-1"
+        @keydown="handleUninstallDialogKeydown"
+      >
+        <h2 id="plugin-uninstall-title">{{ t('plugin.uninstall.dataDispositionTitle') }}</h2>
+        <p id="plugin-uninstall-description">
+          {{ t('plugin.uninstall.dataDispositionDescription', { name: plugin.name }) }}
+        </p>
+
+        <label class="PluginInfo-UninstallChoice">
+          <input
+            v-model="uninstallOrdinaryExport"
+            data-testid="plugin-uninstall-ordinary-export"
+            type="checkbox"
+            :disabled="loadingStates.uninstall"
+          />
+          <span>
+            <strong>{{ t('plugin.uninstall.ordinaryExportLabel') }}</strong>
+            <small>{{ t('plugin.uninstall.ordinaryExportDescription') }}</small>
+          </span>
+        </label>
+
+        <label class="PluginInfo-UninstallChoice">
+          <input
+            v-model="uninstallSecretBackup"
+            data-testid="plugin-uninstall-secret-backup"
+            type="checkbox"
+            :disabled="loadingStates.uninstall"
+          />
+          <span>
+            <strong>{{ t('plugin.uninstall.secretBackupLabel') }}</strong>
+            <small>{{ t('plugin.uninstall.secretBackupDescription') }}</small>
+          </span>
+        </label>
+
+        <div v-if="uninstallSecretBackup" class="PluginInfo-UninstallPasswords">
+          <label>
+            <span>{{ t('plugin.uninstall.passwordLabel') }}</span>
+            <input
+              v-model="uninstallPassword"
+              data-testid="plugin-uninstall-password"
+              type="password"
+              autocomplete="new-password"
+              :disabled="loadingStates.uninstall"
+            />
+          </label>
+          <label>
+            <span>{{ t('plugin.uninstall.passwordConfirmationLabel') }}</span>
+            <input
+              v-model="uninstallPasswordConfirmation"
+              data-testid="plugin-uninstall-password-confirmation"
+              type="password"
+              autocomplete="new-password"
+              :disabled="loadingStates.uninstall"
+            />
+          </label>
+          <p
+            v-if="uninstallPasswordError"
+            data-testid="plugin-uninstall-password-error"
+            role="alert"
+          >
+            {{ uninstallPasswordError }}
+          </p>
+        </div>
+
+        <label class="PluginInfo-UninstallChoice PluginInfo-UninstallImpact">
+          <input
+            v-model="uninstallFinalImpact"
+            data-testid="plugin-uninstall-final-impact"
+            type="checkbox"
+            :disabled="loadingStates.uninstall"
+          />
+          <span>
+            <strong>{{ t('plugin.uninstall.finalImpactLabel') }}</strong>
+            <small>{{ t('plugin.uninstall.finalImpactDescription') }}</small>
+          </span>
+        </label>
+
+        <p data-testid="plugin-uninstall-status" aria-live="polite">
+          {{ loadingStates.uninstall ? t('plugin.uninstall.pending') : uninstallStatus }}
+        </p>
+
+        <div class="PluginInfo-UninstallActions">
+          <button
+            type="button"
+            data-testid="plugin-uninstall-cancel"
+            :disabled="loadingStates.uninstall"
+            @click="closeUninstallConfirm()"
+          >
+            {{ t('plugin.uninstall.cancelButton') }}
+          </button>
+          <button
+            type="button"
+            data-testid="plugin-uninstall-confirm"
+            class="danger"
+            :disabled="loadingStates.uninstall || !uninstallCanRetry || !uninstallFinalImpact"
+            @click="confirmUninstall"
+          >
+            {{ t('plugin.uninstall.confirmButton') }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -570,6 +889,11 @@ async function handlePrimaryAction(): Promise<void> {
 }
 
 .action-item {
+  width: 100%;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -692,6 +1016,139 @@ async function handlePrimaryAction(): Promise<void> {
 .PluginInfo-IssuesDialog :deep(.p-4) {
   padding-top: 24px;
   padding-right: 56px;
+}
+
+.PluginInfo-UninstallBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.PluginInfo-UninstallDialog {
+  box-sizing: border-box;
+  width: min(520px, 100%);
+  max-height: min(720px, calc(100vh - 40px));
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--tx-border-color);
+  border-radius: 6px;
+  background: var(--tx-bg-color);
+  color: var(--tx-text-color-primary);
+  box-shadow: var(--tx-box-shadow-dark);
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 16px;
+  }
+
+  > p {
+    margin: 0 0 14px;
+    color: var(--tx-text-color-secondary);
+    font-size: 13px;
+  }
+}
+
+.PluginInfo-UninstallChoice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--tx-border-color);
+  font-size: 13px;
+
+  input {
+    margin-top: 2px;
+
+    &:focus-visible {
+      outline: 2px solid var(--tx-color-primary);
+      outline-offset: 2px;
+    }
+  }
+
+  > span {
+    display: grid;
+    gap: 3px;
+  }
+
+  small {
+    color: var(--tx-text-color-secondary);
+    font-size: 12px;
+  }
+}
+
+.PluginInfo-UninstallImpact {
+  margin-top: 10px;
+  color: var(--tx-color-danger);
+}
+
+.PluginInfo-UninstallPasswords {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 8px 0 12px 26px;
+
+  label {
+    display: grid;
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  input {
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--tx-border-color);
+    border-radius: 6px;
+    background: var(--tx-fill-color-blank);
+    color: inherit;
+  }
+
+  p {
+    grid-column: 1 / -1;
+    margin: 0;
+    color: var(--tx-color-danger);
+    font-size: 12px;
+  }
+}
+
+.PluginInfo-UninstallActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+
+  button {
+    padding: 7px 12px;
+    border: 1px solid var(--tx-border-color);
+    border-radius: 6px;
+    background: var(--tx-bg-color);
+    color: var(--tx-text-color-primary);
+    cursor: pointer;
+  }
+
+  button.danger {
+    border-color: var(--tx-color-danger);
+    background: var(--tx-color-danger);
+    color: white;
+  }
+
+  button:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--tx-color-primary);
+    outline-offset: 2px;
+  }
+}
+
+@media (max-width: 640px) {
+  .PluginInfo-UninstallPasswords {
+    grid-template-columns: 1fr;
+  }
 }
 
 @keyframes spin {

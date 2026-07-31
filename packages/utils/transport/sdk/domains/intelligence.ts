@@ -133,6 +133,28 @@ import type {
 } from "../../types";
 import { defineEvent } from "../../event/builder";
 
+import {
+  normalizeIntelligenceProviderConfigDeleteRequest,
+  normalizeIntelligenceProviderConfigSaveRequest,
+  normalizeIntelligenceProviderDeleteResult,
+  normalizeIntelligenceProviderRuntimeConfig,
+  normalizeIntelligenceProviderStoredConfig,
+  type IntelligenceProviderConfigDeleteRequest,
+  type IntelligenceProviderConfigSaveRequest,
+  type IntelligenceProviderStoredConfig,
+} from "./intelligence-provider-credential";
+
+export {
+  normalizeIntelligenceProviderConfigDeleteRequest,
+  normalizeIntelligenceProviderConfigSaveRequest,
+  normalizeIntelligenceProviderRuntimeConfig,
+  normalizeIntelligenceProviderStoredConfig,
+  type IntelligenceProviderConfigDeleteRequest,
+  type IntelligenceProviderConfigSaveRequest,
+  type IntelligenceProviderCredentialMutation,
+  type IntelligenceProviderStoredConfig,
+} from "./intelligence-provider-credential";
+
 export interface IntelligenceAuditLogEntry {
   traceId: string;
   timestamp: number;
@@ -647,6 +669,12 @@ export interface IntelligenceSdk {
     payload: IntelligenceChatRequest,
   ) => Promise<IntelligenceInvokeResult<string>>;
   testProvider: (config: IntelligenceProviderConfig) => Promise<unknown>;
+  saveProviderConfig: (
+    request: IntelligenceProviderConfigSaveRequest,
+  ) => Promise<IntelligenceProviderStoredConfig>;
+  deleteProviderConfig: (
+    request: IntelligenceProviderConfigDeleteRequest,
+  ) => Promise<{ deleted: boolean }>;
   testCapability: (params: Record<string, unknown>) => Promise<unknown>;
   getCapabilityTestMeta: (payload: {
     capabilityId: string;
@@ -907,6 +935,20 @@ export const intelligenceApiEvents = {
     .define<
       { provider: IntelligenceProviderConfig },
       IntelligenceApiResponse<unknown>
+    >(),
+  saveProviderConfig: defineEvent("intelligence")
+    .module("api")
+    .event("provider-config:save")
+    .define<
+      IntelligenceProviderConfigSaveRequest,
+      IntelligenceApiResponse<IntelligenceProviderStoredConfig>
+    >(),
+  deleteProviderConfig: defineEvent("intelligence")
+    .module("api")
+    .event("provider-config:delete")
+    .define<
+      IntelligenceProviderConfigDeleteRequest,
+      IntelligenceApiResponse<{ deleted: boolean }>
     >(),
   testCapability: defineEvent("intelligence")
     .module("api")
@@ -1537,9 +1579,35 @@ export function createIntelligenceSdk(
     async testProvider(config) {
       const response = await transport.send(
         intelligenceApiEvents.testProvider,
-        { provider: config },
+        {
+          provider: normalizeIntelligenceProviderRuntimeConfig(config),
+        },
       );
       return assertApiResponse(response, "Intelligence provider test failed");
+    },
+
+    async saveProviderConfig(request) {
+      const normalizedRequest =
+        normalizeIntelligenceProviderConfigSaveRequest(request);
+      const response = await transport.send(
+        intelligenceApiEvents.saveProviderConfig,
+        normalizedRequest,
+      );
+      return normalizeIntelligenceProviderStoredConfig(
+        assertApiResponse(response, "Intelligence provider save failed"),
+      );
+    },
+
+    async deleteProviderConfig(request) {
+      const normalizedRequest =
+        normalizeIntelligenceProviderConfigDeleteRequest(request);
+      const response = await transport.send(
+        intelligenceApiEvents.deleteProviderConfig,
+        normalizedRequest,
+      );
+      return normalizeIntelligenceProviderDeleteResult(
+        assertApiResponse(response, "Intelligence provider delete failed"),
+      );
     },
 
     async testCapability(params) {
@@ -1582,7 +1650,7 @@ export function createIntelligenceSdk(
 
     async fetchModels(config) {
       const response = await transport.send(intelligenceApiEvents.fetchModels, {
-        provider: config,
+        provider: normalizeIntelligenceProviderRuntimeConfig(config),
       });
       return assertApiResponse(response, "Failed to fetch models");
     },

@@ -726,6 +726,9 @@ export interface IPluginSecretManager {
     key: string,
     value: string | null,
   ) => Promise<{ success: boolean; error?: string }>;
+  setMany: (
+    entries: Array<{ key: string; value: string | null }>,
+  ) => Promise<{ success: boolean; error?: string }>;
   delete: (key: string) => Promise<{ success: boolean; error?: string }>;
   health: () => Promise<SecureStoreHealthResponse>;
 }

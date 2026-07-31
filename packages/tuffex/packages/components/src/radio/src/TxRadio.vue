@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { TxRadioProps, TxRadioType, TxRadioValue } from './types'
-import { computed, inject, toRefs } from 'vue'
+import { computed, inject, onBeforeUnmount, ref, toRefs } from 'vue'
 
 defineOptions({ name: 'TxRadio' })
 
@@ -8,38 +8,81 @@ const props = withDefaults(defineProps<TxRadioProps>(), {
   disabled: false,
   label: '',
   type: 'button',
+  modelValue: undefined,
 })
 
 const emit = defineEmits<{
   (e: 'click', v: TxRadioValue): void
+  (e: 'update:modelValue', v: boolean): void
 }>()
 
 interface RadioGroupContext {
   model: { value: TxRadioValue | undefined }
   disabled: { value: boolean }
   type: { value: TxRadioType }
+  tabStopValue?: { value: TxRadioValue | undefined }
+  registerRadio?: (registration: { value: TxRadioValue, isDisabled: () => boolean }) => () => void
 }
 
 const group = inject<RadioGroupContext | null>('tx-radio-group', null)
 
 const { label, type: propType } = toRefs(props)
 
+// Local checked state for standalone use (no group). Ignored when a group is present.
+const uncontrolledChecked = ref(false)
+
 const isDisabled = computed(() => (group?.disabled.value ?? false) || props.disabled)
-const isChecked = computed(() => group?.model.value === props.value)
+const isChecked = computed(() => {
+  if (group)
+    return group.model.value === props.value
+  if (props.modelValue !== undefined)
+    return props.modelValue
+  return uncontrolledChecked.value
+})
 const radioType = computed(() => {
   const groupType = group?.type.value
   return (groupType ?? propType.value ?? 'button') as TxRadioType
 })
 
+// Register with the group so it can designate a single roving tab stop.
+if (group?.registerRadio) {
+  const unregister = group.registerRadio({
+    value: props.value,
+    isDisabled: () => isDisabled.value,
+  })
+  onBeforeUnmount(unregister)
+}
+
+const rovingTabindex = computed<number | undefined>(() => {
+  // Standalone radios keep their native <button> tab behavior.
+  if (!group?.tabStopValue)
+    return undefined
+  // Roving tabindex: only the group's designated tab stop is Tab-reachable, so a
+  // single Tab enters the group and arrow keys move within it.
+  return group.tabStopValue.value === props.value ? 0 : -1
+})
+
 function select() {
-  if (!group)
-    return
   if (isDisabled.value)
     return
+
+  // Group-controlled: selection flows through the shared group model (unchanged).
+  if (group) {
+    if (isChecked.value)
+      return
+    group.model.value = props.value
+    emit('click', props.value)
+    return
+  }
+
+  // Standalone: emit the click and drive the local checked state so the radio
+  // is usable on its own (with or without v-model).
+  emit('click', props.value)
   if (isChecked.value)
     return
-  group.model.value = props.value
-  emit('click', props.value)
+  if (props.modelValue === undefined)
+    uncontrolledChecked.value = true
+  emit('update:modelValue', true)
 }
 </script>
 
@@ -49,6 +92,7 @@ function select() {
     type="button"
     role="radio"
     :aria-checked="isChecked"
+    :tabindex="rovingTabindex"
     :disabled="isDisabled"
     :class="[
       { 'is-checked': isChecked, 'is-disabled': isDisabled },

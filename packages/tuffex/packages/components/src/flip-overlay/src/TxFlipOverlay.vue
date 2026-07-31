@@ -3,7 +3,7 @@ import type { BaseSurfaceMode } from '../../base-surface/src/types'
 import type { FlipOverlayEmits, FlipOverlayProps, FlipOverlaySlotProps } from './types'
 import type { Slots } from 'vue'
 import TxButton from '../../button/src/button.vue'
-import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue'
 import TxBaseSurface from '../../base-surface/src/TxBaseSurface.vue'
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
@@ -67,6 +67,9 @@ const props = withDefaults(defineProps<FlipOverlayProps>(), {
 const emit = defineEmits<FlipOverlayEmits>()
 const slots: Slots = useSlots()
 const instanceId = nextOverlayInstanceId()
+const titleId = useId()
+const descId = useId()
+let previouslyFocused: HTMLElement | null = null
 
 const cardRef = ref<HTMLElement | null>(null)
 const visible = ref(Boolean(props.modelValue))
@@ -161,8 +164,6 @@ const maskClassName = computed(() => {
     classes.push('is-stack-underlay-mask')
   if (blockedCloseWarning.value)
     classes.push('is-close-guard-warning')
-  if (props.maskClass)
-    classes.push(props.maskClass)
   return classes
 })
 
@@ -288,7 +289,7 @@ function clearBlockedCloseWarning(): void {
   blockedCloseWarning.value = false
 }
 
-function triggerBlockedCloseWarning(): void {
+async function triggerBlockedCloseWarning(): Promise<void> {
   if (!visible.value || !props.preventAccidentalClose)
     return
 
@@ -297,10 +298,15 @@ function triggerBlockedCloseWarning(): void {
     blockedCloseTimer = null
   }
 
+  // Restart the warning animation even on a repeated blocked close. Toggling the
+  // flag false→true within one tick coalesces to no DOM change (Vue batches), so
+  // the CSS animation never replays. Flush the removal to the DOM, force a reflow
+  // on a real boundary, then re-add the class.
   blockedCloseWarning.value = false
+  await nextTick()
   if (hasWindow())
     void cardRef.value?.offsetWidth
-    blockedCloseWarning.value = true
+  blockedCloseWarning.value = true
 
   blockedCloseTimer = setTimeout(() => {
     blockedCloseWarning.value = false
@@ -492,7 +498,7 @@ function requestClose(): void {
 
 function handleMaskClick(): void {
   if (props.preventAccidentalClose) {
-    triggerBlockedCloseWarning()
+    void triggerBlockedCloseWarning()
     return
   }
   if (!props.maskClosable)
@@ -503,7 +509,7 @@ function handleMaskClick(): void {
 function handleBeforeUnload(event: BeforeUnloadEvent): void {
   if (!visible.value || !props.preventAccidentalClose)
     return
-  triggerBlockedCloseWarning()
+  void triggerBlockedCloseWarning()
   event.preventDefault()
   event.returnValue = ''
 }
@@ -534,6 +540,23 @@ watch(
   },
   { immediate: true },
 )
+
+// aria-modal="true" promises focus is inside the dialog, so move focus into the card
+// on open and restore it to the previously focused element on close.
+watch(visible, (isVisible) => {
+  if (!hasWindow())
+    return
+  if (isVisible) {
+    previouslyFocused = document.activeElement as HTMLElement | null
+    nextTick(() => {
+      cardRef.value?.focus()
+    })
+  }
+  else if (previouslyFocused) {
+    previouslyFocused.focus()
+    previouslyFocused = null
+  }
+})
 
 watch(
   () => [
@@ -626,7 +649,18 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
         v-if="props.globalMask && stackMeta.isMaskOwner && stackMeta.stackSize <= 1"
         class="TxFlipOverlay-GlobalMask"
       />
-      <div ref="cardRef" :class="cardClassName" :style="props.cardStyle" @click.stop>
+      <div
+        ref="cardRef"
+        :class="cardClassName"
+        :style="props.cardStyle"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        :aria-labelledby="(shouldRenderBuiltInHeader && props.headerTitle) ? titleId : undefined"
+        :aria-describedby="(shouldRenderBuiltInHeader && props.headerDesc) ? descId : undefined"
+        @click.stop
+        @keydown.esc="handleMaskClick"
+      >
         <TxBaseSurface
           class="TxFlipOverlay-Surface"
           preset="card"
@@ -641,10 +675,10 @@ const slotProps = computed<FlipOverlaySlotProps>(() => ({
           <div v-else-if="shouldRenderBuiltInHeader" class="TxFlipOverlay-Header">
             <div class="TxFlipOverlay-HeaderDisplay">
               <slot name="header-display" v-bind="slotProps">
-                <p v-if="props.headerTitle" class="TxFlipOverlay-HeaderTitle">
+                <p v-if="props.headerTitle" :id="titleId" class="TxFlipOverlay-HeaderTitle">
                   {{ props.headerTitle }}
                 </p>
-                <p v-if="props.headerDesc" class="TxFlipOverlay-HeaderDesc">
+                <p v-if="props.headerDesc" :id="descId" class="TxFlipOverlay-HeaderDesc">
                   {{ props.headerDesc }}
                 </p>
               </slot>

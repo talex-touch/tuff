@@ -179,6 +179,27 @@ describe('txPopover', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
 
+  it('advertises popover semantics on the reference and a dialog role on the panel (#15)', () => {
+    const wrapper = mountPopover({ modelValue: true })
+
+    const reference = wrapper.find('.tx-popover__reference')
+    const panel = wrapper.find('.tx-popover__content')
+    const panelId = panel.attributes('id')
+
+    // The trigger announces it controls an expanded dialog popup...
+    expect(reference.attributes('aria-haspopup')).toBe('dialog')
+    expect(reference.attributes('aria-expanded')).toBe('true')
+    expect(panelId).toBeTruthy()
+    expect(reference.attributes('aria-controls')).toBe(panelId)
+    // ...and the panel itself carries the matching dialog role.
+    expect(panel.attributes('role')).toBe('dialog')
+  })
+
+  it('reflects the collapsed state via aria-expanded when closed', () => {
+    const wrapper = mountPopover()
+    expect(wrapper.find('.tx-popover__reference').attributes('aria-expanded')).toBe('false')
+  })
+
   it('passes full-width reference classes and content side slot props', () => {
     const wrapper = mountPopover({
       modelValue: true,

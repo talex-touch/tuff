@@ -2,6 +2,8 @@
 title: "Agents"
 description: "Selectable agent list with enabled/disabled grouping, loading skeletons, empty state, selection, and badges."
 category: Data
+status: beta
+since: 1.0.0
 tags: [agents, list, selection]
 syncStatus: reviewed
 verified: true
@@ -88,7 +90,7 @@ code: |
 - `TxAgentsList` computes enabled and disabled groups from the same `agents` array; it does not mutate or sort inside each group.
 - Loading state wins over list and empty rendering; `agents` content is ignored while `loading=true`.
 - Each group body has `role="listbox"` and an `aria-label` equal to the group title.
-- `TxAgentItem` is built on `TxCardItem` with `role="option"`, `clickable` only when enabled, and `avatarShape="rounded"`.
+- `TxAgentItem` is built on `TxCardItem` with `role="option"`, `avatarShape="rounded"`, and `clickable` always on so disabled rows keep their `option` role in the listbox; selection on disabled rows is blocked by `aria-disabled` and the click guard, not by dropping the role.
 - Disabled items suppress click, Enter, and Space selection; enabled items emit the item `id` for all three activation paths.
 
 ## Best Practices

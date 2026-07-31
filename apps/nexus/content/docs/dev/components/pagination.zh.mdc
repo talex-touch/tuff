@@ -57,20 +57,20 @@ rows:
     description: 每页数量
   - name: total
     type: number
-    default: '0'
-    description: 总数量
+    default: '-'
+    description: 总条数；省略或传 0 时改用 totalPages 计算总页数
   - name: totalPages
     type: number
     default: '-'
     description: 显式总页数；未提供 total 时使用
   - name: prevIcon
     type: string
-    default: "'chevron-left'"
-    description: 上一页图标
+    default: "'i-carbon-chevron-left'"
+    description: 上一页图标（UnoCSS 图标类，供 TxIcon 使用）
   - name: nextIcon
     type: string
-    default: "'chevron-right'"
-    description: 下一页图标
+    default: "'i-carbon-chevron-right'"
+    description: 下一页图标（UnoCSS 图标类，供 TxIcon 使用）
   - name: showInfo
     type: boolean
     default: 'false'

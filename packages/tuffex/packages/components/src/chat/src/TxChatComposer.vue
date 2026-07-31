@@ -32,6 +32,11 @@ const value = computed({
   set: (v: string) => emit('update:modelValue', v),
 })
 
+// `maxRows` caps how tall the textarea can grow/resize; expose it as a CSS var so the
+// style block (which owns the 1.6 line-height) turns it into a max-height. Floor it at
+// `minRows` so a smaller maxRows can't clamp the box below its resting height.
+const cappedMaxRows = computed(() => Math.max(props.maxRows ?? 6, props.minRows ?? 3))
+
 const attachmentItems = computed<ChatComposerAttachment[]>(() => {
   return Array.isArray(props.attachments) ? props.attachments : []
 })
@@ -119,7 +124,9 @@ function onKeydown(e: KeyboardEvent): void {
         ref="textareaRef"
         v-model="value"
         class="tx-chat-composer__textarea"
+        :style="{ '--tx-chat-composer-max-rows': cappedMaxRows }"
         :placeholder="placeholder"
+        :aria-label="ariaLabel || placeholder"
         :disabled="disabled"
         :rows="minRows"
         @keydown="onKeydown"
@@ -224,6 +231,10 @@ function onKeydown(e: KeyboardEvent): void {
 .tx-chat-composer__textarea {
   width: 100%;
   resize: vertical;
+  // Cap growth at `maxRows` lines (1.6em mirrors the line-height below); content
+  // scrolls past the cap instead of pushing the composer ever taller.
+  max-height: calc(var(--tx-chat-composer-max-rows, 6) * 1.6em);
+  overflow-y: auto;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--tx-border-color, #dcdfe6);

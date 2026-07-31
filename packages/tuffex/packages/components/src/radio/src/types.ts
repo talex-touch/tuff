@@ -14,9 +14,9 @@ export interface TxRadioGroupProps {
   blur?: boolean
   /** 指示器动画到位后再触发 v-model 更新（仅 button 类型有效） */
   updateOnSettled?: boolean
-  /** 弹簧刚度，值越大速度越快（默认 85） */
+  /** 弹簧刚度，值越大速度越快（默认 110） */
   stiffness?: number
-  /** 弹簧阻尼，值越小越Q弹（默认 10） */
+  /** 弹簧阻尼，值越小越Q弹（默认 12） */
   damping?: number
   /** 模糊强度（默认 1） */
   blurAmount?: number
@@ -29,4 +29,6 @@ export interface TxRadioProps {
   disabled?: boolean
   label?: string
   type?: TxRadioType
+  /** 独立使用（未包裹在 TxRadioGroup 内）时的选中状态，支持 v-model；在 group 内该值被忽略 */
+  modelValue?: boolean
 }

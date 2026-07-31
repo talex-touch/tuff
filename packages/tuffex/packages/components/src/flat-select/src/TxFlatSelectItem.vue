@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, inject, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 import { FLAT_SELECT_KEY } from './types'
 import type { TxFlatSelectValue } from './types'
 
@@ -19,19 +19,31 @@ const props = withDefaults(
 
 const ctx = inject(FLAT_SELECT_KEY)
 const itemRef = ref<HTMLElement | null>(null)
+// A stable id so the combobox trigger can reference this option via
+// aria-activedescendant while DOM focus stays on the trigger.
+const optionId = useId()
 
 const isSelected = computed(() => ctx?.currentValue.value === props.value)
 
+// Resolve the label shown in the trigger. An explicit `label` prop wins;
+// otherwise fall back to the rendered default-slot text so a custom slot is
+// honoured (the documented "slot overrides label" behaviour); finally the raw
+// value. Reading the label span's textContent is a deliberate DOM read —
+// reliable for the click path (DOM present) and for synchronous slot content.
+function resolveLabel(): string {
+  if (props.label) return props.label
+  const text = itemRef.value?.querySelector('.tx-flat-select-item__label')?.textContent?.trim()
+  return text || String(props.value)
+}
+
 function handleClick() {
   if (props.disabled) return
-  const label = props.label || String(props.value)
-  ctx?.handleSelect(props.value, label)
+  ctx?.handleSelect(props.value, resolveLabel())
 }
 
 onMounted(() => {
   if (itemRef.value && ctx) {
-    const label = props.label || String(props.value)
-    ctx.registerItem(props.value, label, itemRef.value)
+    ctx.registerItem(props.value, resolveLabel(), itemRef.value)
   }
 })
 
@@ -42,6 +54,7 @@ onBeforeUnmount(() => {
 
 <template>
   <button
+    :id="optionId"
     ref="itemRef"
     type="button"
     class="tx-flat-select-item"

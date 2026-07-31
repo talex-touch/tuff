@@ -1,69 +1,16 @@
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
-import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import { loadPluginModule } from './plugin-loader'
 
-const translationPlugin = loadPluginModule(
-  new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-  createPluginGlobals(),
-)
-const { __test: translationTest } = translationPlugin
-
-const ALLOWED_WIDGET_PACKAGES = [
-  'vue',
-  '@talex-touch/utils',
-  '@talex-touch/utils/plugin',
-  '@talex-touch/utils/plugin/sdk',
-  '@talex-touch/utils/core-box',
-  '@talex-touch/utils/transport',
-  '@talex-touch/utils/common',
-  '@talex-touch/utils/types',
-] as const
-
-function extractWidgetImports(source: string): string[] {
-  const patterns = [
-    /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+\w+|\w+))*\s+from\s+)?['"]([^'"]+)['"]/g,
-    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    /(?:await\s+)?import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    /export\s+(?:\*|\{[^}]*\})\s+from\s+['"]([^'"]+)['"]/g,
-  ]
-
-  const imports = new Set<string>()
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null
-    match = pattern.exec(source)
-    while (match !== null) {
-      imports.add(match[1]!)
-      match = pattern.exec(source)
-    }
-  }
-
-  return [...imports]
-}
-
-function listDisallowedWidgetImports(source: string): string[] {
-  return extractWidgetImports(source).filter((moduleId) => {
-    if (moduleId.startsWith('.') || moduleId.startsWith('/')) {
-      return true
-    }
-
-    return !ALLOWED_WIDGET_PACKAGES.some(
-      allowedPackage => moduleId === allowedPackage || moduleId.startsWith(`${allowedPackage}/`),
-    )
-  })
-}
-
-function resolvePath(relativePath: string): string {
-  return fileURLToPath(new URL(relativePath, import.meta.url))
-}
+const preludeUrl = new URL('../../../../plugins/touch-translation/index.js', import.meta.url)
 
 class TestTuffItemBuilder {
   private readonly item: Record<string, any>
+  private readonly basic: Record<string, any> = {}
 
   constructor(id: string) {
-    this.item = { id, actions: [], meta: {} }
+    this.item = { id, actions: [], meta: {}, render: { mode: 'default', basic: this.basic } }
   }
 
   setSource(type: string, id: string, name: string) {
@@ -72,658 +19,350 @@ class TestTuffItemBuilder {
   }
 
   setTitle(title: string) {
-    this.item.title = title
+    this.basic.title = title
     return this
   }
 
   setSubtitle(subtitle: string) {
-    this.item.subtitle = subtitle
+    this.basic.subtitle = subtitle
     return this
   }
 
   setIcon(icon: unknown) {
-    this.item.icon = icon
-    return this
-  }
-
-  setCustomRender(runtime: string, widgetId: string, payload: unknown) {
-    this.item.customRender = { runtime, widgetId, payload }
+    this.basic.icon = icon
     return this
   }
 
   setMeta(meta: Record<string, unknown>) {
-    this.item.meta = meta
+    this.item.meta = { ...this.item.meta, ...meta }
+    return this
+  }
+
+  createAndAddAction(id: string, type: string, label: string, payload?: unknown) {
+    this.item.actions.push({ id, type, label, primary: this.item.actions.length === 0, payload })
     return this
   }
 
   build() {
-    return this.item
+    return structuredClone(this.item)
   }
 }
 
-const require = createRequire(import.meta.url)
-const { syncTouchTranslationBundledRuntime } = require(
-  '../../../../apps/core-app/scripts/lib/touch-translation-runtime-sync.js',
-) as {
-  syncTouchTranslationBundledRuntime: (options?: {
-    projectRoot?: string
-    workspaceRoot?: string
-  }) => { skipped: boolean, synced: boolean }
+interface HarnessOptions {
+  providers?: Array<Record<string, unknown>>
+  translate?: (payload: any, options: any) => Promise<Record<string, unknown>>
+  ocr?: (payload: any, options: any) => Promise<Record<string, unknown>>
+  clipboardWrite?: (text: string) => Promise<void>
+  clearItems?: () => Promise<void>
 }
 
-function ensureBundledRuntimeSynced(): void {
-  syncTouchTranslationBundledRuntime({
-    projectRoot: resolvePath('../../../../apps/core-app'),
-    workspaceRoot: resolvePath('../../../../'),
+function createHarness(options: HarnessOptions = {}) {
+  const pushes: any[][] = []
+  const calls: Array<{ kind: string, payload?: unknown, options?: unknown }> = []
+  const providers = options.providers ?? [
+    {
+      providerId: 'provider-a',
+      providerName: 'Provider A',
+      providerType: 'host',
+      models: ['model-a'],
+      defaultModel: 'model-a',
+      capabilities: ['text.translate'],
+      available: true,
+    },
+  ]
+  const clipboardWrite = vi.fn(options.clipboardWrite ?? (async () => undefined))
+  const module = loadPluginModule<any>(preludeUrl, {
+    plugin: {
+      feature: {
+        async clearItems() {
+          calls.push({ kind: 'clear' })
+          await options.clearItems?.()
+        },
+        async pushItems(items: any[]) {
+          pushes.push(structuredClone(items))
+          calls.push({ kind: 'push', payload: structuredClone(items) })
+        },
+      },
+      translation: {
+        async listProviders() {
+          calls.push({ kind: 'list-providers' })
+          return structuredClone(providers)
+        },
+        async translate(payload: any, invokeOptions: any) {
+          calls.push({ kind: 'translate', payload: structuredClone(payload), options: structuredClone(invokeOptions) })
+          if (options.translate)
+            return options.translate(payload, invokeOptions)
+          return {
+            result: `translated:${payload.text}`,
+            provider: invokeOptions.preferredProviderId,
+            model: invokeOptions.modelPreference?.[0] ?? 'default',
+            traceId: 'trace-public',
+            latency: 5,
+          }
+        },
+        async ocr(payload: any, invokeOptions: any) {
+          calls.push({ kind: 'ocr', payload: structuredClone(payload), options: structuredClone(invokeOptions) })
+          if (options.ocr)
+            return options.ocr(payload, invokeOptions)
+          return {
+            result: { text: 'recognized text' },
+            provider: 'ocr-provider',
+            model: 'ocr-model',
+            traceId: 'ocr-trace',
+            latency: 4,
+          }
+        },
+      },
+    },
+    clipboard: { writeText: clipboardWrite },
+    logger: { error() {}, warn() {} },
+    TuffItemBuilder: TestTuffItemBuilder,
   })
+
+  return { module, pushes, calls, clipboardWrite }
 }
 
-async function runNetworkPermissionFailureScenario(
-  permission: unknown,
-): Promise<{
-  networkCalls: string[]
-  permissionRequests: string[]
-}> {
-  const networkCalls: string[] = []
-  const permissionRequests: string[] = []
-  const permissionRecord = permission && typeof permission === 'object'
-    ? permission as { request?: (permissionId: string) => Promise<boolean> }
-    : null
-  const permissionOverride = permissionRecord?.request
-    ? {
-        ...permissionRecord,
-        request: async (permissionId: string) => {
-          permissionRequests.push(permissionId)
-          return permissionRecord.request!(permissionId)
-        },
-      }
-    : permission
-  const pluginModule = loadPluginModule(
-    new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-    createPluginGlobals({
-      http: {
-        async get() {
-          networkCalls.push('get')
-          throw new Error('network provider must remain blocked')
-        },
-        async post() {
-          networkCalls.push('post')
-          throw new Error('network provider must remain blocked')
-        },
-      },
-      permission: permissionOverride,
-      TuffItemBuilder: TestTuffItemBuilder,
-      plugin: {
-        feature: {
-          clearItems() {},
-          pushItems() {},
-          updateItem() {},
-        },
-        storage: {
-          async getFile(filename: string) {
-            if (filename === 'providers_config') {
-              return {
-                google: {
-                  enabled: true,
-                  config: {},
-                },
-              }
-            }
-            return null
-          },
-          async setFile() {},
-        },
-        box: {
-          hide() {},
-        },
-      },
-    }),
-  )
-
-  await pluginModule.onFeatureTriggered('touch-translate', 'hello world', undefined, new AbortController().signal)
-  await vi.advanceTimersByTimeAsync(250)
-
-  return { networkCalls, permissionRequests }
+function finalItems(pushes: any[][]): any[] {
+  return pushes.at(-1) ?? []
 }
 
-describe('touch-translation shared helpers', () => {
-  it('detects target language from input text', () => {
-    expect(translationTest.detectLanguage('你好，世界')).toBe('zh')
-    expect(translationTest.resolveTargetLanguage('你好，世界')).toBe('en')
-    expect(translationTest.resolveTargetLanguage('hello world')).toBe('zh')
+function actionItem(items: any[]): any {
+  return items.find(item => item.actions?.some((action: any) => action.id === 'copy-translation'))
+}
+
+describe('touch-translation isolated Prelude', () => {
+  it('contains no privileged child surface or production test export', () => {
+    const source = fs.readFileSync(fileURLToPath(preludeUrl), 'utf8')
+    for (const pattern of [
+      /\b__test\b/,
+      /\brequire\s*\(/,
+      /\bfetch\s*\(/,
+      /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+      /\btouchChannel\b/,
+      /\bpermission\s*\.\s*request\s*\(/,
+      /\b(?:apiKey|secretKey|secretId|authorization|endpoint)\b/i,
+      /\b(?:child_process|node:crypto|electron)\b/,
+    ]) {
+      expect(source).not.toMatch(pattern)
+    }
+    const exported = createHarness().module
+    expect(exported.__test).toBeUndefined()
   })
 
-  it('normalizes enabled providers by shared order and supported set', () => {
-    const enabledProviders = translationTest.getEnabledProviderIds(
-      {
-        deepl: { enabled: true },
-        google: { enabled: true },
-        tuffintelligence: { enabled: true },
-      },
-      {
-        supportedIds: ['google', 'tuffintelligence'],
-      },
-    )
-
-    expect(enabledProviders).toEqual(['tuffintelligence', 'google'])
-  })
-
-  it('falls back to default fast providers when saved config has no supported provider', () => {
-    const enabledProviders = translationTest.getEnabledProviderIds(
-      {
-        deepl: { enabled: true },
-      },
-      {
-        supportedIds: ['google', 'tuffintelligence'],
-      },
-    )
-
-    expect(enabledProviders).toEqual(['tuffintelligence', 'google'])
-  })
-
-  it('filters tuffintelligence out of runtime provider display when auth token is unavailable', async () => {
-    const providerConfigs = [
-      { id: 'tuffintelligence' },
-      { id: 'google' },
-    ]
-
+  it('awaits a bounded single-provider text translation and publishes a copy action', async () => {
+    const harness = createHarness()
     await expect(
-      translationTest.filterAuthorizedProviderConfigs(providerConfigs, {
-        canUseTuffIntelligenceProvider: async () => false,
-      }),
-    ).resolves.toEqual([{ id: 'google' }])
+      harness.module.onFeatureTriggered('touch-translate', 'hello', undefined, new AbortController().signal),
+    ).resolves.toBe(true)
 
-    await expect(
-      translationTest.filterAuthorizedProviderConfigs(providerConfigs, {
-        canUseTuffIntelligenceProvider: async () => true,
-      }),
-    ).resolves.toEqual(providerConfigs)
-  })
-
-  it('filters tuffintelligence out when the account token is guest', async () => {
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        channel: {
-          async send() {
-            return 'guest'
-          },
-        },
-      }),
-    )
-
-    await expect(pluginModule.__test.canUseTuffIntelligenceProvider()).resolves.toBe(false)
-  })
-
-  it('filters tuffintelligence out when text.translate has no Intelligence provider', async () => {
-    const capabilityChecks: unknown[] = []
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        channel: {
-          async send(eventName: string, payload?: unknown) {
-            if (eventName === 'account:auth:get-token') {
-              return 'app-token'
-            }
-            if (eventName === 'intelligence:api:get-capability-status') {
-              capabilityChecks.push(payload)
-              return {
-                ok: true,
-                result: {
-                  capabilityId: 'text.translate',
-                  available: false,
-                  providerIds: [],
-                  reason: 'no-enabled-provider',
-                },
-              }
-            }
-            return null
-          },
-        },
-      }),
-    )
-
-    await expect(pluginModule.__test.canUseTuffIntelligenceProvider()).resolves.toBe(false)
-    expect(capabilityChecks).toEqual([{ capabilityId: 'text.translate' }])
-  })
-
-  it('keeps tuffintelligence when account token and text.translate provider are both available', async () => {
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        channel: {
-          async send(eventName: string) {
-            if (eventName === 'account:auth:get-token') {
-              return 'app-token'
-            }
-            if (eventName === 'intelligence:api:get-capability-status') {
-              return {
-                ok: true,
-                result: {
-                  capabilityId: 'text.translate',
-                  available: true,
-                  providerIds: ['tuff-nexus-default'],
-                },
-              }
-            }
-            return null
-          },
-        },
-      }),
-    )
-
-    await expect(pluginModule.__test.canUseTuffIntelligenceProvider()).resolves.toBe(true)
-  })
-
-  it('does not show tuffintelligence in triggered widget state while logged out', async () => {
-    vi.useFakeTimers()
-    const updatedItems: any[] = []
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        TuffItemBuilder: TestTuffItemBuilder,
-        URLSearchParams,
-        channel: {
-          async send() {
-            return ''
-          },
-        },
-        plugin: {
-          feature: {
-            clearItems() {},
-            updateItem(_id: string, item: unknown) {
-              updatedItems.push(item)
-            },
-            pushItems(items: unknown[]) {
-              updatedItems.push(...items)
-            },
-          },
-          storage: {
-            async getFile() {
-              return {
-                tuffintelligence: { enabled: true },
-                google: { enabled: true },
-              }
-            },
-            async setFile() {},
-          },
-          box: {
-            hide() {},
-          },
-        },
-      }),
-    )
-    const controller = new AbortController()
-    controller.abort()
-
-    try {
-      await pluginModule.onFeatureTriggered('touch-translate', 'hello', {}, controller.signal)
-      const providers = updatedItems[0]?.customRender?.payload?.providers ?? []
-      expect(providers.map((provider: { id: string }) => provider.id)).toEqual(['google'])
-    }
-    finally {
-      vi.clearAllTimers()
-      vi.useRealTimers()
-    }
-  })
-
-  it('normalizes translation failure messages', () => {
-    expect(translationTest.normalizeCallFailureMessage('')).toBe('调用失败：翻译服务暂不可用，请稍后重试')
-    expect(translationTest.normalizeErrorMessage('permission denied')).toBe('权限被拒绝：请在插件设置中授予所需权限后重试')
-    expect(translationTest.normalizeErrorMessage('无输入：')).toBe('无输入：请输入要翻译的文本')
-  })
-
-  it('keeps provider secrets out of metadata and reads runtime secrets from plugin storage', async () => {
-    const secretGetCalls: string[] = []
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        plugin: {
-          feature: {
-            clearItems() {},
-            pushItems() {},
-          },
-          storage: {
-            async getFile() {
-              return null
-            },
-            async setFile() {},
-          },
-          secret: {
-            async get(key: string) {
-              secretGetCalls.push(key)
-              return key === 'providers.baidu.secretKey' ? 'secure-baidu-secret' : null
-            },
-          },
-          box: {
-            hide() {},
-          },
-        },
-      }),
-    )
-
-    expect(pluginModule.__test.stripProviderSecrets('baidu', {
-      appId: 'baidu-app',
-      secretKey: 'plain-secret',
-      apiUrl: 'https://example.test',
-    })).toEqual({
-      appId: 'baidu-app',
-      apiUrl: 'https://example.test',
+    expect(harness.calls.map(call => call.kind)).toEqual([
+      'clear',
+      'push',
+      'list-providers',
+      'translate',
+      'clear',
+      'push',
+    ])
+    const translated = harness.calls.find(call => call.kind === 'translate')!
+    expect(translated.payload).toEqual({ text: 'hello', targetLang: 'zh' })
+    expect(translated.options).toMatchObject({
+      preferredProviderId: 'provider-a',
+      modelPreference: ['model-a'],
+      metadata: {
+        entry: 'touch-translate',
+        capabilityId: 'text.translate',
+        selectedProviderId: 'provider-a',
+      },
     })
-    await expect(pluginModule.__test.mergeProviderSecrets('baidu', {
-      appId: 'baidu-app',
-    })).resolves.toEqual({
-      appId: 'baidu-app',
-      secretKey: 'secure-baidu-secret',
+    const item = actionItem(finalItems(harness.pushes))
+    expect(item.render.basic.icon).toEqual({ type: 'class', value: 'i-ri-translate-2' })
+    expect(item.meta).toEqual({
+      pluginName: 'touch-translation',
+      featureId: 'touch-translate',
+      defaultAction: 'copy-translation',
     })
-    expect(secretGetCalls).toEqual(['providers.baidu.secretKey'])
-  })
-
-  it('rechecks network permission after a denied translation request', async () => {
-    let checkGranted = false
-    const request = vi.fn(async () => checkGranted)
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: {
-          check: async () => checkGranted,
-          request,
-        },
-      }),
-    )
-
-    await expect(pluginModule.__test.ensureNetworkPermission()).resolves.toBe(false)
-
-    checkGranted = true
-    await expect(pluginModule.__test.ensureNetworkPermission()).resolves.toBe(true)
-
-    expect(request).toHaveBeenCalledTimes(1)
-  })
-
-  it('blocks network and AI helpers when permission sdk is unavailable', async () => {
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: withoutGlobal(),
-      }),
-    )
-
-    await expect(pluginModule.__test.ensureNetworkPermission()).resolves.toBe(false)
-    await expect(pluginModule.__test.ensureClipboardWritePermission()).resolves.toBe(false)
-    await expect(pluginModule.__test.canUseTuffIntelligenceProvider({ authToken: 'token' })).resolves.toBe(false)
-  })
-
-  it('blocks network providers when permission sdk is unavailable', async () => {
-    vi.useFakeTimers()
-    try {
-      const result = await runNetworkPermissionFailureScenario(
-        withoutGlobal(),
-      )
-
-      expect(result.networkCalls).toEqual([])
-      expect(result.permissionRequests).toEqual([])
-    }
-    finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('blocks network providers when network.internet permission is denied', async () => {
-    vi.useFakeTimers()
-    try {
-      const result = await runNetworkPermissionFailureScenario(
-        {
-          check: async () => false,
-          request: async () => false,
-        },
-      )
-
-      expect(result.networkCalls).toEqual([])
-      expect(result.permissionRequests).toEqual(['network.internet'])
-    }
-    finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('blocks network providers without requesting when permission check fails', async () => {
-    vi.useFakeTimers()
-    try {
-      const result = await runNetworkPermissionFailureScenario(
-        {
-          check: async () => {
-            throw new Error('permission check failed')
-          },
-          request: async () => true,
-        },
-      )
-
-      expect(result.networkCalls).toEqual([])
-      expect(result.permissionRequests).toEqual([])
-    }
-    finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('blocks network providers when permission request fails', async () => {
-    vi.useFakeTimers()
-    try {
-      const result = await runNetworkPermissionFailureScenario(
-        {
-          check: async () => false,
-          request: async () => {
-            throw new Error('permission request failed')
-          },
-        },
-      )
-
-      expect(result.networkCalls).toEqual([])
-      expect(result.permissionRequests).toEqual(['network.internet'])
-    }
-    finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('blocks translation copy when clipboard.write permission is denied', async () => {
-    const hide = vi.fn()
-    const writeText = vi.fn()
-    const request = vi.fn(async () => false)
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        clipboard: { writeText },
-        permission: {
-          check: async () => false,
-          request,
-        },
-        plugin: {
-          feature: {
-            clearItems() {},
-            pushItems() {},
-          },
-          storage: {
-            async getFile() {
-              return null
-            },
-            async setFile() {},
-          },
-          box: { hide },
-        },
-      }),
-    )
-
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: 'translated text' }],
+    expect(item.actions[0].payload).toMatchObject({
+      requestId: expect.any(String),
+      text: 'translated:hello',
     })
+  })
 
-    expect(request).toHaveBeenCalledWith('clipboard.write', '需要剪贴板写入权限以复制翻译结果')
-    expect(writeText).not.toHaveBeenCalled()
-    expect(hide).not.toHaveBeenCalled()
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
+  it('caps multi-source translation to three host-enumerated public providers', async () => {
+    const providers = Array.from({ length: 5 }, (_, index) => ({
+      providerId: `provider-${index}`,
+      providerName: `Provider ${index}`,
+      providerType: 'host',
+      models: [`model-${index}`],
+      defaultModel: `model-${index}`,
+      capabilities: ['text.translate'],
+      available: true,
+    }))
+    const harness = createHarness({ providers })
+
+    await harness.module.onFeatureTriggered('multi-source-translate', '你好', undefined, new AbortController().signal)
+
+    const translateCalls = harness.calls.filter(call => call.kind === 'translate')
+    expect(translateCalls).toHaveLength(3)
+    expect(translateCalls.map(call => (call.options as any).preferredProviderId)).toEqual([
+      'provider-0',
+      'provider-1',
+      'provider-2',
+    ])
+    expect(translateCalls.every(call => JSON.stringify(call).includes('ignored') === false)).toBe(true)
+    expect(finalItems(harness.pushes)).toHaveLength(3)
+  })
+
+  it('performs screenshot OCR then fixed text.translate without image or window output', async () => {
+    const harness = createHarness()
+    const png = 'data:image/png;base64,iVBORw0KGgo='
+    await harness.module.onFeatureTriggered(
+      'screenshot-translate',
+      { inputs: [{ type: 'image', content: png }] },
+      undefined,
+      new AbortController().signal,
+    )
+
+    const ocr = harness.calls.find(call => call.kind === 'ocr')!
+    const translate = harness.calls.find(call => call.kind === 'translate')!
+    expect(ocr.payload).toEqual({
+      source: { type: 'data-url', dataUrl: png },
+      language: 'zh-CN',
+      includeLayout: false,
+      includeKeywords: false,
+    })
+    expect(translate.payload).toEqual({ text: 'recognized text', targetLang: 'zh' })
+    expect(JSON.stringify(finalItems(harness.pushes))).not.toContain(png)
+    expect(JSON.stringify(finalItems(harness.pushes))).not.toMatch(/division|window|translatedImage/i)
+  })
+
+  it('distinguishes clipboard denial, operational failure, success, and stale actions', async () => {
+    const denied = createHarness({
+      clipboardWrite: async () => {
+        throw Object.assign(new Error('redacted'), { code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED' })
+      },
+    })
+    await denied.module.onFeatureTriggered('touch-translate', 'hello', undefined, new AbortController().signal)
+    const deniedItem = actionItem(finalItems(denied.pushes))
+    await expect(denied.module.onItemAction(deniedItem)).resolves.toMatchObject({
       status: 'blocked',
       reason: 'permission-denied',
     })
-  })
 
-  it('blocks translation copy when permission sdk is unavailable', async () => {
-    const hide = vi.fn()
-    const writeText = vi.fn()
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        clipboard: { writeText },
-        permission: withoutGlobal(),
-        plugin: {
-          feature: {
-            clearItems() {},
-            pushItems() {},
-          },
-          storage: {
-            async getFile() {
-              return null
-            },
-            async setFile() {},
-          },
-          box: { hide },
-        },
-      }),
-    )
-
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: 'translated text' }],
+    const failed = createHarness({
+      clipboardWrite: async () => {
+        throw new Error('native secret')
+      },
+    })
+    await failed.module.onFeatureTriggered('touch-translate', 'hello', undefined, new AbortController().signal)
+    await expect(failed.module.onItemAction(actionItem(finalItems(failed.pushes)))).resolves.toMatchObject({
+      status: 'failed',
+      reason: 'clipboard-write-failed',
     })
 
-    expect(writeText).not.toHaveBeenCalled()
-    expect(hide).not.toHaveBeenCalled()
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
+    const successful = createHarness()
+    await successful.module.onFeatureTriggered('touch-translate', 'hello', undefined, new AbortController().signal)
+    const current = actionItem(finalItems(successful.pushes))
+    await expect(successful.module.onItemAction(current)).resolves.toMatchObject({ status: 'started' })
+    expect(successful.clipboardWrite).toHaveBeenCalledWith('translated:hello')
+
+    const forged = structuredClone(current)
+    forged.actions[0].payload.text = 'attacker-controlled'
+    await expect(successful.module.onItemAction(forged)).resolves.toMatchObject({
       status: 'blocked',
-      reason: 'permission-denied',
+      reason: 'invalid-payload',
     })
+    expect(successful.clipboardWrite).toHaveBeenCalledTimes(1)
+
+    const stale = structuredClone(current)
+    stale.actions[0].payload.requestId = 'old-generation'
+    await expect(successful.module.onItemAction(stale)).resolves.toMatchObject({
+      status: 'ignored',
+      reason: 'stale-request',
+    })
+    expect(successful.clipboardWrite).toHaveBeenCalledTimes(1)
   })
 
-  it('copies translation payload after clipboard.write permission is granted', async () => {
-    const hide = vi.fn()
-    const writeText = vi.fn()
-    const request = vi.fn()
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-translation/index.js', import.meta.url),
-      createPluginGlobals({
-        clipboard: { writeText },
-        permission: {
-          check: async () => true,
-          request,
-        },
-        plugin: {
-          feature: {
-            clearItems() {},
-            pushItems() {},
-          },
-          storage: {
-            async getFile() {
-              return null
-            },
-            async setFile() {},
-          },
-          box: { hide },
-        },
-      }),
-    )
-
-    const result = await pluginModule.onItemAction({
-      meta: { defaultAction: 'copy' },
-      actions: [{ type: 'copy', payload: 'translated text' }],
+  it('serializes publications so an older clear cannot erase or republish over a newer request', async () => {
+    let resolveOld!: (value: Record<string, unknown>) => void
+    const oldResult = new Promise<Record<string, unknown>>((resolve) => {
+      resolveOld = resolve
+    })
+    let releaseOldClear!: () => void
+    const oldClearBarrier = new Promise<void>((resolve) => {
+      releaseOldClear = resolve
+    })
+    let clearCount = 0
+    const harness = createHarness({
+      clearItems: async () => {
+        clearCount += 1
+        if (clearCount === 2)
+          await oldClearBarrier
+      },
+      translate: async (payload, invokeOptions) => {
+        if (payload.text === 'old')
+          return oldResult
+        return {
+          result: `fresh:${payload.text}`,
+          provider: invokeOptions.preferredProviderId,
+          model: invokeOptions.modelPreference?.[0] ?? 'default',
+          traceId: 'fresh-trace',
+          latency: 1,
+        }
+      },
     })
 
-    expect(request).not.toHaveBeenCalled()
-    expect(writeText).toHaveBeenCalledWith('translated text')
-    expect(hide).toHaveBeenCalledTimes(1)
-    expect(result).toMatchObject({ externalAction: true, status: 'started' })
-  })
-
-  it('keeps translate-panel widgets sandbox-compatible in canonical and bundled runtime copies', () => {
-    ensureBundledRuntimeSynced()
-
-    const widgetFiles = [
-      resolvePath('../../../../plugins/touch-translation/widgets/translate-panel.vue'),
-      resolvePath('../../../../plugins/touch-translation/dist/build/widgets/translate-panel.vue'),
-      resolvePath('../../../../apps/core-app/tuff/modules/plugins/touch-translation/widgets/translate-panel.vue'),
-      resolvePath('../../../../apps/core-app/tuff/modules/plugins/touch-translation/dist/build/widgets/translate-panel.vue'),
-    ]
-
-    for (const widgetFile of widgetFiles) {
-      const source = fs.readFileSync(widgetFile, 'utf-8')
-      expect(source).not.toContain('../shared/translation-shared.cjs')
-      expect(listDisallowedWidgetImports(source)).toEqual([])
-    }
-  })
-
-  it('keeps bundled touch-translation runtime files aligned with canonical build output', () => {
-    const canonicalRoot = resolvePath('../../../../plugins/touch-translation/')
-    const canonicalBuildRoot = path.join(canonicalRoot, 'dist/build')
-    const bundledRoot = resolvePath('../../../../apps/core-app/tuff/modules/plugins/touch-translation/')
-
-    ensureBundledRuntimeSynced()
-
-    const bundledBuildRoot = path.join(bundledRoot, 'dist/build')
-
-    const canonicalPackage = JSON.parse(
-      fs.readFileSync(path.join(canonicalRoot, 'package.json'), 'utf-8'),
-    ) as { version: string }
-    const canonicalBuildManifest = JSON.parse(
-      fs.readFileSync(path.join(canonicalBuildRoot, 'manifest.json'), 'utf-8'),
-    ) as { version: string }
-    const bundledPackage = JSON.parse(
-      fs.readFileSync(path.join(bundledRoot, 'package.json'), 'utf-8'),
-    ) as { version: string }
-    const bundledManifest = JSON.parse(
-      fs.readFileSync(path.join(bundledRoot, 'manifest.json'), 'utf-8'),
-    ) as { version: string }
-    const bundledBuildManifest = JSON.parse(
-      fs.readFileSync(path.join(bundledBuildRoot, 'manifest.json'), 'utf-8'),
-    ) as { version: string }
-
-    expect(bundledPackage.version).toBe(canonicalPackage.version)
-    expect(bundledManifest.version).toBe(canonicalBuildManifest.version)
-    expect(bundledBuildManifest.version).toBe(canonicalBuildManifest.version)
-    expect(fs.readFileSync(path.join(bundledRoot, 'index.js'), 'utf-8')).toBe(
-      fs.readFileSync(path.join(canonicalBuildRoot, 'index.js'), 'utf-8'),
+    const oldLifecycle = harness.module.onFeatureTriggered(
+      'touch-translate',
+      'old',
+      undefined,
+      new AbortController().signal,
     )
-    expect(
-      fs.readFileSync(path.join(bundledRoot, 'widgets/translate-panel.vue'), 'utf-8'),
-    ).toBe(fs.readFileSync(path.join(canonicalBuildRoot, 'widgets/translate-panel.vue'), 'utf-8'))
-    expect(
-      fs.existsSync(
-        path.join(canonicalRoot, 'dist', `touch-translation-${canonicalBuildManifest.version}.tpex`),
-      ),
-    ).toBe(true)
-    expect(
-      fs.existsSync(
-        path.join(bundledRoot, 'dist', `touch-translation-${canonicalBuildManifest.version}.tpex`),
-      ),
-    ).toBe(true)
+    await vi.waitFor(() => expect(harness.calls.some(call => call.kind === 'translate')).toBe(true))
+    resolveOld({
+      result: 'stale-result',
+      provider: 'provider-a',
+      model: 'model-a',
+      traceId: 'stale-trace',
+      latency: 1,
+    })
+    await vi.waitFor(() => expect(clearCount).toBe(2))
+
+    const freshLifecycle = harness.module.onFeatureTriggered(
+      'touch-translate',
+      'fresh',
+      undefined,
+      new AbortController().signal,
+    )
+    releaseOldClear()
+    await Promise.all([oldLifecycle, freshLifecycle])
+
+    expect(JSON.stringify(harness.pushes)).not.toContain('stale-result')
+    expect(JSON.stringify(finalItems(harness.pushes))).toContain('fresh:fresh')
   })
 
-  it('does not depend on plugin.search in canonical and bundled translation preludes', () => {
-    ensureBundledRuntimeSynced()
+  it('drops late provider completion after destroy and does not publish a stale result', async () => {
+    let resolveTranslate!: (value: Record<string, unknown>) => void
+    const deferred = new Promise<Record<string, unknown>>((resolve) => {
+      resolveTranslate = resolve
+    })
+    const harness = createHarness({ translate: async () => deferred })
+    const lifecycle = harness.module.onFeatureTriggered(
+      'touch-translate',
+      'late',
+      undefined,
+      new AbortController().signal,
+    )
+    await vi.waitFor(() => expect(harness.calls.some(call => call.kind === 'translate')).toBe(true))
+    await harness.module.onDestroy()
+    resolveTranslate({
+      result: 'late-result',
+      provider: 'provider-a',
+      model: 'model-a',
+      traceId: 'late-trace',
+      latency: 1,
+    })
+    await lifecycle
 
-    const preludeFiles = [
-      resolvePath('../../../../plugins/touch-translation/index.js'),
-      resolvePath('../../../../plugins/touch-translation/dist/build/index.js'),
-      resolvePath('../../../../apps/core-app/tuff/modules/plugins/touch-translation/index.js'),
-      resolvePath('../../../../apps/core-app/tuff/modules/plugins/touch-translation/dist/build/index.js'),
-    ]
-
-    for (const preludeFile of preludeFiles) {
-      const source = fs.readFileSync(preludeFile, 'utf-8')
-      expect(source).not.toContain('plugin.search.updateQuery')
-    }
+    expect(JSON.stringify(harness.pushes)).not.toContain('late-result')
   })
 })

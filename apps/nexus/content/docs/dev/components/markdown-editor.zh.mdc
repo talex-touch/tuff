@@ -41,6 +41,7 @@ code: |
 - `sanitize` 默认是 `true`；只有内容已经可信时才关闭。
 - Source 模式直接编辑 Markdown；WYSIWYG 模式会在输入时把 DOM 序列化回 Markdown。
 - 工具栏动作在各模式复用，但 preview 模式会禁用编辑动作。
+- 模式切换器是一个切换按钮组：容器是 `role="group"`（标注 "Markdown editor mode"），每个模式按钮通过 `aria-pressed` 反映当前模式（不是 `role="tab"`，因为没有对应的 tabpanel）。
 - `theme="auto"` 监听 `documentElement` 的 class / `data-theme`，无法判断时回退到 light。
 
 ## API
@@ -111,6 +112,6 @@ code: |
 - Component source: `packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue`。
 - Types: `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`。
 - Serializer: `packages/tuffex/packages/components/src/markdown-editor/src/markdown-serializer.ts`。
-- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/markdown-editor/__tests__/markdown-editor.test.ts` 验证导出、净化后的 WYSIWYG 渲染、source 模式输入更新、非受控模式事件，以及富文本内容重新序列化为 Markdown。
+- **实测覆盖:** Coverage: `packages/tuffex/packages/components/src/markdown-editor/__tests__/markdown-editor.test.ts` 验证导出、净化后的 WYSIWYG 渲染、source 模式输入更新、非受控模式事件、`role="group"` / `aria-pressed` 模式切换器，以及富文本内容重新序列化为 Markdown。
 
 <TuffDocSourceLink />

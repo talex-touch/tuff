@@ -27,6 +27,12 @@ export interface MarkdownEditorProps {
   toolbarActions?: MarkdownEditorToolbarActionKey[]
   minHeight?: string | number
   maxHeight?: string | number
+  /**
+   * Accessible label announced for both editing surfaces (the WYSIWYG
+   * `role="textbox"` and the source `<textarea>`), which are otherwise unnamed.
+   * @default 'Markdown editor'
+   */
+  ariaLabel?: string
   linkPrompt?: (selectedText: string) => string | Promise<string>
 }
 

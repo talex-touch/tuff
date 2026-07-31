@@ -8,7 +8,7 @@ import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref
 import { hasWindow } from '../../../../utils/env'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 import TxCard from '../../card/src/TxCard.vue'
-import { beadPinchRatio, beadSpanAt, createLiquidMetrics, geometryAt, itemOpacityAt, LIQUID_DEFAULTS } from './base-anchor-liquid'
+import { beadPinchRatio, beadSpanAt, createLiquidMetrics, geometryAt, itemOpacityAt, LIQUID_DEFAULTS, neckClipAt } from './base-anchor-liquid'
 import { useBaseAnchorMotion } from './base-anchor-motion'
 
 defineOptions({ name: 'TxBaseAnchor', inheritAttrs: false })
@@ -152,7 +152,10 @@ const { floatingStyles, middlewareData, placement, update } = useFloating(floati
           style.minWidth = `${minW}px`
         }
 
-        style.maxWidth = `${props.maxWidth}px`
+        // An explicit `width` is a deliberate override and must not be silently
+        // re-clamped by the default `maxWidth` (360): `:width="480"` should render
+        // 480, not 360. Only bound derived widths (reference-matched / min / intrinsic).
+        style.maxWidth = props.width > 0 ? '' : `${props.maxWidth}px`
         if (isUnlimitedHeight.value) {
           elements.floating.style.setProperty('--tx-ba-max-height', 'none')
           return
@@ -373,6 +376,7 @@ const {
   animateOpen,
   bouncePad,
   clearTimeline,
+  hasActiveLiquidRun,
   hasActiveTimeline,
   resolvedAnimation,
   settleOpenVisualStateForFollow,
@@ -400,6 +404,7 @@ const {
   prepareLiquid,
   applyLiquidFrame,
   settleLiquid,
+  prefersReducedMotion,
 })
 
 /* ─── liquid drop ─── */
@@ -611,6 +616,12 @@ function applyLiquidFrame(p: number, velocity = 0) {
     shadow.style.opacity = String(Math.min(1, Math.max(0, cleared)))
   }
 
+  // Rows keep their full width while the sheet does not, so bound them by the
+  // sheet. Vertically they are still keyed to the panel's own growth.
+  const content = contentRef.value
+  if (content)
+    content.style.clipPath = neckClipAt(span.x)
+
   for (const item of liquidItems)
     item.el.style.opacity = String(itemOpacityAt(geometry.bottom, item.hold))
 
@@ -624,6 +635,11 @@ function settleLiquid(isOpen: boolean) {
     item.el.style.opacity = ''
   liquidItems = []
 
+  // The sheet is back at full width by now, so the clip has nothing left to do.
+  const content = contentRef.value
+  if (content)
+    content.style.clipPath = ''
+
   const stage = liquidStageRef.value
   if (stage)
     stage.style.visibility = isOpen ? 'visible' : 'hidden'
@@ -634,9 +650,19 @@ function settleLiquid(isOpen: boolean) {
   }
 }
 
-/** Keep the goo silhouette glued to the reference while the anchor sits open. */
+/**
+ * Keep the goo silhouette glued to the reference while the anchor sits open.
+ *
+ * `autoUpdate` runs with `animationFrame: true`, so this fires on every frame —
+ * including every frame of a drop that is already re-measuring and rewriting the
+ * whole stage from its own loop. Replaying the last progress on top of that
+ * bought nothing and cost a second forced layout plus a second full geometry
+ * write per frame, on an animation whose entire pinch lives in about seven frames.
+ */
 function refreshLiquidStage() {
   if (!usesLiquidMotion.value || !liquidMetrics)
+    return
+  if (hasActiveLiquidRun())
     return
   applyLiquidFrame(liquidProgress, liquidVelocity)
 }

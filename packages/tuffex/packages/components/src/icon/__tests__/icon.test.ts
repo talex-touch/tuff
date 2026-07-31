@@ -47,6 +47,21 @@ describe('txIcon', () => {
     expect(halfStarPath).not.toContain('V2z')
   })
 
+  it('hides decorative icons (no alt) from the a11y tree instead of exposing a nameless image', () => {
+    // alt defaults to '' — a decorative icon must drop role="img"/title and become aria-hidden,
+    // otherwise screen readers announce an unlabeled graphic.
+    const decorative = mount(TxIcon, { props: { name: 'i-ri-home-line' } })
+    expect(decorative.attributes('role')).toBeUndefined()
+    expect(decorative.attributes('title')).toBeUndefined()
+    expect(decorative.attributes('aria-hidden')).toBe('true')
+
+    // With an alt it is a labelled image and stays in the a11y tree.
+    const labelled = mount(TxIcon, { props: { name: 'i-ri-home-line', alt: 'Home' } })
+    expect(labelled.attributes('role')).toBe('img')
+    expect(labelled.attributes('title')).toBe('Home')
+    expect(labelled.attributes('aria-hidden')).toBeUndefined()
+  })
+
   it('renders emoji, empty, loading, and error states', () => {
     expect(mount(TxIcon, { props: { icon: { type: 'emoji', value: 'A' } } }).text()).toBe('A')
     expect(mount(TxIcon, { props: { empty: '/empty.png' } }).find('img').attributes('src')).toBe('/empty.png')

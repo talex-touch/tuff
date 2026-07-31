@@ -64,6 +64,7 @@ interface PluginManifest {
   category?: string
   icon: ITuffIcon
   dev?: IPluginDev
+  main?: string
   build?: IPluginBuildInfo
   platforms?: Record<string, boolean>
   features?: LocalizedPluginFeature[]
@@ -127,6 +128,13 @@ function resolveManifestDescription(pluginInfo: PluginManifest, locale: AppLocal
     return resolveLocalizedText(value, locale)
   }
   return 'No description.'
+}
+
+function resolveBuildIndexEntry(build: IPluginBuildInfo | undefined): string | undefined {
+  const index = build?.index
+  if (!index || typeof index !== 'object' || Array.isArray(index)) return undefined
+  const entry = (index as { entry?: unknown }).entry
+  return typeof entry === 'string' ? entry : undefined
 }
 
 function resolveManifestPermissionReasons(
@@ -248,6 +256,11 @@ abstract class BasePluginLoader {
     this.touchPlugin.build = Array.isArray(pluginInfo.build?.widgets)
       ? { widgets: [...pluginInfo.build.widgets] }
       : undefined
+    const buildIndexEntry = resolveBuildIndexEntry(pluginInfo.build)
+    this.touchPlugin.setPreludeContract({
+      ...(pluginInfo.main === undefined ? {} : { main: pluginInfo.main }),
+      ...(buildIndexEntry === undefined ? {} : { buildIndexEntry })
+    })
     this.touchPlugin.platforms = pluginInfo.platforms || {}
 
     // Category (for UI grouping)

@@ -1,5 +1,14 @@
 # 剩余安全加固 Backlog — 详细实施 Handoff — 2026-07-15
 
+> **历史快照，插件隔离部分已被 #297 取代。** 本文中的 singleton
+> `plugin-host-bridge.ts`、`plugin-host-protocol.ts`、`TUFF_PLUGIN_ISOLATION`、synthetic
+> self-check、direct privileged `require` 与共享宿主进程方案均不得继续作为实施指引。
+> 当前合同与证据以 `.trellis/spec/frontend/plugin-runtime-security.md` 的
+> `Isolated Plugin Prelude Runtime` 场景和
+> `.trellis/tasks/07-27-isolate-plugin-prelude-297/` 为准：每个 activation 独占
+> utility process，所有宿主访问走逐调用鉴权的 fixed typed capability，生产无 main-VM
+> fallback。下文保留仅用于解释 2026-07-15 的历史决策。
+
 > 主 handoff（`security-hardening-handoff-2026-07-15.md`）的实施细节补充。
 > 每一项都在本轮审计中定位过，这里给接手者可直接照做的现状 / 步骤 / 验证 / 陷阱。
 > **两条共同硬约束**：① 多数项需要真机 app 或真实 D1 才能验收；② 开始前读取当前 worktree/Trellis 状态并协调文件 owner，不依赖本文的历史并行修改快照。

@@ -20,11 +20,19 @@ The common case uses numeric steps. Completed states are inferred when both `act
 ---
 code: |
   <template>
-    <TxSteps :active="1">
-      <TxStep title="Start" description="Collect basics" :step="0" />
-      <TxStep title="Details" description="Fill in details" :step="1" />
-      <TxStep title="Finish" description="Review and submit" :step="2" />
-    </TxSteps>
+    <div style="display: grid; gap: 24px;">
+      <TxSteps :active="1">
+        <TxStep title="Start" description="Collect basics" :step="0" />
+        <TxStep title="Details" description="Fill in details" :step="1" />
+        <TxStep title="Finish" description="Review and submit" :step="2" />
+      </TxSteps>
+
+      <TxSteps direction="vertical" size="small" active="review">
+        <TxStep title="Draft" description="Content saved" step="draft" status="completed" />
+        <TxStep title="Review" description="Waiting for approval" step="review" icon="i-carbon-in-progress" />
+        <TxStep title="Publish" description="Unlocked after review" step="publish" disabled />
+      </TxSteps>
+    </div>
   </template>
 ---
 ::::

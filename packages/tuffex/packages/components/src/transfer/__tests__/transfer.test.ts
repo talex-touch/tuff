@@ -48,4 +48,19 @@ describe('txTransfer', () => {
     expect(buttons[0].attributes('aria-label')).toBe('Add selected')
     expect(buttons[1].attributes('aria-label')).toBe('Remove selected')
   })
+
+  it('gives each row checkbox an accessible name from its item label', () => {
+    const wrapper = mount(TxTransfer, {
+      props: { data, modelValue: ['docs'] },
+    })
+
+    const labels = wrapper.findAll('.tx-checkbox').map(cb => cb.attributes('aria-label'))
+    // Pre-fix the row text lived in a sibling <span>, so the role="checkbox"
+    // button resolved to no accessible name.
+    expect(labels).toContain('Docs')
+    expect(labels).toContain('Release')
+
+    // The visible label is hidden from AT so it is not announced twice.
+    expect(wrapper.find('.tx-transfer__label').attributes('aria-hidden')).toBe('true')
+  })
 })

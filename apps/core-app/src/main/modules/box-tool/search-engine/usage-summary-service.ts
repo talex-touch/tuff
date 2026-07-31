@@ -1,8 +1,6 @@
 import type { DbUtils } from '../../../db/utils'
 import type { Primitive } from '../../../utils/logger'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { lt } from 'drizzle-orm'
-import * as schema from '../../../db/schema'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
 import { TimeStatsAggregator } from './time-stats-aggregator'
@@ -22,11 +20,11 @@ export interface SummaryStats {
 
 const DEFAULT_CONFIG: SummaryConfig = {
   retentionDays: 30,
-  autoCleanup: true,
+  autoCleanup: false,
   summaryInterval: 24 * 60 * 60 * 1000
 }
 
-/** Periodically rebuild time-based usage stats and remove expired raw logs. */
+/** Periodically rebuild time-based usage stats. Retention is owned by the privacy lifecycle. */
 export class UsageSummaryService {
   private config: SummaryConfig
   private readonly pollingService = PollingService.getInstance()
@@ -39,11 +37,8 @@ export class UsageSummaryService {
     avgDuration: 0
   }
 
-  constructor(
-    private dbUtils: DbUtils,
-    config?: Partial<SummaryConfig>
-  ) {
-    this.config = { ...DEFAULT_CONFIG, ...config }
+  constructor(dbUtils: DbUtils, config?: Partial<SummaryConfig>) {
+    this.config = { ...DEFAULT_CONFIG, ...config, autoCleanup: false }
     this.timeStatsAggregator = new TimeStatsAggregator(dbUtils)
   }
 
@@ -89,13 +84,10 @@ export class UsageSummaryService {
 
     try {
       // `item_usage_stats` is owned by UsageStatsQueue. Periodic maintenance
-      // only rebuilds time distributions and removes expired raw logs.
+      // only rebuilds time distributions; privacy retention owns raw-log deletion.
       await this.timeStatsAggregator.aggregateTimeStats()
 
-      let cleanedCount = 0
-      if (this.config.autoCleanup) {
-        cleanedCount = await this.cleanupExpiredLogs()
-      }
+      const cleanedCount = 0
 
       const duration = performance.now() - start
 
@@ -117,31 +109,12 @@ export class UsageSummaryService {
     }
   }
 
-  /** Remove usage logs older than retention period */
-  private async cleanupExpiredLogs(): Promise<number> {
-    const timer = log.time('cleanupExpiredLogs')
-    const db = this.dbUtils.getDb()
-
-    try {
-      const expirationDate = new Date()
-      expirationDate.setDate(expirationDate.getDate() - this.config.retentionDays)
-
-      await db.delete(schema.usageLogs).where(lt(schema.usageLogs.timestamp, expirationDate))
-
-      timer.end('debug')
-      return 0
-    } catch (error) {
-      log.error('Failed to cleanup expired logs', { error })
-      throw error
-    }
-  }
-
   async triggerSummary(): Promise<SummaryStats> {
     return this.runSummary()
   }
 
   updateConfig(config: Partial<SummaryConfig>): void {
-    this.config = { ...this.config, ...config }
+    this.config = { ...this.config, ...config, autoCleanup: false }
     const metaConfig: Record<string, Primitive> = {
       retentionDays: this.config.retentionDays,
       autoCleanup: this.config.autoCleanup,

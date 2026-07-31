@@ -3,20 +3,76 @@ import { structuredStrictStringify } from '@talex-touch/utils'
 import { describe, expect, it, vi } from 'vitest'
 import { instantiateCommandPreset } from '../../../../plugins/touch-intelligence/widgets/_shared/command-presets'
 import { renderPromptTemplatePreview } from '../../../../plugins/touch-intelligence/widgets/_shared/prompt-template-preview'
-import {
-  createPluginGlobals,
-  loadPluginModule,
-  withoutGlobal,
-} from './plugin-loader'
+import { createPluginGlobals, loadPluginModuleWithSourceTransform, withoutGlobal } from './plugin-loader'
 
-const intelligencePlugin = loadPluginModule(
-  new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
-)
+const intelligencePluginUrl = new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url)
+const TEST_EXPORT_NAMES = [
+  'buildInvokePayload',
+  'buildInvokeOptions',
+  'buildAiCommandInvokeOptions',
+  'buildCustomAiCommandFeature',
+  'buildCustomAiCommandDocument',
+  'buildCustomAiCommandRegistryItem',
+  'getAiCommandStarterPresets',
+  'commitCustomAiCommandDocument',
+  'deleteCustomAiCommand',
+  'loadCustomAiCommandConfig',
+  'parseCustomAiCommandConfig',
+  'reloadCustomAiCommands',
+  'serializeCustomAiCommand',
+  'upsertCustomAiCommand',
+  'buildWidgetItem',
+  'buildWidgetPayload',
+  'buildContextExecutionRequest',
+  'buildHandoffSessionId',
+  'buildIntelligenceMeta',
+  'buildOcrPayload',
+  'extractEntrypointContext',
+  'extractImageDataUrl',
+  'extractInputKinds',
+  'extractQueryContext',
+  'mapInvokeResult',
+  'normalizeInvokeError',
+  'normalizeLatency',
+  'normalizeModelOptions',
+  'normalizeModelSelection',
+  'normalizePrompt',
+  'normalizeFeaturePrompt',
+  'resolveAiCommand',
+  'isKnownIntelligenceFeature',
+  'buildModelSelectionInvokeOptions',
+  'resolveIntelligenceClient',
+] as const
+
+function loadPluginModule(url: URL, overrides?: Record<string, unknown>) {
+  const pluginOverride = overrides?.plugin
+  const normalizedOverrides
+    = pluginOverride
+      && typeof pluginOverride === 'object'
+      && !Array.isArray(pluginOverride)
+      && !Object.hasOwn(pluginOverride, 'widget')
+      && 'feature' in pluginOverride
+      && pluginOverride.feature
+      && typeof pluginOverride.feature === 'object'
+      && 'pushItems' in pluginOverride.feature
+      && typeof pluginOverride.feature.pushItems === 'function'
+      ? {
+          ...overrides,
+          plugin: {
+            ...pluginOverride,
+            widget: { pushItems: pluginOverride.feature.pushItems },
+          },
+        }
+      : overrides
+  return loadPluginModuleWithSourceTransform(
+    url,
+    source => `${source}\nmodule.exports.__test={${TEST_EXPORT_NAMES.join(',')}}`,
+    normalizedOverrides,
+  )
+}
+
+const intelligencePlugin = loadPluginModule(intelligencePluginUrl)
 const { __test: intelligenceTest } = intelligencePlugin
-const intelligencePluginUrl = new URL(
-  '../../../../plugins/touch-intelligence/index.js',
-  import.meta.url,
-)
 
 const builtInAiCommands = [
   {
@@ -35,8 +91,7 @@ const builtInAiCommands = [
     name: 'AI 摘要',
     version: '1.0.0',
     prefixes: ['summarize', 'summary', '总结', '摘要'],
-    promptTemplate:
-      'Summarize the user input in {{length}}. Return only the summary.',
+    promptTemplate: 'Summarize the user input in {{length}}. Return only the summary.',
     promptVariables: { length: 'three concise bullet points or fewer' },
   },
   {
@@ -45,8 +100,7 @@ const builtInAiCommands = [
     name: 'AI 解释',
     version: '1.0.0',
     prefixes: ['explain', '解释'],
-    promptTemplate:
-      'Explain the user input for a {{audience}} audience. Be concise and return only the explanation.',
+    promptTemplate: 'Explain the user input for a {{audience}} audience. Be concise and return only the explanation.',
     promptVariables: { audience: 'general technical' },
   },
 ] as const
@@ -89,11 +143,7 @@ class FakeBuilder {
     return this
   }
 
-  setCustomRender(
-    type: string,
-    content: string,
-    data?: Record<string, unknown>,
-  ) {
+  setCustomRender(type: string, content: string, data?: Record<string, unknown>) {
     this.item.render = {
       mode: 'custom',
       custom: { type, content, data },
@@ -125,28 +175,20 @@ class FakeBuilder {
 
 describe('intelligence plugin', () => {
   it('normalizes prompt with ai prefix', () => {
-    expect(intelligenceTest.normalizePrompt('ai 帮我写总结')).toBe(
-      '帮我写总结',
-    )
-    expect(intelligenceTest.normalizePrompt('/ai: explain this code')).toBe(
-      'explain this code',
-    )
+    expect(intelligenceTest.normalizePrompt('ai 帮我写总结')).toBe('帮我写总结')
+    expect(intelligenceTest.normalizePrompt('/ai: explain this code')).toBe('explain this code')
     expect(intelligenceTest.normalizePrompt('智能，今天做啥')).toBe('今天做啥')
     expect(intelligenceTest.normalizePrompt('ai')).toBe('')
   })
 
   it('renders AI Command prompt previews with host-compatible Mustache semantics', () => {
     expect(
-      renderPromptTemplatePreview(
-        'Explain {{topic}} for {{audience.name}}. Repeat {{topic}}.',
-        {
-          topic: '<typed transport>',
-          audience: { name: 'SDK authors' },
-        },
-      ),
+      renderPromptTemplatePreview('Explain {{topic}} for {{audience.name}}. Repeat {{topic}}.', {
+        topic: '<typed transport>',
+        audience: { name: 'SDK authors' },
+      }),
     ).toEqual({
-      rendered:
-        'Explain <typed transport> for SDK authors. Repeat <typed transport>.',
+      rendered: 'Explain <typed transport> for SDK authors. Repeat <typed transport>.',
       variableNames: ['topic', 'audience.name'],
       missingVariables: [],
     })
@@ -210,22 +252,12 @@ describe('intelligence plugin', () => {
   })
 
   it('keeps built-in command definitions versioned and uniquely identified', () => {
-    const resolvedCommands = builtInAiCommands.map(({ featureId }) =>
-      intelligenceTest.resolveAiCommand(featureId),
-    )
+    const resolvedCommands = builtInAiCommands.map(({ featureId }) => intelligenceTest.resolveAiCommand(featureId))
 
-    expect(resolvedCommands).toEqual(
-      builtInAiCommands.map(({ featureId: _featureId, ...command }) => command),
-    )
-    expect(new Set(resolvedCommands.map(command => command?.id)).size).toBe(
-      builtInAiCommands.length,
-    )
-    expect(
-      new Set(resolvedCommands.map(command => command?.promptTemplate)).size,
-    ).toBe(builtInAiCommands.length)
-    expect(
-      intelligenceTest.isKnownIntelligenceFeature('intelligence-ask'),
-    ).toBe(true)
+    expect(resolvedCommands).toEqual(builtInAiCommands.map(({ featureId: _featureId, ...command }) => command))
+    expect(new Set(resolvedCommands.map(command => command?.id)).size).toBe(builtInAiCommands.length)
+    expect(new Set(resolvedCommands.map(command => command?.promptTemplate)).size).toBe(builtInAiCommands.length)
+    expect(intelligenceTest.isKnownIntelligenceFeature('intelligence-ask')).toBe(true)
     for (const { featureId } of builtInAiCommands) {
       expect(intelligenceTest.isKnownIntelligenceFeature(featureId)).toBe(true)
     }
@@ -266,30 +298,10 @@ describe('intelligence plugin', () => {
     ] as const
 
     for (const command of cases) {
-      expect(
-        intelligenceTest.normalizeFeaturePrompt(
-          command.featureId,
-          command.english,
-        ),
-      ).toBe(command.englishResult)
-      expect(
-        intelligenceTest.normalizeFeaturePrompt(
-          command.featureId,
-          command.chinese,
-        ),
-      ).toBe(command.chineseResult)
-      expect(
-        intelligenceTest.normalizeFeaturePrompt(
-          command.featureId,
-          command.slash,
-        ),
-      ).toBe(command.slashResult)
-      expect(
-        intelligenceTest.normalizeFeaturePrompt(
-          command.featureId,
-          command.ordinary,
-        ),
-      ).toBe(command.ordinary)
+      expect(intelligenceTest.normalizeFeaturePrompt(command.featureId, command.english)).toBe(command.englishResult)
+      expect(intelligenceTest.normalizeFeaturePrompt(command.featureId, command.chinese)).toBe(command.chineseResult)
+      expect(intelligenceTest.normalizeFeaturePrompt(command.featureId, command.slash)).toBe(command.slashResult)
+      expect(intelligenceTest.normalizeFeaturePrompt(command.featureId, command.ordinary)).toBe(command.ordinary)
     }
   })
 
@@ -301,10 +313,7 @@ describe('intelligence plugin', () => {
         capabilityId: 'text.chat',
         inputKinds: ['text'],
       })
-      const options = intelligenceTest.buildAiCommandInvokeOptions(
-        command.featureId,
-        baseOptions,
-      )
+      const options = intelligenceTest.buildAiCommandInvokeOptions(command.featureId, baseOptions)
 
       expect(options).toMatchObject({
         promptTemplate: command.promptTemplate,
@@ -324,18 +333,13 @@ describe('intelligence plugin', () => {
       capabilityId: 'text.chat',
       inputKinds: ['text'],
     })
-    const untemplatedAskOptions = intelligenceTest.buildAiCommandInvokeOptions(
-      'intelligence-ask',
-      askOptions,
-    )
+    const untemplatedAskOptions = intelligenceTest.buildAiCommandInvokeOptions('intelligence-ask', askOptions)
 
     expect(untemplatedAskOptions).toBe(askOptions)
     expect(untemplatedAskOptions).not.toHaveProperty('promptTemplate')
     expect(untemplatedAskOptions).not.toHaveProperty('promptVariables')
     expect(untemplatedAskOptions.metadata).not.toHaveProperty('aiCommandId')
-    expect(untemplatedAskOptions.metadata).not.toHaveProperty(
-      'aiCommandVersion',
-    )
+    expect(untemplatedAskOptions.metadata).not.toHaveProperty('aiCommandVersion')
   })
 
   it('runs built-in command requests statelessly without history or handoff', async () => {
@@ -392,10 +396,7 @@ describe('intelligence plugin', () => {
       const request = contextInvoke.mock.calls[0]?.[0]
       expect(request).toMatchObject({
         payload: {
-          messages: [
-            expect.objectContaining({ role: 'system' }),
-            { role: 'user', content: 'command input' },
-          ],
+          messages: [expect.objectContaining({ role: 'system' }), { role: 'user', content: 'command input' }],
         },
         options: {
           promptTemplate: command.promptTemplate,
@@ -410,9 +411,7 @@ describe('intelligence plugin', () => {
         },
       })
       expect(request.context).not.toHaveProperty('sessionId')
-      expect(JSON.stringify(request.payload.messages)).not.toContain(
-        'stored conversation must not be reused',
-      )
+      expect(JSON.stringify(request.payload.messages)).not.toContain('stored conversation must not be reused')
       expect(agentSessionStart).not.toHaveBeenCalled()
       const pendingWidget = pushItems.mock.calls.find(
         call => call[0][0].render?.custom?.data?.status === 'chat-pending',
@@ -424,15 +423,11 @@ describe('intelligence plugin', () => {
           { role: 'assistant', status: 'streaming' },
         ],
       })
-      expect(JSON.stringify(pendingWidget)).not.toContain(
-        'stored conversation must not be reused',
-      )
+      expect(JSON.stringify(pendingWidget)).not.toContain('stored conversation must not be reused')
     }
   })
   it('uses attached text only for empty summarize command suffixes', async () => {
-    const createSummarizePlugin = (
-      contextInvoke: (request: unknown) => Promise<unknown>,
-    ) =>
+    const createSummarizePlugin = (contextInvoke: (request: unknown) => Promise<unknown>) =>
       loadPluginModule(
         intelligencePluginUrl,
         createPluginGlobals({
@@ -461,22 +456,16 @@ describe('intelligence plugin', () => {
       }))
       const pluginWithAttachedText = createSummarizePlugin(contextInvoke)
 
-      await pluginWithAttachedText.onFeatureTriggered(
-        'intelligence-summarize',
-        {
-          text: commandAlias,
-          inputs: [{ type: 'text', content: 'attached clipboard text' }],
-        },
-      )
+      await pluginWithAttachedText.onFeatureTriggered('intelligence-summarize', {
+        text: commandAlias,
+        inputs: [{ type: 'text', content: 'attached clipboard text' }],
+      })
       await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledOnce())
 
       expect(contextInvoke.mock.calls[0]?.[0]).toMatchObject({
         input: 'attached clipboard text',
         payload: {
-          messages: [
-            expect.objectContaining({ role: 'system' }),
-            { role: 'user', content: 'attached clipboard text' },
-          ],
+          messages: [expect.objectContaining({ role: 'system' }), { role: 'user', content: 'attached clipboard text' }],
         },
       })
     }
@@ -486,21 +475,15 @@ describe('intelligence plugin', () => {
     }))
     const pluginWithExplicitSuffix = createSummarizePlugin(contextInvoke)
 
-    await pluginWithExplicitSuffix.onFeatureTriggered(
-      'intelligence-summarize',
-      {
-        text: 'summary: explicit text wins',
-        inputs: [{ type: 'text', content: 'attached clipboard text' }],
-      },
-    )
+    await pluginWithExplicitSuffix.onFeatureTriggered('intelligence-summarize', {
+      text: 'summary: explicit text wins',
+      inputs: [{ type: 'text', content: 'attached clipboard text' }],
+    })
     await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledOnce())
     expect(contextInvoke.mock.calls[0]?.[0]).toMatchObject({
       input: 'explicit text wins',
       payload: {
-        messages: [
-          expect.objectContaining({ role: 'system' }),
-          { role: 'user', content: 'explicit text wins' },
-        ],
+        messages: [expect.objectContaining({ role: 'system' }), { role: 'user', content: 'explicit text wins' }],
       },
     })
 
@@ -539,19 +522,11 @@ describe('intelligence plugin', () => {
 
   it('declares built-in commands as text-only ask-panel widget features', () => {
     const manifest = JSON.parse(
-      readFileSync(
-        new URL(
-          '../../../../plugins/touch-intelligence/manifest.json',
-          import.meta.url,
-        ),
-        'utf8',
-      ),
+      readFileSync(new URL('../../../../plugins/touch-intelligence/manifest.json', import.meta.url), 'utf8'),
     )
 
     for (const command of builtInAiCommands) {
-      const feature = manifest.features.find(
-        (candidate: { id: string }) => candidate.id === command.featureId,
-      )
+      const feature = manifest.features.find((candidate: { id: string }) => candidate.id === command.featureId)
 
       expect(feature).toMatchObject({
         id: command.featureId,
@@ -568,26 +543,13 @@ describe('intelligence plugin', () => {
 
   it('declares the versioned custom-command registry management feature', () => {
     const manifest = JSON.parse(
-      readFileSync(
-        new URL(
-          '../../../../plugins/touch-intelligence/manifest.json',
-          import.meta.url,
-        ),
-        'utf8',
-      ),
+      readFileSync(new URL('../../../../plugins/touch-intelligence/manifest.json', import.meta.url), 'utf8'),
     )
     const packageJson = JSON.parse(
-      readFileSync(
-        new URL(
-          '../../../../plugins/touch-intelligence/package.json',
-          import.meta.url,
-        ),
-        'utf8',
-      ),
+      readFileSync(new URL('../../../../plugins/touch-intelligence/package.json', import.meta.url), 'utf8'),
     )
     const registryFeature = manifest.features.find(
-      (feature: { id: string }) =>
-        feature.id === 'intelligence-command-registry',
+      (feature: { id: string }) => feature.id === 'intelligence-command-registry',
     )
 
     expect(manifest.version).toBe('1.2.0')
@@ -718,21 +680,9 @@ describe('intelligence plugin', () => {
       },
       commands: [{ type: 'match', value: ['release'] }],
     })
-    expect(
-      registeredFeatures.every(feature =>
-        feature.acceptedInputTypes.includes('text'),
-      ),
-    ).toBe(true)
-    expect(
-      registeredFeatures.some(feature =>
-        feature.acceptedInputTypes.includes('image'),
-      ),
-    ).toBe(false)
-    expect(
-      registeredFeatures.some(feature =>
-        feature.acceptedInputTypes.includes('files'),
-      ),
-    ).toBe(false)
+    expect(registeredFeatures.every(feature => feature.acceptedInputTypes.includes('text'))).toBe(true)
+    expect(registeredFeatures.some(feature => feature.acceptedInputTypes.includes('image'))).toBe(false)
+    expect(registeredFeatures.some(feature => feature.acceptedInputTypes.includes('files'))).toBe(false)
     expect(registeredFeatures.map(feature => feature.id)).toEqual([
       'intelligence-custom-release-notes',
       ...extraCommands.map(command => `intelligence-custom-${command.id}`),
@@ -741,23 +691,19 @@ describe('intelligence plugin', () => {
   })
 
   it('keeps prior custom commands through rejected reloads before atomically replacing them', async () => {
-    let config: { version: number, commands: Array<Record<string, unknown>> }
-      = {
-        version: 1,
-        commands: [
-          {
-            id: 'command-a',
-            name: 'Command A',
-            aliases: ['commanda'],
-            promptTemplate: 'Run command A.',
-          },
-        ],
-      }
-    const featureMap = new Map<string, { id: string, name: string }>([
-      [
-        'static-feature',
-        { id: 'static-feature', name: 'Existing static feature' },
+    let config: { version: number, commands: Array<Record<string, unknown>> } = {
+      version: 1,
+      commands: [
+        {
+          id: 'command-a',
+          name: 'Command A',
+          aliases: ['commanda'],
+          promptTemplate: 'Run command A.',
+        },
       ],
+    }
+    const featureMap = new Map<string, { id: string, name: string }>([
+      ['static-feature', { id: 'static-feature', name: 'Existing static feature' }],
     ])
     const addFeature = vi.fn((feature: { id: string, name: string }) => {
       if (featureMap.has(feature.id))
@@ -765,9 +711,7 @@ describe('intelligence plugin', () => {
       featureMap.set(feature.id, feature)
       return true
     })
-    const removeFeature = vi.fn((featureId: string) =>
-      featureMap.delete(featureId),
-    )
+    const removeFeature = vi.fn((featureId: string) => featureMap.delete(featureId))
     const pushItems = vi.fn()
     const pluginWithReloadableRegistry = loadPluginModule(
       intelligencePluginUrl,
@@ -802,20 +746,14 @@ describe('intelligence plugin', () => {
 
     await pluginWithReloadableRegistry.onInit()
     expect(featureMap.has('intelligence-custom-command-a')).toBe(true)
-    expect(
-      pluginWithReloadableRegistry.__test.resolveAiCommand(
-        'intelligence-custom-command-a',
-      ),
-    ).toMatchObject({
+    expect(pluginWithReloadableRegistry.__test.resolveAiCommand('intelligence-custom-command-a')).toMatchObject({
       id: 'command-a',
     })
     addFeature.mockClear()
     removeFeature.mockClear()
 
     config = { version: 2, commands: [] }
-    await expect(
-      pluginWithReloadableRegistry.onItemAction(reloadAction),
-    ).resolves.toEqual({
+    await expect(pluginWithReloadableRegistry.onItemAction(reloadAction)).resolves.toEqual({
       externalAction: true,
       status: 'blocked',
       reason: 'invalid-config',
@@ -835,9 +773,7 @@ describe('intelligence plugin', () => {
         },
       ],
     }
-    await expect(
-      pluginWithReloadableRegistry.onItemAction(reloadAction),
-    ).resolves.toMatchObject({
+    await expect(pluginWithReloadableRegistry.onItemAction(reloadAction)).resolves.toMatchObject({
       externalAction: true,
       status: 'blocked',
       reason: 'invalid-config',
@@ -859,9 +795,7 @@ describe('intelligence plugin', () => {
         },
       ],
     }
-    await expect(
-      pluginWithReloadableRegistry.onItemAction(reloadAction),
-    ).resolves.toEqual({
+    await expect(pluginWithReloadableRegistry.onItemAction(reloadAction)).resolves.toEqual({
       externalAction: true,
       status: 'started',
       reason: undefined,
@@ -869,11 +803,7 @@ describe('intelligence plugin', () => {
     expect(removeFeature).toHaveBeenCalledWith('intelligence-custom-command-a')
     expect(featureMap.has('intelligence-custom-command-a')).toBe(false)
     expect(featureMap.has('intelligence-custom-command-b')).toBe(true)
-    expect(
-      pluginWithReloadableRegistry.__test.resolveAiCommand(
-        'intelligence-custom-command-b',
-      ),
-    ).toMatchObject({
+    expect(pluginWithReloadableRegistry.__test.resolveAiCommand('intelligence-custom-command-b')).toMatchObject({
       id: 'command-b',
     })
     expect(pushItems).toHaveBeenCalled()
@@ -901,14 +831,10 @@ describe('intelligence plugin', () => {
       featureMap.set(feature.id, feature)
       return true
     })
-    const removeFeature = vi.fn((featureId: string) =>
-      featureMap.delete(featureId),
-    )
-    const setFile = vi.fn(
-      async (_name: string, document: typeof storedDocument) => {
-        storedDocument = JSON.parse(JSON.stringify(document))
-      },
-    )
+    const removeFeature = vi.fn((featureId: string) => featureMap.delete(featureId))
+    const setFile = vi.fn(async (_name: string, document: typeof storedDocument) => {
+      storedDocument = JSON.parse(JSON.stringify(document))
+    })
     const pushItems = vi.fn()
     const pluginWithRegistryEditor = loadPluginModule(
       intelligencePluginUrl,
@@ -932,10 +858,7 @@ describe('intelligence plugin', () => {
         },
       }),
     )
-    const registryAction = (
-      actionId: string,
-      payload: Record<string, unknown>,
-    ) => ({
+    const registryAction = (actionId: string, payload: Record<string, unknown>) => ({
       meta: {
         defaultAction: 'intelligence-action',
         featureId: 'intelligence-command-registry',
@@ -945,10 +868,7 @@ describe('intelligence plugin', () => {
     })
 
     await pluginWithRegistryEditor.onInit()
-    await pluginWithRegistryEditor.onFeatureTriggered(
-      'intelligence-command-registry',
-      '',
-    )
+    await pluginWithRegistryEditor.onFeatureTriggered('intelligence-command-registry', '')
 
     const editorPayload = pushItems.mock.calls[0]?.[0][0].render.custom.data
     expect(editorPayload).toMatchObject({
@@ -1003,9 +923,7 @@ describe('intelligence plugin', () => {
       enabled: true,
     }
     await expect(
-      pluginWithRegistryEditor.onItemAction(
-        registryAction('save-custom-ai-command', { command: commandB }),
-      ),
+      pluginWithRegistryEditor.onItemAction(registryAction('save-custom-ai-command', { command: commandB })),
     ).resolves.toEqual({
       externalAction: true,
       status: 'started',
@@ -1074,18 +992,14 @@ describe('intelligence plugin', () => {
     })
     expect(storedDocument).toMatchObject({
       version: 1,
-      commands: [
-        expect.objectContaining({ id: 'command-c', aliases: ['commandc'] }),
-      ],
+      commands: [expect.objectContaining({ id: 'command-c', aliases: ['commandc'] })],
     })
     expect(featureMap.has('intelligence-custom-command-a')).toBe(false)
     expect(featureMap.has('intelligence-custom-command-b')).toBe(false)
     expect(featureMap.has('intelligence-custom-command-c')).toBe(true)
 
     await expect(
-      pluginWithRegistryEditor.onItemAction(
-        registryAction('delete-custom-ai-command', { commandId: 'command-c' }),
-      ),
+      pluginWithRegistryEditor.onItemAction(registryAction('delete-custom-ai-command', { commandId: 'command-c' })),
     ).resolves.toEqual({
       externalAction: true,
       status: 'started',
@@ -1144,9 +1058,7 @@ describe('intelligence plugin', () => {
                 return config
               return {
                 'intelligence-custom-format-release': {
-                  messages: [
-                    { role: 'user', content: 'ask history must not be reused' },
-                  ],
+                  messages: [{ role: 'user', content: 'ask history must not be reused' }],
                 },
               }
             },
@@ -1158,25 +1070,17 @@ describe('intelligence plugin', () => {
     )
 
     await pluginWithCustomCommand.onInit()
-    await pluginWithCustomCommand.onFeatureTriggered(
-      'intelligence-custom-format-release',
-      {
-        text: 'formatrelease: explicit custom suffix',
-        inputs: [
-          { type: 'text', content: 'attached text must lose to the suffix' },
-        ],
-      },
-    )
+    await pluginWithCustomCommand.onFeatureTriggered('intelligence-custom-format-release', {
+      text: 'formatrelease: explicit custom suffix',
+      inputs: [{ type: 'text', content: 'attached text must lose to the suffix' }],
+    })
     await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledOnce())
 
     const request = contextInvoke.mock.calls[0]?.[0]
     expect(request).toMatchObject({
       input: 'explicit custom suffix',
       payload: {
-        messages: [
-          expect.objectContaining({ role: 'system' }),
-          { role: 'user', content: 'explicit custom suffix' },
-        ],
+        messages: [expect.objectContaining({ role: 'system' }), { role: 'user', content: 'explicit custom suffix' }],
       },
       options: {
         promptTemplate: 'Format the release note for {{audience}}.',
@@ -1189,9 +1093,7 @@ describe('intelligence plugin', () => {
       context: { mode: 'stateless' },
     })
     expect(request.context).not.toHaveProperty('sessionId')
-    expect(JSON.stringify(request.payload.messages)).not.toContain(
-      'ask history must not be reused',
-    )
+    expect(JSON.stringify(request.payload.messages)).not.toContain('ask history must not be reused')
     expect(agentSessionStart).not.toHaveBeenCalled()
     expect(contextEvaluateMemory).not.toHaveBeenCalled()
   })
@@ -1202,32 +1104,19 @@ describe('intelligence plugin', () => {
     expect(payload.messages[1]?.content).toBe('hello')
   })
 
-  it('loads the intelligence client through the plugin runtime require path', async () => {
-    const send = vi.fn(async () => ({
-      ok: true,
-      result: {
-        result: 'ok',
-      },
-    }))
+  it('rejects the legacy channel when the injected intelligence facade is absent', () => {
+    const send = vi.fn()
     const pluginWithChannel = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         touchChannel: { send },
       }),
     )
 
-    const client = pluginWithChannel.__test.resolveIntelligenceClient()
-    const result = await client.invoke('text.chat', { messages: [] })
-
-    expect(result).toEqual({ result: 'ok' })
-    expect(send).toHaveBeenCalledWith('intelligence:api:invoke', {
-      capabilityId: 'text.chat',
-      payload: { messages: [] },
-      options: undefined,
-    })
+    expect(() => pluginWithChannel.__test.resolveIntelligenceClient()).toThrow(
+      'Intelligence SDK is unavailable for this plugin runtime',
+    )
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('prefers the injected intelligence SDK from the plugin runtime', async () => {
@@ -1235,10 +1124,7 @@ describe('intelligence plugin', () => {
       invoke: vi.fn(async () => ({ result: 'injected' })),
     }
     const pluginWithInjectedSdk = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         intelligence: injectedIntelligence,
         touchChannel: {
@@ -1277,14 +1163,8 @@ describe('intelligence plugin', () => {
       ],
     }
 
-    expect(intelligenceTest.extractImageDataUrl(query)).toBe(
-      'data:image/png;base64,abc',
-    )
-    expect(intelligenceTest.extractInputKinds(query)).toEqual([
-      'text',
-      'image',
-      'files',
-    ])
+    expect(intelligenceTest.extractImageDataUrl(query)).toBe('data:image/png;base64,abc')
+    expect(intelligenceTest.extractInputKinds(query)).toEqual(['text', 'image', 'files'])
     expect(intelligenceTest.extractQueryContext(query)).toMatchObject({
       prompt: '总结这张图',
       imageDataUrl: 'data:image/png;base64,abc',
@@ -1348,6 +1228,7 @@ describe('intelligence plugin', () => {
       intelligencePluginUrl,
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
+        intelligence: { getProviderModelOptions: vi.fn(async () => []) },
         plugin: {
           feature: { clearItems, pushItems },
           storage: {
@@ -1389,6 +1270,7 @@ describe('intelligence plugin', () => {
       intelligencePluginUrl,
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
+        intelligence: { getProviderModelOptions: vi.fn(async () => []) },
         plugin: {
           feature: { clearItems, pushItems },
           storage: {
@@ -1493,10 +1375,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithFeatureMocks.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
+    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
 
     expect(pushItems).toHaveBeenCalled()
     expect(pushItems.mock.calls[0][0][0].render).toMatchObject({
@@ -1516,11 +1395,9 @@ describe('intelligence plugin', () => {
   it('submits the latest plain prompt after the widget is already active', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
-    const invoke = vi.fn(
-      async (_capabilityId: string, _payload: { messages?: unknown[] }) => ({
-        result: 'ok',
-      }),
-    )
+    const invoke = vi.fn(async (_capabilityId: string, _payload: { messages?: unknown[] }) => ({
+      result: 'ok',
+    }))
     const pluginWithFeatureMocks = loadPluginModule(
       intelligencePluginUrl,
       createPluginGlobals({
@@ -1543,23 +1420,15 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithFeatureMocks.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 旧问题',
-    )
+    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', 'ai 旧问题')
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(1))
     pushItems.mockClear()
 
-    await pluginWithFeatureMocks.onFeatureTriggered(
-      'intelligence-ask',
-      '新问题',
-    )
+    await pluginWithFeatureMocks.onFeatureTriggered('intelligence-ask', '新问题')
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(2))
 
     expect(pushItems).toHaveBeenCalled()
-    const newPromptCall = pushItems.mock.calls.find(
-      call => call[0][0].render.custom.data.prompt === '新问题',
-    )
+    const newPromptCall = pushItems.mock.calls.find(call => call[0][0].render.custom.data.prompt === '新问题')
     expect(newPromptCall?.[0][0].render.custom.data).toMatchObject({
       prompt: '新问题',
       status: 'chat-pending',
@@ -1571,17 +1440,12 @@ describe('intelligence plugin', () => {
       ]),
     )
     const secondMessages = invoke.mock.calls[1]?.[1]?.messages
-    expect(secondMessages).toEqual([
-      expect.objectContaining({ role: 'system' }),
-      { role: 'user', content: '新问题' },
-    ])
+    expect(secondMessages).toEqual([expect.objectContaining({ role: 'system' }), { role: 'user', content: '新问题' }])
     expect(JSON.stringify(secondMessages)).not.toContain('旧问题')
   })
 
   it('builds OCR payload', () => {
-    expect(
-      intelligenceTest.buildOcrPayload('data:image/png;base64,abc'),
-    ).toEqual({
+    expect(intelligenceTest.buildOcrPayload('data:image/png;base64,abc')).toEqual({
       source: {
         type: 'data-url',
         dataUrl: 'data:image/png;base64,abc',
@@ -1602,7 +1466,6 @@ describe('intelligence plugin', () => {
       }),
     ).toEqual({
       metadata: {
-        caller: 'plugin:touch-intelligence',
         entry: 'corebox.ai-ask',
         featureId: 'intelligence-ask',
         requestId: 'req-1',
@@ -1612,9 +1475,8 @@ describe('intelligence plugin', () => {
     })
   })
 
-  it('builds handoff-aware invoke metadata', () => {
-    const sessionId
-      = intelligenceTest.buildHandoffSessionId('intelligence-ask')
+  it('does not emit child caller or handoff authority in invoke metadata', () => {
+    const sessionId = intelligenceTest.buildHandoffSessionId('intelligence-ask')
 
     expect(
       intelligenceTest.buildInvokeOptions({
@@ -1626,15 +1488,11 @@ describe('intelligence plugin', () => {
       }),
     ).toEqual({
       metadata: {
-        caller: 'plugin:touch-intelligence',
         entry: 'corebox.ai-ask',
         featureId: 'intelligence-ask',
         requestId: 'req-1',
         inputKinds: ['text'],
         capabilityId: 'text.chat',
-        sessionId,
-        handoffSessionId: sessionId,
-        handoffSource: 'corebox.touch-intelligence',
       },
     })
   })
@@ -1683,53 +1541,15 @@ describe('intelligence plugin', () => {
     )
   })
 
-  it('builds bounded handoff conversation context', () => {
-    const history = Array.from({ length: 6 }, (_, index) => [
-      { role: 'user', content: `q${index}` },
-      { role: 'assistant', content: `a${index}` },
-    ]).flat()
-    const context = intelligenceTest.buildHandoffContext({
-      featureId: 'intelligence-ask',
-      prompt: 'final question',
-      answer: 'final answer',
-      history,
-      requestId: 'req-1',
-      inputKinds: ['text', 'image', 'text'],
-    })
-
-    expect(context).toMatchObject({
-      source: 'corebox.touch-intelligence',
-      featureId: 'intelligence-ask',
-      entry: 'corebox.ai-ask',
-      requestId: 'req-1',
-      inputKinds: ['text', 'image'],
-      lastPrompt: 'final question',
-      lastAnswer: 'final answer',
-    })
-    expect(context.conversation.messages).toHaveLength(10)
-    expect(context.conversation.messages.at(-2)).toEqual({
-      role: 'user',
-      content: 'final question',
-    })
-    expect(context.conversation.messages.at(-1)).toEqual({
-      role: 'assistant',
-      content: 'final answer',
-    })
-  })
-
   it('normalizes visible invoke errors to canonical codes', () => {
-    const noProvider = intelligenceTest.normalizeInvokeError(
-      new Error('No enabled providers for text.chat'),
-    )
+    const noProvider = intelligenceTest.normalizeInvokeError(new Error('No enabled providers for text.chat'))
     expect(noProvider).toMatchObject({
       code: 'PROVIDER_UNAVAILABLE',
     })
     expect(noProvider.message).toContain('Provider 不可用')
 
     const providerCapabilityConflict = intelligenceTest.normalizeInvokeError(
-      new Error(
-        '[Intelligence] No enabled providers for text.chat: capability not supported',
-      ),
+      new Error('[Intelligence] No enabled providers for text.chat: capability not supported'),
     )
     expect(providerCapabilityConflict).toMatchObject({
       code: 'PROVIDER_UNAVAILABLE',
@@ -1745,26 +1565,20 @@ describe('intelligence plugin', () => {
     expect(quotaVerificationUnavailable.message).toContain('配额校验暂不可用')
     expect(quotaVerificationUnavailable.message).not.toContain('配额不足')
 
-    const quotaExhausted = intelligenceTest.normalizeInvokeError(
-      new Error('Quota exceeded: daily limit'),
-    )
+    const quotaExhausted = intelligenceTest.normalizeInvokeError(new Error('Quota exceeded: daily limit'))
     expect(quotaExhausted).toMatchObject({
       code: 'QUOTA_EXHAUSTED',
     })
     expect(quotaExhausted.message).toContain('配额不足')
     expect(quotaExhausted.message).not.toContain('配额校验暂不可用')
 
-    const unsupportedCapability = intelligenceTest.normalizeInvokeError(
-      new Error('capability not supported'),
-    )
+    const unsupportedCapability = intelligenceTest.normalizeInvokeError(new Error('capability not supported'))
     expect(unsupportedCapability).toMatchObject({
       code: 'CAPABILITY_UNSUPPORTED',
     })
     expect(unsupportedCapability.message).toContain('不支持该能力')
 
-    const ocrEmpty = intelligenceTest.normalizeInvokeError(
-      Object.assign(new Error('no text'), { code: 'OCR_EMPTY' }),
-    )
+    const ocrEmpty = intelligenceTest.normalizeInvokeError(Object.assign(new Error('no text'), { code: 'OCR_EMPTY' }))
     expect(ocrEmpty).toMatchObject({
       code: 'OCR_EMPTY',
     })
@@ -1777,9 +1591,7 @@ describe('intelligence plugin', () => {
       { code: 'NETWORK_FAILURE', message: '网络请求失败' },
       { code: 'INVALID_REQUEST', message: '请求无效' },
     ] as const) {
-      const normalized = intelligenceTest.normalizeInvokeError(
-        Object.assign(new Error('upstream error'), { code }),
-      )
+      const normalized = intelligenceTest.normalizeInvokeError(Object.assign(new Error('upstream error'), { code }))
       expect(normalized).toMatchObject({ code })
       expect(normalized.message).toContain(message)
     }
@@ -1808,8 +1620,10 @@ describe('intelligence plugin', () => {
     )
     expect(truncated.reason).toBe(`${oversizedDetail.slice(0, 239)}…`)
     expect(truncated.recovery).toBe(`${oversizedDetail.slice(0, 239)}…`)
-    expect(intelligenceTest.normalizeInvokeError(new Error('provider request failed')))
-      .toMatchObject({ reason: '', recovery: '' })
+    expect(intelligenceTest.normalizeInvokeError(new Error('provider request failed'))).toMatchObject({
+      reason: '',
+      recovery: '',
+    })
   })
 
   it('maps invoke result', () => {
@@ -2088,15 +1902,12 @@ describe('intelligence plugin', () => {
       ])
     }
 
-    const permissionItem = pluginWithBuilder.__test.buildWidgetItem(
-      'intelligence-ask',
-      {
-        prompt: '解释这段代码',
-        status: 'error',
-        errorCode: 'PERMISSION_DENIED',
-        errorMessage: '插件权限已拒绝',
-      },
-    )
+    const permissionItem = pluginWithBuilder.__test.buildWidgetItem('intelligence-ask', {
+      prompt: '解释这段代码',
+      status: 'error',
+      errorCode: 'PERMISSION_DENIED',
+      errorMessage: '插件权限已拒绝',
+    })
 
     expect(permissionItem.actions).toEqual([
       {
@@ -2124,28 +1935,20 @@ describe('intelligence plugin', () => {
       intelligencePluginUrl,
       createPluginGlobals({ TuffItemBuilder: FakeBuilder }),
     )
-    const rewriteItem = pluginWithBuilder.__test.buildWidgetItem(
-      'intelligence-rewrite',
-      {
-        requestId: 'rewrite-req-1',
-        prompt: 'Make this clearer',
-        handoffSessionId: 'previous-conversation',
-        history: [
-          { role: 'user', content: 'history must not reach a command widget' },
-        ],
-        contextMode: 'continue',
-        status: 'chat-pending',
-        stage: 'chat',
-        capabilityId: 'text.chat',
-      },
-    )
-    const askItem = pluginWithBuilder.__test.buildWidgetItem(
-      'intelligence-ask',
-      {
-        prompt: 'ordinary question',
-        status: 'chat-pending',
-      },
-    )
+    const rewriteItem = pluginWithBuilder.__test.buildWidgetItem('intelligence-rewrite', {
+      requestId: 'rewrite-req-1',
+      prompt: 'Make this clearer',
+      handoffSessionId: 'previous-conversation',
+      history: [{ role: 'user', content: 'history must not reach a command widget' }],
+      contextMode: 'continue',
+      status: 'chat-pending',
+      stage: 'chat',
+      capabilityId: 'text.chat',
+    })
+    const askItem = pluginWithBuilder.__test.buildWidgetItem('intelligence-ask', {
+      prompt: 'ordinary question',
+      status: 'chat-pending',
+    })
 
     expect(rewriteItem.render.custom.data).toMatchObject({
       aiCommandId: 'rewrite',
@@ -2156,9 +1959,9 @@ describe('intelligence plugin', () => {
         { role: 'assistant', status: 'streaming' },
       ],
     })
-    expect(
-      JSON.stringify(rewriteItem.render.custom.data.messages),
-    ).not.toContain('history must not reach a command widget')
+    expect(JSON.stringify(rewriteItem.render.custom.data.messages)).not.toContain(
+      'history must not reach a command widget',
+    )
     expect(askItem.render.custom.data).not.toHaveProperty('aiCommandId')
   })
 
@@ -2284,14 +2087,10 @@ describe('intelligence plugin', () => {
       },
     })
 
-    await expect(
-      pluginWithContextModes.onItemAction(buildModeItem('stateless')),
-    ).resolves.toEqual({
+    await expect(pluginWithContextModes.onItemAction(buildModeItem('stateless'))).resolves.toEqual({
       externalAction: true,
     })
-    expect(
-      pushItems.mock.calls.at(-1)?.[0][0].render.custom.data,
-    ).toMatchObject({
+    expect(pushItems.mock.calls.at(-1)?.[0][0].render.custom.data).toMatchObject({
       contextMode: 'stateless',
       contextPackage: null,
       answer: 'answer',
@@ -2304,56 +2103,9 @@ describe('intelligence plugin', () => {
         'intelligence-ask': expect.objectContaining({ messages: [] }),
       }),
     )
-    expect(
-      pushItems.mock.calls.at(-1)?.[0][0].render.custom.data,
-    ).toMatchObject({
+    expect(pushItems.mock.calls.at(-1)?.[0][0].render.custom.data).toMatchObject({
       contextMode: 'new',
       contextPackage: null,
-    })
-  })
-
-  it('builds visible error item metadata for retryable AI failures', () => {
-    const pluginWithBuilder = loadPluginModule(
-      intelligencePluginUrl,
-      createPluginGlobals({ TuffItemBuilder: FakeBuilder }),
-    )
-
-    const item = pluginWithBuilder.__test.buildErrorItem(
-      'intelligence-ask',
-      '解释这段代码',
-      { code: 'MODEL_UNSUPPORTED', message: '当前模型不支持该能力' },
-      [{ role: 'user', content: '旧问题' }],
-      {
-        draftId: 'draft-1',
-        inputKinds: ['text'],
-        capabilityId: 'vision.ocr',
-        handoffSessionId: 'session-1',
-      },
-    )
-
-    expect(item.render.basic).toMatchObject({
-      title: 'AI 请求失败：解释这段代码',
-      subtitle: '当前模型不支持该能力',
-      description: 'vision.ocr + MODEL_UNSUPPORTED',
-      accessory: 'MODEL_UNSUPPORTED',
-    })
-    expect(item.meta).toMatchObject({
-      status: 'error',
-      actionId: 'retry',
-      intelligence: {
-        status: 'error',
-        stage: 'error',
-        capabilityId: 'vision.ocr',
-        errorCode: 'MODEL_UNSUPPORTED',
-        errorMessage: '当前模型不支持该能力',
-        handoffSessionId: 'session-1',
-        inputKinds: ['text'],
-      },
-    })
-    expect(item.meta.payload).toMatchObject({
-      prompt: '解释这段代码',
-      draftId: 'draft-1',
-      errorCode: 'MODEL_UNSUPPORTED',
     })
   })
 
@@ -2384,20 +2136,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithDeniedAi.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
-    const sendItem = pushItems.mock.calls[0][0][0]
-    pushItems.mockClear()
-
-    const result = await pluginWithDeniedAi.onItemAction(sendItem)
+    const result = await pluginWithDeniedAi.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
 
     expect(permission.check).toHaveBeenCalledWith('intelligence.basic')
-    expect(permission.request).toHaveBeenCalledWith(
-      'intelligence.basic',
-      '需要 AI 权限以执行智能问答',
-    )
+    expect(permission.request).not.toHaveBeenCalled()
     expect(invoke).not.toHaveBeenCalled()
     expect(clearItems).toHaveBeenCalled()
     expect(pushItems).toHaveBeenCalledOnce()
@@ -2412,6 +2154,8 @@ describe('intelligence plugin', () => {
     expect(result).toMatchObject({
       externalAction: true,
       success: false,
+      status: 'blocked',
+      reason: 'permission-denied',
     })
   })
 
@@ -2458,14 +2202,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithLoggedOutAuth.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
-    const sendItem = pushItems.mock.calls[0][0][0]
-    pushItems.mockClear()
-
-    await pluginWithLoggedOutAuth.onItemAction(sendItem)
+    await pluginWithLoggedOutAuth.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
     await vi.waitFor(() => {
       expect(invoke).toHaveBeenCalledWith(
         'text.chat',
@@ -2474,9 +2211,7 @@ describe('intelligence plugin', () => {
       )
     })
 
-    expect(touchChannel.send).not.toHaveBeenCalledWith(
-      'auth:session:get-state',
-    )
+    expect(touchChannel.send).not.toHaveBeenCalledWith('auth:session:get-state')
     expect(permission.check).toHaveBeenCalledWith('intelligence.basic')
     expect(clearItems).toHaveBeenCalled()
     expect(
@@ -2521,14 +2256,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithFailedInvoke.onFeatureTriggered(
-      'intelligence-ask',
-      'ai summarize the incident',
-    )
-    const sendItem = pushItems.mock.calls[0]?.[0][0]
-    pushItems.mockClear()
-
-    await pluginWithFailedInvoke.onItemAction(sendItem)
+    await pluginWithFailedInvoke.onFeatureTriggered('intelligence-ask', 'ai summarize the incident')
     await vi.waitFor(() => expect(invoke).toHaveBeenCalledOnce())
 
     const failedPayload = pushItems.mock.calls
@@ -2582,9 +2310,7 @@ describe('intelligence plugin', () => {
           summarySourceId: 'snapshot-archived',
           summary: 'continuation summary must stay in the host',
         },
-        items: [
-          { content: 'raw context package item must never reach the widget' },
-        ],
+        items: [{ content: 'raw context package item must never reach the widget' }],
       },
     }))
     const contextStream = vi.fn(async () => {
@@ -2614,10 +2340,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithContextHygiene.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
+    await pluginWithContextHygiene.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
 
     await vi.waitFor(() => {
       expect(contextInvoke).toHaveBeenCalledWith(
@@ -2627,7 +2350,6 @@ describe('intelligence plugin', () => {
           payload: expect.objectContaining({ messages: expect.any(Array) }),
           options: expect.objectContaining({
             metadata: expect.objectContaining({
-              caller: 'plugin:touch-intelligence',
               entry: 'corebox.ai-ask',
               featureId: 'intelligence-ask',
               capabilityId: 'text.chat',
@@ -2644,10 +2366,7 @@ describe('intelligence plugin', () => {
     })
     expect(invoke).not.toHaveBeenCalled()
 
-    await pluginWithContextHygiene.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 继续补充',
-    )
+    await pluginWithContextHygiene.onFeatureTriggered('intelligence-ask', 'ai 继续补充')
     await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledTimes(2))
     expect(contextInvoke.mock.calls[1]?.[0]).toMatchObject({
       capabilityId: 'text.chat',
@@ -2659,9 +2378,7 @@ describe('intelligence plugin', () => {
       },
     })
 
-    const readyCall = pushItems.mock.calls.find(
-      call => call[0][0].render?.custom?.data?.status === 'ready',
-    )
+    const readyCall = pushItems.mock.calls.find(call => call[0][0].render?.custom?.data?.status === 'ready')
     expect(readyCall?.[0][0].render.custom.data.contextPackage).toMatchObject({
       id: 'ctxpkg_1',
       sessionId: 'ctxs_1',
@@ -2672,9 +2389,7 @@ describe('intelligence plugin', () => {
       citationCount: 1,
       retrievalItemCount: 1,
     })
-    expect(
-      readyCall?.[0][0].render.custom.data.contextPackage,
-    ).not.toHaveProperty('items')
+    expect(readyCall?.[0][0].render.custom.data.contextPackage).not.toHaveProperty('items')
     expect(readyCall?.[0][0].render.custom.data.contextPackage).toMatchObject({
       checkpointId: 'checkpoint_archived',
       checkpointReason: 'archived-session-continuation',
@@ -2686,21 +2401,11 @@ describe('intelligence plugin', () => {
         summarySourceId: 'snapshot-archived',
       },
     })
-    const serializedReadyItem = JSON.parse(
-      structuredStrictStringify(readyCall?.[0][0]),
-    )
-    expect(
-      serializedReadyItem.render.custom.data.contextPackage,
-    ).not.toHaveProperty('items')
-    expect(JSON.stringify(serializedReadyItem)).not.toContain(
-      'raw context package item',
-    )
-    expect(JSON.stringify(serializedReadyItem)).not.toContain(
-      'continuation summary must stay in the host',
-    )
-    expect(JSON.stringify(serializedReadyItem)).not.toContain(
-      'checkpoint summary must stay in the host',
-    )
+    const serializedReadyItem = JSON.parse(structuredStrictStringify(readyCall?.[0][0]))
+    expect(serializedReadyItem.render.custom.data.contextPackage).not.toHaveProperty('items')
+    expect(JSON.stringify(serializedReadyItem)).not.toContain('raw context package item')
+    expect(JSON.stringify(serializedReadyItem)).not.toContain('continuation summary must stay in the host')
+    expect(JSON.stringify(serializedReadyItem)).not.toContain('checkpoint summary must stay in the host')
     expect(readyCall?.[0][0].meta.intelligence).toMatchObject({
       contextPackageId: 'ctxpkg_1',
       contextSessionId: 'ctxs_1',
@@ -2819,15 +2524,10 @@ describe('intelligence plugin', () => {
         }),
       },
     })
-    expect(JSON.stringify(assistantRequest.payload.messages)).not.toContain(
-      'private CoreBox',
-    )
+    expect(JSON.stringify(assistantRequest.payload.messages)).not.toContain('private CoreBox')
     expect(setFile).not.toHaveBeenCalled()
 
-    await pluginWithAssistantEntrypoint.onFeatureTriggered(
-      'intelligence-ask',
-      'ordinary CoreBox question',
-    )
+    await pluginWithAssistantEntrypoint.onFeatureTriggered('intelligence-ask', 'ordinary CoreBox question')
     await vi.waitFor(() => expect(contextInvoke).toHaveBeenCalledTimes(2))
     expect(contextInvoke.mock.calls[1]?.[0]).toMatchObject({
       context: {
@@ -2838,7 +2538,7 @@ describe('intelligence plugin', () => {
     })
   })
 
-  it('previews explicit memory policy for CoreBox AI Ask without saving memory', async () => {
+  it('keeps the memory control plane absent from isolated CoreBox AI Ask', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
     const contextInvoke = vi.fn(async () => ({
@@ -2907,10 +2607,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithMemoryPolicy.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 记住我喜欢中文回复',
-    )
+    await pluginWithMemoryPolicy.onFeatureTriggered('intelligence-ask', 'ai 记住我喜欢中文回复')
 
     await vi.waitFor(() => {
       expect(contextInvoke).toHaveBeenCalledWith(
@@ -2919,42 +2616,17 @@ describe('intelligence plugin', () => {
           input: '记住我喜欢中文回复',
         }),
       )
-      expect(contextEvaluateMemory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          content: '记住我喜欢中文回复',
-          type: 'preference',
-          scope: 'session',
-          sourceSessionId: 'ctxs_memory',
-          sourceTurnId: 'turn_memory',
-        }),
-      )
     })
+    expect(contextEvaluateMemory).not.toHaveBeenCalled()
 
-    const readyCall = pushItems.mock.calls.find(
-      call => call[0][0].render?.custom?.data?.status === 'ready',
-    )
-    expect(readyCall?.[0][0].render.custom.data.memoryPolicy).toMatchObject({
-      status: 'suggested',
-      reason: 'explicit_memory_candidate',
-      candidate: {
-        type: 'preference',
-        scope: 'session',
-        summary: '记住我喜欢中文回复',
-        tags: ['corebox-ai-ask'],
-        privacyLevel: 'normal',
-      },
-    })
-    expect(
-      readyCall?.[0][0].render.custom.data.memoryPolicy.candidate,
-    ).not.toHaveProperty('content')
-    expect(readyCall?.[0][0].meta.intelligence).toMatchObject({
-      memoryPolicyStatus: 'suggested',
-      memoryPolicyReason: 'explicit_memory_candidate',
-    })
+    const readyCall = pushItems.mock.calls.find(call => call[0][0].render?.custom?.data?.status === 'ready')
+    expect(readyCall?.[0][0].render.custom.data.memoryPolicy).toBeNull()
+    expect(readyCall?.[0][0].meta.intelligence).not.toHaveProperty('memoryPolicyStatus')
+    expect(readyCall?.[0][0].meta.intelligence).not.toHaveProperty('memoryPolicyReason')
     expect(contextSaveMemory).not.toHaveBeenCalled()
   })
 
-  it('continues CoreBox AI Ask when memory policy preview is unavailable', async () => {
+  it('does not call an injected memory control plane while context invoke remains available', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
     const contextInvoke = vi.fn(async () => ({
@@ -3005,25 +2677,16 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithUnavailableMemoryPolicy.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 记住我喜欢中文回复',
-    )
+    await pluginWithUnavailableMemoryPolicy.onFeatureTriggered('intelligence-ask', 'ai 记住我喜欢中文回复')
 
     await vi.waitFor(() => {
       expect(contextInvoke).toHaveBeenCalled()
-      expect(contextEvaluateMemory).toHaveBeenCalledWith(
-        expect.objectContaining({
-          sourceSessionId: 'ctxs_memory',
-          sourceTurnId: 'turn_memory',
-        }),
-      )
     })
+    expect(contextEvaluateMemory).not.toHaveBeenCalled()
     expect(
       pushItems.mock.calls.some(
         call =>
-          call[0][0].render?.custom?.data?.status === 'ready'
-          && call[0][0].render.custom.data.memoryPolicy === null,
+          call[0][0].render?.custom?.data?.status === 'ready' && call[0][0].render.custom.data.memoryPolicy === null,
       ),
     ).toBe(true)
   })
@@ -3074,10 +2737,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithUnavailableContext.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
+    await pluginWithUnavailableContext.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
 
     await vi.waitFor(() => {
       expect(contextInvoke).toHaveBeenCalledWith(
@@ -3087,9 +2747,7 @@ describe('intelligence plugin', () => {
         }),
       )
     })
-    const readyCall = pushItems.mock.calls.find(
-      call => call[0][0].render?.custom?.data?.status === 'ready',
-    )
+    const readyCall = pushItems.mock.calls.find(call => call[0][0].render?.custom?.data?.status === 'ready')
     expect(readyCall?.[0][0].render.custom.data).toMatchObject({
       answer: 'local answer without context',
       contextPackage: {
@@ -3099,24 +2757,18 @@ describe('intelligence plugin', () => {
         degradedReason: 'context_prepare_failed',
       },
     })
-    const serializedReadyItem = JSON.parse(
-      structuredStrictStringify(readyCall?.[0][0]),
-    )
-    expect(serializedReadyItem.render.custom.data.contextPackage).toMatchObject(
-      {
-        mode: 'new',
-        degradedReason: 'context_prepare_failed',
-      },
-    )
+    const serializedReadyItem = JSON.parse(structuredStrictStringify(readyCall?.[0][0]))
+    expect(serializedReadyItem.render.custom.data.contextPackage).toMatchObject({
+      mode: 'new',
+      degradedReason: 'context_prepare_failed',
+    })
     expect(serializedReadyItem.meta.payload.contextPackage).toMatchObject({
       mode: 'new',
       degradedReason: 'context_prepare_failed',
     })
-    expect(serializedReadyItem.meta.intelligence).not.toHaveProperty(
-      'contextPackage',
-    )
+    expect(serializedReadyItem.meta.intelligence).not.toHaveProperty('contextPackage')
   })
-  it('updates an existing streamed widget in place for visible deltas and the terminal answer', async () => {
+  it('publishes bounded widget replacements for visible stream deltas and the terminal answer', async () => {
     const hostItems: Array<Record<string, unknown>> = []
     const hostResolvedSource = { owner: 'corebox-host' }
     const hostResolvedIcon = { type: 'url', value: 'tfile://host-icon' }
@@ -3147,7 +2799,7 @@ describe('intelligence plugin', () => {
           model?: string
           traceId?: string
         },
-      ) => void
+      ) => Promise<void>
       onEnd: (event?: {
         content?: string
         provider?: string
@@ -3182,10 +2834,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithStatefulFeature.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 持续回答',
-    )
+    const lifecycle = pluginWithStatefulFeature.onFeatureTriggered('intelligence-ask', 'ai 持续回答')
     await vi.waitFor(() => {
       expect(contextStream).toHaveBeenCalledTimes(1)
       expect(pushItems).toHaveBeenCalledTimes(1)
@@ -3193,50 +2842,52 @@ describe('intelligence plugin', () => {
     expect(clearItems).toHaveBeenCalledTimes(1)
     expect(updateItem).not.toHaveBeenCalled()
 
-    streamCallbacks[0].onDelta('第一段', {
+    await streamCallbacks[0].onDelta('第一段', {
       provider: 'nexus',
       model: 'stream-model',
       traceId: 'trace-delta',
     })
     await vi.waitFor(() => {
-      expect(updateItem).toHaveBeenNthCalledWith(
-        1,
-        'intelligence-widget',
-        expect.objectContaining({
-          render: expect.objectContaining({
-            custom: expect.objectContaining({
-              data: expect.objectContaining({
-                answer: '第一段',
-                status: 'chat-pending',
+      expect(pushItems).toHaveBeenNthCalledWith(
+        2,
+        expect.arrayContaining([
+          expect.objectContaining({
+            render: expect.objectContaining({
+              custom: expect.objectContaining({
+                data: expect.objectContaining({
+                  answer: '第一段',
+                  status: 'chat-pending',
+                }),
+              }),
+            }),
+            meta: expect.objectContaining({
+              intelligence: expect.objectContaining({
+                provider: 'nexus',
+                model: 'stream-model',
+                traceId: 'trace-delta',
               }),
             }),
           }),
-          meta: expect.objectContaining({
-            intelligence: expect.objectContaining({
-              provider: 'nexus',
-              model: 'stream-model',
-              traceId: 'trace-delta',
-            }),
-          }),
-        }),
+        ]),
       )
     })
 
-    streamCallbacks[0].onDelta('第二段')
+    await streamCallbacks[0].onDelta('第二段')
     await vi.waitFor(() => {
-      expect(updateItem).toHaveBeenNthCalledWith(
-        2,
-        'intelligence-widget',
-        expect.objectContaining({
-          render: expect.objectContaining({
-            custom: expect.objectContaining({
-              data: expect.objectContaining({
-                answer: '第一段第二段',
-                status: 'chat-pending',
+      expect(pushItems).toHaveBeenNthCalledWith(
+        3,
+        expect.arrayContaining([
+          expect.objectContaining({
+            render: expect.objectContaining({
+              custom: expect.objectContaining({
+                data: expect.objectContaining({
+                  answer: '第一段第二段',
+                  status: 'chat-pending',
+                }),
               }),
             }),
           }),
-        }),
+        ]),
       )
     })
 
@@ -3247,33 +2898,35 @@ describe('intelligence plugin', () => {
       traceId: 'trace-terminal',
       metadata: { latency: 24 },
     })
+    await lifecycle
     await vi.waitFor(() => {
-      expect(updateItem).toHaveBeenNthCalledWith(
-        3,
-        'intelligence-widget',
-        expect.objectContaining({
-          render: expect.objectContaining({
-            custom: expect.objectContaining({
-              data: expect.objectContaining({
-                answer: '完整回答',
-                status: 'ready',
+      expect(pushItems).toHaveBeenNthCalledWith(
+        4,
+        expect.arrayContaining([
+          expect.objectContaining({
+            render: expect.objectContaining({
+              custom: expect.objectContaining({
+                data: expect.objectContaining({
+                  answer: '完整回答',
+                  status: 'ready',
+                }),
+              }),
+            }),
+            meta: expect.objectContaining({
+              status: 'ready',
+              intelligence: expect.objectContaining({
+                provider: 'nexus',
+                model: 'stream-model',
+                traceId: 'trace-terminal',
+                latency: 24,
               }),
             }),
           }),
-          meta: expect.objectContaining({
-            status: 'ready',
-            intelligence: expect.objectContaining({
-              provider: 'nexus',
-              model: 'stream-model',
-              traceId: 'trace-terminal',
-              latency: 24,
-            }),
-          }),
-        }),
+        ]),
       )
     })
-    expect(clearItems).toHaveBeenCalledTimes(1)
-    expect(pushItems).toHaveBeenCalledTimes(1)
+    expect(clearItems).toHaveBeenCalledTimes(4)
+    expect(pushItems).toHaveBeenCalledTimes(4)
     expect(hostItems[0]).toMatchObject({
       id: 'intelligence-widget',
       source: hostResolvedSource,
@@ -3324,13 +2977,10 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithControllableStreams.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 旧问题',
-    )
+    const firstLifecycle = pluginWithControllableStreams.onFeatureTriggered('intelligence-ask', 'ai 旧问题')
     await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(1))
 
-    await pluginWithControllableStreams.onFeatureTriggered(
+    const secondLifecycle = pluginWithControllableStreams.onFeatureTriggered(
       'intelligence-rewrite',
       'rewrite: 最新问题',
     )
@@ -3339,24 +2989,16 @@ describe('intelligence plugin', () => {
       expect(firstController.cancel).toHaveBeenCalledTimes(1)
     })
 
-    streamCallbacks[1].onDelta('最新回答')
+    await streamCallbacks[1].onDelta('最新回答')
     await vi.waitFor(() => {
-      expect(
-        pushItems.mock.calls.some(
-          call => call[0][0].render?.custom?.data?.answer === '最新回答',
-        ),
-      ).toBe(true)
+      expect(pushItems.mock.calls.some(call => call[0][0].render?.custom?.data?.answer === '最新回答')).toBe(true)
     })
 
     streamCallbacks[0].onDelta('过期回答')
     streamCallbacks[0].onError(new Error('stale stream failure'))
     await Promise.resolve()
     await Promise.resolve()
-    expect(
-      pushItems.mock.calls.some(
-        call => call[0][0].render?.custom?.data?.answer === '过期回答',
-      ),
-    ).toBe(false)
+    expect(pushItems.mock.calls.some(call => call[0][0].render?.custom?.data?.answer === '过期回答')).toBe(false)
     expect(pushItems.mock.calls.at(-1)?.[0][0].render?.custom).toMatchObject({
       content: 'touch-intelligence::intelligence-rewrite',
       data: {
@@ -3366,20 +3008,15 @@ describe('intelligence plugin', () => {
       },
     })
 
-    await pluginWithControllableStreams.onFeatureTriggered(
-      'intelligence-rewrite',
-      '',
-    )
+    await pluginWithControllableStreams.onFeatureTriggered('intelligence-rewrite', '')
+    await firstLifecycle
+    await secondLifecycle
     await vi.waitFor(() => expect(secondController.cancel).toHaveBeenCalledTimes(1))
     streamCallbacks[1].onDelta('清空后过期回答')
     streamCallbacks[1].onError(new Error('cleared stream failure'))
     await Promise.resolve()
     await Promise.resolve()
-    expect(
-      pushItems.mock.calls.some(
-        call => call[0][0].render?.custom?.data?.answer === '清空后过期回答',
-      ),
-    ).toBe(false)
+    expect(pushItems.mock.calls.some(call => call[0][0].render?.custom?.data?.answer === '清空后过期回答')).toBe(false)
     expect(firstController.cancel).toHaveBeenCalledTimes(1)
     expect(pushItems.mock.calls.at(-1)?.[0][0].render?.custom).toMatchObject({
       content: 'touch-intelligence::intelligence-rewrite',
@@ -3421,20 +3058,17 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithLateController.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 旧问题',
-    )
+    const firstLifecycle = pluginWithLateController.onFeatureTriggered('intelligence-ask', 'ai 旧问题')
     await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(1))
-    await pluginWithLateController.onFeatureTriggered(
-      'intelligence-rewrite',
-      'rewrite: 最新问题',
-    )
-    await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(2))
+    const secondLifecycle = pluginWithLateController.onFeatureTriggered('intelligence-rewrite', 'rewrite: 最新问题')
 
     resolveLateController(lateController)
     await vi.waitFor(() => expect(lateController.cancel).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(2))
     expect(activeController.cancel).not.toHaveBeenCalled()
+    await pluginWithLateController.onFeatureTriggered('intelligence-rewrite', '')
+    await firstLifecycle
+    await secondLifecycle
   })
 
   it('falls back to context invoke when context stream auth fails', async () => {
@@ -3488,10 +3122,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithStreamAuthFailure.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
+    await pluginWithStreamAuthFailure.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
     await vi.waitFor(() => {
       expect(contextStream).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -3519,8 +3150,7 @@ describe('intelligence plugin', () => {
       pushItems.mock.calls.some(
         call =>
           call[0][0].render?.custom?.data?.status === 'ready'
-          && call[0][0].render.custom.data.answer
-          === 'local answer after stream fallback'
+          && call[0][0].render.custom.data.answer === 'local answer after stream fallback'
           && call[0][0].render.custom.data.provider === 'local-default',
       ),
     ).toBe(true)
@@ -3564,10 +3194,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithVisibleStreamFailure.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
+    await pluginWithVisibleStreamFailure.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
 
     await vi.waitFor(() => {
       expect(
@@ -3581,8 +3208,7 @@ describe('intelligence plugin', () => {
     expect(contextInvoke).not.toHaveBeenCalled()
     expect(invoke).not.toHaveBeenCalled()
 
-    const terminalState = pushItems.mock.calls.at(-1)?.[0][0].render?.custom
-      ?.data
+    const terminalState = pushItems.mock.calls.at(-1)?.[0][0].render?.custom?.data
     expect(terminalState).toMatchObject({
       status: 'error',
       errorCode: 'NEXUS_AUTH_REQUIRED',
@@ -3613,10 +3239,7 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithoutPermissionSdk.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 写一段总结',
-    )
+    await pluginWithoutPermissionSdk.onFeatureTriggered('intelligence-ask', 'ai 写一段总结')
     const sendItem = pushItems.mock.calls[0][0][0]
     pushItems.mockClear()
 
@@ -3648,10 +3271,7 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => false),
     }
     const pluginWithDeniedClipboard = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { writeText },
@@ -3691,10 +3311,7 @@ describe('intelligence plugin', () => {
     )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).toHaveBeenCalledWith(
-      'clipboard.write',
-      '需要剪贴板权限以复制 AI 回答',
-    )
+    expect(permission.request).not.toHaveBeenCalled()
     expect(writeText).not.toHaveBeenCalled()
     expect(clearItems).toHaveBeenCalled()
     expect(pushItems).toHaveBeenCalledOnce()
@@ -3740,10 +3357,7 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => false),
     }
     const pluginWithDeniedClipboard = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { writeText },
@@ -3804,10 +3418,7 @@ describe('intelligence plugin', () => {
   it('blocks answer copy when permission sdk is unavailable', async () => {
     const writeText = vi.fn()
     const pluginWithoutPermissionSdk = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         clipboard: { writeText },
         permission: withoutGlobal(),
@@ -3843,10 +3454,7 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => true),
     }
     const pluginWithRejectedClipboard = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { writeText },
@@ -3902,17 +3510,14 @@ describe('intelligence plugin', () => {
     })
   })
 
-  it('copies answers after clipboard.write permission is granted', async () => {
+  it('copies answers when clipboard.write is already authorized', async () => {
     const writeText = vi.fn()
     const permission = {
-      check: vi.fn(async () => false),
+      check: vi.fn(async () => true),
       request: vi.fn(async () => true),
     }
     const pluginWithGrantedClipboard = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         clipboard: { writeText },
         permission,
@@ -3929,10 +3534,7 @@ describe('intelligence plugin', () => {
     })
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).toHaveBeenCalledWith(
-      'clipboard.write',
-      '需要剪贴板权限以复制 AI 回答',
-    )
+    expect(permission.request).not.toHaveBeenCalled()
     expect(writeText).toHaveBeenCalledWith('hello')
     expect(result).toMatchObject({
       externalAction: true,
@@ -3949,10 +3551,7 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => false),
     }
     const pluginWithDeniedReplacement = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { copyAndPaste },
@@ -3990,10 +3589,7 @@ describe('intelligence plugin', () => {
     )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).toHaveBeenCalledWith(
-      'clipboard.write',
-      '需要剪贴板权限以替换选中文本',
-    )
+    expect(permission.request).not.toHaveBeenCalled()
     expect(copyAndPaste).not.toHaveBeenCalled()
     expect(pushItems.mock.calls[0][0][0].render.custom.data).toMatchObject({
       answer: 'replacement',
@@ -4014,10 +3610,9 @@ describe('intelligence plugin', () => {
   it('keeps macOS automation failure visible after replace-selection', async () => {
     const clearItems = vi.fn()
     const pushItems = vi.fn()
-    const automationError = Object.assign(
-      new Error('macOS automation permission is required'),
-      { code: 'MACOS_AUTOMATION_PERMISSION_DENIED' },
-    )
+    const automationError = Object.assign(new Error('macOS automation permission is required'), {
+      code: 'MACOS_AUTOMATION_PERMISSION_DENIED',
+    })
     const copyAndPaste = vi.fn(async () => {
       throw automationError
     })
@@ -4026,10 +3621,7 @@ describe('intelligence plugin', () => {
       request: vi.fn(async () => true),
     }
     const pluginWithBlockedAutomation = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         TuffItemBuilder: FakeBuilder,
         clipboard: { copyAndPaste },
@@ -4075,8 +3667,7 @@ describe('intelligence plugin', () => {
       status: 'ready',
       replaceStatus: 'failed',
       replaceError: '替换失败：未授予 macOS 自动化权限',
-      replaceRecovery:
-        '请在系统设置 > 隐私与安全性 > 自动化中允许 Talex Touch 控制当前应用后重试。',
+      replaceRecovery: '请在系统设置 > 隐私与安全性 > 自动化中允许 Talex Touch 控制当前应用后重试。',
     })
     expect(result).toMatchObject({
       externalAction: true,
@@ -4095,17 +3686,14 @@ describe('intelligence plugin', () => {
     })
   })
 
-  it('replaces selected text through governed copy-and-paste', async () => {
+  it('replaces selected text through governed copy-and-paste when already authorized', async () => {
     const copyAndPaste = vi.fn(async () => true)
     const permission = {
-      check: vi.fn(async () => false),
+      check: vi.fn(async () => true),
       request: vi.fn(async () => true),
     }
     const pluginWithReplacement = loadPluginModule(
-      new URL(
-        '../../../../plugins/touch-intelligence/index.js',
-        import.meta.url,
-      ),
+      new URL('../../../../plugins/touch-intelligence/index.js', import.meta.url),
       createPluginGlobals({
         clipboard: { copyAndPaste },
         permission,
@@ -4124,10 +3712,7 @@ describe('intelligence plugin', () => {
     )
 
     expect(permission.check).toHaveBeenCalledWith('clipboard.write')
-    expect(permission.request).toHaveBeenCalledWith(
-      'clipboard.write',
-      '需要剪贴板权限以替换选中文本',
-    )
+    expect(permission.request).not.toHaveBeenCalled()
     expect(copyAndPaste).toHaveBeenCalledWith({
       text: 'replacement',
       hideCoreBox: true,
@@ -4149,10 +3734,13 @@ describe('intelligence plugin', () => {
     const firstController = { cancel: vi.fn() }
     const secondController = { cancel: vi.fn() }
     const streamCallbacks: Array<{
-      onDelta: (delta: string) => void
+      onDelta: (delta: string) => Promise<void>
       onEnd: (event?: { content?: string }) => void
       onError: (error: Error) => void
     }> = []
+    const clearItems = vi.fn(() => {
+      hostItems.splice(0, hostItems.length)
+    })
     const pushItems = vi.fn((items: WidgetItem[]) => {
       hostItems.push(...items)
     })
@@ -4176,7 +3764,7 @@ describe('intelligence plugin', () => {
           request: vi.fn(async () => true),
         },
         plugin: {
-          feature: { clearItems: vi.fn(), pushItems, getItems, updateItem },
+          feature: { clearItems, pushItems, getItems, updateItem },
           storage: {
             async getFile() {
               return null
@@ -4188,12 +3776,9 @@ describe('intelligence plugin', () => {
       }),
     )
 
-    await pluginWithControllableStream.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 取消这个回答',
-    )
+    const firstLifecycle = pluginWithControllableStream.onFeatureTriggered('intelligence-ask', 'ai 取消这个回答')
     await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(1))
-    streamCallbacks[0].onDelta('保留这一段')
+    await streamCallbacks[0].onDelta('保留这一段')
     await vi.waitFor(() => {
       expect(hostItems[0]?.render.custom.data).toMatchObject({
         status: 'chat-pending',
@@ -4218,6 +3803,7 @@ describe('intelligence plugin', () => {
       status: 'cancelled',
     })
     expect(firstController.cancel).toHaveBeenCalledTimes(1)
+    await firstLifecycle
     expect(hostItems[0]).toMatchObject({
       render: {
         basic: { subtitle: '已停止生成' },
@@ -4244,10 +3830,7 @@ describe('intelligence plugin', () => {
     })
     expect(firstController.cancel).toHaveBeenCalledTimes(1)
 
-    await pluginWithControllableStream.onFeatureTriggered(
-      'intelligence-ask',
-      'ai 更新的回答',
-    )
+    const secondLifecycle = pluginWithControllableStream.onFeatureTriggered('intelligence-ask', 'ai 更新的回答')
     await vi.waitFor(() => expect(contextStream).toHaveBeenCalledTimes(2))
     const currentPayload = { ...hostItems[0].render.custom.data }
     const staleCancellation = await pluginWithControllableStream.onItemAction(
@@ -4259,16 +3842,15 @@ describe('intelligence plugin', () => {
       },
       { actionId: 'cancel-request' },
     )
-    const missingRequestCancellation
-      = await pluginWithControllableStream.onItemAction(
-        {
-          meta: {
-            featureId: 'intelligence-ask',
-            payload: { ...currentPayload, requestId: '' },
-          },
+    const missingRequestCancellation = await pluginWithControllableStream.onItemAction(
+      {
+        meta: {
+          featureId: 'intelligence-ask',
+          payload: { ...currentPayload, requestId: '' },
         },
-        { actionId: 'cancel-request' },
-      )
+      },
+      { actionId: 'cancel-request' },
+    )
 
     expect(staleCancellation).toMatchObject({ status: 'ignored', reason: 'stale-request' })
     expect(missingRequestCancellation).toMatchObject({
@@ -4280,5 +3862,7 @@ describe('intelligence plugin', () => {
       requestId: currentPayload.requestId,
       status: 'chat-pending',
     })
+    await pluginWithControllableStream.onFeatureTriggered('intelligence-ask', '')
+    await secondLifecycle
   })
 })

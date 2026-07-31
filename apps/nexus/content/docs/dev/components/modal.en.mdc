@@ -72,6 +72,7 @@ code: |
 - The overlay exposes `role="dialog"`, `aria-modal="true"`, and `tabindex="-1"`.
 - With the default header and non-empty `title`, the dialog links `aria-labelledby` to the generated heading.
 - Opening focuses the overlay root. Closing or unmounting restores the element focused before opening.
+- Tab and Shift+Tab cycle focus within the dialog (focus trap), so focus cannot reach the page behind the modal.
 - Backdrop click, Escape, and the close button all emit `update:modelValue(false)` followed by `close`.
 - `TModal` forwards props, attrs, `update:modelValue`, `close`, and `default/header/footer` slots to `TxModal`.
 

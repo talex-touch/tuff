@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { Fragment, defineAsyncComponent, defineComponent, h, nextTick } from 'vue'
+import { Fragment, defineAsyncComponent, defineComponent, h, nextTick, ref } from 'vue'
 import { describe, expect, it } from 'vitest'
 import TxTabHeader from '../src/TxTabHeader.vue'
 import TxTabItem from '../src/TxTabItem.vue'
@@ -24,7 +24,10 @@ const AutoSizerStub = defineComponent({
         await fn(undefined)
         return { changedKeys: [] }
       },
-      size: { value: { width: 320, height: 180 } },
+      // Real TxAutoSizer exposes `size` as a Ref (Vue's expose proxy unwraps it via
+      // proxyRefs). The stub must expose a genuine ref so it reflects that unwrapping;
+      // a plain `{ value: ... }` object would mask the double-unwrap bug (issue #460).
+      size: ref({ width: 320, height: 180 }),
     })
     return () => h('div', { class: 'auto-sizer-stub' }, slots.default?.())
   },
@@ -107,7 +110,10 @@ describe('txTabs', () => {
     expect(tabItems).toHaveLength(3)
     expect(tabItems.map(item => item.element.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON'])
     expect(tabItems[0].attributes('type')).toBe('button')
-    expect(tabItems[0].attributes('role')).toBeUndefined()
+    // Tab items now expose tab semantics (pre-fix `role` was undefined).
+    expect(tabItems[0].attributes('role')).toBe('tab')
+    expect(tabItems[0].attributes('aria-selected')).toBe('true')
+    expect(tabItems[1].attributes('aria-selected')).toBe('false')
     expect(tabItems[2].attributes('disabled')).toBeDefined()
 
     await wrapper.findAllComponents(TxTabItem)[1].trigger('click')
@@ -124,6 +130,17 @@ describe('txTabs', () => {
 
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['Network'])
     expect(wrapper.text()).not.toContain('Disabled content')
+  })
+
+  it('exposes tablist and tabpanel semantics on the nav row and active panel', async () => {
+    const wrapper = mountTabs()
+    await nextTick()
+
+    const tablist = wrapper.find('.tx-tabs__nav-inner')
+    // Pre-fix the nav row and the active panel carried no ARIA roles at all.
+    expect(tablist.attributes('role')).toBe('tablist')
+    expect(['horizontal', 'vertical']).toContain(tablist.attributes('aria-orientation'))
+    expect(wrapper.find('.tx-tabs__select-slot').attributes('role')).toBe('tabpanel')
   })
 
   it('uses controlled modelValue without emitting on prop-driven updates', async () => {
@@ -306,5 +323,18 @@ describe('txTabs', () => {
     await expect(wrapper.vm.flip(() => undefined)).resolves.toBeUndefined()
     await expect(wrapper.vm.action(() => undefined)).resolves.toEqual({ changedKeys: [] })
     expect(wrapper.vm.size()).toEqual({ width: 320, height: 180 })
+  })
+
+  it('exposes AutoSizer size as the unwrapped ref value (issue #460 regression)', async () => {
+    const wrapper = mountTabs()
+
+    await nextTick()
+
+    // The real TxAutoSizer exposes `size` as a Ref; Vue's expose proxy unwraps it
+    // via proxyRefs, so reading `.value` again (the original bug) returned undefined.
+    // size() must return the plain object the ref holds, not the ref and not undefined.
+    const size = wrapper.vm.size()
+    expect(size).not.toBeUndefined()
+    expect(size).toEqual({ width: 320, height: 180 })
   })
 })

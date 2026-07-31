@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const formatValue = ref('')
-const value = ref('')
+const value = ref(30)
+const formatValue = (next: number) => `${next}%`
 </script>
 
 <template>

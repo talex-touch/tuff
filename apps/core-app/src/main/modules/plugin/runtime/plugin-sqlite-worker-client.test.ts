@@ -82,6 +82,26 @@ describe('pluginSqliteWorkerClient', () => {
     await expect(second).resolves.toEqual({ rows: [], columns: ['id'] })
   })
 
+  it('passes the purpose-built read-only mode to the worker', async () => {
+    const client = new PluginSqliteWorkerClient('/tmp/browser-history.sqlite', {
+      readOnly: true
+    })
+    const pending = client.query('SELECT url FROM urls', [])
+    const worker = workerMock.workers[0]
+
+    expect(worker.options.workerData).toEqual({
+      databasePath: '/tmp/browser-history.sqlite',
+      readOnly: true
+    })
+    worker.emit('message', {
+      type: 'result',
+      requestId: requestIdOf(worker.messages[0]),
+      result: { rows: [], columns: ['url'] }
+    })
+    await expect(pending).resolves.toEqual({ rows: [], columns: ['url'] })
+    await client.close()
+  })
+
   it('fails closed when the queue limit is exceeded', async () => {
     const client = new PluginSqliteWorkerClient('/tmp/plugin.sqlite', {
       maxQueueDepth: 2

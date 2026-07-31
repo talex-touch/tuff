@@ -1,6 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import RatingInstalled from '../index'
 import TxRating from '../src/TxRating.vue'
 
 const rafCallbacks: FrameRequestCallback[] = []
@@ -131,6 +132,27 @@ describe('txRating', () => {
     expect(stillWrapper.find('.tx-rating__star--pop').exists()).toBe(false)
   })
 
+  it('reflects external modelValue changes while interactive', async () => {
+    // Regression: in interactive mode the filled layer reads hoverValue, which
+    // never re-synced from modelValue, so a programmatic value change did not
+    // render until the next mouseleave.
+    const wrapper = mount(TxRating, {
+      props: {
+        modelValue: 2,
+      },
+    })
+
+    let stars = wrapper.findAll('.tx-rating__star')
+    expect(stars[1].classes()).toContain('tx-rating__star--filled')
+    expect(stars[3].classes()).not.toContain('tx-rating__star--filled')
+
+    await wrapper.setProps({ modelValue: 4 })
+
+    stars = wrapper.findAll('.tx-rating__star')
+    expect(stars[2].classes()).toContain('tx-rating__star--filled')
+    expect(stars[3].classes()).toContain('tx-rating__star--filled')
+  })
+
   it('exposes radio state and text slot props', () => {
     const wrapper = mount(TxRating, {
       props: {
@@ -146,8 +168,32 @@ describe('txRating', () => {
     expect(wrapper.find('.tx-rating__stars').attributes('role')).toBe('radiogroup')
     const stars = wrapper.findAll('.tx-rating__star')
     expect(stars[0].attributes('role')).toBe('radio')
-    expect(stars[0].attributes('aria-checked')).toBe('true')
-    expect(stars[3].attributes('aria-checked')).toBe('false')
+    // aria-checked is exclusive: exactly one radio is checked (ceil of the score),
+    // not every star at or below the score. For 3.5 that is star 4 (index 3).
+    const checked = stars.filter(s => s.attributes('aria-checked') === 'true')
+    expect(checked).toHaveLength(1)
+    expect(stars[3].attributes('aria-checked')).toBe('true')
+    expect(stars[0].attributes('aria-checked')).toBe('false')
     expect(wrapper.text()).toContain('3.5 of 5')
+  })
+
+  it('exposes a localizable per-star aria-label', () => {
+    const defaults = mount(TxRating, { props: { modelValue: 0, maxStars: 3 } })
+    const defaultStars = defaults.findAll('.tx-rating__star')
+    expect(defaultStars[0].attributes('aria-label')).toBe('Rate 1 star')
+    expect(defaultStars[1].attributes('aria-label')).toBe('Rate 2 stars')
+
+    const localized = mount(TxRating, {
+      props: { modelValue: 0, maxStars: 3, starLabel: (star: number) => `评分 ${star} 星` },
+    })
+    expect(localized.findAll('.tx-rating__star')[0].attributes('aria-label')).toBe('评分 1 星')
+  })
+
+  it('registers the component through install', () => {
+    const app = { component: vi.fn() }
+
+    RatingInstalled.install?.(app as any)
+
+    expect(app.component).toHaveBeenCalledWith('TxRating', RatingInstalled)
   })
 })

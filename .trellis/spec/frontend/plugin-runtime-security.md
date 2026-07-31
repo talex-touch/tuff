@@ -19,18 +19,18 @@ Public window creation is file-only and uses a closed options object:
 
 ```ts
 interface PluginWindowNewRequest {
-  file: string;
+  file: string
   options?: {
-    width?: number;
-    height?: number;
-    x?: number;
-    y?: number;
-    title?: string;
-    resizable?: boolean;
-    alwaysOnTop?: boolean;
-    visible?: boolean;
-  };
-  _sdkapi?: number;
+    width?: number
+    height?: number
+    x?: number
+    y?: number
+    title?: string
+    resizable?: boolean
+    alwaysOnTop?: boolean
+    visible?: boolean
+  }
+  _sdkapi?: number
 }
 ```
 
@@ -38,13 +38,13 @@ Window control is a discriminated union:
 
 ```ts
 type PluginWindowCommand =
-  | { type: "focus" }
-  | { type: "close" }
+  | { type: 'focus' }
+  | { type: 'close' }
   | {
-      type: "setBounds";
-      bounds: { x?: number; y?: number; width: number; height: number };
+      type: 'setBounds'
+      bounds: { x?: number; y?: number; width: number; height: number }
     }
-  | { type: "setAlwaysOnTop"; value: boolean };
+  | { type: 'setAlwaysOnTop'; value: boolean }
 ```
 
 Privileged plugin handlers use the protected transport registration contract:
@@ -53,15 +53,15 @@ Privileged plugin handlers use the protected transport registration contract:
 createProtectedRegister(transport)(
   event,
   {
-    permissionId: "window.create",
+    permissionId: 'window.create',
     failClosedForPlugin: true,
     requireVerifiedPlugin: true,
-    unavailableCode: "PLUGIN_WINDOW_PERMISSION_UNAVAILABLE",
-    deniedCode: "PLUGIN_WINDOW_PERMISSION_DENIED",
-    sdkMismatchCode: "SDKAPI_MISMATCH",
+    unavailableCode: 'PLUGIN_WINDOW_PERMISSION_UNAVAILABLE',
+    deniedCode: 'PLUGIN_WINDOW_PERMISSION_DENIED',
+    sdkMismatchCode: 'SDKAPI_MISMATCH',
   },
   handler,
-);
+)
 ```
 
 ### 3. Contracts
@@ -145,36 +145,27 @@ only sanitized plugin identity, source surface, profile reason, and stable code.
 
 ```ts
 transport.on(PluginEvents.window.new, async ({ url, ...options }) => {
-  const win = new BrowserWindow(options);
-  await win.loadURL(url);
-});
+  const win = new BrowserWindow(options)
+  await win.loadURL(url)
+})
 
-const target = browserWindow[propertyName];
-target(...args);
+const target = browserWindow[propertyName]
+target(...args)
 ```
 
 #### Correct
 
 ```ts
-registerProtectedWindowChannel(
-  PluginEvents.window.new,
-  protectedWindowOptions,
-  async (payload, context) => {
-    const request = normalizePluginWindowRequest(payload);
-    const target = await resolveLocalPluginWindowTarget(
-      plugin.pluginPath,
-      request.file,
-    );
-    const preferences = buildPluginViewWebPreferences(profile, hostOptions);
-    const navigation = await createPluginViewNavigationPolicy(policyOptions);
-    const win = new TouchWindow(
-      buildPublicPluginWindowOptions(request.options ?? {}, preferences),
-    );
-    installPluginViewNavigationPolicy(win.window.webContents, navigation);
-    await win.loadFile(target);
-    return { id: win.window.webContents.id };
-  },
-);
+registerProtectedWindowChannel(PluginEvents.window.new, protectedWindowOptions, async (payload, context) => {
+  const request = normalizePluginWindowRequest(payload)
+  const target = await resolveLocalPluginWindowTarget(plugin.pluginPath, request.file)
+  const preferences = buildPluginViewWebPreferences(profile, hostOptions)
+  const navigation = await createPluginViewNavigationPolicy(policyOptions)
+  const win = new TouchWindow(buildPublicPluginWindowOptions(request.options ?? {}, preferences))
+  installPluginViewNavigationPolicy(win.window.webContents, navigation)
+  await win.loadFile(target)
+  return { id: win.window.webContents.id }
+})
 ```
 
 ## Scenario: Authoritative Transport Caller Identity
@@ -193,7 +184,7 @@ registerProtectedWindowChannel(
   payload plugin name, port scope, child-process plugin name, or caller-authored
   `verified: true` must never authorize a privileged operation.
 - The activation registry owns `{ name, pluginInstanceId,
-  activationGeneration, key }`. A plugin instance id is stable for one runtime
+activationGeneration, key }`. A plugin instance id is stable for one runtime
   object; generation increments on each successful enable; disable revokes and
   clears the current key.
 - Register every host-created plugin WebContents before its first load/IPC. The
@@ -225,19 +216,19 @@ registerProtectedWindowChannel(
 
 ### 3. Validation Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Non-empty, stolen, or forged payload key | No authoritative identity |
-| Registered current sender, matching activation | `web-contents` authority |
-| Registered sender with mismatched/stale generation | PLUGIN lane, unverified |
-| Unregistered sender presenting a valid plugin key | PLUGIN lane, unverified |
-| Destroyed registered sender | PLUGIN lane, unverified |
-| Valid current local lookup | `local-host` authority |
-| Caller passes `verified: true` or copied identity | Unverified |
-| Current plugin port confirmed | `message-port` authority bound to port id |
-| Port reused after revoke/re-enable | Reject/fallback; no plugin port delivery |
-| Unknown or stale plugin-host handle/generation | SDK result error; no context lookup |
-| Trusted-test factory outside test runtime | Throw before identity issuance |
+| Condition                                          | Required result                           |
+| -------------------------------------------------- | ----------------------------------------- |
+| Non-empty, stolen, or forged payload key           | No authoritative identity                 |
+| Registered current sender, matching activation     | `web-contents` authority                  |
+| Registered sender with mismatched/stale generation | PLUGIN lane, unverified                   |
+| Unregistered sender presenting a valid plugin key  | PLUGIN lane, unverified                   |
+| Destroyed registered sender                        | PLUGIN lane, unverified                   |
+| Valid current local lookup                         | `local-host` authority                    |
+| Caller passes `verified: true` or copied identity  | Unverified                                |
+| Current plugin port confirmed                      | `message-port` authority bound to port id |
+| Port reused after revoke/re-enable                 | Reject/fallback; no plugin port delivery  |
+| Unknown or stale plugin-host handle/generation     | SDK result error; no context lookup       |
+| Trusted-test factory outside test runtime          | Throw before identity issuance            |
 
 ### 4. Tests Required
 
@@ -261,18 +252,872 @@ registerProtectedWindowChannel(
 #### Wrong
 
 ```ts
-const plugin = data.plugin
-  ? { name: data.plugin, uniqueKey: data.header.uniqueKey, verified: true }
-  : undefined;
-if (plugin?.verified) allowPrivilegedOperation();
+const plugin = data.plugin ? { name: data.plugin, uniqueKey: data.header.uniqueKey, verified: true } : undefined
+if (plugin?.verified) allowPrivilegedOperation()
 ```
 
 #### Correct
 
 ```ts
-const plugin = resolveHandlerPluginContext(realSender, currentActivation);
-if (!isAuthoritativePluginContext(plugin)) denyPrivilegedOperation();
+const plugin = resolveHandlerPluginContext(realSender, currentActivation)
+if (!isAuthoritativePluginContext(plugin)) denyPrivilegedOperation()
 ```
+
+## Scenario: Isolated Plugin Prelude Runtime
+
+### 1. Scope / Trigger
+
+- Trigger: an official or third-party plugin Prelude executes in the plugin-host child
+  VM and accesses host-owned work through declared capability facades.
+- This boundary spans manifest permissions, capability projection, child realm
+  construction, wire DTO normalization, business-resource ownership, canonical build
+  resolution, rollout policy, and real Electron process smoke.
+
+### 2. Signatures
+
+```ts
+type HostHeartbeat = HostMessageBase & { type: 'heartbeat' }
+type HostHeartbeatResult = HostMessageBase & { type: 'heartbeat-result' }
+
+const heartbeatIntervalMs = 2_000
+const heartbeatTimeoutMs = 5_000
+const restartBudget = { maxCrashes: 3, windowMs: 30_000 } as const
+```
+
+`HostMessageBase` includes the V2 protocol version, main-issued activation handle,
+host generation, and request id.
+
+### 3. Contracts
+
+- The child global is a closed projection. Expose only immutable snapshots, standard
+  safe intrinsics, logging, lifecycle registration, and facades derived from the
+  exact capability manifest. Do not expose `process`, `Buffer`, `require`, Electron,
+  filesystem APIs, host constructors, host arrays, host errors, or mutable host DTOs.
+- A facade exists only when at least one of its capability IDs is declared, and each
+  method exists only for its exact declared ID. `hostCapabilities.invoke()` remains
+  declaration-gated; a facade must not broaden that authority.
+- Host authorization is `manifest declaration AND current permission grant AND
+current activation authority`. A default grant, including `storage.plugin`, never
+  authorizes an undeclared permission. Normalize permission IDs before comparing the
+  manifest declaration and store grant.
+- Clone every capability request and result through bounded wire DTOs. Plugin-visible
+  items use portable icon descriptors; never return absolute paths, native handles,
+  Electron objects, host errors/stacks, or host-realm arrays and typed arrays.
+- Capture byte-related intrinsic getters and mutation methods before plugin code runs.
+  Determine `ArrayBuffer`, typed-array, and `DataView` offsets and lengths with those
+  captured getters; enforce byte limits before iteration or other plugin-controlled
+  callbacks; copy bytes by bounded index reads; use the captured typed-array `set`
+  for `getRandomValues`. Digest inputs and outputs must not depend on `Buffer` or on a
+  plugin-replaced iterator/prototype method.
+- `TextEncoder`, `TextDecoder`, random bytes, and digest return values are child-realm
+  values. Supported digest algorithms are an exact allow-list, and oversized input
+  fails before hashing or invoking plugin-controlled iteration.
+- Locale is a validated, bounded, immutable load snapshot. `plugin.getLocale()` reads
+  that snapshot and does not call back into mutable main-process state.
+- Prelude capability calls are asynchronous. Await clear-before-push, storage writes,
+  clipboard writes, external opens, HTTP requests, and lifecycle cleanup before
+  reporting success. Fixed business actions use exact host-owned request/reply IDs
+  and bounded DTOs; child code never selects destinations, routes, credentials, SQL,
+  filesystem paths, Flow identities, or other authority-bearing values. Map denials
+  and operational failures to distinct stable codes and redacted messages; do not
+  infer permission denial from every host exception. Filter sensitive content before
+  public sharing and never send child-managed credentials across the channel.
+- Canonical Prelude resolution accepts only the declared build artifact under the
+  plugin root and verifies source/build/resource/runtime projection parity where a
+  release projection exists. Never silently execute a stale root or generated copy.
+- Production installs the isolated runtime by default after the exact 22/22 official
+  manifest inventory passes. There is no environment override, singleton bridge,
+  synthetic self-check, legacy protocol source, or main-process VM fallback. A new or
+  incompatible plugin fails with a stable activation error; it never restores legacy
+  execution.
+- Main starts one heartbeat only after the activation becomes active and keeps at most
+  one heartbeat request in flight. The child endpoint replies directly without invoking
+  Prelude lifecycle code. Missing acknowledgement uses the canonical request timeout,
+  cancel grace, authority invalidation, resource cleanup, forced kill, and real exit
+  barrier. Every stop/crash/startup cleanup clears heartbeat state.
+- Heartbeat requests use a dedicated single infrastructure pending slot, while business
+  calls retain their configured concurrency limit. The session stores a monotonic
+  heartbeat request-id watermark instead of retaining unbounded periodic history.
+- An unexpected active-process termination records one plugin-scoped crash. Three crashes
+  inside 30 seconds block the fourth explicit start before handle allocation or spawn with
+  `PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED`. Normal stop and startup failure do not count;
+  the budget expires after the stability window. The host never auto-restarts or falls
+  back.
+- Real Electron smoke executes every claimed compatible Prelude in at least two host
+  generations. It records real child PIDs, verifies handle and generation rotation,
+  and proves stale ports/messages cannot mutate storage, clipboard, open, HTTP, or
+  published feature state after stop/reload.
+
+### 4. Validation Matrix
+
+| Condition                                                 | Required result                                                       |
+| --------------------------------------------------------- | --------------------------------------------------------------------- |
+| Facade or method capability is undeclared                 | Property absent or stable undeclared-capability rejection             |
+| Permission is granted by default but absent from manifest | Authorization denied before handler execution                         |
+| Plugin replaces typed-array iterator, getter, or `set`    | No host constructor/value exposure; bounded operation remains correct |
+| Byte input exceeds the wire limit                         | Reject before plugin iterator/callback and before digest allocation   |
+| Clipboard/open/HTTP operation fails without a denial code | Stable operational failure, not `permission-denied`                   |
+| Host denial code is returned                              | Stable `permission-denied`; no native detail or stack                 |
+| Item contains file icon/path or host object               | Reject or project to a portable DTO before child publication          |
+| Runtime service is initialized                           | Install the activation-scoped isolated runtime by default                |
+| Official manifest inventory changes                      | Rollout contract test fails until the new Prelude is migrated            |
+| Heartbeat result has wrong owner/generation/direction    | Protocol violation; no request completion                                |
+| Heartbeat result is duplicate, late, or unknown          | Stable session rejection; no request-id reuse                            |
+| Active child misses the heartbeat deadline               | Cancel, revoke, cleanup, kill, await exit, and report one stable crash    |
+| Fourth explicit start after three recent crashes         | `PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED`; no spawn                       |
+| Normal stop or failed startup                            | Do not consume restart budget                                             |
+| Resolver sees stale root projection                       | Select the canonical declared build or fail closed                        |
+| Old handle/port emits after generation rotation           | Ignore/reject; no stale side effect                                   |
+
+### 5. Good / Base / Bad Cases
+
+- Good: an active child answers endpoint heartbeats while async plugin work is pending;
+  disable clears the timer, revokes authority, releases resources, and waits for exit.
+- Base: a child event loop becomes stuck after lifecycle completion; the missed heartbeat
+  follows timeout/cancel grace and force-kill without affecting another activation.
+- Bad: rely only on lifecycle deadlines, keep an environment kill switch or main VM
+  fallback, retain every heartbeat id forever, or automatically restart an unbounded crash
+  loop.
+
+### 6. Tests Required
+
+- Child-realm RED tests replace `Uint8Array.prototype.set`, typed-array iterators, and
+  related getters, then exercise random values, encoding/decoding, digest, and wire
+  serialization. Assert no host constructor can recover `process` and oversized
+  inputs reject before the plugin hook is observed.
+- Authorization tests grant a default permission while omitting it from required and
+  optional manifest declarations; assert both generic and business capabilities deny
+  without consulting a permissive fallback.
+- Facade projection tests cover absent facade, absent individual method, frozen
+  null-prototype objects, local DTO clones, portable icons, locale snapshot, and no
+  host path/error leakage.
+- Official Prelude tests exercise success, denial, and ordinary failure for storage,
+  clipboard, open URL, HTTP, and fixed request/reply operations; assert every success
+  waits for its side effect, every failure is stable and redacted, persistence is
+  bounded, clipboard placeholders read only when needed, and public payloads exclude
+  sensitive content and credentials.
+- Resolver/release tests cover canonical source selection, projection cleanup, and
+  SHA-256 parity. Rollout tests prove the exact 22/22 inventory, production default-on,
+  and fail-closed behavior for any future incompatible official plugin.
+- Wire/session tests cover heartbeat direction, exact keys, owner/generation binding,
+  duplicate/late/unknown responses, the dedicated pending slot, request-id watermark,
+  and business pending limits.
+- Host/process tests cover active-only scheduling, direct child acknowledgement, one
+  in-flight heartbeat, missed-ack timeout through the real termination barrier, timer
+  cleanup, cross-activation isolation, and no crash report on normal stop.
+- Service tests cover three crashes in 30 seconds, fourth-start denial before spawn,
+  plugin-name isolation, stability-window recovery, and exclusion of normal stop/startup
+  failure.
+- Real Electron smoke executes the complete claimed compatibility set twice and
+  asserts PID/handle/generation rotation plus stale message and stale side-effect
+  denial after the first host is stopped.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+if (permissionStore.hasPermission(pluginName, permissionId, sdkapi)) allow()
+setInterval(() => child.postMessage({ type: 'ping' }), interval)
+if (childExited) restartPluginWithoutLimit()
+```
+
+#### Correct
+
+```ts
+if (!manifestDeclares(plugin, permissionId)) deny()
+if (!permissionStore.hasPermission(pluginName, permissionId, sdkapi)) deny()
+const heartbeat = session.request(ownerBoundHeartbeat, heartbeatTimeoutMs)
+await heartbeat // timeout uses canonical cancellation and termination
+assertRestartBudget(pluginName, { maxCrashes: 3, windowMs: 30_000 })
+```
+
+The byte-codec boundary additionally captures intrinsic getters before plugin code runs:
+
+```ts
+const { byteLength, view } = readByteViewWithCapturedGetters(value)
+assertWireByteLimit(byteLength)
+const bytes = copyByBoundedIndex(view, byteLength)
+Reflect.apply(capturedUint8ArraySet, target, [childRealmBytes])
+```
+
+## Scenario: Owner-Bound Fixed Process Action
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated official Prelude needs to start or signal one known desktop
+  application through `process.spawn`.
+- This contract spans child facade projection, exact capability DTOs, main-owned
+  discovery, permission authority, fixed spawn options, process ownership, and
+  activation teardown.
+
+### 2. Signatures
+
+```ts
+type SnipasteProcessRequest = {
+  operation: 'snipaste-action'
+  actionId: 'launch' | 'snip' | 'snip-full' | 'paste' | 'pick-color' | 'toggle-images' | 'docs'
+}
+
+type SnipasteProcessResult =
+  | { actionId: SnipasteProcessRequest['actionId']; status: 'started' }
+  | {
+      actionId: SnipasteProcessRequest['actionId']
+      status: 'blocked'
+      reason: 'not-installed' | 'permission-denied' | 'permission-unavailable' | 'platform-unsupported'
+    }
+  | { actionId: SnipasteProcessRequest['actionId']; status: 'failed'; reason: 'spawn-failed' }
+```
+
+The child projection is `plugin.snipaste.runAction(actionId)`. It is frozen,
+null-prototype, and present only when `process.spawn` is declared.
+
+### 3. Contracts
+
+- The child request contains exactly `operation` and `actionId`. Executable, path,
+  command, arguments, environment, cwd, detached, shell, platform, and settings
+  fields are forbidden.
+- Main maps every action to one fixed argument vector. It discovers only canonical
+  absolute regular files at platform-owned Snipaste locations and a bounded current
+  user's `Applications` directory derived through Electron main. PATH lookup,
+  command names, child settings, symlinks, non-files, and root escapes are denied.
+- Capability construction accepts only a discovery object issued by the fixed discovery
+  factory. A private type brand provides the compile-time contract and a module-owned
+  identity registry provides the runtime signature; structural copies, proxies, and
+  arbitrary main discovery adapters fail before permission watchers or host work.
+- Spawn uses `shell: false`, `detached: false`, ignored stdio, a fixed executable
+  directory cwd, and a platform allow-list of environment keys. Child input cannot
+  affect any spawn option.
+- Require current authoritative activation and host generation before and after
+  discovery and spawn. Require declared/current `system.shell` on every call.
+- A successfully started process stays owned by the exact activation after the RPC
+  returns. Permission revoke, caller cancellation before completion, timeout,
+  disable, crash, and generation rotation issue at most one kill and await the real
+  child exit event. A kill request is not an exit barrier.
+- Result and diagnostics contain only fixed action/status/reason values. Executable
+  paths, native errors, environment values, activation keys, and host handles never
+  cross to the child or logs.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                       | Required result                                 |
+| --------------------------------------------------------------- | ----------------------------------------------- |
+| Unknown action or any extra request field                       | Invalid request before discovery/spawn          |
+| Permission missing/revoked/unavailable                          | Stable permission failure; no new spawn         |
+| Unsupported platform                                            | `blocked/platform-unsupported`                  |
+| No canonical regular candidate                                  | `blocked/not-installed`; no PATH fallback       |
+| Candidate/root resolves through symlink or outside trusted root | Skip/reject candidate                           |
+| Arbitrary, copied, or proxied discovery adapter                 | Reject capability construction before host work |
+| Spawn throws or emits a pre-spawn error                         | `failed/spawn-failed`, redacted                 |
+| Cancel/timeout/revoke after process acquisition                 | Kill once and await real exit                   |
+| Disable/crash with a previously started process                 | Close activation owner and await exit           |
+| Old generation invokes or replies late                          | Reject/ignore; no new process or completion     |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `runAction('snip-full')` resolves one canonical Snipaste executable in main,
+  spawns the fixed `['snip', '--full', '-o', 'clipboard']` vector, and teardown owns
+  the process until its real exit.
+- Base: Snipaste is absent from every trusted location, so the plugin receives
+  `not-installed` without a path or native error.
+- Bad: accept `SNIPASTE_PATH`, `settings.json` custom args, `spawn('Snipaste')`, a
+  symlinked app, inherited full environment, `shell: true`, or a child-selected cwd.
+
+### 6. Tests Required
+
+- DTO tests reject executable/path/command/args/env/cwd/shell/platform fields,
+  accessors, proxies, unknown actions, and malformed results before host work.
+- Discovery tests cover every platform candidate, bounded user Applications,
+  missing/non-file/symlink/root escape, cancellation, no PATH command fallback, and
+  construction-time rejection of arbitrary, structurally copied, and proxied adapters.
+- Process tests separate spawn acknowledgement, kill request, and real exit; cover
+  idempotent kill plus cancel, timeout, revoke, disable, stale activation, and host
+  generation rotation.
+- Child tests assert declaration gating, exact local action allow-list, frozen
+  null-prototype facade, constructor containment, and no global process/spawn facade.
+- Real Electron smoke loads the actual Prelude twice with an in-memory fake executor;
+  prove permission deny/grant, PID/handle/generation rotation, stale old-port denial,
+  and close barriers without launching the real application.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+spawn(request.path || process.env.SNIPASTE_PATH || 'Snipaste', request.args, {
+  shell: true,
+  env: process.env,
+})
+```
+
+#### Correct
+
+```ts
+const executable = await trustedDiscovery.discover(signal)
+const action = validateExactFixedAction(request)
+const owned = activationProcesses.start(executable, FIXED_SNIPASTE_ARGS[action])
+await owned.started
+assertCurrentActivationAndPermission()
+return { actionId: action, status: 'started' }
+```
+
+## Scenario: Owner-Bound Voice Capability
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated Prelude invokes dictation, streaming ASR, or speech synthesis
+  through `voice.invoke` or `voice.stream`.
+- This contract spans child facades, callback/resource transport, activation authority,
+  permission revoke, native capture, intelligence STT/polish/TTS, and teardown barriers.
+
+### 2. Signatures
+
+```ts
+interface IsolatedVoiceHostService {
+  dictate(payload: VoiceDictatePayload, signal: AbortSignal, caller: string): Promise<VoiceDictateResult>
+  speak(payload: VoiceSpeakPayload, signal: AbortSignal, caller: string): Promise<VoiceSpeakResult>
+  streamDictation(
+    payload: VoiceAsrStreamPayload,
+    signal: AbortSignal,
+    caller: string,
+  ): AsyncIterable<VoiceAsrStreamEvent>
+}
+
+type VoiceStreamRequest = {
+  operation: 'asr-stream'
+  language?: string
+  onEvent(event: VoiceAsrStreamEvent): Promise<void>
+}
+```
+
+### 3. Contracts
+
+- Require manifest declaration and a current grant for `voice.dictation` on every
+  invoke and stream start. Bind the returned stream resource and retained callback
+  to the current activation owner and generation.
+- After authoritative activation and host-generation validation, main derives the
+  provider caller as `plugin:<manifest plugin id>`. The child request cannot supply
+  or override caller. Thread the derived caller through STT, polish, and TTS so quota,
+  audit, and TTS cache entries remain plugin-scoped.
+- Deliver stream events one at a time and await `onEvent` before reading the next
+  event. `final`, `error`, and `end` are terminal and automatically dispose the
+  resource; explicit `cancel()` and repeated disposal are idempotent.
+- Propagate the capability `AbortSignal` through the production VoiceService. Abort
+  cancels native microphone capture immediately and releases waits for STT, polish,
+  and TTS without waiting for a provider promise that cannot be physically aborted.
+- A provider promise that settles after abort is observed only to contain rejection;
+  its value is discarded and cannot emit events, play audio, publish items, or settle
+  a newer generation's request.
+- TTS audio stays in main. The child receives bounded metadata only. Check abort
+  after synthesis and immediately before playback so cancelled work never starts
+  speaker output.
+- Permission revoke and activation teardown abort the signal, dispose the resource,
+  release the callback, and await native capture cancellation before the host stop
+  barrier resolves.
+- Every stream owns a dedicated `AbortController`. Explicit dispose aborts that
+  controller before awaiting `iterator.return()`. WebSocket open, event-queue wait,
+  and frame-pump delay all observe the signal; abort closes the socket, latches the
+  queue terminal state, removes handlers, and awaits the stopped pump.
+
+### 4. Validation & Error Matrix
+
+| Condition                                              | Required result                                                 |
+| ------------------------------------------------------ | --------------------------------------------------------------- |
+| `voice.*` capability or method undeclared              | Facade/method absent or stable undeclared-capability failure    |
+| `voice.dictation` missing or revoked                   | Reject before new native capture; close current stream resource |
+| Child supplies/spoofs caller or plugin identity        | Reject the exact DTO before service work; main derives caller   |
+| Signal aborts during capture                           | `cancelCapture(sessionId)` and `VOICE_OPERATION_CANCELLED`      |
+| Signal aborts during STT/polish/TTS                    | Release awaiting caller; discard late result and side effects   |
+| Signal aborts before TTS playback                      | No `playAudio` call                                             |
+| Callback rejects or exceeds deadline                   | Stable redacted callback failure and resource disposal          |
+| Duplicate cancel/dispose                               | No-op after the first completed cleanup                         |
+| Dispose while WebSocket never opens or never finalizes | Abort provider signal, close socket, and settle disposer        |
+| Old generation emits a late event                      | Reject/ignore; no callback or host side effect                  |
+
+### 5. Good / Base / Bad Cases
+
+- Good: Dictation starts an owner-bound stream, awaits each partial/final callback,
+  auto-disposes on terminal delivery, and permission revoke cancels native capture.
+- Base: one-shot STT/TTS completes normally; only bounded text/status metadata crosses
+  to the child and no native audio bytes cross the capability boundary.
+- Bad: remove the child iterator while leaving capture or provider work awaited in
+  main, or race a TTS promise without checking abort before playback.
+
+### 6. Tests Required
+
+- VoiceService unit tests abort dictate, stream, and speak while work is pending;
+  assert native cancel, stable cancellation, no STT after capture abort, and no audio
+  playback after synthesis abort.
+- Capability tests cover manifest/grant checks, owner/generation binding, main-derived
+  caller attribution, per-event backpressure, terminal auto-dispose, callback failure,
+  explicit cancel, repeated dispose, permission revoke, and activation cleanup.
+- WebSocket tests cover never-open, open-without-final, external abort, and explicit
+  resource dispose; assert stable cancellation, socket close, and bounded pump exit.
+- Child VM tests cover declaration-gated frozen facades, terminal auto-dispose,
+  idempotent cancel, callback error redaction, and absence when undeclared.
+- Real Electron smoke runs the actual Dictation Prelude in two generations and proves
+  permission deny/grant, partial/final delivery, clipboard action, resource count
+  returning to zero, PID/handle/generation rotation, and stale-port rejection.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const result = await Promise.race([voiceService.speak(payload), timeout])
+// The provider can finish later and still play audio.
+```
+
+#### Correct
+
+```ts
+const activation = assertAuthoritativeActivation(context)
+const caller = `plugin:${activation.name}`
+const result = await voiceService.speak(payload, signal, caller)
+signal.throwIfAborted()
+// VoiceService also checks abort immediately before native playback.
+```
+
+## Scenario: Bounded Intelligence Invoke Capability
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated Prelude needs non-streaming `text.chat`, `vision.ocr`, or
+  public text-model discovery through the host Intelligence runtime.
+- This foundation does not authorize context execution, streams, memory evaluation,
+  agent sessions, provider configuration, or production rollout.
+
+### 2. Signatures
+
+```ts
+type PluginIntelligenceRequest =
+  | {
+      operation: 'capability.invoke'
+      capabilityId: 'text.chat'
+      payload: { messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> }
+      options?: SafePluginIntelligenceOptions
+    }
+  | {
+      operation: 'capability.invoke'
+      capabilityId: 'vision.ocr'
+      payload: {
+        source: { type: 'data-url'; dataUrl: string }
+        language?: string
+        includeLayout?: boolean
+        includeKeywords?: boolean
+      }
+      options?: SafePluginIntelligenceOptions
+    }
+  | { operation: 'provider-models.list'; capabilityId: 'text.chat' }
+
+interface PluginIntelligenceHostProjection {
+  invoke(request: ProjectedInvoke, signal: AbortSignal, caller: string): Promise<ProjectedResult>
+  listProviderModels(signal: AbortSignal, caller: string): Promise<ProjectedProvider[]>
+}
+```
+
+### 3. Contracts
+
+- Register exactly `intelligence.invoke` with permission `intelligence.basic`. Recheck
+  branded plugin-host authority, current activation identity, and host generation on
+  every call; main derives `plugin:<manifest id>` after those checks.
+- Child requests cannot supply caller, plugin identity, key, quota scope, provider
+  endpoint, credentials, authorization, cookies, or tokens. Options are limited to
+  bounded provider/model preference, prompt template/variables, and exact diagnostic
+  metadata. Metadata capability/provider/model values must agree with the request.
+- Chat accepts at most 64 exact role/content messages within the aggregate byte budget.
+  OCR accepts only canonical base64 PNG/JPEG/WebP data URLs with matching magic and a
+  decoded limit of 640 KiB; the maximum valid request must fit the shared 1 MiB wire
+  envelope. Remote URLs and file paths are never accepted.
+- The injected host service is a projection adapter, not the raw Intelligence SDK.
+  Before returning, it drops usage, reasoning, provider configuration, raw OCR blocks,
+  credentials, native errors, and stacks. Capability validation rejects an unprojected
+  service result instead of silently copying unknown fields.
+- Service methods are snapshotted at capability creation. Permission revoke, activation
+  rotation, and host-generation mismatch reject the invocation and discard late results.
+- Cancellation authority is a CoreApp-private `AbortSignal` injected after capability DTO
+  validation; `IntelligenceInvokeOptions` and child requests never contain `signal`. Only
+  normalized `text.chat` and `vision.ocr` may use this host cancellation path. Other
+  capabilities fail with `INTELLIGENCE_CANCELLATION_UNSUPPORTED` rather than inheriting
+  unreviewed partial-side-effect semantics.
+- Quota, strategy, primary provider, and each fallback run through an abort-listener
+  boundary. Abort immediately settles the host SDK call with
+  `INTELLIGENCE_OPERATION_CANCELLED`; attached handlers still observe and discard late
+  provider settlement. This releases plugin-host concurrency but does not claim to stop
+  provider computation or billing until provider interfaces accept the same signal.
+- The final abort check before cache/audit is the success commit point. Abort before it
+  writes neither cache nor audit and cannot start another fallback. Abort after it does not
+  rewrite an already committed success while its success audit is settling. Signal is
+  excluded from cache identity, so active-signal and signal-free calls share cache keys.
+- Provider-supplied cancellation codes are ordinary provider failures; only the captured
+  signal is authoritative. Signal-enabled quota/provider/fallback logs and failure audit
+  use stable redacted codes and never persist native messages, causes, paths, or secrets.
+- Context invoke/stream, memory, and handoff/session require separate owner-bound
+  contracts. Never add them as generic operations or expose host-only session IDs.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                     | Required result                                                                                   |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Unknown operation or capability ID                                            | Invalid request before service work                                                               |
+| Child supplies caller, identity, endpoint, or credential field                | Invalid request before service work                                                               |
+| Metadata capability/provider/model disagrees with options                     | Invalid request                                                                                   |
+| OCR MIME is remote, non-image, malformed base64, wrong magic, or over 640 KiB | Invalid request                                                                                   |
+| Permission denied or revoked                                                  | Stable permission error; late result discarded                                                    |
+| Host signal is pre-aborted or aborts during quota/strategy/provider/fallback  | `INTELLIGENCE_OPERATION_CANCELLED` settles immediately; late settlement is observed and discarded |
+| Host signal is attached to any capability except normalized chat/OCR          | `INTELLIGENCE_CANCELLATION_UNSUPPORTED` before provider work                                      |
+| Provider throws a forged cancellation code                                    | Treat as ordinary provider failure/fallback; never as host cancellation                           |
+| Abort occurs after the cache/audit commit point                               | Complete the already committed success; do not rewrite it as cancelled                            |
+| Signal-enabled native quota/provider failure                                  | Stable redacted log/audit code; no native message/cause/path/secret                               |
+| Activation or host generation is stale                                        | Stable stale/handler failure; no service work                                                     |
+| Service returns usage, reasoning, raw data, credential, or stack fields       | Fail closed as unprojected handler result                                                         |
+| Native service throws                                                         | Stable redacted handler failure                                                                   |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a current plugin sends bounded chat messages; main derives its caller, invokes
+  a projected host adapter, and returns only text/provider/model/trace/latency fields.
+- Base: model discovery returns bounded public provider labels and model IDs, with no
+  endpoint, key, account, quota, or routing configuration.
+- Bad: pass the raw Prelude options with `metadata.caller`, accept a 5 MiB screenshot
+  despite a 1 MiB wire limit, or expose `agent-session.update` under a child-selected ID.
+
+### 6. Tests Required
+
+- Authority tests cover forged context, stale activation, host-generation mismatch,
+  permission denial/revoke, caller abort, and late success after revoke.
+- Cancellation tests must settle the SDK rejection before resolving/rejecting deferred
+  quota, strategy, primary provider, and fallback Promises. Assert canonical errors,
+  no unhandled late rejection, no fallback after abort, no cache/audit write before the
+  commit point, outer-governed containment, and committed success during audit-time abort.
+- Cache tests prove signal is excluded from key identity. Redaction tests prove
+  signal-enabled quota/provider/fallback logs and failure audits contain only stable codes;
+  provider-forged cancellation codes must still take ordinary fallback.
+- Scope tests reject host signal on every non-chat/OCR capability and prove the public
+  Intelligence option DTO has no `signal` field.
+- DTO tests cover extra keys, proxies, accessors, sparse arrays, cycles, classes,
+  prototype keys, message/byte bounds, metadata consistency, and caller spoofing.
+- OCR tests cover PNG/JPEG/WebP magic, MIME mismatch, canonical base64, remote/file
+  denial, the 640 KiB boundary, and successful encoding within host wire limits.
+- Projection tests reject raw SDK usage/reasoning/OCR/provider/credential fields and
+  prove native failures remain redacted.
+- Before production wiring, add real host-adapter tests, child facade tests, provider
+  cancellation decisions, and real Electron enable/trigger/disable/revoke smoke.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+return tuffIntelligence.invoke(request.capabilityId, request.payload, request.options)
+```
+
+#### Correct
+
+```ts
+const activation = assertAuthoritativeActivation(context)
+const caller = `plugin:${activation.name}`
+// The adapter validates child DTOs first, then injects signal into CoreApp-private host options.
+const projected = await intelligenceAdapter.invoke(request, signal, caller)
+// Abort settles the host await immediately; late provider completion is only observed/discarded.
+return validateProjectedIntelligenceResult(projected)
+```
+
+## Scenario: Activation-Bound Ephemeral Intelligence Context Invoke
+
+### 1. Scope / Trigger
+
+- Trigger: the exact isolated `touch-intelligence` activation needs a governed,
+  non-streaming `text.chat` fallback without admitting a durable Context operation.
+- This foundation covers `intelligence.context.invoke`, main-derived actor identity,
+  current-input secret policy, host cancellation, exact result projection, and the child
+  `intelligence.contextInvoke()` facade. Persistent sessions, turns, package logs,
+  checkpoints, continuation, Memory and retrieval belong to the owner-bound stream path
+  or a future terminable durable-operation contract.
+
+### 2. Signatures
+
+```ts
+type EphemeralPluginContextInvokeRequest = {
+  operation: 'context.invoke'
+  capabilityId: 'text.chat'
+  input: string
+  payload: {
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+  }
+  options?: SafePluginIntelligenceOptions
+  context: {
+    mode: 'new' | 'stateless'
+    owner: 'corebox' | 'assistant'
+    scope?: 'light' | 'session' | 'retrieval'
+    objective?: string
+    tokenBudget?: number
+    traceId?: string
+  }
+}
+
+interface IntelligenceContextExecutionHostOptions {
+  signal?: AbortSignal
+  persistence?: 'full' | 'ephemeral' // CoreApp-private; never a child DTO field
+}
+```
+
+The result contains the bounded invocation plus a summary with exactly one
+`current_input` item and `degradedReason: 'isolated_context_persistence_unavailable'`.
+It contains no session, turn, package, checkpoint or continuation identity.
+
+### 3. Contracts
+
+- Install `intelligence.context.invoke` only in the exact `touch-intelligence` activation.
+  Recheck the branded plugin-host context, full activation identity, permission and host
+  generation on every call. Main derives `caller = plugin:touch-intelligence`.
+- The host service always injects frozen `{ signal, persistence: 'ephemeral' }`. Child
+  fields cannot enable persistence, select an actor, provide a signal, or alter caller,
+  endpoint, credentials, quota identity or host generation.
+- Accept `new` and `stateless` only. Reject `continue` locally and again in main with
+  `CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED` before provider work. Do not imply that a
+  child session id was consumed.
+- Validate the actor and fixed entrypoint pair before execution:
+  `corebox.ai-ask/corebox` or `assistant.voice/assistant`, with matching mode.
+- Build provider input from bounded system messages plus the trimmed current input only.
+  Child user/assistant history is not trusted Context state. Apply the shared host secret
+  classifier to current input, every provider-bound system message, every prompt variable,
+  and both the raw and rendered prompt template before invoking a provider.
+- The ephemeral path never calls `prepareTurn()`, `revalidatePackageMemories()` or
+  `appendAssistantTurn()`. It creates no session, turn, checkpoint, ContextPackage or
+  package log, so cancellation/retry cannot duplicate durable Context state.
+- Cancellation uses the canonical capability protocol. Pre-abort and abort during provider
+  wait reject; late provider settlement is observed and discarded. This is containment,
+  not a claim that provider compute or billing physically stopped.
+- Exact-project results before child delivery. Drop usage and reasoning; reject credential,
+  endpoint, native-error, stack, persistent-id, arbitrary degraded-reason, extra-field and
+  oversized results. The child independently enforces the same ephemeral summary shape.
+- Full host-owned Context invoke keeps the existing persistent default. Owner-bound Context
+  stream remains a separate capability/resource contract; this foundation must not be cited
+  as persistent Context or official migration evidence by itself.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Non-`touch-intelligence`, stale activation, wrong host generation or missing permission | Reject before Context/provider work |
+| Unknown operation/capability, extra field, Proxy, accessor, sparse/cyclic/class DTO | Invalid request before provider work |
+| Child supplies caller, signal, persistence, endpoint, credential or mismatched entrypoint | Invalid request before host work |
+| `continue` or any supplied session id | `CONTEXT_EPHEMERAL_CONTINUATION_UNSUPPORTED`; provider untouched |
+| Secret in input, system message, prompt variable or rendered template | `CONTEXT_CURRENT_INPUT_POLICY_BLOCKED`; provider untouched |
+| Signal aborts before or during provider wait | Canonical cancellation; no Context DB method called |
+| Result contains a persistent id or non-fixed degraded reason | `PLUGIN_INTELLIGENCE_CONTEXT_HOST_RESULT_INVALID` |
+| Result count/source shape differs from one current input | Invalid host/child result |
+| Native provider failure | Stable redacted handler failure; no message, path, stack, key or cause crosses |
+
+### 5. Good / Base / Bad Cases
+
+- Good: the current `touch-intelligence` activation runs a bounded stateless AI command;
+  main derives the caller, checks the fully rendered prompt for secrets, and returns an
+  ephemeral metadata-only summary with no database write.
+- Base: `new` executes with current input only and explicitly reports persistence
+  unavailable; callers do not retain a returned session id.
+- Bad: accept `continue`, run ContextHygiene, append an assistant turn, trust child history,
+  or introduce a capability-specific committed-success exception after child cancellation.
+
+### 6. Tests Required
+
+- Context execution tests prove zero prepare/revalidate/append calls, fixed summary shape,
+  full default persistence unchanged, and secret blocking for input, system message and
+  rendered prompt template before provider work.
+- Host/capability tests cover exact DTOs, actor derivation, private ephemeral injection,
+  activation/host-generation/permission checks, cancellation, raw-result rejection and
+  explicit denial of persistent ids and arbitrary degraded reasons.
+- Child tests cover declaration gating, local `continue` denial, frozen null-prototype
+  facade, exact result bounds, constructor containment and no stream/memory/session/admin
+  expansion from the one-shot id.
+- Real Electron smoke runs the actual Prelude once without the stream capability to force
+  the one-shot fallback, then runs a separate generation with owner-bound stream. Both use
+  controlled providers and prove process/generation rotation and cleanup.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+return contextExecution.invoke(request, actor, {
+  signal,
+  persistence: request.persistence,
+})
+```
+
+#### Correct
+
+```ts
+const activation = assertTouchIntelligenceActivation(context)
+const caller = `plugin:${activation.name}` as const
+const projected = validatePluginIntelligenceContextRequest(request, caller)
+return contextExecution.invoke(projected, { id: caller, type: 'plugin' }, {
+  signal: hostSignal,
+  persistence: 'ephemeral',
+})
+```
+
+## Scenario: Activation-Bound Custom Widget Publication
+
+### 1. Scope / Trigger
+
+- Trigger: an isolated Prelude publishes a custom-render `TuffItem` whose renderer was
+  compiled and registered from the same plugin manifest or an activation-local dynamic
+  feature.
+- Generic `feature.items.push` remains non-custom. Custom publication uses only
+  `feature.items.widget.push` and the declaration-gated `plugin.widget.pushItems()` facade.
+
+### 2. Signatures
+
+```ts
+type PluginWidgetPushRequest = {
+  scope: 'active-feature'
+  items: readonly PluginWidgetItemDto[]
+}
+
+plugin.widget.pushItems(items: readonly PluginWidgetItemDto[]): Promise<void>
+```
+
+### 3. Contracts
+
+- The main registry derives plugin name, activation generation, item ownership and source
+  provenance. Child `source`, `pluginName`, renderer content and generation are correlation
+  data only and are rewritten or checked against the authoritative activation.
+- Every custom renderer must resolve to one directly registered same-plugin feature with
+  `interaction.type: 'widget'` and a concrete path. Alias chains, another plugin, dynamic
+  paths and an arbitrary namespaced widget id fail before item mutation.
+- Navigation actions are limited to exact host-owned action-id/path pairs. Other custom
+  actions remain plugin lifecycle actions and cannot become a generic host command.
+- Requests/results use bounded plain DTOs. The Prelude omits optional `undefined` fields
+  before publication; main does not loosen item validation to accommodate them.
+- Manifest platform booleans are host input only. `feature.registry.list` projects them to
+  canonical `{ win|darwin|linux: { enable, arch, os } }` DTOs before child delivery.
+- Clear, push, stream callback updates and lifecycle teardown are awaited. A detached
+  publication after lifecycle scope completion is cancelled and cannot mutate a newer
+  activation.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| `feature.items.widget.push` undeclared | `plugin.widget` absent; no generic fallback |
+| Renderer missing, foreign, aliased, pathless or dynamic | Invalid request before feature-host mutation |
+| Child source/plugin/generation differs from owner | Reject or replace from authoritative activation |
+| DTO contains `undefined`, accessor, Proxy, class, cycle or oversized content | Stable invalid request before host work |
+| Manifest uses `win32` boolean platform | Project to canonical `win` platform DTO |
+| Permission revoked, activation stale or teardown started | Reject and remove only that activation's items |
+
+### 5. Good / Base / Bad Cases
+
+- Good: `touch-intelligence` publishes `touch-intelligence::intelligence-ask`; main verifies
+  the manifest renderer, rewrites ownership and tracks the item for exact-generation cleanup.
+- Base: a default-render item continues through `feature.items.push` and never acquires a
+  custom renderer.
+- Bad: allow arbitrary `render.custom.content`, accept another feature's alias chain, emit
+  `draftId: undefined`, or fall back to generic item push after widget validation fails.
+
+### 6. Tests Required
+
+- Business capability tests cover same-plugin renderer success, foreign/path/alias denial,
+  canonical source rewriting, manifest platform projection and activation cleanup.
+- Child tests cover declaration gating, frozen null-prototype facade and builder methods,
+  absent generic custom-render escape and hostile DTO rejection.
+- Official Prelude tests load the real script, require pending/delta/ready widget writes and
+  prove production exports contain no test hook.
+- Real Electron smoke uses two utility-process generations and proves stale-port denial,
+  item cleanup and no real provider, network, native or OS action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await plugin.feature.pushItems([
+  { render: { custom: { content: childSelectedRenderer, data } } },
+])
+```
+
+#### Correct
+
+```ts
+const item = compactPluginDto(builder.setCustomRender('vue', fixedRendererId, data).build())
+await plugin.feature.clearItems()
+await plugin.widget.pushItems([item])
+```
+
+## Scenario: Activation-Bound Intelligence Context Stream
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated official `touch-intelligence` Prelude needs governed streaming
+  `text.chat` events assembled through the host ContextHygiene pipeline.
+- This contract covers the activation-local `intelligence.stream` capability, retained
+  event callback, stream resource, child `intelligence.contextStream()` controller, and
+  the official Prelude migration. It does not authorize another plugin, memory evaluation,
+  Agent sessions, raw checkpoints, provider credentials, or a generic stream transport.
+
+### 2. Contracts
+
+- Register `intelligence.context.invoke` and `intelligence.stream` only through the exact
+  `touch-intelligence` activation factory. Neither id belongs in the global manifest.
+  Construction and every call must match the full activation identity and current host
+  generation; main derives `caller = plugin:touch-intelligence`.
+- `intelligence.stream` requires `intelligence.basic`, exact Context request DTOs, one
+  resource-lifetime `onEvent` callback, a bounded timeout, and bounded concurrency. The
+  child cannot supply caller, signal, actor authority, endpoint, credential, arbitrary
+  capability id, or resource identity.
+- Main obtains an `AsyncIterable` only from the snapped Context execution service. It
+  validates and projects each event before invoking the retained callback. Allowed events
+  are bounded `start`, `delta`, `message`, `usage`, `metadata`, and terminal `end`; native
+  failures and malformed/premature termination become only `INTELLIGENCE_STREAM_FAILED`.
+- The capability returns a `stream` resource. Cancellation, permission revoke, generation
+  rotation, registry close, child cancel, and normal terminal disposal abort the host
+  controller and await `iterator.return()` when available. Late events cannot cross a
+  disposed resource or stale activation.
+- The child projects `contextStream()` only when `intelligence.stream` is declared. It
+  accepts only the named callback set, validates event discriminants again, and returns a
+  frozen null-prototype controller with `cancel()` and read-only `cancelled`. Callback
+  failure terminates and disposes the stream.
+- Prelude lifecycle entrypoints must await the complete prompt/action dispatch. Work
+  detached with `void` loses request-scoped lifecycle authority when the entrypoint
+  resolves and must not later invoke Context, stream, feature, storage, or clipboard
+  capabilities.
+- Prelude feature/widget DTOs crossing the business boundary must contain only supported
+  plain values. Optional values are omitted instead of emitted as `undefined`; manifest
+  features used by a host fixture must be projected to the host runtime platform shape
+  before business validation.
+- The official Prelude uses only projected globals. It must not import/require Node or
+  Electron, access `process`, call raw `fetch`, request permissions at runtime, expose
+  test hooks, or retain the legacy channel bridge.
+
+### 3. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Non-Intelligence activation, stale identity/generation, or undeclared capability | Reject before Context/provider work |
+| Permission denied/revoked or stream resource disposed | Abort and close the iterator; no late child event |
+| Extra request/event field, wrong capability id, Proxy/accessor/class DTO | Stable invalid request/result before plugin callback |
+| Stream ends without a terminal event or host iteration fails | Redacted `INTELLIGENCE_STREAM_FAILED` |
+| Child callback throws or receives a malformed event | `INTELLIGENCE_STREAM_CALLBACK_FAILED`, then dispose |
+| Lifecycle entrypoint resolves before prompt dispatch settles | Forbidden detached work; regression must fail |
+| Widget DTO contains `undefined` or an unprojected source-manifest feature | Business validation rejects; Prelude/fixture must omit/project |
+
+### 4. Tests Required
+
+- Capability and host-service tests cover exact DTOs, actor derivation, activation and host
+  generation checks, permission/revoke/cancel/close races, iterator cleanup, malformed
+  events, redaction, and Context execution delegation.
+- Child tests cover declaration gating, callback allowlisting, event projection, terminal
+  disposal, callback failure, frozen controller containment, and absent raw capability
+  access.
+- Official Prelude tests load the real script in the child VM and prove invoke plus stream,
+  awaited lifecycle completion, widget updates, no forbidden globals, and no exported test
+  surface.
+- Real Electron smoke runs the actual Prelude in two activation generations with only fake
+  Context/provider events. It must observe pending, delta, and ready widget writes, stale
+  generation isolation, resource teardown, and no real provider, browser, network, native,
+  or OS action.
 
 ## Scenario: Plugin-Owned Runtime Overlay
 
@@ -351,18 +1196,18 @@ runWidgetHostAction(
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Undeclared or unavailable module | Reject before module resolution; record registration failure evidence |
-| Raw `@talex-touch/utils/transport` import | Reject during package/runtime dependency validation |
-| Dynamic source violation | `WIDGET_SANDBOX_DYNAMIC_CODE_BLOCKED`; source body is not executed |
-| Clipboard/location/worker/network attempt | `WIDGET_SANDBOX_CAPABILITY_DENIED`; host spy remains untouched |
-| Call 121 inside the fixed window | `WIDGET_SANDBOX_QUOTA_EXCEEDED`; audit `quota-exceeded` |
-| `postMessage` with cloneable data | Deliver only to the widget-local message target; audit without data |
-| Cross-plugin IndexedDB/cache enumeration | Filter the foreign namespace and strip the internal prefix from owned names |
-| Cache network loader | Reject `add` / `addAll`; do not call the host Cache method |
-| Host action after widget disposal | Return `false`; do not invoke the host callback |
-| Retained browser facade after disposal | Reject with disposed-policy evidence |
+| Condition                                 | Required result                                                             |
+| ----------------------------------------- | --------------------------------------------------------------------------- |
+| Undeclared or unavailable module          | Reject before module resolution; record registration failure evidence       |
+| Raw `@talex-touch/utils/transport` import | Reject during package/runtime dependency validation                         |
+| Dynamic source violation                  | `WIDGET_SANDBOX_DYNAMIC_CODE_BLOCKED`; source body is not executed          |
+| Clipboard/location/worker/network attempt | `WIDGET_SANDBOX_CAPABILITY_DENIED`; host spy remains untouched              |
+| Call 121 inside the fixed window          | `WIDGET_SANDBOX_QUOTA_EXCEEDED`; audit `quota-exceeded`                     |
+| `postMessage` with cloneable data         | Deliver only to the widget-local message target; audit without data         |
+| Cross-plugin IndexedDB/cache enumeration  | Filter the foreign namespace and strip the internal prefix from owned names |
+| Cache network loader                      | Reject `add` / `addAll`; do not call the host Cache method                  |
+| Host action after widget disposal         | Return `false`; do not invoke the host callback                             |
+| Retained browser facade after disposal    | Reject with disposed-policy evidence                                        |
 
 ### 5. Good / Base / Bad Cases
 
@@ -386,10 +1231,8 @@ runWidgetHostAction(
 #### Wrong
 
 ```ts
-const executor = new Function("require", "module", "window", code);
-const module = moduleName.startsWith("@talex-touch/")
-  ? preloadedModules[moduleName]
-  : undefined;
+const executor = new Function('require', 'module', 'window', code)
+const module = moduleName.startsWith('@talex-touch/') ? preloadedModules[moduleName] : undefined
 ```
 
 Free identifiers and generic scoped packages can recover host capabilities outside the declared widget contract.
@@ -397,14 +1240,12 @@ Free identifiers and generic scoped packages can recover host capabilities outsi
 #### Correct
 
 ```ts
-assertWidgetDynamicSource(widgetId, code);
+assertWidgetDynamicSource(widgetId, code)
 const scope = new Proxy(scopedGlobals, {
   has: () => true,
   get: (target, key) => Reflect.get(target, key),
-});
-const module = isAllowedWidgetModule(moduleName)
-  ? resolveAllowlistedWidgetModule(moduleName)
-  : undefined;
+})
+const module = isAllowedWidgetModule(moduleName) ? resolveAllowlistedWidgetModule(moduleName) : undefined
 ```
 
 The factory sees only explicit globals and modules; privileged behavior remains behind quota-governed typed host actions.
@@ -436,9 +1277,9 @@ The factory sees only explicit globals and modules; privileged behavior remains 
 
 ```ts
 interface IFeatureInteraction {
-  type: "webcontent" | "widget";
-  path?: string;
-  rendererFeatureId?: string;
+  type: 'webcontent' | 'widget'
+  path?: string
+  rendererFeatureId?: string
 }
 ```
 
@@ -483,11 +1324,11 @@ interface IFeatureInteraction {
 
 ```ts
 features.addFeature({
-  id: "dynamic-command",
-  interaction: { type: "widget", path: "ask-panel" },
-});
+  id: 'dynamic-command',
+  interaction: { type: 'widget', path: 'ask-panel' },
+})
 
-makeWidgetId(pluginName, "dynamic-command");
+makeWidgetId(pluginName, 'dynamic-command')
 ```
 
 The packaged build has no precompiled `dynamic-command` widget entry.
@@ -496,11 +1337,11 @@ The packaged build has no precompiled `dynamic-command` widget entry.
 
 ```ts
 features.addFeature({
-  id: "dynamic-command",
-  interaction: { type: "widget", rendererFeatureId: "intelligence-ask" },
-});
+  id: 'dynamic-command',
+  interaction: { type: 'widget', rendererFeatureId: 'intelligence-ask' },
+})
 
-makeWidgetId(pluginName, "intelligence-ask");
+makeWidgetId(pluginName, 'intelligence-ask')
 ```
 
 ## Scenario: Declared Widget Host Navigation
@@ -539,14 +1380,14 @@ executeAction(actionId: string, targetItem: TuffItem): Promise<void>;
 
 ### 4. Validation & Error Matrix
 
-| Widget event | Current item declaration | Required result |
-| --- | --- | --- |
-| Matching action id | `type: "navigate"`, non-empty `payload.path` | Hide CoreBox and navigate; no plugin execute transport |
-| Matching action id | `type: "execute"` | Preserve plugin item execution |
-| Unknown action id | Missing | Preserve plugin item execution so existing widget commands keep working |
-| Spoofed event payload path | Declared navigate action has a different path | Ignore event path; use declared action payload |
-| Valid plugin tab deep link | `?tab=Permissions` | Select the exact declared Permissions tab |
-| Missing or invalid plugin tab | None / unsupported value | Select `Overview` |
+| Widget event                  | Current item declaration                      | Required result                                                         |
+| ----------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
+| Matching action id            | `type: "navigate"`, non-empty `payload.path`  | Hide CoreBox and navigate; no plugin execute transport                  |
+| Matching action id            | `type: "execute"`                             | Preserve plugin item execution                                          |
+| Unknown action id             | Missing                                       | Preserve plugin item execution so existing widget commands keep working |
+| Spoofed event payload path    | Declared navigate action has a different path | Ignore event path; use declared action payload                          |
+| Valid plugin tab deep link    | `?tab=Permissions`                            | Select the exact declared Permissions tab                               |
+| Missing or invalid plugin tab | None / unsupported value                      | Select `Overview`                                                       |
 
 ### 5. Good / Base / Bad Cases
 
@@ -567,8 +1408,8 @@ executeAction(actionId: string, targetItem: TuffItem): Promise<void>;
 #### Wrong
 
 ```ts
-if (payload.actionId === "open-settings") {
-  router.push(String(payload.payload?.path));
+if (payload.actionId === 'open-settings') {
+  router.push(String(payload.payload?.path))
 }
 ```
 
@@ -577,10 +1418,10 @@ The widget controls the route and bypasses the item's declarative action contrac
 #### Correct
 
 ```ts
-const declared = item.actions?.find((action) => action.id === payload.actionId);
-if (declared?.type === "navigate") {
-  await actionPanel.executeAction(payload.actionId, item);
-  return;
+const declared = item.actions?.find(action => action.id === payload.actionId)
+if (declared?.type === 'navigate') {
+  await actionPanel.executeAction(payload.actionId, item)
+  return
 }
 ```
 
@@ -597,17 +1438,17 @@ The host validates intent against the current item and reuses the established na
 
 ```ts
 interface NormalizedPluginIntelligenceError {
-  code: string;
-  message: string;
-  reason: string;
-  recovery: string;
+  code: string
+  message: string
+  reason: string
+  recovery: string
 }
 
 interface IntelligenceWidgetFailurePayload {
-  errorCode: string;
-  errorMessage: string;
-  errorReason: string;
-  errorRecovery: string;
+  errorCode: string
+  errorMessage: string
+  errorReason: string
+  errorRecovery: string
 }
 ```
 
@@ -624,13 +1465,13 @@ interface IntelligenceWidgetFailurePayload {
 
 ### 4. Validation & Error Matrix
 
-| Input | Required result |
-| --- | --- |
+| Input                             | Required result                                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------- |
 | Canonical reason/recovery present | Trim, truncate with existing ellipsis behavior, preserve both fields end to end |
-| One field missing | Render only the populated row |
-| Both fields missing | Render no error-details group or empty labels |
-| Markup-like detail text | Display escaped text; do not create DOM from it |
-| Retry after structured failure | Host payload retains the bounded reason/recovery values |
+| One field missing                 | Render only the populated row                                                   |
+| Both fields missing               | Render no error-details group or empty labels                                   |
+| Markup-like detail text           | Display escaped text; do not create DOM from it                                 |
+| Retry after structured failure    | Host payload retains the bounded reason/recovery values                         |
 
 ### 5. Good / Base / Bad Cases
 
@@ -651,7 +1492,7 @@ interface IntelligenceWidgetFailurePayload {
 #### Wrong
 
 ```ts
-const errorMessage = `${failure.message}: ${failure.recovery}`;
+const errorMessage = `${failure.message}: ${failure.recovery}`
 ```
 
 This destroys structure, duplicates content, and prevents safe conditional presentation.
@@ -664,7 +1505,7 @@ const failureState = {
   errorMessage: failure.message,
   errorReason: truncateText(failure.reason, 240),
   errorRecovery: truncateText(failure.recovery, 240),
-};
+}
 ```
 
 The widget can present bounded guidance without guessing or parsing provider text.
@@ -680,22 +1521,16 @@ The widget can present bounded guidance without guessing or parsing provider tex
 
 ```ts
 interface CancelIntelligenceWidgetAction {
-  actionId: "cancel-request";
+  actionId: 'cancel-request'
   payload: {
-    requestId: string;
-    prompt: string;
-    answer: string;
-    status: "ocr-pending" | "chat-pending";
-  };
+    requestId: string
+    prompt: string
+    answer: string
+    status: 'ocr-pending' | 'chat-pending'
+  }
 }
 
-type IntelligenceWidgetStatus =
-  | "idle"
-  | "ocr-pending"
-  | "chat-pending"
-  | "ready"
-  | "cancelled"
-  | "error";
+type IntelligenceWidgetStatus = 'idle' | 'ocr-pending' | 'chat-pending' | 'ready' | 'cancelled' | 'error'
 ```
 
 ### 3. Contracts
@@ -710,13 +1545,13 @@ type IntelligenceWidgetStatus =
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Matching active request with stream controller | Cancel once; push `cancelled`; preserve partial answer |
-| Matching request before controller/invoke completion | Clear authority; ignore eventual completion |
-| Missing request id | Return ignored; no controller or widget mutation |
-| Stale request id while newer request is active | Return ignored; newer pending state remains authoritative |
-| Late delta/end/error after stop | Ignore; cancelled widget remains unchanged |
+| Condition                                            | Required result                                           |
+| ---------------------------------------------------- | --------------------------------------------------------- |
+| Matching active request with stream controller       | Cancel once; push `cancelled`; preserve partial answer    |
+| Matching request before controller/invoke completion | Clear authority; ignore eventual completion               |
+| Missing request id                                   | Return ignored; no controller or widget mutation          |
+| Stale request id while newer request is active       | Return ignored; newer pending state remains authoritative |
+| Late delta/end/error after stop                      | Ignore; cancelled widget remains unchanged                |
 
 ### 5. Good / Base / Bad Cases
 
@@ -736,8 +1571,8 @@ type IntelligenceWidgetStatus =
 #### Wrong
 
 ```ts
-if (actionId === "cancel-request") {
-  supersedeAllActiveRequests();
+if (actionId === 'cancel-request') {
+  supersedeAllActiveRequests()
 }
 ```
 
@@ -746,9 +1581,9 @@ One stale widget can cancel unrelated or newer feature work.
 #### Correct
 
 ```ts
-if (payload.requestId !== session.activeRequestId) return ignored;
-supersedeActiveRequest(session);
-await pushWidgetState(featureId, { status: "cancelled", answer: payload.answer });
+if (payload.requestId !== session.activeRequestId) return ignored
+supersedeActiveRequest(session)
+await pushWidgetState(featureId, { status: 'cancelled', answer: payload.answer })
 ```
 
 Cancellation is identity-bound, local to one session, and leaves a stable user-visible terminal state.
@@ -768,13 +1603,8 @@ The plugin facade omits the quota control plane:
 ```ts
 type PluginIntelligenceSdk = Omit<
   IntelligenceSdk,
-  | "getQuota"
-  | "setQuota"
-  | "deleteQuota"
-  | "getAllQuotas"
-  | "checkQuota"
-  | "getCurrentUsage"
->;
+  'getQuota' | 'setQuota' | 'deleteQuota' | 'getAllQuotas' | 'checkQuota' | 'getCurrentUsage'
+>
 ```
 
 Plugin invoke options are rebound at the host boundary:
@@ -782,8 +1612,8 @@ Plugin invoke options are rebound at the host boundary:
 ```ts
 function bindPluginInvokeCaller(
   options: IntelligenceInvokeOptions | undefined,
-  context: Pick<HandlerContext, "plugin">,
-): IntelligenceInvokeOptions | undefined;
+  context: Pick<HandlerContext, 'plugin'>,
+): IntelligenceInvokeOptions | undefined
 ```
 
 ### 3. Contracts
@@ -798,17 +1628,17 @@ function bindPluginInvokeCaller(
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Plugin reads a host-only quota method from facade | `undefined`; method is not discoverable or enumerable |
-| Plugin sends a quota control-plane typed event | `INTELLIGENCE_HOST_ONLY_CAPABILITY` before handler work |
-| Plugin omits `metadata.caller` | Runtime receives `plugin:<plugin id>` |
-| Plugin supplies another caller id | Host overwrites it with `plugin:<plugin id>` |
-| Host sends a quota event | Continue to normal payload validation and quota manager |
-| Host invokes with an explicit caller | Preserve the host caller |
-| Primary provider fails, fallback succeeds | One success audit with fallback identity/usage; result cached |
-| Every provider fails | One failure audit; primary error preserved |
-| Outer-governed fallback succeeds | No inner audit; result may be cached |
+| Condition                                         | Required result                                               |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| Plugin reads a host-only quota method from facade | `undefined`; method is not discoverable or enumerable         |
+| Plugin sends a quota control-plane typed event    | `INTELLIGENCE_HOST_ONLY_CAPABILITY` before handler work       |
+| Plugin omits `metadata.caller`                    | Runtime receives `plugin:<plugin id>`                         |
+| Plugin supplies another caller id                 | Host overwrites it with `plugin:<plugin id>`                  |
+| Host sends a quota event                          | Continue to normal payload validation and quota manager       |
+| Host invokes with an explicit caller              | Preserve the host caller                                      |
+| Primary provider fails, fallback succeeds         | One success audit with fallback identity/usage; result cached |
+| Every provider fails                              | One failure audit; primary error preserved                    |
+| Outer-governed fallback succeeds                  | No inner audit; result may be cached                          |
 
 ### 5. Good / Base / Bad Cases
 
@@ -830,22 +1660,22 @@ function bindPluginInvokeCaller(
 
 ```ts
 registerSafe(intelligenceApiEvents.setQuota, async config => {
-  await intelligenceQuotaManager.setQuota(config);
-});
+  await intelligenceQuotaManager.setQuota(config)
+})
 
-await tuffIntelligence.invoke(capabilityId, payload, payload.options);
+await tuffIntelligence.invoke(capabilityId, payload, payload.options)
 ```
 
 #### Correct
 
 ```ts
 registerSafe(intelligenceApiEvents.setQuota, async (config, context) => {
-  assertHostOwnedIntelligenceControlPlane(context);
-  await intelligenceQuotaManager.setQuota(config);
-});
+  assertHostOwnedIntelligenceControlPlane(context)
+  await intelligenceQuotaManager.setQuota(config)
+})
 
-const options = bindPluginInvokeCaller(payload.options, context);
-await tuffIntelligence.invoke(capabilityId, payload.payload, options);
+const options = bindPluginInvokeCaller(payload.options, context)
+await tuffIntelligence.invoke(capabilityId, payload.payload, options)
 ```
 
 ## Scenario: Autonomous Intelligence Permission
@@ -883,19 +1713,19 @@ assertAutonomousIntelligencePermission(
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Basic-only plugin invokes/streams autonomous capability | `INTELLIGENCE_AGENTS_PERMISSION_DENIED`; runtime untouched |
-| Permission runtime unavailable | `INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE`; runtime untouched |
-| Lifecycle facade streams autonomous capability | Same protected typed handler and `intelligence.agents` gate |
-| Lifecycle stream cancellation | Protocol cancel event carries the same plugin identity |
-| Legacy Agent plugin caller missing/spoofed | Gate first; manager receives canonical plugin caller |
-| Legacy Agent host caller missing | Manager receives `intelligence.agent-executor` |
-| Legacy Agent LLM success | SDK quota/audit sees caller; AgentResult preserves provider usage |
-| Plugin sends a raw low-level Agent session/orchestrator/tool event | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; runtime untouched |
-| Plugin reads/enumerates a low-level Agent runtime method | Missing/`undefined`; high-level `agent.run` remains |
-| Plugin calls any persisted workflow control-plane event | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; storage/runtime untouched |
-| Host performs low-level session or persisted workflow operations | Preserve host behavior |
+| Condition                                                          | Required result                                                   |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Basic-only plugin invokes/streams autonomous capability            | `INTELLIGENCE_AGENTS_PERMISSION_DENIED`; runtime untouched        |
+| Permission runtime unavailable                                     | `INTELLIGENCE_AGENTS_PERMISSION_UNAVAILABLE`; runtime untouched   |
+| Lifecycle facade streams autonomous capability                     | Same protected typed handler and `intelligence.agents` gate       |
+| Lifecycle stream cancellation                                      | Protocol cancel event carries the same plugin identity            |
+| Legacy Agent plugin caller missing/spoofed                         | Gate first; manager receives canonical plugin caller              |
+| Legacy Agent host caller missing                                   | Manager receives `intelligence.agent-executor`                    |
+| Legacy Agent LLM success                                           | SDK quota/audit sees caller; AgentResult preserves provider usage |
+| Plugin sends a raw low-level Agent session/orchestrator/tool event | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; runtime untouched            |
+| Plugin reads/enumerates a low-level Agent runtime method           | Missing/`undefined`; high-level `agent.run` remains               |
+| Plugin calls any persisted workflow control-plane event            | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; storage/runtime untouched    |
+| Host performs low-level session or persisted workflow operations   | Preserve host behavior                                            |
 
 ### 5. Good / Base / Bad Cases
 
@@ -917,18 +1747,18 @@ assertAutonomousIntelligencePermission(
 #### Wrong
 
 ```ts
-registerProtectedSafe(invokeEvent, "Invoke", "intelligence.basic", async data => {
-  return tuffIntelligence.invoke(data.capabilityId, data.payload, data.options);
-});
+registerProtectedSafe(invokeEvent, 'Invoke', 'intelligence.basic', async data => {
+  return tuffIntelligence.invoke(data.capabilityId, data.payload, data.options)
+})
 ```
 
 #### Correct
 
 ```ts
-registerProtectedSafe(invokeEvent, "Invoke", "intelligence.basic", async (data, context) => {
-  await assertAutonomousIntelligencePermission(data.capabilityId, data, context);
-  return tuffIntelligence.invoke(data.capabilityId, data.payload, data.options);
-});
+registerProtectedSafe(invokeEvent, 'Invoke', 'intelligence.basic', async (data, context) => {
+  await assertAutonomousIntelligencePermission(data.capabilityId, data, context)
+  return tuffIntelligence.invoke(data.capabilityId, data.payload, data.options)
+})
 ```
 
 ## Scenario: Plugin Intelligence Admin Surface
@@ -944,14 +1774,14 @@ The plugin facade omits:
 
 ```ts
 type HostIntelligenceAdminMethod =
-  | "testProvider"
-  | "testCapability"
-  | "fetchModels"
-  | "getAuditLogs"
-  | "getTodayStats"
-  | "getMonthStats"
-  | "getUsageStats"
-  | "getLocalEnvironment";
+  | 'testProvider'
+  | 'testCapability'
+  | 'fetchModels'
+  | 'getAuditLogs'
+  | 'getTodayStats'
+  | 'getMonthStats'
+  | 'getUsageStats'
+  | 'getLocalEnvironment'
 ```
 
 Safe plugin discovery remains `getCapabilityStatus`, `getProviderModelOptions`, and `getCapabilityTestMeta`.
@@ -967,14 +1797,14 @@ Safe plugin discovery remains `getCapabilityStatus`, `getProviderModelOptions`, 
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Plugin reads/enumerates admin method | Missing/`undefined` |
+| Condition                                  | Required result                                               |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| Plugin reads/enumerates admin method       | Missing/`undefined`                                           |
 | Plugin sends raw provider test/fetch event | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no provider/network work |
-| Plugin sends raw stats/audit event | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no telemetry query |
-| Plugin requests local environment | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no scan |
-| Host sends malformed admin request | Continue to the existing payload-validation error |
-| Plugin calls safe capability discovery | Preserve current result |
+| Plugin sends raw stats/audit event         | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no telemetry query       |
+| Plugin requests local environment          | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no scan                  |
+| Host sends malformed admin request         | Continue to the existing payload-validation error             |
+| Plugin calls safe capability discovery     | Preserve current result                                       |
 
 ### 5. Good / Base / Bad Cases
 
@@ -995,17 +1825,17 @@ Safe plugin discovery remains `getCapabilityStatus`, `getProviderModelOptions`, 
 
 ```ts
 registerSafe(intelligenceApiEvents.fetchModels, async data => {
-  return fetchProviderModels(data.provider);
-});
+  return fetchProviderModels(data.provider)
+})
 ```
 
 #### Correct
 
 ```ts
 registerSafe(intelligenceApiEvents.fetchModels, async (data, context) => {
-  assertHostOwnedIntelligenceControlPlane(context);
-  return fetchProviderModels(data.provider);
-});
+  assertHostOwnedIntelligenceControlPlane(context)
+  return fetchProviderModels(data.provider)
+})
 ```
 
 ## Scenario: Alternate Plugin Intelligence Caller Attribution
@@ -1018,10 +1848,7 @@ registerSafe(intelligenceApiEvents.fetchModels, async (data, context) => {
 ### 2. Signatures
 
 ```ts
-function bindPluginMetadataCaller<T>(
-  payload: T,
-  context: Pick<HandlerContext, "plugin">,
-): T;
+function bindPluginMetadataCaller<T>(payload: T, context: Pick<HandlerContext, 'plugin'>): T
 ```
 
 For a verified plugin, `metadata.caller` is always `plugin:<manifest plugin id>`.
@@ -1036,14 +1863,14 @@ For a verified plugin, `metadata.caller` is always `plugin:<manifest plugin id>`
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Plugin chat omits caller | Invoke as authenticated plugin caller |
-| Plugin chat spoofs host/other plugin | Replace with authenticated plugin caller |
-| Plugin TTS spoofs caller | Replace before TTS cache/provider access |
-| Same TTS input, different callers | Distinct cache entries/provider responses |
-| Same TTS input, same caller | Caller-local cache hit |
-| Host supplies caller | Preserve exactly |
+| Condition                            | Required result                           |
+| ------------------------------------ | ----------------------------------------- |
+| Plugin chat omits caller             | Invoke as authenticated plugin caller     |
+| Plugin chat spoofs host/other plugin | Replace with authenticated plugin caller  |
+| Plugin TTS spoofs caller             | Replace before TTS cache/provider access  |
+| Same TTS input, different callers    | Distinct cache entries/provider responses |
+| Same TTS input, same caller          | Caller-local cache hit                    |
+| Host supplies caller                 | Preserve exactly                          |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1063,13 +1890,13 @@ For a verified plugin, `metadata.caller` is always `plugin:<manifest plugin id>`
 #### Wrong
 
 ```ts
-return intelligenceTtsService.speak(data);
+return intelligenceTtsService.speak(data)
 ```
 
 #### Correct
 
 ```ts
-return intelligenceTtsService.speak(bindPluginMetadataCaller(data, context));
+return intelligenceTtsService.speak(bindPluginMetadataCaller(data, context))
 ```
 
 ## Scenario: Plugin Local Knowledge Namespace Isolation
@@ -1082,12 +1909,12 @@ return intelligenceTtsService.speak(bindPluginMetadataCaller(data, context));
 ### 2. Signatures
 
 ```ts
-type PluginKnowledgeScope = `plugin:${string}`;
+type PluginKnowledgeScope = `plugin:${string}`
 
 function bindPluginKnowledgeDocument(
   input: IndexDocumentInput,
-  context: Pick<HandlerContext, "plugin">,
-): IndexDocumentInput;
+  context: Pick<HandlerContext, 'plugin'>,
+): IndexDocumentInput
 ```
 
 Document and chunk ids returned to plugins are opaque, deterministic, actor-namespaced identifiers.
@@ -1104,14 +1931,14 @@ Document and chunk ids returned to plugins are opaque, deterministic, actor-name
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Plugin omits/spoofs scope | Force `plugin:<verified id>` |
-| Same plugin repeats explicit/implicit document id | Same opaque id |
-| Different plugin uses same local id/content | Different opaque id |
-| Plugin supplies another namespace's id | Remap into its own namespace |
-| Plugin search supplies scope array/default | Replace with its single actor scope |
-| Host supplies scope/id | Forward unchanged |
+| Condition                                         | Required result                     |
+| ------------------------------------------------- | ----------------------------------- |
+| Plugin omits/spoofs scope                         | Force `plugin:<verified id>`        |
+| Same plugin repeats explicit/implicit document id | Same opaque id                      |
+| Different plugin uses same local id/content       | Different opaque id                 |
+| Plugin supplies another namespace's id            | Remap into its own namespace        |
+| Plugin search supplies scope array/default        | Replace with its single actor scope |
+| Host supplies scope/id                            | Forward unchanged                   |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1131,13 +1958,13 @@ Document and chunk ids returned to plugins are opaque, deterministic, actor-name
 #### Wrong
 
 ```ts
-localKnowledgeEngine.search(data);
+localKnowledgeEngine.search(data)
 ```
 
 #### Correct
 
 ```ts
-localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context));
+localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context))
 ```
 
 ## Scenario: Autonomous Intelligence Caller Propagation
@@ -1159,13 +1986,13 @@ localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context));
 
 ### 3. Validation Matrix
 
-| Path | Plugin result | Host result |
-| --- | --- | --- |
-| `agentSessionStart(autoRunGraph)` | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no start/graph | Supplied metadata preserved |
-| Runtime capability node | Governed high-level/internal caller retained | Internal fallback if caller absent |
-| `workflowRun` | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no service/runtime | Payload identity preserved |
-| Workflow model/context | Bound caller wins over step spoof | Host workflow fallback preserved |
-| Workflow DeepAgent prompt/agent | Caller in config/adapter/state | Host metadata preserved |
+| Path                              | Plugin result                                           | Host result                        |
+| --------------------------------- | ------------------------------------------------------- | ---------------------------------- |
+| `agentSessionStart(autoRunGraph)` | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no start/graph     | Supplied metadata preserved        |
+| Runtime capability node           | Governed high-level/internal caller retained            | Internal fallback if caller absent |
+| `workflowRun`                     | `INTELLIGENCE_HOST_ONLY_CAPABILITY`; no service/runtime | Payload identity preserved         |
+| Workflow model/context            | Bound caller wins over step spoof                       | Host workflow fallback preserved   |
+| Workflow DeepAgent prompt/agent   | Caller in config/adapter/state                          | Host metadata preserved            |
 
 ### 4. Tests Required
 
@@ -1178,7 +2005,9 @@ localKnowledgeEngine.search(bindPluginKnowledgeScope(data, context));
 #### Wrong
 
 ```ts
-metadata: { caller: "intelligence.orchestrator", sessionId, turnId }
+metadata: {
+  caller: ('intelligence.orchestrator', sessionId, turnId)
+}
 ```
 
 #### Correct
@@ -1210,16 +2039,16 @@ metadata: { ...requestMetadata, caller: resolvedCaller, sessionId, turnId }
 
 ### 3. Validation Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Self + plugin + quota allowed | Provider runs; one safe audit |
-| Self + plugin + quota denied | No config/adapter/provider work |
-| Self + plugin + provider failure | Canonical failure audit; step fails |
-| Outer generic Agent/Workflow | No inner quota/audit duplication |
-| Outer generic stable model step | One outer charge/audit; provider/fallback behavior unchanged |
-| Spoofed outer-governance metadata | Ordinary SDK quota/audit still applies |
-| Direct stable model step | Existing governed SDK invoke |
-| Host direct workflow | Existing host semantics |
+| Condition                         | Required result                                              |
+| --------------------------------- | ------------------------------------------------------------ |
+| Self + plugin + quota allowed     | Provider runs; one safe audit                                |
+| Self + plugin + quota denied      | No config/adapter/provider work                              |
+| Self + plugin + provider failure  | Canonical failure audit; step fails                          |
+| Outer generic Agent/Workflow      | No inner quota/audit duplication                             |
+| Outer generic stable model step   | One outer charge/audit; provider/fallback behavior unchanged |
+| Spoofed outer-governance metadata | Ordinary SDK quota/audit still applies                       |
+| Direct stable model step          | Existing governed SDK invoke                                 |
+| Host direct workflow              | Existing host semantics                                      |
 
 ### 4. Tests Required
 
@@ -1233,15 +2062,15 @@ metadata: { ...requestMetadata, caller: resolvedCaller, sessionId, turnId }
 #### Wrong
 
 ```ts
-const raw = await adapter.run(state); // direct provider call for a bound non-host caller, no quota/audit
+const raw = await adapter.run(state) // direct provider call for a bound non-host caller, no quota/audit
 ```
 
 #### Correct
 
 ```ts
-await checkQuota(caller);
-const raw = await adapter.run(state);
-await recordRuntimeAudit(toSafeAudit(raw));
+await checkQuota(caller)
+const raw = await adapter.run(state)
+await recordRuntimeAudit(toSafeAudit(raw))
 ```
 
 ## Scenario: Plugin Context Observability Ownership
@@ -1270,14 +2099,14 @@ await recordRuntimeAudit(toSafeAudit(raw));
 #### Wrong
 
 ```ts
-return contextHygieneService.listPackageLogs(payload); // payload may omit sessionId
+return contextHygieneService.listPackageLogs(payload) // payload may omit sessionId
 ```
 
 #### Correct
 
 ```ts
-assertHostOwnedIntelligenceControlPlane(context);
-return contextHygieneService.listPackageLogs(payload);
+assertHostOwnedIntelligenceControlPlane(context)
+return contextHygieneService.listPackageLogs(payload)
 ```
 
 ## Scenario: Plugin Selected-Text Capture Boundary
@@ -1318,7 +2147,7 @@ await intelligence.text.chat({ messages: [{ role: 'user', content: text }] })
 const selection = await system.captureSelection()
 if (!selection.text) return
 await intelligence.text.chat({
-  messages: [{ role: 'user', content: selection.text }]
+  messages: [{ role: 'user', content: selection.text }],
 })
 ```
 
@@ -1348,18 +2177,18 @@ await intelligence.text.chat({
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Unknown runtime protocol/version or missing worker artifact | Fail closed; no fallback to an external CLI |
-| Tool, Skill, MCP, path, network, profile, or budget outside policy | Persist `pending_approval` with an explicit reason |
-| Import candidate missing/invalid, outside canonical source root, or changed after preview | Reject the whole selected transaction |
-| Secret plaintext without explicit confirmation or unavailable secure store | Reject and rollback; ordinary DB/blob/renderer data stays redacted |
-| Rule glob is invalid, absolute, or escapes with `..` | Mark candidate blocking; do not import or inject it |
-| Tool side effect succeeds but durable result persistence fails | Fail the run and retain started-call replay protection; never report completed |
-| External credential cannot be exported safely | Store descriptor as `reauth-required`; do not activate it |
-| Workspace Skill/MCP requested from another cwd | Reject before content read or MCP connection |
-| App restart finds queued/running automation with changed policy version | Cancel or return to approval; never inherit stale authorization |
-| Pi initialization fails after worker start | Stop scheduler and Utility Process before propagating the error |
+| Condition                                                                                 | Required result                                                                |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Unknown runtime protocol/version or missing worker artifact                               | Fail closed; no fallback to an external CLI                                    |
+| Tool, Skill, MCP, path, network, profile, or budget outside policy                        | Persist `pending_approval` with an explicit reason                             |
+| Import candidate missing/invalid, outside canonical source root, or changed after preview | Reject the whole selected transaction                                          |
+| Secret plaintext without explicit confirmation or unavailable secure store                | Reject and rollback; ordinary DB/blob/renderer data stays redacted             |
+| Rule glob is invalid, absolute, or escapes with `..`                                      | Mark candidate blocking; do not import or inject it                            |
+| Tool side effect succeeds but durable result persistence fails                            | Fail the run and retain started-call replay protection; never report completed |
+| External credential cannot be exported safely                                             | Store descriptor as `reauth-required`; do not activate it                      |
+| Workspace Skill/MCP requested from another cwd                                            | Reject before content read or MCP connection                                   |
+| App restart finds queued/running automation with changed policy version                   | Cancel or return to approval; never inherit stale authorization                |
+| Pi initialization fails after worker start                                                | Stop scheduler and Utility Process before propagating the error                |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1380,15 +2209,15 @@ await intelligence.text.chat({
 #### Wrong
 
 ```ts
-spawn(importedProvider.command, importedProvider.args);
-await mcpClient.connect(candidate.url, candidate.headers);
+spawn(importedProvider.command, importedProvider.args)
+await mcpClient.connect(candidate.url, candidate.headers)
 ```
 
 #### Correct
 
 ```ts
-const run = await aiCliOrchestrator.execute(request);
-const imported = await aiCliImportService.apply(confirmedSelection);
+const run = await aiCliOrchestrator.execute(request)
+const imported = await aiCliImportService.apply(confirmedSelection)
 // Pi decides; Electron main authorizes; Tool/MCP registries perform side effects.
 ```
 
@@ -1424,17 +2253,17 @@ validatePluginPackagePolicy({
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Missing/invalid id, name, version or sdkapi | Stable `PLUGIN_PACKAGE_MANIFEST_*` violation |
-| SDK requires category but category is absent | `PLUGIN_PACKAGE_MANIFEST_CATEGORY_REQUIRED` |
-| Unknown/malformed/duplicate permission | Permission violation before build/upload |
-| Packaged dev source/address remains enabled | `PLUGIN_PACKAGE_DEV_MODE_ENABLED` |
-| Traversal, absolute/backslash path or duplicate/case collision | Entry path/collision violation before extraction |
-| Link/device/FIFO/unknown entry | `PLUGIN_PACKAGE_ENTRY_TYPE_DENIED` |
-| Missing/duplicate root Manifest or mismatched `_files` | Manifest/file-map violation |
-| Entry/file/expanded/archive limit exceeded | Stable size/count violation |
-| Nexus target id/name/version differs from Manifest | Expected identity/version mismatch; no package/version write |
+| Condition                                                      | Required result                                              |
+| -------------------------------------------------------------- | ------------------------------------------------------------ |
+| Missing/invalid id, name, version or sdkapi                    | Stable `PLUGIN_PACKAGE_MANIFEST_*` violation                 |
+| SDK requires category but category is absent                   | `PLUGIN_PACKAGE_MANIFEST_CATEGORY_REQUIRED`                  |
+| Unknown/malformed/duplicate permission                         | Permission violation before build/upload                     |
+| Packaged dev source/address remains enabled                    | `PLUGIN_PACKAGE_DEV_MODE_ENABLED`                            |
+| Traversal, absolute/backslash path or duplicate/case collision | Entry path/collision violation before extraction             |
+| Link/device/FIFO/unknown entry                                 | `PLUGIN_PACKAGE_ENTRY_TYPE_DENIED`                           |
+| Missing/duplicate root Manifest or mismatched `_files`         | Manifest/file-map violation                                  |
+| Entry/file/expanded/archive limit exceeded                     | Stable size/count violation                                  |
+| Nexus target id/name/version differs from Manifest             | Expected identity/version mismatch; no package/version write |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1454,8 +2283,7 @@ validatePluginPackagePolicy({
 #### Wrong
 
 ```ts
-if (file.name.endsWith('.tpex') && file.size < 30 * 1024 * 1024)
-  await upload(file)
+if (file.name.endsWith('.tpex') && file.size < 30 * 1024 * 1024) await upload(file)
 ```
 
 #### Correct
@@ -1503,15 +2331,15 @@ The report carries scanner/rule-set versions, artifact digest, bounded findings,
 
 ### 4. Rule / Decision Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Private key or high-confidence secret material | Critical finding; `blocked`; non-waivable |
-| Raw Electron, raw transport, `ipcRenderer`, process binding or non-webpack require escape | Critical finding; `blocked`; non-waivable |
-| Dynamic execution marker, Node VM or native executable/addon | High finding; blocked unless an active server-owned waiver permits the rule |
-| Capability reference lacks its declared permission | High `PLUGIN_SCAN_PERMISSION_MISMATCH` |
-| Per-file/total/file-count limit or timeout exceeded | `blocked` finding or `unavailable`; never pass |
-| Scanner exception, invalid digest or missing policy prerequisite | `unavailable`; no package/version write |
-| Only valid waived findings remain | `passed`, with original findings and waiver metadata retained |
+| Condition                                                                                 | Required result                                                             |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Private key or high-confidence secret material                                            | Critical finding; `blocked`; non-waivable                                   |
+| Raw Electron, raw transport, `ipcRenderer`, process binding or non-webpack require escape | Critical finding; `blocked`; non-waivable                                   |
+| Dynamic execution marker, Node VM or native executable/addon                              | High finding; blocked unless an active server-owned waiver permits the rule |
+| Capability reference lacks its declared permission                                        | High `PLUGIN_SCAN_PERMISSION_MISMATCH`                                      |
+| Per-file/total/file-count limit or timeout exceeded                                       | `blocked` finding or `unavailable`; never pass                              |
+| Scanner exception, invalid digest or missing policy prerequisite                          | `unavailable`; no package/version write                                     |
+| Only valid waived findings remain                                                         | `passed`, with original findings and waiver metadata retained               |
 
 ### 5. Tests Required
 
@@ -1575,15 +2403,15 @@ Required secret inputs are `TUFF_PLUGIN_SIGNING_PRIVATE_KEY_PEM` or `TUFF_PLUGIN
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Missing/private key invalid or algorithm is not Ed25519 | CLI/Nexus fail before publish; no unsigned fallback |
-| Publisher key unknown, wrong owner, not yet valid, expired, or revoked | Stable signing/trust code; no scan, attestation, listing, or install |
-| Artifact, size, identity, channel, policy version, file map, payload digest, or signature differs | Reject at publisher verification and again at review |
-| Scan blocked/unavailable or review not approved | No Nexus attestation |
-| Attestation root unknown/invalid/expired/revoked | CoreApp `PLUGIN_TRUST_KEY_*` failure before extraction |
-| Wrong issuer/audience or algorithm downgrade | Specific issuer/audience/algorithm trust code, not generic success/fallback |
-| Publisher key revoked after attestation | Nexus withdraws immediately; CoreApp rejects new install |
+| Condition                                                                                         | Required result                                                             |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Missing/private key invalid or algorithm is not Ed25519                                           | CLI/Nexus fail before publish; no unsigned fallback                         |
+| Publisher key unknown, wrong owner, not yet valid, expired, or revoked                            | Stable signing/trust code; no scan, attestation, listing, or install        |
+| Artifact, size, identity, channel, policy version, file map, payload digest, or signature differs | Reject at publisher verification and again at review                        |
+| Scan blocked/unavailable or review not approved                                                   | No Nexus attestation                                                        |
+| Attestation root unknown/invalid/expired/revoked                                                  | CoreApp `PLUGIN_TRUST_KEY_*` failure before extraction                      |
+| Wrong issuer/audience or algorithm downgrade                                                      | Specific issuer/audience/algorithm trust code, not generic success/fallback |
+| Publisher key revoked after attestation                                                           | Nexus withdraws immediately; CoreApp rejects new install                    |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1603,8 +2431,7 @@ Required secret inputs are `TUFF_PLUGIN_SIGNING_PRIVATE_KEY_PEM` or `TUFF_PLUGIN
 #### Wrong
 
 ```ts
-if (sha256(download) === version.signature)
-  await install(download)
+if (sha256(download) === version.signature) await install(download)
 ```
 
 #### Correct
@@ -1646,14 +2473,14 @@ The ordered stable reasons use the `PLUGIN_ELIGIBILITY_*` namespace. Human text,
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Plugin/version not approved | Publicly ineligible; owner/admin receives safe reason code |
-| Policy missing/failed, scan blocked/unavailable, publisher unverified, attestation missing, admission pending/blocked | Hidden from every public Store surface and download |
-| Artifact missing/quarantined or key/version revoked | Immediate withdrawal before object retrieval |
-| Eligible old release plus newer pending/rejected release | Keep the old release as public latest |
-| `BETA` on public audience or any `SNAPSHOT` public request | `PLUGIN_ELIGIBILITY_CHANNEL_PRIVATE` |
-| No eligible version remains | Omit plugin from list/search/detail; download returns safe unavailable/not-found response |
+| Condition                                                                                                             | Required result                                                                           |
+| --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Plugin/version not approved                                                                                           | Publicly ineligible; owner/admin receives safe reason code                                |
+| Policy missing/failed, scan blocked/unavailable, publisher unverified, attestation missing, admission pending/blocked | Hidden from every public Store surface and download                                       |
+| Artifact missing/quarantined or key/version revoked                                                                   | Immediate withdrawal before object retrieval                                              |
+| Eligible old release plus newer pending/rejected release                                                              | Keep the old release as public latest                                                     |
+| `BETA` on public audience or any `SNAPSHOT` public request                                                            | `PLUGIN_ELIGIBILITY_CHANNEL_PRIVATE`                                                      |
+| No eligible version remains                                                                                           | Omit plugin from list/search/detail; download returns safe unavailable/not-found response |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1673,8 +2500,7 @@ The ordered stable reasons use the `PLUGIN_ELIGIBILITY_*` namespace. Human text,
 #### Wrong
 
 ```ts
-if (plugin.status === 'approved' && version.status === 'approved')
-  return download(version.packageKey)
+if (plugin.status === 'approved' && version.status === 'approved') return download(version.packageKey)
 ```
 
 #### Correct
@@ -1731,16 +2557,16 @@ interface PluginReleaseTarget {
 
 ### 4. Validation & Error Matrix
 
-| Condition | Required result |
-| --- | --- |
-| Unknown target, invalid repeat, dirty scoped source without opt-in | Reject before prerequisites or target build |
-| Prerequisite or required target gate fails | Stop in deterministic order; emit failed record with bounded sanitized reason |
-| Stale/nested `.tpex`, `dist`, or `node_modules` exists in source | Exclude from staging; never consume as input |
-| Manifest/package identity or version differs | Reject the target before evidence can pass |
-| `_files` mismatch, untracked archive entry, policy failure, or scan failure | Reject the final artifact |
-| Bundled projection missing, extra, or changed content | Reject with bounded relative-path differences |
-| Repeated normalized inventory digest differs | `normalizedInventory: failed`; overall audit fails |
-| Signing key absent without explicit ephemeral mode | Reject; do not fabricate a signature state |
+| Condition                                                                   | Required result                                                               |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Unknown target, invalid repeat, dirty scoped source without opt-in          | Reject before prerequisites or target build                                   |
+| Prerequisite or required target gate fails                                  | Stop in deterministic order; emit failed record with bounded sanitized reason |
+| Stale/nested `.tpex`, `dist`, or `node_modules` exists in source            | Exclude from staging; never consume as input                                  |
+| Manifest/package identity or version differs                                | Reject the target before evidence can pass                                    |
+| `_files` mismatch, untracked archive entry, policy failure, or scan failure | Reject the final artifact                                                     |
+| Bundled projection missing, extra, or changed content                       | Reject with bounded relative-path differences                                 |
+| Repeated normalized inventory digest differs                                | `normalizedInventory: failed`; overall audit fails                            |
+| Signing key absent without explicit ephemeral mode                          | Reject; do not fabricate a signature state                                    |
 
 ### 5. Good / Base / Bad Cases
 
@@ -1763,8 +2589,7 @@ interface PluginReleaseTarget {
 
 ```ts
 const artifact = findExistingTpex(pluginRoot)
-if (bundledManifest.version === sourceManifest.version)
-  markProjectionFresh(artifact)
+if (bundledManifest.version === sourceManifest.version) markProjectionFresh(artifact)
 ```
 
 #### Correct
@@ -1775,4 +2600,808 @@ const artifact = await buildCanonicalTarget(staging, sourceRevision)
 const inventory = readVerifiedArtifactInventory(artifact)
 assertProjectionInventory(target.bundledProjection, inventory)
 writeAuditRecord({ sourceRevision, artifactSha256: sha256(artifact), inventory })
+```
+
+## Scenario: Owner-Bound Fixed Window Presets
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated `touch-window-presets` Prelude needs Windows window counts, two fixed layouts, or bulk topmost cleanup.
+- This boundary spans the child facade, exact capability DTOs, main-owned selection, fixed PowerShell/Win32 execution, process ownership, and activation teardown.
+
+### 2. Signatures
+
+```ts
+type WindowPresetRequest =
+  | { operation: 'status' }
+  | {
+      operation: 'run-action'
+      actionId: 'preset-two-column' | 'preset-dev-split' | 'preset-clear-topmost'
+    }
+
+type WindowPresetResult =
+  | { operation: 'status'; status: 'available'; windowCount: number }
+  | { operation: 'status'; status: 'blocked' | 'failed'; reason: string }
+  | {
+      operation: 'run-action'
+      actionId: WindowPresetRequest['actionId']
+      status: 'completed'
+      affectedWindows: number
+    }
+  | {
+      operation: 'run-action'
+      actionId: WindowPresetRequest['actionId']
+      status: 'blocked' | 'failed'
+      reason: string
+    }
+```
+
+The fixed capability ID is `system.window-presets`. The child projection is
+`plugin.windowPresets.status()` plus `plugin.windowPresets.runAction(actionId)`.
+
+### 3. Contracts
+
+- Project the facade only when the exact capability is declared and the immutable manifest name is `touch-window-presets`. Do not project `system.invoke` or another plugin's system IDs.
+- Child input contains only `operation` and, for execution, one fixed `actionId`. It cannot carry scripts, PowerShell, coordinates, handles, PIDs, commands, arguments, environment, cwd, executable, or platform.
+- Main enumerates at most 128 visible windows and returns only a count. Names, titles, PIDs, handles, native paths, scripts, stderr, and errors never cross to the child.
+- Main selects the first two ordered windows or the terminal/browser development pair. Handles originate only from the bounded host enumeration and match canonical positive decimal strings before entering fixed script templates.
+- The branded executor uses only `<drive>:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`, `shell: false`, fixed arguments, fixed cwd, two environment keys, hidden windows, piped stdout, and ignored stdin/stderr. Reject UNC roots and redirected non-Windows directories.
+- Require current plugin-host authority, activation identity, host generation, manifest declaration, and current `system.shell` on every call and before/after each process boundary.
+- Bound stdout to 256 KiB with stateful UTF-8 decoding; reject more than 128 windows, duplicate handles, oversized names/titles, extra fields, malformed JSON, and mismatched action summaries.
+- Caller abort, timeout, permission revoke, disable, crash, and generation rotation terminate each owned process at most once and await the real `exit` event. A kill request alone is not a cleanup barrier.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                | Required result                                       |
+| -------------------------------------------------------- | ----------------------------------------------------- |
+| Unknown action or any child authority field              | Invalid request before host work                      |
+| Non-Windows platform                                     | Stable `platform-unsupported`; no spawn               |
+| Permission missing/revoked/unavailable                   | Stable permission failure; no new process             |
+| Fewer than two layout windows or no cleanup windows      | `insufficient-windows`; no action process             |
+| Malformed/oversized/extra-field enumeration              | `status-failed` or `execution-failed`; no host detail |
+| Executor is copied, proxied, or not fixed-factory issued | Reject capability construction                        |
+| Cancel/revoke/close after process acquisition            | Kill once and await real exit                         |
+| Old activation or host generation calls/replies          | Reject/ignore; no window mutation                     |
+
+### 5. Good / Base / Bad Cases
+
+- Good: `preset-dev-split` enumerates in main, selects one terminal and one browser, executes one fixed layout script, and returns only `{ status: 'completed', affectedWindows: 2 }`.
+- Base: a non-Windows activation receives `platform-unsupported` without permission or process work.
+- Bad: accept a child window handle, coordinate, script, `powershell.exe` argument, inherited environment, or generic `system.runAction()` fallback.
+
+### 6. Tests Required
+
+- DTO tests reject scripts, coordinates, handles/window IDs, command/args/env/cwd/platform, proxies, accessors, unknown IDs, and cross-variant result fields.
+- Host tests cover bounded count, development selection, all three fixed actions, malformed/oversized results, unsupported platform, permission denial/revoke, caller cancel, stale activation/host generation, and structural executor rejection.
+- Process tests separate spawn, stdout, kill request, and true exit; split a multibyte title across chunks and overflow stdout before exit.
+- Child tests prove declaration and plugin-name gating, fixed local allowlist, frozen null-prototype facade, constructor containment, and absence of generic `system`.
+- Real Electron smoke loads the actual Prelude twice with a fake fixed executor; prove deny/grant, status/action, PID/handle/generation rotation, stale old-port denial, and teardown without running a real window or OS action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+execFile('powershell.exe', ['-Command', request.script])
+```
+
+#### Correct
+
+```ts
+const windows = await enumerateOwnedWindows(signal)
+const pair = selectFixedPresetPair(request.actionId, windows)
+const process = fixedExecutor.start({ operation: 'layout-windows', ...pair })
+await process.started()
+await process.wait() // real exit barrier
+```
+
+## Scenario: Owner-Bound Window Manager Tokens
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated `touch-window-manager` Prelude needs to enumerate and act on desktop windows or reopen an application already present in the current host inventory.
+- This boundary spans `system.window-manager`, child facade projection, host-only native inventory, activation-local opaque tokens, fixed Windows/macOS execution, permission revoke, and process teardown.
+
+### 2. Signatures
+
+```ts
+type WindowManagerAction =
+  | 'activate'
+  | 'snap-left'
+  | 'snap-right'
+  | 'topmost-toggle'
+  | 'close'
+  | 'hide'
+  | 'quit'
+  | 'launch'
+
+type WindowManagerRequest =
+  | { operation: 'list' }
+  | { operation: 'act'; action: WindowManagerAction; token: `wm_${string}` }
+
+type WindowManagerDisplayItem =
+  | {
+      kind: 'window'
+      token: string
+      name: string
+      title: string
+      isFront: boolean
+      topmost: boolean
+      actions: readonly WindowManagerAction[]
+    }
+  | {
+      kind: 'app'
+      token: string
+      name: string
+      running: true
+      actions: readonly ['launch']
+    }
+```
+
+The child projection is exactly `plugin.windowManager.list()` and
+`plugin.windowManager.act(action, token)`. The facade exists only for the immutable
+manifest name `touch-window-manager` with the declared `system.window-manager` ID.
+
+### 3. Contracts
+
+- `list` runs a branded main-owned Windows PowerShell/Win32 or macOS JXA inventory. It validates at most 128 windows and 64 running applications before returning redacted display fields plus random 192-bit tokens. HWND, PID, start identity, bundle ID, application path, executable, script, stderr, and native errors remain in main.
+- Every successful list starts a new bounded epoch and retires all prior tokens. Tokens expire after 10 seconds, are single-use, never reissued from a bounded no-reuse history, and are owned by one activation plus its current host generation.
+- `act` accepts exactly `{ operation, action, token }`. Unknown, expired, replayed, previous-epoch, cross-plugin, cross-generation, and cross-host tokens fail before mutation.
+- Before acting, main reruns the bounded inventory and matches process/window identity using the host-only PID, native ID, process start identity, and canonical application identity. A reused handle or replaced process fails as `native-replaced`. The fixed mutation process must repeat the PID/start plus HWND or Bundle identity check immediately before mutation; a successful prior inventory process is not an atomic authorization for a later action process.
+- Windows mutation scripts contain only fixed host-selected operations and validated numeric native IDs. Native process names and titles never enter a mutation script. macOS JXA uses fixed `run(argv)` programs and validated PIDs; no child or native display string enters source text.
+- `launch` never accepts or executes a child/app path or arbitrary app name. It only activates an application that is still present in the current inventory: Windows rechecks PID/start identity and activates that process's current main window; macOS rechecks PID/launch time/Bundle ID in fixed JXA and activates that exact `NSRunningApplication`. Persisted recent-window launch is intentionally unsupported because tokens cannot survive a list epoch or activation.
+- Require authoritative activation, host generation, manifest declaration, and current `system.shell` before and after list, revalidation, process start, and process exit. Cancel, timeout, revoke, disable, crash, and rotation retire tokens, terminate each owned process at most once, and await the real exit event.
+- The Prelude awaits list, action, clear, and push calls. Item payloads contain only `{ action, token }`; plugin storage, permission SDKs, process globals, child process APIs, raw handles, platform scripts, and generic system/window-presets facades are absent.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                  | Required result                                      |
+| -------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Extra request field, raw handle/PID/path/app name/script/args/env/platform | Invalid request before native work                   |
+| Unknown or foreign token                                                   | `token-invalid`; no revalidation or mutation         |
+| Previous list epoch or consumed token                                      | `token-replayed`; no mutation                        |
+| Token exceeds TTL                                                          | `token-expired`; no mutation                         |
+| Native PID/handle/start/app identity changed                               | `native-replaced`; no mutation                       |
+| Action not valid for the token kind/platform                               | `action-unsupported`; no action process              |
+| Malformed, proxied, oversized, duplicate, or over-count inventory          | `list-failed` / `action-failed`, redacted            |
+| Permission denied/revoked/unavailable                                      | Stable capability permission failure; no new process |
+| Cancel/revoke/close after process acquisition                              | Kill once and await the real exit event              |
+| Copied/proxied/non-factory service                                         | Reject capability construction                       |
+
+### 5. Good / Base / Bad Cases
+
+- Good: list returns `Terminal / Workspace` with a short-lived token; `snap-left` consumes it, reenumerates the same native identity, runs one fixed Win32 script, and returns only `{ operation: 'act', action: 'snap-left', status: 'completed' }`.
+- Base: a token expires while the result remains visible, so the action reports that the list must be refreshed and performs no host mutation.
+- Bad: persist HWND/PID/path in plugin storage, build AppleScript from an app title, pass `Start-Process` a child/native path, accept arbitrary launch text, reuse a token after another list, or route through `system.invoke` / `system.window-presets`.
+
+### 6. Tests Required
+
+- DTO tests reject extra fields, raw handles, PIDs, paths, names, scripts, unknown actions, proxies/accessors, malformed tokens, and cross-variant results.
+- Token tests cover unknown, cross-plugin, cross-generation, cross-host, previous list epoch, exact TTL expiry, replay, bounded no-reuse history, request-validation preservation, admitted-action failure consumption, and native identity replacement across both the inventory/action boundary and the final mutation boundary.
+- Native tests cover Windows and macOS action subsets, bounded/oversized output, duplicate identities, fixed executable/options, no title interpolation, and path-free launch execution.
+- Lifecycle tests cover permission deny/revoke, caller cancellation, timeout, reentrant/normal close, one kill request, real exit barriers, and token invalidation on teardown.
+- Child tests prove exact declaration/plugin gating, fixed action membership, token validation after intrinsic mutation, frozen null-prototype methods, constructor containment, and absence of generic system/window-presets facades.
+- Real Electron smoke loads the actual Prelude in two generations and uses only an in-memory fake native service. Assert distinct utility PIDs/handles/generations, deny/grant, list/action, restart rotation, stale old-port denial, and cleanup; never execute a real window or OS action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+spawn('powershell.exe', ['-Command', buildScript(request.handle, request.title)])
+spawn(request.appPath ?? request.appName)
+```
+
+#### Correct
+
+```ts
+const owned = consumeActivationToken(request.token)
+const current = await fixedService.list(signal)
+const target = requireSameNativeIdentity(owned.target, current)
+const process = fixedService.startAction(request.action, target)
+await process.started()
+await process.wait()
+assertCurrentActivationAndPermission()
+```
+
+## Scenario: Owner-Bound Workspace Script Tokens
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated `touch-workspace-scripts` Prelude needs to select one local workspace, list its declared package scripts, or run one selected script.
+- This boundary spans `process.workspace-scripts`, main-owned directory selection and confirmation, canonical filesystem identity, activation-local opaque tokens, fixed package-manager execution, and process teardown.
+
+### 2. Signatures
+
+```ts
+type WorkspaceScriptRequest =
+  | { operation: 'select-workspace' }
+  | { operation: 'list-scripts'; workspaceToken: `ws_${string}` }
+  | { operation: 'run-script'; scriptToken: `wss_${string}` }
+
+type WorkspaceScriptDisplay = {
+  token: string
+  name: string
+}
+```
+
+The child projection is exactly `plugin.workspaceScripts.select()`,
+`plugin.workspaceScripts.list(workspaceToken)`, and
+`plugin.workspaceScripts.run(scriptToken)`. It exists only for the immutable manifest name
+`touch-workspace-scripts` with the declared `process.workspace-scripts` ID.
+
+### 3. Contracts
+
+- The child can supply only an operation and one opaque token. It cannot supply a path, cwd, package name, script name, script body, command, executable, argument, environment, shell option, platform, or confirmation result.
+- Main owns the directory dialog. Selection accepts only a canonical, non-symlink directory with a canonical, non-symlink regular `package.json`; root and package `dev`/`ino` identities are retained and revalidated after reads, after confirmation, immediately before spawn, and after the real spawn acknowledgement.
+- Read at most 256 KiB from an `O_NOFOLLOW` package handle, verify handle identity before and after the read, parse JSON once, and accept at most 128 exact script names matching the bounded host grammar. Script bodies remain in main and are represented by SHA-256 digests.
+- Workspace tokens use 192 random bits, expire after five minutes, allow at most 32 list uses, and rotate on selection. Script tokens use 192 random bits, expire after two minutes, rotate on every list, and are consumed once before revalidation or confirmation. Retired tokens are retained in a bounded no-reuse history.
+- Require current plugin-host authority, activation identity, host generation, and `fs.read` on every call. Running additionally requires current `system.shell` before confirmation and before/after process acquisition.
+- Main shows the workspace and script name and warns that package scripts are project-owned arbitrary code. Denial performs no spawn. After confirmation, revalidate root/package identity and the exact script digest before spawning; the branded process adapter receives the retained workspace identity rather than a bare cwd.
+- Execution is fixed to an absolute canonical pnpm executable resolved from the main-owned PATH, `run <host-owned-script-name>`, `shell: false`, ignored stdio, a bounded environment snapshot, and the canonical workspace cwd. Relative/empty PATH entries and package-manager override variables are removed. On Windows, main invokes fixed `%SystemRoot%\\System32\\cmd.exe` with `/d /s /c`, `windowsVerbatimArguments: true`, and one quoted command string containing the absolute canonical `pnpm.cmd` plus the validated host-owned script name; unsafe expansion/metacharacter executable paths fail closed and the child controls none of those fields.
+- At most two owned script processes may run. Caller abort, permission revoke, disable, crash, restart, and host-generation rotation retire tokens, issue at most one kill per process, and await the real child-process `exit` event.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                       | Required result                                             |
+| ------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Extra field or child path/name/command/executable/args/env/shell/platform       | Invalid request before dialog, read, confirmation, or spawn |
+| Unknown, expired, replayed, prior-epoch, or stale-generation token              | Stable blocked/stale result; no privileged work             |
+| Symlink, non-canonical root/package, replaced `dev`/`ino`, or oversized package | Stable invalid/replaced result; no spawn                    |
+| Script body missing or digest changed before execution                          | `script-changed`; no spawn                                  |
+| `fs.read` or `system.shell` denied/revoked/unavailable                          | Stable permission result; no new process                    |
+| Confirmation denied/unavailable                                                 | Stable blocked/failed result; no spawn                      |
+| More than two active owned processes                                            | `process-limit`; no additional spawn                        |
+| Copied/proxied/non-factory host or process adapter                              | Reject capability construction/acquisition                  |
+| Cancel/revoke/close after process acquisition                                   | Kill once and await the real `exit` event                   |
+
+### 5. Trust Boundary
+
+- Main does not trust the Prelude with filesystem selection, absolute paths, script bodies, command parsing, execution fields, permission decisions, confirmation, or process ownership.
+- A selected `package.json` script is intentionally project-owned code. Once the user confirms its displayed workspace and script name, that script may perform arbitrary actions with the privileges of the application process. This capability constrains which selected script can be launched and prevents child-selected shell authority; it is not an OS sandbox for project code.
+- Revalidation narrows accidental or adversarial drift before spawn, but package-manager execution necessarily reads project state from the selected workspace. Strong protection against a concurrently malicious local filesystem owner requires an OS sandbox or immutable workspace snapshot and is outside this utility-process boundary.
+
+### 6. Tests Required
+
+- DTO tests reject paths, names, commands, executable/args/env/cwd/shell/platform, extra fields, proxies/accessors, malformed tokens, and cross-variant results.
+- Filesystem tests cover canonical roots, symlinked/replaced roots and packages, bounded reads/parsing/counts, package replacement, script drift, and digest revalidation after confirmation.
+- Token tests cover unknown, exact TTL expiry, replay, list/selection epoch rotation, bounded workspace uses, no-reuse history, cross-activation, and cross-host generation.
+- Process tests cover absolute main-owned package-manager resolution, relative PATH and environment override removal, fixed POSIX and quoted Windows invocation, safe environment/options, confirmation denial, confirmation/spawn-window replacement, process limits, structural adapter rejection, spawn acknowledgement, cancellation/revoke, idempotent kill, and true exit barriers.
+- Child tests prove exact declaration/plugin gating, frozen null-prototype facade, token-only calls, constructor containment, and absence of filesystem, shell, dialog, permission, storage, or generic process facades.
+- Real Electron smoke loads the official Prelude in two generations using only fake selection, confirmation, and process adapters. It proves deny/grant, select/list/run, token redaction, rotation, stale-port denial, and awaited cleanup without executing a real package script.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+spawn(request.executable, request.args, { cwd: request.workspacePath, shell: true })
+```
+
+#### Correct
+
+```ts
+const owned = consumeScriptToken(request.scriptToken)
+const current = await readCanonicalPackage(owned.workspace)
+assertSameScriptDigest(owned, current)
+await confirmInMain(owned.workspace.displayName, owned.scriptName)
+const revalidated = await readCanonicalPackage(owned.workspace)
+assertSameScriptDigest(owned, revalidated)
+const process = fixedHost.startScript(revalidated.root, owned.scriptName)
+await process.started()
+```
+
+## Scenario: Activation-Bound Fixed Browser Open
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated `touch-browser-open` Prelude needs the main-owned browser inventory or needs to open one validated HTTP(S) URL in the default or a specifically listed browser.
+- Search suggestions remain on the existing bounded, DNS-pinned, no-redirect `http.request` capability and never pass through browser-opening authority.
+
+### 2. Signatures
+
+```ts
+type BrowserOpenRequest = { operation: 'list' } | { operation: 'open'; url: string; browserToken?: `bo_${string}` }
+
+type BrowserOpenDisplay = {
+  token: string
+  id: string
+  name: string
+}
+
+type BrowserOpenListResult = {
+  operation: 'list'
+  status: 'available'
+  defaultAvailable: true
+  browsers: BrowserOpenDisplay[]
+}
+```
+
+The child projection is exactly `plugin.browser.list()` and `plugin.browser.open(url, browserToken?)`. It exists only for the immutable manifest name `touch-browser-open` with the declared `system.browser-open` ID.
+
+### 3. Contracts
+
+- The child can supply only an operation, one URL, and an optional opaque browser token. It cannot supply a browser path, executable, argument, script, command, shell option, platform, environment, cwd, or native identity.
+- Main owns browser discovery and the trusted platform inventory. Specific-browser entries retain native `dev`/`ino` identity and are revalidated immediately before launch.
+- Browser tokens use 192 random bits, expire after 30 seconds, are bound to plugin activation, host generation, and inventory epoch, and are consumed once. Every inventory refresh rotates the epoch; a late response from an older concurrent refresh is rejected, and retired values remain in a bounded no-reuse history.
+- `list` requires current `system.shell`; `open` requires current `system.shell` and `network.internet`. Permission checks occur on every call and again before privileged launch.
+- Accept only bounded `http:` and `https:` URLs without credentials or control characters. Main parses and canonicalizes the URL and passes it unchanged to a fixed launcher.
+- Launchers are fixed and shell-free: macOS `/usr/bin/open`, Windows fixed System32 `rundll32.exe` for default opening or fixed PowerShell for an inventory-owned browser, and POSIX `/usr/bin/xdg-open`. Child input never selects an executable or argument shape.
+- The main capability owns every launched process. Caller abort, permission revoke, disable, crash, restart, and host-generation rotation retire tokens, issue at most one kill, and await the real process `exit` event.
+- Recent-browser storage contains display metadata only. A later use must call `list` and obtain a fresh authority token; no opaque token or native path is persisted.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                            | Required result                            |
+| ------------------------------------------------------------------------------------ | ------------------------------------------ |
+| Extra field or child path/executable/args/script/command/shell/platform/env/cwd      | Invalid request before discovery or launch |
+| Non-HTTP(S), credentialed, oversized, malformed, or control-character URL            | Stable blocked result; no launch           |
+| Unknown, expired, replayed, prior-epoch, stale-activation, or stale-generation token | Stable blocked/stale result; no launch     |
+| Specific browser path or `dev`/`ino` identity changed                                | Stable replaced result; no launch          |
+| Required permission denied, revoked, or unavailable                                  | Stable permission result; no new process   |
+| Copied/proxied/non-factory discovery or process adapter                              | Reject capability construction/acquisition |
+| Cancel/revoke/close after process acquisition                                        | Kill once and await the real `exit` event  |
+
+### 5. Trust Boundary
+
+- Main does not trust the Prelude with browser discovery, installation paths, native identity, URL policy, permission decisions, executable selection, arguments, process ownership, or shell access.
+- `network.internet` authorizes navigation to an arbitrary validated public HTTP(S) URL. This capability does not classify the destination as safe content and does not prevent a chosen browser from applying its own URL handlers, extensions, profile policy, or update behavior.
+- Inventory trust is platform-specific and fixed in main. Linux default opening intentionally does not expose a discoverable specific-browser inventory; expanding that surface requires a new threat review rather than child-supplied executable data.
+
+### 6. Tests Required
+
+- DTO tests reject hostile URL variants, paths, scripts, commands, executables, arguments, shell, platform, environment, cwd, extra fields, accessors, proxies, and malformed tokens.
+- Token tests cover unknown, exact TTL expiry, replay, inventory epoch rotation, no-reuse history, cross-activation, and cross-host generation.
+- Native identity tests cover replacement after listing. Launcher tests assert exact fixed macOS, Windows, and Linux executable/argument contracts with `shell: false`.
+- Permission/process tests cover shell/network denial and revoke, caller cancellation, close, idempotent kill, structural adapter rejection, process acknowledgement, and true exit barriers.
+- Child tests prove exact declaration/plugin gating, frozen null-prototype facade, URL/token-only calls, constructor containment, and absence of filesystem, shell, process, permission, or native inventory facades.
+- Real Electron smoke loads the official Prelude in two generations using only fake inventory, HTTP, and process adapters. It proves deny/grant, default/specific/search flows, token rotation, stale-port denial, and awaited cleanup without real browser, network, or OS activity.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+spawn(request.browserPath, [request.url], { shell: true })
+```
+
+#### Correct
+
+```ts
+const target = request.browserToken ? consumeAndRevalidateInventoryToken(request.browserToken) : DEFAULT_BROWSER
+const url = parseAllowedHttpUrl(request.url)
+await assertCurrentPermissions(['system.shell', 'network.internet'])
+await fixedBrowserHost.open(target, url)
+```
+
+## Scenario: Activation-Bound Browser Data Scan
+
+### 1. Scope / Trigger
+
+- Trigger: the isolated `touch-browser-data` Prelude needs local Chromium bookmarks or a bounded recent-history window.
+- The boundary spans the exact `browser-data.scan` DTO, main-owned platform roots, temporary SQLite copies, activation permissions, child result projection, and cleanup barriers.
+
+### 2. Signatures
+
+```ts
+type BrowserDataScanRequest = {
+  operation: 'scan'
+  sources: readonly ('bookmarks' | 'history')[]
+  browser?: 'chrome' | 'edge' | 'brave' | 'arc'
+}
+
+type BrowserDataRecord = {
+  source: 'bookmarks' | 'history'
+  browser: 'chrome' | 'edge' | 'brave' | 'arc'
+  browserName: string
+  profile: string
+  title: string
+  url: string
+  folder?: string
+  visitedAt?: number
+}
+
+type BrowserDataScanResult =
+  | { operation: 'scan'; status: 'completed'; records: BrowserDataRecord[]; diagnostics: BrowserDataDiagnostic[] }
+  | {
+      operation: 'scan'
+      status: 'blocked'
+      code: 'BROWSER_DATA_SOURCE_DISABLED' | 'BROWSER_DATA_PLATFORM_UNSUPPORTED'
+      records: []
+      diagnostics: []
+    }
+```
+
+The child projection is exactly `plugin.browserData.scan(sources, browser?)`. It exists only for the immutable manifest name `touch-browser-data` with the declared `browser-data.scan` ID.
+
+### 3. Contracts
+
+- Child input contains only a non-empty unique source list and an optional fixed browser id. Paths, SQL, profile names, platform, time windows, limits, temp roots, and permission decisions remain in main.
+- Main derives fixed Chromium roots from `home`, platform config data, and Windows `LOCALAPPDATA`. Canonical roots and profile directories must be non-symlink directories with stable `dev`/`ino` identity inside those main-owned parents.
+- Bookmarks are read through an `O_NOFOLLOW` handle, bounded to 4 MiB, and revalidated before return. Profile enumeration stops after 128 entries without first materializing an unbounded directory, and parsing is iterative and bounded by depth/member/record limits.
+- History never queries the live browser database. The temp root must itself be a canonical non-symlink directory before `mkdtemp`; a pre-positioned symlink is rejected before browser bytes are copied. Main snapshots the regular database plus bounded `-wal`/`-shm` sidecar membership and each file's `dev`/`ino`/`size`/`mtimeNs`/`ctimeNs`, copies them through revalidated `O_NOFOLLOW` handles into one private temp directory, then repeats the complete set snapshot. A new, removed, replaced, resized, or modified member rejects the copy before query. Only then may a worker execute the fixed `chromium-history` query with host-owned lower/upper visit-time parameters against that owned copy.
+- Worker `readOnly` means query-only protocol admission. It does not rely on unsupported libSQL `?mode=ro` URI behavior; the original browser file remains protected because only the temporary copy is opened.
+- Every temp directory is removed after success, failure, cancellation, revoke, and close. Cleanup failure is a stable terminal error and must not be swallowed, including copy-acquisition rollback.
+- `fs.read` is required for every scan. `fs.index` is required only when an enabled history source is admitted; disabling history must not block bookmarks.
+- Activation, host generation, permission, and enabled-source state are rechecked before and after privileged work. Revoke/disable aborts the fixed query and `close()` waits for active cleanup.
+- Return at most 100 records and 768 KiB. Aggregate truncation marks the source diagnostic `partial`. Display text replaces C0/C1 controls with normalized spaces, URLs containing control characters are dropped, and results contain only canonical public HTTP(S) URLs, safe timestamps, and stable diagnostics. No path, SQL, native error, `dev`/`ino`, database name, or temp identity crosses to the child.
+
+### 4. Validation & Error Matrix
+
+| Condition                                                                                       | Required result                                                                |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Extra field, duplicate source, path, SQL, profile, platform, or unknown browser                 | Invalid request before filesystem/query work                                   |
+| C0/C1 controls in URL or display fields                                                         | Drop the URL record or normalize display controls before child projection      |
+| Source disabled by current main registry                                                        | Omit it; if none remain, `BROWSER_DATA_SOURCE_DISABLED`                        |
+| `fs.read` missing/unavailable                                                                   | Stable permission result; no file open                                         |
+| Enabled history with `fs.index` missing/unavailable                                             | Stable permission result; bookmarks remain available when requested separately |
+| Root/profile/file or temp root is symlinked, non-canonical, non-regular, replaced, or oversized | Per-source safe diagnostic; no leaked path/native error                        |
+| Database/WAL/SHM membership or fingerprint changes during the complete copy                     | Reject and remove the copy before query; stable safe diagnostic                |
+| Query-only worker receives execute, transaction, multiple statements, PRAGMA, or ATTACH         | Stable SQL-policy rejection; database remains unchanged                        |
+| SQLite rows exceed the fixed per-profile limit                                                  | `BROWSER_DATA_RESULT_LIMIT`; discard that profile                              |
+| Caller abort, permission revoke, stale generation, or close                                     | Abort query, remove temp copy, await cleanup barrier                           |
+| Temp cleanup fails during success or rollback                                                   | `BROWSER_DATA_TEMP_CLEANUP_FAILED`; never silently leave browser data          |
+| Arc requested on Linux or another unavailable fixed browser                                     | Stable `BROWSER_DATA_PLATFORM_UNSUPPORTED`; no arbitrary fallback              |
+
+### 5. Good / Base / Bad Cases
+
+- Good: Chrome history is copied to one private temp directory, queried with fixed SQL, projected to bounded URL/title/time fields, then removed before the capability settles.
+- Base: history is disabled or lacks `fs.index`; bookmarks still scan through the fixed JSON path with no history query.
+- Bad: pass a child path or SQL string, query the live database, follow a symlinked temp root, query a DB/WAL/SHM set that changed during acquisition, inherit arbitrary browser profile locations, open a SQLite URI selected by the child, or swallow temp cleanup failure.
+
+### 6. Tests Required
+
+- DTO tests reject authority fields, paths, SQL, duplicate/unknown sources, extra keys, accessors, proxies, and malformed results before host work.
+- Filesystem tests cover fixed macOS/Windows/Linux roots, unsupported Arc on Linux, bounded directory enumeration, symlink/non-regular/oversized inputs, canonical temp-root rejection, database/WAL/SHM copy and whole-set drift, host-owned SQL time bounds, row/result limits, partial diagnostics, control-character sanitation, schema-error redaction, and path/native-field exclusion.
+- Permission/lifecycle tests cover disabled history without index permission, read/index denial, revoke during query, stale activation, close waiting, and cleanup after success/failure/cancel.
+- Worker tests prove `readOnly` owners can query the owned copy; reject execute, transaction, multiple-statement, PRAGMA, and ATTACH operations; preserve ordinary plugin SQLite behavior; and retain the 64 MiB quota.
+- Child tests prove exact manifest/declaration gating, frozen null-prototype facade, fixed browser/source membership, constructor containment, and no filesystem/SQLite/process surface.
+- Real Electron smoke loads the actual Prelude in two generations using only temporary fixtures and a fake fixed query. It proves deny/grant, bookmarks/history, action dispatch, revoke cancellation, temp cleanup, generation rotation, stale-port denial, and no real browser/network/OS action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const database = request.path ?? path.join(process.env.HOME!, request.profile, 'History')
+return sqlite.prepare(request.sql).all()
+```
+
+#### Correct
+
+```ts
+const profile = await resolveFixedCanonicalProfile(owner, request.browser)
+const copy = await copyStableBrowserDatabaseSet(profile.history, owner.canonicalTempRoot, signal)
+return await withOwnedTemporaryCopy(copy, () => fixedReadOnlyQuery(copy.databasePath, 'chromium-history', signal))
+```
+
+## Scenario: Owner-Bound Intelligence Stream Finalization
+
+### 1. Scope / Trigger
+
+- Trigger: activation-local `intelligence.stream` runs for the exact isolated
+  `touch-intelligence` activation and persists the terminal assistant turn through its
+  owner-bound retained resource.
+- This boundary covers callback backpressure, iterator teardown, stream finalization,
+  custom widget projection and activation close. It does not change the ephemeral
+  `intelligence.context.invoke` contract above; host-owned non-plugin Context invoke keeps
+  its separate persistent default.
+
+### 2. Signatures
+
+```ts
+type PluginIntelligenceStreamRequest = {
+  operation: 'context.stream'
+  capabilityId: 'text.chat'
+  input: string
+  context: PluginIntelligenceContextRequest['context']
+  onEvent(event: ProjectedContextStreamEvent): Promise<void>
+}
+
+type PluginIntelligenceStreamResource = {
+  id: string
+  kind: 'stream'
+}
+```
+
+### 3. Contracts
+
+- Install `intelligence.stream` only for the exact `touch-intelligence` activation with
+  `intelligence.basic`, one retained `onEvent` callback and one owner-bound stream resource.
+- Main derives actor/caller, prepares persistent Context through the host service and
+  validates every event before invoking the child callback. Callback delivery is serial and
+  awaited for backpressure.
+- Stream finalization is signal-raced. Cancel/revoke/close releases the visible stream,
+  aborts provider iteration, observes late append settlement and converges on one idempotent
+  resource disposer plus `iterator.return()` path.
+- A provider iterator must emit a terminal `end`. Completion without a terminal event emits
+  stable `INTELLIGENCE_STREAM_FAILED` and disposes callbacks/resources.
+- Host-owned direct Context invoke may retain full persistence and await its assistant-turn
+  append. The plugin one-shot capability must never acquire this behavior or add a special
+  registry commit mode.
+- Custom widget items may render only through a same-plugin feature whose renderer target
+  directly owns a widget path. Navigate actions are limited to exact host-owned
+  action-id/path pairs.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Permission revoke, activation rotation or resource dispose | Abort iteration, release callback/resource and reject late events |
+| Callback rejects or exceeds its deadline | Stable callback failure and one disposer path |
+| Stream append is pending when cancellation wins | Visible stream settles cancelled; late append settlement is contained |
+| Provider stream completes without `end` | Emit stable stream failure and dispose retained state |
+| Duplicate cancel/dispose/end | Idempotent no-op after the first cleanup |
+| Widget renderer resolves through another alias | Reject before item push |
+| Unknown or mismatched navigate action/path | Reject before item push |
+
+### 5. Good / Base / Bad Cases
+
+- Good: the owner-bound stream emits start/delta/end with awaited callbacks, persists its
+  terminal answer through host Context, then disposes the iterator and resource exactly once.
+- Base: user cancellation stops visible delivery and cleanup without waiting for provider
+  computation that cannot be physically cancelled.
+- Bad: reuse one-shot invoke commit exceptions, detach assistant persistence from every
+  resource owner, accept completion without a terminal event, or let a widget select an
+  arbitrary host route.
+
+### 6. Tests Required
+
+- Stream tests cover callback backpressure, terminal and missing-terminal completion,
+  callback failure, cancellation during finalization, permission revoke, generation
+  rotation and awaited iterator disposal.
+- Registry/resource tests cover owner/generation matching, retained callback release,
+  duplicate disposal and no late event after close.
+- Widget tests cover declaration gating, direct renderer ownership, exact navigation pairs
+  and activation-owned item cleanup.
+- Real Electron smoke loads the actual Prelude in two generations and proves stream
+  pending/delta/end writes, cancellation, stale-port rejection, callback/resource cleanup
+  and no real provider/native action.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await contextInvoke(request) // then retrofit a committed-success exception after cancel
+```
+
+#### Correct
+
+```ts
+const resource = await startOwnerBoundContextStream(request, onEvent, hostSignal)
+try {
+  await resource.completed
+} finally {
+  await resource.dispose()
+}
+```
+
+## Scenario: Activation-Bound Translation Prelude
+
+### 1. Scope / Trigger
+
+- Trigger: the exact isolated `touch-translation` activation needs text translation,
+  screenshot OCR-to-text, public provider enumeration, feature-item publication, and an
+  explicit copy action.
+- This boundary does not authorize direct network access, provider configuration, provider
+  credentials, generic Intelligence, image translation output, or window/control-plane APIs.
+
+### 2. Signatures
+
+```ts
+type PluginTranslationFacade = Readonly<{
+  translate(payload: { text: string; sourceLang?: string; targetLang: string }, options?: {
+    preferredProviderId?: string
+    modelPreference?: readonly string[]
+    metadata?: TranslationDiagnosticMetadata
+  }): Promise<ProjectedTranslationResult>
+  ocr(payload: {
+    source: { type: 'data-url'; dataUrl: string }
+    language?: string
+    includeLayout?: boolean
+    includeKeywords?: boolean
+  }, options?: { metadata?: TranslationDiagnosticMetadata }): Promise<ProjectedOcrResult>
+  listProviders(): Promise<readonly PublicTranslationProvider[]>
+}>
+```
+
+### 3. Contracts
+
+- Main installs `intelligence.invoke` only into the exact current `touch-translation`
+  activation, bound to its main-issued activation identity and host generation, and limits it
+  to `text.translate`, `vision.ocr`, and public `text.translate` provider enumeration.
+- The child exposes a frozen null-prototype `plugin.translation` facade only when both the
+  manifest name and declaration match. For Translation, raw `hostCapabilities`, generic
+  Intelligence, HTTP/open-url, Secret, Storage, permission, channel, process, filesystem,
+  system, QuickOps, Flow, feature-registry, voice, and widget facades remain absent even if
+  shared host definitions exist in the activation manifest.
+- Translation options admit only provider/model preference plus exact diagnostic metadata.
+  OCR options admit diagnostic metadata only. Caller, credentials, endpoints, headers,
+  tokens, quota identity, prompt templates/variables, and generic AI command fields fail
+  before service work.
+- OCR accepts only canonical bounded PNG/JPEG/WebP base64 data URLs with matching signatures.
+  Main returns OCR text only; source bytes, layout blocks, raw provider data, usage, reasoning,
+  native errors, and stacks do not cross back to the child.
+- `text.translate` cancellation is contained by the activation-local capability registry.
+  The current Intelligence SDK does not accept a provider signal for this capability, so the
+  host adapter must not pass one; cancel/revoke releases the host await and discards observed
+  late settlement. OCR continues to receive the supported host signal.
+- The Prelude owns one current request across all Translation features. Every item publication
+  is serialized and rechecks request/generation/signal after `clearItems()` and before
+  `pushItems()`, preventing an old request from erasing or replacing newer output.
+- Input and result bounds are UTF-8 byte bounds, not JavaScript code-unit counts. Screenshot
+  results contain OCR/translation text only and never the source image or translated image.
+- A copy action is accepted only when its activation-generation request id and exact bounded
+  text match a currently published result retained by the Prelude. Clipboard writes are
+  awaited; forged text, stale generations, denial, and operational failure remain distinct.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Wrong plugin name, undeclared capability, stale activation/host generation | Reject before provider enumeration or invocation |
+| Prompt/control-plane option, caller, credential, endpoint, header, token, or extra DTO field | Invalid request before service work |
+| Non-canonical, oversized, mismatched-signature, or unsupported image data URL | Invalid request before OCR/provider work |
+| Permission revoke or lifecycle cancellation during provider wait | Stable cancellation/permission result; late value discarded |
+| Older feature request settles after a newer feature begins | No old clear/push or copy authority may affect current output |
+| Forged copy text with a current request id | `invalid-payload`; no clipboard write |
+| Previous activation-generation copy item | `stale-request`; no clipboard write |
+| SDK result contains usage/reasoning/raw OCR/provider internals | Reject or project them away before child delivery |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a current Translation activation uses only the fixed facade, awaits serialized item
+  publication and accepts copy only for its own generation-bound result.
+- Base: a denied provider or unsupported OCR input returns a stable blocked result without
+  feature mutation, provider detail or native image output.
+- Bad: expose generic Intelligence/network/storage, let the child select a credential or
+  endpoint, reuse a prior generation request id, or return source image bytes.
+
+### 6. Tests Required
+
+- Host DTO tests cover exact translate/OCR/provider-list requests and projections, multibyte
+  bounds, hostile records/arrays, extra control fields, authority, permission, revoke,
+  cancellation, and late settlement.
+- Child tests declare unrelated shared capabilities deliberately and still prove only the
+  Translation-specific facade plus required feature/clipboard surfaces are reachable.
+- Prelude tests cover text, multi-source cap, screenshot OCR-to-text, cross-feature races,
+  serialized clear/push, forged/stale copy actions, destroy invalidation, redaction, and UTF-8
+  bounds.
+- Real Electron smoke runs two activation generations with fake providers only and proves
+  generation rotation, stale action rejection, no image return, no network/native action,
+  and awaited shutdown.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const config = await plugin.storage.getFile('providers_config')
+return tuffIntelligence.invoke('text.translate', payload, { ...options, signal })
+```
+
+#### Correct
+
+```ts
+const providers = await plugin.translation.listProviders()
+const result = await activationRegistry.dispatch('intelligence.invoke', exactRequest, signal)
+if (isCurrentRequest()) await serializedPublish(result)
+```
+
+## Scenario: Production Plugin Prelude Hard Cut
+
+### 1. Scope / Trigger
+
+- Trigger: all 22 manifested official Preludes satisfy the isolated contract and CoreApp
+  installs the activation-scoped utility-process runtime as the only production Prelude path.
+- This cut covers rollout policy, legacy-source removal, fixed artifact packaging, heartbeat
+  containment, crash behavior and activation teardown. It does not claim an OS sandbox beyond
+  Electron `utilityProcess` plus the closed child projection.
+
+### 2. Signatures
+
+```ts
+const PLUGIN_RUNTIME_DEFAULT_ENABLED = true
+shouldInstallPluginRuntimeServiceByDefault(): true
+
+PluginRuntimeHostResourceLimits = {
+  heartbeatIntervalMs: number
+  heartbeatTimeoutMs: number
+  maxOldSpaceMb: number
+  // existing wire, request, callback, resource and lifecycle limits
+}
+```
+
+### 3. Contracts
+
+- Production always injects `PluginRuntimeService` into `TouchPlugin`; there is no environment
+  flag, compatibility profile, main-process VM fallback or synthetic self-check.
+- Every activation, including an empty Prelude, owns one fresh process, control port,
+  activation key, opaque handle and host generation. Reload/re-enable rotates all authority.
+- `plugin-host-bridge.ts` and the legacy reflective `plugin-host-protocol.ts` do not exist in
+  the production source graph. Main never accepts `chain: string[]` dispatch.
+- The only child artifact is the fixed bundled `out/main/plugin-host.js`; a missing, malformed
+  or non-file artifact fails activation before plugin script execution.
+- Heartbeat starts only after activation commit, permits one in-flight probe and uses the
+  ordinary correlated request timeout/cancel-grace/real-exit barrier. Startup rollback and
+  controlled stop leave no heartbeat timer.
+- Automatic crash restart budget is zero. Unexpected exit, heartbeat timeout or protocol
+  violation invalidates authority, rejects work, disposes resources and leaves the plugin
+  `CRASHED`; only an explicit enable/reload may create a new generation. Therefore an
+  unattended crash loop cannot spawn replacement processes.
+- Disable, reload, unload, uninstall and module teardown revoke authority first and await
+  capability/resource cleanup plus the actual child exit before their barrier settles.
+- Resource close attempts every disposer and waits every barrier. Any failure is reduced to a
+  stable `PLUGIN_HOST_RESOURCE_DISPOSE_FAILED`, `PLUGIN_RUNTIME_HOST_CLEANUP_FAILED`, or
+  `PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED` result only after remaining cleanup and child exit.
+- A failed controlled stop, active crash, or startup rollback leaves its service record
+  non-accepting and retains the exact rejected stop promise. It cannot be replaced by another
+  generation, reloaded, uninstalled, or force-updated. Activation-local business resource
+  owners are cleared only after their own close succeeds so a later disable can retry them.
+- `stopAll()` accumulates cleanup failures across concurrent operations, records and the host
+  manager; a later successful barrier must never overwrite an earlier cleanup failure.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Runtime default evaluated in production | Isolated service installed; no alternate branch |
+| Fixed child artifact missing or malformed | Stable activation failure; no VM fallback |
+| Heartbeat reply missing | Timeout, cancel grace, forced termination and real exit barrier |
+| Wrong/duplicate/stale heartbeat result | Protocol rejection scoped to that activation |
+| Unexpected child exit | One redacted crash notification after cleanup; no automatic restart |
+| Explicit re-enable after crash | Fresh key, handle, host generation and process |
+| Controlled disable during heartbeat | Clear timer/request and await normal/forced exit |
+| Any disposer or activation close fails | Continue all cleanup and child exit, then reject with a stable cleanup code |
+| Cleanup fails during stop, crash, or startup rollback | Retain a non-accepting failed record; reject generation replacement |
+| Reload, uninstall, resolver update, or dev force-update sees failed teardown | Preserve the current generation/files and return failure |
+| Concurrent stop operation fails before other records close | `stopAll()` retains the earlier failure after all barriers settle |
+| Legacy bridge/protocol import or `TUFF_PLUGIN_ISOLATION` appears | Production contract test fails |
+
+### 5. Good / Base / Bad Cases
+
+- Good: 22 official activations run in distinct processes, a hung child is killed without
+  blocking a healthy child, and explicit re-enable rotates every authority value only after
+  the previous cleanup barrier succeeds.
+- Base: an empty Prelude loads an empty lifecycle in its own child and shuts down through the
+  same barrier.
+- Bad: default-off rollout, main `vm.runInContext`, shared singleton child, environment
+  fallback, reflective chain dispatch, automatic unbounded restart, swallowing disposer
+  failures, deleting runtime records before cleanup succeeds, or overwriting an earlier
+  `stopAll()` failure with a later successful barrier.
+
+### 6. Tests Required
+
+- Static production-contract tests assert default-on, legacy-source absence, no VM loader,
+  no environment flag and fixed packaged artifact binding.
+- Host/session/process tests cover strict heartbeat directions, duplicate/stale correlation,
+  one in-flight probe, timeout, startup rollback, controlled stop and real exit barriers.
+- TouchPlugin/PluginModule tests prove default runtime injection, one crash notification,
+  no automatic replacement, fresh explicit re-enable authority, failed-resource retention,
+  stable cleanup errors, and blocked reload/unload/uninstall replacement.
+- Service tests prove controlled-stop, unexpected-crash and startup-rollback cleanup failures
+  retain their generation; concurrent `stopAll()` failures cannot be overwritten. Resolver
+  and development installer tests prove plugin files are preserved after incomplete teardown.
+- Complete plugin tests, Node/Web typechecks, scoped lint, 24/24 validation, production build,
+  built-child forbidden scan, `git diff --check` and real Electron two-generation smoke are
+  required before the hard cut is committed.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const runtime = process.env.TUFF_PLUGIN_ISOLATION ? isolated : mainVmFallback
+runtime.restartOnExit()
+```
+
+#### Correct
+
+```ts
+TouchPlugin.setRuntimeService(pluginRuntimeService)
+const stopped = await plugin.disable()
+if (!stopped) throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+await replacePluginFiles()
+// Crash cleanup is terminal. A later generation starts only after cleanup succeeds.
 ```

@@ -40,6 +40,7 @@ const startCapture = nativeAudio.startCapture as unknown as ReturnType<typeof vi
 const pollCapture = nativeAudio.pollCapture as unknown as ReturnType<typeof vi.fn>
 const snapshotCapture = nativeAudio.snapshotCapture as unknown as ReturnType<typeof vi.fn>
 const stopCapture = nativeAudio.stopCapture as unknown as ReturnType<typeof vi.fn>
+const cancelCapture = nativeAudio.cancelCapture as unknown as ReturnType<typeof vi.fn>
 const playAudio = (nativeAudio as unknown as { playAudio: ReturnType<typeof vi.fn> }).playAudio
 const typeText = (nativeAudio as unknown as { typeText: ReturnType<typeof vi.fn> }).typeText
 const isAccessibilityTrusted = (
@@ -106,6 +107,45 @@ describe('VoiceService.dictate', () => {
     expect(result.text).toBe('raw text')
     expect(result.polished).toBe(false)
     expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('attributes STT and polish to the trusted plugin caller', async () => {
+    stt.mockResolvedValue({ result: { text: 'raw text' } })
+    invoke.mockResolvedValue({ result: 'Raw text.' })
+
+    await new VoiceService().dictate(
+      { cleanup: true },
+      undefined,
+      undefined,
+      'plugin:touch-dictation'
+    )
+
+    expect(stt).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ metadata: { caller: 'plugin:touch-dictation' } })
+    )
+    expect(invoke).toHaveBeenCalledWith(
+      'text.chat',
+      expect.any(Object),
+      expect.objectContaining({ metadata: { caller: 'plugin:touch-dictation' } })
+    )
+  })
+
+  it('cancels native capture when the owner signal aborts', async () => {
+    vi.useFakeTimers()
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    const controller = new AbortController()
+    const pending = new VoiceService().dictate({ cleanup: false }, undefined, controller.signal)
+    const cancelled = expect(pending).rejects.toThrow('VOICE_OPERATION_CANCELLED')
+
+    await Promise.resolve()
+    controller.abort()
+    await vi.runAllTimersAsync()
+
+    await cancelled
+    expect(cancelCapture).toHaveBeenCalledWith('s1')
+    expect(stt).not.toHaveBeenCalled()
+    vi.useRealTimers()
   })
 
   it('throws when native capture is unsupported', async () => {
@@ -176,6 +216,22 @@ describe('VoiceService.streamDictation', () => {
     expect(events.at(-1)).toEqual({ type: 'end' })
   })
 
+  it('cancels in-flight streaming capture without emitting a terminal result', async () => {
+    pollCapture.mockReturnValue({ active: true, durationMs: 0, stoppedReason: null })
+    const controller = new AbortController()
+    const generator = new VoiceService().streamDictation({}, controller.signal)
+    const pending = generator.next()
+    const cancelled = expect(pending).rejects.toThrow('VOICE_OPERATION_CANCELLED')
+
+    await Promise.resolve()
+    controller.abort()
+    await vi.runAllTimersAsync()
+
+    await cancelled
+    expect(cancelCapture).toHaveBeenCalledWith('s1')
+    expect(stopCapture).not.toHaveBeenCalled()
+  })
+
   it('does not let a failed interim transcription kill the stream', async () => {
     pollCapture.mockReturnValueOnce({ active: true, durationMs: 1000, stoppedReason: null })
     pollCapture.mockReturnValue({ active: false, durationMs: 2000, stoppedReason: 'silence' })
@@ -214,6 +270,39 @@ describe('VoiceService.speak', () => {
     expect(result.played).toBe(true)
     expect(result.durationMs).toBe(1500)
     expect(playAudio).toHaveBeenCalledTimes(1)
+  })
+
+  it('attributes synthesis to the trusted plugin caller', async () => {
+    await new VoiceService().speak(
+      { text: 'hello', play: false },
+      undefined,
+      'plugin:touch-dictation'
+    )
+
+    expect(ttsSpeak).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { caller: 'plugin:touch-dictation' } })
+    )
+  })
+
+  it('cancels pending synthesis and never starts playback after abort', async () => {
+    let resolveSynthesis!: (value: unknown) => void
+    ttsSpeak.mockImplementation(
+      async () =>
+        await new Promise((resolve) => {
+          resolveSynthesis = resolve
+        })
+    )
+    const controller = new AbortController()
+    const pending = new VoiceService().speak({ text: 'hello' }, controller.signal)
+    const cancelled = expect(pending).rejects.toThrow('VOICE_OPERATION_CANCELLED')
+
+    await Promise.resolve()
+    controller.abort()
+    await cancelled
+    expect(playAudio).not.toHaveBeenCalled()
+
+    resolveSynthesis({ audio: 'data:audio/wav;base64,QUJD', format: 'wav' })
+    await Promise.resolve()
   })
 
   it('skips playback when play is false', async () => {

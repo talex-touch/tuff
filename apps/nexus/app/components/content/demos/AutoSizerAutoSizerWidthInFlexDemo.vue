@@ -2,8 +2,11 @@
 import { ref } from 'vue'
 const { locale } = useI18n()
 const wide = ref(false)
-const toggle = () => {
-  wide.value = !wide.value
+const sizerRef = ref<any>(null)
+function toggle() {
+  void sizerRef.value?.action?.(() => {
+    wide.value = !wide.value
+  })
 }
 </script>
 

@@ -1,0 +1,90 @@
+---
+title: Utils
+description: Public helper functions exported from the TuffEx root entry and ./utils subpath
+category: Foundations
+status: beta
+since: 1.0.0
+tags: [utils, helpers, z-index, toast]
+syncStatus: reviewed
+verified: false
+---
+
+# Utils
+
+TuffEx exports a set of component-agnostic helpers from `@talex-touch/tuffex/utils` (also re-exported from the root `@talex-touch/tuffex` entry), covering overlay stacking, environment guards, haptics, toasts, dialog orchestration, animation, and install helpers. They back the components internally and are safe to reuse directly in app code.
+
+```ts
+import { nextZIndex, toast, hasWindow } from '@talex-touch/tuffex/utils'
+```
+
+## API
+
+### Z-index manager
+
+Hands out overlay stacking levels from one source so components do not hard-code conflicting `z-index` values.
+
+| Export | Signature | When to use |
+|--------|-----------|-------------|
+| `nextZIndex()` | `() => number` | Claim the next incremented level for a new overlay |
+| `getZIndex()` | `() => number` | Read the current top level without incrementing |
+| `refreshZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | Recount from a given baseline |
+| `resetZIndex(seed?, reason?)` | `(seed?: number, reason?: string) => number` | Reset to the seed after unmount / in tests |
+| `configureZIndex(options)` | `(options) => void` | Configure the base seed and overrides globally |
+| `onZIndexEvent(listener)` | `(listener) => () => void` | Subscribe to level changes; returns an unsubscribe |
+
+### Environment guards
+
+SSR-safe checks for browser API availability so you never touch `window` / `document` / `navigator` blindly.
+
+| Export | Signature | When to use |
+|--------|-----------|-------------|
+| `hasWindow()` | `() => boolean` | Guard before accessing `window` |
+| `hasDocument()` | `() => boolean` | Guard before accessing `document` |
+| `hasNavigator()` | `() => boolean` | Guard before `navigator` (vibrate, clipboard) |
+
+### Haptics (vibrate)
+
+Wraps `navigator.vibrate` with semantic patterns.
+
+| Export | Signature | When to use |
+|--------|-----------|-------------|
+| `vibrate` | `{ light() … error(), stop, isSupported }` | Fire a preset directly, e.g. `vibrate.success()` |
+| `useVibrate(type, options?)` | `(type: VibrateType, options?) => void` | Trigger one configurable semantic vibration |
+| `stopVibrate()` | `() => void` | Interrupt an in-progress vibration |
+| `isVibrateSupported()` | `() => boolean` | Capability detection |
+
+### Toast
+
+A global toast queue that does not require a per-page host (rendering still needs `TxToastHost`).
+
+| Export | Signature | When to use |
+|--------|-----------|-------------|
+| `toast(options)` | `(options) => string` | Show a toast; returns an id usable to dismiss it |
+| `dismissToast(id)` | `(id: string) => void` | Dismiss a specific toast |
+| `clearToasts()` | `() => void` | Clear every toast |
+
+### Dialog manager
+
+Serially manages global dialogs by priority with lifecycle callbacks.
+
+| Export | Signature | When to use |
+|--------|-----------|-------------|
+| `getDialogManager()` | `() => DialogManager` | Get the global singleton to queue / open dialogs |
+
+### Animation
+
+| Export | Signature | When to use |
+|--------|-----------|-------------|
+| `useFlip(targetRef, opts?)` | `(ref, opts?) => UseFlipReturn` | Run a FLIP transition on an element (powers `TxFlipOverlay`) |
+| `useAutoResize(targetRef, opts?)` | `(ref, opts?) => UseAutoResizeReturn` | Measure and transition size changes (powers `TxAutoSizer`) |
+
+### Install helper
+
+| Export | Signature | When to use |
+|--------|-----------|-------------|
+| `withInstall(component)` | `<T>(component: T) => T & { install }` | Attach `install` so a component works with `app.use()` |
+
+## Source
+
+- Barrel: `packages/tuffex/packages/components/src/utils/index.ts` re-exports `packages/tuffex/packages/utils/*`.
+- Subpath entry: `@talex-touch/tuffex/utils`; the root `@talex-touch/tuffex` entry also folds in these exports.

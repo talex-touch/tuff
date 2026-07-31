@@ -4,7 +4,7 @@ import { TxButton } from '@talex-touch/tuffex/button'
 import { TxPopover } from '@talex-touch/tuffex/popover'
 import { useIntelligenceSdk } from '@talex-touch/utils/renderer'
 import { intelligenceSettings } from '@talex-touch/utils/renderer/storage'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FlatInput from '~/components/base/input/FlatInput.vue'
 import TuffBlockInput from '~/components/tuff/TuffBlockInput.vue'
@@ -26,15 +26,24 @@ const { t } = useI18n()
 
 const aiClient = useIntelligenceSdk()
 
+const credentialInput = ref('')
+const credentialDirty = ref(false)
+const isSavingCredential = ref(false)
 const localApiKey = computed({
-  get: () => props.modelValue.apiKey || '',
+  get: () => credentialInput.value,
   set: (value: string) => {
-    intelligenceSettings.updateProvider(props.modelValue.id, {
-      apiKey: value.trim() || undefined
-    })
-    emits('change')
+    credentialInput.value = value
+    credentialDirty.value = true
   }
 })
+
+watch(
+  () => props.modelValue.id,
+  () => {
+    credentialInput.value = ''
+    credentialDirty.value = false
+  }
+)
 
 const localBaseUrl = computed({
   get: () => props.modelValue.baseUrl || '',
@@ -76,7 +85,7 @@ const canTest = computed(() => {
   if (!requiresApiKey.value) {
     return true
   }
-  return localApiKey.value.trim().length > 0
+  return localApiKey.value.trim().length > 0 || Boolean(props.modelValue.hasCredential)
 })
 
 function resolveTestFailureMessage(result?: { code?: string; message?: string }): string {
@@ -95,7 +104,11 @@ function resolveTestFailureMessage(result?: { code?: string; message?: string })
 function validateApiKey(value: string): boolean {
   apiKeyError.value = ''
 
-  if (requiresApiKey.value && !value.trim()) {
+  if (
+    requiresApiKey.value &&
+    !value.trim() &&
+    !(!credentialDirty.value && props.modelValue.hasCredential)
+  ) {
     apiKeyError.value = t('intelligence.config.api.apiKeyRequired')
     return false
   }
@@ -127,8 +140,32 @@ function validateBaseUrl(value: string): boolean {
   return true
 }
 
-function handleApiKeyBlur() {
-  validateApiKey(localApiKey.value)
+async function handleApiKeyBlur() {
+  if (isSavingCredential.value) return
+  if (!credentialDirty.value) {
+    validateApiKey(localApiKey.value)
+    return
+  }
+
+  const { apiKey: _apiKey, ...provider } = props.modelValue
+  const credential = credentialInput.value
+  const hasCredentialInput = credential.trim().length > 0
+  isSavingCredential.value = true
+  try {
+    const saved = await aiClient.saveProviderConfig({
+      provider,
+      credential: hasCredentialInput ? { action: 'set', value: credential } : { action: 'clear' }
+    })
+    intelligenceSettings.updateProvider(props.modelValue.id, saved)
+    credentialInput.value = ''
+    credentialDirty.value = false
+    apiKeyError.value = ''
+    emits('change')
+  } catch {
+    apiKeyError.value = t('intelligence.config.api.connectionFailed')
+  } finally {
+    isSavingCredential.value = false
+  }
 }
 
 function handleBaseUrlBlur() {
@@ -150,7 +187,7 @@ async function handleTest() {
       type: props.modelValue.type,
       name: props.modelValue.name,
       enabled: true, // 测试时强制启用
-      apiKey: localApiKey.value.trim() || undefined,
+      apiKey: localApiKey.value.trim() ? localApiKey.value : undefined,
       baseUrl: localBaseUrl.value.trim() || undefined,
       models: Array.isArray(props.modelValue.models) ? [...props.modelValue.models] : [],
       defaultModel: props.modelValue.defaultModel || undefined,

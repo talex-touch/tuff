@@ -37,11 +37,11 @@ function resolveBaseUrl(provider: IntelligenceProviderConfig): string {
 }
 
 function ensureApiKey(provider: IntelligenceProviderConfig): string {
-  const key = provider.apiKey?.trim()
-  if (!key && provider.type !== IntelligenceProviderType.LOCAL) {
+  const key = typeof provider.apiKey === 'string' ? provider.apiKey : ''
+  if (!key.trim() && provider.type !== IntelligenceProviderType.LOCAL) {
     throw new Error(`[${provider.type}] API key is required to fetch models`)
   }
-  return key || ''
+  return key
 }
 
 function resolveOpenAiCompatibleBaseUrl(provider: IntelligenceProviderConfig): string {
@@ -66,8 +66,9 @@ function getStoredModels(provider: IntelligenceProviderConfig): string[] {
   return provider.models?.length ? [...new Set(provider.models)] : []
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
 
 function normalizeModelEntries(entries: unknown[]): string[] {
   const normalized: string[] = []

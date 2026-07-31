@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   ),
   getCursorScreenPoint: vi.fn(() => ({ x: -50, y: 25 })),
   registerNamespace: vi.fn(),
+  getNamespaceConfig: vi.fn<
+    () => { namespace: string; retentionMs: number | null; automaticCleanup: boolean } | null
+  >(() => null),
   startCleanup: vi.fn(),
   createFile: vi.fn(async () => ({
     path: '/tmp/tuff/native/screenshots/shot.png',
@@ -22,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   getBaseDir: vi.fn(() => '/tmp/tuff'),
   isWithinBaseDir: vi.fn(() => true),
   resolveNamespaceDir: vi.fn(() => '/tmp/tuff/native/screenshots'),
+  deleteFileFromNamespaces: vi.fn(async () => true),
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -51,11 +55,13 @@ vi.mock('electron', () => ({
 vi.mock('../../service/temp-file.service', () => ({
   tempFileService: {
     registerNamespace: mocks.registerNamespace,
+    getNamespaceConfig: mocks.getNamespaceConfig,
     startCleanup: mocks.startCleanup,
     createFile: mocks.createFile,
     getBaseDir: mocks.getBaseDir,
     isWithinBaseDir: mocks.isWithinBaseDir,
-    resolveNamespaceDir: mocks.resolveNamespaceDir
+    resolveNamespaceDir: mocks.resolveNamespaceDir,
+    deleteFileFromNamespaces: mocks.deleteFileFromNamespaces
   }
 }))
 
@@ -250,6 +256,23 @@ describe('NativeScreenshotService protocol client', () => {
     mocks.isWithinBaseDir.mockReturnValue(true)
   })
 
+  it('does not overwrite a retention namespace already configured by its owner', async () => {
+    mocks.getNamespaceConfig.mockReturnValueOnce({
+      namespace: 'native/screenshots',
+      retentionMs: null,
+      automaticCleanup: false
+    })
+    const { NativeScreenshotService } = await import('./screenshot-service')
+    const transport = createProtocolTransport()
+    const service = new NativeScreenshotService(transport)
+
+    await service.initialize(readySnapshot)
+    await service.capture({ target: 'display', displayId: LEFT_PUBLIC_DISPLAY_ID })
+
+    expect(mocks.registerNamespace).not.toHaveBeenCalled()
+    expect(mocks.startCleanup).toHaveBeenCalledOnce()
+  })
+
   it('initializes through probe then refresh and preserves global DIP display geometry', async () => {
     const { NativeScreenshotService } = await import('./screenshot-service')
     const transport = createProtocolTransport()
@@ -409,6 +432,11 @@ describe('NativeScreenshotService protocol client', () => {
       },
       cursor: 'hidden',
       output: { format: 'png', scale: 'native-max' }
+    })
+    expect(mocks.registerNamespace).toHaveBeenCalledWith({
+      namespace: 'native/screenshots',
+      retentionMs: 24 * 60 * 60 * 1000,
+      automaticCleanup: false
     })
     expect(mocks.createFile).toHaveBeenCalledWith({
       namespace: 'native/screenshots',
@@ -671,5 +699,18 @@ describe('NativeScreenshotService protocol client', () => {
       code: 'ERR_NATIVE_SCREENSHOT_PROTOCOL'
     })
     expect(mocks.createFile).not.toHaveBeenCalled()
+  })
+
+  it('releases validated screenshot resources only through the screenshot namespace', async () => {
+    const { NativeScreenshotService } = await import('./screenshot-service')
+    const service = new NativeScreenshotService(createProtocolTransport())
+
+    await expect(
+      service.releaseTempArtifact('tfile:///tmp/tuff/native/screenshots/shot.png')
+    ).resolves.toBe(true)
+    expect(mocks.deleteFileFromNamespaces).toHaveBeenCalledWith(
+      '/tmp/tuff/native/screenshots/shot.png',
+      ['native/screenshots']
+    )
   })
 })

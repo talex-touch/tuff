@@ -329,6 +329,7 @@ defineExpose({
         ref="panelRef"
         :close="close"
         :close-on-select="closeOnSelect"
+        :outside-guard="true"
       >
         <slot name="menu" />
       </TxContextMenuPanel>

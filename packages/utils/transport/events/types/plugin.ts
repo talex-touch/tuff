@@ -410,9 +410,6 @@ export interface PluginApiOperationResponse {
 export type PluginApiInstallRequest = PluginInstallRequest;
 export type PluginApiInstallResponse = PluginApiOperationResponse;
 
-export type PluginApiUninstallRequest = PluginApiOperationRequest;
-export type PluginApiUninstallResponse = PluginApiOperationResponse;
-
 export type PluginApiTriggerFeatureRequest = TriggerFeatureRequest;
 export type PluginApiTriggerFeatureResponse = unknown;
 
@@ -672,6 +669,11 @@ export interface PluginStorageSecretRequest {
 
 export interface PluginStorageSetSecretRequest extends PluginStorageSecretRequest {
   value: string | null;
+}
+
+export interface PluginStorageSetSecretBatchRequest {
+  pluginName?: string;
+  entries: Array<{ key: string; value: string | null }>;
 }
 
 export type PluginStorageSecretValueResponse =

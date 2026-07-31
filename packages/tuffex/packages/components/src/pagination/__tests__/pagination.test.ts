@@ -79,6 +79,27 @@ describe('txPagination', () => {
     expect(last.find('[aria-label="Last page"]').attributes('disabled')).toBeDefined()
   })
 
+  it('clamps an out-of-range currentPage for display, controls, and corrective emit', async () => {
+    const wrapper = mount(TxPagination, {
+      props: {
+        currentPage: 10, // beyond the 3 available pages, e.g. after a filter shrank the list
+        totalPages: 3,
+      },
+    })
+
+    // Self-corrects the parent's v-model once on mount instead of leaving it at 10.
+    expect(wrapper.emitted('update:currentPage')?.[0]).toEqual([3])
+
+    // The clamped page is the active one; Next is disabled, Previous stays usable.
+    expect(wrapper.find('[aria-current="page"]').text()).toBe('3')
+    expect(wrapper.find('[aria-label="Next page"]').attributes('disabled')).toBeDefined()
+
+    const previous = wrapper.find('[aria-label="Previous page"]')
+    expect(previous.attributes('disabled')).toBeUndefined()
+    await previous.trigger('click')
+    expect(wrapper.emitted('pageChange')?.at(-1)).toEqual([2])
+  })
+
   it('renders custom info slot with current pagination state', () => {
     const wrapper = mount(TxPagination, {
       props: {
@@ -95,6 +116,20 @@ describe('txPagination', () => {
     expect(wrapper.find('.tx-pagination__info').text()).toBe('Page 3/5, total 42')
   })
 
+  it('renders every control with an explicit button type', () => {
+    const wrapper = mount(TxPagination, {
+      props: {
+        currentPage: 2,
+        totalPages: 5,
+        showFirstLast: true,
+      },
+    })
+
+    const buttons = wrapper.findAll('.tx-pagination__button')
+    expect(buttons.length).toBeGreaterThan(0)
+    expect(buttons.every(button => button.attributes('type') === 'button')).toBe(true)
+  })
+
   it('keeps pagination list styles isolated from prose list styles', () => {
     const wrapper = mount(TxPagination, {
       props: {
@@ -109,5 +144,28 @@ describe('txPagination', () => {
     expect(txPaginationSource).toContain('list-style: none;')
     expect(txPaginationSource).toContain('margin: 0;')
     expect(txPaginationSource).toContain('padding: 0;')
+  })
+
+  it('localizes the nav landmark and control aria-labels', () => {
+    const wrapper = mount(TxPagination, {
+      props: {
+        currentPage: 2,
+        totalPages: 5,
+        showFirstLast: true,
+        ariaLabel: '分页',
+        firstLabel: '首页',
+        prevLabel: '上一页',
+        nextLabel: '下一页',
+        lastLabel: '末页',
+      },
+    })
+
+    // Pre-fix each of these was a hardcoded English literal with no prop to override.
+    expect(wrapper.find('.tx-pagination').attributes('aria-label')).toBe('分页')
+    const labels = wrapper.findAll('.tx-pagination__button').map(button => button.attributes('aria-label'))
+    expect(labels).toContain('首页')
+    expect(labels).toContain('上一页')
+    expect(labels).toContain('下一页')
+    expect(labels).toContain('末页')
   })
 })

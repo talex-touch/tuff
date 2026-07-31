@@ -111,4 +111,21 @@ describe('txImageGallery', () => {
     await nextTick()
     expect(document.body.querySelector('.tx-modal__overlay')).toBeNull()
   })
+
+  it('localizes the thumbnail open-label and fallback item-label formatters', () => {
+    const wrapper = mount(TxImageGallery, {
+      props: {
+        items,
+        itemLabelFormatter: (i: number) => `图片 ${i + 1}`,
+        openLabelFormatter: (label: string) => `打开 ${label}`,
+      },
+    })
+
+    const thumbs = wrapper.findAll('.tx-image-gallery__thumb')
+    // Named item: the open formatter wraps the item's name.
+    expect(thumbs[0].attributes('aria-label')).toBe('打开 Alpha')
+    // Unnamed item: the fallback item formatter feeds the open formatter.
+    // Pre-fix these were the hardcoded `Open ${label} preview` / `Image N`.
+    expect(thumbs[2].attributes('aria-label')).toBe('打开 图片 3')
+  })
 })

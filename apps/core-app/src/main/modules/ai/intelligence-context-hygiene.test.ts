@@ -2473,4 +2473,84 @@ describe('contextHygieneService', () => {
       })
     )
   })
+
+  it('exposes host-owned archive, expire, and pin transitions', async () => {
+    dbMock.client.execute.mockResolvedValue(rows([], 1))
+    const service = new ContextHygieneService()
+
+    await expect(service.archiveSession('session-1', 100)).resolves.toBe(true)
+    await expect(service.expireSession('session-2', 200)).resolves.toBe(true)
+    await expect(service.setSessionPinned('session-3', true)).resolves.toBe(true)
+
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining("status = 'archived'"),
+        args: [100, 100, 'session-1']
+      })
+    )
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining("status = 'expired'"),
+        args: [200, 'session-2']
+      })
+    )
+    expect(dbMock.client.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sql: expect.stringContaining('is_pinned = ?'),
+        args: [1, 'session-3']
+      })
+    )
+  })
+
+  it('deletes a bounded strict unpinned Context root page through the owner write lane', async () => {
+    dbMock.client.execute
+      .mockResolvedValueOnce(
+        rows([
+          { id: 'old-1', updated_at: 10 },
+          { id: 'old-2', updated_at: 20 }
+        ])
+      )
+      .mockResolvedValueOnce(rows([{ id: 'old-1' }], 1))
+    const service = new ContextHygieneService()
+
+    const result = await service.cleanupRetentionPage(30, 1, new AbortController().signal)
+
+    expect(result).toEqual({
+      deletedCount: 1,
+      hasMore: true,
+      cancelled: false,
+      cursor: { updatedAtMs: 10, id: 'old-1' }
+    })
+    expect(dbMock.client.execute).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        sql: expect.stringMatching(
+          /status IN \('archived', 'expired'\)[\s\S]+is_pinned[\s\S]+updated_at < \?/
+        ),
+        args: [30, -1, -1, '', 2]
+      })
+    )
+    expect(dbMock.client.execute).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        sql: expect.stringContaining('DELETE FROM intelligence_context_sessions'),
+        args: ['old-1', 30]
+      })
+    )
+  })
+
+  it('keeps active sessions protected when manual cleanup includes pinned sessions', async () => {
+    dbMock.client.execute
+      .mockResolvedValueOnce(rows([{ id: 'pinned-inactive', updated_at: 10 }]))
+      .mockResolvedValueOnce(rows([{ id: 'pinned-inactive' }], 1))
+    const service = new ContextHygieneService()
+
+    await service.cleanupRetentionPage(30, 1, new AbortController().signal, undefined, true)
+
+    for (const [request] of dbMock.client.execute.mock.calls) {
+      const sql = typeof request === 'object' && request !== null ? String(request.sql) : ''
+      expect(sql).toContain("status IN ('archived', 'expired')")
+      expect(sql).not.toContain('is_pinned')
+    }
+  })
 })

@@ -74,14 +74,33 @@ import type {
   PluginBusinessDto,
   PluginBusinessFeatureHost,
   PluginBusinessItemDto,
+  PluginBusinessItemReplacement,
   PluginBusinessItemScope,
   PluginBusinessRuntimeInfoDto
 } from './host/plugin-business-capabilities'
+import {
+  listPluginBusinessFiles,
+  readPluginBusinessFile,
+  removePluginBusinessFile,
+  writePluginBusinessFile
+} from './host/plugin-business-file-storage'
+import type { PluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
+import { createPluginBatchRenameFilesystemCapability } from './host/plugin-filesystem-capabilities'
+import type { PluginBrowserOpenCapabilities } from './host/plugin-browser-open-capabilities'
+import type { PluginBrowserDataCapabilities } from './host/plugin-browser-data-capabilities'
+import type { PluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
+import type { PluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
+import type { PluginSnipasteProcessCapability } from './host/plugin-process-capabilities'
+import type { PluginSystemActionCapabilities } from './host/plugin-system-capabilities'
+import type { PluginWindowManagerCapabilities } from './host/plugin-window-manager-capabilities'
+import type { PluginWindowPresetCapabilities } from './host/plugin-window-preset-capabilities'
+import type { PluginWorkspaceScriptCapabilities } from './host/plugin-workspace-script-capabilities'
 import type {
   PluginRuntimeService,
   PluginRuntimeSnapshot,
   PluginRuntimeSnapshotValue
 } from './host/plugin-runtime-service'
+import type { PluginHostCapability } from './host/plugin-host-wire'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { clampBatteryPercent } from '@talex-touch/utils'
@@ -141,6 +160,10 @@ import {
   bundlePluginPreludeFromContent,
   bundlePluginPreludeFromFile
 } from './runtime/plugin-prelude-compiler'
+import {
+  resolvePluginPrelude,
+  type PluginPreludeManifestContract
+} from './runtime/plugin-prelude-resolver'
 import { PluginViewLoader } from './view/plugin-view-loader'
 import { widgetManager } from './widget/widget-manager'
 
@@ -429,12 +452,63 @@ function createPluginHttpClient(): PluginHttpClient {
   }
 }
 
+const TRANSLATION_RUNTIME_CAPABILITIES = Object.freeze([
+  'feature.items.push',
+  'feature.items.clear',
+  'clipboard.write',
+  'intelligence.invoke'
+] as const satisfies readonly PluginHostCapability[])
+
+const INTELLIGENCE_RUNTIME_CAPABILITIES = Object.freeze([
+  'permission.check',
+  'feature.registry.add',
+  'feature.registry.remove',
+  'feature.registry.list',
+  'feature.items.push',
+  'feature.items.widget.push',
+  'feature.items.clear',
+  'storage.file.read',
+  'storage.file.write',
+  'storage.file.list',
+  'clipboard.write',
+  'clipboard.copy-and-paste',
+  'intelligence.context.invoke',
+  'intelligence.stream'
+] as const satisfies readonly PluginHostCapability[])
+
 /**
  * Plugin implementation
  */
 export class TouchPlugin implements ITouchPlugin {
   private static _transport: ITuffTransportMain | null = null
   private static _runtimeService: PluginRuntimeService | null = null
+  private static _snipasteProcessCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability)
+    | null = null
+  private static _systemActionCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities)
+    | null = null
+  private static _browserOpenCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities)
+    | null = null
+  private static _browserDataCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities)
+    | null = null
+  private static _translationCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities)
+    | null = null
+  private static _intelligenceContextCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
+    | null = null
+  private static _windowManagerCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities)
+    | null = null
+  private static _windowPresetCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities)
+    | null = null
+  private static _workspaceScriptCapabilityFactory:
+    | ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities)
+    | null = null
 
   static setTransport(transport: ITuffTransportMain | null): void {
     TouchPlugin._transport = transport
@@ -442,6 +516,62 @@ export class TouchPlugin implements ITouchPlugin {
 
   static setRuntimeService(runtimeService: PluginRuntimeService | null): void {
     TouchPlugin._runtimeService = runtimeService
+  }
+
+  static setSnipasteProcessCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginSnipasteProcessCapability) | null
+  ): void {
+    TouchPlugin._snipasteProcessCapabilityFactory = factory
+  }
+
+  static setSystemActionCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginSystemActionCapabilities) | null
+  ): void {
+    TouchPlugin._systemActionCapabilityFactory = factory
+  }
+
+  static setBrowserOpenCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginBrowserOpenCapabilities) | null
+  ): void {
+    TouchPlugin._browserOpenCapabilityFactory = factory
+  }
+
+  static setBrowserDataCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginBrowserDataCapabilities) | null
+  ): void {
+    TouchPlugin._browserDataCapabilityFactory = factory
+  }
+
+  static setTranslationCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginIntelligenceCapabilities) | null
+  ): void {
+    TouchPlugin._translationCapabilityFactory = factory
+  }
+
+  static setIntelligenceContextCapabilityFactory(
+    factory:
+      | ((activation: PluginActivationIdentity) => PluginIntelligenceContextCapabilities)
+      | null
+  ): void {
+    TouchPlugin._intelligenceContextCapabilityFactory = factory
+  }
+
+  static setWindowManagerCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginWindowManagerCapabilities) | null
+  ): void {
+    TouchPlugin._windowManagerCapabilityFactory = factory
+  }
+
+  static setWindowPresetCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginWindowPresetCapabilities) | null
+  ): void {
+    TouchPlugin._windowPresetCapabilityFactory = factory
+  }
+
+  static setWorkspaceScriptCapabilityFactory(
+    factory: ((activation: PluginActivationIdentity) => PluginWorkspaceScriptCapabilities) | null
+  ): void {
+    TouchPlugin._workspaceScriptCapabilityFactory = factory
   }
 
   private get transport(): ITuffTransportMain | null {
@@ -495,6 +625,14 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   private runtimeContext: TouchPluginRuntimeContext | null = null
+  private preludeContract: PluginPreludeManifestContract = Object.freeze({})
+  private batchRenameFilesystemCapability: PluginBatchRenameFilesystemCapability | null = null
+  private browserOpenCapability: PluginBrowserOpenCapabilities | null = null
+  private browserDataCapability: PluginBrowserDataCapabilities | null = null
+  private snipasteProcessCapability: PluginSnipasteProcessCapability | null = null
+  private windowManagerCapability: PluginWindowManagerCapabilities | null = null
+  private windowPresetCapability: PluginWindowPresetCapabilities | null = null
+  private workspaceScriptCapability: PluginWorkspaceScriptCapabilities | null = null
 
   dev: IPluginDev
   name: string
@@ -523,6 +661,8 @@ export class TouchPlugin implements ITouchPlugin {
       readonly activation: PluginActivationIdentity
       readonly host: PluginBusinessFeatureHost
       readonly closeResources: () => Promise<void>
+      readonly getOwnedItemForTransfer: (id: string) => TuffItem | undefined
+      readonly releaseTransferredItem: (id: string, item: TuffItem) => void
     }
   >()
   /**
@@ -589,6 +729,8 @@ export class TouchPlugin implements ITouchPlugin {
   toJSONObject(): object {
     return {
       name: this.name,
+      pluginInstanceId: this._runtimeInstanceId,
+      activationGeneration: this._activationGeneration,
       displayName: this.displayName,
       localizedName: this.localizedName,
       localizedDescription: this.localizedDescription,
@@ -862,6 +1004,7 @@ export class TouchPlugin implements ITouchPlugin {
 
     let result: boolean | void = void 0
     try {
+      await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
       result = this.pluginLifecycle?.onFeatureTriggered(
         feature.id,
         query,
@@ -897,6 +1040,7 @@ export class TouchPlugin implements ITouchPlugin {
     this.markActive()
 
     try {
+      await this.batchRenameFilesystemCapability?.approveLifecycleFileInputs(query)
       const result = this.pluginLifecycle?.onFeatureTriggered(feature.id, query, feature)
       if (isPromiseLike(result)) {
         await result
@@ -1065,6 +1209,10 @@ export class TouchPlugin implements ITouchPlugin {
     )
   }
 
+  isSearchProviderEnabledForHost(providerId: string): boolean {
+    return this.isRootResultsProviderIdEnabled(providerId)
+  }
+
   private ensureRootResultsProviderEnabled(method: string, item?: TuffItem): boolean {
     if (this.isRootResultsProviderEnabled(item)) return true
 
@@ -1116,6 +1264,15 @@ export class TouchPlugin implements ITouchPlugin {
   setRuntime(runtime: TouchPluginRuntimeContext): void {
     this.runtimeContext = runtime
     this.ensureDataDirectories()
+  }
+
+  setPreludeContract(contract: PluginPreludeManifestContract): void {
+    this.preludeContract = Object.freeze({
+      ...(contract.main === undefined ? {} : { main: contract.main }),
+      ...(contract.buildIndexEntry === undefined
+        ? {}
+        : { buildIndexEntry: contract.buildIndexEntry })
+    })
   }
 
   private getRuntimeContext(site: string): TouchPluginRuntimeContext {
@@ -1326,9 +1483,17 @@ export class TouchPlugin implements ITouchPlugin {
         }))
       })
     ) as Record<string, PluginRuntimeSnapshotValue>
+    let locale = 'en-US'
+    try {
+      const resolvedLocale = app.getLocale()
+      if (/^[A-Za-z0-9-]{2,64}$/.test(resolvedLocale)) locale = resolvedLocale
+    } catch {
+      // A frozen fallback keeps locale lookup child-local when Electron locale is unavailable.
+    }
     return Object.freeze({
       platform: process.platform,
       arch: process.arch,
+      locale,
       manifest: Object.freeze(manifest)
     })
   }
@@ -1410,6 +1575,8 @@ export class TouchPlugin implements ITouchPlugin {
   ): {
     readonly host: PluginBusinessFeatureHost
     readonly closeResources: () => Promise<void>
+    readonly getOwnedItemForTransfer: (id: string) => TuffItem | undefined
+    readonly releaseTransferredItem: (id: string, item: TuffItem) => void
   } {
     const assertCurrent = (signal: AbortSignal): void =>
       this.assertBusinessActivation(activation, signal)
@@ -1477,7 +1644,8 @@ export class TouchPlugin implements ITouchPlugin {
       pushItems: async (
         scope: PluginBusinessItemScope,
         items: readonly PluginBusinessItemDto[],
-        signal: AbortSignal
+        signal: AbortSignal,
+        replacements: readonly PluginBusinessItemReplacement[] = []
       ) => {
         assertCurrent(signal)
         if (!this.ensureRootResultsPermission('pushItems')) return
@@ -1494,10 +1662,42 @@ export class TouchPlugin implements ITouchPlugin {
         if (accepted.length === 0) return
         assertCurrent(signal)
         const manager = getBoxItemManager()
+        const acceptedIds = new Set(accepted.map((item) => item.id))
+        const replacementOwners = new Map<string, { item: TuffItem; release: () => void }>()
+        for (const replacement of replacements) {
+          if (!acceptedIds.has(replacement.id) || replacementOwners.has(replacement.id)) {
+            throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
+              code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
+            })
+          }
+          const binding = this.businessFeatureBindings.get(
+            this.getBusinessFeatureBindingKey(replacement.activation)
+          )
+          const item = binding?.getOwnedItemForTransfer(replacement.id)
+          if (
+            !binding ||
+            !this.matchesExactBusinessActivation(binding.activation, replacement.activation) ||
+            !item ||
+            manager.get(replacement.id) !== item
+          ) {
+            throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
+              code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
+            })
+          }
+          replacementOwners.set(replacement.id, {
+            item,
+            release: () => binding.releaseTransferredItem(replacement.id, item)
+          })
+        }
         for (const item of accepted) {
           const current = manager.get(item.id)
           const owned = ownedItems.get(item.id)
-          if (current && (!owned || current !== owned.item || owned.scope !== scope)) {
+          if (
+            current &&
+            (!owned || current !== owned.item || owned.scope !== scope) &&
+            replacementOwners.get(item.id)?.item !== current &&
+            !this.ownsLegacyBusinessItem(current)
+          ) {
             throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
               code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
             })
@@ -1506,7 +1706,16 @@ export class TouchPlugin implements ITouchPlugin {
         manager.batchUpsert(accepted)
         for (const item of accepted) {
           const stored = manager.get(item.id)
-          if (stored) ownedItems.set(item.id, { item: stored, scope })
+          const replacement = replacementOwners.get(item.id)
+          if (replacement && (!stored || stored === replacement.item)) {
+            throw Object.assign(new Error('PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'), {
+              code: 'PLUGIN_FEATURE_ITEM_OWNERSHIP_CONFLICT'
+            })
+          }
+          if (stored) {
+            replacement?.release()
+            ownedItems.set(item.id, { item: stored, scope })
+          }
         }
       },
       updateItem: (
@@ -1567,7 +1776,14 @@ export class TouchPlugin implements ITouchPlugin {
       }
     })
 
-    return Object.freeze({ host, closeResources: closeOwnedItems })
+    return Object.freeze({
+      host,
+      closeResources: closeOwnedItems,
+      getOwnedItemForTransfer: (id: string) => getOwnedItem(id)?.item,
+      releaseTransferredItem: (id: string, item: TuffItem) => {
+        if (ownedItems.get(id)?.item === item) ownedItems.delete(id)
+      }
+    })
   }
 
   createBusinessFeatureHost(activation: PluginActivationIdentity): PluginBusinessFeatureHost {
@@ -1604,9 +1820,43 @@ export class TouchPlugin implements ITouchPlugin {
     })
   }
 
+  private isContainedBusinessFeatureFileIcon(requestedPath: string, icon: ITuffIcon): boolean {
+    if (icon.type !== 'file' || icon.status !== 'normal' || !icon.value) return false
+    if (path.isAbsolute(requestedPath) || path.win32.isAbsolute(requestedPath)) return false
+    try {
+      const canonicalRoot = fse.realpathSync(this.pluginPath)
+      const canonicalTarget = fse.realpathSync(path.resolve(this.pluginPath, requestedPath))
+      const relative = path.relative(canonicalRoot, canonicalTarget)
+      if (relative.startsWith('..') || path.isAbsolute(relative)) return false
+      return fse.statSync(canonicalTarget).isFile()
+    } catch {
+      return false
+    }
+  }
+
   async addBusinessFeature(feature: IPluginFeature): Promise<boolean> {
+    const rendererFeatureId = feature.interaction?.rendererFeatureId?.trim()
+    if (feature.interaction) {
+      const renderer = rendererFeatureId ? this.getFeature(rendererFeatureId) : null
+      if (
+        feature.interaction.type !== 'widget' ||
+        !rendererFeatureId ||
+        feature.interaction.path ||
+        !renderer ||
+        renderer.interaction?.type !== 'widget' ||
+        !renderer.interaction.path
+      ) {
+        return false
+      }
+    }
     const normalized = new PluginFeature(this.pluginPath, feature, this.dev)
     if (normalized.icon instanceof TuffIconImpl) await normalized.icon.init()
+    if (
+      feature.icon.type === 'file' &&
+      !this.isContainedBusinessFeatureFileIcon(feature.icon.value, normalized.icon)
+    ) {
+      return false
+    }
     return this.addFeature(normalized)
   }
 
@@ -1619,29 +1869,32 @@ export class TouchPlugin implements ITouchPlugin {
   }
 
   readBusinessFile(name: string): { found: false } | { found: true; value: PluginBusinessDto } {
-    const safePath = resolveSafePath(this.getConfigPath(), name)
-    if (!safePath.resolvedPath) throw new Error('PLUGIN_BUSINESS_FILE_PATH_INVALID')
-    if (!fse.existsSync(safePath.resolvedPath)) return { found: false }
-    return {
-      found: true,
-      value: JSON.parse(fse.readFileSync(safePath.resolvedPath, 'utf8')) as PluginBusinessDto
+    return readPluginBusinessFile(this.getConfigPath(), name)
+  }
+
+  private notifyBusinessStorageUpdate(name: string): void {
+    try {
+      this.broadcastStorageUpdate(name)
+    } catch {
+      pluginSystemLog.warn(`[Plugin ${this.name}] Failed to broadcast business storage update`, {
+        error: 'PLUGIN_BUSINESS_STORAGE_NOTIFICATION_FAILED'
+      })
     }
   }
 
   writeBusinessFile(name: string, value: PluginBusinessDto): void {
-    const result = this.savePluginFile(name, value)
-    if (!result.success) throw new Error('PLUGIN_BUSINESS_FILE_WRITE_FAILED')
+    writePluginBusinessFile(this.getConfigPath(), name, value)
+    this.notifyBusinessStorageUpdate(name)
   }
 
   removeBusinessFile(name: string): boolean {
-    const result = this.deletePluginFile(name)
-    if (result.success) return true
-    if (result.error === 'File not found') return false
-    throw new Error('PLUGIN_BUSINESS_FILE_REMOVE_FAILED')
+    const removed = removePluginBusinessFile(this.getConfigPath(), name)
+    if (removed) this.notifyBusinessStorageUpdate(name)
+    return removed
   }
 
   listBusinessFiles(): readonly string[] {
-    return this.listPluginFiles()
+    return listPluginBusinessFiles(this.getConfigPath())
   }
 
   private ownsLegacyBusinessItem(item: TuffItem): boolean {
@@ -1763,11 +2016,12 @@ export class TouchPlugin implements ITouchPlugin {
       return bundledContent ?? response.data
     }
 
-    const featureIndex = path.resolve(this.pluginPath, 'index.js')
-    if (!fse.existsSync(featureIndex)) {
-      this.logger.info(`No index.js found for plugin '${this.name}', using an empty Prelude.`)
-      return 'module.exports = {}'
+    const resolvedPrelude = resolvePluginPrelude(this.pluginPath, this.preludeContract)
+    if (resolvedPrelude.kind === 'empty') {
+      this.logger.info(`Plugin '${this.name}' declares no Prelude; using an empty lifecycle.`)
+      return resolvedPrelude.scriptContent
     }
+    const featureIndex = resolvedPrelude.filePath!
 
     if (shouldBundlePrelude) {
       const bundledContent = await bundlePluginPreludeFromFile(
@@ -1779,7 +2033,191 @@ export class TouchPlugin implements ITouchPlugin {
       )
       if (bundledContent) return bundledContent
     }
-    return fse.readFile(featureIndex, 'utf8')
+    return resolvedPrelude.scriptContent
+  }
+
+  private createBatchRenameFilesystemCapability(
+    activation: PluginActivationIdentity
+  ): PluginBatchRenameFilesystemCapability | null {
+    if (this.name !== 'touch-batch-rename') return null
+    return createPluginBatchRenameFilesystemCapability({
+      activation,
+      platform: process.platform,
+      resolveCurrentActivation: () => this.getActivationIdentity(),
+      hasPermission: (_pluginName, permissionId) => {
+        if (typeof this.sdkapi !== 'number') return false
+        const declared = [
+          ...(this.declaredPermissions?.required ?? []),
+          ...(this.declaredPermissions?.optional ?? [])
+        ].includes(permissionId)
+        if (!declared) return false
+        try {
+          return (
+            getPermissionModule()
+              ?.getStore()
+              .hasPermission(this.name, permissionId, this.sdkapi) === true
+          )
+        } catch {
+          return false
+        }
+      }
+    })
+  }
+
+  private createSnipasteProcessCapability(
+    activation: PluginActivationIdentity
+  ): PluginSnipasteProcessCapability | null {
+    if (this.name !== 'touch-snipaste') return null
+    const factory = TouchPlugin._snipasteProcessCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_SNIPASTE_PROCESS_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createSystemActionCapability(
+    activation: PluginActivationIdentity
+  ): PluginSystemActionCapabilities | null {
+    if (this.name !== 'touch-quick-actions' && this.name !== 'touch-system-actions') return null
+    const factory = TouchPlugin._systemActionCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_SYSTEM_ACTION_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createBrowserOpenCapability(
+    activation: PluginActivationIdentity
+  ): PluginBrowserOpenCapabilities | null {
+    if (this.name !== 'touch-browser-open') return null
+    const factory = TouchPlugin._browserOpenCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_BROWSER_OPEN_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createBrowserDataCapability(
+    activation: PluginActivationIdentity
+  ): PluginBrowserDataCapabilities | null {
+    if (this.name !== 'touch-browser-data') return null
+    const factory = TouchPlugin._browserDataCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_BROWSER_DATA_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createTranslationCapability(
+    activation: PluginActivationIdentity
+  ): PluginIntelligenceCapabilities | null {
+    if (this.name !== 'touch-translation') return null
+    const factory = TouchPlugin._translationCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_TRANSLATION_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createIntelligenceContextCapability(
+    activation: PluginActivationIdentity
+  ): PluginIntelligenceContextCapabilities | null {
+    if (this.name !== 'touch-intelligence') return null
+    const factory = TouchPlugin._intelligenceContextCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_INTELLIGENCE_CONTEXT_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createWindowManagerCapability(
+    activation: PluginActivationIdentity
+  ): PluginWindowManagerCapabilities | null {
+    if (this.name !== 'touch-window-manager') return null
+    const factory = TouchPlugin._windowManagerCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_WINDOW_MANAGER_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createWindowPresetCapability(
+    activation: PluginActivationIdentity
+  ): PluginWindowPresetCapabilities | null {
+    if (this.name !== 'touch-window-presets') return null
+    const factory = TouchPlugin._windowPresetCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_WINDOW_PRESET_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private createWorkspaceScriptCapability(
+    activation: PluginActivationIdentity
+  ): PluginWorkspaceScriptCapabilities | null {
+    if (this.name !== 'touch-workspace-scripts') return null
+    const factory = TouchPlugin._workspaceScriptCapabilityFactory
+    if (!factory) {
+      throw Object.assign(new Error('PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'), {
+        code: 'PLUGIN_WORKSPACE_SCRIPT_CAPABILITY_UNAVAILABLE'
+      })
+    }
+    return factory(activation)
+  }
+
+  private async closeRetainedActivationResources(): Promise<boolean> {
+    let cleanupSucceeded = true
+    const close = async (
+      resource: { close(): Promise<void> } | null,
+      release: () => void
+    ): Promise<void> => {
+      if (!resource) return
+      try {
+        await resource.close()
+        release()
+      } catch {
+        cleanupSucceeded = false
+      }
+    }
+
+    await close(this.batchRenameFilesystemCapability, () => {
+      this.batchRenameFilesystemCapability = null
+    })
+    await close(this.browserOpenCapability, () => {
+      this.browserOpenCapability = null
+    })
+    await close(this.browserDataCapability, () => {
+      this.browserDataCapability = null
+    })
+    await close(this.snipasteProcessCapability, () => {
+      this.snipasteProcessCapability = null
+    })
+    await close(this.windowManagerCapability, () => {
+      this.windowManagerCapability = null
+    })
+    await close(this.windowPresetCapability, () => {
+      this.windowPresetCapability = null
+    })
+    await close(this.workspaceScriptCapability, () => {
+      this.workspaceScriptCapability = null
+    })
+    return cleanupSucceeded
   }
 
   async enable(): Promise<boolean> {
@@ -1834,10 +2272,136 @@ export class TouchPlugin implements ITouchPlugin {
       const currentActivation = activation
 
       const scriptContent = await this.loadPreludeScript()
+      const filesystemCapability = this.createBatchRenameFilesystemCapability(currentActivation)
+      const browserOpenCapability = this.createBrowserOpenCapability(currentActivation)
+      const browserDataCapability = this.createBrowserDataCapability(currentActivation)
+      const translationCapability = this.createTranslationCapability(currentActivation)
+      const intelligenceContextCapability =
+        this.createIntelligenceContextCapability(currentActivation)
+      const snipasteProcessCapability = this.createSnipasteProcessCapability(currentActivation)
+      const systemActionCapability = this.createSystemActionCapability(currentActivation)
+      const windowManagerCapability = this.createWindowManagerCapability(currentActivation)
+      const windowPresetCapability = this.createWindowPresetCapability(currentActivation)
+      const workspaceScriptCapability = this.createWorkspaceScriptCapability(currentActivation)
+      this.batchRenameFilesystemCapability = filesystemCapability
+      this.browserOpenCapability = browserOpenCapability
+      this.browserDataCapability = browserDataCapability
+      this.snipasteProcessCapability = snipasteProcessCapability
+      this.windowManagerCapability = windowManagerCapability
+      this.windowPresetCapability = windowPresetCapability
+      this.workspaceScriptCapability = workspaceScriptCapability
+      const closeActivationResources =
+        filesystemCapability ||
+        browserOpenCapability ||
+        browserDataCapability ||
+        snipasteProcessCapability ||
+        windowManagerCapability ||
+        windowPresetCapability ||
+        workspaceScriptCapability
+          ? async (): Promise<void> => {
+              const failures: unknown[] = []
+              if (filesystemCapability) {
+                try {
+                  await filesystemCapability.close()
+                  if (this.batchRenameFilesystemCapability === filesystemCapability) {
+                    this.batchRenameFilesystemCapability = null
+                  }
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
+              if (browserOpenCapability) {
+                try {
+                  await browserOpenCapability.close()
+                  if (this.browserOpenCapability === browserOpenCapability) {
+                    this.browserOpenCapability = null
+                  }
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
+              if (browserDataCapability) {
+                try {
+                  await browserDataCapability.close()
+                  if (this.browserDataCapability === browserDataCapability) {
+                    this.browserDataCapability = null
+                  }
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
+              if (snipasteProcessCapability) {
+                try {
+                  await snipasteProcessCapability.close()
+                  if (this.snipasteProcessCapability === snipasteProcessCapability) {
+                    this.snipasteProcessCapability = null
+                  }
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
+              if (windowManagerCapability) {
+                try {
+                  await windowManagerCapability.close()
+                  if (this.windowManagerCapability === windowManagerCapability) {
+                    this.windowManagerCapability = null
+                  }
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
+              if (windowPresetCapability) {
+                try {
+                  await windowPresetCapability.close()
+                  if (this.windowPresetCapability === windowPresetCapability) {
+                    this.windowPresetCapability = null
+                  }
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
+              if (workspaceScriptCapability) {
+                try {
+                  await workspaceScriptCapability.close()
+                  if (this.workspaceScriptCapability === workspaceScriptCapability) {
+                    this.workspaceScriptCapability = null
+                  }
+                } catch (error) {
+                  failures.push(error)
+                }
+              }
+              if (failures.length > 0) {
+                throw new AggregateError(failures, 'PLUGIN_ACTIVATION_RESOURCE_CLOSE_FAILED')
+              }
+            }
+          : undefined
+      const activationCapabilityDefinitions = Object.freeze([
+        ...(filesystemCapability ? filesystemCapability.definitions : []),
+        ...(browserOpenCapability ? browserOpenCapability.definitions : []),
+        ...(browserDataCapability ? browserDataCapability.definitions : []),
+        ...(translationCapability ? translationCapability.definitions : []),
+        ...(intelligenceContextCapability ? intelligenceContextCapability.definitions : []),
+        ...(snipasteProcessCapability ? snipasteProcessCapability.definitions : []),
+        ...(systemActionCapability ? systemActionCapability.definitions : []),
+        ...(windowManagerCapability ? windowManagerCapability.definitions : []),
+        ...(windowPresetCapability ? windowPresetCapability.definitions : []),
+        ...(workspaceScriptCapability ? workspaceScriptCapability.definitions : [])
+      ])
+      const capabilityAllowlist =
+        this.name === 'touch-translation'
+          ? TRANSLATION_RUNTIME_CAPABILITIES
+          : this.name === 'touch-intelligence'
+            ? INTELLIGENCE_RUNTIME_CAPABILITIES
+            : undefined
       const runtimeActivation = await activeRuntime.startActivation({
         activation: currentActivation,
         scriptContent,
         snapshot: this.createRuntimeSnapshot(),
+        ...(activationCapabilityDefinitions.length > 0
+          ? { capabilityDefinitions: activationCapabilityDefinitions }
+          : {}),
+        ...(capabilityAllowlist ? { capabilityAllowlist } : {}),
+        ...(closeActivationResources ? { closeResources: closeActivationResources } : {}),
         onCrash: (diagnostic) => this.handleRuntimeCrash(currentActivation, diagnostic)
       })
 
@@ -1875,6 +2439,7 @@ export class TouchPlugin implements ITouchPlugin {
         }
       }
       this.pluginLifecycle = null
+      await this.closeRetainedActivationResources()
       this._runtimeStats.startedAt = 0
       this.recordActivationFailure(error)
       this.status = PluginStatus.CRASHED
@@ -1898,11 +2463,16 @@ export class TouchPlugin implements ITouchPlugin {
     this.logger.debug('Disabling plugin')
     this.pluginLifecycle = null
     this.abortFeatureControllers()
+    let teardownFailed = false
+    let teardownIssueRecorded = false
 
     if (activation.key) {
+      this.revokeActivationAuthority(activation)
       try {
         await TouchPlugin._runtimeService?.stopActivation(activation, { runDestroy: true })
       } catch {
+        teardownFailed = true
+        teardownIssueRecorded = true
         this.issues.push({
           type: 'error',
           message: 'Plugin runtime termination failed (PLUGIN_RUNTIME_HOST_STOP_FAILED).',
@@ -1913,8 +2483,18 @@ export class TouchPlugin implements ITouchPlugin {
         })
       }
     }
-    this.revokeActivationAuthority(activation)
 
+    if (!(await this.closeRetainedActivationResources())) teardownFailed = true
+    if (teardownFailed && !teardownIssueRecorded) {
+      this.issues.push({
+        type: 'error',
+        message: 'Plugin runtime resource cleanup failed (PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED).',
+        source: 'runtime:teardown',
+        code: 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED',
+        meta: { code: 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED' },
+        timestamp: Date.now()
+      })
+    }
     this.clearCoreBoxItems()
     await widgetManager.releasePlugin(this.name)
 
@@ -1969,7 +2549,11 @@ export class TouchPlugin implements ITouchPlugin {
       // SearchEngineCore may not be initialized; safe to ignore
     }
 
-    this.status = PluginStatus.DISABLED
+    this.status = teardownFailed ? PluginStatus.CRASHED : PluginStatus.DISABLED
+    if (teardownFailed) {
+      this.logger.warn('[Lifecycle] disable completed with incomplete runtime cleanup.')
+      return false
+    }
     this.logger.debug('Plugin disable lifecycle completed.')
     this.logger.info('[Lifecycle] disabled')
     return true
@@ -2177,6 +2761,15 @@ export class TouchPlugin implements ITouchPlugin {
         transport.invoke(
           PluginEvents.storage.setSecret,
           { pluginName, key, value },
+          createPluginContext()
+        ) as Promise<{ success: boolean; error?: string }>,
+
+      setMany: (
+        entries: Array<{ key: string; value: string | null }>
+      ): Promise<{ success: boolean; error?: string }> =>
+        transport.invoke(
+          PluginEvents.storage.setSecretBatch,
+          { pluginName, entries },
           createPluginContext()
         ) as Promise<{ success: boolean; error?: string }>,
 

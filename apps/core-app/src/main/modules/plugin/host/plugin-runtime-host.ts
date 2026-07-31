@@ -47,6 +47,7 @@ export type PluginRuntimeHostErrorCode =
   | 'PLUGIN_RUNTIME_HOST_TIMEOUT'
   | 'PLUGIN_RUNTIME_HOST_CANCELLED'
   | 'PLUGIN_RUNTIME_HOST_CRASHED'
+  | 'PLUGIN_RUNTIME_HOST_CLEANUP_FAILED'
   | 'PLUGIN_RUNTIME_HOST_CLOSED'
 
 export type PluginRuntimeTerminationCode = Extract<
@@ -68,6 +69,8 @@ export interface PluginRuntimeHostResourceLimits extends HostWireLimits {
   handshakeTimeoutMs: number
   loadTimeoutMs: number
   lifecycleTimeoutMs: number
+  heartbeatIntervalMs: number
+  heartbeatTimeoutMs: number
   shutdownTimeoutMs: number
   cancelGraceMs: number
   callbackTimeoutMs: number
@@ -87,6 +90,8 @@ export const DEFAULT_PLUGIN_RUNTIME_HOST_LIMITS: Readonly<PluginRuntimeHostResou
     handshakeTimeoutMs: 10_000,
     loadTimeoutMs: 10_000,
     lifecycleTimeoutMs: 60_000,
+    heartbeatIntervalMs: 2_000,
+    heartbeatTimeoutMs: 5_000,
     shutdownTimeoutMs: 2_000,
     cancelGraceMs: 500,
     callbackTimeoutMs: 5_000,
@@ -516,6 +521,15 @@ function safeInvoke(callback: () => void | Promise<void>): Promise<void> {
   }
 }
 
+async function invokeCleanup(callback: () => void | Promise<void>): Promise<boolean> {
+  try {
+    await callback()
+    return true
+  } catch {
+    return false
+  }
+}
+
 function snapshotHostConstructorOptions(input: PluginRuntimeHostOptions): PluginRuntimeHostOptions {
   let descriptors: PropertyDescriptorMap
   try {
@@ -609,6 +623,8 @@ export class PluginRuntimeHost {
   private resolveStartupAcquisition: (() => void) | null = null
   private cleanupPromise: Promise<void> | null = null
   private readonly cancellationGrace = new Map<number, RuntimeCancellationGrace>()
+  private heartbeatTimer: NodeJS.Timeout | null = null
+  private heartbeatInFlight: Promise<void> | null = null
   private nextRequestId = 0
   private currentState: PluginRuntimeHostState = 'created'
   private terminalCode: PluginRuntimeHostErrorCode = 'PLUGIN_RUNTIME_HOST_CLOSED'
@@ -796,8 +812,9 @@ export class PluginRuntimeHost {
   }
 
   stop(): Promise<void> {
+    if (this.cleanupPromise) return this.cleanupPromise
     if (this.currentState === 'closed') return Promise.resolve()
-    if (!this.cleanupPromise) this.currentState = 'stopping'
+    this.currentState = 'stopping'
     return this.cleanup('PLUGIN_RUNTIME_HOST_CLOSED', {
       finalState: 'closed',
       graceful: true
@@ -957,6 +974,7 @@ export class PluginRuntimeHost {
       }
       this.currentState = 'active'
       this.hasActivated = true
+      this.startHeartbeat()
     } catch (error) {
       const stable =
         error instanceof PluginRuntimeHostError
@@ -968,6 +986,54 @@ export class PluginRuntimeHost {
       })
       throw stable
     }
+  }
+
+  private startHeartbeat(): void {
+    if (this.heartbeatTimer || this.currentState !== 'active' || this.cleanupPromise) return
+    const timer = setInterval(() => this.sendHeartbeat(), this.resourceLimits.heartbeatIntervalMs)
+    timer.unref?.()
+    this.heartbeatTimer = timer
+  }
+
+  private sendHeartbeat(): void {
+    if (
+      this.heartbeatInFlight ||
+      this.currentState !== 'active' ||
+      this.cleanupPromise ||
+      !this.controlPort
+    ) {
+      return
+    }
+    let heartbeat!: Promise<void>
+    heartbeat = this.request(
+      'heartbeat-result',
+      (requestId) => ({
+        ...this.owner,
+        type: 'heartbeat',
+        requestId
+      }),
+      this.resourceLimits.heartbeatTimeoutMs
+    ).then(
+      (response) => {
+        if (response.type !== 'heartbeat-result') {
+          void this.failProtocol()
+          return
+        }
+        if (this.heartbeatInFlight === heartbeat) this.heartbeatInFlight = null
+      },
+      () => {
+        // Request cancellation owns timeout classification and terminal cleanup.
+      }
+    )
+    if (!this.cleanupPromise && this.currentState === 'active') {
+      this.heartbeatInFlight = heartbeat
+    }
+  }
+
+  private clearHeartbeat(): void {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer)
+    this.heartbeatTimer = null
+    this.heartbeatInFlight = null
   }
 
   private request(
@@ -1038,6 +1104,7 @@ export class PluginRuntimeHost {
       const message = this.session.accept('child-to-main', value)
       switch (message.type) {
         case 'host-ready':
+        case 'heartbeat-result':
         case 'load-result':
         case 'lifecycle-result':
         case 'callback-result':
@@ -1305,7 +1372,7 @@ export class PluginRuntimeHost {
         graceful: true,
         terminationCode:
           code === 'PLUGIN_RUNTIME_HOST_TIMEOUT' && this.hasActivated ? code : undefined
-      })
+      }).catch(() => undefined)
     }, this.resourceLimits.cancelGraceMs)
     timer.unref?.()
     grace = Object.freeze({ code, timer })
@@ -1391,7 +1458,7 @@ export class PluginRuntimeHost {
           cancelled.code === 'PLUGIN_RUNTIME_HOST_TIMEOUT' && this.hasActivated
             ? cancelled.code
             : undefined
-      })
+      }).catch(() => undefined)
       return
     }
     this.currentState = 'crashed'
@@ -1399,44 +1466,47 @@ export class PluginRuntimeHost {
       finalState: 'crashed',
       graceful: false,
       reportCrash: true
-    })
+    }).catch(() => undefined)
   }
 
-  private failProtocol(): Promise<void> {
+  private failProtocol(): void {
     if (!this.cleanupPromise) this.currentState = 'stopping'
     const cancelled = this.cancellationGrace.values().next().value
     if (cancelled) {
-      return this.cleanup(cancelled.code, {
+      void this.cleanup(cancelled.code, {
         finalState: 'failed',
         graceful: true,
         terminationCode:
           cancelled.code === 'PLUGIN_RUNTIME_HOST_TIMEOUT' && this.hasActivated
             ? cancelled.code
             : undefined
-      })
+      }).catch(() => undefined)
+      return
     }
-    return this.cleanup('PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION', {
+    void this.cleanup('PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION', {
       finalState: 'failed',
       graceful: false,
       terminationCode: this.hasActivated ? 'PLUGIN_RUNTIME_HOST_PROTOCOL_VIOLATION' : undefined
-    })
+    }).catch(() => undefined)
   }
 
   private cleanup(code: PluginRuntimeHostErrorCode, options: CleanupOptions): Promise<void> {
     if (this.cleanupPromise) return this.cleanupPromise
+    this.clearHeartbeat()
     this.terminalCode = code
     this.cleanupPromise = Promise.resolve().then(async () => {
+      let cleanupFailed = false
       for (const grace of this.cancellationGrace.values()) clearTimeout(grace.timer)
       this.cancellationGrace.clear()
 
-      await safeInvoke(this.invalidateAuthority)
+      if (!(await invokeCleanup(this.invalidateAuthority))) cleanupFailed = true
       if (
         this.ownsCapabilityDispatcher &&
         this.capabilityDispatcher?.close &&
         !this.capabilityDispatcherClosed
       ) {
         this.capabilityDispatcherClosed = true
-        await safeInvoke(() => this.capabilityDispatcher!.close!())
+        if (!(await invokeCleanup(() => this.capabilityDispatcher!.close!()))) cleanupFailed = true
       }
       if (
         this.ownsResourceDispatcher &&
@@ -1444,17 +1514,21 @@ export class PluginRuntimeHost {
         !this.resourceDispatcherClosed
       ) {
         this.resourceDispatcherClosed = true
-        await safeInvoke(() =>
-          this.resourceDispatcher!.close((resourceId) => {
-            const kind = this.retainedCallbackResources.get(resourceId)
-            if (kind) this.releaseRetainedCallbackResource(resourceId, kind, true)
-            else this.callbackRegistry.releaseResource(resourceId)
-          })
-        )
+        if (
+          !(await invokeCleanup(() =>
+            this.resourceDispatcher!.close((resourceId) => {
+              const kind = this.retainedCallbackResources.get(resourceId)
+              if (kind) this.releaseRetainedCallbackResource(resourceId, kind, true)
+              else this.callbackRegistry.releaseResource(resourceId)
+            })
+          ))
+        ) {
+          cleanupFailed = true
+        }
       }
       this.retainedCallbackResources.clear()
       this.callbackRegistry.close()
-      await safeInvoke(this.closeResources)
+      if (!(await invokeCleanup(this.closeResources))) cleanupFailed = true
       await this.startupAcquisition
 
       const unadoptedControlPort = this.unadoptedControlPort
@@ -1551,6 +1625,10 @@ export class PluginRuntimeHost {
           // Terminal observers run after cleanup and cannot weaken the barrier.
         }
       }
+
+      if (cleanupFailed) {
+        throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_CLEANUP_FAILED')
+      }
     })
     for (const active of this.inboundCapabilities.values()) active.controller.abort()
     this.inboundCapabilities.clear()
@@ -1615,7 +1693,10 @@ export class PluginRuntimeHostManager {
           ...[...pluginNames].map((pluginName) => this.stopPlugin(pluginName)),
           ...this.barrierStops
         ]
-        if (barriers.length > 0) await Promise.all(barriers)
+        const results = await Promise.allSettled(barriers)
+        if (results.some((result) => result.status === 'rejected')) {
+          throw new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_CLEANUP_FAILED')
+        }
         await Promise.resolve()
         if (this.current.size === 0 && this.operations.size === 0 && this.barrierStops.size === 0) {
           return

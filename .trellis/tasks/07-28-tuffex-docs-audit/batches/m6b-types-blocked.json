@@ -1,0 +1,164 @@
+[
+ {
+  "component": "base-anchor",
+  "category": "type-mismatch",
+  "summary": "The `panelCard` row types the prop as `Partial<TxCardProps>`, but the real type is `BaseAnchorPanelCardProps` — a `Partial<Pick<TxCardProps, ...>>` restricted to 15 glass/mask/refraction keys — and any `variant`/`background`/`shadow`/`radius`/`padding` passed through it is silently overwritten by the dedicated props.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-anchor.zh.mdc",
+  "evidenceLine": 329,
+  "evidenceQuote": "| `panelCard` | `Partial<TxCardProps>` | `undefined` | 透传 `TxCard` 高级参数（如 `maskOpacity`、`fallbackMaskOpacity`、`surfaceMoving`、`refraction*`） |",
+  "suggestion": "Change the type cell in both zh:329 and en:329 to `BaseAnchorPanelCardProps` and add a sentence that it is a whitelist of glass/mask/refraction keys only, and that `variant / background / shadow / radius / padding` must go through `panelVariant / panelBackground / panelShadow / panelRadius / panelPadding` because `panelCardProps` (TxBaseAnchor.vue:198-205) spreads `panelCard` first and then overrides those five keys."
+ },
+ {
+  "component": "base-anchor",
+  "category": "type-mismatch",
+  "summary": "The `modelValue` row lists default `false`, but `withDefaults` sets it to `undefined`, and that `undefined` is the sentinel that selects uncontrolled mode — a reader who follows the doc and binds a literal `false` gets a permanently-closed anchor.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-anchor.zh.mdc",
+  "evidenceLine": 307,
+  "evidenceQuote": "| `modelValue` | `boolean` | `false` | 是否打开（v-model） |",
+  "suggestion": "Set the default cell to `undefined` in zh:307 / en:307 and note that leaving `modelValue` unset keeps the anchor uncontrolled (internal state), whereas passing any boolean — including `false` — switches it to controlled mode, per `open`'s getter at TxBaseAnchor.vue:58."
+ },
+ {
+  "component": "tabs",
+  "category": "type-leak",
+  "summary": "The exported `TabsProps`/`TabsAnimation`/`TabsEmits` types in tabs/src/types.ts are never imported by TxTabs.vue — the runtime component declares `animation` as `PropType<any>` and `placement`/`indicatorVariant`/`indicatorMotion` as plain `String`, so consumers get zero compile-time checking on the props the docs describe as unions.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tabs/src/TxTabs.vue",
+  "evidenceLine": 80,
+  "evidenceQuote": "    animation: { type: Object as PropType<any>, default: undefined },",
+  "suggestion": "Type the runtime props against the exported interface: `placement: { type: String as PropType<TabsProps['placement']>, default: 'left' }`, same for `indicatorVariant`/`indicatorMotion`, and `animation: { type: Object as PropType<TabsAnimation>, default: undefined }`. Also declare `emits` via `TabsEmits` and add an `expose` type so `TxTabsInstance` actually surfaces the documented `refresh`/`flip`/`action`/`size` methods (tabs.zh.mdc:523-530 documents them but `InstanceType<typeof TxTabs>` in tabs/index.ts:33 does not include them)."
+ },
+ {
+  "component": "tabs",
+  "category": "undocumented-api",
+  "summary": "TxTabItem declares a public `active` prop (`TabItemProps & { active?: boolean }`, default `false`) that is missing from both the doc's `### TxTabItem 属性` table and the exported `TabItemProps` interface, so standalone TxTabItem users can't discover the only prop that drives the `is-active` styling.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tabs/src/TxTabItem.vue",
+  "evidenceLine": 9,
+  "evidenceQuote": "const props = withDefaults(defineProps<TabItemProps & { active?: boolean }>(), {",
+  "suggestion": "Either move `active?: boolean` into `TabItemProps` in tabs/src/types.ts and add a row to the TxTabItem props tables in tabs.zh.mdc:532-539 / tabs.en.mdc:532-539 explaining that TxTabs sets it automatically and it is only set manually when using TxTabItem standalone, or keep it internal and document it as such."
+ },
+ {
+  "component": "timeline",
+  "category": "type-mismatch",
+  "summary": "The TxTimelineItem props table documents `title` and `time` as defaulting to `''`, but TxTimelineItem's `withDefaults` only sets `color` and `active`, so both actually default to `undefined` — which matters because the header block is gated on `v-if=\"title || time\"`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/timeline.zh.mdc",
+  "evidenceLine": 72,
+  "evidenceQuote": "    default: \"''\"",
+  "suggestion": "Change the `default` cells for `title` and `time` to `-` in timeline.zh.mdc:70-77 and timeline.en.mdc:70-77, and add to the description that omitting both suppresses the `.tx-timeline-item__header` row entirely (TxTimelineItem.vue:43)."
+ },
+ {
+  "component": "card-item",
+  "category": "type-leak",
+  "summary": "TxCardItem 的 `click` emit 声明为 `MouseEvent`，但 Enter 键路径用 `$event as any` 把 KeyboardEvent 从同一通道抛出，消费方按 MouseEvent 用（clientX / instanceof）会拿到错的东西。",
+  "evidenceFile": "packages/tuffex/packages/components/src/card-item/src/TxCardItem.vue",
+  "evidenceLine": 52,
+  "evidenceQuote": "@keydown.enter=\"!disabled && clickable && $emit('click', $event as any)\"",
+  "suggestion": "把 emit 签名改成 `(e: 'click', event: MouseEvent | KeyboardEvent): void`，去掉 `as any`；并在文档 Events 表把 payload 写成 `MouseEvent | KeyboardEvent`，而不是现在这句含糊的“Enter 激活在运行时复用同一事件通道”。"
+ },
+ {
+  "component": "group-block",
+  "category": "type-mismatch",
+  "summary": "TxBlockSlot Props 表说 `active` 会「切换行的激活视觉状态与图标状态」，但模板 class 绑定只有 `tx-block-slot--disabled`，SCSS 里也没有任何 active 样式规则，`active` 实际只影响 `currentIcon` 和 `icon`/`default` 插槽的作用域参数。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/group-block.zh.mdc",
+  "evidenceLine": 464,
+  "evidenceQuote": "| `active` | `boolean` | `false` | 切换行的激活视觉状态与图标状态。 |",
+  "suggestion": "二选一：要么在 TxBlockSlot 模板补 `'tx-block-slot--active': active` 并在 SCSS 里实现激活态；要么把 zh/en 描述改成「切换到 activeIcon，并把 `active` 透传给 `icon` / `default` 插槽作用域；不改变行背景等视觉样式」，同时给 `## 激活态与标签` demo 加一句说明。"
+ },
+ {
+  "component": "button",
+  "category": "type-mismatch",
+  "summary": "The `variant` row documents default `'-'` (none), but button.vue falls back to `secondary` whenever neither `variant` nor `type` is set, so an unset `variant` always renders `variant-secondary`.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/button.zh.mdc",
+  "evidenceLine": 164,
+  "evidenceQuote": "    default: '-'",
+  "suggestion": "Set the `variant` default cell to `'secondary'` (effective) in both button.zh.mdc and button.en.mdc, and note that a `type` value only participates when `variant` is unset — matching `normalizedVariant` in button.vue:91-110."
+ },
+ {
+  "component": "base-surface",
+  "category": "undocumented-api",
+  "summary": "The CSS Variables table stops at `--tx-surface-fake-index` and omits ~10 variables the component actually emits/consumes (`--tx-surface-mask-opacity-percent`, `--tx-surface-motion-cover-opacity`, `--tx-surface-refraction-edge-opacity`, `--tx-surface-refraction-streak-angle`, the `refraction-*-weight` set, `--tx-surface-fake-bg`, `--tx-surface-fake-opacity`, plus the theme hook `--tx-surface-refraction-mask-color`), contradicting the Review Notes claim that the table now records every runtime variable.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-surface.zh.mdc",
+  "evidenceLine": 253,
+  "evidenceQuote": "| `--tx-surface-fake-index` | `fakeIndex` prop | fake 伪元素渲染层的 z-index。 |",
+  "suggestion": "Either extend the table with the remaining emitted variables (mark internal ones as \"internal, do not override\") and add `--tx-surface-refraction-mask-color` as the documented theming hook, or soften the Review Notes claim to \"public/overridable variables only\". Apply the same edit to base-surface.en.mdc:253."
+ },
+ {
+  "component": "base-surface",
+  "category": "type-mismatch",
+  "summary": "`refractionStrength`, `refractionAngle` and `refractionProfile` are documented with default `-` (implying no effect when unset), but the component substitutes concrete fallbacks 62, -24 and 'filmic' via toFinite/toEnum whenever the refraction model is active.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/base-surface.zh.mdc",
+  "evidenceLine": 207,
+  "evidenceQuote": "| `refractionStrength` | `number` | - | 0-100，统一控制折射强度。 |",
+  "suggestion": "Document the effective defaults: `refractionStrength` -> `62`, `refractionAngle` -> `-24`, `refractionProfile` -> `'filmic'`, and note that passing any one of the three switches the component from raw channel offsets to the derived refraction model (`shouldUseRefractionModel`, TxBaseSurface.vue:160). Mirror in base-surface.en.mdc:207-208."
+ },
+ {
+  "component": "dialog",
+  "category": "type-mismatch",
+  "summary": "`TouchTipProps.buttons` is declared non-optional in types.ts, but both locale API tables list it with default `[]` and mark only `close` as required, so readers will believe `buttons` can be omitted.",
+  "evidenceFile": "packages/tuffex/packages/components/src/dialog/src/types.ts",
+  "evidenceLine": 205,
+  "evidenceQuote": "  buttons: TouchTipButton[]",
+  "suggestion": "Either make it `buttons?: TouchTipButton[]` in types.ts (the component already supplies `buttons: () => []` via withDefaults) or mark it *required* / *必填* in the TxTouchTip Props tables at dialog.en.mdc:245 and dialog.zh.mdc:245."
+ },
+ {
+  "component": "version-capsule",
+  "category": "type-mismatch",
+  "summary": "The `## Exposed` table types `downloadRef` / `historyRef` as `Ref<HTMLButtonElement>`, but the component declares them as `ref<HTMLButtonElement | null>(null)`, so consumers who follow the docs write `capsuleRef.value.downloadRef.value.focus()` and hit a TypeScript null error.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/version-capsule.zh.mdc",
+  "evidenceLine": 213,
+  "evidenceQuote": "| `downloadRef` | `Ref<HTMLButtonElement>` | 左侧（下载）分段按钮元素。 |",
+  "suggestion": "Change both rows in version-capsule.zh.mdc (213-214) and version-capsule.en.mdc (214-215) to `Ref<HTMLButtonElement | null>`, matching TxVersionCapsule.vue:25-26 (`const downloadRef = ref<HTMLButtonElement | null>(null)`), and note that the ref is `null` before mount."
+ },
+ {
+  "component": "drawer",
+  "category": "type-mismatch",
+  "summary": "The `zIndex` Props row documents default `1998`, but the component has no `withDefaults` entry for it and falls back to the runtime z-index manager seeded at `DRAWER_Z_INDEX_SEED = 10000`; drawer.test.ts asserts the rendered value is `10001`, so `1998` is only the dead CSS `var()` fallback that is never used.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/drawer.zh.mdc",
+  "evidenceLine": 294,
+  "evidenceQuote": "    default: '1998'",
+  "suggestion": "Change the default cell in both drawer.zh.mdc and drawer.en.mdc to `auto (allocated from the shared z-index manager, currently starting at 10001)` and note that setting `zIndex` explicitly also reseeds the manager via `refreshZIndex`."
+ },
+ {
+  "component": "collapse",
+  "category": "type-leak",
+  "summary": "`CollapseContext` is public API but is provided incorrectly: `accordion` is unwrapped to a plain boolean at setup time so it is a permanently stale snapshot when the prop changes, and `activeNames` is typed as `{ value: string[] }` instead of `Ref<string[]>`, hiding the reactive contract from anyone writing a custom collapse item.",
+  "evidenceFile": "packages/tuffex/packages/components/src/collapse/src/TxCollapse.vue",
+  "evidenceLine": 83,
+  "evidenceQuote": "accordion: props.accordion,",
+  "suggestion": "Provide `accordion: computed(() => props.accordion)` (or the whole `props` via `toRefs`) and retype `CollapseContext` as `{ activeNames: Ref<string[]>; accordion: ComputedRef<boolean>; handleItemClick: (name: string) => void }`, then use a typed `InjectionKey<CollapseContext>` instead of the raw `'collapse'` string."
+ },
+ {
+  "component": "floating",
+  "category": "undocumented-api",
+  "summary": "The Interaction Contract omits three shipped behaviours — the built-in `prefers-reduced-motion` media query that stops all motion, the `IntersectionObserver` that parks the RAF loop off-screen, and the capture-phase `scroll` + `resize` listeners — and Best Practices instead tells users to wire reduced-motion into `disabled` themselves.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/floating.en.mdc",
+  "evidenceLine": 110,
+  "evidenceQuote": "- Respect reduced-motion settings by binding them to `disabled`.",
+  "suggestion": "Document `TxFloating.vue:240-246` (`setupMotionPreference()` calls `window.matchMedia('(prefers-reduced-motion: reduce)')` and reacts to `change`), `TxFloating.vue:203-223` (visibility observer), and expand line 65's listener list to include `scroll` (capture) and `resize` (`TxFloating.vue:182-183`). Then rewrite the Best Practice to say reduced-motion is already honoured automatically and `disabled` is only for app-level opt-out."
+ },
+ {
+  "component": "icon-button",
+  "category": "type-mismatch",
+  "summary": "The `size` prop accepts `'xs' | 'sm' | 'md' | 'lg'` and ships a dedicated `.tx-icon-button--xs` rule (24px/4px radius), but both docs list only `'sm' | 'md' | 'lg'`, so the smallest size is invisible to readers.",
+  "evidenceFile": "packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue",
+  "evidenceLine": 13,
+  "evidenceQuote": "size?: 'xs' | 'sm' | 'md' | 'lg'",
+  "suggestion": "Update the Props table type cell to `'xs' \\| 'sm' \\| 'md' \\| 'lg'` in icon-button.zh.mdc:57 and icon-button.en.mdc:57 and mention the 24px xs size for dense toolbars."
+ },
+ {
+  "component": "switch",
+  "category": "hallucinated-api",
+  "summary": "The Interaction Contract claims the root renders `tabindex=\"0\"` when enabled and `tabindex=\"-1\"` when disabled, but TxSwitch renders a native `<button>` with no tabindex at all — switch.test.ts asserts `tabindex` is undefined in both states.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/switch.zh.mdc",
+  "evidenceLine": 177,
+  "evidenceQuote": "- 根节点渲染 `role=\"switch\"`、`aria-checked`、`aria-disabled`，启用时 `tabindex=\"0\"`。",
+  "suggestion": "Rewrite lines 177-178 (and switch.en.mdc:177-178) to describe what TxSwitch.vue:41-53 actually renders: a native `<button type=\"button\" role=\"switch\">` with `aria-checked` / `aria-disabled` / the native `disabled` attribute, which is focusable when enabled and removed from the tab order by `disabled` — no explicit tabindex is set."
+ },
+ {
+  "component": "stat-card",
+  "category": "undocumented-api",
+  "summary": "`hasInsight` returns false whenever the progress variant is active, so passing both `insight` and `progress`/`variant=\"progress\"` silently drops the trend block — the docs only state that `insight` falls back when `from`/`to` are non-finite.",
+  "evidenceFile": "packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue",
+  "evidenceLine": 36,
+  "evidenceQuote": "const hasInsight = computed(() => {\n  if (isProgressVariant.value)\n    return false",
+  "suggestion": "Add a sentence to the intro paragraph and the `insight` prop row in both zh/en docs: `insight` and the progress variant are mutually exclusive; when `progress`/`variant=\"progress\"` is set, `insight` is ignored."
+ }
+]

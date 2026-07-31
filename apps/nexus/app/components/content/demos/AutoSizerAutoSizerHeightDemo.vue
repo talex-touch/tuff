@@ -2,8 +2,11 @@
 import { ref } from 'vue'
 const { locale } = useI18n()
 const active = ref<'a' | 'b'>('a')
-const setTab = (next: 'a' | 'b') => {
-  active.value = next
+const sizerRef = ref<any>(null)
+function setTab(next: 'a' | 'b') {
+  void sizerRef.value?.action?.(() => {
+    active.value = next
+  })
 }
 </script>
 

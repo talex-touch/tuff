@@ -1,0 +1,30 @@
+{
+  "id": "fix-permission-revocation-296",
+  "name": "fix-permission-revocation-296",
+  "title": "修复权限撤销会话失效 #296",
+  "description": "让 revoke/revokeAll 原子清理持久与 session grants，并使运行时能力立即失效。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P0",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-30",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "8c52bf5b4",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-resolve-open-github-issues",
+  "relatedFiles": [],
+  "notes": "Atomic persistent/session revoke, alias normalization, revokeAll, and post-commit invalidation are complete. #299 consumes the same revoke event through an awaited active-resource teardown barrier. GitHub #296 is closed after joint 244/244 CoreApp, 27/27 Utils, typecheck, build, Electron smoke, and independent zero-P0/P1/P2 review.",
+  "meta": {
+    "nextAction": "Proceed with parent #302 closure.",
+    "blocker": "",
+    "evidence": "GitHub #296 closure comment; implementation commit 8c52bf5b4; joint security regression and independent review evidence."
+  }
+}

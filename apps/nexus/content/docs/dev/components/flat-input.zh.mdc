@@ -24,11 +24,13 @@ code: |
 
   const text = ref('')
   const secret = ref('')
+  const note = ref('')
   </script>
 
   <template>
     <FlatInput v-model="text" icon="i-carbon-search" placeholder="搜索项目" />
     <FlatInput v-model="secret" placeholder="密码" password />
+    <FlatInput v-model="note" placeholder="补充说明" area :non-win="true" />
   </template>
 ---
 ::::

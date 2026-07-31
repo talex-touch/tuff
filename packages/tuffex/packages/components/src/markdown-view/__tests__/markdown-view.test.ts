@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { marked } from 'marked'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxMarkdownView from '../src/TxMarkdownView.vue'
@@ -46,6 +47,26 @@ describe('txMarkdownView', () => {
 
     expect(body.find('h1').text()).toBe('Title')
     expect(body.find('li').text()).toBe('item')
+    expect(body.html()).not.toContain('<script>')
+  })
+
+  it('loads the sanitizer when sanitize is enabled after mount', async () => {
+    const wrapper = mount(TxMarkdownView, {
+      props: {
+        sanitize: false,
+        content: '# Title\n\n<script>alert(1)</script>',
+      },
+    })
+
+    // Raw html is shown while sanitize is off.
+    expect(wrapper.find('.markdown-body').find('h1').text()).toBe('Title')
+
+    await wrapper.setProps({ sanitize: true })
+    await flushSanitizer()
+
+    const body = wrapper.find('.markdown-body')
+
+    expect(body.find('h1').text()).toBe('Title')
     expect(body.html()).not.toContain('<script>')
   })
 
@@ -120,5 +141,21 @@ describe('txMarkdownView', () => {
 
     expect(wrapper.classes()).toContain('light')
     expect(wrapper.attributes('data-theme')).toBe('light')
+  })
+
+  it('does not mutate the shared global marked singleton', async () => {
+    const setOptionsSpy = vi.spyOn(marked, 'setOptions')
+
+    const wrapper = mount(TxMarkdownView, {
+      props: { sanitize: false, content: 'line one\nline two' },
+    })
+    await flushSanitizer()
+
+    // The per-instance parser must not reconfigure the app-wide `marked` singleton.
+    expect(setOptionsSpy).not.toHaveBeenCalled()
+    // ...while still applying its own gfm/breaks (a single newline becomes <br>).
+    expect(wrapper.find('.markdown-body').html()).toContain('<br')
+
+    setOptionsSpy.mockRestore()
   })
 })

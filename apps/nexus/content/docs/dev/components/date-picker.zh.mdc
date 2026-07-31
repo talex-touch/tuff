@@ -2,6 +2,9 @@
 title: "DatePicker 日期选择"
 description: "基于 TxPicker 的日期选择器，使用 YYYY-MM-DD 模型。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [date-picker, form, calendar]
 syncStatus: reviewed
 verified: true
 ---

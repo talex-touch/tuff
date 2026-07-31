@@ -37,6 +37,7 @@ const KNOWN_PERMISSION_IDS = new Set([
   'intelligence.basic',
   'intelligence.admin',
   'intelligence.agents',
+  'voice.dictation',
   'storage.plugin',
   'storage.shared',
   'search.root-results',
@@ -151,12 +152,12 @@ for (const pluginName of pluginDirs) {
   }
 
   // 3. Entry point exists + syntax check
-  const entryFile = manifest.main || 'index.js'
+  const entryFile = manifest.main || manifest.build?.index?.entry || 'index.js'
   const entryPath = path.join(pluginPath, entryFile)
   if (!fs.existsSync(entryPath)) {
     logWarn(pluginName, `Entry file "${entryFile}" not found (plugin may be UI-only)`)
   }
-  else {
+  else if (/\.[cm]?js$/i.test(entryFile)) {
     try {
       execSync(`node -c "${entryPath}"`, { stdio: 'pipe' })
     }

@@ -2,6 +2,8 @@
 title: "Splitter 分割面板"
 description: "双面板可拖拽布局，支持指针与键盘调整、比例夹取、吸附步进，以及水平/垂直方向。"
 category: Layout
+status: beta
+since: 1.0.0
 tags: [layout, resize, panels]
 syncStatus: reviewed
 verified: true
@@ -72,7 +74,7 @@ code: |
 
 - 指针拖拽读取 splitter 根节点的 bounding box：水平模式使用 `clientX / width`，垂直模式使用 `clientY / height`。
 - 键盘调整在水平模式使用 ArrowLeft / ArrowRight，在垂直模式使用 ArrowUp / ArrowDown；每次先变化 `0.02`，再执行 clamp / snap。
-- 分隔条渲染 `role="separator"`；水平分割时 `aria-orientation="vertical"`，垂直分割时为 `horizontal`。
+- 分隔条渲染 `role="separator"`，带 `aria-label="Resize"`；水平分割时 `aria-orientation="vertical"`，垂直分割时为 `horizontal`。当前分割位置通过 `aria-valuenow` 暴露，`min`/`max` 边界通过 `aria-valuemin`/`aria-valuemax` 暴露，三者都是整数百分比（`0..100`）。
 - 禁用状态下分隔条使用 `tabindex="-1"`，指针/键盘变化会被忽略，活动拖拽会结束。
 - 组件不持久化布局。需要记住用户面板尺寸时，请在调用方保存 `v-model` 比例。
 
@@ -86,9 +88,9 @@ code: |
 
 ## 审阅说明
 
-- **可访问性说明:** 分隔条可聚焦，带 `role="separator"`，并支持方向键调整，但没有暴露 `aria-valuenow`、`aria-valuemin` 或 `aria-valuemax`。精确调整场景建议在外部补充可见比例/尺寸反馈。
+- **可访问性说明:** 分隔条可聚焦，带 `role="separator"`、`aria-label="Resize"`，支持方向键调整，并把 `aria-valuenow` / `aria-valuemin` / `aria-valuemax` 以整数百分比（当前比例与 `min`/`max` 边界缩放到 `0..100`）暴露，辅助技术可据此播报分割位置。精确调整场景仍建议补充可见比例/尺寸反馈。
 - **布局说明:** 渲染比例会夹取到 `0..1`；指针/键盘派发值先按 `min`/`max` 夹取，再执行 snap。调用方应保证 `min <= max`，组件不会归一化反向边界。
-- **实测覆盖:** `splitter.test.ts` 覆盖水平/垂直渲染、分隔条方向、slot 内容、比例/bar CSS 变量、带 clamp/snap 的指针拖拽、垂直坐标计算、键盘调整、禁用阻断，以及拖拽中禁用时的 drag-end。
+- **实测覆盖:** `splitter.test.ts` 覆盖水平/垂直渲染、分隔条方向、`aria-valuenow`/`aria-valuemin`/`aria-valuemax`、slot 内容、比例/bar CSS 变量、带 clamp/snap 的指针拖拽、垂直坐标计算、键盘调整、禁用阻断，以及拖拽中禁用时的 drag-end。
 
 ## Source
 

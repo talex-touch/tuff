@@ -209,9 +209,9 @@ code: |
 
 | 事件名 | 参数 | 说明 |
 |------|------|------|
-| `open` | - | 打开 |
-| `close` | - | 关闭 |
-| `update:modelValue` | `boolean` | v-model 更新 |
+| `open` | - | 内部或非受控状态打开时触发。 |
+| `close` | - | 内部或非受控状态关闭时触发。 |
+| `update:modelValue` | `boolean` | Popover 请求变更打开状态时触发（受控 / 非受控均会发出）。 |
 
 ### 插槽
 

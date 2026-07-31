@@ -3,6 +3,8 @@ import type { CollapseContext } from './types'
 import { computed, inject, useId } from 'vue'
 import { TxIcon } from '../../icon'
 
+defineOptions({ name: 'TxCollapseItem' })
+
 interface Props {
   title?: string
   name?: string
@@ -27,6 +29,30 @@ function handleHeaderClick() {
   if (props.disabled || !collapse)
     return
   collapse.handleItemClick(itemName.value)
+}
+
+// CSS cannot tween height:0 ↔ height:auto, so drive the disclosure height in JS:
+// grow from 0 to the measured content height, then release to auto (and reverse).
+function onEnter(el: Element) {
+  const node = el as HTMLElement
+  node.style.height = '0px'
+  void node.offsetHeight
+  node.style.height = `${node.scrollHeight}px`
+}
+
+function onAfterEnter(el: Element) {
+  ;(el as HTMLElement).style.height = ''
+}
+
+function onLeave(el: Element) {
+  const node = el as HTMLElement
+  node.style.height = `${node.scrollHeight}px`
+  void node.offsetHeight
+  node.style.height = '0px'
+}
+
+function onAfterLeave(el: Element) {
+  ;(el as HTMLElement).style.height = ''
 }
 </script>
 
@@ -54,7 +80,13 @@ function handleHeaderClick() {
       </slot>
     </button>
 
-    <Transition name="tx-collapse">
+    <Transition
+      name="tx-collapse"
+      @enter="onEnter"
+      @after-enter="onAfterEnter"
+      @leave="onLeave"
+      @after-leave="onAfterLeave"
+    >
       <div
         v-show="isActive"
         :id="contentId"
@@ -128,14 +160,10 @@ function handleHeaderClick() {
   line-height: 1.6;
 }
 
-/* Transition animations */
+/* Height is animated in JS (@enter/@leave); CSS cannot tween 0 ↔ auto. */
 .tx-collapse-enter-active,
 .tx-collapse-leave-active {
+  overflow: hidden;
   transition: height 0.3s ease-in-out;
-}
-
-.tx-collapse-enter-from,
-.tx-collapse-leave-to {
-  height: 0 !important;
 }
 </style>

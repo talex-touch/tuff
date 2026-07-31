@@ -1,6 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
-import { defineComponent } from 'vue'
+import { defineComponent, nextTick } from 'vue'
+import TuffInput from '../../input/src/TxInput.vue'
+import TxTree from '../../tree/src/TxTree.vue'
 import TxTreeSelect from '../src/TxTreeSelect.vue'
 
 const PopoverStub = defineComponent({
@@ -63,5 +65,26 @@ describe('txTreeSelect', () => {
 
     const emitted = wrapper.emitted('update:modelValue')
     expect(emitted?.[0][0]).toBeUndefined()
+  })
+
+  it('resets the search query when the dropdown closes', async () => {
+    const wrapper = mount(TxTreeSelect, {
+      props: { nodes, searchable: true },
+      global: { stubs: { TxPopover: PopoverStub } },
+    })
+
+    // Open and type a filter.
+    ;(wrapper.vm as any).open()
+    await nextTick()
+    wrapper.findComponent(TuffInput).vm.$emit('update:modelValue', 'alph')
+    await nextTick()
+    expect(wrapper.findComponent(TxTree).props('filterText')).toBe('alph')
+
+    // Closing must clear the filter so reopening starts clean rather than showing
+    // the previous query.
+    ;(wrapper.vm as any).close()
+    await nextTick()
+
+    expect(wrapper.findComponent(TxTree).props('filterText')).toBe('')
   })
 })

@@ -26,8 +26,11 @@ const name = computed(() => {
     return 'tx-slide-fade'
   if (props.preset === 'rebound')
     return 'tx-rebound'
-  if (props.preset === 'smooth-size')
-    return 'tx-smooth-size'
+  // `smooth-size` has no TransitionGroup CSS — its animation lives in the dedicated
+  // non-group TxTransitionSmoothSize path, which handles the `!group` case above. Only a
+  // grouped smooth-size reaches this `name`, where `tx-smooth-size-*` classes don't exist
+  // and would silently animate nothing, so fall through to `tx-fade` (it ships `-move`
+  // support) to keep grouped lists animating.
   return 'tx-fade'
 })
 
@@ -55,6 +58,8 @@ const wrapperStyle = computed<StyleValue>(() => {
 <template>
   <TxTransitionSmoothSize
     v-if="preset === 'smooth-size' && !group"
+    :class="wrapperClass"
+    :style="wrapperStyle"
     v-bind="passThroughAttrs"
     :duration="duration"
     :easing="easing"
@@ -138,5 +143,26 @@ const wrapperStyle = computed<StyleValue>(() => {
 .tx-slide-fade-move,
 .tx-rebound-move {
   transition: transform var(--tx-transition-duration) var(--tx-transition-easing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-fade-enter-active,
+  .tx-fade-leave-active,
+  .tx-slide-fade-enter-active,
+  .tx-slide-fade-leave-active,
+  .tx-rebound-enter-active,
+  .tx-rebound-leave-active,
+  .tx-fade-move,
+  .tx-slide-fade-move,
+  .tx-rebound-move {
+    transition-duration: 0.01ms;
+  }
+
+  .tx-slide-fade-enter-from,
+  .tx-slide-fade-leave-to,
+  .tx-rebound-enter-from,
+  .tx-rebound-leave-to {
+    transform: none;
+  }
 }
 </style>

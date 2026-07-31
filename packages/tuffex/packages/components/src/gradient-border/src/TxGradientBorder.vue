@@ -86,4 +86,10 @@ const rootStyle = computed<CSSProperties>(() => {
     --tx-gradient-angle: 360deg;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-gradient-border::before {
+    animation: none;
+  }
+}
 </style>

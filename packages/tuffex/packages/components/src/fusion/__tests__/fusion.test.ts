@@ -87,4 +87,32 @@ describe('txFusion', () => {
     expect(disabled.classes()).toContain('is-disabled')
     expect(disabled.emitted('update:modelValue')).toBeUndefined()
   })
+
+  it('exposes toggle-button semantics and keyboard activation for click trigger', async () => {
+    const wrapper = mount(TxFusion, {
+      props: { trigger: 'click' },
+    })
+
+    // A click-trigger fusion is a toggle button: reachable and pressed-state exposed.
+    expect(wrapper.attributes('role')).toBe('button')
+    expect(wrapper.attributes('tabindex')).toBe('0')
+    expect(wrapper.attributes('aria-pressed')).toBe('false')
+
+    // Enter toggles it on and reflects the new pressed state.
+    await wrapper.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.classes()).toContain('is-active')
+    expect(wrapper.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.emitted('update:modelValue')?.[0][0]).toBe(true)
+
+    // Space toggles it back off.
+    await wrapper.trigger('keydown', { key: ' ' })
+    expect(wrapper.classes()).not.toContain('is-active')
+  })
+
+  it('leaves hover/manual fusions free of button semantics', () => {
+    const hover = mount(TxFusion)
+    // No over-blocking: a hover fusion is not keyboard-interactive.
+    expect(hover.attributes('role')).toBeUndefined()
+    expect(hover.attributes('tabindex')).toBeUndefined()
+  })
 })

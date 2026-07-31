@@ -11,12 +11,11 @@ verified: true
 
 # LayoutSkeleton 布局骨架
 
-> 用于页面/面板级别的布局占位。  
-> **状态**：Beta
+`TxLayoutSkeleton` 是页面/面板级的布局占位骨架：外层容器决定尺寸，组件填满容器并渲染固定的 header + 侧栏 + 内容行结构。适合最终布局形状稳定的页面级加载；不要用它替代表格行占位。
 
+## 基础用法
 
-## Demo
-### Layout Placeholder
+### 布局占位
 容器决定骨架尺寸。
 :::TuffDemoWrapper{demo="LayoutSkeletonLayoutPlaceholderDemo" code-lang="vue"}
 ---
@@ -28,22 +27,19 @@ code: |
   </template>
 ---
 :::
-## 基础用法
-:::TuffCodeBlock{lang="vue"}
+
+### 面板占位
+布局骨架搭配卡片容器使用。
+:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="height: 240px;">
+    <TxCard>
       <TxLayoutSkeleton />
-    </div>
+    </TxCard>
   </template>
 ---
 :::
-
-## 使用建议
-- 外层容器决定骨架尺寸与布局比例。
-- 适合页面级加载，占位期间保持节奏感。
-- 内容区行宽使用固定序列，保证 SSR、hydration 与测试输出稳定。
 
 ## API
 
@@ -71,35 +67,7 @@ rows:
 - `TxLayoutSkeleton` 无 props、events 或 slots。
 - 组件固定渲染 header、6 个 sidebar item 与 8 条内容行。
 - 内容行宽度是确定性的，不依赖运行时随机数。
-
-## 后台数据运维面板
-
-`TxLayoutSkeleton` 适合放在详情栏、侧边摘要或页面级占位里，展示“布局即将出现”的结构，而不是替代具体表格行。
-
-:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="数据运维面板" description="布局骨架用于侧栏/详情区域，表格主体继续由 DataTable 管理。"}
----
-code: |
-  <template>
-    <div style="height: 190px;">
-      <TxLayoutSkeleton />
-    </div>
-  </template>
----
-:::
-
-## 组合示例
-### 面板占位
-布局骨架搭配卡片容器使用。
-:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxCard>
-      <TxLayoutSkeleton />
-    </TxCard>
-  </template>
----
-:::
+- 根节点是 `aria-hidden="true"`，装饰性骨架不进入无障碍树。页面/面板的加载态应由宿主播报（例如区域上的 `aria-busy`），就绪后再切换到真实内容。
 
 ## 最佳实践
 
@@ -111,7 +79,7 @@ code: |
 ## 审阅说明
 
 - 已对照 `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue` 与 `layout-skeleton.test.ts` 核对。
-- **实测覆盖:** 固定骨架结构、6 个 sidebar item、8 条内容行、确定性内容宽度和 install 注册。
+- **实测覆盖:** 固定骨架结构、装饰性 `aria-hidden` 根节点、6 个 sidebar item、8 条内容行、确定性内容宽度和 install 注册。
 - API 说明：该组件有意不提供 props。尺寸、比例和位置必须由父容器决定。
 - 渲染说明：内容行宽度是固定值，不使用随机数，因此 SSR、hydration、文档快照和视觉测试保持稳定。
 

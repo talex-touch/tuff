@@ -386,9 +386,7 @@ code: |
 
 监听剪贴板变化事件。
 
-::: warning 重要
-插件必须先调用 `box.allowClipboard(types)` 声明要监听的类型，否则不会收到任何事件。
-:::
+> **重要**：插件必须先调用 `box.allowClipboard(types)` 声明要监听的类型，否则不会收到任何事件。
 
 :::TuffCodeBlock{lang="typescript"}
 ---

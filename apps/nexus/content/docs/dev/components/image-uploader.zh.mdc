@@ -93,6 +93,8 @@ const images = ref([
 | `accept` | `string` | `'image/*'` | 透传给原生 input 的可接受图片类型。 |
 | `disabled` | `boolean` | `false` | 禁用添加与删除图片。 |
 | `max` | `number` | `9` | 图片总数量上限。 |
+| `uploadText` | `string` | `'Upload'` | 添加块上的文案。覆盖以本地化。 |
+| `removeLabel` | `(name?: string) => string` | `Remove {name}` | 生成每个删除按钮的 `aria-label`。覆盖以本地化。 |
 
 ### ImageUploaderFile
 

@@ -189,6 +189,7 @@ code: |
 - group 级 `disabled` 会禁用所有子项；item 级 `disabled` 只禁用当前项。
 - 键盘导航只遍历启用项：方向键循环切换，`Home` / `End` 跳到第一个 / 最后一个启用项。
 - 按钮组会渲染动画指示器。`glass` 和 `blur` 指示器下，`updateOnSettled` 默认等指示器动画收敛后再发出模型更新。
+- 按钮组的指示器可横向拖拽：在 `type="button"` 组里按住指示器拖动，松手时会吸附并选中最近的启用项，触发 `update:modelValue` / `change`；整组 `disabled` 时忽略拖拽（pointerdown 不响应）。
 - `direction` 只影响 `standard` 和 `card`；按钮组始终解析为横向布局。
 
 ## API

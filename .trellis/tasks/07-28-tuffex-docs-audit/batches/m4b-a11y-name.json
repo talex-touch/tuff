@@ -1,0 +1,209 @@
+[
+ {
+  "component": "typing-indicator",
+  "category": "a11y",
+  "summary": "With `showText=false` the `role=\"status\" aria-live=\"polite\"` region contains only `aria-hidden=\"true\"` loaders, producing an empty live region that announces nothing, and the component exposes no `aria-label` prop to compensate.",
+  "evidenceFile": "packages/tuffex/packages/components/src/chat/src/TxTypingIndicator.vue",
+  "evidenceLine": 72,
+  "evidenceQuote": "  <div class=\"tx-typing-indicator\" role=\"status\" aria-live=\"polite\">",
+  "suggestion": "Every loader branch (lines 73, 92, 94, 96, 98, 104) is marked `aria-hidden=\"true\"`, and the only text node is gated behind `v-if=\"showText\"` (line 109). `grep aria-label` on the component returns nothing, and `TypingIndicatorProps` (chat/src/types.ts:68-83) has no label field. The docs lean hard on this mode — `show-text=\"false\"` appears 11 times in typing-indicator.zh.mdc. Either render a visually-hidden `<span class=\"sr-only\">{{ text }}</span>` when `showText` is false, or add an `ariaLabel?: string` prop bound to `aria-label` on the root and document it in the Props table."
+ },
+ {
+  "component": "tabs",
+  "category": "a11y",
+  "summary": "TxTabs/TxTabItem expose no tab semantics at all — no `role=\"tablist\"` on `.tx-tabs__nav-inner`, no `role=\"tab\"`/`aria-selected` on the tab buttons, no `role=\"tabpanel\"`/`aria-labelledby` on the panel, and no arrow-key roving focus; active state is conveyed by the `is-active` CSS class only.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tabs/src/TxTabItem.vue",
+  "evidenceLine": 33,
+  "evidenceQuote": "    :class=\"{ 'is-active': active, 'is-disabled': disabled }\"",
+  "suggestion": "Add `role=\"tab\"`, `:aria-selected=\"active\"`, `:tabindex=\"active ? 0 : -1\"` and an `id`/`aria-controls` pairing to TxTabItem's button; add `role=\"tablist\"` + `:aria-orientation` to the `.tx-tabs__nav-inner` div (TxTabs.vue:738) and `role=\"tabpanel\"` + `aria-labelledby` to `.tx-tabs__select-slot` (TxTabs.vue:687); implement ArrowLeft/Right (horizontal) and ArrowUp/Down (vertical) roving navigation. Note tabs.test.ts:110 currently asserts `role` is undefined, so that assertion must be updated too."
+ },
+ {
+  "component": "slider",
+  "category": "a11y",
+  "summary": "The `<input type=\"range\">` has no accessible name and no `aria-valuetext`: `SliderProps` exposes no `ariaLabel`/`ariaLabelledby`, and because the root element is `<div class=\"tx-slider\">` with default `inheritAttrs`, a consumer-supplied `aria-label` lands on that unlabelled wrapper div instead of the input.",
+  "evidenceFile": "packages/tuffex/packages/components/src/slider/src/TxSlider.vue",
+  "evidenceLine": 573,
+  "evidenceQuote": "type=\"range\"",
+  "suggestion": "Add `ariaLabel?: string` / `ariaLabelledby?: string` to SliderProps and bind them onto the input, and bind `:aria-valuetext=\"tooltipText\"` so screen readers announce `35%` rather than the bare number when `formatValue`/`tooltipFormatter` is set. Alternatively set `inheritAttrs: false` and `v-bind=\"$attrs\"` on the input."
+ },
+ {
+  "component": "dialog",
+  "category": "a11y",
+  "summary": "`TxBlowDialog` sets `aria-labelledby` only; its default content region carries no id and the dialog has no `aria-describedby`, so screen readers never announce the message — contradicting the doc claim that Blow and Popper both use stable internal ids for their title/content regions.",
+  "evidenceFile": "packages/tuffex/packages/components/src/dialog/src/TxBlowDialog.vue",
+  "evidenceLine": 168,
+  "evidenceQuote": "          <div v-if=\"message || messageHtml\" class=\"tx-blow-dialog__content\">",
+  "suggestion": "Mirror TxPopperDialog: add `id=\"tx-blow-dialog-content\"` to the content div and `:aria-describedby=\"message || messageHtml ? 'tx-blow-dialog-content' : undefined\"` on the root. While there, switch both Blow and Popper to `useId()` like Bottom/TouchTip do — the hard-coded ids collide when two dialogs stack (which the `index`/z-index-manager API explicitly supports)."
+ },
+ {
+  "component": "command-palette",
+  "category": "a11y",
+  "summary": "The command list has no listbox semantics: items are plain `<button>` elements whose active state is only a CSS class, with no `role=\"listbox\"`/`role=\"option\"`/`aria-selected`/`aria-activedescendant`, no accessible name on the search `<input>`, and no `aria-label` on the `role=\"dialog\"` overlay.",
+  "evidenceFile": "packages/tuffex/packages/components/src/command-palette/src/TxCommandPalette.vue",
+  "evidenceLine": 241,
+  "evidenceQuote": "              :class=\"{\n                'is-active': index === activeIndex,\n                'is-disabled': cmd.disabled,\n              }\"",
+  "suggestion": "Give the list container `role=\"listbox\"` with a generated id, give each item `role=\"option\"` + `:aria-selected=\"index === activeIndex\"` + a stable id, wire `aria-controls` and `:aria-activedescendant` on the input, add `aria-label` (or `aria-labelledby` pointing at the input) to the overlay dialog, and set `role=\"combobox\"`/`aria-label` on the input."
+ },
+ {
+  "component": "nav-bar",
+  "category": "a11y",
+  "summary": "The left/right zone buttons carry hardcoded English `aria-label`s that override the slot content's accessible name, so the documented \"Save\" right-slot example is announced to screen readers as \"Navigation right action\", and there is no prop to supply a localized label.",
+  "evidenceFile": "packages/tuffex/packages/components/src/nav-bar/src/TxNavBar.vue",
+  "evidenceLine": 94,
+  "evidenceQuote": "        aria-label=\"Navigation right action\"",
+  "suggestion": "Only apply a fallback `aria-label` when the corresponding slot is absent (e.g. `:aria-label=\"slots.right ? undefined : rightLabel\"`), and add `backLabel` / `leftLabel` / `rightLabel` props so apps can localize the built-in \"Back\" string at line 68."
+ },
+ {
+  "component": "copy-button",
+  "category": "a11y",
+  "summary": "Copy success is communicated only by swapping the visible label and the button's own `aria-label` (`buttonLabel`), with no live region, so a screen-reader user who activates the button gets no announcement that the copy happened.",
+  "evidenceFile": "packages/tuffex/packages/components/src/copy-button/src/TxCopyButton.vue",
+  "evidenceLine": 102,
+  "evidenceQuote": ":aria-label=\"buttonLabel\"",
+  "suggestion": "Add a visually-hidden `<span role=\"status\" aria-live=\"polite\">` inside the button (or as a sibling) that renders `copiedLabel` only while `copied` is true, and document it in the Interaction Contract sections of copy-button.zh.mdc:37-43 / copy-button.en.mdc:37-43."
+ },
+ {
+  "component": "ai-elements",
+  "category": "a11y",
+  "summary": "TxAiMessage puts `aria-hidden=\"true\"` on the wrapper that hosts the `avatar` slot, and labels the typing indicator with `aria-label` on a role-less `<div>`, so the documented \"AI is typing\" state is never announced in the polite live region.",
+  "evidenceFile": "packages/tuffex/packages/components/src/ai-elements/src/TxAiMessage.vue",
+  "evidenceLine": 78,
+  "evidenceQuote": "          <div v-if=\"(message.status === 'pending' || message.status === 'streaming') && !message.content\" class=\"tx-ai-message__typing\" aria-label=\"AI is typing\">",
+  "suggestion": "Give the typing indicator `role=\"status\"` (or render visually-hidden text) so the label is exposed — `aria-label` on a generic div is ignored by AT. Separately, move `aria-hidden=\"true\"` from the slot wrapper (line 63) onto the fallback `<img>`/initial `<span>` only, so a custom `avatar` slot containing interactive or meaningful content is not removed from the a11y tree."
+ },
+ {
+  "component": "chat",
+  "category": "a11y",
+  "summary": "Attachment thumbnails render as a `<button>` whose only child is `<img :alt=\"a.name || ''\">`; when `ChatMessageAttachment.name` is omitted (documented as optional) the button has no accessible name at all, so screen-reader users hear an unlabeled button.",
+  "evidenceFile": "packages/tuffex/packages/components/src/chat/src/TxChatMessage.vue",
+  "evidenceLine": 88,
+  "evidenceQuote": "            <img :src=\"a.url\" :alt=\"a.name || ''\" loading=\"lazy\">",
+  "suggestion": "Give the thumbnail button a deterministic label, e.g. `:aria-label=\"a.name || 'Open image attachment'\"` on the `<button>` while keeping `alt=\"\"` on the decorative `<img>`, and document the fallback label in the `ChatMessageAttachment.name` row so hosts know when to supply it."
+ },
+ {
+  "component": "chat-composer",
+  "category": "a11y",
+  "summary": "The composer textarea has no accessible name — only a placeholder — and because TxChatComposer keeps default attribute fallthrough, an `aria-label` passed by the host lands on the root `<div>` instead of the textarea.",
+  "evidenceFile": "packages/tuffex/packages/components/src/chat/src/TxChatComposer.vue",
+  "evidenceLine": 122,
+  "evidenceQuote": "        :placeholder=\"placeholder\"",
+  "suggestion": "Add an `ariaLabel` prop (or set `inheritAttrs: false` and `v-bind=\"$attrs\"` on the textarea) so hosts can name the field, defaulting to the placeholder text; document it in the Props table of both language files."
+ },
+ {
+  "component": "textarea",
+  "category": "a11y",
+  "summary": "The root element is a `<label>` that also contains the character counter, so when `showCount` is on the textarea's accessible name becomes the counter text (e.g. \"0/160\"), and `aria-live=\"polite\"` re-announces it on every keystroke.",
+  "evidenceFile": "packages/tuffex/packages/components/src/textarea/src/TxTextarea.vue",
+  "evidenceLine": 112,
+  "evidenceQuote": "    <span v-if=\"showCount\" class=\"tx-textarea__count\" aria-live=\"polite\">",
+  "suggestion": "Move the counter out of the naming path: render the root as a `<div>` (keeping a click-to-focus handler), or keep the label and mark the counter `aria-hidden=\"true\"` while exposing the count to AT through a debounced visually-hidden live region; drop the per-keystroke `aria-live` on the visible counter."
+ },
+ {
+  "component": "pagination",
+  "category": "a11y",
+  "summary": "All accessible names are hardcoded English string literals (`aria-label=\"Pagination\"`, `\"First page\"`, `\"Previous page\"`, `\"Next page\"`, `\"Last page\"`) with no prop or slot to override, so screen-reader users in a zh UI get English-only navigation labels.",
+  "evidenceFile": "packages/tuffex/packages/components/src/pagination/src/TxPagination.vue",
+  "evidenceLine": 88,
+  "evidenceQuote": "          aria-label=\"First page\"",
+  "suggestion": "Add optional label props (e.g. `ariaLabel`, `prevLabel`, `nextLabel`, `firstLabel`, `lastLabel`) to `PaginationProps` defaulting to the current English strings, bind them in the template, and document them in the Props table alongside the existing `info` slot guidance."
+ },
+ {
+  "component": "tag",
+  "category": "a11y",
+  "summary": "The close button's accessible name is the hardcoded English string `Remove tag` on an inner element, so it cannot be localized or overridden by attribute fallthrough in the bilingual (zh/en) docs and app.",
+  "evidenceFile": "packages/tuffex/packages/components/src/tag/src/TxTag.vue",
+  "evidenceLine": 128,
+  "evidenceQuote": "aria-label=\"Remove tag\"",
+  "suggestion": "Add a `closeAriaLabel?: string` prop defaulting to `'Remove tag'` and bind it (`:aria-label=\"closeAriaLabel\"`), then document it in the Props table so zh consumers can pass '移除标签'."
+ },
+ {
+  "component": "flat-select",
+  "category": "a11y",
+  "summary": "The trigger carries `role=\"combobox\"` but the options have no `id` and the trigger has no `aria-activedescendant`, so ArrowUp/ArrowDown navigation (which keeps DOM focus on the trigger) is never announced by screen readers; the `role=\"listbox\"` container also has no accessible name.",
+  "evidenceFile": "packages/tuffex/packages/components/src/flat-select/src/TxFlatSelect.vue",
+  "evidenceLine": 222,
+  "evidenceQuote": "      role=\"combobox\"",
+  "suggestion": "Give each `TxFlatSelectItem` a derived id (e.g. `${dropdownId}-opt-${value}`), bind `:aria-activedescendant` on the trigger to the currently highlighted option id while open, and add `aria-label`/`aria-labelledby` on the listbox div."
+ },
+ {
+  "component": "segmented-slider",
+  "category": "a11y",
+  "summary": "Each segment button contains only an empty `<span class=\"dot\">` when `showLabels` is false or a segment has no `label`, leaving the buttons with no accessible name; selection state is also exposed as `aria-pressed` (toggle-button semantics) with no radiogroup role and no arrow-key navigation.",
+  "evidenceFile": "packages/tuffex/packages/components/src/segmented-slider/src/TxSegmentedSlider.vue",
+  "evidenceLine": 96,
+  "evidenceQuote": "        <span class=\"tx-segmented-slider__dot\" />",
+  "suggestion": "Always bind `:aria-label=\"segment.label ?? String(segment.value)\"` on the segment button, wrap the track in `role=\"radiogroup\"` with `role=\"radio\"` + `:aria-checked` on each segment, and add ArrowLeft/ArrowRight (ArrowUp/ArrowDown when `vertical`) keydown handling."
+ },
+ {
+  "component": "image-gallery",
+  "category": "a11y",
+  "summary": "All user-facing strings are hardcoded English with no prop/slot override — the thumbnail `aria-label` template `Open {label} preview`, the `Image N` fallback, the `Previous image`/`Next image` labels, the visible `Prev`/`Next` button text and the `Preview` modal title fallback — so a Chinese app announces English to screen readers and shows English chrome.",
+  "evidenceFile": "packages/tuffex/packages/components/src/image-gallery/src/TxImageGallery.vue",
+  "evidenceLine": 89,
+  "evidenceQuote": "        :aria-label=\"`Open ${getItemLabel(item, i)} preview`\"",
+  "suggestion": "Add optional `labels` props (e.g. `previousLabel`, `nextLabel`, `openLabelFormatter`, `fallbackTitle`) or named slots for the footer controls, defaulting to today's English strings, and document them in the Props table of both locale docs."
+ },
+ {
+  "component": "steps",
+  "category": "a11y",
+  "summary": "The clickable step `<button>` (`.tx-step__head`) wraps only the number/icon; `title` and `description` render in a sibling `.tx-step__content` div, so the button's accessible name is just the step number.",
+  "evidenceFile": "packages/tuffex/packages/components/src/steps/src/TxStep.vue",
+  "evidenceLine": 108,
+  "evidenceQuote": "    <div class=\"tx-step__content\">",
+  "suggestion": "Either move `.tx-step__content` inside the `<component :is>` head, or add `:aria-label=\"title\"` / `aria-describedby` linking the head to the title node. Verified: `head.text()` is `\"1\"` and `head.attributes('aria-label')` is `undefined` for a step with `title=\"Start\" description=\"Collect basics\"`, so screen-reader users tabbing the steps hear only \"1, button\", \"2, button\"."
+ },
+ {
+  "component": "markdown-editor",
+  "category": "a11y",
+  "summary": "The WYSIWYG surface declares `role=\"textbox\"` but has no `aria-label`/`aria-labelledby`, and the source `<textarea>` is likewise unnamed, so both editing surfaces announce with no accessible name.",
+  "evidenceFile": "packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue",
+  "evidenceLine": 519,
+  "evidenceQuote": "        role=\"textbox\"",
+  "suggestion": "Add an `ariaLabel` prop (defaulting to something like \"Markdown editor\") and bind it to both the `role=\"textbox\"` div (line 519) and the `<textarea>` (line 530); document it in the Props table. Verified: `surface.attributes('aria-label')` and `aria-labelledby` are both `undefined`, as is the textarea's `aria-label`."
+ },
+ {
+  "component": "icon-button",
+  "category": "a11y",
+  "summary": "`label` defaults to `''`, which makes `ariaLabel` `undefined`, so an icon-only `TxIconButton` with no label renders a button whose only child is `aria-hidden` — it has no accessible name and no dev warning fires.",
+  "evidenceFile": "packages/tuffex/packages/components/src/icon-button/src/TxIconButton.vue",
+  "evidenceLine": 32,
+  "evidenceQuote": "const ariaLabel = computed(() => props.label || undefined)",
+  "suggestion": "Emit a dev-mode `console.warn` when `!props.label` and no default slot is supplied (mirroring the TxFlatRadioItem context warning at TxFlatRadioItem.vue:17), so the docs' \"纯图标操作必填\" contract is actually enforced."
+ },
+ {
+  "component": "number-input",
+  "category": "a11y",
+  "summary": "Both step buttons carry hardcoded English aria-labels (\"Decrease value\" / \"Increase value\") with no prop or slot to localize them, and `inheritAttrs: false` routes all fallthrough attrs to the input, so consumers cannot override them either.",
+  "evidenceFile": "packages/tuffex/packages/components/src/number-input/src/TxNumberInput.vue",
+  "evidenceLine": 136,
+  "evidenceQuote": "aria-label=\"Decrease value\"",
+  "suggestion": "Add `decreaseLabel` / `increaseLabel` string props (defaulting to the current English strings, mirroring how TxFileUploader exposes `buttonText`/`dropText`/`hintText`) and document them in the Props table."
+ },
+ {
+  "component": "date-picker",
+  "category": "a11y",
+  "summary": "The field calendar puts `role=\"gridcell\"` buttons directly inside a `role=\"grid\"` container with no `role=\"row\"` layer, and each cell's only accessible name is the bare day number while the weekday header is `aria-hidden`.",
+  "evidenceFile": "packages/tuffex/packages/components/src/date-picker/src/TxDatePicker.vue",
+  "evidenceLine": 451,
+  "evidenceQuote": "      <div class=\"tx-date-picker-calendar__grid\" role=\"grid\">",
+  "suggestion": "Wrap each week of 7 cells in a `role=\"row\"` element (ARIA requires gridcell to be owned by a row), give cells `:aria-label=\"cell.key\"` so the full `YYYY-MM-DD` is announced, and expose the weekday header as a `role=\"row\"` of `columnheader`s instead of `aria-hidden`."
+ },
+ {
+  "component": "transfer",
+  "category": "a11y",
+  "summary": "Every row `TxCheckbox` is rendered with no `label`, no default slot and no `ariaLabel`, and the row text lives in a sibling `<span>`, so `TxCheckbox`'s `effectiveAriaLabel` resolves to `undefined` and the emitted `<button role=\"checkbox\">` has no accessible name.",
+  "evidenceFile": "packages/tuffex/packages/components/src/transfer/src/TxTransfer.vue",
+  "evidenceLine": 135,
+  "evidenceQuote": "<TxCheckbox\n            :model-value=\"leftChecked.includes(item.key)\"\n            :disabled=\"item.disabled\"",
+  "suggestion": "Pass the row text into the checkbox — either `<TxCheckbox :label=\"item.label\">` (dropping the sibling `<span>`) or `:aria-label=\"item.label\"` — for both panels, and stop wrapping the interactive `<button>` in a `<label>` element."
+ },
+ {
+  "component": "stat-card",
+  "category": "a11y",
+  "summary": "The card root hardcodes the English group name `aria-label=\"Stat card\"`, so every card in a dashboard is announced identically and the `label` prop never reaches the accessible name.",
+  "evidenceFile": "packages/tuffex/packages/components/src/stat-card/src/TxStatCard.vue",
+  "evidenceLine": 215,
+  "evidenceQuote": "role=\"group\"\n    aria-label=\"Stat card\"",
+  "suggestion": "Derive the group name from content — e.g. `:aria-label=\"label\"` (falling back to an `ariaLabel` prop) or `aria-labelledby` pointing at the rendered `.tx-stat-card__label` node — so each card is distinguishable and localizable."
+ }
+]

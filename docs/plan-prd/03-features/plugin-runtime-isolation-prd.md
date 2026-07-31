@@ -1,5 +1,13 @@
 # 插件运行时隔离设计（C1-B / H2）
 
+> **已被 #297 的最终架构取代。** 本文记录 2026-07-15 的早期设计探索；其中
+> singleton `plugin-host-bridge.ts`、共享 utility process、反射 SDK proxy、环境灰度开关
+> 和 direct privileged require 均不是当前合同。当前实现为一 activation 一 utility process、
+> V2 fixed typed capability、owner/generation-bound callback/resource/cancel、默认 fail-closed
+> 且无 main-process VM fallback。实施与审查必须使用
+> `.trellis/spec/frontend/plugin-runtime-security.md` 及
+> `.trellis/tasks/07-27-isolate-plugin-prelude-297/`，下文仅保留历史背景。
+
 > 状态：设计讨论（不动代码）
 > 关联安全发现：C1（插件 Prelude 主进程 RCE）、H2（插件 Surface 视图不安全默认）
 > 前置已落地：C1-A（require 收紧，commit `3bd386741`）作为缓解；本设计为根治。

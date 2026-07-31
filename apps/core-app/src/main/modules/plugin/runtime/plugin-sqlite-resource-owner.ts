@@ -236,8 +236,10 @@ export class PluginSqliteResourceOwnerRegistry {
         return existing.client
       }
       if (existing) {
-        this.records.delete(identity.pluginName)
         await existing.client.close()
+        if (this.records.get(identity.pluginName) === existing) {
+          this.records.delete(identity.pluginName)
+        }
       }
       if (this.records.size >= this.maxWorkers) await this.evictIdleOwner()
       if (this.records.size >= this.maxWorkers) {
@@ -264,8 +266,8 @@ export class PluginSqliteResourceOwnerRegistry {
     return this.runMutation(async () => {
       const existing = this.records.get(pluginName)
       if (!existing) return false
-      this.records.delete(pluginName)
       await existing.client.close()
+      if (this.records.get(pluginName) === existing) this.records.delete(pluginName)
       return true
     })
   }
@@ -274,18 +276,37 @@ export class PluginSqliteResourceOwnerRegistry {
     return this.runMutation(async () => {
       const existing = this.records.get(identity.pluginName)
       if (!existing || !sameIdentity(existing.identity, identity)) return false
-      this.records.delete(identity.pluginName)
       await existing.client.close()
+      if (this.records.get(identity.pluginName) === existing) {
+        this.records.delete(identity.pluginName)
+      }
       return true
     })
   }
 
   closeAll(): Promise<void> {
     return this.runMutation(async () => {
-      const records = [...this.records.values()]
-      this.records.clear()
-      await Promise.all(records.map((record) => record.client.close()))
+      const records = [...this.records.entries()]
+      const outcomes = await Promise.allSettled(
+        records.map(async ([pluginName, record]) => {
+          await record.client.close()
+          if (this.records.get(pluginName) === record) this.records.delete(pluginName)
+        })
+      )
+      const failure = outcomes.find(
+        (outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected'
+      )
+      if (failure) throw failure.reason
     })
+  }
+
+  hasPlugin(pluginName: string): boolean {
+    return this.records.has(pluginName)
+  }
+
+  hasActivation(identity: PluginSqliteOwnerIdentity): boolean {
+    const existing = this.records.get(identity.pluginName)
+    return Boolean(existing && sameIdentity(existing.identity, identity))
   }
 
   get size(): number {
@@ -299,8 +320,8 @@ export class PluginSqliteResourceOwnerRegistry {
         (left, right) => (left[1].client.lastUsedAt ?? 0) - (right[1].client.lastUsedAt ?? 0)
       )[0]
     if (!candidate) return
-    this.records.delete(candidate[0])
     await candidate[1].client.close()
+    if (this.records.get(candidate[0]) === candidate[1]) this.records.delete(candidate[0])
   }
 
   private async runMutation<T>(operation: () => Promise<T>): Promise<T> {

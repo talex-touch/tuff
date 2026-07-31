@@ -93,6 +93,33 @@ describe('PermissionModule revocation events', () => {
     expect(transport.broadcast).toHaveBeenCalledOnce()
   })
 
+  it('awaits temporary resource teardown for any committed permission revoke', async () => {
+    let release: (() => void) | undefined
+    const teardown = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    disposeTeardown = registerPluginStorageTeardown(teardown)
+    const onRevoked = vi.fn()
+    touchEventBus.on(TalexEvents.PERMISSION_REVOKED, onRevoked)
+    const { handlers } = createHarness({
+      revoke: vi.fn(async () => ['fs.read'])
+    })
+
+    const revoking = handlers.get(PermissionEvents.api.revoke)?.({
+      pluginId: 'touch-demo',
+      permissionId: 'fs.read'
+    })
+    await vi.waitFor(() => expect(teardown).toHaveBeenCalledWith('touch-demo'))
+    expect(onRevoked).not.toHaveBeenCalled()
+
+    release?.()
+    await expect(revoking).resolves.toMatchObject({ success: true })
+    expect(onRevoked).toHaveBeenCalledOnce()
+  })
+
   it('emits committed revocation before broadcasting the renderer update', async () => {
     const order: string[] = []
     let denied = false
@@ -188,6 +215,43 @@ describe('PermissionModule revocation events', () => {
     expect(transport.broadcast).toHaveBeenCalledWith(PermissionEvents.push.updated, {
       pluginId: 'touch-demo'
     })
+  })
+
+  it('revokes new-call authority before awaiting temporary resource cleanup without deleting durable state', async () => {
+    let authorityAllowed = true
+    let release: (() => void) | undefined
+    const teardown = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    const deletePersistentData = vi.fn()
+    const deleteSecret = vi.fn()
+    const removeCode = vi.fn()
+    disposeTeardown = registerPluginStorageTeardown(teardown)
+    const { handlers } = createHarness({
+      revokeAll: vi.fn(async () => {
+        authorityAllowed = false
+        return ['storage.sqlite', 'storage.plugin']
+      })
+    })
+
+    const revoking = handlers.get(PermissionEvents.api.revokeAll)?.({
+      pluginId: 'touch-demo'
+    })
+    await vi.waitFor(() => expect(teardown).toHaveBeenCalledWith('touch-demo'))
+
+    expect(authorityAllowed).toBe(false)
+    expect(deletePersistentData).not.toHaveBeenCalled()
+    expect(deleteSecret).not.toHaveBeenCalled()
+    expect(removeCode).not.toHaveBeenCalled()
+
+    release?.()
+    await expect(revoking).resolves.toMatchObject({ success: true })
+    expect(deletePersistentData).not.toHaveBeenCalled()
+    expect(deleteSecret).not.toHaveBeenCalled()
+    expect(removeCode).not.toHaveBeenCalled()
   })
 
   it('does not emit or broadcast when the store rejects revocation', async () => {

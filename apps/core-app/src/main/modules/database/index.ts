@@ -844,7 +844,8 @@ export class DatabaseModule extends BaseModule {
         timestamp integer NOT NULL,
         source_app text,
         is_favorite integer DEFAULT 0,
-        metadata text
+        metadata text,
+        retention_protected integer NOT NULL DEFAULT 0
       )`,
       'CREATE INDEX IF NOT EXISTS idx_clipboard_history_timestamp ON clipboard_history (timestamp)',
       `CREATE TABLE IF NOT EXISTS clipboard_history_meta (
@@ -888,6 +889,31 @@ export class DatabaseModule extends BaseModule {
     ]
 
     for (const statement of statements) {
+      await this.auxClient.execute(statement)
+    }
+
+    const clipboardProtectionColumn = await this.auxClient.execute(
+      "SELECT 1 FROM pragma_table_info('clipboard_history') WHERE name = 'retention_protected' LIMIT 1"
+    )
+    if (clipboardProtectionColumn.rows.length === 0) {
+      await this.auxClient.execute(
+        'ALTER TABLE clipboard_history ADD COLUMN retention_protected integer NOT NULL DEFAULT 0'
+      )
+    }
+
+    const retentionIndexes = [
+      `CREATE INDEX IF NOT EXISTS clipboard_history_retention_idx
+         ON clipboard_history (timestamp, id)
+      WHERE COALESCE(is_favorite, 0) = 0 AND COALESCE(retention_protected, 0) = 0`,
+      `CREATE INDEX IF NOT EXISTS ocr_jobs_retention_idx
+         ON ocr_jobs (COALESCE(finished_at, queued_at), id)
+      WHERE status IN ('completed', 'failed', 'cancelled')`,
+      'CREATE INDEX IF NOT EXISTS analytics_snapshots_retention_idx ON analytics_snapshots (timestamp, id)',
+      'CREATE INDEX IF NOT EXISTS plugin_analytics_retention_idx ON plugin_analytics (timestamp, id)',
+      'CREATE INDEX IF NOT EXISTS telemetry_upload_stats_retention_idx ON telemetry_upload_stats (last_failure_at, id)',
+      'CREATE INDEX IF NOT EXISTS recommendation_cache_retention_idx ON recommendation_cache (created_at)'
+    ]
+    for (const statement of retentionIndexes) {
       await this.auxClient.execute(statement)
     }
   }

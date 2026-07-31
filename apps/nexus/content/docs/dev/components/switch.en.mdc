@@ -108,12 +108,21 @@ code: |
   </script>
 
   <template>
-    <label style="display: inline-flex; align-items: center; gap: 10px;">
-      <span>Off</span>
-      <TuffSwitch v-model="compact" />
-      <span>On</span>
-      <strong>Compact mode</strong>
-    </label>
+    <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 12px;">
+      <label style="display: inline-flex; align-items: center; gap: 10px;">
+        <span>Off</span>
+        <TuffSwitch v-model="compact" />
+        <span>On</span>
+        <strong>Compact mode</strong>
+      </label>
+      <label style="display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%; max-width: 320px; padding: 12px 14px; border: 1px solid var(--tx-border-color-light); border-radius: 14px;">
+        <span style="display: inline-flex; flex-direction: column; gap: 4px;">
+          <strong>Auto sync</strong>
+          <small style="color: var(--tx-text-color-secondary); font-size: 12px;">{{ autoSync ? 'On' : 'Off' }}</small>
+        </span>
+        <TuffSwitch v-model="autoSync" />
+      </label>
+    </div>
   </template>
 ---
 :::
@@ -128,22 +137,55 @@ code: |
 
   const success = ref(true)
   const warning = ref(true)
+  const violet = ref(false)
   </script>
 
   <template>
-    <div class="custom-switch-row">
-      <TuffSwitch v-model="success" class="custom-switch custom-switch--success" />
-      <TuffSwitch v-model="warning" class="custom-switch custom-switch--warning" />
+    <div class="switch-custom-color-demo">
+      <label class="switch-custom-color-demo__item is-success">
+        <span>Success</span>
+        <TuffSwitch v-model="success" />
+      </label>
+      <label class="switch-custom-color-demo__item is-warning">
+        <span>Warning</span>
+        <TuffSwitch v-model="warning" />
+      </label>
+      <label class="switch-custom-color-demo__item is-violet">
+        <span>Violet</span>
+        <TuffSwitch v-model="violet" />
+      </label>
     </div>
   </template>
 
   <style scoped>
-  .custom-switch-row :deep(.custom-switch--success.is-active) {
-    background-color: var(--tx-color-success);
+  .switch-custom-color-demo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
   }
 
-  .custom-switch-row :deep(.custom-switch--warning.is-active) {
-    background-color: var(--tx-color-warning);
+  .switch-custom-color-demo__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--switch-demo-color);
+  }
+
+  .switch-custom-color-demo__item :deep(.tuff-switch.is-active) {
+    background-color: var(--switch-demo-color);
+  }
+
+  .switch-custom-color-demo__item.is-success {
+    --switch-demo-color: var(--tx-color-success);
+  }
+
+  .switch-custom-color-demo__item.is-warning {
+    --switch-demo-color: var(--tx-color-warning);
+  }
+
+  .switch-custom-color-demo__item.is-violet {
+    --switch-demo-color: #8b5cf6;
   }
   </style>
 ---
@@ -243,14 +285,14 @@ code: |
 
 - **Model contract:** `TxSwitch` is controlled by `modelValue`. User interaction emits both `update:modelValue` and `change` with the next boolean; the visual state updates after the parent writes the new prop back.
 - **Keyboard contract:** Enabled switches respond to click, Enter, and Space. Disabled switches set `tabindex="-1"`, keep `aria-disabled="true"`, and emit nothing.
-- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click and keyboard emissions, disabled blocking, and disabled tabindex/aria state.
+- **Verified coverage:** `switch.test.ts` covers active aria state, size classes, click emission, disabled blocking, and disabled tabindex/aria state.
 
 ## Source
 
 - Component source: `packages/tuffex/packages/components/src/switch/src/TxSwitch.vue`.
 - Style source: `packages/tuffex/packages/components/src/switch/style/index.scss`.
 - Export entry: `packages/tuffex/packages/components/src/switch/index.ts` exports `TuffSwitch`, aliases `TxSwitch`, and installs the component under its `TuffSwitch` name.
-- Coverage: `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts` verifies semantics, size classing, click/keyboard updates, and disabled behavior.
+- Coverage: `packages/tuffex/packages/components/src/switch/__tests__/switch.test.ts` verifies semantics, size classing, click updates, and disabled behavior.
 
 <TuffDocSourceLink />
 

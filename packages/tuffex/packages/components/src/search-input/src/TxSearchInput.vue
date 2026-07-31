@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<SearchInputProps>(), {
 
 const emit = defineEmits<SearchInputEmits>()
 
-const inputRef = ref<any>(null)
+const inputRef = ref<InstanceType<typeof TuffInput> | null>(null)
 
 const value = computed({
   get: () => props.modelValue ?? '',
@@ -66,11 +66,15 @@ onBeforeUnmount(() => {
 })
 
 defineExpose({
-  focus: () => inputRef.value?.focus?.(),
-  blur: () => inputRef.value?.blur?.(),
-  clear: () => inputRef.value?.clear?.(),
-  setValue: (v: string) => inputRef.value?.setValue?.(v),
-  getValue: () => inputRef.value?.getValue?.(),
+  focus: () => inputRef.value?.focus(),
+  blur: () => inputRef.value?.blur(),
+  clear: () => inputRef.value?.clear(),
+  setValue: (v: string) => inputRef.value?.setValue(v),
+  // TxSearchInput's own modelValue is typed `string`, so the inner TuffInput only
+  // ever holds a string here. String() narrows TuffInput's wider `string | number`
+  // getValue return to match our documented `() => string` contract; it is a no-op
+  // on every real path, not a mask over a runtime number.
+  getValue: (): string => String(inputRef.value?.getValue() ?? ''),
 })
 </script>
 

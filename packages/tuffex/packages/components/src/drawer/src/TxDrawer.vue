@@ -223,6 +223,7 @@ onUnmounted(() => {
       :aria-labelledby="drawerAriaLabelledBy"
       :aria-label="drawerAriaLabel"
       :aria-hidden="!display"
+      :inert="!display || undefined"
       tabindex="-1"
     >
       <div

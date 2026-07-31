@@ -1,7 +1,9 @@
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type * as schema from '../../db/schema'
-import { eq } from 'drizzle-orm'
+import { and, eq, isNotNull, lt } from 'drizzle-orm'
+import { dbWriteScheduler } from '../../db/db-write-scheduler'
 import * as dbSchema from '../../db/schema'
+import { withSqliteRetry } from '../../db/sqlite-retry'
 
 export interface TelemetryUploadStatsRecord {
   searchCount: number
@@ -14,10 +16,25 @@ export interface TelemetryUploadStatsRecord {
 }
 
 const TELEMETRY_UPLOAD_STATS_ID = 1
+const TELEMETRY_FAILURE_CODES = new Set([
+  'NETWORK_TIMEOUT',
+  'NETWORK_UNAVAILABLE',
+  'TELEMETRY_FLUSH_FAILED',
+  'TELEMETRY_OUTBOX_ENQUEUE_FAILED',
+  'TELEMETRY_OUTBOX_UNAVAILABLE',
+  'TELEMETRY_UPLOAD_FAILED'
+])
 
 interface TelemetryUploadStatsStoreDeps {
   auxDb: LibSQLDatabase<typeof schema>
   coreDb?: LibSQLDatabase<typeof schema>
+}
+
+export function sanitizeTelemetryFailureCode(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null
+  return typeof value === 'string' && TELEMETRY_FAILURE_CODES.has(value)
+    ? value
+    : 'TELEMETRY_UPLOAD_FAILED'
 }
 
 export class TelemetryUploadStatsStore {
@@ -27,6 +44,14 @@ export class TelemetryUploadStatsStore {
   constructor({ auxDb, coreDb }: TelemetryUploadStatsStoreDeps) {
     this.auxDb = auxDb
     this.coreDb = coreDb && coreDb !== auxDb ? coreDb : null
+  }
+
+  private async withWrite<T>(label: string, operation: () => Promise<T>): Promise<T> {
+    return dbWriteScheduler.schedule(label, () => withSqliteRetry(operation, { label }), {
+      priority: 'background',
+      dropPolicy: 'none',
+      maxQueueWaitMs: 15_000
+    })
   }
 
   async get(): Promise<TelemetryUploadStatsRecord | null> {
@@ -56,35 +81,65 @@ export class TelemetryUploadStatsStore {
       failedUploads: row.failedUploads,
       lastUploadTime: row.lastUploadTime ?? null,
       lastFailureAt: row.lastFailureAt ?? null,
-      lastFailureMessage: row.lastFailureMessage ?? null,
+      lastFailureMessage: sanitizeTelemetryFailureCode(row.lastFailureMessage),
       updatedAt: row.updatedAt
     }
   }
 
   async upsert(record: TelemetryUploadStatsRecord): Promise<void> {
-    await this.auxDb
-      .insert(dbSchema.telemetryUploadStats)
-      .values({
-        id: TELEMETRY_UPLOAD_STATS_ID,
-        searchCount: record.searchCount,
-        totalUploads: record.totalUploads,
-        failedUploads: record.failedUploads,
-        lastUploadTime: record.lastUploadTime,
-        lastFailureAt: record.lastFailureAt,
-        lastFailureMessage: record.lastFailureMessage,
-        updatedAt: record.updatedAt
-      })
-      .onConflictDoUpdate({
-        target: dbSchema.telemetryUploadStats.id,
-        set: {
+    const lastFailureMessage = sanitizeTelemetryFailureCode(record.lastFailureMessage)
+    await this.withWrite('telemetry.upload-stats.upsert', () =>
+      this.auxDb
+        .insert(dbSchema.telemetryUploadStats)
+        .values({
+          id: TELEMETRY_UPLOAD_STATS_ID,
           searchCount: record.searchCount,
           totalUploads: record.totalUploads,
           failedUploads: record.failedUploads,
           lastUploadTime: record.lastUploadTime,
           lastFailureAt: record.lastFailureAt,
-          lastFailureMessage: record.lastFailureMessage,
+          lastFailureMessage,
           updatedAt: record.updatedAt
-        }
-      })
+        })
+        .onConflictDoUpdate({
+          target: dbSchema.telemetryUploadStats.id,
+          set: {
+            searchCount: record.searchCount,
+            totalUploads: record.totalUploads,
+            failedUploads: record.failedUploads,
+            lastUploadTime: record.lastUploadTime,
+            lastFailureAt: record.lastFailureAt,
+            lastFailureMessage,
+            updatedAt: record.updatedAt
+          }
+        })
+    )
+  }
+
+  async clearFailureBefore(cutoffMs: number, maxRows = 2, signal?: AbortSignal): Promise<number> {
+    const limit = Math.min(2, Math.max(0, Math.floor(maxRows)))
+    if (limit === 0 || signal?.aborted) return 0
+
+    const clear = async (db: LibSQLDatabase<typeof schema>, suffix: string): Promise<number> => {
+      const result = await this.withWrite(`telemetry.upload-stats.retention.${suffix}`, () =>
+        db
+          .update(dbSchema.telemetryUploadStats)
+          .set({ lastFailureAt: null, lastFailureMessage: null })
+          .where(
+            and(
+              eq(dbSchema.telemetryUploadStats.id, TELEMETRY_UPLOAD_STATS_ID),
+              isNotNull(dbSchema.telemetryUploadStats.lastFailureAt),
+              lt(dbSchema.telemetryUploadStats.lastFailureAt, cutoffMs)
+            )
+          )
+      )
+      return Number(result.rowsAffected ?? 0)
+    }
+
+    let cleared = await clear(this.auxDb, 'aux')
+    if (this.coreDb && cleared < limit && !signal?.aborted) {
+      cleared += await clear(this.coreDb, 'compat')
+    }
+    return cleared
   }
 }

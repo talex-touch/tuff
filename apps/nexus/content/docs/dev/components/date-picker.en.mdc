@@ -2,6 +2,9 @@
 title: "DatePicker"
 description: "Date selector built on TxPicker with a YYYY-MM-DD model."
 category: Form
+status: beta
+since: 1.0.0
+tags: [date-picker, form, calendar]
 syncStatus: reviewed
 verified: true
 ---

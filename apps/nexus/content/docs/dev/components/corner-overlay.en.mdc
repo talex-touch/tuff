@@ -64,7 +64,7 @@ String offsets are preserved. Numeric offsets are converted to pixels.
 
 - The root renders an inline-block `span` with `position: relative`.
 - The overlay is rendered only when the `overlay` slot exists.
-- The overlay layer is absolutely positioned and marked `aria-hidden="true"`.
+- The overlay layer is absolutely positioned; while decorative (`overlayPointerEvents="none"`, the default) it is marked `aria-hidden="true"`, and with `overlayPointerEvents="auto"` it is exposed so a focusable control inside stays reachable.
 - `placement` selects which x/y inset pair is written: top/left, top/right, bottom/left, or bottom/right.
 - `offsetX` controls `left` or `right`; `offsetY` controls `top` or `bottom`.
 - Number offsets become pixel values, while string offsets are passed through as-is.
@@ -108,7 +108,7 @@ No public instance methods are exposed.
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`, `TxCornerOverlay.vue`, and `corner-overlay.test.ts`.
-- The overlay slot is conditional and always `aria-hidden`; product-critical status still needs text or a labeled control outside the decorative layer.
+- The overlay slot is conditional and `aria-hidden` only while decorative (`overlayPointerEvents="none"`); `overlayPointerEvents="auto"` exposes it so an interactive control is reachable. Product-critical status still needs text or a labeled control outside a decorative layer.
 - `overlayPointerEvents="auto"` only forwards CSS pointer behavior. The slotted control owns all keyboard, focus, and label semantics.
 
 ## Source

@@ -45,6 +45,11 @@ interface InstallTask {
 }
 
 interface PluginInstallQueueOptions {
+  assertInstallAdmission?: (payload: {
+    request: PluginInstallRequest
+    manifest?: PreparedPluginInstall['manifest']
+    clientMetadata?: Record<string, unknown>
+  }) => Promise<void> | void
   onInstallCompleted?: (payload: {
     request: PluginInstallRequest
     manifest?: PreparedPluginInstall['manifest']
@@ -240,6 +245,11 @@ export class PluginInstallQueue {
         })
       }
 
+      await this.options?.assertInstallAdmission?.({
+        request: task.request,
+        manifest: task.prepared.manifest,
+        clientMetadata: task.clientMetadata
+      })
       this.emitProgress(task, 'installing', { progress: 0 })
 
       const summary = await this.installer.finalizeInstall(prepared, {

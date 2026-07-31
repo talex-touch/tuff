@@ -117,7 +117,7 @@ async function save() {
 
 - Reviewed against `packages/tuffex/packages/components/src/flat-button/src/TxFlatButton.vue`, `index.ts`, and `flat-button.test.ts`.
 - **Verified coverage:** native button rendering, default slot content, non-primary `fake-background`, primary and mini classes, enabled click emission with the native `MouseEvent`, disabled/loading native semantics, no-submit default type, and plugin install registration.
-- Accessibility note: the component keeps native button semantics with `type="button"`; `disabled` and `loading` set the native `disabled` attribute, while enabled keyboard/focus behavior stays delegated to the browser.
+- Accessibility note: the component keeps native button semantics with `type="button"`; `disabled` and `loading` set the native `disabled` attribute, and `loading` also sets `aria-busy="true"` while the decorative spinner is `aria-hidden="true"`. Enabled keyboard/focus behavior stays delegated to the browser.
 
 ## Source
 

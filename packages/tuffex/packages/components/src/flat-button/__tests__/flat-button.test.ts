@@ -50,6 +50,8 @@ describe('tuffFlatButton', () => {
 
     expect(disabled.attributes('disabled')).toBeDefined()
     expect(disabled.classes()).toContain('is-disabled')
+    // Disabled (not loading) must not announce a busy state.
+    expect(disabled.attributes('aria-busy')).toBeUndefined()
     await disabled.trigger('click')
     expect(disabled.emitted('click')).toBeUndefined()
 
@@ -61,6 +63,10 @@ describe('tuffFlatButton', () => {
 
     expect(loading.attributes('disabled')).toBeDefined()
     expect(loading.classes()).toContain('is-loading')
+    // Loading exposes aria-busy so assistive tech knows why the button went inert,
+    // and the decorative spinner is hidden from the a11y tree.
+    expect(loading.attributes('aria-busy')).toBe('true')
+    expect(loading.find('.tx-flat-button__loading').attributes('aria-hidden')).toBe('true')
     expect(loading.find('.tx-flat-button__loading').exists()).toBe(true)
     expect(loading.find('.tx-flat-button__spinner').exists()).toBe(true)
     await loading.trigger('click')

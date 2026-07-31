@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict')
+const { createHash } = require('node:crypto')
 const test = require('node:test')
 
 function loadFreshPluginModule() {
@@ -9,12 +10,19 @@ function loadFreshPluginModule() {
 }
 
 globalThis.plugin = {
-  box: { hide() {} },
-  feature: { clearItems() {}, pushItems() {} },
+  feature: { async clearItems() {}, async pushItems() {} },
 }
 globalThis.clipboard = {}
 globalThis.logger = {}
-globalThis.permission = {}
+Object.defineProperty(globalThis, 'crypto', {
+  configurable: true,
+  value: {
+    async digest(algorithm, value) {
+      const resolved = String(algorithm).toLowerCase().replace('-', '')
+      return Uint8Array.from(createHash(resolved).update(value).digest()).buffer
+    },
+  },
+})
 globalThis.TuffItemBuilder = class {
   constructor(id) {
     this.item = { id, meta: {}, actions: [] }
@@ -64,22 +72,21 @@ function copyItem(payload = 'TEXT') {
   }
 }
 
-test('onItemAction blocks copy when permission sdk is unavailable', async () => {
+test('onItemAction attempts the host clipboard capability without a child permission sdk', async () => {
   const writes = []
   const originalPermission = globalThis.permission
   const originalWriteText = globalThis.clipboard.writeText
 
   delete globalThis.permission
-  globalThis.clipboard.writeText = value => writes.push(value)
+  globalThis.clipboard.writeText = async value => writes.push(value)
 
   try {
     const freshPlugin = loadFreshPluginModule()
     const result = await freshPlugin.onItemAction(copyItem())
 
-    assert.deepEqual(writes, [])
+    assert.deepEqual(writes, ['TEXT'])
     assert.equal(result.externalAction, true)
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-sdk-unavailable')
+    assert.equal(result.status, 'started')
   }
   finally {
     globalThis.permission = originalPermission
@@ -87,41 +94,35 @@ test('onItemAction blocks copy when permission sdk is unavailable', async () => 
   }
 })
 
-test('onItemAction blocks copy when permission request fails', async () => {
+test('onItemAction returns a stable denial when the host rejects permission', async () => {
   const writes = []
   const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
 
-  globalThis.clipboard.writeText = value => writes.push(value)
-  globalThis.permission.check = async () => {
-    throw new Error('permission down')
+  globalThis.clipboard.writeText = async (value) => {
+    writes.push(value)
+    throw Object.assign(new Error('/private/permission down'), {
+      code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
+    })
   }
-  globalThis.permission.request = async () => true
 
   try {
     const result = await pluginModule.onItemAction(copyItem())
 
-    assert.deepEqual(writes, [])
+    assert.deepEqual(writes, ['TEXT'])
     assert.equal(result.externalAction, true)
     assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-request-failed')
+    assert.equal(result.reason, 'permission-denied')
+    assert.doesNotMatch(JSON.stringify(result), /private|permission down/)
   }
   finally {
     globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
   }
 })
 
 test('onItemAction blocks copy when clipboard sdk is unavailable', async () => {
   const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
 
   delete globalThis.clipboard.writeText
-  globalThis.permission.check = async () => true
-  globalThis.permission.request = async () => true
 
   try {
     const result = await pluginModule.onItemAction(copyItem())
@@ -132,21 +133,15 @@ test('onItemAction blocks copy when clipboard sdk is unavailable', async () => {
   }
   finally {
     globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
   }
 })
 
-test('onItemAction returns explicit failure when clipboard write fails', async () => {
+test('onItemAction returns a stable redacted failure when clipboard write fails', async () => {
   const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
 
   globalThis.clipboard.writeText = async () => {
-    throw new Error('clipboard down')
+    throw new Error('/private/clipboard down')
   }
-  globalThis.permission.check = async () => true
-  globalThis.permission.request = async () => true
 
   try {
     const result = await pluginModule.onItemAction(copyItem())
@@ -154,24 +149,19 @@ test('onItemAction returns explicit failure when clipboard write fails', async (
     assert.equal(result.externalAction, true)
     assert.equal(result.status, 'blocked')
     assert.equal(result.reason, 'clipboard-write-failed')
-    assert.equal(result.message, 'clipboard down')
+    assert.equal(result.message, '复制失败')
+    assert.doesNotMatch(JSON.stringify(result), /private|clipboard down/)
   }
   finally {
     globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
   }
 })
 
-test('onItemAction copies after clipboard.write permission is granted', async () => {
+test('onItemAction copies when the host capability grants the call', async () => {
   const writes = []
   const originalWriteText = globalThis.clipboard.writeText
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
 
-  globalThis.clipboard.writeText = value => writes.push(value)
-  globalThis.permission.check = async () => true
-  globalThis.permission.request = async () => true
+  globalThis.clipboard.writeText = async value => writes.push(value)
 
   try {
     const result = await pluginModule.onItemAction(copyItem('ok'))
@@ -182,7 +172,33 @@ test('onItemAction copies after clipboard.write permission is granted', async ()
   }
   finally {
     globalThis.clipboard.writeText = originalWriteText
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
+  }
+})
+
+test('onFeatureTriggered awaits clear and publishes hash results', async () => {
+  let releaseClear
+  let items = null
+  const clearBarrier = new Promise((resolve) => {
+    releaseClear = resolve
+  })
+  const originalFeature = globalThis.plugin.feature
+  globalThis.plugin.feature = {
+    clearItems: () => clearBarrier,
+    async pushItems(value) {
+      items = value
+    },
+  }
+
+  try {
+    const freshPlugin = loadFreshPluginModule()
+    const trigger = freshPlugin.onFeatureTriggered('text-tools-convert', { text: 'abc' })
+    await Promise.resolve()
+    assert.equal(items, null)
+    releaseClear()
+    await trigger
+    assert.equal(items.find(item => item.id.endsWith('-sha256')).actions[0].payload.text, 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+  }
+  finally {
+    globalThis.plugin.feature = originalFeature
   }
 })

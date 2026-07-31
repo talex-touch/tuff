@@ -2,6 +2,8 @@
 title: "Transition"
 description: "Preset transition wrapper for keyed content switches, list motion, and smooth size changes."
 category: Effects
+status: beta
+since: 1.0.0
 tags: [transition, motion, list, auto-size]
 syncStatus: reviewed
 verified: true
@@ -227,6 +229,7 @@ code: |
 - `smooth-size` is a single-child mode. It wraps the child with `TxAutoSizer`, defaults to height animation, and keeps overflow hidden during measurement.
 - `group=true` switches to `TransitionGroup`; `mode` no longer applies and each rendered item must have a stable key.
 - Presets share the `--tx-transition-duration` and `--tx-transition-easing` CSS variables, except rebound enter easing uses its spring curve intentionally.
+- Under `prefers-reduced-motion: reduce`, every preset collapses to a near-instant duration and drops its `translateY`/`scale` offsets, so switches and list motion still complete without animation.
 
 ## Best Practices
 

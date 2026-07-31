@@ -18,6 +18,7 @@ const props = withDefaults(
     rows?: number
     prefixIcon?: string
     suffixIcon?: string
+    capsLockText?: string
   }>(),
   {
     modelValue: '',
@@ -29,6 +30,7 @@ const props = withDefaults(
     rows: 3,
     prefixIcon: '',
     suffixIcon: '',
+    capsLockText: 'CapsLock is on',
   },
 )
 
@@ -152,7 +154,7 @@ defineExpose({
       @keydown="handleKeydown"
     >
 
-    <span v-if="showCapsLock" class="tx-input__capslock" title="CapsLock is on">
+    <span v-if="showCapsLock" class="tx-input__capslock" role="status" aria-live="polite" :aria-label="capsLockText" :title="capsLockText">
       <svg viewBox="0 0 24 24" width="14" height="14">
         <path fill="currentColor" d="M12 2L4 10h3v4h10v-4h3L12 2zm-5 14v2h10v-2H7z" />
       </svg>

@@ -50,7 +50,7 @@ code: |
 ---
 :::
 
-## TuffIcons constants
+### TuffIcons constants
 
 `@talex-touch/utils` provides predefined icon constants for consistency:
 
@@ -70,9 +70,9 @@ code: |
 ---
 :::
 
-## Icon categories
+### Icon categories
 
-### Navigation
+#### Navigation
 
 | Name | Class | Preview |
 |------|-------|---------|
@@ -81,7 +81,7 @@ code: |
 | Forward | `i-ri-arrow-right-line` | <i class="i-ri-arrow-right-line" /> |
 | Menu | `i-ri-menu-line` | <i class="i-ri-menu-line" /> |
 
-### Actions
+#### Actions
 
 | Name | Class | Preview |
 |------|-------|---------|
@@ -95,7 +95,7 @@ code: |
 | Upload | `i-ri-upload-line` | <i class="i-ri-upload-line" /> |
 | Refresh | `i-ri-refresh-line` | <i class="i-ri-refresh-line" /> |
 
-### Status
+#### Status
 
 | Name | Class | Preview |
 |------|-------|---------|
@@ -105,7 +105,7 @@ code: |
 | Info | `i-ri-information-line` | <i class="i-ri-information-line" /> |
 | Error | `i-ri-close-circle-line` | <i class="i-ri-close-circle-line" /> |
 
-### Files
+#### Files
 
 | Name | Class | Preview |
 |------|-------|---------|
@@ -114,7 +114,7 @@ code: |
 | FileCode | `i-ri-file-code-line` | <i class="i-ri-file-code-line" /> |
 | FileImage | `i-ri-image-line` | <i class="i-ri-image-line" /> |
 
-### UI elements
+#### UI elements
 
 | Name | Class | Preview |
 |------|-------|---------|
@@ -125,7 +125,7 @@ code: |
 | Lock | `i-ri-lock-line` | <i class="i-ri-lock-line" /> |
 | Eye | `i-ri-eye-line` | <i class="i-ri-eye-line" /> |
 
-### Brands
+#### Brands
 
 | Name | Class | Preview |
 |------|-------|---------|
@@ -134,7 +134,7 @@ code: |
 | Chrome | `i-simple-icons-googlechrome` | <i class="i-simple-icons-googlechrome" /> |
 | Discord | `i-simple-icons-discord` | <i class="i-simple-icons-discord" /> |
 
-## Custom styles
+### Custom styles
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -157,11 +157,11 @@ code: |
 ---
 :::
 
-## TxStatusIcon
+### TxStatusIcon
 
 Overlay a status indicator on the bottom-right corner of an icon.
 
-### TxStatusIcon
+#### TxStatusIcon
 Status overlays for different states.
 :::TuffDemoWrapper{demo="IconTxStatusIconDemo" code-lang="vue"}
 ---
@@ -175,7 +175,7 @@ code: |
   </template>
 ---
 :::
-## Types & Sources
+### Types & Sources
 - `class`: icon class name (recommended).
 - `emoji`: lightweight emphasis.
 - `file` / `url`: local or remote icons.
@@ -189,21 +189,29 @@ code: |
 ---
 rows:
   - name: icon
-    type: 'ITuffIcon'
+    type: 'TxIconSource | null'
     default: '-'
-    description: 'Icon object (type/value)'
+    description: 'Structured icon source (type/value); alternative to name.'
   - name: name
     type: 'string'
     default: '-'
     description: 'Icon name or class'
   - name: size
     type: 'number'
-    default: '16'
-    description: 'Icon size'
+    default: '-'
+    description: 'Icon size in px; when omitted no font-size is set and the icon inherits the parent font size.'
   - name: colorful
     type: 'boolean'
     default: 'false'
     description: 'Keep original colors'
+  - name: alt
+    type: 'string'
+    default: "''"
+    description: 'Accessible label mapped to the root title attribute; also used as the fallback image alt.'
+  - name: empty
+    type: 'string'
+    default: "''"
+    description: 'Fallback image URL rendered when neither icon nor name resolves (default content of the empty slot).'
   - name: urlResolver
     type: "(url: string, type: 'url' | 'file') => string"
     default: '-'
@@ -215,10 +223,18 @@ rows:
 ---
 ::
 
-## TxStatusIcon API (Lite)
+### TxStatusIcon API (Lite)
 ::TuffPropsTable
 ---
 rows:
+  - name: colorful
+    type: 'boolean'
+    default: 'true'
+    description: 'Keep original SVG colors; defaults to true — the opposite of TxIcon (false).'
+  - name: size
+    type: 'number'
+    default: '18'
+    description: 'Icon size in px; defaults to 18, whereas TxIcon inherits the parent font size.'
   - name: tone
     type: "'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'"
     default: "'none'"
@@ -291,7 +307,7 @@ code: |
 
 ## Review Notes
 
-- **Accessibility note:** `TxIcon` sets `role="img"` and maps `alt` to `title`; icon-only interactive controls should use `TxIconButton label` or visible text instead of relying on icon title text alone.
+- **Accessibility note:** `TxIcon` renders `role="img"` and maps `alt` to `title` only when `alt` is set; without `alt` the icon is decorative and marked `aria-hidden="true"`, dropping out of the accessibility tree. Icon-only interactive controls should use `TxIconButton label` or visible text instead of relying on icon title text alone.
 - **Verified coverage:** `icon.test.ts` verifies class and built-in name rendering, size/color styles, emoji/empty/loading/error states, injected file protocol resolution, SVG mask mode, colorful SVG fallback, data SVG handling, multi-color SVG detection, and status indicator sizing.
 
 ## Source

@@ -59,10 +59,11 @@ function addTags(values: string[]) {
   }
 }
 
-function removeTag(tag: string) {
+function removeTag(tag: string, index: number) {
   if (props.disabled)
     return
-  const next = tags.value.filter(t => t !== tag)
+  const next = tags.value.slice()
+  next.splice(index, 1)
   emit('remove', tag)
   emitChange(next)
 }
@@ -72,14 +73,11 @@ function focusInput() {
 }
 
 function splitBySeparators(value: string): string[] {
-  const separators = props.separators ?? []
-  if (!separators.length)
-    return [value]
-  const escaped = separators.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('')
-  if (!escaped)
-    return [value]
-  const pattern = new RegExp(`[${escaped}]`, 'g')
-  return value.split(pattern)
+  const separators = (props.separators ?? []).filter(Boolean)
+  return separators.reduce<string[]>(
+    (parts, sep) => parts.flatMap(part => part.split(sep)),
+    [value],
+  )
 }
 
 function onInput(value: string) {
@@ -104,9 +102,10 @@ function onKeydown(e: KeyboardEvent) {
     return
   }
   if (e.key === 'Backspace' && !inputValue.value && tags.value.length) {
-    const lastTag = tags.value[tags.value.length - 1]
+    const lastIndex = tags.value.length - 1
+    const lastTag = tags.value[lastIndex]
     if (lastTag)
-      removeTag(lastTag)
+      removeTag(lastTag, lastIndex)
   }
 }
 
@@ -125,13 +124,13 @@ function onBlur(e: FocusEvent) {
   >
     <div class="tx-tag-input__tags">
       <TxTag
-        v-for="tag in tags"
-        :key="tag"
+        v-for="(tag, index) in tags"
+        :key="index"
         :label="tag"
         size="sm"
         closable
         :disabled="disabled"
-        @close="removeTag(tag)"
+        @close="removeTag(tag, index)"
       />
       <input
         ref="inputRef"

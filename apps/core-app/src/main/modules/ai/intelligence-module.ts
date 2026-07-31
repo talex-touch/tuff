@@ -2,7 +2,6 @@ import type {
   IntelligenceAgentStreamEvent,
   IntelligenceInvokeOptions,
   IntelligenceInvokeResult,
-  IntelligenceProviderConfig,
   TuffIntelligenceAgentSession,
   TuffIntelligenceAgentTraceEvent,
   TuffIntelligenceApprovalTicket,
@@ -35,7 +34,8 @@ import {
   intelligenceApiEvents,
   intelligenceContextEvents,
   intelligenceOrchestratorEvents,
-  intelligenceKnowledgeEvents
+  intelligenceKnowledgeEvents,
+  normalizeIntelligenceProviderRuntimeConfig
 } from '@talex-touch/utils/transport/sdk/domains/intelligence'
 import { createHash } from 'node:crypto'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -76,6 +76,12 @@ import { intelligenceWorkflowService } from './intelligence-workflow-service'
 import { createCustomProvider } from './provider-factory'
 import { fetchProviderModels } from './provider-models'
 import { normalizeProviderForRuntime } from './provider-runtime'
+import {
+  deleteProviderCredentialConfig,
+  initializeProviderCredentialLifecycle,
+  saveProviderCredentialConfig,
+  shutdownProviderCredentialLifecycle
+} from './provider-credential-runtime'
 import { AnthropicProvider } from './providers/anthropic-provider'
 import { DeepSeekProvider } from './providers/deepseek-provider'
 import { LocalProvider } from './providers/local-provider'
@@ -618,6 +624,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
 
     intelligenceLog.info('Initializing Intelligence module')
 
+    // Credentials must be migrated and hydrated before any Provider instance is created.
+    await initializeProviderCredentialLifecycle()
+
     // 创建 Provider Manager
     this.manager = new IntelligenceProviderManager()
 
@@ -675,6 +684,7 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
     intelligenceTtsService.clear()
     this.manager?.clear()
     this.manager = null
+    await shutdownProviderCredentialLifecycle()
   }
 
   private startAgentRuntime(): void {
@@ -1514,13 +1524,37 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
       handler: (payload: TReq, context: HandlerContext) => Promise<TRes> | TRes
     ) => void
   ): void {
+    registerSafe(
+      intelligenceApiEvents.saveProviderConfig,
+      'Save provider credential config',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        const provider = await saveProviderCredentialConfig(data)
+        ensureIntelligenceConfigLoaded(true)
+        return provider
+      }
+    )
+
+    registerSafe(
+      intelligenceApiEvents.deleteProviderConfig,
+      'Delete provider credential config',
+      async (data, context) => {
+        assertHostOwnedIntelligenceControlPlane(context)
+        const result = await deleteProviderCredentialConfig(data)
+        ensureIntelligenceConfigLoaded(true)
+        return result
+      }
+    )
+
     registerSafe(intelligenceApiEvents.testProvider, 'Provider test', async (data, context) => {
       assertHostOwnedIntelligenceControlPlane(context)
       if (!data || typeof data !== 'object' || !data.provider) {
         throw new Error('Missing provider payload')
       }
 
-      const provider = normalizeProviderForRuntime(data.provider as IntelligenceProviderConfig)
+      const provider = normalizeProviderForRuntime(
+        normalizeIntelligenceProviderRuntimeConfig(data.provider)
+      )
       ensureIntelligenceConfigLoaded()
       intelligenceLog.info(`Testing provider: ${provider.id}`)
       const result = await tuffIntelligence.testProvider(provider)
@@ -1650,7 +1684,9 @@ export class IntelligenceModule extends BaseModule<TalexEvents> {
           throw new Error('Missing provider payload')
         }
 
-        const provider = normalizeProviderForRuntime(data.provider as IntelligenceProviderConfig)
+        const provider = normalizeProviderForRuntime(
+          normalizeIntelligenceProviderRuntimeConfig(data.provider)
+        )
         ensureIntelligenceConfigLoaded()
         intelligenceLog.info(`Fetching models for provider: ${provider.id}`)
 

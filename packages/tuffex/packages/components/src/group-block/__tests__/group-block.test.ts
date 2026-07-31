@@ -71,6 +71,19 @@ describe('group-block components', () => {
     expect(JSON.parse(window.localStorage.getItem('tuff-block-storage-settings') || '{}')).toEqual({ expand: true })
   })
 
+  it('starts collapsed on first render when only collapsed is set', () => {
+    const wrapper = mount(TxGroupBlock, {
+      props: {
+        name: 'Advanced',
+        collapsed: true,
+      },
+    })
+
+    // defaultExpand is unset, so the initial state must fall back to !collapsed.
+    expect(wrapper.classes()).not.toContain('tx-group-block--expanded')
+    expect(wrapper.find('.tx-group-block__trigger').attributes('aria-expanded')).toBe('false')
+  })
+
   it('does not toggle when the group is static', async () => {
     const wrapper = mount(TxGroupBlock, {
       props: {
@@ -144,6 +157,39 @@ describe('group-block components', () => {
     await wrapper.trigger('click')
     expect(wrapper.classes()).toContain('tx-block-slot--disabled')
     expect(wrapper.emitted('click')).toHaveLength(1)
+  })
+
+  it('makes a clickable BlockSlot keyboard-reachable and ignores nested control keys', async () => {
+    const onClick = () => {}
+    const wrapper = mount(TxBlockSlot, {
+      props: { title: 'Theme', onClick },
+      slots: { default: '<button class="control">Select</button>' },
+    })
+
+    // With a click listener the row becomes a keyboard-reachable button.
+    expect(wrapper.attributes('role')).toBe('button')
+    expect(wrapper.attributes('tabindex')).toBe('0')
+
+    await wrapper.trigger('keydown', { key: 'Enter' })
+    await wrapper.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toHaveLength(2)
+
+    // Keys bubbling from the slot control must not activate the row.
+    await wrapper.find('.control').trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toHaveLength(2)
+
+    // Disabled announces aria-disabled and blocks keyboard activation.
+    await wrapper.setProps({ disabled: true })
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    await wrapper.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('click')).toHaveLength(2)
+  })
+
+  it('leaves a listener-less BlockSlot free of interactive semantics', () => {
+    const wrapper = mount(TxBlockSlot, { props: { title: 'Static' } })
+    // No click listener → not a button, out of the tab order (no over-blocking).
+    expect(wrapper.attributes('role')).toBeUndefined()
+    expect(wrapper.attributes('tabindex')).toBeUndefined()
   })
 
   it('emits BlockSwitch value changes and supports guidance/loading modes', async () => {

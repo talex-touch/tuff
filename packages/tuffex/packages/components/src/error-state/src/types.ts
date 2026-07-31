@@ -1,3 +1,4 @@
-import type { EmptyStateProps } from '../../empty-state'
+import type { EmptyStateEmits, EmptyStateProps } from '../../empty-state'
 
 export type ErrorStateProps = Omit<EmptyStateProps, 'variant'>
+export type ErrorStateEmits = EmptyStateEmits

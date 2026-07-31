@@ -101,6 +101,27 @@ describe('tuffInput', () => {
     expect(readonly.emitted('update:modelValue')).toBeUndefined()
   })
 
+  it('announces CapsLock through a localizable status region', async () => {
+    const wrapper = mount(TuffInput, {
+      props: { type: 'password', capsLockText: '大写锁定已开启' },
+    })
+    const input = wrapper.find('input')
+    await input.trigger('focus')
+    // CapsLock detection reads getModifierState on the keydown event; jsdom's default
+    // returns false, so dispatch a real event with the modifier reported active.
+    const event = new KeyboardEvent('keydown', { bubbles: true })
+    Object.defineProperty(event, 'getModifierState', { value: () => true })
+    input.element.dispatchEvent(event)
+    await wrapper.vm.$nextTick()
+
+    const caps = wrapper.find('.tx-input__capslock')
+    expect(caps.exists()).toBe(true)
+    expect(caps.attributes('role')).toBe('status')
+    expect(caps.attributes('aria-live')).toBe('polite')
+    expect(caps.attributes('aria-label')).toBe('大写锁定已开启')
+    expect(caps.attributes('title')).toBe('大写锁定已开启')
+  })
+
   it('renders prefix and suffix slots before icon props', () => {
     const wrapper = mount(TuffInput, {
       props: {

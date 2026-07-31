@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const value = ref('')
+const value = ref(60)
 </script>
 
 <template>

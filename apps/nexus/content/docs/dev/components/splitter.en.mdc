@@ -2,6 +2,8 @@
 title: "Splitter"
 description: "Resizable two-pane layout with pointer and keyboard controls, clamped ratios, snapping, and horizontal or vertical direction."
 category: Layout
+status: beta
+since: 1.0.0
 tags: [layout, resize, panels]
 syncStatus: reviewed
 verified: true
@@ -72,7 +74,7 @@ code: |
 
 - Pointer drag reads the splitter root bounding box: horizontal uses `clientX / width`, vertical uses `clientY / height`.
 - Keyboard resizing uses ArrowLeft / ArrowRight in horizontal mode and ArrowUp / ArrowDown in vertical mode, stepping by `0.02` before clamp / snap.
-- The separator renders `role="separator"`; `aria-orientation` is `vertical` for horizontal panes and `horizontal` for vertical panes.
+- The separator renders `role="separator"` with `aria-label="Resize"`; `aria-orientation` is `vertical` for horizontal panes and `horizontal` for vertical panes. It reports the current split through `aria-valuenow` and the `min`/`max` bounds through `aria-valuemin`/`aria-valuemax`, all as integer percentages (`0..100`).
 - When disabled, the separator uses `tabindex="-1"`, pointer/keyboard changes are ignored, and active dragging is ended.
 - The component does not persist layout. Store the `v-model` ratio in the caller if users should keep their pane size.
 
@@ -86,9 +88,9 @@ code: |
 
 ## Review Notes
 
-- **Accessibility note:** The separator is keyboard-focusable with `role="separator"` and arrow-key resizing, but it does not expose `aria-valuenow`, `aria-valuemin`, or `aria-valuemax`. Pair complex resizable layouts with visible ratio/size feedback when precision matters.
+- **Accessibility note:** The separator is keyboard-focusable with `role="separator"`, `aria-label="Resize"`, and arrow-key resizing, and it exposes `aria-valuenow` / `aria-valuemin` / `aria-valuemax` as integer percentages (the current ratio and the `min`/`max` bounds scaled to `0..100`) so assistive tech can announce the split position. Visible ratio/size feedback is still helpful when precision matters.
 - **Layout note:** Rendered ratios are clamped to `0..1`, while emitted pointer/keyboard changes are clamped by `min`/`max` and then snapped. Keep `min <= max` in caller code; the component does not normalize inverted bounds.
-- **Verified coverage:** `splitter.test.ts` checks horizontal and vertical rendering, separator orientation, slot content, ratio/bar CSS variables, pointer drag with clamp/snap, vertical pointer math, keyboard resizing, disabled blocking, and drag-end emission when disabled mid-drag.
+- **Verified coverage:** `splitter.test.ts` checks horizontal and vertical rendering, separator orientation, `aria-valuenow`/`aria-valuemin`/`aria-valuemax`, slot content, ratio/bar CSS variables, pointer drag with clamp/snap, vertical pointer math, keyboard resizing, disabled blocking, and drag-end emission when disabled mid-drag.
 
 ## Source
 

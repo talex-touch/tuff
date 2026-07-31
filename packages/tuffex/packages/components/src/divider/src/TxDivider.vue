@@ -1,19 +1,13 @@
 <script setup lang="ts">
+import type { DividerProps } from './types'
 import { computed } from 'vue'
-
-type DividerGradient = boolean | 'start' | 'end' | 'both'
 
 defineOptions({
   name: 'TxDivider',
 })
 
 const props = withDefaults(
-  defineProps<{
-    direction?: 'horizontal' | 'vertical'
-    dashed?: boolean
-    textPlacement?: 'left' | 'center' | 'right'
-    gradient?: DividerGradient
-  }>(),
+  defineProps<DividerProps>(),
   {
     direction: 'horizontal',
     dashed: false,
