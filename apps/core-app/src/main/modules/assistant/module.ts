@@ -8,7 +8,7 @@ import type {
   IntelligenceInvokeResult,
   IntelligenceVisionOcrResult
 } from '@talex-touch/tuff-intelligence'
-import type { HandlerContext, ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { StorageList } from '@talex-touch/utils'
 import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
@@ -17,7 +17,6 @@ import type {
   AssistantVoiceTranscribePayload,
   AssistantVoiceTranscribeResponse,
   AssistantRuntimeConfig,
-  AssistantScreenshotDisplay,
   AssistantScreenshotFallbackReason,
   AssistantScreenshotCapturePayload,
   AssistantScreenshotCaptureResponse,
@@ -39,7 +38,6 @@ import { isIntelligenceErrorCode } from '@talex-touch/utils/transport/events/typ
 import { AssistantEvents } from '@talex-touch/utils/transport/events/assistant'
 import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import fs from 'node:fs/promises'
 import {
   dialog,
   screen,
@@ -49,7 +47,6 @@ import {
 } from 'electron'
 import {
   AssistantFloatingBallWindowOption,
-  AssistantRegionSelectorWindowOption,
   AssistantVoicePanelWindowOption
 } from '../../config/default'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
@@ -61,13 +58,10 @@ import { tuffIntelligence } from '../ai/intelligence-sdk'
 import { normalizeIntelligenceError } from '../ai/intelligence-error-normalizer'
 import { BaseModule } from '../abstract-base-module'
 import { coreBoxManager } from '../box-tool/core-box/manager'
-import {
-  normalizeImageBase64Payload,
-  translateClipboardImage,
-  translateImageBase64
-} from '../box-tool/core-box/image-translate'
+import { translateClipboardImage, translateImageBase64 } from '../box-tool/core-box/image-translate'
 import { windowManager } from '../box-tool/core-box/window'
 import { getNativeScreenshotService } from '../native-capabilities/screenshot-service'
+import { getScreenshotSessionManager } from '../screenshot-session'
 import { getMainConfig, persistMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
 
 interface FloatingBallPosition {
@@ -92,13 +86,6 @@ interface VoiceWakeSetting {
   openPanelOnWake: boolean
 }
 
-interface PendingScreenshotRegionSelection {
-  display: AssistantScreenshotDisplay
-  resolve: (response: AssistantScreenshotRegionSelectionResponse) => void
-  timeout: NodeJS.Timeout | null
-  window: TouchWindow | null
-}
-
 type ScreenshotUnavailableCode =
   | 'SCREENSHOT_PERMISSION_DENIED'
   | 'SCREENSHOT_UNSUPPORTED'
@@ -115,8 +102,6 @@ const ASSISTANT_DEFAULT_ENABLED = false
 const DEFAULT_WAKE_WORDS = ['阿洛', 'aler']
 const DEFAULT_WAKE_LANGUAGE = 'zh-CN'
 const DEFAULT_WAKE_COOLDOWN = 2200
-const REGION_SELECTION_TIMEOUT_MS = 60_000
-const REGION_CAPTURE_PANEL_RESTORE_TIMEOUT_MS = 3_000
 const ASSISTANT_SCREENSHOT_TRANSLATE_CALLER = 'core.assistant.screenshot-translate'
 const ASSISTANT_SCREENSHOT_FALLBACK_SOURCE = 'assistant-screenshot-ocr-fallback'
 const ASSISTANT_VOICE_TRANSCRIBE_CALLER = 'core.assistant.voice-transcribe'
@@ -202,6 +187,37 @@ function normalizeScreenshotRegion(value: unknown): NativeScreenshotRegion | nul
     return null
   }
   return { x, y, width, height }
+}
+
+function managedCaptureResult(
+  payload?: AssistantScreenshotTargetPayload
+): NativeScreenshotCaptureResult | null {
+  const resource = payload?.target === 'resource' ? payload.resource : undefined
+  if (
+    !resource ||
+    resource.mimeType !== 'image/png' ||
+    typeof resource.tfileUrl !== 'string' ||
+    !resource.tfileUrl.startsWith('tfile://') ||
+    (payload?.tfileUrl !== undefined && payload.tfileUrl !== resource.tfileUrl) ||
+    !Number.isFinite(resource.width) ||
+    resource.width <= 0 ||
+    !Number.isFinite(resource.height) ||
+    resource.height <= 0 ||
+    !Number.isSafeInteger(resource.sizeBytes) ||
+    resource.sizeBytes < 0
+  ) {
+    return null
+  }
+  return {
+    ...resource,
+    displayId: '',
+    displayName: '',
+    x: 0,
+    y: 0,
+    scaleFactor: 1,
+    durationMs: 0,
+    wroteClipboard: false
+  }
 }
 
 function normalizeScreenshotTarget(
@@ -328,9 +344,6 @@ export class AssistantModule extends BaseModule {
   private floatingBallWindowPending: Promise<TouchWindow> | null = null
   private voicePanelWindow: TouchWindow | null = null
   private voicePanelWindowPending: Promise<TouchWindow> | null = null
-  private pendingRegionSelection: PendingScreenshotRegionSelection | null = null
-  private regionCapturePanelRestorePending = false
-  private regionCapturePanelRestoreTimer: NodeJS.Timeout | null = null
   private voicePanelAutoHideSuppressionDepth = 0
   private voicePanelAutoHideResumeTimer: NodeJS.Timeout | null = null
   private pendingPosition: FloatingBallPosition | null = null
@@ -389,14 +402,6 @@ export class AssistantModule extends BaseModule {
 
     this.pendingPosition = null
     this.voicePanelAutoHideSuppressionDepth = 0
-    this.finishPendingRegionSelection(
-      {
-        success: false,
-        canceled: true
-      },
-      false
-    )
-    this.clearRegionCapturePanelRestore(false)
     this.unsubscribeAppSetting?.()
     this.unsubscribeAppSetting = null
 
@@ -494,18 +499,6 @@ export class AssistantModule extends BaseModule {
     this.transportDisposers.push(
       this.transport.on(AssistantEvents.voice.selectScreenshotRegion, async (payload) => {
         return await this.handleScreenshotRegionSelection(payload || undefined)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.regionSelection.submit, (payload, context) => {
-        return this.submitScreenshotRegionSelection(payload, context)
-      })
-    )
-
-    this.transportDisposers.push(
-      this.transport.on(AssistantEvents.regionSelection.cancel, (_payload, context) => {
-        return this.cancelScreenshotRegionSelection(context)
       })
     )
 
@@ -733,8 +726,6 @@ export class AssistantModule extends BaseModule {
 
   private async applySettingSnapshot(setting: AppSetting): Promise<void> {
     if (!this.isAssistantEnabled(setting)) {
-      this.finishPendingRegionSelection({ success: false, canceled: true }, false)
-      this.clearRegionCapturePanelRestore(false)
       this.hideVoicePanel()
       this.destroyVoicePanelWindow()
       this.destroyFloatingBallWindow()
@@ -743,8 +734,6 @@ export class AssistantModule extends BaseModule {
 
     const floatingBall = this.getFloatingBallSetting(setting)
     if (!floatingBall.enabled) {
-      this.finishPendingRegionSelection({ success: false, canceled: true }, false)
-      this.clearRegionCapturePanelRestore(false)
       this.hideVoicePanel()
       this.destroyVoicePanelWindow()
       this.destroyFloatingBallWindow()
@@ -758,34 +747,8 @@ export class AssistantModule extends BaseModule {
     }
   }
 
-  private resolveScreenshotRegionDisplay(
-    payload?: AssistantScreenshotRegionSelectionPayload
-  ): AssistantScreenshotDisplay | null {
-    const displays = getNativeScreenshotService().listDisplays()
-    if (displays.length === 0) return null
-
-    const displayId = typeof payload?.displayId === 'string' ? payload.displayId.trim() : ''
-    if (payload?.target === 'display') {
-      return displayId ? displays.find((display) => display.id === displayId) || null : null
-    }
-
-    const cursor = screen.getCursorScreenPoint()
-    return (
-      displays.find(
-        (display) =>
-          cursor.x >= display.x &&
-          cursor.x < display.x + display.width &&
-          cursor.y >= display.y &&
-          cursor.y < display.y + display.height
-      ) ||
-      displays.find((display) => display.isPrimary) ||
-      displays[0] ||
-      null
-    )
-  }
-
   private async handleScreenshotRegionSelection(
-    payload?: AssistantScreenshotRegionSelectionPayload
+    _payload?: AssistantScreenshotRegionSelectionPayload
   ): Promise<AssistantScreenshotRegionSelectionResponse> {
     const setting = this.readAppSetting()
     if (!this.isAssistantEnabled(setting) || !this.getFloatingBallSetting(setting).enabled) {
@@ -796,201 +759,49 @@ export class AssistantModule extends BaseModule {
       }
     }
 
-    const support = getNativeScreenshotService().getSupport()
-    if (!support.supported) {
-      return {
-        success: false,
-        code: 'SCREENSHOT_UNSUPPORTED',
-        error: support.reason || 'Native screenshot is unsupported.'
-      }
-    }
-    if (this.pendingRegionSelection) {
+    const manager = getScreenshotSessionManager()
+    if (manager.getActiveSessionId()) {
       return {
         success: false,
         code: 'REGION_SELECTION_UNAVAILABLE',
-        error: 'A screenshot region selection is already active.'
-      }
-    }
-
-    const display = this.resolveScreenshotRegionDisplay(payload)
-    if (!display || display.width <= 0 || display.height <= 0) {
-      return {
-        success: false,
-        code: 'REGION_SELECTION_UNAVAILABLE',
-        error: 'Unable to resolve a display for screenshot region selection.'
+        error: 'A screenshot session is already active.'
       }
     }
 
     this.hideVoicePanel()
-    return await new Promise<AssistantScreenshotRegionSelectionResponse>((resolve) => {
-      const pending: PendingScreenshotRegionSelection = {
-        display,
-        resolve,
-        timeout: null,
-        window: null
-      }
-      this.pendingRegionSelection = pending
-      pending.timeout = setTimeout(() => {
-        if (this.pendingRegionSelection === pending) {
-          this.finishPendingRegionSelection({ success: false, canceled: true }, true)
-        }
-      }, REGION_SELECTION_TIMEOUT_MS)
-
-      void this.openScreenshotRegionSelector(pending).catch((error) => {
-        if (this.pendingRegionSelection !== pending) return
-        this.finishPendingRegionSelection(
-          {
-            success: false,
-            code: 'REGION_SELECTION_UNAVAILABLE',
-            error:
-              error instanceof Error ? error.message : 'Screenshot region selector is unavailable.'
-          },
-          true
-        )
+    try {
+      const ownerKey = 'internal:assistant-region'
+      const started = await manager.start({
+        entrypoint: 'assistant',
+        ownerKey,
+        completionMode: 'return-resource',
+        delayMs: 0,
+        initialTarget: 'free-region'
       })
-    })
-  }
-
-  private async openScreenshotRegionSelector(
-    pending: PendingScreenshotRegionSelection
-  ): Promise<void> {
-    const display = pending.display
-    const touchWindow = new TouchWindow({
-      ...AssistantRegionSelectorWindowOption,
-      x: display.x,
-      y: display.y,
-      width: display.width,
-      height: display.height
-    })
-    if (this.pendingRegionSelection !== pending) {
-      touchWindow.window.destroy()
-      return
-    }
-
-    pending.window = touchWindow
-    touchWindow.window.setAlwaysOnTop(true, 'screen-saver')
-    touchWindow.window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-    touchWindow.window.setFullScreenable(false)
-    touchWindow.window.setSkipTaskbar(true)
-    touchWindow.window.on('closed', () => {
-      if (this.pendingRegionSelection === pending) {
-        this.finishPendingRegionSelection({ success: false, canceled: true }, true)
+      if (!started.accepted || !started.sessionId) {
+        return {
+          success: false,
+          code: 'REGION_SELECTION_UNAVAILABLE',
+          error: started.reason || 'Screenshot session is unavailable.'
+        }
       }
-    })
-
-    await this.loadAssistantRenderer(touchWindow)
-    if (this.pendingRegionSelection !== pending || touchWindow.window.isDestroyed()) return
-    touchWindow.window.show()
-    touchWindow.window.focus()
-  }
-
-  private submitScreenshotRegionSelection(
-    payload: NativeScreenshotRegion,
-    context: HandlerContext
-  ): { accepted: boolean } {
-    const pending = this.pendingRegionSelection
-    if (!pending || !this.isRegionSelectionSender(pending, context)) {
-      return { accepted: false }
-    }
-
-    const localRegion = normalizeScreenshotRegion(payload)
-    if (
-      !localRegion ||
-      localRegion.width < 4 ||
-      localRegion.height < 4 ||
-      pending.display.width <= 0 ||
-      pending.display.height <= 0
-    ) {
-      return { accepted: false }
-    }
-
-    const localX = clamp(Math.round(localRegion.x), 0, pending.display.width - 1)
-    const localY = clamp(Math.round(localRegion.y), 0, pending.display.height - 1)
-    const width = clamp(Math.round(localRegion.width), 1, pending.display.width - localX)
-    const height = clamp(Math.round(localRegion.height), 1, pending.display.height - localY)
-    const region: NativeScreenshotRegion = {
-      x: pending.display.x + localX,
-      y: pending.display.y + localY,
-      width,
-      height
-    }
-
-    this.deferRegionCapturePanelRestore()
-    this.finishPendingRegionSelection(
-      {
-        success: true,
-        region,
-        displayId: pending.display.id,
-        displayName: pending.display.friendlyName?.trim() || pending.display.name
-      },
-      false
-    )
-    return { accepted: true }
-  }
-
-  private cancelScreenshotRegionSelection(context: HandlerContext): { accepted: boolean } {
-    const pending = this.pendingRegionSelection
-    if (!pending || !this.isRegionSelectionSender(pending, context)) {
-      return { accepted: false }
-    }
-    this.finishPendingRegionSelection({ success: false, canceled: true }, true)
-    return { accepted: true }
-  }
-
-  private isRegionSelectionSender(
-    pending: PendingScreenshotRegionSelection,
-    context: HandlerContext
-  ): boolean {
-    const selectorId = pending.window?.window.webContents.id
-    return typeof selectorId === 'number' && context.sender.id === selectorId
-  }
-
-  private finishPendingRegionSelection(
-    response: AssistantScreenshotRegionSelectionResponse,
-    restorePanel: boolean
-  ): boolean {
-    const pending = this.pendingRegionSelection
-    if (!pending) return false
-    this.pendingRegionSelection = null
-    clearTimeout(pending.timeout ?? undefined)
-    pending.timeout = null
-
-    const selectorWindow = pending.window?.window
-    if (selectorWindow && !selectorWindow.isDestroyed()) {
-      selectorWindow.destroy()
-    }
-    if (restorePanel) {
-      this.restoreVoicePanelWindow()
-    }
-    pending.resolve(response)
-    return true
-  }
-
-  private deferRegionCapturePanelRestore(): void {
-    clearTimeout(this.regionCapturePanelRestoreTimer ?? undefined)
-    this.regionCapturePanelRestorePending = true
-    this.regionCapturePanelRestoreTimer = setTimeout(() => {
-      this.clearRegionCapturePanelRestore(true)
-    }, REGION_CAPTURE_PANEL_RESTORE_TIMEOUT_MS)
-  }
-
-  private claimRegionCapturePanelRestore(payload?: AssistantScreenshotTargetPayload): boolean {
-    if (payload?.target !== 'region' || !this.regionCapturePanelRestorePending) return false
-    if (this.regionCapturePanelRestoreTimer) {
-      clearTimeout(this.regionCapturePanelRestoreTimer)
-      this.regionCapturePanelRestoreTimer = null
-    }
-    return true
-  }
-
-  private clearRegionCapturePanelRestore(restorePanel: boolean): void {
-    if (this.regionCapturePanelRestoreTimer) {
-      clearTimeout(this.regionCapturePanelRestoreTimer)
-      this.regionCapturePanelRestoreTimer = null
-    }
-    const shouldRestore = this.regionCapturePanelRestorePending
-    this.regionCapturePanelRestorePending = false
-    if (restorePanel && shouldRestore) {
+      const result = await manager.waitForResult(started.sessionId, ownerKey)
+      if (result.status === 'canceled') return { success: false, canceled: true }
+      if (result.status === 'failed') {
+        return {
+          success: false,
+          code: 'REGION_SELECTION_UNAVAILABLE',
+          error: result.code
+        }
+      }
+      return { success: true, resource: result.resource }
+    } catch (error) {
+      return {
+        success: false,
+        code: 'REGION_SELECTION_UNAVAILABLE',
+        error: error instanceof Error ? error.message : 'Screenshot session is unavailable.'
+      }
+    } finally {
       this.restoreVoicePanelWindow()
     }
   }
@@ -1473,18 +1284,29 @@ export class AssistantModule extends BaseModule {
 
     this.beginVoicePanelAutoHideSuppression()
     try {
-      const restorePanelAfterCapture = this.claimRegionCapturePanelRestore(payload)
-      let captureResult: NativeScreenshotCaptureResult
-      try {
-        captureResult = await getNativeScreenshotService().capture({
+      const screenshotService = getNativeScreenshotService()
+      let captureResult = managedCaptureResult(payload)
+      if (payload?.target === 'resource' && !captureResult) {
+        return {
+          success: false,
+          code: 'SCREENSHOT_UNAVAILABLE',
+          error: 'Screenshot resource is invalid.'
+        }
+      }
+      if (captureResult) {
+        captureResult = {
+          ...captureResult,
+          wroteClipboard: await screenshotService.writeCaptureResourceToClipboard(
+            captureResult.tfileUrl
+          )
+        }
+      } else {
+        captureResult = await screenshotService.capture({
           ...normalizeScreenshotTarget(payload),
-          output: 'data-url',
           writeClipboard: true
         })
-      } finally {
-        if (restorePanelAfterCapture) this.clearRegionCapturePanelRestore(true)
       }
-      if (typeof captureResult.dataUrl !== 'string' || !captureResult.dataUrl.trim()) {
+      if (typeof captureResult.tfileUrl !== 'string' || !captureResult.tfileUrl.trim()) {
         return {
           success: false,
           code: 'SCREENSHOT_UNAVAILABLE',
@@ -1494,7 +1316,7 @@ export class AssistantModule extends BaseModule {
 
       return {
         success: true,
-        dataUrl: captureResult.dataUrl,
+        tfileUrl: captureResult.tfileUrl,
         mimeType: captureResult.mimeType,
         width: captureResult.width,
         height: captureResult.height,
@@ -1525,17 +1347,25 @@ export class AssistantModule extends BaseModule {
     }
 
     this.beginVoicePanelAutoHideSuppression()
-    let tempArtifactPath: string | undefined
+    let ownedTempArtifactUrl: string | undefined
+    let ownsCaptureArtifact = false
     try {
-      let captureResult: NativeScreenshotCaptureResult
-      const restorePanelAfterCapture = this.claimRegionCapturePanelRestore(payload)
-      try {
+      const screenshotService = getNativeScreenshotService()
+      let captureResult = managedCaptureResult(payload)
+      if (payload?.target === 'resource' && !captureResult) {
+        return {
+          success: false,
+          code: 'SCREENSHOT_UNAVAILABLE',
+          error: 'Screenshot resource is invalid.'
+        }
+      }
+      if (!captureResult) {
         try {
-          captureResult = await getNativeScreenshotService().capture({
+          captureResult = await screenshotService.capture({
             ...normalizeScreenshotTarget(payload),
-            output: 'tfile',
             writeClipboard: false
           })
+          ownsCaptureArtifact = true
         } catch (error) {
           return {
             success: false,
@@ -1543,11 +1373,9 @@ export class AssistantModule extends BaseModule {
             error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
           }
         }
-      } finally {
-        if (restorePanelAfterCapture) this.clearRegionCapturePanelRestore(true)
       }
 
-      if (typeof captureResult.path !== 'string' || !captureResult.path.trim()) {
+      if (typeof captureResult.tfileUrl !== 'string' || !captureResult.tfileUrl.trim()) {
         return {
           success: false,
           code: 'SCREENSHOT_UNAVAILABLE',
@@ -1555,7 +1383,9 @@ export class AssistantModule extends BaseModule {
         }
       }
 
-      tempArtifactPath = captureResult.path
+      if (ownsCaptureArtifact) {
+        ownedTempArtifactUrl = captureResult.tfileUrl
+      }
 
       const ownerWindow = this.voicePanelWindow?.window.isDestroyed()
         ? undefined
@@ -1575,11 +1405,10 @@ export class AssistantModule extends BaseModule {
         }
       }
 
-      await fs.copyFile(captureResult.path, saveResult.filePath)
+      await screenshotService.copyCaptureResource(captureResult.tfileUrl, saveResult.filePath)
 
       return {
         success: true,
-        path: saveResult.filePath,
         mimeType: captureResult.mimeType,
         width: captureResult.width,
         height: captureResult.height,
@@ -1593,9 +1422,9 @@ export class AssistantModule extends BaseModule {
         error: error instanceof Error ? error.message : 'Screenshot save failed.'
       }
     } finally {
-      if (tempArtifactPath) {
+      if (ownedTempArtifactUrl) {
         try {
-          await getNativeScreenshotService().releaseTempArtifact(tempArtifactPath)
+          await getNativeScreenshotService().releaseTempArtifact(ownedTempArtifactUrl)
         } catch {
           // Scheduled retention remains the fallback if eager release fails.
         }
@@ -1728,29 +1557,35 @@ export class AssistantModule extends BaseModule {
 
     this.beginVoicePanelAutoHideSuppression()
     try {
-      let dataUrl: string | undefined
-      const restorePanelAfterCapture = this.claimRegionCapturePanelRestore(payload)
+      let screenshotDataUrl = ''
+      let imageBase64 = ''
       try {
-        try {
-          const captureResult = await getNativeScreenshotService().capture({
-            ...normalizeScreenshotTarget(payload),
-            output: 'data-url',
-            writeClipboard: false
-          })
-          dataUrl = captureResult.dataUrl
-        } catch (error) {
+        const screenshotService = getNativeScreenshotService()
+        const managed = managedCaptureResult(payload)
+        if (payload?.target === 'resource' && !managed) {
           return {
             success: false,
-            code: mapScreenshotUnavailableCode(error),
-            error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
+            code: 'SCREENSHOT_UNAVAILABLE',
+            error: 'Screenshot resource is invalid.'
           }
         }
-      } finally {
-        if (restorePanelAfterCapture) this.clearRegionCapturePanelRestore(true)
+        const captureResult =
+          managed ??
+          (await screenshotService.capture({
+            ...normalizeScreenshotTarget(payload),
+            writeClipboard: false
+          }))
+        const imageBuffer = await screenshotService.readCaptureResource(captureResult.tfileUrl)
+        imageBase64 = imageBuffer.toString('base64')
+        screenshotDataUrl = `data:${captureResult.mimeType};base64,${imageBase64}`
+      } catch (error) {
+        return {
+          success: false,
+          code: mapScreenshotUnavailableCode(error),
+          error: error instanceof Error ? error.message : 'Native screenshot is unavailable.'
+        }
       }
 
-      const screenshotDataUrl = typeof dataUrl === 'string' ? dataUrl.trim() : ''
-      const imageBase64 = screenshotDataUrl ? normalizeImageBase64Payload(screenshotDataUrl) : null
       if (!imageBase64) {
         return {
           success: false,

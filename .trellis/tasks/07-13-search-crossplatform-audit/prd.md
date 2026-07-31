@@ -88,9 +88,11 @@
 
 ### 🟠 高危工程风险
 
-- [ ] **R1 — Rust 截图模块疑似未接入 CI/安装构建链**
-  - 位置：`packages/tuff-native/scripts/build-screenshot.js`（手动脚本）、`scripts/build-target/build-target.js:169`（`verifyNativeOcrModule` 只验 OCR）；`gypfile:true` 只触发 node-gyp（OCR+Everything），不含 cargo。
-  - 风险：打包产物可能缺 `tuff_native_screenshot.node` → 截图静默降级 `ERR_NATIVE_SCREENSHOT_UNAVAILABLE`。**需实际打包验证**。跟踪：[ #321](https://github.com/talex-touch/tuff/issues/321)。
+- [x] **R1 — Rust 截图模块已接入 CI/安装构建链** ✅ 已修（`07-29-macos-screenshot-capture-core`，原跟踪 #321 已关闭）
+  - 修复：`native-protocol.yml` 在 macOS/Windows/Linux 安装 xcap 所需 Linux build deps，构建 ordinary screenshot addon，执行真实 dlopen/export contracts；随后构建 deterministic addon 跑 `.node -> NapiCarrier -> NativeTransport` integration，并在结束前恢复 ordinary addon。
+  - 包合同：`@talex-touch/tuff-native.files` 显式包含 macOS/AX/stream/xcap production backend 源码与 `build/Release/tuff_native_screenshot.node`，继续排除 fixture、contract test backend 和 Cargo target。
+  - 证据：本地 ordinary/deterministic 双构建、普通 addon strict macOS integration、31/31 Node contracts 和 `pnpm pack --dry-run` 通过；tarball 包含 addon 与全部 production backend，未包含 `test_backend.rs`/contract fixtures/target。
+  - 边界：Windows/Linux authoritative native build 由新增 CI matrix 执行；signed Electron packaged runtime evidence 仍由 `07-29-screenshot-packaged-evidence` 独立承接。
 
 - [ ] **R2 — macOS 打包未签名 + 仅 arm64 + dir target，与 electron-updater 路径冲突**
   - 位置：`electron-builder.yml:100-119`（`sign/notarize/hardenedRuntime:false`、`identity:null`、`target:dir`、无 Intel）
@@ -140,13 +142,13 @@
 
 ## 子任务映射
 
-| 子任务                                       | 覆盖                                      | 状态                                                              |
-| -------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------- |
-| `07-13-fix-ranking-dead-features`            | B1 + B2                                   | ✅ done（typecheck 0 err，46 相关用例通过）                       |
-| `07-16-fix-usage-statistics-double-counting` | B3                                        | ✅ done（单写者 + 保守迁移，4 tests + smoke）                     |
-| `07-16-unify-file-filtering-service`         | B4                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
-| `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-off, readiness-order, and flag-on app gates | planning |
-| (待建)                                       | R1 打包验证 / R2 mac 签名 / R3 流式落库 … | backlog                                                           |
+| 子任务                                         | 覆盖                                                                                                      | 状态                                                              |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `07-13-fix-ranking-dead-features`              | B1 + B2                                                                                                   | ✅ done（typecheck 0 err，46 相关用例通过）                       |
+| `07-16-fix-usage-statistics-double-counting`   | B3                                                                                                        | ✅ done（单写者 + 保守迁移，4 tests + smoke）                     |
+| `07-16-unify-file-filtering-service`           | B4                                                                                                        | ✅ done（统一策略 + 索引/发布双门，83 tests + typecheck + smoke） |
+| `07-28-migrate-search-index-split-write-paths` | R9 remaining provider/file/embedding write migration; default-off, readiness-order, and flag-on app gates | planning                                                          |
+| (待建)                                         | R1 打包验证 / R2 mac 签名 / R3 流式落库 …                                                                 | backlog                                                           |
 
 ### 遗留 carve-out（B1 派生，未做）
 

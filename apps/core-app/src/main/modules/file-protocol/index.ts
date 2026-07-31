@@ -3,6 +3,7 @@ import url from 'node:url'
 import { net, session } from 'electron'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import { FILE_SCHEMA } from '../../config/default'
+import { tempFileService } from '../../service/temp-file.service'
 import {
   getAllowedLocalFileRoots,
   isAllowedLocalFilePath,
@@ -92,7 +93,7 @@ class FileProtocolModule extends BaseModule {
 
   onInit(): MaybePromise<void> {
     const ses = session.defaultSession
-    const allowedRoots = getAllowedLocalFileRoots()
+    const allowedRoots = [...getAllowedLocalFileRoots(), tempFileService.getBaseDir()]
 
     ses.protocol.handle(FILE_SCHEMA, async (request) => {
       const extractedPath = extractAbsolutePath(request.url)

@@ -1,0 +1,35 @@
+# Final deduplication decisions
+
+Audited repository: `talex-touch/tuff`
+
+Final default-branch commit: `784377c499899529145c0dac7f1d0000329e0794`
+
+GitHub open and closed Issues, active/archived Trellis tasks, the search/cross-platform audit, recent commits, and current source were searched before these decisions.
+
+| Candidate                                           | Decision                 | Reason                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| CoreBox duplicate canonical handlers                | New Issue                | 21 duplicate canonical events and deterministic programmatic-search side effects share one root cause. No open/closed Issue matches duplicate CoreBox handlers or `Search stream superseded`. Relevant CoreBox/transport source is unchanged between the original audit commit and final commit. |
+| CoreBox programmatic `Search stream superseded`     | Group with CoreBox draft | It is the confirmed consequence of duplicate registrations, not an independent fix boundary.                                                                                                                                                                                                     |
+| CoreApp full Vitest failures                        | Existing #323            | Both runs match #323's known packaging/security-boundary baseline.                                                                                                                                                                                                                               |
+| CoreBox double `shortcutTriggered` send             | Excluded                 | Intentional pre-show ordering plus post-show fallback; no duplicate non-idempotent effect was proven.                                                                                                                                                                                            |
+| One delayed `vision.ocr` native error               | Excluded                 | Single contaminated occurrence, not reproducible, and unrelated native worktree changes were active.                                                                                                                                                                                             |
+| File-provider fixture timing and unsigned packaging | Excluded                 | Environment/timing-only observations without a product failure contract.                                                                                                                                                                                                                         |
+| Nexus docs directory alias SSR 404/build failure    | New Issue                | Pure Nuxt, local Cloudflare dev, and production build reproduce it; explicit index/API controls pass. No open/closed Issue owns index-alias record matching or 24-route prerender failure. #327 lists test-suite groups, not this runtime status/build defect.                                   |
+| Nexus tests under `server/api`                      | New Issue                | The documented route-tree guard independently fails on five paths. No open/closed Issue owns these paths or the guard regression.                                                                                                                                                                |
+| Nexus Store hydration mismatch                      | Existing #327            | The mismatch is caused by the same `server:false` first-load source change already covered by #327's Store first-load/performance guard boundary and real-regression triage requirement. No duplicate Issue will be created.                                                                     |
+| Nexus full-suite failures                           | Existing #327            | Two prepared runs are identical and all nine files/12 tests map to groups explicitly listed by #327.                                                                                                                                                                                             |
+| Vue Router/Volar resolution warnings                | Existing #332            | Exact warning signatures match #332.                                                                                                                                                                                                                                                             |
+| Missing deployed OAuth/Dashboard/bfcache evidence   | Existing #324            | This task had no approved authenticated/deployed surface; no completion claim is made.                                                                                                                                                                                                           |
+| Auth.js advisories                                  | Existing #329            | Dependency/security ownership is unchanged.                                                                                                                                                                                                                                                      |
+| Three English auth locale warnings                  | Excluded                 | Each call supplies a visible English fallback; no independent user-visible failure was confirmed.                                                                                                                                                                                                |
+| Worker findings after aborted build                 | Excluded                 | Analysis consumed incomplete output after the docs prerender failure and is not valid standalone evidence.                                                                                                                                                                                       |
+
+## Existing Issues reused
+
+- [#323](https://github.com/talex-touch/tuff/issues/323)
+- [#324](https://github.com/talex-touch/tuff/issues/324)
+- [#327](https://github.com/talex-touch/tuff/issues/327)
+- [#329](https://github.com/talex-touch/tuff/issues/329)
+- [#332](https://github.com/talex-touch/tuff/issues/332)
+
+No comment or edit has been posted to these Issues. Store hydration evidence could be added to #327 only with separate user approval.

@@ -1551,11 +1551,9 @@ describe('touchPlugin.triggerFeature', () => {
     )
   })
 
-  it('exposes one verified screenshot facade that routes typed targets and redacts native paths', async () => {
+  it('exposes one verified descriptor-only screenshot facade that routes typed targets', async () => {
     const nativeCapture = {
       tfileUrl: 'tfile:///tmp/native/shot.png',
-      dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdA==',
-      path: '/private/tmp/native/shot.png',
       mimeType: 'image/png',
       width: 1280,
       height: 720,
@@ -1611,19 +1609,16 @@ describe('touchPlugin.triggerFeature', () => {
     await featureUtil.screenshot.capture({ target: 'cursor-display', writeClipboard: true })
     await featureUtil.screenshot.capture({
       target: 'display',
-      displayId: 'display-external',
-      output: 'data-url'
+      displayId: 'display-external'
     })
     const regionCapture = await featureUtil.screenshot.capture({
       target: 'region',
       displayId: 'display-1',
-      region: { x: 10, y: 20, width: 300, height: 200 },
-      output: 'tfile'
+      region: { x: 10, y: 20, width: 300, height: 200 }
     })
 
     expect(regionCapture).toEqual({
       tfileUrl: 'tfile:///tmp/native/shot.png',
-      dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdA==',
       mimeType: 'image/png',
       width: 1280,
       height: 720,
@@ -1637,6 +1632,7 @@ describe('touchPlugin.triggerFeature', () => {
       wroteClipboard: false
     })
     expect(regionCapture).not.toHaveProperty('path')
+    expect(regionCapture).not.toHaveProperty('dataUrl')
 
     const calls = vi.mocked(transport.invoke).mock.calls
     const expectedCalls = [
@@ -1648,15 +1644,14 @@ describe('touchPlugin.triggerFeature', () => {
       },
       {
         event: NativeEvents.screenshot.capture,
-        payload: { target: 'display', displayId: 'display-external', output: 'data-url' }
+        payload: { target: 'display', displayId: 'display-external' }
       },
       {
         event: NativeEvents.screenshot.capture,
         payload: {
           target: 'region',
           displayId: 'display-1',
-          region: { x: 10, y: 20, width: 300, height: 200 },
-          output: 'tfile'
+          region: { x: 10, y: 20, width: 300, height: 200 }
         }
       }
     ]

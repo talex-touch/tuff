@@ -79,11 +79,7 @@ describe('Assistant module startup contract', () => {
   it('loads Assistant renderer surfaces through exact async component declarations', () => {
     for (const { component, path } of [
       { component: 'FloatingBall', path: './views/assistant/FloatingBall.vue' },
-      { component: 'VoicePanel', path: './views/assistant/VoicePanel.vue' },
-      {
-        component: 'ScreenshotRegionSelector',
-        path: './views/assistant/ScreenshotRegionSelector.vue'
-      }
+      { component: 'VoicePanel', path: './views/assistant/VoicePanel.vue' }
     ]) {
       const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -212,6 +208,16 @@ describe('Assistant module startup contract', () => {
     expect(assistantEventsSource).toContain('AssistantClipboardImageTranslateResponse')
     expect(assistantEventsSource).toContain('AssistantScreenshotCaptureResponse')
     expect(assistantEventsSource).toContain('AssistantScreenshotSaveResponse')
+    const captureResponseContract = assistantEventsSource.match(
+      /export interface AssistantScreenshotCaptureResponse \{[\s\S]*?\n\}/
+    )?.[0]
+    const saveResponseContract = assistantEventsSource.match(
+      /export interface AssistantScreenshotSaveResponse \{[\s\S]*?\n\}/
+    )?.[0]
+    expect(captureResponseContract).toContain('tfileUrl?: string')
+    expect(captureResponseContract).not.toContain('dataUrl')
+    expect(captureResponseContract).not.toContain('path')
+    expect(saveResponseContract).not.toContain('path')
     expect(assistantEventsSource).toContain('translateClipboardImage')
     expect(assistantEventsSource).toContain('captureScreenshot')
     expect(assistantEventsSource).toContain('saveScreenshot')
@@ -251,6 +257,9 @@ describe('Assistant module startup contract', () => {
     expect(voicePanelSource).toContain('capturingScreenshot')
     expect(voicePanelSource).toContain('savingScreenshot')
     expect(voicePanelSource).toContain('screenshotPreview')
+    expect(voicePanelSource).toContain('screenshotPreview.tfileUrl')
+    expect(voicePanelSource).not.toContain('response.path')
+    expect(voicePanelSource).not.toContain('savedPath')
     expect(voicePanelSource).toContain('translatingScreenshot')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:capture-screenshot')
     expect(voicePanelSource).not.toContain('assistant:voice-panel:save-screenshot')
@@ -275,7 +284,8 @@ describe('Assistant module startup contract', () => {
     expect(screenshotCaptureBlock).toContain('SCREENSHOT_UNAVAILABLE')
     expect(screenshotCaptureBlock).toContain('getNativeScreenshotService')
     expect(screenshotCaptureBlock).toContain('normalizeScreenshotTarget(payload)')
-    expect(screenshotCaptureBlock).toContain("output: 'data-url'")
+    expect(screenshotCaptureBlock).not.toContain('output:')
+    expect(screenshotCaptureBlock).toContain('captureResult.tfileUrl')
     expect(screenshotCaptureBlock).toContain('writeClipboard: true')
     expect(screenshotCaptureBlock).not.toContain('translateImageBase64')
 
@@ -288,10 +298,11 @@ describe('Assistant module startup contract', () => {
     expect(screenshotSaveBlock).toContain('SAVE_FAILED')
     expect(screenshotSaveBlock).toContain('getNativeScreenshotService')
     expect(screenshotSaveBlock).toContain('normalizeScreenshotTarget(payload)')
-    expect(screenshotSaveBlock).toContain("output: 'tfile'")
+    expect(screenshotSaveBlock).not.toContain('output:')
     expect(screenshotSaveBlock).toContain('writeClipboard: false')
     expect(screenshotSaveBlock).toContain('dialog.showSaveDialog')
-    expect(screenshotSaveBlock).toContain('fs.copyFile')
+    expect(screenshotSaveBlock).toContain('copyCaptureResource')
+    expect(screenshotSaveBlock).not.toContain('fs.copyFile')
     expect(screenshotSaveBlock).not.toContain('translateImageBase64')
 
     const screenshotTranslateBlock = moduleSource.match(
@@ -302,7 +313,8 @@ describe('Assistant module startup contract', () => {
     expect(screenshotTranslateBlock).toContain('SCREENSHOT_UNAVAILABLE')
     expect(screenshotTranslateBlock).toContain('getNativeScreenshotService')
     expect(screenshotTranslateBlock).toContain('normalizeScreenshotTarget(payload)')
-    expect(screenshotTranslateBlock).toContain("output: 'data-url'")
+    expect(screenshotTranslateBlock).not.toContain('output:')
+    expect(screenshotTranslateBlock).toContain('readCaptureResource')
     expect(screenshotTranslateBlock).toContain('writeClipboard: false')
     expect(screenshotTranslateBlock).toContain('translateImageBase64')
   })

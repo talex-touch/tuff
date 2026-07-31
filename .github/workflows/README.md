@@ -12,6 +12,13 @@ This directory contains GitHub Actions workflows for CI/CD automation.
   - Runs typecheck on the entire monorepo
   - Uses read-only `pull_request` on `main` / `master`; workflows that execute PR code must not use `pull_request_target`
 
+- **`native-protocol.yml`** - Rust native protocol matrix
+  - Runs only when native protocol, CoreApp native transport, or native facade files change
+  - Checks the shared Cargo workspace with rustfmt, clippy `-D warnings`, tests, and release builds on macOS, Windows, and Linux
+  - Builds and dlopens the ordinary screenshot addon, verifies its protocol-only exports, then builds the deterministic backend for CoreApp `NativeTransport` attachment/stream integration and restores the ordinary addon
+  - Builds the protocol fixture addon and runs Node carrier/package contracts
+  - Installs Linux ALSA plus xcap PipeWire/XCB/XRandR/Wayland/EGL/Clang development libraries explicitly instead of relying on runner image accidents
+
 - **`build-and-release.yml`** - Build and release workflow for Electron app
   - Builds the application for multiple platforms
   - Creates releases and uploads artifacts

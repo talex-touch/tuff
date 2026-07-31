@@ -22,8 +22,15 @@ vi.mock('electron', () => ({
 
 vi.mock('../../utils/local-file-policy', () => ({
   getAllowedLocalFileRoots: () => ['/allowed'],
-  isAllowedLocalFilePath: (filePath: string) => filePath.startsWith('/allowed/'),
+  isAllowedLocalFilePath: (filePath: string, roots: string[]) =>
+    roots.some((root) => filePath === root || filePath.startsWith(`${root}/`)),
   normalizeDarwinUsersPath: (filePath: string) => filePath
+}))
+
+vi.mock('../../service/temp-file.service', () => ({
+  tempFileService: {
+    getBaseDir: () => '/managed-temp'
+  }
 }))
 
 import { __test__, fileProtocolModule } from './index'
@@ -47,6 +54,23 @@ describe('file-protocol canonical tfile parsing', () => {
       bypassCustomProtocolHandlers: true
     })
     expect(response.body).toBeInstanceOf(ReadableStream)
+  })
+
+  it('forwards managed temp resources through the same confined protocol', async () => {
+    const response = new Response('managed-image')
+    fetchMock.mockResolvedValue(response)
+    fileProtocolModule.onInit()
+
+    const handler = handleMock.mock.calls.at(-1)?.[1] as
+      | ((request: { url: string }) => Promise<Response>)
+      | undefined
+
+    await expect(
+      handler?.({ url: 'tfile:///managed-temp/native/screenshots/capture.png' })
+    ).resolves.toBe(response)
+    expect(fetchMock).toHaveBeenCalledWith('file:///managed-temp/native/screenshots/capture.png', {
+      bypassCustomProtocolHandlers: true
+    })
   })
 
   it('accepts host-style darwin paths emitted by renderer requests', () => {

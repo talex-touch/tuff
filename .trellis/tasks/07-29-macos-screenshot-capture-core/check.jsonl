@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"Audit attachment ownership, sensitive logging, cancellation, dispose, and public-surface boundaries."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Audit required focused and broad quality gates after implementation."}
+{"file":".trellis/spec/frontend/release-testing.md","reason":"Audit cross-platform build, package, and real runtime evidence requirements."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Verify screenshot protocol/native IDs/attachments remain main-only and plugin permission checks stay authoritative."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Audit complete request, attachment, error, cancellation, and resource data flow across layers."}
+{"file":".trellis/tasks/07-29-macos-screenshot-capture-core/research/macos-window-multidisplay-best-practices.md","reason":"Check implementation against researched API availability, exact window identity, AX degradation, and coordinate rules."}

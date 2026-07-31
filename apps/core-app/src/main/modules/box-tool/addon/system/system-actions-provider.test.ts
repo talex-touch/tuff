@@ -8,20 +8,7 @@ import { TuffInputType } from '@talex-touch/utils'
 const mocks = vi.hoisted(() => ({
   addAppByPath: vi.fn(async () => ({ success: true, status: 'added' })),
   addWatchPath: vi.fn(async () => ({ success: true, status: 'added' })),
-  captureScreenshot: vi.fn(async () => ({
-    tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
-    mimeType: 'image/png',
-    width: 100,
-    height: 100,
-    displayId: '1',
-    displayName: 'Display',
-    x: 0,
-    y: 0,
-    scaleFactor: 1,
-    durationMs: 1,
-    sizeBytes: 12,
-    wroteClipboard: true
-  })),
+  startScreenshotTool: vi.fn(async () => undefined),
   getLogger: vi.fn(() => ({
     info: vi.fn(),
     warn: vi.fn(),
@@ -52,10 +39,10 @@ vi.mock('../../../plugin/plugin-module', () => ({
   }
 }))
 
-vi.mock('../../../native-capabilities/screenshot-service', () => ({
-  getNativeScreenshotService: vi.fn(() => ({
-    capture: mocks.captureScreenshot
-  }))
+vi.mock('../../../screenshot-session', () => ({
+  screenshotSessionModule: {
+    startStandalone: mocks.startScreenshotTool
+  }
 }))
 
 vi.mock('../apps/app-provider', () => ({
@@ -212,11 +199,7 @@ describe('SystemActionsProvider app index actions', () => {
 
     await provider.onExecute({ item } satisfies IExecuteArgs)
 
-    expect(mocks.captureScreenshot).toHaveBeenCalledWith({
-      target: 'cursor-display',
-      output: 'data-url',
-      writeClipboard: true
-    })
+    expect(mocks.startScreenshotTool).toHaveBeenCalledWith('system-action')
   })
 
   it('extracts unquoted Windows app command lines with spaces and arguments', async () => {

@@ -1,0 +1,29 @@
+{
+  "id": "rust-native-protocol-screenshot",
+  "name": "rust-native-protocol-screenshot",
+  "title": "Unify Rust native protocol and screenshot runtime",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-28",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-28-rust-native-communication-protocol",
+    "07-28-rust-screenshot-mvp"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

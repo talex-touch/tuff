@@ -1,0 +1,21 @@
+[package]
+name = "tuff-native-protocol-fixture"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+name = "tuff_native_protocol_fixture"
+
+[dependencies]
+napi = { workspace = true, features = ["tokio_rt"] }
+napi-derive.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tuff-native-core = { path = "../../native-core" }
+tuff-native-napi = { path = "../../native-napi" }
+
+[build-dependencies]
+napi-build.workspace = true

@@ -1,0 +1,135 @@
+name: Native Protocol
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-protocol.yml'
+      - 'apps/core-app/src/main/modules/native-capabilities/**'
+      - 'packages/test/src/native/**'
+      - 'packages/tuff-native/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/native-protocol.yml'
+      - 'apps/core-app/src/main/modules/native-capabilities/**'
+      - 'packages/test/src/native/**'
+      - 'packages/tuff-native/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-protocol-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol:
+    name: Protocol (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-2022, ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Linux native build dependencies
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          libasound2-dev
+          libclang-dev
+          libdbus-1-dev
+          libegl-dev
+          libpipewire-0.3-dev
+          libwayland-dev
+          libxcb1-dev
+          libxcb-randr0-dev
+          libxdo-dev
+          libxkbcommon-dev
+          libxrandr-dev
+          pkg-config
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Rust workspace
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/tuff-native
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path packages/tuff-native/Cargo.toml --all -- --check
+
+      - name: Lint Rust workspace
+        run: cargo clippy --manifest-path packages/tuff-native/Cargo.toml --workspace --all-targets -- -D warnings
+
+      - name: Test Rust workspace
+        run: cargo test --manifest-path packages/tuff-native/Cargo.toml --workspace
+
+      - name: Build Rust workspace release addons
+        run: cargo build --manifest-path packages/tuff-native/Cargo.toml --workspace --release
+
+      - name: Build production screenshot addon and verify exports
+        run: >-
+          pnpm -C packages/tuff-native run build:screenshot &&
+          pnpm -C packages/tuff-native run test:screenshot-protocol &&
+          pnpm -C packages/tuff-native run verify:screenshot-production
+
+      - name: Build deterministic screenshot addon
+        env:
+          TUFF_SCREENSHOT_PROTOCOL_TEST_BACKEND: '1'
+        run: pnpm -C packages/tuff-native run build:screenshot
+
+      - name: Test screenshot N-API transport integration
+        run: >-
+          pnpm -C apps/core-app exec vitest run
+          src/main/modules/native-capabilities/native-screenshot-transport-napi.integration.test.ts
+
+      - name: Restore and verify production screenshot addon
+        run: >-
+          pnpm -C packages/tuff-native run build:screenshot &&
+          pnpm -C packages/tuff-native run test:screenshot-protocol &&
+          pnpm -C packages/tuff-native run verify:screenshot-production
+
+      - name: Verify packed native package contents
+        run: pnpm -C packages/tuff-native pack --dry-run
+
+      - name: Build protocol fixture addon
+        run: pnpm -C packages/tuff-native run build:protocol-fixture
+
+      - name: Test protocol contracts
+        run: pnpm -C packages/tuff-native run test:protocol
+
+      - name: Test main-process transport integration
+        run: >-
+          pnpm -C apps/core-app exec vitest run
+          src/main/modules/native-capabilities/native-transport.test.ts
+          src/main/modules/native-capabilities/native-transport-stream.test.ts
+          src/main/modules/native-capabilities/native-transport-napi.integration.test.ts
+
+      - name: Type-check Electron main process
+        run: pnpm -C apps/core-app run typecheck:node

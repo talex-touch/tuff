@@ -5,7 +5,6 @@
 
 ---
 
-
 ## Session 1: Fix CoreBox recommendation logos
 
 **Date**: 2026-07-04
@@ -22,8 +21,8 @@ Fixed CoreBox recommendation logo normalization so app and plugin icons preserve
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `eed7430f9` | (see git log) |
 
 ### Testing
@@ -37,7 +36,6 @@ Fixed CoreBox recommendation logo normalization so app and plugin icons preserve
 ### Next Steps
 
 - None - task complete
-
 
 ## Session 2: Contain plugin window privilege boundary
 
@@ -55,8 +53,8 @@ Hardened plugin-owned Electron windows with fail-closed permissions, local-only 
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `bd95a0009` | (see git log) |
 | `7db0a9db9` | (see git log) |
 
@@ -71,7 +69,6 @@ Hardened plugin-owned Electron windows with fail-closed permissions, local-only 
 ### Next Steps
 
 - None - task complete
-
 
 ## Session 3: Serialize async search gather updates
 
@@ -89,8 +86,8 @@ Serialized async search gather updates, centralized cancellation completion, add
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `f40d92698` | (see git log) |
 | `efdcbecee` | (see git log) |
 
@@ -272,8 +269,7 @@ Closed the remaining P1 ContextHygiene explain gap by turning `memory-tombstoned
 - Capture OmniPanel packaged context execution separately; do not reuse this generic Workflow runtime smoke.
 - Task remains completed but unarchived because this session did not create a work commit.
 
-
-## Session 4: Progressive CoreBox index search
+## Session 9: Progressive CoreBox index search
 
 **Date**: 2026-07-15
 **Task**: Progressive CoreBox index search
@@ -289,8 +285,8 @@ Removed transient CoreBox indexing/search hints and added post-commit App/File i
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `d85bb7ea6` | (see git log) |
 
 ### Testing
@@ -305,8 +301,7 @@ Removed transient CoreBox indexing/search hints and added post-commit App/File i
 
 - None - task complete
 
-
-## Session 5: Harden Dependabot and CI reliability
+## Session 10: Harden Dependabot and CI reliability
 
 **Date**: 2026-07-15
 **Task**: Harden Dependabot and CI reliability
@@ -322,8 +317,8 @@ Unified workflow Node and PNPM sources, repaired fresh-runner Intelligence setup
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash                                       | Message       |
+| ------------------------------------------ | ------------- |
 | `4922b47984865e5f4b134c7ce36a82f3266b485a` | (see git log) |
 
 ### Testing
@@ -338,8 +333,7 @@ Unified workflow Node and PNPM sources, repaired fresh-runner Intelligence setup
 
 - None - task complete
 
-
-## Session 6: Verify CoreBox app indexing and clipboard lifecycle
+## Session 11: Verify CoreBox app indexing and clipboard lifecycle
 
 **Date**: 2026-07-15
 **Task**: Verify CoreBox app indexing and clipboard lifecycle
@@ -355,8 +349,8 @@ Live-tested app discovery, indexing, search, launch, AutoPaste, and AutoClear in
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash                                       | Message       |
+| ------------------------------------------ | ------------- |
 | `bfa18626b04fec62d4bceacfb076498217ff3f5b` | (see git log) |
 
 ### Testing
@@ -371,8 +365,7 @@ Live-tested app discovery, indexing, search, launch, AutoPaste, and AutoClear in
 
 - None - task complete
 
-
-## Session 7: 修复官方插件发布链并完成 Beta.14 验证
+## Session 12: 修复官方插件发布链并完成 Beta.14 验证
 
 **Date**: 2026-07-16
 **Task**: 修复官方插件发布链并完成 Beta.14 验证
@@ -388,8 +381,8 @@ Live-tested app discovery, indexing, search, launch, AutoPaste, and AutoClear in
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `ef039c893` | (see git log) |
 | `282dd6fc7` | (see git log) |
 | `dc5cd7ce9` | (see git log) |
@@ -418,8 +411,7 @@ Live-tested app discovery, indexing, search, launch, AutoPaste, and AutoClear in
 
 - None - task complete
 
-
-## Session 8: Stabilization P0 closure and unified file filtering
+## Session 13: Stabilization P0 closure and unified file filtering
 
 **Date**: 2026-07-16
 **Task**: Stabilization P0 closure and unified file filtering
@@ -435,8 +427,8 @@ Committed usage-stat single-writer repair, atomic Nexus batch ingest, stabilizat
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `7d2a24714` | (see git log) |
 | `1d26362dd` | (see git log) |
 | `c180cdc0d` | (see git log) |
@@ -455,8 +447,7 @@ Committed usage-stat single-writer repair, atomic Nexus batch ingest, stabilizat
 
 - None - task complete
 
-
-## Session 9: Search core test fixture repair
+## Session 14: Search core test fixture repair
 
 **Date**: 2026-07-16
 **Task**: Search core test fixture repair
@@ -472,8 +463,8 @@ Updated three SearchEngineCore regression fixtures to use IndexedSourceEventRout
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `69ed465c3` | (see git log) |
 
 ### Testing
@@ -488,8 +479,7 @@ Updated three SearchEngineCore regression fixtures to use IndexedSourceEventRout
 
 - None - task complete
 
-
-## Session 10: Downloaded release acceptance flow
+## Session 15: Downloaded release acceptance flow
 
 **Date**: 2026-07-16
 **Task**: Downloaded release acceptance flow
@@ -505,8 +495,8 @@ Ran the standardized v2.4.13-beta.14 release acceptance flow against GitHub and 
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `45462a71b` | (see git log) |
 
 ### Testing
@@ -521,8 +511,7 @@ Ran the standardized v2.4.13-beta.14 release acceptance flow against GitHub and 
 
 - None - task complete
 
-
-## Session 11: Harden release signing and official build verification
+## Session 16: Harden release signing and official build verification
 
 **Date**: 2026-07-17
 **Task**: Harden release signing and official build verification
@@ -538,8 +527,8 @@ Rotated the RSA-4096 release key, added signed app build attestations, synchroni
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `723b1bdd4` | (see git log) |
 
 ### Testing
@@ -554,8 +543,7 @@ Rotated the RSA-4096 release key, added signed app build attestations, synchroni
 
 - None - task complete
 
-
-## Session 12: Merge PR #287 into master
+## Session 17: Merge PR #287 into master
 
 **Date**: 2026-07-18
 **Task**: Merge PR #287 into master
@@ -571,8 +559,8 @@ Merged LP-03 Context Actions and Windows Everything productionization into maste
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash                                       | Message       |
+| ------------------------------------------ | ------------- |
 | `726c53d00011329e2ba0b724e979cbdc6a12e35e` | (see git log) |
 
 ### Testing
@@ -587,8 +575,7 @@ Merged LP-03 Context Actions and Windows Everything productionization into maste
 
 - None - task complete
 
-
-## Session 13: Consolidate remaining master work
+## Session 18: Consolidate remaining master work
 
 **Date**: 2026-07-18
 **Task**: Consolidate remaining master work
@@ -604,8 +591,8 @@ Committed verified CoreBox toast gating, completed and validated nine plugin Tuf
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash                                       | Message       |
+| ------------------------------------------ | ------------- |
 | `79f04faece31d64cd632d4918330e96a1de785fc` | (see git log) |
 | `03858db71dd2d71e1279189fda2f1e907a9d8944` | (see git log) |
 | `ad20e747c4fae731d91b8ce5ea491ff86e5f642e` | (see git log) |
@@ -622,7 +609,7 @@ Committed verified CoreBox toast gating, completed and validated nine plugin Tuf
 
 - None - task complete
 
-## Session 14: Harden CoreBox transport and WindowManager
+## Session 19: Harden CoreBox transport and WindowManager
 
 **Date**: 2026-07-18
 **Task**: Harden CoreBox transport and WindowManager
@@ -634,8 +621,8 @@ Aligned CoreBox typed transport contracts, split WindowManager into focused cont
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `80ab3e68d` | (see git log) |
 | `2ec45efa2` | (see git log) |
 | `8e2bdc559` | (see git log) |
@@ -653,7 +640,7 @@ Aligned CoreBox typed transport contracts, split WindowManager into focused cont
 
 - None - task complete
 
-## Session 15: Integrate Pi AI orchestrator and CLI imports
+## Session 20: Integrate Pi AI orchestrator and CLI imports
 
 **Date**: 2026-07-18
 **Task**: Integrate Pi AI orchestrator and CLI imports
@@ -665,8 +652,8 @@ Added durable AI orchestration contracts and storage, governed automation and mu
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `3ae037fe6` | (see git log) |
 | `66b22612a` | (see git log) |
 | `c5e137930` | (see git log) |
@@ -686,8 +673,7 @@ Added durable AI orchestration contracts and storage, governed automation and mu
 
 - None - task complete
 
-
-## Session 16: Integrate AI CLI Orchestrator
+## Session 21: Integrate AI CLI Orchestrator
 
 **Date**: 2026-07-18
 **Task**: Integrate AI CLI Orchestrator
@@ -703,8 +689,8 @@ Resolved master conflicts, preserved Pi-only orchestration and CoreBox/plugin se
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `5c28b32bb` | (see git log) |
 | `0357f3a3f` | (see git log) |
 
@@ -720,8 +706,7 @@ Resolved master conflicts, preserved Pi-only orchestration and CoreBox/plugin se
 
 - None - task complete
 
-
-## Session 17: Close single search-index writer acceptance
+## Session 22: Close single search-index writer acceptance
 
 **Date**: 2026-07-18
 **Task**: Close single search-index writer acceptance
@@ -737,8 +722,8 @@ Closed the single-writer task with real-profile query-only/copy evidence, correl
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `5f2f4ab99` | (see git log) |
 
 ### Testing
@@ -753,8 +738,7 @@ Closed the single-writer task with real-profile query-only/copy evidence, correl
 
 - None - task complete
 
-
-## Session 18: Plugin Security Scan
+## Session 23: Plugin Security Scan
 
 **Date**: 2026-07-18
 **Task**: Plugin Security Scan
@@ -770,8 +754,8 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `9d2a4e5e1` | (see git log) |
 
 ### Testing
@@ -786,8 +770,7 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 - None - task complete
 
-
-## Session 19: 发布 Tuff 2.4.13-beta.16
+## Session 24: 发布 Tuff 2.4.13-beta.16
 
 **Date**: 2026-07-19
 **Task**: 发布 Tuff 2.4.13-beta.16
@@ -803,8 +786,8 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `340a65fae` | (see git log) |
 | `6a1c8cd20` | (see git log) |
 | `ba74b5fbb` | (see git log) |
@@ -834,8 +817,7 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 - None - task complete
 
-
-## Session 20: 修复搜索流 MessagePort 交付
+## Session 25: 修复搜索流 MessagePort 交付
 
 **Date**: 2026-07-20
 **Task**: 修复搜索流 MessagePort 交付
@@ -851,8 +833,8 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `478a8871c` | (see git log) |
 
 ### Testing
@@ -867,8 +849,7 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 - None - task complete
 
-
-## Session 21: 统一运行时错误上报与 SQLite 重建可靠性
+## Session 26: 统一运行时错误上报与 SQLite 重建可靠性
 
 **Date**: 2026-07-21
 **Task**: 统一运行时错误上报与 SQLite 重建可靠性
@@ -884,8 +865,8 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `b6c7d8886` | (see git log) |
 
 ### Testing
@@ -900,8 +881,7 @@ Implemented deterministic TPEX security scanning across shared rules, CLI artifa
 
 - None - task complete
 
-
-## Session 22: Enable macOS signing and notarization
+## Session 27: Enable macOS signing and notarization
 
 **Date**: 2026-07-21
 **Task**: Enable macOS signing and notarization
@@ -917,8 +897,8 @@ Configured Developer ID and App Store Connect notarization for local and CI buil
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash                                       | Message       |
+| ------------------------------------------ | ------------- |
 | `ebf6330c19156da6e9d815fc0e116513f9e2bd1c` | (see git log) |
 
 ### Testing
@@ -933,8 +913,7 @@ Configured Developer ID and App Store Connect notarization for local and CI buil
 
 - None - task complete
 
-
-## Session 23: Publish reverse proxy trust-boundary design
+## Session 28: Publish reverse proxy trust-boundary design
 
 **Date**: 2026-07-22
 **Task**: Publish reverse proxy trust-boundary design
@@ -950,8 +929,8 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `a413da30c` | (see git log) |
 
 ### Testing
@@ -966,8 +945,7 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 
 - None - task complete
 
-
-## Session 24: 修复 Nexus 文档侧边栏空白与 Hero 中文断行
+## Session 29: 修复 Nexus 文档侧边栏空白与 Hero 中文断行
 
 **Date**: 2026-07-27
 **Task**: 修复 Nexus 文档侧边栏空白与 Hero 中文断行
@@ -983,8 +961,8 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `a7a6daad8` | (see git log) |
 
 ### Testing
@@ -999,8 +977,7 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 
 - None - task complete
 
-
-## Session 25: 分批提交并推送工作区代码
+## Session 30: 分批提交并推送工作区代码
 
 **Date**: 2026-07-28
 **Task**: 分批提交并推送工作区代码
@@ -1016,8 +993,8 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `ad8c54944` | (see git log) |
 | `6bee9f5f3` | (see git log) |
 | `d0caa9073` | (see git log) |
@@ -1040,8 +1017,7 @@ Added and verified the standalone Astro trust-boundary design site; removed gene
 
 - None - task complete
 
-
-## Session 26: Contain isolated Intelligence invoke cancellation
+## Session 31: Contain isolated Intelligence invoke cancellation
 
 **Date**: 2026-07-28
 **Task**: Contain isolated Intelligence invoke cancellation
@@ -1058,8 +1034,8 @@ Added host-only immediate cancellation containment for Intelligence chat/OCR inv
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `f1cdd7772` | (see git log) |
 
 ### Testing
@@ -1075,8 +1051,7 @@ Added host-only immediate cancellation containment for Intelligence chat/OCR inv
 
 - Continue task #297 with production Intelligence/Translation migration and the final hard cut.
 
-
-## Session 27: Repair peripheral product documentation
+## Session 32: Repair peripheral product documentation
 
 **Date**: 2026-07-28
 **Task**: Repair peripheral product documentation
@@ -1093,8 +1068,8 @@ Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Ne
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `05aa394a3` | (see git log) |
 
 ### Testing
@@ -1112,8 +1087,7 @@ Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Ne
 
 - None - task complete
 
-
-## Session 27: Complete Prelude utility-process isolation
+## Session 33: Complete Prelude utility-process isolation
 
 **Date**: 2026-07-29
 **Task**: Complete Prelude utility-process isolation
@@ -1129,8 +1103,8 @@ Completed and pushed the #297 production hard cut: all 22 official manifested Pr
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `1bcbca825` | (see git log) |
 | `a0a2091a5` | (see git log) |
 | `997b246f5` | (see git log) |
@@ -1148,8 +1122,37 @@ Completed and pushed the #297 production hard cut: all 22 official manifested Pr
 
 - None - task complete
 
+## Session 34: CoreBox 与 Nexus 端到端调试及 Issue 发布
 
-## Session 28: Close sensitive data lifecycle and issue baseline
+**Date**: 2026-07-29
+**Task**: CoreBox 与 Nexus 端到端调试及 Issue 发布
+**Branch**: `master`
+
+### Summary
+
+完成 CoreBox/Nexus 全链路调试与去重，发布并验证 #477、#478、#479；复用 #323/#324/#327/#329/#332，未修改产品源码。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+(No commits - planning session)
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+## Session 35: Close sensitive data lifecycle and issue baseline
 
 **Date**: 2026-07-30
 **Task**: Close sensitive data lifecycle and issue baseline
@@ -1165,8 +1168,8 @@ Implemented and independently reviewed #301 sensitive-data lifecycle, closed and
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `5bf6e08b4` | (see git log) |
 | `70c65575f` | (see git log) |
 
@@ -1182,8 +1185,7 @@ Implemented and independently reviewed #301 sensitive-data lifecycle, closed and
 
 - None - task complete
 
-
-## Session 29: Close Preview Secret Configuration #475
+## Session 36: Close Preview Secret Configuration #475
 
 **Date**: 2026-07-30
 **Task**: Close Preview Secret Configuration #475
@@ -1199,10 +1201,43 @@ Removed deployable Preview credential placeholders, added name-only Cloudflare S
 
 ### Git Commits
 
-| Hash | Message |
-|------|---------|
+| Hash        | Message       |
+| ----------- | ------------- |
 | `b8261e06b` | (see git log) |
 | `aba777981` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
+
+## Session 37: Ship versioned native screenshot workflow
+
+**Date**: 2026-07-30
+**Task**: Ship versioned native screenshot workflow
+**Branch**: `master`
+
+### Summary
+
+Implemented the protocol-only Rust native transport and ScreenCaptureKit/xcap screenshot core, delivered same-overlay screenshot editing with managed-resource boundaries and unified entrypoints, and verified focused suites, strict macOS integration, production addon loading, real save output, and the isolated demo video.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash        | Message       |
+| ----------- | ------------- |
+| `f184d0966` | (see git log) |
+| `5c3e0710e` | (see git log) |
 
 ### Testing
 

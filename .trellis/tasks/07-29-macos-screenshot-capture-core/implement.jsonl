@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"Defines the Rust-main attachment boundary, lifecycle, sanitization, and renderer/plugin restrictions for native resources."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Requires strict TypeScript/runtime validation at untrusted native control boundaries."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Defines focused tests, typecheck, lint, build, and smoke expectations for CoreApp changes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides end-to-end data flow across Rust, N-API, Electron main, typed transport, and resource ownership."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Constrains reuse of NativeTransport, NapiCarrier, native-core, and existing screenshot facades without duplicate abstractions."}
+{"file":".trellis/tasks/07-29-macos-screenshot-capture-core/research/macos-window-multidisplay-best-practices.md","reason":"Records verified ScreenCaptureKit, CoreGraphics z-order, AX fallback, mixed-DPI geometry, and binding decisions for implementation."}

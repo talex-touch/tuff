@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check SSR, evidence strength, privacy, and production-claim boundaries"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check complete Nexus browser-to-binding flow coverage"}
+{"file":".trellis/tasks/archive/2026-07/07-28-debug-corebox-nexus/research/audit-baseline.md","reason":"Check findings against baseline, access limit, and Issue map"}
+{"file":"docs/plan-prd/TODO-nexus.md","reason":"Check deduplication and local-versus-deployed evidence classification"}

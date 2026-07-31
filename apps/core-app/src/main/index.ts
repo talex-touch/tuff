@@ -39,6 +39,7 @@ import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
 import { privacyLifecycleModule } from './modules/privacy/privacy-module'
 import { quickOpsModule } from './modules/quick-ops'
+import { screenshotSessionModule } from './modules/screenshot-session'
 import { sentryModule } from './modules/sentry'
 import { syncModule } from './modules/sync'
 import { authModule } from './modules/auth'
@@ -178,6 +179,7 @@ const foregroundModulesToLoad = [
   analyticsModule,
   platformPermissionModule,
   permissionModule, // Plugin permission management - before plugin module
+  screenshotSessionModule,
   notificationModule,
   quickOpsModule,
   sentryModule,

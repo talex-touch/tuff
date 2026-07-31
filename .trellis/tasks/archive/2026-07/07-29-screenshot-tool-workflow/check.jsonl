@@ -1,0 +1,12 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verification scope, evidence honesty, and no unrelated formatting churn"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Cross-layer typed event and runtime validation review"}
+{"file":".trellis/spec/frontend/native-resource-protocols.md","reason":"Descriptor-only resource and forbidden byte/path boundary review"}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Plugin identity, permission matrix, and BrowserWindow security review"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Semantic controls, keyboard/focus behavior, TuffEx, and i18n review"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"End-to-end ownership and cleanup review across native/main/renderer"}
+{"file":".trellis/tasks/07-29-macos-screenshot-capture-core/research/macos-window-multidisplay-best-practices.md","reason":"Validate overlay and multi-display assumptions against prior research"}
+{"file":"apps/core-app/src/renderer/src/views/screenshot/ScreenshotOverlay.vue","reason":"Review same-overlay controls, safe-area placement, transport snapshots, and native Save-sheet Escape suppression"}
+{"file":"apps/core-app/src/main/modules/screenshot-session/session-manager.test.ts","reason":"Verify copy/save retention, single lazy composition, no editor creation, Done completion, authorization, and teardown"}
+{"file":"/tmp/tuff-screenshot-demo/screenshot-tool-demo.mp4","reason":"ffprobe-verified real Electron video: H.264/yuv420p, 4096x2648, 18.883333 seconds, 258 non-empty frames"}
+{"file":"/tmp/tuff-screenshot-demo/video-contact-sheet-direct.png","reason":"Contact-sheet review for no popup editor, no DevTools, no personal content, and complete direct-edit sequence"}
+{"file":"/tmp/tuff-screenshot-demo/inline-save-confirmed-20260730.png","reason":"file/sips-verified real Save sheet output: 1800x1080 RGBA PNG, 48,403 bytes; overlay retained until Done and page count returned 5 to 4"}
