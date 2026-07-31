@@ -6,7 +6,7 @@
 ## Summary
 
 - Cold benchmark summary: `../startup-packaged-cold-runs-2026-06-21/汇总报告.md`
-- Long-tail sample: `../startup-packaged-cold-runs-2026-06-21/第08次运行报告.md`
+- Long-tail sample: 原第08次逐次运行报告已按 reports 卫生口径移除，长尾数据见汇总报告与本文件下方记录。
 - Isolated userData sample: stored locally under ignored evidence, not committed.
 
 ## Result

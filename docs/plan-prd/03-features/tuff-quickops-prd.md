@@ -745,4 +745,4 @@ AI 自然语言示例：
 - `docs/plan-prd/03-features/search/RAYCAST-UTOOLS-CAPABILITY-GAP-MATRIX.md`
 - `docs/plan-prd/03-features/search/APP-DATA-PLUGINS-AND-EVERYTHING-ROADMAP.md`
 - `docs/plan-prd/TODO.md`
-- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/PRD-QUALITY-BASELINE.md`

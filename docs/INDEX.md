@@ -1,12 +1,13 @@
 # 文档索引
 
-> 更新时间：2026-07-16
-> 定位：仓库文档导航，不保存易漂移的本地 `HEAD`、分支、工作区或“当前版本”快照。
+> 更新时间：2026-07-31
+> 定位：仓库文档导航，不保存易漂移的本地 `HEAD`、分支、工作区或“当前版本”快照。项目全貌一览见根目录 [`ROADMAP.md`](../ROADMAP.md)。
 
 ## 30 秒入口
 
 | 需要回答的问题 | 单一事实源 |
 | --- | --- |
+| 项目全貌是什么 | 根目录 [`ROADMAP.md`](../ROADMAP.md) |
 | 当前代码版本是什么 | 根目录与 `apps/core-app/package.json` |
 | 当前任务由谁执行、状态如何 | [`.trellis/tasks/README.md`](../.trellis/tasks/README.md) 与 `.trellis/scripts/get_context.py` |
 | 接下来两周先做什么 | [`plan-prd/TODO.md`](./plan-prd/TODO.md) |
@@ -40,11 +41,15 @@ Usage 单写者、Nexus 同步原子批处理和 Trellis 任务/文档收敛三�
 - [`plan-prd/TODO-AI.md`](./plan-prd/TODO-AI.md)：AI Stable / 产品化专题。
 - [`plan-prd/TODO-R3.md`](./plan-prd/TODO-R3.md)：Search / Indexing Runtime 专题。
 - [`plan-prd/TODO-nexus.md`](./plan-prd/TODO-nexus.md)：Nexus 性能专题。
-- [`plan-prd/docs/TODO-BACKLOG-LONG-TERM.md`](./plan-prd/docs/TODO-BACKLOG-LONG-TERM.md)：非当前窗口的长期债务。
+- [`plan-prd/TODO-BACKLOG-LONG-TERM.md`](./plan-prd/TODO-BACKLOG-LONG-TERM.md)：非当前窗口的长期债务。
+- [`design/README.md`](./design/README.md)：CoreBox / Nexus 设计文档与资产索引。
 
 ### 3. 工程交接与审计层
 
 - [`engineering/README.md`](./engineering/README.md)：工程资料入口。
+- [`engineering/build-strategy.md`](./engineering/build-strategy.md)：打包与分发策略。
+- [`engineering/nexus-release-assets-checklist.md`](./engineering/nexus-release-assets-checklist.md)：Nexus 发布资产核对（Gate D）。
+- 脚本原生专题（2026-01/02 设计基线）：[`script-native-build-distribution.md`](./script-native-build-distribution.md)、[`script-native-capability-matrix.md`](./script-native-capability-matrix.md)、[`script-native-constraints.md`](./script-native-constraints.md)、[`script-native-native-integration.md`](./script-native-native-integration.md)、[`script-native-provider-examples.md`](./script-native-provider-examples.md)、[`script-native-python-runtime.md`](./script-native-python-runtime.md)、[`script-native-test-plan.md`](./script-native-test-plan.md)。
 - [`engineering/security-hardening-handoff-2026-07-15.md`](./engineering/security-hardening-handoff-2026-07-15.md)：安全加固交接摘要。
 - [`engineering/security-hardening-remaining-backlog-2026-07-15.md`](./engineering/security-hardening-remaining-backlog-2026-07-15.md)：剩余安全/数据一致性实施细节。
 - [Search & Cross-Platform Audit](../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索与跨平台风险清单。

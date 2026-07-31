@@ -26,4 +26,4 @@ Intelligence Power 定义 AI capability、provider、routing、audit 与 quota �
 - `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
 - `docs/plan-prd/02-architecture/nexus-provider-scene-aggregation-prd.md`
 - `docs/plan-prd/03-features/ai-2.5.0-plan-prd.md`
-- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/PRD-QUALITY-BASELINE.md`

@@ -65,4 +65,4 @@
 - 当前主清单：`docs/plan-prd/TODO.md`
 - 变更记录：`docs/plan-prd/01-project/CHANGES.md`
 - PRD 主入口：`docs/plan-prd/README.md`
-- 质量基线：`docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- 质量基线：`docs/plan-prd/PRD-QUALITY-BASELINE.md`

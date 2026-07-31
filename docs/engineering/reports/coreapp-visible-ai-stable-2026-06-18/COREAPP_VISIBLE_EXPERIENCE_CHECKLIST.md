@@ -30,14 +30,12 @@
   - [x] Startup health and renderer-ready timing are captured
   - [x] Warnings/errors are recorded without redaction of failure codes
 - Recommended artifacts:
-  - docs/engineering/reports/startup-packaged-hot-runs-YYYY-MM-DD/汇总报告.md
-  - docs/engineering/reports/startup-packaged-hot-runs-YYYY-MM-DD/第01次运行报告.md
+  - docs/engineering/reports/startup-packaged-hot-runs-YYYY-MM-DD/汇总报告.md（逐次运行报告不提交，见 reports/README 卫生口径）
 - Block instead of pass when:
   - The packaged artifact version does not match the package baseline.
   - The app does not reach startup health or renderer-ready markers.
 - Artifact paths:
   - ../startup-packaged-hot-runs-2026-06-21/汇总报告.md
-  - ../startup-packaged-hot-runs-2026-06-21/第10次运行报告.md
 - Notes:
   - 2026-06-21 packaged hot benchmark uses the current `2.4.12-beta.8` artifact and passed 10/10 runs with Startup health P50 552ms, P95 810ms, 0 WARN, and 0 ERROR.
 
@@ -58,14 +56,12 @@
   - [x] Isolated userData path is used
   - [x] WAL/health long-tail notes are attached
 - Recommended artifacts:
-  - docs/engineering/reports/startup-packaged-cold-runs-YYYY-MM-DD/汇总报告.md
-  - docs/engineering/reports/startup-packaged-cold-runs-YYYY-MM-DD/第01次运行报告.md
+  - docs/engineering/reports/startup-packaged-cold-runs-YYYY-MM-DD/汇总报告.md（逐次运行报告不提交，见 reports/README 卫生口径）
 - Block instead of pass when:
   - The run uses the normal user profile instead of an isolated benchmark profile.
   - Cold-start timing is collected from a stale packaged artifact.
 - Artifact paths:
   - ../startup-packaged-cold-runs-2026-06-21/汇总报告.md
-  - ../startup-packaged-cold-runs-2026-06-21/第01次运行报告.md
   - startup-packaged-cold-long-tail-notes.md
 - Notes:
   - 2026-06-21 packaged cold benchmark uses per-run isolated userData directories and passed 10/10 runs with Startup health P50 572ms, P95 615ms, 0 WARN, and 0 ERROR. Run 08 is the long-tail sample at 615ms.

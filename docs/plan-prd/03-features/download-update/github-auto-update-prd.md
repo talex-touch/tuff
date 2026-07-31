@@ -1,5 +1,7 @@
 # PRD: GitHub 自动更新与下载包可视化 (v1.0)
 
+> ⚠️ **Historical（历史快照，停止维护）**：2026-01 版本，OTA 已由统一更新链路任务（07-17-unify-ota-update-flow）重做。当前事实源以 `ROADMAP.md`、`docs/plan-prd/TODO.md` 与 Trellis 任务为准。
+
 ## 1. 背景与目标
 
 当前更新系统已具备 GitHub Release 检查、下载中心集成与提示更新的基础能力，但需要明确以下产品方向：

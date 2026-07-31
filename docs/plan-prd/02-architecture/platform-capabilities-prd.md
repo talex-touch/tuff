@@ -34,5 +34,5 @@
 ## 关联入口
 
 - `docs/plan-prd/TODO.md`
-- `docs/plan-prd/docs/PRD-QUALITY-BASELINE.md`
+- `docs/plan-prd/PRD-QUALITY-BASELINE.md`
 - `docs/plan-prd/04-implementation/Evidence-Matrix-Platform-2026-06-18.md`

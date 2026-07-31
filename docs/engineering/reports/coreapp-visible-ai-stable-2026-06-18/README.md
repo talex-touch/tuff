@@ -122,7 +122,7 @@
 - Packaged CoreBox AI Ask text.chat success evidence：`packaged-ai-ask-text-success-probe.json` 与 `packaged-ai-ask-text-success.png`。
 - Packaged CoreBox AI Ask OCR handoff evidence：`raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait-probe.json` 与 `raw/packaged-ai-ask-ocr-forced-feature-updated-plugin-after-wait.png`。
 - Packaged CoreBox AI Ask copy failure evidence：`packaged-ai-ask-copy-failure-probe.json` 与 `packaged-ai-ask-copy-failure.png`。
-- Packaged startup benchmark evidence：`../startup-packaged-hot-runs-2026-06-21/汇总报告.md`、`../startup-packaged-hot-runs-2026-06-21/第10次运行报告.md`、`../startup-packaged-cold-runs-2026-06-21/汇总报告.md`、`../startup-packaged-cold-runs-2026-06-21/第01次运行报告.md` 与 `startup-packaged-cold-long-tail-notes.md`。
+- Packaged startup benchmark evidence：`../startup-packaged-hot-runs-2026-06-21/汇总报告.md`、`../startup-packaged-cold-runs-2026-06-21/汇总报告.md` 与 `startup-packaged-cold-long-tail-notes.md`（逐次运行报告已按 reports 卫生口径移除）。
 - Packaged startup first-screen evidence：`startup-first-screen-settings.png`、`startup-first-screen-settings-dom.json`、`startup-health-summary.png`、`startup-health-summary-dom.json` 与 `startup-first-screen-cdp-target-inventory.json`。
 - CoreBox search states R2D evidence：`corebox-search-states-recapture-2026-06-22-r2d.json`、`corebox-search-cdp-inventory-2026-06-22-r2d.json`、`corebox-search-idle-2026-06-22-r2d.*`、`corebox-search-searching-2026-06-22-r2d.*` 与 `corebox-search-no-result-2026-06-22-r2d.*`。
 - CoreBox search states R2I evidence：`corebox-search-cdp-inventory-2026-06-22-r2i.json`、`corebox-search-result-pills-2026-06-22-r2i.png` 与 `corebox-search-result-pills-2026-06-22-r2i-dom.json`。

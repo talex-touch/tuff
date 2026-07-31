@@ -1,5 +1,7 @@
 # TuffIntelligence 落地待办（全可用 + 高可用）
 
+> ⚠️ **Historical（历史快照，停止维护）**：2026-02 AI 落地待办，已被 TODO-AI.md、AI-2.5x 计划与 Evidence Matrix 三层取代。当前事实源以 `ROADMAP.md`、`docs/plan-prd/TODO.md` 与 Trellis 任务为准。
+
 > 范围：core-app / nexus / cloudflare
 > 
 > 原则：命名统一为 TuffIntelligence / intelligence，不新增 ai 前缀能力入口；所有已注册能力必须可执行，不允许占位返回。
