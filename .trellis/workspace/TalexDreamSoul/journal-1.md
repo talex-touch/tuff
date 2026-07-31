@@ -1181,3 +1181,37 @@ Implemented and independently reviewed #301 sensitive-data lifecycle, closed and
 ### Next Steps
 
 - None - task complete
+
+
+## Session 29: Close Preview Secret Configuration #475
+
+**Date**: 2026-07-30
+**Task**: Close Preview Secret Configuration #475
+**Branch**: `master`
+
+### Summary
+
+Removed deployable Preview credential placeholders, added name-only Cloudflare Secret inventory and double preflight deployment guard, enforced platform-binding runtime credentials, migrated four Preview Secrets, deployed branch preview, completed remote auth/emergency smoke, and captured the Nexus deployment contract.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b8261e06b` | (see git log) |
+| `aba777981` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
