@@ -37,7 +37,7 @@
 | 文件搜索 | Everything 三级回退+自动安装+自愈 ✅ | Spotlight mdfind ✅  | locate/tracker/baloo，缺失时无感知 ⚠️ |
 | 应用扫描 | 5 源并行（重依赖 PowerShell）✅      | mdfind+plist+mdls ✅ | 仅 .desktop（139 行）⚠️               |
 | OCR      | WinRT ✅                             | Apple Vision ✅      | stub 未实现 ❌                        |
-| 截图     | Rust xcap 三平台统一（构建链存疑）   | 同左                 | 同左                                  |
+| 截图     | Rust xcap 三平台统一，CI 构建链已验证；已签名打包运行证据待补 | 同左                 | 同左                                  |
 | 更新安装 | msiexec/NSIS ✅                      | .app 替换脚本 ✅     | 仅 shell.openPath（打开≠安装）❌      |
 
 ---
@@ -94,10 +94,10 @@
   - 证据：本地 ordinary/deterministic 双构建、普通 addon strict macOS integration、31/31 Node contracts 和 `pnpm pack --dry-run` 通过；tarball 包含 addon 与全部 production backend，未包含 `test_backend.rs`/contract fixtures/target。
   - 边界：Windows/Linux authoritative native build 由新增 CI matrix 执行；signed Electron packaged runtime evidence 仍由 `07-29-screenshot-packaged-evidence` 独立承接。
 
-- [ ] **R2 — macOS 打包未签名 + 仅 arm64 + dir target，与 electron-updater 路径冲突**
-  - 位置：`electron-builder.yml:100-119`（`sign/notarize/hardenedRuntime:false`、`identity:null`、`target:dir`、无 Intel）
-  - 风险：Gatekeeper 拦截；`mac-auto-updater-adapter.ts` 依赖 app-update.yml + 签名 zip，实际不可用；`update-asset-utils.ts:33-38` 仍在给不产出的 .dmg/.pkg 打分。**需产品决策**（是否签名/公证/保留 Intel）。
-  - 2026-07-21 进展（`07-21-enable-macos-notarization`）：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；同时移除 Resources 中越界 pnpm symlink，阻止公证后被本地后处理 ad-hoc 重签。R2 仍保持 open：Intel/Universal 产物与 `dir`/updater 目标冲突尚未解决。跟踪：[ #311](https://github.com/talex-touch/tuff/issues/311)。
+- [ ] **R2 — macOS 发行架构范围未决**
+  - 位置：`electron-builder.yml:100-119` 当前仅产出 darwin/arm64；下载与 OTA 选择必须与该架构策略一致。
+  - 风险：未明确支持范围会让 Intel 用户收到不兼容资产，或迫使发行链临时引入未经签名、公证和真机验证的 x64/Universal 变体。**需产品决策**：保持 arm64-only 并显式告知，或新增完整 x64/Universal 发布矩阵。
+  - 2026-07-21 进展：Developer ID 签名、App Store Connect API-key 公证、本机/GitHub Secrets 与 ZIP 信任验证已闭环；OTA 已移除 `electron-updater` 双路径。R2 仍保持 open：架构策略、发布清单、下载选择和真机证据尚未收敛。跟踪：[#311](https://github.com/talex-touch/tuff/issues/311)。
 
 - [ ] **R3 — 大目录扫描/对账内存峰值**
   - 位置：`addon/files/workers/file-scan-worker.ts:82`（scanDirectory 全物化）、`file-scan-worker-client.ts:132`（client 再累积）、`addon/files/services/file-provider-reconciliation-run-service.ts:122`（磁盘全集 + DB 全集 `LIKE` 无 LIMIT）
