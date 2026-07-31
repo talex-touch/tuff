@@ -101,7 +101,7 @@
 
 - [ ] **R3 — 大目录扫描/对账内存峰值**
   - 位置：`addon/files/workers/file-scan-worker.ts:82`（scanDirectory 全物化）、`file-scan-worker-client.ts:132`（client 再累积）、`addon/files/services/file-provider-reconciliation-run-service.ts:122`（磁盘全集 + DB 全集 `LIKE` 无 LIMIT）
-  - 风险：同一文件列表约 3 份同存，无分块流式落库；百万级根目录（整个 home）OOM。尚无 GitHub issue：当前无登录浏览器会话，需在可认证会话中补建独立 issue。
+  - 风险：同一文件列表约 3 份同存，无分块流式落库；百万级根目录（整个 home）OOM。跟踪：[#480](https://github.com/talex-touch/tuff/issues/480)。
 
 ### 🟡 中危架构债
 
