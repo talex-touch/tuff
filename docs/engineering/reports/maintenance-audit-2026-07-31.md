@@ -17,6 +17,7 @@
 
 ## 功能、门禁与文档质量
 
+- **35 个开放 Dependabot 告警未分诊** — GitHub 当前报告 3 critical、15 high、14 medium、3 low；critical 均涉及 Nexus 使用的 `next-auth` / `@auth/core`。其余高危直接或锁文件依赖包括 `sharp`、`postcss`、`fast-uri`、`fast-xml-parser`、`svgo`、`shell-quote`、`js-yaml` 与 `brace-expansion`。需逐项确定可达性、升级/替换策略、回归门禁与例外理由；不得仅按锁文件位置忽略运行时可达依赖。
 - **高权限插件审计任务未归档，但其既有 P0/P1/P2 风险均已关闭** — #296–#301 与总跟踪 #302 已 closed；任务 PRD 仍保留未完成的全量能力矩阵、数据流与最终审计产物验收。应补齐或明确归档该审计记录，避免把已关闭问题重复报告为开放安全风险。
 - **TuffEx 文档审计未形成可验收终态** — 任务要求覆盖 114 个组件和 118 组双语文档、产出任务内报告并逐项去重立项；当前 `07-28-tuffex-docs-audit` 仍 in-progress，未记录完成报告与验收结果。完成覆盖证明、对抗验证和 issue disposition 后再关闭。
 
