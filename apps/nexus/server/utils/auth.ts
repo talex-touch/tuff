@@ -4,11 +4,22 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { useRuntimeConfig } from '#imports'
 import { getServerSession } from '#auth'
 import { createError, getHeader } from 'h3'
-import { consumeLoginToken, createUser, ensureDeviceForRequest, getDevice, getUserByEmail, getUserById, readDeviceId, readDeviceMetadata, upsertDevice } from './authStore'
+import {
+  consumeLoginToken,
+  createUser,
+  ensureDeviceForRequest,
+  getDevice,
+  getUserByEmail,
+  getUserById,
+  readDeviceId,
+  readDeviceMetadata,
+  upsertDevice,
+} from './authStore'
 import { validateApiKey } from './apiKeyStore'
 import { hasRequiredScope, isAdminOnlyApiKeyScope } from './apiKeyScopes'
 import { readCloudflareBindings } from './cloudflare'
 import { ensurePersonalTeam } from './creditsStore'
+import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
 
 const APP_TOKEN_ISSUER = 'tuff-nexus'
 const APP_TOKEN_AUDIENCE = 'tuff-app'
@@ -35,16 +46,14 @@ function shouldDebugAuth() {
 }
 
 function logSessionDebug(stage: string, event: H3Event, payload: Record<string, unknown>) {
-  if (!shouldDebugAuth())
-    return
+  if (!shouldDebugAuth()) return
   const path = event.path || event.node.req.url || ''
   console.info('[auth][session]', stage, { path, ...payload })
 }
 
 async function resolveSessionUserByEmail(event: H3Event, email: string, name: string) {
   const existing = await getUserByEmail(event, email)
-  if (existing)
-    return existing
+  if (existing) return existing
 
   try {
     const user = await createUser(event, {
@@ -56,45 +65,42 @@ async function resolveSessionUserByEmail(event: H3Event, email: string, name: st
     await ensurePersonalTeam(event, user.id)
     logSessionDebug('email-auto-provisioned', event, { email, userId: user.id })
     return user
-  }
-  catch {
+  } catch {
     return await getUserByEmail(event, email)
   }
-}
-
-function normalizeSecret(value: unknown): string | null {
-  if (typeof value !== 'string')
-    return null
-  const trimmed = value.trim()
-  return trimmed.length >= APP_SECRET_MIN_LENGTH ? trimmed : null
-}
-
-function isProductionRuntime() {
-  return process.env.NODE_ENV === 'production' || process.env.NITRO_PRESET === 'cloudflare-pages'
 }
 
 function getAppJwtSecret(event?: H3Event): string {
   const config = useRuntimeConfig(event)
   const bindings = event ? readCloudflareBindings(event) : undefined
-  const secretCandidates = [
+  const localDevelopment = isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings)
+  const primaryCredential = selectRuntimeCredential(bindings, bindings?.APP_AUTH_JWT_SECRET, [
     config.appAuthJwtSecret,
-    bindings?.APP_AUTH_JWT_SECRET,
     process.env.APP_AUTH_JWT_SECRET,
-    config.auth?.secret,
-    bindings?.AUTH_SECRET,
-    process.env.AUTH_SECRET,
-  ]
+  ])
 
-  for (const candidate of secretCandidates) {
-    const secret = normalizeSecret(candidate)
-    if (secret)
-      return secret
+  if (primaryCredential !== undefined && primaryCredential !== null) {
+    return assertRuntimeCredential('APP_AUTH_JWT_SECRET', primaryCredential, {
+      localDevelopment,
+      minimumLength: APP_SECRET_MIN_LENGTH,
+    })
   }
 
-  if (isProductionRuntime()) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'APP_AUTH_JWT_SECRET or AUTH_SECRET must be configured for app token authentication.',
+  const fallbackCredential = selectRuntimeCredential(bindings, bindings?.AUTH_SECRET, [
+    config.auth?.secret,
+    process.env.AUTH_SECRET,
+  ])
+  if (fallbackCredential !== undefined && fallbackCredential !== null) {
+    return assertRuntimeCredential('AUTH_SECRET', fallbackCredential, {
+      localDevelopment,
+      minimumLength: APP_SECRET_MIN_LENGTH,
+    })
+  }
+
+  if (!localDevelopment) {
+    return assertRuntimeCredential('APP_AUTH_JWT_SECRET', undefined, {
+      localDevelopment: false,
+      minimumLength: APP_SECRET_MIN_LENGTH,
     })
   }
 
@@ -102,7 +108,9 @@ function getAppJwtSecret(event?: H3Event): string {
     ephemeralJwtSecret = base64UrlEncode(randomBytes(32))
     if (!appSecretWarned) {
       appSecretWarned = true
-      console.warn('[auth] APP_AUTH_JWT_SECRET/Auth secret missing or too short, using development-only ephemeral secret.')
+      console.warn(
+        '[auth] APP_AUTH_JWT_SECRET/Auth secret missing or too short, using development-only ephemeral secret.',
+      )
     }
   }
   return ephemeralJwtSecret
@@ -110,11 +118,7 @@ function getAppJwtSecret(event?: H3Event): string {
 
 function base64UrlEncode(input: Buffer | string): string {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input)
-  return buffer
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '')
+  return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
 function base64UrlDecode(input: string): Buffer {
@@ -173,10 +177,8 @@ export async function requireAuthOrApiKey(event: H3Event, requiredScopes: string
   try {
     const auth = await requireAuth(event)
     return { ...auth, authType: auth.authSource as 'session' | 'app' }
-  }
-  catch (error: any) {
-    if (error?.statusCode !== 401)
-      throw error
+  } catch (error: any) {
+    if (error?.statusCode !== 401) throw error
     const apiKey = await requireApiKey(event, requiredScopes)
     return { ...apiKey, authType: 'apiKey' as const }
   }
@@ -186,8 +188,7 @@ export async function requireAdminOrApiKey(event: H3Event, requiredScopes: strin
   try {
     const admin = await requireAdmin(event)
     return { ...admin, authType: 'admin' as const }
-  }
-  catch {
+  } catch {
     const apiKey = await requireApiKey(event, requiredScopes)
     return { ...apiKey, authType: 'apiKey' as const }
   }
@@ -200,16 +201,22 @@ export async function createAppToken(
     deviceId?: string | null
     ttlSeconds?: number
     grantType?: 'short' | 'long'
-    deviceMeta?: { deviceName?: string | null; platform?: string | null; clientType?: 'app' | 'cli' | 'external' | null; reactivateRevoked?: boolean | null }
-  }
+    deviceMeta?: {
+      deviceName?: string | null
+      platform?: string | null
+      clientType?: 'app' | 'cli' | 'external' | null
+      reactivateRevoked?: boolean | null
+    }
+  },
 ): Promise<string> {
   const secret = getAppJwtSecret(event)
   const now = Math.floor(Date.now() / 1000)
   const hasExplicitDeviceId = Boolean(options && Object.prototype.hasOwnProperty.call(options, 'deviceId'))
-  const deviceId = hasExplicitDeviceId ? options?.deviceId ?? null : readDeviceId(event)
-  const ttlSeconds = typeof options?.ttlSeconds === 'number' && Number.isFinite(options.ttlSeconds) && options.ttlSeconds > 0
-    ? Math.floor(options.ttlSeconds)
-    : APP_TOKEN_TTL_SECONDS
+  const deviceId = hasExplicitDeviceId ? (options?.deviceId ?? null) : readDeviceId(event)
+  const ttlSeconds =
+    typeof options?.ttlSeconds === 'number' && Number.isFinite(options.ttlSeconds) && options.ttlSeconds > 0
+      ? Math.floor(options.ttlSeconds)
+      : APP_TOKEN_TTL_SECONDS
   let deviceTokenVersion: number | undefined
 
   if (deviceId) {
@@ -228,7 +235,7 @@ export async function createAppToken(
     exp: now + ttlSeconds,
     iss: APP_TOKEN_ISSUER,
     aud: APP_TOKEN_AUDIENCE,
-    typ: 'app'
+    typ: 'app',
   }
   const payloadPart = base64UrlEncode(JSON.stringify(payload))
   const signingInput = `${header}.${payloadPart}`
@@ -275,8 +282,7 @@ function verifyAppToken(event: H3Event, token: string): AppTokenPayload | null {
     }
 
     return payload
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -329,11 +335,9 @@ export async function requireAppAuth(event: H3Event): Promise<AuthContext> {
 
 export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
   const session = await getServerSession(event)
-  const sessionUser = session?.user as { id?: string, email?: string, name?: string } | undefined
+  const sessionUser = session?.user as { id?: string; email?: string; name?: string } | undefined
   const sessionMeta = session as { issuedAt?: unknown } | null
-  const sessionIssuedAt = typeof sessionMeta?.issuedAt === 'number'
-    ? sessionMeta.issuedAt
-    : null
+  const sessionIssuedAt = typeof sessionMeta?.issuedAt === 'number' ? sessionMeta.issuedAt : null
 
   const directUserId = typeof sessionUser?.id === 'string' ? sessionUser.id.trim() : ''
   let user = directUserId ? await getUserById(event, directUserId) : null
@@ -347,7 +351,7 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
         hasUserId: Boolean(sessionUser?.id),
         hasEmail: Boolean(sessionUser?.email),
         hasAuthorization: Boolean(getHeader(event, 'authorization')),
-        hasCookie: Boolean(getHeader(event, 'cookie'))
+        hasCookie: Boolean(getHeader(event, 'cookie')),
       })
       throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
     }
@@ -383,14 +387,11 @@ export async function requireSessionAuth(event: H3Event): Promise<AuthContext> {
 export async function requireAuth(event: H3Event): Promise<AuthContext> {
   try {
     return await requireSessionAuth(event)
-  }
-  catch (error: any) {
-    if (error?.statusCode !== 401)
-      throw error
+  } catch (error: any) {
+    if (error?.statusCode !== 401) throw error
 
     const bearerToken = parseBearerToken(event)
-    if (!bearerToken)
-      throw error
+    if (!bearerToken) throw error
 
     return await requireAppAuth(event)
   }
@@ -411,8 +412,7 @@ export async function requireVerifiedEmail(event: H3Event): Promise<AuthContext>
 export async function getOptionalAuth(event: H3Event): Promise<AuthContext | null> {
   try {
     return await requireSessionAuth(event)
-  }
-  catch {
+  } catch {
     return null
   }
 }
