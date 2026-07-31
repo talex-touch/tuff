@@ -1107,3 +1107,37 @@ Repaired 663 tracked relative-link failures to zero, refreshed CoreApp/Search/Ne
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: Ship versioned native screenshot workflow
+
+**Date**: 2026-07-30
+**Task**: Ship versioned native screenshot workflow
+**Branch**: `master`
+
+### Summary
+
+Implemented the protocol-only Rust native transport and ScreenCaptureKit/xcap screenshot core, delivered same-overlay screenshot editing with managed-resource boundaries and unified entrypoints, and verified focused suites, strict macOS integration, production addon loading, real save output, and the isolated demo video.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f184d0966` | (see git log) |
+| `5c3e0710e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
