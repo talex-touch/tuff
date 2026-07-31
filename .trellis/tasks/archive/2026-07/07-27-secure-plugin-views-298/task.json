@@ -1,0 +1,30 @@
+{
+  "id": "secure-plugin-views-298",
+  "name": "secure-plugin-views-298",
+  "title": "启用插件视图安全默认值 #298",
+  "description": "默认启用 Electron 安全配置、版本化 preload API 与 legacy 迁移错误。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-30",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "ef4fba34b",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-resolve-open-github-issues",
+  "relatedFiles": [],
+  "notes": "Secure plugin-view hard cut is complete. Production plugin Electron views use hardened preferences, bridge v1, sender-bound resource/navigation policy, and no legacy/env fallback. GitHub #298 is closed after 271/271 joint regression, Node/Web typecheck, production build, real Electron preload smoke, and independent zero-P0/P1/P2 review.",
+  "meta": {
+    "nextAction": "Proceed with parent #302 closure.",
+    "blocker": "",
+    "evidence": "GitHub #298 closure comment; primary commit 3365c2340 and final fixture commit ef4fba34b; joint regression/build/smoke and independent review evidence."
+  }
+}

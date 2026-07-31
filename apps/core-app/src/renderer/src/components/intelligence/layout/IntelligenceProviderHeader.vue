@@ -30,6 +30,8 @@ interface IntelligenceProviderConfig {
   enabled: boolean
   metadata?: Record<string, unknown>
   apiKey?: string
+  authRef?: string
+  hasCredential?: boolean
   baseUrl?: string
   models?: string[]
   defaultModel?: string
@@ -105,7 +107,12 @@ function handleEditBasic() {
 }
 
 function createProviderConfigText(): string {
-  const { apiKey: _apiKey, ...safeProvider } = props.provider
+  const {
+    apiKey: _apiKey,
+    authRef: _authRef,
+    hasCredential: _hasCredential,
+    ...safeProvider
+  } = props.provider
   return JSON.stringify(
     {
       schema: 'tuff.intelligence.provider.config.v1',

@@ -64,7 +64,7 @@ code: |
 
 - 根节点渲染为 `position: relative` 的行内块 `span`。
 - 只有存在 `overlay` 插槽时才渲染覆盖层。
-- 覆盖层使用绝对定位，并标记 `aria-hidden="true"`。
+- 覆盖层使用绝对定位；作为装饰时（`overlayPointerEvents="none"`，默认）标记 `aria-hidden="true"`，设为 `overlayPointerEvents="auto"` 则会暴露，使内部可聚焦控件仍可达。
 - `placement` 决定写入 top/left、top/right、bottom/left 或 bottom/right 这一组 x/y inset。
 - `offsetX` 控制 `left` 或 `right`；`offsetY` 控制 `top` 或 `bottom`。
 - 数字偏移会转为 px，字符串偏移会原样传入样式。
@@ -108,7 +108,7 @@ code: |
 ## 审阅说明
 
 - 已人工核对 `packages/tuffex/packages/components/src/corner-overlay/src/types.ts`、`TxCornerOverlay.vue` 与 `corner-overlay.test.ts`。
-- `overlay` 插槽按需渲染且始终 `aria-hidden`；业务关键状态仍需要附近文本或外部有标签控件表达。
+- `overlay` 插槽按需渲染，仅在装饰态（`overlayPointerEvents="none"`）下 `aria-hidden`；设为 `overlayPointerEvents="auto"` 会暴露，使内部交互控件可达。业务关键状态仍需要附近文本或外部有标签控件表达。
 - `overlayPointerEvents="auto"` 只转发 CSS 指针行为；插槽内控件自行负责键盘、焦点和标签语义。
 
 ## Source

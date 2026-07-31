@@ -39,6 +39,7 @@ export interface PluginSqliteWorkerClientOptions {
   queryTimeoutMs?: number
   writeTimeoutMs?: number
   workerPath?: string
+  readOnly?: boolean
 }
 
 const WORKER_UNAVAILABLE_MESSAGE = 'Plugin SQLite worker is unavailable.'
@@ -55,6 +56,7 @@ export class PluginSqliteWorkerClient {
   private readonly queryTimeoutMs: number
   private readonly writeTimeoutMs: number
   private readonly workerPath: string
+  private readonly readOnly: boolean
 
   constructor(
     private readonly databasePath: string,
@@ -66,6 +68,7 @@ export class PluginSqliteWorkerClient {
     this.writeTimeoutMs =
       options.timeoutMs ?? options.writeTimeoutMs ?? PLUGIN_SQLITE_WRITE_TIMEOUT_MS
     this.workerPath = options.workerPath ?? path.join(__dirname, 'plugin-sqlite-worker.js')
+    this.readOnly = options.readOnly === true
   }
 
   get isClosed(): boolean {
@@ -195,7 +198,7 @@ export class PluginSqliteWorkerClient {
   private ensureWorker(): Worker {
     if (this.worker) return this.worker
     const worker = new Worker(this.workerPath, {
-      workerData: { databasePath: this.databasePath },
+      workerData: { databasePath: this.databasePath, readOnly: this.readOnly },
       resourceLimits: {
         maxOldGenerationSizeMb: 64,
         maxYoungGenerationSizeMb: 16,

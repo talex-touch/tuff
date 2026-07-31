@@ -1,0 +1,7 @@
+{"file":"apps/nexus/AGENTS.md","reason":"Check Nexus deployment safety and evidence boundaries."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check no plaintext secrets or unsafe production fallback remains."}
+{"file":"wrangler.toml","reason":"Verify deployable preview config contains only non-secret values."}
+{"file":"apps/nexus/package.json","reason":"Verify local-only defaults and deployment preflight separation."}
+{"file":"apps/nexus/server/utils/auth.ts","reason":"Verify app/session auth fail closed for non-local placeholders."}
+{"file":"apps/nexus/server/utils/adminEmergencyToken.ts","reason":"Verify emergency token secret fail-closed policy."}
+{"file":"apps/nexus/server/utils/adminEmergencyStore.ts","reason":"Verify control-plane pepper fail-closed policy."}

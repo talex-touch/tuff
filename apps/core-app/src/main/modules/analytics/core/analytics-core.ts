@@ -202,6 +202,11 @@ export class AnalyticsCore {
     return this.recordAndPersist(this.currentMetrics, '1m')
   }
 
+  clearPluginRuntimeState(pluginName: string): void {
+    this.pluginTracer.clearPlugin(pluginName)
+    this.currentMetrics = { ...this.currentMetrics, plugins: this.pluginTracer.snapshot() }
+  }
+
   getPluginStats(pluginName: string): PluginStats {
     return this.pluginTracer.getStats(pluginName)
   }

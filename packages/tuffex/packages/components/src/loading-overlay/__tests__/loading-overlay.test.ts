@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import TxLoadingOverlay from '../src/TxLoadingOverlay.vue'
 
 const SpinnerStub = {
@@ -49,6 +50,37 @@ describe('txLoadingOverlay', () => {
 
     expect(wrapper.find('.content').exists()).toBe(true)
     expect(wrapper.find('.tx-loading-overlay').exists()).toBe(false)
+  })
+
+  it('marks the local container busy and the overlay as a live status region (#9)', () => {
+    const wrapper = mountOverlay({ loading: true }, { default: '<div class="content">Content</div>' })
+
+    expect(wrapper.find('.tx-loading-overlay__container').attributes('aria-busy')).toBe('true')
+    const overlay = wrapper.find('.tx-loading-overlay')
+    expect(overlay.attributes('role')).toBe('status')
+    expect(overlay.attributes('aria-live')).toBe('polite')
+  })
+
+  it('announces and traps keyboard focus on the fullscreen overlay (#9)', async () => {
+    const wrapper = mountOverlay({ fullscreen: true, loading: true, text: 'Syncing' })
+
+    try {
+      await nextTick()
+      const overlay = document.body.querySelector<HTMLElement>('.tx-loading-overlay--fullscreen')
+      expect(overlay).not.toBeNull()
+      expect(overlay?.getAttribute('role')).toBe('status')
+      expect(overlay?.getAttribute('aria-live')).toBe('polite')
+      expect(overlay?.getAttribute('aria-busy')).toBe('true')
+      expect(overlay?.getAttribute('tabindex')).toBe('-1')
+
+      // Tab is trapped so focus cannot escape to the page behind the overlay.
+      const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+      overlay?.dispatchEvent(tab)
+      expect(tab.defaultPrevented).toBe(true)
+    }
+    finally {
+      wrapper.unmount()
+    }
   })
 
   it('teleports fullscreen overlay to the document body', async () => {

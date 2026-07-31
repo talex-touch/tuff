@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { TxIconSource } from '../../icon'
 import type { CommandPaletteEmits, CommandPaletteItem, CommandPaletteProps } from './types'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { getZIndex, nextZIndex } from '../../../../utils/z-index-manager'
 import { TxIcon } from '../../icon'
 
@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<CommandPaletteProps>(), {
   maxHeight: 320,
   autoFocus: true,
   closeOnSelect: true,
+  ariaLabel: 'Command palette',
 })
 
 const emit = defineEmits<CommandPaletteEmits>()
@@ -45,13 +46,44 @@ const filteredCommands = computed(() => {
   })
 })
 
+const listId = useId()
+// aria-activedescendant lets the combobox point at the highlighted option while DOM
+// focus stays in the input, so screen readers announce each command as the user
+// moves through the (already-implemented) active-index navigation.
+const activeOptionId = computed(() =>
+  filteredCommands.value.length ? `${listId}-opt-${activeIndex.value}` : undefined,
+)
+
+function firstEnabledIndex() {
+  const idx = filteredCommands.value.findIndex(cmd => !cmd.disabled)
+  return idx === -1 ? 0 : idx
+}
+
+// Arrow navigation skips disabled commands so the highlight never parks on an
+// unselectable row (where Enter would silently do nothing).
+function moveActive(delta: number) {
+  const list = filteredCommands.value
+  const n = list.length
+  if (!n)
+    return
+  let next = activeIndex.value
+  for (let i = 0; i < n; i++) {
+    next = (next + delta + n) % n
+    if (!list[next]?.disabled) {
+      activeIndex.value = next
+      return
+    }
+  }
+  // Every command is disabled — leave the highlight where it is.
+}
+
 watch(
   () => props.modelValue,
   async (v, oldValue) => {
     if (v) {
       zIndex.value = nextZIndex()
       emit('open')
-      activeIndex.value = 0
+      activeIndex.value = firstEnabledIndex()
       await nextTick()
       if (props.autoFocus)
         inputRef.value?.focus()
@@ -59,6 +91,10 @@ watch(
     }
     if (oldValue !== undefined)
       emit('close')
+    // Mirror the reset to v-model:query listeners; onInput is the only other writer
+    // and it always emits, so a close must too or the parent keeps the stale string.
+    if (query.value !== '')
+      emit('update:query', '')
     query.value = ''
     activeIndex.value = 0
   },
@@ -68,7 +104,7 @@ watch(
 watch(
   filteredCommands,
   () => {
-    activeIndex.value = 0
+    activeIndex.value = firstEnabledIndex()
   },
 )
 
@@ -174,16 +210,21 @@ function onCompositionEnd() {
 function onKeydown(e: KeyboardEvent) {
   if (e.isComposing || e.keyCode === 229 || composing.value)
     return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    close()
+    return
+  }
   if (!filteredCommands.value.length)
     return
   if (e.key === 'ArrowDown') {
     e.preventDefault()
-    activeIndex.value = (activeIndex.value + 1) % filteredCommands.value.length
+    moveActive(1)
     return
   }
   if (e.key === 'ArrowUp') {
     e.preventDefault()
-    activeIndex.value = (activeIndex.value - 1 + filteredCommands.value.length) % filteredCommands.value.length
+    moveActive(-1)
     return
   }
   if (e.key === 'Enter') {
@@ -191,10 +232,6 @@ function onKeydown(e: KeyboardEvent) {
     const current = filteredCommands.value[activeIndex.value]
     if (current)
       selectItem(current)
-  }
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    close()
   }
 }
 </script>
@@ -209,6 +246,7 @@ function onKeydown(e: KeyboardEvent) {
         :style="{ zIndex }"
         role="dialog"
         aria-modal="true"
+        :aria-label="ariaLabel"
         @click.self="close"
       >
         <div
@@ -225,6 +263,11 @@ function onKeydown(e: KeyboardEvent) {
               class="tx-command-palette__input"
               :value="query"
               :placeholder="placeholder"
+              role="combobox"
+              :aria-label="placeholder"
+              aria-expanded="true"
+              :aria-controls="listId"
+              :aria-activedescendant="activeOptionId"
               @input="(e) => onInput((e.target as HTMLInputElement).value)"
               @keydown="onKeydown"
               @compositionstart="onCompositionStart"
@@ -232,12 +275,17 @@ function onKeydown(e: KeyboardEvent) {
             >
           </div>
 
-          <div class="tx-command-palette__list">
+          <div :id="listId" class="tx-command-palette__list" role="listbox" :aria-label="ariaLabel">
             <button
               v-for="(cmd, index) in filteredCommands"
+              :id="`${listId}-opt-${index}`"
               :key="cmd.id"
               type="button"
               class="tx-command-palette__item"
+              role="option"
+              :aria-selected="index === activeIndex"
+              :aria-disabled="cmd.disabled || undefined"
+              :tabindex="cmd.disabled ? -1 : 0"
               :class="{
                 'is-active': index === activeIndex,
                 'is-disabled': cmd.disabled,

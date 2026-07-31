@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { GuideStateProps } from './types'
+import type { GuideStateEmits, GuideStateProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -7,10 +7,16 @@ defineOptions({
 })
 
 const props = defineProps<GuideStateProps>()
+const emit = defineEmits<GuideStateEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="guide">
+  <TxEmptyState
+    v-bind="props"
+    variant="guide"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

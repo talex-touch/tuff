@@ -35,6 +35,11 @@ export interface ChatListProps {
 export interface ChatComposerProps {
   modelValue?: string
   placeholder?: string
+  /**
+   * Accessible label for the message textarea. Falls back to `placeholder` when
+   * omitted so screen readers never announce an unnamed text box.
+   */
+  ariaLabel?: string
   disabled?: boolean
   submitting?: boolean
   allowAttachmentWhileSubmitting?: boolean
@@ -69,6 +74,12 @@ export interface TypingIndicatorProps {
   variant?: 'dots' | 'ai' | 'pure' | 'ring' | 'circle-dash' | 'bars'
   text?: string
   showText?: boolean
+  /**
+   * Screen-reader text for the `role="status"` region when `showText` is false.
+   * Without it, hiding the label leaves the live region empty and it announces
+   * nothing. Falls back to `text`.
+   */
+  ariaLabel?: string
   size?: number
   gap?: number
   loaderSize?: number

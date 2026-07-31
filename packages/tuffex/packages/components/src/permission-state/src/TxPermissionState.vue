@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PermissionStateProps } from './types'
+import type { PermissionStateEmits, PermissionStateProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -7,10 +7,16 @@ defineOptions({
 })
 
 const props = defineProps<PermissionStateProps>()
+const emit = defineEmits<PermissionStateEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="permission">
+  <TxEmptyState
+    v-bind="props"
+    variant="permission"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

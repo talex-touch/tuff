@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 
 const { locale } = useI18n()
-const mode = ref<'loading' | 'empty' | 'error'>('empty')
+const mode = ref<'loading' | 'empty' | 'error'>('loading')
 
 const labels = computed(() => {
   if (locale.value === 'zh') {

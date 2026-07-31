@@ -109,7 +109,10 @@ defineExpose({
       @focus="handleFocus"
       @blur="handleBlur"
     />
-    <span v-if="showCount" class="tx-textarea__count" aria-live="polite">
+    <!-- The counter is decorative: the root <label> names the textarea, so an
+         un-hidden counter made the field's accessible name the count text (e.g.
+         "0/160") and its aria-live re-announced it on every keystroke. -->
+    <span v-if="showCount" class="tx-textarea__count" aria-hidden="true">
       {{ countText }}
     </span>
   </label>

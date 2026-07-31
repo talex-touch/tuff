@@ -11,6 +11,7 @@ const props = withDefaults(defineProps<ImageUploaderProps>(), {
   accept: 'image/*',
   disabled: false,
   max: 9,
+  uploadText: 'Upload',
 })
 
 const emit = defineEmits<ImageUploaderEmits>()
@@ -18,6 +19,10 @@ const emit = defineEmits<ImageUploaderEmits>()
 const inputRef = ref<HTMLInputElement | null>(null)
 
 const value = computed(() => props.modelValue ?? [])
+
+function removeLabelFor(name?: string): string {
+  return props.removeLabel?.(name) ?? `Remove ${name || 'image'}`
+}
 
 const objectUrls = new Set<string>()
 
@@ -112,7 +117,7 @@ onBeforeUnmount(() => {
         @click="pick"
       >
         <i class="i-carbon-add" aria-hidden="true" />
-        <span class="tx-image-uploader__add-text">Upload</span>
+        <span class="tx-image-uploader__add-text">{{ uploadText }}</span>
       </button>
 
       <div
@@ -124,7 +129,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="tx-image-uploader__remove"
-          :aria-label="`Remove ${item.name || 'image'}`"
+          :aria-label="removeLabelFor(item.name)"
           :disabled="disabled"
           @click="remove(item.id)"
         >
@@ -210,8 +215,17 @@ onBeforeUnmount(() => {
   transition: opacity 150ms ease;
 }
 
-.tx-image-uploader__item:hover .tx-image-uploader__remove {
+.tx-image-uploader__item:hover .tx-image-uploader__remove,
+.tx-image-uploader__item:focus-within .tx-image-uploader__remove,
+.tx-image-uploader__remove:focus-visible {
+  /* Reveal the remove control on keyboard focus too, not only pointer hover, so a
+     tabbed-to button is never an invisible focus target. */
   opacity: 1;
+}
+
+.tx-image-uploader__remove:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+  outline-offset: 2px;
 }
 
 .tx-image-uploader__remove:disabled {

@@ -18,7 +18,7 @@
   },
   "build": {
     "index": {
-      "entry": "index/main.ts",
+      "entry": "index.js",
       "format": "cjs",
       "target": "node24",
       "external": ["electron"],
@@ -27,23 +27,14 @@
     }
   },
   "permissions": {
-    "required": [
-      "clipboard.read",
-      "network.internet",
-      "intelligence.basic",
-      "storage.plugin",
-      "window.create",
-      "search.root-results"
-    ],
+    "required": ["network.internet", "intelligence.basic", "storage.plugin", "search.root-results"],
     "optional": ["clipboard.write"]
   },
   "permissionReasons": {
-    "clipboard.read": "读取剪贴板中的待翻译文本",
-    "network.internet": "连接翻译服务 API（如 Google、DeepL、百度等）",
-    "intelligence.basic": "调用智能翻译服务",
-    "storage.plugin": "保存翻译源配置与本地密钥引用",
-    "window.create": "打开 DivisionBox 独立窗口展示图片翻译结果",
-    "search.root-results": "将翻译入口和多源翻译结果推送到 CoreBox 根搜索结果",
+    "network.internet": "供插件设置 Surface 访问用户显式配置的翻译服务；隔离 Prelude 不直接联网",
+    "intelligence.basic": "通过宿主受控智能服务执行文本翻译与图片 OCR",
+    "storage.plugin": "供插件设置 Surface 保存启用状态和非敏感翻译源配置；密钥由安全存储管理",
+    "search.root-results": "将翻译状态与结果推送到 CoreBox 根搜索结果",
     "clipboard.write": "将翻译结果复制到剪贴板"
   },
   "searchProviders": [

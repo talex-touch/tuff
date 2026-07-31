@@ -84,5 +84,8 @@ describe('txCornerOverlay', () => {
     expect(style).toContain('right: calc(100% - 12px)')
     expect(style).toContain('bottom: -0.25rem')
     expect(style).toContain('pointer-events: auto')
+    // Interactive overlays (pointer-events auto) must not be aria-hidden, otherwise a
+    // focusable child sits in an aria-hidden subtree (WCAG 4.1.2).
+    expect(wrapper.find('.tx-corner-overlay__overlay').attributes('aria-hidden')).toBeUndefined()
   })
 })

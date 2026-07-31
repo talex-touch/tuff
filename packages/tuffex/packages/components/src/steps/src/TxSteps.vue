@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { StepsContext, StepsDirection, StepsSize } from './types'
-import { provide, ref, watch } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 
 interface Props {
   direction?: StepsDirection
@@ -22,8 +22,8 @@ watch(() => props.active, (newValue) => {
 })
 
 provide<StepsContext>('steps', {
-  direction: props.direction,
-  size: props.size,
+  direction: computed(() => props.direction),
+  size: computed(() => props.size),
   activeStep,
   stepKeys,
   registerStep: (key: string) => {

@@ -90,4 +90,29 @@ describe('txKeyframeStrokeText', () => {
 
     expect(app.component).toHaveBeenCalledWith('TxKeyframeStrokeText', InstalledKeyframeStrokeText)
   })
+
+  it('sizes the svg height from the measured viewBox so stroke width does not rescale the glyph', async () => {
+    const wrapper = mount(KeyframeStrokeText, {
+      props: { text: 'Tx', fontSize: 48, strokeWidth: 3 },
+    })
+
+    await nextTick()
+    await nextTick()
+
+    // bbox height 48 + 2 * max(4, strokeWidth * 3) => 48 + 18 = 66.
+    expect(wrapper.find('svg').attributes('style')).toContain('--tx-kf-view-height: 66px')
+
+    // Raising strokeWidth widens the padding and the viewBox, so the root height must
+    // grow with it (keeping the render scale ~1) rather than staying pinned to
+    // font-size, which used to shrink the whole glyph.
+    await wrapper.setProps({ strokeWidth: 20 })
+    // The metrics watcher awaits a tick before re-measuring, then the computed
+    // style re-renders, so give it a few ticks to settle.
+    await nextTick()
+    await nextTick()
+    await nextTick()
+
+    // padding = max(4, 20 * 3) = 60 => 48 + 120 = 168.
+    expect(wrapper.find('svg').attributes('style')).toContain('--tx-kf-view-height: 168px')
+  })
 })

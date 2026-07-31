@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { types as utilTypes } from 'node:util'
 
 export const SECURE_STORE_FILE = 'secure-store.json'
 export const LOCAL_SECRET_FILE = 'local-secret.v1.key'
@@ -12,6 +13,30 @@ export const SECURE_STORE_KEY_PATTERN = /^[a-z0-9._-]{1,80}$/i
 type WarnHandler = (message: string, error: unknown) => void
 export type SecureStoreBackend = 'local-secret' | 'unavailable'
 export type SecureStorePurpose = 'auth-token' | 'sync-payload-key' | 'machine-seed' | string
+
+export interface SecureStoreBatchEntry {
+  key: string
+  value: string | null
+  purpose?: SecureStorePurpose
+}
+
+export interface SecureStoreBatchConflictOptions {
+  conflictPolicy: 'skip' | 'overwrite'
+  expectedRevision?: string
+}
+
+export interface SecureStoreBatchResult {
+  persisted: boolean
+  conflict: boolean
+  applied: number
+  overwritten: number
+  skipped: number
+}
+
+export interface SecureStoreBatchSnapshot {
+  readonly revision: string
+  readonly existing: readonly boolean[]
+}
 
 type WritableSecureStoreBackend = Exclude<SecureStoreBackend, 'unavailable'>
 type SecureStoreEnvelopeBackend = WritableSecureStoreBackend | 'safe-storage'
@@ -68,10 +93,15 @@ const AES_256_KEY_BYTES = 32
 const AES_GCM_NONCE_BYTES = 12
 const AES_GCM_TAG_BYTES = 16
 const DEFAULT_PURPOSE: SecureStorePurpose = 'default'
+const SECURE_STORE_BATCH_MAX_ENTRIES = 256
+const SECURE_STORE_BATCH_MAX_VALUE_BYTES = 1024 * 1024
+const SECURE_STORE_BATCH_MAX_PURPOSE_BYTES = 128
+const SECURE_STORE_REVISION_PATTERN = /^[a-f0-9]{64}$/
+const SECURE_STORE_FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 
 function normalizeSecureStoreKey(rawKey: string): string {
   const key = rawKey.trim()
-  if (!SECURE_STORE_KEY_PATTERN.test(key)) {
+  if (!SECURE_STORE_KEY_PATTERN.test(key) || SECURE_STORE_FORBIDDEN_KEYS.has(key)) {
     throw new Error('INVALID_SECURE_STORE_KEY')
   }
   return key
@@ -117,6 +147,154 @@ function normalizePurpose(purpose?: SecureStorePurpose): string {
   return normalized || DEFAULT_PURPOSE
 }
 
+function normalizeSecureStoreBatch(value: unknown): SecureStoreBatchEntry[] {
+  if (
+    !Array.isArray(value) ||
+    utilTypes.isProxy(value) ||
+    Object.getPrototypeOf(value) !== Array.prototype ||
+    value.length === 0 ||
+    value.length > SECURE_STORE_BATCH_MAX_ENTRIES
+  ) {
+    throw new Error('INVALID_SECURE_STORE_BATCH')
+  }
+
+  const arrayDescriptors = Object.getOwnPropertyDescriptors(value)
+  const allowedArrayKeys = new Set<PropertyKey>(['length'])
+  for (let index = 0; index < value.length; index += 1) {
+    const key = String(index)
+    allowedArrayKeys.add(key)
+    const descriptor = arrayDescriptors[key]
+    if (!descriptor?.enumerable || !('value' in descriptor)) {
+      throw new Error('INVALID_SECURE_STORE_BATCH')
+    }
+  }
+  if (Reflect.ownKeys(arrayDescriptors).some((key) => !allowedArrayKeys.has(key))) {
+    throw new Error('INVALID_SECURE_STORE_BATCH')
+  }
+
+  const normalized: SecureStoreBatchEntry[] = []
+  const seen = new Set<string>()
+  for (const candidate of value) {
+    if (
+      !candidate ||
+      typeof candidate !== 'object' ||
+      Array.isArray(candidate) ||
+      utilTypes.isProxy(candidate)
+    ) {
+      throw new Error('INVALID_SECURE_STORE_BATCH_ENTRY')
+    }
+
+    const prototype = Object.getPrototypeOf(candidate)
+    const descriptors = Object.getOwnPropertyDescriptors(candidate)
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error('INVALID_SECURE_STORE_BATCH_ENTRY')
+    }
+    const keys = Reflect.ownKeys(descriptors)
+    if (
+      keys.some(
+        (key) =>
+          typeof key !== 'string' ||
+          !['key', 'value', 'purpose'].includes(key) ||
+          !descriptors[key]?.enumerable ||
+          !('value' in descriptors[key])
+      ) ||
+      !Object.hasOwn(descriptors, 'key') ||
+      !Object.hasOwn(descriptors, 'value')
+    ) {
+      throw new Error('INVALID_SECURE_STORE_BATCH_ENTRY')
+    }
+
+    try {
+      structuredClone(candidate)
+    } catch {
+      throw new Error('INVALID_SECURE_STORE_BATCH_ENTRY')
+    }
+
+    const keyValue = descriptors.key
+    const valueValue = descriptors.value
+    const purposeValue = descriptors.purpose
+    const key = normalizeSecureStoreKey(
+      keyValue && 'value' in keyValue && typeof keyValue.value === 'string' ? keyValue.value : ''
+    )
+    const entryValue = valueValue && 'value' in valueValue ? valueValue.value : undefined
+    const purpose = purposeValue && 'value' in purposeValue ? purposeValue.value : undefined
+    if (
+      (entryValue !== null &&
+        (typeof entryValue !== 'string' ||
+          !entryValue ||
+          Buffer.byteLength(entryValue, 'utf-8') > SECURE_STORE_BATCH_MAX_VALUE_BYTES)) ||
+      (purpose !== undefined &&
+        (typeof purpose !== 'string' ||
+          !purpose.trim() ||
+          Buffer.byteLength(purpose, 'utf-8') > SECURE_STORE_BATCH_MAX_PURPOSE_BYTES)) ||
+      seen.has(key)
+    ) {
+      throw new Error('INVALID_SECURE_STORE_BATCH_ENTRY')
+    }
+    seen.add(key)
+    normalized.push({
+      key,
+      value: entryValue,
+      ...(purpose === undefined ? {} : { purpose: normalizePurpose(purpose) })
+    })
+  }
+  try {
+    structuredClone(value)
+  } catch {
+    throw new Error('INVALID_SECURE_STORE_BATCH')
+  }
+  return normalized
+}
+
+function normalizeSecureStoreBatchConflictOptions(
+  value: unknown
+): SecureStoreBatchConflictOptions | undefined {
+  if (value === undefined) return undefined
+  if (!value || typeof value !== 'object' || Array.isArray(value) || utilTypes.isProxy(value)) {
+    throw new Error('INVALID_SECURE_STORE_BATCH_OPTIONS')
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value)
+  const keys = Reflect.ownKeys(descriptors)
+  const policy = descriptors.conflictPolicy
+  const expectedRevision = descriptors.expectedRevision
+  if (
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    keys.some((key) => key !== 'conflictPolicy' && key !== 'expectedRevision') ||
+    keys.length < 1 ||
+    keys.length > 2 ||
+    !policy?.enumerable ||
+    !('value' in policy) ||
+    (policy.value !== 'skip' && policy.value !== 'overwrite') ||
+    (expectedRevision !== undefined &&
+      (!expectedRevision.enumerable ||
+        !('value' in expectedRevision) ||
+        typeof expectedRevision.value !== 'string' ||
+        !SECURE_STORE_REVISION_PATTERN.test(expectedRevision.value)))
+  ) {
+    throw new Error('INVALID_SECURE_STORE_BATCH_OPTIONS')
+  }
+  try {
+    structuredClone(value)
+  } catch {
+    throw new Error('INVALID_SECURE_STORE_BATCH_OPTIONS')
+  }
+  return {
+    conflictPolicy: policy.value,
+    ...(expectedRevision && 'value' in expectedRevision
+      ? { expectedRevision: expectedRevision.value as string }
+      : {})
+  }
+}
+
+function getSecureStoreRevision(store: Readonly<Record<string, string>>): string {
+  const canonicalStore = Object.fromEntries(
+    Object.keys(store)
+      .sort()
+      .map((key) => [key, store[key]])
+  )
+  return createHash('sha256').update(JSON.stringify(canonicalStore), 'utf-8').digest('hex')
+}
+
 function getConfigDir(rootPath: string): string {
   return path.join(rootPath, 'config')
 }
@@ -141,9 +319,16 @@ async function readSecureStoreFile(
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('SECURE_STORE_INVALID_DOCUMENT')
     }
-    const store: Record<string, string> = {}
+    const store: Record<string, string> = Object.create(null)
     for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value !== 'string') {
+      let normalizedKey: string
+      try {
+        normalizedKey = normalizeSecureStoreKey(key)
+      } catch {
+        if (failOnCorrupt) throw new Error('SECURE_STORE_INVALID_KEY')
+        continue
+      }
+      if (normalizedKey !== key || typeof value !== 'string') {
         if (failOnCorrupt) throw new Error('SECURE_STORE_INVALID_ENTRY')
         continue
       }
@@ -241,8 +426,10 @@ async function getOrCreateLocalSecret(rootPath: string, warn?: WarnHandler): Pro
     })
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === 'EEXIST') {
+      secret.fill(0)
       return await requireLocalSecret(rootPath)
     }
+    secret.fill(0)
     throw error
   }
   if (process.platform !== 'win32') {
@@ -269,7 +456,8 @@ async function assertReadableExistingEnvelopeBackends(
     (value) => tryParseEnvelope(value)?.backend === 'local-secret'
   )
   if (needsLocalSecret) {
-    await requireLocalSecret(rootPath)
+    const secret = await requireLocalSecret(rootPath)
+    secret.fill(0)
   }
 }
 
@@ -324,21 +512,25 @@ function encodeEnvelope(
   purpose?: SecureStorePurpose
 ): string {
   const key = deriveValueKey(secret, rawKey, purpose)
-  const nonce = randomBytes(AES_GCM_NONCE_BYTES)
-  const cipher = createCipheriv('aes-256-gcm', key, nonce, {
-    authTagLength: AES_GCM_TAG_BYTES
-  })
-  const ciphertext = Buffer.concat([cipher.update(value, 'utf-8'), cipher.final()])
-  const envelope: SecureStoreEnvelope = {
-    v: 1,
-    backend,
-    alg: 'A256GCM',
-    kid: getKeyId(secret, rawKey, purpose),
-    n: toBase64(nonce),
-    c: toBase64(ciphertext),
-    t: toBase64(cipher.getAuthTag())
+  try {
+    const nonce = randomBytes(AES_GCM_NONCE_BYTES)
+    const cipher = createCipheriv('aes-256-gcm', key, nonce, {
+      authTagLength: AES_GCM_TAG_BYTES
+    })
+    const ciphertext = Buffer.concat([cipher.update(value, 'utf-8'), cipher.final()])
+    const envelope: SecureStoreEnvelope = {
+      v: 1,
+      backend,
+      alg: 'A256GCM',
+      kid: getKeyId(secret, rawKey, purpose),
+      n: toBase64(nonce),
+      c: toBase64(ciphertext),
+      t: toBase64(cipher.getAuthTag())
+    }
+    return JSON.stringify(envelope)
+  } finally {
+    key.fill(0)
   }
-  return JSON.stringify(envelope)
 }
 
 function tryParseEnvelope(raw: string): SecureStoreEnvelope | null {
@@ -365,28 +557,42 @@ async function decryptEnvelope(
   rootPath: string,
   rawKey: string,
   envelope: SecureStoreEnvelope,
-  purpose?: SecureStorePurpose
-): Promise<string> {
+  purpose?: SecureStorePurpose,
+  exposePlaintext = true
+): Promise<string | null> {
   const backend = await resolveBackendForEnvelope(rootPath, envelope.backend)
-  const keyId = getKeyId(backend.secret, rawKey, purpose)
-  if (envelope.kid !== keyId) {
-    throw new Error('SECURE_STORE_KEY_ID_MISMATCH')
-  }
+  try {
+    const keyId = getKeyId(backend.secret, rawKey, purpose)
+    if (envelope.kid !== keyId) {
+      throw new Error('SECURE_STORE_KEY_ID_MISMATCH')
+    }
 
-  const nonce = fromBase64(envelope.n)
-  const tag = fromBase64(envelope.t)
-  if (nonce.byteLength !== AES_GCM_NONCE_BYTES || tag.byteLength !== AES_GCM_TAG_BYTES) {
-    throw new Error('SECURE_STORE_ENVELOPE_INVALID')
-  }
+    const nonce = fromBase64(envelope.n)
+    const tag = fromBase64(envelope.t)
+    if (nonce.byteLength !== AES_GCM_NONCE_BYTES || tag.byteLength !== AES_GCM_TAG_BYTES) {
+      throw new Error('SECURE_STORE_ENVELOPE_INVALID')
+    }
 
-  const key = deriveValueKey(backend.secret, rawKey, purpose)
-  const decipher = createDecipheriv('aes-256-gcm', key, nonce, {
-    authTagLength: AES_GCM_TAG_BYTES
-  })
-  decipher.setAuthTag(tag)
-  return Buffer.concat([decipher.update(fromBase64(envelope.c)), decipher.final()]).toString(
-    'utf-8'
-  )
+    const key = deriveValueKey(backend.secret, rawKey, purpose)
+    const ciphertext = fromBase64(envelope.c)
+    let plaintext: Buffer | undefined
+    try {
+      const decipher = createDecipheriv('aes-256-gcm', key, nonce, {
+        authTagLength: AES_GCM_TAG_BYTES
+      })
+      decipher.setAuthTag(tag)
+      plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()])
+      return exposePlaintext ? plaintext.toString('utf-8') : null
+    } finally {
+      key.fill(0)
+      nonce.fill(0)
+      tag.fill(0)
+      ciphertext.fill(0)
+      plaintext?.fill(0)
+    }
+  } finally {
+    backend.secret.fill(0)
+  }
 }
 
 export async function getSecureStoreHealth(rootPath?: string): Promise<SecureStoreHealth> {
@@ -401,7 +607,8 @@ export async function getSecureStoreHealth(rootPath?: string): Promise<SecureSto
 
   try {
     await assertReadableExistingEnvelopeBackends(rootPath, undefined, true)
-    await getOrCreateLocalSecret(rootPath)
+    const secret = await getOrCreateLocalSecret(rootPath)
+    secret.fill(0)
     return {
       backend: 'local-secret',
       available: true,
@@ -440,9 +647,13 @@ export async function wrapSecureStoreValue(
 ): Promise<{ backend: WritableSecureStoreBackend; value: string } | null> {
   try {
     const backend = await resolveSecureStoreBackend(rootPath, warn)
-    return {
-      backend: backend.backend,
-      value: encodeEnvelope(backend.backend, backend.secret, rawKey, value, purpose)
+    try {
+      return {
+        backend: backend.backend,
+        value: encodeEnvelope(backend.backend, backend.secret, rawKey, value, purpose)
+      }
+    } finally {
+      backend.secret.fill(0)
     }
   } catch (error) {
     warn?.('Failed to wrap secure store value', error)
@@ -520,7 +731,11 @@ export async function setSecureStoreValue(
       }
 
       const backend = await resolveSecureStoreBackend(rootPath, warn)
-      store[key] = encodeEnvelope(backend.backend, backend.secret, key, value, purpose)
+      try {
+        store[key] = encodeEnvelope(backend.backend, backend.secret, key, value, purpose)
+      } finally {
+        backend.secret.fill(0)
+      }
       await writeSecureStoreFile(rootPath, store)
       return true
     } catch (error) {
@@ -530,18 +745,168 @@ export async function setSecureStoreValue(
   })
 }
 
-export async function deleteSecureStoreValuesByPrefix(
+export async function getSecureStoreBatchSnapshot(
   rootPath: string,
-  rawPrefix: string,
+  entries: readonly SecureStoreBatchEntry[],
   warn?: WarnHandler
-): Promise<number> {
-  const prefix = normalizeSecureStoreKey(rawPrefix)
+): Promise<SecureStoreBatchSnapshot> {
+  const normalized = normalizeSecureStoreBatch(entries)
   return runSecureStoreMutation(rootPath, async () => {
     const store = await readSecureStoreFile(rootPath, warn, true)
-    const matchingKeys = Object.keys(store).filter((key) => key.startsWith(prefix))
+    const existing: boolean[] = []
+    for (const entry of normalized) {
+      const encrypted = store[entry.key]
+      if (!encrypted) {
+        existing.push(false)
+        continue
+      }
+      const envelope = tryParseEnvelope(encrypted)
+      if (!envelope) throw new Error('SECURE_STORE_ENVELOPE_INVALID')
+      await decryptEnvelope(rootPath, entry.key, envelope, entry.purpose, false)
+      existing.push(true)
+    }
+    return Object.freeze({
+      revision: getSecureStoreRevision(store),
+      existing: Object.freeze(existing)
+    })
+  })
+}
+
+export function applySecureStoreBatch(
+  rootPath: string,
+  entries: readonly SecureStoreBatchEntry[],
+  options: SecureStoreBatchConflictOptions,
+  warn?: WarnHandler
+): Promise<SecureStoreBatchResult>
+export function applySecureStoreBatch(
+  rootPath: string,
+  entries: readonly SecureStoreBatchEntry[],
+  warn?: WarnHandler
+): Promise<boolean>
+export async function applySecureStoreBatch(
+  rootPath: string,
+  entries: readonly SecureStoreBatchEntry[],
+  optionsOrWarn?: SecureStoreBatchConflictOptions | WarnHandler,
+  maybeWarn?: WarnHandler
+): Promise<boolean | SecureStoreBatchResult> {
+  const normalized = normalizeSecureStoreBatch(entries)
+  const options =
+    typeof optionsOrWarn === 'function'
+      ? undefined
+      : normalizeSecureStoreBatchConflictOptions(optionsOrWarn)
+  const warn = typeof optionsOrWarn === 'function' ? optionsOrWarn : maybeWarn
+
+  return runSecureStoreMutation(rootPath, async () => {
+    let skipped = 0
+    let overwritten = 0
+    try {
+      const store = await readSecureStoreFile(rootPath, warn, true)
+      if (
+        options?.expectedRevision !== undefined &&
+        options.expectedRevision !== getSecureStoreRevision(store)
+      ) {
+        return {
+          persisted: false,
+          conflict: true,
+          applied: 0,
+          overwritten: 0,
+          skipped: 0
+        }
+      }
+      const admitted = normalized.filter((entry) => {
+        const exists = Object.hasOwn(store, entry.key)
+        if (options?.conflictPolicy === 'skip' && exists) {
+          skipped += 1
+          return false
+        }
+        if (exists) overwritten += 1
+        return true
+      })
+
+      const valuesToWrite = admitted.filter(
+        (entry): entry is SecureStoreBatchEntry & { value: string } => entry.value !== null
+      )
+      const backend = valuesToWrite.length
+        ? await resolveSecureStoreBackend(rootPath, warn)
+        : undefined
+      try {
+        for (const entry of admitted) {
+          if (entry.value === null) {
+            delete store[entry.key]
+          } else if (backend) {
+            store[entry.key] = encodeEnvelope(
+              backend.backend,
+              backend.secret,
+              entry.key,
+              entry.value,
+              entry.purpose
+            )
+          }
+        }
+      } finally {
+        backend?.secret.fill(0)
+      }
+
+      if (admitted.length > 0) {
+        await writeSecureStoreFile(rootPath, store)
+      }
+      if (!options) return true
+      return {
+        persisted: true,
+        conflict: false,
+        applied: admitted.length,
+        overwritten,
+        skipped
+      }
+    } catch (error) {
+      warn?.('Failed to apply secure store batch', error)
+      if (!options) return false
+      return {
+        persisted: false,
+        conflict: false,
+        applied: 0,
+        overwritten: 0,
+        skipped
+      }
+    }
+  })
+}
+
+export async function countSecureStoreValuesByPrefixes(
+  rootPath: string,
+  rawPrefixes: readonly string[],
+  warn?: WarnHandler
+): Promise<number> {
+  const prefixes = [...new Set(rawPrefixes.map((prefix) => normalizeSecureStoreKey(prefix)))]
+  return runSecureStoreMutation(rootPath, async () => {
+    const store = await readSecureStoreFile(rootPath, warn, true)
+    return Object.keys(store).filter((key) => prefixes.some((prefix) => key.startsWith(prefix)))
+      .length
+  })
+}
+
+export async function deleteSecureStoreValuesByPrefixes(
+  rootPath: string,
+  rawPrefixes: readonly string[],
+  warn?: WarnHandler
+): Promise<number> {
+  const prefixes = [...new Set(rawPrefixes.map((prefix) => normalizeSecureStoreKey(prefix)))]
+  return runSecureStoreMutation(rootPath, async () => {
+    const store = await readSecureStoreFile(rootPath, warn, true)
+    const matchingKeys = Object.keys(store).filter((key) =>
+      prefixes.some((prefix) => key.startsWith(prefix))
+    )
     if (matchingKeys.length === 0) return 0
     for (const key of matchingKeys) delete store[key]
     await writeSecureStoreFile(rootPath, store)
     return matchingKeys.length
   })
+}
+
+export async function deleteSecureStoreValuesByPrefix(
+  rootPath: string,
+  rawPrefix: string,
+  warn?: WarnHandler
+): Promise<number> {
+  return deleteSecureStoreValuesByPrefixes(rootPath, [rawPrefix], warn)
 }

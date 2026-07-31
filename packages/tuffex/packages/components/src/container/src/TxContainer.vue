@@ -70,30 +70,30 @@ const style = computed<Record<string, string>>(() => {
   max-width: none;
 }
 
-.tx-container.is-responsive {
+.tx-container.is-responsive:not(.is-fluid) {
   max-width: 100%;
 }
 
 @media (min-width: 640px) {
-  .tx-container.is-responsive {
+  .tx-container.is-responsive:not(.is-fluid) {
     max-width: 640px;
   }
 }
 
 @media (min-width: 768px) {
-  .tx-container.is-responsive {
+  .tx-container.is-responsive:not(.is-fluid) {
     max-width: 768px;
   }
 }
 
 @media (min-width: 1024px) {
-  .tx-container.is-responsive {
+  .tx-container.is-responsive:not(.is-fluid) {
     max-width: 1024px;
   }
 }
 
 @media (min-width: 1280px) {
-  .tx-container.is-responsive {
+  .tx-container.is-responsive:not(.is-fluid) {
     max-width: 1280px;
   }
 }

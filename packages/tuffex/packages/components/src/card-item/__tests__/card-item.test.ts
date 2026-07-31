@@ -88,9 +88,30 @@ describe('txCardItem', () => {
     expect(wrapper.attributes('tabindex')).toBe('0')
 
     await wrapper.trigger('click')
-    await wrapper.trigger('keydown.enter')
+    await wrapper.trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.emitted('click')).toHaveLength(2)
+  })
+
+  it('activates on Space and exposes aria-disabled without hijacking slot controls', async () => {
+    const wrapper = mount(TxCardItem, {
+      props: { role: 'button', clickable: true },
+      slots: { right: '<button class="inner" type="button">Open</button>' },
+    })
+
+    // Space activates the row per the ARIA button contract, via the same guard as click.
+    await wrapper.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toHaveLength(1)
+
+    // Keys bubbling up from a right-slot control must not activate the row.
+    await wrapper.find('.inner').trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toHaveLength(1)
+
+    // Disabled announces aria-disabled and blocks Space activation.
+    await wrapper.setProps({ disabled: true })
+    expect(wrapper.attributes('aria-disabled')).toBe('true')
+    await wrapper.trigger('keydown', { key: ' ' })
+    expect(wrapper.emitted('click')).toHaveLength(1)
   })
 
   it('blocks click events and focus when disabled', async () => {
@@ -105,7 +126,7 @@ describe('txCardItem', () => {
     expect(wrapper.attributes('tabindex')).toBeUndefined()
 
     await wrapper.trigger('click')
-    await wrapper.trigger('keydown.enter')
+    await wrapper.trigger('keydown', { key: 'Enter' })
 
     expect(wrapper.emitted('click')).toBeUndefined()
   })
@@ -119,5 +140,25 @@ describe('txCardItem', () => {
 
     expect(wrapper.classes()).toContain('tx-card-item--no-left')
     expect(wrapper.find('.tx-card-item__left').exists()).toBe(false)
+  })
+
+  it('activates on Space from the row but leaves slot typing alone', () => {
+    const wrapper = mount(TxCardItem, {
+      props: { clickable: true },
+      slots: { right: '<input class="inner" />' },
+    })
+
+    // Space typed into a control in the slot must reach that control untouched.
+    // A `.prevent` modifier would swallow it before the row could decline it.
+    const inSlot = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })
+    wrapper.find('input.inner').element.dispatchEvent(inSlot)
+    expect(inSlot.defaultPrevented).toBe(false)
+    expect(wrapper.emitted('click')).toBeUndefined()
+
+    // Space on the row itself still activates, and stops the page scrolling.
+    const onRow = new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })
+    wrapper.element.dispatchEvent(onRow)
+    expect(onRow.defaultPrevented).toBe(true)
+    expect(wrapper.emitted('click')).toHaveLength(1)
   })
 })

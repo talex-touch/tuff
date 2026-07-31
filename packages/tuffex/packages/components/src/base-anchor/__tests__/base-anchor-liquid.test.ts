@@ -7,12 +7,17 @@ import {
   createLiquidMetrics,
   DETACH_AT,
   easeOutCubic,
+  easeSlopeAt,
+  fillSlopeAt,
   geometryAt,
   itemOpacityAt,
   LIQUID_DEFAULTS,
-  normalizedVelocity,
+  liquidVelocityAt,
+  NECK_CLIP_MIN,
+  neckClipAt,
   parseCubicBezier,
   peelAt,
+  peelSlopeAt,
   resolveLiquidEase,
 } from '../src/base-anchor-liquid'
 
@@ -224,16 +229,64 @@ describe('baseAnchorLiquid: defaults', () => {
   })
 })
 
+/** The frame sequence `runLiquid` writes for an open run, as pinch ratios. */
+function openPinchRatios(frameMs: number, durationMs = LIQUID_DEFAULTS.duration) {
+  const ease = resolveLiquidEase(LIQUID_DEFAULTS.ease, LIQUID_DEFAULTS.ease)
+  const ratios: number[] = []
+  for (let frame = 0; ; frame += 1) {
+    const t = Math.min(1, (frame * frameMs) / durationMs)
+    const p = ease(t)
+    ratios.push(beadPinchRatio(liquidVelocityAt(p, t, ease)))
+    if (t >= 1)
+      return ratios
+  }
+}
+
 describe('baseAnchorLiquid: bead pinch', () => {
-  it('reads a linear ramp as exactly average speed', () => {
-    // A linear ramp covers dp == dt, so its normalised velocity is 1.0 at any duration.
-    expect(normalizedVelocity(0.1, 0.1)).toBeCloseTo(1, 10)
-    expect(normalizedVelocity(0.02, 0.02)).toBeCloseTo(1, 10)
+  it('differentiates the peel analytically', () => {
+    // easeOutQuad(x) = 2x - x² over x = p / DETACH_AT, so the slope leaves at
+    // 2 / DETACH_AT and falls linearly to nothing at the detach.
+    expect(peelSlopeAt(0)).toBeCloseTo(2 / DETACH_AT, 10)
+    expect(peelSlopeAt(DETACH_AT / 2)).toBeCloseTo(1 / DETACH_AT, 10)
+    expect(peelSlopeAt(DETACH_AT)).toBe(0)
+    // Past the detach the top edge is parked, so there is nothing left to report.
+    expect(peelSlopeAt(0.9)).toBe(0)
+  })
+
+  it('differentiates the fill analytically, and never saturates it', () => {
+    // easeOutCubic(x) = 1 - (1-x)³, so the slope is 3(1-x)².
+    expect(fillSlopeAt(0)).toBeCloseTo(3, 10)
+    expect(fillSlopeAt(0.5)).toBeCloseTo(0.75, 10)
+    expect(fillSlopeAt(1)).toBe(0)
+
+    // The point of mixing it in: unlike the peel it is still alive past the detach.
+    expect(peelSlopeAt(DETACH_AT)).toBe(0)
+    expect(fillSlopeAt(DETACH_AT)).toBeGreaterThan(0.9)
+  })
+
+  it('differentiates an ease without consulting the frame clock', () => {
+    const linear = resolveLiquidEase('linear', LIQUID_DEFAULTS.ease)
+    // A linear ramp travels at exactly 1.0 per unit of timeline, endpoints included.
+    expect(easeSlopeAt(linear, 0)).toBeCloseTo(1, 6)
+    expect(easeSlopeAt(linear, 0.5)).toBeCloseTo(1, 6)
+    expect(easeSlopeAt(linear, 1)).toBeCloseTo(1, 6)
+
+    // A cubic-bezier ends on the slope of its trailing handle, (1 - y2) / (1 - x2).
+    const closing = resolveLiquidEase(LIQUID_DEFAULTS.closeEase, LIQUID_DEFAULTS.closeEase)
+    expect(easeSlopeAt(closing, 1)).toBeCloseTo((1 - 0.94) / (1 - 0.45), 1)
+  })
+
+  it('reports the speed the drop actually leaves at, not a standing start', () => {
+    const ease = resolveLiquidEase(LIQUID_DEFAULTS.ease, LIQUID_DEFAULTS.ease)
+    // Backward differencing had no sample before t=0 and fell back to zero, so the
+    // seed frame drew the sheet at full width and the next one snapped it to full
+    // pinch. The closed form has a value at t=0 like it has one anywhere else.
+    expect(liquidVelocityAt(0, 0, ease)).toBeCloseTo(2 / DETACH_AT, 6)
+    expect(beadPinchRatio(liquidVelocityAt(0, 0, ease))).toBe(1)
+
     // Direction does not matter: closing pinches the same way opening does.
-    expect(normalizedVelocity(-0.4, 0.1)).toBeCloseTo(4, 10)
-    // Degenerate frames cannot produce a pinch.
-    expect(normalizedVelocity(0.5, 0)).toBe(0)
-    expect(normalizedVelocity(Number.NaN, 0.1)).toBe(0)
+    const closeVelocity = liquidVelocityAt(0.1, 0.9, resolveLiquidEase('linear', LIQUID_DEFAULTS.ease))
+    expect(closeVelocity).toBeGreaterThan(0)
   })
 
   it('peaks the pinch at speed and decays it to nothing at rest', () => {
@@ -244,14 +297,25 @@ describe('baseAnchorLiquid: bead pinch', () => {
   })
 
   it('draws the sheet in symmetrically about its own centre', () => {
-    const full = beadSpanAt(200, 14, 0)
+    const full = beadSpanAt(200, 60, 0)
     expect(full).toEqual({ x: 0, width: 200 })
 
-    const pinched = beadSpanAt(200, 14, 1)
-    expect(pinched.x).toBe(14)
-    expect(pinched.width).toBe(172)
+    const pinched = beadSpanAt(200, 60, 1)
+    expect(pinched.x).toBe(60)
+    expect(pinched.width).toBe(80)
     // Centre line is preserved, so the bead necks instead of sliding sideways.
     expect(pinched.x + pinched.width / 2).toBeCloseTo(100, 10)
+  })
+
+  it('necks well inside the trigger it is torn from', () => {
+    // The whole point of the default: the sheet has to read as visibly narrower
+    // than the 200px trigger, not as a barely-inset copy of it.
+    const narrowest = beadSpanAt(200, LIQUID_DEFAULTS.beadPinch, 1).width
+    expect(narrowest / 200).toBeLessThan(0.45)
+
+    // ...but still far too wide for the goo field to dissolve. A 4.5px blur needs
+    // the sheet down around single digits before the threshold stops seeing it.
+    expect(narrowest).toBeGreaterThan(LIQUID_DEFAULTS.gooBlur * 8)
   })
 
   it('never lets the pinch close the sheet', () => {
@@ -261,35 +325,108 @@ describe('baseAnchorLiquid: bead pinch', () => {
     expect(beadSpanAt(0, 14, 1).width).toBeGreaterThanOrEqual(1)
   })
 
-  it('rides the falling edge rather than p, which is linear and carries no speed', () => {
-    const step = 1 / 16
-    const ratios: number[] = []
-    let previous = 0
-    for (let i = 1; i <= 16; i += 1) {
-      const p = i * step // p advances linearly
-      ratios.push(beadPinchRatio(normalizedVelocity(peelAt(p) - peelAt(previous), step)))
-      previous = p
-    }
+  it('rides the moving edges rather than p, which is linear and carries no speed', () => {
+    const ratios = openPinchRatios(1000 / 60)
 
-    // Fastest as the drop breaks away, dead still once the peel has stopped.
+    // Fastest as the drop breaks away, dead still only once everything has stopped.
     expect(ratios[0]).toBe(1)
     expect(ratios.at(-1)).toBe(0)
-    // Monotonic decay: easeOutQuad only ever decelerates.
+    // Monotonic decay: both slopes only ever decelerate, so their max does too.
     for (let i = 1; i < ratios.length; i += 1)
       expect(ratios[i]!).toBeLessThanOrEqual(ratios[i - 1]! + 1e-9)
 
     // Reading p directly would pin the pinch open forever: a linear ramp has a
     // constant derivative, so it never decays.
-    let flat = 0
-    for (let i = 1; i <= 16; i += 1)
-      flat = Math.max(flat, beadPinchRatio(normalizedVelocity(i * step - (i - 1) * step, step)))
-    expect(flat).toBeCloseTo(beadPinchRatio(1), 10)
-    expect(flat).toBeGreaterThan(0)
+    const linear = resolveLiquidEase('linear', LIQUID_DEFAULTS.ease)
+    expect(easeSlopeAt(linear, 0.1)).toBeCloseTo(easeSlopeAt(linear, 0.9), 6)
   })
 
-  it('stops reporting speed once the peel has finished', () => {
-    // Past the detach the top edge is parked, so there is nothing left to report.
+  it('opens without a width pop on the first animated frame', () => {
+    const width = LIQUID_DEFAULTS.beadPinch * 2
+    const widths = openPinchRatios(1000 / 60)
+      .map(ratio => beadSpanAt(200, LIQUID_DEFAULTS.beadPinch, ratio).width)
+
+    // The seed frame is already necked. Differencing reported 0 there, so the
+    // sheet stood at full width for one frame and then jumped the entire pinch
+    // — the whole travel, in a single frame, at every refresh rate.
+    expect(widths[0]).toBe(200 - width)
+
+    let largestJump = 0
+    for (let i = 1; i < widths.length; i += 1)
+      largestJump = Math.max(largestJump, Math.abs(widths[i]! - widths[i - 1]!))
+    // One frame's share of a ramp that spans DETACH_AT, not the whole travel at once.
+    expect(largestJump).toBeLessThan(width / 4)
+  })
+
+  it('derives the same pinch at any refresh rate', () => {
+    const at60 = openPinchRatios(1000 / 60)
+    const at120 = openPinchRatios(1000 / 120)
+
+    // Same point in the timeline, same pinch: a 120Hz display samples the ramp
+    // twice as often, it does not squeeze the sheet differently.
+    expect(at120[0]).toBeCloseTo(at60[0]!, 10)
+    expect(at120[2]).toBeCloseTo(at60[1]!, 10)
+    expect(at120[4]).toBeCloseTo(at60[2]!, 10)
+  })
+
+  it('bounds the content by the necked sheet', () => {
+    // Symmetric, so the rows are cropped about the same centre line the sheet necks about.
+    expect(neckClipAt(60)).toBe('inset(0 60px 0 60px)')
+    // No pinch, no crop: `drip` and a settled `bead` leave the panel alone.
+    expect(neckClipAt(0)).toBe('none')
+    expect(neckClipAt(-3)).toBe('none')
+  })
+
+  it('never lets a row extend past the sheet drawing it', () => {
+    const configured = LIQUID_DEFAULTS.beadPinch
+    const ease = resolveLiquidEase(LIQUID_DEFAULTS.ease, LIQUID_DEFAULTS.ease)
+
+    for (let frame = 0; ; frame += 1) {
+      const t = Math.min(1, (frame * (1000 / 60)) / LIQUID_DEFAULTS.duration)
+      const p = ease(t)
+      const ratio = beadPinchRatio(t >= 1 ? 0 : liquidVelocityAt(p, t, ease))
+      const span = beadSpanAt(200, configured, ratio)
+
+      // The crop is the pinch, so the visible content box is the sheet — there is
+      // no depth of pinch that can leave a row hanging outside it. The only slack
+      // is the sub-pixel floor that releases the clip once it stops cropping.
+      const clip = neckClipAt(span.x)
+      const cropped = clip === 'none' ? 200 : 200 - span.x * 2
+      expect(cropped).toBeLessThanOrEqual(span.width + NECK_CLIP_MIN * 2)
+
+      if (t >= 1)
+        break
+    }
+  })
+
+  it('keeps reporting speed after the neck has snapped', () => {
+    const ease = resolveLiquidEase(LIQUID_DEFAULTS.ease, LIQUID_DEFAULTS.ease)
+
+    // The top edge is parked at the detach...
     expect(peelAt(DETACH_AT)).toBe(1)
-    expect(normalizedVelocity(peelAt(0.9) - peelAt(0.8), 0.1)).toBe(0)
+    expect(peelSlopeAt(DETACH_AT)).toBe(0)
+    // ...but the body is only 83% filled, so the sheet is still under tension.
+    // Keyed to the peel alone this was 0 and the sheet slammed back to full width
+    // with more than half the animation still to run.
+    expect(liquidVelocityAt(DETACH_AT, DETACH_AT, ease)).toBeGreaterThan(0.9)
+    expect(liquidVelocityAt(0.9, 0.9, ease)).toBeGreaterThan(0)
+
+    // It reaches nothing only when the panel does.
+    expect(liquidVelocityAt(1, 1, ease)).toBe(0)
+  })
+
+  it('spreads the pinch across the whole drop, not just the peel', () => {
+    const ratios = openPinchRatios(1000 / 60)
+    const alive = ratios.filter(ratio => ratio > 0).length
+
+    // DETACH_AT of a 260ms open is about 7 frames at 60Hz. The pinch has to
+    // outlast that by a wide margin or it is back to being cut off mid-drop.
+    expect(alive).toBeGreaterThan(12)
+
+    // Still a decay, not a plateau: past the detach it is a thin residual tension,
+    // not the tear.
+    const atDetach = ratios[Math.round(DETACH_AT * ratios.length)]!
+    expect(atDetach).toBeLessThan(0.3)
+    expect(atDetach).toBeGreaterThan(0)
   })
 })

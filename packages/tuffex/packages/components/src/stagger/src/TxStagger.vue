@@ -1,7 +1,21 @@
 <script lang="ts">
-import type { StaggerProps } from './types'
-import type { CSSProperties, VNode } from 'vue'
-import { Comment, TransitionGroup, cloneVNode, computed, defineComponent, h, onMounted, ref } from 'vue'
+import type { CSSProperties, PropType, VNode } from 'vue'
+import type { StaggerEasing, StaggerProps } from './types'
+import { cloneVNode, Comment, computed, defineComponent, Fragment, h, TransitionGroup } from 'vue'
+
+// Flatten template `v-for` output: a `v-for` compiles to a single Fragment vnode
+// whose real element vnodes live in `children`. Without descending into it the
+// stagger index lands on the Fragment (a no-op) instead of the elements.
+function flattenFragments(vnodes: VNode[]): VNode[] {
+  const result: VNode[] = []
+  for (const vnode of vnodes) {
+    if (vnode.type === Fragment && Array.isArray(vnode.children))
+      result.push(...flattenFragments(vnode.children as VNode[]))
+    else if (vnode.type !== Comment)
+      result.push(vnode)
+  }
+  return result
+}
 
 export default defineComponent({
   name: 'TxStagger',
@@ -12,11 +26,9 @@ export default defineComponent({
     duration: { type: Number, default: 180 },
     delayStep: { type: Number, default: 24 },
     delayBase: { type: Number, default: 0 },
-    easing: { type: String, default: 'ease-out' },
+    easing: { type: String as PropType<StaggerEasing>, default: 'ease-out' },
   },
   setup(props: StaggerProps, { slots }) {
-    const isMounted = ref(false)
-
     const rootStyle = computed(() => {
       return {
         '--tx-stagger-duration': `${props.duration}ms`,
@@ -27,12 +39,7 @@ export default defineComponent({
     })
 
     const normalizedChildren = computed<VNode[]>(() => {
-      const vnodes = slots.default?.({}) ?? []
-      return vnodes.filter((vnode: VNode) => vnode.type !== Comment)
-    })
-
-    onMounted(() => {
-      isMounted.value = true
+      return flattenFragments(slots.default?.({}) ?? [])
     })
 
     return () => {
@@ -48,9 +55,12 @@ export default defineComponent({
       return h(
         TransitionGroup,
         {
-          name: isMounted.value ? props.name : undefined,
+          // Pass `name`/`appear` on the first render too: TransitionGroup only runs
+          // the appear transition on its initial mount and consumes these as props
+          // (not fallthrough attrs), so deferring them permanently skipped appear.
+          name: props.name,
           tag: props.tag,
-          appear: isMounted.value ? props.appear : undefined,
+          appear: props.appear,
           class: 'tx-stagger',
           style: rootStyle.value,
         },

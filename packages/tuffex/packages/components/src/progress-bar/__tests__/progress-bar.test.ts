@@ -52,6 +52,33 @@ describe('txProgressBar', () => {
     expect(wrapper.emitted('complete')).toHaveLength(2)
   })
 
+  it('emits complete when mounted already at 100 (watcher previously lacked immediate)', () => {
+    const wrapper = mount(TxProgressBar, {
+      props: {
+        percentage: 100,
+      },
+    })
+
+    expect(wrapper.emitted('complete')).toHaveLength(1)
+  })
+
+  it('does not emit complete on mount below 100 or while loading', () => {
+    const below = mount(TxProgressBar, {
+      props: {
+        percentage: 40,
+      },
+    })
+    expect(below.emitted('complete')).toBeUndefined()
+
+    const loading = mount(TxProgressBar, {
+      props: {
+        percentage: 100,
+        loading: true,
+      },
+    })
+    expect(loading.emitted('complete')).toBeUndefined()
+  })
+
   it('normalizes segment widths by positive segment sum', () => {
     const wrapper = mount(TxProgressBar, {
       props: {

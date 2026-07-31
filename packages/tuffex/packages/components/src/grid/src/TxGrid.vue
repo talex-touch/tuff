@@ -1,22 +1,12 @@
 <script setup lang="ts">
+import type { Breakpoint, GridProps, Responsive } from './types'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { hasWindow } from '../../../../utils/env'
 
 defineOptions({ name: 'TxGrid' })
 
 const props = withDefaults(
-  defineProps<{
-    cols?: number | Responsive<number>
-    rows?: number
-    gap?:
-      | number
-      | string
-      | { row?: number | string, col?: number | string }
-      | Responsive<number | string>
-    minItemWidth?: string
-    justify?: string
-    align?: string
-  }>(),
+  defineProps<GridProps>(),
   {
     cols: 0,
     rows: 0,
@@ -26,8 +16,6 @@ const props = withDefaults(
     align: 'stretch',
   },
 )
-type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
-type Responsive<T> = Partial<Record<Breakpoint, T>>
 
 const width = ref<number>(hasWindow() ? window.innerWidth : 1024)
 
@@ -70,8 +58,23 @@ function toCssSize(v: any): string {
 }
 
 function resolveResponsive<T>(v: Responsive<T>): T | undefined {
-  const bp = getBp(width.value)
-  return v[bp] ?? v.md ?? v.sm ?? v.xs ?? v.lg ?? v.xl
+  const order: Breakpoint[] = ['xs', 'sm', 'md', 'lg', 'xl']
+  const start = order.indexOf(getBp(width.value))
+
+  // Cascade toward smaller breakpoints first (a value keeps applying as the
+  // viewport grows), then fall back to larger ones when nothing smaller is set.
+  // Iterating (rather than indexing) keeps the key typed as `Breakpoint` under
+  // the stricter `noUncheckedIndexedAccess` that nexus compiles this source with.
+  const smallerFirst = order.slice(0, start + 1).reverse()
+  const largerAfter = order.slice(start + 1)
+
+  for (const key of [...smallerFirst, ...largerAfter]) {
+    const val = v[key]
+    if (val != null)
+      return val
+  }
+
+  return undefined
 }
 
 const resolvedCols = computed(() => {

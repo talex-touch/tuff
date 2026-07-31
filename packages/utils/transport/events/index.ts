@@ -20,6 +20,8 @@
  * ```
  */
 
+import type { PluginApiUninstallRequest, PluginApiUninstallResponse } from './types/plugin-uninstall'
+
 import type {
   AgentsCancelRequest,
   AgentsCancelResponse,
@@ -55,7 +57,7 @@ import type {
   AgentsToolsListResponse,
   AgentsUpdatePriorityRequest,
   AgentsUpdatePriorityResponse,
-} from "./types/agents";
+} from './types/agents'
 
 import type {
   BoxItem,
@@ -68,7 +70,7 @@ import type {
   BoxItemSyncResponse,
   BoxItemUpdateRequest,
   BoxItemUpsertRequest,
-} from "./types/box-item";
+} from './types/box-item'
 
 import type {
   ClipboardActionResult,
@@ -90,7 +92,7 @@ import type {
   ClipboardSetFavoriteRequest,
   ClipboardStatus,
   ClipboardWriteRequest,
-} from "./types/clipboard";
+} from './types/clipboard'
 
 import type {
   ActivationState,
@@ -152,7 +154,7 @@ import type {
   SetInputVisibilityRequest,
   SetQueryRequest,
   TuffSearchResult,
-} from "./types/core-box";
+} from './types/core-box'
 
 import type {
   DivisionBoxCloseRequest,
@@ -177,7 +179,7 @@ import type {
   DivisionBoxTogglePinResponse,
   DivisionBoxUpdateStateRequest,
   DivisionBoxUpdateStateResponse,
-} from "./types/division-box";
+} from './types/division-box'
 
 import type {
   DownloadAddTaskRequest,
@@ -208,7 +210,7 @@ import type {
   DownloadUpdateConfigRequest,
   DownloadUpdateNotificationConfigRequest,
   DownloadUpdatePriorityRequest,
-} from "./types/download";
+} from './types/download'
 
 import type {
   FlowAcknowledgeRequest,
@@ -234,7 +236,7 @@ import type {
   FlowSetPluginEnabledRequest,
   FlowSetPluginHandlerRequest,
   FlowUnregisterTargetsRequest,
-} from "./types/flow";
+} from './types/flow'
 import type {
   StoreCheckUpdatesResponse,
   StoreGetPluginRequest,
@@ -244,7 +246,7 @@ import type {
   StoreSearchRequest,
   StoreSearchResponse,
   StoreUpdatesAvailablePayload,
-} from "./types/store";
+} from './types/store'
 import type {
   NetworkConfigGetResponse,
   NetworkConfigUpdateRequest,
@@ -257,7 +259,7 @@ import type {
   NetworkRequest,
   NetworkRequestResponse,
   NetworkToTfileRequest,
-} from "./types/network";
+} from './types/network'
 import type {
   NativeCapabilitiesListRequest,
   NativeCapabilityGetRequest,
@@ -285,7 +287,7 @@ import type {
   NativeScreenshotCaptureResult,
   NativeScreenshotDisplay,
   NativeScreenshotSupport,
-} from "./types/native";
+} from './types/native'
 
 // ============================================================================
 // Store Events
@@ -310,7 +312,7 @@ import type {
   NotificationResult,
   NotificationUpdatePayload,
   NotificationUpdateRequest,
-} from "./types/notification";
+} from './types/notification'
 
 // ============================================================================
 // Permission Events
@@ -335,16 +337,13 @@ import type {
   PermissionRevokeRequest,
   PermissionStartupRequestPayload,
   PermissionUpdatedPayload,
-} from "./types/permission";
+} from './types/permission'
 
 // ============================================================================
 // Agents Events
 // ============================================================================
 
-import type {
-  PlatformCapabilityListRequest,
-  PlatformCapabilityListResponse,
-} from "./types/platform";
+import type { PlatformCapabilityListRequest, PlatformCapabilityListResponse } from './types/platform'
 
 import type {
   QuickOpsBatteryStatusGetResponse,
@@ -379,7 +378,7 @@ import type {
   QuickOpsSessionsGetResponse,
   QuickOpsSystemProxyGetResponse,
   QuickOpsSystemInfoGetResponse,
-} from "./types/quick-ops";
+} from './types/quick-ops'
 
 // ============================================================================
 // Platform Events
@@ -477,6 +476,7 @@ import type {
   PluginStorageSecretRequest,
   PluginStorageSecretValueResponse,
   PluginStorageSetFileRequest,
+  PluginStorageSetSecretBatchRequest,
   PluginStorageSetSecretRequest,
   PluginStorageSyncItem,
   PluginStorageStatsRequest,
@@ -503,12 +503,9 @@ import type {
   PluginWindowVisibleRequest,
   PluginWindowVisibleResponse,
   PluginUnloadRequest,
-} from "./types/plugin";
+} from './types/plugin'
 
-import type {
-  WidgetFailurePayload,
-  WidgetRegistrationPayload,
-} from "../../plugin/widget";
+import type { WidgetFailurePayload, WidgetRegistrationPayload } from '../../plugin/widget'
 
 // ============================================================================
 // Sentry Events
@@ -521,7 +518,7 @@ import type {
   SentryRecordPerformanceRequest,
   SentryRecordPerformanceResponse,
   SentryUpdateUserRequest,
-} from "./types/sentry";
+} from './types/sentry'
 
 import type {
   PluginStorageDeleteRequest,
@@ -534,7 +531,7 @@ import type {
   StorageSaveResult,
   StorageSetRequest,
   StorageUpdateNotification,
-} from "./types/storage";
+} from './types/storage'
 
 import type {
   TransportPortClosePayload,
@@ -542,12 +539,13 @@ import type {
   TransportPortErrorPayload,
   TransportPortUpgradeRequest,
   TransportPortUpgradeResponse,
-} from "./types/transport";
-import { AccountEvents, AuthEvents } from "./auth";
-import { SyncEvents } from "./sync";
-import { TerminalEvents } from "./terminal";
-import { OpenerEvents } from "./opener";
-import { PluginBroadcastEvents } from "./plugin-broadcast";
+} from './types/transport'
+import { AccountEvents, AuthEvents } from './auth'
+import { SyncEvents } from './sync'
+import { TerminalEvents } from './terminal'
+import { OpenerEvents } from './opener'
+import { PluginBroadcastEvents } from './plugin-broadcast'
+import { PrivacyEvents } from './privacy'
 
 // ============================================================================
 // Clipboard Events
@@ -577,24 +575,24 @@ import type {
   UpdateOpResponse,
   UpdateRecordActionRequest,
   UpdateUpdateSettingsRequest,
-} from "./types/update";
+} from './types/update'
 
 // ============================================================================
 // MetaOverlay Events
 // ============================================================================
 
-import { defineEvent, defineRawEvent } from "../event/builder";
-import { AppEvents } from "./app";
+import { defineEvent, defineRawEvent } from '../event/builder'
+import { AppEvents } from './app'
 
 // ============================================================================
 // File Index Events
 // ============================================================================
 
-import { MetaOverlayEvents } from "./meta-overlay";
+import { MetaOverlayEvents } from './meta-overlay'
 
 // Re-export all types for convenience
-export * from "./types";
-export * from "./screenshot-session";
+export * from './screenshot-session'
+export * from './types'
 
 // ============================================================================
 // Download Events
@@ -602,499 +600,373 @@ export * from "./screenshot-session";
 
 export const DownloadEvents = {
   task: {
-    add: defineEvent("download")
-      .module("task")
-      .event("add")
-      .define<DownloadAddTaskRequest, DownloadAddTaskResponse>(),
+    add: defineEvent('download').module('task').event('add').define<DownloadAddTaskRequest, DownloadAddTaskResponse>(),
 
-    pause: defineEvent("download")
-      .module("task")
-      .event("pause")
-      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+    pause: defineEvent('download').module('task').event('pause').define<DownloadTaskIdRequest, DownloadOpResponse>(),
 
-    resume: defineEvent("download")
-      .module("task")
-      .event("resume")
-      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+    resume: defineEvent('download').module('task').event('resume').define<DownloadTaskIdRequest, DownloadOpResponse>(),
 
-    cancel: defineEvent("download")
-      .module("task")
-      .event("cancel")
-      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+    cancel: defineEvent('download').module('task').event('cancel').define<DownloadTaskIdRequest, DownloadOpResponse>(),
 
-    retry: defineEvent("download")
-      .module("task")
-      .event("retry")
-      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+    retry: defineEvent('download').module('task').event('retry').define<DownloadTaskIdRequest, DownloadOpResponse>(),
 
-    remove: defineEvent("download")
-      .module("task")
-      .event("remove")
-      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+    remove: defineEvent('download').module('task').event('remove').define<DownloadTaskIdRequest, DownloadOpResponse>(),
 
-    getStatus: defineEvent("download")
-      .module("task")
-      .event("get-status")
+    getStatus: defineEvent('download')
+      .module('task')
+      .event('get-status')
       .define<DownloadTaskIdRequest, DownloadGetTaskStatusResponse>(),
 
-    updatePriority: defineEvent("download")
-      .module("task")
-      .event("update-priority")
+    updatePriority: defineEvent('download')
+      .module('task')
+      .event('update-priority')
       .define<DownloadUpdatePriorityRequest, DownloadOpResponse>(),
 
-    pauseAll: defineEvent("download")
-      .module("task")
-      .event("pause-all")
-      .define<void, DownloadOpResponse>(),
+    pauseAll: defineEvent('download').module('task').event('pause-all').define<void, DownloadOpResponse>(),
 
-    resumeAll: defineEvent("download")
-      .module("task")
-      .event("resume-all")
-      .define<void, DownloadOpResponse>(),
+    resumeAll: defineEvent('download').module('task').event('resume-all').define<void, DownloadOpResponse>(),
 
-    cancelAll: defineEvent("download")
-      .module("task")
-      .event("cancel-all")
-      .define<void, DownloadOpResponse>(),
+    cancelAll: defineEvent('download').module('task').event('cancel-all').define<void, DownloadOpResponse>(),
   },
 
   list: {
-    getAll: defineEvent("download")
-      .module("list")
-      .event("get")
-      .define<void, DownloadGetTasksResponse>(),
+    getAll: defineEvent('download').module('list').event('get').define<void, DownloadGetTasksResponse>(),
 
-    getByStatus: defineEvent("download")
-      .module("list")
-      .event("get-by-status")
+    getByStatus: defineEvent('download')
+      .module('list')
+      .event('get-by-status')
       .define<DownloadGetTasksByStatusRequest, DownloadGetTasksResponse>(),
   },
 
   config: {
-    get: defineEvent("download")
-      .module("config")
-      .event("get")
-      .define<void, DownloadGetConfigResponse>(),
+    get: defineEvent('download').module('config').event('get').define<void, DownloadGetConfigResponse>(),
 
-    update: defineEvent("download")
-      .module("config")
-      .event("update")
+    update: defineEvent('download')
+      .module('config')
+      .event('update')
       .define<DownloadUpdateConfigRequest, DownloadOpResponse>(),
 
-    getNotification: defineEvent("download")
-      .module("config")
-      .event("get-notification")
+    getNotification: defineEvent('download')
+      .module('config')
+      .event('get-notification')
       .define<void, DownloadGetNotificationConfigResponse>(),
 
-    updateNotification: defineEvent("download")
-      .module("config")
-      .event("update-notification")
+    updateNotification: defineEvent('download')
+      .module('config')
+      .event('update-notification')
       .define<DownloadUpdateNotificationConfigRequest, DownloadOpResponse>(),
   },
 
   history: {
-    get: defineEvent("download")
-      .module("history")
-      .event("get")
+    get: defineEvent('download')
+      .module('history')
+      .event('get')
       .define<DownloadGetHistoryRequest, DownloadGetHistoryResponse>(),
 
-    clear: defineEvent("download")
-      .module("history")
-      .event("clear")
-      .define<void, DownloadOpResponse>(),
+    clear: defineEvent('download').module('history').event('clear').define<void, DownloadOpResponse>(),
 
-    clearItem: defineEvent("download")
-      .module("history")
-      .event("clear-item")
+    clearItem: defineEvent('download')
+      .module('history')
+      .event('clear-item')
       .define<DownloadClearHistoryItemRequest, DownloadOpResponse>(),
   },
 
   file: {
-    open: defineEvent("download")
-      .module("file")
-      .event("open")
+    open: defineEvent('download').module('file').event('open').define<DownloadTaskIdRequest, DownloadOpResponse>(),
+
+    showInFolder: defineEvent('download')
+      .module('file')
+      .event('show-in-folder')
       .define<DownloadTaskIdRequest, DownloadOpResponse>(),
 
-    showInFolder: defineEvent("download")
-      .module("file")
-      .event("show-in-folder")
-      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
-
-    delete: defineEvent("download")
-      .module("file")
-      .event("delete")
-      .define<DownloadTaskIdRequest, DownloadOpResponse>(),
+    delete: defineEvent('download').module('file').event('delete').define<DownloadTaskIdRequest, DownloadOpResponse>(),
   },
 
   maintenance: {
-    cleanupTemp: defineEvent("download")
-      .module("maintenance")
-      .event("cleanup-temp")
-      .define<void, DownloadOpResponse>(),
+    cleanupTemp: defineEvent('download').module('maintenance').event('cleanup-temp').define<void, DownloadOpResponse>(),
   },
 
   logs: {
-    get: defineEvent("download")
-      .module("logs")
-      .event("get")
-      .define<{ limit?: number }, DownloadGetLogsResponse>(),
+    get: defineEvent('download').module('logs').event('get').define<{ limit?: number }, DownloadGetLogsResponse>(),
 
-    getErrorStats: defineEvent("download")
-      .module("logs")
-      .event("get-error-stats")
+    getErrorStats: defineEvent('download')
+      .module('logs')
+      .event('get-error-stats')
       .define<void, DownloadGetErrorStatsResponse>(),
 
-    clear: defineEvent("download")
-      .module("logs")
-      .event("clear")
-      .define<void, DownloadOpResponse>(),
+    clear: defineEvent('download').module('logs').event('clear').define<void, DownloadOpResponse>(),
   },
 
   temp: {
-    getStats: defineEvent("download")
-      .module("temp")
-      .event("get-stats")
-      .define<void, DownloadGetTempStatsResponse>(),
+    getStats: defineEvent('download').module('temp').event('get-stats').define<void, DownloadGetTempStatsResponse>(),
   },
 
   stats: {
-    get: defineEvent("download")
-      .module("stats")
-      .event("get")
-      .define<void, DownloadGetStatsResponse>(),
+    get: defineEvent('download').module('stats').event('get').define<void, DownloadGetStatsResponse>(),
   },
 
   migration: {
-    checkNeeded: defineEvent("download")
-      .module("migration")
-      .event("check-needed")
+    checkNeeded: defineEvent('download')
+      .module('migration')
+      .event('check-needed')
       .define<void, DownloadMigrationNeededResponse>(),
 
-    start: defineEvent("download")
-      .module("migration")
-      .event("start")
-      .define<void, DownloadMigrationStartResponse>(),
+    start: defineEvent('download').module('migration').event('start').define<void, DownloadMigrationStartResponse>(),
 
-    retry: defineEvent("download")
-      .module("migration")
-      .event("retry")
-      .define<void, DownloadMigrationRetryResponse>(),
+    retry: defineEvent('download').module('migration').event('retry').define<void, DownloadMigrationRetryResponse>(),
 
-    status: defineEvent("download")
-      .module("migration")
-      .event("status")
-      .define<void, DownloadMigrationStatusResponse>(),
+    status: defineEvent('download').module('migration').event('status').define<void, DownloadMigrationStatusResponse>(),
 
-    progress: defineEvent("download")
-      .module("migration")
-      .event("progress")
+    progress: defineEvent('download')
+      .module('migration')
+      .event('progress')
       .define<DownloadMigrationProgressPayload, void>(),
 
-    result: defineEvent("download")
-      .module("migration")
-      .event("result")
-      .define<DownloadMigrationResultPayload, void>(),
+    result: defineEvent('download').module('migration').event('result').define<DownloadMigrationResultPayload, void>(),
   },
 
   push: {
-    taskAdded: defineEvent("download")
-      .module("push")
-      .event("task-added")
-      .define<DownloadTaskPayload, void>(),
+    taskAdded: defineEvent('download').module('push').event('task-added').define<DownloadTaskPayload, void>(),
 
-    taskProgress: defineEvent("download")
-      .module("push")
-      .event("task-progress")
-      .define<DownloadTaskPayload, void>(),
+    taskProgress: defineEvent('download').module('push').event('task-progress').define<DownloadTaskPayload, void>(),
 
-    taskCompleted: defineEvent("download")
-      .module("push")
-      .event("task-completed")
-      .define<DownloadTaskPayload, void>(),
+    taskCompleted: defineEvent('download').module('push').event('task-completed').define<DownloadTaskPayload, void>(),
 
-    taskFailed: defineEvent("download")
-      .module("push")
-      .event("task-failed")
-      .define<DownloadTaskPayload, void>(),
+    taskFailed: defineEvent('download').module('push').event('task-failed').define<DownloadTaskPayload, void>(),
 
-    taskUpdated: defineEvent("download")
-      .module("push")
-      .event("task-updated")
-      .define<DownloadTaskPayload, void>(),
+    taskUpdated: defineEvent('download').module('push').event('task-updated').define<DownloadTaskPayload, void>(),
 
-    taskRetrying: defineEvent("download")
-      .module("push")
-      .event("task-retrying")
+    taskRetrying: defineEvent('download')
+      .module('push')
+      .event('task-retrying')
       .define<DownloadTaskRetryingPayload, void>(),
 
-    notificationClicked: defineEvent("download")
-      .module("push")
-      .event("notification-clicked")
+    notificationClicked: defineEvent('download')
+      .module('push')
+      .event('notification-clicked')
       .define<DownloadNotificationClickedPayload, void>(),
   },
-} as const;
+} as const
 
 // ============================================================================
 // Update Events
 // ============================================================================
 
 export const UpdateEvents = {
-  check: defineEvent("update")
-    .module("service")
-    .event("check")
-    .define<UpdateCheckRequest, UpdateCheckResponse>(),
+  check: defineEvent('update').module('service').event('check').define<UpdateCheckRequest, UpdateCheckResponse>(),
 
-  getSettings: defineEvent("update")
-    .module("service")
-    .event("get-settings")
-    .define<void, UpdateGetSettingsResponse>(),
+  getSettings: defineEvent('update').module('service').event('get-settings').define<void, UpdateGetSettingsResponse>(),
 
-  updateSettings: defineEvent("update")
-    .module("service")
-    .event("update-settings")
+  updateSettings: defineEvent('update')
+    .module('service')
+    .event('update-settings')
     .define<UpdateUpdateSettingsRequest, UpdateOpResponse>(),
 
-  getStatus: defineEvent("update")
-    .module("service")
-    .event("get-status")
-    .define<void, UpdateGetStatusResponse>(),
+  getStatus: defineEvent('update').module('service').event('get-status').define<void, UpdateGetStatusResponse>(),
 
-  clearCache: defineEvent("update")
-    .module("service")
-    .event("clear-cache")
-    .define<void, UpdateOpResponse>(),
+  clearCache: defineEvent('update').module('service').event('clear-cache').define<void, UpdateOpResponse>(),
 
-  getCachedRelease: defineEvent("update")
-    .module("service")
-    .event("get-cached-release")
+  getCachedRelease: defineEvent('update')
+    .module('service')
+    .event('get-cached-release')
     .define<UpdateCachedReleaseRequest, UpdateGetCachedReleaseResponse>(),
 
-  getBundledReleaseNotes: defineEvent("update")
-    .module("release-notes")
-    .event("get-bundled")
+  getBundledReleaseNotes: defineEvent('update')
+    .module('release-notes')
+    .event('get-bundled')
     .define<void, UpdateGetBundledReleaseNotesResponse>(),
 
-  listReleaseNotes: defineEvent("update")
-    .module("release-notes")
-    .event("list")
+  listReleaseNotes: defineEvent('update')
+    .module('release-notes')
+    .event('list')
     .define<UpdateListReleaseNotesRequest, UpdateListReleaseNotesResponse>(),
 
-  getReleaseNotes: defineEvent("update")
-    .module("release-notes")
-    .event("get")
+  getReleaseNotes: defineEvent('update')
+    .module('release-notes')
+    .event('get')
     .define<UpdateGetReleaseNotesRequest, UpdateGetReleaseNotesResponse>(),
 
-  acknowledgeReleaseNotes: defineEvent("update")
-    .module("release-notes")
-    .event("acknowledge")
+  acknowledgeReleaseNotes: defineEvent('update')
+    .module('release-notes')
+    .event('acknowledge')
     .define<UpdateAcknowledgeReleaseNotesRequest, UpdateOpResponse>(),
 
-  recordAction: defineEvent("update")
-    .module("service")
-    .event("record-action")
+  recordAction: defineEvent('update')
+    .module('service')
+    .event('record-action')
     .define<UpdateRecordActionRequest, UpdateOpResponse>(),
 
-  download: defineEvent("update")
-    .module("service")
-    .event("download")
+  download: defineEvent('update')
+    .module('service')
+    .event('download')
     .define<UpdateDownloadRequest, UpdateDownloadResponse>(),
 
-  install: defineEvent("update")
-    .module("service")
-    .event("install")
-    .define<UpdateInstallRequest, UpdateOpResponse>(),
+  install: defineEvent('update').module('service').event('install').define<UpdateInstallRequest, UpdateOpResponse>(),
 
-  ignoreVersion: defineEvent("update")
-    .module("service")
-    .event("ignore-version")
+  ignoreVersion: defineEvent('update')
+    .module('service')
+    .event('ignore-version')
     .define<UpdateIgnoreVersionRequest, UpdateOpResponse>(),
 
-  setAutoDownload: defineEvent("update")
-    .module("service")
-    .event("set-auto-download")
+  setAutoDownload: defineEvent('update')
+    .module('service')
+    .event('set-auto-download')
     .define<UpdateAutoDownloadRequest, UpdateOpResponse>(),
 
-  setAutoCheck: defineEvent("update")
-    .module("service")
-    .event("set-auto-check")
+  setAutoCheck: defineEvent('update')
+    .module('service')
+    .event('set-auto-check')
     .define<UpdateAutoCheckRequest, UpdateOpResponse>(),
 
-  available: defineEvent("update")
-    .module("push")
-    .event("available")
-    .define<UpdateAvailablePayload, void>(),
+  available: defineEvent('update').module('push').event('available').define<UpdateAvailablePayload, void>(),
 
-  lifecycleChanged: defineEvent("update")
-    .module("push")
-    .event("lifecycle-changed")
+  lifecycleChanged: defineEvent('update')
+    .module('push')
+    .event('lifecycle-changed')
     .define<UpdateLifecycleChangedPayload, void>(),
-} as const;
+} as const
 
 // ============================================================================
 // Flow Events
 // ============================================================================
 
 export const FlowEvents = {
-  dispatch: defineEvent("flow")
-    .module("bus")
-    .event("dispatch")
-    .define<FlowDispatchRequest, FlowDispatchResponse>(),
+  dispatch: defineEvent('flow').module('bus').event('dispatch').define<FlowDispatchRequest, FlowDispatchResponse>(),
 
-  getTargets: defineEvent("flow")
-    .module("bus")
-    .event("get-targets")
+  getTargets: defineEvent('flow')
+    .module('bus')
+    .event('get-targets')
     .define<FlowGetTargetsRequest, FlowGetTargetsResponse>(),
 
-  cancel: defineEvent("flow")
-    .module("bus")
-    .event("cancel")
+  cancel: defineEvent('flow')
+    .module('bus')
+    .event('cancel')
     .define<{ sessionId: string; _sdkapi?: number }, FlowCancelResponse>(),
 
-  acknowledge: defineEvent("flow")
-    .module("bus")
-    .event("acknowledge")
+  acknowledge: defineEvent('flow')
+    .module('bus')
+    .event('acknowledge')
     .define<FlowAcknowledgeRequest, FlowAcknowledgeResponse>(),
 
-  reportError: defineEvent("flow")
-    .module("bus")
-    .event("report-error")
+  reportError: defineEvent('flow')
+    .module('bus')
+    .event('report-error')
     .define<FlowReportErrorRequest, FlowReportErrorResponse>(),
 
-  selectTarget: defineEvent("flow")
-    .module("bus")
-    .event("select-target")
+  selectTarget: defineEvent('flow')
+    .module('bus')
+    .event('select-target')
     .define<FlowSelectTargetRequest, FlowSelectTargetResponse>(),
 
-  checkConsent: defineEvent("flow")
-    .module("consent")
-    .event("check")
+  checkConsent: defineEvent('flow')
+    .module('consent')
+    .event('check')
     .define<FlowConsentCheckRequest, FlowConsentCheckResponse>(),
 
-  grantConsent: defineEvent("flow")
-    .module("consent")
-    .event("grant")
+  grantConsent: defineEvent('flow')
+    .module('consent')
+    .event('grant')
     .define<FlowConsentGrantRequest, FlowConsentGrantResponse>(),
 
-  sessionUpdate: defineEvent("flow")
-    .module("session")
-    .event("update")
-    .define<FlowSessionUpdatePayload, void>(),
+  sessionUpdate: defineEvent('flow').module('session').event('update').define<FlowSessionUpdatePayload, void>(),
 
-  deliver: defineEvent("flow")
-    .module("session")
-    .event("deliver")
-    .define<FlowDeliverPayload, void>(),
+  deliver: defineEvent('flow').module('session').event('deliver').define<FlowDeliverPayload, void>(),
 
-  triggerTransfer: defineEvent("flow")
-    .module("ui")
-    .event("trigger-transfer")
-    .define<void, void>(),
+  triggerTransfer: defineEvent('flow').module('ui').event('trigger-transfer').define<void, void>(),
 
-  triggerDetach: defineEvent("flow")
-    .module("ui")
-    .event("trigger-detach")
-    .define<void, void>(),
+  triggerDetach: defineEvent('flow').module('ui').event('trigger-detach').define<void, void>(),
 
-  registerTargets: defineEvent("flow")
-    .module("plugin")
-    .event("register-targets")
+  registerTargets: defineEvent('flow')
+    .module('plugin')
+    .event('register-targets')
     .define<FlowRegisterTargetsRequest, { success: boolean }>(),
 
-  unregisterTargets: defineEvent("flow")
-    .module("plugin")
-    .event("unregister-targets")
+  unregisterTargets: defineEvent('flow')
+    .module('plugin')
+    .event('unregister-targets')
     .define<FlowUnregisterTargetsRequest, { success: boolean }>(),
 
-  setPluginEnabled: defineEvent("flow")
-    .module("plugin")
-    .event("set-plugin-enabled")
+  setPluginEnabled: defineEvent('flow')
+    .module('plugin')
+    .event('set-plugin-enabled')
     .define<FlowSetPluginEnabledRequest, { success: boolean }>(),
 
-  setPluginHandler: defineEvent("flow")
-    .module("plugin")
-    .event("set-plugin-handler")
+  setPluginHandler: defineEvent('flow')
+    .module('plugin')
+    .event('set-plugin-handler')
     .define<FlowSetPluginHandlerRequest, { success: boolean }>(),
 
-  nativeShare: defineEvent("flow")
-    .module("native")
-    .event("share")
+  nativeShare: defineEvent('flow')
+    .module('native')
+    .event('share')
     .define<FlowNativeShareRequest, FlowNativeShareResponse>(),
-} as const;
+} as const
 
 // ============================================================================
 // DivisionBox Events
 // ============================================================================
 
 export const DivisionBoxEvents = {
-  open: defineEvent("division-box")
-    .module("session")
-    .event("open")
+  open: defineEvent('division-box')
+    .module('session')
+    .event('open')
     .define<DivisionBoxOpenRequest, DivisionBoxOpenResponse>(),
 
-  close: defineEvent("division-box")
-    .module("session")
-    .event("close")
+  close: defineEvent('division-box')
+    .module('session')
+    .event('close')
     .define<DivisionBoxCloseRequest, DivisionBoxCloseResponse>(),
 
-  getState: defineEvent("division-box")
-    .module("session")
-    .event("get-state")
+  getState: defineEvent('division-box')
+    .module('session')
+    .event('get-state')
     .define<DivisionBoxGetStateRequest, DivisionBoxGetStateResponse>(),
 
-  updateState: defineEvent("division-box")
-    .module("session")
-    .event("update-state")
+  updateState: defineEvent('division-box')
+    .module('session')
+    .event('update-state')
     .define<DivisionBoxUpdateStateRequest, DivisionBoxUpdateStateResponse>(),
 
-  getActiveSessions: defineEvent("division-box")
-    .module("session")
-    .event("get-active-sessions")
-    .define<
-      DivisionBoxGetActiveSessionsRequest,
-      DivisionBoxGetActiveSessionsResponse
-    >(),
+  getActiveSessions: defineEvent('division-box')
+    .module('session')
+    .event('get-active-sessions')
+    .define<DivisionBoxGetActiveSessionsRequest, DivisionBoxGetActiveSessionsResponse>(),
 
-  stateChanged: defineEvent("division-box")
-    .module("session")
-    .event("state-changed")
+  stateChanged: defineEvent('division-box')
+    .module('session')
+    .event('state-changed')
     .define<DivisionBoxStateChangedPayload, void>(),
 
-  sessionDestroyed: defineEvent("division-box")
-    .module("session")
-    .event("session-destroyed")
+  sessionDestroyed: defineEvent('division-box')
+    .module('session')
+    .event('session-destroyed')
     .define<DivisionBoxSessionDestroyedPayload, void>(),
 
-  togglePin: defineEvent("division-box")
-    .module("window")
-    .event("toggle-pin")
+  togglePin: defineEvent('division-box')
+    .module('window')
+    .event('toggle-pin')
     .define<DivisionBoxTogglePinRequest, DivisionBoxTogglePinResponse>(),
 
-  setOpacity: defineEvent("division-box")
-    .module("window")
-    .event("set-opacity")
+  setOpacity: defineEvent('division-box')
+    .module('window')
+    .event('set-opacity')
     .define<DivisionBoxSetOpacityRequest, DivisionBoxSetOpacityResponse>(),
 
-  toggleDevTools: defineEvent("division-box")
-    .module("window")
-    .event("toggle-devtools")
-    .define<
-      DivisionBoxToggleDevToolsRequest,
-      DivisionBoxToggleDevToolsResponse
-    >(),
+  toggleDevTools: defineEvent('division-box')
+    .module('window')
+    .event('toggle-devtools')
+    .define<DivisionBoxToggleDevToolsRequest, DivisionBoxToggleDevToolsResponse>(),
 
-  getWindowState: defineEvent("division-box")
-    .module("window")
-    .event("get-window-state")
-    .define<
-      DivisionBoxGetWindowStateRequest,
-      DivisionBoxGetWindowStateResponse
-    >(),
+  getWindowState: defineEvent('division-box')
+    .module('window')
+    .event('get-window-state')
+    .define<DivisionBoxGetWindowStateRequest, DivisionBoxGetWindowStateResponse>(),
 
-  inputChange: defineEvent("division-box")
-    .module("ui")
-    .event("input-change")
+  inputChange: defineEvent('division-box')
+    .module('ui')
+    .event('input-change')
     .define<DivisionBoxInputChangeRequest, DivisionBoxInputChangeResponse>(),
-} as const;
+} as const
 
 /**
  * CoreBox events for search, UI control, and input management.
@@ -1107,10 +979,7 @@ export const CoreBoxEvents = {
     /**
      * Notify the onboarding renderer that the CoreBox shortcut was triggered.
      */
-    shortcutTriggered: defineEvent("beginner")
-      .module("shortcut")
-      .event("triggered")
-      .define<void, void>(),
+    shortcutTriggered: defineEvent('beginner').module('shortcut').event('triggered').define<void, void>(),
   },
 
   /**
@@ -1120,106 +989,76 @@ export const CoreBoxEvents = {
     /**
      * Show the CoreBox window.
      */
-    show: defineEvent("core-box")
-      .module("ui")
-      .event("show")
-      .define<void, void>(),
+    show: defineEvent('core-box').module('ui').event('show').define<void, void>(),
 
     /**
      * Hide the CoreBox window.
      */
-    hide: defineEvent("core-box")
-      .module("ui")
-      .event("hide")
-      .define<CoreBoxHideRequest | void, void>(),
+    hide: defineEvent('core-box').module('ui').event('hide').define<CoreBoxHideRequest | void, void>(),
 
     /**
      * Pin or unpin the CoreBox window above other windows.
      */
-    setPinned: defineEvent("core-box")
-      .module("ui")
-      .event("set-pinned")
+    setPinned: defineEvent('core-box')
+      .module('ui')
+      .event('set-pinned')
       .define<CoreBoxSetPinnedRequest, CoreBoxSetPinnedResponse>(),
 
     /**
      * Expand or collapse the CoreBox.
      */
-    expand: defineEvent("core-box")
-      .module("ui")
-      .event("expand")
-      .define<ExpandOptions | number, void>(),
+    expand: defineEvent('core-box').module('ui').event('expand').define<ExpandOptions | number, void>(),
 
     /**
      * Focus the CoreBox window.
      */
-    focusWindow: defineEvent("core-box")
-      .module("ui")
-      .event("focus-window")
-      .define<void, FocusWindowResponse>(),
+    focusWindow: defineEvent('core-box').module('ui').event('focus-window').define<void, FocusWindowResponse>(),
 
     /**
      * Forward a key event to the attached UI view.
      */
-    forwardKeyEvent: defineEvent("core-box")
-      .module("ui")
-      .event("forward-key-event")
+    forwardKeyEvent: defineEvent('core-box')
+      .module('ui')
+      .event('forward-key-event')
       .define<CoreBoxForwardKeyEvent, void>(),
 
     /**
      * Query current UI view state.
      */
-    getUIViewState: defineEvent("core-box")
-      .module("ui")
-      .event("get-ui-view-state")
+    getUIViewState: defineEvent('core-box')
+      .module('ui')
+      .event('get-ui-view-state')
       .define<void, CoreBoxUIViewStateResponse>(),
 
     /**
      * Notify renderer about CoreBox visibility or entrance mode changes.
      */
-    trigger: defineEvent("core-box")
-      .module("ui")
-      .event("trigger")
-      .define<CoreBoxTriggerPayload, void>(),
+    trigger: defineEvent('core-box').module('ui').event('trigger').define<CoreBoxTriggerPayload, void>(),
 
     /**
      * Notify renderer that CoreBox was triggered by shortcut.
      */
-    shortcutTriggered: defineEvent("core-box")
-      .module("ui")
-      .event("shortcut-triggered")
-      .define<void, void>(),
+    shortcutTriggered: defineEvent('core-box').module('ui').event('shortcut-triggered').define<void, void>(),
 
     /**
      * Notify renderer that UI mode exited.
      */
-    uiModeExited: defineEvent("core-box")
-      .module("ui")
-      .event("mode-exited")
-      .define<CoreBoxUIModeExitedPayload, void>(),
+    uiModeExited: defineEvent('core-box').module('ui').event('mode-exited').define<CoreBoxUIModeExitedPayload, void>(),
 
     /**
      * Hide the CoreBox input field.
      */
-    hideInput: defineEvent("core-box")
-      .module("ui")
-      .event("hide-input")
-      .define<void, CoreBoxInputVisibilityResponse>(),
+    hideInput: defineEvent('core-box').module('ui').event('hide-input').define<void, CoreBoxInputVisibilityResponse>(),
 
     /**
      * Show the CoreBox input field.
      */
-    showInput: defineEvent("core-box")
-      .module("ui")
-      .event("show-input")
-      .define<void, CoreBoxInputVisibilityResponse>(),
+    showInput: defineEvent('core-box').module('ui').event('show-input').define<void, CoreBoxInputVisibilityResponse>(),
 
     /**
      * Notify a plugin UI that its CoreBox surface should resume.
      */
-    resume: defineEvent("core-box")
-      .module("ui")
-      .event("resume")
-      .define<CoreBoxUiResumePayload, void>(),
+    resume: defineEvent('core-box').module('ui').event('resume').define<CoreBoxUiResumePayload, void>(),
   },
 
   /**
@@ -1233,39 +1072,33 @@ export const CoreBoxEvents = {
      * This event is expected to be sent frequently. The main process should
      * coalesce updates and decide when/how to resize the window.
      */
-    update: defineEvent("core-box")
-      .module("layout")
-      .event("update")
+    update: defineEvent('core-box')
+      .module('layout')
+      .event('update')
       .define<CoreBoxLayoutUpdateRequest, void>({
-        batch: { enabled: true, windowMs: 16, mergeStrategy: "latest" },
+        batch: { enabled: true, windowMs: 16, mergeStrategy: 'latest' },
       }),
 
     /**
      * Set the CoreBox window height.
      */
-    setHeight: defineEvent("core-box")
-      .module("layout")
-      .event("set-height")
+    setHeight: defineEvent('core-box')
+      .module('layout')
+      .event('set-height')
       .define<CoreBoxSetHeightRequest, CoreBoxSetHeightResponse>(),
 
     /**
      * Set the CoreBox vertical position offset.
      */
-    setPositionOffset: defineEvent("core-box")
-      .module("layout")
-      .event("set-position-offset")
-      .define<
-        CoreBoxSetPositionOffsetRequest,
-        CoreBoxSetPositionOffsetResponse
-      >(),
+    setPositionOffset: defineEvent('core-box')
+      .module('layout')
+      .event('set-position-offset')
+      .define<CoreBoxSetPositionOffsetRequest, CoreBoxSetPositionOffsetResponse>(),
 
     /**
      * Get the current CoreBox window bounds.
      */
-    getBounds: defineEvent("core-box")
-      .module("layout")
-      .event("get-bounds")
-      .define<void, CoreBoxGetBoundsResponse>(),
+    getBounds: defineEvent('core-box').module('layout').event('get-bounds').define<void, CoreBoxGetBoundsResponse>(),
   },
 
   /**
@@ -1275,46 +1108,37 @@ export const CoreBoxEvents = {
     /**
      * Execute a search query through the sender-scoped compatibility facade.
      */
-    query: defineEvent("core-box")
-      .module("search")
-      .event("query")
-      .define<CoreBoxSearchRequest, TuffSearchResult>(),
+    query: defineEvent('core-box').module('search').event('query').define<CoreBoxSearchRequest, TuffSearchResult>(),
 
     /**
      * Execute one caller-owned search session as an ordered stream.
      */
-    session: defineEvent("core-box")
-      .module("search")
-      .event("session")
-      .define<
-        CoreBoxSearchSessionRequest,
-        AsyncIterable<CoreBoxSearchSessionChunk>
-      >({
+    session: defineEvent('core-box')
+      .module('search')
+      .event('session')
+      .define<CoreBoxSearchSessionRequest, AsyncIterable<CoreBoxSearchSessionChunk>>({
         stream: { enabled: true, bufferSize: 100 },
       }),
 
     /**
      * Cancel an in-progress search.
      */
-    cancel: defineEvent("core-box")
-      .module("search")
-      .event("cancel")
+    cancel: defineEvent('core-box')
+      .module('search')
+      .event('cancel')
       .define<CancelSearchRequest, CancelSearchResponse>(),
 
     /**
      * Push incremental search results to renderer.
      */
-    update: defineEvent("core-box")
-      .module("search")
-      .event("update")
-      .define<CoreBoxSearchUpdatePayload, void>(),
+    update: defineEvent('core-box').module('search').event('update').define<CoreBoxSearchUpdatePayload, void>(),
 
     /**
      * Stream committed search-index revisions to CoreBox renderers.
      */
-    indexCommitted: defineEvent("core-box")
-      .module("search")
-      .event("index-committed")
+    indexCommitted: defineEvent('core-box')
+      .module('search')
+      .event('index-committed')
       .define<void, AsyncIterable<CoreBoxSearchIndexCommitPayload>>({
         stream: { enabled: true },
       }),
@@ -1322,25 +1146,19 @@ export const CoreBoxEvents = {
     /**
      * Mark search finished/cancelled.
      */
-    end: defineEvent("core-box")
-      .module("search")
-      .event("end")
-      .define<CoreBoxSearchEndPayload, void>(),
+    end: defineEvent('core-box').module('search').event('end').define<CoreBoxSearchEndPayload, void>(),
 
     /**
      * Notify renderer about empty results (UI sizing hint).
      */
-    noResults: defineEvent("core-box")
-      .module("search")
-      .event("no-results")
-      .define<CoreBoxNoResultsPayload, void>(),
+    noResults: defineEvent('core-box').module('search').event('no-results').define<CoreBoxNoResultsPayload, void>(),
 
     /**
      * Read unified indexed source health for Settings/CoreBox diagnostics.
      */
-    indexingDiagnostics: defineEvent("core-box")
-      .module("search")
-      .event("indexing-diagnostics")
+    indexingDiagnostics: defineEvent('core-box')
+      .module('search')
+      .event('indexing-diagnostics')
       .define<void, CoreBoxIndexingDiagnosticsResponse>(),
   },
 
@@ -1351,66 +1169,45 @@ export const CoreBoxEvents = {
     /**
      * Focus the CoreBox input field.
      */
-    focus: defineEvent("core-box")
-      .module("input")
-      .event("focus")
-      .define<void, void>(),
+    focus: defineEvent('core-box').module('input').event('focus').define<void, void>(),
 
     /**
      * Get current input value.
      */
-    get: defineEvent("core-box")
-      .module("input")
-      .event("get")
-      .define<void, GetInputResponse>(),
+    get: defineEvent('core-box').module('input').event('get').define<void, GetInputResponse>(),
 
     /**
      * Set input value.
      */
-    set: defineEvent("core-box")
-      .module("input")
-      .event("set")
-      .define<SetInputRequest, SetInputResponse>(),
+    set: defineEvent('core-box').module('input').event('set').define<SetInputRequest, SetInputResponse>(),
 
     /**
      * Clear input value.
      */
-    clear: defineEvent("core-box")
-      .module("input")
-      .event("clear")
-      .define<void, ClearInputResponse>(),
+    clear: defineEvent('core-box').module('input').event('clear').define<void, ClearInputResponse>(),
 
     /**
      * Set input visibility.
      */
-    setVisibility: defineEvent("core-box")
-      .module("input")
-      .event("set-visibility")
+    setVisibility: defineEvent('core-box')
+      .module('input')
+      .event('set-visibility')
       .define<SetInputVisibilityRequest, void>(),
 
     /**
      * Broadcast input changes from renderer.
      */
-    change: defineEvent("core-box")
-      .module("input")
-      .event("change")
-      .define<CoreBoxInputChangeRequest, void>(),
+    change: defineEvent('core-box').module('input').event('change').define<CoreBoxInputChangeRequest, void>(),
 
     /**
      * Request input value from renderer.
      */
-    requestValue: defineEvent("core-box")
-      .module("input")
-      .event("request-value")
-      .define<void, GetInputResponse>(),
+    requestValue: defineEvent('core-box').module('input').event('request-value').define<void, GetInputResponse>(),
 
     /**
      * Set query from main process.
      */
-    setQuery: defineEvent("core-box")
-      .module("input")
-      .event("set-query")
-      .define<SetQueryRequest, void>(),
+    setQuery: defineEvent('core-box').module('input').event('set-query').define<SetQueryRequest, void>(),
   },
 
   /**
@@ -1420,9 +1217,9 @@ export const CoreBoxEvents = {
     /**
      * Open CoreBox with a captured text or clipboard-image context.
      */
-    open: defineEvent("core-box")
-      .module("context-actions")
-      .event("open")
+    open: defineEvent('core-box')
+      .module('context-actions')
+      .event('open')
       .define<CoreBoxContextActionsOpenRequest, void>(),
   },
 
@@ -1430,19 +1227,16 @@ export const CoreBoxEvents = {
    * Item execution and mutations.
    */
   item: {
-    execute: defineEvent("core-box")
-      .module("item")
-      .event("execute")
+    execute: defineEvent('core-box')
+      .module('item')
+      .event('execute')
       .define<CoreBoxExecuteRequest, IProviderActivate[] | null>(),
 
-    clear: defineEvent("core-box")
-      .module("item")
-      .event("clear")
-      .define<CoreBoxClearItemsPayload | void, void>(),
+    clear: defineEvent('core-box').module('item').event('clear').define<CoreBoxClearItemsPayload | void, void>(),
 
-    togglePin: defineEvent("core-box")
-      .module("item")
-      .event("toggle-pin")
+    togglePin: defineEvent('core-box')
+      .module('item')
+      .event('toggle-pin')
       .define<CoreBoxTogglePinRequest, CoreBoxTogglePinResponse>(),
   },
 
@@ -1453,26 +1247,20 @@ export const CoreBoxEvents = {
     /**
      * Deactivate a specific provider.
      */
-    deactivate: defineEvent("core-box")
-      .module("provider")
-      .event("deactivate")
+    deactivate: defineEvent('core-box')
+      .module('provider')
+      .event('deactivate')
       .define<DeactivateProviderRequest, ActivationState>(),
 
     /**
      * Deactivate all providers.
      */
-    deactivateAll: defineEvent("core-box")
-      .module("provider")
-      .event("deactivate-all")
-      .define<void, ActivationState>(),
+    deactivateAll: defineEvent('core-box').module('provider').event('deactivate-all').define<void, ActivationState>(),
 
     /**
      * Get current activated providers.
      */
-    getActivated: defineEvent("core-box")
-      .module("provider")
-      .event("get-activated")
-      .define<void, ActivationState>(),
+    getActivated: defineEvent('core-box').module('provider').event('get-activated').define<void, ActivationState>(),
 
     /**
      * Get details for multiple providers.
@@ -1480,11 +1268,11 @@ export const CoreBoxEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    getDetails: defineEvent("core-box")
-      .module("provider")
-      .event("get-details")
+    getDetails: defineEvent('core-box')
+      .module('provider')
+      .event('get-details')
       .define<GetProviderDetailsRequest, ProviderDetail[]>({
-        batch: { enabled: true, windowMs: 50, mergeStrategy: "dedupe" },
+        batch: { enabled: true, windowMs: 50, mergeStrategy: 'dedupe' },
       }),
   },
 
@@ -1495,18 +1283,12 @@ export const CoreBoxEvents = {
     /**
      * Enter plugin UI mode.
      */
-    enter: defineEvent("core-box")
-      .module("ui-mode")
-      .event("enter")
-      .define<EnterUIModeRequest, void>(),
+    enter: defineEvent('core-box').module('ui-mode').event('enter').define<EnterUIModeRequest, void>(),
 
     /**
      * Exit plugin UI mode.
      */
-    exit: defineEvent("core-box")
-      .module("ui-mode")
-      .event("exit")
-      .define<void, void>(),
+    exit: defineEvent('core-box').module('ui-mode').event('exit').define<void, void>(),
   },
 
   /**
@@ -1516,17 +1298,17 @@ export const CoreBoxEvents = {
     /**
      * Allow clipboard monitoring for specific types.
      */
-    allow: defineEvent("core-box")
-      .module("clipboard")
-      .event("allow")
+    allow: defineEvent('core-box')
+      .module('clipboard')
+      .event('allow')
       .define<AllowClipboardRequest, AllowClipboardResponse>(),
 
     /**
      * Notify plugin UI that clipboard content changed while monitoring is enabled.
      */
-    change: defineEvent("core-box")
-      .module("clipboard")
-      .event("change")
+    change: defineEvent('core-box')
+      .module('clipboard')
+      .event('change')
       .define<{ item: ClipboardMetaHistoryItem }, void>(),
   },
 
@@ -1537,9 +1319,9 @@ export const CoreBoxEvents = {
     /**
      * Allow input monitoring.
      */
-    allow: defineEvent("core-box")
-      .module("input-monitoring")
-      .event("allow")
+    allow: defineEvent('core-box')
+      .module('input-monitoring')
+      .event('allow')
       .define<void, AllowInputMonitoringResponse>(),
   },
 
@@ -1550,25 +1332,25 @@ export const CoreBoxEvents = {
     /**
      * Get CoreBox recommendations.
      */
-    get: defineEvent("core-box")
-      .module("recommendation")
-      .event("get")
+    get: defineEvent('core-box')
+      .module('recommendation')
+      .event('get')
       .define<CoreBoxRecommendationRequest, CoreBoxRecommendationResponse>(),
 
     /**
      * Aggregate time-aware recommendation stats.
      */
-    aggregateTimeStats: defineEvent("core-box")
-      .module("recommendation")
-      .event("aggregate-time-stats")
+    aggregateTimeStats: defineEvent('core-box')
+      .module('recommendation')
+      .event('aggregate-time-stats')
       .define<void, CoreBoxAggregateTimeStatsResponse>(),
 
     /**
      * Check whether an item is pinned.
      */
-    isPinned: defineEvent("core-box")
-      .module("recommendation")
-      .event("is-pinned")
+    isPinned: defineEvent('core-box')
+      .module('recommendation')
+      .event('is-pinned')
       .define<CoreBoxIsPinnedRequest, CoreBoxIsPinnedResponse>(),
   },
 
@@ -1579,18 +1361,12 @@ export const CoreBoxEvents = {
     /**
      * Show preview history.
      */
-    show: defineEvent("core-box")
-      .module("preview-history")
-      .event("show")
-      .define<void, void>(),
+    show: defineEvent('core-box').module('preview-history').event('show').define<void, void>(),
 
     /**
      * Hide preview history.
      */
-    hide: defineEvent("core-box")
-      .module("preview-history")
-      .event("hide")
-      .define<void, void>(),
+    hide: defineEvent('core-box').module('preview-history').event('hide').define<void, void>(),
   },
 
   /**
@@ -1600,10 +1376,7 @@ export const CoreBoxEvents = {
     /**
      * Copy the current preview value.
      */
-    copy: defineEvent("core-box")
-      .module("preview")
-      .event("copy")
-      .define<CoreBoxPreviewCopyRequest, void>(),
+    copy: defineEvent('core-box').module('preview').event('copy').define<CoreBoxPreviewCopyRequest, void>(),
   },
 
   /**
@@ -1613,10 +1386,7 @@ export const CoreBoxEvents = {
     /**
      * Open the action panel for an item.
      */
-    open: defineEvent("core-box")
-      .module("action-panel")
-      .event("open")
-      .define<CoreBoxActionPanelOpenRequest, void>(),
+    open: defineEvent('core-box').module('action-panel').event('open').define<CoreBoxActionPanelOpenRequest, void>(),
   },
 
   /**
@@ -1626,28 +1396,28 @@ export const CoreBoxEvents = {
     /**
      * Notify a plugin that one of its MetaOverlay actions was executed.
      */
-    actionExecuted: defineEvent("core-box")
-      .module("meta-overlay")
-      .event("action-executed")
+    actionExecuted: defineEvent('core-box')
+      .module('meta-overlay')
+      .event('action-executed')
       .define<CoreBoxMetaOverlayActionExecutedPayload, void>(),
 
     /**
      * Ask the renderer to execute an item action.
      */
-    itemAction: defineEvent("core-box")
-      .module("meta-overlay")
-      .event("item-action")
+    itemAction: defineEvent('core-box')
+      .module('meta-overlay')
+      .event('item-action')
       .define<CoreBoxMetaOverlayItemActionPayload, void>(),
 
     /**
      * Ask the renderer to open Flow Transfer for an item.
      */
-    flowTransfer: defineEvent("core-box")
-      .module("meta-overlay")
-      .event("flow-transfer")
+    flowTransfer: defineEvent('core-box')
+      .module('meta-overlay')
+      .event('flow-transfer')
       .define<CoreBoxMetaOverlayFlowTransferPayload, void>(),
   },
-} as const;
+} as const
 
 /**
  * Storage events for app and plugin configuration persistence.
@@ -1663,9 +1433,9 @@ export const StorageEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    get: defineEvent("storage")
-      .module("app")
-      .event("get")
+    get: defineEvent('storage')
+      .module('app')
+      .event('get')
       .define<StorageGetRequest, unknown>({
         batch: { enabled: true, windowMs: 16, maxSize: 20 },
       }),
@@ -1673,9 +1443,9 @@ export const StorageEvents = {
     /**
      * Get a value with version info from app storage.
      */
-    getVersioned: defineEvent("storage")
-      .module("app")
-      .event("get-versioned")
+    getVersioned: defineEvent('storage')
+      .module('app')
+      .event('get-versioned')
       .define<StorageGetRequest, StorageGetVersionedResponse | null>({
         batch: { enabled: true, windowMs: 16, maxSize: 20 },
       }),
@@ -1686,35 +1456,29 @@ export const StorageEvents = {
      * @remarks
      * This event supports batching with 'latest' strategy.
      */
-    set: defineEvent("storage")
-      .module("app")
-      .event("set")
+    set: defineEvent('storage')
+      .module('app')
+      .event('set')
       .define<StorageSetRequest, void>({
-        batch: { enabled: true, windowMs: 100, mergeStrategy: "latest" },
+        batch: { enabled: true, windowMs: 100, mergeStrategy: 'latest' },
       }),
 
     /**
      * Save a value with version tracking in app storage.
      */
-    save: defineEvent("storage")
-      .module("app")
-      .event("save")
-      .define<StorageSaveRequest, StorageSaveResult>(),
+    save: defineEvent('storage').module('app').event('save').define<StorageSaveRequest, StorageSaveResult>(),
 
     /**
      * Delete a value from app storage.
      */
-    delete: defineEvent("storage")
-      .module("app")
-      .event("delete")
-      .define<StorageDeleteRequest, void>(),
+    delete: defineEvent('storage').module('app').event('delete').define<StorageDeleteRequest, void>(),
 
     /**
      * Subscribe to storage updates.
      */
-    updated: defineEvent("storage")
-      .module("app")
-      .event("updated")
+    updated: defineEvent('storage')
+      .module('app')
+      .event('updated')
       .define<void, AsyncIterable<StorageUpdateNotification>>({
         stream: { enabled: true },
       }),
@@ -1730,9 +1494,9 @@ export const StorageEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    get: defineEvent("storage")
-      .module("plugin")
-      .event("get")
+    get: defineEvent('storage')
+      .module('plugin')
+      .event('get')
       .define<PluginStorageGetRequest, unknown>({
         batch: { enabled: true, windowMs: 16 },
       }),
@@ -1743,22 +1507,19 @@ export const StorageEvents = {
      * @remarks
      * This event supports batching with 'latest' strategy.
      */
-    set: defineEvent("storage")
-      .module("plugin")
-      .event("set")
+    set: defineEvent('storage')
+      .module('plugin')
+      .event('set')
       .define<PluginStorageSetRequest, void>({
-        batch: { enabled: true, windowMs: 100, mergeStrategy: "latest" },
+        batch: { enabled: true, windowMs: 100, mergeStrategy: 'latest' },
       }),
 
     /**
      * Delete a value from plugin storage.
      */
-    delete: defineEvent("storage")
-      .module("plugin")
-      .event("delete")
-      .define<PluginStorageDeleteRequest, void>(),
+    delete: defineEvent('storage').module('plugin').event('delete').define<PluginStorageDeleteRequest, void>(),
   },
-} as const;
+} as const
 
 /**
  * Plugin lifecycle and feature events.
@@ -1771,257 +1532,182 @@ export const PluginEvents = {
     /**
      * Load a plugin.
      */
-    load: defineEvent("plugin")
-      .module("lifecycle")
-      .event("load")
-      .define<PluginLoadRequest, PluginInfo>(),
+    load: defineEvent('plugin').module('lifecycle').event('load').define<PluginLoadRequest, PluginInfo>(),
 
     /**
      * Unload a plugin.
      */
-    unload: defineEvent("plugin")
-      .module("lifecycle")
-      .event("unload")
-      .define<PluginUnloadRequest, void>(),
+    unload: defineEvent('plugin').module('lifecycle').event('unload').define<PluginUnloadRequest, void>(),
 
     /**
      * Reload a plugin.
      */
-    reload: defineEvent("plugin")
-      .module("lifecycle")
-      .event("reload")
-      .define<PluginReloadRequest, PluginInfo>(),
+    reload: defineEvent('plugin').module('lifecycle').event('reload').define<PluginReloadRequest, PluginInfo>(),
 
     /**
      * Enable a plugin.
      */
-    enable: defineEvent("plugin")
-      .module("lifecycle")
-      .event("enable")
-      .define<PluginEnableRequest, void>(),
+    enable: defineEvent('plugin').module('lifecycle').event('enable').define<PluginEnableRequest, void>(),
 
     /**
      * Disable a plugin.
      */
-    disable: defineEvent("plugin")
-      .module("lifecycle")
-      .event("disable")
-      .define<PluginDisableRequest, void>(),
+    disable: defineEvent('plugin').module('lifecycle').event('disable').define<PluginDisableRequest, void>(),
   },
 
   /**
    * Lifecycle notifications pushed to plugin renderer processes.
    */
   lifecycleSignal: {
-    active: defineEvent("plugin")
-      .module("lifecycle")
-      .event("active")
-      .define<void, void>(),
+    active: defineEvent('plugin').module('lifecycle').event('active').define<void, void>(),
 
-    inactive: defineEvent("plugin")
-      .module("lifecycle")
-      .event("inactive")
-      .define<void, void>(),
+    inactive: defineEvent('plugin').module('lifecycle').event('inactive').define<void, void>(),
 
-    enabled: defineEvent("plugin")
-      .module("lifecycle")
-      .event("enabled")
-      .define<unknown, void>(),
+    enabled: defineEvent('plugin').module('lifecycle').event('enabled').define<unknown, void>(),
 
-    disabled: defineEvent("plugin")
-      .module("lifecycle")
-      .event("disabled")
-      .define<unknown, void>(),
+    disabled: defineEvent('plugin').module('lifecycle').event('disabled').define<unknown, void>(),
 
-    crashed: defineEvent("plugin")
-      .module("lifecycle")
-      .event("crashed")
-      .define<unknown, void>(),
+    crashed: defineEvent('plugin').module('lifecycle').event('crashed').define<unknown, void>(),
   },
 
   /**
    * Renderer-facing push/broadcast events.
    */
   push: {
-    stateChanged: defineRawEvent<PluginPushStateChangedPayload, void>(
-      "plugin:state-changed",
-    ),
-    statusUpdated: defineRawEvent<PluginPushStatusUpdatedPayload, void>(
-      "plugin-status-updated",
-    ),
-    reloadReadme: defineRawEvent<PluginPushReloadReadmePayload, void>(
-      "plugin:reload-readme",
-    ),
-    reload: defineRawEvent<PluginPushReloadPayload, void>("plugin:reload"),
-    crashed: defineRawEvent<PluginPushCrashedPayload, void>("plugin-crashed"),
+    stateChanged: defineRawEvent<PluginPushStateChangedPayload, void>('plugin:state-changed'),
+    statusUpdated: defineRawEvent<PluginPushStatusUpdatedPayload, void>('plugin-status-updated'),
+    reloadReadme: defineRawEvent<PluginPushReloadReadmePayload, void>('plugin:reload-readme'),
+    reload: defineRawEvent<PluginPushReloadPayload, void>('plugin:reload'),
+    crashed: defineRawEvent<PluginPushCrashedPayload, void>('plugin-crashed'),
   },
 
   /**
    * Plugin widget events.
    */
   widget: {
-    register: defineEvent("plugin")
-      .module("widget")
-      .event("register")
-      .define<WidgetRegistrationPayload, void>(),
-    update: defineEvent("plugin")
-      .module("widget")
-      .event("update")
-      .define<WidgetRegistrationPayload, void>(),
-    failed: defineEvent("plugin")
-      .module("widget")
-      .event("failed")
-      .define<WidgetFailurePayload, void>(),
-    unregister: defineEvent("plugin")
-      .module("widget")
-      .event("unregister")
-      .define<{ widgetId: string }, void>(),
+    register: defineEvent('plugin').module('widget').event('register').define<WidgetRegistrationPayload, void>(),
+    update: defineEvent('plugin').module('widget').event('update').define<WidgetRegistrationPayload, void>(),
+    failed: defineEvent('plugin').module('widget').event('failed').define<WidgetFailurePayload, void>(),
+    unregister: defineEvent('plugin').module('widget').event('unregister').define<{ widgetId: string }, void>(),
   },
 
   /**
    * Plugin management APIs (renderer/main).
    */
   api: {
-    list: defineEvent("plugin")
-      .module("api")
-      .event("list")
-      .define<PluginApiListRequest, PluginApiListResponse>(),
+    list: defineEvent('plugin').module('api').event('list').define<PluginApiListRequest, PluginApiListResponse>(),
 
-    get: defineEvent("plugin")
-      .module("api")
-      .event("get")
-      .define<PluginApiGetRequest, PluginApiGetResponse>(),
+    get: defineEvent('plugin').module('api').event('get').define<PluginApiGetRequest, PluginApiGetResponse>(),
 
-    getStatus: defineEvent("plugin")
-      .module("api")
-      .event("get-status")
+    getStatus: defineEvent('plugin')
+      .module('api')
+      .event('get-status')
       .define<PluginApiGetStatusRequest, PluginApiGetStatusResponse>(),
 
-    enable: defineEvent("plugin")
-      .module("api")
-      .event("enable")
+    enable: defineEvent('plugin')
+      .module('api')
+      .event('enable')
       .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
 
-    disable: defineEvent("plugin")
-      .module("api")
-      .event("disable")
+    disable: defineEvent('plugin')
+      .module('api')
+      .event('disable')
       .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
 
-    reload: defineEvent("plugin")
-      .module("api")
-      .event("reload")
+    reload: defineEvent('plugin')
+      .module('api')
+      .event('reload')
       .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
 
-    install: defineEvent("plugin")
-      .module("api")
-      .event("install")
+    install: defineEvent('plugin')
+      .module('api')
+      .event('install')
       .define<PluginApiInstallRequest, PluginApiInstallResponse>(),
 
-    uninstall: defineEvent("plugin")
-      .module("api")
-      .event("uninstall")
-      .define<PluginApiOperationRequest, PluginApiOperationResponse>(),
+    uninstall: defineEvent('plugin')
+      .module('api')
+      .event('uninstall')
+      .define<PluginApiUninstallRequest, PluginApiUninstallResponse>(),
 
-    triggerFeature: defineEvent("plugin")
-      .module("api")
-      .event("trigger-feature")
-      .define<
-        PluginApiTriggerFeatureRequest,
-        PluginApiTriggerFeatureResponse
-      >(),
+    triggerFeature: defineEvent('plugin')
+      .module('api')
+      .event('trigger-feature')
+      .define<PluginApiTriggerFeatureRequest, PluginApiTriggerFeatureResponse>(),
 
-    registerWidget: defineEvent("plugin")
-      .module("api")
-      .event("register-widget")
-      .define<
-        PluginApiRegisterWidgetRequest,
-        PluginApiRegisterWidgetResponse
-      >(),
+    registerWidget: defineEvent('plugin')
+      .module('api')
+      .event('register-widget')
+      .define<PluginApiRegisterWidgetRequest, PluginApiRegisterWidgetResponse>(),
 
-    featureInputChanged: defineEvent("plugin")
-      .module("api")
-      .event("feature-input-changed")
+    featureInputChanged: defineEvent('plugin')
+      .module('api')
+      .event('feature-input-changed')
       .define<PluginApiFeatureInputChangedRequest, void>(),
 
-    openFolder: defineEvent("plugin")
-      .module("api")
-      .event("open-folder")
-      .define<PluginApiOpenFolderRequest, void>(),
+    openFolder: defineEvent('plugin').module('api').event('open-folder').define<PluginApiOpenFolderRequest, void>(),
 
-    getOfficialList: defineEvent("plugin")
-      .module("api")
-      .event("get-official-list")
-      .define<
-        PluginApiGetOfficialListRequest,
-        PluginApiGetOfficialListResponse
-      >(),
+    getOfficialList: defineEvent('plugin')
+      .module('api')
+      .event('get-official-list')
+      .define<PluginApiGetOfficialListRequest, PluginApiGetOfficialListResponse>(),
 
-    getManifest: defineEvent("plugin")
-      .module("api")
-      .event("get-manifest")
+    getManifest: defineEvent('plugin')
+      .module('api')
+      .event('get-manifest')
       .define<PluginApiGetManifestRequest, PluginApiGetManifestResponse>(),
 
-    saveManifest: defineEvent("plugin")
-      .module("api")
-      .event("save-manifest")
+    saveManifest: defineEvent('plugin')
+      .module('api')
+      .event('save-manifest')
       .define<PluginApiSaveManifestRequest, PluginApiSaveManifestResponse>(),
 
-    saveWidgetFile: defineEvent("plugin")
-      .module("api")
-      .event("save-widget-file")
-      .define<
-        PluginApiSaveWidgetFileRequest,
-        PluginApiSaveWidgetFileResponse
-      >(),
+    saveWidgetFile: defineEvent('plugin')
+      .module('api')
+      .event('save-widget-file')
+      .define<PluginApiSaveWidgetFileRequest, PluginApiSaveWidgetFileResponse>(),
 
-    getPaths: defineEvent("plugin")
-      .module("api")
-      .event("get-paths")
+    getPaths: defineEvent('plugin')
+      .module('api')
+      .event('get-paths')
       .define<PluginApiGetPathsRequest, PluginApiGetPathsResponse>(),
 
-    getFileTree: defineEvent("plugin")
-      .module("api")
-      .event("get-file-tree")
+    getFileTree: defineEvent('plugin')
+      .module('api')
+      .event('get-file-tree')
       .define<PluginApiGetFileTreeRequest, PluginApiGetFileTreeResponse>(),
 
-    openPath: defineEvent("plugin")
-      .module("api")
-      .event("open-path")
+    openPath: defineEvent('plugin')
+      .module('api')
+      .event('open-path')
       .define<PluginApiOpenPathRequest, PluginApiOpenPathResponse>(),
 
-    revealPath: defineEvent("plugin")
-      .module("api")
-      .event("reveal-path")
+    revealPath: defineEvent('plugin')
+      .module('api')
+      .event('reveal-path')
       .define<PluginApiRevealPathRequest, PluginApiRevealPathResponse>(),
 
-    getPerformance: defineEvent("plugin")
-      .module("api")
-      .event("get-performance")
-      .define<
-        PluginApiGetPerformanceRequest,
-        PluginApiGetPerformanceResponse
-      >(),
+    getPerformance: defineEvent('plugin')
+      .module('api')
+      .event('get-performance')
+      .define<PluginApiGetPerformanceRequest, PluginApiGetPerformanceResponse>(),
 
-    getRuntimeStats: defineEvent("plugin")
-      .module("api")
-      .event("get-runtime-stats")
-      .define<
-        PluginApiGetRuntimeStatsRequest,
-        PluginApiGetRuntimeStatsResponse
-      >(),
+    getRuntimeStats: defineEvent('plugin')
+      .module('api')
+      .event('get-runtime-stats')
+      .define<PluginApiGetRuntimeStatsRequest, PluginApiGetRuntimeStatsResponse>(),
   },
 
   /**
    * Permission-gated plugin localization APIs.
    */
   i18n: {
-    getLocale: defineEvent("plugin")
-      .module("i18n")
-      .event("get-locale")
+    getLocale: defineEvent('plugin')
+      .module('i18n')
+      .event('get-locale')
       .define<PluginI18nGetLocaleRequest, PluginI18nGetLocaleResponse>(),
-    resolveText: defineEvent("plugin")
-      .module("i18n")
-      .event("resolve-text")
+    resolveText: defineEvent('plugin')
+      .module('i18n')
+      .event('resolve-text')
       .define<PluginI18nResolveTextRequest, PluginI18nResolveTextResponse>(),
   },
 
@@ -2029,253 +1715,178 @@ export const PluginEvents = {
    * Permission-gated official and plugin-scoped Domain Lexicon APIs.
    */
   lexicon: {
-    resolve: defineEvent("plugin")
-      .module("lexicon")
-      .event("resolve")
+    resolve: defineEvent('plugin')
+      .module('lexicon')
+      .event('resolve')
       .define<PluginLexiconResolveRequest, PluginLexiconResolveResponse>(),
-    search: defineEvent("plugin")
-      .module("lexicon")
-      .event("search")
+    search: defineEvent('plugin')
+      .module('lexicon')
+      .event('search')
       .define<PluginLexiconSearchRequest, PluginLexiconSearchResponse>(),
-    register: defineEvent("plugin")
-      .module("lexicon")
-      .event("register")
+    register: defineEvent('plugin')
+      .module('lexicon')
+      .event('register')
       .define<PluginLexiconRegisterRequest, PluginLexiconRegisterResponse>(),
   },
 
   install: {
-    progress: defineRawEvent<PluginInstallProgressPayload, void>(
-      "plugin:install-progress",
-    ),
-    confirm: defineRawEvent<PluginInstallConfirmPayload, void>(
-      "plugin:install-confirm",
-    ),
-    confirmResponse: defineRawEvent<PluginInstallConfirmResponsePayload, void>(
-      "plugin:install-confirm-response",
-    ),
-    source: defineRawEvent<
-      PluginInstallSourceRequest,
-      PluginInstallSourceResponse
-    >("plugin:install-source"),
-    completed: defineRawEvent<PluginInstallCompletedPayload, void>(
-      "plugin:install-completed",
-    ),
+    progress: defineRawEvent<PluginInstallProgressPayload, void>('plugin:install-progress'),
+    confirm: defineRawEvent<PluginInstallConfirmPayload, void>('plugin:install-confirm'),
+    confirmResponse: defineRawEvent<PluginInstallConfirmResponsePayload, void>('plugin:install-confirm-response'),
+    source: defineRawEvent<PluginInstallSourceRequest, PluginInstallSourceResponse>('plugin:install-source'),
+    completed: defineRawEvent<PluginInstallCompletedPayload, void>('plugin:install-completed'),
   },
 
   content: {
-    install: defineRawEvent<
-      PluginContentInstallRequest,
-      PluginContentInstallResponse
-    >("plugin-content:install"),
+    install: defineRawEvent<PluginContentInstallRequest, PluginContentInstallResponse>('plugin-content:install'),
   },
 
   devServer: {
-    reconnect: defineRawEvent<
-      PluginReconnectDevServerRequest,
-      PluginReconnectDevServerResponse
-    >("plugin:reconnect-dev-server"),
-    status: defineRawEvent<
-      PluginDevServerStatusRequest,
-      PluginDevServerStatusResponse
-    >("plugin:dev-server-status"),
+    reconnect: defineRawEvent<PluginReconnectDevServerRequest, PluginReconnectDevServerResponse>(
+      'plugin:reconnect-dev-server',
+    ),
+    status: defineRawEvent<PluginDevServerStatusRequest, PluginDevServerStatusResponse>('plugin:dev-server-status'),
   },
 
   storage: {
-    getFile: defineEvent("plugin")
-      .module("storage")
-      .event("get-file")
-      .define<PluginStorageFileRequest, unknown>(),
+    getFile: defineEvent('plugin').module('storage').event('get-file').define<PluginStorageFileRequest, unknown>(),
 
-    setFile: defineEvent("plugin")
-      .module("storage")
-      .event("set-file")
-      .define<
-        PluginStorageSetFileRequest,
-        { success: boolean; error?: string }
-      >(),
+    setFile: defineEvent('plugin')
+      .module('storage')
+      .event('set-file')
+      .define<PluginStorageSetFileRequest, { success: boolean; error?: string }>(),
 
-    deleteFile: defineEvent("plugin")
-      .module("storage")
-      .event("delete-file")
+    deleteFile: defineEvent('plugin')
+      .module('storage')
+      .event('delete-file')
       .define<PluginStorageFileRequest, { success: boolean; error?: string }>(),
 
-    getSecret: defineEvent("plugin")
-      .module("storage")
-      .event("get-secret")
+    getSecret: defineEvent('plugin')
+      .module('storage')
+      .event('get-secret')
       .define<PluginStorageSecretRequest, PluginStorageSecretValueResponse>(),
 
-    getSecretHealth: defineEvent("plugin")
-      .module("storage")
-      .event("get-secret-health")
+    getSecretHealth: defineEvent('plugin')
+      .module('storage')
+      .event('get-secret-health')
       .define<void, PluginStorageSecretHealthResponse>(),
 
-    setSecret: defineEvent("plugin")
-      .module("storage")
-      .event("set-secret")
-      .define<
-        PluginStorageSetSecretRequest,
-        PluginStorageSecretMutationResponse
-      >(),
+    setSecret: defineEvent('plugin')
+      .module('storage')
+      .event('set-secret')
+      .define<PluginStorageSetSecretRequest, PluginStorageSecretMutationResponse>(),
 
-    deleteSecret: defineEvent("plugin")
-      .module("storage")
-      .event("delete-secret")
-      .define<
-        PluginStorageSecretRequest,
-        PluginStorageSecretMutationResponse
-      >(),
+    setSecretBatch: defineEvent('plugin')
+      .module('storage')
+      .event('set-secret-batch')
+      .define<PluginStorageSetSecretBatchRequest, PluginStorageSecretMutationResponse>(),
 
-    listFiles: defineEvent("plugin")
-      .module("storage")
-      .event("list-files")
+    deleteSecret: defineEvent('plugin')
+      .module('storage')
+      .event('delete-secret')
+      .define<PluginStorageSecretRequest, PluginStorageSecretMutationResponse>(),
+
+    listFiles: defineEvent('plugin')
+      .module('storage')
+      .event('list-files')
       .define<PluginStorageListFilesRequest, string[]>(),
 
-    listSyncItems: defineEvent("plugin")
-      .module("storage")
-      .event("list-sync-items")
+    listSyncItems: defineEvent('plugin')
+      .module('storage')
+      .event('list-sync-items')
       .define<PluginStorageListSyncItemsRequest, PluginStorageSyncItem[]>(),
 
-    applySyncItem: defineEvent("plugin")
-      .module("storage")
-      .event("apply-sync-item")
-      .define<
-        PluginStorageApplySyncItemRequest,
-        { success: boolean; error?: string }
-      >(),
+    applySyncItem: defineEvent('plugin')
+      .module('storage')
+      .event('apply-sync-item')
+      .define<PluginStorageApplySyncItemRequest, { success: boolean; error?: string }>(),
 
-    deleteSyncItem: defineEvent("plugin")
-      .module("storage")
-      .event("delete-sync-item")
-      .define<
-        PluginStorageDeleteSyncItemRequest,
-        { success: boolean; error?: string }
-      >(),
+    deleteSyncItem: defineEvent('plugin')
+      .module('storage')
+      .event('delete-sync-item')
+      .define<PluginStorageDeleteSyncItemRequest, { success: boolean; error?: string }>(),
 
-    getStats: defineEvent("plugin")
-      .module("storage")
-      .event("get-stats")
-      .define<PluginStorageStatsRequest, unknown>(),
+    getStats: defineEvent('plugin').module('storage').event('get-stats').define<PluginStorageStatsRequest, unknown>(),
 
-    getTree: defineEvent("plugin")
-      .module("storage")
-      .event("get-tree")
-      .define<PluginStorageTreeRequest, unknown>(),
+    getTree: defineEvent('plugin').module('storage').event('get-tree').define<PluginStorageTreeRequest, unknown>(),
 
-    getFileDetails: defineEvent("plugin")
-      .module("storage")
-      .event("get-file-details")
+    getFileDetails: defineEvent('plugin')
+      .module('storage')
+      .event('get-file-details')
       .define<PluginStorageFileDetailsRequest, unknown>(),
 
-    clear: defineEvent("plugin")
-      .module("storage")
-      .event("clear")
-      .define<
-        PluginStorageClearRequest,
-        { success: boolean; error?: string }
-      >(),
+    clear: defineEvent('plugin')
+      .module('storage')
+      .event('clear')
+      .define<PluginStorageClearRequest, { success: boolean; error?: string }>(),
 
-    openFolder: defineEvent("plugin")
-      .module("storage")
-      .event("open-folder")
+    openFolder: defineEvent('plugin')
+      .module('storage')
+      .event('open-folder')
       .define<PluginStorageOpenFolderRequest, void>(),
 
-    openInEditor: defineEvent("plugin")
-      .module("storage")
-      .event("open-in-editor")
-      .define<
-        PluginStorageOpenInEditorRequest,
-        { success: boolean; error?: string }
-      >(),
+    openInEditor: defineEvent('plugin')
+      .module('storage')
+      .event('open-in-editor')
+      .define<PluginStorageOpenInEditorRequest, { success: boolean; error?: string }>(),
 
-    update: defineEvent("plugin")
-      .module("storage")
-      .event("update")
-      .define<PluginStorageUpdatePayload, void>(),
+    update: defineEvent('plugin').module('storage').event('update').define<PluginStorageUpdatePayload, void>(),
   },
 
   sqlite: {
-    execute: defineEvent("plugin")
-      .module("sqlite")
-      .event("execute")
+    execute: defineEvent('plugin')
+      .module('sqlite')
+      .event('execute')
       .define<PluginSqliteExecuteRequest, PluginSqliteExecuteResponse>(),
 
-    query: defineEvent("plugin")
-      .module("sqlite")
-      .event("query")
+    query: defineEvent('plugin')
+      .module('sqlite')
+      .event('query')
       .define<PluginSqliteQueryRequest, PluginSqliteQueryResponse>(),
 
-    transaction: defineEvent("plugin")
-      .module("sqlite")
-      .event("transaction")
-      .define<
-        PluginSqliteTransactionRequest,
-        PluginSqliteTransactionResponse
-      >(),
+    transaction: defineEvent('plugin')
+      .module('sqlite')
+      .event('transaction')
+      .define<PluginSqliteTransactionRequest, PluginSqliteTransactionResponse>(),
   },
 
   performance: {
-    getMetrics: defineEvent("plugin")
-      .module("performance")
-      .event("get-metrics")
+    getMetrics: defineEvent('plugin')
+      .module('performance')
+      .event('get-metrics')
       .define<void, PluginPerformanceGetMetricsResponse>(),
 
-    getPaths: defineEvent("plugin")
-      .module("performance")
-      .event("get-paths")
+    getPaths: defineEvent('plugin')
+      .module('performance')
+      .event('get-paths')
       .define<void, PluginPerformanceGetPathsResponse>(),
   },
 
   tempFile: {
-    create: defineRawEvent<
-      PluginTempFileCreateRequest,
-      PluginTempFileCreateResponse
-    >("temp-file:create"),
-    delete: defineRawEvent<
-      PluginTempFileDeleteRequest,
-      PluginTempFileDeleteResponse
-    >("temp-file:delete"),
+    create: defineRawEvent<PluginTempFileCreateRequest, PluginTempFileCreateResponse>('temp-file:create'),
+    delete: defineRawEvent<PluginTempFileDeleteRequest, PluginTempFileDeleteResponse>('temp-file:delete'),
   },
 
   window: {
-    new: defineRawEvent<PluginWindowNewRequest, PluginWindowNewResponse>(
-      "window:new",
-    ),
-    visible: defineRawEvent<
-      PluginWindowVisibleRequest,
-      PluginWindowVisibleResponse
-    >("window:visible"),
-    command: defineRawEvent<
-      PluginWindowCommandRequest,
-      PluginWindowCommandResponse
-    >("window:command"),
-    property: defineRawEvent<
-      PluginWindowPropertyRequest,
-      PluginWindowPropertyResponse
-    >("window:property"),
+    new: defineRawEvent<PluginWindowNewRequest, PluginWindowNewResponse>('window:new'),
+    visible: defineRawEvent<PluginWindowVisibleRequest, PluginWindowVisibleResponse>('window:visible'),
+    command: defineRawEvent<PluginWindowCommandRequest, PluginWindowCommandResponse>('window:command'),
+    property: defineRawEvent<PluginWindowPropertyRequest, PluginWindowPropertyResponse>('window:property'),
   },
 
   service: {
-    register: defineRawEvent<PluginServiceRequest, boolean>("service:reg"),
-    unregister: defineRawEvent<PluginServiceRequest, boolean>("service:unreg"),
-    handle: defineRawEvent<PluginServiceHandlePayload, unknown>(
-      "service:handle",
-    ),
+    register: defineRawEvent<PluginServiceRequest, boolean>('service:reg'),
+    unregister: defineRawEvent<PluginServiceRequest, boolean>('service:unreg'),
+    handle: defineRawEvent<PluginServiceHandlePayload, unknown>('service:handle'),
   },
 
   shortcut: {
-    register: defineRawEvent<PluginShortcutRegisterRequest, boolean>(
-      "shortcon:reg",
-    ),
-    trigger: defineRawEvent<PluginShortcutTriggerPayload, void>(
-      "shortcon:trigger",
-    ),
+    register: defineRawEvent<PluginShortcutRegisterRequest, boolean>('shortcon:reg'),
+    trigger: defineRawEvent<PluginShortcutTriggerPayload, void>('shortcon:trigger'),
   },
 
   communicate: {
-    index: defineRawEvent<
-      PluginIndexCommunicateRequest,
-      PluginIndexCommunicateResponse
-    >("index:communicate"),
+    index: defineRawEvent<PluginIndexCommunicateRequest, PluginIndexCommunicateResponse>('index:communicate'),
   },
 
   /**
@@ -2285,9 +1896,9 @@ export const PluginEvents = {
     /**
      * Trigger a plugin feature.
      */
-    trigger: defineEvent("plugin")
-      .module("feature")
-      .event("trigger")
+    trigger: defineEvent('plugin')
+      .module('feature')
+      .event('trigger')
       .define<FeatureTriggerRequest, FeatureTriggerResponse>(),
   },
 
@@ -2301,40 +1912,30 @@ export const PluginEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    write: defineEvent("plugin")
-      .module("log")
-      .event("write")
+    write: defineEvent('plugin')
+      .module('log')
+      .event('write')
       .define<PluginLogEntry, void>({
         batch: { enabled: true, windowMs: 100, maxSize: 50 },
       }),
   },
-} as const;
+} as const
 
 export const StoreEvents = {
   api: {
-    checkUpdates: defineRawEvent<void, StoreCheckUpdatesResponse>(
-      "store:check-updates",
-    ),
-    search: defineRawEvent<StoreSearchRequest, StoreSearchResponse>(
-      "store:search",
-    ),
-    getPlugin: defineRawEvent<StoreGetPluginRequest, StoreGetPluginResponse>(
-      "store:get-plugin",
-    ),
-    httpRequest: defineRawEvent<StoreHttpRequest, StoreHttpRequestResponse>(
-      "store:http-request",
-    ),
+    checkUpdates: defineRawEvent<void, StoreCheckUpdatesResponse>('store:check-updates'),
+    search: defineRawEvent<StoreSearchRequest, StoreSearchResponse>('store:search'),
+    getPlugin: defineRawEvent<StoreGetPluginRequest, StoreGetPluginResponse>('store:get-plugin'),
+    httpRequest: defineRawEvent<StoreHttpRequest, StoreHttpRequestResponse>('store:http-request'),
 
-    featured: defineRawEvent<unknown, unknown>("store:featured"),
-    npmList: defineRawEvent<void, unknown>("store:npm-list"),
+    featured: defineRawEvent<unknown, unknown>('store:featured'),
+    npmList: defineRawEvent<void, unknown>('store:npm-list'),
   },
 
   push: {
-    updatesAvailable: defineRawEvent<StoreUpdatesAvailablePayload, void>(
-      "store:updates-available",
-    ),
+    updatesAvailable: defineRawEvent<StoreUpdatesAvailablePayload, void>('store:updates-available'),
   },
-} as const;
+} as const
 
 // ============================================================================
 // Network Events
@@ -2342,44 +1943,26 @@ export const StoreEvents = {
 
 export const NetworkEvents = {
   api: {
-    request: defineRawEvent<NetworkRequest, NetworkRequestResponse>(
-      "network:request",
-    ),
-    readText: defineRawEvent<NetworkReadTextRequest, string>(
-      "network:read-text",
-    ),
-    readBinary: defineRawEvent<NetworkReadBinaryRequest, ArrayBuffer>(
-      "network:read-binary",
-    ),
-    toTfileUrl: defineRawEvent<NetworkToTfileRequest, string>(
-      "network:to-tfile-url",
-    ),
-    getConfig: defineRawEvent<void, NetworkConfigGetResponse>(
-      "network:get-config",
-    ),
-    updateConfig: defineRawEvent<
-      NetworkConfigUpdateRequest,
-      NetworkConfigGetResponse
-    >("network:update-config"),
-    clearCooldown: defineRawEvent<NetworkCooldownClearRequest | void, void>(
-      "network:clear-cooldown",
-    ),
+    request: defineRawEvent<NetworkRequest, NetworkRequestResponse>('network:request'),
+    readText: defineRawEvent<NetworkReadTextRequest, string>('network:read-text'),
+    readBinary: defineRawEvent<NetworkReadBinaryRequest, ArrayBuffer>('network:read-binary'),
+    toTfileUrl: defineRawEvent<NetworkToTfileRequest, string>('network:to-tfile-url'),
+    getConfig: defineRawEvent<void, NetworkConfigGetResponse>('network:get-config'),
+    updateConfig: defineRawEvent<NetworkConfigUpdateRequest, NetworkConfigGetResponse>('network:update-config'),
+    clearCooldown: defineRawEvent<NetworkCooldownClearRequest | void, void>('network:clear-cooldown'),
   },
   lifecycle: {
-    status: defineEvent("network")
-      .module("lifecycle")
-      .event("status")
-      .define<NetworkLifecycleStatusPayload, void>(),
-    online: defineEvent("network")
-      .module("lifecycle")
-      .event("online")
+    status: defineEvent('network').module('lifecycle').event('status').define<NetworkLifecycleStatusPayload, void>(),
+    online: defineEvent('network')
+      .module('lifecycle')
+      .event('online')
       .define<NetworkLifecycleOnlinePayload | void, void>(),
-    offline: defineEvent("network")
-      .module("lifecycle")
-      .event("offline")
+    offline: defineEvent('network')
+      .module('lifecycle')
+      .event('offline')
       .define<NetworkLifecycleOfflinePayload | void, void>(),
   },
-} as const;
+} as const
 
 // ============================================================================
 // Native Events
@@ -2387,112 +1970,85 @@ export const NetworkEvents = {
 
 export const NativeEvents = {
   capabilities: {
-    list: defineEvent("native")
-      .module("capabilities")
-      .event("list")
+    list: defineEvent('native')
+      .module('capabilities')
+      .event('list')
       .define<NativeCapabilitiesListRequest | void, NativeCapabilityStatus[]>(),
-    get: defineEvent("native")
-      .module("capabilities")
-      .event("get")
+    get: defineEvent('native')
+      .module('capabilities')
+      .event('get')
       .define<NativeCapabilityGetRequest, NativeCapabilityStatus>(),
   },
 
   screenshot: {
-    getSupport: defineEvent("native")
-      .module("screenshot")
-      .event("get-support")
-      .define<void, NativeScreenshotSupport>(),
-    listDisplays: defineEvent("native")
-      .module("screenshot")
-      .event("list-displays")
+    getSupport: defineEvent('native').module('screenshot').event('get-support').define<void, NativeScreenshotSupport>(),
+    listDisplays: defineEvent('native')
+      .module('screenshot')
+      .event('list-displays')
       .define<void, NativeScreenshotDisplay[]>(),
-    capture: defineEvent("native")
-      .module("screenshot")
-      .event("capture")
-      .define<
-        NativeScreenshotCaptureRequest | void,
-        NativeScreenshotCaptureResult
-      >(),
+    capture: defineEvent('native')
+      .module('screenshot')
+      .event('capture')
+      .define<NativeScreenshotCaptureRequest | void, NativeScreenshotCaptureResult>(),
   },
 
   fileIndex: {
-    getSupport: defineEvent("native")
-      .module("file-index")
-      .event("get-support")
-      .define<void, NativeFileIndexSupport>(),
-    getStatus: defineEvent("native")
-      .module("file-index")
-      .event("get-status")
-      .define<void, NativeFileIndexStatus>(),
-    getStats: defineEvent("native")
-      .module("file-index")
-      .event("get-stats")
-      .define<void, NativeFileIndexStats>(),
-    query: defineEvent("native")
-      .module("file-index")
-      .event("query")
+    getSupport: defineEvent('native').module('file-index').event('get-support').define<void, NativeFileIndexSupport>(),
+    getStatus: defineEvent('native').module('file-index').event('get-status').define<void, NativeFileIndexStatus>(),
+    getStats: defineEvent('native').module('file-index').event('get-stats').define<void, NativeFileIndexStats>(),
+    query: defineEvent('native')
+      .module('file-index')
+      .event('query')
       .define<NativeFileIndexQueryRequest, NativeFileIndexQueryResult>(),
-    rebuild: defineEvent("native")
-      .module("file-index")
-      .event("rebuild")
-      .define<
-        NativeFileIndexRebuildRequest | void,
-        NativeFileIndexRebuildResult
-      >(),
-    addPath: defineEvent("native")
-      .module("file-index")
-      .event("add-path")
+    rebuild: defineEvent('native')
+      .module('file-index')
+      .event('rebuild')
+      .define<NativeFileIndexRebuildRequest | void, NativeFileIndexRebuildResult>(),
+    addPath: defineEvent('native')
+      .module('file-index')
+      .event('add-path')
       .define<NativeFileIndexAddPathRequest, NativeFileIndexAddPathResult>(),
-    progress: defineEvent("native")
-      .module("file-index")
-      .event("progress")
+    progress: defineEvent('native')
+      .module('file-index')
+      .event('progress')
       .define<void, AsyncIterable<NativeFileIndexProgress>>({
         stream: { enabled: true },
       }),
   },
 
   file: {
-    stat: defineEvent("native")
-      .module("file")
-      .event("stat")
-      .define<NativeFilePathRequest, NativeFileStatResult>(),
-    reveal: defineEvent("native")
-      .module("file")
-      .event("reveal")
+    stat: defineEvent('native').module('file').event('stat').define<NativeFilePathRequest, NativeFileStatResult>(),
+    reveal: defineEvent('native')
+      .module('file')
+      .event('reveal')
       .define<NativeFilePathRequest, NativeFileActionResult>(),
-    open: defineEvent("native")
-      .module("file")
-      .event("open")
-      .define<NativeFilePathRequest, NativeFileActionResult>(),
-    getIcon: defineEvent("native")
-      .module("file")
-      .event("get-icon")
+    open: defineEvent('native').module('file').event('open').define<NativeFilePathRequest, NativeFileActionResult>(),
+    getIcon: defineEvent('native')
+      .module('file')
+      .event('get-icon')
       .define<NativeFileResourceRequest, NativeResourceRef>(),
-    getThumbnail: defineEvent("native")
-      .module("file")
-      .event("get-thumbnail")
+    getThumbnail: defineEvent('native')
+      .module('file')
+      .event('get-thumbnail')
       .define<NativeFileResourceRequest, NativeResourceRef>(),
-    toTfile: defineEvent("native")
-      .module("file")
-      .event("to-tfile")
+    toTfile: defineEvent('native')
+      .module('file')
+      .event('to-tfile')
       .define<NativeFilePathRequest, NativeFileTfileResult>(),
   },
 
   media: {
-    getSupport: defineEvent("native")
-      .module("media")
-      .event("get-support")
-      .define<void, NativeCapabilityStatus>(),
-    probe: defineEvent("native")
-      .module("media")
-      .event("probe")
+    getSupport: defineEvent('native').module('media').event('get-support').define<void, NativeCapabilityStatus>(),
+    probe: defineEvent('native')
+      .module('media')
+      .event('probe')
       .define<NativeMediaProbeRequest, NativeMediaProbeResult>(),
-    getThumbnail: defineEvent("native")
-      .module("media")
-      .event("get-thumbnail")
+    getThumbnail: defineEvent('native')
+      .module('media')
+      .event('get-thumbnail')
       .define<NativeMediaThumbnailRequest, NativeResourceRef>(),
   },
-} as const;
+} as const
 
 // ============================================================================
 // Notification Events
@@ -2500,439 +2056,294 @@ export const NativeEvents = {
 
 export const NotificationEvents = {
   api: {
-    notify: defineEvent("notification")
-      .module("api")
-      .event("notify")
-      .define<NotificationRequest, NotificationResult>(),
+    notify: defineEvent('notification').module('api').event('notify').define<NotificationRequest, NotificationResult>(),
 
-    update: defineEvent("notification")
-      .module("api")
-      .event("update")
+    update: defineEvent('notification')
+      .module('api')
+      .event('update')
       .define<NotificationUpdateRequest, NotificationResult>(),
 
-    dismiss: defineEvent("notification")
-      .module("api")
-      .event("dismiss")
+    dismiss: defineEvent('notification')
+      .module('api')
+      .event('dismiss')
       .define<NotificationDismissRequest, NotificationResult>(),
 
-    action: defineEvent("notification")
-      .module("api")
-      .event("action")
-      .define<NotificationActionPayload, void>(),
+    action: defineEvent('notification').module('api').event('action').define<NotificationActionPayload, void>(),
   },
 
   inbox: {
-    list: defineEvent("notification")
-      .module("inbox")
-      .event("list")
+    list: defineEvent('notification')
+      .module('inbox')
+      .event('list')
       .define<NotificationInboxListRequest, NotificationInboxListResponse>(),
 
-    markRead: defineEvent("notification")
-      .module("inbox")
-      .event("mark-read")
-      .define<
-        NotificationInboxMarkReadRequest,
-        NotificationInboxEntry | null
-      >(),
+    markRead: defineEvent('notification')
+      .module('inbox')
+      .event('mark-read')
+      .define<NotificationInboxMarkReadRequest, NotificationInboxEntry | null>(),
 
-    archive: defineEvent("notification")
-      .module("inbox")
-      .event("archive")
+    archive: defineEvent('notification')
+      .module('inbox')
+      .event('archive')
       .define<NotificationInboxArchiveRequest, NotificationInboxEntry | null>(),
 
-    delete: defineEvent("notification")
-      .module("inbox")
-      .event("delete")
-      .define<
-        NotificationInboxDeleteRequest,
-        NotificationInboxDeleteResponse
-      >(),
+    delete: defineEvent('notification')
+      .module('inbox')
+      .event('delete')
+      .define<NotificationInboxDeleteRequest, NotificationInboxDeleteResponse>(),
 
-    clear: defineEvent("notification")
-      .module("inbox")
-      .event("clear")
+    clear: defineEvent('notification')
+      .module('inbox')
+      .event('clear')
       .define<NotificationInboxClearRequest, NotificationInboxClearResponse>(),
   },
 
   push: {
-    notify: defineEvent("notification")
-      .module("push")
-      .event("notify")
-      .define<NotificationPushPayload, void>(),
+    notify: defineEvent('notification').module('push').event('notify').define<NotificationPushPayload, void>(),
 
-    update: defineEvent("notification")
-      .module("push")
-      .event("update")
-      .define<NotificationUpdatePayload, void>(),
+    update: defineEvent('notification').module('push').event('update').define<NotificationUpdatePayload, void>(),
 
-    dismiss: defineEvent("notification")
-      .module("push")
-      .event("dismiss")
-      .define<NotificationDismissPayload, void>(),
+    dismiss: defineEvent('notification').module('push').event('dismiss').define<NotificationDismissPayload, void>(),
 
-    action: defineEvent("notification")
-      .module("push")
-      .event("action")
-      .define<NotificationActionPayload, void>(),
+    action: defineEvent('notification').module('push').event('action').define<NotificationActionPayload, void>(),
 
-    inboxUpdated: defineEvent("notification")
-      .module("push")
-      .event("inbox-updated")
+    inboxUpdated: defineEvent('notification')
+      .module('push')
+      .event('inbox-updated')
       .define<NotificationInboxUpdatedPayload, void>(),
   },
-} as const;
+} as const
 
 export const PermissionEvents = {
   api: {
-    getPlugin: defineRawEvent<
-      PermissionGetPluginRequest,
-      PermissionGetPluginResponse
-    >("permission:get-plugin"),
-    getStatus: defineRawEvent<
-      PermissionGetStatusRequest,
-      PermissionGetStatusResponse
-    >("permission:get-status"),
-    grant: defineRawEvent<PermissionGrantRequest, PermissionOperationResult>(
-      "permission:grant",
+    getPlugin: defineRawEvent<PermissionGetPluginRequest, PermissionGetPluginResponse>('permission:get-plugin'),
+    getStatus: defineRawEvent<PermissionGetStatusRequest, PermissionGetStatusResponse>('permission:get-status'),
+    grant: defineRawEvent<PermissionGrantRequest, PermissionOperationResult>('permission:grant'),
+    revoke: defineRawEvent<PermissionRevokeRequest, PermissionOperationResult>('permission:revoke'),
+    grantMultiple: defineRawEvent<PermissionGrantMultipleRequest, PermissionOperationResult>(
+      'permission:grant-multiple',
     ),
-    revoke: defineRawEvent<PermissionRevokeRequest, PermissionOperationResult>(
-      "permission:revoke",
+    grantSession: defineRawEvent<PermissionGrantMultipleRequest, PermissionOperationResult>('permission:grant-session'),
+    revokeAll: defineRawEvent<PermissionRevokeAllRequest, PermissionOperationResult>('permission:revoke-all'),
+    check: defineRawEvent<PermissionCheckRequest, PermissionCheckResponse>('permission:check'),
+    getAll: defineRawEvent<void, PermissionGetAllResponse>('permission:get-all'),
+    getRegistry: defineRawEvent<void, PermissionGetRegistryResponse>('permission:get-registry'),
+    getAuditLogs: defineRawEvent<PermissionGetAuditLogsRequest | void, PermissionGetAuditLogsResponse>(
+      'permission:get-audit-logs',
     ),
-    grantMultiple: defineRawEvent<
-      PermissionGrantMultipleRequest,
-      PermissionOperationResult
-    >("permission:grant-multiple"),
-    grantSession: defineRawEvent<
-      PermissionGrantMultipleRequest,
-      PermissionOperationResult
-    >("permission:grant-session"),
-    revokeAll: defineRawEvent<
-      PermissionRevokeAllRequest,
-      PermissionOperationResult
-    >("permission:revoke-all"),
-    check: defineRawEvent<PermissionCheckRequest, PermissionCheckResponse>(
-      "permission:check",
-    ),
-    getAll: defineRawEvent<void, PermissionGetAllResponse>(
-      "permission:get-all",
-    ),
-    getRegistry: defineRawEvent<void, PermissionGetRegistryResponse>(
-      "permission:get-registry",
-    ),
-    getAuditLogs: defineRawEvent<
-      PermissionGetAuditLogsRequest | void,
-      PermissionGetAuditLogsResponse
-    >("permission:get-audit-logs"),
-    clearAuditLogs: defineRawEvent<void, PermissionOperationResult>(
-      "permission:clear-audit-logs",
-    ),
-    getPerformance: defineRawEvent<void, PermissionGetPerformanceResponse>(
-      "permission:get-performance",
-    ),
-    resetPerformance: defineRawEvent<void, PermissionOperationResult>(
-      "permission:reset-performance",
-    ),
+    clearAuditLogs: defineRawEvent<void, PermissionOperationResult>('permission:clear-audit-logs'),
+    getPerformance: defineRawEvent<void, PermissionGetPerformanceResponse>('permission:get-performance'),
+    resetPerformance: defineRawEvent<void, PermissionOperationResult>('permission:reset-performance'),
   },
 
   push: {
-    updated: defineRawEvent<PermissionUpdatedPayload, void>(
-      "permission:updated",
-    ),
-    startupRequest: defineRawEvent<PermissionStartupRequestPayload, void>(
-      "permission:startup-request",
-    ),
+    updated: defineRawEvent<PermissionUpdatedPayload, void>('permission:updated'),
+    startupRequest: defineRawEvent<PermissionStartupRequestPayload, void>('permission:startup-request'),
   },
-} as const;
+} as const
 
 export const PlatformEvents = {
   capabilities: {
-    list: defineEvent("platform")
-      .module("capabilities")
-      .event("list")
-      .define<
-        PlatformCapabilityListRequest | void,
-        PlatformCapabilityListResponse
-      >(),
+    list: defineEvent('platform')
+      .module('capabilities')
+      .event('list')
+      .define<PlatformCapabilityListRequest | void, PlatformCapabilityListResponse>(),
   },
-} as const;
+} as const
 
 export const QuickOpsEvents = {
   capabilities: {
-    get: defineEvent("quick-ops")
-      .module("capabilities")
-      .event("get")
-      .define<void, QuickOpsCapabilityGetResponse>(),
+    get: defineEvent('quick-ops').module('capabilities').event('get').define<void, QuickOpsCapabilityGetResponse>(),
   },
   sessions: {
-    get: defineEvent("quick-ops")
-      .module("sessions")
-      .event("get")
-      .define<void, QuickOpsSessionsGetResponse>(),
+    get: defineEvent('quick-ops').module('sessions').event('get').define<void, QuickOpsSessionsGetResponse>(),
   },
   audit: {
-    get: defineEvent("quick-ops")
-      .module("audit")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('audit')
+      .event('get')
       .define<QuickOpsAuditGetRequest | void, QuickOpsAuditGetResponse>(),
   },
   systemInfo: {
-    get: defineEvent("quick-ops")
-      .module("system-info")
-      .event("get")
-      .define<void, QuickOpsSystemInfoGetResponse>(),
+    get: defineEvent('quick-ops').module('system-info').event('get').define<void, QuickOpsSystemInfoGetResponse>(),
   },
   tuffDiagnostics: {
-    get: defineEvent("quick-ops")
-      .module("tuff-diagnostics")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('tuff-diagnostics')
+      .event('get')
       .define<void, QuickOpsDiagnosticsGetResponse>(),
   },
   diskSpace: {
-    get: defineEvent("quick-ops")
-      .module("disk-space")
-      .event("get")
-      .define<void, QuickOpsDiskSpaceGetResponse>(),
+    get: defineEvent('quick-ops').module('disk-space').event('get').define<void, QuickOpsDiskSpaceGetResponse>(),
   },
   directoryUsage: {
-    get: defineEvent("quick-ops")
-      .module("directory-usage")
-      .event("get")
-      .define<
-        QuickOpsDirectoryUsageGetRequest | void,
-        QuickOpsDirectoryUsageGetResponse
-      >(),
+    get: defineEvent('quick-ops')
+      .module('directory-usage')
+      .event('get')
+      .define<QuickOpsDirectoryUsageGetRequest | void, QuickOpsDirectoryUsageGetResponse>(),
   },
   queryLocalIp: {
-    get: defineEvent("quick-ops")
-      .module("query-local-ip")
-      .event("get")
-      .define<void, QuickOpsQueryLocalIpGetResponse>(),
+    get: defineEvent('quick-ops').module('query-local-ip').event('get').define<void, QuickOpsQueryLocalIpGetResponse>(),
   },
   portStatus: {
-    get: defineEvent("quick-ops")
-      .module("port-status")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('port-status')
+      .event('get')
       .define<QuickOpsPortStatusGetRequest, QuickOpsPortStatusGetResponse>(),
   },
   dnsQuery: {
-    get: defineEvent("quick-ops")
-      .module("dns-query")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('dns-query')
+      .event('get')
       .define<QuickOpsDnsQueryGetRequest, QuickOpsDnsQueryGetResponse>(),
   },
   fileHash: {
-    get: defineEvent("quick-ops")
-      .module("file-hash")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('file-hash')
+      .event('get')
       .define<QuickOpsFileHashGetRequest, QuickOpsFileHashGetResponse>(),
   },
   fileBase64: {
-    get: defineEvent("quick-ops")
-      .module("file-base64")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('file-base64')
+      .event('get')
       .define<QuickOpsFileBase64GetRequest, QuickOpsFileBase64GetResponse>(),
   },
   recentDownload: {
-    get: defineEvent("quick-ops")
-      .module("recent-download")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('recent-download')
+      .event('get')
       .define<void, QuickOpsRecentDownloadGetResponse>(),
   },
   commonDirectory: {
-    get: defineEvent("quick-ops")
-      .module("common-directory")
-      .event("get")
-      .define<
-        QuickOpsCommonDirectoryGetRequest | void,
-        QuickOpsCommonDirectoryGetResponse
-      >(),
+    get: defineEvent('quick-ops')
+      .module('common-directory')
+      .event('get')
+      .define<QuickOpsCommonDirectoryGetRequest | void, QuickOpsCommonDirectoryGetResponse>(),
   },
   pathFormat: {
-    get: defineEvent("quick-ops")
-      .module("path-format")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('path-format')
+      .event('get')
       .define<QuickOpsPathFormatGetRequest, QuickOpsPathFormatGetResponse>(),
   },
   formatText: {
-    get: defineEvent("quick-ops")
-      .module("format-text")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('format-text')
+      .event('get')
       .define<QuickOpsFormatTextGetRequest, QuickOpsFormatTextGetResponse>(),
   },
   networkStatus: {
-    get: defineEvent("quick-ops")
-      .module("network-status")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('network-status')
+      .event('get')
       .define<void, QuickOpsNetworkStatusGetResponse>(),
   },
   batteryStatus: {
-    get: defineEvent("quick-ops")
-      .module("battery-status")
-      .event("get")
+    get: defineEvent('quick-ops')
+      .module('battery-status')
+      .event('get')
       .define<void, QuickOpsBatteryStatusGetResponse>(),
   },
   systemProxy: {
-    get: defineEvent("quick-ops")
-      .module("system-proxy")
-      .event("get")
-      .define<void, QuickOpsSystemProxyGetResponse>(),
+    get: defineEvent('quick-ops').module('system-proxy').event('get').define<void, QuickOpsSystemProxyGetResponse>(),
   },
   developerPreview: {
-    get: defineEvent("quick-ops")
-      .module("developer-preview")
-      .event("get")
-      .define<
-        QuickOpsDeveloperPreviewRequest,
-        QuickOpsDeveloperPreviewResponse
-      >(),
-    save: defineEvent("quick-ops")
-      .module("developer-preview")
-      .event("save")
-      .define<
-        QuickOpsDeveloperPreviewSaveRequest,
-        QuickOpsDeveloperPreviewSaveResponse
-      >(),
+    get: defineEvent('quick-ops')
+      .module('developer-preview')
+      .event('get')
+      .define<QuickOpsDeveloperPreviewRequest, QuickOpsDeveloperPreviewResponse>(),
+    save: defineEvent('quick-ops')
+      .module('developer-preview')
+      .event('save')
+      .define<QuickOpsDeveloperPreviewSaveRequest, QuickOpsDeveloperPreviewSaveResponse>(),
   },
-} as const;
+} as const
 
 export const AgentsEvents = {
   api: {
-    list: defineEvent("agents")
-      .module("api")
-      .event("list")
-      .define<void, AgentsListResponse>(),
-    listAll: defineEvent("agents")
-      .module("api")
-      .event("list-all")
-      .define<void, AgentsListResponse>(),
-    get: defineEvent("agents")
-      .module("api")
-      .event("get")
-      .define<AgentsGetRequest, AgentsGetResponse>(),
-    execute: defineEvent("agents")
-      .module("api")
-      .event("execute")
-      .define<AgentsExecuteRequest, AgentsExecuteResponse>(),
-    executeImmediate: defineEvent("agents")
-      .module("api")
-      .event("execute-immediate")
+    list: defineEvent('agents').module('api').event('list').define<void, AgentsListResponse>(),
+    listAll: defineEvent('agents').module('api').event('list-all').define<void, AgentsListResponse>(),
+    get: defineEvent('agents').module('api').event('get').define<AgentsGetRequest, AgentsGetResponse>(),
+    execute: defineEvent('agents').module('api').event('execute').define<AgentsExecuteRequest, AgentsExecuteResponse>(),
+    executeImmediate: defineEvent('agents')
+      .module('api')
+      .event('execute-immediate')
       .define<AgentsExecuteImmediateRequest, AgentsExecuteImmediateResponse>(),
-    cancel: defineEvent("agents")
-      .module("api")
-      .event("cancel")
-      .define<AgentsCancelRequest, AgentsCancelResponse>(),
-    taskStatus: defineEvent("agents")
-      .module("api")
-      .event("task-status")
+    cancel: defineEvent('agents').module('api').event('cancel').define<AgentsCancelRequest, AgentsCancelResponse>(),
+    taskStatus: defineEvent('agents')
+      .module('api')
+      .event('task-status')
       .define<AgentsTaskStatusRequest, AgentsTaskStatusResponse>(),
-    updatePriority: defineEvent("agents")
-      .module("api")
-      .event("update-priority")
+    updatePriority: defineEvent('agents')
+      .module('api')
+      .event('update-priority')
       .define<AgentsUpdatePriorityRequest, AgentsUpdatePriorityResponse>(),
-    stats: defineEvent("agents")
-      .module("api")
-      .event("stats")
-      .define<void, AgentsStatsResponse>(),
+    stats: defineEvent('agents').module('api').event('stats').define<void, AgentsStatsResponse>(),
 
     tools: {
-      list: defineEvent("agents")
-        .module("tools")
-        .event("list")
-        .define<void, AgentsToolsListResponse>(),
+      list: defineEvent('agents').module('tools').event('list').define<void, AgentsToolsListResponse>(),
 
-      get: defineEvent("agents")
-        .module("tools")
-        .event("get")
-        .define<AgentsToolsGetRequest, AgentsToolsGetResponse>(),
+      get: defineEvent('agents').module('tools').event('get').define<AgentsToolsGetRequest, AgentsToolsGetResponse>(),
     },
   },
 
   push: {
-    taskStarted: defineEvent("agents")
-      .module("push")
-      .event("task-started")
-      .define<AgentsTaskStartedPayload, void>(),
-    taskProgress: defineEvent("agents")
-      .module("push")
-      .event("task-progress")
-      .define<AgentsTaskProgressPayload, void>(),
-    taskCompleted: defineEvent("agents")
-      .module("push")
-      .event("task-completed")
+    taskStarted: defineEvent('agents').module('push').event('task-started').define<AgentsTaskStartedPayload, void>(),
+    taskProgress: defineEvent('agents').module('push').event('task-progress').define<AgentsTaskProgressPayload, void>(),
+    taskCompleted: defineEvent('agents')
+      .module('push')
+      .event('task-completed')
       .define<AgentsTaskCompletedPayload, void>(),
-    taskFailed: defineEvent("agents")
-      .module("push")
-      .event("task-failed")
-      .define<AgentsTaskFailedPayload, void>(),
-    taskCancelled: defineEvent("agents")
-      .module("push")
-      .event("task-cancelled")
+    taskFailed: defineEvent('agents').module('push').event('task-failed').define<AgentsTaskFailedPayload, void>(),
+    taskCancelled: defineEvent('agents')
+      .module('push')
+      .event('task-cancelled')
       .define<AgentsTaskCancelledPayload, void>(),
   },
 
   store: {
-    search: defineEvent("agents")
-      .module("store")
-      .event("search")
+    search: defineEvent('agents')
+      .module('store')
+      .event('search')
       .define<AgentsStoreSearchRequest | void, AgentsStoreSearchResponse>(),
 
-    get: defineEvent("agents")
-      .module("store")
-      .event("get")
-      .define<AgentsStoreGetRequest, AgentsStoreGetResponse>(),
+    get: defineEvent('agents').module('store').event('get').define<AgentsStoreGetRequest, AgentsStoreGetResponse>(),
 
-    featured: defineEvent("agents")
-      .module("store")
-      .event("featured")
-      .define<void, AgentsStoreFeaturedResponse>(),
+    featured: defineEvent('agents').module('store').event('featured').define<void, AgentsStoreFeaturedResponse>(),
 
-    installed: defineEvent("agents")
-      .module("store")
-      .event("installed")
-      .define<void, AgentsStoreInstalledResponse>(),
+    installed: defineEvent('agents').module('store').event('installed').define<void, AgentsStoreInstalledResponse>(),
 
-    categories: defineEvent("agents")
-      .module("store")
-      .event("categories")
-      .define<void, AgentsStoreCategoriesResponse>(),
+    categories: defineEvent('agents').module('store').event('categories').define<void, AgentsStoreCategoriesResponse>(),
 
-    install: defineEvent("agents")
-      .module("store")
-      .event("install")
+    install: defineEvent('agents')
+      .module('store')
+      .event('install')
       .define<AgentsStoreInstallRequest, AgentsStoreInstallResponse>(),
 
-    uninstall: defineEvent("agents")
-      .module("store")
-      .event("uninstall")
+    uninstall: defineEvent('agents')
+      .module('store')
+      .event('uninstall')
       .define<AgentsStoreUninstallRequest, AgentsStoreUninstallResponse>(),
 
-    checkUpdates: defineEvent("agents")
-      .module("store")
-      .event("check-updates")
+    checkUpdates: defineEvent('agents')
+      .module('store')
+      .event('check-updates')
       .define<void, AgentsStoreCheckUpdatesResponse>(),
   },
-} as const;
+} as const
 
 export const SentryEvents = {
   api: {
-    updateUser: defineRawEvent<SentryUpdateUserRequest, void>(
-      "sentry:update-user",
+    updateUser: defineRawEvent<SentryUpdateUserRequest, void>('sentry:update-user'),
+    getConfig: defineRawEvent<void, SentryGetConfigResponse>('sentry:get-config'),
+    getSearchCount: defineRawEvent<void, SentryGetSearchCountResponse>('sentry:get-search-count'),
+    getTelemetryStats: defineRawEvent<void, SentryGetTelemetryStatsResponse>('sentry:get-telemetry-stats'),
+    recordPerformance: defineRawEvent<SentryRecordPerformanceRequest, SentryRecordPerformanceResponse>(
+      'sentry:record-performance',
     ),
-    getConfig: defineRawEvent<void, SentryGetConfigResponse>(
-      "sentry:get-config",
-    ),
-    getSearchCount: defineRawEvent<void, SentryGetSearchCountResponse>(
-      "sentry:get-search-count",
-    ),
-    getTelemetryStats: defineRawEvent<void, SentryGetTelemetryStatsResponse>(
-      "sentry:get-telemetry-stats",
-    ),
-    recordPerformance: defineRawEvent<
-      SentryRecordPerformanceRequest,
-      SentryRecordPerformanceResponse
-    >("sentry:record-performance"),
   },
-} as const;
+} as const
 
 /**
  * BoxItem CRUD and sync events.
@@ -2945,18 +2356,12 @@ export const BoxItemEvents = {
     /**
      * Create a new BoxItem.
      */
-    create: defineEvent("box-item")
-      .module("crud")
-      .event("create")
-      .define<BoxItemCreateRequest, BoxItem>(),
+    create: defineEvent('box-item').module('crud').event('create').define<BoxItemCreateRequest, BoxItem>(),
 
     /**
      * Update an existing BoxItem.
      */
-    update: defineEvent("box-item")
-      .module("crud")
-      .event("update")
-      .define<BoxItemUpdateRequest, BoxItem>(),
+    update: defineEvent('box-item').module('crud').event('update').define<BoxItemUpdateRequest, BoxItem>(),
 
     /**
      * Create or update a BoxItem.
@@ -2964,9 +2369,9 @@ export const BoxItemEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    upsert: defineEvent("box-item")
-      .module("crud")
-      .event("upsert")
+    upsert: defineEvent('box-item')
+      .module('crud')
+      .event('upsert')
       .define<BoxItemUpsertRequest, BoxItem>({
         batch: { enabled: true, windowMs: 50, maxSize: 100 },
       }),
@@ -2977,9 +2382,9 @@ export const BoxItemEvents = {
      * @remarks
      * This event supports batching for efficiency.
      */
-    delete: defineEvent("box-item")
-      .module("crud")
-      .event("delete")
+    delete: defineEvent('box-item')
+      .module('crud')
+      .event('delete')
       .define<BoxItemDeleteRequest, void>({
         batch: { enabled: true, windowMs: 50 },
       }),
@@ -2992,26 +2397,17 @@ export const BoxItemEvents = {
     /**
      * Batch upsert multiple BoxItems.
      */
-    upsert: defineEvent("box-item")
-      .module("batch")
-      .event("upsert")
-      .define<BoxItem[], BoxItemBatchUpsertResponse>(),
+    upsert: defineEvent('box-item').module('batch').event('upsert').define<BoxItem[], BoxItemBatchUpsertResponse>(),
 
     /**
      * Batch delete multiple BoxItems.
      */
-    delete: defineEvent("box-item")
-      .module("batch")
-      .event("delete")
-      .define<string[], BoxItemBatchDeleteResponse>(),
+    delete: defineEvent('box-item').module('batch').event('delete').define<string[], BoxItemBatchDeleteResponse>(),
 
     /**
      * Clear BoxItems by source.
      */
-    clear: defineEvent("box-item")
-      .module("batch")
-      .event("clear")
-      .define<BoxItemClearRequest, BoxItemClearResponse>(),
+    clear: defineEvent('box-item').module('batch').event('clear').define<BoxItemClearRequest, BoxItemClearResponse>(),
   },
 
   /**
@@ -3021,10 +2417,7 @@ export const BoxItemEvents = {
     /**
      * Request sync of all items.
      */
-    request: defineEvent("box-item")
-      .module("sync")
-      .event("request")
-      .define<void, void>(),
+    request: defineEvent('box-item').module('sync').event('request').define<void, void>(),
 
     /**
      * Receive sync response (streaming).
@@ -3032,14 +2425,14 @@ export const BoxItemEvents = {
      * @remarks
      * This event uses MessagePort streaming for large datasets.
      */
-    response: defineEvent("box-item")
-      .module("sync")
-      .event("response")
+    response: defineEvent('box-item')
+      .module('sync')
+      .event('response')
       .define<void, AsyncIterable<BoxItemSyncResponse>>({
         stream: { enabled: true },
       }),
   },
-} as const;
+} as const
 
 /**
  * Clipboard domain events for history, monitoring, and actions.
@@ -3050,9 +2443,9 @@ export const ClipboardEvents = {
    * Subscribe to clipboard changes via MessagePort streaming.
    * @since v0.9.0
    */
-  change: defineEvent("clipboard")
-    .module("monitor")
-    .event("change")
+  change: defineEvent('clipboard')
+    .module('monitor')
+    .event('change')
     .define<void, AsyncIterable<ClipboardChangePayload>>({
       stream: { enabled: true, bufferSize: 10 },
     }),
@@ -3061,138 +2454,117 @@ export const ClipboardEvents = {
    * Query clipboard history with pagination and filters.
    * @since v0.9.0
    */
-  getHistory: defineEvent("clipboard")
-    .module("history")
-    .event("get")
+  getHistory: defineEvent('clipboard')
+    .module('history')
+    .event('get')
     .define<ClipboardQueryRequest, ClipboardQueryResponse>({
-      batch: { enabled: true, windowMs: 50, mergeStrategy: "dedupe" },
+      batch: { enabled: true, windowMs: 50, mergeStrategy: 'dedupe' },
     }),
 
   /**
    * Query clipboard history by metadata fields.
    */
-  queryMeta: defineEvent("clipboard")
-    .module("history")
-    .event("query-meta")
+  queryMeta: defineEvent('clipboard')
+    .module('history')
+    .event('query-meta')
     .define<ClipboardMetaQueryRequest, ClipboardMetaHistoryItem[]>(),
 
   /**
    * Get the most recent clipboard item.
    * @since v0.9.0
    */
-  getLatest: defineEvent("clipboard")
-    .module("history")
-    .event("latest")
+  getLatest: defineEvent('clipboard')
+    .module('history')
+    .event('latest')
     .define<ClipboardGetLatestRequest | void, ClipboardItem | null>(),
 
   /**
    * Apply clipboard item to active application with auto-paste.
    * @since v0.9.0
    */
-  apply: defineEvent("clipboard")
-    .module("action")
-    .event("apply")
+  apply: defineEvent('clipboard')
+    .module('action')
+    .event('apply')
     .define<ClipboardApplyRequest, ClipboardActionResult>(),
 
   /**
    * Delete a clipboard history item by ID.
    * @since v0.9.0
    */
-  delete: defineEvent("clipboard")
-    .module("history")
-    .event("delete")
-    .define<ClipboardDeleteRequest, void>(),
+  delete: defineEvent('clipboard').module('history').event('delete').define<ClipboardDeleteRequest, void>(),
 
   /**
    * Toggle favorite status for a clipboard item.
    * @since v0.9.0
    */
-  setFavorite: defineEvent("clipboard")
-    .module("history")
-    .event("set-favorite")
+  setFavorite: defineEvent('clipboard')
+    .module('history')
+    .event('set-favorite')
     .define<ClipboardSetFavoriteRequest, void>(),
 
   /**
    * Clear clipboard history cache entries.
    * @since v0.9.0
    */
-  clearHistory: defineEvent("clipboard")
-    .module("history")
-    .event("clear")
-    .define<void, void>(),
+  clearHistory: defineEvent('clipboard').module('history').event('clear').define<void, void>(),
 
   /**
    * Resolve streamable URL for a clipboard image item.
    * @since v0.9.0
    */
-  getImageUrl: defineEvent("clipboard")
-    .module("history")
-    .event("image-url")
+  getImageUrl: defineEvent('clipboard')
+    .module('history')
+    .event('image-url')
     .define<ClipboardGetImageUrlRequest, ClipboardGetImageUrlResponse>(),
 
   /**
    * Write content to system clipboard programmatically.
    * @since v0.9.0
    */
-  write: defineEvent("clipboard")
-    .module("action")
-    .event("write")
-    .define<ClipboardWriteRequest, void>(),
+  write: defineEvent('clipboard').module('action').event('write').define<ClipboardWriteRequest, void>(),
 
   /**
    * Read current clipboard snapshot.
    * @since v0.9.0
    */
-  read: defineEvent("clipboard")
-    .module("action")
-    .event("read")
-    .define<void, ClipboardReadResponse>(),
+  read: defineEvent('clipboard').module('action').event('read').define<void, ClipboardReadResponse>(),
 
   /**
    * Read clipboard image and return preview/original URL.
    * @since v0.9.0
    */
-  readImage: defineEvent("clipboard")
-    .module("action")
-    .event("read-image")
+  readImage: defineEvent('clipboard')
+    .module('action')
+    .event('read-image')
     .define<ClipboardReadImageRequest, ClipboardReadImageResponse | null>(),
 
   /**
    * Read clipboard file paths.
    * @since v0.9.0
    */
-  readFiles: defineEvent("clipboard")
-    .module("action")
-    .event("read-files")
-    .define<void, string[]>(),
+  readFiles: defineEvent('clipboard').module('action').event('read-files').define<void, string[]>(),
 
   /**
    * Clear current clipboard data.
    * @since v0.9.0
    */
-  clear: defineEvent("clipboard")
-    .module("action")
-    .event("clear")
-    .define<void, void>(),
+  clear: defineEvent('clipboard').module('action').event('clear').define<void, void>(),
 
   /**
    * Write and auto-paste clipboard content to active app.
    * @since v0.9.0
    */
-  copyAndPaste: defineEvent("clipboard")
-    .module("action")
-    .event("copy-and-paste")
+  copyAndPaste: defineEvent('clipboard')
+    .module('action')
+    .event('copy-and-paste')
     .define<ClipboardCopyAndPasteRequest, ClipboardActionResult>(),
 
   /**
    * Query clipboard capture-engine status (native watch vs polling fallback).
    * Diagnostic only — exposes engine health, never clipboard content.
    */
-  getStatus: defineEvent("clipboard")
-    .module("monitor")
-    .event("status")
-    .define<void, ClipboardStatus>(),
-} as const;
+  getStatus: defineEvent('clipboard').module('monitor').event('status').define<void, ClipboardStatus>(),
+} as const
 
 // ============================================================================
 // Transport Events
@@ -3203,36 +2575,27 @@ export const TransportEvents = {
     /**
      * Request to upgrade to MessagePort-based transport.
      */
-    upgrade: defineEvent("transport")
-      .module("port")
-      .event("upgrade")
+    upgrade: defineEvent('transport')
+      .module('port')
+      .event('upgrade')
       .define<TransportPortUpgradeRequest, TransportPortUpgradeResponse>(),
 
     /**
      * Confirm MessagePort upgrade and provide binding metadata.
      */
-    confirm: defineEvent("transport")
-      .module("port")
-      .event("confirm")
-      .define<TransportPortConfirmPayload, void>(),
+    confirm: defineEvent('transport').module('port').event('confirm').define<TransportPortConfirmPayload, void>(),
 
     /**
      * Close MessagePort transport channel.
      */
-    close: defineEvent("transport")
-      .module("port")
-      .event("close")
-      .define<TransportPortClosePayload, void>(),
+    close: defineEvent('transport').module('port').event('close').define<TransportPortClosePayload, void>(),
 
     /**
      * Report MessagePort transport errors.
      */
-    error: defineEvent("transport")
-      .module("port")
-      .event("error")
-      .define<TransportPortErrorPayload, void>(),
+    error: defineEvent('transport').module('port').event('error').define<TransportPortErrorPayload, void>(),
   },
-} as const;
+} as const
 
 // ============================================================================
 // Unified Export
@@ -3262,6 +2625,7 @@ export const TuffEvents = {
   native: NativeEvents,
   notification: NotificationEvents,
   permission: PermissionEvents,
+  privacy: PrivacyEvents,
   platform: PlatformEvents,
   quickOps: QuickOpsEvents,
   agents: AgentsEvents,
@@ -3277,7 +2641,7 @@ export const TuffEvents = {
   metaOverlay: MetaOverlayEvents,
   flow: FlowEvents,
   divisionBox: DivisionBoxEvents,
-} as const;
+} as const
 
 // Export MetaOverlayEvents separately for convenience
 export {
@@ -3287,6 +2651,7 @@ export {
   MetaOverlayEvents,
   OpenerEvents,
   PluginBroadcastEvents,
+  PrivacyEvents,
   SyncEvents,
   TerminalEvents,
-};
+}

@@ -318,6 +318,60 @@ describe('PluginHostSession', () => {
     ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_UNKNOWN_RESPONSE' }))
   })
 
+  it('correlates active heartbeat results and rejects duplicate or unknown results', () => {
+    const completed = new PluginHostSession({ owner })
+    activate(completed)
+    accept(completed, 'main-to-child', { type: 'heartbeat', requestId: 3 })
+    expect(completed.pendingCount).toBe(1)
+    accept(completed, 'child-to-main', { type: 'heartbeat-result', requestId: 3 })
+    expect(completed.pendingCount).toBe(0)
+    expect(completed.state).toBe('active')
+    expect(() =>
+      accept(completed, 'child-to-main', { type: 'heartbeat-result', requestId: 3 })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_LATE_RESPONSE' }))
+
+    const unknown = new PluginHostSession({ owner })
+    activate(unknown)
+    expect(() =>
+      accept(unknown, 'child-to-main', { type: 'heartbeat-result', requestId: 99 })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_UNKNOWN_RESPONSE' }))
+  })
+
+  it('keeps periodic heartbeat correlation outside the bounded business request history', () => {
+    const session = new PluginHostSession({
+      owner,
+      maxPendingRequests: 2,
+      maxTrackedRequestIds: 3
+    })
+    activate(session)
+
+    for (const requestId of [3, 4, 5]) {
+      accept(session, 'main-to-child', { type: 'heartbeat', requestId })
+      accept(session, 'child-to-main', { type: 'heartbeat-result', requestId })
+    }
+
+    accept(session, 'main-to-child', {
+      type: 'lifecycle-call',
+      requestId: 6,
+      method: 'onMessage',
+      payload: null
+    })
+    accept(session, 'child-to-main', {
+      type: 'lifecycle-result',
+      requestId: 6,
+      ok: true,
+      result: null
+    })
+    expect(() =>
+      accept(session, 'main-to-child', {
+        type: 'callback-call',
+        requestId: 7,
+        callbackId: 'callback-1',
+        payload: []
+      })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_REQUEST_LIMIT' }))
+  })
+
   it('rejects duplicate child requests before resolving payload handles', () => {
     const resolveCallback = vi.fn()
     const session = new PluginHostSession({ owner, codec: { resolveCallback } })
@@ -609,6 +663,23 @@ describe('PluginHostSession', () => {
         result: null
       })
     ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_LATE_RESPONSE' }))
+  })
+
+  it('reserves one infrastructure slot without broadening the business pending limit', () => {
+    const session = new PluginHostSession({ owner, maxPendingRequests: 1 })
+    activate(session)
+    accept(session, 'child-to-main', {
+      type: 'capability-call',
+      requestId: 3,
+      capability: 'plugin.info.get',
+      payload: null
+    })
+
+    accept(session, 'main-to-child', { type: 'heartbeat', requestId: 3 })
+    expect(session.pendingCount).toBe(2)
+    expect(() =>
+      accept(session, 'main-to-child', { type: 'heartbeat', requestId: 4 })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_SESSION_PENDING_LIMIT' }))
   })
 
   it('bounds pending requests before admitting more work', () => {

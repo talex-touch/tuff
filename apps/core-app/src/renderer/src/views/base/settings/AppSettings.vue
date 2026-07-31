@@ -77,7 +77,7 @@ watch(
 
       <SettingSentry v-if="showAdvancedSettings" />
 
-      <SettingStorage v-if="showAdvancedSettings" />
+      <SettingStorage />
 
       <SettingAbout />
     </div>

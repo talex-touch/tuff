@@ -72,6 +72,7 @@ code: |
 - 遮罩暴露 `role="dialog"`、`aria-modal="true"` 和 `tabindex="-1"`。
 - 使用默认头部且 `title` 非空时，对话框会把 `aria-labelledby` 指向生成的标题。
 - 打开时聚焦遮罩根节点；关闭或卸载时恢复打开前的焦点元素。
+- Tab / Shift+Tab 会在对话框内循环焦点（焦点陷阱），焦点不会移动到模态框背后的页面。
 - 点击遮罩空白、按 Escape、点击关闭按钮都会依次触发 `update:modelValue(false)` 和 `close`。
 - `TModal` 会把 props、attrs、`update:modelValue`、`close` 与 `default/header/footer` 插槽转发给 `TxModal`。
 

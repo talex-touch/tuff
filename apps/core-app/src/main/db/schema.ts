@@ -168,18 +168,24 @@ export const embeddings = sqliteTable('embeddings', {
  * 行为上下文向量表: 存储用户行为序列的语义向量，用于“意图预测”和“主动推荐”。
  * 处理的是 "在什么场景下，想做什么事" 的问题。
  */
-export const contextualEmbeddings = sqliteTable('contextual_embeddings', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  sessionId: text('session_id').notNull().unique(), // 一次完整用户交互会话的ID
+export const contextualEmbeddings = sqliteTable(
+  'contextual_embeddings',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sessionId: text('session_id').notNull().unique(), // 一次完整用户交互会话的ID
 
-  // 将行为序列转换成的自然语言描述，便于理解、调试和向量化
-  // e.g., "用户在 VS Code 中，刚复制了一段代码，然后搜索了'JSON格式化'"
-  contextText: text('context_text').notNull(),
+    // 将行为序列转换成的自然语言描述，便于理解、调试和向量化
+    // e.g., "用户在 VS Code 中，刚复制了一段代码，然后搜索了'JSON格式化'"
+    contextText: text('context_text').notNull(),
 
-  embedding: vectorType('embedding').notNull(), // 行为上下文的向量表示
-  model: text('model').notNull(),
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull()
-})
+    embedding: vectorType('embedding').notNull(), // 行为上下文的向量表示
+    model: text('model').notNull(),
+    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull()
+  },
+  (table) => ({
+    retentionIdx: index('contextual_embeddings_retention_idx').on(table.timestamp, table.id)
+  })
+)
 
 // =============================================================================
 // 4. 用户行为原始日志与配置 (Usage Logs & Config)
@@ -189,17 +195,23 @@ export const contextualEmbeddings = sqliteTable('contextual_embeddings', {
  * 存储每一次具体的用户交互，作为最原始、最详细的流水记录。
  * 这是生成 `usageSummary` 和 `contextualEmbeddings` 的数据源。
  */
-export const usageLogs = sqliteTable('usage_logs', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  sessionId: text('session_id'), // 关联到 contextualEmbeddings
-  itemId: text('item_id').notNull(), // 全局唯一的项目ID
-  source: text('source').notNull(), // e.g., 'files', 'clipboard_history'
-  action: text('action').notNull(), // e.g., 'click', 'execute'
-  keyword: text('keyword'),
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
-  // 以JSON字符串形式存储更多上下文信息
-  context: text('context') // e.g., { "prev_app": "com.figma.Desktop", "window_title": "..." }
-})
+export const usageLogs = sqliteTable(
+  'usage_logs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sessionId: text('session_id'), // 关联到 contextualEmbeddings
+    itemId: text('item_id').notNull(), // 全局唯一的项目ID
+    source: text('source').notNull(), // e.g., 'files', 'clipboard_history'
+    action: text('action').notNull(), // e.g., 'click', 'execute'
+    keyword: text('keyword'),
+    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+    // 以JSON字符串形式存储更多上下文信息
+    context: text('context') // e.g., { "prev_app": "com.figma.Desktop", "window_title": "..." }
+  },
+  (table) => ({
+    retentionIdx: index('usage_logs_retention_idx').on(table.timestamp, table.id)
+  })
+)
 
 /**
  * 按天聚合的执行统计，用于趋势计算，避免扫描 usage_logs。
@@ -226,11 +238,17 @@ export const usageTrendDaily = sqliteTable(
  * 行为频率汇总表，用于聚合与重排层快速获取常用项和最近使用项。
  * 避免了实时计算，是性能优化的关键。
  */
-export const usageSummary = sqliteTable('usage_summary', {
-  itemId: text('item_id').primaryKey(),
-  clickCount: integer('click_count').notNull().default(0),
-  lastUsed: integer('last_used', { mode: 'timestamp' }).notNull()
-})
+export const usageSummary = sqliteTable(
+  'usage_summary',
+  {
+    itemId: text('item_id').primaryKey(),
+    clickCount: integer('click_count').notNull().default(0),
+    lastUsed: integer('last_used', { mode: 'timestamp' }).notNull()
+  },
+  (table) => ({
+    retentionIdx: index('usage_summary_retention_idx').on(table.lastUsed)
+  })
+)
 
 /**
  * 基于 source + item 组合键的使用统计表。
@@ -257,7 +275,10 @@ export const itemUsageStats = sqliteTable(
       .default(sql`(strftime('%s', 'now'))`)
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.sourceId, table.itemId] })
+    pk: primaryKey({ columns: [table.sourceId, table.itemId] }),
+    retentionIdx: index('item_usage_stats_retention_idx').on(
+      sql`MAX(COALESCE(${table.lastSearched}, 0), COALESCE(${table.lastExecuted}, 0), COALESCE(${table.lastCancelled}, 0), ${table.updatedAt})`
+    )
   })
 )
 
@@ -266,18 +287,24 @@ export const itemUsageStats = sqliteTable(
  * 存储用户的查询前缀与实际执行的项目的映射关系
  * 用于自动完成优化和动态匹配权重调整
  */
-export const queryCompletions = sqliteTable('query_completions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  prefix: text('prefix').notNull(), // 查询前缀（规范化后）
-  sourceId: text('source_id').notNull(), // 执行项的来源ID
-  itemId: text('item_id').notNull(), // 执行项的ID
-  completionCount: integer('completion_count').notNull().default(1), // 完成次数
-  lastCompleted: integer('last_completed', { mode: 'timestamp' }).notNull(), // 最后完成时间
-  avgQueryLength: real('avg_query_length').notNull().default(0), // 平均查询长度
-  createdAt: integer('created_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(strftime('%s', 'now'))`)
-})
+export const queryCompletions = sqliteTable(
+  'query_completions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    prefix: text('prefix').notNull(), // 查询前缀（规范化后）
+    sourceId: text('source_id').notNull(), // 执行项的来源ID
+    itemId: text('item_id').notNull(), // 执行项的ID
+    completionCount: integer('completion_count').notNull().default(1), // 完成次数
+    lastCompleted: integer('last_completed', { mode: 'timestamp' }).notNull(), // 最后完成时间
+    avgQueryLength: real('avg_query_length').notNull().default(0), // 平均查询长度
+    createdAt: integer('created_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`)
+  },
+  (table) => ({
+    retentionIdx: index('query_completions_retention_idx').on(table.lastCompleted)
+  })
+)
 
 /**
  * 为插件提供统一的、隔离的持久化键值对存储能力。
@@ -356,23 +383,36 @@ export const indexedSourceTaskState = sqliteTable(
  * 存储剪贴板历史记录。
  * 这是剪贴板增强功能（如历史搜索、自动粘贴）的核心数据来源。
  */
-export const clipboardHistory = sqliteTable('clipboard_history', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const clipboardHistory = sqliteTable(
+  'clipboard_history',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
 
-  // 内容核心
-  type: text('type', { enum: ['text', 'image', 'files'] }).notNull(),
-  content: text('content').notNull(), // 纯文本内容, 或文件路径的 JSON 数组
-  rawContent: text('raw_content'), // 可选的原始富文本内容 (e.g., HTML)
-  thumbnail: text('thumbnail'), // 可选的图片 Base64 缩略图 (Data URL)
+    // 内容核心
+    type: text('type', { enum: ['text', 'image', 'files'] }).notNull(),
+    content: text('content').notNull(), // 纯文本内容, 或文件路径的 JSON 数组
+    rawContent: text('raw_content'), // 可选的原始富文本内容 (e.g., HTML)
+    thumbnail: text('thumbnail'), // 可选的图片 Base64 缩略图 (Data URL)
 
-  // 上下文信息
-  timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
-  sourceApp: text('source_app'), // 来源应用 (macOS only, best-effort)
+    // 上下文信息
+    timestamp: integer('timestamp', { mode: 'timestamp' }).notNull(),
+    sourceApp: text('source_app'), // 来源应用 (macOS only, best-effort)
 
-  // 用户交互与元数据
-  isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),
-  metadata: text('metadata') // 存储其他元数据 (JSON string)
-})
+    // 用户交互与元数据
+    isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),
+    retentionProtected: integer('retention_protected', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    metadata: text('metadata') // 存储其他元数据 (JSON string)
+  },
+  (table) => ({
+    retentionIdx: index('clipboard_history_retention_idx')
+      .on(table.timestamp, table.id)
+      .where(
+        sql`COALESCE(${table.isFavorite}, 0) = 0 AND COALESCE(${table.retentionProtected}, 0) = 0`
+      )
+  })
+)
 
 /**
  * 扩展的剪贴板元数据表。
@@ -393,28 +433,36 @@ export const clipboardHistoryMeta = sqliteTable('clipboard_history_meta', {
 /**
  * OCR 任务队列表，用于跟踪后台识别的生命周期。
  */
-export const ocrJobs = sqliteTable('ocr_jobs', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  clipboardId: integer('clipboard_id').references(() => clipboardHistory.id, {
-    onDelete: 'cascade'
-  }),
-  status: text('status', {
-    enum: ['pending', 'processing', 'completed', 'failed', 'cancelled']
+export const ocrJobs = sqliteTable(
+  'ocr_jobs',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    clipboardId: integer('clipboard_id').references(() => clipboardHistory.id, {
+      onDelete: 'cascade'
+    }),
+    status: text('status', {
+      enum: ['pending', 'processing', 'completed', 'failed', 'cancelled']
+    })
+      .notNull()
+      .default('pending'),
+    priority: integer('priority').notNull().default(0),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+    nextRetryAt: integer('next_retry_at', { mode: 'timestamp' }), // 下次重试时间
+    payloadHash: text('payload_hash'),
+    meta: text('meta'),
+    queuedAt: integer('queued_at', { mode: 'timestamp' })
+      .notNull()
+      .default(sql`(strftime('%s', 'now'))`),
+    startedAt: integer('started_at', { mode: 'timestamp' }),
+    finishedAt: integer('finished_at', { mode: 'timestamp' })
+  },
+  (table) => ({
+    retentionIdx: index('ocr_jobs_retention_idx')
+      .on(sql`COALESCE(${table.finishedAt}, ${table.queuedAt})`, table.id)
+      .where(sql`${table.status} IN ('completed', 'failed', 'cancelled')`)
   })
-    .notNull()
-    .default('pending'),
-  priority: integer('priority').notNull().default(0),
-  attempts: integer('attempts').notNull().default(0),
-  lastError: text('last_error'),
-  nextRetryAt: integer('next_retry_at', { mode: 'timestamp' }), // 下次重试时间
-  payloadHash: text('payload_hash'),
-  meta: text('meta'),
-  queuedAt: integer('queued_at', { mode: 'timestamp' })
-    .notNull()
-    .default(sql`(strftime('%s', 'now'))`),
-  startedAt: integer('started_at', { mode: 'timestamp' }),
-  finishedAt: integer('finished_at', { mode: 'timestamp' })
-})
+)
 
 /**
  * OCR 结果表，存储识别文本和置信度等信息。
@@ -560,7 +608,8 @@ export const recommendationCache = sqliteTable(
     expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull() // 过期时间
   },
   (table) => ({
-    expiresIdx: index('idx_recommendation_cache_expires').on(table.expiresAt)
+    expiresIdx: index('idx_recommendation_cache_expires').on(table.expiresAt),
+    retentionIdx: index('recommendation_cache_retention_idx').on(table.createdAt)
   })
 )
 
@@ -878,14 +927,18 @@ export const intelligenceContextSessions = sqliteTable(
     metadata: text('metadata'),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
-    archivedAt: integer('archived_at')
+    archivedAt: integer('archived_at'),
+    isPinned: integer('is_pinned', { mode: 'boolean' }).notNull().default(false)
   },
   (table) => ({
     ownerStatusIdx: index('idx_intelligence_context_sessions_owner_status').on(
       table.owner,
       table.status
     ),
-    updatedIdx: index('idx_intelligence_context_sessions_updated').on(table.updatedAt)
+    updatedIdx: index('idx_intelligence_context_sessions_updated').on(table.updatedAt),
+    retentionIdx: index('intelligence_context_sessions_retention_idx')
+      .on(table.updatedAt, table.id)
+      .where(sql`${table.status} IN ('archived', 'expired') AND COALESCE(${table.isPinned}, 0) = 0`)
   })
 )
 
@@ -1059,7 +1112,8 @@ export const analyticsSnapshots = sqliteTable(
     windowTimeIdx: index('idx_analytics_snapshots_window_time').on(
       table.windowType,
       table.timestamp
-    )
+    ),
+    retentionIdx: index('analytics_snapshots_retention_idx').on(table.timestamp, table.id)
   })
 )
 
@@ -1081,7 +1135,8 @@ export const pluginAnalytics = sqliteTable(
       table.pluginName,
       table.pluginVersion,
       table.timestamp
-    )
+    ),
+    retentionIdx: index('plugin_analytics_retention_idx').on(table.timestamp, table.id)
   })
 )
 
@@ -1101,16 +1156,22 @@ export const analyticsReportQueue = sqliteTable(
   })
 )
 
-export const telemetryUploadStats = sqliteTable('telemetry_upload_stats', {
-  id: integer('id').primaryKey(),
-  searchCount: integer('search_count').notNull().default(0),
-  totalUploads: integer('total_uploads').notNull().default(0),
-  failedUploads: integer('failed_uploads').notNull().default(0),
-  lastUploadTime: integer('last_upload_time'),
-  lastFailureAt: integer('last_failure_at'),
-  lastFailureMessage: text('last_failure_message'),
-  updatedAt: integer('updated_at').notNull().default(0)
-})
+export const telemetryUploadStats = sqliteTable(
+  'telemetry_upload_stats',
+  {
+    id: integer('id').primaryKey(),
+    searchCount: integer('search_count').notNull().default(0),
+    totalUploads: integer('total_uploads').notNull().default(0),
+    failedUploads: integer('failed_uploads').notNull().default(0),
+    lastUploadTime: integer('last_upload_time'),
+    lastFailureAt: integer('last_failure_at'),
+    lastFailureMessage: text('last_failure_message'),
+    updatedAt: integer('updated_at').notNull().default(0)
+  },
+  (table) => ({
+    retentionIdx: index('telemetry_upload_stats_retention_idx').on(table.lastFailureAt, table.id)
+  })
+)
 
 // =============================================================================
 // 13. 应用更新记录 (App Update Records)

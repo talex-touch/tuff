@@ -7,6 +7,8 @@ describe('txLayoutSkeleton', () => {
     const wrapper = mount(LayoutSkeleton)
 
     expect(wrapper.find('.tx-layout-skeleton').exists()).toBe(true)
+    // The scaffold is purely decorative and stays out of the a11y tree.
+    expect(wrapper.find('.tx-layout-skeleton').attributes('aria-hidden')).toBe('true')
     expect(wrapper.find('.tx-layout-skeleton__header-line').exists()).toBe(true)
     expect(wrapper.findAll('.tx-layout-skeleton__sidebar-item')).toHaveLength(6)
     expect(wrapper.findAll('.tx-layout-skeleton__content-line')).toHaveLength(8)

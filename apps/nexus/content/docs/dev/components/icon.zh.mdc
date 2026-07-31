@@ -50,7 +50,7 @@ code: |
 ---
 :::
 
-## TuffIcons 常量
+### TuffIcons 常量
 
 `@talex-touch/utils` 提供预定义的图标常量，确保一致性：
 
@@ -70,9 +70,9 @@ code: |
 ---
 :::
 
-## 图标分类
+### 图标分类
 
-### 导航图标
+#### 导航图标
 
 | 名称 | 类名 | 预览 |
 |------|------|------|
@@ -81,7 +81,7 @@ code: |
 | Forward | `i-ri-arrow-right-line` | <i class="i-ri-arrow-right-line" /> |
 | Menu | `i-ri-menu-line` | <i class="i-ri-menu-line" /> |
 
-### 操作图标
+#### 操作图标
 
 | 名称 | 类名 | 预览 |
 |------|------|------|
@@ -95,7 +95,7 @@ code: |
 | Upload | `i-ri-upload-line` | <i class="i-ri-upload-line" /> |
 | Refresh | `i-ri-refresh-line` | <i class="i-ri-refresh-line" /> |
 
-### 状态图标
+#### 状态图标
 
 | 名称 | 类名 | 预览 |
 |------|------|------|
@@ -105,7 +105,7 @@ code: |
 | Info | `i-ri-information-line` | <i class="i-ri-information-line" /> |
 | Error | `i-ri-close-circle-line` | <i class="i-ri-close-circle-line" /> |
 
-### 文件图标
+#### 文件图标
 
 | 名称 | 类名 | 预览 |
 |------|------|------|
@@ -114,7 +114,7 @@ code: |
 | FileCode | `i-ri-file-code-line` | <i class="i-ri-file-code-line" /> |
 | FileImage | `i-ri-image-line` | <i class="i-ri-image-line" /> |
 
-### UI 元素图标
+#### UI 元素图标
 
 | 名称 | 类名 | 预览 |
 |------|------|------|
@@ -125,7 +125,7 @@ code: |
 | Lock | `i-ri-lock-line` | <i class="i-ri-lock-line" /> |
 | Eye | `i-ri-eye-line` | <i class="i-ri-eye-line" /> |
 
-### 品牌图标
+#### 品牌图标
 
 | 名称 | 类名 | 预览 |
 |------|------|------|
@@ -134,7 +134,7 @@ code: |
 | Chrome | `i-simple-icons-googlechrome` | <i class="i-simple-icons-googlechrome" /> |
 | Discord | `i-simple-icons-discord` | <i class="i-simple-icons-discord" /> |
 
-## 自定义样式
+### 自定义样式
 
 :::TuffCodeBlock{lang="vue"}
 ---
@@ -157,11 +157,11 @@ code: |
 ---
 :::
 
-## TxStatusIcon
+### TxStatusIcon
 
 用于在图标右下角叠加状态指示器（如插件运行状态/健康状态）。
 
-### TxStatusIcon
+#### TxStatusIcon
 在角标上展示不同状态。
 :::TuffDemoWrapper{demo="IconTxStatusIconDemo" code-lang="vue"}
 ---
@@ -175,7 +175,7 @@ code: |
   </template>
 ---
 :::
-## 类型与来源
+### 类型与来源
 - `class`：使用图标类名（推荐）。
 - `emoji`：用于轻量强调。
 - `file` / `url`：本地或远程图标。
@@ -189,21 +189,29 @@ code: |
 ---
 rows:
   - name: icon
-    type: 'ITuffIcon'
+    type: 'TxIconSource | null'
     default: '-'
-    description: '图标对象（type/value）'
+    description: '结构化图标源（type/value）；与 name 二选一。'
   - name: name
     type: 'string'
     default: '-'
     description: '图标名称或类名'
   - name: size
     type: 'number'
-    default: '16'
-    description: '图标尺寸'
+    default: '-'
+    description: '图标尺寸（px）；省略时不设置 font-size，继承父级字号。'
   - name: colorful
     type: 'boolean'
     default: 'false'
     description: '是否保留原色'
+  - name: alt
+    type: 'string'
+    default: "''"
+    description: '无障碍标题，映射到根节点 title 属性；同时作为兜底图片的 alt。'
+  - name: empty
+    type: 'string'
+    default: "''"
+    description: '当 icon/name 未解析出可见图标时的兜底图片 URL（empty 插槽默认内容）。'
   - name: urlResolver
     type: "(url: string, type: 'url' | 'file') => string"
     default: '-'
@@ -215,10 +223,18 @@ rows:
 ---
 ::
 
-## TxStatusIcon API（简版）
+### TxStatusIcon API（简版）
 ::TuffPropsTable
 ---
 rows:
+  - name: colorful
+    type: 'boolean'
+    default: 'true'
+    description: '保留 SVG 原色；默认 true，与 TxIcon 的 false 相反。'
+  - name: size
+    type: 'number'
+    default: '18'
+    description: '图标尺寸（px）；默认 18，而 TxIcon 默认继承父级字号。'
   - name: tone
     type: "'none' | 'loading' | 'warning' | 'success' | 'error' | 'info'"
     default: "'none'"
@@ -291,7 +307,7 @@ code: |
 
 ## 审阅说明
 
-- **可访问性说明：** `TxIcon` 会设置 `role="img"`，并把 `alt` 映射到 `title`；纯图标交互控件应使用 `TxIconButton label` 或可见文本，不要只依赖图标 title 文案。
+- **可访问性说明：** 仅当设置了 `alt` 时，`TxIcon` 才渲染 `role="img"` 并把 `alt` 映射到 `title`；未设置 `alt` 时图标视为装饰性，会标记 `aria-hidden="true"` 从无障碍树中移除。纯图标交互控件应使用 `TxIconButton label` 或可见文本，不要只依赖图标 title 文案。
 - **实测覆盖:** `icon.test.ts` 覆盖 class 与内置名称渲染、尺寸/颜色样式、emoji/empty/loading/error 状态、注入 file protocol 解析、SVG mask 模式、colorful SVG 回退、data SVG 处理、多色 SVG 检测与状态角标尺寸。
 
 ## Source

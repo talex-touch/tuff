@@ -12,8 +12,6 @@ verified: true
 
 `TxOfflineState` is a thin `TxEmptyState` wrapper with `variant="offline"` fixed. Use it when the app is offline, a network-backed panel cannot load, or a retryable transport error should preserve the current user context.
 
-Reviewed against `packages/tuffex/packages/components/src/offline-state/src/TxOfflineState.vue`, `types.ts`, and `offline-state.test.ts`.
-
 ## Basic Usage
 
 ### OfflineState

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import type { GridLayoutProps } from '../index'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 defineOptions({
   name: 'TxGridLayout',
@@ -41,8 +41,6 @@ function handleMove(event: MouseEvent) {
 }
 
 function cancelColor() {
-  if (!props.interactive)
-    return
   if (!gridContainer.value)
     return
 
@@ -50,6 +48,13 @@ function cancelColor() {
     ;(element as HTMLElement).style.setProperty('--tx-grid-op', '0')
   })
 }
+
+// Turning interactivity off while the pointer is inside must clear any spotlight
+// vars already written, otherwise the items stay permanently lit.
+watch(() => props.interactive, (v) => {
+  if (!v)
+    cancelColor()
+})
 
 const rootStyle = computed<CSSProperties>(() => {
   return {

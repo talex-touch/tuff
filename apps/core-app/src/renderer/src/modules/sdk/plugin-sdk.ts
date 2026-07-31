@@ -14,7 +14,11 @@ import type {
   RegisterWidgetRequest,
   TriggerFeatureRequest
 } from '@talex-touch/utils/plugin/sdk/types'
-import type { PluginFileTreeNode } from '@talex-touch/utils/transport/events/types'
+import type {
+  PluginApiUninstallRequest,
+  PluginApiUninstallResponse,
+  PluginFileTreeNode
+} from '@talex-touch/utils/transport/events/types'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { createPluginSdk } from '@talex-touch/utils/transport/sdk/domains/plugin'
@@ -337,14 +341,8 @@ class PluginSDK {
   /**
    * Uninstall a plugin
    */
-  async uninstall(name: string): Promise<boolean> {
-    try {
-      const response = await pluginTransportSdk.uninstall({ name })
-      return response?.success || false
-    } catch (error) {
-      pluginSdkLog.error('Failed to uninstall plugin', error)
-      return false
-    }
+  async uninstall(request: PluginApiUninstallRequest): Promise<PluginApiUninstallResponse> {
+    return pluginTransportSdk.uninstall(request)
   }
 
   // ============================================

@@ -41,6 +41,7 @@ code: |
 - `sanitize` defaults to `true`; disable it only for already trusted content.
 - Source mode writes directly to Markdown. WYSIWYG mode serializes edited DOM back to Markdown on input.
 - Toolbar actions are shared across modes, but preview mode disables editing actions.
+- The mode switcher is a toggle-button group: the container is `role="group"` labeled "Markdown editor mode", and each mode button reflects the active mode through `aria-pressed` (not `role="tab"`, since there are no associated tabpanels).
 - `theme="auto"` watches `documentElement` class / `data-theme` and falls back to light.
 
 ## API
@@ -111,6 +112,6 @@ No public slots are exposed; toolbar buttons, editing surfaces, and preview outp
 - Component source: `packages/tuffex/packages/components/src/markdown-editor/src/TxMarkdownEditor.vue`.
 - Types: `packages/tuffex/packages/components/src/markdown-editor/src/types.ts`.
 - Serializer: `packages/tuffex/packages/components/src/markdown-editor/src/markdown-serializer.ts`.
-- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/markdown-editor/__tests__/markdown-editor.test.ts` verifies exports, sanitized WYSIWYG rendering, source-mode input updates, uncontrolled mode emits, and rich-content serialization back to Markdown.
+- **Verified coverage:** Coverage: `packages/tuffex/packages/components/src/markdown-editor/__tests__/markdown-editor.test.ts` verifies exports, sanitized WYSIWYG rendering, source-mode input updates, uncontrolled mode emits, the `role="group"` / `aria-pressed` mode switcher, and rich-content serialization back to Markdown.
 
 <TuffDocSourceLink />

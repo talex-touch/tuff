@@ -78,14 +78,14 @@ code: |
 | `title` | `string` | `'Something went wrong'` | 错误标题。建议写明失败对象或操作。 |
 | `description` | `string` | `'Please try again later.'` | 辅助说明和恢复建议。 |
 | `icon` | `TxIconSource \| string \| null` | variant 默认值 | 自定义图标；设为 `null` 可关闭继承图标。 |
-| `iconSize` | `number` | 继承值 | 透传给 `TxEmptyState` 的图标尺寸。 |
+| `iconSize` | `number` | 按 `size` 派生 | 透传给 `TxEmptyState` 的图标尺寸；缺省时按 `size` 取 28 / 36 / 44（small / medium / large）。 |
 | `layout` | `'vertical' \| 'horizontal'` | `'vertical'` | 布局方向。 |
 | `align` | `'start' \| 'center' \| 'end'` | `'center'` | 内容对齐方式。 |
 | `size` | `'small' \| 'medium' \| 'large'` | `'medium'` | 尺寸等级。 |
 | `surface` | `'plain' \| 'card'` | `'plain'` | 表面样式。 |
 | `primaryAction` | `EmptyStateAction` | - | 主恢复动作配置。 |
 | `secondaryAction` | `EmptyStateAction` | - | 次要动作配置。 |
-| `actionSize` | `TxButtonProps['size']` | 继承值 | 生成按钮的尺寸。 |
+| `actionSize` | `TxButtonProps['size']` | `'small'` | 生成按钮的尺寸；默认沿用 `TxEmptyState` 的 `small`。 |
 | `loading` | `boolean` | `false` | 透传给生成操作按钮的加载态。 |
 
 ### Events

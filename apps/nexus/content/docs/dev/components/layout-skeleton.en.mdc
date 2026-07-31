@@ -11,11 +11,10 @@ verified: true
 
 # LayoutSkeleton
 
-> Layout-level placeholder for page or panel loading.  
-> **Status**: Beta
+`TxLayoutSkeleton` is a page/panel-level layout placeholder: the wrapper controls the size while the component fills it and renders a fixed header + sidebar + content-row scaffold. Use it for page-level loading where the final layout shape is stable; do not use it as a replacement for table rows.
 
+## Basic Usage
 
-## Demo
 ### Layout Placeholder
 The wrapper controls the size.
 :::TuffDemoWrapper{demo="LayoutSkeletonLayoutPlaceholderDemo" code-lang="vue"}
@@ -28,22 +27,19 @@ code: |
   </template>
 ---
 :::
-## Basic Usage
-:::TuffCodeBlock{lang="vue"}
+
+### Panel Placeholder
+Skeleton paired with card containers.
+:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
 ---
 code: |
   <template>
-    <div style="height: 240px;">
+    <TxCard>
       <TxLayoutSkeleton />
-    </div>
+    </TxCard>
   </template>
 ---
 :::
-
-## Usage Notes
-- The wrapper controls size and layout ratio.
-- Ideal for page-level loading with consistent rhythm.
-- Content line widths use a fixed sequence, keeping SSR, hydration, and tests deterministic.
 
 ## API
 
@@ -71,35 +67,7 @@ rows:
 - `TxLayoutSkeleton` has no props, events, or slots.
 - The component always renders a header, 6 sidebar items, and 8 content lines.
 - Content line widths are deterministic and do not depend on runtime randomness.
-
-## Dashboard Data Operations
-
-Use `TxLayoutSkeleton` in detail panes, side summaries, or page-level placeholders to show that a layout is coming; do not use it as a replacement for concrete table rows.
-
-:::TuffDemoWrapper{demo="ComponentsDataOperationsDemo" code-lang="vue" title="Data operations panel" description="Layout skeletons cover side/detail regions while DataTable owns the primary table body."}
----
-code: |
-  <template>
-    <div style="height: 190px;">
-      <TxLayoutSkeleton />
-    </div>
-  </template>
----
-:::
-
-## Composite Patterns
-### Panel Placeholder
-Skeleton paired with card containers.
-:::TuffDemoWrapper{demo="LayoutSkeletonPanelPlaceholderDemo" code-lang="vue"}
----
-code: |
-  <template>
-    <TxCard>
-      <TxLayoutSkeleton />
-    </TxCard>
-  </template>
----
-:::
+- The root is `aria-hidden="true"`, so the decorative scaffold stays out of the a11y tree. The host should announce the page/panel loading state (for example `aria-busy` on the region) and swap to real content when ready.
 
 ## Best Practices
 
@@ -111,7 +79,7 @@ code: |
 ## Review Notes
 
 - Reviewed against `packages/tuffex/packages/components/src/layout-skeleton/src/TxLayoutSkeleton.vue` and `layout-skeleton.test.ts`.
-- **Verified coverage:** fixed scaffold shape, six sidebar items, eight content rows, deterministic content widths, and install registration.
+- **Verified coverage:** fixed scaffold shape, the decorative `aria-hidden` root, six sidebar items, eight content rows, deterministic content widths, and install registration.
 - API note: this component intentionally has no props. Size, aspect ratio, and placement must come from the parent container.
 - Rendering note: content line widths are fixed, not random, so SSR, hydration, docs snapshots, and visual tests stay stable.
 

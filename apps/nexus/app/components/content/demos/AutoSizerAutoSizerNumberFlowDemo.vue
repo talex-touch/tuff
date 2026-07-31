@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const { locale } = useI18n()
-const value = ref('')
-const shuffle = () => {}
+const value = ref(123.45)
+const sizerRef = ref<any>(null)
+function shuffle() {
+  const next = Math.random() > 0.5
+    ? 3243.6
+    : 1000000.12
+
+  void sizerRef.value?.action?.(() => {
+    value.value = next
+  })
+}
 </script>
 
 <template>

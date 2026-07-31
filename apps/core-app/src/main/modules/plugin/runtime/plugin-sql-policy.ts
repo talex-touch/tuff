@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { types as utilTypes } from 'node:util'
 import { PLUGIN_STORAGE_ERROR_CODES } from '@talex-touch/utils/transport/events/types'
 
 export const PLUGIN_SQL_MAX_BYTES = 64 * 1024
@@ -355,6 +356,118 @@ export function normalizePluginSqlForExecution(sql: string): string {
   return (terminalSemicolonIndex === null ? sql : sql.slice(0, terminalSemicolonIndex)).trim()
 }
 
+const SQL_PARAM_FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
+
+function snapshotSqlParam(
+  value: unknown,
+  ancestors = new WeakSet<object>(),
+  depth = 0,
+  budget = { members: 0 }
+): unknown {
+  if (depth > 16) rejectInvalidSql()
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return value
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) rejectInvalidSql()
+    return value
+  }
+  if (!value || typeof value !== 'object' || utilTypes.isProxy(value)) rejectInvalidSql()
+  if (value instanceof Date) {
+    const timestamp = value.getTime()
+    if (!Number.isFinite(timestamp)) rejectInvalidSql()
+    return new Date(timestamp)
+  }
+  if (value instanceof ArrayBuffer) return value.slice(0)
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice()
+  }
+  if (ancestors.has(value)) rejectInvalidSql()
+  ancestors.add(value)
+  try {
+    const descriptors = Object.getOwnPropertyDescriptors(value)
+    if (Array.isArray(value)) {
+      const lengthDescriptor = descriptors.length
+      const length = lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : -1
+      if (!Number.isSafeInteger(length) || length < 0) rejectInvalidSql()
+      const output: unknown[] = []
+      const allowedKeys = new Set<PropertyKey>(['length'])
+      for (let index = 0; index < length; index += 1) {
+        const key = String(index)
+        allowedKeys.add(key)
+        const descriptor = descriptors[key]
+        if (!descriptor?.enumerable || !('value' in descriptor)) rejectInvalidSql()
+        budget.members += 1
+        if (budget.members > 10_000) rejectInvalidSql()
+        const entry = snapshotSqlParam(descriptor.value, ancestors, depth + 1, budget)
+        if (entry === undefined || typeof entry === 'bigint') rejectInvalidSql()
+        output.push(entry)
+      }
+      if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) rejectInvalidSql()
+      return output
+    }
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) rejectInvalidSql()
+    const output: Record<string, unknown> = Object.create(null)
+    for (const key of Reflect.ownKeys(descriptors)) {
+      if (typeof key !== 'string' || SQL_PARAM_FORBIDDEN_KEYS.has(key)) rejectInvalidSql()
+      const descriptor = descriptors[key]
+      if (!descriptor?.enumerable || !('value' in descriptor)) rejectInvalidSql()
+      budget.members += 1
+      if (budget.members > 10_000) rejectInvalidSql()
+      const entry = snapshotSqlParam(descriptor.value, ancestors, depth + 1, budget)
+      if (entry === undefined || typeof entry === 'bigint') rejectInvalidSql()
+      output[key] = entry
+    }
+    return output
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
+function snapshotSqlParams(params: unknown): unknown[] {
+  if (!Array.isArray(params) || utilTypes.isProxy(params)) {
+    return rejectSql(
+      PLUGIN_STORAGE_ERROR_CODES.PARAMS_TOO_LARGE,
+      'Plugin SQL parameters exceed the allowed limits.'
+    )
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(params) as unknown as Record<
+    string,
+    PropertyDescriptor | undefined
+  >
+  const lengthDescriptor = descriptors['length']
+  const rawLength = lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : -1
+  if (
+    !Number.isSafeInteger(rawLength) ||
+    Number(rawLength) < 0 ||
+    Number(rawLength) > PLUGIN_SQL_MAX_PARAMS
+  ) {
+    return rejectSql(
+      PLUGIN_STORAGE_ERROR_CODES.PARAMS_TOO_LARGE,
+      'Plugin SQL parameters exceed the allowed limits.'
+    )
+  }
+  const length = Number(rawLength)
+  const output: unknown[] = []
+  const allowedKeys = new Set<PropertyKey>(['length'])
+  for (let index = 0; index < length; index += 1) {
+    const key = String(index)
+    allowedKeys.add(key)
+    const descriptor = descriptors[key]
+    if (!descriptor?.enumerable || !('value' in descriptor)) rejectInvalidSql()
+    output.push(snapshotSqlParam(descriptor.value))
+  }
+  if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) rejectInvalidSql()
+  return output
+}
+
 function getParamByteLength(value: unknown): number {
   if (value === null || value === undefined) return 0
   if (typeof value === 'string') return Buffer.byteLength(value, 'utf8')
@@ -377,15 +490,10 @@ function getParamByteLength(value: unknown): number {
 
 export function validatePluginSqlParams(params: unknown): unknown[] {
   if (params === undefined) return []
-  if (!Array.isArray(params) || params.length > PLUGIN_SQL_MAX_PARAMS) {
-    return rejectSql(
-      PLUGIN_STORAGE_ERROR_CODES.PARAMS_TOO_LARGE,
-      'Plugin SQL parameters exceed the allowed limits.'
-    )
-  }
+  const normalized = snapshotSqlParams(params)
 
   let totalBytes = 0
-  for (const value of params) {
+  for (const value of normalized) {
     totalBytes += getParamByteLength(value)
     if (totalBytes > PLUGIN_SQL_MAX_PARAM_BYTES) {
       return rejectSql(
@@ -395,7 +503,7 @@ export function validatePluginSqlParams(params: unknown): unknown[] {
     }
   }
 
-  return params
+  return normalized
 }
 
 function isTransactionStatement(value: unknown): value is PluginSqlTransactionStatement {

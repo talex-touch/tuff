@@ -135,9 +135,12 @@ function handleRemove() {
           <TxCheckbox
             :model-value="leftChecked.includes(item.key)"
             :disabled="item.disabled"
+            :aria-label="item.label"
             @update:model-value="(checked) => (leftChecked = updateChecked(leftChecked, item.key, checked))"
           />
-          <span class="tx-transfer__label">{{ item.label }}</span>
+          <!-- The row text is exposed to AT through the checkbox's aria-label above;
+               hide the visible copy so screen readers don't announce it twice. -->
+          <span class="tx-transfer__label" aria-hidden="true">{{ item.label }}</span>
         </label>
       </div>
     </div>
@@ -184,9 +187,12 @@ function handleRemove() {
           <TxCheckbox
             :model-value="rightChecked.includes(item.key)"
             :disabled="item.disabled"
+            :aria-label="item.label"
             @update:model-value="(checked) => (rightChecked = updateChecked(rightChecked, item.key, checked))"
           />
-          <span class="tx-transfer__label">{{ item.label }}</span>
+          <!-- The row text is exposed to AT through the checkbox's aria-label above;
+               hide the visible copy so screen readers don't announce it twice. -->
+          <span class="tx-transfer__label" aria-hidden="true">{{ item.label }}</span>
         </label>
       </div>
     </div>

@@ -24,4 +24,26 @@ describe('txTagInput', () => {
     await wrapper.find('.tx-tag__close').trigger('click')
     expect(wrapper.emitted('remove')?.[0][0]).toBe('foo')
   })
+
+  it('splits on a "-" separator without crashing or eating characters', async () => {
+    const wrapper = mount(TxTagInput, {
+      props: { modelValue: [], separators: [',', '-', ' '] },
+    })
+
+    const input = wrapper.find('input')
+    await input.setValue('a-b ')
+
+    expect(wrapper.emitted('update:modelValue')?.[0][0]).toEqual(['a', 'b'])
+  })
+
+  it('removes only the clicked chip when duplicates are allowed', async () => {
+    const wrapper = mount(TxTagInput, {
+      props: { modelValue: ['foo', 'foo', 'bar'], allowDuplicates: true },
+    })
+
+    const closeButtons = wrapper.findAll('.tx-tag__close')
+    await closeButtons[0].trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0][0]).toEqual(['foo', 'bar'])
+  })
 })

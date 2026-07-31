@@ -6,6 +6,10 @@ const VirtualList = withInstall(TxVirtualList)
 
 export { TxVirtualList, VirtualList }
 export type { VirtualListEmits, VirtualListItemKey, VirtualListKey, VirtualListProps }
-export type TxVirtualListInstance = InstanceType<typeof TxVirtualList>
+export interface TxVirtualListInstance {
+  scrollToIndex: (index: number) => void
+  scrollToTop: () => void
+  scrollToBottom: () => void
+}
 
 export default VirtualList

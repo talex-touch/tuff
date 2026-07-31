@@ -53,7 +53,7 @@ const overlayStyle = computed<CSSProperties>(() => {
 <template>
   <span class="tx-corner-overlay">
     <slot />
-    <span v-if="$slots.overlay" class="tx-corner-overlay__overlay" :style="overlayStyle" aria-hidden="true">
+    <span v-if="$slots.overlay" class="tx-corner-overlay__overlay" :style="overlayStyle" :aria-hidden="overlayPointerEvents === 'auto' ? undefined : 'true'">
       <slot name="overlay" />
     </span>
   </span>

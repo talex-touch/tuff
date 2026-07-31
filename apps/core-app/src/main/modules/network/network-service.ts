@@ -13,9 +13,13 @@ import type {
   NetworkLifecycleStatusPayload
 } from '@talex-touch/utils/transport/events/types'
 import type { ProxyConfig, Session } from 'electron'
+import type { IncomingHttpHeaders, RequestOptions as NodeHttpRequestOptions } from 'node:http'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
+import { request as httpRequest } from 'node:http'
+import { request as httpsRequest } from 'node:https'
+import { isIP } from 'node:net'
 import { Readable } from 'node:stream'
 import { StorageList } from '@talex-touch/utils'
 import {
@@ -76,6 +80,11 @@ interface NetworkStreamResponse {
 interface NetworkPolicySettlement {
   success: () => void
   failure: () => void
+}
+
+export interface PinnedNetworkRequestPolicy {
+  readonly resolvedAddresses: readonly string[]
+  readonly maxResponseBytes: number
 }
 
 type NetworkResultLifecycle<T> = (result: T, settlement: NetworkPolicySettlement) => T
@@ -230,6 +239,48 @@ function normalizeHeaders(headers: Headers): Record<string, string> {
     result[key] = value
   })
   return result
+}
+
+function normalizeNodeHeaders(headers: IncomingHttpHeaders): Record<string, string> {
+  const output: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === 'string') output[key] = value
+    else if (Array.isArray(value)) output[key] = value.join(', ')
+  }
+  return output
+}
+
+function serializePinnedRequestBody(options: NetworkRequestOptions): Buffer | undefined {
+  const method = (options.method ?? 'GET').toUpperCase()
+  if (
+    options.body === undefined ||
+    options.body === null ||
+    method === 'GET' ||
+    method === 'HEAD'
+  ) {
+    return undefined
+  }
+  if (typeof options.body === 'string') return Buffer.from(options.body, 'utf8')
+  if (options.body instanceof ArrayBuffer) return Buffer.from(options.body)
+  if (ArrayBuffer.isView(options.body)) {
+    return Buffer.from(options.body.buffer, options.body.byteOffset, options.body.byteLength)
+  }
+  return Buffer.from(JSON.stringify(options.body), 'utf8')
+}
+
+function parsePinnedResponseBody(
+  bytes: Buffer,
+  responseType: NetworkRequestOptions['responseType']
+): unknown {
+  if (responseType === 'arrayBuffer') return toArrayBuffer(bytes)
+  const text = bytes.toString('utf8')
+  if (responseType === 'text') return text
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return text
+  }
 }
 
 function getBody(method: string, body: unknown, headers: Headers): BodyInit | undefined {
@@ -560,6 +611,19 @@ export class NetworkService {
     })
   }
 
+  async requestPinnedNoRedirect<T = unknown>(
+    options: NetworkRequestOptions,
+    policy: PinnedNetworkRequestPolicy
+  ): Promise<NetworkResponse<T>> {
+    const responseType = options.responseType ?? 'json'
+    if (responseType === 'stream') {
+      throw new Error('NETWORK_STREAM_NOT_SUPPORTED_FOR_TYPED_RESPONSE')
+    }
+    return await this.executeWithPolicies(options, async () => {
+      return (await this.executePinnedRequest(options, policy)) as NetworkResponse<T>
+    })
+  }
+
   async fetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
     const url = typeof input === 'string' ? input : input.toString()
     const method = (init.method ?? 'GET').toUpperCase() as NetworkRequestOptions['method']
@@ -757,6 +821,140 @@ export class NetworkService {
 
     const delay = baseDelay * backoffFactor ** Math.max(0, attempt - 1)
     return Math.min(Math.max(0, Math.floor(delay)), Math.max(0, maxDelay))
+  }
+
+  private async executePinnedRequest(
+    options: NetworkRequestOptions,
+    policy: PinnedNetworkRequestPolicy
+  ): Promise<NetworkResponse> {
+    const targetUrl = appendQuery(options.url, options.query)
+    let parsed: URL
+    try {
+      parsed = new URL(targetUrl)
+    } catch {
+      throw new Error('NETWORK_PINNED_URL_INVALID')
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error('NETWORK_PINNED_URL_INVALID')
+    }
+    if (
+      !Array.isArray(policy.resolvedAddresses) ||
+      policy.resolvedAddresses.length < 1 ||
+      policy.resolvedAddresses.some(
+        (address) => typeof address !== 'string' || isIP(address) === 0
+      ) ||
+      !Number.isSafeInteger(policy.maxResponseBytes) ||
+      policy.maxResponseBytes < 1 ||
+      policy.maxResponseBytes > 16 * 1024 * 1024
+    ) {
+      throw new Error('NETWORK_PINNED_POLICY_INVALID')
+    }
+
+    const resolvedAddresses = [...new Set(policy.resolvedAddresses)]
+    const selectedAddress = resolvedAddresses[0]
+    const family = isIP(selectedAddress) as 4 | 6
+    const timeoutMs =
+      typeof options.timeoutMs === 'number' && Number.isFinite(options.timeoutMs)
+        ? Math.max(100, Math.floor(options.timeoutMs))
+        : this.getConfigFromSettings().timeoutMs
+    const method = (options.method ?? 'GET').toUpperCase()
+    const headers = { ...(options.headers ?? {}), 'accept-encoding': 'identity' }
+    const body = serializePinnedRequestBody(options)
+    if (body && !Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+      headers['content-type'] = 'application/json'
+    }
+    if (body) headers['content-length'] = String(body.byteLength)
+
+    return await new Promise<NetworkResponse>((resolve, reject) => {
+      let settled = false
+      const signal = options.signal
+      const finish = (callback: () => void): void => {
+        if (settled) return
+        settled = true
+        signal?.removeEventListener('abort', onAbort)
+        callback()
+      }
+      const fail = (error: unknown): void => finish(() => reject(error))
+      const onAbort = (): void => {
+        request.destroy(new Error('NETWORK_REQUEST_ABORTED'))
+      }
+      const requestOptions: NodeHttpRequestOptions = {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname.replace(/^\[|\]$/g, ''),
+        port: parsed.port || undefined,
+        method,
+        path: `${parsed.pathname}${parsed.search}`,
+        headers,
+        maxHeaderSize: 64 * 1024,
+        lookup: (_hostname, lookupOptions, callback) => {
+          if (lookupOptions.all) {
+            callback(null, [{ address: selectedAddress, family }])
+            return
+          }
+          callback(null, selectedAddress, family)
+        }
+      }
+      const requestFactory = parsed.protocol === 'https:' ? httpsRequest : httpRequest
+      const request = requestFactory(requestOptions, (response) => {
+        const declaredLength = Number(response.headers['content-length'])
+        if (Number.isFinite(declaredLength) && declaredLength > policy.maxResponseBytes) {
+          const error = new Error('NETWORK_RESPONSE_TOO_LARGE')
+          fail(error)
+          response.destroy()
+          request.destroy()
+          return
+        }
+        const chunks: Buffer[] = []
+        let totalBytes = 0
+        response.on('data', (chunk: Buffer | Uint8Array | string) => {
+          const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+          totalBytes += bytes.byteLength
+          if (totalBytes > policy.maxResponseBytes) {
+            const error = new Error('NETWORK_RESPONSE_TOO_LARGE')
+            fail(error)
+            response.destroy()
+            request.destroy()
+            return
+          }
+          chunks.push(bytes)
+        })
+        response.once('error', fail)
+        response.once('end', () => {
+          const status = response.statusCode ?? 0
+          if (!isSuccessStatus(status, options.validateStatus)) {
+            fail(new NetworkHttpStatusError(status, response.statusMessage ?? '', targetUrl))
+            return
+          }
+          const data = parsePinnedResponseBody(
+            Buffer.concat(chunks, totalBytes),
+            options.responseType ?? 'json'
+          )
+          finish(() =>
+            resolve({
+              status,
+              statusText: response.statusMessage ?? '',
+              headers: normalizeNodeHeaders(response.headers),
+              data,
+              url: targetUrl,
+              ok: status >= 200 && status < 300
+            })
+          )
+        })
+      })
+      request.once('error', (error) => {
+        if (signal?.aborted) {
+          fail(
+            signal.reason instanceof Error ? signal.reason : new Error('NETWORK_REQUEST_ABORTED')
+          )
+          return
+        }
+        fail(error)
+      })
+      request.setTimeout(timeoutMs, () => request.destroy(new NetworkTimeoutError(timeoutMs)))
+      if (signal?.aborted) onAbort()
+      else signal?.addEventListener('abort', onAbort, { once: true })
+      request.end(body)
+    })
   }
 
   private async executeFetch(

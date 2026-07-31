@@ -102,13 +102,13 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|------|------|
-| `modelValue` | `string[]` | `[]` | Tag list |
-| `placeholder` | `string` | `'Add tag'` | Placeholder text |
-| `disabled` | `boolean` | `false` | Disabled state |
-| `max` | `number` | `20` | Max tag count |
-| `allowDuplicates` | `boolean` | `false` | Allow duplicate tags |
-| `separators` | `string[]` | `[',']` | Separator characters |
-| `confirmOnBlur` | `boolean` | `true` | Confirm on blur |
+| `modelValue` | `string[]` | `[]` | Controlled tag list and the single source of truth; every add/remove emits a new array via `update:modelValue`. |
+| `placeholder` | `string` | `'Add tag'` | Placeholder text; cleared once `max` is reached. |
+| `disabled` | `boolean` | `false` | Blocks adding/removing and disables the close button on existing tags. |
+| `max` | `number` | `20` | Hard cap on tag count; set it to the smallest useful limit. Reaching it disables the inner input and hides the placeholder. |
+| `allowDuplicates` | `boolean` | `false` | Whether duplicate tags are allowed; when off, dedup is exact after trimming (case-sensitive). |
+| `separators` | `string[]` | `[',']` | Characters that split pasted / typed text; add every delimiter you show in help text. Enter always confirms the current input. |
+| `confirmOnBlur` | `boolean` | `true` | Whether unfinished input is committed on blur. |
 
 ### Events
 

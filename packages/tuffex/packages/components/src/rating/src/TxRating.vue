@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { TxIconSource } from '../../icon'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TxIcon } from '../../icon'
+
+defineOptions({ name: 'TxRating' })
 
 type RatingIconValue = string | {
   type: 'emoji' | 'url' | 'file' | 'class' | 'builtin'
@@ -29,6 +31,8 @@ interface Props {
   size?: number | string
   gap?: number | string
   animated?: boolean
+  /** Localizable accessible label for each star button; defaults to English "Rate N star(s)". */
+  starLabel?: (star: number) => string
 }
 
 interface Emits {
@@ -54,6 +58,7 @@ const props = withDefaults(defineProps<Props>(), {
   size: undefined,
   gap: undefined,
   animated: true,
+  starLabel: undefined,
 })
 
 const emit = defineEmits<Emits>()
@@ -72,6 +77,13 @@ const precisionDigits = computed(() => {
 
 const hoverValue = ref<number>(props.modelValue)
 const animatedStar = ref<number | null>(null)
+
+// Sync the hover-preview baseline with external value changes so a programmatic
+// modelValue update — or a committed half-star click — renders immediately in
+// interactive mode instead of waiting for the next mouseleave.
+watch(() => props.modelValue, (value) => {
+  hoverValue.value = value
+})
 
 const filledStars = computed(() => {
   if (props.readonly || props.disabled) {
@@ -128,7 +140,13 @@ function getFilledLayerWidth(star: number) {
 }
 
 function getStarAriaChecked(star: number) {
-  return rating.value >= star
+  // Exclusive per radiogroup semantics: exactly one radio is checked (the score
+  // rounded up), not every star at or below the score.
+  return Math.ceil(rating.value) === star
+}
+
+function getStarLabel(star: number) {
+  return props.starLabel?.(star) ?? `Rate ${star} star${star !== 1 ? 's' : ''}`
 }
 
 function isEmojiIcon(value: string) {
@@ -203,7 +221,7 @@ function handleMouseLeave() {
         role="radio"
         :aria-checked="getStarAriaChecked(star)"
         :disabled="disabled || readonly"
-        :aria-label="`Rate ${star} star${star !== 1 ? 's' : ''}`"
+        :aria-label="getStarLabel(star)"
         @click="handleClick(star)"
         @mouseenter="handleMouseEnter(star)"
         @mouseleave="handleMouseLeave"

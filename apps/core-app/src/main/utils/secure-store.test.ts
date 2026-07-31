@@ -79,6 +79,109 @@ describe('secure-store local encrypted backend', () => {
     expect(files.filter((name) => name.includes('.tmp-'))).toEqual([])
   })
 
+  it('applies a multi-purpose encrypted batch with one atomic persistence step', async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), 'tuff-secure-store-'))
+    const secureStore = await import('./secure-store')
+    const rename = vi.spyOn(fs, 'rename')
+
+    await expect(
+      secureStore.applySecureStoreBatch(rootPath, [
+        { key: 'plugin.alpha.token', value: 'alpha', purpose: 'plugin-secret' },
+        { key: 'provider.openai.api-key', value: 'provider', purpose: 'provider-credential' }
+      ])
+    ).resolves.toBe(true)
+
+    expect(rename).toHaveBeenCalledTimes(1)
+    await expect(
+      secureStore.getSecureStoreValueStrict(rootPath, 'plugin.alpha.token', 'plugin-secret')
+    ).resolves.toBe('alpha')
+    await expect(
+      secureStore.getSecureStoreValueStrict(
+        rootPath,
+        'provider.openai.api-key',
+        'provider-credential'
+      )
+    ).resolves.toBe('provider')
+  })
+
+  it('rejects a stale batch revision without mutating encrypted entries', async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), 'tuff-secure-store-'))
+    const secureStore = await import('./secure-store')
+    const batch = [
+      { key: 'plugin.alpha.token', value: 'new-alpha', purpose: 'plugin-secret' }
+    ] as const
+
+    await secureStore.setSecureStoreValue(
+      rootPath,
+      'plugin.alpha.token',
+      'old-alpha',
+      'plugin-secret'
+    )
+    const snapshot = await secureStore.getSecureStoreBatchSnapshot(rootPath, batch)
+    await secureStore.setSecureStoreValue(rootPath, 'plugin.beta.token', 'beta', 'plugin-secret')
+
+    await expect(
+      secureStore.applySecureStoreBatch(rootPath, batch, {
+        conflictPolicy: 'overwrite',
+        expectedRevision: snapshot.revision
+      })
+    ).resolves.toEqual({
+      persisted: false,
+      conflict: true,
+      applied: 0,
+      overwritten: 0,
+      skipped: 0
+    })
+    await expect(
+      secureStore.getSecureStoreValueStrict(rootPath, 'plugin.alpha.token', 'plugin-secret')
+    ).resolves.toBe('old-alpha')
+  })
+
+  it('rejects hostile batch DTOs before encrypted store work', async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), 'tuff-secure-store-'))
+    const secureStore = await import('./secure-store')
+    const getter = vi.fn(() => 'synthetic-secret')
+    const accessor = Object.defineProperty(
+      { key: 'plugin.alpha.token', purpose: 'plugin-secret' },
+      'value',
+      { enumerable: true, get: getter }
+    )
+    const sparse = new Array(1)
+    const arraySubclass = [
+      { key: 'plugin.alpha.token', value: 'synthetic-secret', purpose: 'plugin-secret' }
+    ]
+    Object.setPrototypeOf(arraySubclass, Object.create(Array.prototype))
+    const proxyGetPrototype = vi.fn(() => Array.prototype)
+    const proxy = new Proxy(
+      [{ key: 'plugin.alpha.token', value: 'synthetic-secret', purpose: 'plugin-secret' }],
+      { getPrototypeOf: proxyGetPrototype }
+    )
+
+    for (const batch of [
+      sparse,
+      arraySubclass,
+      proxy,
+      [accessor],
+      [
+        { key: 'plugin.alpha.token', value: 'first' },
+        { key: ' plugin.alpha.token ', value: 'duplicate' }
+      ],
+      [{ key: '__proto__', value: 'synthetic-secret' }]
+    ]) {
+      await expect(secureStore.applySecureStoreBatch(rootPath, batch as never)).rejects.toThrow()
+    }
+    await expect(
+      secureStore.applySecureStoreBatch(
+        rootPath,
+        [{ key: 'plugin.alpha.token', value: 'synthetic-secret' }],
+        { conflictPolicy: 'overwrite', expectedRevision: 'not-a-revision' }
+      )
+    ).rejects.toThrow('INVALID_SECURE_STORE_BATCH_OPTIONS')
+    expect(getter).not.toHaveBeenCalled()
+    expect(proxyGetPrototype).not.toHaveBeenCalled()
+    await expect(readdir(rootPath)).resolves.toEqual([])
+  })
+
   it('preserves the previous file when atomic rename fails', async () => {
     const rootPath = await mkdtemp(path.join(tmpdir(), 'tuff-secure-store-'))
     const secureStore = await import('./secure-store')
@@ -128,6 +231,74 @@ describe('secure-store local encrypted backend', () => {
     await expect(
       secureStore.getSecureStoreValue(rootPath, 'plugin.beta.token', 'plugin-secret')
     ).resolves.toBe('beta-token')
+  })
+
+  it('atomically purges and verifies both exact plugin Secret namespaces', async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), 'tuff-secure-store-'))
+    const secureStore = await import('./secure-store')
+    const prefixes = ['plugin.alpha.', 'plugin.v2.YWxwaGE.'] as const
+
+    await Promise.all([
+      secureStore.setSecureStoreValue(
+        rootPath,
+        'plugin.alpha.token',
+        'legacy-token',
+        'plugin-secret'
+      ),
+      secureStore.setSecureStoreValue(
+        rootPath,
+        'plugin.v2.YWxwaGE.token',
+        'v2-token',
+        'plugin-secret'
+      ),
+      secureStore.setSecureStoreValue(
+        rootPath,
+        'plugin.alpha2.token',
+        'other-token',
+        'plugin-secret'
+      )
+    ])
+
+    await expect(secureStore.countSecureStoreValuesByPrefixes(rootPath, prefixes)).resolves.toBe(2)
+    await expect(secureStore.deleteSecureStoreValuesByPrefixes(rootPath, prefixes)).resolves.toBe(2)
+    await expect(secureStore.countSecureStoreValuesByPrefixes(rootPath, prefixes)).resolves.toBe(0)
+    await expect(
+      secureStore.getSecureStoreValue(rootPath, 'plugin.alpha2.token', 'plugin-secret')
+    ).resolves.toBe('other-token')
+  })
+
+  it('retains every matching namespace when an atomic multi-prefix write fails', async () => {
+    const rootPath = await mkdtemp(path.join(tmpdir(), 'tuff-secure-store-'))
+    const secureStore = await import('./secure-store')
+    await secureStore.setSecureStoreValue(
+      rootPath,
+      'plugin.alpha.token',
+      'legacy-token',
+      'plugin-secret'
+    )
+    await secureStore.setSecureStoreValue(
+      rootPath,
+      'plugin.v2.YWxwaGE.token',
+      'v2-token',
+      'plugin-secret'
+    )
+    const rename = vi
+      .spyOn(fs, 'rename')
+      .mockRejectedValueOnce(new Error('synthetic rename failure'))
+
+    await expect(
+      secureStore.deleteSecureStoreValuesByPrefixes(rootPath, [
+        'plugin.alpha.',
+        'plugin.v2.YWxwaGE.'
+      ])
+    ).rejects.toThrow('synthetic rename failure')
+    rename.mockRestore()
+    await expect(
+      secureStore.countSecureStoreValuesByPrefixes(rootPath, [
+        'plugin.alpha.',
+        'plugin.v2.YWxwaGE.'
+      ])
+    ).resolves.toBe(2)
   })
 
   it('does not overwrite a corrupt secure store during mutation', async () => {

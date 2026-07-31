@@ -13,7 +13,9 @@ describe('txTag', () => {
       },
     })
 
-    expect(wrapper.attributes('role')).toBe('status')
+    // A tag is static metadata, not a live region: it must not carry role="status"
+    // (implicit aria-live), which would make every tag re-announce on content change.
+    expect(wrapper.attributes('role')).toBeUndefined()
     expect(wrapper.classes()).toContain('tx-tag--sm')
     expect(wrapper.find('.tx-tag__content').text()).toBe('Beta')
     expect(wrapper.find('.tx-tag__icon').classes()).toContain('i-carbon-star')
@@ -79,5 +81,14 @@ describe('txTag', () => {
 
     expect(wrapper.emitted('click')).toBeUndefined()
     expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('exposes a localizable close-button aria-label', () => {
+    const wrapper = mount(TxTag, {
+      props: { label: 'Vue', closable: true, closeAriaLabel: '移除标签' },
+    })
+
+    // Pre-fix the close button hardcoded aria-label="Remove tag" with no override.
+    expect(wrapper.find('.tx-tag__close').attributes('aria-label')).toBe('移除标签')
   })
 })

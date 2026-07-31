@@ -97,6 +97,7 @@ const mocks = vi.hoisted(() => ({
   persistMainConfig: vi.fn(() => Promise.resolve()),
   subscribeMainConfig: vi.fn(() => vi.fn()),
   capture: vi.fn<() => Promise<NativeScreenshotCaptureResult>>(),
+  releaseTempArtifact: vi.fn(() => Promise.resolve(true)),
   listDisplays: vi.fn<() => NativeScreenshotDisplay[]>(),
   getSupport: vi.fn(),
   getActiveScreenshotSessionId: vi.fn<() => string | null>(),
@@ -300,6 +301,7 @@ vi.mock('../native-capabilities/screenshot-service', () => ({
     copyCaptureResource: mocks.copyCaptureResource,
     writeCaptureResourceToClipboard: mocks.writeCaptureResourceToClipboard,
     readCaptureResource: mocks.readCaptureResource,
+    releaseTempArtifact: mocks.releaseTempArtifact,
     getSupport: mocks.getSupport,
     listDisplays: mocks.listDisplays
   }))
@@ -1279,7 +1281,38 @@ describe('AssistantModule screenshot translation', () => {
       'tfile:///tmp/native/screenshots/source-screenshot.png',
       '/tmp/tuff-screenshot.png'
     )
+    expect(mocks.releaseTempArtifact).toHaveBeenCalledWith(
+      'tfile:///tmp/native/screenshots/source-screenshot.png'
+    )
     expect(mocks.translateImageBase64).not.toHaveBeenCalled()
+
+    await module.onDestroy({} as never)
+  })
+
+  it('does not release a borrowed screenshot resource after saving it', async () => {
+    const resource = {
+      tfileUrl: 'tfile:///tmp/native/screenshots/borrowed-screenshot.png',
+      mimeType: 'image/png' as const,
+      width: 12,
+      height: 8,
+      sizeBytes: 128
+    }
+    const { handler, module } = await createInitializedModuleWithHandler(
+      AssistantEvents.voice.saveScreenshot.toEventName()
+    )
+
+    const result = await handler(
+      { target: 'resource', tfileUrl: resource.tfileUrl, resource },
+      {} as HandlerContext
+    )
+
+    expect(result).toMatchObject({ success: true, sizeBytes: 128 })
+    expect(mocks.capture).not.toHaveBeenCalled()
+    expect(mocks.copyCaptureResource).toHaveBeenCalledWith(
+      resource.tfileUrl,
+      '/tmp/tuff-screenshot.png'
+    )
+    expect(mocks.releaseTempArtifact).not.toHaveBeenCalled()
 
     await module.onDestroy({} as never)
   })
@@ -1304,6 +1337,9 @@ describe('AssistantModule screenshot translation', () => {
       canceled: true
     })
     expect(mocks.copyCaptureResource).not.toHaveBeenCalled()
+    expect(mocks.releaseTempArtifact).toHaveBeenCalledWith(
+      'tfile:///tmp/native/screenshots/source-screenshot.png'
+    )
 
     await module.onDestroy({} as never)
   })

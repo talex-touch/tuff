@@ -1,0 +1,123 @@
+[
+ {
+  "component": "card-item",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "card-item 的 zh/en frontmatter 只有 6 个字段，缺 `status` 与 `since`（同组的 error-state、group-block 都有；组件文档集里 95/118 的 zh 文档带 status）。",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/card-item.zh.mdc",
+  "evidenceLine": 5,
+  "evidenceQuote": "tags: [card, list, settings]",
+  "suggestion": "在 zh/en frontmatter 补 `status:`（如 `stable` 或 `beta`）和 `since:`（首次发布版本号），凑齐 title/description/category/status/since/tags/syncStatus/verified 8 字段。",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "agents",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "agents.zh.mdc / .en.mdc frontmatter is missing `status` and `since` (only title / description / category / tags / syncStatus / verified are present).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/agents.zh.mdc",
+  "evidenceLine": 4,
+  "evidenceQuote": "category: Data\ntags: [agents, list, selection]",
+  "suggestion": "Add `status:` and `since:` to both agents.zh.mdc and agents.en.mdc frontmatter, using copy-button.zh.mdc:5-6 (`status: beta` / `since: 1.0.0`) as the template.",
+  "failure_scenario": "The component index and sync dashboard render Agents without a stability badge or introduction version, so a consumer cannot tell whether `TxAgentsList` is stable enough to depend on.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "splitter",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "Both splitter docs omit the `status` and `since` frontmatter fields that the rest of the component docs carry (compare empty-state/floating/offline-state, which all have `status: beta` and `since: 1.0.0`).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/splitter.zh.mdc",
+  "evidenceLine": 5,
+  "evidenceQuote": "tags: [layout, resize, panels]",
+  "suggestion": "Add `status:` and `since:` to splitter.zh.mdc and splitter.en.mdc frontmatter so the 8-field contract (title/description/category/status/since/tags/syncStatus/verified) holds.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "tab-bar",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "Both tab-bar docs omit the `status` and `since` frontmatter fields required by the 8-field standard.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/tab-bar.zh.mdc",
+  "evidenceLine": 5,
+  "evidenceQuote": "tags: [navigation, tabs, mobile]",
+  "suggestion": "Add `status: beta` (or the real maturity) and `since: 1.0.0` to tab-bar.zh.mdc and tab-bar.en.mdc frontmatter.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "skeleton",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "The body restates `status: beta` as a blockquote line `> **状态**：Beta`, duplicating frontmatter that the doc shell already renders.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/skeleton.zh.mdc",
+  "evidenceLine": 15,
+  "evidenceQuote": "> **状态**：Beta",
+  "suggestion": "Delete the `> **状态**：Beta` line (and `> **Status**: Beta` at skeleton.en.mdc:15) and let the `status: beta` frontmatter field be the single source of truth; keep only the one-line purpose sentence.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "tuff-logo-stroke",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "tuff-logo-stroke frontmatter has title/description/category/tags/syncStatus/verified but is missing `status` and `since` in both zh and en.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/tuff-logo-stroke.zh.mdc",
+  "evidenceLine": 5,
+  "evidenceQuote": "tags: [logo, svg, animation]",
+  "suggestion": "Add `status: beta` and `since: 1.0.0` between `category` and `tags` in both tuff-logo-stroke.zh.mdc and tuff-logo-stroke.en.mdc.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "gradual-blur",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "Both gradual-blur.zh.mdc and gradual-blur.en.mdc frontmatter omit the required `status` and `since` fields (only title/description/category/tags/syncStatus/verified are present), unlike the other four components in this shard.",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/gradual-blur.zh.mdc",
+  "evidenceLine": 5,
+  "evidenceQuote": "tags: [blur, edge-fade, overlay, backdrop-filter]",
+  "suggestion": "Insert `status: beta` and `since: <first shipping version>` between `category: Effects` and `tags:` in both locale files so the frontmatter matches the 8-field standard.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "picker",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "picker.zh.mdc and picker.en.mdc frontmatter is missing `status`, `since`, and `tags` (only title/description/category/syncStatus/verified are present).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/picker.zh.mdc",
+  "evidenceLine": 4,
+  "evidenceQuote": "category: Form",
+  "suggestion": "Add `status: beta`, `since: 1.0.0`, and `tags: [picker, wheel, form, selection]` to both language files so Picker matches the 8-field frontmatter standard used by checkbox and progress-bar.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "date-picker",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "Both date-picker docs are missing the `status`, `since`, and `tags` frontmatter fields (only title/description/category/syncStatus/verified are present).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/date-picker.zh.mdc",
+  "evidenceLine": 5,
+  "evidenceQuote": "syncStatus: reviewed",
+  "suggestion": "Add `status: beta`, `since: 1.0.0`, and `tags: [date-picker, form, calendar]` to both date-picker.zh.mdc and date-picker.en.mdc so the frontmatter matches the 8-field standard used by cascader/flat-input/switch.",
+  "verdict": "PLAUSIBLE"
+ },
+ {
+  "component": "text-transformer",
+  "dimension": "D5",
+  "category": "d5-frontmatter",
+  "severity": "low",
+  "summary": "Both zh and en frontmatter omit `status` and `since`, so the component shows no maturity or availability signal (the other four components in this shard except stat-card declare `status: beta` / `since: 1.0.0`).",
+  "evidenceFile": "apps/nexus/content/docs/dev/components/text-transformer.zh.mdc",
+  "evidenceLine": 6,
+  "evidenceQuote": "syncStatus: reviewed",
+  "suggestion": "Add `status: beta` and `since: 1.0.0` to both `text-transformer.zh.mdc` and `text-transformer.en.mdc` frontmatter.",
+  "verdict": "PLAUSIBLE"
+ }
+]

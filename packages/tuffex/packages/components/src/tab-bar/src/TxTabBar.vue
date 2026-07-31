@@ -43,7 +43,6 @@ function onPick(v: TabBarValue, disabled?: boolean) {
     class="tx-tab-bar"
     :class="{ 'is-fixed': fixed, 'is-disabled': disabled }"
     :style="rootStyle"
-    role="tablist"
   >
     <div class="tx-tab-bar__inner">
       <button
@@ -53,8 +52,7 @@ function onPick(v: TabBarValue, disabled?: boolean) {
         class="tx-tab-bar__item"
         :class="{ 'is-active': value === it.value, 'is-item-disabled': !!it.disabled }"
         :disabled="disabled || !!it.disabled"
-        role="tab"
-        :aria-selected="value === it.value"
+        :aria-current="value === it.value ? 'page' : undefined"
         @click="onPick(it.value, it.disabled)"
       >
         <div class="tx-tab-bar__icon">

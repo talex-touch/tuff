@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { AvatarProps } from './types'
 import type { CSSProperties } from 'vue'
+import type { AvatarProps } from './types'
 import { computed, ref } from 'vue'
 import { TxIcon } from '../../icon'
 
@@ -14,11 +14,11 @@ const props = withDefaults(defineProps<AvatarProps>(), {
   clickable: false,
 })
 
+const emit = defineEmits<Emits>()
+
 interface Emits {
   click: []
 }
-
-const emit = defineEmits<Emits>()
 
 const imageError = ref(false)
 
@@ -112,6 +112,19 @@ function handleClick() {
     emit('click')
   }
 }
+
+function handleKeydown(ev: KeyboardEvent) {
+  // Only the avatar root itself activates; ignore Enter/Space bubbling up from
+  // focusable slot content.
+  if (ev.target !== ev.currentTarget)
+    return
+  if (!props.clickable)
+    return
+  if (ev.key !== 'Enter' && ev.key !== ' ')
+    return
+  ev.preventDefault()
+  emit('click')
+}
 </script>
 
 <template>
@@ -122,7 +135,10 @@ function handleClick() {
       { 'tx-avatar--clickable': clickable },
     ]"
     :style="customStyle"
+    :role="clickable ? 'button' : undefined"
+    :tabindex="clickable ? 0 : undefined"
     @click="handleClick"
+    @keydown="handleKeydown"
   >
     <img
       v-if="src && !imageError"
@@ -204,6 +220,11 @@ function handleClick() {
 .tx-avatar--clickable {
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.tx-avatar--clickable:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+  outline-offset: 2px;
 }
 
 .tx-avatar--clickable:hover {

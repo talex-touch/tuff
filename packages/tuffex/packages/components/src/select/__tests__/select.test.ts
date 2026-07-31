@@ -70,6 +70,36 @@ describe('txSelect', () => {
     expect(wrapper.emitted('change')).toBeUndefined()
   })
 
+  it('exposes listbox, option, and combobox semantics', () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        modelValue: 'beta',
+        eager: true,
+        options: [
+          { value: 'alpha', label: 'Alpha' },
+          { value: 'beta', label: 'Beta' },
+        ],
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+      },
+    })
+
+    // The single-select trigger declares combobox semantics like the multi trigger.
+    const trigger = wrapper.find('.tuff-select__trigger input')
+    expect(trigger.attributes('role')).toBe('combobox')
+    expect(trigger.attributes('aria-haspopup')).toBe('listbox')
+
+    // The list is a listbox whose options carry role + aria-selected.
+    const list = wrapper.find('.tuff-select__list')
+    expect(list.attributes('role')).toBe('listbox')
+
+    const options = wrapper.findAll('.tuff-select__option')
+    expect(options[0].attributes('role')).toBe('option')
+    expect(options[0].attributes('aria-selected')).toBe('false')
+    expect(options[1].attributes('aria-selected')).toBe('true')
+  })
+
   it('filters local options when searchable', async () => {
     const wrapper = mountSelect({ searchable: true })
     const input = wrapper.find('.tuff-select__search input')
@@ -276,5 +306,42 @@ describe('txSelect', () => {
     })
 
     expect(wrapper.find('.tuff-select').classes()).toContain('is-status-error')
+  })
+
+  it('shows emptyText in slot mode when the search query matches nothing', async () => {
+    const wrapper = mountSelect({ searchable: true, emptyText: 'Nothing found' })
+
+    await wrapper.find('.tuff-select__search input').setValue('zzz')
+
+    // None of Alpha / Beta / Gamma Slot match: the empty state must render.
+    expect(wrapper.text()).toContain('Nothing found')
+  })
+
+  it('renders a single search field for multiple + searchable + options', async () => {
+    const wrapper = mount(TxSelect, {
+      props: {
+        multiple: true,
+        searchable: true,
+        modelValue: [],
+        options: [
+          { value: 'alpha', label: 'Alpha' },
+          { value: 'beta', label: 'Beta' },
+          { value: 'gamma', label: 'Gamma' },
+        ],
+      },
+      global: {
+        stubs: { TxPopover: PopoverStub },
+      },
+    })
+
+    // The dead panel search box is gone; only the inline multi-input remains.
+    expect(wrapper.findAll('.tuff-select__search')).toHaveLength(0)
+    expect(wrapper.findAll('.tuff-select__multi-input')).toHaveLength(1)
+
+    // And that single field actually filters the options.
+    await wrapper.find('.tuff-select__multi-input').setValue('Beta')
+    const options = wrapper.findAll('.tuff-select__option')
+    expect(options).toHaveLength(1)
+    expect(options[0].text()).toContain('Beta')
   })
 })

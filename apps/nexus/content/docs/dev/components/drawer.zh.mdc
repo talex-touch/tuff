@@ -89,7 +89,7 @@ code: |
 
 使用 `header` / `footer` 插槽自定义头尾区域，也可以用 `show-header` / `show-footer` 关闭。Drawer 内置 Header/Footer 分割线复用 `TxDivider`；`mask-effect` 支持 `blur`、`opacity`、`transparent`，`panel-transparent` 可让面板透出背部内容。
 
-### Slots / effects / mobile / close controls
+### 自定义头尾插槽 + 遮罩效果
 :::TuffDemoWrapper{demo="DrawerSlotsEffectsDemo" code-lang="vue"}
 ---
 code: |

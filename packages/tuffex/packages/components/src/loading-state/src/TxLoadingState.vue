@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { LoadingStateProps } from './types'
+import type { LoadingStateEmits, LoadingStateProps } from './types'
 import { TxEmptyState } from '../../empty-state'
 
 defineOptions({
@@ -7,10 +7,16 @@ defineOptions({
 })
 
 const props = defineProps<LoadingStateProps>()
+const emit = defineEmits<LoadingStateEmits>()
 </script>
 
 <template>
-  <TxEmptyState v-bind="props" variant="loading">
+  <TxEmptyState
+    v-bind="props"
+    variant="loading"
+    @primary="emit('primary')"
+    @secondary="emit('secondary')"
+  >
     <template v-if="$slots.icon" #icon>
       <slot name="icon" />
     </template>

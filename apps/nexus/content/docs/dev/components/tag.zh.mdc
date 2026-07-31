@@ -107,7 +107,7 @@ code: |
 
 ## 交互契约
 
-- 根元素渲染 `role="status"`；标签文案必须不依赖颜色也能表达含义。
+- 根元素是静态元数据，不带 live region 角色；标签文案必须不依赖颜色也能表达含义。
 - `label` 默认是空字符串；`null` 会归一化为空字符串。
 - 默认插槽会替换 `label` 内容，但保留图标和关闭按钮区域。
 - `color` 默认是 `var(--tx-color-primary)`；未传 `background` 与 `border` 时会基于 `color` 用 `color-mix` 派生。
@@ -129,6 +129,7 @@ code: |
 | `size` | `'sm' \| 'md'` | `'sm'` | 标签密度。 |
 | `closable` | `boolean` | `false` | 渲染关闭按钮。 |
 | `disabled` | `boolean` | `false` | 禁用标签点击与关闭交互。 |
+| `pill` | `boolean` | `false` | 使用全圆角胶囊外形（根节点加 `.pill` class）；用于筛选芯片等需要与方角标签在形状上区分的场景。 |
 
 ### Events
 

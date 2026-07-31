@@ -1,5 +1,5 @@
-import type { TranslationProvider } from '../types/translation'
 import type { SecureStoreHealthResponse } from '@talex-touch/utils/transport/events/types'
+import type { TranslationProvider } from '../types/translation'
 import {
   applyProviderPresentation,
   getEnabledProviderIds,
@@ -56,10 +56,6 @@ export function stripProviderSecrets(providerId: string, config: Record<string, 
   return next
 }
 
-function hasProviderSecrets(providerId: string, config: Record<string, any>): boolean {
-  return (PROVIDER_SECRET_FIELDS[providerId] || []).some(field => typeof config[field] === 'string' && config[field].trim())
-}
-
 function hasProviderSecretFields(providerId: string, config: Record<string, any>): boolean {
   return (PROVIDER_SECRET_FIELDS[providerId] || []).some(field => field in config)
 }
@@ -68,7 +64,10 @@ export function useTranslationProvider() {
   const storage = usePluginStorage()
   const secret = usePluginSecret()
 
-  const mergeProviderSecrets = async (providerId: string, config: Record<string, any>): Promise<Record<string, any>> => {
+  const mergeProviderSecrets = async (
+    providerId: string,
+    config: Record<string, any>,
+  ): Promise<Record<string, any>> => {
     const next = { ...config }
     const secretFields = PROVIDER_SECRET_FIELDS[providerId] || []
     for (const field of secretFields) {
@@ -81,32 +80,25 @@ export function useTranslationProvider() {
   }
 
   const saveProviderSecrets = async (providerId: string, config: Record<string, any>): Promise<boolean> => {
-    const secretFields = PROVIDER_SECRET_FIELDS[providerId] || []
-    const results = await Promise.all(secretFields.map(async (field) => {
-      if (!(field in config)) {
-        return true
-      }
-      const value = typeof config[field] === 'string' ? config[field].trim() : ''
-      if (value) {
-        const result = await secret.set(getProviderSecretKey(providerId, field), value)
-        return result.success
-      }
-      const result = await secret.delete(getProviderSecretKey(providerId, field))
-      return result.success
-    }))
-    return results.every(Boolean)
+    const entries = (PROVIDER_SECRET_FIELDS[providerId] || [])
+      .filter(field => field in config)
+      .map((field) => {
+        const value = typeof config[field] === 'string' ? config[field] : ''
+        return { key: getProviderSecretKey(providerId, field), value: value.trim() ? value : null }
+      })
+    if (entries.length === 0) {
+      return true
+    }
+    const result = await secret.setMany(entries)
+    return result.success
   }
 
   const deleteAllProviderSecrets = async (): Promise<boolean> => {
-    const results = await Promise.all(
-      Object.entries(PROVIDER_SECRET_FIELDS).flatMap(([providerId, fields]) =>
-        fields.map(async (field) => {
-          const result = await secret.delete(getProviderSecretKey(providerId, field))
-          return result.success
-        }),
-      ),
+    const entries = Object.entries(PROVIDER_SECRET_FIELDS).flatMap(([providerId, fields]) =>
+      fields.map(field => ({ key: getProviderSecretKey(providerId, field), value: null })),
     )
-    return results.every(Boolean)
+    const result = await secret.setMany(entries)
+    return result.success
   }
 
   async function persistProviderConfig(providerId: string, config: Record<string, any>) {
@@ -168,28 +160,19 @@ export function useTranslationProvider() {
       if (saved && typeof saved === 'object' && saved !== null) {
         const config = saved as Record<string, { enabled?: boolean, config?: Record<string, any> }>
         const enabledIds = getEnabledProviderIds(config) as string[]
-        let legacySecretsFound = false
-        await Promise.all(Array.from(providers.entries()).map(async ([id, provider]) => {
-          provider.enabled = enabledIds.includes(id)
-          if (config[id]?.config && provider.config) {
-            const rawConfig = config[id].config
-            const hasLegacySecrets = hasProviderSecrets(id, rawConfig)
-            legacySecretsFound = legacySecretsFound || hasLegacySecrets
-            let providerSecretsMigrated = true
-            if (hasLegacySecrets) {
-              providerSecretsMigrated = await saveProviderSecrets(id, rawConfig)
+        await Promise.all(
+          Array.from(providers.entries()).map(async ([id, provider]) => {
+            provider.enabled = enabledIds.includes(id)
+            if (config[id]?.config && provider.config) {
+              const metadataConfig = stripProviderSecrets(id, config[id].config)
+              provider.config = {
+                ...provider.config,
+                ...metadataConfig,
+                ...(await mergeProviderSecrets(id, metadataConfig)),
+              }
             }
-            const metadataConfig = stripProviderSecrets(id, rawConfig)
-            provider.config = {
-              ...provider.config,
-              ...metadataConfig,
-              ...(providerSecretsMigrated ? await mergeProviderSecrets(id, metadataConfig) : {}),
-            }
-          }
-        }))
-        if (legacySecretsFound) {
-          await saveProvidersConfig()
-        }
+          }),
+        )
       }
     }
     catch (error) {
@@ -266,20 +249,20 @@ export function useTranslationProvider() {
       provider.enabled = isDefaultEnabledProvider(provider.id)
       if (provider.config) {
         if (provider.id === 'deepl') {
-          (provider as DeepLTranslateProvider).config = {
+          ;(provider as DeepLTranslateProvider).config = {
             apiKey: '',
             apiUrl: 'https://api-free.deepl.com/v2/translate',
           }
         }
         else if (provider.id === 'bing') {
-          (provider as BingTranslateProvider).config = {
+          ;(provider as BingTranslateProvider).config = {
             apiKey: '',
             region: 'global',
             apiUrl: 'https://api.cognitive.microsofttranslator.com/translate',
           }
         }
         else if (provider.id === 'custom') {
-          (provider as CustomTranslateProvider).config = {
+          ;(provider as CustomTranslateProvider).config = {
             apiUrl: '',
             apiKey: '',
             model: 'gpt-3.5-turbo',
@@ -287,14 +270,14 @@ export function useTranslationProvider() {
           }
         }
         else if (provider.id === 'baidu') {
-          (provider as BaiduTranslateProvider).config = {
+          ;(provider as BaiduTranslateProvider).config = {
             appId: '',
             secretKey: '',
             apiUrl: 'https://fanyi-api.baidu.com/api/trans/vip/translate',
           }
         }
         else if (provider.id === 'tencent') {
-          (provider as TencentTranslateProvider).config = {
+          ;(provider as TencentTranslateProvider).config = {
             secretId: '',
             secretKey: '',
             region: 'ap-beijing',
@@ -302,7 +285,7 @@ export function useTranslationProvider() {
           }
         }
         else if (provider.id === 'mymemory') {
-          (provider as MyMemoryTranslateProvider).config = {
+          ;(provider as MyMemoryTranslateProvider).config = {
             apiUrl: 'https://api.mymemory.translated.net/get',
             email: '',
           }

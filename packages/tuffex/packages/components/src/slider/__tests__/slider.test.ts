@@ -129,4 +129,28 @@ describe('txSlider', () => {
     addSpy.mockRestore()
     removeSpy.mockRestore()
   })
+
+  it('names the range input and surfaces aria-valuetext only when a formatter is set', () => {
+    // Pre-fix the input had no accessible name (a host aria-label landed on the
+    // wrapper div) and a custom formatter was never announced to AT.
+    const wrapper = mount(TxSlider, {
+      props: {
+        modelValue: 40,
+        min: 0,
+        max: 100,
+        ariaLabel: '音量',
+        formatValue: (value: number) => `${value}%`,
+      },
+    })
+
+    const input = wrapper.find('input')
+    expect(input.attributes('aria-label')).toBe('音量')
+    expect(input.attributes('aria-valuetext')).toBe('40%')
+
+    // Without a formatter the raw aria-valuenow suffices; no redundant valuetext.
+    const plain = mount(TxSlider, {
+      props: { modelValue: 40, min: 0, max: 100 },
+    })
+    expect(plain.find('input').attributes('aria-valuetext')).toBeUndefined()
+  })
 })

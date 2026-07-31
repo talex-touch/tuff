@@ -118,4 +118,26 @@ describe('txSegmentedSlider', () => {
 
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([0])
   })
+
+  it('names every segment via aria-label even when labels are hidden or missing', () => {
+    const wrapper = mount(TxSegmentedSlider, {
+      props: {
+        modelValue: 1,
+        showLabels: false,
+        segments: [
+          { value: 0, label: 'Low' },
+          { value: 1, label: 'High' },
+          { value: 2 },
+        ],
+      },
+    })
+
+    const buttons = wrapper.findAll('.tx-segmented-slider__segment')
+    // Pre-fix, with labels hidden each button held only an empty dot span and had
+    // no accessible name.
+    expect(buttons[0].attributes('aria-label')).toBe('Low')
+    expect(buttons[1].attributes('aria-label')).toBe('High')
+    // A segment with no label falls back to its stringified value.
+    expect(buttons[2].attributes('aria-label')).toBe('2')
+  })
 })

@@ -63,7 +63,7 @@ Negative `depth` moves in the opposite direction from positive `depth`.
 - The container renders a relative `div` with classes `tx-floating` and optional `className`.
 - `TxFloatingElement` renders an absolute `div` with classes `tx-floating-element` and optional `className`.
 - On mount, `TxFloating` starts passive `mousemove` and `touchmove` window listeners unless disabled.
-- Pointer coordinates are measured relative to the floating container's top-left corner.
+- Pointer coordinates are measured relative to the floating container's center.
 - Each animation frame moves registered elements toward `pointerPosition * (depth * sensitivity / 20)` using `easingFactor`.
 - `disabled=true` stops listeners, cancels the current RAF, and resets transforms to `translate3d(0px, 0px, 0)`.
 - `disabled=false` restarts listeners and RAF.

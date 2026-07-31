@@ -92,8 +92,9 @@ export interface BottomDialogProps {
   message?: string
 
   /**
-   * Duration in milliseconds before the dialog auto-closes.
-   * Set to 0 to disable auto-close.
+   * Reserved auto-close duration prop. The current runtime does not start a
+   * timer from `stay` alone; auto-close only occurs via a button's `time`
+   * countdown. Kept for API compatibility.
    * @default 0
    */
   stay?: number
@@ -110,7 +111,8 @@ export interface BottomDialogProps {
   btns?: DialogButton[]
 
   /**
-   * Icon class name to display in the dialog.
+   * Legacy icon class prop. Not rendered by the current template; kept for
+   * API compatibility.
    * @default ''
    */
   icon?: string

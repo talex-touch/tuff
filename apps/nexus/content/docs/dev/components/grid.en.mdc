@@ -88,49 +88,25 @@ code: |
 
 ## Grid Gaps
 
-### Uniform gap
+`gap` accepts three forms: a number (uniform gap converted to px), `{ row, col }` for separate row/column gaps, and a responsive object keyed by breakpoint.
 
 :::TuffCodeBlock{lang="vue"}
 ---
 code: |
   <template>
+    <!-- Uniform gap: number converted to px -->
     <TxGrid :cols="3" gap="32">
-      <TxGridItem v-for="i in 6" :key="i">
-        Item {{ i }}
-      </TxGridItem>
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
     </TxGrid>
-  </template>
----
-:::
 
-### Row / column gaps
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
+    <!-- Separate row / column gaps -->
     <TxGrid :cols="3" :gap="{ row: 24, col: 16 }">
-      <TxGridItem v-for="i in 6" :key="i">
-        Item {{ i }}
-      </TxGridItem>
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
     </TxGrid>
-  </template>
----
-:::
 
-### Responsive gaps
-
-:::TuffCodeBlock{lang="vue"}
----
-code: |
-  <template>
-    <TxGrid
-      :cols="{ xs: 1, md: 2, lg: 3 }"
-      :gap="{ xs: 16, md: 24, lg: 32 }"
-    >
-      <TxGridItem v-for="i in 6" :key="i">
-        Item {{ i }}
-      </TxGridItem>
+    <!-- Responsive by breakpoint -->
+    <TxGrid :cols="{ xs: 1, md: 2, lg: 3 }" :gap="{ xs: 16, md: 24, lg: 32 }">
+      <TxGridItem v-for="i in 6" :key="i">{{ i }}</TxGridItem>
     </TxGrid>
   </template>
 ---
@@ -216,9 +192,9 @@ code: |
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| cols | `number \| ResponsiveValue<number>` | `0` | Columns; 0 leaves the column template unset |
+| cols | `number \| Responsive<number>` | `0` | Columns; 0 leaves the column template unset |
 | rows | `number` | `0` | Rows; 0 leaves the row template unset |
-| gap | `number \| string \| ResponsiveValue<number \| string> \| GapValue` | `16` | Grid gap |
+| gap | `GridGap` | `16` | Grid gap (number → px, `{ row, col }`, or responsive object) |
 | minItemWidth | `string` | - | Min item width (auto-fit) |
 | justify | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Horizontal alignment |
 | align | `'start' \| 'end' \| 'center' \| 'stretch'` | `'stretch'` | Vertical alignment |
@@ -239,18 +215,15 @@ code: |
 code: |
   type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
-  interface ResponsiveValue<T> {
-    xs?: number
-    sm?: number
-    md?: number
-    lg?: number
-    xl?: number
-  }
+  type Responsive<T> = Partial<Record<Breakpoint, T>>
 
-  interface GapValue {
-    row?: number | string
-    col?: number | string
-  }
+  type GridAlign = 'start' | 'end' | 'center' | 'stretch'
+
+  type GridGap =
+    | number
+    | string
+    | { row?: number | string, col?: number | string }
+    | Responsive<number | string>
 ---
 :::
 

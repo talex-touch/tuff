@@ -50,9 +50,11 @@ describe('txNavBar', () => {
   it('emits left and right events from custom slots', async () => {
     const wrapper = mount(TxNavBar, {
       slots: {
-        left: '<button class="custom-left">Menu</button>',
+        // Slot content stays non-interactive: the action zone is itself the button that
+        // emits the event, and the docs forbid nesting another interactive control here.
+        left: '<span class="custom-left">Menu</span>',
         title: '<strong>Custom title</strong>',
-        right: '<button class="custom-right">Done</button>',
+        right: '<span class="custom-right">Done</span>',
       },
     })
 
@@ -101,5 +103,30 @@ describe('txNavBar', () => {
     expect(wrapper.emitted('back')).toBeUndefined()
     expect(wrapper.emitted('click-left')).toBeUndefined()
     expect(wrapper.emitted('click-right')).toBeUndefined()
+  })
+
+  it('lets a provided right slot name the button instead of a hardcoded label', () => {
+    const wrapper = mount(TxNavBar, {
+      slots: { right: '<span>Save</span>' },
+    })
+
+    // Pre-fix the right button hardcoded aria-label="Navigation right action",
+    // which overrode the slot's "Save" accessible name. With a slot present the
+    // button must expose no competing aria-label.
+    expect(wrapper.find('.tx-nav-bar__right').attributes('aria-label')).toBeUndefined()
+  })
+
+  it('localizes the built-in back and right action labels', () => {
+    const back = mount(TxNavBar, {
+      props: { showBack: true, backLabel: '返回' },
+    })
+    // Pre-fix the back label was the hardcoded literal 'Back'.
+    expect(back.find('.tx-nav-bar__left').attributes('aria-label')).toBe('返回')
+
+    const right = mount(TxNavBar, {
+      props: { rightLabel: '保存' },
+    })
+    // No right slot, so the localized fallback names the button.
+    expect(right.find('.tx-nav-bar__right').attributes('aria-label')).toBe('保存')
   })
 })

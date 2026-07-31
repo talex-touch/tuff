@@ -52,7 +52,7 @@ const linesArray = computed(() => {
     <slot />
   </template>
 
-  <div v-else class="tx-skeleton" :style="rootStyle">
+  <div v-else class="tx-skeleton" :style="rootStyle" aria-hidden="true">
     <div
       v-for="(_, i) in linesArray"
       :key="i"

@@ -52,7 +52,7 @@ code: |
 
 In admin authorization flows, `TxTransfer` should only own controlled movement between assignable and granted resources. Let `TxTree` select the permission scope, `TxTreeSelect` select the owner team, and `TxTimeline` show audit progress so every component keeps one clear responsibility.
 
-::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified resource grant transfer."}
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="A screenshot-verified resource grant transfer."}
 ---
 code: |
   <script setup lang="ts">
@@ -64,6 +64,7 @@ code: |
     { key: 'publish-notes', label: 'Publish notes' },
     { key: 'manage-assets', label: 'Manage assets' },
     { key: 'rotate-keys', label: 'Rotate keys', disabled: true },
+    { key: 'view-billing', label: 'View billing' },
   ]
   </script>
 
@@ -75,6 +76,8 @@ code: |
       filterable
       filter-placeholder="Filter resources"
       empty-text="No resources"
+      add-aria-label="Add selected resources"
+      remove-aria-label="Remove selected resources"
     />
   </template>
 ---

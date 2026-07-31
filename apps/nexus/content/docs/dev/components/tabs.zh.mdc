@@ -2,6 +2,9 @@
 title: "Tabs 标签页"
 description: "支持多方向布局、分组导航、动态指示器和内容尺寸测量的组合式标签页。"
 category: Navigation
+status: beta
+since: 1.0.0
+tags: [navigation, tabs, layout]
 syncStatus: reviewed
 verified: true
 ---
@@ -61,9 +64,9 @@ code: |
 ---
 :::
 
-## Indicator Showcase
+### Indicator Showcase
 
-### Indicator variants & motions
+#### Indicator variants & motions
 :::TuffDemoWrapper{demo="TabsIndicatorVariantsMotionsDemo" code-lang="vue"}
 ---
 code: |
@@ -71,10 +74,13 @@ code: |
   import { computed, ref } from 'vue'
 
   type Motion = 'stretch' | 'warp' | 'glide' | 'snap' | 'spring'
+  type ContentMotion = 'fade' | 'slide' | 'zoom' | 'blur' | 'scale' | 'none'
 
   type TabValue = 'A' | 'B' | 'C'
 
   const motion = ref<Motion>('stretch')
+  const contentMotion = ref<ContentMotion>('zoom')
+  const showIndicator = ref(true)
   const active = ref<TabValue>('A')
 
   const variants = computed(() => {
@@ -95,6 +101,15 @@ code: |
     { value: 'spring', label: 'spring' },
   ] as const
 
+  const contentMotionOptions = [
+    { value: 'zoom', label: 'zoom' },
+    { value: 'fade', label: 'fade' },
+    { value: 'slide', label: 'slide' },
+    { value: 'blur', label: 'blur' },
+    { value: 'scale', label: 'scale' },
+    { value: 'none', label: 'none' },
+  ] as const
+
   function next() {
     active.value = active.value === 'A' ? 'B' : active.value === 'B' ? 'C' : 'A'
   }
@@ -109,6 +124,20 @@ code: |
             <TuffSelect v-model="motion" style="min-width: 190px;">
               <TuffSelectItem v-for="opt in motionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
             </TuffSelect>
+          </label>
+
+          <label class="tx-demo__row" style="gap: 8px;">
+            <span class="tx-demo__label">content</span>
+            <TuffSelect v-model="contentMotion" style="min-width: 150px;">
+              <TuffSelectItem v-for="opt in contentMotionOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+            </TuffSelect>
+          </label>
+
+          <label class="tx-demo__row" style="gap: 8px;">
+            <span class="tx-demo__label">indicator</span>
+            <TxButton size="small" @click="showIndicator = !showIndicator">
+              {{ showIndicator ? 'on' : 'off' }}
+            </TxButton>
           </label>
 
           <label class="tx-demo__row" style="gap: 8px;">
@@ -139,9 +168,10 @@ code: |
             v-model="active"
             placement="top"
             :content-scrollable="false"
+            :show-indicator="showIndicator"
             :indicator-variant="v.value"
             :indicator-motion="motion"
-            :animation="{ indicator: { durationMs: 180 }, content: true }"
+            :animation="{ indicator: { durationMs: 350 }, content: { type: contentMotion, durationRatio: 0.5 } }"
           >
             <TxTabItem name="A" activation>
               Overview
@@ -160,9 +190,9 @@ code: |
 ---
 :::
 
-## 动态内容尺寸（manual, rich content）
+### 动态内容尺寸（manual, rich content）
 
-### Dynamic Content (manual)
+#### Dynamic Content (manual)
 :::TuffDemoWrapper{demo="TabsDynamicContentManualDemo" code-lang="vue"}
 ---
 code: |
@@ -285,9 +315,9 @@ code: |
 ---
 :::
 
-## 布局方向（placement）
+### 布局方向（placement）
 
-### Placement + Header Slot
+#### Placement + Header Slot
 :::TuffDemoWrapper{demo="TabsPlacementHeaderSlotDemo" code-lang="vue"}
 ---
 code: |
@@ -354,9 +384,9 @@ code: |
 ---
 :::
 
-## 高度跟随内容（animation.size）
+### 高度跟随内容（animation.size）
 
-### Auto Size (contentScrollable=false)
+#### Auto Size (contentScrollable=false)
 :::TuffDemoWrapper{demo="TabsAutoSizeContentScrollableFalseDemo" code-lang="vue"}
 ---
 code: |
@@ -396,9 +426,9 @@ code: |
 ---
 :::
 
-## 关闭动画（indicator/content）
+### 关闭动画（indicator/content）
 
-### Disable Animations
+#### Disable Animations
 :::TuffDemoWrapper{demo="TabsDisableAnimationsDemo" code-lang="vue"}
 ---
 code: |
@@ -436,7 +466,7 @@ code: |
 ---
 :::
 
-## 后台导航配置组合
+### 后台导航配置组合
 
 后台页的导航与配置不应把所有内容塞进同一个表单。推荐用 `TxTabs` 固定一级分区，用 `TxDropdownMenu` 承载当前区的轻量操作，用 `TxPopover` 展示短说明，再把高密度配置放进 `TxDrawer`。
 
@@ -466,12 +496,30 @@ code: |
         浮层只放短说明和轻量动作。
       </TxPopover>
 
-      <TxTabs v-model="active" placement="left" indicator-variant="pill">
-        <TxTabItem name="总览" activation>总览配置</TxTabItem>
-        <TxTabItem name="发布">发布配置</TxTabItem>
+      <TxTabs
+        v-model="active"
+        placement="left"
+        :nav-min-width="176"
+        :content-scrollable="false"
+        indicator-variant="pill"
+        indicator-motion="glide"
+        auto-height
+        :animation="{ size: { enabled: true, durationMs: 220 }, content: true }"
+      >
+        <TxTabItem name="总览" icon-class="i-carbon-dashboard" activation>
+          <TxStatusBadge text="运行中" status="success" size="sm" />
+        </TxTabItem>
+        <TxTabItem name="发布" icon-class="i-carbon-rocket">
+          <TxProgressBar :percentage="82" status="success" show-text height="10px" />
+        </TxTabItem>
+        <TxTabItem name="安全" icon-class="i-carbon-security">
+          <TxStatusBadge text="待审批" status="warning" size="sm" />
+        </TxTabItem>
       </TxTabs>
 
-      <TxDrawer v-model:visible="drawerVisible" title="发布策略" />
+      <TxDrawer v-model:visible="drawerVisible" title="发布策略">
+        <p>抽屉承载重设置表单，导航壳只负责切换。</p>
+      </TxDrawer>
     </section>
   </template>
 ---

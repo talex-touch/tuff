@@ -107,6 +107,10 @@ const circleDashStyle = computed(() => ({
       <span class="tx-typing-indicator__dot" :style="dotStyle" />
     </div>
     <span v-if="showText" class="tx-typing-indicator__text">{{ text }}</span>
+    <!-- When the visible label is hidden the loaders are all aria-hidden, so the
+         role="status" region would be empty and announce nothing. Keep a
+         visually-hidden label so screen readers still hear the typing state. -->
+    <span v-else class="tx-typing-indicator__sr-text">{{ ariaLabel || text }}</span>
   </div>
 </template>
 
@@ -117,6 +121,18 @@ const circleDashStyle = computed(() => ({
   gap: 8px;
   color: var(--tx-text-color-secondary, #6b7280);
   font-size: 12px;
+}
+
+.tx-typing-indicator__sr-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .tx-typing-indicator__circle-dash {

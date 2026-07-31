@@ -226,6 +226,55 @@ describe('txDrawer', () => {
     expect(drawer?.isConnected).toBe(false)
   })
 
+  it('keeps the closed drawer inert so its content leaves the Tab sequence', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: false,
+        title: 'Settings',
+      },
+      slots: {
+        default: '<button class="drawer-action">Action</button>',
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    const drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    const action = document.body.querySelector<HTMLButtonElement>('.drawer-action')
+
+    // A closed drawer must be inert so its focusable descendants leave the Tab order.
+    expect(drawer?.hasAttribute('inert')).toBe(true)
+    expect(drawer?.getAttribute('inert')).not.toBe('false')
+    expect(drawer?.getAttribute('aria-hidden')).toBe('true')
+    // The slot button lives inside the inert subtree, so it cannot be tabbed into.
+    expect(action?.closest('[inert]')).toBe(drawer)
+
+    wrapper.unmount()
+  })
+
+  it('drops inert while visible and re-applies it when hidden again', async () => {
+    const wrapper = mount(TxDrawer, {
+      props: {
+        visible: true,
+        title: 'Settings',
+      },
+      slots: {
+        default: '<button class="drawer-action">Action</button>',
+      },
+      attachTo: document.body,
+    })
+
+    await nextTick()
+    const drawer = document.body.querySelector<HTMLElement>('.tx-drawer')
+    // While open the drawer must not be inert, otherwise its own controls become unreachable.
+    expect(drawer?.hasAttribute('inert')).toBe(false)
+
+    await wrapper.setProps({ visible: false })
+    expect(drawer?.hasAttribute('inert')).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it('keeps focus on the dialog when no child control is focusable', async () => {
     const wrapper = mount(TxDrawer, {
       props: {

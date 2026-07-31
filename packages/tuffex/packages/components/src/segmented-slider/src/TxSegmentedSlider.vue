@@ -91,6 +91,7 @@ onMounted(() => {
         :style="segmentStyle(index)"
         :disabled="disabled"
         :aria-pressed="segment.value === modelValue"
+        :aria-label="segment.label ?? String(segment.value)"
         @click="handleSegmentClick(segment)"
       >
         <span class="tx-segmented-slider__dot" />

@@ -1,11 +1,36 @@
 import { mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import TxGradualBlur from '../src/TxGradualBlur.vue'
 
+type ObserverCallback = (entries: Array<{ isIntersecting: boolean }>) => void
+
+class MockIntersectionObserver {
+  static instances: MockIntersectionObserver[] = []
+  private callback: ObserverCallback
+
+  constructor(callback: ObserverCallback) {
+    this.callback = callback
+    MockIntersectionObserver.instances.push(this)
+  }
+
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+
+  emit(isIntersecting: boolean): void {
+    this.callback([{ isIntersecting }])
+  }
+}
+
 describe('txGradualBlur', () => {
+  beforeEach(() => {
+    MockIntersectionObserver.instances = []
+  })
+
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('renders configured blur layers, slot content, page target, and gpu styles', () => {
@@ -117,5 +142,131 @@ describe('txGradualBlur', () => {
 
     expect(wrapper.attributes('style')).toContain('height: 4rem')
     expect(wrapper.attributes('style')).toContain('width: 70%')
+  })
+
+  it('fires onAnimationComplete honoring millisecond duration units', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
+
+    const onAnimationComplete = vi.fn()
+    mount(TxGradualBlur, {
+      props: {
+        animated: 'scroll',
+        duration: '300ms',
+        onAnimationComplete,
+      },
+    })
+    await nextTick()
+
+    const observer = MockIntersectionObserver.instances[0]
+    expect(observer).toBeDefined()
+
+    observer.emit(true)
+    await nextTick()
+
+    vi.advanceTimersByTime(299)
+    expect(onAnimationComplete).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(onAnimationComplete).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the pending animation-complete timer when it scrolls back out of view', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
+
+    const onAnimationComplete = vi.fn()
+    mount(TxGradualBlur, {
+      props: {
+        animated: 'scroll',
+        duration: '0.3s',
+        onAnimationComplete,
+      },
+    })
+    await nextTick()
+
+    const observer = MockIntersectionObserver.instances[0]
+    observer.emit(true)
+    await nextTick()
+
+    vi.advanceTimersByTime(100)
+    observer.emit(false)
+    await nextTick()
+
+    vi.advanceTimersByTime(500)
+    expect(onAnimationComplete).not.toHaveBeenCalled()
+  })
+
+  it('does not fire animation-complete after the component unmounts', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
+
+    const onAnimationComplete = vi.fn()
+    const wrapper = mount(TxGradualBlur, {
+      props: {
+        animated: 'scroll',
+        duration: '0.3s',
+        onAnimationComplete,
+      },
+    })
+    await nextTick()
+
+    const observer = MockIntersectionObserver.instances[0]
+    observer.emit(true)
+    await nextTick()
+
+    vi.advanceTimersByTime(100)
+    wrapper.unmount()
+
+    vi.advanceTimersByTime(500)
+    expect(onAnimationComplete).not.toHaveBeenCalled()
+  })
+
+  it('attaches the resize listener when responsive is enabled after mount', async () => {
+    const add = vi.spyOn(window, 'addEventListener')
+    const wrapper = mount(TxGradualBlur, {
+      props: {
+        responsive: false,
+      },
+    })
+    await nextTick()
+    expect(add.mock.calls.filter(call => call[0] === 'resize')).toHaveLength(0)
+
+    await wrapper.setProps({ responsive: true })
+    await nextTick()
+    expect(add.mock.calls.filter(call => call[0] === 'resize')).toHaveLength(1)
+  })
+
+  it('removes the resize listener on unmount even after responsive was toggled off', async () => {
+    const remove = vi.spyOn(window, 'removeEventListener')
+    const wrapper = mount(TxGradualBlur, {
+      props: {
+        responsive: true,
+      },
+    })
+    await nextTick()
+
+    // Toggle off, then unmount: the old cleanup keyed off the current responsive value and
+    // would skip removal here, leaking the debounced handler.
+    await wrapper.setProps({ responsive: false })
+    await nextTick()
+    wrapper.unmount()
+
+    expect(remove.mock.calls.filter(call => call[0] === 'resize').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('sets up the IntersectionObserver when animated switches to scroll after mount', async () => {
+    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver)
+    const wrapper = mount(TxGradualBlur, {
+      props: {
+        animated: false,
+      },
+    })
+    await nextTick()
+    expect(MockIntersectionObserver.instances).toHaveLength(0)
+
+    await wrapper.setProps({ animated: 'scroll' })
+    await nextTick()
+    expect(MockIntersectionObserver.instances).toHaveLength(1)
   })
 })

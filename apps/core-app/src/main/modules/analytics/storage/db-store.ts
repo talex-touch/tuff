@@ -11,6 +11,11 @@ import * as schema from '../../../db/schema'
 import { withSqliteRetry } from '../../../db/sqlite-retry'
 import { createLogger } from '../../../utils/logger'
 import { enterPerfContext } from '../../../utils/perf-context'
+import {
+  sanitizePluginAnalyticsIdentifier,
+  sanitizePluginAnalyticsMetadata,
+  sanitizePluginAnalyticsNumber
+} from '../analytics-report-sanitizer'
 
 const PERSIST_WINDOWS: AnalyticsWindowType[] = ['15m', '1h', '24h']
 const ANALYTICS_QUEUE_LIMIT = 8
@@ -91,9 +96,14 @@ export class DbStore {
       this.lastQueuePressureQueued = options.queued
     }
     if (options && Object.prototype.hasOwnProperty.call(options, 'error')) {
-      const errorMessage =
-        options.error instanceof Error ? options.error.message : String(options.error ?? '')
-      this.lastQueuePressureError = errorMessage.slice(0, 180)
+      const candidateCode =
+        typeof options.error === 'object' && options.error !== null && 'code' in options.error
+          ? (options.error as { code?: unknown }).code
+          : undefined
+      this.lastQueuePressureError =
+        typeof candidateCode === 'string' && /^[A-Za-z][A-Za-z0-9_:-]{0,63}$/.test(candidateCode)
+          ? candidateCode
+          : 'ANALYTICS_DB_WRITE_FAILED'
     }
 
     const now = Date.now()
@@ -341,6 +351,20 @@ export class DbStore {
     timestamp: number
   }): Promise<void> {
     try {
+      const pluginName = sanitizePluginAnalyticsIdentifier(payload.pluginName)
+      const pluginVersion = payload.pluginVersion
+        ? sanitizePluginAnalyticsIdentifier(payload.pluginVersion)
+        : null
+      const featureId = payload.featureId
+        ? sanitizePluginAnalyticsIdentifier(payload.featureId)
+        : undefined
+      const eventType = sanitizePluginAnalyticsIdentifier(payload.eventType)
+      const metadata = sanitizePluginAnalyticsMetadata(payload.metadata)
+      const count = Math.max(0, Math.floor(sanitizePluginAnalyticsNumber(payload.count ?? 1)))
+      const timestamp =
+        Number.isSafeInteger(payload.timestamp) && payload.timestamp >= 0
+          ? payload.timestamp
+          : Date.now()
       const queueStats = dbWriteScheduler.getStats()
       if (queueStats.queued >= ANALYTICS_QUEUE_LIMIT) {
         this.recordQueuePressure('pluginSkipped', { queued: queueStats.queued })
@@ -352,13 +376,13 @@ export class DbStore {
           withSqliteRetry(
             () =>
               this.db.insert(schema.pluginAnalytics).values({
-                pluginName: payload.pluginName,
-                pluginVersion: payload.pluginVersion ?? null,
-                featureId: payload.featureId,
-                eventType: payload.eventType,
-                count: payload.count ?? 1,
-                metadata: payload.metadata ? JSON.stringify(payload.metadata) : null,
-                timestamp: payload.timestamp
+                pluginName,
+                pluginVersion,
+                featureId,
+                eventType,
+                count,
+                metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+                timestamp
               }),
             { label: 'analytics.plugin' }
           ),

@@ -20,11 +20,19 @@ verified: true
 ---
 code: |
   <template>
-    <TxSteps :active="1">
-      <TxStep title="开始" description="收集基础信息" :step="0" />
-      <TxStep title="填写" description="补充详细内容" :step="1" />
-      <TxStep title="完成" description="确认提交" :step="2" />
-    </TxSteps>
+    <div style="display: grid; gap: 24px;">
+      <TxSteps :active="1">
+        <TxStep title="开始" description="收集基础信息" :step="0" />
+        <TxStep title="填写" description="补充详细内容" :step="1" />
+        <TxStep title="完成" description="确认提交" :step="2" />
+      </TxSteps>
+
+      <TxSteps direction="vertical" size="small" active="review">
+        <TxStep title="草稿" description="内容已保存" step="draft" status="completed" />
+        <TxStep title="审核" description="等待负责人确认" step="review" icon="i-carbon-in-progress" />
+        <TxStep title="发布" description="审核后解锁" step="publish" disabled />
+      </TxSteps>
+    </div>
   </template>
 ---
 ::::

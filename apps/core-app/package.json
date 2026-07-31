@@ -21,6 +21,7 @@
     "smoke:omnipanel": "cross-env TUFF_OMNIPANEL_SMOKE=1 electron-vite preview",
     "smoke:plugin-view-preload": "electron scripts/plugin-view-preload-smoke.cjs",
     "smoke:plugin-host-isolation": "electron scripts/plugin-host-isolation-smoke.cjs",
+    "smoke:privacy-lifecycle": "electron out/main/privacy-lifecycle-smoke.js",
     "start": "electron-vite preview",
     "release:notes:catalog": "node ../../scripts/generate-release-notes-catalog.mjs",
     "dev": "pnpm run release:notes:catalog && node scripts/dev-electron-wrapper.mjs",

@@ -1,9 +1,10 @@
+import type { IntelligenceAuditLogEntry } from './intelligence-audit-logger'
 import { describe, expect, it } from 'vitest'
-import './intelligence-test-harness'
 import {
   aggregateUsageStatsByCallerAndPeriod,
-  type IntelligenceAuditLogEntry
+  sanitizeIntelligenceAuditEntry
 } from './intelligence-audit-logger'
+import './intelligence-test-harness'
 
 const logs: IntelligenceAuditLogEntry[] = [
   {
@@ -69,6 +70,43 @@ const logs: IntelligenceAuditLogEntry[] = [
 ]
 
 describe('usage aggregation by caller and period', () => {
+  it('drops prompt, response, path, SQL, Secret, and native-error detail at audit ingress', () => {
+    const sanitized = sanitizeIntelligenceAuditEntry({
+      traceId: 'trace-safe',
+      timestamp: Date.parse('2026-07-02T10:00:00.000Z'),
+      capabilityId: 'text.chat',
+      provider: 'https://CANARY_ENDPOINT',
+      model: 'C:/CANARY/MODEL',
+      promptHash: '0123456789abcdef',
+      caller: '/CANARY/PATH',
+      userId: '../CANARY_USER',
+      usage: { promptTokens: 2, completionTokens: 3, totalTokens: 5 },
+      latency: 10,
+      success: false,
+      error: 'CANARY_SECRET',
+      metadata: {
+        promptId: 'prompt-safe',
+        retryCount: 1,
+        source: '/CANARY/PATH',
+        promptTemplate: 'CANARY_PROMPT_TEMPLATE',
+        promptVariables: { password: 'CANARY_SECRET' },
+        response: 'CANARY_RESPONSE',
+        sql: 'SELECT CANARY_SQL',
+        path: '/CANARY/PATH'
+      }
+    })
+
+    expect(sanitized).toMatchObject({
+      provider: 'unknown',
+      model: 'unknown',
+      caller: 'unknown',
+      userId: 'unknown',
+      error: 'INTELLIGENCE_INVOCATION_FAILED',
+      metadata: { promptId: 'prompt-safe', retryCount: 1 }
+    })
+    expect(JSON.stringify(sanitized)).not.toMatch(/CANARY_|password|SELECT|\/CANARY/i)
+  })
+
   it('preserves opaque colon callers in distinct day and month buckets', () => {
     const buckets = aggregateUsageStatsByCallerAndPeriod(logs)
 

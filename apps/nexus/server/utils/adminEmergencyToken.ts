@@ -1,8 +1,10 @@
 import { Buffer } from 'node:buffer'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { H3Event } from 'h3'
-import { createError, getHeader } from 'h3'
+import { getHeader } from 'h3'
 import { useRuntimeConfig } from '#imports'
+import { readCloudflareBindings } from './cloudflare'
+import { assertRuntimeCredential, isLocalDevelopmentRuntime, selectRuntimeCredential } from './runtimeCredentialPolicy'
 
 const TOKEN_TYP = 'admin_emergency'
 const TOKEN_ISSUER = 'nexus-admin-control-plane'
@@ -30,34 +32,27 @@ interface JwtHeader {
 
 function base64UrlEncode(input: Buffer | string): string {
   const buffer = Buffer.isBuffer(input) ? input : Buffer.from(input)
-  return buffer
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/g, '')
+  return buffer.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
 
 function base64UrlDecode(input: string): Buffer {
   let normalized = input.replace(/-/g, '+').replace(/_/g, '/')
-  while (normalized.length % 4 !== 0)
-    normalized += '='
+  while (normalized.length % 4 !== 0) normalized += '='
   return Buffer.from(normalized, 'base64')
 }
 
 function resolveEmergencyTokenSecret(event?: H3Event): string {
   const config = useRuntimeConfig(event)
-  const secret = typeof config.adminControl?.emergencyJwtSecret === 'string'
-    ? config.adminControl.emergencyJwtSecret.trim()
-    : ''
+  const bindings = event ? readCloudflareBindings(event) : undefined
+  const secret = selectRuntimeCredential(bindings, bindings?.ADMIN_EMERGENCY_JWT_SECRET, [
+    config.adminControl?.emergencyJwtSecret,
+    process.env.ADMIN_EMERGENCY_JWT_SECRET,
+  ])
 
-  if (secret.length < SECRET_MIN_LENGTH) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'ADMIN_EMERGENCY_JWT_SECRET is required.',
-    })
-  }
-
-  return secret
+  return assertRuntimeCredential('ADMIN_EMERGENCY_JWT_SECRET', secret, {
+    localDevelopment: isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings),
+    minimumLength: SECRET_MIN_LENGTH,
+  })
 }
 
 function signPayload(secret: string, signingInput: string) {
@@ -66,11 +61,9 @@ function signPayload(secret: string, signingInput: string) {
 
 export function parseBearerToken(event: H3Event): string | null {
   const header = getHeader(event, 'authorization')
-  if (!header)
-    return null
+  if (!header) return null
   const [scheme, value] = header.split(' ')
-  if (scheme !== 'Bearer' || !value)
-    return null
+  if (scheme !== 'Bearer' || !value) return null
   return value.trim()
 }
 
@@ -99,44 +92,30 @@ export function signAdminEmergencyToken(
 export function verifyAdminEmergencyToken(event: H3Event, token: string): AdminEmergencyClaims | null {
   const secret = resolveEmergencyTokenSecret(event)
   const parts = token.split('.')
-  if (parts.length !== 3)
-    return null
+  if (parts.length !== 3) return null
 
   const [headerPart, payloadPart, signaturePart] = parts
-  if (!headerPart || !payloadPart || !signaturePart)
-    return null
+  if (!headerPart || !payloadPart || !signaturePart) return null
 
   try {
     const signingInput = `${headerPart}.${payloadPart}`
     const expected = signPayload(secret, signingInput)
     const actual = base64UrlDecode(signaturePart)
-    if (expected.length !== actual.length)
-      return null
-    if (!timingSafeEqual(expected, actual))
-      return null
+    if (expected.length !== actual.length) return null
+    if (!timingSafeEqual(expected, actual)) return null
 
     const payload = JSON.parse(base64UrlDecode(payloadPart).toString('utf8')) as AdminEmergencyClaims
-    if (payload.typ !== TOKEN_TYP || payload.iss !== TOKEN_ISSUER)
-      return null
-    if (typeof payload.admin_id !== 'string' || !payload.admin_id)
-      return null
-    if (!Array.isArray(payload.scope) || payload.scope.length === 0)
-      return null
-    if (typeof payload.dfp_hash !== 'string' || !payload.dfp_hash)
-      return null
-    if (typeof payload.nonce !== 'string' || !payload.nonce)
-      return null
-    if (typeof payload.iv !== 'string' || !payload.iv)
-      return null
-    if (typeof payload.jti !== 'string' || !payload.jti)
-      return null
-    if (typeof payload.exp !== 'number' || payload.exp <= Math.floor(Date.now() / 1000))
-      return null
+    if (payload.typ !== TOKEN_TYP || payload.iss !== TOKEN_ISSUER) return null
+    if (typeof payload.admin_id !== 'string' || !payload.admin_id) return null
+    if (!Array.isArray(payload.scope) || payload.scope.length === 0) return null
+    if (typeof payload.dfp_hash !== 'string' || !payload.dfp_hash) return null
+    if (typeof payload.nonce !== 'string' || !payload.nonce) return null
+    if (typeof payload.iv !== 'string' || !payload.iv) return null
+    if (typeof payload.jti !== 'string' || !payload.jti) return null
+    if (typeof payload.exp !== 'number' || payload.exp <= Math.floor(Date.now() / 1000)) return null
 
     return payload
-  }
-  catch {
+  } catch {
     return null
   }
 }
-

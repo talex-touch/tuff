@@ -4,7 +4,7 @@ export interface SegmentedSliderSegment {
 }
 
 export interface SegmentedSliderProps {
-  modelValue?: number | string
+  modelValue?: number | string | null
   segments?: SegmentedSliderSegment[]
   disabled?: boolean
   showLabels?: boolean

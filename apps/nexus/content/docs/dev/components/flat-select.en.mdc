@@ -10,7 +10,7 @@ verified: true
 ---
 # FlatSelect
 
-ComboBox-style dropdown selector (`TxFlatSelect` + `TxFlatSelectItem`). When clicked, the options list overlays the trigger with the selected item anchored at the trigger position. Uses `clip-path` for smooth expand/collapse animation.
+`TxFlatSelect` is for short, stable single-select lists (roughly 3–6 options) — the kind of dropdown you can take in at a glance on settings pages and toolbars. It expands ComboBox-style, overlaying the trigger with the current selection anchored in place, and deliberately skips search, remote data, and grouping; switch to `TxSelect` once you need those or the list grows.
 
 ## Basic Usage
 
@@ -146,16 +146,16 @@ code: |
 
 | Prop | Description | Type | Default |
 |------|-------------|------|---------|
-| modelValue / v-model | Bound value | `string \| number` | `''` |
-| placeholder | Placeholder text | `string` | `''` |
-| disabled | Disable the selector | `boolean` | `false` |
+| modelValue / v-model | Selected value; matches the `value` of one `TxFlatSelectItem`, or shows the placeholder when unset. | `string \| number` | `''` |
+| placeholder | Text shown in the trigger while nothing is selected. | `string` | `''` |
+| disabled | Disable the whole group: the trigger becomes a disabled button, the dropdown no longer opens, and keyboard navigation is inert. | `boolean` | `false` |
 
 #### Events
 
 | Event | Description | Params |
 |-------|-------------|--------|
-| update:modelValue | Emitted when value updates | `(value: string \| number) => void` |
-| change | Emitted when value changes | `(value: string \| number) => void` |
+| update:modelValue | Emitted on commit for v-model. | `(value: string \| number) => void` |
+| change | Emitted together with `update:modelValue` on every commit, including ArrowUp/ArrowDown keyboard navigation; the two are equivalent today, so listen to either. | `(value: string \| number) => void` |
 
 #### Slots
 
@@ -169,9 +169,9 @@ code: |
 
 | Prop | Description | Type | Default |
 |------|-------------|------|---------|
-| value | Item value | `string \| number` | - |
-| label | Display text | `string` | - |
-| disabled | Disable this item | `boolean` | `false` |
+| value | Option value; keep it stable and unique since the parent registry matches selection by it. | `string \| number` | - |
+| label | Text shown in the trigger and option; override it with the default slot. | `string` | - |
+| disabled | Disable a single option: it cannot be selected and keyboard navigation skips it. | `boolean` | `false` |
 
 #### Slots
 

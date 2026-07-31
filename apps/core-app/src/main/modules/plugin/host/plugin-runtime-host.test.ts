@@ -196,6 +196,13 @@ function createHarness(
             result: { method: message.method }
           })
           break
+        case 'heartbeat':
+          port.emit({
+            ...host.owner,
+            type: 'heartbeat-result',
+            requestId: message.requestId
+          })
+          break
         case 'shutdown':
           child.emitExit()
           break
@@ -294,6 +301,10 @@ describe('PluginRuntimeHost activation transaction', () => {
     expect(Object.isFrozen(first.host.activation)).toBe(true)
     expect(Object.isFrozen(first.host.owner)).toBe(true)
     expect(Object.isFrozen(first.host.resourceLimits)).toBe(true)
+    expect(first.host.resourceLimits).toMatchObject({
+      heartbeatIntervalMs: 2_000,
+      heartbeatTimeoutMs: 5_000
+    })
     expect(first.factory.spawn).toHaveBeenCalledTimes(1)
     expect(second.factory.spawn).toHaveBeenCalledTimes(1)
     expect(first.child.transferredPorts).toEqual([{ id: 'child-port' }])
@@ -346,7 +357,9 @@ describe('PluginRuntimeHost activation transaction', () => {
     ['concurrent callback limit', { maxConcurrentCallbacks: 17 }],
     ['resource limit', { maxResources: 65 }],
     ['non-positive heap limit', { maxOldSpaceMb: 0 }],
-    ['non-finite deadline', { shutdownTimeoutMs: Number.NaN }]
+    ['non-finite deadline', { shutdownTimeoutMs: Number.NaN }],
+    ['non-positive heartbeat interval', { heartbeatIntervalMs: 0 }],
+    ['non-finite heartbeat timeout', { heartbeatTimeoutMs: Number.POSITIVE_INFINITY }]
   ])('rejects an invalid %s snapshot before probing the artifact', (_label, resourceLimits) => {
     const factory: PluginRuntimeProcessFactory = {
       artifactExists: vi.fn(() => true),
@@ -1385,6 +1398,42 @@ describe('PluginRuntimeHost capability dispatch', () => {
     expect(harness.port.sent.some((message) => message.type === 'capability-result')).toBe(false)
   })
 
+  it('does not cross the old host termination barrier before async dispatcher close settles', async () => {
+    const dispatcherClosing = deferred<void>()
+    const close = vi.fn(() => dispatcherClosing.promise)
+    const harness = createHarness({
+      capabilityDispatcher: {
+        owner: ownerFields,
+        activation: activation(),
+        dispatch: vi.fn(async () => null),
+        close
+      },
+      ownsCapabilityDispatcher: true
+    })
+    await start(harness)
+
+    const stopping = harness.host.stop()
+    let stopSettled = false
+    void stopping.then(() => {
+      stopSettled = true
+    })
+    await vi.waitFor(() => expect(close).toHaveBeenCalledOnce())
+
+    expect(harness.invalidateAuthority).toHaveBeenCalledOnce()
+    expect(harness.closeResources).not.toHaveBeenCalled()
+    expect(harness.port.sent.some((message) => message.type === 'shutdown')).toBe(false)
+    expect(harness.child.exited).toBe(false)
+    expect(stopSettled).toBe(false)
+
+    dispatcherClosing.resolve()
+    await stopping
+
+    expect(harness.closeResources).toHaveBeenCalledOnce()
+    expect(harness.port.sent.some((message) => message.type === 'shutdown')).toBe(true)
+    expect(harness.child.exited).toBe(true)
+    expect(stopSettled).toBe(true)
+  })
+
   it('does not close an externally owned dispatcher', async () => {
     const close = vi.fn()
     const harness = createHarness({
@@ -1401,6 +1450,180 @@ describe('PluginRuntimeHost capability dispatch', () => {
     await harness.host.stop()
 
     expect(close).not.toHaveBeenCalled()
+  })
+})
+
+describe('PluginRuntimeHost heartbeat', () => {
+  it('does not start before activation and leaves no timer after startup failure', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness(
+      {
+        resourceLimits: {
+          ...limits,
+          heartbeatIntervalMs: 1,
+          heartbeatTimeoutMs: 2
+        }
+      },
+      { autoRespond: false }
+    )
+    const starting = harness.host.start({ loadPayload: null })
+    const rejection = expect(starting).rejects.toEqual(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_CRASHED')
+    )
+    await flush()
+
+    await vi.advanceTimersByTimeAsync(5)
+    expect(harness.port.sent.filter((message) => message.type === 'heartbeat')).toHaveLength(0)
+
+    harness.child.emitExit()
+    await rejection
+    await harness.host.close()
+
+    expect(harness.host.state).toBe('crashed')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('starts after activation, keeps one request in flight, and clears its timer on stop', async () => {
+    vi.useFakeTimers()
+    const heartbeatLimits = {
+      ...limits,
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 20
+    }
+    const harness = createHarness({ resourceLimits: heartbeatLimits })
+    await start(harness)
+    const originalResponder = harness.port.responder
+    harness.port.responder = (message) => {
+      if (message.type === 'heartbeat') return
+      originalResponder?.(message)
+    }
+
+    expect(harness.port.sent.some((message) => message.type === 'heartbeat')).toBe(false)
+    await vi.advanceTimersByTimeAsync(5)
+    const heartbeat = harness.port.sent.findLast((message) => message.type === 'heartbeat')
+    expect(heartbeat).toMatchObject({ type: 'heartbeat' })
+    expect(harness.host.pendingCount).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(10)
+    expect(harness.port.sent.filter((message) => message.type === 'heartbeat')).toHaveLength(1)
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'heartbeat-result',
+      requestId: heartbeat!.requestId
+    })
+    await flush()
+    expect(harness.host.pendingCount).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(5)
+    expect(harness.port.sent.filter((message) => message.type === 'heartbeat')).toHaveLength(2)
+    harness.port.responder = originalResponder
+    const second = harness.port.sent.findLast((message) => message.type === 'heartbeat')!
+    harness.port.emit({
+      ...harness.host.owner,
+      type: 'heartbeat-result',
+      requestId: second.requestId
+    })
+    await harness.host.stop()
+    const sentAfterStop = harness.port.sent.length
+    await vi.advanceTimersByTimeAsync(heartbeatLimits.heartbeatIntervalMs * 3)
+
+    expect(harness.port.sent).toHaveLength(sentAfterStop)
+    expect(harness.host.state).toBe('closed')
+    expect(harness.onCrash).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('terminates a hung heartbeat through cancel grace and the real exit barrier only', async () => {
+    vi.useFakeTimers()
+    const heartbeatLimits = {
+      ...limits,
+      heartbeatIntervalMs: 5,
+      heartbeatTimeoutMs: 7,
+      cancelGraceMs: 3,
+      shutdownTimeoutMs: 2
+    }
+    const hung = createHarness({ resourceLimits: heartbeatLimits })
+    const healthy = createHarness(
+      {
+        activationHandle: 'host-handle-heartbeat-healthy',
+        hostGeneration: 8,
+        resourceLimits: heartbeatLimits
+      },
+      {
+        activation: activation({
+          name: 'plugin.heartbeat-healthy',
+          pluginInstanceId: 'instance-heartbeat-healthy',
+          activationGeneration: 1,
+          key: 'activation-key-heartbeat-healthy'
+        })
+      }
+    )
+    await Promise.all([start(hung), start(healthy)])
+    const hungResponder = hung.port.responder
+    hung.port.responder = (message) => {
+      if (
+        message.type === 'heartbeat' ||
+        message.type === 'cancel' ||
+        message.type === 'shutdown'
+      ) {
+        return
+      }
+      hungResponder?.(message)
+    }
+
+    await vi.advanceTimersByTimeAsync(heartbeatLimits.heartbeatIntervalMs)
+    expect(hung.port.sent.filter((message) => message.type === 'heartbeat')).toHaveLength(1)
+    expect(healthy.port.sent.filter((message) => message.type === 'heartbeat')).toHaveLength(1)
+    expect(healthy.host.state).toBe('active')
+
+    await vi.advanceTimersByTimeAsync(heartbeatLimits.heartbeatTimeoutMs)
+    const heartbeat = hung.port.sent.find((message) => message.type === 'heartbeat')!
+    expect(hung.port.sent.findLast((message) => message.type === 'cancel')).toMatchObject({
+      type: 'cancel',
+      targetRequestId: heartbeat.requestId
+    })
+    expect(hung.host.pendingCount).toBe(0)
+
+    await vi.advanceTimersByTimeAsync(heartbeatLimits.cancelGraceMs)
+    await flush()
+    expect(hung.invalidateAuthority).toHaveBeenCalledOnce()
+    expect(hung.child.forceKillCalls).toBe(0)
+    expect(healthy.host.state).toBe('active')
+
+    await vi.advanceTimersByTimeAsync(heartbeatLimits.shutdownTimeoutMs)
+    await hung.host.close()
+    expect(hung.child.forceKillCalls).toBe(1)
+    expect(hung.child.exited).toBe(true)
+    expect(hung.host.state).toBe('failed')
+    expect(hung.onCrash).not.toHaveBeenCalled()
+    expect(hung.onTerminated).toHaveBeenCalledWith({
+      code: 'PLUGIN_RUNTIME_HOST_TIMEOUT',
+      pluginName: 'plugin.alpha',
+      activationGeneration: 3
+    })
+    expect(healthy.invalidateAuthority).not.toHaveBeenCalled()
+
+    await healthy.host.stop()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears heartbeat state when an active child crashes', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness({
+      resourceLimits: {
+        ...limits,
+        heartbeatIntervalMs: 5,
+        heartbeatTimeoutMs: 20
+      }
+    })
+    await start(harness)
+    harness.child.emitExit()
+    await harness.host.close()
+    await vi.advanceTimersByTimeAsync(25)
+
+    expect(harness.host.state).toBe('crashed')
+    expect(harness.onCrash).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
 
@@ -2057,6 +2280,29 @@ describe('PluginRuntimeHost termination barrier', () => {
     harness.child.emitExit()
     await stopping
     expect(stopSettled).toBe(true)
+  })
+
+  it('reports a stable cleanup failure only after the child exit barrier settles', async () => {
+    const events: string[] = []
+    const harness = createHarness({
+      closeResources: vi.fn(() => {
+        events.push('close-resources')
+        throw new Error('/private/plugin/cleanup-detail')
+      })
+    })
+    await start(harness)
+
+    const stopping = harness.host.stop()
+
+    await expect(stopping).rejects.toEqual(
+      new PluginRuntimeHostError('PLUGIN_RUNTIME_HOST_CLEANUP_FAILED')
+    )
+    expect(events).toEqual(['close-resources'])
+    expect(harness.child.exited).toBe(true)
+    expect(harness.host.state).toBe('closed')
+    expect(JSON.stringify(await stopping.catch((error: unknown) => error))).not.toContain(
+      '/private/plugin/cleanup-detail'
+    )
   })
 
   it('stops accepting child responses before asynchronous authority invalidation settles', async () => {

@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<FileUploaderProps>(), {
 const emit = defineEmits<FileUploaderEmits>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
+const rootRef = ref<HTMLElement | null>(null)
 const dropActive = ref(false)
 
 const value = computed(() => props.modelValue ?? [])
@@ -93,7 +94,13 @@ function onDragOver(e: DragEvent) {
   dropActive.value = true
 }
 
-function onDragLeave() {
+function onDragLeave(e: DragEvent) {
+  // dragleave bubbles up from children, so crossing an inner boundary (button → span)
+  // would flicker the highlight off. Only clear when the pointer actually left the drop
+  // zone — moved to a node outside the root (or off-window, where relatedTarget is null).
+  const related = e.relatedTarget as Node | null
+  if (related && rootRef.value?.contains(related))
+    return
   dropActive.value = false
 }
 
@@ -102,7 +109,9 @@ function onDrop(e: DragEvent) {
     return
   e.preventDefault()
   dropActive.value = false
-  const files = Array.from(e.dataTransfer?.files ?? [])
+  const all = Array.from(e.dataTransfer?.files ?? [])
+  // Mirror the native picker: a single-file uploader only accepts the first drop.
+  const files = props.multiple ? all : all.slice(0, 1)
   addFiles(files)
 }
 
@@ -111,6 +120,7 @@ defineExpose({ pick })
 
 <template>
   <div
+    ref="rootRef"
     class="tx-file-uploader"
     :class="{ 'is-disabled': disabled, 'is-dragging': dropActive }"
     @dragover="onDragOver"

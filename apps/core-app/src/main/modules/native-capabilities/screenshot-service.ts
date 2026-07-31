@@ -13,6 +13,10 @@ import { performance } from 'node:perf_hooks'
 import { resolveLocalFilePath, toTfileUrl } from '@talex-touch/utils/network'
 import { BrowserWindow, clipboard, nativeImage, screen } from 'electron'
 import { tempFileService } from '../../service/temp-file.service'
+import {
+  PRIVACY_RETENTION_DAY_MS,
+  PRIVACY_SCREENSHOT_TEMP_NAMESPACE
+} from '../privacy/retention-policy'
 import { createLogger } from '../../utils/logger'
 import type {
   NativeResult,
@@ -32,8 +36,8 @@ import {
 } from './screenshot-protocol'
 
 const SCREENSHOT_CAPABILITY = 'screenshot.capture'
-const SCREENSHOT_NAMESPACE = 'native/screenshots'
-const SCREENSHOT_RETENTION_MS = 30 * 60_000
+const SCREENSHOT_NAMESPACE = PRIVACY_SCREENSHOT_TEMP_NAMESPACE
+const SCREENSHOT_RETENTION_MS = PRIVACY_RETENTION_DAY_MS
 const DEFAULT_FRAME_BYTES = 64 * 1024 * 1024
 const MAX_COMPOSE_ATTACHMENT_BYTES = 32 * 1024 * 1024
 const MAX_COMPOSE_PACKET_BYTES = 64 * 1024 * 1024
@@ -1062,12 +1066,21 @@ export class NativeScreenshotService {
     return true
   }
 
+  async releaseTempArtifact(tfileUrl: string): Promise<boolean> {
+    this.ensureTempNamespace()
+    const artifactPath = await this.resolveCaptureResourcePath(tfileUrl)
+    return await tempFileService.deleteFileFromNamespaces(artifactPath, [SCREENSHOT_NAMESPACE])
+  }
+
   private ensureTempNamespace(): void {
     if (this.tempNamespaceRegistered) return
-    tempFileService.registerNamespace({
-      namespace: SCREENSHOT_NAMESPACE,
-      retentionMs: SCREENSHOT_RETENTION_MS
-    })
+    if (!tempFileService.getNamespaceConfig(SCREENSHOT_NAMESPACE)) {
+      tempFileService.registerNamespace({
+        namespace: SCREENSHOT_NAMESPACE,
+        retentionMs: SCREENSHOT_RETENTION_MS,
+        automaticCleanup: false
+      })
+    }
     tempFileService.startCleanup()
     this.tempNamespaceRegistered = true
   }

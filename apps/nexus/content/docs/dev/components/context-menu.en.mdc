@@ -2,6 +2,9 @@
 title: "ContextMenu"
 description: "General menu surface for right-click, controlled coordinates, and Popover composition."
 category: Navigation
+status: beta
+since: 1.0.0
+tags: [context, menu, popover]
 syncStatus: reviewed
 verified: true
 ---
@@ -9,7 +12,7 @@ verified: true
 
 `TxContextMenu` is a general menu overlay. It can bind to the native `contextmenu` event and open from controlled coordinates. Positioning, collision handling, Card surface, and motion are now hosted by `TxBaseAnchor` through virtual-anchor mode, so the menu follows the latest position when users right-click repeatedly. The visual/content part is also available as `TxContextMenuPanel`, so the same menu items can be embedded inside `TxPopover` or any custom overlay.
 
-## Basic and Composition Scenarios
+## Basic Usage
 
 ### ContextMenu
 :::TuffDemoWrapper{demo="ContextMenuContextMenuDemo" code-lang="vue"}
@@ -103,7 +106,7 @@ code: |
           <TxContextMenuItem shortcut="⌘R">Refresh</TxContextMenuItem>
           <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
           <TxContextMenuDivider dashed />
-          <TxPopover v-model="popoverOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false">
+          <TxPopover v-model="popoverOpen" placement="right-start" :offset="8" :show-arrow="false" :toggle-on-reference-click="false" :close-on-click-outside="false" reference-full-width>
             <template #reference>
               <TxContextMenuItem submenu :close-on-select="false" @select="popoverOpen = true">
                 More actions
@@ -154,28 +157,9 @@ code: |
 ---
 :::
 
-## Common Patterns
+### Anchor mode
 
-### Bind to right-click
-
-```vue
-<TxContextMenu>
-  <template #trigger>
-    <div class="file-row">Right click file row</div>
-  </template>
-
-  <template #menu>
-    <TxContextMenuItem shortcut="⌘O">Open</TxContextMenuItem>
-    <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
-    <TxContextMenuDivider />
-    <TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
-  </template>
-</TxContextMenu>
-```
-
-### Anchor mode: follow pointer or trigger reference
-
-The default is `anchorMode="pointer"`, so the context menu follows the mouse coordinates. Use `anchorMode="reference"` when the menu should behave more like a Popover/Dropdown and attach to the trigger area.
+The default is `anchorMode="pointer"`, so the menu follows the mouse coordinates. Use `anchorMode="reference"` when the menu should behave more like a Popover/Dropdown and attach to the trigger area.
 
 ```vue
 <!-- Follow mouse / provided coordinates. Good for standard context menus. -->
@@ -185,101 +169,14 @@ The default is `anchorMode="pointer"`, so the context menu follows the mouse coo
 <TxContextMenu anchor-mode="reference" />
 ```
 
-### Controlled coordinates / custom trigger
+## Interaction Contract
 
-Use this for button clicks, editor shortcuts, canvas node menus, and other non-right-click flows. `trigger="manual"` disables internal event handling, so the menu opens only through `v-model + x/y`.
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const open = ref(false)
-const x = ref(0)
-const y = ref(0)
-
-function openFromButton(event: MouseEvent) {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  x.value = rect.left
-  y.value = rect.bottom + 8
-  open.value = true
-}
-</script>
-
-<template>
-  <TxButton @click="openFromButton">Open menu</TxButton>
-  <TxContextMenu v-model="open" trigger="manual" :x="x" :y="y">
-    <template #menu>
-      <TxContextMenuItem shortcut="⌘N">New</TxContextMenuItem>
-    </template>
-  </TxContextMenu>
-</template>
-```
-
-### Embed in Popover
-
-`TxContextMenuPanel` has no positioning or trigger logic. It only provides menu layout, item injection, and close context, so it can live inside `TxPopover`, `TxDropdownMenu`, or a custom overlay.
-
-```vue
-<TxPopover placement="bottom-start" :width="240" :panel-padding="6">
-  <template #reference>
-    <TxButton>More</TxButton>
-  </template>
-
-  <TxContextMenuPanel>
-    <TxContextMenuItem shortcut="⌘P">Pin</TxContextMenuItem>
-    <TxContextMenuItem color="#10b981">Approve</TxContextMenuItem>
-    <TxContextMenuDivider />
-    <TxContextMenuItem danger>Reject</TxContextMenuItem>
-  </TxContextMenuPanel>
-</TxPopover>
-```
-
-### Custom secondary context menu
-
-Use `TxPopover` for a submenu and set `close-on-select="false"` on the parent item so selecting it does not close the parent menu. If the submenu is teleported outside the parent `TxContextMenu`, add `outside-guard` on `TxContextMenuPanel` to prevent the parent outside-click handler from closing immediately.
-
-```vue
-<TxPopover v-model="submenuOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false" reference-full-width>
-  <template #reference>
-    <TxContextMenuItem submenu :close-on-select="false" @select="submenuOpen = true">
-      More actions
-    </TxContextMenuItem>
-  </template>
-
-  <TxContextMenuPanel :close="() => { submenuOpen = false }" outside-guard>
-    <TxContextMenuItem shortcut="⌘D">Duplicate</TxContextMenuItem>
-    <TxContextMenuItem color="var(--tx-color-primary)">Share link</TxContextMenuItem>
-  </TxContextMenuPanel>
-</TxPopover>
-```
-
-### Divider / Disabled / Danger / custom color / shortcuts
-
-```vue
-<TxContextMenuItem shortcut="⌘C">Copy</TxContextMenuItem>
-<TxContextMenuItem disabled shortcut="⌘V">Paste</TxContextMenuItem>
-<TxContextMenuDivider dashed />
-<TxContextMenuItem color="#8b5cf6" shortcut="⌘K">Run command</TxContextMenuItem>
-<TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
-```
-
-### Anchor animation and automatic placement
-
-`TxContextMenu` uses Floating UI `flip + shift + size` placement through `TxBaseAnchor`. It flips or shifts near viewport edges and constrains max height to the available viewport. With `anchorMode="pointer"`, repeated right-clicks update the virtual anchor to the latest mouse position; with `anchorMode="reference"`, the menu follows the trigger area.
-
-Animation is handled directly by `BaseAnchor`: `transfer`, `boom`, `opacity`, and `none`.
-
-```vue
-<TxContextMenu
-  :animation="{
-    type: 'boom',
-    duration: 180,
-    closeDuration: 120,
-    scale: 0.92,
-    blur: 10
-  }"
-/>
-```
+- Placement: `TxContextMenu` positions itself through `TxBaseAnchor` with Floating UI `flip + shift + size`, flipping/shifting near viewport edges and constraining max height to the available viewport.
+- Anchor: `anchorMode="pointer"` (default) follows the mouse / provided coordinates and updates the virtual anchor to the latest position on repeated right-clicks; `anchorMode="reference"` follows the trigger area, more like a Dropdown.
+- Trigger: `trigger` supports `contextmenu` / `click` / `both` / `manual`; `manual` disables internal event handling and opens only through `v-model + x/y`, for button clicks, editor shortcuts, and canvas node menus.
+- Close: ESC, outside click, and item selection all close by default; `closeOnSelect=false` is only for parent submenu rows or multi-step actions.
+- Submenus: `TxContextMenuPanel` has no positioning or trigger logic and can be embedded in `TxPopover` / `TxDropdownMenu` / a custom overlay; a teleported submenu must set `outsideGuard` on its child `TxContextMenuPanel`, otherwise the parent treats the submenu click as an outside click and closes.
+- Animation: handled directly by `BaseAnchor` — `transfer` / `boom` / `opacity` / `none`.
 
 ## API
 
@@ -348,8 +245,14 @@ Animation is handled directly by `BaseAnchor`: `transfer`, `boom`, `opacity`, an
 | `close` | `() => void` | - | Close callback injected into child items. |
 | `dense` | `boolean` | `false` | Uses tighter item spacing. |
 | `outsideGuard` | `boolean` | `false` | Marks the panel as a protected ContextMenu layer for teleported submenus. |
-| `role` | `string` | `'menu'` | ARIA role. |
+| `role` | `'menu' \| 'listbox' \| 'none'` | `'menu'` | Panel ARIA role, which also drives keyboard navigation: `menu`/`listbox` enable arrow keys, Home/End, and `focusFirstItem`, with child items set to `role="menuitem"` (menu) or `role="option"` (listbox) accordingly; `none` opts out of keyboard navigation (no focusable items, so `focusFirstItem` is a no-op). |
 | `ariaLabel` | `string` | - | ARIA label. |
+
+### TxContextMenuPanel Exposes
+
+| Name | Type | Description |
+|------|------|------|
+| `focusFirstItem` | `() => void` | Moves keyboard focus to the first enabled item in the panel. Only needed when you embed a standalone `TxContextMenuPanel` inside `TxPopover` / a custom overlay: call it after the panel opens to send focus into the menu for keyboard navigation. `TxContextMenu` calls it automatically on open; a bare panel does not. When `role` is `none` the panel has no navigable items, so the call is a no-op. |
 
 ### TxContextMenuItem Props
 

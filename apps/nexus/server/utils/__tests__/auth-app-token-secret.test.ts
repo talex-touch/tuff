@@ -8,7 +8,7 @@ const runtimeConfig = vi.hoisted(() => ({
   },
 }))
 const serverSession = vi.hoisted(() => ({
-  value: null as null | { user?: { id?: string, email?: string, name?: string }, issuedAt?: number },
+  value: null as null | { user?: { id?: string; email?: string; name?: string }; issuedAt?: number },
 }))
 
 const users = vi.hoisted(() => new Map<string, any>())
@@ -26,7 +26,9 @@ vi.mock('../authStore', () => ({
   consumeLoginToken: vi.fn(),
   createUser: vi.fn(),
   ensureDeviceForRequest: vi.fn(),
-  getDevice: vi.fn(async (_event: any, userId: string, deviceId: string) => devices.get(`${userId}:${deviceId}`) ?? null),
+  getDevice: vi.fn(
+    async (_event: any, userId: string, deviceId: string) => devices.get(`${userId}:${deviceId}`) ?? null,
+  ),
   getUserByEmail: vi.fn(),
   getUserById: vi.fn(async (_event: any, userId: string) => users.get(userId) ?? null),
   readDeviceId: vi.fn(() => 'device-1'),
@@ -61,8 +63,7 @@ function createEvent(env: Record<string, unknown> = {}) {
 
 function readJwtPayload(token: string) {
   const payload = token.split('.')[1]
-  if (!payload)
-    throw new Error('JWT payload missing')
+  if (!payload) throw new Error('JWT payload missing')
   const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
   return JSON.parse(Buffer.from(padded, 'base64').toString('utf8')) as {
@@ -90,10 +91,8 @@ describe('app auth token secret resolution', () => {
 
   afterEach(() => {
     process.env.NODE_ENV = previousNodeEnv
-    if (previousNitroPreset === undefined)
-      delete process.env.NITRO_PRESET
-    else
-      process.env.NITRO_PRESET = previousNitroPreset
+    if (previousNitroPreset === undefined) delete process.env.NITRO_PRESET
+    else process.env.NITRO_PRESET = previousNitroPreset
   })
 
   it('uses Cloudflare APP_AUTH_JWT_SECRET consistently for signing and verification', async () => {
@@ -118,6 +117,63 @@ describe('app auth token secret resolution', () => {
     const { createAppToken } = await import('../auth')
     await expect(createAppToken(createEvent(), 'user-1')).rejects.toMatchObject({
       statusCode: 500,
+      code: 'NEXUS_RUNTIME_CREDENTIAL_INVALID',
+      variableName: 'APP_AUTH_JWT_SECRET',
+    })
+  })
+
+  it.each(['change-me-auth-secret', 'your_auth_secret', 'replace-with-local-secret', 'tuff-local-app-auth-jwt-secret'])(
+    'rejects unsafe app auth credential in production: %s',
+    async credential => {
+      process.env.NODE_ENV = 'production'
+      const { createAppToken } = await import('../auth')
+      const event = createEvent({ APP_AUTH_JWT_SECRET: credential })
+
+      await expect(createAppToken(event, 'user-1')).rejects.toMatchObject({
+        statusCode: 500,
+        code: 'NEXUS_RUNTIME_CREDENTIAL_INVALID',
+        variableName: 'APP_AUTH_JWT_SECRET',
+      })
+    },
+  )
+
+  it('rejects an explicitly unsafe app credential instead of hiding it behind AUTH_SECRET', async () => {
+    process.env.NODE_ENV = 'production'
+    const { createAppToken } = await import('../auth')
+    const event = createEvent({
+      APP_AUTH_JWT_SECRET: 'tuff-local-app-auth-jwt-secret',
+      AUTH_SECRET: 'strong-session-fallback-secret-123456',
+    })
+
+    await expect(createAppToken(event, 'user-1')).rejects.toMatchObject({
+      code: 'NEXUS_RUNTIME_CREDENTIAL_INVALID',
+      variableName: 'APP_AUTH_JWT_SECRET',
+    })
+  })
+
+  it('uses platform AUTH_SECRET only when APP_AUTH_JWT_SECRET is absent', async () => {
+    process.env.NODE_ENV = 'production'
+    const { createAppToken } = await import('../auth')
+
+    await expect(
+      createAppToken(
+        createEvent({
+          AUTH_SECRET: 'strong-session-fallback-secret-123456',
+        }),
+        'user-1',
+      ),
+    ).resolves.toMatch(/^[^.]+\.[^.]+\.[^.]+$/)
+  })
+
+  it('does not replace a missing Cloudflare Secret with build-time runtime config', async () => {
+    process.env.NODE_ENV = 'production'
+    runtimeConfig.appAuthJwtSecret = 'strong-build-time-app-secret-123456'
+    runtimeConfig.auth.secret = 'strong-build-time-auth-secret-123456'
+    const { createAppToken } = await import('../auth')
+
+    await expect(createAppToken(createEvent({}), 'user-1')).rejects.toMatchObject({
+      code: 'NEXUS_RUNTIME_CREDENTIAL_INVALID',
+      variableName: 'APP_AUTH_JWT_SECRET',
     })
   })
 

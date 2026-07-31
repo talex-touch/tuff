@@ -65,12 +65,12 @@ code: |
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `text` | `string` | `''` | Text content rendered into all SVG text layers. |
-| `strokeColor` | `string` | `'#4C4CFF'` | Stroke animation color. |
-| `fillColor` | `string` | `'#111827'` | Final fill color. |
+| `strokeColor` | `string` | `'#4C4CFF'` | Color of the stroke phase (the outline that animates in first); pick a high-contrast value on dark backgrounds or the first stroke pass is nearly invisible. |
+| `fillColor` | `string` | `'#111827'` | Final text color revealed after the stroke animation completes. |
 | `durationMs` | `number` | `1800` | Animation duration in milliseconds. Used by both stroke and fill animations. |
-| `strokeWidth` | `number` | `2` | SVG stroke width. Also affects viewBox padding. |
+| `strokeWidth` | `number` | `2` | SVG stroke width; also drives viewBox padding, so large values (e.g. above 3) visibly change the laid-out size. |
 | `fontSize` | `string \| number` | `64` | Font size. Numbers are converted to px; strings are passed through. |
-| `fontWeight` | `string \| number` | `700` | SVG font weight. |
+| `fontWeight` | `string \| number` | `700` | SVG font weight; heavier weights thicken the glyph outline and make the stroke animation feel bolder. |
 | `fontFamily` | `string` | `'inherit'` | SVG font family. |
 
 ### Events

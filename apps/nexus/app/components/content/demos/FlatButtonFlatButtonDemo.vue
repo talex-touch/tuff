@@ -3,7 +3,7 @@ const { locale } = useI18n()
 </script>
 
 <template>
-  <div v-if="locale === 'zh'">
+  <div v-if="locale === 'zh'" class="tuff-demo-row">
         <TuffFlatButton>默认</TuffFlatButton>
         <TuffFlatButton primary>
 主色
@@ -15,7 +15,7 @@ const { locale } = useI18n()
 加载中
 </TuffFlatButton>
   </div>
-  <div v-else>
+  <div v-else class="tuff-demo-row">
         <TuffFlatButton>Default</TuffFlatButton>
         <TuffFlatButton primary>
 Primary

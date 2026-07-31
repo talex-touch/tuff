@@ -11,6 +11,9 @@ const props = withDefaults(defineProps<NavBarProps>(), {
   showBack: false,
   disabled: false,
   zIndex: 2000,
+  backLabel: 'Back',
+  leftLabel: 'Navigation left action',
+  rightLabel: 'Navigation right action',
 })
 
 const emit = defineEmits<NavBarEmits>()
@@ -24,6 +27,16 @@ const rootStyle = computed<Record<string, string>>(() => {
 
 const leftInteractive = computed(() => props.showBack || Boolean(slots.left))
 const rightInteractive = computed(() => Boolean(slots.right))
+
+// Only fall back to a built-in aria-label when the matching slot is absent. A
+// provided slot (e.g. a documented "Save" right action) already carries its own
+// accessible name; a hardcoded label here would override what AT announces.
+const leftAriaLabel = computed(() => {
+  if (slots.left)
+    return undefined
+  return props.showBack ? props.backLabel : props.leftLabel
+})
+const rightAriaLabel = computed(() => (slots.right ? undefined : props.rightLabel))
 
 function onBack() {
   if (props.disabled)
@@ -65,7 +78,7 @@ function onLeftAction() {
         type="button"
         class="tx-nav-bar__left"
         :disabled="disabled || !leftInteractive"
-        :aria-label="showBack ? 'Back' : 'Navigation left action'"
+        :aria-label="leftAriaLabel"
         @click="onLeftAction"
       >
         <slot name="left">
@@ -91,7 +104,7 @@ function onLeftAction() {
         type="button"
         class="tx-nav-bar__right"
         :disabled="disabled || !rightInteractive"
-        aria-label="Navigation right action"
+        :aria-label="rightAriaLabel"
         @click="onRightClick"
       >
         <slot name="right" />
@@ -110,6 +123,9 @@ function onLeftAction() {
   border-bottom: 1px solid color-mix(in srgb, var(--tx-border-color-light, #e4e7ed) 60%, transparent);
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
+  // `z-index` only takes effect on a positioned box; without this the documented
+  // `zIndex` prop was inert unless `fixed` (which sets position: sticky) was on.
+  position: relative;
   z-index: var(--tx-nav-bar-z-index, 2000);
 
   &.is-fixed {

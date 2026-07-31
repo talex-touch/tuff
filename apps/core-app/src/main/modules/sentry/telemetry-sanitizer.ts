@@ -61,7 +61,6 @@ const FEATURE_STRING_FIELDS = new Map([
   ['sourceModule', 96],
   ['sourceType', 64],
   ['sourceId', 96],
-  ['sourceName', 96],
   ['sourceVersion', 64],
   ['itemKind', 48],
   ['pluginName', 96],
@@ -80,8 +79,7 @@ const PERFORMANCE_STRING_FIELDS = new Map([
   ['phase', 32],
   ['moduleKey', 96],
   ['moduleName', 96],
-  ['status', 16],
-  ['reason', 96]
+  ['status', 16]
 ])
 
 const PERFORMANCE_NUMBER_FIELDS = new Set([
@@ -291,6 +289,8 @@ function sanitizePerformanceMetadata(
     const normalized = normalizeString(metadata[field], maxLength)
     if (normalized) output[field] = normalized
   }
+  const reason = normalizeIdentifier(metadata.reason)
+  if (reason) output.reason = reason
 
   for (const field of PERFORMANCE_NUMBER_FIELDS) {
     const normalized = normalizeNumber(metadata[field], { min: 0, max: MAX_SEARCH_DURATION_MS })

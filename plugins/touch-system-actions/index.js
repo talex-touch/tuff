@@ -1,547 +1,136 @@
-const { plugin, logger, TuffItemBuilder, permission, dialog, openUrl } = globalThis
-const process = require('node:process')
+const { plugin, logger, TuffItemBuilder, system, platform: hostPlatform } = globalThis
 
-let spawnShellCommand
-try {
-  ;({ spawnShellCommand } = require('@talex-touch/utils/common/utils/safe-shell'))
-}
-catch {
-  spawnShellCommand = null
-}
-
-const SHELL_UNSAFE_PATTERN = /[\0\r\n]/
 const PLUGIN_NAME = 'touch-system-actions'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
-const ACTION_ID = 'system-actions'
-const SHELL_PERMISSION_ID = 'system.shell'
-const NATIVE_PERMISSION_ID = 'app.window'
+const FEATURE_ID = 'system-actions'
+const RUN_ACTION_ID = 'run-action'
+const ICON = { type: 'class', value: 'i-ri-shut-down-line' }
 const GROUP_ORDER = ['power', 'audio', 'display', 'window']
-const SHELL_STATUS_LABELS = {
-  'available': '可用',
-  'permission-missing': '缺少权限',
-  'unsupported': '不可用',
-}
-
 const GROUP_META = {
   power: { title: '电源操作', subtitle: '关机 / 重启 / 锁屏' },
   audio: { title: '音量操作', subtitle: '音量+ / 音量- / 静音' },
   display: { title: '显示操作', subtitle: '亮度+ / 亮度-' },
   window: { title: '窗口操作', subtitle: '主窗口控制' },
 }
-
-let cachedActions = null
-let pinyin = null
-
-try {
-  ;({ pinyin } = require('pinyin-pro'))
-}
-catch {
-  pinyin = null
-}
-
-function normalizeText(value) {
-  return String(value ?? '').trim()
-}
-
-function truncateText(value, max = 96) {
-  const text = normalizeText(value)
-  if (!text)
-    return ''
-  if (text.length <= max)
-    return text
-  return `${text.slice(0, max - 1)}…`
-}
-
-function getQueryText(query) {
-  if (typeof query === 'string')
-    return query
-  return query?.text ?? ''
-}
-
-async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
-  }
-
-  try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission) {
-      return { granted: true }
-    }
-
-    const granted = await permission.request(permissionId, reason)
-    if (granted) {
-      return { granted: true }
-    }
-
-    return {
-      granted: false,
-      reason: 'permission-denied',
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-system-actions] Failed to request permission', error)
-    return {
-      granted: false,
-      reason: 'permission-request-failed',
-    }
-  }
-}
-
-async function checkPermissionStatus(permissionId) {
-  if (!permission?.check) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
-  }
-
-  try {
-    return {
-      granted: Boolean(await permission.check(permissionId)),
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-system-actions] Failed to check permission', error)
-    return {
-      granted: false,
-      reason: 'permission-check-failed',
-    }
-  }
-}
-
-function isShellPlatformSupported(platform = process.platform) {
-  return platform === 'win32' || platform === 'darwin'
-}
-
-function resolveShellStatus(platform = process.platform) {
-  if (!isShellPlatformSupported(platform)) {
-    return {
-      status: 'unsupported',
-      reason: `platform:${platform}`,
-    }
-  }
-
-  if (!spawnShellCommand) {
-    return {
-      status: 'unsupported',
-      reason: 'safe-shell-unavailable',
-    }
-  }
-
-  return {
-    status: 'available',
-  }
-}
-
-function resolveNativeWindowStatus() {
-  return {
-    status: 'available',
-  }
-}
-
-function resolveActionCommandKind(action, platform = process.platform) {
-  if (action?.id === 'open-main-window')
-    return 'native-window'
-  if (platform === 'win32' && ['volume-up', 'volume-down', 'mute'].includes(action?.id))
-    return 'powershell'
-  return 'fixed-shell'
-}
-
-function buildShellCapability({
-  featureId,
-  actionId,
-  commandKind = 'fixed-shell',
-  requiresConfirmation = false,
-  requiresAdmin = false,
-  platform = process.platform,
-  status,
-  reason,
-} = {}) {
-  const resolved = status ? { status, reason } : resolveShellStatus(platform)
-  const capability = {
-    id: SHELL_PERMISSION_ID,
-    type: 'shell',
-    platform,
-    permission: SHELL_PERMISSION_ID,
-    status: resolved.status,
-    audit: {
-      pluginName: PLUGIN_NAME,
-      featureId,
-      actionId,
-      commandKind,
-      requiresConfirmation: Boolean(requiresConfirmation),
-      requiresAdmin: Boolean(requiresAdmin),
-    },
-  }
-
-  if (resolved.reason)
-    capability.reason = resolved.reason
-
-  return capability
-}
-
-function buildNativeWindowCapability({
-  featureId,
-  actionId,
-  status,
-  reason,
-} = {}) {
-  const resolved = status ? { status, reason } : resolveNativeWindowStatus()
-  const capability = {
-    id: NATIVE_PERMISSION_ID,
-    type: 'native-window',
-    platform: process.platform,
-    status: resolved.status,
-    audit: {
-      pluginName: PLUGIN_NAME,
-      featureId,
-      actionId,
-      commandKind: 'native-window',
-      requiresConfirmation: false,
-      requiresAdmin: false,
-    },
-  }
-
-  if (resolved.reason)
-    capability.reason = resolved.reason
-
-  return capability
-}
-
-function buildActionCapability(featureId, action, platform = process.platform, capabilityState) {
-  if (action?.id === 'open-main-window') {
-    return buildNativeWindowCapability({
-      featureId,
-      actionId: action?.id,
-      status: capabilityState?.status,
-      reason: capabilityState?.reason,
-    })
-  }
-
-  return buildShellCapability({
-    featureId,
-    actionId: action?.id,
-    commandKind: resolveActionCommandKind(action, platform),
-    requiresConfirmation: Boolean(action?.requiresAdmin),
-    requiresAdmin: Boolean(action?.requiresAdmin),
-    platform,
-    status: capabilityState?.status,
-    reason: capabilityState?.reason,
-  })
-}
-
-async function resolveFeatureShellCapabilityState(platform = process.platform) {
-  const shellStatus = resolveShellStatus(platform)
-  if (shellStatus.status !== 'available')
-    return shellStatus
-
-  const permissionStatus = await checkPermissionStatus(SHELL_PERMISSION_ID)
-  if (!permissionStatus.granted) {
-    return {
-      status: 'permission-missing',
-      reason: permissionStatus.reason || 'system-shell-permission-required',
-    }
-  }
-
-  return shellStatus
-}
-
-function formatCapabilitySubtitle(state) {
-  const label = SHELL_STATUS_LABELS[state.status] || state.status
-  return state.reason ? `${label} · ${state.reason}` : label
-}
-
-async function openSystemSettings() {
-  if (process.platform === 'darwin') {
-    if (typeof openUrl === 'function') {
-      openUrl('x-apple.systempreferences:com.apple.preference.security')
-      return
-    }
-    await runShellCommand('open "x-apple.systempreferences:com.apple.preference.security"')
-    return
-  }
-
-  if (process.platform === 'win32') {
-    if (typeof openUrl === 'function') {
-      openUrl('ms-settings:')
-      return
-    }
-    await runShellCommand('powershell -Command "Start-Process ms-settings:"')
-  }
-}
-
-async function runShellCommand(command) {
-  if (SHELL_UNSAFE_PATTERN.test(command)) {
-    throw new Error('unsafe command payload')
-  }
-  if (!spawnShellCommand) {
-    throw new Error('safe-shell-unavailable')
-  }
-
-  await new Promise((resolve, reject) => {
-    const child = spawnShellCommand(command, { windowsHide: true })
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code && code !== 0)
-        reject(new Error(`command failed with code ${code}`))
-      else
-        resolve()
-    })
-  })
-}
-
-async function showPermissionError(actionName) {
-  if (!dialog?.showMessageBox)
-    return
-
-  const result = await dialog.showMessageBox({
-    type: 'warning',
-    title: '权限不足',
-    message: `执行"${actionName}"操作可能需要更高权限`,
-    detail: '请以管理员身份运行应用，或手动执行该操作。',
-    buttons: ['确定', '打开系统设置'],
-    defaultId: 0,
-    cancelId: 0,
-  })
-
-  if (result?.response === 1) {
-    await openSystemSettings()
-  }
-}
-
-async function confirmDangerAction(actionName, detail) {
-  if (!dialog?.showMessageBox)
-    return false
-
-  const result = await dialog.showMessageBox({
-    type: 'question',
-    title: `确认${actionName}`,
-    message: `确定要执行${actionName}吗？`,
-    detail,
-    buttons: ['取消', '确定'],
-    defaultId: 0,
-    cancelId: 0,
-  })
-
-  return result?.response === 1
-}
-
-function addTokensFromText(text, tokens) {
-  const value = normalizeText(text)
-  if (!value)
-    return
-
-  const lower = value.toLowerCase()
-  tokens.add(lower)
-  tokens.add(lower.replace(/\s+/g, ''))
-
-  if (/[\u4E00-\u9FFF]/.test(value) && pinyin) {
-    try {
-      const full = pinyin(value, { toneType: 'none' }).replace(/\s/g, '').toLowerCase()
-      if (full)
-        tokens.add(full)
-      const first = pinyin(value, { pattern: 'first', toneType: 'none' }).replace(/\s/g, '').toLowerCase()
-      if (first)
-        tokens.add(first)
-    }
-    catch {}
-  }
-}
-
-function buildSearchTokens(action) {
-  const tokens = new Set()
-  addTokensFromText(action.name, tokens)
-  addTokensFromText(action.description, tokens)
-  action.keywords.forEach(keyword => addTokensFromText(keyword, tokens))
-  return Array.from(tokens)
-}
-
-function createActions(platform = process.platform) {
-  const isMac = platform === 'darwin'
-  const isWindows = platform === 'win32'
-  const actions = []
-
-  actions.push({
+const ACTIONS = [
+  {
     id: 'shutdown',
     name: '关机',
     description: '关闭计算机',
     keywords: ['关机', '关闭', 'shutdown', 'power off', '关闭电脑'],
     group: 'power',
-    requiresAdmin: true,
-    execute: async () => {
-      const confirmed = await confirmDangerAction('关机', '此操作会立即关闭计算机。')
-      if (!confirmed)
-        return { status: 'cancelled' }
-
-      if (isMac) {
-        await runShellCommand('osascript -e \'tell app "System Events" to shut down\'')
-      }
-      else if (isWindows) {
-        await runShellCommand('shutdown /s /t 0')
-      }
-    },
-  })
-
-  actions.push({
+    platforms: ['darwin', 'win32'],
+  },
+  {
     id: 'restart',
     name: '重启',
     description: '重启计算机',
     keywords: ['重启', '重新启动', 'restart', 'reboot', '重启电脑'],
     group: 'power',
-    requiresAdmin: true,
-    execute: async () => {
-      const confirmed = await confirmDangerAction('重启', '此操作会立即重启计算机。')
-      if (!confirmed)
-        return { status: 'cancelled' }
-
-      if (isMac) {
-        await runShellCommand('osascript -e \'tell app "System Events" to restart\'')
-      }
-      else if (isWindows) {
-        await runShellCommand('shutdown /r /t 0')
-      }
-    },
-  })
-
-  actions.push({
+    platforms: ['darwin', 'win32'],
+  },
+  {
     id: 'lock-screen',
     name: '锁定屏幕',
     description: '立即锁屏',
     keywords: ['锁定', '锁屏', 'lock', 'lock screen', '锁定屏幕'],
     group: 'power',
-    execute: async () => {
-      if (isMac) {
-        await runShellCommand('pmset displaysleepnow')
-      }
-      else if (isWindows) {
-        await runShellCommand('rundll32.exe user32.dll,LockWorkStation')
-      }
-    },
-  })
-
-  actions.push({
+    platforms: ['darwin', 'win32'],
+  },
+  {
     id: 'volume-up',
     name: '增加音量',
     description: '增加系统音量',
     keywords: ['音量', '增加音量', 'volume up', '音量+', '声音'],
     group: 'audio',
-    execute: async () => {
-      if (isMac) {
-        await runShellCommand('osascript -e \'set volume output volume (output volume of (get volume settings) + 10)\'')
-      }
-      else if (isWindows) {
-        await runShellCommand('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]175)"')
-      }
-    },
-  })
-
-  actions.push({
+    platforms: ['darwin', 'win32'],
+  },
+  {
     id: 'volume-down',
     name: '降低音量',
     description: '降低系统音量',
     keywords: ['音量', '降低音量', 'volume down', '音量-', '声音'],
     group: 'audio',
-    execute: async () => {
-      if (isMac) {
-        await runShellCommand('osascript -e \'set volume output volume (output volume of (get volume settings) - 10)\'')
-      }
-      else if (isWindows) {
-        await runShellCommand('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]174)"')
-      }
-    },
-  })
-
-  actions.push({
-    id: 'mute',
-    name: '静音',
-    description: '静音/取消静音',
-    keywords: ['静音', 'mute', '无声', '关闭声音'],
+    platforms: ['darwin', 'win32'],
+  },
+  {
+    id: 'mute-toggle',
+    name: '静音切换',
+    description: '静音或恢复系统声音',
+    keywords: ['静音', 'mute', 'mute toggle', '无声', '关闭声音'],
     group: 'audio',
-    execute: async () => {
-      if (isMac) {
-        await runShellCommand('osascript -e \'set volume output muted not (output muted of (get volume settings))\'')
-      }
-      else if (isWindows) {
-        await runShellCommand('powershell -Command "$wshShell = New-Object -ComObject WScript.Shell; $wshShell.SendKeys([char]173)"')
-      }
-    },
-  })
-
-  if (isMac) {
-    actions.push({
-      id: 'brightness-up',
-      name: '增加亮度',
-      description: '增加屏幕亮度',
-      keywords: ['亮度', '增加亮度', 'brightness up', '亮度+'],
-      group: 'display',
-      execute: async () => {
-        await runShellCommand('osascript -e \'tell application "System Events" to key code 144\'')
-      },
-    })
-
-    actions.push({
-      id: 'brightness-down',
-      name: '降低亮度',
-      description: '降低屏幕亮度',
-      keywords: ['亮度', '降低亮度', 'brightness down', '亮度-'],
-      group: 'display',
-      execute: async () => {
-        await runShellCommand('osascript -e \'tell application "System Events" to key code 145\'')
-      },
-    })
-  }
-
-  actions.push({
+    platforms: ['darwin', 'win32'],
+  },
+  {
+    id: 'brightness-up',
+    name: '增加亮度',
+    description: '增加屏幕亮度',
+    keywords: ['亮度', '增加亮度', 'brightness up', '亮度+'],
+    group: 'display',
+    platforms: ['darwin'],
+  },
+  {
+    id: 'brightness-down',
+    name: '降低亮度',
+    description: '降低屏幕亮度',
+    keywords: ['亮度', '降低亮度', 'brightness down', '亮度-'],
+    group: 'display',
+    platforms: ['darwin'],
+  },
+  {
     id: 'open-main-window',
     name: '打开主窗口',
     description: '显示并激活 Tuff 主窗口',
     keywords: ['主窗口', '打开', 'main window', 'show window', '显示窗口', 'tuff', '窗口'],
     group: 'window',
-    execute: async () => {
-      await plugin.system.showMainWindow()
-    },
-  })
+    platforms: ['darwin', 'win32'],
+  },
+]
+const ACTION_IDS = new Set(ACTIONS.map(action => action.id))
 
-  return actions.map(action => ({
-    ...action,
-    searchTokens: buildSearchTokens(action),
-  }))
+function normalizeText(value) {
+  return String(value ?? '').trim()
 }
 
-function resolveActions(platform = process.platform) {
-  if (cachedActions && cachedActions.platform === platform) {
-    return cachedActions.items
-  }
-
-  const items = createActions(platform)
-  cachedActions = { platform, items }
-  return items
+function currentPlatform() {
+  return typeof hostPlatform?.platform === 'string' ? hostPlatform.platform : 'unsupported'
 }
 
-function matchActions(actions, keyword) {
-  const text = normalizeText(keyword).toLowerCase()
-  if (!text)
+function getQueryText(query) {
+  return typeof query === 'string' ? query : (query?.text ?? '')
+}
+
+function availableActions(platform = currentPlatform()) {
+  return ACTIONS.filter(action => action.platforms.includes(platform))
+}
+
+function buildSearchTokens(action) {
+  return Array.from(
+    new Set(
+      [action.id, action.name, action.description, ...action.keywords]
+        .map(value => normalizeText(value).toLowerCase())
+        .flatMap(value => [value, value.replace(/\s+/g, '')])
+        .filter(Boolean),
+    ),
+  )
+}
+
+function matchActions(actions, query) {
+  const keyword = normalizeText(query).toLowerCase()
+  if (!keyword)
     return actions
-
-  return actions.filter((action) => {
-    if (action.name.toLowerCase().includes(text))
-      return true
-
-    return action.searchTokens.some(token => token.includes(text))
-  })
+  const compact = keyword.replace(/\s+/g, '')
+  return actions.filter(action =>
+    buildSearchTokens(action).some(token => token.includes(keyword) || token.includes(compact)),
+  )
 }
 
-function resolveGroupOrder(actions) {
-  return GROUP_ORDER.filter(groupId => actions.some(action => action.group === groupId))
+function groupOrder(actions) {
+  return GROUP_ORDER.filter(group => actions.some(action => action.group === group))
 }
 
-function buildInfoItem({ id, featureId, title, subtitle, capability }) {
-  return new TuffItemBuilder(id)
+function buildItem({ id, featureId, title, subtitle, actionId }) {
+  const builder = new TuffItemBuilder(id)
     .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
     .setTitle(title)
     .setSubtitle(subtitle)
@@ -549,202 +138,160 @@ function buildInfoItem({ id, featureId, title, subtitle, capability }) {
     .setMeta({
       pluginName: PLUGIN_NAME,
       featureId,
-      ...(capability ? { capability } : {}),
+      ...(actionId ? { defaultAction: FEATURE_ID } : {}),
     })
-    .build()
+
+  if (actionId)
+    builder.createAndAddAction(RUN_ACTION_ID, 'plugin', `执行${title}`, { actionId })
+  return builder.build()
 }
 
-function buildSectionHeader(featureId, groupId) {
-  const section = GROUP_META[groupId]
-  return buildInfoItem({
-    id: `${featureId}-section-${groupId}`,
-    featureId,
-    title: section?.title || groupId,
-    subtitle: section?.subtitle || '',
-  })
+async function publishItems(items) {
+  await plugin.feature.clearItems()
+  await plugin.feature.pushItems(items)
 }
 
-function buildActionItem(featureId, action, capabilityState) {
-  return new TuffItemBuilder(`${featureId}-${action.id}`)
-    .setSource('plugin', SOURCE_ID, PLUGIN_NAME)
-    .setTitle(action.name)
-    .setSubtitle(action.description)
-    .setIcon(ICON)
-    .setMeta({
-      pluginName: PLUGIN_NAME,
-      featureId,
-      defaultAction: ACTION_ID,
-      actionId: action.id,
-      capability: buildActionCapability(featureId, action, process.platform, capabilityState),
-    })
-    .build()
+function blocked(reason, message, status = 'blocked') {
+  return {
+    externalAction: true,
+    success: false,
+    status,
+    reason,
+    message,
+  }
+}
+
+function stableFailure(error) {
+  const code = error && typeof error === 'object' && typeof error.code === 'string' ? error.code : ''
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED')
+    return blocked('permission-denied', '缺少 system.shell 权限')
+  if (code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_UNAVAILABLE')
+    return blocked('permission-unavailable', '权限系统不可用')
+  if (code === 'PLUGIN_HOST_CAPABILITY_CANCELLED')
+    return blocked('cancelled', '操作已取消', 'cancelled')
+  if (code === 'PLUGIN_HOST_CAPABILITY_TIMEOUT')
+    return blocked('timeout', '系统操作执行超时', 'failed')
+  return blocked('system-action-failed', '系统操作执行失败', 'failed')
+}
+
+async function runAction(actionId) {
+  const platformActions = availableActions()
+  const action = platformActions.find(candidate => candidate.id === actionId)
+  if (!action || !ACTION_IDS.has(actionId))
+    return blocked('invalid-action', '无效系统操作')
+  if (!system || typeof system.runAction !== 'function')
+    return blocked('system-capability-unavailable', '系统操作能力不可用')
+
+  try {
+    const result = await system.runAction(action.id)
+    if (result?.status === 'started') {
+      return {
+        externalAction: true,
+        success: true,
+        status: 'started',
+      }
+    }
+    if (result?.status === 'blocked') {
+      const reason = normalizeText(result.reason) || 'blocked'
+      const message = reason === 'confirmation-denied'
+        ? '操作已取消'
+        : reason === 'permission-denied'
+          ? '缺少 system.shell 权限'
+          : reason === 'permission-unavailable'
+            ? '权限系统不可用'
+            : reason === 'platform-unsupported'
+              ? '当前平台暂不支持该系统操作'
+              : '系统操作不可用'
+      return blocked(reason, message, reason === 'confirmation-denied' ? 'cancelled' : 'blocked')
+    }
+    return blocked('execution-failed', '系统操作执行失败', 'failed')
+  }
+  catch (error) {
+    const failure = stableFailure(error)
+    logger?.error?.(`[touch-system-actions] ${failure.reason}`)
+    return failure
+  }
+}
+
+function selectedActionId(item, context) {
+  if (!item?.meta || item.meta.defaultAction !== FEATURE_ID)
+    return ''
+  const selectedId = context?.actionId || item.actions?.[0]?.id
+  if (selectedId !== RUN_ACTION_ID)
+    return ''
+  const selectedAction = item.actions?.find?.(action => action?.id === selectedId)
+  const actionId = normalizeText(selectedAction?.payload?.actionId)
+  return ACTION_IDS.has(actionId) ? actionId : ''
 }
 
 const pluginLifecycle = {
+  async onInit() {},
+
   async onFeatureTriggered(featureId, query) {
-    try {
-      const shellCapabilityState = await resolveFeatureShellCapabilityState(process.platform)
+    if (featureId !== FEATURE_ID)
+      return false
 
-      if (!isShellPlatformSupported(process.platform)) {
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildInfoItem({
-            id: `${featureId}-unsupported`,
-            featureId,
-            title: '当前平台暂不支持系统操作',
-            subtitle: `platform:${process.platform}`,
-            capability: buildShellCapability({
-              featureId,
-              actionId: 'list-actions',
-              status: 'unsupported',
-              reason: `platform:${process.platform}`,
-            }),
-          }),
-        ])
-        return true
-      }
-
-      const keyword = getQueryText(query)
-      const actions = resolveActions()
-      const matched = matchActions(actions, keyword)
-
-      if (matched.length === 0) {
-        plugin.feature.clearItems()
-        plugin.feature.pushItems([
-          buildInfoItem({
-            id: `${featureId}-empty`,
-            featureId,
-            title: '没有匹配的系统操作',
-            subtitle: '可尝试输入：关机 / 重启 / 锁屏 / 音量 / 亮度 / 主窗口',
-          }),
-        ])
-        return true
-      }
-
-      const order = resolveGroupOrder(matched)
-      const items = [
-        buildInfoItem({
-          id: `${featureId}-shell-capability`,
+    const actions = availableActions()
+    if (actions.length === 0) {
+      await publishItems([
+        buildItem({
+          id: `${featureId}-unsupported`,
           featureId,
-          title: '系统命令能力',
-          subtitle: formatCapabilitySubtitle(shellCapabilityState),
-          capability: buildShellCapability({
-            featureId,
-            actionId: 'list-actions',
-            status: shellCapabilityState.status,
-            reason: shellCapabilityState.reason,
-          }),
-        }),
-      ]
-
-      order.forEach((groupId) => {
-        items.push(buildSectionHeader(featureId, groupId))
-        matched
-          .filter(action => action.group === groupId)
-          .forEach((action) => {
-            const capabilityState = action.id === 'open-main-window'
-              ? resolveNativeWindowStatus()
-              : shellCapabilityState
-            items.push(buildActionItem(featureId, action, capabilityState))
-          })
-      })
-
-      plugin.feature.clearItems()
-      plugin.feature.pushItems(items)
-      return true
-    }
-    catch (error) {
-      logger?.error?.('[touch-system-actions] Failed to handle feature', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          id: `${featureId}-error`,
-          featureId,
-          title: '系统操作加载失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
+          title: '当前平台暂不支持系统操作',
+          subtitle: `platform:${currentPlatform()}`,
         }),
       ])
       return true
     }
+
+    const keyword = getQueryText(query)
+    const matched = matchActions(actions, keyword)
+    const items = []
+    for (const group of groupOrder(matched)) {
+      const meta = GROUP_META[group]
+      items.push(
+        buildItem({
+          id: `${featureId}-section-${group}`,
+          featureId,
+          title: meta.title,
+          subtitle: meta.subtitle,
+        }),
+      )
+      for (const action of matched.filter(candidate => candidate.group === group)) {
+        items.push(
+          buildItem({
+            id: `${featureId}-${action.id}`,
+            featureId,
+            title: action.name,
+            subtitle: action.description,
+            actionId: action.id,
+          }),
+        )
+      }
+    }
+
+    if (items.length === 0) {
+      items.push(
+        buildItem({
+          id: `${featureId}-empty`,
+          featureId,
+          title: '没有匹配的系统操作',
+          subtitle: '可尝试输入：关机 / 重启 / 锁屏 / 音量 / 亮度 / 主窗口',
+        }),
+      )
+    }
+    await publishItems(items)
+    return true
   },
 
-  async onItemAction(item) {
-    if (item?.meta?.defaultAction !== ACTION_ID)
-      return
-
-    const actionId = normalizeText(item.meta?.actionId)
+  async onItemAction(item, context = {}) {
+    const actionId = selectedActionId(item, context)
     if (!actionId)
-      return
-
-    const action = resolveActions().find(candidate => candidate.id === actionId)
-    if (!action)
-      return
-
-    if (action.id !== 'open-main-window') {
-      const shellStatus = resolveShellStatus(process.platform)
-      if (shellStatus.status !== 'available') {
-        return { externalAction: true, status: 'blocked', reason: shellStatus.reason }
-      }
-
-      const permissionResult = await ensurePermission(SHELL_PERMISSION_ID, '需要系统命令权限以执行系统操作')
-      if (!permissionResult.granted) {
-        return {
-          externalAction: true,
-          status: 'blocked',
-          reason: permissionResult.reason || 'permission-denied',
-        }
-      }
-    }
-
-    try {
-      const result = await action.execute()
-      if (result?.status === 'cancelled')
-        return { externalAction: true, status: 'cancelled' }
-      return { externalAction: true, status: 'started' }
-    }
-    catch (error) {
-      logger?.error?.(`[touch-system-actions] Action failed: ${action.id}`, error)
-
-      if (action.requiresAdmin) {
-        await showPermissionError(action.name)
-      }
-      else if (dialog?.showMessageBox) {
-        await dialog.showMessageBox({
-          type: 'error',
-          title: '操作失败',
-          message: `执行"${action.name}"失败`,
-          detail: truncateText(error?.message || '未知错误', 180),
-          buttons: ['确定'],
-        })
-      }
-
-      return {
-        externalAction: true,
-        status: 'blocked',
-        success: false,
-        message: error?.message || '执行失败',
-      }
-    }
+      return blocked('invalid-action', '无效系统操作')
+    return await runAction(actionId)
   },
+
+  async onDestroy() {},
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    buildSearchTokens,
-    buildActionCapability,
-    buildNativeWindowCapability,
-    buildShellCapability,
-    checkPermissionStatus,
-    formatCapabilitySubtitle,
-    isShellPlatformSupported,
-    matchActions,
-    resolveFeatureShellCapabilityState,
-    resolveActions,
-    resolveGroupOrder,
-    resolveShellStatus,
-    setSpawnShellCommandForTest(runner) {
-      spawnShellCommand = runner
-    },
-  },
-}
+module.exports = pluginLifecycle

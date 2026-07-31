@@ -12,8 +12,6 @@ verified: true
 
 `TxBlankSlate` is a `TxEmptyState` wrapper with `variant="blank-slate"` fixed and first-run defaults applied. Use it when a product area has no user-created content yet and the page should explain the value of taking the first action.
 
-Reviewed against `packages/tuffex/packages/components/src/blank-slate/src/TxBlankSlate.vue`, `types.ts`, and `blank-slate.test.ts`.
-
 ## Basic Usage
 
 ### BlankSlate

@@ -115,6 +115,7 @@ No public instance methods are exposed.
 - Keep `animationDuration` slower on dense pages; multiple fast animated borders compete with primary content.
 - Avoid wrapping controls whose focus rings must escape the border unless the inner content handles focus styling itself.
 - Prefer one highlighted gradient surface per view region; use `TxBadge` or `TxTag` for smaller status accents.
+- Under `prefers-reduced-motion: reduce` the rotation is disabled and the border settles at a static gradient angle.
 
 ## Review Notes
 

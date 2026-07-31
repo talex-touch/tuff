@@ -2,6 +2,9 @@
 title: "DropdownMenu"
 description: "Compact menu surface built on Popover"
 category: Navigation
+status: beta
+since: 1.0.0
+tags: [dropdown, menu, popover]
 syncStatus: reviewed
 verified: true
 ---
@@ -127,13 +130,13 @@ code: |
 
 | Prop | Type | Default | Description |
 |------|------|---------|------|
-| `modelValue` | `boolean` | `false` | Controls whether the dropdown is open. |
+| `modelValue` | `boolean` | `undefined` | Controls whether the dropdown is open (v-model). Omit it for uncontrolled open state, kept internally. |
 | `placement` | `DropdownPlacement` | `'bottom-start'` | Positions the panel relative to the trigger. |
 | `offset` | `number` | `6` | Distance in pixels between the trigger and panel. |
 | `closeOnSelect` | `boolean` | `true` | Closes the menu after an enabled item emits `select`. |
-| `animation` | `BaseAnchorAnimationOptions` | `{ type: 'transfer', duration: 180 }` | Popover animation config forwarded to BaseAnchor. |
+| `animation` | `BaseAnchorAnimationOptions` | `{}` | Popover animation config forwarded to BaseAnchor; an empty object uses BaseAnchor's default animation. |
 | `duration` | `number` | `180` | Backward-compatible popover transition duration; prefer `animation.duration`. |
-| `minWidth` | `number` | `220` | Minimum panel width in pixels. |
+| `minWidth` | `number` | `220` | Minimum panel width in pixels. The maximum panel width is fixed at 360px, with no prop to change it. |
 | `maxHeight` | `number` | `420` | Maximum scrollable panel height in pixels. |
 | `unlimitedHeight` | `boolean` | `false` | Disables the panel max-height constraint. |
 | `referenceClass` | `BaseAnchorClassValue` | - | Extra class value forwarded to the trigger anchor. |
@@ -188,6 +191,8 @@ code: |
 - `TxDropdownMenu` wraps `TxPopover`, so `placement`, `offset`, height limiting, panel card props, and animation follow the same anchor behavior.
 - `closeOnSelect` closes the parent menu after enabled items emit `select`; disabled items do not select or close.
 - The menu panel uses `role="menu"`, and each item uses `role="menuitem"` through `TxDropdownItem`.
+- The first enabled item receives focus when the menu opens.
+- Inside the panel, `ArrowDown` / `ArrowUp` move focus between enabled items with wraparound, and `Home` / `End` jump to the first / last item, skipping `aria-disabled` items.
 - `TxDropdownItem` emits `select` with no payload; attach business context in the handler that renders the item.
 
 ## Best Practices

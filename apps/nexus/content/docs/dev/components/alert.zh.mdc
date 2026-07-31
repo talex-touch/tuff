@@ -23,7 +23,7 @@ verified: true
 ---
 code: |
   <template>
-    <div class="tuff-demo-stack">
+    <div>
       <TxAlert title="提示" message="检查一下配置项。" type="info" />
       <TxAlert title="成功" message="已保存。" type="success" />
       <TxAlert title="注意" message="有需要处理的内容。" type="warning" />

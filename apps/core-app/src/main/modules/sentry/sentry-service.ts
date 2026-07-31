@@ -9,6 +9,7 @@ import type { TelemetryUploadStatsRecord } from './telemetry-upload-stats-store'
 import fs from 'node:fs'
 import path from 'node:path'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
+import { isProxy } from 'node:util/types'
 import * as Sentry from '@sentry/electron/main'
 import { StorageList } from '@talex-touch/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -18,10 +19,7 @@ import { innerRootPath } from '../../core/precore'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { createLogger } from '../../utils/logger'
-import {
-  shouldDowngradeRemoteFailure,
-  summarizeRemoteFailurePayload
-} from '../../utils/network-log-noise'
+import { shouldDowngradeRemoteFailure } from '../../utils/network-log-noise'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { BaseModule } from '../abstract-base-module'
 import { getOrCreateTelemetryClientId } from '../analytics/telemetry-client'
@@ -30,7 +28,10 @@ import { databaseModule } from '../database'
 import { getNetworkService } from '../network'
 import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { getMainConfig, saveMainConfig, subscribeMainConfig } from '../storage'
-import { TelemetryUploadStatsStore } from './telemetry-upload-stats-store'
+import {
+  sanitizeTelemetryFailureCode,
+  TelemetryUploadStatsStore
+} from './telemetry-upload-stats-store'
 import { sanitizeNexusTelemetryEvent, sanitizeSentryEvent } from './telemetry-sanitizer'
 import { operationalErrorService, type OperationalErrorSinkEvent } from '../observability'
 
@@ -63,7 +64,6 @@ interface SearchMetrics {
   providerTimings: Record<string, number>
   providerResults: Record<string, number>
   sortingDuration: number
-  queryText: string
   inputTypes: string[]
   resultCount: number
   sessionId: string
@@ -100,33 +100,29 @@ interface NexusTelemetryEvent {
 
 type LogMetaPrimitive = string | number | boolean | null | undefined
 
+function stableTelemetryFailureCode(error: unknown, fallback: string): string {
+  try {
+    if (typeof error !== 'object' || error === null || isProxy(error)) return fallback
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
+    const code = descriptor && 'value' in descriptor ? descriptor.value : undefined
+    return typeof code === 'string' && /^[A-Za-z][A-Za-z0-9_:-]{0,63}$/.test(code) ? code : fallback
+  } catch {
+    return fallback
+  }
+}
+
 function toLogMeta(meta?: Record<string, unknown>): Record<string, LogMetaPrimitive> | undefined {
   if (!meta) return undefined
   const normalized: Record<string, LogMetaPrimitive> = {}
-  for (const [key, value] of Object.entries(meta)) {
-    if (
-      value === null ||
-      value === undefined ||
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
-    ) {
-      normalized[key] = value
-      continue
-    }
-
-    if (value instanceof Error) {
-      normalized[key] = value.message
-      continue
-    }
-
-    try {
-      normalized[key] = JSON.stringify(value)
-    } catch {
-      normalized[key] = String(value)
-    }
+  for (const key of ['count', 'status'] as const) {
+    const value = meta[key]
+    if (typeof value === 'number' && Number.isFinite(value)) normalized[key] = value
   }
-  return normalized
+  const code = meta.code
+  if (typeof code === 'string' && /^[A-Za-z][A-Za-z0-9_:-]{0,63}$/.test(code)) {
+    normalized.code = code
+  }
+  return Object.keys(normalized).length > 0 ? normalized : undefined
 }
 
 function shouldDowngradeTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
@@ -230,9 +226,9 @@ export class SentryServiceModule extends BaseModule {
       } else {
         this.config = { enabled: true, anonymous: false }
       }
-    } catch (error) {
+    } catch {
       sentryLog.warn('Failed to pre-load Sentry config, using defaults', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { code: 'SENTRY_CONFIG_PRELOAD_FAILED' }
       })
       this.config = { enabled: true, anonymous: false }
     }
@@ -279,9 +275,9 @@ export class SentryServiceModule extends BaseModule {
         const cfg = data as Partial<SentryConfig>
         this.saveConfig(cfg)
       })
-    } catch (error) {
+    } catch {
       sentryLog.warn('Failed to subscribe sentry-config changes', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { code: 'SENTRY_CONFIG_SUBSCRIBE_FAILED' }
       })
     }
 
@@ -351,9 +347,9 @@ export class SentryServiceModule extends BaseModule {
           effectiveAnonymous: this.resolveEffectiveAnonymous()
         }
       })
-    } catch (error) {
+    } catch {
       sentryLog.warn('Failed to load Sentry config, using defaults', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { code: 'SENTRY_CONFIG_LOAD_FAILED' }
       })
       this.config = { enabled: true, anonymous: false }
     }
@@ -370,6 +366,16 @@ export class SentryServiceModule extends BaseModule {
     } catch {
       return null
     }
+  }
+
+  async clearTelemetryFailureBeforeForPrivacy(
+    cutoffMs: number,
+    maxRows: number,
+    signal?: AbortSignal
+  ): Promise<number> {
+    const store = this.getTelemetryStatsStore()
+    if (!store) throw new Error('PRIVACY_TELEMETRY_STORE_UNAVAILABLE')
+    return await store.clearFailureBefore(cutoffMs, maxRows, signal)
   }
 
   private getReportQueueStore(): ReportQueueStore | null {
@@ -473,9 +479,9 @@ export class SentryServiceModule extends BaseModule {
         lastFailureMessage: this.lastTelemetryFailureMessage,
         updatedAt: Date.now()
       })
-    } catch (error) {
+    } catch {
       sentryLog.debug('Failed to persist telemetry upload stats', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { code: 'TELEMETRY_STATS_PERSIST_FAILED' }
       })
     }
   }
@@ -517,9 +523,9 @@ export class SentryServiceModule extends BaseModule {
       const record = await store.get()
       if (!record) return
       this.applyHydratedTelemetryStats(record, baseline)
-    } catch (error) {
+    } catch {
       sentryLog.warn('Failed to hydrate telemetry upload stats', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { code: 'TELEMETRY_STATS_HYDRATE_FAILED' }
       })
     }
   }
@@ -602,9 +608,9 @@ export class SentryServiceModule extends BaseModule {
     if (this.eventLoopDelay) {
       try {
         this.eventLoopDelay.disable()
-      } catch (error) {
+      } catch {
         sentryLog.debug('Failed to disable event loop delay monitor', {
-          meta: { error: error instanceof Error ? error.message : String(error) }
+          meta: { code: 'SENTRY_PERF_MONITOR_DISABLE_FAILED' }
         })
       }
       this.eventLoopDelay = undefined
@@ -785,9 +791,9 @@ export class SentryServiceModule extends BaseModule {
           effectiveAnonymous: this.resolveEffectiveAnonymous()
         }
       })
-    } catch (error) {
+    } catch {
       sentryLog.error('Failed to initialize Sentry', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { code: 'SENTRY_INITIALIZE_FAILED' }
       })
     }
   }
@@ -989,7 +995,6 @@ export class SentryServiceModule extends BaseModule {
             Object.entries(providerTotalTimes).map(([p, t]) => [p, Math.round(t / totalSearches)])
           ),
           sample_queries: this.searchMetricsBuffer.slice(-5).map((m) => ({
-            text: m.queryText.substring(0, 100), // Truncate for privacy
             inputTypes: m.inputTypes,
             duration: m.totalDuration,
             results: m.resultCount
@@ -1009,9 +1014,9 @@ export class SentryServiceModule extends BaseModule {
           avgDuration: avgDuration.toFixed(2)
         }
       })
-    } catch (error) {
+    } catch {
       sentryLog.error('Failed to report search analytics', {
-        meta: { error: error instanceof Error ? error.message : String(error) }
+        meta: { code: 'SENTRY_SEARCH_ANALYTICS_FAILED' }
       })
     }
   }
@@ -1198,7 +1203,7 @@ export class SentryServiceModule extends BaseModule {
           })
           .catch((error) => {
             this.recordTelemetryFailure('Nexus telemetry flush task failed', {
-              error: error instanceof Error ? error.message : String(error)
+              code: stableTelemetryFailureCode(error, 'TELEMETRY_FLUSH_FAILED')
             })
           }),
       {
@@ -1251,12 +1256,12 @@ export class SentryServiceModule extends BaseModule {
         createdAt: Date.now()
       })
       sentryLog.debug('Telemetry batch queued to outbox', {
-        meta: { count: events.length, url }
+        meta: { count: events.length }
       })
     } catch (error) {
       this.nexusTelemetryBuffer = [...events.slice(-50), ...this.nexusTelemetryBuffer].slice(0, 100)
       this.recordTelemetryFailure('Telemetry outbox enqueue failed', {
-        error: error instanceof Error ? error.message : String(error),
+        code: stableTelemetryFailureCode(error, 'TELEMETRY_OUTBOX_ENQUEUE_FAILED'),
         count: events.length
       })
       this.failedNexusUploads++
@@ -1322,7 +1327,6 @@ export class SentryServiceModule extends BaseModule {
         })
 
         if (response.status < 200 || response.status >= 300) {
-          const errorText = summarizeRemoteFailurePayload(response.data) ?? 'Unknown error'
           if (response.status === 403) {
             this.telemetryCooldownUntil = Date.now() + 60 * 60_000
           } else if (response.status === 429) {
@@ -1330,13 +1334,12 @@ export class SentryServiceModule extends BaseModule {
           }
           this.failedNexusUploads++
           this.schedulePersistTelemetryStats()
+          const failureCode = `HTTP_${response.status}`
           this.recordTelemetryFailure('Telemetry upload failed', {
             status: response.status,
-            statusText: response.statusText,
-            error: errorText,
-            url: endpoint
+            code: failureCode
           })
-          await store.markAttempt(item.id, `${response.status}:${errorText}`)
+          await store.markAttempt(item.id, failureCode)
           continue
         }
 
@@ -1349,12 +1352,11 @@ export class SentryServiceModule extends BaseModule {
         this.failedNexusUploads++
         this.schedulePersistTelemetryStats()
         this.telemetryCooldownUntil = Date.now() + 5 * 60_000
-        const errorMessage = error instanceof Error ? error.message : String(error)
+        const failureCode = stableTelemetryFailureCode(error, 'TELEMETRY_UPLOAD_FAILED')
         this.recordTelemetryFailure('Telemetry upload exception', {
-          error: errorMessage,
-          url: endpoint
+          code: failureCode
         })
-        await store.markAttempt(item.id, errorMessage)
+        await store.markAttempt(item.id, failureCode)
       }
     }
   }
@@ -1362,12 +1364,13 @@ export class SentryServiceModule extends BaseModule {
   private recordTelemetryFailure(message: string, meta?: Record<string, unknown>): boolean {
     const now = Date.now()
     const throttleWindow = 10 * 60 * 1000
+    const failureCode = sanitizeTelemetryFailureCode(meta?.code) ?? 'TELEMETRY_UPLOAD_FAILED'
     if (this.lastTelemetryFailureAt && now - this.lastTelemetryFailureAt < throttleWindow) {
-      if (this.lastTelemetryFailureMessage === message) return false
+      if (this.lastTelemetryFailureMessage === failureCode) return false
     }
 
     this.lastTelemetryFailureAt = now
-    this.lastTelemetryFailureMessage = message
+    this.lastTelemetryFailureMessage = failureCode
     this.schedulePersistTelemetryStats()
     const logMeta = toLogMeta(meta)
     if (shouldDowngradeTelemetryFailure(message, meta)) {

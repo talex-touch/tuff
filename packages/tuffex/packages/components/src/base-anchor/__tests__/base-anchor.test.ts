@@ -1,5 +1,5 @@
 import type { BaseAnchorAnimationOptions } from '../src/types'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import gsap from 'gsap'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, nextTick, ref } from 'vue'
@@ -300,6 +300,20 @@ describe('txBaseAnchor', () => {
     await nextTick()
 
     expect(outline()?.getAttribute('viewBox')).toBe('0 0 200 40')
+  })
+
+  it('honours an explicit width above the default maxWidth instead of clamping it', async () => {
+    const wrapper = mountAnchor({ props: { modelValue: true, width: 480 } })
+    await nextTick()
+    await flushPromises()
+    await new Promise(resolve => requestAnimationFrame(() => resolve(null)))
+    await nextTick()
+
+    const floating = document.body.querySelector('.tx-base-anchor') as HTMLElement
+    expect(floating).toBeTruthy()
+    expect(floating.style.width).toBe('480px')
+    // The default maxWidth (360) must not silently clamp the explicit 480 back down.
+    expect(floating.style.maxWidth).toBe('')
   })
 })
 

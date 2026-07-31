@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { types as utilTypes } from 'node:util'
 import vm from 'node:vm'
 import {
@@ -9,6 +9,15 @@ import {
   type HostWireLimits,
   type HostWireResourceDescriptor
 } from './plugin-host-wire-codec'
+import {
+  PLUGIN_CHANNEL_OPERATION_IDS,
+  PLUGIN_FLOW_OPERATION_IDS,
+  PLUGIN_QUICK_OPS_OPERATION_IDS
+} from './plugin-host-request-reply'
+import { PLUGIN_SNIPASTE_ACTION_IDS } from './plugin-process-capabilities'
+import { PLUGIN_SYSTEM_ACTION_IDS } from './plugin-system-capabilities'
+import { PLUGIN_WINDOW_MANAGER_ACTION_IDS } from './plugin-window-manager-capabilities'
+import { PLUGIN_WINDOW_PRESET_ACTION_IDS } from './plugin-window-preset-capabilities'
 import {
   PLUGIN_HOST_CAPABILITIES,
   PLUGIN_HOST_LIFECYCLE_METHODS,
@@ -45,6 +54,7 @@ export type PluginHostSnapshotValue =
 export interface PluginHostLoadSnapshot {
   readonly platform: string
   readonly arch: string
+  readonly locale: string
   readonly manifest: Readonly<Record<string, PluginHostSnapshotValue>>
 }
 
@@ -99,6 +109,7 @@ interface ContextBridge {
   parseUrl(input: string, base?: string): string
   randomBytes(length: number): number[]
   randomUUID(): string
+  digest(algorithm: string, value: number[]): number[]
   invokeCapability(capability: string, payloadJson: string, callbacks: unknown[]): Promise<string>
   disposeResource(id: string, kind: string): Promise<void>
 }
@@ -138,7 +149,15 @@ const IDENTIFIER_PATTERN = /^[a-z0-9_-]+$/i
 const CALLBACK_FIELD_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/
 const FORBIDDEN_CALLBACK_FIELDS = new Set(['__proto__', 'prototype', 'constructor', 'then'])
 const MAX_PLATFORM_FIELD_LENGTH = 32
+const MAX_LOCALE_FIELD_LENGTH = 64
 const MAX_CONTEXT_JSON_EXPANSION = 8
+const CHILD_DIGEST_ALGORITHMS = new Map([
+  ['SHA-1', 'sha1'],
+  ['SHA-256', 'sha256'],
+  ['SHA-384', 'sha384'],
+  ['SHA-512', 'sha512'],
+  ['MD5', 'md5']
+])
 
 class ContextTransportBudget {
   private bytes = 0
@@ -284,7 +303,7 @@ export function parsePluginHostLoadPayload(
     throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
   }
 
-  const snapshot = exactRecord(normalized.snapshot, ['platform', 'arch', 'manifest'])
+  const snapshot = exactRecord(normalized.snapshot, ['platform', 'arch', 'locale', 'manifest'])
   for (const field of ['platform', 'arch'] as const) {
     const entry = snapshot[field]
     if (
@@ -295,6 +314,15 @@ export function parsePluginHostLoadPayload(
     ) {
       throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
     }
+  }
+  const locale = snapshot.locale
+  if (
+    typeof locale !== 'string' ||
+    locale.length < 2 ||
+    locale.length > MAX_LOCALE_FIELD_LENGTH ||
+    !/^[A-Za-z0-9-]+$/.test(locale)
+  ) {
+    throw new PluginHostChildError('PLUGIN_HOST_CHILD_LOAD_INVALID')
   }
   const manifest = snapshotJsonValue(snapshot.manifest)
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
@@ -350,6 +378,7 @@ export function parsePluginHostLoadPayload(
     snapshot: Object.freeze({
       platform: snapshot.platform as string,
       arch: snapshot.arch as string,
+      locale,
       manifest: manifest as Readonly<Record<string, PluginHostSnapshotValue>>
     }),
     capabilityManifest: Object.freeze(capabilityManifest),
@@ -634,16 +663,43 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const objectGetPrototypeOf = Object.getPrototypeOf
   const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor
   const objectDefineProperty = Object.defineProperty
+  const objectDefineProperties = Object.defineProperties
   const objectCreate = Object.create
+  const objectHasOwn = Object.hasOwn
   const objectPrototype = Object.prototype
   const arrayConstructor = Array
   const arrayIsArray = Array.isArray
   const arrayFrom = Array.from
   const arrayMap = Array.prototype.map
   const arrayPush = Array.prototype.push
-  const arrayBufferConstructor = ArrayBuffer
+  const arrayJoin = Array.prototype.join
+  const arrayIterator = Array.prototype[Symbol.iterator]
   const arrayBufferIsView = ArrayBuffer.isView
+  const arrayBufferByteLengthGetter = objectGetOwnPropertyDescriptor(
+    ArrayBuffer.prototype,
+    'byteLength'
+  ).get
   const uint8ArrayConstructor = Uint8Array
+  const uint8ArraySet = Uint8Array.prototype.set
+  const typedArrayPrototype = objectGetPrototypeOf(Uint8Array.prototype)
+  const typedArrayBufferGetter = objectGetOwnPropertyDescriptor(typedArrayPrototype, 'buffer').get
+  const typedArrayByteLengthGetter = objectGetOwnPropertyDescriptor(
+    typedArrayPrototype,
+    'byteLength'
+  ).get
+  const typedArrayByteOffsetGetter = objectGetOwnPropertyDescriptor(
+    typedArrayPrototype,
+    'byteOffset'
+  ).get
+  const dataViewBufferGetter = objectGetOwnPropertyDescriptor(DataView.prototype, 'buffer').get
+  const dataViewByteLengthGetter = objectGetOwnPropertyDescriptor(
+    DataView.prototype,
+    'byteLength'
+  ).get
+  const dataViewByteOffsetGetter = objectGetOwnPropertyDescriptor(
+    DataView.prototype,
+    'byteOffset'
+  ).get
   const errorConstructor = Error
   const typeErrorConstructor = TypeError
   const weakSetConstructor = WeakSet
@@ -654,8 +710,16 @@ const CONTEXT_BOOTSTRAP = String.raw`
   const hasSetValue = (set, value) => reflectApply(setHas, set, [value])
   const getMapValue = (map, value) => reflectApply(mapGet, map, [value])
   const numberIsFinite = Number.isFinite
+  const numberIsSafeInteger = Number.isSafeInteger
   const stringConstructor = String
+  const stringIndexOf = String.prototype.indexOf
+  const stringReplaceAll = String.prototype.replaceAll
   const stringSlice = String.prototype.slice
+  const stringTrim = String.prototype.trim
+  const stringToUpperCase = String.prototype.toUpperCase
+  const encodeUriComponent = encodeURIComponent
+  const decodeUriComponent = decodeURIComponent
+  const symbolIterator = Symbol.iterator
   const jsonParse = JSON.parse
   const jsonStringify = JSON.stringify
   const parseJson = (value) => reflectApply(jsonParse, undefined, [value])
@@ -717,6 +781,56 @@ const CONTEXT_BOOTSTRAP = String.raw`
         addBytes(bridge.utf8ByteLength(value) + 8)
       }
     }
+  }
+
+  const createByteView = (value) => {
+    let buffer
+    let byteOffset = 0
+    let byteLength
+    try {
+      byteLength = reflectApply(arrayBufferByteLengthGetter, value, [])
+      buffer = value
+    } catch {
+      if (!arrayBufferIsView(value)) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      try {
+        buffer = reflectApply(typedArrayBufferGetter, value, [])
+        byteOffset = reflectApply(typedArrayByteOffsetGetter, value, [])
+        byteLength = reflectApply(typedArrayByteLengthGetter, value, [])
+      } catch {
+        try {
+          buffer = reflectApply(dataViewBufferGetter, value, [])
+          byteOffset = reflectApply(dataViewByteOffsetGetter, value, [])
+          byteLength = reflectApply(dataViewByteLengthGetter, value, [])
+        } catch {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+      }
+    }
+    if (
+      !numberIsSafeInteger(byteOffset) ||
+      byteOffset < 0 ||
+      !numberIsSafeInteger(byteLength) ||
+      byteLength < 0
+    ) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    return {
+      view: new uint8ArrayConstructor(buffer, byteOffset, byteLength),
+      byteLength
+    }
+  }
+  const copyByteView = (value, maximumBytes = snapshot.wireLimits.maxBytes) => {
+    const info = createByteView(value)
+    if (info.byteLength > maximumBytes) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    const output = []
+    for (let index = 0; index < info.byteLength; index += 1) {
+      reflectApply(arrayPush, output, [info.view[index]])
+    }
+    return output
   }
 
   const decodeNode = (node, budget = createBudget(), depth = 0) => {
@@ -808,13 +922,16 @@ const CONTEXT_BOOTSTRAP = String.raw`
         return { type: 'error', value: { message, code } }
       }
       if (arrayBufferIsView(value)) {
-        budget.addBytes(value.byteLength + 32)
-        const bytes = new uint8ArrayConstructor(value.buffer, value.byteOffset, value.byteLength)
-        return { type: 'bytes', value: reflectApply(arrayFrom, arrayConstructor, [bytes]) }
+        const bytes = copyByteView(value)
+        budget.addBytes(bytes.length + 32)
+        return { type: 'bytes', value: bytes }
       }
-      if (value instanceof arrayBufferConstructor) {
-        budget.addBytes(value.byteLength + 32)
-        return { type: 'bytes', value: reflectApply(arrayFrom, arrayConstructor, [new uint8ArrayConstructor(value)]) }
+      try {
+        const bytes = copyByteView(value)
+        budget.addBytes(bytes.length + 32)
+        return { type: 'bytes', value: bytes }
+      } catch {
+        // Continue into the plain DTO validator for non-ArrayBuffer objects.
       }
       if (arrayIsArray(value)) {
         budget.addMembers(value.length)
@@ -889,23 +1006,189 @@ const CONTEXT_BOOTSTRAP = String.raw`
     abort(reason) { this.signal._abort(reason) }
   }
 
+  const searchParamsInternalToken = objectFreeze(objectCreate(null))
+  const maxSearchParamPairs = Math.floor(snapshot.wireLimits.maxMembers / 3)
+  const assertSearchParamPairs = (pairs) => {
+    if (!arrayIsArray(pairs) || pairs.length > maxSearchParamPairs) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    let bytes = 0
+    for (let index = 0; index < pairs.length; index += 1) {
+      const pair = pairs[index]
+      if (
+        !arrayIsArray(pair) ||
+        pair.length !== 2 ||
+        typeof pair[0] !== 'string' ||
+        typeof pair[1] !== 'string'
+      ) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      bytes += bridge.utf8ByteLength(pair[0]) + bridge.utf8ByteLength(pair[1]) + 40
+      if (bytes > snapshot.wireLimits.maxBytes) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+    }
+    return pairs
+  }
+  const decodeSearchParamPart = (value) => {
+    try {
+      let cursor = 0
+      let withSpaces = ''
+      while (cursor <= value.length) {
+        const plus = reflectApply(stringIndexOf, value, ['+', cursor])
+        if (plus < 0) {
+          withSpaces += reflectApply(stringSlice, value, [cursor])
+          break
+        }
+        withSpaces += reflectApply(stringSlice, value, [cursor, plus]) + ' '
+        cursor = plus + 1
+      }
+      return reflectApply(decodeUriComponent, undefined, [withSpaces])
+    } catch {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+  }
+  const parseSearchParamString = (input) => {
+    let normalized = stringConstructor(input)
+    if (bridge.utf8ByteLength(normalized) > snapshot.wireLimits.maxBytes) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    if (normalized[0] === '?') normalized = reflectApply(stringSlice, normalized, [1])
+    if (!normalized) return []
+    const pairs = []
+    let cursor = 0
+    while (cursor <= normalized.length) {
+      const delimiter = reflectApply(stringIndexOf, normalized, ['&', cursor])
+      const end = delimiter < 0 ? normalized.length : delimiter
+      const segment = reflectApply(stringSlice, normalized, [cursor, end])
+      if (segment.length > 0) {
+        if (pairs.length >= maxSearchParamPairs) {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        const separator = reflectApply(stringIndexOf, segment, ['='])
+        const rawKey = separator < 0 ? segment : reflectApply(stringSlice, segment, [0, separator])
+        const rawValue = separator < 0 ? '' : reflectApply(stringSlice, segment, [separator + 1])
+        reflectApply(arrayPush, pairs, [[
+          decodeSearchParamPart(rawKey),
+          decodeSearchParamPart(rawValue)
+        ]])
+      }
+      if (delimiter < 0) break
+      cursor = end + 1
+    }
+    return assertSearchParamPairs(pairs)
+  }
+  const encodeSearchParamPart = (value) => {
+    let encoded = reflectApply(encodeUriComponent, undefined, [value])
+    encoded = reflectApply(stringReplaceAll, encoded, ['%20', '+'])
+    encoded = reflectApply(stringReplaceAll, encoded, ['!', '%21'])
+    encoded = reflectApply(stringReplaceAll, encoded, ["'", '%27'])
+    encoded = reflectApply(stringReplaceAll, encoded, ['(', '%28'])
+    encoded = reflectApply(stringReplaceAll, encoded, [')', '%29'])
+    return reflectApply(stringReplaceAll, encoded, ['~', '%7E'])
+  }
+
   class TuffURLSearchParams {
     #pairs
-    constructor(pairs) { this.#pairs = pairs.map(([key, value]) => [String(key), String(value)]) }
-    get(name) { const pair = this.#pairs.find(([key]) => key === String(name)); return pair ? pair[1] : null }
-    getAll(name) { return this.#pairs.filter(([key]) => key === String(name)).map(([, value]) => value) }
-    has(name) { return this.#pairs.some(([key]) => key === String(name)) }
-    toString() { return this.#pairs.map(([key, value]) => encodeURIComponent(key) + '=' + encodeURIComponent(value)).join('&') }
-    entries() { return this.#pairs[Symbol.iterator]() }
-    [Symbol.iterator]() { return this.entries() }
+    constructor(input = '', token) {
+      if (token === searchParamsInternalToken) {
+        const pairs = []
+        if (!arrayIsArray(input) || input.length > maxSearchParamPairs) {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        for (let index = 0; index < input.length; index += 1) {
+          const pair = input[index]
+          if (!arrayIsArray(pair) || pair.length !== 2) {
+            throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+          }
+          reflectApply(arrayPush, pairs, [[stringConstructor(pair[0]), stringConstructor(pair[1])]])
+        }
+        this.#pairs = assertSearchParamPairs(pairs)
+        return
+      }
+      if (input === undefined || typeof input === 'string') {
+        this.#pairs = parseSearchParamString(input === undefined ? '' : input)
+        return
+      }
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    append(name, value) {
+      const pairs = []
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        reflectApply(arrayPush, pairs, [[pair[0], pair[1]]])
+      }
+      reflectApply(arrayPush, pairs, [[stringConstructor(name), stringConstructor(value)]])
+      this.#pairs = assertSearchParamPairs(pairs)
+    }
+    get(name) {
+      const expected = stringConstructor(name)
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        if (pair[0] === expected) return pair[1]
+      }
+      return null
+    }
+    getAll(name) {
+      const expected = stringConstructor(name)
+      const values = []
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        if (pair[0] === expected) reflectApply(arrayPush, values, [pair[1]])
+      }
+      return values
+    }
+    has(name) {
+      const expected = stringConstructor(name)
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        if (this.#pairs[index][0] === expected) return true
+      }
+      return false
+    }
+    toString() {
+      const encoded = []
+      let maximumEncodedBytes = 0
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        maximumEncodedBytes +=
+          (bridge.utf8ByteLength(pair[0]) + bridge.utf8ByteLength(pair[1])) * 3 +
+          1 +
+          (index === 0 ? 0 : 1)
+        if (maximumEncodedBytes > snapshot.wireLimits.maxBytes) {
+          throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        reflectApply(arrayPush, encoded, [
+          encodeSearchParamPart(pair[0]) + '=' + encodeSearchParamPart(pair[1])
+        ])
+      }
+      return reflectApply(arrayJoin, encoded, ['&'])
+    }
+    entries() {
+      const entries = []
+      for (let index = 0; index < this.#pairs.length; index += 1) {
+        const pair = this.#pairs[index]
+        reflectApply(arrayPush, entries, [[pair[0], pair[1]]])
+      }
+      return reflectApply(arrayIterator, entries, [])
+    }
+    [symbolIterator]() { return this.entries() }
   }
   class TuffURL {
     #data
     constructor(input, base) {
-      const parsed = parseJson(bridge.parseUrl(stringConstructor(input), base === undefined ? undefined : stringConstructor(base)))
-      if (!parsed.ok) throw new TypeError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      const normalizedInput = stringConstructor(input)
+      const normalizedBase = base === undefined ? undefined : stringConstructor(base)
+      if (
+        bridge.utf8ByteLength(normalizedInput) > snapshot.wireLimits.maxBytes ||
+        (normalizedBase !== undefined &&
+          bridge.utf8ByteLength(normalizedBase) > snapshot.wireLimits.maxBytes)
+      ) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      const parsed = parseJson(bridge.parseUrl(normalizedInput, normalizedBase))
+      if (!parsed.ok) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
       this.#data = parsed.value
-      this.searchParams = new TuffURLSearchParams(this.#data.searchParams)
+      this.searchParams = new TuffURLSearchParams(this.#data.searchParams, searchParamsInternalToken)
     }
     get href() { return this.#data.href }
     get origin() { return this.#data.origin }
@@ -922,24 +1205,62 @@ const CONTEXT_BOOTSTRAP = String.raw`
     toJSON() { return this.href }
   }
   class TuffTextEncoder {
-    encode(value = '') { return new uint8ArrayConstructor(bridge.encodeUtf8(stringConstructor(value))) }
+    encode(value = '') {
+      const normalized = stringConstructor(value)
+      if (bridge.utf8ByteLength(normalized) > snapshot.wireLimits.maxBytes) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      return new uint8ArrayConstructor(bridge.encodeUtf8(normalized))
+    }
   }
   class TuffTextDecoder {
     decode(value = new uint8ArrayConstructor()) {
-      if (value instanceof arrayBufferConstructor) value = new uint8ArrayConstructor(value)
-      if (!arrayBufferIsView(value)) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
-      return bridge.decodeUtf8(reflectApply(arrayFrom, arrayConstructor, [new uint8ArrayConstructor(value.buffer, value.byteOffset, value.byteLength)]))
+      return bridge.decodeUtf8(copyByteView(value))
     }
   }
+  objectFreeze(TuffURLSearchParams.prototype)
+  objectFreeze(TuffURLSearchParams)
+  objectFreeze(TuffURL.prototype)
+  objectFreeze(TuffURL)
+  objectFreeze(TuffTextEncoder.prototype)
+  objectFreeze(TuffTextEncoder)
+  objectFreeze(TuffTextDecoder.prototype)
+  objectFreeze(TuffTextDecoder)
 
-  const crypto = objectFreeze({
-    randomUUID: () => bridge.randomUUID(),
-    getRandomValues: (value) => {
-      if (!arrayBufferIsView(value) || value.byteLength > 65536) throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
-      new uint8ArrayConstructor(value.buffer, value.byteOffset, value.byteLength).set(bridge.randomBytes(value.byteLength))
-      return value
+  const subtleCrypto = objectCreate(null)
+  const digest = (algorithm, value) => {
+    const normalized = reflectApply(stringToUpperCase, stringConstructor(algorithm), [])
+    let bytes
+    try {
+      bytes = copyByteView(value)
+    } catch {
+      return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_RESULT_INVALID'))
     }
-  })
+    return thenPromise(resolvePromise(), () => {
+      const output = bridge.digest(normalized, bytes)
+      return new uint8ArrayConstructor(output).buffer
+    })
+  }
+  objectFreeze(digest)
+  objectDefineProperty(subtleCrypto, 'digest', { value: digest, enumerable: true })
+  objectFreeze(subtleCrypto)
+  const crypto = objectCreate(null)
+  const getRandomValues = (value) => {
+    const info = createByteView(value)
+    if (!arrayBufferIsView(value) || info.byteLength > 65536) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+    }
+    reflectApply(uint8ArraySet, info.view, [bridge.randomBytes(info.byteLength)])
+    return value
+  }
+  objectFreeze(getRandomValues)
+  const randomUuid = () => bridge.randomUUID()
+  objectFreeze(randomUuid)
+  objectDefineProperty(crypto, 'randomUUID', { value: randomUuid, enumerable: true })
+  objectDefineProperty(crypto, 'getRandomValues', { value: getRandomValues, enumerable: true })
+  objectDefineProperty(crypto, 'digest', { value: digest, enumerable: true })
+  objectDefineProperty(crypto, 'subtle', { value: subtleCrypto, enumerable: true })
+  objectFreeze(crypto)
 
   const createCapabilityError = (code) => {
     const error = new errorConstructor(code)
@@ -1001,7 +1322,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
       })
   }
   objectFreeze(invokeCapability)
-  const hostCapabilities = Object.create(null)
+  const hostCapabilities = objectCreate(null)
   objectDefineProperty(hostCapabilities, 'invoke', {
     value: invokeCapability,
     enumerable: true
@@ -1009,18 +1330,173 @@ const CONTEXT_BOOTSTRAP = String.raw`
   objectFreeze(hostCapabilities)
 
   const hasDeclaredCapability = (id) => Boolean(getMapValue(declaredCapabilities, id))
-  const hasFeatureFacade = [
-    'feature.items.push',
-    'feature.items.update',
-    'feature.items.remove',
-    'feature.items.clear',
-    'feature.items.list'
-  ].some(hasDeclaredCapability)
-  const hasClipboardFacade = [
-    'clipboard.read',
-    'clipboard.write',
-    'clipboard.copy-and-paste'
-  ].some(hasDeclaredCapability)
+  const isTranslationPrelude = snapshot.manifest.name === 'touch-translation'
+  const hasFeatureFacade =
+    hasDeclaredCapability('feature.items.push') ||
+    hasDeclaredCapability('feature.items.update') ||
+    hasDeclaredCapability('feature.items.remove') ||
+    hasDeclaredCapability('feature.items.clear') ||
+    hasDeclaredCapability('feature.items.list')
+  const hasWidgetItemFacade =
+    !isTranslationPrelude && hasDeclaredCapability('feature.items.widget.push')
+  const hasStorageFacade =
+    !isTranslationPrelude &&
+    (hasDeclaredCapability('storage.file.read') ||
+      hasDeclaredCapability('storage.file.write') ||
+      hasDeclaredCapability('storage.file.remove') ||
+      hasDeclaredCapability('storage.file.list'))
+  const hasFeaturesFacade =
+    !isTranslationPrelude &&
+    (hasDeclaredCapability('feature.registry.add') ||
+      hasDeclaredCapability('feature.registry.remove') ||
+      hasDeclaredCapability('feature.registry.list'))
+  const hasSecretFacade =
+    !isTranslationPrelude &&
+    (hasDeclaredCapability('secret.get') ||
+      hasDeclaredCapability('secret.set') ||
+      hasDeclaredCapability('secret.delete'))
+  const hasClipboardFacade =
+    hasDeclaredCapability('clipboard.read') ||
+    hasDeclaredCapability('clipboard.write') ||
+    hasDeclaredCapability('clipboard.copy-and-paste')
+  const hasHttpFacade = !isTranslationPrelude && hasDeclaredCapability('http.request')
+  const hasFilesystemFacade =
+    !isTranslationPrelude && hasDeclaredCapability('filesystem.write')
+  const hasPermissionFacade =
+    !isTranslationPrelude && hasDeclaredCapability('permission.check')
+  const hasChannelFacade = !isTranslationPrelude && hasDeclaredCapability('channel.invoke')
+  const hasQuickOpsFacade = !isTranslationPrelude && hasDeclaredCapability('quick-ops.invoke')
+  const hasFlowFacade = !isTranslationPrelude && hasDeclaredCapability('flow.invoke')
+  const hasVoiceInvokeFacade = !isTranslationPrelude && hasDeclaredCapability('voice.invoke')
+  const hasVoiceStreamFacade = !isTranslationPrelude && hasDeclaredCapability('voice.stream')
+  const hasVoiceFacade = hasVoiceInvokeFacade || hasVoiceStreamFacade
+  const hasTranslationFacade =
+    isTranslationPrelude && hasDeclaredCapability('intelligence.invoke')
+  const hasBasicIntelligenceFacade =
+    !isTranslationPrelude && hasDeclaredCapability('intelligence.invoke')
+  const hasIntelligenceContextInvokeFacade =
+    !isTranslationPrelude && hasDeclaredCapability('intelligence.context.invoke')
+  const hasIntelligenceContextStreamFacade =
+    !isTranslationPrelude && hasDeclaredCapability('intelligence.stream')
+  const hasIntelligenceFacade =
+    hasBasicIntelligenceFacade ||
+    hasIntelligenceContextInvokeFacade ||
+    hasIntelligenceContextStreamFacade
+  const hasSnipasteFacade =
+    !isTranslationPrelude && hasDeclaredCapability('process.spawn')
+  const hasWorkspaceScriptsFacade =
+    snapshot.manifest.name === 'touch-workspace-scripts' &&
+    hasDeclaredCapability('process.workspace-scripts')
+  const hasSystemFacade = !isTranslationPrelude && hasDeclaredCapability('system.invoke')
+  const hasBrowserDataFacade =
+    snapshot.manifest.name === 'touch-browser-data' &&
+    hasDeclaredCapability('browser-data.scan')
+  const hasBrowserOpenFacade =
+    snapshot.manifest.name === 'touch-browser-open' &&
+    hasDeclaredCapability('system.browser-open')
+  const hasWindowPresetFacade =
+    snapshot.manifest.name === 'touch-window-presets' &&
+    hasDeclaredCapability('system.window-presets')
+  const hasWindowManagerFacade =
+    snapshot.manifest.name === 'touch-window-manager' &&
+    hasDeclaredCapability('system.window-manager')
+  const fixedChannelOperations = new setConstructor(${JSON.stringify(PLUGIN_CHANNEL_OPERATION_IDS)})
+  const fixedQuickOpsOperations = new setConstructor(${JSON.stringify(PLUGIN_QUICK_OPS_OPERATION_IDS)})
+  const fixedFlowOperations = new setConstructor(${JSON.stringify(PLUGIN_FLOW_OPERATION_IDS)})
+  const fixedIntelligenceCapabilities = new setConstructor(['text.chat', 'vision.ocr'])
+  const fixedSnipasteActions = new setConstructor(${JSON.stringify(PLUGIN_SNIPASTE_ACTION_IDS)})
+  const fixedSystemActions = new setConstructor(${JSON.stringify(PLUGIN_SYSTEM_ACTION_IDS)})
+  const fixedWindowPresetActions = new setConstructor(${JSON.stringify(PLUGIN_WINDOW_PRESET_ACTION_IDS)})
+  const fixedWindowManagerActions = new setConstructor(${JSON.stringify(PLUGIN_WINDOW_MANAGER_ACTION_IDS)})
+  const isBrowserOpenToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 35 ||
+      value[0] !== 'b' ||
+      value[1] !== 'o' ||
+      value[2] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 3; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
+  const isWindowManagerToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 35 ||
+      value[0] !== 'w' ||
+      value[1] !== 'm' ||
+      value[2] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 3; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
+  const isWorkspaceToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 35 ||
+      value[0] !== 'w' ||
+      value[1] !== 's' ||
+      value[2] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 3; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
+  const isWorkspaceScriptToken = (value) => {
+    if (
+      typeof value !== 'string' ||
+      value.length !== 36 ||
+      value[0] !== 'w' ||
+      value[1] !== 's' ||
+      value[2] !== 's' ||
+      value[3] !== '_'
+    ) {
+      return false
+    }
+    for (let index = 4; index < value.length; index += 1) {
+      const character = value[index]
+      const valid =
+        (character >= 'A' && character <= 'Z') ||
+        (character >= 'a' && character <= 'z') ||
+        (character >= '0' && character <= '9') ||
+        character === '_' ||
+        character === '-'
+      if (!valid) return false
+    }
+    return true
+  }
   const defineFacadeMethod = (target, name, callback) => {
     objectDefineProperty(target, name, {
       value: objectFreeze(callback),
@@ -1066,13 +1542,975 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   if (hasDeclaredCapability('feature.items.list')) {
     defineFacadeMethod(featureFacade, 'getItems', () =>
-      mapCapabilityResult(invokeCapability('feature.items.list', null), (result) => result.items)
+      mapCapabilityResult(
+        invokeCapability('feature.items.list', null),
+        (result) => cloneLocalDto(result.items)
+      )
     )
   }
   objectFreeze(featureFacade)
+
+  const storageFacade = objectCreate(null)
+  if (hasDeclaredCapability('storage.file.read')) {
+    defineFacadeMethod(storageFacade, 'getFile', (name) =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.read', { name: stringConstructor(name) }),
+        (result) => result.found === true ? cloneLocalDto(result.value) : null
+      )
+    )
+  }
+  if (hasDeclaredCapability('storage.file.write')) {
+    defineFacadeMethod(storageFacade, 'setFile', (name, value) =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.write', { name: stringConstructor(name), value }),
+        () => undefined
+      )
+    )
+  }
+  if (hasDeclaredCapability('storage.file.remove')) {
+    defineFacadeMethod(storageFacade, 'deleteFile', (name) =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.remove', { name: stringConstructor(name) }),
+        (result) => result.removed === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('storage.file.list')) {
+    defineFacadeMethod(storageFacade, 'listFiles', () =>
+      mapCapabilityResult(
+        invokeCapability('storage.file.list', null),
+        (result) => cloneLocalDto(result.names)
+      )
+    )
+  }
+  objectFreeze(storageFacade)
+
+  const filesystemFacade = objectCreate(null)
+  if (hasFilesystemFacade) {
+    defineFacadeMethod(filesystemFacade, 'renameBatch', (entries) =>
+      mapCapabilityResult(
+        invokeCapability('filesystem.write', { operation: 'rename-batch', entries }),
+        (result) => cloneLocalDto(result.entries)
+      )
+    )
+  }
+  objectFreeze(filesystemFacade)
+
+  const voiceFacade = objectCreate(null)
+  if (hasVoiceInvokeFacade) {
+    defineFacadeMethod(voiceFacade, 'dictate', (payload = {}) =>
+      mapCapabilityResult(
+        invokeCapability('voice.invoke', { operation: 'dictate', payload }),
+        (result) => {
+          if (!result || result.operation !== 'dictate') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.data)
+        }
+      )
+    )
+    defineFacadeMethod(voiceFacade, 'speak', (payload) =>
+      mapCapabilityResult(
+        invokeCapability('voice.invoke', { operation: 'speak', payload }),
+        (result) => {
+          if (!result || result.operation !== 'speak') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.data)
+        }
+      )
+    )
+  }
+  if (hasVoiceStreamFacade) {
+    defineFacadeMethod(voiceFacade, 'asrStream', (payload = {}, options = {}) => {
+      const onData = typeof options?.onData === 'function' ? options.onData : undefined
+      const onError = typeof options?.onError === 'function' ? options.onError : undefined
+      const onEnd = typeof options?.onEnd === 'function' ? options.onEnd : undefined
+      let resource = null
+      let terminal = false
+      let cancelled = false
+      let disposePromise = null
+      const disposeCurrent = () => {
+        if (disposePromise) return disposePromise
+        if (!resource) return resolvePromise()
+        disposePromise = thenPromise(resolvePromise(), () => resource.dispose())
+        return disposePromise
+      }
+      const reportCallbackFailure = async () => {
+        terminal = true
+        if (onError) {
+          try { await onError(createCapabilityError('VOICE_STREAM_CALLBACK_FAILED')) } catch {}
+        }
+        await disposeCurrent()
+      }
+      const onEvent = async (rawEvent) => {
+        if (terminal || cancelled) return
+        let event
+        try {
+          event = cloneLocalDto(rawEvent)
+          if (!event || typeof event !== 'object' || typeof event.type !== 'string') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          if (event.type === 'partial' || event.type === 'final') {
+            if (typeof event.text !== 'string') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (event.language !== undefined && typeof event.language !== 'string') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (onData) await onData(event)
+            return
+          }
+          if (event.type === 'end') {
+            if (onData) await onData(event)
+            terminal = true
+            if (onEnd) await onEnd()
+            await disposeCurrent()
+            return
+          }
+          if (event.type === 'error' && event.code === 'VOICE_STREAM_FAILED') {
+            terminal = true
+            if (onError) await onError(createCapabilityError('VOICE_STREAM_FAILED'))
+            await disposeCurrent()
+            return
+          }
+          throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+        } catch {
+          await reportCallbackFailure()
+        }
+      }
+      objectFreeze(onEvent)
+      return mapCapabilityResult(
+        invokeCapability('voice.stream', { payload, onEvent }),
+        (streamResource) => {
+          if (
+            !streamResource ||
+            streamResource.kind !== 'stream' ||
+            typeof streamResource.id !== 'string' ||
+            typeof streamResource.dispose !== 'function'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          resource = streamResource
+          const controller = objectCreate(null)
+          objectDefineProperty(controller, 'id', { value: streamResource.id, enumerable: true })
+          objectDefineProperty(controller, 'cancelled', {
+            get: objectFreeze(() => cancelled),
+            enumerable: true
+          })
+          const cancel = () => {
+            cancelled = true
+            terminal = true
+            return disposeCurrent()
+          }
+          objectDefineProperty(controller, 'cancel', {
+            value: objectFreeze(cancel),
+            enumerable: true
+          })
+          if (terminal) void disposeCurrent()
+          return objectFreeze(controller)
+        }
+      )
+    })
+  }
+  objectFreeze(voiceFacade)
+
+  const mapIntelligenceInvokeResult = (result) => {
+    if (!result || typeof result !== 'object' || result.operation !== 'capability.invoke') {
+      throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+    }
+    return cloneLocalDto({
+      result: result.result,
+      provider: result.providerId,
+      model: result.modelId,
+      traceId: result.traceId,
+      latency: result.latency
+    })
+  }
+  objectFreeze(mapIntelligenceInvokeResult)
+  const invokeIntelligenceCapability = (capabilityId, payload, options) => {
+    if (
+      typeof capabilityId !== 'string' ||
+      !hasSetValue(fixedIntelligenceCapabilities, capabilityId)
+    ) {
+      return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+    }
+    const request = {
+      operation: 'capability.invoke',
+      capabilityId,
+      payload
+    }
+    if (options !== undefined) request.options = options
+    return mapCapabilityResult(
+      invokeCapability('intelligence.invoke', request),
+      mapIntelligenceInvokeResult
+    )
+  }
+  objectFreeze(invokeIntelligenceCapability)
+  const translationFacade = objectCreate(null)
+  if (hasTranslationFacade) {
+    defineFacadeMethod(translationFacade, 'translate', (payload, options) => {
+      const request = {
+        operation: 'capability.invoke',
+        capabilityId: 'text.translate',
+        payload
+      }
+      if (options !== undefined) request.options = options
+      return mapCapabilityResult(
+        invokeCapability('intelligence.invoke', request),
+        mapIntelligenceInvokeResult
+      )
+    })
+    defineFacadeMethod(translationFacade, 'ocr', (payload, options) => {
+      const request = {
+        operation: 'capability.invoke',
+        capabilityId: 'vision.ocr',
+        payload
+      }
+      if (options !== undefined) request.options = options
+      return mapCapabilityResult(
+        invokeCapability('intelligence.invoke', request),
+        mapIntelligenceInvokeResult
+      )
+    })
+    defineFacadeMethod(translationFacade, 'listProviders', () =>
+      mapCapabilityResult(
+        invokeCapability('intelligence.invoke', {
+          operation: 'provider-models.list',
+          capabilityId: 'text.translate'
+        }),
+        (result) => {
+          if (
+            !result ||
+            typeof result !== 'object' ||
+            result.operation !== 'provider-models.list' ||
+            result.capabilityId !== 'text.translate'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.providers)
+        }
+      )
+    )
+  }
+  objectFreeze(translationFacade)
+  const intelligenceTextFacade = objectCreate(null)
+  const intelligenceVisionFacade = objectCreate(null)
+  const intelligenceFacade = objectCreate(null)
+  if (hasBasicIntelligenceFacade) {
+    defineFacadeMethod(intelligenceFacade, 'invoke', invokeIntelligenceCapability)
+    defineFacadeMethod(intelligenceTextFacade, 'chat', (payload, options) =>
+      invokeIntelligenceCapability('text.chat', payload, options)
+    )
+    defineFacadeMethod(intelligenceVisionFacade, 'ocr', (payload, options) =>
+      invokeIntelligenceCapability('vision.ocr', payload, options)
+    )
+    objectDefineProperty(intelligenceFacade, 'text', {
+      value: intelligenceTextFacade,
+      enumerable: true
+    })
+    objectDefineProperty(intelligenceFacade, 'vision', {
+      value: intelligenceVisionFacade,
+      enumerable: true
+    })
+    defineFacadeMethod(intelligenceFacade, 'getProviderModelOptions', (input = {}) => {
+      let request
+      try {
+        request = cloneLocalDto(input)
+      } catch {
+        return rejectPromise(
+          createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+        )
+      }
+      if (
+        !request ||
+        typeof request !== 'object' ||
+        arrayIsArray(request) ||
+        objectKeys(request).length !== 1 ||
+        !objectHasOwn(request, 'capabilityId') ||
+        request.capabilityId !== 'text.chat'
+      ) {
+        return rejectPromise(
+          createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+        )
+      }
+      return mapCapabilityResult(
+        invokeCapability('intelligence.invoke', {
+          operation: 'provider-models.list',
+          capabilityId: 'text.chat'
+        }),
+        (result) => {
+          if (!result || typeof result !== 'object' || result.operation !== 'provider-models.list') {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          return cloneLocalDto(result.providers)
+        }
+      )
+    })
+  }
+  if (hasIntelligenceContextInvokeFacade) {
+    defineFacadeMethod(intelligenceFacade, 'contextInvoke', (input) => {
+      let request
+      try {
+        request = cloneLocalDto(input)
+      } catch {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const payload = request && typeof request === 'object' ? request.payload : null
+      const messages = payload && typeof payload === 'object' ? payload.messages : null
+      const context = request && typeof request === 'object' ? request.context : null
+      const mode = context && typeof context === 'object' ? context.mode : undefined
+      const owner = context && typeof context === 'object' ? context.owner : undefined
+      const sessionId = context && typeof context === 'object' ? context.sessionId : undefined
+      const options = request && typeof request === 'object' ? request.options : null
+      const metadata = options && typeof options === 'object' ? options.metadata : null
+      const entrypoint = metadata && typeof metadata === 'object' ? metadata.contextEntrypoint : null
+      const entrypointId = entrypoint && typeof entrypoint === 'object' ? entrypoint.id : undefined
+      const entrypointOwner =
+        entrypoint && typeof entrypoint === 'object' ? entrypoint.owner : undefined
+      const entrypointMode = entrypoint && typeof entrypoint === 'object' ? entrypoint.mode : undefined
+      if (
+        !request ||
+        typeof request !== 'object' ||
+        arrayIsArray(request) ||
+        request.capabilityId !== 'text.chat' ||
+        typeof request.input !== 'string' ||
+        !reflectApply(stringTrim, request.input, []) ||
+        !payload ||
+        typeof payload !== 'object' ||
+        arrayIsArray(payload) ||
+        !arrayIsArray(messages) ||
+        messages.length < 1 ||
+        !context ||
+        typeof context !== 'object' ||
+        arrayIsArray(context) ||
+        (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') ||
+        mode === 'continue' ||
+        (owner !== 'corebox' && owner !== 'assistant') ||
+        (mode === 'continue' &&
+          (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, []))) ||
+        (mode !== 'continue' && sessionId !== undefined) ||
+        !options ||
+        typeof options !== 'object' ||
+        arrayIsArray(options) ||
+        !metadata ||
+        typeof metadata !== 'object' ||
+        arrayIsArray(metadata) ||
+        !entrypoint ||
+        typeof entrypoint !== 'object' ||
+        arrayIsArray(entrypoint) ||
+        objectKeys(entrypoint).length !== 3 ||
+        entrypointOwner !== owner ||
+        entrypointMode !== mode ||
+        ((entrypointId !== 'corebox.ai-ask' || owner !== 'corebox') &&
+          (entrypointId !== 'assistant.voice' || owner !== 'assistant'))
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('intelligence.context.invoke', {
+          operation: 'context.invoke',
+          capabilityId: request.capabilityId,
+          input: request.input,
+          payload: request.payload,
+          ...(objectHasOwn(request, 'options') ? { options: request.options } : {}),
+          context: request.context
+        }),
+        (result) => {
+          if (
+            !result ||
+            typeof result !== 'object' ||
+            result.operation !== 'context.invoke' ||
+            !result.invocation ||
+            typeof result.invocation !== 'object' ||
+            typeof result.invocation.result !== 'string' ||
+            typeof result.invocation.providerId !== 'string' ||
+            typeof result.invocation.modelId !== 'string' ||
+            typeof result.invocation.traceId !== 'string' ||
+            typeof result.invocation.latency !== 'number' ||
+            !numberIsFinite(result.invocation.latency) ||
+            !result.context ||
+            typeof result.context !== 'object' ||
+            arrayIsArray(result.context)
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          const summary = result.context
+          if (
+            (summary.mode !== 'new' && summary.mode !== 'stateless') ||
+            (summary.scope !== 'light' &&
+              summary.scope !== 'session' &&
+              summary.scope !== 'retrieval') ||
+            summary.itemCount !== 1 ||
+            !numberIsSafeInteger(summary.tokenBudget) ||
+            summary.tokenBudget < 1 ||
+            summary.tokenBudget > 16000 ||
+            !numberIsSafeInteger(summary.tokenEstimate) ||
+            summary.tokenEstimate < 0 ||
+            summary.tokenEstimate > 16000 ||
+            !arrayIsArray(summary.sourceTypes) ||
+            summary.sourceTypes.length !== 1 ||
+            summary.sourceTypes[0] !== 'current_input' ||
+            summary.retrievalItemCount !== 0 ||
+            summary.citationCount !== 0 ||
+            summary.degradedReason !== 'isolated_context_persistence_unavailable' ||
+            objectHasOwn(summary, 'sessionId') ||
+            objectHasOwn(summary, 'turnId') ||
+            objectHasOwn(summary, 'packageId') ||
+            objectHasOwn(summary, 'traceId') ||
+            objectHasOwn(summary, 'checkpoint') ||
+            objectHasOwn(summary, 'continuation')
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          const projectedContext = {
+            mode: summary.mode,
+            scope: summary.scope,
+            itemCount: summary.itemCount,
+            tokenBudget: summary.tokenBudget,
+            tokenEstimate: summary.tokenEstimate,
+            sourceTypes: cloneLocalDto(summary.sourceTypes),
+            retrievalItemCount: summary.retrievalItemCount,
+            citationCount: summary.citationCount,
+            degradedReason: 'isolated_context_persistence_unavailable'
+          }
+          return cloneLocalDto({
+            invocation: {
+              result: result.invocation.result,
+              provider: result.invocation.providerId,
+              model: result.invocation.modelId,
+              traceId: result.invocation.traceId,
+              latency: result.invocation.latency
+            },
+            context: projectedContext
+          })
+        }
+      )
+    })
+  }
+  if (hasIntelligenceContextStreamFacade) {
+    defineFacadeMethod(intelligenceFacade, 'contextStream', (input, options = {}) => {
+      let request
+      try {
+        request = cloneLocalDto(input)
+      } catch {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const payload = request && typeof request === 'object' ? request.payload : null
+      const messages = payload && typeof payload === 'object' ? payload.messages : null
+      const context = request && typeof request === 'object' ? request.context : null
+      const mode = context && typeof context === 'object' ? context.mode : undefined
+      const owner = context && typeof context === 'object' ? context.owner : undefined
+      const sessionId = context && typeof context === 'object' ? context.sessionId : undefined
+      const requestOptions = request && typeof request === 'object' ? request.options : null
+      const metadata =
+        requestOptions && typeof requestOptions === 'object' ? requestOptions.metadata : null
+      const entrypoint =
+        metadata && typeof metadata === 'object' ? metadata.contextEntrypoint : null
+      const entrypointId = entrypoint && typeof entrypoint === 'object' ? entrypoint.id : undefined
+      const entrypointOwner =
+        entrypoint && typeof entrypoint === 'object' ? entrypoint.owner : undefined
+      const entrypointMode =
+        entrypoint && typeof entrypoint === 'object' ? entrypoint.mode : undefined
+      if (
+        !request ||
+        typeof request !== 'object' ||
+        arrayIsArray(request) ||
+        request.capabilityId !== 'text.chat' ||
+        typeof request.input !== 'string' ||
+        !reflectApply(stringTrim, request.input, []) ||
+        !payload ||
+        typeof payload !== 'object' ||
+        arrayIsArray(payload) ||
+        !arrayIsArray(messages) ||
+        messages.length < 1 ||
+        !context ||
+        typeof context !== 'object' ||
+        arrayIsArray(context) ||
+        (mode !== 'new' && mode !== 'continue' && mode !== 'stateless') ||
+        (owner !== 'corebox' && owner !== 'assistant') ||
+        (mode === 'continue' &&
+          (typeof sessionId !== 'string' || !reflectApply(stringTrim, sessionId, []))) ||
+        (mode !== 'continue' && sessionId !== undefined) ||
+        !requestOptions ||
+        typeof requestOptions !== 'object' ||
+        arrayIsArray(requestOptions) ||
+        !metadata ||
+        typeof metadata !== 'object' ||
+        arrayIsArray(metadata) ||
+        !entrypoint ||
+        typeof entrypoint !== 'object' ||
+        arrayIsArray(entrypoint) ||
+        objectKeys(entrypoint).length !== 3 ||
+        entrypointOwner !== owner ||
+        entrypointMode !== mode ||
+        ((entrypointId !== 'corebox.ai-ask' || owner !== 'corebox') &&
+          (entrypointId !== 'assistant.voice' || owner !== 'assistant'))
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      if (!options || typeof options !== 'object' || arrayIsArray(options)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const allowedCallbacks = [
+        'onStart',
+        'onDelta',
+        'onMessage',
+        'onUsage',
+        'onMetadata',
+        'onEnd',
+        'onError'
+      ]
+      const callbacks = objectCreate(null)
+      for (const key of objectKeys(options)) {
+        let allowed = false
+        for (const expected of allowedCallbacks) {
+          if (key === expected) allowed = true
+        }
+        const descriptor = objectGetOwnPropertyDescriptor(options, key)
+        if (!allowed || !descriptor || !('value' in descriptor) || typeof descriptor.value !== 'function') {
+          return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+        }
+        callbacks[key] = descriptor.value
+      }
+      let resource = null
+      let terminal = false
+      let cancelled = false
+      let disposePromise = null
+      const disposeCurrent = () => {
+        if (disposePromise) return disposePromise
+        if (!resource) return resolvePromise()
+        disposePromise = thenPromise(resolvePromise(), () => resource.dispose())
+        return disposePromise
+      }
+      const failCallback = async () => {
+        terminal = true
+        if (callbacks.onError) {
+          try {
+            await callbacks.onError(createCapabilityError('INTELLIGENCE_STREAM_CALLBACK_FAILED'))
+          } catch {}
+        }
+        await disposeCurrent()
+      }
+      const onEvent = async (rawEvent) => {
+        if (terminal || cancelled) return
+        try {
+          const event = cloneLocalDto(rawEvent)
+          if (
+            !event ||
+            typeof event !== 'object' ||
+            event.capabilityId !== 'text.chat' ||
+            typeof event.type !== 'string'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          if (event.type === 'start') {
+            if (callbacks.onStart) await callbacks.onStart(event)
+            return
+          }
+          if (event.type === 'delta') {
+            if (typeof event.delta !== 'string') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (callbacks.onDelta) await callbacks.onDelta(event.delta, event)
+            return
+          }
+          if (event.type === 'message') {
+            if (!event.message || typeof event.message !== 'object') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (callbacks.onMessage) await callbacks.onMessage(event.message, event)
+            return
+          }
+          if (event.type === 'usage') {
+            if (!event.usage || typeof event.usage !== 'object') {
+              throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+            }
+            if (callbacks.onUsage) await callbacks.onUsage(event.usage, event)
+            return
+          }
+          if (event.type === 'metadata') {
+            if (callbacks.onMetadata) await callbacks.onMetadata({}, event)
+            return
+          }
+          if (event.type === 'end') {
+            terminal = true
+            if (callbacks.onEnd) await callbacks.onEnd(event)
+            await disposeCurrent()
+            return
+          }
+          if (event.type === 'error' && event.code === 'INTELLIGENCE_STREAM_FAILED') {
+            terminal = true
+            if (callbacks.onError) {
+              await callbacks.onError(createCapabilityError('INTELLIGENCE_STREAM_FAILED'))
+            }
+            await disposeCurrent()
+            return
+          }
+          throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+        } catch {
+          await failCallback()
+        }
+      }
+      objectFreeze(onEvent)
+      const capabilityRequest = {
+        operation: 'context.stream',
+        capabilityId: request.capabilityId,
+        input: request.input,
+        payload: request.payload,
+        ...(objectHasOwn(request, 'options') ? { options: request.options } : {}),
+        context: request.context,
+        onEvent
+      }
+      return mapCapabilityResult(
+        invokeCapability('intelligence.stream', capabilityRequest),
+        async (streamResource) => {
+          if (
+            !streamResource ||
+            streamResource.kind !== 'stream' ||
+            typeof streamResource.id !== 'string' ||
+            typeof streamResource.dispose !== 'function'
+          ) {
+            throw createCapabilityError('PLUGIN_HOST_CHILD_CAPABILITY_RESULT_INVALID')
+          }
+          resource = streamResource
+          const controller = objectCreate(null)
+          objectDefineProperty(controller, 'cancelled', {
+            get: objectFreeze(() => cancelled),
+            enumerable: true
+          })
+          const cancel = () => {
+            if (cancelled) return disposeCurrent()
+            cancelled = true
+            terminal = true
+            return disposeCurrent()
+          }
+          objectDefineProperty(controller, 'cancel', {
+            value: objectFreeze(cancel),
+            enumerable: true
+          })
+          if (terminal) await disposeCurrent()
+          return objectFreeze(controller)
+        }
+      )
+    })
+  }
+  objectFreeze(intelligenceTextFacade)
+  objectFreeze(intelligenceVisionFacade)
+  objectFreeze(intelligenceFacade)
+
+  const snipasteFacade = objectCreate(null)
+  if (hasSnipasteFacade) {
+    defineFacadeMethod(snipasteFacade, 'runAction', (actionId) => {
+      if (typeof actionId !== 'string' || !hasSetValue(fixedSnipasteActions, actionId)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('process.spawn', { operation: 'snipaste-action', actionId }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(snipasteFacade)
+
+  const workspaceScriptsFacade = objectCreate(null)
+  if (hasWorkspaceScriptsFacade) {
+    defineFacadeMethod(workspaceScriptsFacade, 'select', () =>
+      mapCapabilityResult(
+        invokeCapability('process.workspace-scripts', { operation: 'select-workspace' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(workspaceScriptsFacade, 'list', (workspaceToken) => {
+      if (!isWorkspaceToken(workspaceToken)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('process.workspace-scripts', {
+          operation: 'list-scripts',
+          workspaceToken
+        }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+    defineFacadeMethod(workspaceScriptsFacade, 'run', (scriptToken) => {
+      if (!isWorkspaceScriptToken(scriptToken)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('process.workspace-scripts', { operation: 'run-script', scriptToken }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(workspaceScriptsFacade)
+
+  const systemFacade = objectCreate(null)
+  if (hasSystemFacade) {
+    defineFacadeMethod(systemFacade, 'runAction', (actionId) => {
+      if (typeof actionId !== 'string' || !hasSetValue(fixedSystemActions, actionId)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('system.invoke', { operation: 'run-action', actionId }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(systemFacade)
+
+  const browserDataFacade = objectCreate(null)
+  if (hasBrowserDataFacade) {
+    defineFacadeMethod(browserDataFacade, 'scan', (sources, browser) => {
+      if (!arrayIsArray(sources) || sources.length < 1 || sources.length > 2) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const normalizedSources = []
+      for (let index = 0; index < sources.length; index += 1) {
+        if (!objectHasOwn(sources, index)) {
+          return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+        }
+        const source = sources[index]
+        let duplicate = false
+        for (let previous = 0; previous < normalizedSources.length; previous += 1) {
+          if (normalizedSources[previous] === source) duplicate = true
+        }
+        if ((source !== 'bookmarks' && source !== 'history') || duplicate) {
+          return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+        }
+        normalizedSources.push(source)
+      }
+      if (
+        browser !== undefined &&
+        browser !== 'chrome' &&
+        browser !== 'edge' &&
+        browser !== 'brave' &&
+        browser !== 'arc'
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const request = browser === undefined
+        ? { operation: 'scan', sources: normalizedSources }
+        : { operation: 'scan', sources: normalizedSources, browser }
+      return mapCapabilityResult(
+        invokeCapability('browser-data.scan', request),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(browserDataFacade)
+
+  const browserOpenFacade = objectCreate(null)
+  if (hasBrowserOpenFacade) {
+    defineFacadeMethod(browserOpenFacade, 'list', () =>
+      mapCapabilityResult(
+        invokeCapability('system.browser-open', { operation: 'list' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(browserOpenFacade, 'open', (url, browserToken) => {
+      if (browserToken !== undefined && !isBrowserOpenToken(browserToken)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      const request = browserToken === undefined
+        ? { operation: 'open', url: stringConstructor(url) }
+        : { operation: 'open', url: stringConstructor(url), browserToken }
+      return mapCapabilityResult(
+        invokeCapability('system.browser-open', request),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(browserOpenFacade)
+
+  const windowPresetFacade = objectCreate(null)
+  if (hasWindowPresetFacade) {
+    defineFacadeMethod(windowPresetFacade, 'status', () =>
+      mapCapabilityResult(
+        invokeCapability('system.window-presets', { operation: 'status' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(windowPresetFacade, 'runAction', (actionId) => {
+      if (typeof actionId !== 'string' || !hasSetValue(fixedWindowPresetActions, actionId)) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('system.window-presets', { operation: 'run-action', actionId }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(windowPresetFacade)
+
+  const windowManagerFacade = objectCreate(null)
+  if (hasWindowManagerFacade) {
+    defineFacadeMethod(windowManagerFacade, 'list', () =>
+      mapCapabilityResult(
+        invokeCapability('system.window-manager', { operation: 'list' }),
+        (result) => cloneLocalDto(result)
+      )
+    )
+    defineFacadeMethod(windowManagerFacade, 'act', (action, token) => {
+      if (
+        typeof action !== 'string' ||
+        !hasSetValue(fixedWindowManagerActions, action) ||
+        typeof token !== 'string' ||
+        !isWindowManagerToken(token)
+      ) {
+        return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+      }
+      return mapCapabilityResult(
+        invokeCapability('system.window-manager', { operation: 'act', action, token }),
+        (result) => cloneLocalDto(result)
+      )
+    })
+  }
+  objectFreeze(windowManagerFacade)
+
+  const widgetItemFacade = objectCreate(null)
+  if (hasWidgetItemFacade) {
+    defineFacadeMethod(widgetItemFacade, 'pushItems', (items) =>
+      mapCapabilityResult(
+        invokeCapability('feature.items.widget.push', {
+          scope: 'active-feature',
+          items
+        }),
+        () => undefined
+      )
+    )
+  }
+  objectFreeze(widgetItemFacade)
+
   const pluginFacade = objectCreate(null)
-  objectDefineProperty(pluginFacade, 'feature', { value: featureFacade, enumerable: true })
+  defineFacadeMethod(pluginFacade, 'getLocale', () => snapshot.locale)
+  if (hasFeatureFacade) {
+    objectDefineProperty(pluginFacade, 'feature', { value: featureFacade, enumerable: true })
+  }
+  if (hasWidgetItemFacade) {
+    objectDefineProperty(pluginFacade, 'widget', { value: widgetItemFacade, enumerable: true })
+  }
+  if (hasStorageFacade) {
+    objectDefineProperty(pluginFacade, 'storage', { value: storageFacade, enumerable: true })
+  }
+  if (hasVoiceFacade) {
+    objectDefineProperty(pluginFacade, 'voice', { value: voiceFacade, enumerable: true })
+  }
+  if (hasTranslationFacade) {
+    objectDefineProperty(pluginFacade, 'translation', {
+      value: translationFacade,
+      enumerable: true
+    })
+  }
+  if (hasIntelligenceFacade) {
+    objectDefineProperty(pluginFacade, 'intelligence', {
+      value: intelligenceFacade,
+      enumerable: true
+    })
+  }
+  if (hasSnipasteFacade) {
+    objectDefineProperty(pluginFacade, 'snipaste', { value: snipasteFacade, enumerable: true })
+  }
+  if (hasWorkspaceScriptsFacade) {
+    objectDefineProperty(pluginFacade, 'workspaceScripts', {
+      value: workspaceScriptsFacade,
+      enumerable: true
+    })
+  }
+  if (hasSystemFacade) {
+    objectDefineProperty(pluginFacade, 'system', { value: systemFacade, enumerable: true })
+  }
+  if (hasBrowserDataFacade) {
+    objectDefineProperty(pluginFacade, 'browserData', {
+      value: browserDataFacade,
+      enumerable: true
+    })
+  }
+  if (hasBrowserOpenFacade) {
+    objectDefineProperty(pluginFacade, 'browser', {
+      value: browserOpenFacade,
+      enumerable: true
+    })
+  }
+  if (hasWindowPresetFacade) {
+    objectDefineProperty(pluginFacade, 'windowPresets', {
+      value: windowPresetFacade,
+      enumerable: true
+    })
+  }
+  if (hasWindowManagerFacade) {
+    objectDefineProperty(pluginFacade, 'windowManager', {
+      value: windowManagerFacade,
+      enumerable: true
+    })
+  }
   objectFreeze(pluginFacade)
+
+  const featuresFacade = objectCreate(null)
+  if (hasDeclaredCapability('feature.registry.add')) {
+    defineFacadeMethod(featuresFacade, 'addFeature', (feature) =>
+      mapCapabilityResult(
+        invokeCapability('feature.registry.add', { feature }),
+        (result) => result.added === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('feature.registry.remove')) {
+    defineFacadeMethod(featuresFacade, 'removeFeature', (featureId) =>
+      mapCapabilityResult(
+        invokeCapability('feature.registry.remove', { featureId: stringConstructor(featureId) }),
+        (result) => result.removed === true
+      )
+    )
+  }
+  if (hasDeclaredCapability('feature.registry.list')) {
+    defineFacadeMethod(featuresFacade, 'getFeature', (featureId) =>
+      mapCapabilityResult(invokeCapability('feature.registry.list', null), (result) => {
+        const expectedId = stringConstructor(featureId)
+        for (const feature of result.features) {
+          if (feature.id === expectedId) return cloneLocalDto(feature)
+        }
+        return undefined
+      })
+    )
+    defineFacadeMethod(featuresFacade, 'getFeatures', () =>
+      mapCapabilityResult(
+        invokeCapability('feature.registry.list', null),
+        (result) => cloneLocalDto(result.features)
+      )
+    )
+  }
+  objectFreeze(featuresFacade)
+
+  const secretFacade = objectCreate(null)
+  if (hasDeclaredCapability('secret.get')) {
+    defineFacadeMethod(secretFacade, 'get', (key) =>
+      mapCapabilityResult(
+        invokeCapability('secret.get', { key: stringConstructor(key) }),
+        (result) => result.found === true ? result.value : null
+      )
+    )
+  }
+  if (hasDeclaredCapability('secret.set')) {
+    defineFacadeMethod(secretFacade, 'set', (key, value) =>
+      mapCapabilityResult(
+        invokeCapability('secret.set', {
+          key: stringConstructor(key),
+          value: stringConstructor(value)
+        }),
+        () => undefined
+      )
+    )
+  }
+  if (hasDeclaredCapability('secret.delete')) {
+    defineFacadeMethod(secretFacade, 'delete', (key) =>
+      mapCapabilityResult(
+        invokeCapability('secret.delete', { key: stringConstructor(key) }),
+        () => undefined
+      )
+    )
+  }
+  objectFreeze(secretFacade)
 
   const clipboardFacade = objectCreate(null)
   if (hasDeclaredCapability('clipboard.read')) {
@@ -1110,6 +2548,133 @@ const CONTEXT_BOOTSTRAP = String.raw`
   }
   objectFreeze(clipboardFacade)
 
+  const openUrlFacade = !isTranslationPrelude && hasDeclaredCapability('open-url')
+    ? objectFreeze((url) =>
+        mapCapabilityResult(
+          invokeCapability('open-url', { url: stringConstructor(url) }),
+          () => undefined
+        )
+      )
+    : undefined
+
+  const normalizeHttpRequest = (input, forcedMethod, forcedUrl, forcedBody, hasForcedBody) => {
+    const source = cloneLocalDto(input === undefined ? {} : input)
+    if (!source || typeof source !== 'object' || arrayIsArray(source)) {
+      throw new typeErrorConstructor('PLUGIN_HOST_CHILD_CAPABILITY_PAYLOAD_INVALID')
+    }
+    const request = objectCreate(null)
+    const method = forcedMethod === undefined ? source.method : forcedMethod
+    request.method = reflectApply(
+      stringToUpperCase,
+      stringConstructor(method === undefined ? 'GET' : method),
+      []
+    )
+    request.url = stringConstructor(forcedUrl === undefined ? source.url : forcedUrl)
+    const responseType = source.responseType === 'arraybuffer' ? 'bytes' : source.responseType
+    request.responseType = responseType === undefined ? 'json' : stringConstructor(responseType)
+    if (source.headers !== undefined) request.headers = source.headers
+    if (source.query !== undefined) request.query = source.query
+    else if (source.params !== undefined) request.query = source.params
+    if (hasForcedBody) request.body = cloneLocalDto(forcedBody)
+    else if (objectHasOwn(source, 'body')) request.body = source.body
+    else if (objectHasOwn(source, 'data')) request.body = source.data
+    const timeoutMs = source.timeoutMs === undefined ? source.timeout : source.timeoutMs
+    if (timeoutMs !== undefined) request.timeoutMs = timeoutMs
+    return request
+  }
+  const httpFacade = objectCreate(null)
+  if (hasHttpFacade) {
+    defineFacadeMethod(httpFacade, 'request', (config) =>
+      invokeCapability('http.request', normalizeHttpRequest(config))
+    )
+    defineFacadeMethod(httpFacade, 'get', (url, config) =>
+      invokeCapability('http.request', normalizeHttpRequest(config, 'GET', url))
+    )
+    defineFacadeMethod(httpFacade, 'post', (url, body, config) =>
+      invokeCapability('http.request', normalizeHttpRequest(config, 'POST', url, body, true))
+    )
+  }
+  objectFreeze(httpFacade)
+
+  const permissionFacade = objectCreate(null)
+  if (hasPermissionFacade) {
+    defineFacadeMethod(permissionFacade, 'check', (permissionId) =>
+      mapCapabilityResult(
+        invokeCapability('permission.check', { permissionId: stringConstructor(permissionId) }),
+        (result) => result.granted === true
+      )
+    )
+  }
+  objectFreeze(permissionFacade)
+
+  const invokeOperation = (capability, operations, operation, payload) => {
+    if (typeof operation !== 'string' || !hasSetValue(operations, operation)) {
+      return rejectPromise(createCapabilityError('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED'))
+    }
+    return mapCapabilityResult(
+      invokeCapability(capability, { operation, payload }),
+      (result) => cloneLocalDto(result.data)
+    )
+  }
+  objectFreeze(invokeOperation)
+
+  const touchChannelFacade = objectCreate(null)
+  if (hasChannelFacade) {
+    defineFacadeMethod(touchChannelFacade, 'send', (operation, payload = null) =>
+      invokeOperation('channel.invoke', fixedChannelOperations, operation, payload)
+    )
+  }
+  objectFreeze(touchChannelFacade)
+
+  const quickOpsFacade = objectCreate(null)
+  const defineQuickOpsMethod = (name, operation, payloadFactory) => {
+    if (!hasQuickOpsFacade || !hasSetValue(fixedQuickOpsOperations, operation)) return
+    defineFacadeMethod(quickOpsFacade, name, (...args) =>
+      invokeOperation(
+        'quick-ops.invoke',
+        fixedQuickOpsOperations,
+        operation,
+        payloadFactory(...args)
+      )
+    )
+  }
+  defineQuickOpsMethod('capabilities', 'capabilities.get', () => null)
+  defineQuickOpsMethod('sessions', 'sessions.get', () => null)
+  defineQuickOpsMethod('auditRecent', 'audit.get', (request) => request === undefined ? {} : request)
+  defineQuickOpsMethod('systemInfo', 'system-info.get', () => null)
+  defineQuickOpsMethod('tuffDiagnostics', 'tuff-diagnostics.get', () => null)
+  defineQuickOpsMethod('diskSpace', 'disk-space.get', () => null)
+  defineQuickOpsMethod('directoryUsage', 'directory-usage.get', (request) => request === undefined ? {} : request)
+  defineQuickOpsMethod('queryLocalIp', 'query-local-ip.get', () => null)
+  defineQuickOpsMethod('portStatus', 'port-status.get', (request) => request)
+  defineQuickOpsMethod('dnsQuery', 'dns-query.get', (request) => request)
+  defineQuickOpsMethod('fileHash', 'file-hash.get', (request) => request)
+  defineQuickOpsMethod('fileBase64', 'file-base64.get', (request) => request)
+  defineQuickOpsMethod('recentDownload', 'recent-download.get', () => null)
+  defineQuickOpsMethod('commonDirectory', 'common-directory.get', (request) => request === undefined ? {} : request)
+  defineQuickOpsMethod('pathFormat', 'path-format.get', (request) => request)
+  defineQuickOpsMethod('formatText', 'format-text.get', (request) => request)
+  defineQuickOpsMethod('networkStatus', 'network-status.get', () => null)
+  defineQuickOpsMethod('batteryStatus', 'battery-status.get', () => null)
+  defineQuickOpsMethod('systemProxy', 'system-proxy.get', () => null)
+  defineQuickOpsMethod('developerPreview', 'developer-preview.get', (request) => request)
+  defineQuickOpsMethod('saveDeveloperPreview', 'developer-preview.save', (request) => request)
+  objectFreeze(defineQuickOpsMethod)
+  objectFreeze(quickOpsFacade)
+
+  const flowFacade = objectCreate(null)
+  if (hasFlowFacade) {
+    defineFacadeMethod(flowFacade, 'dispatch', (payload, options) =>
+      invokeOperation(
+        'flow.invoke',
+        fixedFlowOperations,
+        'quickops.dispatch',
+        { payload, options }
+      )
+    )
+  }
+  objectFreeze(flowFacade)
+
   const loggerFacade = objectCreate(null)
   const localLog = (...values) => {
     for (const value of values) {
@@ -1129,6 +2694,7 @@ const CONTEXT_BOOTSTRAP = String.raw`
   class ChildTuffItemBuilder {
     #item
     #basic
+    #custom
     constructor(id) {
       this.#item = objectCreate(null)
       this.#basic = objectCreate(null)
@@ -1150,6 +2716,14 @@ const CONTEXT_BOOTSTRAP = String.raw`
       this.#basic.subtitle = stringConstructor(subtitle)
       return this
     }
+    setDescription(description) {
+      this.#basic.description = stringConstructor(description)
+      return this
+    }
+    setAccessory(accessory) {
+      this.#basic.accessory = stringConstructor(accessory)
+      return this
+    }
     setIcon(icon) {
       this.#basic.icon = cloneLocalDto(icon)
       return this
@@ -1166,6 +2740,25 @@ const CONTEXT_BOOTSTRAP = String.raw`
       }
       for (const key of objectKeys(next)) merged[key] = next[key]
       this.#item.meta = merged
+      return this
+    }
+    setCustomRender(type, content, data) {
+      if (!hasWidgetItemFacade) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_OPERATION_NOT_DECLARED')
+      }
+      const custom = objectCreate(null)
+      custom.type = stringConstructor(type)
+      custom.content = stringConstructor(content)
+      custom.data = cloneLocalDto(data)
+      this.#custom = custom
+      return this
+    }
+    setActions(actions) {
+      const next = cloneLocalDto(actions)
+      if (!arrayIsArray(next)) {
+        throw new typeErrorConstructor('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      this.#item.actions = next
       return this
     }
     createAndAddAction(id, type, label, payload) {
@@ -1185,15 +2778,21 @@ const CONTEXT_BOOTSTRAP = String.raw`
       }
       const item = cloneLocalDto(this.#item)
       item.render = objectCreate(null)
-      item.render.mode = 'default'
+      item.render.mode = this.#custom ? 'custom' : 'default'
       item.render.basic = cloneLocalDto(this.#basic)
+      if (this.#custom) item.render.custom = cloneLocalDto(this.#custom)
       return deepFreeze(item)
     }
+  }
+  if (!hasWidgetItemFacade) {
+    objectDefineProperty(ChildTuffItemBuilder.prototype, 'setCustomRender', {
+      value: undefined
+    })
   }
   objectFreeze(ChildTuffItemBuilder.prototype)
   objectFreeze(ChildTuffItemBuilder)
 
-  Object.defineProperties(globalThis, {
+  objectDefineProperties(globalThis, {
     setTimeout: {
       value: (callback, delay = 0, ...args) =>
         typeof callback === 'function'
@@ -1223,9 +2822,32 @@ const CONTEXT_BOOTSTRAP = String.raw`
     crypto: { value: crypto },
     platform: { value: deepFreeze({ platform: snapshot.platform, arch: snapshot.arch }) },
     manifest: { value: deepFreeze(snapshot.manifest) },
-    hostCapabilities: { value: hostCapabilities },
-    plugin: { value: hasFeatureFacade ? pluginFacade : undefined, configurable: true },
+    hostCapabilities: { value: isTranslationPrelude ? undefined : hostCapabilities },
+    plugin: { value: pluginFacade, configurable: true },
+    intelligence: {
+      value: hasIntelligenceFacade ? intelligenceFacade : undefined,
+      configurable: true
+    },
+    features: { value: hasFeaturesFacade ? featuresFacade : undefined, configurable: true },
+    secret: { value: hasSecretFacade ? secretFacade : undefined, configurable: true },
     clipboard: { value: hasClipboardFacade ? clipboardFacade : undefined, configurable: true },
+    openUrl: { value: openUrlFacade, configurable: true },
+    http: { value: hasHttpFacade ? httpFacade : undefined, configurable: true },
+    filesystem: {
+      value: hasFilesystemFacade ? filesystemFacade : undefined,
+      configurable: true
+    },
+    system: { value: hasSystemFacade ? systemFacade : undefined, configurable: true },
+    touchChannel: {
+      value: hasChannelFacade ? touchChannelFacade : undefined,
+      configurable: true
+    },
+    quickOps: { value: hasQuickOpsFacade ? quickOpsFacade : undefined, configurable: true },
+    flow: { value: hasFlowFacade ? flowFacade : undefined, configurable: true },
+    permission: {
+      value: hasPermissionFacade ? permissionFacade : undefined,
+      configurable: true
+    },
     logger: { value: loggerFacade, configurable: true },
     TuffItemBuilder: {
       value: hasDeclaredCapability('feature.items.push') ? ChildTuffItemBuilder : undefined,
@@ -1285,8 +2907,25 @@ function createContextBridge(
     decodeUtf8: (value) => Buffer.from(value).toString('utf8'),
     parseUrl: (input, base) => {
       try {
+        if (
+          Buffer.byteLength(input, 'utf8') > limits.maxBytes ||
+          (base !== undefined && Buffer.byteLength(base, 'utf8') > limits.maxBytes)
+        ) {
+          return '{"ok":false}'
+        }
         const parsed = new URL(input, base)
-        return JSON.stringify({
+        const searchParams: string[][] = []
+        let searchParamBytes = 0
+        let searchParamMembers = 0
+        for (const [key, value] of parsed.searchParams) {
+          searchParamMembers += 3
+          searchParamBytes += Buffer.byteLength(key, 'utf8') + Buffer.byteLength(value, 'utf8') + 40
+          if (searchParamMembers > limits.maxMembers || searchParamBytes > limits.maxBytes) {
+            return '{"ok":false}'
+          }
+          searchParams.push([key, value])
+        }
+        const serialized = JSON.stringify({
           ok: true,
           value: {
             href: parsed.href,
@@ -1300,15 +2939,59 @@ function createContextBridge(
             pathname: parsed.pathname,
             search: parsed.search,
             hash: parsed.hash,
-            searchParams: [...parsed.searchParams.entries()]
+            searchParams
           }
         })
+        return Buffer.byteLength(serialized, 'utf8') <= limits.maxBytes * MAX_CONTEXT_JSON_EXPANSION
+          ? serialized
+          : '{"ok":false}'
       } catch {
         return '{"ok":false}'
       }
     },
     randomBytes: (length) => Array.from(randomBytes(length)),
     randomUUID,
+    digest: (algorithm, value) => {
+      const resolved = CHILD_DIGEST_ALGORITHMS.get(algorithm)
+      if (
+        !resolved ||
+        !Array.isArray(value) ||
+        utilTypes.isProxy(value) ||
+        value.length > limits.maxBytes
+      ) {
+        throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      const descriptors = Object.getOwnPropertyDescriptors(value)
+      const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length')
+      if (
+        !lengthDescriptor ||
+        !('value' in lengthDescriptor) ||
+        lengthDescriptor.value !== value.length
+      ) {
+        throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      const bytes = new Uint8Array(value.length)
+      const allowedKeys = new Set<PropertyKey>(['length'])
+      for (let index = 0; index < value.length; index += 1) {
+        const key = String(index)
+        allowedKeys.add(key)
+        const descriptor = descriptors[key]
+        const entry = descriptor && 'value' in descriptor ? descriptor.value : undefined
+        if (
+          !descriptor?.enumerable ||
+          !Number.isInteger(entry) ||
+          Number(entry) < 0 ||
+          Number(entry) > 255
+        ) {
+          throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+        }
+        bytes[index] = Number(entry)
+      }
+      if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) {
+        throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
+      }
+      return Array.from(createHash(resolved).update(bytes).digest())
+    },
     disposeResource: async (id, kind) => {
       if (typeof id !== 'string' || typeof kind !== 'string' || !options.disposeResource) {
         throw new PluginHostChildError('PLUGIN_HOST_CHILD_RESULT_INVALID')
@@ -1471,6 +3154,7 @@ export function loadPluginPrelude(
       value: JSON.stringify({
         platform: payload.snapshot.platform,
         arch: payload.snapshot.arch,
+        locale: payload.snapshot.locale,
         manifest: payload.snapshot.manifest,
         capabilityManifest: payload.capabilityManifest,
         fixedCapabilities: PLUGIN_HOST_CAPABILITIES,

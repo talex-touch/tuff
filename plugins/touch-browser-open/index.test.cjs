@@ -1,54 +1,132 @@
 const assert = require('node:assert/strict')
-const childProcess = require('node:child_process')
 const fs = require('node:fs')
 const Module = require('node:module')
-const os = require('node:os')
 const path = require('node:path')
 const test = require('node:test')
 
-const permissionState = {
-  async check() {
-    return false
-  },
-  async request() {
-    return false
-  },
-}
+class FakeBuilder {
+  constructor(id) {
+    this.item = { id }
+    this.basic = {}
+  }
 
-const storageWrites = []
-globalThis.plugin = {
-  storage: {
-    async getFile() {
-      return null
-    },
-    async setFile(name, value) {
-      storageWrites.push({ name, value })
-    },
-  },
-}
-globalThis.logger = {
-  warn() {},
-  error() {},
-}
-globalThis.permission = permissionState
+  setSource(type, id, name) {
+    this.item.source = { type, id, name }
+    return this
+  }
 
-const spawnCalls = []
-let execFileCalls = 0
-const originalExecFile = childProcess.execFile
-const originalSpawn = childProcess.spawn
-const originalPlatform = os.platform
+  setTitle(title) {
+    this.item.title = title
+    this.basic.title = title
+    return this
+  }
 
-os.platform = () => 'darwin'
-childProcess.execFile = () => {
-  execFileCalls += 1
-  throw new Error('execFile must remain blocked')
-}
-childProcess.spawn = (...args) => {
-  spawnCalls.push(args)
-  return {
-    unref() {},
+  setSubtitle(subtitle) {
+    this.item.subtitle = subtitle
+    this.basic.subtitle = subtitle
+    return this
+  }
+
+  setIcon(icon) {
+    this.basic.icon = icon
+    return this
+  }
+
+  setMeta(meta) {
+    this.item.meta = meta
+    return this
+  }
+
+  createAndAddAction(id, type, label, payload) {
+    this.item.actions ||= []
+    this.item.actions.push({ id, type, label, payload })
+    return this
+  }
+
+  build() {
+    return { ...this.item, render: { mode: 'default', basic: this.basic } }
   }
 }
+
+const state = {
+  items: [],
+  files: new Map(),
+  openCalls: [],
+  httpCalls: [],
+  clipboardWrites: [],
+  features: new Map(),
+  listResult: {
+    operation: 'list',
+    status: 'available',
+    defaultAvailable: true,
+    browsers: [
+      {
+        id: 'chrome',
+        name: 'Chrome',
+        token: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      },
+    ],
+  },
+}
+
+globalThis.plugin = {
+  getLocale: () => 'zh-CN',
+  feature: {
+    async clearItems() {
+      state.items.length = 0
+    },
+    async pushItems(items) {
+      state.items.push(...items)
+    },
+  },
+  storage: {
+    async getFile(name) {
+      return state.files.get(name) ?? null
+    },
+    async setFile(name, value) {
+      state.files.set(name, value)
+    },
+  },
+  browser: {
+    async list() {
+      return state.listResult
+    },
+    async open(url, token) {
+      state.openCalls.push({ url, token })
+      return { operation: 'open', status: 'completed' }
+    },
+  },
+}
+globalThis.clipboard = {
+  async writeText(value) {
+    state.clipboardWrites.push(value)
+  },
+}
+globalThis.http = {
+  async get(url, config) {
+    state.httpCalls.push({ url, config })
+    return {
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: ['tuff', ['tuff app', 'tuff plugin']],
+      url,
+      ok: true,
+    }
+  },
+}
+globalThis.features = {
+  async getFeature(id) {
+    return state.features.get(id)
+  },
+  async addFeature(feature) {
+    state.features.set(feature.id, feature)
+    return true
+  },
+}
+globalThis.platform = { platform: 'darwin', arch: 'arm64' }
+globalThis.logger = { error() {}, warn() {}, info() {} }
+globalThis.TuffItemBuilder = FakeBuilder
 
 function loadPluginModule(filename) {
   const source = fs.readFileSync(filename, 'utf8')
@@ -59,130 +137,180 @@ function loadPluginModule(filename) {
   return mod.exports
 }
 
-const browserOpenPlugin = loadPluginModule(path.join(__dirname, 'index.js'))
-const { cacheDetectedBrowsers } = browserOpenPlugin.__test
+const sourcePath = path.join(__dirname, 'index.js')
+const pluginModule = loadPluginModule(sourcePath)
 
-childProcess.execFile = originalExecFile
-childProcess.spawn = originalSpawn
-os.platform = originalPlatform
+function actionItem(actionId) {
+  return state.items.find(item => item.actions?.some(action => action.id === actionId))
+}
 
-function createActionItem(actionId, browser) {
-  return {
-    meta: {
-      defaultAction: 'browser-open',
-      actionId,
-      payload: {
-        url: 'https://example.com',
-        ...(browser ? { browser } : {}),
+function reset() {
+  state.items.length = 0
+  state.files.clear()
+  state.openCalls.length = 0
+  state.httpCalls.length = 0
+  state.clipboardWrites.length = 0
+  state.features.clear()
+  state.listResult = {
+    operation: 'list',
+    status: 'available',
+    defaultAvailable: true,
+    browsers: [
+      {
+        id: 'chrome',
+        name: 'Chrome',
+        token: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       },
-    },
+    ],
   }
 }
 
-test.beforeEach(() => {
-  cacheDetectedBrowsers([])
-  permissionState.check = async () => false
-  permissionState.request = async () => false
-  spawnCalls.length = 0
-  execFileCalls = 0
-  storageWrites.length = 0
-})
+test.beforeEach(reset)
 
-test('blocks unsupported actions before permission and shell execution', async () => {
-  let permissionChecks = 0
-  permissionState.check = async () => {
-    permissionChecks += 1
-    return true
+test('production Prelude contains no privileged child surface or test export', () => {
+  const source = fs.readFileSync(sourcePath, 'utf8')
+  for (const pattern of [
+    /\b__test\b/,
+    /\brequire\s*\(/,
+    /\bfetch\s*\(/,
+    /(?:^|[^.\w])process\s*(?:\.|\[)/m,
+    /\bnode:(?:fs|child_process|sqlite|worker_threads)\b/,
+    /\belectron\b/,
+  ]) {
+    assert.doesNotMatch(source, pattern)
   }
-
-  const result = await browserOpenPlugin.onItemAction(createActionItem('launch-arbitrary'))
-
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'unsupported-action')
-  assert.equal(permissionChecks, 0)
-  assert.equal(spawnCalls.length, 0)
-  assert.equal(execFileCalls, 0)
+  assert.deepEqual(Object.keys(pluginModule).sort(), [
+    'onDestroy',
+    'onFeatureTriggered',
+    'onInit',
+    'onInputChanged',
+    'onItemAction',
+  ])
 })
 
-test('blocks unknown browser targets before permission and shell execution', async () => {
-  let permissionChecks = 0
-  permissionState.check = async () => {
-    permissionChecks += 1
-    return true
+test('registers bounded dynamic search features through the typed registry', async () => {
+  await pluginModule.onInit()
+  assert.deepEqual(
+    [...state.features.keys()],
+    ['search-engine-google', 'search-engine-bing', 'search-engine-duckduckgo'],
+  )
+  for (const feature of state.features.values()) {
+    assert.equal(feature.icon.type, 'class')
+    assert.deepEqual(feature.platform.darwin, { enable: true, arch: [], os: [] })
+    assert.equal(feature.platform.win.enable, false)
   }
-
-  const result = await browserOpenPlugin.onItemAction(createActionItem('open-browser', {
-    id: 'calculator',
-    name: 'Calculator',
-    target: 'Calculator',
-  }))
-
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'browser-target-not-allowed')
-  assert.equal(permissionChecks, 0)
-  assert.equal(spawnCalls.length, 0)
-  assert.equal(execFileCalls, 0)
 })
 
-test('blocks mismatched targets for a detected browser id', async () => {
-  cacheDetectedBrowsers([{ id: 'chrome', name: 'Chrome', target: 'Google Chrome' }])
+test('publishes only opaque browser tokens and opens a re-listed browser', async () => {
+  await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+  const item = actionItem('open-browser')
+  assert.ok(item)
+  const action = item.actions.find(candidate => candidate.id === 'open-browser')
+  assert.deepEqual(Object.keys(action.payload).sort(), ['browserToken', 'url'])
+  assert.equal(action.payload.browserToken, 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+  assert.doesNotMatch(JSON.stringify(state.items), /Applications|Google Chrome\.app|executable|target|path/i)
 
-  const result = await browserOpenPlugin.onItemAction(createActionItem('open-browser', {
-    id: 'chrome',
-    name: 'Chrome',
-    target: 'Calculator',
-  }))
-
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'browser-target-not-allowed')
-  assert.equal(spawnCalls.length, 0)
+  const result = await pluginModule.onItemAction(item, { actionId: 'open-browser' })
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: true,
+    status: 'completed',
+  })
+  assert.deepEqual(state.openCalls, [
+    {
+      url: 'https://example.com/',
+      token: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    },
+  ])
+  const recent = state.files.get('recent-browsers.json')
+  assert.deepEqual(Object.keys(recent.items[0]).sort(), ['id', 'lastUsedAt', 'name'])
+  assert.equal(recent.items[0].id, 'chrome')
+  assert.equal(JSON.stringify(recent).includes('token'), false)
 })
 
-test('blocks a detected browser before shell execution when permission is denied', async () => {
-  cacheDetectedBrowsers([{ id: 'chrome', name: 'Chrome', target: 'Google Chrome' }])
-
-  const result = await browserOpenPlugin.onItemAction(createActionItem('open-browser', {
-    id: 'chrome',
-    name: 'Forged Name',
-    target: 'Google Chrome',
-  }))
-
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'permission-denied')
-  assert.equal(spawnCalls.length, 0)
+test('re-lists recent display ids and never treats storage as authority', async () => {
+  state.files.set('recent-browsers.json', {
+    items: [
+      {
+        id: 'chrome',
+        name: 'Forged Chrome',
+        target: '/Applications/Calculator.app',
+        token: 'bo_ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ',
+        lastUsedAt: Date.now(),
+      },
+    ],
+  })
+  await pluginModule.onFeatureTriggered('browser-open', 'https://example.com')
+  const recent = state.items.find(item => item.title === '最近 · Chrome')
+  assert.ok(recent)
+  assert.deepEqual(recent.actions[0].payload, {
+    url: 'https://example.com/',
+    browserToken: 'bo_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+  })
+  assert.doesNotMatch(JSON.stringify(recent), /Calculator|ZZZZ/)
 })
 
-test('blocks a detected browser when the permission sdk is unavailable', async () => {
-  cacheDetectedBrowsers([{ id: 'chrome', name: 'Chrome', target: 'Google Chrome' }])
-  permissionState.check = undefined
-  permissionState.request = undefined
-
-  const result = await browserOpenPlugin.onItemAction(createActionItem('open-browser', {
-    id: 'chrome',
-    name: 'Chrome',
-    target: 'Google Chrome',
-  }))
-
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'permission-sdk-unavailable')
-  assert.equal(spawnCalls.length, 0)
+test('uses bounded typed HTTP suggestions and keeps direct search first', async () => {
+  await pluginModule.onFeatureTriggered('search-engine-google', 'google tuff', null, new AbortController().signal)
+  assert.equal(state.httpCalls.length, 1)
+  assert.match(state.httpCalls[0].url, /^https:\/\/suggestqueries\.google\.com\//)
+  assert.equal(state.httpCalls[0].config.responseType, 'json')
+  assert.deepEqual(
+    state.items.map(item => item.title),
+    ['Google 搜索：tuff', 'tuff app', 'tuff plugin'],
+  )
+  const direct = actionItem('search-web')
+  const result = await pluginModule.onItemAction(direct, { actionId: 'search-web' })
+  assert.equal(result.status, 'completed')
+  assert.equal(state.openCalls[0].token, undefined)
+  assert.equal(state.openCalls[0].url, 'https://www.google.com/search?q=tuff')
 })
 
-test('opens only the canonical detected browser target after permission succeeds', async () => {
-  cacheDetectedBrowsers([{ id: 'chrome', name: 'Chrome', target: 'Google Chrome' }])
-  permissionState.check = async () => true
+test('awaits clipboard writes and rejects hostile action payloads', async () => {
+  await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+  const copy = actionItem('copy-url')
+  await pluginModule.onItemAction(copy, { actionId: 'copy-url' })
+  assert.deepEqual(state.clipboardWrites, ['https://example.com/'])
 
-  const result = await browserOpenPlugin.onItemAction(createActionItem('open-browser', {
-    id: 'chrome',
-    name: 'Forged Name',
-    target: 'Google Chrome',
-  }))
+  const forged = {
+    ...copy,
+    actions: [
+      {
+        id: 'default-open',
+        type: 'plugin',
+        label: 'open',
+        payload: {
+          url: 'https://example.com',
+          executable: '/Applications/Calculator.app',
+        },
+      },
+    ],
+  }
+  forged.meta = { ...copy.meta, defaultAction: 'default-open' }
+  const result = await pluginModule.onItemAction(forged, { actionId: 'default-open' })
+  assert.equal(result.status, 'blocked')
+  assert.equal(result.reason, 'invalid-action')
+  assert.equal(state.openCalls.length, 0)
+})
 
-  assert.equal(result.status, 'started')
-  assert.equal(spawnCalls.length, 1)
-  assert.equal(spawnCalls[0][0], 'open')
-  assert.deepEqual(spawnCalls[0][1], ['-a', 'Google Chrome', 'https://example.com/'])
-  assert.equal(execFileCalls, 0)
-  assert.equal(storageWrites.length, 1)
-  assert.equal(storageWrites[0].value.items[0].name, 'Chrome')
+test('maps capability denial to a deterministic redacted result', async () => {
+  globalThis.plugin.browser.open = async () => {
+    throw Object.assign(new Error('/private/path denied'), {
+      code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
+    })
+  }
+  await pluginModule.onFeatureTriggered('browser-open', 'example.com')
+  const result = await pluginModule.onItemAction(actionItem('default-open'), {
+    actionId: 'default-open',
+  })
+  assert.deepEqual(result, {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-denied',
+  })
+  globalThis.plugin.browser.open = async (url, token) => {
+    state.openCalls.push({ url, token })
+    return { operation: 'open', status: 'completed' }
+  }
 })

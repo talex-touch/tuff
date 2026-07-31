@@ -37,6 +37,7 @@ import { networkModule } from './modules/network'
 import { nativeCapabilitiesModule } from './modules/native-capabilities'
 import { PermissionModule } from './modules/permission'
 import { pluginModule } from './modules/plugin/plugin-module'
+import { privacyLifecycleModule } from './modules/privacy/privacy-module'
 import { quickOpsModule } from './modules/quick-ops'
 import { screenshotSessionModule } from './modules/screenshot-session'
 import { sentryModule } from './modules/sentry'
@@ -198,6 +199,7 @@ const foregroundModulesToLoad = [
   assistantModule,
   addonOpenerModule,
   clipboardModule,
+  privacyLifecycleModule,
   tuffDashboardModule,
   terminalModule,
   downloadCenterModule

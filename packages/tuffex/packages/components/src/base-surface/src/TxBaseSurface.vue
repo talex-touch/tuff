@@ -642,15 +642,16 @@ const cssVars = computed(() => {
   if (props.fake) {
     vars['--tx-surface-fake-index'] = String(props.fakeIndex)
 
+    // Every fake mode needs a concrete background, or the `::before` resolves
+    // `background: var(--tx-surface-fake-bg)` to nothing for blur/glass/refraction
+    // and paints an empty layer. pure/mask keep their tuned opacity; the rest fall
+    // back to a solid fill.
     const mode = activeMode.value
-    if (mode === 'pure') {
-      vars['--tx-surface-fake-bg'] = props.color || 'var(--tx-fill-color-lighter, #fafafa)'
-      vars['--tx-surface-fake-opacity'] = '1'
-    }
-    else if (mode === 'mask') {
-      vars['--tx-surface-fake-bg'] = props.color || 'var(--tx-fill-color-lighter, #fafafa)'
+    vars['--tx-surface-fake-bg'] = props.color || 'var(--tx-fill-color-lighter, #fafafa)'
+    if (mode === 'mask')
       vars['--tx-surface-fake-opacity'] = String(layerMaskOpacity.value)
-    }
+    else
+      vars['--tx-surface-fake-opacity'] = '1'
   }
 
   return vars

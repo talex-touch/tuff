@@ -104,6 +104,7 @@ export interface PluginHostSessionOptions {
 
 export type RequestMessageType =
   | 'host-init'
+  | 'heartbeat'
   | 'host-load'
   | 'lifecycle-call'
   | 'capability-call'
@@ -111,6 +112,7 @@ export type RequestMessageType =
 
 export type ResponseMessageType =
   | 'host-ready'
+  | 'heartbeat-result'
   | 'load-result'
   | 'lifecycle-result'
   | 'capability-result'
@@ -129,6 +131,7 @@ const DIRECTIONS: readonly HostMessageDirection[] = ['main-to-child', 'child-to-
 const EXPECTED_RESPONSES: Readonly<Record<RequestMessageType, ResponseMessageType>> = Object.freeze(
   {
     'host-init': 'host-ready',
+    heartbeat: 'heartbeat-result',
     'host-load': 'load-result',
     'lifecycle-call': 'lifecycle-result',
     'capability-call': 'capability-result',
@@ -145,6 +148,8 @@ const LEGAL_MESSAGES: Readonly<Record<PluginHostSessionState, ReadonlySet<string
     ready: new Set(['host-load', 'resource-dispose', 'shutdown', 'violation']),
     loading: new Set(['load-result', 'cancel', 'resource-dispose', 'shutdown', 'violation']),
     active: new Set([
+      'heartbeat',
+      'heartbeat-result',
       'lifecycle-call',
       'lifecycle-result',
       'capability-call',
@@ -230,6 +235,7 @@ function isCanonicalCancellationResponse(
     case 'capability-result':
       return message.error.code === 'PLUGIN_HOST_CAPABILITY_CANCELLED'
     case 'host-ready':
+    case 'heartbeat-result':
       return false
   }
 }
@@ -246,6 +252,7 @@ export class PluginHostSession {
   private readonly pending = new Map<HostMessageDirection, Map<number, InternalPendingRequest>>()
   private readonly seenRequestIds = new Map<HostMessageDirection, Set<number>>()
   private readonly cancelledRequestIds = new Map<HostMessageDirection, Set<number>>()
+  private readonly lastHeartbeatRequestIds = new Map<HostMessageDirection, number>()
   private currentState: PluginHostSessionState = 'handshake'
   private initAdmitted = false
   private loadAdmitted = false
@@ -294,6 +301,7 @@ export class PluginHostSession {
       this.pending.set(direction, new Map())
       this.seenRequestIds.set(direction, new Set())
       this.cancelledRequestIds.set(direction, new Set())
+      this.lastHeartbeatRequestIds.set(direction, -1)
     }
   }
 
@@ -445,8 +453,8 @@ export class PluginHostSession {
       ) {
         throw new PluginHostSessionError('PLUGIN_HOST_SESSION_ILLEGAL_STATE')
       }
-      this.assertPendingCapacity()
-      this.trackRequestId(direction, message.requestId)
+      this.assertPendingCapacity(message.type)
+      this.trackRequestId(direction, message.requestId, false, message.type === 'heartbeat')
       if (message.type === 'host-init') this.initAdmitted = true
       if (message.type === 'host-load') this.loadAdmitted = true
       this.addPending(direction, message)
@@ -472,8 +480,8 @@ export class PluginHostSession {
     ) {
       throw new PluginHostSessionError('PLUGIN_HOST_SESSION_ILLEGAL_STATE')
     }
-    this.assertPendingCapacity()
-    this.assertRequestIdAvailable(direction, message.requestId)
+    this.assertPendingCapacity(message.type)
+    this.assertRequestIdAvailable(direction, message.requestId, false, message.type === 'heartbeat')
   }
 
   private addPending(
@@ -507,7 +515,11 @@ export class PluginHostSession {
       return pending
     }
     if (!pending) {
-      if (this.seenRequestIds.get(requestDirection)!.has(message.requestId)) {
+      if (
+        this.seenRequestIds.get(requestDirection)!.has(message.requestId) ||
+        (message.type === 'heartbeat-result' &&
+          message.requestId <= this.lastHeartbeatRequestIds.get(requestDirection)!)
+      ) {
         throw new PluginHostSessionError('PLUGIN_HOST_SESSION_LATE_RESPONSE')
       }
       throw new PluginHostSessionError('PLUGIN_HOST_SESSION_UNKNOWN_RESPONSE')
@@ -557,28 +569,45 @@ export class PluginHostSession {
   private trackRequestId(
     direction: HostMessageDirection,
     requestId: number,
-    allowShutdownOverflow = false
+    allowShutdownOverflow = false,
+    compactHeartbeat = false
   ): void {
-    this.assertRequestIdAvailable(direction, requestId, allowShutdownOverflow)
+    this.assertRequestIdAvailable(direction, requestId, allowShutdownOverflow, compactHeartbeat)
+    if (compactHeartbeat) {
+      this.lastHeartbeatRequestIds.set(direction, requestId)
+      return
+    }
     this.seenRequestIds.get(direction)!.add(requestId)
   }
 
   private assertRequestIdAvailable(
     direction: HostMessageDirection,
     requestId: number,
-    allowShutdownOverflow = false
+    allowShutdownOverflow = false,
+    compactHeartbeat = false
   ): void {
     const seen = this.seenRequestIds.get(direction)!
-    if (seen.has(requestId)) {
+    if (seen.has(requestId) || requestId <= this.lastHeartbeatRequestIds.get(direction)!) {
       throw new PluginHostSessionError('PLUGIN_HOST_SESSION_DUPLICATE_REQUEST_ID')
     }
-    if (!allowShutdownOverflow && seen.size >= this.maxTrackedRequestIds) {
+    if (!allowShutdownOverflow && !compactHeartbeat && seen.size >= this.maxTrackedRequestIds) {
       throw new PluginHostSessionError('PLUGIN_HOST_SESSION_REQUEST_LIMIT')
     }
   }
 
-  private assertPendingCapacity(): void {
-    if (this.pendingCount >= this.maxPendingRequests) {
+  private assertPendingCapacity(requestType: RequestMessageType): void {
+    let businessPending = 0
+    let heartbeatPending = false
+    for (const requests of this.pending.values()) {
+      for (const pending of requests.values()) {
+        if (pending.requestType === 'heartbeat') heartbeatPending = true
+        else businessPending += 1
+      }
+    }
+    if (
+      (requestType === 'heartbeat' && heartbeatPending) ||
+      (requestType !== 'heartbeat' && businessPending >= this.maxPendingRequests)
+    ) {
       throw new PluginHostSessionError('PLUGIN_HOST_SESSION_PENDING_LIMIT')
     }
   }

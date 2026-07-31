@@ -5,13 +5,15 @@ const hits = ref<string[]>([])
 const loading = ref(false)
 const open = ref(false)
 const value = ref('')
-const onSearch = (term: string) => {
+const onSearch = async (q: string) => {
+  const query = q.trim().toLowerCase()
   loading.value = true
-  const normalized = term.trim()
-  hits.value = normalized
-    ? Array.from({ length: 3 }, (_, idx) => `${normalized} result ${idx + 1}`)
-    : []
+  await new Promise(resolve => setTimeout(resolve, 200))
+  hits.value = Array.from({ length: 12 })
+    .map((_, i) => `Result ${i + 1}`)
+    .filter(s => s.toLowerCase().includes(query))
   loading.value = false
+  open.value = true
 }
 const onPick = (item: string) => {
   value.value = item

@@ -1,18 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPluginGlobals, loadPluginModule, withoutGlobal } from './plugin-loader'
+import { createPluginGlobals, loadPluginModule } from './plugin-loader'
 
-const presetsPlugin = loadPluginModule(new URL('../../../../plugins/touch-window-presets/index.js', import.meta.url))
-const { __test: presetsTest } = presetsPlugin
+const pluginUrl = new URL('../../../../plugins/touch-window-presets/index.js', import.meta.url)
+
+interface Item {
+  id: string
+  title?: string
+  subtitle?: string
+  icon?: { type: string, value: string }
+  meta: Record<string, unknown>
+  actions: Array<{ id: string, payload?: Record<string, unknown> }>
+}
 
 class TestTuffItemBuilder {
-  item: any
+  item: Item
 
   constructor(id: string) {
-    this.item = { id, meta: {} }
+    this.item = { id, meta: {}, actions: [] }
   }
 
   setSource(type: string, id: string, name: string) {
-    this.item.source = { type, id, name }
+    Object.assign(this.item, { source: { type, id, name } })
     return this
   }
 
@@ -26,7 +34,7 @@ class TestTuffItemBuilder {
     return this
   }
 
-  setIcon(icon: unknown) {
+  setIcon(icon: { type: string, value: string }) {
     this.item.icon = icon
     return this
   }
@@ -36,221 +44,99 @@ class TestTuffItemBuilder {
     return this
   }
 
+  createAndAddAction(
+    id: string,
+    _type: string,
+    _label: string,
+    payload: Record<string, unknown>,
+  ) {
+    this.item.actions.push({ id, payload })
+    return this
+  }
+
   build() {
     return this.item
   }
 }
 
-describe('window presets plugin', () => {
-  it('builds windows snap script', () => {
-    const script = presetsTest.buildWindowsScript('snap', {
-      handle: '1024',
-      side: 'left',
-    })
-
-    expect(script).toContain('SetWindowPos')
-    expect(script).toContain('left')
+function createHarness(platform = 'win32') {
+  const state = { items: [] as Item[] }
+  const clearItems = vi.fn(async () => {
+    state.items = []
   })
-
-  it('normalizes windows and removes invalid/duplicate rows', () => {
-    const windows = presetsTest.normalizeWindows([
-      { name: 'Chrome', title: 'Docs', handle: '200', isFront: true },
-      { name: 'Chrome', title: 'Docs', handle: '200', isFront: false },
-      { name: '', title: 'NoName', handle: '201' },
-      { name: 'VSCode', title: 'Editor', handle: '202' },
-    ])
-
-    expect(windows.length).toBe(2)
-    expect(windows[0].key).toBe('h:200')
-    expect(windows[1].key).toBe('h:202')
+  const pushItems = vi.fn(async (items: Item[]) => {
+    state.items = items
   })
-
-  it('selects terminal and browser pair for dev preset', () => {
-    const pair = presetsTest.selectDevPair([
-      { key: 'h:1', name: 'Code', title: 'Workspace', isFront: true },
-      { key: 'h:2', name: 'WindowsTerminal', title: 'zsh', isFront: false },
-      { key: 'h:3', name: 'Chrome', title: 'Docs', isFront: false },
-    ])
-
-    expect(pair).not.toBeNull()
-    expect(pair.left.name).toBe('WindowsTerminal')
-    expect(pair.right.name).toBe('Chrome')
-  })
-
-  it('resolves group order presets then cleanup', () => {
-    const order = presetsTest.resolveGroupOrder([
-      { group: 'cleanup' },
-      { group: 'presets' },
-    ])
-
-    expect(order).toEqual(['presets', 'cleanup'])
-  })
-
-  it('keeps execution permission block messages user-visible', () => {
-    expect(presetsTest.formatPermissionBlockedMessage('permission-denied')).toBe('缺少 system.shell 权限')
-    expect(presetsTest.formatPermissionBlockedMessage('permission-sdk-unavailable')).toBe('权限系统不可用，无法执行窗口预设')
-    expect(presetsTest.formatPermissionBlockedMessage('permission-request-failed')).toBe('权限请求失败，无法执行窗口预设')
-  })
-
-  it('lists presets without requesting shell permission', async () => {
-    const pushItems = vi.fn()
-    const check = vi.fn().mockResolvedValue(false)
-    const request = vi.fn().mockResolvedValue(false)
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-window-presets/index.js', import.meta.url),
-      createPluginGlobals({
-        plugin: {
-          feature: {
-            clearItems() {},
-            pushItems,
-          },
-        },
-        TuffItemBuilder: TestTuffItemBuilder,
-        permission: { check, request },
-        logger: { error() {}, warn() {} },
-      }),
-    )
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-
-    try {
-      await pluginModule.onFeatureTriggered('window-presets', '')
-    }
-    finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform })
-    }
-
-    expect(check).toHaveBeenCalledWith('system.shell')
-    expect(request).not.toHaveBeenCalled()
-    const items = pushItems.mock.calls.at(-1)?.[0]
-    expect(items.some((item: any) => item.id === 'window-presets-no-permission')).toBe(true)
-    expect(items.some((item: any) => item.meta?.capability?.status === 'permission-missing')).toBe(true)
-  })
-
-  it('marks permission sdk unavailable while listing presets', async () => {
-    const pushItems = vi.fn()
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-window-presets/index.js', import.meta.url),
-      createPluginGlobals({
-        plugin: {
-          feature: {
-            clearItems() {},
-            pushItems,
-          },
-        },
-        TuffItemBuilder: TestTuffItemBuilder,
-        permission: withoutGlobal(),
-        logger: { error() {}, warn() {} },
-      }),
-    )
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'win32' })
-
-    try {
-      await pluginModule.onFeatureTriggered('window-presets', '')
-    }
-    finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform })
-    }
-
-    const items = pushItems.mock.calls.at(-1)?.[0]
-    const diagnostic = items.find((item: any) => item.id === 'window-presets-no-permission')
-    expect(diagnostic?.meta?.capability).toMatchObject({
-      status: 'permission-missing',
-      reason: 'permission-sdk-unavailable',
-    })
-  })
-
-  it('requests shell permission only when running a preset', async () => {
-    const check = vi.fn().mockResolvedValue(false)
-    const request = vi.fn().mockResolvedValue(false)
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-window-presets/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: { check, request },
-        logger: { error() {}, warn() {} },
-      }),
-    )
-
-    const result = await pluginModule.onItemAction({
-      meta: {
-        defaultAction: 'window-presets',
-        actionId: 'run-preset',
-        payload: { presetId: 'split-horizontal' },
+  const status = vi.fn(async () => ({
+    operation: 'status',
+    status: 'available',
+    windowCount: 3,
+  }))
+  const runAction = vi.fn(async (actionId: string) => ({
+    operation: 'run-action',
+    actionId,
+    status: 'completed',
+    affectedWindows: actionId === 'preset-clear-topmost' ? 3 : 2,
+  }))
+  const pluginModule = loadPluginModule(
+    pluginUrl,
+    createPluginGlobals({
+      platform: { platform, arch: 'x64' },
+      TuffItemBuilder: TestTuffItemBuilder,
+      logger: { error: vi.fn() },
+      plugin: {
+        feature: { clearItems, pushItems },
+        windowPresets: { status, runAction },
       },
-    })
+    }),
+  )
+  return { clearItems, pluginModule, pushItems, runAction, state, status }
+}
 
-    expect(request).toHaveBeenCalledWith('system.shell', '需要 system.shell 权限执行窗口预设')
-    expect(result.status).toBe('blocked')
-    expect(result.reason).toBe('permission-denied')
-    expect(result.message).toBe('缺少 system.shell 权限')
+describe('window presets isolated Prelude', () => {
+  it('awaits status and feature publication for all fixed workflows', async () => {
+    const harness = createHarness()
+    await expect(
+      harness.pluginModule.onFeatureTriggered('window-presets', { text: '' }),
+    ).resolves.toBe(true)
+
+    expect(harness.status).toHaveBeenCalledOnce()
+    expect(harness.clearItems).toHaveBeenCalledBefore(harness.pushItems)
+    expect(harness.state.items.find(item => item.id === 'window-presets-window-count')?.subtitle).toBe(
+      '3 个',
+    )
+    expect(
+      harness.state.items.flatMap(item => item.actions).map(action => action.payload?.actionId),
+    ).toEqual(['preset-two-column', 'preset-dev-split', 'preset-clear-topmost'])
+    expect(harness.state.items.every(item => item.icon?.type === 'class')).toBe(true)
   })
 
-  it('blocks preset execution when permission sdk is unavailable', async () => {
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-window-presets/index.js', import.meta.url),
-      createPluginGlobals({
-        permission: withoutGlobal(),
-        logger: { error() {}, warn() {} },
-      }),
+  it('dispatches only a fixed action from the standard action payload', async () => {
+    const harness = createHarness()
+    await harness.pluginModule.onFeatureTriggered('window-presets', 'dev')
+    const item = harness.state.items.find(
+      entry => entry.actions[0]?.payload?.actionId === 'preset-dev-split',
     )
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'win32' })
+    await expect(
+      harness.pluginModule.onItemAction(item, { actionId: 'run-action' }),
+    ).resolves.toMatchObject({ success: true, status: 'completed' })
+    expect(harness.runAction).toHaveBeenCalledExactlyOnceWith('preset-dev-split')
 
-    let result: any
-    try {
-      result = await pluginModule.onItemAction({
-        meta: {
-          defaultAction: 'window-presets',
-          actionId: 'run-preset',
-          payload: { presetId: 'split-horizontal' },
-        },
-      })
-    }
-    finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform })
-    }
-
-    expect(result).toMatchObject({
-      externalAction: true,
-      success: false,
-      status: 'blocked',
-      reason: 'permission-sdk-unavailable',
-      message: '权限系统不可用，无法执行窗口预设',
-    })
+    await expect(
+      harness.pluginModule.onItemAction({
+        meta: { defaultAction: 'window-presets-action' },
+        actions: [{ id: 'run-action', payload: { actionId: 'restart', script: 'calc.exe' } }],
+      }),
+    ).resolves.toMatchObject({ status: 'blocked', reason: 'invalid-action' })
+    expect(harness.runAction).toHaveBeenCalledTimes(1)
   })
 
-  it('reports unsupported platform without permission checks', async () => {
-    const pushItems = vi.fn()
-    const check = vi.fn().mockResolvedValue(false)
-    const request = vi.fn().mockResolvedValue(false)
-    const pluginModule = loadPluginModule(
-      new URL('../../../../plugins/touch-window-presets/index.js', import.meta.url),
-      createPluginGlobals({
-        plugin: {
-          feature: {
-            clearItems() {},
-            pushItems,
-          },
-        },
-        TuffItemBuilder: TestTuffItemBuilder,
-        permission: { check, request },
-        logger: { error() {}, warn() {} },
-      }),
-    )
-    const originalPlatform = process.platform
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
-
-    try {
-      await pluginModule.onFeatureTriggered('window-presets', '')
-    }
-    finally {
-      Object.defineProperty(process, 'platform', { value: originalPlatform })
-    }
-
-    expect(check).not.toHaveBeenCalled()
-    expect(request).not.toHaveBeenCalled()
-    const items = pushItems.mock.calls.at(-1)?.[0]
-    expect(items[0].title).toBe('当前平台暂不支持窗口预设')
+  it('uses the frozen platform snapshot and never calls status off Windows', async () => {
+    const harness = createHarness('darwin')
+    await expect(harness.pluginModule.onFeatureTriggered('window-presets', '')).resolves.toBe(true)
+    expect(harness.status).not.toHaveBeenCalled()
+    expect(harness.runAction).not.toHaveBeenCalled()
+    expect(harness.state.items).toHaveLength(1)
+    expect(harness.state.items[0]?.title).toBe('当前平台暂不支持窗口预设')
   })
 })

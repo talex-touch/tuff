@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import type { TxIconButtonProps } from './types'
+import { computed, getCurrentInstance, ref, useSlots } from 'vue'
 import TxIcon from '../../icon/src/TxIcon.vue'
 
 defineOptions({
@@ -7,15 +8,7 @@ defineOptions({
   inheritAttrs: false,
 })
 
-const props = withDefaults(defineProps<{
-  icon?: string
-  label?: string
-  size?: 'xs' | 'sm' | 'md' | 'lg'
-  shape?: 'square' | 'circle' | 'pill'
-  pressed?: boolean
-  disabled?: boolean
-  nativeType?: 'button' | 'submit' | 'reset'
-}>(), {
+const props = withDefaults(defineProps<TxIconButtonProps>(), {
   icon: '',
   label: '',
   size: 'md',
@@ -31,6 +24,14 @@ const emit = defineEmits<{
 const isHovered = ref(false)
 const ariaLabel = computed(() => props.label || undefined)
 const ariaPressed = computed(() => typeof props.pressed === 'boolean' ? props.pressed : undefined)
+
+// An icon-only button renders only an aria-hidden icon, so without a `label` or
+// default slot content it has no accessible name. Warn in dev (mirroring
+// TxFlatRadioItem) to enforce the documented "icon-only buttons need a label".
+const slots = useSlots()
+if (!props.label && !slots.default && getCurrentInstance()) {
+  console.warn('[TxIconButton] An icon-only button has no accessible name — pass a `label` prop or provide default slot content.')
+}
 
 function handleClick(event: MouseEvent) {
   if (props.disabled)

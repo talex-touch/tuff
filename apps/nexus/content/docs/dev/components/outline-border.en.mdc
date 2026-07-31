@@ -2,6 +2,8 @@
 title: "OutlineBorder"
 description: "Border and ring wrapper with optional clipping for avatars, thumbnails, badges, and custom slot content."
 category: Effects
+status: beta
+since: 1.0.0
 tags: [border, ring, clip, mask]
 syncStatus: reviewed
 verified: true
@@ -86,7 +88,8 @@ No component events.
 - Numeric `borderRadius`, `borderWidth`, `ringWidth`, `offset`, and `padding` values are converted to px.
 - `variant="border"` writes a real CSS border; ring variants use `box-shadow` and do not affect layout size.
 - `clipMode="overflow"` clips through `border-radius`; `clipPath` writes a CSS `clip-path`; `mask` writes an inline SVG mask data URI.
-- `clipShape="rounded"` and the default rectangular case resolve to `inset(0 round var(--tx-outline-radius))` for `clipPath`.
+- `clipShape="rounded"`, `"squircle"`, and the default rectangular case resolve to `inset(0 round var(--tx-outline-radius))` under `clipPath`; the true squircle shape only renders with `clipMode="mask"`.
+- `ring`/`border` outlines are drawn with `box-shadow`/CSS border and follow only `border-radius`; `clipShape` affects the content layer only, so the outline does not trace non-rounded shapes like `hexagon`/`squircle` (use a shaped `drop-shadow` filter if the outline must follow such a shape).
 - The component has no intrinsic size. The slotted content determines the final box.
 
 ## Best Practices

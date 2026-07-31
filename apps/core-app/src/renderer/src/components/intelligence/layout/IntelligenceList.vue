@@ -12,6 +12,8 @@ interface IntelligenceProviderConfig {
   name: string
   enabled: boolean
   apiKey?: string
+  authRef?: string
+  hasCredential?: boolean
   baseUrl?: string
   models?: string[]
   defaultModel?: string

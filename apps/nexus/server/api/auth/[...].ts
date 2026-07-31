@@ -9,9 +9,22 @@ import type { OAuthConfig } from 'next-auth/providers/oauth'
 import Credentials from 'next-auth/providers/credentials'
 import GitHub from 'next-auth/providers/github'
 import { createD1Adapter } from '../../utils/authAdapter'
-import { consumeLoginToken, getUserByAccount, getUserByEmail, logLoginAttempt, restorePendingDeletionIfWithinWindow, verifyUserPassword } from '../../utils/authStore'
+import {
+  consumeLoginToken,
+  getUserByAccount,
+  getUserByEmail,
+  logLoginAttempt,
+  restorePendingDeletionIfWithinWindow,
+  verifyUserPassword,
+} from '../../utils/authStore'
+import { readCloudflareBindings } from '../../utils/cloudflare'
 import { sendEmail } from '../../utils/email'
 import { normalizeAuthOrigin, shouldTrustForwardedAuthHost } from '../../utils/authOrigin'
+import {
+  assertRuntimeCredential,
+  isLocalDevelopmentRuntime,
+  selectRuntimeCredential,
+} from '../../utils/runtimeCredentialPolicy'
 
 const CredentialsProvider = (Credentials as any).default ?? Credentials
 const GitHubProvider = (GitHub as any).default ?? GitHub
@@ -40,23 +53,26 @@ function createEmailProvider(server: string, from: string) {
     from,
     maxAge: 24 * 60 * 60,
     async sendVerificationRequest({ identifier, url }: EmailVerificationRequestContext) {
-      await sendEmail({
-        to: identifier,
-        subject: 'Sign in to Tuff',
-        html: `<p>Click the link to sign in:</p><p><a href="${url}">${url}</a></p>`,
-        action: 'auth.email.magic_link',
-        resourceType: 'auth_session',
-      }, tryCreateAuthEvent())
+      await sendEmail(
+        {
+          to: identifier,
+          subject: 'Sign in to Tuff',
+          html: `<p>Click the link to sign in:</p><p><a href="${url}">${url}</a></p>`,
+          action: 'auth.email.magic_link',
+          resourceType: 'auth_session',
+        },
+        tryCreateAuthEvent(),
+      )
     },
   } as any
 }
 
-function resolveAuthHeaders(req?: { headers?: Headers | AuthRequestHeaders } | Request | null): AuthRequestHeaders | undefined {
-  if (!req)
-    return undefined
+function resolveAuthHeaders(
+  req?: { headers?: Headers | AuthRequestHeaders } | Request | null,
+): AuthRequestHeaders | undefined {
+  if (!req) return undefined
   const headers = 'headers' in req ? req.headers : undefined
-  if (!headers)
-    return undefined
+  if (!headers) return undefined
   if (headers instanceof Headers) {
     const record: AuthRequestHeaders = {}
     headers.forEach((value, key) => {
@@ -93,8 +109,7 @@ function createAuthEvent(headers?: AuthRequestHeaders): H3Event {
 function tryCreateAuthEvent(headers?: AuthRequestHeaders): H3Event | undefined {
   try {
     return createAuthEvent(headers)
-  }
-  catch {
+  } catch {
     return undefined
   }
 }
@@ -102,8 +117,7 @@ function tryCreateAuthEvent(headers?: AuthRequestHeaders): H3Event | undefined {
 function parseUrlWithBase(value: string, baseUrl: string) {
   try {
     return new URL(value, baseUrl)
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -112,43 +126,37 @@ function safeDecodeUriComponent(value: string) {
   try {
     const decoded = decodeURIComponent(value)
     return decoded === value ? null : decoded
-  }
-  catch {
+  } catch {
     return null
   }
 }
 
 function buildSignInErrorUrl(baseUrl: string, source: URL | null) {
   const signInUrl = new URL('/sign-in', baseUrl)
-  if (!source)
-    return signInUrl.toString()
+  if (!source) return signInUrl.toString()
 
   const error = source.searchParams.get('error')
   const description = source.searchParams.get('error_description')
-  if (error)
-    signInUrl.searchParams.set('error', error)
-  if (description)
-    signInUrl.searchParams.set('error_description', description)
+  if (error) signInUrl.searchParams.set('error', error)
+  if (description) signInUrl.searchParams.set('error_description', description)
   return signInUrl.toString()
 }
 
 function normalizeAuthFallbackUrl(url: string, baseUrl: string) {
   const base = parseUrlWithBase(baseUrl, baseUrl)
   const parsed = parseUrlWithBase(url, baseUrl)
-  if (!base || !parsed)
-    return url
-  if (parsed.origin !== base.origin)
-    return url
+  if (!base || !parsed) return url
+  if (parsed.origin !== base.origin) return url
 
   const callbackUrlRaw = parsed.searchParams.get('callbackUrl') ?? parsed.searchParams.get('callback_url')
-  if (parsed.pathname !== '/' || !callbackUrlRaw)
-    return parsed.toString()
+  if (parsed.pathname !== '/' || !callbackUrlRaw) return parsed.toString()
 
-  const callbackCandidates = [callbackUrlRaw, safeDecodeUriComponent(callbackUrlRaw)].filter((value): value is string => Boolean(value))
+  const callbackCandidates = [callbackUrlRaw, safeDecodeUriComponent(callbackUrlRaw)].filter((value): value is string =>
+    Boolean(value),
+  )
   for (const candidate of callbackCandidates) {
     const nested = parseUrlWithBase(candidate, baseUrl)
-    if (!nested || nested.origin !== base.origin)
-      continue
+    if (!nested || nested.origin !== base.origin) continue
 
     if (nested.pathname.startsWith('/sign-in') || nested.pathname.startsWith('/api/auth/signin'))
       return buildSignInErrorUrl(baseUrl, parsed)
@@ -162,10 +170,8 @@ function normalizeAuthFallbackUrl(url: string, baseUrl: string) {
 function normalizeAuthRedirectUrl(url: string, baseUrl: string) {
   const base = parseUrlWithBase(baseUrl, baseUrl)
   const parsed = parseUrlWithBase(url, baseUrl)
-  if (!base || !parsed)
-    return baseUrl
-  if (parsed.origin !== base.origin)
-    return baseUrl
+  if (!base || !parsed) return baseUrl
+  if (parsed.origin !== base.origin) return baseUrl
 
   return normalizeAuthFallbackUrl(parsed.toString(), baseUrl)
 }
@@ -176,8 +182,7 @@ function normalizeAuthResponseUrl(url: string, baseUrl: string) {
 
 function resolveAuthBaseUrl(event: H3Event) {
   const configuredOrigin = normalizeAuthOrigin(useRuntimeConfig().auth?.origin)
-  if (configuredOrigin && !shouldTrustForwardedAuthHost(configuredOrigin))
-    return configuredOrigin
+  if (configuredOrigin && !shouldTrustForwardedAuthHost(configuredOrigin)) return configuredOrigin
   return getRequestURL(event).origin
 }
 
@@ -215,7 +220,7 @@ async function normalizeAuthResponseResult(result: unknown, event: H3Event, base
 
     if (isSigninActionRequest(event) && isJsonResponse(normalizedResponse)) {
       try {
-        const payload = await normalizedResponse.clone().json() as Record<string, unknown>
+        const payload = (await normalizedResponse.clone().json()) as Record<string, unknown>
         const url = typeof payload?.url === 'string' ? payload.url : ''
         if (url) {
           const normalizedUrl = normalizeAuthResponseUrl(url, baseUrl)
@@ -230,8 +235,7 @@ async function normalizeAuthResponseResult(result: unknown, event: H3Event, base
             })
           }
         }
-      }
-      catch {
+      } catch {
         // Ignore JSON parse errors and keep original response.
       }
     }
@@ -239,30 +243,31 @@ async function normalizeAuthResponseResult(result: unknown, event: H3Event, base
     return normalizedResponse
   }
 
-  if (result && typeof result === 'object' && 'url' in result && typeof (result as { url?: unknown }).url === 'string') {
+  if (
+    result &&
+    typeof result === 'object' &&
+    'url' in result &&
+    typeof (result as { url?: unknown }).url === 'string'
+  ) {
     const currentUrl = (result as { url: string }).url
     const normalizedUrl = normalizeAuthResponseUrl(currentUrl, baseUrl)
-    if (normalizedUrl !== currentUrl)
-      return { ...(result as Record<string, unknown>), url: normalizedUrl }
+    if (normalizedUrl !== currentUrl) return { ...(result as Record<string, unknown>), url: normalizedUrl }
   }
 
   return result
 }
 
 function toRecord(value: unknown) {
-  if (value && typeof value === 'object')
-    return value as Record<string, unknown>
+  if (value && typeof value === 'object') return value as Record<string, unknown>
   return {}
 }
 
 async function parseOauthPayload(text: string) {
-  if (!text)
-    return {}
+  if (!text) return {}
 
   try {
     return toRecord(JSON.parse(text))
-  }
-  catch {
+  } catch {
     const params = new URLSearchParams(text)
     const payload: Record<string, string> = {}
     params.forEach((value, key) => {
@@ -277,8 +282,7 @@ function normalizeOauthTokenPayload(payload: Record<string, unknown>) {
   const expiresIn = normalized.expires_in
   if (typeof expiresIn === 'string') {
     const parsed = Number.parseInt(expiresIn, 10)
-    if (!Number.isNaN(parsed))
-      normalized.expires_in = parsed
+    if (!Number.isNaN(parsed)) normalized.expires_in = parsed
   }
 
   const scope = normalized.scope
@@ -304,20 +308,17 @@ function buildOauthTokenRequestBody(
   const paramsRecord = toRecord(params)
   const body = new URLSearchParams()
   const code = typeof paramsRecord.code === 'string' ? paramsRecord.code : ''
-  if (code)
-    body.set('code', code)
+  if (code) body.set('code', code)
 
   const checksRecord = toRecord(checks)
   const codeVerifierFromParams = typeof paramsRecord.code_verifier === 'string' ? paramsRecord.code_verifier : ''
   const codeVerifierFromChecks = typeof checksRecord.code_verifier === 'string' ? checksRecord.code_verifier : ''
   const codeVerifier = codeVerifierFromParams || codeVerifierFromChecks
-  if (codeVerifier)
-    body.set('code_verifier', codeVerifier)
+  if (codeVerifier) body.set('code_verifier', codeVerifier)
 
   const redirectUriFromParams = typeof paramsRecord.redirect_uri === 'string' ? paramsRecord.redirect_uri : ''
   const redirectUri = redirectUriFromParams || callbackUrl
-  if (includeRedirectUri && redirectUri)
-    body.set('redirect_uri', redirectUri)
+  if (includeRedirectUri && redirectUri) body.set('redirect_uri', redirectUri)
 
   const grantType = typeof paramsRecord.grant_type === 'string' ? paramsRecord.grant_type : 'authorization_code'
   body.set('grant_type', grantType)
@@ -363,7 +364,7 @@ async function requestOauthTokenByFetch(input: {
     },
     body: requestBody.toString(),
     responseType: 'text',
-    validateStatus: ALL_HTTP_STATUS
+    validateStatus: ALL_HTTP_STATUS,
   })
 
   const payload = normalizeOauthTokenPayload(await parseOauthPayload(response.data))
@@ -392,7 +393,7 @@ async function requestOauthProfileByFetch(input: {
       authorization: `Bearer ${input.accessToken}`,
       ...input.headers,
     },
-    validateStatus: ALL_HTTP_STATUS
+    validateStatus: ALL_HTTP_STATUS,
   })
 
   const payload = toRecord(response.data)
@@ -409,8 +410,7 @@ function applyNextAuthOriginFallback(configuredOrigin: string, trustForwardedHos
     return
   }
 
-  if (!process.env.NEXTAUTH_URL)
-    process.env.AUTH_TRUST_HOST = 'true'
+  if (!process.env.NEXTAUTH_URL) process.env.AUTH_TRUST_HOST = 'true'
 }
 
 async function restoreForInteractiveSignIn(authEvent: H3Event, userId: string) {
@@ -418,7 +418,19 @@ async function restoreForInteractiveSignIn(authEvent: H3Event, userId: string) {
   return user?.status === 'active' ? user : null
 }
 
-function getAuthOptions(): AuthOptions {
+function resolveSessionAuthSecret(event: H3Event) {
+  const config = useRuntimeConfig(event)
+  const bindings = readCloudflareBindings(event)
+  const secret = selectRuntimeCredential(bindings, bindings?.AUTH_SECRET, [
+    config.auth?.secret,
+    process.env.AUTH_SECRET,
+  ])
+  return assertRuntimeCredential('AUTH_SECRET', secret, {
+    localDevelopment: isLocalDevelopmentRuntime(bindings?.NEXUS_LOCAL_PAGES_PREVIEW, bindings),
+  })
+}
+
+function getAuthOptions(authSecret: string): AuthOptions {
   const config = useRuntimeConfig()
   const configuredOrigin = normalizeAuthOrigin(config.auth?.origin)
   const trustForwardedHost = shouldTrustForwardedAuthHost(configuredOrigin)
@@ -433,9 +445,12 @@ function getAuthOptions(): AuthOptions {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
-        loginToken: { label: 'Login Token', type: 'text' }
+        loginToken: { label: 'Login Token', type: 'text' },
       },
-      async authorize(credentials: Record<string, unknown> | undefined, req: { headers?: Headers | AuthRequestHeaders } | Request | null) {
+      async authorize(
+        credentials: Record<string, unknown> | undefined,
+        req: { headers?: Headers | AuthRequestHeaders } | Request | null,
+      ) {
         const authEvent = createAuthEvent(resolveAuthHeaders(req))
         const email = credentials?.email?.toString().trim().toLowerCase() ?? ''
         const password = credentials?.password?.toString() ?? ''
@@ -448,12 +463,24 @@ function getAuthOptions(): AuthOptions {
             if (activeUser)
               return { id: activeUser.id, email: activeUser.email, name: activeUser.name, image: activeUser.image }
           }
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'login_token_invalid', clientType: 'web' })
+          await logLoginAttempt(authEvent, {
+            userId: null,
+            deviceId: null,
+            success: false,
+            reason: 'login_token_invalid',
+            clientType: 'web',
+          })
           return null
         }
 
         if (!email || !password) {
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'missing_credentials', clientType: 'web' })
+          await logLoginAttempt(authEvent, {
+            userId: null,
+            deviceId: null,
+            success: false,
+            reason: 'missing_credentials',
+            clientType: 'web',
+          })
           return null
         }
 
@@ -471,100 +498,110 @@ function getAuthOptions(): AuthOptions {
         }
         const activeUser = await restoreForInteractiveSignIn(authEvent, user.id)
         if (!activeUser) {
-          await logLoginAttempt(authEvent, { userId: null, deviceId: null, success: false, reason: 'account_deletion_pending', clientType: 'web' })
+          await logLoginAttempt(authEvent, {
+            userId: null,
+            deviceId: null,
+            success: false,
+            reason: 'account_deletion_pending',
+            clientType: 'web',
+          })
           return null
         }
-        await logLoginAttempt(authEvent, { userId: activeUser.id, deviceId: null, success: true, reason: 'password', clientType: 'web' })
+        await logLoginAttempt(authEvent, {
+          userId: activeUser.id,
+          deviceId: null,
+          success: true,
+          reason: 'password',
+          clientType: 'web',
+        })
         return { id: activeUser.id, email: activeUser.email, name: activeUser.name, image: activeUser.image }
-      }
+      },
     }),
   ]
 
   const githubClientId = config.auth?.github?.clientId
   const githubClientSecret = config.auth?.github?.clientSecret
   if (githubClientId && githubClientSecret) {
-    providers.push(GitHubProvider({
-      clientId: githubClientId,
-      clientSecret: githubClientSecret,
-      allowDangerousEmailAccountLinking: true,
-      token: {
-        async request(context: OAuthTokenRequestContext) {
-          const tokens = await requestOauthTokenByFetch({
-            tokenUrl: 'https://github.com/login/oauth/access_token',
-            callbackUrl: context.provider.callbackUrl,
-            clientId: githubClientId,
-            clientSecret: githubClientSecret,
-            params: context.params,
-            checks: context.checks,
-            headers: {
-              accept: 'application/json',
-            },
-            providerName: 'github',
-            includeRedirectUri: false,
-          })
-          return { tokens }
-        },
-      },
-      userinfo: {
-        async request(context: OAuthUserInfoRequestContext) {
-          const accessToken = typeof context.tokens.access_token === 'string'
-            ? context.tokens.access_token
-            : ''
-          if (!accessToken)
-            throw new Error('github_userinfo_failed: missing_access_token')
-
-          const headers = {
-            accept: 'application/vnd.github+json',
-            'user-agent': 'tuff-nexus-auth',
-          }
-          const profile = await requestOauthProfileByFetch({
-            userInfoUrl: 'https://api.github.com/user',
-            accessToken,
-            providerName: 'github',
-            headers,
-          })
-
-          if (!profile.email) {
-            const emailResponse = await networkClient.request<Array<Record<string, unknown>>>({
-              method: 'GET',
-              url: 'https://api.github.com/user/emails',
+    providers.push(
+      GitHubProvider({
+        clientId: githubClientId,
+        clientSecret: githubClientSecret,
+        allowDangerousEmailAccountLinking: true,
+        token: {
+          async request(context: OAuthTokenRequestContext) {
+            const tokens = await requestOauthTokenByFetch({
+              tokenUrl: 'https://github.com/login/oauth/access_token',
+              callbackUrl: context.provider.callbackUrl,
+              clientId: githubClientId,
+              clientSecret: githubClientSecret,
+              params: context.params,
+              checks: context.checks,
               headers: {
-                ...headers,
-                authorization: `Bearer ${accessToken}`,
+                accept: 'application/json',
               },
-              validateStatus: ALL_HTTP_STATUS
+              providerName: 'github',
+              includeRedirectUri: false,
+            })
+            return { tokens }
+          },
+        },
+        userinfo: {
+          async request(context: OAuthUserInfoRequestContext) {
+            const accessToken = typeof context.tokens.access_token === 'string' ? context.tokens.access_token : ''
+            if (!accessToken) throw new Error('github_userinfo_failed: missing_access_token')
+
+            const headers = {
+              accept: 'application/vnd.github+json',
+              'user-agent': 'tuff-nexus-auth',
+            }
+            const profile = await requestOauthProfileByFetch({
+              userInfoUrl: 'https://api.github.com/user',
+              accessToken,
+              providerName: 'github',
+              headers,
             })
 
-            if (emailResponse.status >= 200 && emailResponse.status < 300) {
-              const emails = Array.isArray(emailResponse.data) ? emailResponse.data : []
-              if (Array.isArray(emails)) {
-                const primary = emails.find((item) => {
-                  return item
-                    && typeof item.email === 'string'
-                    && item.email.length > 0
-                    && item.verified === true
-                    && item.primary === true
-                }) ?? emails.find((item) => {
-                  return item
-                    && typeof item.email === 'string'
-                    && item.email.length > 0
-                    && item.verified === true
-                }) ?? emails.find((item) => {
-                  return item
-                    && typeof item.email === 'string'
-                    && item.email.length > 0
-                })
+            if (!profile.email) {
+              const emailResponse = await networkClient.request<Array<Record<string, unknown>>>({
+                method: 'GET',
+                url: 'https://api.github.com/user/emails',
+                headers: {
+                  ...headers,
+                  authorization: `Bearer ${accessToken}`,
+                },
+                validateStatus: ALL_HTTP_STATUS,
+              })
 
-                if (primary && typeof primary.email === 'string')
-                  profile.email = primary.email
+              if (emailResponse.status >= 200 && emailResponse.status < 300) {
+                const emails = Array.isArray(emailResponse.data) ? emailResponse.data : []
+                if (Array.isArray(emails)) {
+                  const primary =
+                    emails.find(item => {
+                      return (
+                        item &&
+                        typeof item.email === 'string' &&
+                        item.email.length > 0 &&
+                        item.verified === true &&
+                        item.primary === true
+                      )
+                    }) ??
+                    emails.find(item => {
+                      return item && typeof item.email === 'string' && item.email.length > 0 && item.verified === true
+                    }) ??
+                    emails.find(item => {
+                      return item && typeof item.email === 'string' && item.email.length > 0
+                    })
+
+                  if (primary && typeof primary.email === 'string') profile.email = primary.email
+                }
               }
             }
-          }
 
-          return profile
+            return profile
+          },
         },
-      },
-    }))
+      }),
+    )
   }
 
   if (linuxdoClientId && linuxdoClientSecret) {
@@ -602,11 +639,8 @@ function getAuthOptions(): AuthOptions {
       userinfo: {
         url: `${linuxdoIssuer}/api/user`,
         async request(context: OAuthUserInfoRequestContext) {
-          const accessToken = typeof context.tokens.access_token === 'string'
-            ? context.tokens.access_token
-            : ''
-          if (!accessToken)
-            throw new Error('linuxdo_userinfo_failed: missing_access_token')
+          const accessToken = typeof context.tokens.access_token === 'string' ? context.tokens.access_token : ''
+          if (!accessToken) throw new Error('linuxdo_userinfo_failed: missing_access_token')
 
           return await requestOauthProfileByFetch({
             userInfoUrl: `${linuxdoIssuer}/api/user`,
@@ -618,9 +652,8 @@ function getAuthOptions(): AuthOptions {
       idToken: false,
       profile(profile: Record<string, any>) {
         const id = profile.sub ?? profile.id ?? profile.user_id ?? profile.uid
-        const avatarTemplate = typeof profile.avatar_template === 'string'
-          ? profile.avatar_template.replace('{size}', '128')
-          : null
+        const avatarTemplate =
+          typeof profile.avatar_template === 'string' ? profile.avatar_template.replace('{size}', '128') : null
         const image = profile.avatar_url ?? avatarTemplate ?? profile.avatar ?? profile.picture ?? null
         return {
           id: id ? String(id) : '',
@@ -628,7 +661,7 @@ function getAuthOptions(): AuthOptions {
           email: profile.email ?? null,
           image,
         }
-      }
+      },
     }
     providers.push(linuxdoProvider as any)
   }
@@ -640,7 +673,7 @@ function getAuthOptions(): AuthOptions {
   }
 
   return {
-    secret: config.auth?.secret,
+    secret: authSecret,
     session: { strategy: 'jwt' },
     adapter: createD1Adapter(createRequestAuthEvent) as AuthOptions['adapter'],
     pages: {
@@ -650,41 +683,34 @@ function getAuthOptions(): AuthOptions {
     },
     providers,
     callbacks: {
-      async redirect({ url, baseUrl }: { url: string, baseUrl: string }) {
+      async redirect({ url, baseUrl }: { url: string; baseUrl: string }) {
         return normalizeAuthRedirectUrl(url, baseUrl)
       },
-      async signIn({ user, account, profile }: { user: User, account: Account | null, profile?: Profile | undefined }) {
+      async signIn({ user, account, profile }: { user: User; account: Account | null; profile?: Profile | undefined }) {
         const authEvent = createRequestAuthEvent()
-        if (!account)
-          return false
-        if (account.provider === 'credentials')
-          return true
+        if (!account) return false
+        if (account.provider === 'credentials') return true
         if (account.type === 'oauth') {
           if (account.provider && account.providerAccountId) {
             const existingByAccount = await getUserByAccount(authEvent, account.provider, account.providerAccountId)
-            if (existingByAccount)
-              return Boolean(await restoreForInteractiveSignIn(authEvent, existingByAccount.id))
+            if (existingByAccount) return Boolean(await restoreForInteractiveSignIn(authEvent, existingByAccount.id))
           }
           const email = user?.email ?? (profile as any)?.email
-          if (!email)
-            return true
+          if (!email) return true
           const existing = await getUserByEmail(authEvent, email)
-          if (!existing)
-            return true
+          if (!existing) return true
           return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         if (account.provider === 'email') {
           const email = user?.email
-          if (!email)
-            return false
+          if (!email) return false
           const existing = await getUserByEmail(authEvent, email)
-          if (!existing)
-            return false
+          if (!existing) return false
           return Boolean(await restoreForInteractiveSignIn(authEvent, existing.id))
         }
         return true
       },
-      async jwt({ token, user }: { token: JWT, user?: User | null }) {
+      async jwt({ token, user }: { token: JWT; user?: User | null }) {
         if (user) {
           token.userId = (user as { id?: string }).id
         }
@@ -693,10 +719,8 @@ function getAuthOptions(): AuthOptions {
         }
         return token
       },
-      async session({ session, token }: { session: Session, token: JWT }) {
-        const issuedAt = typeof (token as { iat?: unknown }).iat === 'number'
-          ? (token as { iat: number }).iat
-          : null
+      async session({ session, token }: { session: Session; token: JWT }) {
+        const issuedAt = typeof (token as { iat?: unknown }).iat === 'number' ? (token as { iat: number }).iat : null
         ;(session as { issuedAt?: number | null }).issuedAt = issuedAt
         if (session.user) {
           const resolvedUserId =
@@ -707,24 +731,21 @@ function getAuthOptions(): AuthOptions {
                 : ''
           if (resolvedUserId) {
             ;(session.user as { id?: string }).id = resolvedUserId
-          }
-          else if (process.env.NUXT_AUTH_DEBUG === 'true') {
+          } else if (process.env.NUXT_AUTH_DEBUG === 'true') {
             console.info('[auth][session-callback] missing user id in token', {
               hasTokenUserId: Boolean(token.userId),
-              hasTokenSub: Boolean(token.sub)
+              hasTokenSub: Boolean(token.sub),
             })
           }
         }
         return session
-      }
+      },
     },
     events: {
-      async signIn({ user, account }: { user: User, account: Account | null }) {
-        if (!account || account.provider === 'credentials')
-          return
+      async signIn({ user, account }: { user: User; account: Account | null }) {
+        if (!account || account.provider === 'credentials') return
         const userId = (user as { id?: unknown }).id
-        if (typeof userId !== 'string' || !userId)
-          return
+        if (typeof userId !== 'string' || !userId) return
         await logLoginAttempt(createRequestAuthEvent(), {
           userId,
           deviceId: null,
@@ -748,11 +769,9 @@ const SESSION_COOKIE_NAMES = [
 
 function isJwtSessionError(error: unknown) {
   if (error instanceof Error) {
-    return error.message.includes('JWT_SESSION_ERROR')
-      || error.message.includes('decryption operation failed')
+    return error.message.includes('JWT_SESSION_ERROR') || error.message.includes('decryption operation failed')
   }
-  return String(error).includes('JWT_SESSION_ERROR')
-    || String(error).includes('decryption operation failed')
+  return String(error).includes('JWT_SESSION_ERROR') || String(error).includes('decryption operation failed')
 }
 
 function isSessionRequest(event: H3Event) {
@@ -761,7 +780,7 @@ function isSessionRequest(event: H3Event) {
 }
 
 function clearAuthCookies(event: H3Event) {
-  SESSION_COOKIE_NAMES.forEach((name) => {
+  SESSION_COOKIE_NAMES.forEach(name => {
     const secure = name.startsWith('__Secure-') || name.startsWith('__Host-')
     setCookie(event, name, '', {
       path: '/',
@@ -783,19 +802,18 @@ function markSessionError(event: H3Event) {
 
 let cachedAuthHandler: ReturnType<typeof NuxtAuthHandler> | null = null
 
-function getCachedAuthHandler() {
-  cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions())
+function getCachedAuthHandler(event: H3Event) {
+  cachedAuthHandler ??= NuxtAuthHandler(getAuthOptions(resolveSessionAuthSecret(event)))
   return cachedAuthHandler
 }
 
-export default defineEventHandler(async (event) => {
+export default defineEventHandler(async event => {
   const baseUrl = resolveAuthBaseUrl(event)
-  const authHandler = getCachedAuthHandler()
+  const authHandler = getCachedAuthHandler(event)
   try {
     const result = await authHandler(event)
     return await normalizeAuthResponseResult(result, event, baseUrl)
-  }
-  catch (error) {
+  } catch (error) {
     if (isJwtSessionError(error) && isSessionRequest(event)) {
       clearAuthCookies(event)
       markSessionError(event)

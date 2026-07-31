@@ -75,8 +75,12 @@ export class FlowBus {
   async dispatch(
     senderId: string,
     payload: FlowPayload,
-    options: FlowDispatchOptions = {}
+    options: FlowDispatchOptions = {},
+    signal?: AbortSignal
   ): Promise<FlowDispatchResult> {
+    if (signal?.aborted) {
+      return { sessionId: '', state: 'CANCELLED' }
+    }
     // Validate payload
     const validationError = this.validatePayload(payload)
     if (validationError) {
@@ -122,42 +126,22 @@ export class FlowBus {
       payload
     )
 
-    // If no target specified, need user selection
-    if (!targetInfo) {
-      flowSessionManager.updateState(session.sessionId, 'TARGET_SELECTING')
+    const abortDispatch = (): void => {
+      this.cancel(session.sessionId)
+    }
+    signal?.addEventListener('abort', abortDispatch, { once: true })
 
-      if (options.skipSelector) {
-        flowSessionManager.setError(session.sessionId, {
-          code: FlowErrorCode.TARGET_NOT_FOUND,
-          message: 'No target specified and selector skipped'
-        })
-        return {
-          sessionId: session.sessionId,
-          state: 'FAILED',
-          error: session.error
-        }
-      }
+    try {
+      if (signal?.aborted) return { sessionId: session.sessionId, state: 'CANCELLED' }
 
-      // Wait for user selection (will be resolved by UI)
-      try {
-        const selectedTargetId = await this.waitForTargetSelection(
-          session.sessionId,
-          options.timeout ?? flowSessionManager.getDefaultTimeout()
-        )
+      // If no target specified, need user selection
+      if (!targetInfo) {
+        flowSessionManager.updateState(session.sessionId, 'TARGET_SELECTING')
 
-        if (!selectedTargetId) {
-          flowSessionManager.cancel(session.sessionId)
-          return {
-            sessionId: session.sessionId,
-            state: 'CANCELLED'
-          }
-        }
-
-        targetInfo = flowTargetRegistry.getTarget(selectedTargetId) ?? null
-        if (!targetInfo) {
+        if (options.skipSelector) {
           flowSessionManager.setError(session.sessionId, {
             code: FlowErrorCode.TARGET_NOT_FOUND,
-            message: `Selected target not found: ${selectedTargetId}`
+            message: 'No target specified and selector skipped'
           })
           return {
             sessionId: session.sessionId,
@@ -165,10 +149,73 @@ export class FlowBus {
             error: session.error
           }
         }
-      } catch (error) {
+
+        // Wait for user selection (will be resolved by UI)
+        try {
+          const selectedTargetId = await this.waitForTargetSelection(
+            session.sessionId,
+            options.timeout ?? flowSessionManager.getDefaultTimeout()
+          )
+
+          if (!selectedTargetId) {
+            flowSessionManager.cancel(session.sessionId)
+            return {
+              sessionId: session.sessionId,
+              state: 'CANCELLED'
+            }
+          }
+
+          targetInfo = flowTargetRegistry.getTarget(selectedTargetId) ?? null
+          if (!targetInfo) {
+            flowSessionManager.setError(session.sessionId, {
+              code: FlowErrorCode.TARGET_NOT_FOUND,
+              message: `Selected target not found: ${selectedTargetId}`
+            })
+            return {
+              sessionId: session.sessionId,
+              state: 'FAILED',
+              error: session.error
+            }
+          }
+        } catch (error) {
+          const flowError: FlowError = {
+            code: FlowErrorCode.TIMEOUT,
+            message: error instanceof Error ? error.message : 'Target selection timeout'
+          }
+          flowSessionManager.setError(session.sessionId, flowError)
+          return {
+            sessionId: session.sessionId,
+            state: 'FAILED',
+            error: flowError
+          }
+        }
+      }
+
+      // Update session with target info
+      const updatedSession = flowSessionManager.getSession(session.sessionId)!
+      updatedSession.targetPluginId = targetInfo.pluginId
+      updatedSession.targetId = targetInfo.id
+      updatedSession.fullTargetId = targetInfo.fullId
+
+      flowSessionManager.updateState(session.sessionId, 'TARGET_SELECTED')
+
+      // Validate target supports payload type
+      if (!targetInfo.supportedTypes.includes(payload.type)) {
+        flowSessionManager.setError(session.sessionId, {
+          code: FlowErrorCode.TYPE_NOT_SUPPORTED,
+          message: `Target does not support payload type: ${payload.type}`
+        })
+        return {
+          sessionId: session.sessionId,
+          state: 'FAILED',
+          error: updatedSession.error
+        }
+      }
+
+      if (!targetInfo.hasFlowHandler) {
         const flowError: FlowError = {
-          code: FlowErrorCode.TIMEOUT,
-          message: error instanceof Error ? error.message : 'Target selection timeout'
+          code: FlowErrorCode.TARGET_OFFLINE,
+          message: `Target has not registered a Flow delivery handler: ${targetInfo.fullId}`
         }
         flowSessionManager.setError(session.sessionId, flowError)
         return {
@@ -177,192 +224,162 @@ export class FlowBus {
           error: flowError
         }
       }
-    }
 
-    // Update session with target info
-    const updatedSession = flowSessionManager.getSession(session.sessionId)!
-    updatedSession.targetPluginId = targetInfo.pluginId
-    updatedSession.targetId = targetInfo.id
-    updatedSession.fullTargetId = targetInfo.fullId
-
-    flowSessionManager.updateState(session.sessionId, 'TARGET_SELECTED')
-
-    // Validate target supports payload type
-    if (!targetInfo.supportedTypes.includes(payload.type)) {
-      flowSessionManager.setError(session.sessionId, {
-        code: FlowErrorCode.TYPE_NOT_SUPPORTED,
-        message: `Target does not support payload type: ${payload.type}`
-      })
-      return {
-        sessionId: session.sessionId,
-        state: 'FAILED',
-        error: updatedSession.error
-      }
-    }
-
-    if (!targetInfo.hasFlowHandler) {
-      const flowError: FlowError = {
-        code: FlowErrorCode.TARGET_OFFLINE,
-        message: `Target has not registered a Flow delivery handler: ${targetInfo.fullId}`
-      }
-      flowSessionManager.setError(session.sessionId, flowError)
-      return {
-        sessionId: session.sessionId,
-        state: 'FAILED',
-        error: flowError
-      }
-    }
-
-    // Check sender whitelist
-    if (targetInfo.capabilities?.allowedSenders?.length) {
-      if (!targetInfo.capabilities.allowedSenders.includes(senderId)) {
-        flowSessionManager.setError(session.sessionId, {
-          code: FlowErrorCode.PERMISSION_DENIED,
-          message: `Sender not allowed: ${senderId}`
-        })
-        return {
-          sessionId: session.sessionId,
-          state: 'FAILED',
-          error: updatedSession.error
+      // Check sender whitelist
+      if (targetInfo.capabilities?.allowedSenders?.length) {
+        if (!targetInfo.capabilities.allowedSenders.includes(senderId)) {
+          flowSessionManager.setError(session.sessionId, {
+            code: FlowErrorCode.PERMISSION_DENIED,
+            message: `Sender not allowed: ${senderId}`
+          })
+          return {
+            sessionId: session.sessionId,
+            state: 'FAILED',
+            error: updatedSession.error
+          }
         }
       }
-    }
 
-    const consentToken = options.consentToken
-    if (requiresFlowConsent(senderId, targetInfo)) {
-      const hasConsent = flowConsentStore.hasConsent(senderId, targetInfo.fullId)
-      const allowOnce = consentToken
-        ? flowConsentStore.consumeOnce(senderId, targetInfo.fullId, consentToken)
-        : false
-      if (!hasConsent && !allowOnce) {
-        flowSessionManager.setError(session.sessionId, {
-          code: FlowErrorCode.PERMISSION_DENIED,
-          message: 'Flow consent required',
-          details: {
+      const consentToken = options.consentToken
+      if (requiresFlowConsent(senderId, targetInfo)) {
+        const hasConsent = flowConsentStore.hasConsent(senderId, targetInfo.fullId)
+        const allowOnce = consentToken
+          ? flowConsentStore.consumeOnce(senderId, targetInfo.fullId, consentToken)
+          : false
+        if (!hasConsent && !allowOnce) {
+          flowSessionManager.setError(session.sessionId, {
+            code: FlowErrorCode.PERMISSION_DENIED,
+            message: 'Flow consent required',
+            details: {
+              senderId,
+              targetId: targetInfo.fullId
+            }
+          })
+          return {
+            sessionId: session.sessionId,
+            state: 'FAILED',
+            error: flowSessionManager.getSession(session.sessionId)?.error
+          }
+        }
+      }
+
+      if (targetInfo.requireConfirm) {
+        const confirmed = options.confirmationToken
+          ? flowConsentStore.consumeConfirmationOnce(
+              senderId,
+              targetInfo.fullId,
+              options.confirmationToken
+            )
+          : false
+        if (!confirmed) {
+          flowSessionManager.setError(session.sessionId, {
+            code: FlowErrorCode.PERMISSION_DENIED,
+            message: 'Flow target confirmation required',
+            details: {
+              senderId,
+              targetId: targetInfo.fullId,
+              reason: 'flow-confirmation-required'
+            }
+          })
+          return {
+            sessionId: session.sessionId,
+            state: 'FAILED',
+            error: flowSessionManager.getSession(session.sessionId)?.error
+          }
+        }
+      }
+
+      // Deliver payload
+      if (signal?.aborted) return { sessionId: session.sessionId, state: 'CANCELLED' }
+      flowSessionManager.updateState(session.sessionId, 'DELIVERING')
+
+      try {
+        await this.deliverPayload(updatedSession, targetInfo)
+        if (signal?.aborted) return { sessionId: session.sessionId, state: 'CANCELLED' }
+        const deliveredSession = flowSessionManager.getSession(session.sessionId)
+        if (deliveredSession?.state === 'ACKED') {
+          flowTargetRegistry.recordUsage(targetInfo.fullId)
+          void flowAuditLogger.logSessionComplete(deliveredSession)
+          return {
+            sessionId: session.sessionId,
+            state: 'ACKED',
+            ackPayload: deliveredSession.ackPayload
+          }
+        }
+
+        flowSessionManager.updateState(session.sessionId, 'DELIVERED')
+
+        // Record usage
+        flowTargetRegistry.recordUsage(targetInfo.fullId)
+
+        // Audit log for successful delivery
+        void flowAuditLogger.logSessionComplete({
+          ...updatedSession,
+          state: 'DELIVERED',
+          updatedAt: Date.now()
+        })
+
+        // Wait for acknowledgment if required
+        if (options.requireAck) {
+          flowSessionManager.updateState(session.sessionId, 'PROCESSING')
+
+          const finalSession = await this.waitForAcknowledgment(
+            session.sessionId,
+            options.timeout ?? flowSessionManager.getDefaultTimeout()
+          )
+
+          // Audit log for final state after ack
+          void flowAuditLogger.logSessionComplete(finalSession)
+
+          return {
+            sessionId: session.sessionId,
+            state: finalSession.state,
+            ackPayload: finalSession.ackPayload,
+            error: finalSession.error
+          }
+        }
+
+        return {
+          sessionId: session.sessionId,
+          state: 'DELIVERED'
+        }
+      } catch (error) {
+        const flowError: FlowError = {
+          code: FlowErrorCode.INTERNAL_ERROR,
+          message: error instanceof Error ? error.message : 'Delivery failed'
+        }
+        flowSessionManager.setError(session.sessionId, flowError)
+
+        // Audit log for failed delivery
+        void flowAuditLogger.logSessionComplete({
+          ...updatedSession,
+          state: 'FAILED',
+          error: flowError,
+          updatedAt: Date.now()
+        })
+
+        // Execute fallback if specified
+        if (options.fallbackAction === 'copy') {
+          await this.executeFallbackCopy(payload)
+        }
+
+        flowBusDispatchLog.error('Payload delivery failed', {
+          meta: {
+            sessionId: session.sessionId,
             senderId,
             targetId: targetInfo.fullId
-          }
+          },
+          error
         })
+
         return {
           sessionId: session.sessionId,
           state: 'FAILED',
-          error: flowSessionManager.getSession(session.sessionId)?.error
+          error: flowError
         }
       }
-    }
-
-    if (targetInfo.requireConfirm) {
-      const confirmed = options.confirmationToken
-        ? flowConsentStore.consumeConfirmationOnce(
-            senderId,
-            targetInfo.fullId,
-            options.confirmationToken
-          )
-        : false
-      if (!confirmed) {
-        flowSessionManager.setError(session.sessionId, {
-          code: FlowErrorCode.PERMISSION_DENIED,
-          message: 'Flow target confirmation required',
-          details: {
-            senderId,
-            targetId: targetInfo.fullId,
-            reason: 'flow-confirmation-required'
-          }
-        })
-        return {
-          sessionId: session.sessionId,
-          state: 'FAILED',
-          error: flowSessionManager.getSession(session.sessionId)?.error
-        }
-      }
-    }
-
-    // Deliver payload
-    flowSessionManager.updateState(session.sessionId, 'DELIVERING')
-
-    try {
-      await this.deliverPayload(updatedSession, targetInfo)
-      const deliveredSession = flowSessionManager.getSession(session.sessionId)
-      if (deliveredSession?.state === 'ACKED') {
-        flowTargetRegistry.recordUsage(targetInfo.fullId)
-        void flowAuditLogger.logSessionComplete(deliveredSession)
-        return {
-          sessionId: session.sessionId,
-          state: 'ACKED',
-          ackPayload: deliveredSession.ackPayload
-        }
-      }
-
-      flowSessionManager.updateState(session.sessionId, 'DELIVERED')
-
-      // Record usage
-      flowTargetRegistry.recordUsage(targetInfo.fullId)
-
-      // Audit log for successful delivery
-      void flowAuditLogger.logSessionComplete({
-        ...updatedSession,
-        state: 'DELIVERED',
-        updatedAt: Date.now()
-      })
-
-      // Wait for acknowledgment if required
-      if (options.requireAck) {
-        flowSessionManager.updateState(session.sessionId, 'PROCESSING')
-
-        const finalSession = await this.waitForAcknowledgment(
-          session.sessionId,
-          options.timeout ?? flowSessionManager.getDefaultTimeout()
-        )
-
-        // Audit log for final state after ack
-        void flowAuditLogger.logSessionComplete(finalSession)
-
-        return {
-          sessionId: session.sessionId,
-          state: finalSession.state,
-          ackPayload: finalSession.ackPayload,
-          error: finalSession.error
-        }
-      }
-
-      return {
-        sessionId: session.sessionId,
-        state: 'DELIVERED'
-      }
-    } catch (error) {
-      const flowError: FlowError = {
-        code: FlowErrorCode.INTERNAL_ERROR,
-        message: error instanceof Error ? error.message : 'Delivery failed'
-      }
-      flowSessionManager.setError(session.sessionId, flowError)
-
-      // Audit log for failed delivery
-      void flowAuditLogger.logSessionComplete({
-        ...updatedSession,
-        state: 'FAILED',
-        error: flowError,
-        updatedAt: Date.now()
-      })
-
-      // Execute fallback if specified
-      if (options.fallbackAction === 'copy') {
-        await this.executeFallbackCopy(payload)
-      }
-
-      flowBusDispatchLog.error('Payload delivery failed', {
-        meta: {
-          sessionId: session.sessionId,
-          senderId,
-          targetId: targetInfo.fullId
-        },
-        error
-      })
-
-      return {
-        sessionId: session.sessionId,
-        state: 'FAILED',
-        error: flowError
-      }
+    } finally {
+      signal?.removeEventListener('abort', abortDispatch)
     }
   }
 

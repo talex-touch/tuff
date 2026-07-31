@@ -89,6 +89,60 @@ import { IntelligenceProvider } from './runtime/base-provider'
 const intelligenceLog = createLogger('Intelligence')
 const formatLogMessage = (...args: unknown[]) => format(...args)
 
+class IntelligenceOperationCancelledError extends Error {
+  readonly code = 'INTELLIGENCE_OPERATION_CANCELLED' as const
+
+  constructor() {
+    super('INTELLIGENCE_OPERATION_CANCELLED')
+    this.name = 'IntelligenceOperationCancelledError'
+  }
+}
+
+function throwIfIntelligenceCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new IntelligenceOperationCancelledError()
+}
+
+async function awaitIntelligenceBoundary<T>(
+  operation: Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  throwIfIntelligenceCancelled(signal)
+  if (!signal) return operation
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const finish = (callback: () => void): void => {
+      if (settled) return
+      settled = true
+      signal.removeEventListener('abort', onAbort)
+      callback()
+    }
+    const onAbort = (): void => {
+      finish(() => reject(new IntelligenceOperationCancelledError()))
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true })
+    operation.then(
+      (value) => {
+        finish(() => {
+          if (signal.aborted) reject(new IntelligenceOperationCancelledError())
+          else resolve(value)
+        })
+      },
+      (error) => {
+        finish(() => {
+          if (signal.aborted) reject(new IntelligenceOperationCancelledError())
+          else reject(error)
+        })
+      }
+    )
+  })
+}
+
+type HostIntelligenceInvokeOptions = IntelligenceInvokeOptions & {
+  readonly signal?: AbortSignal
+}
+
 function isNetworkCooldownError(error: unknown): error is Error & { retryAfterMs?: number } {
   if (error instanceof NetworkCooldownError) {
     return true
@@ -136,6 +190,20 @@ function logError(...args: unknown[]) {
 const MAX_EMBEDDING_TOTAL_CHARS = 32_000
 const EMBEDDING_CHUNK_CHARS = 2_000
 const MAX_EMBEDDING_CHUNKS = 16
+const CANCELLABLE_CAPABILITIES = new Set(['text.chat', 'vision.ocr'])
+const REDACTED_PROVIDER_FAILURE = 'INTELLIGENCE_PROVIDER_FAILED'
+const REDACTED_QUOTA_FAILURE = 'INTELLIGENCE_QUOTA_FAILED'
+
+function assertCancellableCapability(capabilityId: string, signal?: AbortSignal): void {
+  if (!signal || CANCELLABLE_CAPABILITIES.has(capabilityId)) return
+  throw Object.assign(new Error('INTELLIGENCE_CANCELLATION_UNSUPPORTED'), {
+    code: 'INTELLIGENCE_CANCELLATION_UNSUPPORTED'
+  })
+}
+
+function providerFailureForBoundary(error: unknown, redact: boolean): unknown {
+  return redact ? new Error(REDACTED_PROVIDER_FAILURE) : error
+}
 
 function toInvokeErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -422,7 +490,7 @@ function extractMustacheVariables(template: string): string[] {
   return Array.from(vars)
 }
 
-async function renderPromptTemplate(
+export async function renderPromptTemplate(
   template: string,
   variables?: Record<string, unknown>
 ): Promise<string> {
@@ -565,10 +633,13 @@ export class TuffIntelligenceSDK {
   async invoke<T = unknown>(
     capabilityId: string,
     payload: unknown,
-    options: IntelligenceInvokeOptions = {}
+    options: HostIntelligenceInvokeOptions = {}
   ): Promise<IntelligenceInvokeResult<T>> {
+    const signal = options.signal
+    throwIfIntelligenceCancelled(signal)
     const outerGoverned = isOuterGovernedInvocation(options)
     capabilityId = this.normalizeCapabilityId(capabilityId)
+    assertCancellableCapability(capabilityId, signal)
     const payloadRecord =
       payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : null
     const disposeInvoke = enterPerfContext('Intelligence.invoke', {
@@ -595,7 +666,10 @@ export class TuffIntelligenceSDK {
 
       const caller = options.metadata?.caller
       if (!outerGoverned && this.config.enableQuota && caller) {
-        const quotaCheck = await this.checkQuota(caller)
+        const quotaCheck = await awaitIntelligenceBoundary(
+          this.checkQuota(caller, 0, signal),
+          signal
+        )
         if (!quotaCheck.allowed) {
           throw new Error(`[Intelligence] Quota exceeded: ${quotaCheck.reason}`)
         }
@@ -607,8 +681,10 @@ export class TuffIntelligenceSDK {
       )
 
       const cacheKey = this.getCacheKey(capabilityId, payload, runtimeOptions)
+      throwIfIntelligenceCancelled(signal)
       if (this.config.enableCache && !runtimeOptions.stream) {
         const cached = this.getFromCache<T>(cacheKey)
+        throwIfIntelligenceCancelled(signal)
         if (cached) {
           logInfo(`Returning cached result for ${capabilityId}`)
           return cached
@@ -625,11 +701,14 @@ export class TuffIntelligenceSDK {
         false
       )
 
-      const strategyResult = await strategyManager.select({
-        capabilityId,
-        options: runtimeOptions,
-        availableProviders
-      })
+      const strategyResult = await awaitIntelligenceBoundary(
+        strategyManager.select({
+          capabilityId,
+          options: runtimeOptions,
+          availableProviders
+        }),
+        signal
+      )
 
       const provider = manager.get(strategyResult.selectedProvider.id)
       if (!provider) {
@@ -637,7 +716,7 @@ export class TuffIntelligenceSDK {
       }
       logInfo(`Selected provider ${strategyResult.selectedProvider.id} for ${capabilityId}`)
 
-      const fallbackRuntimeOptions: IntelligenceInvokeOptions = {
+      const fallbackRuntimeOptions: HostIntelligenceInvokeOptions = {
         ...runtimeOptions,
         ...(runtimeOptions.modelPreference
           ? { modelPreference: [...runtimeOptions.modelPreference] }
@@ -648,14 +727,20 @@ export class TuffIntelligenceSDK {
       const startTime = Date.now()
 
       try {
-        const result = await this.invokeByCapabilityType<T>(
-          provider,
-          capability.type,
-          payload,
-          runtimeOptions,
-          promptTemplate,
-          promptVariables
+        throwIfIntelligenceCancelled(signal)
+        const result = await awaitIntelligenceBoundary(
+          this.invokeByCapabilityType<T>(
+            provider,
+            capability.type,
+            payload,
+            runtimeOptions,
+            promptTemplate,
+            promptVariables
+          ),
+          signal
         )
+        // Commit point: once this gate passes, cache/audit/result complete as one logical success.
+        throwIfIntelligenceCancelled(signal)
 
         if (this.config.enableCache) {
           this.setToCache(cacheKey, result)
@@ -680,17 +765,8 @@ export class TuffIntelligenceSDK {
         this.invokeFailureCounts.delete(capabilityId)
         return result
       } catch (error) {
-        // Suppress repetitive error logging: only log full error on first
-        // failure and every 10th failure; intermediate failures get a concise warn.
-        const failCount = (this.invokeFailureCounts.get(capabilityId) ?? 0) + 1
-        this.invokeFailureCounts.set(capabilityId, failCount)
-        if (isRecoverableVisionInputError(capabilityId, error)) {
-          logInfo(`Invoke skipped for ${capabilityId}: ${toInvokeErrorMessage(error)}`)
-        } else if (failCount === 1 || failCount % 10 === 0) {
-          logWarn(
-            `Invoke failed for ${capabilityId}${failCount > 1 ? ` (${failCount} failures)` : ''}`,
-            toInvokeErrorMessage(error)
-          )
+        if (signal?.aborted) {
+          throw new IntelligenceOperationCancelledError()
         }
 
         const fallbackResult = hasExplicitProviderSelection(runtimeOptions)
@@ -705,6 +781,8 @@ export class TuffIntelligenceSDK {
               promptTemplate,
               promptVariables
             })
+        // Fallback success has the same logical commit point as primary success.
+        throwIfIntelligenceCancelled(signal)
 
         if (fallbackResult) {
           if (this.config.enableCache) {
@@ -725,9 +803,25 @@ export class TuffIntelligenceSDK {
           return fallbackResult
         }
 
+        // Failure accounting is deferred until fallback is exhausted so cancellation
+        // cannot pollute failure counters or provider-failure logs.
+        const failCount = (this.invokeFailureCounts.get(capabilityId) ?? 0) + 1
+        this.invokeFailureCounts.set(capabilityId, failCount)
+        const failureMessage = signal ? REDACTED_PROVIDER_FAILURE : toInvokeErrorMessage(error)
+        if (isRecoverableVisionInputError(capabilityId, error)) {
+          logInfo(`Invoke skipped for ${capabilityId}: ${failureMessage}`)
+        } else if (failCount === 1 || failCount % 10 === 0) {
+          logWarn(
+            `Invoke failed for ${capabilityId}${failCount > 1 ? ` (${failCount} failures)` : ''}`,
+            failureMessage
+          )
+        }
+
         if (!outerGoverned) {
+          // Failure audit is the terminal commit point for an ordinary provider failure.
+          throwIfIntelligenceCancelled(signal)
           await this.writeFailureAudit({
-            error,
+            error: providerFailureForBoundary(error, Boolean(signal)),
             startTime,
             capabilityId,
             providerId: strategyResult.selectedProvider.id,
@@ -996,13 +1090,13 @@ export class TuffIntelligenceSDK {
 
   private prepareRuntimeOptions(
     capabilityId: string,
-    options: IntelligenceInvokeOptions
+    options: HostIntelligenceInvokeOptions
   ): {
-    runtimeOptions: IntelligenceInvokeOptions
+    runtimeOptions: HostIntelligenceInvokeOptions
     promptTemplate?: string
     promptVariables?: Record<string, unknown>
   } {
-    const runtimeOptions: IntelligenceInvokeOptions = { ...options }
+    const runtimeOptions: HostIntelligenceInvokeOptions = { ...options }
     runtimeOptions.metadata = {
       ...(runtimeOptions.metadata ?? {}),
       capabilityId
@@ -1858,7 +1952,7 @@ export class TuffIntelligenceSDK {
     capabilityId: string
     capabilityType: string
     payload: unknown
-    runtimeOptions: IntelligenceInvokeOptions
+    runtimeOptions: HostIntelligenceInvokeOptions
     manager: IntelligenceProviderManagerAdapter
     fallbackProviders: IntelligenceProviderConfig[]
     promptTemplate?: string
@@ -1879,36 +1973,51 @@ export class TuffIntelligenceSDK {
       return null
     }
 
+    const signal = runtimeOptions.signal
+    throwIfIntelligenceCancelled(signal)
     logWarn(`Attempting fallback providers for ${capabilityId}`)
 
     for (const fallbackConfig of fallbackProviders) {
+      throwIfIntelligenceCancelled(signal)
       const fallbackProvider = manager.get(fallbackConfig.id)
       if (!fallbackProvider) continue
 
       try {
-        const fallbackRuntimeOptions: IntelligenceInvokeOptions = {
+        const fallbackRuntimeOptions: HostIntelligenceInvokeOptions = {
           ...runtimeOptions,
           ...(runtimeOptions.modelPreference
             ? { modelPreference: [...runtimeOptions.modelPreference] }
             : {})
         }
         this.applyModelPreference(fallbackRuntimeOptions, fallbackConfig, capabilityId)
-        const result = await this.invokeFallbackByCapabilityType<T>(
-          fallbackProvider,
-          capabilityType,
-          payload,
-          fallbackRuntimeOptions,
-          promptTemplate,
-          promptVariables
+        throwIfIntelligenceCancelled(signal)
+        const result = await awaitIntelligenceBoundary(
+          this.invokeFallbackByCapabilityType<T>(
+            fallbackProvider,
+            capabilityType,
+            payload,
+            fallbackRuntimeOptions,
+            promptTemplate,
+            promptVariables
+          ),
+          signal
         )
+        throwIfIntelligenceCancelled(signal)
         if (!result) continue
 
         logInfo(`Fallback successful with provider ${fallbackConfig.id}`)
         return result
       } catch (fallbackError) {
+        if (signal?.aborted) {
+          throw new IntelligenceOperationCancelledError()
+        }
         // Downgrade to warn with concise message to reduce log noise.
         // Full error details are captured in the audit log.
-        const msg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+        const msg = signal
+          ? REDACTED_PROVIDER_FAILURE
+          : fallbackError instanceof Error
+            ? fallbackError.message
+            : String(fallbackError)
         logWarn(`Fallback provider ${fallbackConfig.id} failed: ${msg}`)
       }
     }
@@ -1918,15 +2027,14 @@ export class TuffIntelligenceSDK {
 
   private getAuditMeta(
     promptTemplate?: string,
-    promptVariables?: Record<string, unknown>
+    _promptVariables?: Record<string, unknown>
   ): { promptHash?: string; metadata?: Record<string, unknown> } {
     if (!promptTemplate) {
       return {}
     }
 
     return {
-      promptHash: intelligenceAuditLogger.generatePromptHash(promptTemplate),
-      metadata: { promptTemplate, promptVariables }
+      promptHash: intelligenceAuditLogger.generatePromptHash(promptTemplate)
     }
   }
 
@@ -1987,6 +2095,14 @@ export class TuffIntelligenceSDK {
       promptVariables
     } = params
     const auditMeta = this.getAuditMeta(promptTemplate, promptVariables)
+    const candidateCode =
+      typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : undefined
+    const errorCode =
+      typeof candidateCode === 'string' && /^[A-Za-z][A-Za-z0-9_:-]{0,63}$/.test(candidateCode)
+        ? candidateCode
+        : 'INTELLIGENCE_PROVIDER_FAILED'
 
     await this.logAudit({
       traceId: intelligenceAuditLogger.generateTraceId(),
@@ -1997,7 +2113,7 @@ export class TuffIntelligenceSDK {
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       latency: Date.now() - startTime,
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorCode,
       caller,
       userId,
       ...auditMeta
@@ -2078,9 +2194,10 @@ export class TuffIntelligenceSDK {
   private getCacheKey(
     capabilityId: string,
     payload: unknown,
-    options: IntelligenceInvokeOptions
+    options: HostIntelligenceInvokeOptions
   ): string {
-    return `${capabilityId}:${JSON.stringify(payload)}:${JSON.stringify(options)}`
+    const { signal: _signal, ...cacheOptions } = options
+    return `${capabilityId}:${JSON.stringify(payload)}:${JSON.stringify(cacheOptions)}`
   }
 
   private getFromCache<T>(key: string): IntelligenceInvokeResult<T> | null {
@@ -2120,16 +2237,30 @@ export class TuffIntelligenceSDK {
    */
   async checkQuota(
     caller?: string,
-    estimatedTokens: number = 0
+    estimatedTokens: number = 0,
+    signal?: AbortSignal
   ): Promise<{ allowed: boolean; reason?: string }> {
+    throwIfIntelligenceCancelled(signal)
     if (!this.config.enableQuota || !caller) {
       return { allowed: true }
     }
 
     try {
       const result = await intelligenceQuotaManager.checkQuota(caller, 'plugin', estimatedTokens)
+      throwIfIntelligenceCancelled(signal)
       return { allowed: result.allowed, reason: result.reason }
     } catch (error) {
+      if (signal?.aborted) throw new IntelligenceOperationCancelledError()
+      if (signal) {
+        logWarn(`Failed to check quota: ${REDACTED_QUOTA_FAILURE}`)
+        throw Object.assign(
+          toNormalizedIntelligenceError(
+            Object.assign(new Error('Quota verification is unavailable.'), {
+              code: 'QUOTA_CHECK_UNAVAILABLE'
+            })
+          )
+        )
+      }
       logError('Failed to check quota:', error)
       throw Object.assign(
         toNormalizedIntelligenceError(
@@ -2484,7 +2615,7 @@ export class TuffIntelligenceSDK {
       }
 
       // Test the provider with timeout
-      const result = await Promise.race([
+      await Promise.race([
         provider.chat(testPayload, { timeout, testRun: true }),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Request timeout')), timeout)
@@ -2495,7 +2626,7 @@ export class TuffIntelligenceSDK {
 
       return {
         success: true,
-        message: `Connection successful. Model: ${result.model}`,
+        message: 'Connection successful',
         latency,
         timestamp
       }
@@ -2527,8 +2658,6 @@ export class TuffIntelligenceSDK {
           message = 'Provider service error - try again later'
         } else if (error.message.includes('network') || error.message.includes('fetch')) {
           message = 'Network error - check your internet connection'
-        } else {
-          message = error.message
         }
       }
 

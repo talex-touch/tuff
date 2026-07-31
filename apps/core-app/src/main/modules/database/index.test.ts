@@ -137,6 +137,31 @@ describe('DatabaseModule background startup tasks', () => {
     expect(target.registerWalMaintenanceTasks).toHaveBeenCalledTimes(1)
     expect(target.reportDatabaseHealth).toHaveBeenCalledWith('threshold')
   })
+
+  it('upgrades the auxiliary Clipboard column before creating owner indexes', async () => {
+    const execute = vi.fn(async (_statement: unknown) => ({ rows: [] }))
+    const module = new DatabaseModule()
+    const target = module as unknown as {
+      auxClient: { execute: typeof execute }
+      ensureAuxTables: () => Promise<void>
+    }
+    target.auxClient = { execute }
+
+    await target.ensureAuxTables()
+
+    const statements = execute.mock.calls.map(([statement]) => String(statement))
+    const alterIndex = statements.findIndex((statement) =>
+      statement.includes('ALTER TABLE clipboard_history ADD COLUMN retention_protected')
+    )
+    const clipboardIndex = statements.findIndex((statement) =>
+      statement.includes('CREATE INDEX IF NOT EXISTS clipboard_history_retention_idx')
+    )
+    expect(alterIndex).toBeGreaterThan(-1)
+    expect(clipboardIndex).toBeGreaterThan(alterIndex)
+    expect(statements.join('\n')).toContain('ocr_jobs_retention_idx')
+    expect(statements.join('\n')).toContain('analytics_snapshots_retention_idx')
+    expect(statements.join('\n')).toContain('recommendation_cache_retention_idx')
+  })
 })
 
 describe('DatabaseModule WAL checkpoint maintenance', () => {

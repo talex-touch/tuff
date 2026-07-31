@@ -118,7 +118,10 @@ describe('UsageSummaryService', () => {
       })
 
       const db = drizzle(client, { schema })
-      const service = new UsageSummaryService(createDbUtils(db), { autoCleanup: false })
+      const service = new UsageSummaryService(createDbUtils(db), { autoCleanup: true })
+      expect(service.getConfig().autoCleanup).toBe(false)
+      service.updateConfig({ autoCleanup: true })
+      expect(service.getConfig().autoCleanup).toBe(false)
       const usageStatsBeforeMaintenance = await readUsageStats(client)
       const storedExecution = await db
         .select({ timestamp: schema.usageLogs.timestamp })

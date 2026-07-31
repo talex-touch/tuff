@@ -1,10 +1,9 @@
-const { plugin, logger, TuffItemBuilder, openUrl, permission } = globalThis
+const { plugin, logger, TuffItemBuilder, openUrl } = globalThis
 
 const PLUGIN_NAME = 'touch-dev-toolbox'
 const SOURCE_ID = 'plugin-features'
-const ICON = { type: 'file', value: 'assets/logo.svg' }
+const ICON = { type: 'class', value: 'i-ri-tools-line' }
 const ACTION_ID = 'dev-toolbox'
-const NETWORK_PERMISSION_ID = 'network.internet'
 const TOOLBOX_FILE = 'toolbox.json'
 
 const DEFAULT_CONFIG = {
@@ -13,15 +12,6 @@ const DEFAULT_CONFIG = {
 
 function normalizeText(value) {
   return String(value ?? '').trim()
-}
-
-function truncateText(value, max = 96) {
-  const text = normalizeText(value)
-  if (!text)
-    return ''
-  if (text.length <= max)
-    return text
-  return `${text.slice(0, max - 1)}…`
 }
 
 function getQueryText(query) {
@@ -75,47 +65,14 @@ async function ensureToolboxFile() {
     if (!existing)
       await plugin.storage.setFile(TOOLBOX_FILE, DEFAULT_CONFIG)
   }
-  catch (error) {
-    logger?.warn?.('[touch-dev-toolbox] Failed to ensure toolbox file', error)
+  catch {
+    logger?.warn?.('[touch-dev-toolbox] Failed to ensure toolbox file')
   }
 }
 
 async function loadConfig() {
   const raw = await plugin.storage.getFile(TOOLBOX_FILE)
   return parseToolboxConfig(raw)
-}
-
-async function ensurePermission(permissionId, reason) {
-  if (!permission?.check || !permission?.request) {
-    return {
-      granted: false,
-      reason: 'permission-sdk-unavailable',
-    }
-  }
-
-  try {
-    const hasPermission = await permission.check(permissionId)
-    if (hasPermission) {
-      return { granted: true }
-    }
-
-    const granted = await permission.request(permissionId, reason)
-    if (granted) {
-      return { granted: true }
-    }
-
-    return {
-      granted: false,
-      reason: 'permission-denied',
-    }
-  }
-  catch (error) {
-    logger?.warn?.('[touch-dev-toolbox] Failed to request permission', error)
-    return {
-      granted: false,
-      reason: 'permission-request-failed',
-    }
-  }
 }
 
 function matchKeyword(target, keyword) {
@@ -145,9 +102,8 @@ function buildActionItem({ id, featureId, title, subtitle, actionId, payload }) 
       pluginName: PLUGIN_NAME,
       featureId,
       defaultAction: ACTION_ID,
-      actionId,
-      payload,
     })
+    .createAndAddAction(actionId, 'plugin', title, payload)
     .build()
 }
 
@@ -176,13 +132,6 @@ const pluginLifecycle = {
           title: '初始化配置',
           subtitle: '创建默认 toolbox.json',
           actionId: 'config-init',
-        }),
-        buildActionItem({
-          id: `${featureId}-config-open`,
-          featureId,
-          title: '打开配置目录',
-          subtitle: '编辑 toolbox.json',
-          actionId: 'config-open',
         }),
       ]
 
@@ -215,22 +164,28 @@ const pluginLifecycle = {
         }))
       }
 
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([...items, ...linkItems])
+      await plugin.feature.clearItems()
+      await plugin.feature.pushItems([...items, ...linkItems])
       return true
     }
-    catch (error) {
-      logger?.error?.('[touch-dev-toolbox] Failed to handle feature', error)
-      plugin.feature.clearItems()
-      plugin.feature.pushItems([
-        buildInfoItem({
-          id: `${featureId}-error`,
-          featureId,
-          title: '加载失败',
-          subtitle: truncateText(error?.message || '未知错误', 120),
-        }),
-      ])
-      return true
+    catch {
+      logger?.error?.('[touch-dev-toolbox] Failed to handle feature')
+      try {
+        await plugin.feature.clearItems()
+        await plugin.feature.pushItems([
+          buildInfoItem({
+            id: `${featureId}-error`,
+            featureId,
+            title: '加载失败',
+            subtitle: '插件运行失败',
+          }),
+        ])
+        return true
+      }
+      catch {
+        logger?.error?.('[touch-dev-toolbox] Failed to publish fallback')
+        return false
+      }
     }
   },
 
@@ -239,19 +194,16 @@ const pluginLifecycle = {
       if (item?.meta?.defaultAction !== ACTION_ID)
         return
 
-      const actionId = item.meta?.actionId
+      const action = Array.isArray(item.actions) ? item.actions[0] : null
+      const actionId = action?.id
+      const payload = action?.payload || {}
       if (actionId === 'config-init') {
         await ensureToolboxFile()
         return { externalAction: true }
       }
 
-      if (actionId === 'config-open') {
-        await plugin.storage.openFolder()
-        return { externalAction: true }
-      }
-
       if (actionId === 'open-link') {
-        const url = normalizeExternalUrl(item.meta?.payload?.url)
+        const url = normalizeExternalUrl(payload.url)
         if (!url) {
           return {
             externalAction: true,
@@ -259,17 +211,6 @@ const pluginLifecycle = {
             status: 'blocked',
             reason: 'invalid-url',
             message: '链接地址无效，仅支持 HTTP/HTTPS',
-          }
-        }
-
-        const permissionResult = await ensurePermission(NETWORK_PERMISSION_ID, '需要 network.internet 权限以默认浏览器打开开发工具箱链接')
-        if (!permissionResult.granted) {
-          return {
-            externalAction: true,
-            success: false,
-            status: 'blocked',
-            reason: permissionResult.reason || 'permission-denied',
-            message: '缺少 network.internet 权限',
           }
         }
 
@@ -288,27 +229,29 @@ const pluginLifecycle = {
           return { externalAction: true, status: 'started' }
         }
         catch (error) {
-          logger?.error?.('[touch-dev-toolbox] Failed to open external URL', error)
+          logger?.error?.('[touch-dev-toolbox] Failed to open external URL')
+          const permissionDenied = error?.code === 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED'
           return {
             externalAction: true,
             success: false,
             status: 'blocked',
-            reason: 'open-url-failed',
-            message: '打开外部链接失败',
+            reason: permissionDenied ? 'permission-denied' : 'open-url-failed',
+            message: permissionDenied ? '缺少 network.internet 权限' : '打开外部链接失败',
           }
         }
       }
     }
-    catch (error) {
-      logger?.error?.('[touch-dev-toolbox] Action failed', error)
+    catch {
+      logger?.error?.('[touch-dev-toolbox] Action failed')
+      return {
+        externalAction: true,
+        success: false,
+        status: 'blocked',
+        reason: 'action-failed',
+        message: '执行失败',
+      }
     }
   },
 }
 
-module.exports = {
-  ...pluginLifecycle,
-  __test: {
-    normalizeExternalUrl,
-    parseToolboxConfig,
-  },
-}
+module.exports = pluginLifecycle

@@ -2,6 +2,9 @@
 title: "ContextMenu 右键菜单"
 description: "可右键、可坐标控制、可嵌入 Popover 的通用菜单面板。"
 category: Navigation
+status: beta
+since: 1.0.0
+tags: [context, menu, popover]
 syncStatus: reviewed
 verified: true
 ---
@@ -9,7 +12,7 @@ verified: true
 
 `TxContextMenu` 是一个更通用的菜单浮层：既可以绑定原生右键，也可以用受控坐标打开；底层通过 `TxBaseAnchor` 的 virtual anchor 模式承载定位、碰撞处理、Card surface 与动画，并在连续右键时自动跟随最新鼠标位置。菜单内容也可以拆成 `TxContextMenuPanel` 嵌入到 `TxPopover` / 自定义浮层里复用。
 
-## 基础与组合场景
+## 基础用法
 
 ### ContextMenu
 :::TuffDemoWrapper{demo="ContextMenuContextMenuDemo" code-lang="vue"}
@@ -103,7 +106,7 @@ code: |
           <TxContextMenuItem shortcut="⌘R">Refresh</TxContextMenuItem>
           <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
           <TxContextMenuDivider dashed />
-          <TxPopover v-model="popoverOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false">
+          <TxPopover v-model="popoverOpen" placement="right-start" :offset="8" :show-arrow="false" :toggle-on-reference-click="false" :close-on-click-outside="false" reference-full-width>
             <template #reference>
               <TxContextMenuItem submenu :close-on-select="false" @select="popoverOpen = true">
                 More actions
@@ -154,28 +157,9 @@ code: |
 ---
 :::
 
-## 常见用法
+### 锚点模式
 
-### 绑定到右键
-
-```vue
-<TxContextMenu>
-  <template #trigger>
-    <div class="file-row">Right click file row</div>
-  </template>
-
-  <template #menu>
-    <TxContextMenuItem shortcut="⌘O">Open</TxContextMenuItem>
-    <TxContextMenuItem shortcut="↩">Rename</TxContextMenuItem>
-    <TxContextMenuDivider />
-    <TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
-  </template>
-</TxContextMenu>
-```
-
-### 锚点模式：跟随鼠标或跟随触发区域
-
-默认 `anchorMode="pointer"`，右键菜单会跟随鼠标坐标；如果需要像 Popover/Dropdown 一样贴着触发区域，改成 `anchorMode="reference"`。
+默认 `anchorMode="pointer"`，菜单跟随鼠标坐标；需要像 Popover/Dropdown 一样贴着触发区域时改成 `anchorMode="reference"`。
 
 ```vue
 <!-- 跟随鼠标/传入坐标，适合标准右键菜单 -->
@@ -185,101 +169,14 @@ code: |
 <TxContextMenu anchor-mode="reference" />
 ```
 
-### 受控坐标 / 自定义触发方式
+## 交互契约
 
-适用于按钮点击、编辑器快捷键、画布节点菜单等场景。`trigger="manual"` 会禁用组件内部触发，只由 `v-model + x/y` 控制打开位置。
-
-```vue
-<script setup lang="ts">
-import { ref } from 'vue'
-
-const open = ref(false)
-const x = ref(0)
-const y = ref(0)
-
-function openFromButton(event: MouseEvent) {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  x.value = rect.left
-  y.value = rect.bottom + 8
-  open.value = true
-}
-</script>
-
-<template>
-  <TxButton @click="openFromButton">Open menu</TxButton>
-  <TxContextMenu v-model="open" trigger="manual" :x="x" :y="y">
-    <template #menu>
-      <TxContextMenuItem shortcut="⌘N">New</TxContextMenuItem>
-    </template>
-  </TxContextMenu>
-</template>
-```
-
-### 嵌入 Popover
-
-`TxContextMenuPanel` 不包含定位和触发器，只提供菜单布局、item 注入和关闭上下文，因此可以放进 `TxPopover`、`TxDropdownMenu` 或自定义 Overlay。
-
-```vue
-<TxPopover placement="bottom-start" :width="240" :panel-padding="6">
-  <template #reference>
-    <TxButton>More</TxButton>
-  </template>
-
-  <TxContextMenuPanel>
-    <TxContextMenuItem shortcut="⌘P">Pin</TxContextMenuItem>
-    <TxContextMenuItem color="#10b981">Approve</TxContextMenuItem>
-    <TxContextMenuDivider />
-    <TxContextMenuItem danger>Reject</TxContextMenuItem>
-  </TxContextMenuPanel>
-</TxPopover>
-```
-
-### 自定义二级 Context Menu
-
-可以用 `TxPopover` 承载子菜单，并将父级 item 的 `close-on-select` 设为 `false`，点击后不关闭父菜单。若子菜单在父 `TxContextMenu` 外层 Teleport，可在 `TxContextMenuPanel` 上加 `outside-guard`，避免点击子菜单时父菜单被外部点击逻辑关闭。
-
-```vue
-<TxPopover v-model="submenuOpen" placement="right-start" :close-on-click-outside="false" :show-arrow="false" reference-full-width>
-  <template #reference>
-    <TxContextMenuItem submenu :close-on-select="false" @select="submenuOpen = true">
-      More actions
-    </TxContextMenuItem>
-  </template>
-
-  <TxContextMenuPanel :close="() => { submenuOpen = false }" outside-guard>
-    <TxContextMenuItem shortcut="⌘D">Duplicate</TxContextMenuItem>
-    <TxContextMenuItem color="var(--tx-color-primary)">Share link</TxContextMenuItem>
-  </TxContextMenuPanel>
-</TxPopover>
-```
-
-### Divider / Disabled / Danger / 自定义颜色 / 快捷键
-
-```vue
-<TxContextMenuItem shortcut="⌘C">Copy</TxContextMenuItem>
-<TxContextMenuItem disabled shortcut="⌘V">Paste</TxContextMenuItem>
-<TxContextMenuDivider dashed />
-<TxContextMenuItem color="#8b5cf6" shortcut="⌘K">Run command</TxContextMenuItem>
-<TxContextMenuItem danger shortcut="⌘⌫">Delete</TxContextMenuItem>
-```
-
-### Anchor 动画与自动定位
-
-`TxContextMenu` 通过 `TxBaseAnchor` 使用 Floating UI 的 `flip + shift + size` 自动定位：靠近视口边缘时会自动翻转/平移，并限制最大高度。`anchorMode="pointer"` 时同一个 trigger 多次右键会更新 virtual anchor 坐标并跟随最新鼠标位置；`anchorMode="reference"` 时菜单跟随触发区域。
-
-动画直接走 `BaseAnchor`，支持 `transfer`、`boom`、`opacity`、`none`。
-
-```vue
-<TxContextMenu
-  :animation="{
-    type: 'boom',
-    duration: 180,
-    closeDuration: 120,
-    scale: 0.92,
-    blur: 10
-  }"
-/>
-```
+- 定位：`TxContextMenu` 通过 `TxBaseAnchor` 用 Floating UI 的 `flip + shift + size` 自动定位，靠近视口边缘时翻转/平移并限制最大高度。
+- 锚点：`anchorMode="pointer"`（默认）跟随鼠标/传入坐标，同一 trigger 连续右键会把 virtual anchor 更新到最新位置；`anchorMode="reference"` 跟随触发区域，更接近 Dropdown。
+- 触发：`trigger` 支持 `contextmenu` / `click` / `both` / `manual`；`manual` 禁用组件内部触发，仅由 `v-model + x/y` 控制打开坐标，适合按钮点击、编辑器快捷键、画布节点菜单。
+- 关闭：默认 ESC、点击外部、选中条目都会关闭；`closeOnSelect=false` 仅用于父级二级菜单行或多步操作。
+- 二级菜单：`TxContextMenuPanel` 不含定位与触发器，可嵌入 `TxPopover` / `TxDropdownMenu` / 自定义 Overlay 复用；Teleport 出去的子菜单要在子 `TxContextMenuPanel` 上加 `outsideGuard`，否则父菜单会把子菜单点击当作外部点击而关闭。
+- 动画：动画直接走 `BaseAnchor`，支持 `transfer` / `boom` / `opacity` / `none`。
 
 ## API
 
@@ -348,8 +245,14 @@ function openFromButton(event: MouseEvent) {
 | `close` | `() => void` | - | 面板关闭回调，供 item 注入使用 |
 | `dense` | `boolean` | `false` | 更紧凑的 item 间距 |
 | `outsideGuard` | `boolean` | `false` | 标记为 ContextMenu 外部保护层，用于二级菜单/Teleport 组合 |
-| `role` | `string` | `'menu'` | ARIA role |
+| `role` | `'menu' \| 'listbox' \| 'none'` | `'menu'` | 面板的 ARIA role，同时决定键盘导航：`menu`/`listbox` 启用方向键与 Home/End 导航及 `focusFirstItem`，此时子项需相应设 `role="menuitem"`（menu）或 `role="option"`（listbox）；`none` 主动退出键盘导航（无可聚焦项，`focusFirstItem` 为空操作）。 |
 | `ariaLabel` | `string` | - | ARIA label |
+
+### TxContextMenuPanel Exposes
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `focusFirstItem` | `() => void` | 将键盘焦点移入面板内第一个可用项。仅当你把 `TxContextMenuPanel` 单独嵌进 `TxPopover`/自定义浮层时才需手动调用：面板打开后调用它，把焦点送进菜单供键盘导航；`TxContextMenu` 会在打开时自动调用，裸用面板不会。`role` 为 `none` 时面板没有可导航项，调用为空操作。 |
 
 ### TxContextMenuItem Props
 

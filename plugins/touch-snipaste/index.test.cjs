@@ -1,34 +1,15 @@
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
-const Module = require('node:module')
 const path = require('node:path')
 const test = require('node:test')
+const vm = require('node:vm')
 
-globalThis.plugin = {
-  storage: {
-    async getFile() {
-      return null
-    },
-    async setFile() {},
-    async openFolder() {},
-  },
-  feature: {
-    clearItems() {},
-    pushItems() {},
-  },
-}
-globalThis.logger = {}
-globalThis.permission = {
-  async check() {
-    return true
-  },
-  async request() {
-    return true
-  },
-}
-globalThis.TuffItemBuilder = class {
+const sourcePath = path.join(__dirname, 'index.js')
+const source = fs.readFileSync(sourcePath, 'utf8')
+
+class TuffItemBuilder {
   constructor(id) {
-    this.item = { id, meta: {} }
+    this.item = { id, actions: [], meta: {} }
   }
 
   setSource(type, id, name) {
@@ -56,135 +37,169 @@ globalThis.TuffItemBuilder = class {
     return this
   }
 
+  createAndAddAction(id, type, label, payload) {
+    this.item.actions.push({ id, type, label, payload })
+    return this
+  }
+
   build() {
     return this.item
   }
 }
 
-function loadPluginModule(filename) {
-  const source = fs.readFileSync(filename, 'utf8')
-  const mod = new Module(filename)
-  mod.filename = filename
-  mod.paths = Module._nodeModulePaths(path.dirname(filename))
-  mod._compile(source, filename)
-  return mod.exports
+function createHarness(options = {}) {
+  const state = { calls: [], items: [], order: [] }
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    logger: { error() {} },
+    platform: { platform: options.platform || 'darwin', arch: 'arm64' },
+    TuffItemBuilder,
+    plugin: {
+      feature: {
+        async clearItems() {
+          state.order.push('clear')
+          state.items = []
+        },
+        async pushItems(items) {
+          state.order.push('push')
+          state.items = items
+        },
+      },
+      snipaste: options.withoutCapability
+        ? undefined
+        : {
+            async runAction(actionId) {
+              state.calls.push(actionId)
+              if (options.error)
+                throw options.error
+              return options.result || { actionId, status: 'started' }
+            },
+          },
+    },
+  }
+  context.globalThis = context
+  vm.runInNewContext(source, context, { filename: sourcePath })
+  return { lifecycle: context.module.exports, state }
 }
 
-const snipastePlugin = loadPluginModule(path.join(__dirname, 'index.js'))
-const {
-  buildCapabilityMeta,
-  formatBlockedMessage,
-  normalizeAction,
-  normalizeArgs,
-  runSnipaste,
-} = snipastePlugin.__test
+function plain(value) {
+  return JSON.parse(JSON.stringify(value))
+}
 
-test('normalizeArgs rejects newline and null payloads', () => {
-  assert.deepEqual(normalizeArgs(['snip', '  --full  ']), { ok: true, args: ['snip', '--full'] })
-  assert.equal(normalizeArgs(['snip\nrm']).reason, 'invalid-arg-payload')
-  assert.equal(normalizeArgs(['snip\0rm']).reason, 'invalid-arg-payload')
-  assert.equal(normalizeArgs([123]).reason, 'invalid-arg-type')
+test('production Prelude exports lifecycle hooks only and has no privileged child surface', () => {
+  const harness = createHarness()
+  assert.deepEqual(Object.keys(harness.lifecycle).sort(), [
+    'onDestroy',
+    'onFeatureTriggered',
+    'onInit',
+    'onItemAction',
+  ])
+  assert.doesNotMatch(source, /\b__test\b/)
+  assert.doesNotMatch(source, /\brequire\s*\(/)
+  assert.doesNotMatch(source, /\bnode:(?:child_process|path)\b/)
+  assert.doesNotMatch(source, /(?:^|[^.\w])process\s*(?:\.|\[)/m)
+  assert.doesNotMatch(source, /SNIPASTE_PATH|snipastePath|custom-snip|settings\.json/)
 })
 
-test('normalizeAction preserves invalid custom action as blocked diagnostic', () => {
-  const action = normalizeAction({
-    id: 'bad',
-    title: 'Bad',
-    args: ['snip\nbad'],
-  }, 'custom')
+test('feature trigger publishes the seven fixed workflows in awaited order', async () => {
+  const harness = createHarness()
 
-  assert.equal(action.invalidReason, 'invalid-arg-payload')
-  assert.deepEqual(action.args, [])
+  assert.equal(
+    await harness.lifecycle.onFeatureTriggered('snipaste-quick', { text: '' }),
+    true,
+  )
+  assert.deepEqual(harness.state.order, ['clear', 'push'])
+  assert.deepEqual(
+    plain(harness.state.items.map(item => item.actions[0].payload.actionId)),
+    ['launch', 'snip', 'snip-full', 'paste', 'pick-color', 'toggle-images', 'docs'],
+  )
+  for (const item of harness.state.items) {
+    assert.deepEqual(plain(item.icon), { type: 'class', value: 'i-ri-screenshot-2-line' })
+    assert.equal(item.meta.pluginName, 'touch-snipaste')
+    assert.doesNotMatch(JSON.stringify(item), /Applications|Program Files|snipastePath/)
+  }
 })
 
-test('buildCapabilityMeta exposes shell capability audit fields', () => {
-  const meta = buildCapabilityMeta({
-    actionId: 'builtin:snip',
-    status: 'permission-missing',
-    reason: 'system.shell permission is required',
-    commandSource: 'builtin',
+test('feature query filters fixed actions without accepting custom behavior', async () => {
+  const harness = createHarness()
+  await harness.lifecycle.onFeatureTriggered('snipaste-quick', { text: '取色' })
+
+  assert.equal(harness.state.items.length, 1)
+  assert.equal(harness.state.items[0].actions[0].payload.actionId, 'pick-color')
+  assert.equal(await harness.lifecycle.onFeatureTriggered('other-feature', { text: '' }), false)
+})
+
+test('item action invokes only the fixed purpose facade', async () => {
+  const harness = createHarness()
+  await harness.lifecycle.onFeatureTriggered('snipaste-quick', { text: '截图' })
+  const item = harness.state.items.find(entry => entry.actions[0].payload.actionId === 'snip')
+
+  const result = await harness.lifecycle.onItemAction(item, { actionId: 'run-action' })
+
+  assert.deepEqual(plain(result), {
+    externalAction: true,
+    success: true,
+    status: 'started',
+  })
+  assert.deepEqual(harness.state.calls, ['snip'])
+})
+
+test('host blocked results remain stable and redacted', async () => {
+  const harness = createHarness({
+    result: { actionId: 'launch', status: 'blocked', reason: 'not-installed' },
+  })
+  await harness.lifecycle.onFeatureTriggered('snipaste-quick', { text: '启动' })
+
+  const result = await harness.lifecycle.onItemAction(harness.state.items[0], {
+    actionId: 'run-action',
   })
 
-  assert.equal(meta.capability.permissionId, 'system.shell')
-  assert.equal(meta.capability.status, 'permission-missing')
-  assert.equal(meta.capability.commandSource, 'builtin')
-  assert.equal(meta.capability.actionId, 'builtin:snip')
+  assert.deepEqual(plain(result), {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'not-installed',
+    message: '未在受信任位置找到 Snipaste',
+  })
+  assert.doesNotMatch(JSON.stringify(result), /Applications|Program Files|private/)
 })
 
-test('formatBlockedMessage keeps permission failure reasons user-visible', () => {
-  assert.equal(formatBlockedMessage('permission-denied'), '缺少 system.shell 权限')
-  assert.equal(formatBlockedMessage('permission-sdk-unavailable'), '权限系统不可用，无法启动 Snipaste')
-  assert.equal(formatBlockedMessage('permission-request-failed'), '权限请求失败，无法启动 Snipaste')
+test('capability errors map to deterministic failure without native detail', async () => {
+  const error = Object.assign(new Error('/private/Snipaste native failure'), {
+    code: 'PLUGIN_HOST_CAPABILITY_PERMISSION_DENIED',
+  })
+  const harness = createHarness({ error })
+  await harness.lifecycle.onFeatureTriggered('snipaste-quick', { text: '截图' })
+
+  const result = await harness.lifecycle.onItemAction(harness.state.items[0], {
+    actionId: 'run-action',
+  })
+
+  assert.deepEqual(plain(result), {
+    externalAction: true,
+    success: false,
+    status: 'blocked',
+    reason: 'permission-denied',
+    message: '缺少 system.shell 权限',
+  })
+  assert.doesNotMatch(JSON.stringify(result), /private|native failure/)
 })
 
-test('runSnipaste blocks before spawn when permission is missing', async () => {
-  const originalCheck = globalThis.permission.check
-  const originalRequest = globalThis.permission.request
-  globalThis.permission.check = async () => false
-  globalThis.permission.request = async () => false
+test('missing facade and forged item action fail closed without host work', async () => {
+  const missing = createHarness({ withoutCapability: true })
+  await missing.lifecycle.onFeatureTriggered('snipaste-quick', { text: '截图' })
+  const missingResult = await missing.lifecycle.onItemAction(missing.state.items[0], {
+    actionId: 'run-action',
+  })
+  assert.equal(missingResult.reason, 'process-capability-unavailable')
 
-  try {
-    const result = await runSnipaste(['snip'])
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-denied')
+  const harness = createHarness()
+  const forged = {
+    meta: { defaultAction: 'snipaste-action' },
+    actions: [{ id: 'run-action', payload: { actionId: 'custom-command' } }],
   }
-  finally {
-    globalThis.permission.check = originalCheck
-    globalThis.permission.request = originalRequest
-  }
-})
-
-test('permission diagnostics fail closed when permission sdk is unavailable', async () => {
-  const originalPermission = globalThis.permission
-  delete globalThis.permission
-
-  try {
-    const pluginWithoutPermission = loadPluginModule(path.join(__dirname, 'index.js'))
-    const state = await pluginWithoutPermission.__test.getShellPermissionState()
-    assert.equal(state.granted, false)
-    assert.equal(state.status, 'permission-missing')
-    assert.equal(state.reason, 'permission-sdk-unavailable')
-  }
-  finally {
-    globalThis.permission = originalPermission
-  }
-})
-
-test('runSnipaste blocks before spawn when permission sdk is unavailable', async () => {
-  const originalPermission = globalThis.permission
-  delete globalThis.permission
-
-  try {
-    const pluginWithoutPermission = loadPluginModule(path.join(__dirname, 'index.js'))
-    const result = await pluginWithoutPermission.__test.runSnipaste(['snip'])
-    assert.equal(result.status, 'blocked')
-    assert.equal(result.reason, 'permission-sdk-unavailable')
-  }
-  finally {
-    globalThis.permission = originalPermission
-  }
-})
-
-test('runSnipaste blocks invalid args without permission checks when requested', async () => {
-  const result = await runSnipaste(['snip\nbad'], { checkPermission: false })
-  assert.equal(result.status, 'blocked')
-  assert.equal(result.reason, 'invalid-arg-payload')
-})
-
-test('runSnipaste returns failed when executable cannot spawn', async () => {
-  const originalEnv = process.env.SNIPASTE_PATH
-  process.env.SNIPASTE_PATH = '/definitely/not/a/snipaste/bin'
-
-  try {
-    const result = await runSnipaste(['snip'], { checkPermission: false })
-    assert.equal(result.status, 'failed')
-    assert.equal(result.reason, 'spawn-failed')
-    assert.ok(result.errorMessage)
-  }
-  finally {
-    if (originalEnv === undefined)
-      delete process.env.SNIPASTE_PATH
-    else
-      process.env.SNIPASTE_PATH = originalEnv
-  }
+  const forgedResult = await harness.lifecycle.onItemAction(forged, { actionId: 'run-action' })
+  assert.equal(forgedResult.reason, 'invalid-action')
+  assert.deepEqual(harness.state.calls, [])
 })

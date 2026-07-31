@@ -12,8 +12,8 @@ const zIndex = computed(() => toastStore.zIndex)
 
 <template>
   <teleport to="body">
-    <div class="tx-toast-host" role="region" aria-label="Notifications" :style="{ zIndex }">
-      <div v-for="t in items" :key="t.id" class="tx-toast" :class="`tx-toast--${t.variant || 'default'}`">
+    <div class="tx-toast-host" role="region" aria-label="Notifications" aria-live="polite" aria-atomic="false" :style="{ zIndex }">
+      <div v-for="t in items" :key="t.id" class="tx-toast" :class="`tx-toast--${t.variant || 'default'}`" :role="t.variant === 'danger' ? 'alert' : undefined">
         <div class="tx-toast__content">
           <div v-if="t.title" class="tx-toast__title">
             {{ t.title }}

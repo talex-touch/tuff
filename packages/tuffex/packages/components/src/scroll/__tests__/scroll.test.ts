@@ -240,4 +240,60 @@ describe('txScroll', () => {
 
     wrapper.unmount()
   })
+
+  it('clamps a top over-scroll bounce to scrollTop 0 instead of mirroring the offset', async () => {
+    const wrapper = mount(TxScroll, {
+      props: {
+        nativeAutoFallback: false,
+      },
+    })
+
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    const betterScroll = betterScrollMock.instances[0]
+    expect(betterScroll).toBeTruthy()
+
+    const scrollHandler = betterScroll.on.mock.calls.find(call => call[0] === 'scroll')?.[1] as
+      | ((pos: { x: number, y: number }) => void)
+      | undefined
+    expect(scrollHandler).toBeTypeOf('function')
+
+    // Normal downward scroll: BetterScroll reports a negative translate offset,
+    // which must surface as a positive scrollTop.
+    scrollHandler!({ x: -4, y: -10 })
+    expect(wrapper.emitted('scroll')?.at(-1)?.[0]).toEqual({ scrollTop: 10, scrollLeft: 4 })
+
+    // Over-scroll bounce past the top pushes pos.y positive; it must clamp to 0
+    // rather than mirror into a positive scrollTop (the old Math.abs bug).
+    scrollHandler!({ x: 3, y: 6 })
+    expect(wrapper.emitted('scroll')?.at(-1)?.[0]).toEqual({ scrollTop: 0, scrollLeft: 0 })
+  })
+
+  it('does not rebuild BetterScroll when re-rendered with an equal inline options literal', async () => {
+    const wrapper = mount(TxScroll, {
+      props: {
+        nativeAutoFallback: false,
+        options: { tap: true },
+      },
+    })
+
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    expect(betterScrollMock.instances).toHaveLength(1)
+    const first = betterScrollMock.instances[0]
+
+    // A parent re-render passing a fresh literal of identical content must not
+    // tear down and re-create BetterScroll (which would drop scroll position).
+    await wrapper.setProps({ options: { tap: true } })
+    await nextTick()
+    await flushPromises()
+    await nextTick()
+
+    expect(betterScrollMock.instances).toHaveLength(1)
+    expect(first.destroy).not.toHaveBeenCalled()
+  })
 })

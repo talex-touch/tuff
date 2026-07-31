@@ -26,7 +26,9 @@ import {
   PLUGIN_SQLITE_MAX_ROWS
 } from './plugin-sqlite-worker-protocol'
 
-const databasePathInput = (workerData as { databasePath?: unknown })?.databasePath
+const workerOptions = workerData as { databasePath?: unknown; readOnly?: unknown }
+const databasePathInput = workerOptions?.databasePath
+const readOnly = workerOptions?.readOnly === true
 if (!parentPort || typeof databasePathInput !== 'string' || !databasePathInput) {
   throw new Error('PLUGIN_SQLITE_WORKER_INVALID_INIT')
 }
@@ -78,6 +80,9 @@ function getClient(): Promise<Client> {
   if (!clientPromise) {
     clientPromise = Promise.resolve().then(async () => {
       await assertSafeDatabasePath(false)
+      // Browser-data scans query a host-owned temporary copy. The worker-level
+      // operation gate below provides read-only semantics without relying on
+      // libSQL URI query parameters, which are not supported consistently.
       const client = createClient({ url: `file:${databasePath}` })
       try {
         await assertSafeDatabasePath(true)
@@ -94,32 +99,34 @@ function getClient(): Promise<Client> {
         if (!Number.isInteger(pageSize) || pageSize <= 0) {
           throw new Error('PLUGIN_SQLITE_INVALID_PAGE_SIZE')
         }
-        const maxPageCount = Math.max(1, Math.floor(PLUGIN_SQLITE_MAX_DATABASE_BYTES / pageSize))
-        const maxPageCountResult = await client.execute(`PRAGMA max_page_count = ${maxPageCount}`)
-        const effectiveMaxPageCount = Number(
-          maxPageCountResult.rows[0]
-            ? Object.values(maxPageCountResult.rows[0] as Record<string, unknown>)[0]
-            : undefined
-        )
-        if (!Number.isInteger(effectiveMaxPageCount) || effectiveMaxPageCount > maxPageCount) {
-          throw Object.assign(new Error('quota'), {
-            storageCode: PLUGIN_STORAGE_ERROR_CODES.DISK_QUOTA
-          })
-        }
-        await client.execute(`PRAGMA journal_size_limit = ${PLUGIN_SQLITE_MAX_JOURNAL_BYTES}`)
-        const heapLimitResult = await client.execute(
-          `PRAGMA hard_heap_limit = ${PLUGIN_SQLITE_MAX_HEAP_BYTES}`
-        )
-        const effectiveHeapLimit = Number(
-          heapLimitResult.rows[0]
-            ? Object.values(heapLimitResult.rows[0] as Record<string, unknown>)[0]
-            : undefined
-        )
-        if (
-          !Number.isInteger(effectiveHeapLimit) ||
-          effectiveHeapLimit > PLUGIN_SQLITE_MAX_HEAP_BYTES
-        ) {
-          throw new Error('PLUGIN_SQLITE_INVALID_HEAP_LIMIT')
+        if (!readOnly) {
+          const maxPageCount = Math.max(1, Math.floor(PLUGIN_SQLITE_MAX_DATABASE_BYTES / pageSize))
+          const maxPageCountResult = await client.execute(`PRAGMA max_page_count = ${maxPageCount}`)
+          const effectiveMaxPageCount = Number(
+            maxPageCountResult.rows[0]
+              ? Object.values(maxPageCountResult.rows[0] as Record<string, unknown>)[0]
+              : undefined
+          )
+          if (!Number.isInteger(effectiveMaxPageCount) || effectiveMaxPageCount > maxPageCount) {
+            throw Object.assign(new Error('quota'), {
+              storageCode: PLUGIN_STORAGE_ERROR_CODES.DISK_QUOTA
+            })
+          }
+          await client.execute(`PRAGMA journal_size_limit = ${PLUGIN_SQLITE_MAX_JOURNAL_BYTES}`)
+          const heapLimitResult = await client.execute(
+            `PRAGMA hard_heap_limit = ${PLUGIN_SQLITE_MAX_HEAP_BYTES}`
+          )
+          const effectiveHeapLimit = Number(
+            heapLimitResult.rows[0]
+              ? Object.values(heapLimitResult.rows[0] as Record<string, unknown>)[0]
+              : undefined
+          )
+          if (
+            !Number.isInteger(effectiveHeapLimit) ||
+            effectiveHeapLimit > PLUGIN_SQLITE_MAX_HEAP_BYTES
+          ) {
+            throw new Error('PLUGIN_SQLITE_INVALID_HEAP_LIMIT')
+          }
         }
         await assertSafeDatabasePath(true)
         return client
@@ -206,6 +213,12 @@ function ensureBoundedResult(result: unknown): void {
 async function handleRequest(request: PluginSqliteWorkerRequest): Promise<void> {
   try {
     const operation = request.operation
+    if (readOnly && operation.type !== 'query') {
+      throw new PluginSqlPolicyError(
+        PLUGIN_STORAGE_ERROR_CODES.SQL_INVALID,
+        'Plugin SQLite read-only owner accepts queries only.'
+      )
+    }
     if (operation.type === 'query') {
       validatePluginSql(operation.sql, 'query')
       validatePluginSqlParams(operation.params)

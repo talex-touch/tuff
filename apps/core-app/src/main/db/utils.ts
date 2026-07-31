@@ -548,6 +548,21 @@ function createDbUtilsInternal(
         .where(and(eq(schema.pluginData.pluginId, pluginId), eq(schema.pluginData.key, key)))
         .get()
     },
+    async listPluginData(pluginId: string) {
+      return db
+        .select({ key: schema.pluginData.key, value: schema.pluginData.value })
+        .from(schema.pluginData)
+        .where(eq(schema.pluginData.pluginId, pluginId))
+        .orderBy(schema.pluginData.key)
+    },
+    async countPluginData(pluginId: string): Promise<number> {
+      const result = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(schema.pluginData)
+        .where(eq(schema.pluginData.pluginId, pluginId))
+        .get()
+      return Number(result?.count ?? 0)
+    },
     async setPluginData(pluginId: string, key: string, value: unknown) {
       const stringValue = JSON.stringify(value)
       return db

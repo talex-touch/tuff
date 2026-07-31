@@ -2,6 +2,8 @@
 title: "CardItem"
 description: "Compact list row with optional avatar media, text, right-side actions, active state, and explicit click handling."
 category: Layout
+status: beta
+since: 1.0.0
 tags: [card, list, settings]
 syncStatus: reviewed
 verified: true

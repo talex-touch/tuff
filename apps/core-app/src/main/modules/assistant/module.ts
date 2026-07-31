@@ -1347,6 +1347,8 @@ export class AssistantModule extends BaseModule {
     }
 
     this.beginVoicePanelAutoHideSuppression()
+    let ownedTempArtifactUrl: string | undefined
+    let ownsCaptureArtifact = false
     try {
       const screenshotService = getNativeScreenshotService()
       let captureResult = managedCaptureResult(payload)
@@ -1363,6 +1365,7 @@ export class AssistantModule extends BaseModule {
             ...normalizeScreenshotTarget(payload),
             writeClipboard: false
           })
+          ownsCaptureArtifact = true
         } catch (error) {
           return {
             success: false,
@@ -1378,6 +1381,10 @@ export class AssistantModule extends BaseModule {
           code: 'SCREENSHOT_UNAVAILABLE',
           error: 'Screenshot image is unavailable.'
         }
+      }
+
+      if (ownsCaptureArtifact) {
+        ownedTempArtifactUrl = captureResult.tfileUrl
       }
 
       const ownerWindow = this.voicePanelWindow?.window.isDestroyed()
@@ -1415,6 +1422,13 @@ export class AssistantModule extends BaseModule {
         error: error instanceof Error ? error.message : 'Screenshot save failed.'
       }
     } finally {
+      if (ownedTempArtifactUrl) {
+        try {
+          await getNativeScreenshotService().releaseTempArtifact(ownedTempArtifactUrl)
+        } catch {
+          // Scheduled retention remains the fallback if eager release fails.
+        }
+      }
       this.releaseVoicePanelAutoHideSuppression()
     }
   }

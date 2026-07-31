@@ -2,14 +2,15 @@
 title: "SearchInput 搜索输入框"
 description: "基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。"
 category: Form
+status: beta
+since: 1.0.0
+tags: [search, input, form]
 syncStatus: reviewed
 verified: true
 ---
 # SearchInput 搜索输入框
 
-基于输入框的搜索组件，内置搜索图标，并在 Enter 时触发 `search` 事件。
-
-如果你需要“像 Select 一样展开结果面板”的搜索框，推荐使用 `SearchSelect`。
+`TxSearchInput` 把搜索框常见的那套零件——搜索图标、清除按钮、Enter 触发 `search`、可选的防抖远程搜索——打包进一个输入框，省得你在裸 `TuffInput` 上逐个接线。只需要纯文本录入时用 `TuffInput`；需要结果落进可选择的下拉面板时用 `TxSearchSelect`。
 
 ## 基础用法
 
@@ -133,18 +134,44 @@ code: |
 
   const query = ref('')
   const selectedScope = ref<string | number>('all')
+  const lastSearch = ref('')
+
   const scopeOptions = [
     { value: 'all', label: '全部' },
+    { value: 'plugins', label: '插件' },
     { value: 'docs', label: '文档' },
     { value: 'tasks', label: '任务' },
   ]
-  const records = ['插件发布流水', 'Tuffex 组件教程', '截图核验任务']
-  const filteredRecords = computed(() => records.filter(item => item.includes(query.value)))
+  const records = [
+    { type: 'plugins', title: '插件发布流水' },
+    { type: 'docs', title: 'Tuffex 组件教程' },
+    { type: 'tasks', title: '截图核验任务' },
+  ]
+
+  const filteredRecords = computed(() => {
+    const keyword = query.value.trim().toLowerCase()
+    const scope = String(selectedScope.value)
+    return records.filter((item) => {
+      const matchesScope = scope === 'all' || item.type === scope
+      const matchesQuery = !keyword || item.title.toLowerCase().includes(keyword)
+      return matchesScope && matchesQuery
+    })
+  })
+
+  function onSearch(value: string) {
+    lastSearch.value = value.trim()
+  }
   </script>
 
   <template>
     <section class="grid gap-3">
-      <TxSearchInput v-model="query" remote placeholder="搜索插件 / 文档 / 任务" />
+      <TxSearchInput
+        v-model="query"
+        remote
+        :search-debounce="180"
+        placeholder="搜索插件 / 文档 / 任务"
+        @search="onSearch"
+      />
       <TxSearchSelect v-model="selectedScope" :options="scopeOptions" placeholder="筛选范围" />
       <TxSearchEmpty v-if="!filteredRecords.length" description="换一个关键词或筛选范围。" />
     </section>

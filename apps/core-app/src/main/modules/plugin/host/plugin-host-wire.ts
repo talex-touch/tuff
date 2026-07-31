@@ -2,10 +2,12 @@ export const HOST_PROTOCOL_VERSION = 2 as const
 
 export const PLUGIN_HOST_CAPABILITIES = [
   'plugin.info.get',
+  'permission.check',
   'feature.registry.add',
   'feature.registry.remove',
   'feature.registry.list',
   'feature.items.push',
+  'feature.items.widget.push',
   'feature.items.update',
   'feature.items.remove',
   'feature.items.clear',
@@ -29,6 +31,7 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'channel.subscribe',
   'channel.unsubscribe',
   'intelligence.invoke',
+  'intelligence.context.invoke',
   'intelligence.stream',
   'voice.invoke',
   'voice.stream',
@@ -39,7 +42,12 @@ export const PLUGIN_HOST_CAPABILITIES = [
   'filesystem.list',
   'filesystem.stat',
   'process.spawn',
-  'system.invoke'
+  'process.workspace-scripts',
+  'system.invoke',
+  'browser-data.scan',
+  'system.browser-open',
+  'system.window-presets',
+  'system.window-manager'
 ] as const
 
 export const PLUGIN_HOST_LIFECYCLE_METHODS = [
@@ -107,6 +115,14 @@ export interface HostInit extends HostMessageBase {
 export interface HostReady extends HostMessageBase {
   type: 'host-ready'
   handshakeNonce: string
+}
+
+export interface HostHeartbeat extends HostMessageBase {
+  type: 'heartbeat'
+}
+
+export interface HostHeartbeatResult extends HostMessageBase {
+  type: 'heartbeat-result'
 }
 
 export interface HostLoad extends HostMessageBase {
@@ -208,6 +224,8 @@ export type HostCallbackResult = HostCallbackSuccess | HostCallbackFailure
 export type HostWireMessage =
   | HostInit
   | HostReady
+  | HostHeartbeat
+  | HostHeartbeatResult
   | HostLoad
   | HostLoadResult
   | HostLifecycleCall
@@ -420,6 +438,18 @@ function parseHostMessageInternal(
       }
       assertIdentifier(readDataField(value, 'handshakeNonce'))
       return value as unknown as HostReady
+    case 'heartbeat':
+      assertDirection(direction, 'main-to-child')
+      if (!hasExactKeys(value, COMMON_KEYS)) {
+        throw new HostProtocolError('PLUGIN_HOST_INVALID_MESSAGE')
+      }
+      return value as unknown as HostHeartbeat
+    case 'heartbeat-result':
+      assertDirection(direction, 'child-to-main')
+      if (!hasExactKeys(value, COMMON_KEYS)) {
+        throw new HostProtocolError('PLUGIN_HOST_INVALID_MESSAGE')
+      }
+      return value as unknown as HostHeartbeatResult
     case 'host-load':
       assertDirection(direction, 'main-to-child')
       if (!hasExactKeys(value, [...COMMON_KEYS, 'payload'])) {

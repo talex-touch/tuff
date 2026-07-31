@@ -85,7 +85,7 @@ code: |
 
 In permission, member, and release-policy pages, `TxTreeSelect` works well for owner teams, namespaces, and organization units. It saves space compared with a full tree and composes naturally with `TxTransfer` and `TxTimeline` in authorization flows.
 
-::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="Screenshot-verified owner selection, resource grants, and audit flow."}
+:::TuffDemoWrapper{demo="ComponentsPermissionOrchestrationDemo" code-lang="vue" title="Permission orchestration panel" description="Screenshot-verified owner selection, resource grants, and audit flow."}
 ---
 code: |
   <script setup lang="ts">
@@ -183,7 +183,7 @@ code: |
 
 ## Interaction Contract
 
-- The trigger is a focusable `role="combobox"`. `Enter` and `Space` toggle the dropdown; `Escape` closes it.
+- The trigger is a focusable `role="combobox"` with `aria-haspopup="tree"` and `aria-controls` pointing at the popup, which exposes a `TxTree` (`role="tree"`), not a listbox. `Enter` and `Space` toggle the dropdown; `Escape` closes it.
 - The dropdown panel is backed by `TxPopover`; placement and width props pass through to that component.
 - Search uses the inner `TxTree` default label filter. There is currently no prop to pass a custom `filterMethod` through `TxTreeSelect`.
 - Single selection closes the dropdown after emitting value events. Multiple selection keeps it open for additional checks.
@@ -205,7 +205,6 @@ code: |
 - Reviewed against `packages/tuffex/packages/components/src/tree-select/src/TxTreeSelect.vue` and `types.ts`.
 - Existing tests cover selection emission, empty-state rendering, and clear behavior.
 - Recommendation: use `key`/`label` in `nodes` instead of legacy select `value` fields; clearing returns `undefined` in single mode and an empty array in multiple mode.
-- Screenshot reference: `.codex-screenshots/nexus-tree-select-permission-orchestration-demo-playwright-2026-05-28.png`.
 
 ## Source
 

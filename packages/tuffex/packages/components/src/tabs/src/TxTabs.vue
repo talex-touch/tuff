@@ -279,7 +279,9 @@ export default defineComponent({
       refresh: () => autoSizerRef.value?.refresh?.(),
       flip: exposedFlip,
       action: exposedAction,
-      size: () => autoSizerRef.value?.size?.value,
+      // TxAutoSizer exposes `size` as a Ref, which Vue's expose proxy unwraps via
+      // proxyRefs. Reading `.value` here would double-unwrap and always return undefined.
+      size: () => autoSizerRef.value?.size,
     })
 
     const tabNodeCache = ref<any[]>([])
@@ -685,6 +687,9 @@ export default defineComponent({
           ref: (el: any) => (contentRootElRef.value = el),
           key: activeName.value,
           class: ['tx-tabs__select-slot', { 'tx-tabs-content-enter': animationContent.value.enabled }],
+          // Identify the active panel as a tabpanel so it is announced as the
+          // content region controlled by the tablist above.
+          role: 'tabpanel',
         },
         renderContent(tabHeader, activeNode),
       )
@@ -737,6 +742,10 @@ export default defineComponent({
                 {
                   ref: (el: any) => (navInnerElRef.value = el),
                   class: 'tx-tabs__nav-inner',
+                  // Expose tab semantics so screen readers announce the row as a
+                  // tablist of tabs rather than an unlabelled group of buttons.
+                  role: 'tablist',
+                  'aria-orientation': isVertical.value ? 'vertical' : 'horizontal',
                 },
                 pointer ? [...tabs, pointer] : tabs,
               ),

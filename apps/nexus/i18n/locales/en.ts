@@ -44,6 +44,13 @@ export default {
     cancel: 'Cancel',
     close: 'Close',
   },
+  notFound: {
+    title: 'Page not found',
+    description: 'The page you are looking for doesn\'t exist, or has drifted past the event horizon.',
+    seoDescription: 'The page {path} does not exist or has been moved.',
+    backHome: 'Back to Home',
+    goBack: 'Go Back',
+  },
   search: {
     open: 'Search',
     openAria: 'Open global search',
@@ -225,12 +232,11 @@ export default {
     eyebrow: 'Pricing',
     title: 'Choose the plan that matches your momentum.',
     subtitle: 'Upgrade inside Nexus. Unlock premium automations and surfaces instantly after subscription.',
-    note: 'Start free — no credit card required. Upgrade or cancel anytime.',
     popular: 'Most popular',
     comingSoon: 'Coming soon',
     comingSoonHint: 'Pricing announced at launch',
+    freeHint: 'Free forever, no card required',
     perMonth: '/ month',
-    included: 'Includes',
     ctaFree: 'Get started',
     ctaWaitlist: 'Join the waitlist',
     plans: {

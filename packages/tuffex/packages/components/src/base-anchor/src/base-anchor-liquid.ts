@@ -14,10 +14,15 @@ export const DETACH_AT = 0.45
 /** How many pixels of panel growth an item fades across. */
 export const ITEM_FADE_SPAN = 18
 
+/** Below this the neck is not cropping anything a display can resolve. */
+export const NECK_CLIP_MIN = 0.5
+
 /**
- * Speed at which the bead pinch saturates, expressed in `p` per unit of
- * normalised time. A linear ramp travels at exactly 1.0, so 4 reads as
- * "four times the average pace squeezes the sheet as thin as it goes".
+ * Speed at which the bead pinch saturates, in peel per unit of normalised time.
+ *
+ * The peel leaves the trigger at `2 / DETACH_AT` — about 4.44 — and decays
+ * linearly to 0 at the detach, so a reference of 4 holds the sheet fully drawn
+ * in for roughly the first tenth of the peel and then lets it relax.
  */
 export const BEAD_VELOCITY_REF = 4
 
@@ -53,8 +58,15 @@ export const LIQUID_DEFAULTS = {
   seedHeight: 12,
   itemSelector: '[data-liquid-item]',
   outlineColor: '#dcdfe6',
-  /** `bead` only: how far each side may be drawn in at peak speed (px). */
-  beadPinch: 14,
+  /**
+   * `bead` only: how far each side may be drawn in at peak speed (px).
+   *
+   * Deep enough that the neck reads as a neck rather than as a slightly inset
+   * copy of the trigger — on the reference 200px panel it necks to 80px, well
+   * under half. Full-width rows cannot survive a pinch this deep on their own,
+   * which is what `neckClipAt` is for.
+   */
+  beadPinch: 60,
   beadVelocityRef: BEAD_VELOCITY_REF,
 } as const
 
@@ -237,7 +249,8 @@ export function createLiquidMetrics(input: {
  *
  * This — not `p` — is the drop's actual fall. `p` advances linearly, so its own
  * derivative is a constant and carries no information; the peel decelerates to a
- * dead stop at the detach, which is exactly the speed the bead reports.
+ * dead stop at the detach, and it is the faster of the two motions the bead
+ * reports until roughly a third of the way through the timeline.
  */
 export function peelAt(p: number): number {
   return easeOutQuad(clamp01(clamp01(p) / DETACH_AT))
@@ -270,15 +283,77 @@ export function geometryAt(p: number, metrics: LiquidMetrics): LiquidGeometry {
 /* ─── bead ─── */
 
 /**
- * Speed of `p`, normalised so a linear ramp reads exactly 1.0.
+ * d(peel)/dp — the peel's own slope at progress `p`.
  *
- * `dtNormalised` is the fraction of the whole timeline consumed by this frame,
- * which makes the result independent of both duration and refresh rate.
+ * `easeOutQuad(x)` is `2x - x²`, so its slope is `2 - 2x`, and `x = p / DETACH_AT`
+ * contributes the `1 / DETACH_AT` chain factor. Past the detach the peel is
+ * saturated and the slope is exactly 0, which is what retires the pinch.
  */
-export function normalizedVelocity(dp: number, dtNormalised: number): number {
-  if (!Number.isFinite(dp) || !Number.isFinite(dtNormalised) || dtNormalised <= 0)
+export function peelSlopeAt(p: number): number {
+  const x = clamp01(p) / DETACH_AT
+  if (x >= 1)
     return 0
-  return Math.abs(dp) / dtNormalised
+  return (2 - 2 * x) / DETACH_AT
+}
+
+/**
+ * d(fill)/dp — the slope of the body still filling.
+ *
+ * `easeOutCubic(x)` is `1 - (1-x)³`, so its slope is `3(1-x)²`. Unlike the peel
+ * this never saturates: the panel is still growing right up to p = 1, which is
+ * what gives the pinch something to keep reporting after the neck has snapped.
+ */
+export function fillSlopeAt(p: number): number {
+  const inv = 1 - clamp01(p)
+  return 3 * inv * inv
+}
+
+/**
+ * Step used to differentiate a timing function.
+ *
+ * Fixed on purpose. Sampling the ease across the real frame delta is what made
+ * the pinch a function of the display's refresh rate rather than of the animation.
+ */
+const EASE_SLOPE_STEP = 1e-3
+
+/**
+ * Slope of a resolved ease at timeline position `t`, by central difference.
+ *
+ * Every ease reaching this point is either linear or a cubic-bezier — both
+ * smooth enough that a fixed-step difference lands well inside a tenth of a
+ * pixel of pinch. Staying a pure function of `t` is the property that matters:
+ * two machines running at different refresh rates derive the same number for
+ * the same point in the timeline.
+ */
+export function easeSlopeAt(ease: (t: number) => number, t: number): number {
+  const x = clamp01(t)
+  const lo = Math.max(0, x - EASE_SLOPE_STEP)
+  const hi = Math.min(1, x + EASE_SLOPE_STEP)
+  if (hi <= lo)
+    return 0
+  return (ease(hi) - ease(lo)) / (hi - lo)
+}
+
+/**
+ * How fast the drop is moving at timeline position `t`, normalised per unit of
+ * timeline so it is independent of duration and refresh rate.
+ *
+ * The drop has two motions and reports whichever is currently faster. The peel
+ * dominates the tear and then stops dead at `DETACH_AT`; the fill is slower but
+ * runs all the way to p = 1. Reporting the peel alone cut the pinch off at 45%
+ * of the timeline — the sheet slammed back to full width while the panel was
+ * still visibly growing. A sheet is under tension for as long as *either* end of
+ * it is still moving.
+ *
+ * Both slopes are closed forms, which is the other half of the point: the frame
+ * loop used to reconstruct this by backward difference across rAF frames, and
+ * differencing has no sample at `t = 0`, so it reported a standing start the drop
+ * never has and popped the sheet from full width to full pinch on frame one.
+ */
+export function liquidVelocityAt(p: number, t: number, ease: (t: number) => number): number {
+  const motion = Math.max(peelSlopeAt(p), fillSlopeAt(p))
+  const velocity = motion * easeSlopeAt(ease, t)
+  return Number.isFinite(velocity) ? Math.abs(velocity) : 0
 }
 
 /**
@@ -320,4 +395,28 @@ export function beadSpanAt(
 export function itemOpacityAt(bottom: number, hold: number, span: number = ITEM_FADE_SPAN): number {
   const range = span > 0 ? span : ITEM_FADE_SPAN
   return clamp01((bottom - hold) / range)
+}
+
+/**
+ * `clip-path` that keeps the panel's content inside the necked sheet.
+ *
+ * `itemOpacityAt` is the vertical half of this rule — nothing appears before the
+ * panel has grown to hold it — and a deep pinch makes the horizontal half matter
+ * just as much: rows keep their full width while the sheet does not, so at a
+ * pinch of any depth their text would hang outside the silhouette.
+ *
+ * Clipped rather than faded on purpose. A fade has to be tuned against the pinch
+ * depth and only ever makes the overhang *faint*; clipping to the sheet makes it
+ * impossible, and reads as the neck revealing the content as it relaxes. The goo
+ * threshold sits fractionally outside the rect it is drawn from, so clipping on
+ * the rect edge stays conservative.
+ */
+export function neckClipAt(pinch: number): string {
+  const inset = Math.max(0, pinch)
+  // The pinch now decays all the way to p=1, so without a floor the clip would
+  // stay armed for the whole run to crop a fraction of a pixel — and a clip-path
+  // is a containing block for anything positioned inside the panel.
+  if (inset < NECK_CLIP_MIN)
+    return 'none'
+  return `inset(0 ${inset}px 0 ${inset}px)`
 }

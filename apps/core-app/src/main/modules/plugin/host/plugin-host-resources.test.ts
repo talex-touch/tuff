@@ -340,7 +340,7 @@ describe('PluginHostResourceRegistry', () => {
     expect(fatal).not.toHaveBeenCalled()
   })
 
-  it('closes all resources exactly once despite failures and callback release errors', async () => {
+  it('closes all resources exactly once and reports a stable aggregate disposal failure', async () => {
     const first = vi.fn(async () => {
       throw new Error('/private/dispose-detail')
     })
@@ -355,8 +355,12 @@ describe('PluginHostResourceRegistry', () => {
       throw new Error('/private/callback-release')
     })
 
-    await target.close(releaseCallbacks)
-    await target.close(releaseCallbacks)
+    await expect(target.close(releaseCallbacks)).rejects.toEqual(
+      new PluginHostResourceError('PLUGIN_HOST_RESOURCE_DISPOSE_FAILED')
+    )
+    await expect(target.close(releaseCallbacks)).rejects.toEqual(
+      new PluginHostResourceError('PLUGIN_HOST_RESOURCE_DISPOSE_FAILED')
+    )
     expect(first).toHaveBeenCalledTimes(1)
     expect(second).toHaveBeenCalledTimes(1)
     expect(releaseCallbacks).toHaveBeenCalledTimes(2)

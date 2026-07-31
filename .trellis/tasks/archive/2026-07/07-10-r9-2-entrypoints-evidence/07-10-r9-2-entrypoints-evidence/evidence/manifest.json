@@ -1,0 +1,232 @@
+{
+  "schema": "tuff.context-entrypoint-evidence.v1",
+  "generatedAt": "2026-07-13T08:19:24.679Z",
+  "cases": [
+    {
+      "id": "unit-cross-entrypoint-contracts",
+      "entrypoint": "cross-entrypoint",
+      "level": "unit",
+      "status": "passed",
+      "source": "focused-vitest",
+      "timestamp": "2026-07-12T04:44:35.000Z",
+      "buildVersion": "2.4.13-beta.4",
+      "runtimeVersion": "vitest-3.2.4",
+      "expected": {
+        "hostAssembler": true,
+        "workflowRunIsolation": true,
+        "omniPanelLightPolicy": true,
+        "assistantHistoryIsolation": true
+      },
+      "observed": {
+        "suiteCount": 8,
+        "testCount": 117,
+        "failedCount": 0,
+        "rawInteractionFieldsStored": 0
+      },
+      "redaction": {
+        "status": "passed",
+        "scanner": "context-entrypoint-evidence-v1"
+      },
+      "artifactPaths": [
+        ".trellis/tasks/07-10-r9-2-entrypoints-evidence/evidence/unit-contract-2026-07-11.json"
+      ]
+    },
+    {
+      "id": "controlled-cross-entrypoint-isolation",
+      "entrypoint": "cross-entrypoint",
+      "level": "controlled",
+      "status": "passed",
+      "source": "controlled-plugin-harness",
+      "timestamp": "2026-07-12T04:44:35.000Z",
+      "buildVersion": "2.4.13-beta.4",
+      "runtimeVersion": "vitest-3.2.4",
+      "expected": {
+        "assistantOwner": "assistant",
+        "assistantScope": "light",
+        "coreboxOwner": "corebox",
+        "isolatedHistorySourceCount": 0
+      },
+      "observed": {
+        "testCount": 42,
+        "failedCount": 0,
+        "assistantOwner": "assistant",
+        "assistantScope": "light",
+        "coreboxOwner": "corebox",
+        "isolatedHistorySourceCount": 0
+      },
+      "redaction": {
+        "status": "passed",
+        "scanner": "context-entrypoint-evidence-v1"
+      },
+      "artifactPaths": [
+        ".trellis/tasks/07-10-r9-2-entrypoints-evidence/evidence/controlled-plugin-2026-07-11.json"
+      ]
+    },
+    {
+      "id": "packaged-corebox-baseline",
+      "entrypoint": "corebox",
+      "level": "packaged",
+      "status": "passed",
+      "source": "packaged-electron",
+      "timestamp": "2026-07-12T06:24:09.975Z",
+      "buildVersion": "2.4.13-beta.4",
+      "runtimeVersion": "electron-41.3.0",
+      "expected": {
+        "owner": "corebox",
+        "scope": "retrieval",
+        "contextMode": "new",
+        "providerCallCount": 1
+      },
+      "observed": {
+        "owner": "corebox",
+        "scope": "retrieval",
+        "boundaryLabel": "new / retrieval",
+        "providerCallCount": 1,
+        "providerEntryCount": 2,
+        "visibleExecution": true
+      },
+      "redaction": {
+        "status": "passed",
+        "scanner": "context-entrypoint-evidence-v1"
+      },
+      "artifactPaths": [
+        ".trellis/tasks/07-10-r9-2-entrypoints-evidence/evidence/packaged-electron-2026-07-12.json"
+      ]
+    },
+    {
+      "id": "packaged-assistant-light-isolation",
+      "entrypoint": "assistant",
+      "level": "packaged",
+      "status": "passed",
+      "source": "packaged-electron",
+      "timestamp": "2026-07-12T06:24:09.975Z",
+      "buildVersion": "2.4.13-beta.4",
+      "runtimeVersion": "electron-41.3.0",
+      "expected": {
+        "entrypointId": "assistant.voice",
+        "owner": "assistant",
+        "scope": "light",
+        "isolated": true,
+        "providerCallCount": 1
+      },
+      "observed": {
+        "entrypointId": "assistant.voice",
+        "owner": "assistant",
+        "scope": "light",
+        "boundaryLabel": "new / light",
+        "providerCallCount": 1,
+        "providerEntryCount": 2,
+        "visibleExecution": true
+      },
+      "redaction": {
+        "status": "passed",
+        "scanner": "context-entrypoint-evidence-v1"
+      },
+      "artifactPaths": [
+        ".trellis/tasks/07-10-r9-2-entrypoints-evidence/evidence/packaged-electron-2026-07-12.json"
+      ]
+    },
+    {
+      "id": "packaged-workflow-run-isolation",
+      "entrypoint": "workflow",
+      "level": "packaged",
+      "status": "passed",
+      "source": "packaged-electron",
+      "timestamp": "2026-07-13T07:05:36.425Z",
+      "buildVersion": "2.4.13-beta.4",
+      "runtimeVersion": "electron-41.3.0",
+      "expected": {
+        "entrypointId": "workflow.use-model",
+        "owner": "workflow",
+        "scope": "session",
+        "contextMode": "new",
+        "isolatedRuns": true,
+        "providerCallCount": 2,
+        "providerCallsPerRun": 1
+      },
+      "observed": {
+        "entrypointId": "workflow.use-model",
+        "owner": "workflow",
+        "scope": "session",
+        "contextMode": "new",
+        "boundaryLabel": "new / session",
+        "distinctRunCount": 2,
+        "distinctContextSessionCount": 2,
+        "continuationMetadataCount": 0,
+        "providerCallCount": 2,
+        "providerCallsPerRun": 1,
+        "providerEntryCount": 1,
+        "visibleExecution": true
+      },
+      "redaction": {
+        "status": "passed",
+        "scanner": "context-entrypoint-evidence-v1"
+      },
+      "artifactPaths": [
+        ".trellis/tasks/07-12-workflow-context-packaged-evidence/evidence/packaged-workflow-context-2026-07-12.json"
+      ]
+    },
+    {
+      "id": "packaged-omnipanel-ai-action",
+      "entrypoint": "omni-panel",
+      "level": "packaged",
+      "status": "passed",
+      "source": "packaged-electron",
+      "timestamp": "2026-07-13T08:19:24.679Z",
+      "buildVersion": "2.4.13-beta.4",
+      "runtimeVersion": "electron-41.3.0",
+      "expected": {
+        "entrypointId": "omni-panel.ai-action",
+        "owner": "omni-panel",
+        "scope": "light",
+        "contextMode": "new",
+        "providerCallCount": 1,
+        "providerCallsPerAction": 1,
+        "visibleResult": true
+      },
+      "observed": {
+        "entrypointId": "omni-panel.ai-action",
+        "owner": "omni-panel",
+        "scope": "light",
+        "contextMode": "new",
+        "boundaryLabel": "new / light",
+        "distinctContextSessionCount": 1,
+        "continuationMetadataCount": 0,
+        "providerCallCount": 1,
+        "providerCallsPerAction": 1,
+        "providerEntryCount": 1,
+        "visibleExecution": true,
+        "visibleResult": true
+      },
+      "redaction": {
+        "status": "passed",
+        "scanner": "context-entrypoint-evidence-v1"
+      },
+      "artifactPaths": [
+        ".trellis/tasks/07-13-omnipanel-context-packaged-evidence/evidence/packaged-omnipanel-context-2026-07-13.json"
+      ]
+    },
+    {
+      "id": "real-profile-open",
+      "entrypoint": "cross-entrypoint",
+      "level": "real-profile",
+      "status": "open",
+      "source": "not-collected",
+      "timestamp": "2026-07-12T06:24:09.975Z",
+      "buildVersion": "2.4.13-beta.4",
+      "runtimeVersion": "not-collected",
+      "expected": {
+        "realProfileCollected": true
+      },
+      "observed": {
+        "realProfileCollected": false,
+        "reasonCode": "real-profile-not-collected"
+      },
+      "redaction": {
+        "status": "not-run",
+        "scanner": "context-entrypoint-evidence-v1"
+      },
+      "artifactPaths": []
+    }
+  ]
+}

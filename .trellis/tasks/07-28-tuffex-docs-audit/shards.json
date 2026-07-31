@@ -1,0 +1,295 @@
+[
+  {
+    "id": "shard-01",
+    "weight": 4474,
+    "components": [
+      "card"
+    ]
+  },
+  {
+    "id": "shard-02",
+    "weight": 4411,
+    "components": [
+      "base-anchor"
+    ]
+  },
+  {
+    "id": "shard-03",
+    "weight": 4036,
+    "components": [
+      "breadcrumb",
+      "fusion",
+      "typing-indicator"
+    ]
+  },
+  {
+    "id": "shard-04",
+    "weight": 4090,
+    "components": [
+      "blank-slate",
+      "tabs",
+      "timeline"
+    ]
+  },
+  {
+    "id": "shard-05",
+    "weight": 4039,
+    "components": [
+      "card-item",
+      "error-state",
+      "group-block"
+    ]
+  },
+  {
+    "id": "shard-06",
+    "weight": 4089,
+    "components": [
+      "image-uploader",
+      "os-icon",
+      "slider",
+      "virtual-list"
+    ]
+  },
+  {
+    "id": "shard-07",
+    "weight": 4020,
+    "components": [
+      "flip-overlay",
+      "form",
+      "kbd",
+      "spinner"
+    ]
+  },
+  {
+    "id": "shard-08",
+    "weight": 4098,
+    "components": [
+      "glow-text",
+      "guide-state",
+      "keyframe-stroke-text",
+      "select"
+    ]
+  },
+  {
+    "id": "shard-09",
+    "weight": 4080,
+    "components": [
+      "button",
+      "no-selection",
+      "toast",
+      "tooltip"
+    ]
+  },
+  {
+    "id": "shard-10",
+    "weight": 4087,
+    "components": [
+      "base-surface",
+      "flat-button",
+      "search-empty",
+      "search-select"
+    ]
+  },
+  {
+    "id": "shard-11",
+    "weight": 3986,
+    "components": [
+      "badge",
+      "dialog",
+      "flat-dropdown",
+      "sortable-list"
+    ]
+  },
+  {
+    "id": "shard-12",
+    "weight": 3969,
+    "components": [
+      "command-palette",
+      "gradient-border",
+      "nav-bar",
+      "scroll"
+    ]
+  },
+  {
+    "id": "shard-13",
+    "weight": 3964,
+    "components": [
+      "input",
+      "loading-overlay",
+      "modal",
+      "radio"
+    ]
+  },
+  {
+    "id": "shard-14",
+    "weight": 3975,
+    "components": [
+      "avatar-variants",
+      "corner-overlay",
+      "grid",
+      "status-badge"
+    ]
+  },
+  {
+    "id": "shard-15",
+    "weight": 3989,
+    "components": [
+      "agents",
+      "copy-button",
+      "index",
+      "version-capsule"
+    ]
+  },
+  {
+    "id": "shard-16",
+    "weight": 3883,
+    "components": [
+      "ai-elements",
+      "avatar",
+      "context-menu",
+      "layout-skeleton"
+    ]
+  },
+  {
+    "id": "shard-17",
+    "weight": 3787,
+    "components": [
+      "collapse",
+      "drawer",
+      "stagger",
+      "tree"
+    ]
+  },
+  {
+    "id": "shard-18",
+    "weight": 3822,
+    "components": [
+      "chat",
+      "grid-layout",
+      "search-input",
+      "tree-select",
+      "utils"
+    ]
+  },
+  {
+    "id": "shard-19",
+    "weight": 3999,
+    "components": [
+      "chat-composer",
+      "code-editor",
+      "dropdown-menu",
+      "markdown-view",
+      "textarea"
+    ]
+  },
+  {
+    "id": "shard-20",
+    "weight": 4075,
+    "components": [
+      "empty-state",
+      "floating",
+      "offline-state",
+      "splitter",
+      "tab-bar"
+    ]
+  },
+  {
+    "id": "shard-21",
+    "weight": 4118,
+    "components": [
+      "alert",
+      "icon",
+      "popover",
+      "skeleton",
+      "stack"
+    ]
+  },
+  {
+    "id": "shard-22",
+    "weight": 4113,
+    "components": [
+      "auto-sizer",
+      "divider",
+      "flex",
+      "pagination",
+      "transition"
+    ]
+  },
+  {
+    "id": "shard-23",
+    "weight": 4090,
+    "components": [
+      "glass-surface",
+      "no-data",
+      "rating",
+      "tag",
+      "tuff-logo-stroke"
+    ]
+  },
+  {
+    "id": "shard-24",
+    "weight": 4082,
+    "components": [
+      "empty",
+      "flat-select",
+      "gradual-blur",
+      "image-gallery",
+      "segmented-slider"
+    ]
+  },
+  {
+    "id": "shard-25",
+    "weight": 4092,
+    "components": [
+      "data-table",
+      "edge-fade-mask",
+      "loading-state",
+      "markdown-editor",
+      "steps"
+    ]
+  },
+  {
+    "id": "shard-26",
+    "weight": 4071,
+    "components": [
+      "checkbox",
+      "outline-border",
+      "permission-state",
+      "picker",
+      "progress-bar"
+    ]
+  },
+  {
+    "id": "shard-27",
+    "weight": 4108,
+    "components": [
+      "container",
+      "file-uploader",
+      "flat-radio",
+      "icon-button",
+      "number-input"
+    ]
+  },
+  {
+    "id": "shard-28",
+    "weight": 4033,
+    "components": [
+      "cascader",
+      "date-picker",
+      "flat-input",
+      "foundations",
+      "switch"
+    ]
+  },
+  {
+    "id": "shard-29",
+    "weight": 4068,
+    "components": [
+      "progress",
+      "stat-card",
+      "tag-input",
+      "text-transformer",
+      "transfer"
+    ]
+  }
+]

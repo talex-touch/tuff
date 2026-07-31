@@ -29,6 +29,8 @@ export type PluginRuntimeServiceErrorCode =
   | 'PLUGIN_RUNTIME_SERVICE_INVALID_OPTIONS'
   | 'PLUGIN_RUNTIME_SERVICE_CLOSED'
   | 'PLUGIN_RUNTIME_ACTIVATION_STALE'
+  | 'PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED'
+  | 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED'
 
 export class PluginRuntimeServiceError extends Error {
   constructor(readonly code: PluginRuntimeServiceErrorCode) {
@@ -48,6 +50,7 @@ export type PluginRuntimeSnapshotValue =
 export interface PluginRuntimeSnapshot {
   readonly platform: string
   readonly arch: string
+  readonly locale: string
   readonly manifest: Readonly<Record<string, PluginRuntimeSnapshotValue>>
 }
 
@@ -74,6 +77,7 @@ export interface PluginRuntimeActivationOptions {
   scriptContent: string
   snapshot: PluginRuntimeSnapshot
   capabilityDefinitions?: readonly PluginHostCapabilityDefinition[]
+  capabilityAllowlist?: readonly PluginHostCapability[]
   closeResources?: () => void | Promise<void>
   onCrash?: (diagnostic: PluginRuntimeCrashDiagnostic) => void
 }
@@ -109,6 +113,7 @@ interface SnapshotActivationOptions {
   scriptContent: string
   snapshot: PluginRuntimeSnapshot
   capabilityDefinitions: readonly PluginHostCapabilityDefinition[]
+  capabilityAllowlist?: readonly PluginHostCapability[]
   closeResources?: () => void | Promise<void>
   onCrash?: (diagnostic: PluginRuntimeCrashDiagnostic) => void
 }
@@ -120,6 +125,8 @@ interface RuntimeKeyManager {
 
 const DEFAULT_TEARDOWN_TIMEOUT_MS = 2_000
 const MAX_TEARDOWN_TIMEOUT_MS = 60_000
+const RESTART_BUDGET_MAX_CRASHES = 3
+const RESTART_BUDGET_WINDOW_MS = 30_000
 const SNAPSHOT_MAX_DEPTH = 32
 const SNAPSHOT_MAX_MEMBERS = 10_000
 const MAX_ISSUED_ACTIVATIONS = 65_536
@@ -133,6 +140,8 @@ const RESOURCE_LIMIT_KEYS = new Set<keyof PluginRuntimeHostResourceLimits>([
   'handshakeTimeoutMs',
   'loadTimeoutMs',
   'lifecycleTimeoutMs',
+  'heartbeatIntervalMs',
+  'heartbeatTimeoutMs',
   'shutdownTimeoutMs',
   'cancelGraceMs',
   'callbackTimeoutMs',
@@ -269,6 +278,48 @@ function snapshotDefinitions(input: unknown): readonly PluginHostCapabilityDefin
   return Object.freeze(definitions)
 }
 
+function snapshotCapabilityAllowlist(input: unknown): readonly PluginHostCapability[] {
+  if (!Array.isArray(input)) invalidOptions()
+  let descriptors: Record<string, PropertyDescriptor>
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(input)
+  } catch {
+    invalidOptions()
+  }
+  const lengthDescriptor = descriptors.length
+  const length =
+    lengthDescriptor && 'value' in lengthDescriptor ? lengthDescriptor.value : undefined
+  if (
+    !Number.isSafeInteger(length) ||
+    Number(length) < 0 ||
+    Number(length) > PLUGIN_HOST_CAPABILITIES.length
+  ) {
+    invalidOptions()
+  }
+  const allowedKeys = new Set<PropertyKey>(['length'])
+  for (let index = 0; index < Number(length); index += 1) allowedKeys.add(String(index))
+  if (Reflect.ownKeys(descriptors).some((key) => !allowedKeys.has(key))) invalidOptions()
+
+  const known = new Set<string>(PLUGIN_HOST_CAPABILITIES)
+  const seen = new Set<PluginHostCapability>()
+  const capabilities: PluginHostCapability[] = []
+  for (let index = 0; index < Number(length); index += 1) {
+    const descriptor = descriptors[String(index)]
+    if (!descriptor?.enumerable || !('value' in descriptor)) invalidOptions()
+    const capability = descriptor.value
+    if (
+      typeof capability !== 'string' ||
+      !known.has(capability) ||
+      seen.has(capability as PluginHostCapability)
+    ) {
+      invalidOptions()
+    }
+    seen.add(capability as PluginHostCapability)
+    capabilities.push(capability as PluginHostCapability)
+  }
+  return Object.freeze(capabilities)
+}
+
 function mergeDefinitions(
   baseDefinitions: readonly PluginHostCapabilityDefinition[],
   activationDefinitions: readonly PluginHostCapabilityDefinition[]
@@ -385,12 +436,17 @@ function snapshotValue(
 function snapshotRuntimeSnapshot(input: unknown): PluginRuntimeSnapshot {
   const platform = readDataProperty(input, 'platform')
   const arch = readDataProperty(input, 'arch')
+  const locale = readDataProperty(input, 'locale')
   const manifest = readDataProperty(input, 'manifest')
   if (
     typeof platform !== 'string' ||
     platform.length < 1 ||
     typeof arch !== 'string' ||
-    arch.length < 1
+    arch.length < 1 ||
+    typeof locale !== 'string' ||
+    locale.length < 2 ||
+    locale.length > 64 ||
+    !/^[A-Za-z0-9-]+$/.test(locale)
   ) {
     invalidOptions()
   }
@@ -405,6 +461,7 @@ function snapshotRuntimeSnapshot(input: unknown): PluginRuntimeSnapshot {
   return Object.freeze({
     platform,
     arch,
+    locale,
     manifest: clonedManifest as Readonly<Record<string, PluginRuntimeSnapshotValue>>
   })
 }
@@ -420,6 +477,11 @@ function snapshotActivationOptions(
   const capabilityDefinitions = snapshotDefinitions(
     readDataProperty(input, 'capabilityDefinitions', false) ?? Object.freeze([])
   )
+  const rawCapabilityAllowlist = readDataProperty(input, 'capabilityAllowlist', false)
+  const capabilityAllowlist =
+    rawCapabilityAllowlist === undefined
+      ? undefined
+      : snapshotCapabilityAllowlist(rawCapabilityAllowlist)
   const closeResources = readDataProperty(input, 'closeResources', false)
   const onCrash = readDataProperty(input, 'onCrash', false)
   if (
@@ -434,6 +496,7 @@ function snapshotActivationOptions(
     scriptContent,
     snapshot,
     capabilityDefinitions,
+    ...(capabilityAllowlist === undefined ? {} : { capabilityAllowlist }),
     ...(closeResources === undefined
       ? {}
       : { closeResources: closeResources as () => void | Promise<void> }),
@@ -449,6 +512,14 @@ function safeCall(callback: () => void | Promise<void>): Promise<void> {
   } catch {
     return Promise.resolve()
   }
+}
+
+function isResourceCleanupFailure(error: unknown): boolean {
+  return (
+    (error instanceof PluginRuntimeServiceError &&
+      error.code === 'PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED') ||
+    (error instanceof PluginRuntimeHostError && error.code === 'PLUGIN_RUNTIME_HOST_CLEANUP_FAILED')
+  )
 }
 
 export function resolvePluginRuntimeArtifactPath(): string {
@@ -471,6 +542,7 @@ export class PluginRuntimeService {
   private readonly records = new Map<string, RuntimeRecord>()
   private readonly operations = new Map<string, Promise<unknown>>()
   private readonly issuedActivationHandles = new Set<string>()
+  private readonly crashHistory = new Map<string, number[]>()
   private stopAllPromise: Promise<void> | null = null
   private disposed = false
   private stopping = false
@@ -617,13 +689,29 @@ export class PluginRuntimeService {
     this.stopAllPromise = Promise.resolve().then(async () => {
       while (true) {
         const activeOperations = [...this.operations.values()]
-        if (activeOperations.length > 0) await Promise.allSettled(activeOperations)
+        let cleanupFailed = false
+        if (activeOperations.length > 0) {
+          const results = await Promise.allSettled(activeOperations)
+          cleanupFailed = results.some(
+            (result) => result.status === 'rejected' && isResourceCleanupFailure(result.reason)
+          )
+        }
 
         const records = [...this.records.values()]
         if (records.length > 0) {
-          await Promise.all(records.map((record) => this.stopRecord(record, true)))
+          const results = await Promise.allSettled(
+            records.map((record) => this.stopRecord(record, true))
+          )
+          cleanupFailed ||= results.some((result) => result.status === 'rejected')
         }
-        await this.manager.stopAll()
+        try {
+          await this.manager.stopAll()
+        } catch {
+          cleanupFailed = true
+        }
+        if (cleanupFailed) {
+          throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+        }
         await Promise.resolve()
         if (this.operations.size === 0 && this.records.size === 0) return
       }
@@ -648,6 +736,7 @@ export class PluginRuntimeService {
       throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_SERVICE_CLOSED')
     }
     this.assertCurrentActivation(activation)
+    this.assertRestartBudget(activation.name)
 
     const previous = this.records.get(activation.name)
     if (previous && sameActivation(previous.activation, activation)) {
@@ -663,6 +752,13 @@ export class PluginRuntimeService {
         this.capabilityDefinitions,
         options.capabilityDefinitions
       )
+      if (options.capabilityAllowlist) {
+        const allowed = new Set(options.capabilityAllowlist)
+        capabilityDefinitions = Object.freeze(
+          capabilityDefinitions.filter((definition) => allowed.has(definition.id))
+        )
+        if (capabilityDefinitions.length !== allowed.size) invalidOptions()
+      }
       capabilityManifest = Object.freeze(
         capabilityDefinitions.map((definition) =>
           Object.freeze({
@@ -723,11 +819,24 @@ export class PluginRuntimeService {
         // Crash observers cannot restore authority or expose native errors.
       }
     }
+    const stopRuntime = (): Promise<void> => {
+      if (record?.stopPromise) return record.stopPromise
+      const stopping = this.manager.stopPlugin(activation.name).catch(() => {
+        throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      })
+      record.stopPromise = stopping
+      return stopping
+    }
     const stopAndReportCrash = (): void => {
       if (crashCleanupStarted) return
       crashCleanupStarted = true
-      const stopping = this.manager.stopPlugin(activation.name)
-      void stopping.then(reportCrash, reportCrash)
+      const stopping = stopRuntime()
+      void stopping.then(() => {
+        if (this.records.get(activation.name) === record) {
+          this.records.delete(activation.name)
+        }
+        reportCrash()
+      }, reportCrash)
     }
     const handleUnexpectedTermination = (): void => {
       if (!record || this.records.get(activation.name) !== record) {
@@ -735,11 +844,11 @@ export class PluginRuntimeService {
         return
       }
       if (!record.acceptingWork) {
-        void this.manager.stopPlugin(activation.name)
+        void stopRuntime().catch(() => undefined)
         return
       }
+      this.recordUnexpectedCrash(activation.name)
       record.acceptingWork = false
-      this.records.delete(activation.name)
       stopAndReportCrash()
     }
 
@@ -792,8 +901,22 @@ export class PluginRuntimeService {
         this.keyManager.revokeKey(activation.key)
       },
       closeResources: async () => {
-        await safeCall(() => this.closeResources(activation))
-        if (options.closeResources) await safeCall(options.closeResources)
+        let cleanupFailed = false
+        try {
+          await this.closeResources(activation)
+        } catch {
+          cleanupFailed = true
+        }
+        if (options.closeResources) {
+          try {
+            await options.closeResources()
+          } catch {
+            cleanupFailed = true
+          }
+        }
+        if (cleanupFailed) {
+          throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+        }
       },
       resolveCurrentActivation: (pluginName) => this.keyManager.resolveCurrentIdentity(pluginName),
       capabilityDispatcher: dispatcher,
@@ -850,8 +973,12 @@ export class PluginRuntimeService {
       return Object.freeze({ activation, host, lifecycle })
     } catch (error) {
       record.acceptingWork = false
+      try {
+        await stopRuntime()
+      } catch {
+        throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      }
       if (this.records.get(activation.name) === record) this.records.delete(activation.name)
-      await this.manager.stopPlugin(activation.name)
       throw error
     }
   }
@@ -926,6 +1053,27 @@ export class PluginRuntimeService {
     }
   }
 
+  private assertRestartBudget(pluginName: string): void {
+    const now = Date.now()
+    const recent = (this.crashHistory.get(pluginName) ?? []).filter(
+      (timestamp) => now - timestamp < RESTART_BUDGET_WINDOW_MS
+    )
+    if (recent.length > 0) this.crashHistory.set(pluginName, recent)
+    else this.crashHistory.delete(pluginName)
+    if (recent.length >= RESTART_BUDGET_MAX_CRASHES) {
+      throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESTART_BUDGET_EXHAUSTED')
+    }
+  }
+
+  private recordUnexpectedCrash(pluginName: string): void {
+    const now = Date.now()
+    const recent = (this.crashHistory.get(pluginName) ?? []).filter(
+      (timestamp) => now - timestamp < RESTART_BUDGET_WINDOW_MS
+    )
+    recent.push(now)
+    this.crashHistory.set(pluginName, recent)
+  }
+
   private stopRecord(record: RuntimeRecord, runDestroy: boolean): Promise<void> {
     if (record.stopPromise) return record.stopPromise
     record.acceptingWork = false
@@ -940,10 +1088,14 @@ export class PluginRuntimeService {
           // Teardown is bounded; authority revocation and process exit still follow.
         }
       }
+      try {
+        await this.manager.stopPlugin(record.activation.name)
+      } catch {
+        throw new PluginRuntimeServiceError('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      }
       if (this.records.get(record.activation.name) === record) {
         this.records.delete(record.activation.name)
       }
-      await this.manager.stopPlugin(record.activation.name)
     })
     return record.stopPromise
   }

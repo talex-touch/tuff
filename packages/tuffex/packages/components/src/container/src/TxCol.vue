@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
 })
 
 function resolveSpan(): number {
-  const bp = getBp(width.value)
+  const order: Breakpoint[] = ['xs', 'sm', 'md', 'lg', 'xl']
   const map: Record<Breakpoint, number | undefined> = {
     xs: props.xs,
     sm: props.sm,
@@ -69,7 +69,22 @@ function resolveSpan(): number {
     xl: props.xl,
   }
 
-  const v = map[bp] ?? props.span
+  // Cascade from the active breakpoint down to the nearest smaller declared one
+  // so a column keeps its width as the viewport grows; only fall back to `span`
+  // when no smaller breakpoint is set. Iterating (rather than indexing) keeps the
+  // key typed as `Breakpoint` under the stricter `noUncheckedIndexedAccess` that
+  // nexus compiles this source with.
+  let v: number | undefined
+  for (const key of order.slice(0, order.indexOf(getBp(width.value)) + 1).reverse()) {
+    const candidate = map[key]
+    if (candidate != null) {
+      v = candidate
+      break
+    }
+  }
+  if (v == null)
+    v = props.span
+
   const n = Number(v)
   if (!Number.isFinite(n))
     return 24

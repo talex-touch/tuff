@@ -62,7 +62,7 @@ export interface ContextMenuPanelProps {
   close?: () => void
   dense?: boolean
   outsideGuard?: boolean
-  role?: string
+  role?: 'menu' | 'listbox' | 'none'
   ariaLabel?: string
 }
 

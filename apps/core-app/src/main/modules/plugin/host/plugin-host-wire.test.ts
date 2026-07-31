@@ -24,6 +24,8 @@ describe('plugin host wire protocol', () => {
       'child-to-main',
       { type: 'host-ready', requestId: 1, handshakeNonce: 'nonce-1' }
     ],
+    ['heartbeat', 'main-to-child', { type: 'heartbeat', requestId: 2 }],
+    ['heartbeat-result', 'child-to-main', { type: 'heartbeat-result', requestId: 2 }],
     ['host-load', 'main-to-child', { type: 'host-load', requestId: 2, payload: { encoded: true } }],
     [
       'load-result success',
@@ -141,6 +143,20 @@ describe('plugin host wire protocol', () => {
     ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_OWNER_MISMATCH' }))
   })
 
+  it.each([
+    ['wrong activation handle', { activationHandle: 'stale-heartbeat-owner' }],
+    ['stale host generation', { hostGeneration: owner.hostGeneration - 1 }]
+  ])('rejects heartbeat results with %s before correlation', (_label, override) => {
+    expect(() =>
+      parseHostMessage('child-to-main', owner, {
+        ...owner,
+        ...override,
+        type: 'heartbeat-result',
+        requestId: 1
+      })
+    ).toThrowError(expect.objectContaining({ code: 'PLUGIN_HOST_OWNER_MISMATCH' }))
+  })
+
   it('rejects malformed and ambiguous discriminants', () => {
     expect(() =>
       parse('child-to-main', {
@@ -223,6 +239,30 @@ describe('plugin host wire protocol', () => {
       'child-to-main',
       { type: 'host-init', requestId: 1, handshakeNonce: 'nonce-1' },
       'PLUGIN_HOST_WRONG_DIRECTION'
+    ],
+    [
+      'wrong heartbeat direction',
+      'child-to-main',
+      { type: 'heartbeat', requestId: 1 },
+      'PLUGIN_HOST_WRONG_DIRECTION'
+    ],
+    [
+      'wrong heartbeat result direction',
+      'main-to-child',
+      { type: 'heartbeat-result', requestId: 1 },
+      'PLUGIN_HOST_WRONG_DIRECTION'
+    ],
+    [
+      'heartbeat child metadata extension',
+      'main-to-child',
+      { type: 'heartbeat', requestId: 1, pluginName: 'child-selected' },
+      'PLUGIN_HOST_INVALID_MESSAGE'
+    ],
+    [
+      'heartbeat result authority extension',
+      'child-to-main',
+      { type: 'heartbeat-result', requestId: 1, activationGeneration: 999 },
+      'PLUGIN_HOST_INVALID_MESSAGE'
     ],
     [
       'extra load control field',

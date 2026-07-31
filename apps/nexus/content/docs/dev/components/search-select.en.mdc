@@ -10,9 +10,7 @@ verified: true
 ---
 # SearchSelect
 
-`TxSearchSelect` combines a text input, local option filtering, optional remote search, and a Popover-backed options panel. Disabled options stay visible but cannot be selected.
-
-The dropdown layer is hosted by `TxPopover` with full-width reference anchoring and no reference-click toggle.
+`TxSearchSelect` is a searchable `Select`: it filters candidates as you type (or fetches them remotely) and refills the field from an option you pick in the dropdown. Reach for it when the value must come from a controlled option list; if you only collect a free-form keyword with no option constraint, use `TxSearchInput`.
 
 ## Basic Usage
 

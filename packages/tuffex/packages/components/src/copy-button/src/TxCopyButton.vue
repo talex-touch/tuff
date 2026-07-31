@@ -55,11 +55,17 @@ async function writeClipboard(text: string) {
   textarea.style.position = 'fixed'
   textarea.style.top = '-9999px'
   document.body.appendChild(textarea)
-  textarea.select()
-  const ok = document.execCommand('copy')
-  document.body.removeChild(textarea)
-  if (!ok)
-    throw new Error('Copy command failed')
+  try {
+    textarea.select()
+    const ok = document.execCommand('copy')
+    if (!ok)
+      throw new Error('Copy command failed')
+  }
+  finally {
+    // Always detach the hidden textarea — even if select()/execCommand throws — so
+    // a failed copy never orphans a node on <body>.
+    document.body.removeChild(textarea)
+  }
 }
 
 async function handleCopy() {
@@ -114,6 +120,10 @@ onBeforeUnmount(() => {
     <span class="tx-copy-button__label">
       <slot :copied="copied" :copying="copying">{{ buttonLabel }}</slot>
     </span>
+    <!-- A polite live region so screen-reader users hear that the copy
+         succeeded; swapping the visible label / aria-label alone is never
+         re-announced by assistive tech. -->
+    <span class="tx-copy-button__status" role="status" aria-live="polite">{{ copied ? copiedLabel : '' }}</span>
   </button>
 </template>
 
@@ -172,5 +182,17 @@ onBeforeUnmount(() => {
 .tx-copy-button__label {
   display: inline-flex;
   align-items: center;
+}
+
+.tx-copy-button__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>

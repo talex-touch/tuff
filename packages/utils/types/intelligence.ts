@@ -352,8 +352,12 @@ export interface IntelligenceProviderConfig {
   name: string;
   /** Whether the provider is enabled. */
   enabled: boolean;
-  /** API key for authentication. */
+  /** API key for transient runtime/test requests only. Never persist this field. */
   apiKey?: string;
+  /** Opaque reference to a main-owned credential. */
+  authRef?: string;
+  /** Whether the main process owns a credential for this provider. */
+  hasCredential?: boolean;
   /** Base URL for API requests. */
   baseUrl?: string;
   /** Rate limit configuration. */

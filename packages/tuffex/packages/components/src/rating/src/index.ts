@@ -1,2 +1,2 @@
 export { default as TxRating } from './TxRating.vue'
-export type { RatingEmits, RatingProps } from './types'
+export type { RatingEmits, RatingIcon, RatingProps } from './types'

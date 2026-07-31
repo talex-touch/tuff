@@ -15,7 +15,7 @@ import type { StatusBadgeEmits, StatusBadgeProps, StatusTone, ToneMeta } from '.
  *
  * @component
  */
-import { computed } from 'vue'
+import { computed, getCurrentInstance } from 'vue'
 
 defineOptions({
   name: 'TxStatusBadge',
@@ -106,6 +106,24 @@ const osIconClass = computed(() => {
 function handleClick(event: MouseEvent): void {
   emit('click', event)
 }
+
+// A status badge is a passive live region by default; it only becomes an
+// interactive button when a click listener is attached, at which point it must be
+// keyboard-reachable. `click` is a declared emit, so the listener is read from the
+// component vnode rather than $attrs.
+const instance = getCurrentInstance()
+const interactive = computed(() => !!instance?.vnode.props?.onClick)
+
+function handleKeydown(event: KeyboardEvent): void {
+  if (event.target !== event.currentTarget)
+    return
+  if (!interactive.value)
+    return
+  if (event.key !== 'Enter' && event.key !== ' ')
+    return
+  event.preventDefault()
+  handleClick(event as unknown as MouseEvent)
+}
 </script>
 
 <template>
@@ -113,8 +131,10 @@ function handleClick(event: MouseEvent): void {
     class="tx-status-badge"
     :class="[`tx-status-badge--${size}`]"
     :style="styleVars"
-    role="status"
+    :role="interactive ? 'button' : 'status'"
+    :tabindex="interactive ? 0 : undefined"
     @click="handleClick"
+    @keydown="handleKeydown"
   >
     <i v-if="osIconClass" :class="osIconClass" class="tx-status-badge__icon" aria-hidden="true" />
     <i
@@ -140,6 +160,11 @@ function handleClick(event: MouseEvent): void {
   background: var(--tx-status-bg, color-mix(in srgb, currentColor 12%, transparent));
   border: 1px solid var(--tx-status-border, color-mix(in srgb, currentColor 32%, transparent));
   transition: background-color 0.25s ease;
+
+  &:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--tx-status-color, var(--tx-color-primary)) 60%, transparent);
+    outline-offset: 2px;
+  }
 
   &__icon {
     font-size: 14px;

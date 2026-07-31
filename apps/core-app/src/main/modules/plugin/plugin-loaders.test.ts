@@ -58,6 +58,7 @@ vi.mock('./plugin', () => ({
     }
     loadState: string
     loadError?: { code: string; message: string }
+    preludeContract?: { main?: string; buildIndexEntry?: string }
     creationOptions?: { skipDataInit?: boolean }
     logger: {
       error: ReturnType<typeof vi.fn>
@@ -92,6 +93,10 @@ vi.mock('./plugin', () => ({
 
     addFeature() {
       return true
+    }
+
+    setPreludeContract(contract: { main?: string; buildIndexEntry?: string }) {
+      this.preludeContract = contract
     }
 
     setLoadState(state: string, loadError?: { code: string; message: string }) {
@@ -275,6 +280,7 @@ describe('createPluginLoader', () => {
       icon: { type: 'emoji', value: 'x' },
       sdkapi: CURRENT_SDK_VERSION,
       build: {
+        index: { entry: 'index/main.ts' },
         widgets: [
           {
             featureId: 'translate',
@@ -303,6 +309,9 @@ describe('createPluginLoader', () => {
       ]
     })
     expect(plugin.build).not.toHaveProperty('internalOnly')
+    expect(Reflect.get(plugin, 'preludeContract')).toEqual({
+      buildIndexEntry: 'index/main.ts'
+    })
   })
 
   it('resolves localized manifest metadata for runtime display without changing plugin id', async () => {

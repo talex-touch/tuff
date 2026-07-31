@@ -1,0 +1,37 @@
+{
+  "id": "isolate-plugin-prelude-297",
+  "name": "isolate-plugin-prelude-297",
+  "title": "完成插件 Prelude 进程隔离 #297",
+  "description": "默认通过 utilityProcess 运行 Prelude，补齐 typed capability RPC、生命周期与资源限制。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-29",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-resolve-open-github-issues",
+  "relatedFiles": [
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire-codec.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire.test.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-wire-codec.test.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-capabilities.ts",
+    "apps/core-app/src/main/modules/plugin/host/plugin-host-capabilities.test.ts"
+  ],
+  "notes": "Production hard cut complete: all 22 manifested official Preludes use activation-scoped utility processes and typed capabilities; the isolated runtime is default-on, legacy bridge/protocol and main-process VM fallback are removed, heartbeat and restart-budget containment are active, and final independent review found no open P0/P1/P2.",
+  "meta": {
+    "nextAction": "Proceed with the parent issue/release workflow; #297 implementation has no remaining blocker.",
+    "blocker": null,
+    "evidence": "CoreApp plugin suite 84 files / 1104 tests, Node/Web typechecks, scoped lint, 22 manifest and 24/24 directory validation, production build, PLUGIN_HOST_ISOLATION_SMOKE_OK, and final independent INTEGRATE review."
+  }
+}

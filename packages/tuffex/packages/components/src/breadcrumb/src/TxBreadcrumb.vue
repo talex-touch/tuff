@@ -9,7 +9,7 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  separatorIcon: 'chevron-right',
+  separatorIcon: 'i-carbon-chevron-right',
 })
 
 const emit = defineEmits<Emits>()
@@ -18,8 +18,14 @@ function isCurrent(index: number) {
   return index === props.items.length - 1
 }
 
-function isInteractive(item: BreadcrumbItem, index: number) {
+function isLink(item: BreadcrumbItem, index: number) {
   return Boolean(item.href) && !item.disabled && !isCurrent(index)
+}
+
+function isButton(item: BreadcrumbItem, index: number) {
+  // A no-href, non-current, enabled crumb is the documented "manual click target".
+  // Render it as a real <button> so it is keyboard-reachable, not a bare <span>.
+  return !item.href && !item.disabled && !isCurrent(index)
 }
 
 function handleClick(item: BreadcrumbItem, index: number) {
@@ -40,8 +46,9 @@ function handleClick(item: BreadcrumbItem, index: number) {
         class="tx-breadcrumb__item"
       >
         <component
-          :is="isInteractive(item, index) ? 'a' : 'span'"
-          :href="isInteractive(item, index) ? item.href : undefined"
+          :is="isLink(item, index) ? 'a' : (isButton(item, index) ? 'button' : 'span')"
+          :href="isLink(item, index) ? item.href : undefined"
+          :type="isButton(item, index) ? 'button' : undefined"
           class="tx-breadcrumb__link"
           :class="{
             'tx-breadcrumb__link--current': isCurrent(index),
@@ -95,6 +102,17 @@ function handleClick(item: BreadcrumbItem, index: number) {
   transition: color 0.2s;
   padding: 4px 8px;
   border-radius: 4px;
+  /* Reset native <button> chrome so a clickable crumb matches its <a>/<span> siblings. */
+  font-family: inherit;
+  line-height: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.tx-breadcrumb__link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+  outline-offset: 2px;
 }
 
 .tx-breadcrumb__link:hover:not(.tx-breadcrumb__link--current) {

@@ -2,6 +2,8 @@
 title: "Agents 智能体列表"
 description: "可选择的智能体列表，支持启用/禁用分组、loading 骨架、空态、选中态和 badge。"
 category: Data
+status: beta
+since: 1.0.0
 tags: [agents, list, selection]
 syncStatus: reviewed
 verified: true
@@ -88,7 +90,7 @@ code: |
 - `TxAgentsList` 从同一个 `agents` 数组中计算可用和禁用分组；不会在分组内部重新排序或修改记录。
 - loading 状态优先级高于列表和空态；`loading=true` 时忽略 `agents` 内容展示骨架。
 - 每个分组内容区带 `role="listbox"`，`aria-label` 等于该分组标题。
-- `TxAgentItem` 基于 `TxCardItem` 构建，使用 `role="option"`；仅可用项开启 `clickable`，头像形状固定为 rounded。
+- `TxAgentItem` 基于 `TxCardItem` 构建，使用 `role="option"`，头像形状固定为 rounded；`clickable` 始终开启，使禁用行在 listbox 中保留 `option` 角色，禁用行的选择由 `aria-disabled` 与点击守卫阻断，而不是丢掉角色。
 - 禁用项会阻止 click、Enter、Space 选择；可用项三种激活方式都会派发该项 `id`。
 
 ## 最佳实践

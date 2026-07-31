@@ -42,6 +42,9 @@ code: |
       <TxBaseSurface mode="glass" :blur="12" :saturation="1.8" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
         Glass
       </TxBaseSurface>
+      <TxBaseSurface mode="refraction" :blur="11" :displace="0.8" :distortion-scale="-200" style="width: 140px; height: 80px; display: flex; align-items: center; justify-content: center;">
+        Refraction
+      </TxBaseSurface>
     </div>
   </template>
 ---
@@ -132,20 +135,33 @@ code: |
   </script>
 
   <template>
-    <TxBaseSurface
-      mode="glass"
-      :blur="12"
-      :moving="animating"
-      fallback-mode="mask"
-      :radius="14"
-    >
-      <div style="max-height: 140px; overflow-y: auto;">
-        Scrollable content...
-      </div>
-    </TxBaseSurface>
     <TxButton @click="animating = !animating">
-      {{ animating ? 'Stop' : 'Start Motion' }}
+      {{ animating ? 'Stop Motion' : 'Start Motion' }}
     </TxButton>
+
+    <!-- Both cards transform together; only :moving differs -->
+    <div :style="{ display: 'flex', gap: '12px', transition: 'transform 1.4s cubic-bezier(0.22, 1, 0.36, 1)', transform: animating ? 'translateX(16px) translateY(-10px) scale(0.92) rotate(2.5deg)' : 'none' }">
+      <TxBaseSurface
+        mode="glass"
+        :blur="12"
+        :moving="false"
+        :auto-detect="false"
+        fallback-mode="mask"
+        :radius="14"
+      >
+        No fallback — backdrop-filter breaks while moving
+      </TxBaseSurface>
+      <TxBaseSurface
+        mode="glass"
+        :blur="12"
+        :moving="animating"
+        :auto-detect="false"
+        fallback-mode="mask"
+        :radius="14"
+      >
+        With fallback — degrades to mask
+      </TxBaseSurface>
+    </div>
   </template>
 ---
 :::

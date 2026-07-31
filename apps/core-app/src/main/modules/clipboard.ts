@@ -346,6 +346,14 @@ export class ClipboardModule extends BaseModule {
     })
   }
 
+  getImagePersistenceForPrivacy(): ClipboardImagePersistence {
+    return this.imagePersistence
+  }
+
+  evictCommittedRetentionIdsForPrivacy(ids: readonly number[]): void {
+    this.historyPersistence.evictCommittedRetentionIds(ids)
+  }
+
   private resolvePollingSettings(): ClipboardPollingSettings {
     const appSetting = this.appSettingSnapshot
     const raw = appSetting?.tools?.clipboardPolling

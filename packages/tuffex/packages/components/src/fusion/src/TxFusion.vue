@@ -57,6 +57,19 @@ function onClick() {
   active.value = !active.value
 }
 
+function onKeydown(ev: KeyboardEvent) {
+  // Only the fusion root itself toggles; ignore Enter/Space bubbling from the
+  // a/b slots. The `active` setter still guards `disabled`.
+  if (ev.target !== ev.currentTarget)
+    return
+  if (props.trigger !== 'click')
+    return
+  if (ev.key !== 'Enter' && ev.key !== ' ')
+    return
+  ev.preventDefault()
+  active.value = !active.value
+}
+
 const stageStyle = computed(() => {
   const d = Math.max(0, props.duration)
   return {
@@ -78,9 +91,14 @@ const matrixValues = computed(() => {
   <div
     class="tx-fusion"
     :class="{ 'is-active': active, 'is-disabled': disabled, 'is-dir-y': direction === 'y' }"
+    :role="trigger === 'click' ? 'button' : undefined"
+    :tabindex="trigger === 'click' && !disabled ? 0 : undefined"
+    :aria-pressed="trigger === 'click' ? active : undefined"
+    :aria-disabled="trigger === 'click' && disabled ? true : undefined"
     @mouseenter="onEnter"
     @mouseleave="onLeave"
     @click="onClick"
+    @keydown="onKeydown"
   >
     <svg class="tx-fusion__filters" width="0" height="0" aria-hidden="true">
       <defs>
@@ -107,6 +125,11 @@ const matrixValues = computed(() => {
 <style scoped lang="scss">
 .tx-fusion {
   display: inline-block;
+}
+
+.tx-fusion:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tx-color-primary, #409eff) 60%, transparent);
+  outline-offset: 2px;
 }
 
 .tx-fusion.is-disabled {

@@ -1,0 +1,30 @@
+{
+  "id": "sensitive-data-lifecycle-301",
+  "name": "sensitive-data-lifecycle-301",
+  "title": "实现敏感数据生命周期控制 #301",
+  "description": "定义并实现敏感数据保留、导出、删除、远程处理、备份恢复与卸载语义。",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-07-27",
+  "completedAt": "2026-07-30",
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": "5bf6e08b4",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "07-27-resolve-open-github-issues",
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "nextAction": "Synchronize and complete parent #302 security tracker.",
+    "blocker": "",
+    "evidence": "implement.md records the superseding post-archive findings, 460-test matrix, static gates, production build, Privacy/plugin-host smokes, inventory repair, and no open P0/P1/P2 review finding."
+  }
+}

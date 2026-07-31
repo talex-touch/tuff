@@ -9,9 +9,10 @@ This is the documentation site for the Tuff project, built with Nuxt and Nuxt Co
     pnpm install
     ```
 2.  Start the development server:
-   ```bash
-   pnpm run dev
-   ```
+
+```bash
+pnpm run dev
+```
 
 The site will be available at `http://localhost:3000`.
 
@@ -28,16 +29,7 @@ pnpm -C "apps/nexus" exec eslint "app/pages/docs/[...slug].vue" "app/utils/docs-
 
 ## Authentication
 
-This project uses NuxtAuth for authentication. Before starting the dev server, configure at least:
-
-```bash
-AUTH_SECRET=your_auth_secret
-AUTH_ORIGIN=http://localhost:3200
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-AUTH_EMAIL_SERVER=smtp://placeholder
-AUTH_EMAIL_FROM="Tuff <noreply@tuff.chat>"
-```
+This project uses NuxtAuth for authentication. Before starting the dev server, configure `AUTH_ORIGIN` and provide credentials through an uncommitted `.env.local`. Generate credential values with a cryptographically secure password manager or secret generator; do not reuse the local-only defaults from `preview:cf`.
 
 Auth email delivery is governed by notification channels. Configure a `notification_channel` with `channel: "email"` and `providerType: "resend"` (or another email adapter), then bind the API key through `secure://notifications/*` credentials.
 
@@ -45,14 +37,43 @@ Auth email delivery is governed by notification channels. Configure a `notificat
 
 The Nexus deployment reads configuration from `.env*` files locally and from Cloudflare Pages environment variables in production. The list below is derived from `apps/nexus/nuxt.config.ts` and server utils.
 
-Required in production:
-- `AUTH_SECRET` (>= 16 chars, session + token signing fallback)
+Required in every non-local Cloudflare Pages Preview runtime:
+
+- `AUTH_SECRET` (session signing, >= 16 chars)
+- `APP_AUTH_JWT_SECRET` (app/CLI JWT signing, >= 16 chars)
+- `ADMIN_EMERGENCY_JWT_SECRET` (emergency-control JWT signing, >= 16 chars)
+- `ADMIN_CONTROL_PLANE_PEPPER` (emergency-control one-way hashing, >= 16 chars)
+
+These four names are the required group in the exact, name-only credential catalog at `shared/security/preview-secret-inventory.json`. They must be Cloudflare Pages **Preview** `secret_text` bindings, not `[env.preview.vars]` values.
+
+Feature-gated credential names may be absent while their owning feature is disabled, but every configured name must use `secret_text`:
+
+- OAuth and access control: `GITHUB_CLIENT_SECRET`, `LINUXDO_CLIENT_SECRET`, `ADMIN_CF_ACCESS_CLIENT_SECRET`, `ADMINSECRET`
+- Verification and email: `TURNSTILE_SECRETKEY`, `TURNSTILE_SECRET_KEY`, `AUTH_EMAIL_SERVER`
+- Encrypted stores: `NUXT_INTELLIGENCE_ENCRYPT_KEY`, `PROVIDER_REGISTRY_SECURE_STORE_KEY`, `NOTIFICATION_SECURE_STORE_KEY`, `STORAGE_SECURE_STORE_KEY` (`NUXT_INTELLIGENCE_ENCRYPT_KEY` is required before storing AI provider API keys)
+- Signing, integrations, and build upload: `PLUGIN_ATTESTATION_PRIVATE_KEY_PEM`, `EXCHANGE_RATE_API_KEY`, `SENTRY_AUTH_TOKEN`
+
+Optional or compatibility credential names may also be absent, but must use `secret_text` when configured: `ADMIN_SECRET`, `NUXT_DOC_TOKEN_SECRET`, `RELEASE_DOWNLOAD_SIGNING_SECRET`, and the legacy `RESEND_API_KEY`. Public client IDs, origins, site keys, public keys, and key IDs are ordinary configuration and are not in this catalog.
+
+Provision the four names in Cloudflare Dashboard: open **Workers & Pages → tuff → Settings → Variables and Secrets**, select the **Preview** environment, add each name, choose **Secret** as the binding type, and enter the value there. The installed Wrangler `pages secret put` command has no `--env` option, so it must not be used to claim that a Secret was written to Preview.
+
+Verify Preview inventory without reading or printing values:
+
+```bash
+export CLOUDFLARE_ACCOUNT_ID
+export CLOUDFLARE_API_TOKEN
+pnpm check:preview-secrets
+```
+
+`check:preview-secrets` calls the Cloudflare Pages project metadata API and inspects only names and binding types under `deployment_configs.preview.env_vars`. Missing required names fail with `PREVIEW_SECRET_INVENTORY_MISSING`; any cataloged credential configured as a non-Secret binding fails with `PREVIEW_SECRET_BINDING_TYPE_INVALID`; both use exit code `78` and list names only. A remote `NEXUS_LOCAL_PAGES_PREVIEW` binding fails with `PREVIEW_LOCAL_MARKER_REMOTE_BINDING`. `deploy:cf` checks before build and again immediately before the fixed `preview` branch deployment, rejects command-line overrides, and performs no Secret writes.
+
+Other required production configuration:
+
 - `AUTH_ORIGIN` (public base URL; required by Passkeys)
-- `APP_AUTH_JWT_SECRET` (required for production app/CLI JWTs, >= 16 chars; keep identical across all Cloudflare Pages deployments/isolates)
-- `NUXT_INTELLIGENCE_ENCRYPT_KEY` (recommended, encrypts AI provider API keys)
 - `ADMINSECRET` (required if you enable first-user admin bootstrap flow)
 
 Auth providers (optional):
+
 - `GITHUB_CLIENT_ID`
 - `GITHUB_CLIENT_SECRET`
 - `LINUXDO_CLIENT_ID`
@@ -60,22 +81,26 @@ Auth providers (optional):
 - `LINUXDO_ISSUER`
 
 Email login / Magic Link (optional gate):
+
 - `AUTH_EMAIL_FROM`
 - `AUTH_EMAIL_SERVER`
 
 Actual email sending is handled by notification channel configs and encrypted notification credentials. Resend is one email channel provider, not a standalone env fallback.
 
 Turnstile (optional):
+
 - `TURNSTILE_SITEKEY` or `NUXT_PUBLIC_TURNSTILE_SITE_KEY`
 - `TURNSTILE_SECRETKEY` or `TURNSTILE_SECRET_KEY`
 
 Cloudflare Pages runtime (optional unless you force Pages in non-prod):
+
 - `NITRO_PRESET=cloudflare-pages`
 - `NUXT_USE_CLOUDFLARE_DEV=true`
 - `CLOUDFLARE_DEV_ENVIRONMENT`
 - `RELEASE_SIGNATURE_PUBLIC_KEY` / `UPDATE_SIGNATURE_PUBLIC_KEY` (optional rotation override; absent values fall back to the public key pinned in the server bundle)
 
 Observability & feature toggles (optional):
+
 - `SENTRY_AUTH_TOKEN` (source maps upload; requires `NUXT_ENABLE_SENTRY_SOURCEMAPS=true`)
 - `NUXT_ENABLE_SENTRY` (`true/1/on/yes` to load Sentry in local development; production loads it by default)
 - `NUXT_DISABLE_SENTRY`
@@ -95,6 +120,7 @@ Observability & feature toggles (optional):
 - `TALEX_WORKFLOW_DEBUG`
 
 Cloudflare bindings (wrangler / Pages settings):
+
 - `DB` (D1)
 - `R2`, `ASSETS`, `IMAGES`, `PACKAGES`, `PLUGIN_PACKAGES` (R2 buckets)
 - `RELEASE_SIGNATURE_PUBLIC_KEY`, `UPDATE_SIGNATURE_PUBLIC_KEY` (optional string-binding overrides for release-key rotation)

@@ -58,6 +58,13 @@ export interface TagProps {
   closable?: boolean
 
   /**
+   * Accessible label for the close button, announced to screen readers.
+   * Localize by passing e.g. '移除标签'.
+   * @default 'Remove tag'
+   */
+  closeAriaLabel?: string
+
+  /**
    * Whether to disable the tag interactions.
    * @default false
    */

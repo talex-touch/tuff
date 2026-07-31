@@ -1,4 +1,5 @@
 import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
+import type { FlowDispatchOptions, FlowPayload } from '@talex-touch/utils/types/flow'
 import type {
   IManifest,
   IPluginManager,
@@ -10,9 +11,14 @@ import type {
   PluginInstallRequest,
   PluginInstallSummary
 } from '@talex-touch/utils/plugin/providers'
-import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
+import type {
+  ITuffTransportMain,
+  PluginActivationIdentity
+} from '@talex-touch/utils/transport/main'
 import type {
   PluginApiGetFileTreeResponse,
+  PluginApiUninstallRequest,
+  PluginApiUninstallResponse,
   PluginInstallSourceResponse
 } from '@talex-touch/utils/transport/events/types'
 import type { PluginWithSource } from '../../service/store-api.service'
@@ -20,14 +26,21 @@ import { lookup } from 'node:dns/promises'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import * as util from 'node:util'
-import { shell } from 'electron'
+import { app, BrowserWindow, dialog, shell } from 'electron'
 import fse from 'fs-extra'
 import { sleep } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { spawnSafe } from '@talex-touch/utils/common/utils/safe-shell'
 import { isLocalizedText, normalizeLocale, resolveLocalizedText } from '@talex-touch/utils/i18n'
-import { parseManifestPermissions } from '@talex-touch/utils/permission'
+import { normalizePermissionId, parseManifestPermissions } from '@talex-touch/utils/permission'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { CoreBoxEvents, StoreEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import {
+  CoreBoxEvents,
+  PluginEvents,
+  QuickOpsEvents,
+  StoreEvents
+} from '@talex-touch/utils/transport/events'
+import { normalizePluginUninstallRequest } from '@talex-touch/utils/transport/events/types'
 import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   PluginInstallCompletedEvent,
@@ -46,24 +59,91 @@ import {
 import { performStoreHttpRequest } from '../../service/store-http.service'
 import { createLogger } from '../../utils/logger'
 import {
-  deleteSecureStoreValuesByPrefix,
+  deleteSecureStoreValuesByPrefixes,
   getSecureStoreValueStrict,
   setSecureStoreValue
 } from '../../utils/secure-store'
+import { tempFileService } from '../../service/temp-file.service'
+import type { PluginDataDispositionCoordinator } from './plugin-data-disposition'
+import {
+  createProductionPluginDataDispositionCoordinator,
+  type ProductionPluginDataDispositionOwner
+} from './plugin-data-disposition-production'
+import { purgePluginTempNamespace } from './plugin-temp-namespace'
 import { openValidatedExternalUrl } from '../../utils/external-url-policy'
 import { getLocale } from '../../utils/i18n-helper'
 import { BaseModule } from '../abstract-base-module'
+import { intelligenceContextExecutionService } from '../ai/intelligence-context-execution'
+import { getAuthToken, getSanitizedAuthSessionState } from '../auth'
+import { flowBus } from '../flow-bus/flow-bus'
 import { getNetworkService } from '../network'
+import { getRuntimeNexusBaseUrl } from '../nexus/runtime-base'
 import { databaseModule } from '../database'
 import { getPermissionModule } from '../permission'
+import { voiceService } from '../voice/voice-service'
 import {
   clearPluginLocalizationEntries,
   registerPluginLocalizationChannels
 } from './plugin-localization-channels'
 import { DevServerHealthMonitor } from './dev-server-monitor'
+import { shouldInstallPluginRuntimeServiceByDefault } from './plugin-runtime-rollout'
 import { getClipboardHostService } from '../clipboard/clipboard-host-service'
-import { createPluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import {
+  createPluginBusinessCapabilities,
+  pluginBusinessSecretPrefix
+} from './host/plugin-business-capabilities'
 import type { PluginBusinessCapabilities } from './host/plugin-business-capabilities'
+import {
+  createFixedPluginBrowserDataService,
+  createPluginBrowserDataCapabilities,
+  createPluginBrowserDataSqliteQuery,
+  type PluginBrowserDataSourceId
+} from './host/plugin-browser-data-capabilities'
+import {
+  createFixedPluginBrowserOpenService,
+  createPluginBrowserOpenCapabilities,
+  createPluginBrowserOpenProcess
+} from './host/plugin-browser-open-capabilities'
+import {
+  createPluginHostNexusService,
+  createPluginRequestReplyCapabilities,
+  type PluginQuickOpsOperationId
+} from './host/plugin-host-request-reply'
+import { createPluginVoiceCapabilities } from './host/plugin-voice-capabilities'
+import { createPluginIntelligenceCapabilities } from './host/plugin-intelligence-capabilities'
+import { createPluginIntelligenceHostService } from './host/plugin-intelligence-host-service'
+import { createPluginIntelligenceContextCapabilities } from './host/plugin-intelligence-context-capabilities'
+import { createPluginIntelligenceContextHostService } from './host/plugin-intelligence-context-host-service'
+import { createPluginIntelligenceContextStreamCapabilities } from './host/plugin-intelligence-context-stream-capabilities'
+import { createPluginIntelligenceContextStreamHostService } from './host/plugin-intelligence-context-stream-host-service'
+import {
+  createFixedPluginSnipasteDiscovery,
+  createFixedPluginSnipasteExecutor,
+  createPluginSnipasteProcess,
+  createPluginSnipasteProcessCapability
+} from './host/plugin-process-capabilities'
+import {
+  createFixedPluginSystemActionConfirmation,
+  createFixedPluginSystemActionExecutor,
+  createPluginSystemActionCapabilities,
+  createPluginSystemActionProcess
+} from './host/plugin-system-capabilities'
+import {
+  createFixedPluginWindowManagerService,
+  createPluginWindowManagerCapabilities,
+  createPluginWindowManagerProcess
+} from './host/plugin-window-manager-capabilities'
+import {
+  createFixedPluginWindowPresetExecutor,
+  createPluginWindowPresetCapabilities,
+  createPluginWindowPresetProcess
+} from './host/plugin-window-preset-capabilities'
+import {
+  createFixedPluginWorkspaceScriptHost,
+  createPluginWorkspaceScriptCapabilities,
+  createPluginWorkspaceScriptProcess,
+  resolvePluginWorkspacePackageManagerPath
+} from './host/plugin-workspace-script-capabilities'
 import { ElectronPluginRuntimeProcessFactory } from './host/plugin-runtime-electron-process'
 import {
   PluginRuntimeService,
@@ -110,6 +190,87 @@ const PLUGIN_FILE_TREE_MAX_DEPTH = 5
 const PLUGIN_FILE_TREE_MAX_ENTRIES = 500
 const PLUGIN_FILE_TREE_IGNORED_DIRS = new Set(['.git', '.vite', 'dist', 'logs', 'node_modules'])
 const ISSUE_FULL_RESYNC_INTERVAL_MS = 45 * 60 * 1000
+const NEXUS_SUCCESS_STATUSES = Object.freeze(
+  Array.from({ length: 100 }, (_value, index) => index + 200)
+)
+
+async function invokeQuickOpsHostOperation(
+  transport: ITuffTransportMain,
+  operation: PluginQuickOpsOperationId,
+  payload: unknown,
+  signal: AbortSignal
+): Promise<unknown> {
+  if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+  let result: unknown
+  switch (operation) {
+    case 'capabilities.get':
+      result = await transport.invoke(QuickOpsEvents.capabilities.get, undefined)
+      break
+    case 'sessions.get':
+      result = await transport.invoke(QuickOpsEvents.sessions.get, undefined)
+      break
+    case 'audit.get':
+      result = await transport.invoke(QuickOpsEvents.audit.get, payload as never)
+      break
+    case 'system-info.get':
+      result = await transport.invoke(QuickOpsEvents.systemInfo.get, undefined)
+      break
+    case 'tuff-diagnostics.get':
+      result = await transport.invoke(QuickOpsEvents.tuffDiagnostics.get, undefined)
+      break
+    case 'disk-space.get':
+      result = await transport.invoke(QuickOpsEvents.diskSpace.get, undefined)
+      break
+    case 'directory-usage.get':
+      result = await transport.invoke(QuickOpsEvents.directoryUsage.get, payload as never)
+      break
+    case 'query-local-ip.get':
+      result = await transport.invoke(QuickOpsEvents.queryLocalIp.get, undefined)
+      break
+    case 'port-status.get':
+      result = await transport.invoke(QuickOpsEvents.portStatus.get, payload as never)
+      break
+    case 'dns-query.get':
+      result = await transport.invoke(QuickOpsEvents.dnsQuery.get, payload as never)
+      break
+    case 'file-hash.get':
+      result = await transport.invoke(QuickOpsEvents.fileHash.get, payload as never)
+      break
+    case 'file-base64.get':
+      result = await transport.invoke(QuickOpsEvents.fileBase64.get, payload as never)
+      break
+    case 'recent-download.get':
+      result = await transport.invoke(QuickOpsEvents.recentDownload.get, undefined)
+      break
+    case 'common-directory.get':
+      result = await transport.invoke(QuickOpsEvents.commonDirectory.get, payload as never)
+      break
+    case 'path-format.get':
+      result = await transport.invoke(QuickOpsEvents.pathFormat.get, payload as never)
+      break
+    case 'format-text.get':
+      result = await transport.invoke(QuickOpsEvents.formatText.get, payload as never)
+      break
+    case 'network-status.get':
+      result = await transport.invoke(QuickOpsEvents.networkStatus.get, undefined)
+      break
+    case 'battery-status.get':
+      result = await transport.invoke(QuickOpsEvents.batteryStatus.get, undefined)
+      break
+    case 'system-proxy.get':
+      result = await transport.invoke(QuickOpsEvents.systemProxy.get, undefined)
+      break
+    case 'developer-preview.get':
+      result = await transport.invoke(QuickOpsEvents.developerPreview.get, payload as never)
+      break
+    case 'developer-preview.save':
+      result = await transport.invoke(QuickOpsEvents.developerPreview.save, payload as never)
+      break
+  }
+  if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+  return result
+}
+
 type PluginLifecycleChannel = {
   broadcastPlugin: (pluginName: string, eventName: string, arg?: unknown) => void
 }
@@ -342,6 +503,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function hasDeclaredPluginPermission(
+  plugin: Pick<ITouchPlugin, 'declaredPermissions'>,
+  permissionId: string
+): boolean {
+  const normalizedPermissionId = normalizePermissionId(permissionId)
+  const declared = [
+    ...(plugin.declaredPermissions?.required ?? []),
+    ...(plugin.declaredPermissions?.optional ?? [])
+  ]
+  return declared.some((value) => normalizePermissionId(value) === normalizedPermissionId)
+}
+
 function buildIssueId(issue: PluginIssue): string {
   const rawId = typeof issue.id === 'string' ? issue.id.trim() : ''
   if (rawId) return rawId
@@ -426,16 +599,20 @@ function createPluginModuleInternal(
   _channel: PluginLifecycleChannel,
   mainWindowId: number,
   pluginSqliteResources?: PluginSqliteResourceOwnerRegistry,
-  purgePluginSecrets?: (pluginName: string) => Promise<void>
+  purgePluginSecrets?: (pluginName: string) => Promise<void>,
+  secureStoreRootPath?: string,
+  invalidatePluginAuthority?: (pluginName: string) => Promise<void>
 ): IPluginManager {
   const plugins: Map<string, ITouchPlugin> = new Map()
   let active: string = ''
   const enabledPlugins = new Set<string>()
   const loadingPlugins = new Set<string>()
   const reloadingPlugins = new Set<string>()
+  const unloadingPlugins = new Set<string>()
   const pendingPermissionPlugins = new Map<string, { pluginName: string; autoRetry: boolean }>()
   const pluginNameIndex: Map<string, string> = new Map()
   const issueSnapshots = new Map<string, Map<string, string>>()
+  let pluginDataDispositionCoordinator: PluginDataDispositionCoordinator | null = null
   let issueFullResyncTimer: NodeJS.Timeout | null = null
   const dbUtils = createDbUtils(databaseModule.getDb())
   const initialLoadPromises: Promise<boolean>[] = []
@@ -606,6 +783,11 @@ function createPluginModuleInternal(
   }
 
   const installQueue = new PluginInstallQueue(installer, transport, mainWindowId, {
+    assertInstallAdmission: () => {
+      if (pluginDataDispositionCoordinator?.hasBlockedOperations()) {
+        throw new Error('PLUGIN_UNINSTALL_INCOMPLETE')
+      }
+    },
     onInstallCompleted: async ({ request, manifest, providerResult }) => {
       await persistInstallSourceMetadata({ request, manifest, providerResult })
       const pluginName = manifest?.name
@@ -618,6 +800,9 @@ function createPluginModuleInternal(
     },
     resolvePermissionConfirmation: async ({ request, manifest, clientMetadata }) => {
       if (!manifest?.name) return null
+      if (pluginDataDispositionCoordinator?.isBlocked(manifest.name)) {
+        throw new Error('PLUGIN_UNINSTALL_INCOMPLETE')
+      }
       const sdkGate = getPluginSdkHardCutGate(manifest.name, manifest.sdkapi)
       if (sdkGate.blocked) {
         throw new Error(sdkGate.message)
@@ -709,6 +894,7 @@ function createPluginModuleInternal(
   }
 
   const setActivePlugin = (pluginName: string): boolean => {
+    if (pluginName && pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
     // Handle deactivation of currently active plugin
     if (active && active !== pluginName) {
       const previousPlugin = plugins.get(active)
@@ -806,6 +992,7 @@ function createPluginModuleInternal(
     pluginName: string,
     skipPermissionCheck = false
   ): Promise<boolean> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
     let plugin = plugins.get(pluginName)
     if (!plugin) return false
 
@@ -870,6 +1057,10 @@ function createPluginModuleInternal(
   }
 
   const reloadPlugin = async (pluginName: string): Promise<void> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) {
+      logWarn('Plugin reload blocked by incomplete uninstall:', pluginTag(pluginName))
+      return
+    }
     if (reloadingPlugins.has(pluginName)) {
       logDebug('Skip reload because plugin already reloading:', pluginTag(pluginName))
       return
@@ -891,11 +1082,17 @@ function createPluginModuleInternal(
       const _enabled =
         plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
-      if (plugin.status !== PluginStatus.LOAD_FAILED) {
-        await plugin.disable()
+      if (
+        plugin.status !== PluginStatus.DISABLED &&
+        plugin.status !== PluginStatus.LOADED &&
+        !(await plugin.disable())
+      ) {
+        throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
       }
 
-      await unloadPlugin(pluginName)
+      if (!(await unloadPlugin(pluginName))) {
+        throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      }
 
       logDebug('Waiting 0.200s before reloading plugin...', pluginTag(pluginName))
       await sleep(200)
@@ -940,6 +1137,7 @@ function createPluginModuleInternal(
   }
 
   const loadPlugin = async (pluginName: string): Promise<boolean> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
     if (INTERNAL_PLUGIN_NAMES.has(pluginName)) {
       logDebug('Skipping disk load for internal plugin', pluginTag(pluginName))
       return true
@@ -1078,53 +1276,67 @@ function createPluginModuleInternal(
   }
 
   const unloadPlugin = async (pluginName: string): Promise<boolean> => {
+    if (pluginDataDispositionCoordinator?.isBlocked(pluginName)) return false
+    if (unloadingPlugins.has(pluginName)) return false
     const plugin = plugins.get(pluginName)
     if (!plugin) return false
 
-    const currentPluginPath = path.resolve(pluginPath, pluginName)
-    localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
-
-    devWatcherInstance.removePlugin(pluginName)
-    stopHealthMonitoring(pluginName)
-
-    if (pluginNameIndex.get(plugin.name) === pluginName) {
-      pluginNameIndex.delete(plugin.name)
-    }
-
+    unloadingPlugins.add(pluginName)
     try {
       if (plugin.status !== PluginStatus.DISABLED && plugin.status !== PluginStatus.LOADED) {
-        await plugin.disable()
+        try {
+          if (!(await plugin.disable())) {
+            logWarn('Plugin unload blocked by incomplete teardown:', pluginTag(pluginName))
+            return false
+          }
+        } catch (error) {
+          logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
+          return false
+        }
       }
-    } catch (error) {
-      logWarn('Error during plugin disable in unload:', pluginTag(pluginName), error)
+
+      const currentPluginPath = path.resolve(pluginPath, pluginName)
+      localProvider.untrackFile(path.resolve(currentPluginPath, 'README.md'))
+
+      devWatcherInstance.removePlugin(pluginName)
+      stopHealthMonitoring(pluginName)
+
+      if (pluginNameIndex.get(plugin.name) === pluginName) {
+        pluginNameIndex.delete(plugin.name)
+      }
+      await pluginSqliteResources?.closePlugin(plugin.name)
+
+      try {
+        plugin.logger.getManager().destroy()
+      } catch (error) {
+        logWarn('Error destroying plugin logger:', pluginTag(pluginName), error)
+      }
+
+      clearPluginDeclaredPermissions(plugin.name)
+      clearIssueSnapshot(plugin.name)
+      clearPluginLocalizationEntries(plugin.name)
+      plugins.delete(pluginName)
+      enabledPlugins.delete(pluginName)
+
+      logWarn('Plugin unloaded', pluginTag(pluginName))
+
+      transport.broadcast(PluginEvents.push.stateChanged, {
+        type: 'removed',
+        name: pluginName
+      })
+
+      return true
+    } finally {
+      unloadingPlugins.delete(pluginName)
     }
-    await pluginSqliteResources?.closePlugin(plugin.name)
-
-    try {
-      plugin.logger.getManager().destroy()
-    } catch (error) {
-      logWarn('Error destroying plugin logger:', pluginTag(pluginName), error)
-    }
-
-    clearPluginDeclaredPermissions(plugin.name)
-    clearIssueSnapshot(plugin.name)
-    clearPluginLocalizationEntries(plugin.name)
-    plugins.delete(pluginName)
-    enabledPlugins.delete(pluginName)
-
-    logWarn('Plugin unloaded', pluginTag(pluginName))
-
-    transport.broadcast(PluginEvents.push.stateChanged, {
-      type: 'removed',
-      name: pluginName
-    })
-
-    return true
   }
 
   const installFromSource = async (
     request: PluginInstallRequest
   ): Promise<PluginInstallSummary> => {
+    if (pluginDataDispositionCoordinator?.hasBlockedOperations()) {
+      throw new Error('PLUGIN_UNINSTALL_INCOMPLETE')
+    }
     const summary = await installer.install(request)
     return summary
   }
@@ -1134,51 +1346,159 @@ function createPluginModuleInternal(
     return pluginNameIndex.get(identifier)
   }
 
-  const uninstallPlugin = async (identifier: string): Promise<boolean> => {
+  const resolveDispositionOwner = (
+    identifier: string
+  ): ProductionPluginDataDispositionOwner | null => {
     const folderName = resolvePluginFolderName(identifier)
-
-    if (!folderName) {
-      logWarn('Cannot uninstall plugin, not found:', pluginTag(identifier))
-      return false
-    }
-
-    const pluginInstance = plugins.get(folderName) as TouchPlugin | undefined
-    const dataDir =
-      pluginInstance instanceof TouchPlugin ? path.dirname(pluginInstance.getConfigPath()) : null
-    const manifestName = pluginInstance?.name ?? identifier
-    const pluginDir = path.resolve(pluginPath, folderName)
-
-    // Report uninstall to store (fire and forget, use folder name as slug)
-    reportPluginUninstall(folderName).catch(() => {})
-
-    await unloadPlugin(folderName)
-    try {
-      await purgePluginSecrets?.(manifestName)
-    } catch {
-      logWarn('Failed to purge plugin secrets', pluginTag(folderName))
-      return false
-    }
-
-    if (await fse.pathExists(pluginDir)) {
-      await fse.remove(pluginDir).catch((error) => {
-        logWarn('Failed to remove plugin directory', pluginTag(folderName), error)
-      })
-    }
-
-    if (dataDir && (await fse.pathExists(dataDir))) {
-      await fse.remove(dataDir).catch((error) => {
-        logWarn('Failed to remove plugin data directory', pluginTag(folderName), error)
-      })
-    }
-
-    await dbUtils.deletePluginData(manifestName).catch((error) => {
-      logWarn('Failed to delete plugin data records', pluginTag(folderName), error)
+    if (!folderName || INTERNAL_PLUGIN_NAMES.has(folderName)) return null
+    const plugin = plugins.get(folderName)
+    if (!(plugin instanceof TouchPlugin)) return null
+    const identity = plugin.getActivationIdentity()
+    const dataRootPath =
+      typeof plugin.getDataPath === 'function'
+        ? plugin.getDataPath()
+        : path.dirname(plugin.getConfigPath())
+    return Object.freeze({
+      pluginName: plugin.name,
+      folderName,
+      pluginInstanceId: identity.pluginInstanceId,
+      activationGeneration: identity.activationGeneration,
+      dataRootPath,
+      codePath: path.resolve(pluginPath, folderName)
     })
+  }
 
-    await persistEnabledPlugins()
+  pluginDataDispositionCoordinator = createProductionPluginDataDispositionCoordinator({
+    secureStoreRootPath: secureStoreRootPath ?? '',
+    dbUtils,
+    tempFileService,
+    sqliteResources: pluginSqliteResources,
+    purgeSecrets: purgePluginSecrets,
+    resolveOwner: (pluginName) => resolveDispositionOwner(pluginName),
+    canStart: (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      return Boolean(
+        plugin &&
+        !loadingPlugins.has(owner.folderName) &&
+        !reloadingPlugins.has(owner.folderName) &&
+        !unloadingPlugins.has(owner.folderName) &&
+        plugin.status !== PluginStatus.LOADING &&
+        plugin.status !== PluginStatus.DISABLING
+      )
+    },
+    closeAdmission: async (owner) => {
+      stopHealthMonitoring(owner.folderName)
+      devWatcherInstance.removePlugin(owner.folderName)
+      localProvider.untrackFile(path.resolve(owner.codePath, 'README.md'))
+      return 'completed'
+    },
+    closeRuntime: async (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      if (!(plugin instanceof TouchPlugin)) throw new Error('PLUGIN_OWNER_NOT_FOUND')
+      const identity = plugin.getActivationIdentity()
+      if (
+        identity.pluginInstanceId !== owner.pluginInstanceId ||
+        identity.activationGeneration !== owner.activationGeneration
+      ) {
+        throw new Error('PLUGIN_OWNER_CHANGED')
+      }
+      if (plugin.status === PluginStatus.DISABLED || plugin.status === PluginStatus.LOADED) {
+        return 'completed'
+      }
+      if (!(await plugin.disable())) throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      return 'completed'
+    },
+    closeLogger: async (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      if (!(plugin instanceof TouchPlugin)) throw new Error('PLUGIN_OWNER_NOT_FOUND')
+      await plugin.logger.getManager().destroy()
+      return 'completed'
+    },
+    revokePermissions: async (owner) => {
+      const permissionModule = getPermissionModule()
+      if (!permissionModule) throw new Error('PLUGIN_PERMISSION_RUNTIME_UNAVAILABLE')
+      await permissionModule.revokeAll(owner.pluginName)
+    },
+    invalidateAuthority: async (owner) => {
+      pendingPermissionPlugins.delete(owner.pluginName)
+      pendingPermissionPlugins.delete(owner.folderName)
+      if (active === owner.folderName || active === owner.pluginName) active = ''
+      await invalidatePluginAuthority?.(owner.pluginName)
+    },
+    inspectAuthorityResiduals: async (owner) => {
+      const plugin = plugins.get(owner.folderName)
+      const currentIdentity = transport.keyManager?.resolveCurrentIdentity?.(owner.pluginName)
+      const runtime = Boolean(
+        (plugin &&
+          plugin.status !== PluginStatus.DISABLED &&
+          plugin.status !== PluginStatus.LOADED) ||
+        (currentIdentity &&
+          currentIdentity.pluginInstanceId === owner.pluginInstanceId &&
+          currentIdentity.activationGeneration === owner.activationGeneration)
+      )
+      const permissionModule = getPermissionModule()
+      const store = permissionModule?.getStore()
+      const declared = plugin
+        ? [
+            ...(plugin.declaredPermissions?.required ?? []),
+            ...(plugin.declaredPermissions?.optional ?? [])
+          ]
+        : []
+      const permissions = Boolean(
+        store &&
+        (store.getPluginPermissions(owner.pluginName).length > 0 ||
+          declared.some((permissionId) =>
+            store.hasSessionPermission(owner.pluginName, permissionId)
+          ))
+      )
+      return Object.freeze({
+        runtime,
+        permissions,
+        pendingAuthority:
+          pendingPermissionPlugins.has(owner.pluginName) ||
+          pendingPermissionPlugins.has(owner.folderName)
+      })
+    },
+    deletePluginRow: async (owner) => {
+      const nextEnabled = [...enabledPlugins].filter(
+        (name) => name !== owner.folderName && name !== owner.pluginName
+      )
+      await dbUtils.deletePluginData(owner.pluginName)
+      await dbUtils.setPluginData('internal:plugin-module', 'enabled_plugins', nextEnabled)
+    },
+    finalize: async (owner) => {
+      enabledPlugins.delete(owner.folderName)
+      enabledPlugins.delete(owner.pluginName)
+      if (pluginNameIndex.get(owner.pluginName) === owner.folderName) {
+        pluginNameIndex.delete(owner.pluginName)
+      }
+      clearPluginDeclaredPermissions(owner.pluginName)
+      clearIssueSnapshot(owner.pluginName)
+      clearPluginLocalizationEntries(owner.pluginName)
+      plugins.delete(owner.folderName)
+      try {
+        transport.broadcast(PluginEvents.push.stateChanged, {
+          type: 'removed',
+          name: owner.folderName
+        })
+      } catch {
+        logWarn('Failed to broadcast plugin removal', pluginTag(owner.folderName))
+      }
+      logModuleInfo('Plugin uninstalled successfully', pluginTag(owner.folderName))
+      return 'completed'
+    },
+    reportUninstall: async (owner) => {
+      await reportPluginUninstall(owner.pluginName)
+      return 'completed'
+    },
+    reportLocalError: (code) => pluginLog.warn(code)
+  })
 
-    logModuleInfo('Plugin uninstalled successfully', pluginTag(folderName))
-    return true
+  const uninstallPlugin = async (
+    input: PluginApiUninstallRequest
+  ): Promise<PluginApiUninstallResponse> => {
+    const request = normalizePluginUninstallRequest(input)
+    return pluginDataDispositionCoordinator!.uninstall(request)
   }
 
   /**
@@ -1405,8 +1725,11 @@ function createPluginModuleInternal(
             const _enabled =
               plugin.status === PluginStatus.ENABLED || plugin.status === PluginStatus.ACTIVE
 
-            await plugin.disable()
-            await unloadPlugin(pluginName)
+            if (!(await plugin.disable())) {
+              logWarn('Plugin reload blocked by incomplete teardown:', pluginTag(pluginName))
+              return
+            }
+            if (!(await unloadPlugin(pluginName))) return
 
             await loadPlugin(pluginName)
 
@@ -1512,6 +1835,28 @@ export class PluginModule extends BaseModule {
   private pluginBusinessCapabilities: PluginBusinessCapabilities | null = null
   private runtimeService: PluginRuntimeService | null = null
   private secureStoreRootPath = ''
+  private uninstallAuthorityInvalidators = new Set<(pluginName: string) => void | Promise<void>>()
+
+  registerUninstallAuthorityInvalidator(
+    invalidator: (pluginName: string) => void | Promise<void>
+  ): () => void {
+    this.uninstallAuthorityInvalidators.add(invalidator)
+    return () => this.uninstallAuthorityInvalidators.delete(invalidator)
+  }
+
+  private async invalidatePluginAuthority(pluginName: string): Promise<void> {
+    const results = await Promise.allSettled(
+      [...this.uninstallAuthorityInvalidators].map(async (invalidator) => {
+        await invalidator(pluginName)
+      })
+    )
+    const failures = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason] : []
+    )
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'PLUGIN_UNINSTALL_AUTHORITY_INVALIDATION_FAILED')
+    }
+  }
 
   static key: symbol = Symbol.for('PluginModule')
   name: ModuleKey = PluginModule.key
@@ -1530,6 +1875,48 @@ export class PluginModule extends BaseModule {
     this.transport = ioRuntime.transport
     this.secureStoreRootPath = ctx.app.rootPath
     TouchPlugin.setTransport(ioRuntime.transport)
+    TouchPlugin.setRuntimeService(null)
+    TouchPlugin.setSnipasteProcessCapabilityFactory(null)
+    TouchPlugin.setSystemActionCapabilityFactory(null)
+    TouchPlugin.setBrowserOpenCapabilityFactory(null)
+    TouchPlugin.setBrowserDataCapabilityFactory(null)
+    TouchPlugin.setTranslationCapabilityFactory(null)
+    TouchPlugin.setIntelligenceContextCapabilityFactory(null)
+    TouchPlugin.setWindowManagerCapabilityFactory(null)
+    TouchPlugin.setWindowPresetCapabilityFactory(null)
+    TouchPlugin.setWorkspaceScriptCapabilityFactory(null)
+
+    const pluginRuntime = buildPluginManagerRuntime({
+      pluginRootDir: file.dirPath!,
+      transport: ioRuntime.transport,
+      channel: ioRuntime.channel,
+      mainWindowId: ioRuntime.mainWindowId,
+      createManager: (pluginRootDir, runtimeTransport, channel, mainWindowId) =>
+        createPluginModuleInternal(
+          pluginRootDir,
+          runtimeTransport,
+          channel,
+          mainWindowId,
+          this.pluginSqliteResources,
+          async (pluginName) => {
+            const reportFailure = (message: string): void =>
+              pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
+            await deleteSecureStoreValuesByPrefixes(
+              this.secureStoreRootPath,
+              [`plugin.${pluginName}.`, pluginBusinessSecretPrefix(pluginName)],
+              reportFailure
+            )
+          },
+          this.secureStoreRootPath,
+          (pluginName) => this.invalidatePluginAuthority(pluginName)
+        ),
+      createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
+    })
+
+    this.pluginManager = pluginRuntime.pluginManager
+    this.installQueue = pluginRuntime.installQueue
+    this.healthMonitor = pluginRuntime.healthMonitor
+
     this.pluginBusinessCapabilities = createPluginBusinessCapabilities({
       resolvePlugin: (pluginName) => {
         const plugin = this.pluginManager?.getPluginByName(pluginName)
@@ -1537,6 +1924,18 @@ export class PluginModule extends BaseModule {
       },
       resolveHostGeneration: (activation) =>
         this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      hasPermission: (pluginName, permissionId, sdkapi) => {
+        try {
+          const plugin = this.pluginManager?.getPluginByName(pluginName)
+          if (!plugin || !hasDeclaredPluginPermission(plugin, permissionId)) return false
+          return (
+            getPermissionModule()?.getStore().hasPermission(pluginName, permissionId, sdkapi) ===
+            true
+          )
+        } catch {
+          return false
+        }
+      },
       sqliteOwners: this.pluginSqliteResources,
       secureStoreRootPath: this.secureStoreRootPath,
       secureStore: Object.freeze({
@@ -1571,76 +1970,580 @@ export class PluginModule extends BaseModule {
           opener: async (target) => await shell.openExternal(target)
         }),
       network: Object.freeze({
-        request: async (options) => await getNetworkService().requestNoRedirect(options),
+        requestPinned: async (options, policy) =>
+          await getNetworkService().requestPinnedNoRedirect(options, policy),
         resolveAddresses: async (hostname) =>
           (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address)
       })
     })
+    const nexusService = createPluginHostNexusService({
+      getBaseUrl: () => getRuntimeNexusBaseUrl(),
+      getCredential: () => getAuthToken(),
+      resolveAddresses: async (hostname) =>
+        (await lookup(hostname, { all: true, verbatim: true })).map((entry) => entry.address),
+      requestPinned: async (request) =>
+        await getNetworkService().requestPinnedNoRedirect(
+          {
+            method: request.method,
+            url: request.url,
+            headers: { ...request.headers },
+            ...(Object.hasOwn(request, 'body') ? { body: request.body } : {}),
+            responseType: 'json',
+            timeoutMs: 30_000,
+            retryPolicy: { maxRetries: 0 },
+            validateStatus: [...NEXUS_SUCCESS_STATUSES],
+            signal: request.signal
+          },
+          {
+            resolvedAddresses: request.resolvedAddresses,
+            maxResponseBytes: request.maxResponseBytes
+          }
+        )
+    })
+    const requestReplyCapabilities = createPluginRequestReplyCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      authState: () => getSanitizedAuthSessionState(),
+      nexus: nexusService,
+      quickOps: Object.freeze({
+        invoke: async (operation, payload, signal) =>
+          await invokeQuickOpsHostOperation(ioRuntime.transport, operation, payload, signal)
+      }),
+      flow: Object.freeze({
+        dispatch: async (senderId, payload, options, signal) =>
+          await flowBus.dispatch(
+            senderId,
+            payload as FlowPayload,
+            options as FlowDispatchOptions,
+            signal
+          )
+      })
+    })
+    const voiceCapabilities = createPluginVoiceCapabilities({
+      resolveCurrentActivation: (pluginName) =>
+        ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+      resolveHostGeneration: (activation) =>
+        this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+      service: Object.freeze({
+        dictate: async (payload, signal, caller) => {
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          const result = await voiceService.dictate(payload, undefined, signal, caller)
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          return result
+        },
+        speak: async (payload, signal, caller) => {
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          const result = await voiceService.speak(payload, signal, caller)
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          return result
+        },
+        stream: (payload, signal, caller) => {
+          if (signal.aborted) throw new Error('PLUGIN_VOICE_CANCELLED')
+          return voiceService.streamDictation(
+            {
+              ...(payload.language ? { language: payload.language } : {})
+            },
+            signal,
+            caller
+          )
+        }
+      })
+    })
+    const intelligenceHostService = createPluginIntelligenceHostService()
+    const createTranslationCapability = (activation: PluginActivationIdentity) =>
+      createPluginIntelligenceCapabilities({
+        activation,
+        invokeCapabilities: Object.freeze(['text.translate', 'vision.ocr']),
+        providerModelCapabilities: Object.freeze(['text.translate']),
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        service: intelligenceHostService
+      })
+    const intelligenceContextHostService = createPluginIntelligenceContextHostService({
+      invoke: intelligenceContextExecutionService.invoke.bind(intelligenceContextExecutionService)
+    })
+    const intelligenceContextStreamHostService = createPluginIntelligenceContextStreamHostService({
+      stream: intelligenceContextExecutionService.stream.bind(intelligenceContextExecutionService)
+    })
+    const createIntelligenceContextCapability = (activation: PluginActivationIdentity) => {
+      const invokeCapabilities = createPluginIntelligenceContextCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        service: intelligenceContextHostService
+      })
+      const streamCapabilities = createPluginIntelligenceContextStreamCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        service: intelligenceContextStreamHostService
+      })
+      return Object.freeze({
+        definitions: Object.freeze([
+          ...invokeCapabilities.definitions,
+          ...streamCapabilities.definitions
+        ])
+      })
+    }
+    const authorizePluginCapability = (pluginName: string, permissionId: string): boolean => {
+      try {
+        const permissionModule = getPermissionModule()
+        const store = permissionModule?.getStore()
+        const plugin = this.pluginManager?.getPluginByName(pluginName) as ITouchPlugin | undefined
+        if (
+          !store ||
+          !plugin ||
+          typeof plugin.sdkapi !== 'number' ||
+          !hasDeclaredPluginPermission(plugin, permissionId)
+        ) {
+          return false
+        }
+        return store.hasPermission(pluginName, permissionId, plugin.sdkapi) === true
+      } catch {
+        return false
+      }
+    }
+    const watchPluginPermissionRevoked = (
+      pluginName: string,
+      permissionId: string,
+      onRevoke: () => void
+    ): (() => void) => {
+      const listener = (event: unknown): void => {
+        if (!isRecord(event) || event.pluginId !== pluginName) return
+        const permissionIds = Array.isArray(event.permissionIds)
+          ? event.permissionIds.filter((value): value is string => typeof value === 'string')
+          : []
+        if (event.all === true || permissionIds.includes(permissionId)) onRevoke()
+      }
+      touchEventBus.on(TalexEvents.PERMISSION_REVOKED, listener)
+      return () => touchEventBus.off(TalexEvents.PERMISSION_REVOKED, listener)
+    }
+    const snipasteDiscovery = createFixedPluginSnipasteDiscovery({
+      platform: process.platform,
+      homeDirectory: app.getPath('home'),
+      fileSystem: Object.freeze({
+        async kind(target: string) {
+          try {
+            const stats = await fse.lstat(target)
+            if (stats.isSymbolicLink()) return 'symlink' as const
+            if (stats.isFile()) return 'file' as const
+            if (stats.isDirectory()) return 'directory' as const
+            return 'other' as const
+          } catch {
+            return 'missing' as const
+          }
+        },
+        realpath: (target: string) => fse.realpath(target)
+      })
+    })
+    const snipasteExecutor = createFixedPluginSnipasteExecutor({
+      platform: process.platform,
+      environment: process.env,
+      spawn: (executable, args, options) =>
+        createPluginSnipasteProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            detached: options.detached,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: options.stdio,
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createSnipasteProcessCapability = (activation: PluginActivationIdentity) =>
+      createPluginSnipasteProcessCapability({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        discovery: snipasteDiscovery,
+        executor: snipasteExecutor
+      })
+    const systemActionExecutor = createFixedPluginSystemActionExecutor({
+      platform: process.platform,
+      spawn: (executable, args, options) =>
+        createPluginSystemActionProcess(
+          spawnSafe(executable, [...args], {
+            windowsHide: options.windowsHide,
+            stdio: options.stdio
+          })
+        )
+    })
+    const systemActionConfirmation = createFixedPluginSystemActionConfirmation({
+      showMessageBox: async (options) => {
+        const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!parentWindow || parentWindow.isDestroyed()) return { response: 0 }
+        const result = await dialog.showMessageBox(parentWindow, {
+          type: options.type,
+          title: options.title,
+          message: options.message,
+          detail: options.detail,
+          buttons: [...options.buttons],
+          defaultId: options.defaultId,
+          cancelId: options.cancelId,
+          noLink: options.noLink,
+          signal: options.signal
+        })
+        if (parentWindow.isDestroyed()) return { response: 0 }
+        return { response: result.response }
+      }
+    })
+    const systemActionWindow = Object.freeze({
+      showMainWindow: async (
+        activation: PluginActivationIdentity,
+        hostGeneration: number,
+        signal: AbortSignal
+      ): Promise<void> => {
+        const assertCurrent = (): void => {
+          if (signal.aborted) throw new Error('PLUGIN_HOST_CAPABILITY_CANCELLED')
+          const current = ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(activation.name)
+          if (
+            !current ||
+            current.name !== activation.name ||
+            current.pluginInstanceId !== activation.pluginInstanceId ||
+            current.activationGeneration !== activation.activationGeneration ||
+            current.key !== activation.key ||
+            this.runtimeService?.resolve(activation)?.owner.hostGeneration !== hostGeneration
+          ) {
+            throw new Error('PLUGIN_SYSTEM_ACTION_STALE')
+          }
+        }
+        assertCurrent()
+        const mainWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          throw new Error('PLUGIN_SYSTEM_ACTION_MAIN_WINDOW_UNAVAILABLE')
+        }
+        if (mainWindow.isMinimized()) {
+          assertCurrent()
+          mainWindow.restore()
+        }
+        assertCurrent()
+        mainWindow.show()
+        assertCurrent()
+        mainWindow.focus()
+        assertCurrent()
+      }
+    })
+    const createSystemActionCapability = (activation: PluginActivationIdentity) =>
+      createPluginSystemActionCapabilities({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        executor: systemActionExecutor,
+        confirmation: systemActionConfirmation,
+        window: systemActionWindow
+      })
+    const browserDataService = createFixedPluginBrowserDataService({
+      platform: process.platform,
+      homeDirectory: app.getPath('home'),
+      appDataDirectory:
+        process.platform === 'win32'
+          ? (process.env.LOCALAPPDATA ?? path.join(app.getPath('home'), 'AppData', 'Local'))
+          : app.getPath('appData'),
+      tempDirectory: path.join(app.getPath('temp'), 'talex-touch', 'plugin-browser-data'),
+      query: createPluginBrowserDataSqliteQuery()
+    })
+    const createBrowserDataCapability = (activation: PluginActivationIdentity) =>
+      createPluginBrowserDataCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        resolveEnabledSources: (pluginName) => {
+          const plugin = this.pluginManager?.getPluginByName(pluginName)
+          if (!(plugin instanceof TouchPlugin)) return Object.freeze([])
+          const providers: readonly [PluginBrowserDataSourceId, string][] = [
+            ['bookmarks', 'touch-browser-data.browser-bookmarks'],
+            ['history', 'touch-browser-data.browser-history']
+          ]
+          return Object.freeze(
+            providers
+              .filter(([, providerId]) => plugin.isSearchProviderEnabledForHost(providerId))
+              .map(([source]) => source)
+          )
+        },
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        authorizeIndex: (pluginName) => authorizePluginCapability(pluginName, 'fs.index'),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        watchIndexPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.index', onRevoke),
+        service: browserDataService
+      })
+    const browserOpenService = createFixedPluginBrowserOpenService({
+      platform: process.platform,
+      homeDirectory: app.getPath('home'),
+      windowsDirectory:
+        process.platform === 'win32'
+          ? (process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows')
+          : '/Windows',
+      environment: process.env,
+      inspect: async (candidatePath, kind, signal) => {
+        if (signal.aborted) return null
+        try {
+          const before = await fse.lstat(candidatePath)
+          if (before.isSymbolicLink()) return null
+          if (kind === 'file' ? !before.isFile() : !before.isDirectory()) return null
+          const canonicalPath = path.normalize(await fse.realpath(candidatePath))
+          if (canonicalPath !== path.normalize(candidatePath)) return null
+          const after = await fse.stat(canonicalPath)
+          if (signal.aborted) return null
+          if (kind === 'file' ? !after.isFile() : !after.isDirectory()) return null
+          if (before.dev !== after.dev || before.ino !== after.ino) return null
+          return {
+            canonicalPath,
+            kind,
+            dev: String(after.dev),
+            ino: String(after.ino)
+          }
+        } catch {
+          return null
+        }
+      },
+      spawn: (executable, args, options) =>
+        createPluginBrowserOpenProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            detached: options.detached,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createBrowserOpenCapability = (activation: PluginActivationIdentity) =>
+      createPluginBrowserOpenCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        authorizeNetwork: (pluginName) => authorizePluginCapability(pluginName, 'network.internet'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        watchNetworkPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'network.internet', onRevoke),
+        service: browserOpenService
+      })
+    const windowManagerService = createFixedPluginWindowManagerService({
+      platform: process.platform,
+      windowsDirectory: process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows',
+      spawn: (executable, args, options) =>
+        createPluginWindowManagerProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createWindowManagerCapability = (activation: PluginActivationIdentity) =>
+      createPluginWindowManagerCapabilities({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        service: windowManagerService
+      })
+    const windowPresetExecutor = createFixedPluginWindowPresetExecutor({
+      platform: process.platform,
+      windowsDirectory: process.env.SystemRoot ?? process.env.WINDIR ?? 'C:\\Windows',
+      spawn: (executable, args, options) =>
+        createPluginWindowPresetProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide
+          })
+        )
+    })
+    const createWindowPresetCapability = (activation: PluginActivationIdentity) =>
+      createPluginWindowPresetCapabilities({
+        activation,
+        platform: process.platform,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        executor: windowPresetExecutor
+      })
+    const workspaceScriptHost = createFixedPluginWorkspaceScriptHost({
+      platform: process.platform,
+      environment: process.env,
+      resolvePackageManager: resolvePluginWorkspacePackageManagerPath,
+      selectWorkspace: async (signal) => {
+        const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return null
+        const selection = dialog.showOpenDialog(parentWindow, {
+          title: 'Select Workspace',
+          buttonLabel: 'Select',
+          properties: ['openDirectory', 'noResolveAliases']
+        })
+        void selection.catch(() => undefined)
+        return await new Promise<string | null>((resolve, reject) => {
+          let settled = false
+          const finish = (value: string | null, error?: unknown): void => {
+            if (settled) return
+            settled = true
+            signal.removeEventListener('abort', onAbort)
+            if (error !== undefined) reject(error)
+            else resolve(value)
+          }
+          const onAbort = (): void => finish(null)
+          signal.addEventListener('abort', onAbort, { once: true })
+          if (signal.aborted) {
+            finish(null)
+            return
+          }
+          void selection.then(
+            (result) => {
+              if (signal.aborted || parentWindow.isDestroyed() || result.canceled) {
+                finish(null)
+                return
+              }
+              finish(typeof result.filePaths[0] === 'string' ? result.filePaths[0] : null)
+            },
+            (error) => finish(null, error)
+          )
+        })
+      },
+      confirmRun: async (input, signal) => {
+        const parentWindow = BrowserWindow.fromId(ioRuntime.mainWindowId)
+        if (!parentWindow || parentWindow.isDestroyed() || signal.aborted) return false
+        const result = await dialog.showMessageBox(parentWindow, {
+          type: 'warning',
+          title: 'Run Workspace Script',
+          message: `Run "${input.scriptName}"?`,
+          detail: `Workspace: ${input.workspaceName}\nThe package script is project-owned code and may perform arbitrary actions.`,
+          buttons: ['Cancel', 'Run'],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+          signal
+        })
+        return !parentWindow.isDestroyed() && !signal.aborted && result.response === 1
+      },
+      spawn: (executable, args, options) =>
+        createPluginWorkspaceScriptProcess(
+          spawnSafe(executable, [...args], {
+            cwd: options.cwd,
+            detached: options.detached,
+            env: { ...options.env },
+            shell: options.shell,
+            stdio: [...options.stdio],
+            windowsHide: options.windowsHide,
+            windowsVerbatimArguments: options.windowsVerbatimArguments
+          })
+        )
+    })
+    const createWorkspaceScriptCapability = (activation: PluginActivationIdentity) =>
+      createPluginWorkspaceScriptCapabilities({
+        activation,
+        resolveCurrentActivation: (pluginName) =>
+          ioRuntime.transport.keyManager?.resolveCurrentIdentity?.(pluginName),
+        resolveHostGeneration: (activation) =>
+          this.runtimeService?.resolve(activation)?.owner.hostGeneration,
+        authorizeRead: (pluginName) => authorizePluginCapability(pluginName, 'fs.read'),
+        authorizeShell: (pluginName) => authorizePluginCapability(pluginName, 'system.shell'),
+        watchReadPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'fs.read', onRevoke),
+        watchShellPermissionRevoked: (pluginName, onRevoke) =>
+          watchPluginPermissionRevoked(pluginName, 'system.shell', onRevoke),
+        host: workspaceScriptHost
+      })
     this.runtimeService = new PluginRuntimeService({
       artifactPath: resolvePluginRuntimeArtifactPath(),
       factory: new ElectronPluginRuntimeProcessFactory(),
       keyManager: ioRuntime.transport.keyManager,
-      capabilityDefinitions: this.pluginBusinessCapabilities.definitions,
-      authorizeCapability: (pluginName, permissionId) => {
-        try {
-          const permissionModule = getPermissionModule()
-          const store = permissionModule?.getStore()
-          const plugin = this.pluginManager?.getPluginByName(pluginName) as
-            | { sdkapi?: number }
-            | undefined
-          if (!store || !plugin || typeof plugin.sdkapi !== 'number') return false
-          return store.hasPermission(pluginName, permissionId, plugin.sdkapi) === true
-        } catch {
-          return false
-        }
-      },
-      watchPermissionRevoked: (pluginName, permissionId, onRevoke) => {
-        const listener = (event: unknown): void => {
-          if (!isRecord(event) || event.pluginId !== pluginName) return
-          const permissionIds = Array.isArray(event.permissionIds)
-            ? event.permissionIds.filter((value): value is string => typeof value === 'string')
-            : []
-          if (event.all === true || permissionIds.includes(permissionId)) onRevoke()
-        }
-        touchEventBus.on(TalexEvents.PERMISSION_REVOKED, listener)
-        return () => touchEventBus.off(TalexEvents.PERMISSION_REVOKED, listener)
-      },
+      capabilityDefinitions: Object.freeze([
+        ...this.pluginBusinessCapabilities.definitions,
+        ...requestReplyCapabilities.definitions,
+        ...voiceCapabilities.definitions
+      ]),
+      authorizeCapability: authorizePluginCapability,
+      watchPermissionRevoked: watchPluginPermissionRevoked,
       closeResources: async (activation) => {
         await this.pluginBusinessCapabilities?.closeActivation(activation)
       }
     })
-    TouchPlugin.setRuntimeService(this.runtimeService)
+    TouchPlugin.setSnipasteProcessCapabilityFactory((activation) =>
+      createSnipasteProcessCapability(activation)
+    )
+    TouchPlugin.setSystemActionCapabilityFactory((activation) =>
+      createSystemActionCapability(activation)
+    )
+    TouchPlugin.setBrowserOpenCapabilityFactory((activation) =>
+      createBrowserOpenCapability(activation)
+    )
+    TouchPlugin.setBrowserDataCapabilityFactory((activation) =>
+      createBrowserDataCapability(activation)
+    )
+    TouchPlugin.setTranslationCapabilityFactory((activation) =>
+      createTranslationCapability(activation)
+    )
+    TouchPlugin.setIntelligenceContextCapabilityFactory((activation) =>
+      createIntelligenceContextCapability(activation)
+    )
+    TouchPlugin.setWindowManagerCapabilityFactory((activation) =>
+      createWindowManagerCapability(activation)
+    )
+    TouchPlugin.setWindowPresetCapabilityFactory((activation) =>
+      createWindowPresetCapability(activation)
+    )
+    TouchPlugin.setWorkspaceScriptCapabilityFactory((activation) =>
+      createWorkspaceScriptCapability(activation)
+    )
+    TouchPlugin.setRuntimeService(
+      shouldInstallPluginRuntimeServiceByDefault() ? this.runtimeService : null
+    )
     this.storageTeardownDisposer?.()
     this.storageTeardownDisposer = registerPluginStorageTeardown(async (pluginName) => {
-      await this.pluginSqliteResources.closePlugin(pluginName)
+      const results = await Promise.allSettled([
+        this.pluginSqliteResources.closePlugin(pluginName),
+        purgePluginTempNamespace(tempFileService, pluginName)
+      ])
+      const failures = results.flatMap((result) =>
+        result.status === 'rejected' ? [result.reason] : []
+      )
+      if (failures.length > 0) {
+        throw new AggregateError(failures, 'PLUGIN_PERMISSION_RESOURCE_TEARDOWN_FAILED')
+      }
     })
-
-    const pluginRuntime = buildPluginManagerRuntime({
-      pluginRootDir: file.dirPath!,
-      transport: ioRuntime.transport,
-      channel: ioRuntime.channel,
-      mainWindowId: ioRuntime.mainWindowId,
-      createManager: (pluginRootDir, runtimeTransport, channel, mainWindowId) =>
-        createPluginModuleInternal(
-          pluginRootDir,
-          runtimeTransport,
-          channel,
-          mainWindowId,
-          this.pluginSqliteResources,
-          async (pluginName) => {
-            await deleteSecureStoreValuesByPrefix(
-              this.secureStoreRootPath,
-              `plugin.${pluginName}.`,
-              (message) => pluginLog.warn(message, { error: 'PLUGIN_SECRET_UNAVAILABLE' })
-            )
-          }
-        ),
-      createHealthMonitor: (manager) => new DevServerHealthMonitor(manager)
-    })
-
-    this.pluginManager = pluginRuntime.pluginManager
-    this.installQueue = pluginRuntime.installQueue
-    this.healthMonitor = pluginRuntime.healthMonitor
 
     if (!this.networkStatusCleanup) {
       this.networkStatusCleanup = getNetworkService().onStatusChange((status) => {
@@ -1712,35 +2615,81 @@ export class PluginModule extends BaseModule {
   }
 
   async onDestroy(): Promise<void> {
-    this.storageTeardownDisposer?.()
-    this.storageTeardownDisposer = null
-    this.permissionGrantedDisposer?.()
-    this.permissionGrantedDisposer = null
-    this.permissionRevokedDisposer?.()
-    this.permissionRevokedDisposer = null
-    this.networkStatusCleanup?.()
-    this.networkStatusCleanup = null
-    for (const disposer of this.transportDisposers) {
+    const cleanupErrors: unknown[] = []
+    const runCleanup = (cleanup: (() => void) | null | undefined): void => {
+      if (!cleanup) return
       try {
-        disposer()
-      } catch {
-        // ignore
+        cleanup()
+      } catch (error) {
+        cleanupErrors.push(error)
       }
     }
+
+    const storageTeardownDisposer = this.storageTeardownDisposer
+    this.storageTeardownDisposer = null
+    runCleanup(storageTeardownDisposer)
+    const permissionGrantedDisposer = this.permissionGrantedDisposer
+    this.permissionGrantedDisposer = null
+    runCleanup(permissionGrantedDisposer)
+    const permissionRevokedDisposer = this.permissionRevokedDisposer
+    this.permissionRevokedDisposer = null
+    runCleanup(permissionRevokedDisposer)
+    const networkStatusCleanup = this.networkStatusCleanup
+    this.networkStatusCleanup = null
+    runCleanup(networkStatusCleanup)
+    for (const disposer of this.transportDisposers) runCleanup(disposer)
     this.transportDisposers = []
-    await Promise.allSettled(
-      [...(this.pluginManager?.plugins.values() ?? [])].map((plugin) => plugin.disable())
+
+    const disableResults = await Promise.allSettled(
+      [...(this.pluginManager?.plugins.values() ?? [])].map(async (plugin) => {
+        if (plugin.status === PluginStatus.DISABLED || plugin.status === PluginStatus.LOADED) return
+        if (!(await plugin.disable())) throw new Error('PLUGIN_RUNTIME_RESOURCE_CLEANUP_FAILED')
+      })
     )
-    await this.runtimeService?.dispose()
+    for (const result of disableResults) {
+      if (result.status === 'rejected') cleanupErrors.push(result.reason)
+    }
+
+    const runtimeService = this.runtimeService
     this.runtimeService = null
-    await this.pluginBusinessCapabilities?.closeAll()
+    try {
+      await runtimeService?.dispose()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+
+    const businessCapabilities = this.pluginBusinessCapabilities
     this.pluginBusinessCapabilities = null
-    TouchPlugin.setRuntimeService(null)
-    TouchPlugin.setTransport(null)
+    try {
+      await businessCapabilities?.closeAll()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+
+    runCleanup(() => TouchPlugin.setSnipasteProcessCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setSystemActionCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setBrowserOpenCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setBrowserDataCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setTranslationCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setIntelligenceContextCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setWindowManagerCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setWindowPresetCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setWorkspaceScriptCapabilityFactory(null))
+    runCleanup(() => TouchPlugin.setRuntimeService(null))
+    runCleanup(() => TouchPlugin.setTransport(null))
     this.transport = null
-    await this.pluginSqliteResources.closeAll()
-    this.healthMonitor?.destroy()
-    stopUpdateScheduler()
+    try {
+      await this.pluginSqliteResources.closeAll()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    runCleanup(() => this.healthMonitor?.destroy())
+    runCleanup(() => stopUpdateScheduler())
+    this.uninstallAuthorityInvalidators.clear()
+
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(cleanupErrors, 'PLUGIN_MODULE_CLEANUP_FAILED')
+    }
   }
 
   private async refreshRemoteWidgetsAfterNetworkRecovery(): Promise<void> {

@@ -69,8 +69,28 @@ export function parseAsrMessage(data: unknown): VoiceAsrStreamEvent | null {
   return isFinal ? { type: 'final', text } : { type: 'partial', text }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function streamCancellationError(): Error {
+  return new Error('VOICE_ASR_STREAM_CANCELLED')
+}
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (signal?.aborted) throw streamCancellationError()
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms))
+  throwIfCancelled(signal)
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(streamCancellationError())
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 interface EventQueue<T> {
@@ -84,6 +104,7 @@ function createQueue<T>(): EventQueue<T> {
   type Slot = { kind: 'item'; value: T } | { kind: 'error'; error: Error } | { kind: 'end' }
   const buffer: Slot[] = []
   let notify: (() => void) | null = null
+  let terminal = false
   const wake = (): void => {
     const fn = notify
     notify = null
@@ -91,14 +112,19 @@ function createQueue<T>(): EventQueue<T> {
   }
   return {
     push: (value) => {
+      if (terminal) return
       buffer.push({ kind: 'item', value })
       wake()
     },
     fail: (error) => {
+      if (terminal) return
+      terminal = true
       buffer.push({ kind: 'error', error })
       wake()
     },
     end: () => {
+      if (terminal) return
+      terminal = true
       buffer.push({ kind: 'end' })
       wake()
     },
@@ -122,6 +148,7 @@ export interface AsrStreamOptions {
   url: string
   sampleRate: number
   language?: string
+  signal?: AbortSignal
   /** Pull newly-captured PCM (16-bit LE mono) since the last call; empty when none. */
   drainFrames: () => Buffer
   /** Returns false once native capture has auto-stopped. */
@@ -135,6 +162,7 @@ export interface AsrStreamOptions {
 export async function* createAsrStream(
   options: AsrStreamOptions
 ): AsyncGenerator<VoiceAsrStreamEvent> {
+  throwIfCancelled(options.signal)
   const WebSocketCtor = (
     globalThis as unknown as { WebSocket?: new (url: string) => MinimalWebSocket }
   ).WebSocket
@@ -145,10 +173,27 @@ export async function* createAsrStream(
   const ws = new WebSocketCtor(options.url)
   ws.binaryType = 'arraybuffer'
   const queue = createQueue<VoiceAsrStreamEvent>()
+  const pumpController = new AbortController()
 
   let opened = false
   let openResolve: (() => void) | null = null
   let openReject: ((error: Error) => void) | null = null
+  let pump: Promise<void> = Promise.resolve()
+
+  const closeSocket = (): void => {
+    try {
+      ws.close()
+    } catch (error) {
+      log.debug('ASR websocket close failed', { error })
+    }
+  }
+  const onAbort = (): void => {
+    const error = streamCancellationError()
+    pumpController.abort()
+    openReject?.(error)
+    queue.fail(error)
+    closeSocket()
+  }
 
   ws.onopen = () => {
     opened = true
@@ -162,51 +207,62 @@ export async function* createAsrStream(
     if (!opened) openReject?.(new Error('ASR websocket failed to open'))
     else queue.fail(new Error('ASR websocket error'))
   }
-  ws.onclose = () => queue.end()
-
-  await new Promise<void>((resolve, reject) => {
-    if (opened) return resolve()
-    openResolve = resolve
-    openReject = reject
-  })
-
-  ws.send(
-    JSON.stringify({
-      type: 'start',
-      sampleRate: options.sampleRate,
-      encoding: 'pcm_s16le',
-      ...(options.language ? { language: options.language } : {})
-    })
-  )
-
-  const pump = (async () => {
-    try {
-      for (;;) {
-        await delay(FRAME_INTERVAL_MS)
-        const active = options.isCapturing()
-        const pcm = options.drainFrames()
-        if (pcm && pcm.length > 0 && ws.readyState === WS_OPEN) {
-          ws.send(pcm)
-        }
-        if (!active) break
-      }
-      if (ws.readyState === WS_OPEN) ws.send(JSON.stringify({ type: 'stop' }))
-    } catch (error) {
-      queue.fail(error instanceof Error ? error : new Error(String(error)))
-    }
-  })()
+  ws.onclose = () => {
+    if (!opened) openReject?.(new Error('ASR websocket closed before open'))
+    queue.end()
+  }
+  options.signal?.addEventListener('abort', onAbort, { once: true })
 
   try {
+    await new Promise<void>((resolve, reject) => {
+      if (opened) return resolve()
+      openResolve = resolve
+      openReject = reject
+    })
+    throwIfCancelled(options.signal)
+
+    ws.send(
+      JSON.stringify({
+        type: 'start',
+        sampleRate: options.sampleRate,
+        encoding: 'pcm_s16le',
+        ...(options.language ? { language: options.language } : {})
+      })
+    )
+
+    pump = (async () => {
+      try {
+        for (;;) {
+          await delay(FRAME_INTERVAL_MS, pumpController.signal)
+          const active = options.isCapturing()
+          const pcm = options.drainFrames()
+          if (pcm && pcm.length > 0 && ws.readyState === WS_OPEN) {
+            ws.send(pcm)
+          }
+          if (!active) break
+        }
+        if (ws.readyState === WS_OPEN) ws.send(JSON.stringify({ type: 'stop' }))
+      } catch (error) {
+        if (!pumpController.signal.aborted) {
+          queue.fail(error instanceof Error ? error : new Error(String(error)))
+        }
+      }
+    })()
+
     for await (const event of queue.iterate()) {
+      throwIfCancelled(options.signal)
       yield event
       if (event.type === 'final') break
     }
+    throwIfCancelled(options.signal)
   } finally {
-    try {
-      ws.close()
-    } catch (error) {
-      log.debug('ASR websocket close failed', { error })
-    }
+    options.signal?.removeEventListener('abort', onAbort)
+    pumpController.abort()
+    closeSocket()
+    ws.onopen = null
+    ws.onmessage = null
+    ws.onerror = null
+    ws.onclose = null
     await pump.catch(() => {})
   }
 }

@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import InstalledProgress from '../index'
 import TuffProgress from '../src/TxProgress.vue'
 
 describe('tuffProgress', () => {
@@ -32,5 +33,13 @@ describe('tuffProgress', () => {
     expect(wrapper.text()).not.toContain('60%')
     expect(wrapper.find('.tx-progress-bar__track').attributes('aria-valuenow')).toBeUndefined()
     expect(wrapper.find('.tx-progress-bar').classes()).toContain('tx-progress-bar--indeterminate')
+  })
+
+  it('registers the component through install', () => {
+    const app = { component: vi.fn() }
+
+    InstalledProgress.install?.(app as any)
+
+    expect(app.component).toHaveBeenCalledWith('TuffProgress', InstalledProgress)
   })
 })

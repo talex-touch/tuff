@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import type { TxVersionCapsulePanel, TxVersionCapsuleProps } from './types'
-import { computed, onBeforeUnmount, ref, useSlots, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 
 defineOptions({ name: 'TxVersionCapsule' })
 
@@ -113,6 +113,15 @@ watch(activePanel, (value) => {
 watch(() => props.disabled, (disabled) => {
   if (disabled)
     activePanel.value = null
+})
+
+// A controlled `panel` can already be open on first render. The activePanel
+// watch only fires on change, so bind the dismiss listeners here for the
+// mount-open case — otherwise closeOnClickOutside / closeOnEsc stay dead until
+// the first manual toggle.
+onMounted(() => {
+  if (activePanel.value)
+    bind()
 })
 
 onBeforeUnmount(unbind)
