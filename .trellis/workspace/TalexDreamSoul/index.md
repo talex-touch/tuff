@@ -7,9 +7,8 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 37
+- **Total Sessions**: 38
 - **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
@@ -18,11 +17,9 @@
 ## Active Documents
 
 <!-- @@@auto:active-documents -->
-
-| File           | Lines | Status |
-| -------------- | ----- | ------ |
-| `journal-1.md` | ~1252 | Active |
-
+| File | Lines | Status |
+|------|-------|--------|
+| `journal-1.md` | ~1286 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -31,8 +28,9 @@
 
 <!-- @@@auto:session-history -->
 
-| #   | Date       | Title                                                  | Commits                                                                                                                                                                                                        | Branch                                   |
-| --- | ---------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| # | Date | Title | Commits | Branch |
+|---|------|-------|---------|--------|
+| 38 | 2026-07-30 | 修复文件索引更新与错误脱敏 #476 | `554435f33`, `baf3bf3d2` | `master` |
 | 37  | 2026-07-30 | Ship versioned native screenshot workflow              | `f184d0966`, `5c3e0710e`                                                                                                                                                                                       | `master`                                 |
 | 36  | 2026-07-30 | Close Preview Secret Configuration #475                | `b8261e06b`, `aba777981`                                                                                                                                                                                       | `master`                                 |
 | 35  | 2026-07-30 | Close sensitive data lifecycle and issue baseline      | `5bf6e08b4`, `70c65575f`                                                                                                                                                                                       | `master`                                 |

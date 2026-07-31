@@ -1250,3 +1250,37 @@ Implemented the protocol-only Rust native transport and ScreenCaptureKit/xcap sc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 38: 修复文件索引更新与错误脱敏 #476
+
+**Date**: 2026-07-30
+**Task**: 修复文件索引更新与错误脱敏 #476
+**Branch**: `master`
+
+### Summary
+
+将文件 metadata 更新路由到 SearchIndex worker 单写者，新增整批输入校验与真实双连接 libSQL 锁回归；公共 transport/dashboard/renderer/Sentry/Nexus 投影改为 exact allowlist，阻断 SQL、params、绝对路径和 stack/cause 外泄。独立 review 的两个 P1 已修复。验证通过：CoreApp focused 140/140、Utils 979/979、node/web typecheck、CoreApp production build、scoped lint/format 与 git diff --check。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `554435f33` | (see git log) |
+| `baf3bf3d2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
