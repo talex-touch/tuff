@@ -260,7 +260,8 @@ export interface IPluginUtils {
   intelligence: import("./intelligence").IntelligenceSDK;
 
   /**
-   * Permission-gated native screenshot facade for display discovery and cursor/display/region capture.
+   * Permission-gated native screenshot facade for descriptor-only cursor/display/region capture.
+   * Successful captures return a managed tfile URL and metadata, never image bytes or native paths.
    * @see {@link PluginScreenshotSDK}
    */
   screenshot: import("./screenshot").PluginScreenshotSDK;

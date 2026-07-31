@@ -250,7 +250,7 @@ beforeEach(() => {
         case 'assistant:voice-panel:capture-screenshot':
           return {
             success: true,
-            dataUrl: 'data:image/png;base64,c2NyZWVuc2hvdC1pbWFnZQ==',
+            tfileUrl: 'tfile:///tmp/native/screenshots/screenshot.png',
             width: 2560,
             height: 1440,
             displayName: 'Studio Display',
@@ -1007,18 +1007,22 @@ describe('VoicePanel screenshot region selection', () => {
     rotation: 0,
     isPrimary: false
   }
-  const region = { x: 1520, y: 80, width: 640, height: 360 }
+  const resource = {
+    tfileUrl: 'tfile:///managed/assistant-region.png',
+    mimeType: 'image/png' as const,
+    width: 640,
+    height: 360,
+    sizeBytes: 2048
+  }
 
   it.each([
     { label: 'Capture screenshot', eventName: 'assistant:voice-panel:capture-screenshot' },
     { label: 'Translate screenshot', eventName: 'assistant:voice-panel:translate-screenshot' }
-  ])('forwards a confirmed region to $label', async ({ label, eventName }) => {
+  ])('forwards a managed interactive capture to $label', async ({ label, eventName }) => {
     screenshotDisplaysResponse = [display]
     screenshotRegionSelectionResponse = {
       success: true,
-      displayId: display.id,
-      displayName: display.friendlyName,
-      region
+      resource
     }
     const wrapper = await mountVoicePanel()
     await selectScreenshotRegionTarget(wrapper, display.id)
@@ -1036,8 +1040,8 @@ describe('VoicePanel screenshot region selection', () => {
     expect(actionCalls).toHaveLength(1)
     expect(actionCalls[0]?.[1]).toEqual(
       eventName === 'assistant:voice-panel:translate-screenshot'
-        ? { targetLang: 'zh', target: 'region', displayId: display.id, region }
-        : { target: 'region', displayId: display.id, region }
+        ? { targetLang: 'zh', target: 'resource', tfileUrl: resource.tfileUrl, resource }
+        : { target: 'resource', tfileUrl: resource.tfileUrl, resource }
     )
 
     wrapper.unmount()

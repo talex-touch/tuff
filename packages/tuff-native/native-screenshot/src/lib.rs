@@ -1,287 +1,116 @@
-use std::io::Cursor;
-use std::time::Instant;
+use std::sync::{Arc, OnceLock};
 
-use image::ImageFormat;
-use napi::bindgen_prelude::Buffer;
-use napi::{Error, Result};
+use napi::bindgen_prelude::{Buffer, Function, PromiseRaw};
+use napi::{Env, Result};
 use napi_derive::napi;
-use xcap::Monitor;
+use tuff_native_core::{CapabilityRegistry, NativeRuntime, ProtocolLimits, RuntimeDescriptor};
+use tuff_native_napi::{NapiPacket, NapiRuntimeAdapter};
 
-#[napi(object)]
-pub struct NativeScreenshotSupport {
-    pub supported: bool,
-    pub platform: String,
-    pub engine: Option<String>,
-    pub reason: Option<String>,
-}
+#[cfg(feature = "protocol-test-backend")]
+use crate::backend::test_backend::DeterministicBackend;
+use crate::capability::ScreenshotCapability;
 
-#[napi(object)]
-pub struct NativeScreenshotDisplay {
-    pub id: String,
-    pub name: String,
-    pub friendly_name: Option<String>,
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
-    pub scale_factor: f64,
-    pub rotation: f64,
-    pub is_primary: bool,
-}
+pub mod backend;
+pub mod capability;
+pub mod compose;
+pub mod error;
+pub mod geometry;
+pub mod limits;
+pub mod model;
+pub mod region_plan;
+pub mod window_candidates;
 
-#[napi(object)]
-pub struct NativeScreenshotRegion {
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
-}
+#[cfg(test)]
+mod backend_contract_tests;
+#[cfg(test)]
+mod capability_contract_tests;
+#[cfg(test)]
+mod geometry_contract_tests;
+#[cfg(all(test, target_os = "macos"))]
+mod macos_contract_tests;
+#[cfg(test)]
+mod region_plan_contract_tests;
+#[cfg(test)]
+mod stream_contract_tests;
+#[cfg(test)]
+mod test_fixtures;
+#[cfg(test)]
+mod window_candidates_contract_tests;
 
-#[napi(object)]
-pub struct NativeScreenshotCaptureOptions {
-    pub display_id: Option<String>,
-    pub cursor_x: Option<i32>,
-    pub cursor_y: Option<i32>,
-    pub region: Option<NativeScreenshotRegion>,
-}
+static ADAPTER: OnceLock<NapiRuntimeAdapter> = OnceLock::new();
 
-#[napi(object)]
-pub struct NativeScreenshotCaptureResult {
-    pub image: Buffer,
-    pub mime_type: String,
-    pub width: u32,
-    pub height: u32,
-    pub display_id: String,
-    pub display_name: String,
-    pub x: i32,
-    pub y: i32,
-    pub scale_factor: f64,
-    pub duration_ms: u32,
-}
-
-#[napi]
-pub fn get_native_screenshot_support() -> NativeScreenshotSupport {
-    build_native_screenshot_support(
-        std::env::consts::OS.to_string(),
-        platform_supported(),
-        probe_monitor_count(),
-    )
-}
-
-#[napi]
-pub fn list_displays() -> Result<Vec<NativeScreenshotDisplay>> {
-    let monitors = Monitor::all().map_err(to_napi_error)?;
-    monitors
-        .iter()
-        .map(to_display)
-        .collect::<Result<Vec<NativeScreenshotDisplay>>>()
-}
-
-#[napi]
-pub fn capture_display(display_id: Option<String>) -> Result<NativeScreenshotCaptureResult> {
-    capture_with_options(NativeScreenshotCaptureOptions {
-        display_id,
-        cursor_x: None,
-        cursor_y: None,
-        region: None,
+fn adapter() -> &'static NapiRuntimeAdapter {
+    ADAPTER.get_or_init(|| {
+        let runtime = NativeRuntime::new(protocol_registry(), ProtocolLimits::default());
+        NapiRuntimeAdapter::new(
+            runtime,
+            RuntimeDescriptor {
+                addon_id: "tuff-native-screenshot".to_string(),
+                addon_version: env!("CARGO_PKG_VERSION").to_string(),
+                target: format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
+                platform: std::env::consts::OS.to_string(),
+                arch: std::env::consts::ARCH.to_string(),
+                build_profile: if cfg!(debug_assertions) {
+                    "debug".to_string()
+                } else {
+                    "release".to_string()
+                },
+            },
+        )
     })
 }
 
-#[napi]
-pub fn capture_region(
-    options: NativeScreenshotCaptureOptions,
-) -> Result<NativeScreenshotCaptureResult> {
-    capture_with_options(options)
+fn protocol_registry() -> CapabilityRegistry {
+    let limits = crate::limits::ScreenshotLimits::default();
+    #[cfg(feature = "protocol-test-backend")]
+    let backend: Arc<dyn crate::backend::ScreenshotBackend> = Arc::new(DeterministicBackend::new());
+    #[cfg(not(feature = "protocol-test-backend"))]
+    let backend = crate::backend::platform_backend(limits);
+    let capability = Arc::new(ScreenshotCapability::new(backend, limits));
+    let mut registry = CapabilityRegistry::new();
+    capability
+        .register_handlers(&mut registry)
+        .expect("screenshot capability must register");
+    registry
 }
 
-#[napi(js_name = "capture")]
-pub fn capture_with_options(
-    options: NativeScreenshotCaptureOptions,
-) -> Result<NativeScreenshotCaptureResult> {
-    let started_at = Instant::now();
-    let monitor = resolve_monitor(
-        options.display_id.as_deref(),
-        options.cursor_x,
-        options.cursor_y,
-    )?;
-    let display = to_display(&monitor)?;
-    let image = if let Some(region) = options.region {
-        validate_region(&region, display.width, display.height)?;
-        monitor
-            .capture_region(region.x, region.y, region.width, region.height)
-            .map_err(to_napi_error)?
-    } else {
-        monitor.capture_image().map_err(to_napi_error)?
-    };
-
-    let width = image.width();
-    let height = image.height();
-    let mut png = Vec::new();
-    image
-        .write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
-        .map_err(to_napi_error)?;
-
-    Ok(NativeScreenshotCaptureResult {
-        image: Buffer::from(png),
-        mime_type: "image/png".to_string(),
-        width,
-        height,
-        display_id: display.id,
-        display_name: display.name,
-        x: display.x,
-        y: display.y,
-        scale_factor: display.scale_factor,
-        duration_ms: started_at.elapsed().as_millis().min(u128::from(u32::MAX)) as u32,
-    })
+#[napi(js_name = "nativeProtocolV1Handshake")]
+pub fn native_protocol_v1_handshake(env: Env, control: String) -> Result<String> {
+    adapter().handshake(&env, control)
 }
 
-fn resolve_monitor(
-    display_id: Option<&str>,
-    cursor_x: Option<i32>,
-    cursor_y: Option<i32>,
-) -> Result<Monitor> {
-    if let Some(id) = display_id {
-        let monitors = Monitor::all().map_err(to_napi_error)?;
-        for monitor in monitors {
-            if monitor_id(&monitor)? == id {
-                return Ok(monitor);
-            }
-        }
-        return Err(Error::from_reason(format!("Display not found: {id}")));
-    }
-
-    if let (Some(x), Some(y)) = (cursor_x, cursor_y) {
-        return Monitor::from_point(x, y).map_err(to_napi_error);
-    }
-
-    select_default_monitor(Monitor::all().map_err(to_napi_error)?)
+#[napi(js_name = "nativeProtocolV1Invoke")]
+pub fn native_protocol_v1_invoke<'env>(
+    env: &'env Env,
+    control: String,
+    attachments: Vec<Buffer>,
+) -> Result<PromiseRaw<'env, NapiPacket>> {
+    adapter().invoke(env, control, attachments)
 }
 
-fn platform_supported() -> bool {
-    cfg!(any(
-        target_os = "macos",
-        target_os = "windows",
-        target_os = "linux"
-    ))
+#[napi(js_name = "nativeProtocolV1OpenStream")]
+pub fn native_protocol_v1_open_stream(
+    env: Env,
+    control: String,
+    attachments: Vec<Buffer>,
+    on_frame: Function<'_, NapiPacket, ()>,
+) -> Result<NapiPacket> {
+    adapter().open_stream(&env, control, attachments, on_frame)
 }
 
-fn probe_monitor_count() -> std::result::Result<usize, String> {
-    Monitor::all()
-        .map(|monitors| monitors.len())
-        .map_err(|error| error.to_string())
+#[napi(js_name = "nativeProtocolV1Ack")]
+pub fn native_protocol_v1_ack(env: Env, control: String) -> Result<()> {
+    adapter().acknowledge(&env, control)
 }
 
-fn build_native_screenshot_support(
-    platform: String,
-    platform_supported: bool,
-    monitor_probe: std::result::Result<usize, String>,
-) -> NativeScreenshotSupport {
-    if !platform_supported {
-        return NativeScreenshotSupport {
-            supported: false,
-            platform,
-            engine: None,
-            reason: Some("platform-not-supported".to_string()),
-        };
-    }
-
-    match monitor_probe {
-        Ok(count) if count > 0 => NativeScreenshotSupport {
-            supported: true,
-            platform,
-            engine: Some("xcap".to_string()),
-            reason: None,
-        },
-        Ok(_) => NativeScreenshotSupport {
-            supported: false,
-            platform,
-            engine: Some("xcap".to_string()),
-            reason: Some("no-display-available".to_string()),
-        },
-        Err(reason) => NativeScreenshotSupport {
-            supported: false,
-            platform,
-            engine: Some("xcap".to_string()),
-            reason: Some(format!("xcap-monitor-probe-failed: {reason}")),
-        },
-    }
+#[napi(js_name = "nativeProtocolV1Cancel")]
+pub fn native_protocol_v1_cancel(env: Env, control: String) -> Result<()> {
+    adapter().cancel(&env, control)
 }
 
-fn select_default_monitor(monitors: Vec<Monitor>) -> Result<Monitor> {
-    let mut fallback = None;
-
-    for monitor in monitors {
-        if monitor.is_primary().unwrap_or(false) {
-            return Ok(monitor);
-        }
-
-        if fallback.is_none() {
-            fallback = Some(monitor);
-        }
-    }
-
-    fallback.ok_or_else(|| Error::from_reason("No display available"))
-}
-
-fn to_display(monitor: &Monitor) -> Result<NativeScreenshotDisplay> {
-    let id = monitor_id(monitor)?;
-    let name = monitor.name().unwrap_or_else(|_| id.clone());
-    Ok(NativeScreenshotDisplay {
-        id,
-        name,
-        friendly_name: monitor.friendly_name().ok(),
-        x: monitor.x().unwrap_or(0),
-        y: monitor.y().unwrap_or(0),
-        width: monitor.width().unwrap_or(0),
-        height: monitor.height().unwrap_or(0),
-        scale_factor: f64::from(monitor.scale_factor().unwrap_or(1.0)),
-        rotation: f64::from(monitor.rotation().unwrap_or(0.0)),
-        is_primary: monitor.is_primary().unwrap_or(false),
-    })
-}
-
-fn monitor_id(monitor: &Monitor) -> Result<String> {
-    Ok(monitor.id().map_err(to_napi_error)?.to_string())
-}
-
-fn validate_region(
-    region: &NativeScreenshotRegion,
-    display_width: u32,
-    display_height: u32,
-) -> Result<()> {
-    if region.width == 0 || region.height == 0 {
-        return Err(Error::from_reason(
-            "Capture region width and height must be positive",
-        ));
-    }
-
-    if display_width == 0 || display_height == 0 {
-        return Err(Error::from_reason(
-            "Display bounds are unavailable for capture region",
-        ));
-    }
-
-    let right = region
-        .x
-        .checked_add(region.width)
-        .ok_or_else(|| Error::from_reason("Capture region horizontal bounds overflow"))?;
-    let bottom = region
-        .y
-        .checked_add(region.height)
-        .ok_or_else(|| Error::from_reason("Capture region vertical bounds overflow"))?;
-
-    if right > display_width || bottom > display_height {
-        return Err(Error::from_reason(format!(
-            "Capture region is outside display bounds: region=({}, {}, {}x{}), display={}x{}",
-            region.x, region.y, region.width, region.height, display_width, display_height
-        )));
-    }
-
-    Ok(())
-}
-
-fn to_napi_error<E: std::fmt::Display>(error: E) -> Error {
-    Error::from_reason(error.to_string())
+#[napi(js_name = "nativeProtocolV1Dispose")]
+pub fn native_protocol_v1_dispose<'env>(env: &'env Env) -> Result<PromiseRaw<'env, ()>> {
+    adapter().dispose(env)
 }
 
 #[cfg(test)]
@@ -306,100 +135,4 @@ extern "C" fn napi_reference_unref(
         }
     }
     napi::Status::Ok as napi::sys::napi_status
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn region(x: u32, y: u32, width: u32, height: u32) -> NativeScreenshotRegion {
-        NativeScreenshotRegion {
-            x,
-            y,
-            width,
-            height,
-        }
-    }
-
-    fn error_text(error: Error) -> String {
-        error.to_string()
-    }
-
-    #[test]
-    fn support_reports_ready_when_monitor_probe_has_displays() {
-        let support = build_native_screenshot_support("macos".to_string(), true, Ok(1));
-
-        assert!(support.supported);
-        assert_eq!(support.platform, "macos");
-        assert_eq!(support.engine.as_deref(), Some("xcap"));
-        assert_eq!(support.reason, None);
-    }
-
-    #[test]
-    fn support_reports_platform_not_supported_before_monitor_probe() {
-        let support = build_native_screenshot_support("freebsd".to_string(), false, Ok(1));
-
-        assert!(!support.supported);
-        assert_eq!(support.engine, None);
-        assert_eq!(support.reason.as_deref(), Some("platform-not-supported"));
-    }
-
-    #[test]
-    fn support_reports_no_display_when_monitor_probe_is_empty() {
-        let support = build_native_screenshot_support("linux".to_string(), true, Ok(0));
-
-        assert!(!support.supported);
-        assert_eq!(support.engine.as_deref(), Some("xcap"));
-        assert_eq!(support.reason.as_deref(), Some("no-display-available"));
-    }
-
-    #[test]
-    fn support_reports_monitor_probe_error() {
-        let support = build_native_screenshot_support(
-            "macos".to_string(),
-            true,
-            Err("screen recording denied".to_string()),
-        );
-
-        assert!(!support.supported);
-        assert_eq!(support.engine.as_deref(), Some("xcap"));
-        assert_eq!(
-            support.reason.as_deref(),
-            Some("xcap-monitor-probe-failed: screen recording denied")
-        );
-    }
-
-    #[test]
-    fn validate_region_accepts_in_bounds_region() {
-        assert!(validate_region(&region(10, 20, 100, 80), 200, 200).is_ok());
-        assert!(validate_region(&region(100, 100, 100, 100), 200, 200).is_ok());
-    }
-
-    #[test]
-    fn validate_region_rejects_zero_sized_region() {
-        let error = validate_region(&region(0, 0, 0, 10), 200, 200).unwrap_err();
-
-        assert!(error_text(error).contains("width and height must be positive"));
-    }
-
-    #[test]
-    fn validate_region_rejects_unavailable_display_bounds() {
-        let error = validate_region(&region(0, 0, 10, 10), 0, 200).unwrap_err();
-
-        assert!(error_text(error).contains("Display bounds are unavailable"));
-    }
-
-    #[test]
-    fn validate_region_rejects_region_outside_display_bounds() {
-        let error = validate_region(&region(150, 20, 100, 80), 200, 200).unwrap_err();
-
-        assert!(error_text(error).contains("outside display bounds"));
-    }
-
-    #[test]
-    fn validate_region_rejects_overflowing_region_bounds() {
-        let error = validate_region(&region(u32::MAX, 0, 1, 10), 200, 200).unwrap_err();
-
-        assert!(error_text(error).contains("horizontal bounds overflow"));
-    }
 }

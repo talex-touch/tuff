@@ -1,17 +1,44 @@
 [package]
 name = "tuff-native-screenshot"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
 name = "tuff_native_screenshot"
 
+[package.metadata.tuff-native]
+macos-deployment-target = "12.3"
+
+[features]
+protocol-test-backend = []
+linkedit-align-pad = []
+
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png"] }
-napi = { version = "3.8.6", default-features = false, features = ["napi4"] }
-napi-derive = "3.5.5"
-xcap = "0.9.4"
+napi = { workspace = true, features = ["tokio_rt"] }
+napi-derive.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tuff-native-core = { path = "../native-core" }
+tuff-native-napi = { path = "../native-napi" }
+tokio.workspace = true
+
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+xcap = { version = "=0.9.4", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = { version = "=0.6.2", default-features = false, features = ["std"] }
+dispatch2 = { version = "=0.3.1", default-features = false, features = ["std", "objc2"] }
+objc2 = { version = "=0.6.4", default-features = false, features = ["std"] }
+objc2-application-services = { version = "=0.3.2", default-features = false, features = ["std", "HIServices", "AXError", "AXUIElement", "AXValue", "libc"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFData", "CFDictionary", "CFNumber", "CFString", "objc2"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGDataProvider", "CGDirectDisplay", "CGDisplayConfiguration", "CGGeometry", "CGImage", "CGWindow", "libc", "objc2"] }
+objc2-core-media = { version = "=0.3.2", default-features = false, features = ["std", "CMSampleBuffer", "CMTime", "objc2", "objc2-core-video"] }
+objc2-core-video = { version = "=0.3.2", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn", "objc2"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSArray", "NSError", "NSObject", "NSProcessInfo", "NSString", "objc2-core-foundation"] }
+objc2-screen-capture-kit = { version = "=0.3.2", default-features = false, features = ["std", "SCError", "SCScreenshotManager", "SCShareableContent", "SCStream", "block2", "dispatch2", "libc", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media"] }
 
 [build-dependencies]
-napi-build = "2.2.3"
+napi-build.workspace = true

@@ -424,8 +424,10 @@ impl SilenceState {
     }
 
     fn mark_sound(&self, elapsed: Duration) {
-        self.last_sound_ms
-            .store(elapsed.as_millis().min(u64::MAX as u128) as u64, Ordering::Relaxed);
+        self.last_sound_ms.store(
+            elapsed.as_millis().min(u64::MAX as u128) as u64,
+            Ordering::Relaxed,
+        );
         self.has_speech.store(true, Ordering::Relaxed);
     }
 }
@@ -449,22 +451,12 @@ impl StopReason {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 struct CaptureMeta {
     sample_rate: u32,
     channels: u16,
     /// `None` while the capture thread is still running; `Some` once it stopped.
     stopped_reason: Option<StopReason>,
-}
-
-impl Default for CaptureMeta {
-    fn default() -> Self {
-        Self {
-            sample_rate: 0,
-            channels: 0,
-            stopped_reason: None,
-        }
-    }
 }
 
 /// Everything start_capture keeps so a later stop/cancel can join the thread and
@@ -608,24 +600,20 @@ fn build_capture_stream(
 ) -> std::result::Result<cpal::Stream, String> {
     match sample_format {
         cpal::SampleFormat::F32 => {
-            build_typed_stream::<f32>(device, config, samples, silence, started_at, |sample| sample)
+            build_typed_stream::<f32>(device, config, samples, silence, started_at, |sample| {
+                sample
+            })
         }
-        cpal::SampleFormat::I16 => build_typed_stream::<i16>(
-            device,
-            config,
-            samples,
-            silence,
-            started_at,
-            |sample| sample as f32 / 32_768.0,
-        ),
-        cpal::SampleFormat::U16 => build_typed_stream::<u16>(
-            device,
-            config,
-            samples,
-            silence,
-            started_at,
-            |sample| (sample as f32 - 32_768.0) / 32_768.0,
-        ),
+        cpal::SampleFormat::I16 => {
+            build_typed_stream::<i16>(device, config, samples, silence, started_at, |sample| {
+                sample as f32 / 32_768.0
+            })
+        }
+        cpal::SampleFormat::U16 => {
+            build_typed_stream::<u16>(device, config, samples, silence, started_at, |sample| {
+                (sample as f32 - 32_768.0) / 32_768.0
+            })
+        }
         other => Err(format!("unsupported-sample-format: {other:?}")),
     }
 }
@@ -757,7 +745,11 @@ fn mono_duration_ms(sample_count: usize, sample_rate: u32) -> u32 {
 fn encode_wav_pcm16(mono: &[f32], sample_rate: u32) -> std::result::Result<Vec<u8>, String> {
     let spec = hound::WavSpec {
         channels: 1,
-        sample_rate: if sample_rate == 0 { 16_000 } else { sample_rate },
+        sample_rate: if sample_rate == 0 {
+            16_000
+        } else {
+            sample_rate
+        },
         bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
@@ -992,24 +984,20 @@ fn build_output_stream(
 ) -> std::result::Result<cpal::Stream, String> {
     match sample_format {
         cpal::SampleFormat::F32 => {
-            build_output_typed::<f32>(device, config, rendered, position, channels, |sample| sample)
+            build_output_typed::<f32>(device, config, rendered, position, channels, |sample| {
+                sample
+            })
         }
-        cpal::SampleFormat::I16 => build_output_typed::<i16>(
-            device,
-            config,
-            rendered,
-            position,
-            channels,
-            |sample| (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16,
-        ),
-        cpal::SampleFormat::U16 => build_output_typed::<u16>(
-            device,
-            config,
-            rendered,
-            position,
-            channels,
-            |sample| ((sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i32 + 32_768) as u16,
-        ),
+        cpal::SampleFormat::I16 => {
+            build_output_typed::<i16>(device, config, rendered, position, channels, |sample| {
+                (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16
+            })
+        }
+        cpal::SampleFormat::U16 => {
+            build_output_typed::<u16>(device, config, rendered, position, channels, |sample| {
+                ((sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i32 + 32_768) as u16
+            })
+        }
         other => Err(format!("unsupported-output-format: {other:?}")),
     }
 }
@@ -1204,8 +1192,14 @@ mod tests {
         assert!(resample_linear(&[], 16_000, 48_000).is_empty());
         assert_eq!(resample_linear(&[0.5, 0.5], 16_000, 0), vec![0.5, 0.5]);
         // Halving the rate halves the sample count; doubling doubles it.
-        assert_eq!(resample_linear(&[0.0, 1.0, 0.0, 1.0], 32_000, 16_000).len(), 2);
-        assert_eq!(resample_linear(&[0.0, 1.0, 0.0, 1.0], 16_000, 32_000).len(), 8);
+        assert_eq!(
+            resample_linear(&[0.0, 1.0, 0.0, 1.0], 32_000, 16_000).len(),
+            2
+        );
+        assert_eq!(
+            resample_linear(&[0.0, 1.0, 0.0, 1.0], 16_000, 32_000).len(),
+            8
+        );
     }
 
     #[test]

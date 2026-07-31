@@ -18,8 +18,11 @@ const WhatsChangedDialog = defineAsyncComponent(
   () => import('./components/update/WhatsChangedDialog.vue')
 )
 const VoicePanel = defineAsyncComponent(() => import('./views/assistant/VoicePanel.vue'))
-const ScreenshotRegionSelector = defineAsyncComponent(
-  () => import('./views/assistant/ScreenshotRegionSelector.vue')
+const ScreenshotOverlay = defineAsyncComponent(
+  () => import('./views/screenshot/ScreenshotOverlay.vue')
+)
+const ScreenshotEditorShell = defineAsyncComponent(
+  () => import('./views/screenshot/ScreenshotEditorShell.vue')
 )
 
 const props = defineProps<{
@@ -69,13 +72,21 @@ watchEffect(() => {
   const mode = appEntranceMode.value
   document.body.classList.toggle('core-box', mode === 'CoreBox' || mode === 'DivisionBox')
   document.body.classList.toggle('division-box', mode === 'DivisionBox')
+  document.body.classList.toggle(
+    'screenshot-surface',
+    mode === 'ScreenshotOverlay' || mode === 'ScreenshotEditor'
+  )
 })
 </script>
 
 <template>
   <div class="AppEntrance absolute inset-0" :class="{ 'has-update': showUpdateIndicator }">
     <Toaster
-      v-if="appEntranceMode !== 'CoreBox' && appEntranceMode !== 'DivisionBox'"
+      v-if="
+        appEntranceMode !== 'CoreBox' &&
+        appEntranceMode !== 'DivisionBox' &&
+        appEntranceMode !== 'ScreenshotOverlay'
+      "
       position="bottom-left"
       :theme="resolvedTheme"
       rich-colors
@@ -90,8 +101,11 @@ watchEffect(() => {
     <template v-else-if="appEntranceMode === 'AssistantVoicePanel'">
       <VoicePanel />
     </template>
-    <template v-else-if="appEntranceMode === 'AssistantRegionSelector'">
-      <ScreenshotRegionSelector />
+    <template v-else-if="appEntranceMode === 'ScreenshotOverlay'">
+      <ScreenshotOverlay />
+    </template>
+    <template v-else-if="appEntranceMode === 'ScreenshotEditor'">
+      <ScreenshotEditorShell />
     </template>
     <template v-else-if="appEntranceMode === 'OmniPanel'">
       <OmniPanel />

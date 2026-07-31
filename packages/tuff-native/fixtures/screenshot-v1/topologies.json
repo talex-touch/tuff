@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "topologies": [
+    {
+      "name": "negative-left-mixed-scale",
+      "displays": [
+        {
+          "id": "display:left-1x",
+          "nativeId": "101",
+          "globalFrame": { "x": -1920, "y": 0, "width": 1920, "height": 1080 },
+          "modePixelSize": { "width": 1920, "height": 1080 },
+          "rotation": 0,
+          "expectedOrientedPixelSize": { "width": 1920, "height": 1080 },
+          "expectedScale": { "x": 1, "y": 1 },
+          "isPrimary": false
+        },
+        {
+          "id": "display:primary-2x",
+          "nativeId": "202",
+          "globalFrame": { "x": 0, "y": 0, "width": 1440, "height": 900 },
+          "modePixelSize": { "width": 2880, "height": 1800 },
+          "rotation": 0,
+          "expectedOrientedPixelSize": { "width": 2880, "height": 1800 },
+          "expectedScale": { "x": 2, "y": 2 },
+          "isPrimary": true
+        }
+      ],
+      "regions": [
+        {
+          "name": "fractional-cross-scale-boundary",
+          "globalRect": { "x": -120.25, "y": 100.5, "width": 240.5, "height": 200.25 },
+          "expectedDisplayIds": ["display:left-1x", "display:primary-2x"],
+          "expectedOutputScale": { "x": 2, "y": 2 },
+          "expectedTransparentHole": false
+        }
+      ],
+      "windows": [
+        {
+          "id": "window:cross-scale",
+          "nativeId": "9001",
+          "globalFrame": { "x": -300, "y": 250, "width": 700, "height": 450 },
+          "expectedCoveredDisplayIds": ["display:left-1x", "display:primary-2x"],
+          "expectedMaximumScale": { "x": 2, "y": 2 }
+        }
+      ]
+    },
+    {
+      "name": "rotated-above-and-below",
+      "displays": [
+        {
+          "id": "display:above-90",
+          "nativeId": "303",
+          "globalFrame": { "x": 240, "y": -1080, "width": 1920, "height": 1080 },
+          "modePixelSize": { "width": 2160, "height": 3840 },
+          "rotation": 90,
+          "expectedOrientedPixelSize": { "width": 3840, "height": 2160 },
+          "expectedScale": { "x": 2, "y": 2 },
+          "isPrimary": false
+        },
+        {
+          "id": "display:primary-2x",
+          "nativeId": "202",
+          "globalFrame": { "x": 0, "y": 0, "width": 1440, "height": 900 },
+          "modePixelSize": { "width": 2880, "height": 1800 },
+          "rotation": 0,
+          "expectedOrientedPixelSize": { "width": 2880, "height": 1800 },
+          "expectedScale": { "x": 2, "y": 2 },
+          "isPrimary": true
+        },
+        {
+          "id": "display:below-270",
+          "nativeId": "404",
+          "globalFrame": { "x": 300, "y": 900, "width": 1920, "height": 1080 },
+          "modePixelSize": { "width": 2160, "height": 3840 },
+          "rotation": 270,
+          "expectedOrientedPixelSize": { "width": 3840, "height": 2160 },
+          "expectedScale": { "x": 2, "y": 2 },
+          "isPrimary": false
+        }
+      ],
+      "regions": [
+        {
+          "name": "fractional-region-on-rotated-display",
+          "globalRect": { "x": 240.25, "y": -1079.75, "width": 255.5, "height": 127.25 },
+          "expectedDisplayIds": ["display:above-90"],
+          "expectedOutputScale": { "x": 2, "y": 2 },
+          "expectedTransparentHole": false
+        }
+      ],
+      "windows": []
+    },
+    {
+      "name": "non-equal-displays-with-hole",
+      "displays": [
+        {
+          "id": "display:primary-1x",
+          "nativeId": "505",
+          "globalFrame": { "x": 0, "y": 0, "width": 1000, "height": 800 },
+          "modePixelSize": { "width": 1000, "height": 800 },
+          "rotation": 0,
+          "expectedOrientedPixelSize": { "width": 1000, "height": 800 },
+          "expectedScale": { "x": 1, "y": 1 },
+          "isPrimary": true
+        },
+        {
+          "id": "display:right-1_5x",
+          "nativeId": "606",
+          "globalFrame": { "x": 1200, "y": 0, "width": 800, "height": 600 },
+          "modePixelSize": { "width": 1200, "height": 900 },
+          "rotation": 0,
+          "expectedOrientedPixelSize": { "width": 1200, "height": 900 },
+          "expectedScale": { "x": 1.5, "y": 1.5 },
+          "isPrimary": false
+        }
+      ],
+      "regions": [
+        {
+          "name": "fractional-region-preserves-topology-hole",
+          "globalRect": { "x": 900.25, "y": 100.25, "width": 500.5, "height": 200.5 },
+          "expectedDisplayIds": ["display:primary-1x", "display:right-1_5x"],
+          "expectedOutputScale": { "x": 1.5, "y": 1.5 },
+          "expectedTransparentHole": true
+        }
+      ],
+      "windows": []
+    }
+  ]
+}

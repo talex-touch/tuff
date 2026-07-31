@@ -181,12 +181,12 @@ const intelligenceSettingsRecoveryVisible = ref(false)
 const statusMessage = ref('')
 const sourceText = ref('')
 const screenshotPreview = ref<{
-  dataUrl: string
+  tfileUrl: string
   width: number
   height: number
   displayName: string
   wroteClipboard: boolean
-  savedPath?: string
+  saved: boolean
 } | null>(null)
 const screenshotTextFallback = ref<{
   sourceText: string
@@ -788,15 +788,15 @@ async function resolveScreenshotActionPayload(): Promise<AssistantScreenshotCapt
     statusMessage.value = ''
     return null
   }
-  if (!response?.success || !response.region) {
+  if (!response?.success || !response.resource?.tfileUrl) {
     statusMessage.value = ''
     errorMessage.value = formatScreenshotRegionSelectionError(response?.code, response?.error)
     return null
   }
   return {
-    target: 'region',
-    displayId: response.displayId,
-    region: response.region
+    target: 'resource',
+    tfileUrl: response.resource.tfileUrl,
+    resource: response.resource
   }
 }
 async function loadScreenshotDisplays(): Promise<void> {
@@ -1002,7 +1002,7 @@ async function captureScreenshot(): Promise<void> {
     if (!capturePayload) return
     statusMessage.value = t('assistant.voicePanel.screenshotCapturing')
     const response = await transport.send(AssistantEvents.voice.captureScreenshot, capturePayload)
-    if (!response?.success || !response.dataUrl) {
+    if (!response?.success || !response.tfileUrl) {
       statusMessage.value = ''
       screenshotPermissionDenied.value = response?.code === 'SCREENSHOT_PERMISSION_DENIED'
       errorMessage.value = formatScreenshotCaptureError(response?.code, response?.error)
@@ -1010,12 +1010,12 @@ async function captureScreenshot(): Promise<void> {
     }
 
     screenshotPreview.value = {
-      dataUrl: response.dataUrl,
+      tfileUrl: response.tfileUrl,
       width: response.width ?? 0,
       height: response.height ?? 0,
       displayName: response.displayName || '',
       wroteClipboard: response.wroteClipboard === true,
-      savedPath: undefined
+      saved: false
     }
     statusMessage.value = t('assistant.voicePanel.screenshotCaptureReady')
   } catch (error) {
@@ -1046,7 +1046,7 @@ async function saveScreenshot(): Promise<void> {
       statusMessage.value = ''
       return
     }
-    if (!response?.success || !response.path) {
+    if (!response?.success) {
       screenshotPermissionDenied.value = response?.code === 'SCREENSHOT_PERMISSION_DENIED'
       statusMessage.value = ''
       errorMessage.value = formatScreenshotSaveError(response?.code, response?.error)
@@ -1059,12 +1059,10 @@ async function saveScreenshot(): Promise<void> {
         width: response.width ?? screenshotPreview.value.width,
         height: response.height ?? screenshotPreview.value.height,
         displayName: response.displayName || screenshotPreview.value.displayName,
-        savedPath: response.path
+        saved: true
       }
     }
-    statusMessage.value = t('assistant.voicePanel.screenshotSaveReady', {
-      path: response.path
-    })
+    statusMessage.value = t('assistant.voicePanel.screenshotSaveReady')
   } catch (error) {
     statusMessage.value = ''
     errorMessage.value = error instanceof Error ? error.message : String(error)
@@ -1261,7 +1259,7 @@ onBeforeUnmount(() => {
         <div v-if="screenshotPreview" class="screenshot-preview">
           <img
             class="screenshot-preview-image"
-            :src="screenshotPreview.dataUrl"
+            :src="screenshotPreview.tfileUrl"
             :alt="t('assistant.voicePanel.screenshotPreviewAlt')"
           />
           <p class="screenshot-preview-meta">
@@ -1278,10 +1276,8 @@ onBeforeUnmount(() => {
           <p v-if="screenshotPreview.wroteClipboard" class="screenshot-preview-copy">
             {{ t('assistant.voicePanel.screenshotCopied') }}
           </p>
-          <p v-if="screenshotPreview.savedPath" class="screenshot-preview-save">
-            {{
-              t('assistant.voicePanel.screenshotSavedPath', { path: screenshotPreview.savedPath })
-            }}
+          <p v-if="screenshotPreview.saved" class="screenshot-preview-save">
+            {{ t('assistant.voicePanel.screenshotSavedPath') }}
           </p>
         </div>
         <section v-if="screenshotTextFallback" class="screenshot-text-fallback" aria-live="polite">

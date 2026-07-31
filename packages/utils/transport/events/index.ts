@@ -591,6 +591,7 @@ import { AppEvents } from './app'
 import { MetaOverlayEvents } from './meta-overlay'
 
 // Re-export all types for convenience
+export * from './screenshot-session'
 export * from './types'
 
 // ============================================================================

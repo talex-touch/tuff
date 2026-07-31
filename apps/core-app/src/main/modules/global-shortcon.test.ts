@@ -193,6 +193,57 @@ describe('ShortcutModule runtime cleanup', () => {
     module.onDestroy()
   })
 
+  it('migrates a persisted system default without overwriting a customized shortcut', () => {
+    const { module, storage } = createModule()
+    const timestamp = Date.now()
+    storage.addShortcut({
+      id: 'core.test.legacy-default',
+      accelerator: 'CommandOrControl+Shift+S',
+      type: ShortcutType.MAIN,
+      meta: {
+        creationTime: timestamp,
+        modificationTime: timestamp,
+        author: 'system',
+        enabled: true
+      }
+    })
+    storage.addShortcut({
+      id: 'core.test.customized',
+      accelerator: 'CommandOrControl+Option+7',
+      type: ShortcutType.MAIN,
+      meta: {
+        creationTime: timestamp,
+        modificationTime: timestamp,
+        author: 'system',
+        enabled: true
+      }
+    })
+
+    expect(
+      module.registerMainShortcut('core.test.legacy-default', 'CommandOrControl+Shift+A', vi.fn(), {
+        owner: 'test',
+        legacyDefaultAccelerators: ['CommandOrControl+Shift+S']
+      })
+    ).toBe(true)
+    expect(
+      module.registerMainShortcut('core.test.customized', 'CommandOrControl+Shift+A', vi.fn(), {
+        owner: 'test',
+        legacyDefaultAccelerators: ['CommandOrControl+Shift+S']
+      })
+    ).toBe(true)
+
+    expect(storage.getShortcutById('core.test.legacy-default')?.accelerator).toBe(
+      'CommandOrControl+Shift+A'
+    )
+    expect(storage.getShortcutById('core.test.customized')?.accelerator).toBe(
+      'CommandOrControl+Option+7'
+    )
+
+    module.unregisterMainShortcut('core.test.legacy-default')
+    module.unregisterMainShortcut('core.test.customized')
+    module.onDestroy()
+  })
+
   it('keeps persisted trigger but skips registration after runtime unregister', () => {
     const { module, storage } = createModule()
 
