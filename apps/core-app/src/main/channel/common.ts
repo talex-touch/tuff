@@ -80,6 +80,13 @@ import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
 import { appProvider } from '../modules/box-tool/addon/apps/app-provider'
 import { fileProvider } from '../modules/box-tool/addon/files/file-provider'
+import {
+  reportFileIndexTransportFailure,
+  reportIndexedSourceTransportFailure,
+  sanitizeFileIndexDiagnosticsSnapshot,
+  sanitizeFileIndexReconcileResult,
+  sanitizeFileIndexResetResult
+} from '../modules/box-tool/search-engine/file-index-public-projection'
 import { getBoxItemManager } from '../modules/box-tool/item-sdk'
 import { indexingRuntime } from '../modules/box-tool/search-engine/indexing-runtime'
 import {
@@ -1474,18 +1481,84 @@ export class CommonChannelModule extends BaseModule {
     transport: NonNullable<CommonChannelModule['transport']>
   ): void {
     this.transportDisposers.push(
-      transport.on(AppEvents.fileIndex.status, () => fileProvider.getIndexingStatus()),
-      transport.on(AppEvents.fileIndex.stats, () => fileProvider.getIndexStats()),
-      transport.on(AppEvents.fileIndex.failedFiles, () => fileProvider.getFailedFiles()),
-      transport.on(AppEvents.fileIndex.batteryLevel, () => fileProvider.getBatteryLevel()),
+      transport.on(AppEvents.fileIndex.status, () => {
+        try {
+          return fileProvider.getIndexingStatus()
+        } catch (error) {
+          const report = reportFileIndexTransportFailure('STATUS', error)
+          return {
+            isInitializing: false,
+            initializationFailed: true,
+            errorCode: report.code,
+            retryable: report.retryable,
+            reportId: report.id,
+            startupReady: false,
+            startupPending: false,
+            startupErrorCode: null,
+            progress: { stage: null, current: 0, total: 0 },
+            startTime: null,
+            estimatedCompletion: null,
+            estimatedRemainingMs: null,
+            averageItemsPerSecond: 0
+          }
+        }
+      }),
+      transport.on(AppEvents.fileIndex.stats, async () => {
+        try {
+          return await fileProvider.getIndexStats()
+        } catch (error) {
+          const report = reportFileIndexTransportFailure('STATS', error)
+          return {
+            totalFiles: 0,
+            failedFiles: 0,
+            skippedFiles: 0,
+            completedFiles: 0,
+            embeddingCompletedFiles: 0,
+            embeddingRows: 0,
+            errorCode: report.code,
+            reportId: report.id
+          }
+        }
+      }),
+      transport.on(AppEvents.fileIndex.failedFiles, async () => {
+        try {
+          return await fileProvider.getFailedFiles()
+        } catch (error) {
+          const report = reportFileIndexTransportFailure('FAILED_FILES', error)
+          return {
+            files: [],
+            errorCode: report.code,
+            retryable: report.retryable,
+            reportId: report.id
+          }
+        }
+      }),
+      transport.on(AppEvents.fileIndex.batteryLevel, async () => {
+        try {
+          return await fileProvider.getBatteryLevel()
+        } catch (error) {
+          reportFileIndexTransportFailure('BATTERY_LEVEL', error)
+          return null
+        }
+      }),
       transport.on<FileIndexAddPathRequest, FileIndexAddPathResult>(
         AppEvents.fileIndex.addPath,
-        (payload) => {
+        async (payload) => {
           const inputPath = getOptionalStringProp(payload, 'path')
           if (!inputPath) {
             return { success: false, status: 'invalid', reason: 'path-empty' }
           }
-          return fileProvider.addWatchPath(inputPath)
+          try {
+            return await fileProvider.addWatchPath(inputPath)
+          } catch (error) {
+            const report = reportFileIndexTransportFailure('ADD_PATH', error)
+            return {
+              success: false,
+              status: 'error',
+              errorCode: report.code,
+              reportId: report.id
+            }
+          }
         }
       ),
       transport.on(AppEvents.fileIndex.rebuild, async (payload) => {
@@ -1501,7 +1574,6 @@ export class CommonChannelModule extends BaseModule {
           })
           return {
             success: false,
-            error: report.publicMessage,
             errorCode: report.code,
             retryable: report.retryable,
             reportId: report.id
@@ -1511,8 +1583,20 @@ export class CommonChannelModule extends BaseModule {
       transport.on<IndexedSourceDiagnosticsRequest | void, IndexedSourceDiagnosticsResponse>(
         AppEvents.indexedSource.diagnostics,
         async (payload) => {
-          const diagnostics = await indexingRuntime.getDiagnostics()
           const sourceId = getOptionalStringProp(payload, 'sourceId')?.trim()
+          let diagnostics: IndexedSourceDiagnosticsResponse
+          try {
+            diagnostics = sanitizeFileIndexDiagnosticsSnapshot(
+              await indexingRuntime.getDiagnostics()
+            )
+          } catch (error) {
+            reportIndexedSourceTransportFailure('DIAGNOSTICS', sourceId ?? '', error)
+            return {
+              generatedAt: Date.now(),
+              summary: { total: 0, byStatus: {}, ready: 0, degraded: 0, unavailable: 0 },
+              sources: []
+            }
+          }
           if (!sourceId) {
             return diagnostics
           }
@@ -1553,11 +1637,29 @@ export class CommonChannelModule extends BaseModule {
             }
           }
 
-          return await indexingRuntime.resetSourceRuntimeState(sourceId, {
-            reason: getOptionalStringProp(payload, 'reason') as never,
-            clearSearchIndex: getOptionalBooleanProp(payload, 'clearSearchIndex'),
-            clearScanProgress: getOptionalBooleanProp(payload, 'clearScanProgress')
-          })
+          try {
+            const result = await indexingRuntime.resetSourceRuntimeState(sourceId, {
+              reason: getOptionalStringProp(payload, 'reason') as never,
+              clearSearchIndex: getOptionalBooleanProp(payload, 'clearSearchIndex'),
+              clearScanProgress: getOptionalBooleanProp(payload, 'clearScanProgress')
+            })
+            return sanitizeFileIndexResetResult(result)
+          } catch (error) {
+            const report = reportIndexedSourceTransportFailure('RESET', sourceId, error)
+            const now = Date.now()
+            return {
+              sourceId,
+              reason: IndexedSourceResetReasons.HealthRepair,
+              clearedSearchIndex: false,
+              clearedScanProgress: false,
+              startedAt: now,
+              completedAt: now,
+              error: report.code,
+              errorCode: report.code,
+              retryable: report.retryable,
+              reportId: report.id
+            }
+          }
         }
       ),
       transport.on<IndexedSourceReconcileRuntimeRequest, IndexedSourceReconcileRuntimeResult>(
@@ -1579,9 +1681,29 @@ export class CommonChannelModule extends BaseModule {
             }
           }
 
-          return await indexingRuntime.reconcileSource(sourceId, {
-            reason: getOptionalStringProp(payload, 'reason') as never
-          })
+          try {
+            const result = await indexingRuntime.reconcileSource(sourceId, {
+              reason: getOptionalStringProp(payload, 'reason') as never
+            })
+            return sanitizeFileIndexReconcileResult(result)
+          } catch (error) {
+            const report = reportIndexedSourceTransportFailure('RECONCILE', sourceId, error)
+            const now = Date.now()
+            return {
+              sourceId,
+              added: 0,
+              changed: 0,
+              deleted: 0,
+              skipped: 0,
+              errors: 1,
+              startedAt: now,
+              completedAt: now,
+              reason: report.code,
+              errorCode: report.code,
+              retryable: report.retryable,
+              reportId: report.id
+            }
+          }
         }
       ),
       transport.on<IndexedSourceScanRuntimeRequest, IndexedSourceScanRuntimeResult>(
@@ -1614,7 +1736,24 @@ export class CommonChannelModule extends BaseModule {
             }
           }
 
-          return await indexingRuntime.scanSource(sourceId, reason as never)
+          try {
+            return await indexingRuntime.scanSource(sourceId, reason as never)
+          } catch (error) {
+            const report = reportIndexedSourceTransportFailure('SCAN', sourceId, error)
+            const now = Date.now()
+            return {
+              sourceId,
+              batches: 0,
+              records: 0,
+              indexedRecords: 0,
+              startedAt: now,
+              completedAt: now,
+              error: report.code,
+              errorCode: report.code,
+              retryable: report.retryable,
+              reportId: report.id
+            }
+          }
         }
       ),
       transport.on<void, SearchProviderConfigResponse>(

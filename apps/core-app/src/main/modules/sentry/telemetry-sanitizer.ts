@@ -409,7 +409,9 @@ function sanitizeSentryContext(value: unknown): unknown {
       if (normalized !== undefined) output[normalizedKey] = normalized
     }
     if (typeof raw === 'string') {
-      const normalized = normalizeString(raw, 96)
+      // Context values are stable identifiers only (versions, codes, channels);
+      // free-form text must never leave the process.
+      const normalized = normalizeIdentifier(raw)
       if (normalized) output[normalizedKey] = normalized
     }
   }
@@ -422,6 +424,19 @@ export function sanitizeSentryEvent<T extends Sentry.Event>(event: T): T {
   delete event.extra
   delete event.modules
   delete event.server_name
+  delete event.transaction
+  delete event.spans
+  delete event.logentry
+
+  if (event.tags) {
+    const tags: Record<string, string> = {}
+    for (const [key, raw] of Object.entries(event.tags)) {
+      const normalizedKey = normalizeIdentifier(key)
+      const normalizedValue = normalizeIdentifier(raw)
+      if (normalizedKey && normalizedValue) tags[normalizedKey] = normalizedValue
+    }
+    event.tags = tags
+  }
 
   event.user = event.user?.id
     ? {
@@ -446,6 +461,11 @@ export function sanitizeSentryEvent<T extends Sentry.Event>(event: T): T {
 
   for (const value of event.exception?.values ?? []) {
     if (value.value) value.value = SAFE_EVENT_MESSAGE
+    // Exception module names and mechanism data may embed raw SQL, params, or
+    // paths from the underlying driver error; only the classification type
+    // and sanitized frames may leave the process.
+    delete value.module
+    delete value.mechanism
     for (const frame of value.stacktrace?.frames ?? []) {
       delete frame.filename
       delete frame.abs_path

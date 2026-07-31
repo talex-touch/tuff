@@ -36,7 +36,7 @@ import type {
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
   FileIndexBatteryStatus,
-  FileIndexFailedFile,
+  FileIndexFailedFilesResult,
   FileIndexProgress,
   FileIndexRebuildRequest,
   FileIndexRebuildResult,
@@ -62,6 +62,14 @@ import type {
   StreamOptions,
 } from "../../types";
 import { AppEvents } from "../../events";
+import {
+  projectFileIndexAddPathResult,
+  projectFileIndexBatteryStatus,
+  projectFileIndexFailedFiles,
+  projectFileIndexRebuildResult,
+  projectFileIndexStats,
+  projectFileIndexStatus,
+} from "./file-index-projection";
 
 export interface SettingsSdk {
   system: {
@@ -82,7 +90,7 @@ export interface SettingsSdk {
     streamProgress: (
       options: StreamOptions<FileIndexProgress>,
     ) => Promise<StreamController>;
-    getFailedFiles: () => Promise<FileIndexFailedFile[]>;
+    getFailedFiles: () => Promise<FileIndexFailedFilesResult>;
     addPath: (
       payload: FileIndexAddPathRequest,
     ) => Promise<FileIndexAddPathResult>;
@@ -168,16 +176,28 @@ export function createSettingsSdk(transport: ITuffTransport): SettingsSdk {
         transport.send(AppEvents.system.traySettingsUpdate, payload),
     },
     fileIndex: {
-      getStatus: () => transport.send(AppEvents.fileIndex.status),
-      getStats: () => transport.send(AppEvents.fileIndex.stats),
-      getBatteryLevel: () => transport.send(AppEvents.fileIndex.batteryLevel),
-      rebuild: (request) =>
-        transport.send(AppEvents.fileIndex.rebuild, request),
+      getStatus: async () =>
+        projectFileIndexStatus(await transport.send(AppEvents.fileIndex.status)),
+      getStats: async () =>
+        projectFileIndexStats(await transport.send(AppEvents.fileIndex.stats)),
+      getBatteryLevel: async () =>
+        projectFileIndexBatteryStatus(
+          await transport.send(AppEvents.fileIndex.batteryLevel),
+        ),
+      rebuild: async (request) =>
+        projectFileIndexRebuildResult(
+          await transport.send(AppEvents.fileIndex.rebuild, request),
+        ),
       streamProgress: (options) =>
         transport.stream(AppEvents.fileIndex.progress, undefined, options),
-      getFailedFiles: () => transport.send(AppEvents.fileIndex.failedFiles),
-      addPath: (payload) =>
-        transport.send(AppEvents.fileIndex.addPath, payload),
+      getFailedFiles: async () =>
+        projectFileIndexFailedFiles(
+          await transport.send(AppEvents.fileIndex.failedFiles),
+        ),
+      addPath: async (payload) =>
+        projectFileIndexAddPathResult(
+          await transport.send(AppEvents.fileIndex.addPath, payload),
+        ),
     },
     indexedSource: {
       getDiagnostics: (request) =>

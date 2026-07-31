@@ -15,6 +15,7 @@ const {
   filePersistenceWaitUntilReady,
   filePersistencePersistEntries,
   filePersistenceUpsertFiles,
+  filePersistenceUpdateFileMetadata,
   filePersistenceUpsertScanProgress,
   filePersistenceRemoveFile,
   filePersistenceRemoveFileExtensions,
@@ -36,6 +37,11 @@ const {
   filePersistenceWaitUntilReady: vi.fn(async () => undefined),
   filePersistencePersistEntries: vi.fn(async () => ({})),
   filePersistenceUpsertFiles: vi.fn(async () => []),
+  filePersistenceUpdateFileMetadata: vi.fn(async (records: Array<Record<string, unknown>>) => ({
+    requested: records.length,
+    updated: records.length,
+    missingFileIds: [] as number[]
+  })),
   filePersistenceUpsertScanProgress: vi.fn(async () => 0),
   filePersistenceRemoveFile: vi.fn(async () => undefined),
   filePersistenceRemoveFileExtensions: vi.fn(async () => undefined),
@@ -176,6 +182,7 @@ vi.mock('./workers/thumbnail-worker-client', () => ({
   }))
 }))
 
+import { operationalErrorService } from '../../../observability'
 import { fileProvider, resolveFileProviderBaseWatchPaths } from './file-provider'
 
 interface MutableFileProvider {
@@ -194,11 +201,12 @@ interface MutableFileProvider {
   backgroundStartupPromise: Promise<void> | null
   backgroundStartupReady: boolean
   backgroundStartupError: Error | null
+  backgroundStartupFailure: { code: string; retryable: boolean; reportId: string } | null
   openersChannelRegistered: boolean
   getIndexingStatus: () => {
     startupReady?: boolean
     startupPending?: boolean
-    startupError?: string | null
+    startupErrorCode?: string | null
   }
   buildStartupDegradedNotice: (query: { text: string; inputs: unknown[] }) => {
     render?: {
@@ -493,6 +501,7 @@ function createFilePersistencePort(): FilePersistencePort {
     waitUntilReady: filePersistenceWaitUntilReady,
     persistEntries: filePersistencePersistEntries,
     upsertFiles: filePersistenceUpsertFiles,
+    updateFileMetadata: filePersistenceUpdateFileMetadata,
     upsertScanProgress: filePersistenceUpsertScanProgress,
     removeFile: filePersistenceRemoveFile,
     removeFileExtensions: filePersistenceRemoveFileExtensions,
@@ -527,6 +536,7 @@ function resetProviderState(provider: MutableFileProvider): void {
   provider.backgroundStartupPromise = null
   provider.backgroundStartupReady = false
   provider.backgroundStartupError = null
+  provider.backgroundStartupFailure = null
   provider.isInitializing = null
   provider.shuttingDown = false
   provider.openersChannelRegistered = false
@@ -548,6 +558,13 @@ afterEach(() => {
   filePersistenceWaitUntilReady.mockResolvedValue(undefined)
   filePersistencePersistEntries.mockResolvedValue({})
   filePersistenceUpsertFiles.mockResolvedValue([])
+  filePersistenceUpdateFileMetadata.mockImplementation(
+    async (records: Array<Record<string, unknown>>) => ({
+      requested: records.length,
+      updated: records.length,
+      missingFileIds: [] as number[]
+    })
+  )
   filePersistenceUpsertScanProgress.mockResolvedValue(0)
   filePersistenceRemoveFile.mockResolvedValue(undefined)
   filePersistenceRemoveFileExtensions.mockResolvedValue(undefined)
@@ -601,7 +618,7 @@ describe('file-provider startup readiness', () => {
       expect.objectContaining({
         startupReady: false,
         startupPending: true,
-        startupError: null
+        startupErrorCode: null
       })
     )
 
@@ -617,7 +634,7 @@ describe('file-provider startup readiness', () => {
       expect.objectContaining({
         startupReady: true,
         startupPending: false,
-        startupError: null
+        startupErrorCode: null
       })
     )
   })
@@ -1328,23 +1345,85 @@ describe('file-provider startup readiness', () => {
     }
   })
 
-  it('keeps startup degraded when file persistence cannot initialize', async () => {
+  it('keeps startup degraded with a correlated safe report when file persistence cannot initialize', async () => {
     const provider = fileProvider as unknown as MutableFileProvider
     resetProviderState(provider)
-    filePersistenceWaitUntilReady.mockRejectedValueOnce(new Error('worker unavailable'))
-
-    await provider.onLoad(createContext())
-    await provider.backgroundStartupPromise
-
-    expect(watchServiceInitialize).toHaveBeenCalledTimes(1)
-    expect(watchServiceEnsure).toHaveBeenCalledTimes(1)
-    expect(provider.getIndexingStatus()).toEqual(
-      expect.objectContaining({
-        startupReady: false,
-        startupPending: false,
-        startupError: 'Search index worker initialization failed'
-      })
+    const reportSpy = vi.spyOn(operationalErrorService, 'report')
+    filePersistenceWaitUntilReady.mockRejectedValueOnce(
+      new Error('Failed query: UPDATE files SET name = ? params: /Users/alice/Private/report.txt')
     )
+
+    try {
+      await provider.onLoad(createContext())
+      await provider.backgroundStartupPromise
+
+      expect(watchServiceInitialize).toHaveBeenCalledTimes(1)
+      expect(watchServiceEnsure).toHaveBeenCalledTimes(1)
+      expect(reportSpy).toHaveBeenCalledTimes(1)
+      expect(reportSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: 'file-index',
+          operation: 'background-startup.worker-ready',
+          code: 'FILE_INDEX_STARTUP_WORKER_UNAVAILABLE',
+          retryable: true,
+          userImpact: 'degraded'
+        })
+      )
+      const status = provider.getIndexingStatus()
+      expect(status).toEqual(
+        expect.objectContaining({
+          startupReady: false,
+          startupPending: false,
+          startupErrorCode: 'FILE_INDEX_STARTUP_WORKER_UNAVAILABLE',
+          errorCode: 'FILE_INDEX_STARTUP_WORKER_UNAVAILABLE',
+          retryable: true,
+          reportId: expect.stringMatching(/^[a-zA-Z0-9_.:-]{1,96}$/)
+        })
+      )
+      expect(JSON.stringify(status)).not.toContain('Failed query:')
+      expect(JSON.stringify(status)).not.toContain('params:')
+      expect(JSON.stringify(status)).not.toContain('/Users/alice/Private/report.txt')
+    } finally {
+      reportSpy.mockRestore()
+    }
+  })
+
+  it('reports caught background startup failures once without public raw text', async () => {
+    const provider = fileProvider as unknown as MutableFileProvider
+    resetProviderState(provider)
+    const reportSpy = vi.spyOn(operationalErrorService, 'report')
+    watchServiceInitialize.mockImplementationOnce(() => {
+      throw new Error('params: C:\\Users\\alice\\Private\\report.txt')
+    })
+
+    try {
+      await provider.onLoad(createContext())
+      await provider.backgroundStartupPromise
+
+      expect(reportSpy).toHaveBeenCalledTimes(1)
+      expect(reportSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: 'file-index',
+          operation: 'background-startup.initialize',
+          code: 'FILE_INDEX_STARTUP_FAILED',
+          retryable: true,
+          userImpact: 'degraded'
+        })
+      )
+      const status = provider.getIndexingStatus()
+      expect(status).toEqual(
+        expect.objectContaining({
+          startupErrorCode: 'FILE_INDEX_STARTUP_FAILED',
+          errorCode: 'FILE_INDEX_STARTUP_FAILED',
+          retryable: true,
+          reportId: expect.stringMatching(/^[a-zA-Z0-9_.:-]{1,96}$/)
+        })
+      )
+      expect(JSON.stringify(status)).not.toContain('params:')
+      expect(JSON.stringify(status)).not.toContain('C:\\Users')
+    } finally {
+      reportSpy.mockRestore()
+    }
   })
 
   it('returns stale searches before applying provider-scoped Runtime cleanup deltas', async () => {
@@ -1700,5 +1779,113 @@ describe('file-provider startup readiness', () => {
     const notice = provider.buildStartupDegradedNotice({ text: 'report', inputs: [] })
 
     expect(notice).toBeNull()
+  })
+})
+
+interface FileUpdateRecordLike {
+  id: number
+  path: string
+  name: string
+  extension: string | null
+  size: number | null
+  ctime: Date
+  mtime: Date
+  type: string
+  isDir: boolean
+}
+
+interface FileProviderUpdateExecutorTestApi extends FileProviderIndexingLifecycleTestApi {
+  _processFileUpdates: (
+    records: FileUpdateRecordLike[],
+    chunkSize?: number
+  ) => Promise<Array<Record<string, unknown>>>
+  dbUtils: unknown
+}
+
+function buildUpdateRecords(count: number): FileUpdateRecordLike[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: index + 1,
+    path: `/tmp/canary-update-${index + 1}.txt`,
+    name: `canary-update-${index + 1}.txt`,
+    extension: '.txt',
+    size: 16,
+    ctime: new Date(2_000),
+    mtime: new Date(3_000),
+    type: 'file',
+    isDir: false
+  }))
+}
+
+describe('file-provider metadata update writer ownership (issue #476)', () => {
+  function installDbUtils(provider: FileProviderUpdateExecutorTestApi) {
+    const mainDbUpdate = vi.fn()
+    const selectWhere = vi.fn()
+    provider.dbUtils = {
+      getDb: () => ({
+        select: () => ({ from: () => ({ where: selectWhere }) }),
+        update: mainDbUpdate
+      })
+    }
+    return { mainDbUpdate, selectWhere }
+  }
+
+  it('routes update chunks through the worker persistence port, never main db.update', async () => {
+    const provider = fileProvider as unknown as FileProviderUpdateExecutorTestApi
+    const { mainDbUpdate, selectWhere } = installDbUtils(provider)
+    const records = buildUpdateRecords(11)
+    const firstChunkRows = records.slice(0, 10).map((record) => ({ ...record, refreshed: true }))
+    const secondChunkRows = records.slice(10).map((record) => ({ ...record, refreshed: true }))
+    selectWhere.mockResolvedValueOnce(firstChunkRows).mockResolvedValueOnce(secondChunkRows)
+
+    const updated = await provider._processFileUpdates(records, 10)
+
+    expect(filePersistenceUpdateFileMetadata).toHaveBeenCalledTimes(2)
+    const firstChunk = filePersistenceUpdateFileMetadata.mock.calls[0][0]
+    const secondChunk = filePersistenceUpdateFileMetadata.mock.calls[1][0]
+    expect(firstChunk).toHaveLength(10)
+    expect(secondChunk).toHaveLength(1)
+    expect(firstChunk[0]).toMatchObject({
+      id: 1,
+      name: 'canary-update-1.txt',
+      extension: '.txt',
+      size: 16,
+      isDir: false,
+      type: 'file'
+    })
+    expect(firstChunk[0].lastIndexedAt).toBeInstanceOf(Date)
+    expect(firstChunk[0]).not.toHaveProperty('path')
+    expect(secondChunk[0]).toMatchObject({ id: 11, name: 'canary-update-11.txt' })
+    expect(mainDbUpdate).not.toHaveBeenCalled()
+    expect(updated).toEqual([...firstChunkRows, ...secondChunkRows])
+  })
+
+  it('commits earlier chunks and propagates a later chunk failure without main writes', async () => {
+    const provider = fileProvider as unknown as FileProviderUpdateExecutorTestApi
+    const { mainDbUpdate, selectWhere } = installDbUtils(provider)
+    const records = buildUpdateRecords(11)
+    selectWhere.mockResolvedValue(records.slice(0, 10))
+    filePersistenceUpdateFileMetadata
+      .mockResolvedValueOnce({ requested: 10, updated: 10, missingFileIds: [] })
+      .mockRejectedValueOnce(new Error('SQLITE_BUSY: database is locked'))
+
+    await expect(provider._processFileUpdates(records, 10)).rejects.toThrow('SQLITE_BUSY')
+
+    expect(filePersistenceUpdateFileMetadata).toHaveBeenCalledTimes(2)
+    expect(mainDbUpdate).not.toHaveBeenCalled()
+    // Refresh ran only for the committed chunk; the failed chunk never reached refresh.
+    expect(selectWhere).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails without touching main db when the persistence port is unavailable', async () => {
+    const provider = fileProvider as unknown as FileProviderUpdateExecutorTestApi
+    const { mainDbUpdate, selectWhere } = installDbUtils(provider)
+    provider.setFilePersistencePort(null)
+
+    await expect(provider._processFileUpdates(buildUpdateRecords(3), 10)).rejects.toThrow(
+      'FILE_PERSISTENCE_PORT_UNAVAILABLE'
+    )
+    expect(filePersistenceUpdateFileMetadata).not.toHaveBeenCalled()
+    expect(mainDbUpdate).not.toHaveBeenCalled()
+    expect(selectWhere).not.toHaveBeenCalled()
   })
 })

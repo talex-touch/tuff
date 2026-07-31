@@ -13,6 +13,7 @@ import type {
   FileIndexBatteryStatus,
   FileIndexEstimateBasis,
   FileIndexEstimateStatus,
+  FileIndexFailedFilesResult,
   FileIndexProgress as FileIndexProgressPayload,
   FileIndexRebuildRequest,
   FileIndexRebuildResult
@@ -32,7 +33,6 @@ import type {
   IndexedWriteFlushSnapshot
 } from '@talex-touch/utils/search'
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
-import type { TouchApp } from '../../../../core/touch-app'
 import type * as schema from '../../../../db/schema'
 import type { SearchIndexService } from '../../search-engine/search-index-service'
 import type { ProviderContext } from '../../search-engine/types'
@@ -48,8 +48,8 @@ import { getLogger } from '@talex-touch/utils/common/logger'
 import { runAdaptiveTaskQueue } from '@talex-touch/utils/common/utils'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
 import { OpenerEvents } from '@talex-touch/utils/transport/events'
+
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import { defineRawEvent } from '@talex-touch/utils/transport/event/builder'
 import {
   IndexedSourceIntegrityEvidenceService,
   IndexedWriteFlushEvidenceService,
@@ -226,15 +226,16 @@ const DEFAULT_FILE_INDEX_SETTINGS: FileIndexSettings = {
 }
 const FILE_PROVIDER_BASE_WATCH_PATHS_ENV = 'TUFF_FILE_PROVIDER_BASE_WATCH_PATHS'
 
-const fileIndexFailedEvent = defineRawEvent<
-  {
-    error: string
-    stack?: string
-    timestamp: number
-  },
-  void
->('file-index:failed')
 const EMPTY_OPENER_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(emptyOpenerSvg.trim())}`
+
+/**
+ * Stable public classification for a failed indexed file. The raw parser or
+ * SQLite error text stays in main-process diagnostics; only the code crosses.
+ */
+function classifyFailedFileIndexError(lastError: string | null): string | null {
+  if (!lastError) return null
+  return lastError.includes('SQLITE_BUSY') ? 'FILE_INDEX_DATABASE_BUSY' : 'FILE_INDEX_ITEM_FAILED'
+}
 
 // class ProgressLogger {
 //   private processed = 0
@@ -372,7 +373,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private dbUtils: ReturnType<typeof createDbUtils> | null = null
   private isInitializing: Promise<FileIndexSyncStats> | null = null
   private initializationFailed: boolean = false
-  private initializationError: Error | null = null
+  /** Stable public failure projection of the last indexing run failure. */
+  private initializationFailure: { code: string; retryable: boolean; reportId: string } | null =
+    null
   private initializationContext: ProviderContext | null = null
   private readonly baseWatchPaths: string[]
   private watchPaths: string[]
@@ -417,6 +420,9 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private backgroundStartupPromise: Promise<void> | null = null
   private backgroundStartupReady = false
   private backgroundStartupError: Error | null = null
+  /** Stable public projection of the last background startup failure. */
+  private backgroundStartupFailure: { code: string; retryable: boolean; reportId: string } | null =
+    null
   private readonly workerStatusService = new FileProviderWorkerStatusService()
   private readonly pendingIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
   private readonly inflightIndexWorkerResults = new Map<number, IndexWorkerFileResult>()
@@ -428,7 +434,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   private indexedSourceRuntimeMutationDelegate: FileIndexedSourceRuntimeMutationDelegate | null =
     null
 
-  private touchApp: TouchApp | null = null
   private fileIndexSettings: FileIndexSettings = { ...DEFAULT_FILE_INDEX_SETTINGS }
   private indexingProgress = {
     current: 0,
@@ -683,7 +688,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         await appTaskGate.waitForIdle()
         await dbWriteScheduler.waitForCapacity(4)
       },
-      updateOne: (record) => this.updateFileRecord(record),
+      updateChunk: (records) => this.updateFileMetadataChunk(records),
       refreshUpdated: (records) => this.refreshFileUpdateRecords(records),
       dispatchUpdated: (records) => {
         this.writeSideEffectService.dispatch(records, {
@@ -1474,6 +1479,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     this.backgroundStartupReady = false
     this.backgroundStartupError = null
+    this.backgroundStartupFailure = null
     this.backgroundStartupPromise = new Promise<void>((resolve) => setImmediate(resolve))
       .then(async () => {
         if (this.shuttingDown) return
@@ -1490,12 +1496,40 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         if (workerReady) {
           this.backgroundStartupReady = true
         } else {
-          this.backgroundStartupError = new Error('Search index worker initialization failed')
+          const error = new Error('Search index worker initialization failed')
+          this.backgroundStartupError = error
+          const report = operationalErrorService.report({
+            domain: 'file-index',
+            operation: 'background-startup.worker-ready',
+            error,
+            code: 'FILE_INDEX_STARTUP_WORKER_UNAVAILABLE',
+            retryable: true,
+            userImpact: 'degraded'
+          })
+          this.backgroundStartupFailure = {
+            code: report.code,
+            retryable: report.retryable,
+            reportId: report.id
+          }
         }
       })
       .catch((error) => {
-        this.backgroundStartupError = error instanceof Error ? error : new Error(String(error))
-        this.logWarn('FileProvider background startup failed', error)
+        const normalizedError = error instanceof Error ? error : new Error(String(error))
+        this.backgroundStartupError = normalizedError
+        const busy = isSqliteBusyError(error)
+        const report = operationalErrorService.report({
+          domain: 'file-index',
+          operation: 'background-startup.initialize',
+          error: normalizedError,
+          code: busy ? 'FILE_INDEX_DATABASE_BUSY' : 'FILE_INDEX_STARTUP_FAILED',
+          retryable: true,
+          userImpact: 'degraded'
+        })
+        this.backgroundStartupFailure = {
+          code: report.code,
+          retryable: report.retryable,
+          reportId: report.id
+        }
       })
       .finally(() => {
         this.logDebug('FileProvider background startup finished', {
@@ -1557,7 +1591,7 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (this.isInitializing) throw new Error('Indexing is already in progress')
 
     this.initializationFailed = false
-    this.initializationError = null
+    this.initializationFailure = null
     const run = this._initialize(options)
       .then(async (stats) => {
         if (!options?.onRecordBatch && !options?.onDelta) {
@@ -1570,10 +1604,22 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       })
       .catch((error) => {
         this.initializationFailed = true
-        this.initializationError = error
+        const busy = isSqliteBusyError(error)
+        const report = operationalErrorService.report({
+          domain: 'file-index',
+          operation: `indexing.${source}`,
+          error,
+          code: busy ? 'FILE_INDEX_DATABASE_BUSY' : 'FILE_INDEX_SCAN_FAILED',
+          retryable: busy,
+          userImpact: 'degraded'
+        })
+        this.initializationFailure = {
+          code: report.code,
+          retryable: report.retryable,
+          reportId: report.id
+        }
         this.logError(`File indexing ${source} run failed`, error)
         this.emitIndexingProgress('idle', 0, 0)
-        this.notifyIndexingFailure(error)
         if (source === 'manual') this.manualRebuildPendingNotification = false
         if (options?.throwOnFailure) throw error
         return { ...createFileIndexSyncStats(), errors: 1 }
@@ -1826,7 +1872,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       writer: searchIndexWriter
     })
     this.searchIndex = context.searchIndex
-    this.touchApp = context.touchApp
 
     try {
       this.embeddingService = new EmbeddingService(context.databaseManager.getDb())
@@ -1898,32 +1943,8 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   /**
-   * 通知前端索引初始化失败
-   */
-  private notifyIndexingFailure(error: Error): void {
-    if (!this.touchApp) {
-      this.logWarn('TouchApp not available, cannot send failure notification')
-      return
-    }
-
-    const channel = this.touchApp.channel
-    const keyManager =
-      (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
-    const transport = getTuffTransportMain(channel, keyManager)
-
-    try {
-      transport.broadcast(fileIndexFailedEvent, {
-        error: error.message,
-        stack: error.stack,
-        timestamp: Date.now()
-      })
-    } catch (err) {
-      this.logError('Failed to send indexing failure notification', err)
-    }
-  }
-
-  /**
-   * 获取索引状态
+   * 获取索引状态。公共边界只暴露稳定分类（errorCode/retryable/reportId）；
+   * 原始 Error 保留在主进程本地诊断（logError / operationalErrorService）。
    */
   public getIndexingStatus() {
     const now = Date.now()
@@ -1949,10 +1970,13 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     return {
       isInitializing: isIndexing,
       initializationFailed: this.initializationFailed,
-      error: this.initializationError?.message || null,
+      errorCode: this.initializationFailure?.code ?? this.backgroundStartupFailure?.code ?? null,
+      retryable: this.initializationFailure?.retryable ?? this.backgroundStartupFailure?.retryable,
+      reportId:
+        this.initializationFailure?.reportId ?? this.backgroundStartupFailure?.reportId ?? null,
       startupReady: this.backgroundStartupReady,
       startupPending: this.backgroundStartupPromise !== null,
-      startupError: this.backgroundStartupError?.message || null,
+      startupErrorCode: this.backgroundStartupFailure?.code ?? null,
       progress: { ...this.indexingProgress },
       startTime: this.indexingStartTime,
       estimatedCompletion,
@@ -2171,17 +2195,11 @@ class FileProvider implements ISearchProvider<ProviderContext> {
   }
 
   /**
-   * 获取失败文件的详细信息列表
+   * 获取失败文件的安全摘要：只有 basename 和稳定分类跨越 transport 边界，
+   * 绝对路径与原始解析错误仅保留在主进程本地诊断中。
    */
-  public async getFailedFiles(): Promise<
-    Array<{
-      fileId: number
-      path: string
-      lastError: string | null
-      updatedAt: string | null
-    }>
-  > {
-    if (!this.dbUtils) return []
+  public async getFailedFiles(): Promise<FileIndexFailedFilesResult> {
+    if (!this.dbUtils) return { files: [] }
 
     const db = this.dbUtils.getDb()
     const rows = await db
@@ -2196,12 +2214,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
       .where(eq(fileIndexProgress.status, 'failed'))
       .limit(500)
 
-    return rows.map((row) => ({
-      fileId: row.fileId,
-      path: row.path,
-      lastError: row.lastError,
-      updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null
-    }))
+    return {
+      files: rows.map((row) => ({
+        fileId: row.fileId,
+        fileName: path.basename(row.path),
+        errorCode: classifyFailedFileIndexError(row.lastError),
+        updatedAt: row.updatedAt ? row.updatedAt.toISOString() : null
+      }))
+    }
   }
 
   /**
@@ -2223,16 +2243,14 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     if (this.isInitializing) {
       return {
         success: false,
-        reason: 'initializing',
-        error: 'Indexing is already in progress'
+        reason: 'initializing'
       }
     }
 
     if (!this.initializationContext) {
       return {
         success: false,
-        reason: 'missing-context',
-        error: 'Cannot rebuild: initialization context not available'
+        reason: 'missing-context'
       }
     }
 
@@ -2269,14 +2287,12 @@ class FileProvider implements ISearchProvider<ProviderContext> {
           }
         )
         this.searchIndex = this.initializationContext.searchIndex
-        this.touchApp = this.initializationContext.touchApp
         this.logInfo('Re-initialized dbUtils from saved context')
       } catch (err) {
         this.logError('Failed to re-initialize dbUtils', err)
         return {
           success: false,
-          reason: 'missing-context',
-          error: 'Database initialization failed'
+          reason: 'missing-context'
         }
       }
     }
@@ -2294,7 +2310,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         if (resetResult.error) {
           return {
             success: false,
-            error: resetResult.error,
             errorCode: resetResult.errorCode,
             retryable: resetResult.retryable,
             reportId: resetResult.reportId,
@@ -2313,7 +2328,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
         })
         return {
           success: false,
-          error: report.publicMessage,
           errorCode: report.code,
           retryable: report.retryable,
           reportId: report.id,
@@ -2334,7 +2348,6 @@ class FileProvider implements ISearchProvider<ProviderContext> {
 
     return {
       success: true,
-      message: 'Index rebuild started',
       battery: batteryStatus
     }
   }
@@ -3233,23 +3246,31 @@ class FileProvider implements ISearchProvider<ProviderContext> {
     })
   }
 
-  private async updateFileRecord(file: FileUpdateRecord): Promise<void> {
-    if (!this.dbUtils) return
-    const db = this.dbUtils.getDb()
-    await this.withDbWrite('file-index.file-update.single', () =>
-      db
-        .update(filesSchema)
-        .set({
-          extension: file.extension,
-          size: file.size,
-          ctime: file.ctime,
-          mtime: file.mtime,
-          name: file.name,
-          type: file.type,
-          isDir: file.isDir,
-          lastIndexedAt: new Date()
-        })
-        .where(eq(filesSchema.id, file.id))
+  /**
+   * Route a bounded metadata-update chunk through the worker-owned
+   * FilePersistencePort. The worker is the single writer of the `files` table;
+   * the main process must never issue `UPDATE files` on its own connection
+   * (issue #476 SQLITE_BUSY root cause). Rows are located strictly by
+   * `files.id`; missing ids are skipped by the repository.
+   */
+  private async updateFileMetadataChunk(records: FileUpdateRecord[]): Promise<void> {
+    if (records.length === 0) return
+    if (!(await this.ensureSearchIndexWorkerReady('file-index.file-update.chunk'))) {
+      throw new Error('FILE_PERSISTENCE_PORT_UNAVAILABLE')
+    }
+    const lastIndexedAt = new Date()
+    await this.requireFilePersistencePort().updateFileMetadata(
+      records.map((file) => ({
+        id: file.id,
+        name: file.name,
+        extension: file.extension ?? null,
+        size: file.size ?? null,
+        ctime: file.ctime,
+        mtime: file.mtime,
+        lastIndexedAt,
+        isDir: file.isDir,
+        type: file.type
+      }))
     )
   }
 

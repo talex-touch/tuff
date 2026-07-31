@@ -25,7 +25,11 @@ import type {
   WorkerErrorMessage as SearchIndexWorkerErrorMessage,
   WorkerResultMessage
 } from './search-index-worker-types'
-import type { UpsertFileRecord } from '../file-index-persistence-repository'
+import type {
+  FileMetadataUpdateRecord,
+  FileMetadataUpdateSummary,
+  UpsertFileRecord
+} from '../file-index-persistence-repository'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -57,7 +61,11 @@ function positiveInteger(value: number | undefined, fallback: number): number {
     : fallback
 }
 
-export type { UpsertFileRecord } from '../file-index-persistence-repository'
+export type {
+  FileMetadataUpdateRecord,
+  FileMetadataUpdateSummary,
+  UpsertFileRecord
+} from '../file-index-persistence-repository'
 export type { FilePersistenceEntry, PersistEntriesSummary } from './search-index-worker-types'
 
 export interface SearchIndexWorkerClientOptions {
@@ -418,6 +426,20 @@ export class SearchIndexWorkerClient {
       records
     })
     return result ?? []
+  }
+
+  async updateFileMetadata(
+    records: FileMetadataUpdateRecord[]
+  ): Promise<FileMetadataUpdateSummary> {
+    if (records.length === 0) return { requested: 0, updated: 0, missingFileIds: [] }
+    await this.ensureInitialized()
+    const taskId = this.generateTaskId('updateFileMetadata')
+    const result = await this.sendAndWaitWithResult<FileMetadataUpdateSummary>(taskId, {
+      type: 'updateFileMetadata',
+      taskId,
+      records
+    })
+    return result ?? { requested: records.length, updated: 0, missingFileIds: [] }
   }
 
   async upsertScanProgress(

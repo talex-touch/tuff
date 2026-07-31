@@ -282,6 +282,8 @@ vi.mock('../modules/box-tool/addon/files/file-provider', () => ({
     getIndexingStatus: vi.fn(),
     getIndexStats: vi.fn(),
     getBatteryLevel: vi.fn(),
+    getFailedFiles: vi.fn(),
+    addWatchPath: vi.fn(),
     rebuildIndex: vi.fn(),
     registerProgressStream: vi.fn()
   }
@@ -1764,5 +1766,293 @@ describe('CommonChannelModule private helpers', () => {
       reason: 'manual-repair'
     })
     expect(indexedRuntimeScanSourceMock).toHaveBeenCalledWith('browser-bookmarks', 'manual-rebuild')
+  })
+
+  it('projects file index handler failures and diagnostics to safe public results', async () => {
+    const SQL_CANARY = 'Failed query: update "files" set "name" = ?'
+    const PARAMS_CANARY = 'params: locked.md,.md,2,3'
+    const POSIX_CANARY = '/Users/alice/Private/report.txt'
+    const WINDOWS_CANARY = 'C:\\Users\\alice\\Private\\report.txt'
+    const STACK_CANARY = 'CANARY_STACK at Object.<anonymous>'
+    const ALL_CANARIES = [SQL_CANARY, PARAMS_CANARY, POSIX_CANARY, WINDOWS_CANARY, STACK_CANARY]
+    const expectNoCanary = (payload: unknown): void => {
+      const serialized = JSON.stringify(payload) ?? ''
+      for (const canary of ALL_CANARIES) {
+        expect(serialized).not.toContain(canary)
+      }
+      expect(serialized).not.toContain('Failed query:')
+      expect(serialized).not.toContain('params:')
+    }
+    const canaryError = new Error(`${SQL_CANARY}\n${PARAMS_CANARY}\n${POSIX_CANARY}`)
+    canaryError.stack = STACK_CANARY
+
+    const handlers = new Map<string, (payload: unknown, context: unknown) => Promise<unknown>>()
+    const transport = {
+      on: vi.fn(
+        (
+          event: { toEventName: () => string },
+          handler: (payload: unknown, context: unknown) => Promise<unknown>
+        ) => {
+          handlers.set(event.toEventName(), handler)
+          return vi.fn()
+        }
+      ),
+      onStream: vi.fn(() => vi.fn()),
+      broadcastToWindow: vi.fn()
+    }
+    getTuffTransportMainMock.mockReturnValue(transport as never)
+
+    const { fileProvider } = await import('../modules/box-tool/addon/files/file-provider')
+    const fileProviderMock = fileProvider as unknown as {
+      getIndexingStatus: ReturnType<typeof vi.fn>
+      getIndexStats: ReturnType<typeof vi.fn>
+      getBatteryLevel: ReturnType<typeof vi.fn>
+      getFailedFiles: ReturnType<typeof vi.fn>
+      addWatchPath: ReturnType<typeof vi.fn>
+      rebuildIndex: ReturnType<typeof vi.fn>
+    }
+    fileProviderMock.getIndexingStatus.mockImplementation(() => {
+      throw canaryError
+    })
+    fileProviderMock.getIndexStats.mockRejectedValue(canaryError)
+    fileProviderMock.getBatteryLevel.mockRejectedValue(canaryError)
+    fileProviderMock.getFailedFiles.mockRejectedValue(canaryError)
+    fileProviderMock.addWatchPath.mockRejectedValue(canaryError)
+    fileProviderMock.rebuildIndex.mockRejectedValue(canaryError)
+
+    indexedRuntimeScanSourceMock.mockRejectedValue(canaryError)
+    indexedRuntimeReconcileSourceMock.mockRejectedValue(canaryError)
+    indexedRuntimeResetSourceRuntimeStateMock.mockRejectedValue(canaryError)
+    indexedRuntimeGetDiagnosticsMock.mockResolvedValue({
+      generatedAt: 1700000000000,
+      summary: { total: 2, byStatus: {}, ready: 0, degraded: 1, unavailable: 1 },
+      sources: [
+        {
+          descriptor: { id: 'file-provider' },
+          health: {
+            status: 'error',
+            reason: `${SQL_CANARY} ${POSIX_CANARY}`,
+            lastError: `${PARAMS_CANARY} ${STACK_CANARY}`
+          },
+          roots: [],
+          progress: { reason: POSIX_CANARY },
+          evidence: [
+            {
+              id: 'file-provider:index-flush',
+              label: 'File index flush',
+              status: 'error',
+              reason: SQL_CANARY,
+              metadata: {
+                error: `${SQL_CANARY} ${PARAMS_CANARY}`,
+                storeBoundary: 'file-persistence',
+                entries: 3,
+                path: POSIX_CANARY
+              }
+            }
+          ],
+          recentTasks: [
+            {
+              kind: 'scan',
+              status: 'failed',
+              completedAt: 1,
+              errorCode: 'runtime',
+              errorMessage: `${SQL_CANARY} ${WINDOWS_CANARY}`,
+              error: STACK_CANARY,
+              summary: { errorMessage: POSIX_CANARY, durationMs: 5 }
+            }
+          ],
+          lastScan: {
+            startedAt: 1,
+            completedAt: 2,
+            batches: 0,
+            records: 0,
+            indexedRecords: 0,
+            error: SQL_CANARY
+          },
+          lastWatch: {
+            occurredAt: 1,
+            completedAt: 2,
+            action: 'add',
+            path: POSIX_CANARY,
+            deltas: 1,
+            appliedDeltas: 0,
+            failedDeltas: 1,
+            error: PARAMS_CANARY
+          },
+          lastReconcile: {
+            startedAt: 1,
+            completedAt: 2,
+            added: 0,
+            changed: 0,
+            deleted: 0,
+            skipped: 0,
+            errors: 1,
+            error: SQL_CANARY
+          },
+          lastReset: {
+            startedAt: 1,
+            completedAt: 2,
+            reason: 'user-clear',
+            clearedSearchIndex: false,
+            clearedScanProgress: false,
+            error: POSIX_CANARY
+          }
+        },
+        {
+          descriptor: { id: 'browser-bookmarks' },
+          health: {
+            status: 'degraded',
+            reason: 'bookmarks-import-failed',
+            lastError: 'raw other-source text'
+          },
+          roots: []
+        }
+      ]
+    })
+
+    const module = new CommonChannelModule()
+    await module.onInit({
+      app: {
+        window: { window: {} },
+        app: { addListener: vi.fn() }
+      }
+    } as never)
+
+    // --- File index handlers: every failure returns a stable projected result.
+    const statusHandler = handlers.get(AppEvents.fileIndex.status.toEventName())
+    const statusResult = await statusHandler?.(undefined, {})
+    expect(statusResult).toMatchObject({
+      initializationFailed: true,
+      errorCode: 'FILE_INDEX_STATUS_FAILED',
+      retryable: false
+    })
+    expect((statusResult as { reportId?: string }).reportId).toEqual(expect.any(String))
+    expectNoCanary(statusResult)
+
+    const statsHandler = handlers.get(AppEvents.fileIndex.stats.toEventName())
+    const statsResult = await statsHandler?.(undefined, {})
+    expect(statsResult).toMatchObject({ totalFiles: 0, errorCode: 'FILE_INDEX_STATS_FAILED' })
+    expectNoCanary(statsResult)
+
+    const failedFilesHandler = handlers.get(AppEvents.fileIndex.failedFiles.toEventName())
+    const failedFilesResult = await failedFilesHandler?.(undefined, {})
+    expect(failedFilesResult).toMatchObject({
+      files: [],
+      errorCode: 'FILE_INDEX_FAILED_FILES_FAILED'
+    })
+    expectNoCanary(failedFilesResult)
+
+    const batteryHandler = handlers.get(AppEvents.fileIndex.batteryLevel.toEventName())
+    await expect(batteryHandler?.(undefined, {})).resolves.toBeNull()
+
+    const addPathHandler = handlers.get(AppEvents.fileIndex.addPath.toEventName())
+    const addPathResult = await addPathHandler?.({ path: '/tmp/canary' }, {})
+    expect(addPathResult).toMatchObject({
+      success: false,
+      status: 'error',
+      errorCode: 'FILE_INDEX_ADD_PATH_FAILED'
+    })
+    expectNoCanary(addPathResult)
+
+    const rebuildHandler = handlers.get(AppEvents.fileIndex.rebuild.toEventName())
+    const rebuildResult = await rebuildHandler?.({}, {})
+    expect(rebuildResult).toMatchObject({
+      success: false,
+      errorCode: 'FILE_INDEX_REBUILD_HANDLER_FAILED'
+    })
+    expect(rebuildResult).not.toHaveProperty('error')
+    expect(rebuildResult).not.toHaveProperty('message')
+    expectNoCanary(rebuildResult)
+
+    // --- Indexed-source handlers: thrown failures are projected per source.
+    const scanHandler = handlers.get(AppEvents.indexedSource.scan.toEventName())
+    const scanResult = await scanHandler?.(
+      { sourceId: 'file-provider', reason: 'manual-rebuild' },
+      {}
+    )
+    expect(scanResult).toMatchObject({
+      sourceId: 'file-provider',
+      errorCode: 'FILE_INDEX_SCAN_FAILED',
+      error: 'FILE_INDEX_SCAN_FAILED',
+      retryable: false
+    })
+    expectNoCanary(scanResult)
+
+    const otherScanResult = await scanHandler?.(
+      { sourceId: 'browser-bookmarks', reason: 'manual-rebuild' },
+      {}
+    )
+    expect(otherScanResult).toMatchObject({
+      sourceId: 'browser-bookmarks',
+      errorCode: 'INDEXED_SOURCE_SCAN_FAILED'
+    })
+    expectNoCanary(otherScanResult)
+
+    const reconcileHandler = handlers.get(AppEvents.indexedSource.reconcile.toEventName())
+    const reconcileResult = await reconcileHandler?.(
+      { sourceId: 'file-provider', reason: 'manual-repair' },
+      {}
+    )
+    expect(reconcileResult).toMatchObject({
+      sourceId: 'file-provider',
+      errorCode: 'FILE_INDEX_RECONCILE_FAILED',
+      reason: 'FILE_INDEX_RECONCILE_FAILED'
+    })
+    expectNoCanary(reconcileResult)
+
+    const resetHandler = handlers.get(AppEvents.indexedSource.reset.toEventName())
+    const resetResult = await resetHandler?.(
+      { sourceId: 'file-provider', reason: 'user-clear', clearSearchIndex: true },
+      {}
+    )
+    expect(resetResult).toMatchObject({
+      sourceId: 'file-provider',
+      errorCode: 'FILE_INDEX_RESET_FAILED',
+      error: 'FILE_INDEX_RESET_FAILED'
+    })
+    expectNoCanary(resetResult)
+
+    // --- Diagnostics: file-provider raw runtime state is sanitized; other sources untouched.
+    const diagnosticsHandler = handlers.get(AppEvents.indexedSource.diagnostics.toEventName())
+    const diagnostics = (await diagnosticsHandler?.(undefined, {})) as {
+      sources: Array<{
+        descriptor: { id: string }
+        health: Record<string, unknown>
+        progress: Record<string, unknown>
+        evidence: Array<{ reason?: unknown; metadata?: unknown }>
+        recentTasks: Array<Record<string, unknown>>
+        lastScan: Record<string, unknown>
+        lastWatch: Record<string, unknown>
+        lastReconcile: Record<string, unknown>
+        lastReset: Record<string, unknown>
+      }>
+    }
+    expectNoCanary(diagnostics)
+
+    const fileSource = diagnostics.sources.find(
+      (source) => source.descriptor.id === 'file-provider'
+    )!
+    expect(fileSource.health.lastError).toBeUndefined()
+    expect(fileSource.health.reason).toBeUndefined()
+    expect(fileSource.progress.reason).toBeUndefined()
+    expect(fileSource.evidence[0].reason).toBeUndefined()
+    expect(fileSource.evidence[0].metadata).toEqual({
+      storeBoundary: 'file-persistence',
+      entries: 3
+    })
+    expect(fileSource.recentTasks[0].errorCode).toBe('runtime')
+    expect(fileSource.recentTasks[0].errorMessage).toBeUndefined()
+    expect(fileSource.recentTasks[0].error).toBeUndefined()
+    expect(fileSource.recentTasks[0].summary).toEqual({ durationMs: 5 })
+    expect(fileSource.lastScan.error).toBeUndefined()
+    expect(fileSource.lastWatch.path).toBe('')
+    expect(fileSource.lastWatch.error).toBeUndefined()
+    expect(fileSource.lastReconcile.error).toBeUndefined()
+    expect(fileSource.lastReset.error).toBeUndefined()
+
+    const otherSource = diagnostics.sources.find(
+      (source) => source.descriptor.id === 'browser-bookmarks'
+    )!
+    expect(otherSource.health.lastError).toBe('raw other-source text')
   })
 })

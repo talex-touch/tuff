@@ -44,10 +44,16 @@ export interface FileIndexProgress {
 export interface FileIndexStatus {
   isInitializing: boolean;
   initializationFailed: boolean;
-  error: string | null;
+  /**
+   * Stable failure classification (e.g. `FILE_INDEX_DATABASE_BUSY`). Raw
+   * exception text never crosses this boundary.
+   */
+  errorCode?: string | null;
+  retryable?: boolean;
+  reportId?: string | null;
   startupReady?: boolean;
   startupPending?: boolean;
-  startupError?: string | null;
+  startupErrorCode?: string | null;
   progress: {
     stage: FileIndexStage | null;
     current: number;
@@ -69,6 +75,9 @@ export interface FileIndexStats {
   completedFiles: number;
   embeddingCompletedFiles: number;
   embeddingRows: number;
+  /** Present when the stats query itself failed and values are zeroed. */
+  errorCode?: string;
+  reportId?: string;
 }
 
 export interface FileIndexAddPathRequest {
@@ -80,6 +89,8 @@ export interface FileIndexAddPathResult {
   status: "added" | "exists" | "invalid" | "error";
   path?: string;
   reason?: string;
+  errorCode?: string;
+  reportId?: string;
 }
 
 export interface FileIndexRebuildRequest {
@@ -88,8 +99,6 @@ export interface FileIndexRebuildRequest {
 
 export interface FileIndexRebuildResult {
   success: boolean;
-  message?: string;
-  error?: string;
   errorCode?: string;
   retryable?: boolean;
   reportId?: string;
@@ -103,11 +112,24 @@ export interface FileIndexRebuildResult {
   threshold?: number;
 }
 
+/**
+ * Safe failed-file summary. The absolute path and raw parser error stay in
+ * main-process diagnostics; only the basename and a stable classification
+ * cross to the renderer.
+ */
 export interface FileIndexFailedFile {
   fileId: number;
-  path: string;
-  lastError: string | null;
+  fileName: string;
+  errorCode: string | null;
   updatedAt: string | null;
+}
+
+export interface FileIndexFailedFilesResult {
+  files: FileIndexFailedFile[];
+  /** Present when the query itself failed and `files` is empty. */
+  errorCode?: string;
+  retryable?: boolean;
+  reportId?: string;
 }
 
 export interface FileIndexBatteryStatus {

@@ -46,6 +46,10 @@ export interface IndexedSourceScanRuntimeResult {
   startedAt: number
   completedAt: number
   error?: string
+  /** Stable failure classification projected at the handler boundary. */
+  errorCode?: string
+  retryable?: boolean
+  reportId?: string
 }
 
 export interface SearchProviderConfigResponse {

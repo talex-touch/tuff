@@ -1,5 +1,5 @@
 import type {
-  FileIndexFailedFile,
+  FileIndexFailedFilesResult,
   FileIndexProgress,
   FileIndexRebuildRequest,
   FileIndexRebuildResult
@@ -13,7 +13,10 @@ const fileIndexMonitorLog = createRendererLogger('FileIndexMonitor')
 
 /**
  * 文件索引监控 Composable
- * 提供索引状态查询和手动重建功能
+ * 提供索引状态查询和手动重建功能。
+ *
+ * 公共边界约定（issue #476）：日志只记录稳定的 operation/code/reportId，
+ * 绝不记录、展示或上传捕获到的原始 Error 或 transport payload。
  */
 export function useFileIndexMonitor() {
   const settingsSdk = useSettingsSdk()
@@ -27,8 +30,8 @@ export function useFileIndexMonitor() {
     try {
       const status = await settingsSdk.fileIndex.getStatus()
       return status
-    } catch (error) {
-      fileIndexMonitorLog.error('Failed to get index status:', error)
+    } catch {
+      fileIndexMonitorLog.error('Failed to get index status', { operation: 'getStatus' })
       return null
     }
   }
@@ -40,8 +43,8 @@ export function useFileIndexMonitor() {
     try {
       const battery = await settingsSdk.fileIndex.getBatteryLevel()
       return battery
-    } catch (error) {
-      fileIndexMonitorLog.error('Failed to get battery level:', error)
+    } catch {
+      fileIndexMonitorLog.error('Failed to get battery level', { operation: 'getBatteryLevel' })
       return null
     }
   }
@@ -49,12 +52,12 @@ export function useFileIndexMonitor() {
   /**
    * 查询失败文件列表
    */
-  const getFailedFiles = async (): Promise<FileIndexFailedFile[]> => {
+  const getFailedFiles = async (): Promise<FileIndexFailedFilesResult> => {
     try {
       return await settingsSdk.fileIndex.getFailedFiles()
-    } catch (error) {
-      fileIndexMonitorLog.error('Failed to get failed files:', error)
-      return []
+    } catch {
+      fileIndexMonitorLog.error('Failed to get failed files', { operation: 'getFailedFiles' })
+      return { files: [] }
     }
   }
 
@@ -65,20 +68,15 @@ export function useFileIndexMonitor() {
     try {
       const stats = await settingsSdk.fileIndex.getStats()
       return stats
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : ''
-      // Ignore timeout errors during startup - module may not be ready yet
-      if (message.includes('timed out')) {
-        devLog('[FileIndexMonitor] Stats fetch timed out, module may be initializing')
-        return null
-      }
-      fileIndexMonitorLog.error('Failed to get index stats:', error)
+    } catch {
+      fileIndexMonitorLog.error('Failed to get index stats', { operation: 'getStats' })
       return null
     }
   }
 
   /**
-   * 手动触发重建索引
+   * 手动触发重建索引。transport 异常被归一化为稳定 failure 结果，
+   * 原始 Error 不会继续向 UI 传播。
    */
   const handleRebuild = async (
     request?: FileIndexRebuildRequest
@@ -95,11 +93,14 @@ export function useFileIndexMonitor() {
         devLog('[FileIndexMonitor] Rebuild triggered successfully')
         return result
       }
-      fileIndexMonitorLog.error('Rebuild failed:', result?.error)
-      return result ?? { success: false, error: 'Rebuild failed' }
-    } catch (error) {
-      fileIndexMonitorLog.error('Failed to trigger rebuild:', error)
-      throw error
+      fileIndexMonitorLog.warn('Rebuild failed', {
+        errorCode: result?.errorCode ?? null,
+        reportId: result?.reportId ?? null
+      })
+      return result ?? { success: false, errorCode: 'FILE_INDEX_REBUILD_FAILED' }
+    } catch {
+      fileIndexMonitorLog.error('Failed to trigger rebuild', { operation: 'rebuild' })
+      return { success: false, errorCode: 'FILE_INDEX_REBUILD_TRANSPORT_FAILED' }
     }
   }
 
@@ -117,8 +118,8 @@ export function useFileIndexMonitor() {
           indexProgress.value = data as FileIndexProgress
           callback(data as FileIndexProgress)
         },
-        onError: (err) => {
-          fileIndexMonitorLog.error('Progress stream error:', err)
+        onError: () => {
+          fileIndexMonitorLog.error('Progress stream error', { operation: 'streamProgress' })
         }
       })
       .then((stream) => {
@@ -128,8 +129,10 @@ export function useFileIndexMonitor() {
         }
         controller = stream
       })
-      .catch((error) => {
-        fileIndexMonitorLog.error('Failed to start progress stream:', error)
+      .catch(() => {
+        fileIndexMonitorLog.error('Failed to start progress stream', {
+          operation: 'streamProgress'
+        })
       })
 
     return () => {

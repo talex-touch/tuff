@@ -135,6 +135,74 @@ describe('SourceScopedIndexWriterRouter visibility publication', () => {
   })
 })
 
+describe('SearchIndexWriter file persistence port', () => {
+  it('routes metadata updates through admission to the worker client', async () => {
+    const summary = { requested: 2, updated: 1, missingFileIds: [42] }
+    const client: Pick<
+      SearchIndexWorkerClient,
+      'init' | 'updateFileMetadata' | 'drain' | 'getPendingCount'
+    > = {
+      init: vi.fn(async () => undefined),
+      updateFileMetadata: vi.fn(async () => summary),
+      drain: vi.fn(async () => undefined),
+      getPendingCount: vi.fn(() => 0)
+    }
+    const writer = new SearchIndexWriter({ client: client as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+
+    const port = writer.getFilePersistencePort()
+    const records = [
+      {
+        id: 7,
+        name: 'canary.md',
+        extension: '.md',
+        size: 64,
+        ctime: new Date(2_000),
+        mtime: new Date(3_000),
+        lastIndexedAt: new Date(4_000),
+        isDir: false,
+        type: 'file'
+      }
+    ]
+    await expect(port.updateFileMetadata(records)).resolves.toBe(summary)
+    expect(client.updateFileMetadata).toHaveBeenCalledWith(records)
+    expect(writer.getStatus().activeAdmissions).toBe(0)
+  })
+
+  it('rejects port metadata updates once the writer is closed', async () => {
+    const client: Pick<
+      SearchIndexWorkerClient,
+      'init' | 'updateFileMetadata' | 'drain' | 'getPendingCount' | 'shutdown'
+    > = {
+      init: vi.fn(async () => undefined),
+      updateFileMetadata: vi.fn(async () => ({ requested: 0, updated: 0, missingFileIds: [] })),
+      drain: vi.fn(async () => undefined),
+      getPendingCount: vi.fn(() => 0),
+      shutdown: vi.fn(async () => undefined)
+    }
+    const writer = new SearchIndexWriter({ client: client as SearchIndexWorkerClient })
+    await writer.initialize('/tmp/search-index-writer-test.db')
+    await writer.shutdown()
+
+    await expect(
+      writer.getFilePersistencePort().updateFileMetadata([
+        {
+          id: 7,
+          name: 'canary.md',
+          extension: '.md',
+          size: 64,
+          ctime: new Date(2_000),
+          mtime: new Date(3_000),
+          lastIndexedAt: new Date(4_000),
+          isDir: false,
+          type: 'file'
+        }
+      ])
+    ).rejects.toThrow('SEARCH_INDEX_WRITER_CLOSED')
+    expect(client.updateFileMetadata).not.toHaveBeenCalled()
+  })
+})
+
 describe('SearchIndexWriter shutdown recovery', () => {
   it('keeps shutdown pending for drain settlement and closes the client exactly once on retry', async () => {
     let rejectDrain!: (reason?: unknown) => void

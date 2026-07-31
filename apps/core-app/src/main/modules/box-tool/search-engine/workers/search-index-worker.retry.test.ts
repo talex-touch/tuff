@@ -49,7 +49,8 @@ describe('search-index-worker retry wrapper', () => {
       upsertFiles: 'search-index.worker.upsertFiles',
       upsertScanProgress: 'search-index.worker.upsertScanProgress',
       removeFile: 'search-index.worker.removeFile',
-      removeFileExtensions: 'search-index.worker.removeFileExtensions'
+      removeFileExtensions: 'search-index.worker.removeFileExtensions',
+      updateFileMetadata: 'search-index.worker.updateFileMetadata'
     })
   })
 })

@@ -12,12 +12,16 @@ import { normalizeScanProgressUpsert } from './workers/search-index-worker-scan-
 const PERSIST_CHUNK_SIZE = 3
 const PERSIST_CHUNK_YIELD_MS = 30
 
+export const FILE_INDEX_METADATA_UPDATE_MAX_BATCH = 100
+export const FILE_INDEX_METADATA_INVALID_CODE = 'FILE_INDEX_METADATA_INVALID'
+
 export const FILE_INDEX_PERSISTENCE_RETRY_LABELS = {
   persistChunk: 'search-index.worker.persistChunk',
   upsertFiles: 'search-index.worker.upsertFiles',
   upsertScanProgress: 'search-index.worker.upsertScanProgress',
   removeFile: 'search-index.worker.removeFile',
-  removeFileExtensions: 'search-index.worker.removeFileExtensions'
+  removeFileExtensions: 'search-index.worker.removeFileExtensions',
+  updateFileMetadata: 'search-index.worker.updateFileMetadata'
 } as const
 
 export interface FilePersistenceEntry {
@@ -62,9 +66,33 @@ export interface UpsertFileRecord {
   type: string
 }
 
+/**
+ * Bounded metadata update for an existing `files` row, located strictly by
+ * `files.id`. Never carries `path`: missing ids are skipped and rows are never
+ * resurrected through a path upsert.
+ */
+export interface FileMetadataUpdateRecord {
+  id: number
+  name: string
+  extension: string | null
+  size: number | null
+  mtime: Date | number | string
+  ctime: Date | number | string
+  lastIndexedAt: Date | number | string
+  isDir: boolean
+  type: string
+}
+
+export interface FileMetadataUpdateSummary {
+  requested: number
+  updated: number
+  missingFileIds: number[]
+}
+
 export interface FileIndexPersistenceRepository {
   persistEntries(entries: FilePersistenceEntry[]): Promise<PersistEntriesSummary>
   upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>>
+  updateFileMetadata(records: FileMetadataUpdateRecord[]): Promise<FileMetadataUpdateSummary>
   upsertScanProgress(paths: string[], lastScanned: string, sourceId?: string): Promise<number>
   removeFile(path: string): Promise<void>
   removeFileExtensions(fileId: number, keys: string[]): Promise<void>
@@ -155,6 +183,78 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
     )
 
     return rows as Array<Record<string, unknown>>
+  }
+
+  async updateFileMetadata(
+    records: FileMetadataUpdateRecord[]
+  ): Promise<FileMetadataUpdateSummary> {
+    const summary: FileMetadataUpdateSummary = {
+      requested: records.length,
+      updated: 0,
+      missingFileIds: []
+    }
+    if (records.length === 0) return summary
+    if (records.length > FILE_INDEX_METADATA_UPDATE_MAX_BATCH) {
+      throw metadataInvalidError(`batch-size-exceeds-${FILE_INDEX_METADATA_UPDATE_MAX_BATCH}`)
+    }
+
+    // Validate the full batch before any SQL so a hostile or malformed record
+    // can never produce a partial write or leak a native bind error message.
+    const validated = records.map((record) => normalizeMetadataUpdateRecord(record))
+    const uniqueIds = new Set(validated.map((record) => record.id))
+    if (uniqueIds.size !== validated.length) {
+      throw metadataInvalidError('duplicate-file-id')
+    }
+
+    // The summary is built inside the retried closure so a busy retry never
+    // double-counts rows or duplicates missingFileIds entries.
+    return await withFileIndexPersistenceRetry(
+      () =>
+        this.db.transaction(
+          async (tx) => {
+            const attemptSummary: FileMetadataUpdateSummary = {
+              requested: records.length,
+              updated: 0,
+              missingFileIds: []
+            }
+            const existingRows = await tx
+              .select({ fileId: schema.files.id })
+              .from(schema.files)
+              .where(
+                inArray(
+                  schema.files.id,
+                  validated.map((record) => record.id)
+                )
+              )
+            const existingFileIds = new Set(existingRows.map((row) => row.fileId))
+
+            for (const record of validated) {
+              if (!existingFileIds.has(record.id)) {
+                attemptSummary.missingFileIds.push(record.id)
+                continue
+              }
+              await tx
+                .update(schema.files)
+                .set({
+                  name: record.name,
+                  extension: record.extension,
+                  size: record.size,
+                  mtime: record.mtime,
+                  ctime: record.ctime,
+                  lastIndexedAt: record.lastIndexedAt,
+                  isDir: record.isDir,
+                  type: record.type
+                })
+                .where(eq(schema.files.id, record.id))
+              attemptSummary.updated += 1
+            }
+
+            return attemptSummary
+          },
+          { behavior: 'immediate' }
+        ),
+      FILE_INDEX_PERSISTENCE_RETRY_LABELS.updateFileMetadata
+    )
   }
 
   async upsertScanProgress(
@@ -330,4 +430,91 @@ export class SqliteFileIndexPersistenceRepository implements FileIndexPersistenc
 
 function toDate(value: Date | number | string): Date {
   return value instanceof Date ? value : new Date(value)
+}
+
+interface NormalizedMetadataUpdateRecord {
+  id: number
+  name: string
+  extension: string | null
+  size: number | null
+  mtime: Date
+  ctime: Date
+  lastIndexedAt: Date
+  isDir: boolean
+  type: string
+}
+
+function metadataInvalidError(reason: string): Error {
+  const error = new Error(`${FILE_INDEX_METADATA_INVALID_CODE}: ${reason}`)
+  error.name = 'FileIndexMetadataInvalidError'
+  return error
+}
+
+function normalizeMetadataUpdateRecord(
+  record: FileMetadataUpdateRecord
+): NormalizedMetadataUpdateRecord {
+  if (!record || typeof record !== 'object') {
+    throw metadataInvalidError('record-not-an-object')
+  }
+
+  const { id, name, extension, size, mtime, ctime, lastIndexedAt, isDir, type } = record
+
+  if (typeof id !== 'number' || !Number.isFinite(id) || !Number.isInteger(id) || id <= 0) {
+    throw metadataInvalidError('id-not-positive-integer')
+  }
+  if (typeof name !== 'string') {
+    throw metadataInvalidError('name-not-string')
+  }
+  if (extension !== null && extension !== undefined && typeof extension !== 'string') {
+    throw metadataInvalidError('extension-not-string-or-null')
+  }
+  if (
+    size !== null &&
+    size !== undefined &&
+    (typeof size !== 'number' || !Number.isFinite(size) || size < 0)
+  ) {
+    throw metadataInvalidError('size-not-nonnegative-finite-or-null')
+  }
+  if (typeof isDir !== 'boolean') {
+    throw metadataInvalidError('is-dir-not-boolean')
+  }
+  if (typeof type !== 'string' || type.length === 0) {
+    throw metadataInvalidError('type-not-non-empty-string')
+  }
+
+  return {
+    id,
+    name,
+    extension: typeof extension === 'string' ? extension : null,
+    size: typeof size === 'number' ? size : null,
+    mtime: normalizeMetadataDate(mtime, 'mtime'),
+    ctime: normalizeMetadataDate(ctime, 'ctime'),
+    lastIndexedAt: normalizeMetadataDate(lastIndexedAt, 'last-indexed-at'),
+    isDir,
+    type
+  }
+}
+
+function normalizeMetadataDate(value: Date | number | string, field: string): Date {
+  if (value instanceof Date) {
+    const time = value.getTime()
+    if (!Number.isFinite(time)) {
+      throw metadataInvalidError(`${field}-invalid-date`)
+    }
+    return value
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw metadataInvalidError(`${field}-non-finite-number`)
+    }
+    return new Date(value)
+  }
+  if (typeof value === 'string') {
+    const time = Date.parse(value)
+    if (!Number.isFinite(time)) {
+      throw metadataInvalidError(`${field}-invalid-date-string`)
+    }
+    return new Date(time)
+  }
+  throw metadataInvalidError(`${field}-unsupported-type`)
 }

@@ -7,7 +7,7 @@ import { toast } from 'vue-sonner'
 import { createRendererLogger } from '~/utils/renderer-log'
 
 const props = defineProps<{
-  loadFiles: () => Promise<FileIndexFailedFile[]>
+  loadFiles: () => Promise<{ files: FileIndexFailedFile[] }>
 }>()
 
 const destroy = inject('destroy') as () => void
@@ -19,13 +19,21 @@ const failedFilesDialogLog = createRendererLogger('FailedFilesListDialog')
 
 onMounted(async () => {
   try {
-    files.value = await props.loadFiles()
-  } catch (error) {
-    failedFilesDialogLog.error('Failed to load files', error)
+    const result = await props.loadFiles()
+    files.value = result.files
+  } catch {
+    failedFilesDialogLog.error('Failed to load files', { operation: 'getFailedFiles' })
   } finally {
     loading.value = false
   }
 })
+
+function errorCodeLabel(errorCode: string | null): string {
+  if (errorCode === 'FILE_INDEX_DATABASE_BUSY') {
+    return t('settings.settingFileIndex.failedFileReasonBusy')
+  }
+  return t('settings.settingFileIndex.failedFileReasonGeneric')
+}
 
 function copyToClipboard(text: string, fileId: number) {
   navigator.clipboard.writeText(text).then(() => {
@@ -39,7 +47,10 @@ function copyToClipboard(text: string, fileId: number) {
 
 function copyAll() {
   const text = files.value
-    .map((f) => `${f.path}\n  Error: ${f.lastError ?? 'Unknown'}`)
+    .map(
+      (f) =>
+        `${f.fileName}\n  ${t('settings.settingFileIndex.failedFileErrorCode')}: ${f.errorCode ?? '-'}`
+    )
     .join('\n\n')
   navigator.clipboard.writeText(text).then(() => {
     toast.success(t('common.copied'))
@@ -86,7 +97,7 @@ function close() {
           <div v-for="file in files" :key="file.fileId" class="file-item">
             <div class="file-path-row">
               <div class="i-carbon-document text-14px shrink-0 text-secondary" />
-              <span class="file-path" :title="file.path">{{ file.path }}</span>
+              <span class="file-path" :title="file.fileName">{{ file.fileName }}</span>
               <TxButton
                 variant="ghost"
                 size="sm"
@@ -96,7 +107,7 @@ function close() {
                 :title="t('common.copy')"
                 @click="
                   copyToClipboard(
-                    `${file.path}\nError: ${file.lastError ?? 'Unknown'}`,
+                    `${file.fileName}\n${t('settings.settingFileIndex.failedFileErrorCode')}: ${file.errorCode ?? '-'}`,
                     file.fileId
                   )
                 "
@@ -107,8 +118,8 @@ function close() {
                 />
               </TxButton>
             </div>
-            <div v-if="file.lastError" class="file-error">
-              {{ file.lastError }}
+            <div v-if="file.errorCode" class="file-error">
+              {{ errorCodeLabel(file.errorCode) }}
             </div>
           </div>
         </TransitionGroup>

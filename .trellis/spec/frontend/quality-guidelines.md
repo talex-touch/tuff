@@ -889,7 +889,11 @@ const parity = sourceIndexedRows === sourceFilesRows;
 - Shared result: `OperationalErrorReport { id, domain, operation, code, severity, retryable, userImpact, publicMessage, occurredAt, occurrenceCount, context }`.
 - Main facade: `operationalErrorService.report(input): OperationalErrorReport`.
 - SQLite observer: `setSqliteRetryExhaustedListener(listener | null): () => void`; `SqliteRetryExhaustedEvent` contains `label`, `attempts`, `elapsedMs`, optional `code/rawCode`, and the original `error`.
-- File rebuild transport: `FileIndexRebuildResult { success, message?, error?, errorCode?, retryable?, reportId?, requiresConfirm?, reason?, battery?, threshold? }`.
+- File rebuild transport: `FileIndexRebuildResult { success, errorCode?, retryable?, reportId?, requiresConfirm?, reason?, battery?, threshold? }`; raw `error`/`message` fields are prohibited.
+- Worker-owned metadata update: `FilePersistencePort.updateFileMetadata(records: FileMetadataUpdateRecord[]): Promise<FileMetadataUpdateSummary>`; the summary is `{ requested, updated, missingFileIds }`.
+- `FileMetadataUpdateRecord` contains `{ id, name, extension, size, mtime, ctime, lastIndexedAt, isDir, type }` and never carries `path`.
+- File index status transport: `FileIndexStatus { ..., errorCode?, retryable?, reportId?, startupErrorCode? }`; raw `error`/`startupError` fields are prohibited.
+- Failed-file transport: `FileIndexFailedFilesResult { files: [{ fileId, fileName, errorCode, updatedAt }], errorCode?, retryable?, reportId? }`; only basename and stable code cross.
 
 ### 3. Contracts
 
@@ -900,6 +904,11 @@ const parity = sourceIndexedRows === sourceFilesRows;
 - The dedupe key is stable `domain + operation + code`. Sink failure, disabled Sentry, or pre-init buffering must not alter the business result. Pre-init detail buffering and dedupe state stay bounded.
 - SQLite retry exhaustion is observed once below business code. The low-level observer emits local/aggregate evidence; a user-blocking boundary may separately emit one deduped detail event with a business code.
 - A file rebuild pauses writer admission, drains active/pending writes, performs only local progress reset inside the pause, resumes in `finally`, then runs writer-backed snapshot rebuild outside the pause. The local reset uses `interactive` priority and `dropPolicy:none`.
+- File metadata refresh never executes main-process `UPDATE files`; FileProvider sends bounded chunks through `FilePersistencePort`, and the search-index worker owns the `BEGIN IMMEDIATE` transaction and retry.
+- Validate the complete metadata batch before SQL: at most 100 rows, unique positive integer IDs, valid dates, nonnegative finite/null size, boolean `isDir`, and nonempty `type`. Missing IDs are reported and skipped; they are never resurrected by path.
+- Public File Index projectors rebuild exact allowlisted objects. `errorCode` is an uppercase identifier, report IDs and progress/estimate fields are bounded stable tokens, failed-file timestamps are canonical ISO, and both new `fileName` and legacy `path` inputs are reduced to basename.
+- File Index dashboard entries, watched roots, scan progress, worker `lastError`, and task `error` pass through a main-process projector before `tuff:dashboard`; the renderer receives basenames and stable codes only.
+- Renderer catches may branch on projected code fields, but must never inspect `Error.message` or pass a caught `Error`/transport payload to console or renderer loggers.
 
 ### 4. Validation & Error Matrix
 
@@ -909,12 +918,17 @@ const parity = sourceIndexedRows === sourceFilesRows;
 - Battery, initialization, missing-context, cancel, permission denial, and offline expected outcomes -> explicit business result; no Sentry detail exception by default.
 - Sentry disabled/uninitialized/rejected -> same business result and local report; no recursive reporter call.
 - Sensitive or dynamic context key/value -> omit it from remote report rather than renaming or stringifying it.
+- Metadata batch exceeds 100, repeats an ID, contains an invalid date, or has negative/non-finite size -> `FILE_INDEX_METADATA_INVALID` before SQL; existing rows remain unchanged.
+- Metadata ID does not exist -> add it to `missingFileIds`, do not insert/upsert a row, and continue the transaction.
+- Second connection holds `BEGIN IMMEDIATE` -> retry under `search-index.worker.updateFileMetadata`; exhaustion maps publicly to `FILE_INDEX_DATABASE_BUSY`, and releasing the lock lets the repository recover.
+- Malformed transport puts SQL, params, path, stack, or cause into any public code/report/stage/status/reason slot -> drop the field.
+- Dashboard worker/indexing error contains raw text -> map to `FILE_INDEX_DATABASE_BUSY` or a stable generic File Index code; dashboard transport failure returns `TUFF_DASHBOARD_FAILED`.
 
 ### 5. Good / Base / Bad Cases
 
 - Good: a real second SQLite connection holds `BEGIN IMMEDIATE`; packaged Electron returns the safe busy result, UI shows localized copy, local log correlates reportId to nested `SQLITE_BUSY`, and the same profile rebuilds after lock release.
 - Base: a transient busy retry recovers; retry metrics/log summary update, no user failure and no detail-event storm occur.
-- Bad: returning `error.message`, calling Sentry in every catch/retry, putting paths in `context`, or calling writer APIs from inside the paused-admission callback.
+- Bad: returning `error.message`, calling Sentry in every catch/retry, putting paths in `context`, calling writer APIs from inside the paused-admission callback, issuing main-process `UPDATE files`, or spreading a worker/dashboard payload across transport.
 
 ### 6. Tests Required
 
@@ -922,6 +936,9 @@ const parity = sourceIndexedRows === sourceFilesRows;
 - Retry tests assert direct and scheduler-wrapped exhaustion notify exactly once with attempts/code/rawCode/error.
 - Writer/runtime tests assert pause -> drain -> local reset -> resume -> writer rebuild ordering, active/pending zero inside the barrier, and admission recovery on every throw/timeout path.
 - Transport/UI tests assert `FILE_INDEX_DATABASE_BUSY` maps to localized copy and serialized results contain no SQL, `params:`, absolute path, or stack.
+- Metadata repository tests assert duplicate/malformed batches execute no SQL, missing IDs do not resurrect rows, retry summaries do not double-count, and a real second connection lock fails then recovers.
+- Public projector tests place canaries independently in every code/report/stage/status/reason/timestamp/name slot and assert serialized exact objects contain none.
+- Dashboard tests assert POSIX/Windows paths become basenames, worker/task errors become stable codes, and Settings/LingPan source contracts contain no caught-Error logger or raw File Index fallback.
 - App Provider tests assert add/update/delete/backfill/rebuild mutations use shared scheduler/retry and preserve file-row/extensions transaction behavior.
 - Final evidence requires node/web typecheck, scoped lint, production build, and packaged Electron with an isolated profile plus a real second-connection `BEGIN IMMEDIATE`; mocks do not prove this contract.
 
@@ -959,7 +976,6 @@ try {
   });
   return {
     success: false,
-    error: report.publicMessage,
     errorCode: report.code,
     retryable: report.retryable,
     reportId: report.id,

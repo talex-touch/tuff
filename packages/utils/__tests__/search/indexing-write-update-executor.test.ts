@@ -65,6 +65,50 @@ describe("indexing-write-update-executor-service", () => {
     ]);
   });
 
+  it("uses a chunk writer once per chunk before refresh and side effects", async () => {
+    const updates: TestUpdateRecord[] = [
+      { id: 1, value: "a" },
+      { id: 2, value: "b" },
+      { id: 3, value: "c" },
+    ];
+    const order: string[] = [];
+    const updateChunk = vi.fn(async (chunk: TestUpdateRecord[]) => {
+      order.push(`update:${chunk.map((record) => record.id).join(",")}`);
+    });
+    const runQueue = vi.fn(async (chunks, handler) => {
+      for (const chunk of chunks) await handler(chunk);
+    });
+    const service = new IndexedWriteUpdateExecutorService<
+      TestUpdateRecord,
+      TestUpdateRecord
+    >({
+      waitBeforeChunk: vi.fn(async () => {}),
+      updateChunk,
+      refreshUpdated: async (chunk) => {
+        order.push(`refresh:${chunk.map((record) => record.id).join(",")}`);
+        return chunk;
+      },
+      dispatchUpdated: (chunk) => {
+        order.push(`dispatch:${chunk.map((record) => record.id).join(",")}`);
+      },
+      runQueue,
+      now: () => 0,
+      formatDuration: (durationMs) => `${durationMs}ms`,
+      logDebug: vi.fn(),
+    });
+
+    await expect(service.execute(updates, 2)).resolves.toEqual(updates);
+    expect(updateChunk).toHaveBeenCalledTimes(2);
+    expect(order).toEqual([
+      "update:1,2",
+      "refresh:1,2",
+      "dispatch:1,2",
+      "update:3",
+      "refresh:3",
+      "dispatch:3",
+    ]);
+  });
+
   it("returns empty result without running queue for empty input", async () => {
     const runQueue = vi.fn();
     const service = new IndexedWriteUpdateExecutorService<

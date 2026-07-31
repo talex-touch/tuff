@@ -659,6 +659,63 @@ describe('SearchIndexWorkerClient init gate', () => {
     })
   })
 
+  it('posts bounded metadata updates and resolves the worker summary', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    const updatePromise = client.updateFileMetadata([
+      {
+        id: 7,
+        name: 'canary.md',
+        extension: '.md',
+        size: 64,
+        ctime: new Date(2_000),
+        mtime: new Date(3_000),
+        lastIndexedAt: new Date(4_000),
+        isDir: false,
+        type: 'file'
+      }
+    ])
+    await vi.waitFor(() => expect(worker.messages).toHaveLength(2))
+
+    const message = worker.messages[1] as {
+      type: string
+      records: Array<Record<string, unknown>>
+    }
+    expect(message.type).toBe('updateFileMetadata')
+    expect(message.records).toHaveLength(1)
+    expect(message.records[0]).toMatchObject({ id: 7, name: 'canary.md', type: 'file' })
+    expect(message.records[0]).not.toHaveProperty('path')
+
+    worker.emit('message', {
+      type: 'result',
+      taskId: taskIdOf(worker.messages[1]),
+      result: { requested: 1, updated: 1, missingFileIds: [] }
+    })
+
+    await expect(updatePromise).resolves.toEqual({ requested: 1, updated: 1, missingFileIds: [] })
+  })
+
+  it('short-circuits empty metadata updates without touching the worker', async () => {
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    worker.emit('message', { type: 'result', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+
+    await expect(client.updateFileMetadata([])).resolves.toEqual({
+      requested: 0,
+      updated: 0,
+      missingFileIds: []
+    })
+    expect(worker.messages).toHaveLength(1)
+  })
+
   it('preserves nested SQLite busy metadata from structured worker errors and supports legacy strings', async () => {
     const client = new SearchIndexWorkerClient()
     const initPromise = client.init('/tmp/search-index.db')

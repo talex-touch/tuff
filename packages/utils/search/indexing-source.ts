@@ -887,6 +887,10 @@ export interface IndexedSourceReconcileResult {
   startedAt: number;
   completedAt: number;
   reason?: string;
+  /** Stable failure classification projected at the handler boundary. */
+  errorCode?: string;
+  retryable?: boolean;
+  reportId?: string;
 }
 
 export interface IndexedSourceResetRequest {
