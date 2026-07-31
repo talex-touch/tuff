@@ -20,6 +20,11 @@ import { resolveScanProgressSchemaShape } from '../box-tool/search-engine/scan-p
 import { databaseModule } from '../database'
 import { ocrService } from '../ocr/ocr-service'
 import { activeAppService } from './active-app'
+import {
+  projectFileIndexDashboardErrorCode,
+  projectFileIndexDashboardFileName,
+  projectFileIndexDashboardWorkerSnapshot
+} from './file-index-dashboard-projection'
 
 const dashboardLog = createLogger('TuffDashboard')
 
@@ -28,7 +33,7 @@ const tuffDashboardEvent = defineRawEvent<
   {
     ok: boolean
     snapshot?: unknown
-    error?: string
+    errorCode?: string
   }
 >('tuff:dashboard')
 
@@ -74,7 +79,7 @@ export class TuffDashboardModule extends BaseModule {
         dashboardLog.error('Failed to build snapshot', { error })
         return {
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          errorCode: 'TUFF_DASHBOARD_FAILED'
         }
       } finally {
         appendWorkflowDebugLog({
@@ -225,24 +230,26 @@ export class TuffDashboardModule extends BaseModule {
     const scanOverview = Array.isArray(scanRows)
       ? scanRows.map((row) => ({
           sourceId: row.sourceId ?? 'file-provider',
-          path: row.path ?? '',
+          fileName: projectFileIndexDashboardFileName(row.path),
           lastScanned: this.toIso(row.lastScanned)
         }))
       : []
 
     const entries = progress.entries.map((entry) => ({
-      path: entry.path,
+      fileName: projectFileIndexDashboardFileName(entry.path),
       status: entry.status,
       progress: entry.progress,
       processedBytes: entry.processedBytes,
       totalBytes: entry.totalBytes,
       updatedAt: this.toIso(entry.updatedAt),
-      lastError: entry.lastError
+      errorCode: projectFileIndexDashboardErrorCode(entry.lastError)
     }))
 
     const section = {
       summary: progress.summary,
-      watchedPaths: fileProvider.getWatchedPaths(),
+      watchedPathNames: fileProvider
+        .getWatchedPaths()
+        .map((watchedPath) => projectFileIndexDashboardFileName(watchedPath)),
       entries,
       scanProgress: scanOverview
     }
@@ -451,7 +458,8 @@ export class TuffDashboardModule extends BaseModule {
   private async buildWorkerSection(requestId: string | null) {
     const startedAt = performance.now()
     try {
-      const snapshot = await fileProvider.getWorkerStatusSnapshot()
+      const rawSnapshot = await fileProvider.getWorkerStatusSnapshot()
+      const snapshot = projectFileIndexDashboardWorkerSnapshot(rawSnapshot)
       appendWorkflowDebugLog({
         hid: 'H1',
         loc: 'tuff-dashboard.buildWorkerSection',

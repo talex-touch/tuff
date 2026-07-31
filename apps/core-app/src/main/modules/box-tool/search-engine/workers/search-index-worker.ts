@@ -37,6 +37,7 @@ import type {
 import type { LibSQLDatabase } from 'drizzle-orm/libsql'
 import type {
   FileIndexPersistenceRepository,
+  FileMetadataUpdateRecord,
   UpsertFileRecord
 } from '../file-index-persistence-repository'
 import process from 'node:process'
@@ -68,6 +69,12 @@ interface UpsertFilesMessage {
   records: UpsertFileRecord[]
 }
 
+interface UpdateFileMetadataMessage {
+  type: 'updateFileMetadata'
+  taskId: string
+  records: FileMetadataUpdateRecord[]
+}
+
 interface UpsertScanProgressMessage {
   type: 'upsertScanProgress'
   taskId: string
@@ -89,6 +96,7 @@ type WorkerRequest =
   | CountByProviderMessage
   | PersistEntriesMessage
   | UpsertFilesMessage
+  | UpdateFileMetadataMessage
   | UpsertScanProgressMessage
   | RemoveFileMessage
   | RemoveFileExtensionsMessage
@@ -246,6 +254,18 @@ async function handleMessage(message: WorkerRequest): Promise<void> {
           type: 'result',
           taskId,
           result: await filePersistenceRepository.upsertFiles(message.records)
+        })
+        break
+      }
+
+      case 'updateFileMetadata': {
+        if (!filePersistenceRepository) {
+          throw new Error('Worker not initialized — send init first')
+        }
+        respond({
+          type: 'result',
+          taskId,
+          result: await filePersistenceRepository.updateFileMetadata(message.records)
         })
         break
       }

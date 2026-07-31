@@ -26,17 +26,17 @@ interface ActiveAppInfo {
 }
 
 interface IndexingEntry {
-  path: string
+  fileName: string
   status: string | null
   progress: number | null
   processedBytes: number | null
   totalBytes: number | null
   updatedAt: string | null
-  lastError: string | null
+  errorCode: string | null
 }
 
 interface ScanProgressItem {
-  path: string
+  fileName: string
   lastScanned: string | null
 }
 
@@ -87,7 +87,7 @@ interface TuffDashboardSnapshot {
   }
   indexing: {
     summary: Record<string, number>
-    watchedPaths: string[]
+    watchedPathNames: string[]
     entries: IndexingEntry[]
     scanProgress: ScanProgressItem[]
   }
@@ -143,9 +143,9 @@ interface TuffDashboardSnapshot {
         startedAt: string | null
         finishedAt: string | null
         durationMs: number | null
-        error: string | null
+        errorCode: string | null
       } | null
-      lastError: string | null
+      errorCode: string | null
       uptimeMs: number | null
       metrics: {
         capturedAt: number
@@ -182,7 +182,7 @@ const transport = useTuffTransport()
 type DashboardResponse = {
   ok: boolean
   snapshot?: TuffDashboardSnapshot
-  error?: string
+  errorCode?: string
 }
 const dashboardEvent = defineRawEvent<{ limit: number }, DashboardResponse>('tuff:dashboard')
 
@@ -338,7 +338,9 @@ async function load(): Promise<void> {
       meta: { limit: limit.value, channel: 'tuff:dashboard' }
     })
     if (!response?.ok) {
-      throw new Error(response?.error || 'Unknown dashboard error')
+      error.value = t('settingAbout.dashboardLoadFailed')
+      snapshot.value = null
+      return
     }
     snapshot.value = response.snapshot ?? null
 
@@ -356,8 +358,8 @@ async function load(): Promise<void> {
         snapshotGeneratedAt: snapshot.value?.generatedAt ?? null
       }
     })
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
+  } catch {
+    error.value = t('settingAbout.dashboardLoadFailed')
   } finally {
     loading.value = false
     reportPerfToMain({
@@ -468,8 +470,8 @@ function formatTaskSummary(
   if (task.finishedAt) {
     parts.push(formatDateTime(task.finishedAt))
   }
-  if (task.error) {
-    parts.push(`ERR: ${truncate(task.error, 24)}`)
+  if (task.errorCode) {
+    parts.push(`ERR: ${task.errorCode}`)
   }
   return parts.join(' | ')
 }
@@ -496,20 +498,20 @@ function formatStatus(status?: string | null): string {
 function getWorkerStateIcon(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
   if (worker.state === 'busy') return 'i-ri-loader-4-line'
   if (worker.state === 'idle') return 'i-ri-checkbox-circle-line'
-  if (worker.lastError) return 'i-ri-error-warning-line'
+  if (worker.errorCode) return 'i-ri-error-warning-line'
   return 'i-ri-pause-circle-line'
 }
 
 function getWorkerStateHint(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
   if (worker.state === 'busy') return 'Worker 正在处理任务。'
   if (worker.state === 'idle') return 'Worker 已就绪。'
-  if (worker.lastError) return 'Worker 已离线：发生异常并退出，将在下次任务触发时按需重启。'
+  if (worker.errorCode) return 'Worker 已离线：发生异常并退出，将在下次任务触发时按需重启。'
   return 'Worker 按需启动：未触发任务时不会创建线程，因此显示为 offline。'
 }
 
 function getWorkerStateLabel(worker: TuffDashboardSnapshot['workers']['workers'][number]): string {
   if (worker.state !== 'offline') return worker.state
-  return worker.lastError ? 'offline (crashed)' : 'offline (lazy)'
+  return worker.errorCode ? 'offline (crashed)' : 'offline (lazy)'
 }
 
 function formatEvent(entry: Record<string, unknown> | null): string {
@@ -882,8 +884,8 @@ onUnmounted(() => {
                         <td>{{ formatDurationMs(worker.uptimeMs) }}</td>
                         <td>{{ formatTaskSummary(worker.lastTask) }}</td>
                         <td>
-                          <span v-if="worker.lastError" class="error-text">
-                            {{ truncate(worker.lastError, 40) }}
+                          <span v-if="worker.errorCode" class="error-text">
+                            {{ worker.errorCode }}
                           </span>
                           <span v-else-if="worker.state === 'offline'" class="no-error">
                             {{ t('settingAbout.dashboardNotStarted') }}
@@ -913,8 +915,12 @@ onUnmounted(() => {
               <div class="section-header">
                 <h2 class="section-title">[INDEXING_PROGRESS]</h2>
                 <div class="watched-paths">
-                  <span v-for="path in snapshot.indexing.watchedPaths" :key="path" class="path-tag">
-                    {{ path }}
+                  <span
+                    v-for="pathName in snapshot.indexing.watchedPathNames"
+                    :key="pathName"
+                    class="path-tag"
+                  >
+                    {{ pathName }}
                   </span>
                 </div>
               </div>
@@ -932,7 +938,7 @@ onUnmounted(() => {
                   <table class="debug-table">
                     <thead>
                       <tr>
-                        <th>PATH</th>
+                        <th>FILE</th>
                         <th>STATUS</th>
                         <th>PROGRESS</th>
                         <th>PROCESSED</th>
@@ -942,9 +948,12 @@ onUnmounted(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      <tr v-for="entry in snapshot.indexing.entries" :key="entry.path">
+                      <tr
+                        v-for="(entry, entryIndex) in snapshot.indexing.entries"
+                        :key="`${entry.fileName}:${entryIndex}`"
+                      >
                         <td class="path-cell">
-                          {{ entry.path }}
+                          {{ entry.fileName }}
                         </td>
                         <td>
                           <span class="status-tag" :class="`status-${entry.status}`">
@@ -956,8 +965,8 @@ onUnmounted(() => {
                         <td>{{ formatBytes(entry.totalBytes) }}</td>
                         <td>{{ formatDateTime(entry.updatedAt) }}</td>
                         <td>
-                          <span v-if="entry.lastError" class="error-text" :title="entry.lastError">
-                            {{ truncate(entry.lastError, 40) }}
+                          <span v-if="entry.errorCode" class="error-text">
+                            {{ entry.errorCode }}
                           </span>
                           <span v-else class="no-error">{{ t('settingAbout.dashboardNone') }}</span>
                         </td>

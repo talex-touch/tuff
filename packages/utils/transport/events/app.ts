@@ -73,7 +73,7 @@ import type {
   FileIndexAddPathRequest,
   FileIndexAddPathResult,
   FileIndexBatteryStatus,
-  FileIndexFailedFile,
+  FileIndexFailedFilesResult,
   FileIndexProgress,
   FileIndexRebuildRequest,
   FileIndexRebuildResult,
@@ -404,7 +404,7 @@ export const AppEvents = {
     failedFiles: defineEvent("app")
       .module("file-index")
       .event("failed-files")
-      .define<void, FileIndexFailedFile[]>(),
+      .define<void, FileIndexFailedFilesResult>(),
 
     /**
      * Add a path to file index watch list.

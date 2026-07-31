@@ -253,11 +253,7 @@ async function reindexAppDiagnosticTarget(mode: AppIndexReindexRequest['mode']) 
     }
 
     if (outcome.type === 'confirm') {
-      toast.error(
-        outcome.result.error ||
-          outcome.result.reason ||
-          t('settings.settingFileIndex.appDiagnosticReindexFailed')
-      )
+      toast.error(t('settings.settingFileIndex.appDiagnosticReindexFailed'))
       return
     }
 

@@ -7,7 +7,12 @@ export interface IndexedWriteUpdateExecutorQueueOptions {
 
 export interface IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated> {
   waitBeforeChunk: () => Promise<void>;
-  updateOne: (record: TUpdate) => Promise<void>;
+  updateOne?: (record: TUpdate) => Promise<void>;
+  /**
+   * Optional chunk-level writer. When provided, it runs once per chunk inside
+   * one writer-owned transaction, then refresh/side effects preserve ordering.
+   */
+  updateChunk?: (records: TUpdate[]) => Promise<void>;
   refreshUpdated: (records: TUpdate[]) => Promise<TUpdated[]>;
   dispatchUpdated: (records: TUpdated[]) => void;
   runQueue: (
@@ -36,6 +41,10 @@ export class IndexedWriteUpdateExecutorService<TUpdate, TUpdated> {
     TUpdate,
     TUpdated
   >["updateOne"];
+  private readonly updateChunk: IndexedWriteUpdateExecutorDeps<
+    TUpdate,
+    TUpdated
+  >["updateChunk"];
   private readonly refreshUpdated: IndexedWriteUpdateExecutorDeps<
     TUpdate,
     TUpdated
@@ -65,8 +74,12 @@ export class IndexedWriteUpdateExecutorService<TUpdate, TUpdated> {
   private readonly label: string;
 
   constructor(deps: IndexedWriteUpdateExecutorDeps<TUpdate, TUpdated>) {
+    if (!deps.updateOne && !deps.updateChunk) {
+      throw new Error("IndexedWriteUpdateExecutor requires updateOne or updateChunk");
+    }
     this.waitBeforeChunk = deps.waitBeforeChunk;
     this.updateOne = deps.updateOne;
+    this.updateChunk = deps.updateChunk;
     this.refreshUpdated = deps.refreshUpdated;
     this.dispatchUpdated = deps.dispatchUpdated;
     this.runQueue = deps.runQueue;
@@ -98,8 +111,12 @@ export class IndexedWriteUpdateExecutorService<TUpdate, TUpdated> {
         await this.waitBeforeChunk();
         const chunkStart = this.now();
 
-        for (const record of chunk) {
-          await this.updateOne(record);
+        if (this.updateChunk) {
+          await this.updateChunk(chunk);
+        } else {
+          for (const record of chunk) {
+            await this.updateOne!(record);
+          }
         }
 
         const refreshed = await this.refreshUpdated(chunk);

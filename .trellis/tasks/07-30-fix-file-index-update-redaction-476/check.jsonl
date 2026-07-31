@@ -1,0 +1,10 @@
+{"file":"apps/core-app/AGENTS.md","reason":"Check CoreApp Search/Indexing and validation compliance."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Check single-writer atomicity and operational-error privacy scenarios."}
+{"file":".trellis/tasks/07-30-fix-file-index-update-redaction-476/design.md","reason":"Check implementation against approved writer/public-boundary/telemetry scope."}
+{"file":".trellis/tasks/07-30-fix-file-index-update-redaction-476/research/error-route-inventory.md","reason":"Verify no known File Index raw route remains."}
+{"file":".trellis/tasks/07-30-fix-file-index-update-redaction-476/research/redaction-test-gap-matrix.md","reason":"Check required DB, transport, renderer and telemetry canaries."}
+{"file":"packages/utils/transport/events/types/file-index.ts","reason":"Check exact public File Index DTOs and decoders."}
+{"file":"apps/core-app/src/main/modules/box-tool/search-engine/file-index-persistence-repository.ts","reason":"Check worker-owned metadata transaction and validation."}
+{"file":"apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts","reason":"Check no main direct metadata update or raw failure broadcast remains."}
+{"file":"apps/core-app/src/main/channel/common.ts","reason":"Check every File Index handler projects failures before transport."}
+{"file":"apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue","reason":"Check localized code/report ID rendering and absence of raw error fallbacks."}

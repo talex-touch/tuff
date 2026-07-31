@@ -72,7 +72,8 @@ async function getFileIndexedSourceHealth(): Promise<IndexedSourceHealth> {
     fileProvider.getIndexStats()
   ])
   const isWarming = status.isInitializing || status.startupPending || !status.startupReady
-  const lastError = status.error || status.startupError || null
+  // 公共健康面只携带稳定分类码；原始错误文本保留在主进程本地诊断。
+  const lastError = status.errorCode || status.startupErrorCode || null
   const hasPendingPermissionRoots = fileProvider.getPendingWatchPermissionPaths().length > 0
 
   return {
@@ -135,7 +136,7 @@ async function getFileIndexedSourceProgress(): Promise<IndexedSourceProgress> {
     averageItemsPerSecond: status.averageItemsPerSecond,
     speedSampleCount: status.speedSampleCount,
     estimateBasis: status.estimateBasis,
-    reason: status.error ?? status.startupError ?? undefined
+    reason: status.errorCode ?? status.startupErrorCode ?? undefined
   }
 }
 

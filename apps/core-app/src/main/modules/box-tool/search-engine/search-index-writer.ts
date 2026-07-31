@@ -10,6 +10,8 @@ import { createLogger } from '../../../utils/logger'
 import { searchIndexCommitHub, type SearchIndexCommitHub } from './search-index-commit-hub'
 import { SearchIndexService } from './search-index-service'
 import type {
+  FileMetadataUpdateRecord,
+  FileMetadataUpdateSummary,
   FilePersistenceEntry,
   PersistEntriesSummary,
   UpsertFileRecord
@@ -18,6 +20,8 @@ import type { ExecWriteResult } from './workers/search-index-worker-types'
 import { SearchIndexWorkerClient } from './workers/search-index-worker-client'
 
 export type {
+  FileMetadataUpdateRecord,
+  FileMetadataUpdateSummary,
   FilePersistenceEntry,
   PersistEntriesSummary,
   UpsertFileRecord
@@ -128,6 +132,7 @@ export interface FilePersistencePort {
   waitUntilReady(): Promise<void>
   persistEntries(entries: FilePersistenceEntry[]): Promise<PersistEntriesSummary>
   upsertFiles(records: UpsertFileRecord[]): Promise<Array<Record<string, unknown>>>
+  updateFileMetadata(records: FileMetadataUpdateRecord[]): Promise<FileMetadataUpdateSummary>
   upsertScanProgress(paths: string[], lastScanned: string, sourceId?: string): Promise<number>
   removeFile(path: string): Promise<void>
   removeFileExtensions(fileId: number, keys: string[]): Promise<void>
@@ -159,6 +164,8 @@ export class SearchIndexWriter implements SearchIndexPhysicalWriter, SearchIndex
         await this.withAdmission(async () => await this.client.persistEntries(entries)),
       upsertFiles: async (records) =>
         await this.withAdmission(async () => await this.client.upsertFiles(records)),
+      updateFileMetadata: async (records) =>
+        await this.withAdmission(async () => await this.client.updateFileMetadata(records)),
       upsertScanProgress: async (paths, lastScanned, sourceId) =>
         await this.withAdmission(
           async () => await this.client.upsertScanProgress(paths, lastScanned, sourceId)

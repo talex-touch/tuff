@@ -49,6 +49,7 @@ import {
   getDeviceIdleReasonKey
 } from './device-idle-diagnostics'
 import { resolveIndexRebuildOutcome } from './index-rebuild-flow'
+import { appendFileIndexReportId, resolveFileIndexFailureCopy } from './file-index-failure-copy'
 import {
   countIndexingSourcesNeedingAttention,
   formatIndexingSourceTimestamp,
@@ -252,8 +253,8 @@ async function checkStatus() {
     if (stats) {
       indexStats.value = stats
     }
-  } catch (error) {
-    settingFileIndexLog.error('Failed to get status', error)
+  } catch {
+    settingFileIndexLog.error('Failed to get status', { operation: 'getStatus' })
   }
 }
 
@@ -264,8 +265,10 @@ async function loadSourceDiagnostics() {
   try {
     sourceDiagnostics.value = await settingsSdk.indexedSource.getDiagnostics()
     sourceDiagnosticsCheckedAt.value = new Date()
-  } catch (error) {
-    settingFileIndexLog.error('Failed to load indexing source diagnostics', error)
+  } catch {
+    settingFileIndexLog.error('Failed to load indexing source diagnostics', {
+      operation: 'getDiagnostics'
+    })
     sourceDiagnostics.value = null
     toast.error(t('settings.settingFileIndex.sourceDiagnosticsLoadFailed'))
   } finally {
@@ -280,8 +283,10 @@ async function loadSearchProviderConfig() {
   try {
     const response = await settingsSdk.indexedSource.getProviderConfig()
     searchProviderConfigs.value = response.providers
-  } catch (error) {
-    settingFileIndexLog.error('Failed to load search provider config', error)
+  } catch {
+    settingFileIndexLog.error('Failed to load search provider config', {
+      operation: 'getProviderConfig'
+    })
     searchProviderConfigs.value = []
     toast.error(t('settings.settingFileIndex.providerConfigLoadFailed'))
   } finally {
@@ -316,8 +321,10 @@ async function saveSearchProviderConfig(providers = searchProviderConfigs.value)
     })
     searchProviderConfigs.value = response.providers
     toast.success(t('settings.settingFileIndex.providerConfigSaved'))
-  } catch (error) {
-    settingFileIndexLog.error('Failed to save search provider config', error)
+  } catch {
+    settingFileIndexLog.error('Failed to save search provider config', {
+      operation: 'updateProviderConfig'
+    })
     toast.error(t('settings.settingFileIndex.providerConfigSaveFailed'))
     await loadSearchProviderConfig()
   } finally {
@@ -395,6 +402,37 @@ function isSourceMaintenanceRunning(sourceId: string): boolean {
   return Boolean(sourceMaintenanceAction.value[sourceId])
 }
 
+interface SourceActionFailure {
+  errorCode?: string
+  reportId?: string
+}
+
+function createSourceActionFailure(result: SourceActionFailure): Error & SourceActionFailure {
+  const failure = new Error('indexed-source-action-failed') as Error & SourceActionFailure
+  failure.errorCode = result.errorCode
+  failure.reportId = result.reportId
+  return failure
+}
+
+function asSourceActionFailure(error: unknown): SourceActionFailure {
+  if (error && typeof error === 'object') {
+    const candidate = error as SourceActionFailure
+    return {
+      errorCode: typeof candidate.errorCode === 'string' ? candidate.errorCode : undefined,
+      reportId: typeof candidate.reportId === 'string' ? candidate.reportId : undefined
+    }
+  }
+  return {}
+}
+
+function resolveSourceActionFailureReason(errorCode: string | undefined): string {
+  return resolveFileIndexFailureCopy(errorCode, {
+    databaseBusy: t('settings.settingFileIndex.alertDatabaseBusy'),
+    writerBusy: t('settings.settingFileIndex.alertWriterBusy'),
+    generic: t('settings.settingFileIndex.sourceActionFailedGeneric')
+  })
+}
+
 async function runSourceMaintenance(
   source: IndexedSourceDiagnostics,
   action: IndexedSourceMaintenanceAction
@@ -413,7 +451,7 @@ async function runSourceMaintenance(
         sourceId,
         reason: IndexedSourceScanReasons.ManualRebuild
       })
-      if (result.error) throw new Error(result.error)
+      if (result.errorCode || result.error) throw createSourceActionFailure(result)
       toast.success(
         t('settings.settingFileIndex.sourceActionScanSuccess', {
           indexedRecords: result.indexedRecords,
@@ -425,8 +463,8 @@ async function runSourceMaintenance(
         sourceId,
         reason: IndexedSourceReconcileReasons.ManualRepair
       })
-      if (result.errors > 0) {
-        throw new Error(result.reason || 'reconcile-failed')
+      if (result.errorCode || result.errors > 0) {
+        throw createSourceActionFailure(result)
       }
       toast.success(
         t('settings.settingFileIndex.sourceActionReconcileSuccess', {
@@ -441,9 +479,9 @@ async function runSourceMaintenance(
         clearSearchIndex: true,
         clearScanProgress: true
       })
-      if (result.error) throw new Error(result.error)
+      if (result.errorCode || result.error) throw createSourceActionFailure(result)
       if (!result.clearedSearchIndex && !result.clearedScanProgress) {
-        throw new Error('reset-cleared-nothing')
+        throw createSourceActionFailure({ errorCode: 'INDEXED_SOURCE_RESET_EMPTY' })
       }
       const message = resolveIndexingSourceResetSuccessMessage(result)
       toast.success(t(message.labelKey, message.values))
@@ -451,13 +489,20 @@ async function runSourceMaintenance(
 
     await loadSourceDiagnostics()
   } catch (error) {
-    settingFileIndexLog.error(`Indexed source ${action} failed`, error, { sourceId })
-    const errorMsg = error instanceof Error ? error.message : String(error)
+    const failure = asSourceActionFailure(error)
+    settingFileIndexLog.error(`Indexed source ${action} failed`, {
+      sourceId,
+      errorCode: failure.errorCode ?? null,
+      reportId: failure.reportId ?? null
+    })
     toast.error(
-      t('settings.settingFileIndex.sourceActionFailed', {
-        action: t(`settings.settingFileIndex.sourceAction.${action}`),
-        error: errorMsg
-      })
+      formatFailureWithReportId(
+        t('settings.settingFileIndex.sourceActionFailed', {
+          action: t(`settings.settingFileIndex.sourceAction.${action}`),
+          reason: resolveSourceActionFailureReason(failure.errorCode)
+        }),
+        failure.reportId
+      )
     )
   } finally {
     sourceMaintenanceAction.value = {
@@ -510,8 +555,10 @@ async function loadDeviceIdleSettings() {
     const settings = await settingsSdk.deviceIdle.getSettings()
     deviceIdleSettings.value = settings
     deviceIdleForm.value = toDeviceIdleForm(settings)
-  } catch (error) {
-    settingFileIndexLog.error('Failed to load device idle settings', error)
+  } catch {
+    settingFileIndexLog.error('Failed to load device idle settings', {
+      operation: 'getDeviceIdleSettings'
+    })
     toast.error(t('settings.settingFileIndex.deviceIdleLoadFailed'))
   }
 }
@@ -522,8 +569,10 @@ async function loadDeviceIdleDiagnostic() {
   try {
     deviceIdleDiagnostic.value = await settingsSdk.deviceIdle.getDiagnostic()
     deviceIdleDiagnosticCheckedAt.value = new Date()
-  } catch (error) {
-    settingFileIndexLog.error('Failed to load device idle diagnostic', error)
+  } catch {
+    settingFileIndexLog.error('Failed to load device idle diagnostic', {
+      operation: 'getDeviceIdleDiagnostic'
+    })
     deviceIdleDiagnostic.value = null
     toast.error(t('settings.settingFileIndex.deviceIdleDiagnosticLoadFailed'))
   } finally {
@@ -558,8 +607,10 @@ async function saveDeviceIdleSettings() {
     deviceIdleForm.value = toDeviceIdleForm(updated)
     await loadDeviceIdleDiagnostic()
     toast.success(t('settings.settingFileIndex.deviceIdleSaved'))
-  } catch (error) {
-    settingFileIndexLog.error('Failed to save device idle settings', error)
+  } catch {
+    settingFileIndexLog.error('Failed to save device idle settings', {
+      operation: 'updateDeviceIdleSettings'
+    })
     toast.error(t('settings.settingFileIndex.deviceIdleSaveFailed'))
   } finally {
     deviceIdleSaving.value = false
@@ -571,8 +622,10 @@ async function loadAppIndexSettings() {
     const settings = await settingsSdk.appIndex.getSettings()
     appIndexSettings.value = settings
     appIndexForm.value = toAppIndexForm(settings)
-  } catch (error) {
-    settingFileIndexLog.error('Failed to load app index settings', error)
+  } catch {
+    settingFileIndexLog.error('Failed to load app index settings', {
+      operation: 'getAppIndexSettings'
+    })
     toast.error(t('settings.settingFileIndex.appIndexLoadFailed'))
   }
 }
@@ -622,8 +675,10 @@ async function saveAppIndexSettings() {
     appIndexSettings.value = updated
     appIndexForm.value = toAppIndexForm(updated)
     toast.success(t('settings.settingFileIndex.appIndexSaved'))
-  } catch (error) {
-    settingFileIndexLog.error('Failed to save app index settings', error)
+  } catch {
+    settingFileIndexLog.error('Failed to save app index settings', {
+      operation: 'updateAppIndexSettings'
+    })
     toast.error(t('settings.settingFileIndex.appIndexSaveFailed'))
   } finally {
     appIndexSaving.value = false
@@ -707,9 +762,24 @@ const statusColor = computed(() => {
   return '#34c759'
 })
 
-const showError = computed(
-  () => indexStatus.value?.initializationFailed && indexStatus.value?.error
+const showError = computed(() =>
+  Boolean(indexStatus.value?.initializationFailed || indexStatus.value?.startupErrorCode)
 )
+
+/**
+ * 状态错误的本地化展示：只根据稳定 errorCode 映射文案并附带 reportId，
+ * 原始错误文本永远不会到达渲染进程（issue #476）。
+ */
+const statusErrorMessage = computed(() => {
+  const code = indexStatus.value?.errorCode ?? indexStatus.value?.startupErrorCode ?? null
+  return resolveFileIndexFailureCopy(code, {
+    databaseBusy: t('settings.settingFileIndex.alertDatabaseBusy'),
+    writerBusy: t('settings.settingFileIndex.alertWriterBusy'),
+    generic: t('settings.settingFileIndex.statusErrorGeneric')
+  })
+})
+
+const statusErrorReportId = computed(() => indexStatus.value?.reportId ?? null)
 
 const isIndexing = computed(() => indexStatus.value?.isInitializing || isRebuilding.value)
 
@@ -918,9 +988,16 @@ function getFileRebuildOutcomeMessages() {
       FILE_INDEX_DATABASE_BUSY: t('settings.settingFileIndex.alertDatabaseBusy'),
       FILE_INDEX_WRITER_DRAIN_TIMEOUT: t('settings.settingFileIndex.alertWriterBusy'),
       FILE_INDEX_REBUILD_FAILED: t('settings.settingFileIndex.alertRebuildGenericFailed'),
-      FILE_INDEX_REBUILD_HANDLER_FAILED: t('settings.settingFileIndex.alertRebuildGenericFailed')
+      FILE_INDEX_REBUILD_HANDLER_FAILED: t('settings.settingFileIndex.alertRebuildGenericFailed'),
+      FILE_INDEX_REBUILD_TRANSPORT_FAILED: t('settings.settingFileIndex.alertRebuildGenericFailed')
     }
   }
+}
+
+function formatFailureWithReportId(message: string, reportId?: string): string {
+  return appendFileIndexReportId(message, reportId, (id) =>
+    t('settings.settingFileIndex.reportIdSuffix', { reportId: id })
+  )
 }
 
 async function triggerRebuild() {
@@ -949,13 +1026,20 @@ async function triggerRebuild() {
   }
 
   isRebuilding.value = true
+  // 公共边界（issue #476）：toast 只使用本地化文案 + reportId，
+  // 绝不插值捕获到的原始 Error/message。
+  const rebuildFlowFailure = Symbol('rebuild-flow-failure')
+  let failureMessage = t('settings.settingFileIndex.alertRebuildGenericFailed')
+  let failureReportId: string | undefined
   try {
     const result = await handleRebuild()
     const outcome = resolveIndexRebuildOutcome(result, getFileRebuildOutcomeMessages())
     let successMessage = outcome.type === 'success' ? outcome.message : ''
 
     if (outcome.type === 'failure') {
-      throw new Error(outcome.message)
+      failureMessage = outcome.message
+      failureReportId = outcome.reportId
+      throw rebuildFlowFailure
     }
 
     if (outcome.type === 'confirm') {
@@ -992,14 +1076,14 @@ async function triggerRebuild() {
       const forced = await handleRebuild({ force: true })
       const forcedOutcome = resolveIndexRebuildOutcome(forced, getFileRebuildOutcomeMessages())
       if (forcedOutcome.type === 'failure') {
-        throw new Error(forcedOutcome.message)
+        failureMessage = forcedOutcome.message
+        failureReportId = forcedOutcome.reportId
+        throw rebuildFlowFailure
       }
       if (forcedOutcome.type === 'confirm') {
-        throw new Error(
-          forcedOutcome.result.error ||
-            forcedOutcome.result.reason ||
-            getFileRebuildOutcomeMessages().failure
-        )
+        failureMessage = getFileRebuildOutcomeMessages().failure
+        failureReportId = undefined
+        throw rebuildFlowFailure
       }
       successMessage = forcedOutcome.message
     }
@@ -1010,14 +1094,14 @@ async function triggerRebuild() {
       isRebuilding.value = false
     }, 2000)
   } catch (error: unknown) {
-    settingFileIndexLog.error('Rebuild failed', error)
     isRebuilding.value = false
-    const errorMsg = error instanceof Error ? error.message : String(error)
-    toast.error(
-      t('settings.settingFileIndex.alertRebuildFailed', {
-        error: errorMsg
-      })
-    )
+    if (error !== rebuildFlowFailure) {
+      // 未预期异常：只记录稳定操作名，回落到通用本地化文案。
+      settingFileIndexLog.error('Rebuild failed', { operation: 'rebuild' })
+      failureMessage = t('settings.settingFileIndex.alertRebuildGenericFailed')
+      failureReportId = undefined
+    }
+    toast.error(formatFailureWithReportId(failureMessage, failureReportId))
   }
 }
 </script>
@@ -1082,7 +1166,12 @@ async function triggerRebuild() {
           <div class="error-popover-desc">
             {{ t('settings.settingFileIndex.errorDesc') }}
           </div>
-          <pre class="error-popover-content">{{ indexStatus?.error }}</pre>
+          <div class="error-popover-content">
+            <p>{{ statusErrorMessage }}</p>
+            <p v-if="statusErrorReportId" class="error-report-id">
+              {{ t('settings.settingFileIndex.reportIdSuffix', { reportId: statusErrorReportId }) }}
+            </p>
+          </div>
         </div>
       </TxPopover>
     </TuffBlockSlot>

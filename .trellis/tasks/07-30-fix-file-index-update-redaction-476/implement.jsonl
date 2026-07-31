@@ -1,0 +1,15 @@
+{"file":"apps/core-app/AGENTS.md","reason":"Owns CoreApp Search/Indexing, typed transport, i18n and verification rules."}
+{"file":".trellis/tasks/07-13-search-crossplatform-audit/prd.md","reason":"Living search/file-indexing audit and single-writer risk backlog required before changes."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Contains App/File Search Index atomicity and Operational Error Privacy contracts."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides DB-worker-main-transport-renderer-telemetry boundary analysis."}
+{"file":".trellis/tasks/07-30-fix-file-index-update-redaction-476/research/files-update-sql-value-audit.md","reason":"Evidence-backed root cause and value-shape audit."}
+{"file":".trellis/tasks/07-30-fix-file-index-update-redaction-476/research/files-update-tempdb-reproduction.md","reason":"Deterministic two-connection reproduction and recovery design."}
+{"file":".trellis/tasks/07-30-fix-file-index-update-redaction-476/research/error-propagation-audit.md","reason":"Raw error propagation findings and scope boundaries."}
+{"file":"apps/core-app/src/main/modules/box-tool/search-engine/file-index-persistence-repository.ts","reason":"Worker-owned files persistence implementation to extend."}
+{"file":"apps/core-app/src/main/modules/box-tool/search-engine/search-index-writer.ts","reason":"FilePersistencePort and writer admission owner."}
+{"file":"apps/core-app/src/main/modules/box-tool/addon/files/file-provider.ts","reason":"Current main direct metadata update and raw status/broadcast owner."}
+{"file":"packages/utils/transport/events/types/file-index.ts","reason":"Public File Index DTO owner."}
+{"file":"apps/core-app/src/main/channel/common.ts","reason":"Main typed transport handler boundary."}
+{"file":"apps/core-app/src/renderer/src/composables/useFileIndexMonitor.ts","reason":"Renderer File Index SDK/logging boundary."}
+{"file":"apps/core-app/src/renderer/src/views/base/settings/SettingFileIndex.vue","reason":"User-visible status/rebuild error surface."}
+{"file":"apps/core-app/src/main/modules/sentry/telemetry-sanitizer.ts","reason":"Main final Sentry/Nexus sanitizer owner."}

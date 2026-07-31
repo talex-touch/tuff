@@ -162,7 +162,7 @@ export async function cleanupFileIndex(
     const { fileProvider } = await import('../modules/box-tool/addon/files/file-provider')
     const result = await fileProvider.rebuildIndex({ force: true })
     if (!result.success) {
-      rebuildErrors.push(result.error || 'File index rebuild failed')
+      rebuildErrors.push(result.errorCode || result.reason || 'File index rebuild failed')
     }
   } catch (error) {
     rebuildErrors.push(`File index rebuild failed: ${toErrorMessage(error)}`)
