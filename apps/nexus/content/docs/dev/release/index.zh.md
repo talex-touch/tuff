@@ -21,5 +21,5 @@
 - [Download SDK](../api/download.zh.mdc)
 - [插件开发与发布任务流](../getting-started/plugin-workflow.zh.mdc)
 - [性能与持久化落地](./performance-persistence.zh.md)
-- [仓库 Release Assets 核对清单](../../../../../../docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)
+- [仓库 Release Assets 核对清单](../../../../../../docs/engineering/nexus-release-assets-checklist.md)
 - [English version](./index.en.md)

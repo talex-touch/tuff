@@ -66,5 +66,5 @@ lifecycle, or use the scoped helper where appropriate.
 - [Download API index](./index.en.mdc)
 - [Release and download routes](../release/index.en.md)
 - [CoreApp Download Center](../../../../../core-app/src/main/modules/download/README.md)
-- [Release-assets checklist](../../../../../../docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)
+- [Release-assets checklist](../../../../../../docs/engineering/nexus-release-assets-checklist.md)
 - [Chinese version](./download.zh.mdc)
