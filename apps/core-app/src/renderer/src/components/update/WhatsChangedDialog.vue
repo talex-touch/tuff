@@ -6,15 +6,10 @@ import { TxModal } from '@talex-touch/tuffex/modal'
 import { TxTag } from '@talex-touch/tuffex/tag'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
 import { useReleaseNotesRuntime } from '~/modules/hooks/useReleaseNotesRuntime'
-import { createRendererLogger } from '~/utils/renderer-log'
-
-const whatsChangedLog = createRendererLogger('WhatsChangedDialog')
 
 const { t, locale } = useI18n()
-const router = useRouter()
-const { dialogVisible, dialogEntries, dialogVersion, closeDialog } = useReleaseNotesRuntime()
+const { dialogVisible, dialogEntries, closeDialog } = useReleaseNotesRuntime()
 const expandedVersions = ref<string[]>([])
 const busy = ref(false)
 
@@ -50,25 +45,6 @@ async function handleClose(): Promise<void> {
     busy.value = false
   }
 }
-
-async function handleViewDetails(): Promise<void> {
-  if (busy.value || !dialogVersion.value) return
-  busy.value = true
-  try {
-    await router.push({
-      path: '/setting',
-      query: {
-        section: 'update',
-        release: `v${dialogVersion.value}`
-      }
-    })
-    await closeDialog()
-  } catch (error) {
-    whatsChangedLog.warn('Failed to open release notes history', error)
-  } finally {
-    busy.value = false
-  }
-}
 </script>
 
 <template>
@@ -100,11 +76,8 @@ async function handleViewDetails(): Promise<void> {
 
     <template #footer>
       <div class="whats-changed-dialog__actions">
-        <TxButton :disabled="busy" @click="handleClose">
+        <TxButton type="primary" :loading="busy" @click="handleClose">
           {{ t('releaseNotes.close') }}
-        </TxButton>
-        <TxButton type="primary" :loading="busy" @click="handleViewDetails">
-          {{ t('releaseNotes.viewDetails') }}
         </TxButton>
       </div>
     </template>

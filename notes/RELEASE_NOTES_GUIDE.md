@@ -15,9 +15,9 @@
 
 Each version adds only the two files above. `<version>` is the complete semantic version without a `v` prefix. Do not maintain a second JSON/manifest/evidence source.
 
-Snapshot 构建不要求版本日志，也不会进入 App 内 What's Changed 历史。`notes/release-notes.config.json` 中强契约基线之前的既有 Release/Beta 版本按 Legacy 展示，不要求回填。
+Snapshot 构建不要求版本日志，也不会进入升级后一次性展示的“本次更新”摘要。`notes/release-notes.config.json` 中的基线只定义双语发布文档强契约的起点；基线及更早的 Release/Beta 版本无需回填，不代表 App 提供 Legacy 浏览能力。
 
-Snapshot builds are exempt and excluded from What's Changed history. Existing Release/Beta versions at or before the thresholds in `notes/release-notes.config.json` remain Legacy and are not backfilled.
+Snapshot builds are exempt and excluded from the one-time post-upgrade What's Changed summary. The thresholds in `notes/release-notes.config.json` only define where the bilingual publishing contract starts; Release/Beta versions at or before them are not backfilled and do not imply an in-app Legacy browser.
 
 ## 强制结构 / Required contract
 
@@ -125,12 +125,12 @@ The author may use any local editor, script, or AI tool. Only the final Markdown
 
 - GitHub Release 正文使用 author 双语文档；merged PR inventory 仅作为附录。
 - Nexus 只接收 generator 产生的双语正文与 metadata asset，不读取 GitHub body 作为 fallback。
-- CoreApp 打包当前版本完整日志和支持范围内的双语摘要索引。
-- 升级后首启弹窗可跨 Release/Beta 聚合摘要；Update 页从 Nexus 分页加载完整历史并使用本地缓存。
+- CoreApp 打包支持范围内的双语摘要索引，用于升级后一次性展示“本次更新”并记录已读版本。
+- “本次更新”弹窗可跨 Release/Beta 聚合摘要；Update 页不提供版本历史，客户端也不从 Nexus 分页读取或在本地缓存历史正文。
 - Release/Beta 缺少合规 author 文档时发版失败。自动 PR 列表、共享 `notes/update_<version>.md` 或 GitHub body 都不能绕过门禁。
 
 - GitHub Release uses the authored bilingual documents; merged PR inventory is appendix-only.
 - Nexus consumes generated bilingual metadata and never falls back to the GitHub body.
-- CoreApp bundles the current full notes plus the supported bilingual summary catalog.
-- The startup dialog aggregates Release/Beta summaries; Update history pages through Nexus with local cache.
+- CoreApp bundles the supported bilingual summary catalog for the one-time post-upgrade What's Changed dialog and records the acknowledged version.
+- The What's Changed dialog aggregates Release/Beta summaries; the Update page has no version-history browser, and the client neither pages history from Nexus nor caches historical notes locally.
 - Missing or invalid Release/Beta author documents fail the release. PR lists, shared Markdown, and GitHub body cannot bypass the gate.

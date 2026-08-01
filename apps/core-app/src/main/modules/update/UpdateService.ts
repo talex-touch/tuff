@@ -37,7 +37,6 @@ import { createLogger } from '../../utils/logger'
 import { getAppVersionSafe } from '../../utils/version-util'
 import { getAnalyticsMessageStore } from '../analytics/message-store'
 import { getSentryService } from '../sentry'
-import { getNetworkService } from '../network'
 import { operationalErrorService } from '../observability'
 /**
  * Update service for checking application updates in main process
@@ -269,18 +268,7 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
       this.releaseNotesService = new ReleaseNotesService({
         currentVersion: this.currentVersion,
         catalogPaths: this.getReleaseNotesCatalogPaths(),
-        cachePath: path.join(ctx.app.rootPath, 'config', 'release-notes-cache.json'),
-        officialBaseUrl: NEXUS_BASE_URL,
-        repository: new ReleaseNotesRepository(db),
-        request: async (url) => {
-          const response = await getNetworkService().request<unknown>({
-            method: 'GET',
-            url,
-            timeoutMs: 8000,
-            responseType: 'json'
-          })
-          return response.data
-        }
+        repository: new ReleaseNotesRepository(db)
       })
       updateLog.success('Update repositories initialized')
     } catch (error) {
@@ -621,40 +609,6 @@ export class UpdateServiceModule extends BaseModule<TalexEvents> {
             error: error instanceof Error ? error.message : 'Release notes are unavailable',
             errorCode: 'RELEASE_NOTES_BUNDLE_UNAVAILABLE',
             retryable: false
-          }
-        }
-      }),
-
-      tx.on(UpdateEvents.listReleaseNotes, async (payload) => {
-        try {
-          return {
-            success: true,
-            data: await this.getReleaseNotesService().list(payload)
-          }
-        } catch (error) {
-          updateLog.warn('Failed to list release notes', { error })
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Release notes history is unavailable',
-            errorCode: 'RELEASE_NOTES_HISTORY_UNAVAILABLE',
-            retryable: true
-          }
-        }
-      }),
-
-      tx.on(UpdateEvents.getReleaseNotes, async (payload) => {
-        try {
-          return {
-            success: true,
-            data: await this.getReleaseNotesService().get(payload.tag)
-          }
-        } catch (error) {
-          updateLog.warn('Failed to get release notes', { error })
-          return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Release notes are unavailable',
-            errorCode: 'RELEASE_NOTES_ENTRY_UNAVAILABLE',
-            retryable: true
           }
         }
       }),

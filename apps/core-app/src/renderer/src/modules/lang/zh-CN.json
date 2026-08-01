@@ -2356,23 +2356,7 @@
     "intro": "以下是升级后新增和调整的内容。",
     "channelRelease": "正式版",
     "channelBeta": "Beta",
-    "close": "关闭",
-    "viewDetails": "查看完整日志",
-    "historyTitle": "版本历史",
-    "historyDescription": "查看正式版与 Beta 版本的完整更新日志。",
-    "refresh": "刷新",
-    "channelTabs": "发布渠道",
-    "cachedNotice": "当前离线，正在显示最近缓存的版本日志。",
-    "versionList": "版本列表",
-    "legacy": "Legacy",
-    "current": "当前版本",
-    "loadFailed": "无法加载版本日志",
-    "retry": "重试",
-    "empty": "该渠道暂无版本日志",
-    "loading": "正在加载版本日志…",
-    "loadMore": "加载更多",
-    "backToVersions": "返回版本列表",
-    "selectVersion": "选择一个版本查看完整日志"
+    "close": "关闭"
   },
   "update": {
     "new_version_available": "发现新版本",
@@ -3626,7 +3610,8 @@
       "groupTitle": "应用更新",
       "groupDesc": "管理应用更新下载、状态与检查操作。",
       "channelTitle": "更新渠道",
-      "channelDesc": "预览渠道能更早体验新版本，但可能不够稳定。",
+      "channelDescRelease": "稳定版为默认；Beta 可提前体验新功能但可能不稳定。切换渠道后会立即检查更新。",
+      "channelDescBeta": "提前接收 Beta 及后续稳定版本，可能存在不稳定问题；切换后会立即检查更新。",
       "channelSnapshotLocked": "Snapshot 构建会按 Beta 渠道接收更新。",
       "channels": {
         "release": "稳定版（Release）",
@@ -3805,7 +3790,7 @@
       },
       "messages": {
         "loadFailed": "加载更新设置失败",
-        "channelSaved": "更新渠道已保存",
+        "channelSaved": "已切换到 {channel}，正在检查更新",
         "frequencySaved": "检查频率已保存",
         "autoDownloadSaved": "自动下载设置已保存",
         "installOnNormalQuitSaved": "正常退出安装设置已保存",

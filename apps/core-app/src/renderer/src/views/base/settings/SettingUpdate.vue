@@ -20,7 +20,6 @@ import { toast } from 'vue-sonner'
 import TuffBlockSelect from '~/components/tuff/TuffBlockSelect.vue'
 import TuffBlockSlot from '~/components/tuff/TuffBlockSlot.vue'
 import TuffGroupBlock from '~/components/tuff/TuffGroupBlock.vue'
-import ReleaseNotesHistory from '~/components/update/ReleaseNotesHistory.vue'
 import { useStartupInfo } from '~/modules/hooks/useStartupInfo'
 import { useUpdateRuntime } from '~/modules/hooks/useUpdateRuntime'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -102,11 +101,24 @@ const frequencyOptions = computed(() => [
   { value: 'never', label: t('settings.settingUpdate.frequency.never') }
 ])
 
-const channelSelectDisabled = computed(() => fetching.value || channelSaving.value)
+const lifecycleDisplay = computed(() => resolveUpdateLifecycleDisplay(lifecycleSnapshot.value))
+const channelSelectDisabled = computed(
+  () =>
+    fetching.value ||
+    channelSaving.value ||
+    manualChecking.value ||
+    !lifecycleDisplay.value.canCheck
+)
+const channelDescription = computed(() =>
+  t(
+    selectedChannel.value === AppPreviewChannel.BETA
+      ? 'settings.settingUpdate.channelDescBeta'
+      : 'settings.settingUpdate.channelDescRelease'
+  )
+)
 const frequencySelectDisabled = computed(() => fetching.value || frequencySaving.value)
 const showAdvancedSettings = computed(() => Boolean(appSetting?.dev?.advancedSettings))
 
-const lifecycleDisplay = computed(() => resolveUpdateLifecycleDisplay(lifecycleSnapshot.value))
 // Non-advanced mode keeps the status minimal; the full diagnostics grid only
 // expands for advanced users or whenever there is an error worth surfacing.
 const lifecycleExpanded = computed(
@@ -310,22 +322,40 @@ async function refreshCachedRelease(
 }
 
 async function handleChannelChange(value: AppPreviewChannel): Promise<void> {
-  if (!settings.value || channelSaving.value) return
+  if (!settings.value || channelSaving.value || !lifecycleDisplay.value.canCheck) return
 
   const normalizedValue = normalizeSupportedUpdateChannel(value)
-  const previous = selectedChannel.value
+  const previous = normalizeSupportedUpdateChannel(
+    normalizeStoredUpdateChannel(settings.value.updateChannel)
+  )
+  if (normalizedValue === previous) return
+
   selectedChannel.value = normalizedValue
   channelSaving.value = true
   try {
     await updateSettings({ updateChannel: normalizedValue })
     settings.value.updateChannel = normalizedValue
-    toast.success(t('settings.settingUpdate.messages.channelSaved'))
-    await refreshCachedRelease(normalizedValue)
   } catch (error) {
     settingUpdateLog.error('Failed to update channel', error)
     selectedChannel.value = previous
     toast.error(t('settings.settingUpdate.messages.saveFailed'))
+    channelSaving.value = false
+    return
+  }
+
+  const channelLabel =
+    channelOptions.value.find((option) => option.value === normalizedValue)?.label ??
+    normalizedValue
+  toast.success(t('settings.settingUpdate.messages.channelSaved', { channel: channelLabel }))
+  manualChecking.value = true
+  try {
+    await checkApplicationUpgrade(true)
+    await refreshStatus()
+    await refreshCachedRelease(normalizedValue)
+  } catch (error) {
+    settingUpdateLog.warn('Failed to check the selected update channel', error)
   } finally {
+    manualChecking.value = false
     channelSaving.value = false
   }
 }
@@ -682,21 +712,21 @@ function openAssetsDialog(): void {
       </div>
     </div>
 
-    <template v-if="showAdvancedSettings">
-      <TuffBlockSelect
-        v-model="selectedChannel"
-        :title="t('settings.settingUpdate.channelTitle')"
-        :description="t('settings.settingUpdate.channelDesc')"
-        default-icon="i-carbon-software"
-        active-icon="i-carbon-software-resource"
-        :disabled="channelSelectDisabled"
-        @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
-      >
-        <TxSelectItem v-for="item in channelOptions" :key="item.value" :value="item.value">
-          {{ item.label }}
-        </TxSelectItem>
-      </TuffBlockSelect>
+    <TuffBlockSelect
+      v-model="selectedChannel"
+      :title="t('settings.settingUpdate.channelTitle')"
+      :description="channelDescription"
+      default-icon="i-carbon-software"
+      active-icon="i-carbon-software-resource"
+      :disabled="channelSelectDisabled"
+      @update:model-value="(value) => handleChannelChange(value as AppPreviewChannel)"
+    >
+      <TxSelectItem v-for="item in channelOptions" :key="item.value" :value="item.value">
+        {{ item.label }}
+      </TxSelectItem>
+    </TuffBlockSelect>
 
+    <template v-if="showAdvancedSettings">
       <TuffBlockSelect
         v-model="selectedFrequency"
         :title="t('settings.settingUpdate.frequencyTitle')"
@@ -902,8 +932,6 @@ function openAssetsDialog(): void {
     </TuffBlockSlot>
   </TuffGroupBlock>
 
-  <ReleaseNotesHistory class="setting-update__release-notes" />
-
   <TModal
     v-model="assetsDialogVisible"
     :title="t('settings.settingUpdate.assetsTitle')"
@@ -983,10 +1011,6 @@ function openAssetsDialog(): void {
 </template>
 
 <style scoped>
-.setting-update__release-notes {
-  margin: 22px 16px 28px;
-}
-
 .native-trust-alert {
   display: flex;
   gap: 12px;

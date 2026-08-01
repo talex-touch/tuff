@@ -33,7 +33,7 @@ function writeNotes(root, version, zhSummary, enSummary) {
 }
 
 describe('generate release notes catalog', () => {
-  it('bundles all strict summaries but full Markdown only for the current version', () => {
+  it('bundles bilingual summaries for every enforced version', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tuff-notes-catalog-'))
     try {
       writeConfig(root)
@@ -51,8 +51,6 @@ describe('generate release notes catalog', () => {
           ['1.1.0', 'RELEASE'],
         ],
       )
-      assert.equal(catalog.entries[0].currentNotes, undefined)
-      assert.match(catalog.entries[1].currentNotes.zh, /## 变更内容/)
       assert.deepEqual(catalog.entries[1].summary.en, ['Release one', 'Release two', 'Release three'])
     }
     finally {

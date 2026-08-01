@@ -11,10 +11,6 @@ function catalog(currentVersion = '2.4.14'): BundledReleaseNotesCatalog {
   return {
     schemaVersion: 1,
     generatedForVersion: currentVersion,
-    legacyThrough: {
-      RELEASE: '2.4.13',
-      BETA: '2.4.13-beta.23'
-    },
     entries: [
       { version: '2.4.14-beta.1', tag: 'v2.4.14-beta.1', channel: 'BETA', summary },
       { version: '2.4.14-beta.2', tag: 'v2.4.14-beta.2', channel: 'BETA', summary },
@@ -22,8 +18,7 @@ function catalog(currentVersion = '2.4.14'): BundledReleaseNotesCatalog {
         version: '2.4.14',
         tag: 'v2.4.14',
         channel: 'RELEASE',
-        summary,
-        currentNotes: { zh: '# 中文\n', en: '# English\n' }
+        summary
       }
     ]
   }

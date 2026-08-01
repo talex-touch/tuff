@@ -50,12 +50,6 @@ export function buildReleaseNotesCatalog({ repoRoot, currentVersion }) {
         en: validation.documents.en.summary,
       },
     }
-    if (version === currentVersion) {
-      entry.currentNotes = {
-        zh: validation.documents.zh.markdown,
-        en: validation.documents.en.markdown,
-      }
-    }
     return entry
   })
 
@@ -64,7 +58,6 @@ export function buildReleaseNotesCatalog({ repoRoot, currentVersion }) {
   return {
     schemaVersion: 1,
     generatedForVersion: currentVersion,
-    legacyThrough: config.legacyThrough,
     entries,
   }
 }
