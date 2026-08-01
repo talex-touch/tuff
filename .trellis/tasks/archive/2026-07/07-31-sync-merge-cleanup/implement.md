@@ -38,15 +38,15 @@ pnpm quality:pr
 
 - [x] 使用 Conventional Commit 提交已验证变更。
 - [x] 确认不存在 secret、缓存、`node_modules`、生成物或大文件误入。
-- [ ] 执行 `git push origin master`，禁止 force 参数。
-- [ ] 再次 fetch 并验证：
+- [x] 执行 `git push origin master`，未使用 force 参数。
+- [x] 再次 fetch 并验证：
 
 ```bash
 git status --short --branch
 git rev-list --left-right --count master...origin/master
 ```
 
-预期工作区干净，ahead/behind 为 `0 0`。
+预期已满足：工作区干净，ahead/behind 为 `0 0`；功能与审计提交已推送到 `origin/master`。
 
 ## 审查门
 

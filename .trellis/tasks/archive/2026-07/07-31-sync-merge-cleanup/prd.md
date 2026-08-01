@@ -40,8 +40,8 @@
 - [x] detached 陈旧工作与无恢复价值的 stash 均保持原状；未执行 apply/pop/drop 或删除。
 - [x] 代码整理拆分为设置层级优化与版本历史移除两个独立提交，无无关大规模格式化。
 - [x] `git diff --check`、相关 lint、测试/类型检查通过；本地 `quality:pr` 退出码为 0，并补充完成 `origin/master...HEAD` 范围的无缓存 scoped ESLint。
-- [ ] 合法工作区变更已提交，`master` 已非强制推送至 `origin/master`。
-- [ ] 最终 `git status --short --branch` 干净且 `master...origin/master` 为 `0/0`。
+- [x] 合法工作区变更已提交，`master` 已通过非强制 `git push origin master` 推送。
+- [x] 推送后 `git status --short --branch` 干净，`master...origin/master` 为 `0/0`。
 
 ## Out of Scope
 
