@@ -73,7 +73,31 @@ function normalizeObject<T>(value: unknown, fallback: T): T {
 }
 
 function normalizeAppSetting(value: unknown, fallback: AppSetting): AppSetting {
-  return normalizeObject(value, fallback)
+  if (!isPlainObject(value)) return fallback
+
+  const setup = isPlainObject(value.setup) ? value.setup : {}
+  const window = isPlainObject(value.window) ? value.window : {}
+  const omniPanel = isPlainObject(value.omniPanel) ? value.omniPanel : {}
+
+  return {
+    ...value,
+    setup: {
+      ...setup,
+      hideDock: typeof setup.hideDock === 'boolean' ? setup.hideDock : fallback.setup.hideDock
+    },
+    window: {
+      ...window,
+      startSilent:
+        typeof window.startSilent === 'boolean' ? window.startSilent : fallback.window.startSilent
+    },
+    omniPanel: {
+      ...omniPanel,
+      autoMountFirstFeatureOnPluginInstall:
+        typeof omniPanel.autoMountFirstFeatureOnPluginInstall === 'boolean'
+          ? omniPanel.autoMountFirstFeatureOnPluginInstall
+          : fallback.omniPanel.autoMountFirstFeatureOnPluginInstall
+    }
+  } as AppSetting
 }
 
 function normalizeArray<T>(value: unknown, fallback: T): T {

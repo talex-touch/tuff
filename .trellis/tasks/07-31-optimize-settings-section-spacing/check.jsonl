@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Required focused tests, typechecks, lint, and git diff verification."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Review scoped CSS, component boundaries, and localization compliance."}
+{"file":".trellis/tasks/07-31-optimize-settings-section-spacing/prd.md","reason":"Acceptance checklist for reviewer mapping."}
+{"file":".trellis/tasks/07-31-optimize-settings-section-spacing/design.md","reason":"Compatibility invariants, explicit-false preservation, and layout boundaries."}
+{"file":".trellis/tasks/07-31-optimize-settings-section-spacing/research/findings.md","reason":"Expected affected paths and pre-existing dirty-file warning."}

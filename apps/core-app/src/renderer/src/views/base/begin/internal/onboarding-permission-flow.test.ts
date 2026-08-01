@@ -106,6 +106,7 @@ describe('onboarding file access outcomes', () => {
     mocks.isRequesting.value = false
     mocks.appSetting.setup.fileAccess = false
     mocks.appSetting.setup.fileAccessRootKey = ''
+    mocks.appSetting.setup.hideDock = false
     mocks.send.mockResolvedValue(false)
     mocks.check.mockResolvedValue(undefined)
     mocks.request.mockResolvedValue(undefined)
@@ -144,6 +145,16 @@ describe('onboarding file access outcomes', () => {
     expect(mocks.step).toHaveBeenCalledOnce()
     expect(mocks.appSetting.setup.fileAccess).toBe(false)
     expect(mocks.appSetting.setup.fileAccessRootKey).toBe('')
+  })
+
+  it('uses the enabled hide Dock default when the stored field is missing', async () => {
+    delete (mocks.appSetting.setup as { hideDock?: boolean }).hideDock
+    const wrapper = await mountPermissions()
+    const [skip] = wrapper.findAll('button')
+
+    await skip!.trigger('click')
+
+    expect(mocks.appSetting.setup.hideDock).toBe(true)
   })
 
   it('advances directly after a successful grant and records the observed roots', async () => {

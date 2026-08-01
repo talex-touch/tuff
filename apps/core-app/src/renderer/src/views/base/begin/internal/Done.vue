@@ -5,7 +5,7 @@ import { sleep } from '@talex-touch/utils/common/utils'
 import { TxButton } from '@talex-touch/tuffex/button'
 import { useAppSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
-import { AppEvents, CoreBoxEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { computed, onMounted, onUnmounted, ref, toRaw } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { toast } from 'vue-sonner'
@@ -45,10 +45,6 @@ type BeginnerState = {
   shortcutArmed?: boolean
 }
 
-type SetupState = {
-  hideDock?: boolean
-}
-
 function ensureBeginnerState(): void {
   if (!appSetting.beginner) {
     appSetting.beginner = {
@@ -72,21 +68,6 @@ function disarmDoneShortcut(): void {
 
 function handleWelcomeLoaded(animation: AnimationItem): void {
   animation.setSpeed(1.5)
-}
-
-function ensureSetupState(): SetupState {
-  return appSetting.setup as SetupState
-}
-
-async function enableHideDockDefault(): Promise<void> {
-  const setupState = ensureSetupState()
-  if (setupState.hideDock === true) return
-  setupState.hideDock = true
-  try {
-    await transport.send(AppEvents.system.traySettingsUpdate, { hideDock: true })
-  } catch {
-    // noop
-  }
 }
 
 async function completeBeginner(options: { openCoreBox?: boolean } = {}): Promise<boolean> {
@@ -150,7 +131,6 @@ async function runShortcutFinishFlow(): Promise<void> {
   isShortcutSuccess.value = true
   await sleep(420)
 
-  await enableHideDockDefault()
   const completed = await completeBeginner({ openCoreBox: true })
   if (!completed) {
     isShortcutFlowRunning.value = false

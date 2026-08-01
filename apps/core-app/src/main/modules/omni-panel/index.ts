@@ -7,6 +7,7 @@ import type {
   TuffQuery
 } from '@talex-touch/utils'
 import type { AppSetting } from '@talex-touch/utils/common/storage/entity/app-settings'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import type { IFeatureOmniTransfer, IPluginFeature, ITouchPlugin } from '@talex-touch/utils/plugin'
 import type { ITuffTransportMain } from '@talex-touch/utils/transport/main'
 import type { SelectionCaptureResult as HostSelectionCaptureResult } from '@talex-touch/utils/transport/events/types'
@@ -430,7 +431,7 @@ export class OmniPanelModule extends BaseModule {
       autoMountFirstFeatureOnPluginInstall:
         typeof omniPanel.autoMountFirstFeatureOnPluginInstall === 'boolean'
           ? omniPanel.autoMountFirstFeatureOnPluginInstall
-          : false,
+          : appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall,
       featureHubItems
     }
   }
@@ -583,7 +584,7 @@ export class OmniPanelModule extends BaseModule {
         autoMountFirstFeatureOnPluginInstall:
           typeof omniPanelRaw.autoMountFirstFeatureOnPluginInstall === 'boolean'
             ? omniPanelRaw.autoMountFirstFeatureOnPluginInstall
-            : false,
+            : appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall,
         featureHub: {
           items: this.featureRegistry.map((item) => ({
             ...item

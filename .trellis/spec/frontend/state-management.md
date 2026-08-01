@@ -60,6 +60,69 @@ Do not make renderer state the source of truth for host data.
 - Plugin secrets belong in secure plugin secret capability / secure-store facade, not ordinary UI state or localStorage.
 - JSON is acceptable for plugin config, sync payloads, catalog downloads, and evidence artifacts, but not as a replacement business SoT.
 
+### CoreApp APP_SETTING Boolean Defaults
+
+#### 1. Scope / Trigger
+
+- Trigger: changing a nested boolean default in `appSettingOriginData`, especially when Main and Renderer both read the field before or outside the owning settings page.
+
+#### 2. Signatures
+
+```ts
+const appSettingOriginData: AppSetting
+resolveMainStorageValue(StorageList.APP_SETTING, value: unknown): AppSetting
+isConfigSilentLaunchEnabled(settings?: SilentLaunchSettings | null): boolean
+resolveSilentLaunchIntent(options: { settings?: SilentLaunchSettings | null }): SilentLaunchIntent
+```
+
+#### 3. Contracts
+
+- `appSettingOriginData` is the canonical default owner; consumers must not keep an unrelated hard-coded fallback for the same field.
+- APP_SETTING hydration is top-level shallow. A historical nested object can replace the canonical nested object while omitting newly added fields.
+- Every storage normalizer and direct Main/Renderer reader uses: preserve the value when `typeof value === 'boolean'`; otherwise use the canonical default.
+- Explicit `false` is user intent and must survive onboarding, page initialization, runtime snapshots, and persistence. Do not use truthiness or a one-time force migration.
+- Startup gates remain independent of product defaults. Configuration-driven silent launch is allowed only when `beginner.init === true`; canonical new settings carry `false` until onboarding completes, and historical settings that omit `beginner` remain visible rather than silently hiding the first-run window. An unavailable settings snapshot also falls back to a visible normal launch. Explicit argv, login-item, or secondary-launch signals keep their documented priority.
+
+#### 4. Validation & Error Matrix
+
+- Missing, `null`, string, or numeric nested boolean -> canonical default.
+- Explicit `true` or `false` -> preserve exactly.
+- Onboarding explicitly incomplete + setting-derived silent default -> visible normal launch.
+- Historical settings omit `beginner` + silent setting/default enabled -> visible normal launch until onboarding is explicitly complete.
+- Settings snapshot unavailable -> visible normal launch.
+- Direct Main reader still hard-codes the old fallback -> fail focused cross-layer tests; UI state alone is not acceptance evidence.
+
+#### 5. Good / Base / Bad Cases
+
+- Good: a new nested boolean default changes once in `appSettingOriginData`, and missing-field tests cover storage, Main runtime, Renderer, and onboarding readers.
+- Base: an existing profile stores `false`; every layer continues reporting and persisting `false`.
+- Bad: `Boolean(storedValue)`, `storedValue === true`, `storedValue ?? false`, or onboarding completion writes `true` unconditionally after the canonical default changed.
+
+#### 6. Tests Required
+
+- Canonical defaults: assert the exact value in `appSettingOriginData`.
+- Main storage: assert missing/invalid fallback and explicit-false preservation.
+- Each direct runtime reader: assert missing and explicit-false cases.
+- Renderer/onboarding: mount with deleted fields and with explicit `false`; assert initialization does not overwrite intent.
+- Startup-sensitive defaults: assert onboarding and explicit-signal priority separately.
+
+#### 7. Wrong vs Correct
+
+##### Wrong
+
+```ts
+const enabled = storedValue === true
+if (onboardingDone) appSetting.setup.hideDock = true
+```
+
+##### Correct
+
+```ts
+const enabled =
+  typeof storedValue === 'boolean' ? storedValue : appSettingOriginData.setup.hideDock
+// Onboarding persists the resolved/user-selected value; it never forces true.
+```
+
 ### CoreApp Cloud Sync Feedback Control
 
 - `APP_SETTING` participates in cloud sync, but its `sync` subtree also stores local runtime metadata (`status`, cursors, queue depth, timestamps, failure counters, and operation sequence). Runtime metadata writes must not mark `APP_SETTING` dirty or schedule another push.

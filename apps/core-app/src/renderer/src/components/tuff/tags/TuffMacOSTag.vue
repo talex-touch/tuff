@@ -13,8 +13,8 @@ const props = withDefaults(
 const { t } = useI18n()
 const text = computed(() => {
   const label = props.label ?? ''
-  const fallback = t('settings.platformTags.macOnly', 'macOS Only')
-  return label || fallback || 'macOS Only'
+  const fallback = t('settings.platformTags.macOnly', 'Only')
+  return label || fallback || 'Only'
 })
 </script>
 

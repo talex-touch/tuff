@@ -1,6 +1,7 @@
 <script setup lang="ts" name="SetupPermissions">
 import { TxButton } from '@talex-touch/tuffex/button'
 import { TxSwitch } from '@talex-touch/tuffex/switch'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents, StorageEvents } from '@talex-touch/utils/transport/events'
 import type { Component } from 'vue'
@@ -36,7 +37,7 @@ const { roots, isGranted, isDenied, isChecking, isRequesting, check, request, op
 const settings = ref({
   autoStart: false,
   showTray: true,
-  hideDock: false
+  hideDock: appSettingOriginData.setup.hideDock
 })
 const traySettingsAvailable = ref(false)
 const isContinuing = ref(false)
@@ -66,13 +67,17 @@ if (!appSetting.setup) {
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
-    hideDock: false,
+    hideDock: appSettingOriginData.setup.hideDock,
     runAsAdmin: false,
     customDesktop: false,
     lastPermissionAudit: createDefaultPermissionAudit()
   }
 } else if (!appSetting.setup.lastPermissionAudit) {
   appSetting.setup.lastPermissionAudit = createDefaultPermissionAudit()
+}
+
+if (typeof appSetting.setup.hideDock !== 'boolean') {
+  appSetting.setup.hideDock = appSettingOriginData.setup.hideDock
 }
 
 if (appSetting.setup.fileAccess === undefined) {
@@ -96,7 +101,10 @@ async function loadSettings(): Promise<void> {
   if (appSetting.setup) {
     settings.value.autoStart = appSetting.setup.autoStart ?? false
     settings.value.showTray = appSetting.setup.showTray ?? true
-    settings.value.hideDock = appSetting.setup.hideDock ?? false
+    settings.value.hideDock =
+      typeof appSetting.setup.hideDock === 'boolean'
+        ? appSetting.setup.hideDock
+        : appSettingOriginData.setup.hideDock
   }
 
   try {
@@ -177,7 +185,10 @@ function advance(): void {
           fileAccessRootKey: isGranted.value ? createRequiredFileAccessRootKey(roots.value) : '',
           autoStart: settings.value.autoStart,
           showTray: settings.value.showTray,
-          hideDock: settings.value.hideDock ?? false,
+          hideDock:
+            typeof settings.value.hideDock === 'boolean'
+              ? settings.value.hideDock
+              : appSettingOriginData.setup.hideDock,
           lastPermissionAudit:
             appSetting.setup.lastPermissionAudit ?? createDefaultPermissionAudit()
         }

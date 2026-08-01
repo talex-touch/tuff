@@ -58,15 +58,16 @@ watch(
 
       <SettingAssistant />
 
-      <div data-settings-section="file-index">
-        <SettingFileIndex
-          v-if="showAdvancedSettings"
-          :force-advanced-settings="targetSection === 'file-index'"
-        />
+      <div
+        v-if="showAdvancedSettings"
+        class="AppSettings-Section"
+        data-settings-section="file-index"
+      >
+        <SettingFileIndex :force-advanced-settings="targetSection === 'file-index'" />
       </div>
 
-      <div data-settings-section="everything">
-        <SettingEverything v-if="isWindows" />
+      <div v-if="isWindows" class="AppSettings-Section" data-settings-section="everything">
+        <SettingEverything />
       </div>
 
       <SettingDownload v-if="showAdvancedSettings" />
@@ -117,6 +118,25 @@ watch(
 
   border-radius: 4px;
   border: 1px solid var(--tx-border-color);
+}
+
+.AppSettings-Container,
+.AppSettings-Section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.AppSettings-Container > :deep(*),
+.AppSettings-Section > :deep(*) {
+  margin-bottom: 0;
+}
+
+.AppSettings-Container :deep(.TBlockSlot-Container) {
+  min-height: 56px;
+  height: auto;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .AppSettings-Container {

@@ -8,6 +8,7 @@ import type { TrayState } from './tray-state-manager'
 import process from 'node:process'
 import { StorageList } from '@talex-touch/utils'
 import { getLogger } from '@talex-touch/utils/common/logger'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { app, Tray } from 'electron'
 import {
   TalexEvents,
@@ -410,7 +411,8 @@ export class TrayManager extends BaseModule {
   private getHideDockConfig(): boolean {
     try {
       const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
-      return appConfig?.setup?.hideDock ?? false
+      const stored = appConfig?.setup?.hideDock
+      return typeof stored === 'boolean' ? stored : appSettingOriginData.setup.hideDock
     } catch (error) {
       trayManagerLog.error('Failed to read hideDock config', { error })
       return false
@@ -420,7 +422,8 @@ export class TrayManager extends BaseModule {
   private getStartSilentConfig(): boolean {
     try {
       const appConfig = getMainConfig(StorageList.APP_SETTING) as AppSetting
-      return appConfig?.window?.startSilent ?? false
+      const stored = appConfig?.window?.startSilent
+      return typeof stored === 'boolean' ? stored : appSettingOriginData.window.startSilent
     } catch (error) {
       trayManagerLog.error('Failed to read startSilent config', { error })
       return false

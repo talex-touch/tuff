@@ -5,6 +5,7 @@
   Allows users to configure window closing, minimizing, and auto-start behavior
 -->
 <script setup lang="ts" name="SettingWindow">
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { onMounted, ref } from 'vue'
@@ -25,7 +26,7 @@ const settingWindowLog = createRendererLogger('SettingWindow')
 const windowSettings = ref({
   closeToTray: true,
   startMinimized: false,
-  startSilent: false,
+  startSilent: appSettingOriginData.window.startSilent,
   autoStart: false
 })
 
@@ -34,7 +35,7 @@ function ensureWindowSettings(): void {
     appSetting.window = {
       closeToTray: true,
       startMinimized: false,
-      startSilent: false
+      startSilent: appSettingOriginData.window.startSilent
     }
     return
   }
@@ -45,8 +46,8 @@ function ensureWindowSettings(): void {
   if (appSetting.window.startMinimized === undefined) {
     appSetting.window.startMinimized = false
   }
-  if (appSetting.window.startSilent === undefined) {
-    appSetting.window.startSilent = false
+  if (typeof appSetting.window.startSilent !== 'boolean') {
+    appSetting.window.startSilent = appSettingOriginData.window.startSilent
   }
 }
 

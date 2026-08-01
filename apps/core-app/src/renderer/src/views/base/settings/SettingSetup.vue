@@ -7,6 +7,7 @@
 <script setup lang="ts" name="SettingSetup">
 import type { AppIndexSettings } from '@talex-touch/utils/transport/events/types'
 import { TxButton } from '@talex-touch/tuffex/button'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { useNotificationSdk, useSettingsSdk } from '@talex-touch/utils/renderer'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
@@ -106,9 +107,9 @@ const permissions = ref<{
 const settings = ref({
   autoStart: false,
   showTray: true,
-  hideDock: false,
-  startSilent: false,
-  omniAutoMountFeature: false,
+  hideDock: appSettingOriginData.setup.hideDock,
+  startSilent: appSettingOriginData.window.startSilent,
+  omniAutoMountFeature: appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall,
   hideNoisySystemApps: true,
   runAsAdmin: false,
   customDesktop: false
@@ -131,7 +132,7 @@ function ensureWindowSettings(): void {
     appSetting.window = {
       closeToTray: true,
       startMinimized: false,
-      startSilent: false
+      startSilent: appSettingOriginData.window.startSilent
     }
     return
   }
@@ -142,8 +143,8 @@ function ensureWindowSettings(): void {
   if (appSetting.window.startMinimized === undefined) {
     appSetting.window.startMinimized = false
   }
-  if (appSetting.window.startSilent === undefined) {
-    appSetting.window.startSilent = false
+  if (typeof appSetting.window.startSilent !== 'boolean') {
+    appSetting.window.startSilent = appSettingOriginData.window.startSilent
   }
 }
 
@@ -153,7 +154,8 @@ function ensureOmniPanelSettings(): void {
       enableShortcut: false,
       enableMouseLongPress: true,
       mouseLongPressDurationMs: 600,
-      autoMountFirstFeatureOnPluginInstall: false,
+      autoMountFirstFeatureOnPluginInstall:
+        appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall,
       featureHub: {
         items: []
       }
@@ -170,8 +172,9 @@ function ensureOmniPanelSettings(): void {
   if (appSetting.omniPanel.mouseLongPressDurationMs === undefined) {
     appSetting.omniPanel.mouseLongPressDurationMs = 600
   }
-  if (appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall === undefined) {
-    appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall = false
+  if (typeof appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall !== 'boolean') {
+    appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall =
+      appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall
   }
   if (!appSetting.omniPanel.featureHub || typeof appSetting.omniPanel.featureHub !== 'object') {
     appSetting.omniPanel.featureHub = {
@@ -194,13 +197,17 @@ if (!appSetting.setup) {
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
-    hideDock: false,
+    hideDock: appSettingOriginData.setup.hideDock,
     runAsAdmin: false,
     customDesktop: false,
     lastPermissionAudit: createDefaultPermissionAudit()
   }
 } else if (!appSetting.setup.lastPermissionAudit) {
   appSetting.setup.lastPermissionAudit = createDefaultPermissionAudit()
+}
+
+if (typeof appSetting.setup.hideDock !== 'boolean') {
+  appSetting.setup.hideDock = appSettingOriginData.setup.hideDock
 }
 
 if (appSetting.setup.fileAccess === undefined) {
@@ -330,7 +337,10 @@ async function loadSettings(): Promise<void> {
   if (appSetting.setup) {
     settings.value.autoStart = appSetting.setup.autoStart ?? false
     settings.value.showTray = appSetting.setup.showTray ?? true
-    settings.value.hideDock = appSetting.setup.hideDock ?? false
+    settings.value.hideDock =
+      typeof appSetting.setup.hideDock === 'boolean'
+        ? appSetting.setup.hideDock
+        : appSettingOriginData.setup.hideDock
     settings.value.runAsAdmin = appSetting.setup.runAsAdmin ?? false
     settings.value.customDesktop = appSetting.setup.customDesktop ?? false
   }
@@ -356,10 +366,8 @@ async function loadSettings(): Promise<void> {
     traySettingsAvailable.value = false
   }
 
-  settings.value.startSilent = Boolean(appSetting.window?.startSilent)
-  settings.value.omniAutoMountFeature = Boolean(
-    appSetting.omniPanel?.autoMountFirstFeatureOnPluginInstall
-  )
+  settings.value.startSilent = appSetting.window.startSilent
+  settings.value.omniAutoMountFeature = appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall
 
   await loadAppIndexSettings()
 }
@@ -740,7 +748,7 @@ function getStatusIconClass(status: string): string {
     />
 
     <TuffBlockSwitch
-      v-if="isMacOS && traySettingsAvailable"
+      v-if="showAdvancedSettings && isMacOS && traySettingsAvailable"
       v-model="settings.hideDock"
       :title="t('settings.setup.hideDock')"
       :description="t('settings.setup.hideDockDesc')"
@@ -754,6 +762,7 @@ function getStatusIconClass(status: string): string {
     </TuffBlockSwitch>
 
     <TuffBlockSwitch
+      v-if="showAdvancedSettings"
       v-model="settings.startSilent"
       :title="t('settings.setup.startSilent')"
       :description="t('settings.setup.startSilentDesc')"
@@ -763,6 +772,7 @@ function getStatusIconClass(status: string): string {
     />
 
     <TuffBlockSwitch
+      v-if="showAdvancedSettings"
       v-model="settings.omniAutoMountFeature"
       :title="t('settings.setup.omniAutoMountFeature')"
       :description="t('settings.setup.omniAutoMountFeatureDesc')"

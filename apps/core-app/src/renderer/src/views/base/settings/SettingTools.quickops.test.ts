@@ -177,6 +177,7 @@ vi.mock('~/modules/storage/app-storage', () => ({
 
 function resetAppSetting(): void {
   appSettingMock.dev.advancedSettings = false
+  appSettingMock.omniPanel.autoMountFirstFeatureOnPluginInstall = false
   appSettingMock.quickOps = createQuickOpsSetting()
 }
 
@@ -257,6 +258,43 @@ describe('SettingTools QuickOps settings boundary', () => {
     expect(text).not.toContain('settingTools.quickOpsDefaultScreenCleanDuration')
     expect(text).not.toContain('settingTools.quickOpsDefaultScreenCleanMode')
     expect(text).not.toContain('writing sprint 45/12')
+  })
+
+  it('shows low-frequency utility controls only when advanced settings are enabled', async () => {
+    const wrapper = mountSettingTools()
+    await nextTick()
+
+    expect(wrapper.text()).not.toContain('settingTools.autoPaste')
+    expect(wrapper.text()).not.toContain('settingTools.autoClear')
+    expect(wrapper.text()).not.toContain('settingTools.autoHide')
+
+    appSettingMock.dev.advancedSettings = true
+    await nextTick()
+
+    expect(wrapper.text()).toContain('settingTools.autoPaste')
+    expect(wrapper.text()).toContain('settingTools.autoClear')
+    expect(wrapper.text()).toContain('settingTools.autoHide')
+
+    wrapper.unmount()
+  })
+
+  it('defaults a missing OmniPanel auto-mount value to true and preserves explicit false', async () => {
+    delete (appSettingMock.omniPanel as { autoMountFirstFeatureOnPluginInstall?: boolean })
+      .autoMountFirstFeatureOnPluginInstall
+
+    const missingWrapper = mountSettingTools()
+    await nextTick()
+    await nextTick()
+
+    expect(appSettingMock.omniPanel.autoMountFirstFeatureOnPluginInstall).toBe(true)
+    missingWrapper.unmount()
+
+    appSettingMock.omniPanel.autoMountFirstFeatureOnPluginInstall = false
+    const falseWrapper = mountSettingTools()
+    await nextTick()
+
+    expect(appSettingMock.omniPanel.autoMountFirstFeatureOnPluginInstall).toBe(false)
+    falseWrapper.unmount()
   })
 
   it('leaves stored QuickOps preferences untouched while plugin owns the settings surface', async () => {
