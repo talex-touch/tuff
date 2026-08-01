@@ -17,7 +17,7 @@
 
 ## 安全、功能与文档门禁
 
-- **依赖安全告警需要重新分诊** — 上次审计记录的 Dependabot 告警（含 Nexus 使用的 `next-auth` / `@auth/core`）未有可追踪的处置清单。需在 GitHub Security dashboard 逐项确认当前告警、运行时可达性、升级或豁免理由与回归门禁；不要以锁文件位置替代可达性判断。
+- **35 个 Dependabot 告警未分诊** — 本次 GitHub push 回执报告默认分支仍有 3 critical、15 high、14 moderate、3 low；其中包括 Nexus 使用的 `next-auth` / `@auth/core`。需在 GitHub Security dashboard 逐项确认运行时可达性、升级或豁免理由与回归门禁；不要以锁文件位置替代可达性判断。
 - **高权限插件审计未形成终态** — 已关闭的既有 issue 不等于任务验收完成；`07-27-audit-plugin-privileged-security` 尚缺完整 capability/数据流矩阵和最终审计产物。应补齐证据后归档，避免把历史关闭项重复当作开放风险。
 - **TuffEx 文档审计未形成可验收终态** — `07-28-tuffex-docs-audit` 要求覆盖 114 个组件与 118 组双语文档、形成 `report.md`、完成对抗验证与 issue disposition；当前仍无该报告及验收记录。完成覆盖证明、去重和用户确认后的 issue 处置。
 
