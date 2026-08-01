@@ -31,18 +31,14 @@ describe('docs prerender routes', () => {
     ])
   })
 
-  it('adds directory routes for index documents', () => {
+  it('keeps index documents as explicit prerender inputs', () => {
     expect(normalizeDocsContentRoute('dev/index.zh.mdc')).toEqual([
       '/en/docs/dev/index',
       '/zh/docs/dev/index',
-      '/en/docs/dev',
-      '/zh/docs/dev',
     ])
     expect(normalizeDocsContentRoute('index.en.mdc')).toEqual([
       '/en/docs/index',
       '/zh/docs/index',
-      '/en/docs',
-      '/zh/docs',
     ])
   })
 
@@ -56,11 +52,9 @@ describe('docs prerender routes', () => {
     writeFileSync(join(docsDir, 'automation.zh.md'), '# Runtime only')
 
     expect(createDocsPrerenderRoutes(root)).toEqual([
-      '/en/docs/guide',
       '/en/docs/guide/automation',
       '/en/docs/guide/index',
       '/en/docs/guide/start',
-      '/zh/docs/guide',
       '/zh/docs/guide/automation',
       '/zh/docs/guide/index',
       '/zh/docs/guide/start',
@@ -148,16 +142,24 @@ describe('docs prerender routes', () => {
     expect(evidence.missingRequiredDocsRoutes).toEqual([])
     expect(evidence.docsApiRoutes).toEqual([...docsApiPrerenderRoutes])
     expect(evidence.docsRoutes).toEqual(expect.arrayContaining([
-      '/en/docs',
-      '/zh/docs',
+      '/en/docs/index',
+      '/zh/docs/index',
       '/en/docs/dev/getting-started/quickstart',
       '/zh/docs/dev/getting-started/quickstart',
-      '/en/docs/dev/components',
-      '/zh/docs/dev/components',
+      '/en/docs/dev/components/index',
+      '/zh/docs/dev/components/index',
       '/en/docs/dev/components/tabs',
       '/zh/docs/dev/components/tabs',
       '/en/docs/guide/start',
       '/zh/docs/guide/start',
+    ]))
+    expect(evidence.docsRoutes).not.toEqual(expect.arrayContaining([
+      '/en/docs',
+      '/zh/docs',
+      '/en/docs/dev',
+      '/zh/docs/dev',
+      '/en/docs/dev/components',
+      '/zh/docs/dev/components',
     ]))
     expect(evidence.docsPageApiRoutes).toEqual([])
     expect(evidence.docsRoutes).not.toEqual(expect.arrayContaining([

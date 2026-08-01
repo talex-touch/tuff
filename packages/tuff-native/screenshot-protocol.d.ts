@@ -6,10 +6,10 @@ import type {
   NativeProtocolBinding,
 } from './protocol'
 
-export type ScreenshotCarrierUnavailableReason =
-  | 'disabled-by-env'
-  | 'binding-unavailable'
-  | 'export-mismatch'
+export type ScreenshotCarrierUnavailableReason
+  = | 'disabled-by-env'
+    | 'binding-unavailable'
+    | 'export-mismatch'
 
 export interface CreateScreenshotCarrierOptions {
   binding: NativeProtocolBinding
@@ -25,9 +25,9 @@ export interface LoadScreenshotCarrierOptions
   baseDir?: string
 }
 
-export type ScreenshotCarrierLoadResult =
-  | { carrier: NapiCarrier; reason: null }
-  | { carrier: null; reason: ScreenshotCarrierUnavailableReason }
+export type ScreenshotCarrierLoadResult
+  = | { carrier: NapiCarrier, reason: null }
+    | { carrier: null, reason: ScreenshotCarrierUnavailableReason }
 
 export declare const SCREENSHOT_PROTOCOL_EXPORTS: readonly string[]
 

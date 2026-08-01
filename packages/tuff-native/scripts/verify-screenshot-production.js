@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const process = require('node:process')
 const { loadScreenshotCarrier } = require('../screenshot-protocol')
 
 const loaded = loadScreenshotCarrier({
@@ -12,7 +13,8 @@ assert.ok(loaded.carrier, `screenshot carrier unavailable: ${loaded.reason}`)
 try {
   const capability = loaded.carrier
     .handshake()
-    .capabilities.find(item => item.id === 'screenshot.capture')
+    .capabilities
+    .find(item => item.id === 'screenshot.capture')
   assert.ok(capability, 'screenshot.capture capability missing')
   assert.notEqual(capability.engine, 'deterministic-test')
 

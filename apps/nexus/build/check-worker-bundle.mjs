@@ -58,6 +58,14 @@ const expectedStaticRoutes = [
   ...publicPrerenderRoutes,
   '/en/docs',
   '/zh/docs',
+  '/en/docs/dev',
+  '/zh/docs/dev',
+  '/en/docs/dev/getting-started/quickstart',
+  '/zh/docs/dev/getting-started/quickstart',
+  '/en/docs/dev/components',
+  '/zh/docs/dev/components',
+  '/en/docs/guide/start',
+  '/zh/docs/guide/start',
   ...docsApiPrerenderRoutes,
 ]
 const expectedStaticRoutePatterns = ['/en/docs/*', '/zh/docs/*']

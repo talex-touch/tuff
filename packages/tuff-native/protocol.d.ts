@@ -10,24 +10,24 @@ import type {
 } from './protocol-contract'
 
 export interface NativeProtocolBinding {
-  nativeProtocolV1Handshake(control: string): string
-  nativeProtocolV1Invoke(
+  nativeProtocolV1Handshake: (control: string) => string
+  nativeProtocolV1Invoke: (
     control: string,
     attachments: Buffer[],
-  ): Promise<{ control: string; attachments: Buffer[] }>
-  nativeProtocolV1OpenStream(
+  ) => Promise<{ control: string, attachments: Buffer[] }>
+  nativeProtocolV1OpenStream: (
     control: string,
     attachments: Buffer[],
-    onFrame: (packet: { control: string; attachments: Buffer[] }) => void,
-  ): { control: string; attachments: Buffer[] }
-  nativeProtocolV1Ack(control: string): void
-  nativeProtocolV1Cancel(control: string): void
-  nativeProtocolV1Dispose(): Promise<void>
+    onFrame: (packet: { control: string, attachments: Buffer[] }) => void,
+  ) => { control: string, attachments: Buffer[] }
+  nativeProtocolV1Ack: (control: string) => void
+  nativeProtocolV1Cancel: (control: string) => void
+  nativeProtocolV1Dispose: () => Promise<void>
 }
 
 export interface NativeCarrierLogger {
-  info?(message: string, metadata: Record<string, unknown>): void
-  warn?(message: string, metadata: Record<string, unknown>): void
+  info?: (message: string, metadata: Record<string, unknown>) => void
+  warn?: (message: string, metadata: Record<string, unknown>) => void
 }
 
 export interface NapiCarrierOptions {
