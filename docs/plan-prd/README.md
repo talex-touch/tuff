@@ -1,6 +1,6 @@
 # Talex Touch 项目文档中心
 
-> 更新时间：2026-07-16
+> 更新时间：2026-08-01
 > 定位：规划入口。当前任务状态以 Trellis 为准；本目录只保留优先级、路线、专题和验收边界。
 
 ## 先看这四个入口
@@ -27,7 +27,7 @@ P0 稳定化三项均已关闭：
 - [`TODO-AI.md`](./TODO-AI.md)：AI Stable 与后续产品化。
 - [`TODO-R3.md`](./TODO-R3.md)：Search / Indexing Runtime。
 - [`TODO-nexus.md`](./TODO-nexus.md)：Nexus 性能与 deployed evidence。
-- [`docs/TODO-BACKLOG-LONG-TERM.md`](./docs/TODO-BACKLOG-LONG-TERM.md)：长期债务池。
+- [`TODO-BACKLOG-LONG-TERM.md`](./TODO-BACKLOG-LONG-TERM.md)：长期债务池。
 - [`04-implementation/Stability-Architecture-Optimization-2026-07-04.md`](./04-implementation/Stability-Architecture-Optimization-2026-07-04.md)：稳定性代码落点与验证矩阵。
 - [`../engineering/security-hardening-handoff-2026-07-15.md`](../engineering/security-hardening-handoff-2026-07-15.md)：安全加固交接。
 - [Search & Cross-Platform Audit](../../.trellis/tasks/07-13-search-crossplatform-audit/prd.md)：搜索/跨平台 backlog。

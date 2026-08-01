@@ -23,5 +23,5 @@ through Download Center.
 - [Download SDK](../api/download.en.mdc)
 - [Plugin development and publishing workflow](../getting-started/plugin-workflow.en.mdc)
 - [Performance and persistence rollout](./performance-persistence.en.md)
-- [Repository release-assets checklist](../../../../../../docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)
+- [Repository release-assets checklist](../../../../../../docs/engineering/nexus-release-assets-checklist.md)
 - [Chinese version](./index.zh.md)

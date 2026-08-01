@@ -64,5 +64,5 @@ code: |
 - [Download API 索引](./index.zh.mdc)
 - [发布与下载路由](../release/index.zh.md)
 - [CoreApp Download Center](../../../../../core-app/src/main/modules/download/README.md)
-- [Release Assets 核对清单](../../../../../../docs/plan-prd/docs/NEXUS-RELEASE-ASSETS-CHECKLIST.md)
+- [Release Assets 核对清单](../../../../../../docs/engineering/nexus-release-assets-checklist.md)
 - [English version](./download.en.mdc)
