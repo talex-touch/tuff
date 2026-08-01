@@ -7,6 +7,7 @@
 <script setup lang="ts" name="SettingTools">
 import type { ShortcutWithStatus } from '~/modules/channel/main/shortcon'
 
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { ShortcutType } from '@talex-touch/utils/common/storage/entity/shortcut-settings'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { defineEvent } from '@talex-touch/utils/transport/event/builder'
@@ -299,7 +300,8 @@ function ensureOmniPanelSettings(): void {
       enableShortcut: false,
       enableMouseLongPress: true,
       mouseLongPressDurationMs: DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS,
-      autoMountFirstFeatureOnPluginInstall: false,
+      autoMountFirstFeatureOnPluginInstall:
+        appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall,
       featureHub: {
         items: []
       }
@@ -318,8 +320,9 @@ function ensureOmniPanelSettings(): void {
     OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_OPTIONS,
     DEFAULT_OMNI_PANEL_MOUSE_LONG_PRESS_DURATION_MS
   )
-  if (appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall === undefined) {
-    appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall = false
+  if (typeof appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall !== 'boolean') {
+    appSetting.omniPanel.autoMountFirstFeatureOnPluginInstall =
+      appSettingOriginData.omniPanel.autoMountFirstFeatureOnPluginInstall
   }
   if (!appSetting.omniPanel.featureHub || typeof appSetting.omniPanel.featureHub !== 'object') {
     appSetting.omniPanel.featureHub = {
@@ -828,6 +831,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Auto paste time selection -->
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.tools.autoPaste.time"
       :title="t('settingTools.autoPaste')"
       :description="t('settingTools.autoPasteDesc')"
@@ -854,6 +858,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Auto clear time selection -->
     <TuffBlockSelect
+      v-if="showAdvancedSettings"
       v-model="appSetting.tools.autoClear"
       :title="t('settingTools.autoClear')"
       :description="t('settingTools.autoClearDesc')"
@@ -915,6 +920,7 @@ watch(shortcutsDialogVisible, (visible) => {
 
     <!-- Auto hide switch -->
     <TuffBlockSwitch
+      v-if="showAdvancedSettings"
       v-model="appSetting.tools.autoHide"
       :title="t('settingTools.autoHide')"
       :description="t('settingTools.autoHideDesc')"

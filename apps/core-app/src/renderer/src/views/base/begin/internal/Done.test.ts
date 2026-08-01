@@ -100,6 +100,19 @@ describe('onboarding completion', () => {
     expect(mocks.hide).toHaveBeenCalledOnce()
   })
 
+  it('preserves an explicit hide Dock false through shortcut completion', async () => {
+    mocks.saveDurable.mockResolvedValue({ success: true, version: 1 })
+    mountDone()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', ctrlKey: true }))
+    await vi.waitFor(() => expect(mocks.hide).toHaveBeenCalledOnce())
+
+    expect(mocks.appSetting.setup.hideDock).toBe(false)
+    expect(mocks.saveDurable).toHaveBeenCalledWith(
+      expect.objectContaining({ setup: expect.objectContaining({ hideDock: false }) })
+    )
+  })
+
   it('does not mutate the admission flag before durable persistence settles', async () => {
     let resolveSave!: (result: { success: boolean; version: number }) => void
     mocks.saveDurable.mockImplementation(

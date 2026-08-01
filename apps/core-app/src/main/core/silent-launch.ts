@@ -1,7 +1,13 @@
+import process from 'node:process'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
+
 export const SILENT_LAUNCH_ARG = '--silent'
 export const HIDDEN_LAUNCH_ARG = '--hidden'
 
 export interface SilentLaunchSettings {
+  beginner?: {
+    init?: boolean
+  }
   window?: {
     startSilent?: boolean
   }
@@ -22,6 +28,18 @@ export function argvHasSilentLaunchFlag(argv: readonly string[] = process.argv):
 
 export function dataHasSilentLaunchFlag(data?: Record<string, unknown> | null): boolean {
   return data?.silent === true || data?.hidden === true || data?.startSilent === true
+}
+
+export function isConfigSilentLaunchEnabled(settings?: SilentLaunchSettings | null): boolean {
+  if (!settings) return false
+
+  const storedStartSilent = settings.window?.startSilent
+  const startSilent =
+    typeof storedStartSilent === 'boolean'
+      ? storedStartSilent
+      : appSettingOriginData.window.startSilent
+
+  return settings.beginner?.init === true && startSilent
 }
 
 export function resolveSilentLaunchIntent(options: {
@@ -46,7 +64,7 @@ export function resolveSilentLaunchIntent(options: {
     // Electron may throw in unsupported environments; keep falling back to settings.
   }
 
-  if (options.settings?.window?.startSilent === true) {
+  if (isConfigSilentLaunchEnabled(options.settings)) {
     return { silent: true, source: 'setting' }
   }
 

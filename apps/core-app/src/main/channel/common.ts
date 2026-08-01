@@ -52,6 +52,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { StorageList, isLocalhostUrl } from '@talex-touch/utils'
+import { appSettingOriginData } from '@talex-touch/utils/common/storage/entity/app-settings'
 import { isSupportedWallpaperImagePath } from '@talex-touch/utils/common/wallpaper'
 import { normalizeAbsolutePath } from '@talex-touch/utils/common/utils/safe-path'
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
@@ -75,7 +76,7 @@ import { APP_SCHEMA, FILE_SCHEMA } from '../config/default'
 import { genTouchChannel } from '../core/channel-core'
 import { LanguageChangedEvent, TalexEvents, touchEventBus } from '../core/eventbus/touch-event'
 import { setQuitIntent } from '../core/quit-intent'
-import { SILENT_LAUNCH_ARG } from '../core/silent-launch'
+import { isConfigSilentLaunchEnabled, SILENT_LAUNCH_ARG } from '../core/silent-launch'
 import { BaseModule } from '../modules/abstract-base-module'
 import { getStartupAnalytics } from '../modules/analytics'
 import { appProvider } from '../modules/box-tool/addon/apps/app-provider'
@@ -1249,7 +1250,7 @@ export class CommonChannelModule extends BaseModule {
 
   private updateAutoStart(enabled: AutoStartUpdateRequest): AutoStartUpdateResponse {
     const appSettings = this.getAppSettingsSnapshot()
-    const startSilent = appSettings?.window?.startSilent === true
+    const startSilent = isConfigSilentLaunchEnabled(appSettings)
 
     const options: Electron.Settings = {
       openAtLogin: enabled === true,
@@ -1285,7 +1286,8 @@ export class CommonChannelModule extends BaseModule {
 
     return {
       showTray: setup.showTray !== false,
-      hideDock: setup.hideDock === true,
+      hideDock:
+        typeof setup.hideDock === 'boolean' ? setup.hideDock : appSettingOriginData.setup.hideDock,
       available,
       trayReady: false,
       windowVisible: touchApp.window.window.isVisible()
@@ -1302,7 +1304,11 @@ export class CommonChannelModule extends BaseModule {
     const nextShowTray =
       typeof payload?.showTray === 'boolean' ? payload.showTray : setup.showTray !== false
     const nextHideDock =
-      typeof payload?.hideDock === 'boolean' ? payload.hideDock : setup.hideDock === true
+      typeof payload?.hideDock === 'boolean'
+        ? payload.hideDock
+        : typeof setup.hideDock === 'boolean'
+          ? setup.hideDock
+          : appSettingOriginData.setup.hideDock
 
     saveMainConfig(StorageList.APP_SETTING, {
       ...appSettings,

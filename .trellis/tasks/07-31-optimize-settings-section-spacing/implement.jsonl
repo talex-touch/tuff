@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Vue SFC composition, scoped styling, TuffEx usage, and i18n rules for settings UI changes."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Focused CoreApp renderer/main verification and dirty-worktree guardrails."}
+{"file":".trellis/tasks/07-31-optimize-settings-section-spacing/prd.md","reason":"Approved requirements and acceptance criteria for visibility, defaults, tags, and spacing."}
+{"file":".trellis/tasks/07-31-optimize-settings-section-spacing/design.md","reason":"Cross-layer default normalization and page-scoped layout design."}
+{"file":".trellis/tasks/07-31-optimize-settings-section-spacing/research/findings.md","reason":"Code-backed locations, fallback conflicts, layout diagnosis, and test targets."}

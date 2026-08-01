@@ -104,6 +104,13 @@ vi.mock('electron', async (importOriginal) => {
   }
 })
 
+vi.mock('talex-mica-electron', () => ({
+  IS_WINDOWS_11: false,
+  MicaBrowserWindow: class {},
+  useMicaElectron: vi.fn(),
+  WIN10: 0
+}))
+
 vi.mock('node:process', () => ({
   default: {
     ...process,
@@ -126,6 +133,12 @@ vi.mock('../storage', () => ({
 vi.mock('../box-tool/core-box/manager', () => ({
   coreBoxManager: {
     trigger: vi.fn()
+  }
+}))
+
+vi.mock('../screenshot-session', () => ({
+  screenshotSessionModule: {
+    startStandalone: vi.fn(async () => undefined)
   }
 }))
 
@@ -182,6 +195,15 @@ describe('TrayManager', () => {
     appMock.removeListener.mockReset()
     getDockIconMock.mockReturnValue({
       isEmpty: vi.fn(() => false)
+    })
+    getMainConfigMock.mockReturnValue({
+      setup: {
+        showTray: true,
+        hideDock: false
+      },
+      window: {
+        startSilent: false
+      }
     })
   })
 
@@ -437,6 +459,24 @@ describe('TrayManager', () => {
       trayReady: true,
       windowVisible: false
     })
+  })
+
+  it('defaults missing Dock and silent-start booleans to enabled while preserving false', () => {
+    const trayManager = new TrayManager() as unknown as {
+      getHideDockConfig: () => boolean
+      getStartSilentConfig: () => boolean
+    }
+
+    getMainConfigMock.mockReturnValue({ setup: {}, window: {} } as never)
+    expect(trayManager.getHideDockConfig()).toBe(true)
+    expect(trayManager.getStartSilentConfig()).toBe(true)
+
+    getMainConfigMock.mockReturnValue({
+      setup: { hideDock: false },
+      window: { startSilent: false }
+    } as never)
+    expect(trayManager.getHideDockConfig()).toBe(false)
+    expect(trayManager.getStartSilentConfig()).toBe(false)
   })
 
   it('does not throw when activate fires after main window destroyed', () => {

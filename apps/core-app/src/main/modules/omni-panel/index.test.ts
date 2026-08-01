@@ -11,7 +11,8 @@ const {
   isXdotoolAvailableMock,
   captureSelectionMock,
   runNexusSceneMock,
-  extractTranslatedTextFromSceneRunMock
+  extractTranslatedTextFromSceneRunMock,
+  saveMainConfigMock
 } = vi.hoisted(() => ({
   getTuffTransportMainMock: vi.fn(() => ({
     on: vi.fn(() => () => {}),
@@ -37,7 +38,8 @@ const {
   isXdotoolAvailableMock: vi.fn(async () => true),
   captureSelectionMock: vi.fn(),
   runNexusSceneMock: vi.fn(),
-  extractTranslatedTextFromSceneRunMock: vi.fn()
+  extractTranslatedTextFromSceneRunMock: vi.fn(),
+  saveMainConfigMock: vi.fn()
 }))
 
 vi.mock('node:module', () => ({
@@ -204,7 +206,7 @@ vi.mock('../nexus/scene-client', () => ({
 
 vi.mock('../storage', () => ({
   getMainConfig: vi.fn(() => ({})),
-  saveMainConfig: vi.fn()
+  saveMainConfig: saveMainConfigMock
 }))
 
 vi.mock('../box-tool/core-box/window', () => ({
@@ -429,7 +431,7 @@ describe('OmniPanelModule selection capture diagnostics', () => {
 })
 
 describe('OmniPanelModule auto-mount', () => {
-  it('keeps all OmniPanel triggers disabled by default', () => {
+  it('enables auto-mount by default while preserving explicit trigger and auto-mount values', () => {
     const module = new OmniPanelModule() as unknown as {
       getSettingsSnapshot: (setting: Record<string, unknown>) => {
         enableShortcut: boolean
@@ -441,7 +443,7 @@ describe('OmniPanelModule auto-mount', () => {
     expect(module.getSettingsSnapshot({})).toMatchObject({
       enableShortcut: false,
       enableMouseLongPress: false,
-      autoMountFirstFeatureOnPluginInstall: false
+      autoMountFirstFeatureOnPluginInstall: true
     })
     expect(
       module.getSettingsSnapshot({
@@ -456,6 +458,43 @@ describe('OmniPanelModule auto-mount', () => {
       enableMouseLongPress: true,
       autoMountFirstFeatureOnPluginInstall: true
     })
+    expect(
+      module.getSettingsSnapshot({
+        omniPanel: {
+          autoMountFirstFeatureOnPluginInstall: false
+        }
+      })
+    ).toMatchObject({
+      autoMountFirstFeatureOnPluginInstall: false
+    })
+  })
+
+  it('preserves explicit false and uses the enabled default when persisting registry settings', () => {
+    const module = new OmniPanelModule() as unknown as {
+      featureRegistry: Array<Record<string, unknown>>
+      persistFeatureRegistry: () => void
+    }
+    module.featureRegistry = []
+
+    vi.mocked(getMainConfig).mockReturnValue({
+      omniPanel: { autoMountFirstFeatureOnPluginInstall: false }
+    } as never)
+    module.persistFeatureRegistry()
+    expect(saveMainConfigMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        omniPanel: expect.objectContaining({ autoMountFirstFeatureOnPluginInstall: false })
+      })
+    )
+
+    vi.mocked(getMainConfig).mockReturnValue({} as never)
+    module.persistFeatureRegistry()
+    expect(saveMainConfigMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        omniPanel: expect.objectContaining({ autoMountFirstFeatureOnPluginInstall: true })
+      })
+    )
   })
 
   it('prioritizes declared omniTransfer features and dedupes repeated install events', async () => {

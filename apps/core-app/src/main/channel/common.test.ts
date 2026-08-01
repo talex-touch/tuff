@@ -29,7 +29,9 @@ const {
   pluginManagerPluginsMock,
   boxItemManagerHandleSyncRequestMock,
   setLocaleMock,
-  touchEventBusEmitMock
+  touchEventBusEmitMock,
+  getMainConfigMock,
+  saveMainConfigMock
 } = vi.hoisted(() => ({
   fsReadFileMock: vi.fn(),
   execFileMock: vi.fn(
@@ -67,7 +69,9 @@ const {
   indexedRuntimeReconcileSourceMock: vi.fn(),
   indexedRuntimeScanSourceMock: vi.fn(),
   pluginManagerPluginsMock: new Map<string, Record<string, unknown>>(),
-  boxItemManagerHandleSyncRequestMock: vi.fn()
+  boxItemManagerHandleSyncRequestMock: vi.fn(),
+  getMainConfigMock: vi.fn(() => ({})),
+  saveMainConfigMock: vi.fn()
 }))
 
 vi.mock('@talex-touch/utils', async (importOriginal) => {
@@ -351,8 +355,8 @@ vi.mock('../modules/storage', () => ({
     }))
   },
   isMainStorageReady: vi.fn(() => true),
-  getMainConfig: vi.fn(() => ({})),
-  saveMainConfig: vi.fn(async () => undefined),
+  getMainConfig: getMainConfigMock,
+  saveMainConfig: saveMainConfigMock,
   subscribeMainConfig: vi.fn(() => vi.fn())
 }))
 
@@ -513,6 +517,20 @@ type CommonChannelModuleTestInstance = {
     handler: (payload: unknown, context: unknown) => Promise<unknown> | unknown
   ) => unknown
   readSystemFile: (payload: { source?: string; allowMissing?: boolean }) => Promise<string>
+  buildTraySettingsFromAppSettings: (
+    appSettings: Record<string, unknown>,
+    touchApp: {
+      moduleManager: { getModule: () => null }
+      window: { window: { isVisible: () => boolean } }
+    }
+  ) => { hideDock: boolean }
+  updateTraySettings: (
+    payload: undefined,
+    touchApp: {
+      moduleManager: { getModule: () => null }
+      window: { window: { isVisible: () => boolean } }
+    }
+  ) => { hideDock: boolean }
 }
 
 afterEach(() => {
@@ -545,6 +563,37 @@ describe('CommonChannelModule private helpers', () => {
       success: false,
       error: 'The operation failed. Please retry.'
     })
+  })
+
+  it('preserves false and uses the enabled Dock default in tray snapshot and update helpers', () => {
+    const module = new CommonChannelModule() as unknown as CommonChannelModuleTestInstance
+    const touchApp = {
+      moduleManager: { getModule: () => null },
+      window: { window: { isVisible: () => false } }
+    }
+
+    expect(module.buildTraySettingsFromAppSettings({ setup: {} }, touchApp).hideDock).toBe(true)
+    expect(
+      module.buildTraySettingsFromAppSettings({ setup: { hideDock: false } }, touchApp).hideDock
+    ).toBe(false)
+
+    getMainConfigMock
+      .mockReturnValueOnce({ setup: {} })
+      .mockReturnValueOnce({ setup: {} })
+      .mockReturnValueOnce({ setup: { hideDock: false } })
+      .mockReturnValueOnce({ setup: { hideDock: false } })
+
+    expect(module.updateTraySettings(undefined, touchApp).hideDock).toBe(true)
+    expect(saveMainConfigMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ setup: expect.objectContaining({ hideDock: true }) })
+    )
+
+    expect(module.updateTraySettings(undefined, touchApp).hideDock).toBe(false)
+    expect(saveMainConfigMock).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ setup: expect.objectContaining({ hideDock: false }) })
+    )
   })
 
   it('readSystemFile reuses inflight promise and caches successful reads', async () => {

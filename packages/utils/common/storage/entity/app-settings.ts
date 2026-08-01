@@ -179,7 +179,7 @@ const _appSettingOriginData = {
     enableShortcut: false,
     enableMouseLongPress: true,
     mouseLongPressDurationMs: 600,
-    autoMountFirstFeatureOnPluginInstall: false,
+    autoMountFirstFeatureOnPluginInstall: true,
     featureHub: {
       items: [] as Array<Record<string, unknown>>,
     },
@@ -372,7 +372,7 @@ const _appSettingOriginData = {
   window: {
     closeToTray: true,
     startMinimized: false,
-    startSilent: false,
+    startSilent: true,
   },
   setup: {
     fileAccess: false,
@@ -383,7 +383,7 @@ const _appSettingOriginData = {
     autoStart: false,
     showTray: true,
     adminPrivileges: false,
-    hideDock: false,
+    hideDock: true,
     runAsAdmin: false,
     customDesktop: false,
     lastPermissionAudit: {

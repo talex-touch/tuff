@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  HIDDEN_LAUNCH_ARG,
-  SILENT_LAUNCH_ARG,
   argvHasSilentLaunchFlag,
   dataHasSilentLaunchFlag,
-  resolveSilentLaunchIntent
+  HIDDEN_LAUNCH_ARG,
+  resolveSilentLaunchIntent,
+  SILENT_LAUNCH_ARG
 } from './silent-launch'
 
 describe('silent launch intent', () => {
@@ -31,7 +31,7 @@ describe('silent launch intent', () => {
         app,
         argv: [],
         data: { silent: true },
-        settings: { window: { startSilent: true } }
+        settings: { beginner: { init: true }, window: { startSilent: true } }
       })
     ).toEqual({ silent: true, source: 'secondary-data' })
 
@@ -49,17 +49,67 @@ describe('silent launch intent', () => {
       resolveSilentLaunchIntent({
         app: { getLoginItemSettings: vi.fn(() => ({ wasOpenedAsHidden: false })) },
         argv: [],
-        settings: { window: { startSilent: true } }
+        settings: { beginner: { init: true }, window: { startSilent: true } }
       })
     ).toEqual({ silent: true, source: 'setting' })
   })
 
-  it('falls back to normal launch when no silent signal exists', () => {
+  it('uses the enabled default after onboarding and preserves explicit false', () => {
+    const app = { getLoginItemSettings: vi.fn(() => ({ wasOpenedAsHidden: false })) }
+
     expect(
       resolveSilentLaunchIntent({
-        app: { getLoginItemSettings: vi.fn(() => ({ wasOpenedAsHidden: false })) },
+        app,
         argv: [],
-        settings: { window: { startSilent: false } }
+        settings: { beginner: { init: true }, window: {} }
+      })
+    ).toEqual({ silent: true, source: 'setting' })
+
+    expect(
+      resolveSilentLaunchIntent({
+        app,
+        argv: [],
+        settings: { beginner: { init: true }, window: { startSilent: false } }
+      })
+    ).toEqual({ silent: false, source: 'none' })
+  })
+
+  it('keeps the first-run guide visible when onboarding is incomplete or missing', () => {
+    const app = { getLoginItemSettings: vi.fn(() => ({ wasOpenedAsHidden: false })) }
+    const incompleteSettings = [
+      { beginner: { init: false }, window: { startSilent: true } },
+      { beginner: { init: false }, window: {} },
+      { window: { startSilent: true } },
+      { window: {} }
+    ]
+
+    for (const settings of incompleteSettings) {
+      expect(
+        resolveSilentLaunchIntent({
+          app,
+          argv: [],
+          settings
+        })
+      ).toEqual({ silent: false, source: 'none' })
+    }
+  })
+
+  it('falls back to normal launch when settings are unavailable or silent start is disabled', () => {
+    const app = { getLoginItemSettings: vi.fn(() => ({ wasOpenedAsHidden: false })) }
+
+    expect(
+      resolveSilentLaunchIntent({
+        app,
+        argv: [],
+        settings: null
+      })
+    ).toEqual({ silent: false, source: 'none' })
+
+    expect(
+      resolveSilentLaunchIntent({
+        app,
+        argv: [],
+        settings: { beginner: { init: true }, window: { startSilent: false } }
       })
     ).toEqual({ silent: false, source: 'none' })
   })

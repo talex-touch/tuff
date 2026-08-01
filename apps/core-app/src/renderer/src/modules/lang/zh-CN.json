@@ -2457,7 +2457,7 @@
   },
   "settings": {
     "platformTags": {
-      "macOnly": "仅限 macOS",
+      "macOnly": "仅限",
       "windowsOnly": "仅限 Windows",
       "linuxOnly": "仅限 Linux",
       "beta": "Beta"
@@ -3885,7 +3885,7 @@
       "showTray": "显示托盘图标",
       "showTrayDesc": "在系统托盘显示应用图标",
       "hideDock": "不在 Dock 栏显示",
-      "hideDockDesc": "关闭主窗口后不在显示 Dock 图标（macOS only）",
+      "hideDockDesc": "关闭主窗口后不显示 Dock 图标",
       "startSilent": "静默启动",
       "startSilentDesc": "应用启动时不显示窗口，仅在后台运行",
       "omniAutoMountFeature": "安装后自动装载 OmniPanel Feature",
