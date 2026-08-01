@@ -1,7 +1,7 @@
 name: Build and Release
 
 on:
-  # 手动触发（可选：仅同步指定 tag 到 Nexus）
+  # 手动触发（可选：同步现有 tag，或从失败 run 恢复发布）
   workflow_dispatch:
     inputs:
       release_type:
@@ -14,7 +14,11 @@ on:
           - snapshot
           - release
       sync_tag:
-        description: Optional existing tag to sync Nexus release metadata only (e.g. v2.4.7)
+        description: Optional existing tag to sync or recover (e.g. v2.4.7)
+        required: false
+        type: string
+      recover_run_id:
+        description: Optional failed release run ID whose build artifacts should be reused
         required: false
         type: string
 
@@ -808,8 +812,17 @@ jobs:
     name: Create Release
     needs: build-and-release
     runs-on: ubuntu-latest
-    if: needs.build-and-release.result == 'success'
+    if: >
+      always() && (
+        needs.build-and-release.result == 'success'
+        || (
+          github.event_name == 'workflow_dispatch'
+          && github.event.inputs.sync_tag != ''
+          && github.event.inputs.recover_run_id != ''
+        )
+      )
     permissions:
+      actions: read
       contents: write
 
     steps:
@@ -824,11 +837,100 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.recover_run_id != '' && github.event.inputs.sync_tag || github.sha }}
+
+      - name: Validate recovery provenance
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.recover_run_id != ''
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECOVER_RUN_ID: ${{ github.event.inputs.recover_run_id }}
+          SYNC_TAG: ${{ github.event.inputs.sync_tag }}
+        run: |
+          set -euo pipefail
+          if ! [[ "${RECOVER_RUN_ID}" =~ ^[0-9]+$ ]]; then
+            echo "recover_run_id must be a numeric GitHub Actions run ID."
+            exit 1
+          fi
+          if ! [[ "${SYNC_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.].*)?$ ]]; then
+            echo "sync_tag is required when recover_run_id is set."
+            exit 1
+          fi
+
+          expected_sha=$(git rev-parse "${SYNC_TAG}^{commit}")
+          checked_out_sha=$(git rev-parse HEAD)
+          if [ "${checked_out_sha}" != "${expected_sha}" ]; then
+            echo "Recovery checkout does not match sync_tag."
+            exit 1
+          fi
+
+          api_base="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${api_base}/actions/runs/${RECOVER_RUN_ID}" \
+            -o /tmp/recovery-run.json
+
+          jq -e \
+            --arg tag "${SYNC_TAG}" \
+            --arg sha "${expected_sha}" \
+            '.event == "push"
+              and .head_branch == $tag
+              and .head_sha == $sha
+              and .name == "Build and Release"
+              and .path == ".github/workflows/build-and-release.yml"' \
+            /tmp/recovery-run.json >/dev/null || {
+              echo "Recovery run provenance does not match sync_tag."
+              exit 1
+            }
+
+          curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${api_base}/actions/runs/${RECOVER_RUN_ID}/artifacts?per_page=100" \
+            -o /tmp/recovery-artifacts.json
+
+          tag_lower=$(echo "${SYNC_TAG}" | tr '[:upper:]' '[:lower:]')
+          if [[ "${tag_lower}" == *"beta"* ]]; then
+            channel=beta
+          elif [[ "${tag_lower}" == *"snapshot"* ]]; then
+            channel=snapshot
+          else
+            channel=release
+          fi
+
+          for artifact_name in \
+            "windows-2022-${channel}" \
+            "macos-latest-${channel}" \
+            "ubuntu-latest-${channel}"; do
+            jq -e --arg name "${artifact_name}" \
+              '.artifacts[] | select(.name == $name and .expired == false)' \
+              /tmp/recovery-artifacts.json >/dev/null || {
+                echo "Required recovery artifact is missing or expired: ${artifact_name}"
+                exit 1
+              }
+          done
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install release tooling dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: artifacts
+          run-id: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.recover_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fix macOS App Permissions After Download
         shell: bash
@@ -878,12 +980,30 @@ jobs:
       - name: Determine Release Type and Tag
         id: release-info
         run: |
-          if [ "$EVENT_NAME" = "push" ]; then
+          if [ -n "$RECOVER_RUN_ID" ]; then
+            REF_NAME_LOWER=$(echo "$SYNC_TAG" | tr '[:upper:]' '[:lower:]')
+            if [[ "$REF_NAME_LOWER" == *"beta"* ]]; then
+              echo "type=beta" >> $GITHUB_OUTPUT
+            elif [[ "$REF_NAME_LOWER" == *"snapshot"* ]]; then
+              echo "type=snapshot" >> $GITHUB_OUTPUT
+            else
+              echo "type=release" >> $GITHUB_OUTPUT
+            fi
+            echo "tag=$SYNC_TAG" >> $GITHUB_OUTPUT
+            echo "name=Release $SYNC_TAG" >> $GITHUB_OUTPUT
+            echo "target_ref=$SYNC_TAG" >> $GITHUB_OUTPUT
+            if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
+              echo "prerelease=true" >> $GITHUB_OUTPUT
+            else
+              echo "prerelease=false" >> $GITHUB_OUTPUT
+            fi
+          elif [ "$EVENT_NAME" = "push" ]; then
             # 标签触发：使用标签信息创建 release
             REF_NAME_LOWER=$(echo "$REF_NAME" | tr '[:upper:]' '[:lower:]')
             echo "type=release" >> $GITHUB_OUTPUT
             echo "tag=$REF_NAME" >> $GITHUB_OUTPUT
             echo "name=Release $REF_NAME" >> $GITHUB_OUTPUT
+            echo "target_ref=$TARGET_SHA" >> $GITHUB_OUTPUT
             if [[ "$REF_NAME_LOWER" == *"beta"* || "$REF_NAME_LOWER" == *"snapshot"* ]]; then
               echo "prerelease=true" >> $GITHUB_OUTPUT
             else
@@ -896,6 +1016,7 @@ jobs:
             echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
             echo "tag=manual-build-$TIMESTAMP" >> $GITHUB_OUTPUT
             echo "name=Manual Build ($RELEASE_TYPE) - $TIMESTAMP" >> $GITHUB_OUTPUT
+            echo "target_ref=$TARGET_SHA" >> $GITHUB_OUTPUT
             if [ "$RELEASE_TYPE" = "snapshot" ] || [ "$RELEASE_TYPE" = "beta" ]; then
               echo "prerelease=true" >> $GITHUB_OUTPUT
             else
@@ -905,8 +1026,11 @@ jobs:
 
         env:
           EVENT_NAME: ${{ github.event_name }}
+          RECOVER_RUN_ID: ${{ github.event.inputs.recover_run_id }}
           REF_NAME: ${{ github.ref_name }}
           RELEASE_TYPE: ${{ github.event.inputs.release_type }}
+          SYNC_TAG: ${{ github.event.inputs.sync_tag }}
+          TARGET_SHA: ${{ github.sha }}
       - name: Resolve same-channel rollback version
         id: rollback
         shell: bash
@@ -1073,7 +1197,7 @@ jobs:
           node scripts/generate-release-notes.mjs \
             --tag "${{ steps.release-info.outputs.tag }}" \
             --repo "${{ github.repository }}" \
-            --target-ref "${{ github.sha }}" \
+            --target-ref "${{ steps.release-info.outputs.target_ref }}" \
             --output-dir "generated-release-notes"
 
       - name: Generate Release Test Summary
@@ -1107,7 +1231,7 @@ jobs:
         with:
           tag_name: ${{ steps.release-info.outputs.tag }}
           name: ${{ steps.release-info.outputs.name }}
-          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          draft: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.recover_run_id == '' }}
           prerelease: ${{ steps.release-info.outputs.prerelease == 'true' }}
           files: ${{ steps.release-files.outputs.files }}
           fail_on_unmatched_files: true
@@ -1124,7 +1248,14 @@ jobs:
     if: >
       always() && (
         (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && needs.create-release.result == 'success')
-        || (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_tag != '')
+        || (
+          github.event_name == 'workflow_dispatch'
+          && github.event.inputs.sync_tag != ''
+          && (
+            github.event.inputs.recover_run_id == ''
+            || needs.create-release.result == 'success'
+          )
+        )
       )
     env:
       NEXUS_BASE_URL: ${{ vars.NEXUS_SYNC_BASE_URL || 'https://tuff.tagzxia.com' }}
@@ -1162,11 +1293,21 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.sync_tag || github.sha }}
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install release tooling dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Resolve same-channel rollback version
         id: sync-rollback
