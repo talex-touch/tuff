@@ -563,15 +563,11 @@ import type {
   UpdateDownloadResponse,
   UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
-  UpdateGetReleaseNotesRequest,
-  UpdateGetReleaseNotesResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateIgnoreVersionRequest,
   UpdateInstallRequest,
   UpdateLifecycleChangedPayload,
-  UpdateListReleaseNotesRequest,
-  UpdateListReleaseNotesResponse,
   UpdateOpResponse,
   UpdateRecordActionRequest,
   UpdateUpdateSettingsRequest,
@@ -775,16 +771,6 @@ export const UpdateEvents = {
     .module('release-notes')
     .event('get-bundled')
     .define<void, UpdateGetBundledReleaseNotesResponse>(),
-
-  listReleaseNotes: defineEvent('update')
-    .module('release-notes')
-    .event('list')
-    .define<UpdateListReleaseNotesRequest, UpdateListReleaseNotesResponse>(),
-
-  getReleaseNotes: defineEvent('update')
-    .module('release-notes')
-    .event('get')
-    .define<UpdateGetReleaseNotesRequest, UpdateGetReleaseNotesResponse>(),
 
   acknowledgeReleaseNotes: defineEvent('update')
     .module('release-notes')

@@ -1,15 +1,12 @@
 // @vitest-environment jsdom
 import { mount } from '@vue/test-utils'
-import { flushPromises } from '@vue/test-utils'
 import { ref, shallowRef } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsChangedDialog from './WhatsChangedDialog.vue'
 
 const mocks = vi.hoisted(() => ({
   useReleaseNotesRuntime: vi.fn(),
-  useI18n: vi.fn(),
-  push: vi.fn(),
-  warn: vi.fn()
+  useI18n: vi.fn()
 }))
 
 vi.mock('~/modules/hooks/useReleaseNotesRuntime', () => ({
@@ -18,14 +15,6 @@ vi.mock('~/modules/hooks/useReleaseNotesRuntime', () => ({
 
 vi.mock('vue-i18n', () => ({
   useI18n: mocks.useI18n
-}))
-
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: mocks.push })
-}))
-
-vi.mock('~/utils/renderer-log', () => ({
-  createRendererLogger: () => ({ warn: mocks.warn })
 }))
 
 vi.mock('@talex-touch/tuffex/button', () => ({
@@ -63,7 +52,6 @@ function setupRuntime() {
   const closeDialog = vi.fn(async () => {})
   mocks.useReleaseNotesRuntime.mockReturnValue({
     dialogVisible: ref(true),
-    dialogVersion: ref('2.4.14'),
     dialogEntries: shallowRef([
       {
         version: '2.4.14-beta.1',
@@ -96,7 +84,6 @@ describe('WhatsChangedDialog', () => {
       t: (key: string) => key,
       locale: ref('en-US')
     })
-    mocks.push.mockResolvedValue(undefined)
   })
 
   it('renders localized summaries and channel labels for every aggregated version', () => {
@@ -112,38 +99,12 @@ describe('WhatsChangedDialog', () => {
     expect(wrapper.text()).toContain('Release summary three')
   })
 
-  it('acknowledges only after full-history navigation succeeds', async () => {
+  it('closes and acknowledges from the only dialog action', async () => {
     const closeDialog = setupRuntime()
     const wrapper = mount(WhatsChangedDialog)
-    const detailsButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('releaseNotes.viewDetails'))!
 
-    await detailsButton.trigger('click')
-    await flushPromises()
+    await wrapper.get('button').trigger('click')
 
-    expect(mocks.push).toHaveBeenCalledWith({
-      path: '/setting',
-      query: { section: 'update', release: 'v2.4.14' }
-    })
     expect(closeDialog).toHaveBeenCalledOnce()
-  })
-
-  it('does not acknowledge when full-history navigation fails', async () => {
-    const closeDialog = setupRuntime()
-    mocks.push.mockRejectedValueOnce(new Error('navigation failed'))
-    const wrapper = mount(WhatsChangedDialog)
-    const detailsButton = wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('releaseNotes.viewDetails'))!
-
-    await detailsButton.trigger('click')
-    await flushPromises()
-
-    expect(closeDialog).not.toHaveBeenCalled()
-    expect(mocks.warn).toHaveBeenCalledWith(
-      'Failed to open release notes history',
-      expect.any(Error)
-    )
   })
 })

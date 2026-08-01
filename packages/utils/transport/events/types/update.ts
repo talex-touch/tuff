@@ -3,11 +3,8 @@ import type {
   BundledReleaseNotesState,
   CachedUpdateRecord,
   GitHubRelease,
-  ReleaseNotesEntry,
-  ReleaseNotesPage,
   UpdateCheckResult,
   UpdateLifecycleSnapshot,
-  UpdateReleaseNotesChannel,
   UpdateSettings,
   UpdateUserAction,
 } from '../../../types/update'
@@ -75,20 +72,6 @@ export type UpdateGetCachedReleaseResponse
 
 export type UpdateGetBundledReleaseNotesResponse
   = UpdateOpResponse<BundledReleaseNotesState>
-
-export interface UpdateListReleaseNotesRequest {
-  channel: UpdateReleaseNotesChannel
-  cursor?: string
-  limit?: number
-}
-
-export type UpdateListReleaseNotesResponse = UpdateOpResponse<ReleaseNotesPage>
-
-export interface UpdateGetReleaseNotesRequest {
-  tag: string
-}
-
-export type UpdateGetReleaseNotesResponse = UpdateOpResponse<ReleaseNotesEntry>
 
 export interface UpdateAcknowledgeReleaseNotesRequest {
   version: string

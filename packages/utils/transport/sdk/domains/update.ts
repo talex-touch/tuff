@@ -2,10 +2,7 @@ import type {
   AppPreviewChannel,
   BundledReleaseNotesState,
   CachedUpdateRecord,
-  ReleaseNotesEntry,
-  ReleaseNotesPage,
   UpdateCheckResult,
-  UpdateReleaseNotesChannel,
   UpdateSettings,
   UpdateUserAction,
 } from '../../../types/update'
@@ -15,13 +12,11 @@ import type {
   UpdateDownloadRequest,
   UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
-  UpdateGetReleaseNotesResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateIgnoreVersionRequest,
   UpdateInstallRequest,
   UpdateLifecycleChangedPayload,
-  UpdateListReleaseNotesResponse,
   UpdateOpResponse,
 } from '../../events/types/update'
 import type { ITuffTransport } from '../../types'
@@ -39,12 +34,6 @@ export interface UpdateSdk {
     channel?: AppPreviewChannel
   }) => Promise<UpdateGetCachedReleaseResponse>
   getBundledReleaseNotes: () => Promise<UpdateGetBundledReleaseNotesResponse>
-  listReleaseNotes: (payload: {
-    channel: UpdateReleaseNotesChannel
-    cursor?: string
-    limit?: number
-  }) => Promise<UpdateListReleaseNotesResponse>
-  getReleaseNotes: (payload: { tag: string }) => Promise<UpdateGetReleaseNotesResponse>
   acknowledgeReleaseNotes: (payload: { version: string }) => Promise<UpdateOpResponse>
   recordAction: (payload: {
     tag: string
@@ -79,10 +68,6 @@ export function createUpdateSdk(transport: ITuffTransport): UpdateSdk {
       transport.send(UpdateEvents.getCachedRelease, payload ?? {}),
     getBundledReleaseNotes: () =>
       transport.send(UpdateEvents.getBundledReleaseNotes),
-    listReleaseNotes: payload =>
-      transport.send(UpdateEvents.listReleaseNotes, payload),
-    getReleaseNotes: payload =>
-      transport.send(UpdateEvents.getReleaseNotes, payload),
     acknowledgeReleaseNotes: payload =>
       transport.send(UpdateEvents.acknowledgeReleaseNotes, payload),
     recordAction: payload =>
@@ -106,11 +91,9 @@ export type {
   UpdateCheckResponse,
   UpdateGetBundledReleaseNotesResponse,
   UpdateGetCachedReleaseResponse,
-  UpdateGetReleaseNotesResponse,
   UpdateGetSettingsResponse,
   UpdateGetStatusResponse,
   UpdateLifecycleChangedPayload,
-  UpdateListReleaseNotesResponse,
   UpdateOpResponse,
 }
 
@@ -118,10 +101,7 @@ export type {
   AppPreviewChannel,
   BundledReleaseNotesState,
   CachedUpdateRecord,
-  ReleaseNotesEntry,
-  ReleaseNotesPage,
   UpdateCheckResult,
-  UpdateReleaseNotesChannel,
   UpdateSettings,
   UpdateUserAction,
 }

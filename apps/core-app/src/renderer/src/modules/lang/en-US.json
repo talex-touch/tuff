@@ -2380,23 +2380,7 @@
     "intro": "Review what was added and changed across this upgrade.",
     "channelRelease": "Release",
     "channelBeta": "Beta",
-    "close": "Close",
-    "viewDetails": "View full history",
-    "historyTitle": "Version history",
-    "historyDescription": "Browse complete release notes for Release and Beta versions.",
-    "refresh": "Refresh",
-    "channelTabs": "Release channels",
-    "cachedNotice": "You're offline. Showing the most recently cached release notes.",
-    "versionList": "Version list",
-    "legacy": "Legacy",
-    "current": "Current",
-    "loadFailed": "Release notes could not be loaded",
-    "retry": "Retry",
-    "empty": "No release notes are available for this channel",
-    "loading": "Loading release notes…",
-    "loadMore": "Load more",
-    "backToVersions": "Back to versions",
-    "selectVersion": "Select a version to view its complete release notes"
+    "close": "Close"
   },
   "update": {
     "new_version_available": "New Version Available",
@@ -3658,7 +3642,8 @@
       "groupTitle": "Application Updates",
       "groupDesc": "Manage update downloads, status, and checks.",
       "channelTitle": "Update Channel",
-      "channelDesc": "Preview channels receive builds earlier but may be less stable.",
+      "channelDescRelease": "Stable is the default. Beta offers earlier features but may be unstable. Switching channels checks for updates immediately.",
+      "channelDescBeta": "Receive Beta builds and subsequent stable releases earlier. Beta builds may be unstable; switching channels checks immediately.",
       "channelSnapshotLocked": "Snapshot builds receive updates through the Beta channel.",
       "channels": {
         "release": "Stable (Release)",
@@ -3849,7 +3834,7 @@
       },
       "messages": {
         "loadFailed": "Failed to load update settings",
-        "channelSaved": "Update channel saved",
+        "channelSaved": "Switched to {channel}; checking for updates",
         "frequencySaved": "Frequency saved",
         "autoDownloadSaved": "Auto download setting saved",
         "installOnNormalQuitSaved": "Normal-quit installation setting saved",

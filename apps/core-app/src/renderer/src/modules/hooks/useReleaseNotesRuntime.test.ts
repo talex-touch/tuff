@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sdk = vi.hoisted(() => ({
   getBundledReleaseNotes: vi.fn(),
-  acknowledgeReleaseNotes: vi.fn(),
-  listReleaseNotes: vi.fn(),
-  getReleaseNotes: vi.fn()
+  acknowledgeReleaseNotes: vi.fn()
 }))
 
 vi.mock('@talex-touch/utils/renderer', () => ({
@@ -21,10 +19,6 @@ function bundledState(lastAcknowledgedVersion: string | null): BundledReleaseNot
     catalog: {
       schemaVersion: 1,
       generatedForVersion: '2.4.14',
-      legacyThrough: {
-        RELEASE: '2.4.13',
-        BETA: '2.4.13-beta.23'
-      },
       entries: [
         {
           version: '2.4.14',
@@ -33,10 +27,6 @@ function bundledState(lastAcknowledgedVersion: string | null): BundledReleaseNot
           summary: {
             zh: ['摘要一', '摘要二', '摘要三'],
             en: ['Summary one', 'Summary two', 'Summary three']
-          },
-          currentNotes: {
-            zh: '# 中文\n',
-            en: '# English\n'
           }
         }
       ]
@@ -70,22 +60,6 @@ describe('useReleaseNotesRuntime', () => {
 
     expect(runtime.dialogVisible.value).toBe(false)
     expect(sdk.acknowledgeReleaseNotes).toHaveBeenCalledWith({ version: '2.4.14' })
-  })
-
-  it('serves the current full notes from the bundled catalog without a network request', async () => {
-    sdk.getBundledReleaseNotes.mockResolvedValue({
-      success: true,
-      data: bundledState('2.4.13')
-    })
-    const { useReleaseNotesRuntime } = await import('./useReleaseNotesRuntime')
-    const runtime = useReleaseNotesRuntime()
-    await runtime.evaluateStartup(true)
-
-    await expect(runtime.getReleaseNotes('v2.4.14')).resolves.toMatchObject({
-      tag: 'v2.4.14',
-      notes: { zh: '# 中文\n', en: '# English\n' }
-    })
-    expect(sdk.getReleaseNotes).not.toHaveBeenCalled()
   })
 
   it('silently acknowledges a fresh install without showing the dialog', async () => {

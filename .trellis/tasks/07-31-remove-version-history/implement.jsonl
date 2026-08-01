@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"约束 CoreApp 主进程、Renderer、typed transport 与 i18n 的删除边界和验证要求"}
+{"file":".trellis/tasks/07-31-remove-version-history/prd.md","reason":"提供版本历史移除、一次性摘要保留与更新渠道行为的验收合同"}
