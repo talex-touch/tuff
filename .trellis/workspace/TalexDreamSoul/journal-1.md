@@ -1327,3 +1327,37 @@ Implemented the protocol-only Rust native transport and ScreenCaptureKit/xcap sc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 40: Release v2.4.14-beta.1
+
+**Date**: 2026-07-31
+**Task**: Release v2.4.14-beta.1
+**Branch**: `master`
+
+### Summary
+
+Published the v2.4.14-beta.1 desktop prerelease, repaired release recovery and dependency setup, restored Cloudflare production runtime credentials, synchronized Nexus metadata, and verified desktop, web, docs, and release API delivery.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `945a3a363` | (see git log) |
+| `6970d12cd` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
