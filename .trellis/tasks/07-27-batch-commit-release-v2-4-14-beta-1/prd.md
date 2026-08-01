@@ -2,17 +2,17 @@
 
 ## Goal
 
-Coordinate the ordered v2.4.14-beta.1 release batch after its child release work supplies the required inputs and acceptance evidence.
+Coordinate the post-publication evidence review for v2.4.14-beta.1 after the release child has completed the authorized publication workflow.
 
 ## Requirements
 
-- Keep this parent limited to the batch order and child release gate; it does not authorize publishing while the release child has unresolved acceptance criteria.
+- Keep this parent limited to post-publication evidence aggregation; publication authorization and execution belong to the release child.
 - Use the repository release workflow as the publication mechanism: beta tags are pre-releases, and the workflow synchronizes release metadata for normal tag pushes or through `workflow_dispatch.sync_tag` when an existing tag needs recovery or resynchronization.
 
 ## Acceptance Criteria
 
-- [ ] The child `07-27-release-v2-4-14-beta-1` has completed its release-input and validation acceptance criteria before the parent batch starts.
-- [ ] The batch records release evidence from the task-local release artifacts and preserves the workflow's manifest and metadata gates.
+- [ ] The child `07-27-release-v2-4-14-beta-1` completes its release, Nexus sync, and Cloudflare deployment acceptance criteria.
+- [ ] The parent records the child's final GitHub Release, manifest, Nexus, Cloudflare, and online smoke evidence without acting as a circular publication prerequisite.
 
 ## Notes
 

@@ -79,7 +79,7 @@ export interface NativeProtocolLimits {
 export interface NativeClientHelloV1 {
   kind: 'client_hello'
   protocol: ProtocolRangeV1
-  client: { name: string; version: string }
+  client: { name: string, version: string }
   requestedFeatures: string[]
 }
 
@@ -110,52 +110,52 @@ export interface NativeRequestV1 {
   attachments: NativeAttachmentDescriptor[]
 }
 
-export type NativeResponseV1 =
+export type NativeResponseV1
+  = | {
+    kind: 'response'
+    protocol: ProtocolVersionV1
+    requestId: string
+    ok: true
+    payload: unknown
+    attachments: NativeAttachmentDescriptor[]
+    meta: NativeRunMeta
+  }
   | {
-      kind: 'response'
-      protocol: ProtocolVersionV1
-      requestId: string
-      ok: true
-      payload: unknown
-      attachments: NativeAttachmentDescriptor[]
-      meta: NativeRunMeta
-    }
-  | {
-      kind: 'response'
-      protocol: ProtocolVersionV1
-      requestId: string
-      ok: false
-      error: NativeProtocolError
-      attachments: []
-      meta: NativeRunMeta
-    }
+    kind: 'response'
+    protocol: ProtocolVersionV1
+    requestId: string
+    ok: false
+    error: NativeProtocolError
+    attachments: []
+    meta: NativeRunMeta
+  }
 
-export type NativeStreamFrameV1 =
+export type NativeStreamFrameV1
+  = | {
+    kind: 'stream_data'
+    protocol: ProtocolVersionV1
+    streamId: string
+    sequence: number
+    payload: unknown
+    attachments: NativeAttachmentDescriptor[]
+    meta?: Record<string, unknown>
+  }
   | {
-      kind: 'stream_data'
-      protocol: ProtocolVersionV1
-      streamId: string
-      sequence: number
-      payload: unknown
-      attachments: NativeAttachmentDescriptor[]
-      meta?: Record<string, unknown>
-    }
+    kind: 'stream_end'
+    protocol: ProtocolVersionV1
+    streamId: string
+    sequence: number
+    payload?: unknown
+    attachments: NativeAttachmentDescriptor[]
+  }
   | {
-      kind: 'stream_end'
-      protocol: ProtocolVersionV1
-      streamId: string
-      sequence: number
-      payload?: unknown
-      attachments: NativeAttachmentDescriptor[]
-    }
-  | {
-      kind: 'stream_error'
-      protocol: ProtocolVersionV1
-      streamId: string
-      sequence: number
-      error: NativeProtocolError
-      attachments: []
-    }
+    kind: 'stream_error'
+    protocol: ProtocolVersionV1
+    streamId: string
+    sequence: number
+    error: NativeProtocolError
+    attachments: []
+  }
 
 export interface NativeStreamAckV1 {
   kind: 'stream_ack'
@@ -167,25 +167,25 @@ export interface NativeStreamAckV1 {
 export interface NativeCancelV1 {
   kind: 'cancel'
   protocol: ProtocolVersionV1
-  target: { type: 'request' | 'stream'; id: string }
+  target: { type: 'request' | 'stream', id: string }
   reason: 'caller' | 'consumer_closed' | 'deadline' | 'dispose'
 }
 
-export type NativeControlV1 =
-  | NativeClientHelloV1
-  | NativeServerHelloV1
-  | NativeRequestV1
-  | NativeResponseV1
-  | NativeStreamFrameV1
-  | NativeStreamAckV1
-  | NativeCancelV1
+export type NativeControlV1
+  = | NativeClientHelloV1
+    | NativeServerHelloV1
+    | NativeRequestV1
+    | NativeResponseV1
+    | NativeStreamFrameV1
+    | NativeStreamAckV1
+    | NativeCancelV1
 
 export interface NativePacket<TControl extends NativeControlV1 = NativeControlV1> {
   control: TControl
   attachments: Buffer[]
 }
 
-export declare const PROTOCOL_V1: Readonly<{ major: 1; minor: 0 }>
+export declare const PROTOCOL_V1: Readonly<{ major: 1, minor: 0 }>
 export declare const HARD_MAX_STREAM_WINDOW: 8
 export declare const MAX_SAFE_SEQUENCE: number
 

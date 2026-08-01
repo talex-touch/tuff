@@ -1,7 +1,6 @@
 'use strict'
 
 const crypto = require('node:crypto')
-const process = require('node:process')
 const {
   PROTOCOL_V1,
   ProtocolContractError,
@@ -26,9 +25,12 @@ class NativeCarrierError extends Error {
     this.code = code
     this.category = options.category ?? 'availability'
     this.retryable = options.retryable ?? false
-    if (options.carrierId) this.carrierId = options.carrierId
-    if (options.requestId) this.requestId = options.requestId
-    if (options.streamId) this.streamId = options.streamId
+    if (options.carrierId)
+      this.carrierId = options.carrierId
+    if (options.requestId)
+      this.requestId = options.requestId
+    if (options.streamId)
+      this.streamId = options.streamId
   }
 }
 
@@ -54,7 +56,8 @@ class NapiCarrier {
     if (this.state === 'disposed') {
       throw carrierError('CARRIER_DISPOSED', 'Native carrier is disposed', this.id)
     }
-    if (this.snapshot) return this.snapshot
+    if (this.snapshot)
+      return this.snapshot
 
     const hello = {
       kind: 'client_hello',
@@ -199,13 +202,15 @@ class NapiCarrier {
         { requestId: control.requestId, streamId },
       )
     }
-    if (!accepted.control.ok) this.streams.delete(streamId)
+    if (!accepted.control.ok)
+      this.streams.delete(streamId)
     return accepted
   }
 
   acknowledge(streamId, ackSequence) {
     const state = this.streams.get(streamId)
-    if (!state || state.released || state.terminalReceived) return false
+    if (!state || state.released || state.terminalReceived)
+      return false
     try {
       this.binding.nativeProtocolV1Ack(encodeControl({
         kind: 'stream_ack',
@@ -231,7 +236,8 @@ class NapiCarrier {
   }
 
   cancel(targetType, id, reason = 'caller') {
-    if (this.state === 'disposed') return false
+    if (this.state === 'disposed')
+      return false
     try {
       this.binding.nativeProtocolV1Cancel(encodeControl({
         kind: 'cancel',
@@ -267,14 +273,16 @@ class NapiCarrier {
 
   releaseStream(streamId) {
     const state = this.streams.get(streamId)
-    if (!state) return false
+    if (!state)
+      return false
     state.released = true
     this.streams.delete(streamId)
     return true
   }
 
   async dispose() {
-    if (this.state === 'disposed') return
+    if (this.state === 'disposed')
+      return
     this.state = 'disposing'
     for (const state of this.streams.values()) {
       state.released = true
@@ -302,7 +310,8 @@ class NapiCarrier {
   }
 
   handleFrame(state, raw) {
-    if (state.released || this.state === 'disposed') return
+    if (state.released || this.state === 'disposed')
+      return
     let packet
     try {
       packet = this.decodePacket(raw, 'stream-frame')
@@ -344,7 +353,8 @@ class NapiCarrier {
   }
 
   failStream(state, code) {
-    if (state.released || state.terminalReceived) return
+    if (state.released || state.terminalReceived)
+      return
     state.terminalReceived = true
     try {
       state.onFrame({
@@ -403,12 +413,14 @@ class NapiCarrier {
     if (this.state === 'disposed' || this.state === 'disposing') {
       throw carrierError('CARRIER_DISPOSED', 'Native carrier is disposed', this.id)
     }
-    if (!this.snapshot) this.handshake()
+    if (!this.snapshot)
+      this.handshake()
   }
 
   safeLog(level, event, metadata) {
     const method = this.logger?.[level]
-    if (typeof method !== 'function') return
+    if (typeof method !== 'function')
+      return
     method.call(this.logger, `Native carrier ${event}`, {
       carrierId: this.id,
       ...metadata,
@@ -435,14 +447,14 @@ function assertBinding(carrierId, binding) {
 }
 
 function normalizeIdentifier(value, fallback) {
-  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) {
+  if (typeof value !== 'string' || !/^[A-Z0-9][\w.:-]{0,127}$/i.test(value)) {
     throw carrierError('CARRIER_INVALID_IDENTIFIER', 'Native carrier identifier is invalid')
   }
   return value || fallback
 }
 
 function safeIdentifier(value) {
-  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)
+  return typeof value === 'string' && /^[A-Z0-9][\w.:-]{0,127}$/i.test(value)
     ? value
     : undefined
 }

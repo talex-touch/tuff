@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const { Buffer } = require('node:buffer')
 const path = require('node:path')
 const test = require('node:test')
 const golden = require('./fixtures/protocol-v1/golden.json')
@@ -50,11 +51,13 @@ function createFrameQueue() {
   return {
     callback(packet) {
       const waiter = waiters.shift()
-      if (waiter) waiter(packet)
+      if (waiter)
+        waiter(packet)
       else queued.push(packet)
     },
     next(timeoutMs = 1000) {
-      if (queued.length > 0) return Promise.resolve(queued.shift())
+      if (queued.length > 0)
+        return Promise.resolve(queued.shift())
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => reject(new Error('Timed out waiting for native frame')), timeoutMs)
         waiters.push((packet) => {

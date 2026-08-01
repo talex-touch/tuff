@@ -26,8 +26,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Complete the remaining release child acceptance and then perform the ordered v2.4.14-beta.1 release batch.",
-    "blocker": "The release child has unresolved acceptance criteria; no release action may start before its evidence is complete.",
-    "evidence": "prd.md, child-task map, and task-local release evidence define the batch gate."
+    "nextAction": "After the release child completes publication and deployment verification, aggregate its final release evidence.",
+    "blocker": "Waiting for the authorized release child to complete; this parent is not a publication prerequisite.",
+    "evidence": "The child task's GitHub Release, signed manifest, Nexus sync, Cloudflare deployment, and online smoke results define completion."
   }
 }

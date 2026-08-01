@@ -1,6 +1,7 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const { Buffer } = require('node:buffer')
 const test = require('node:test')
 const golden = require('./fixtures/protocol-v1/golden.json')
 const {

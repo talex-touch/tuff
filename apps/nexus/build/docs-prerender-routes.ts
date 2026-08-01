@@ -36,19 +36,7 @@ export function normalizeDocsContentRoute(relativePath: string) {
   if (!normalized)
     return []
 
-  const canonicalPath = `/docs/${normalized}`
-  const routes = new Set<string>(toLocalizedDocsPaths(canonicalPath))
-  if (normalized === 'index') {
-    for (const route of toLocalizedDocsPaths('/docs'))
-      routes.add(route)
-  }
-  else if (normalized.endsWith('/index')) {
-    const directoryPath = `/docs/${normalized.slice(0, -'/index'.length)}`
-    for (const route of toLocalizedDocsPaths(directoryPath))
-      routes.add(route)
-  }
-
-  return [...routes]
+  return toLocalizedDocsPaths(`/docs/${normalized}`)
 }
 
 export function createDocsPrerenderRoutes(nexusRoot: string) {

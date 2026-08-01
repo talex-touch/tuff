@@ -2,17 +2,20 @@
 
 ## Goal
 
-Prepare v2.4.14-beta.1 for publication only after the parent batch gate and release inputs have been satisfied.
+Prepare and publish v2.4.14-beta.1 with verified desktop release assets, Nexus metadata, and a successful Cloudflare Pages deployment for the release commit.
 
 ## Requirements
 
 - Validate the beta release through the repository release workflow, which publishes `v*-beta*` tags as pre-releases and emits the updater release manifest alongside platform artifacts.
-- Do not publish while the parent batch has unresolved child acceptance, and do not treat historical or local artifacts as v2.4.14-beta.1 publication evidence.
+- Treat the user's explicit release request as publication authorization; the parent batch records this child's completed evidence after publication instead of blocking the child on itself.
+- Restore the Nexus Cloudflare Pages build when the latest production deployments are failing, and verify the deployed custom domain rather than relying only on a local build.
 
 ## Acceptance Criteria
 
-- [ ] Required release inputs and validation evidence are available for the exact v2.4.14-beta.1 candidate before a publication action is requested.
-- [ ] The parent batch gate is satisfied before this child permits publication.
+- [ ] Exact v2.4.14-beta.1 bilingual release notes satisfy the strict contract, root/Core versions match, and local release gates pass before tag publication.
+- [ ] Nexus focused tests, typecheck, production build, static route checks, and local Wrangler route smoke pass for the release candidate.
+- [ ] The `v2.4.14-beta.1` tag publishes a non-draft GitHub prerelease with signed manifest and platform assets, then synchronizes the same release to Nexus.
+- [ ] Cloudflare Pages reports a successful production deployment for the release commit, and `https://tuff.tagzxia.com` plus representative docs and release endpoints return `2xx` with expected content.
 
 ## Notes
 

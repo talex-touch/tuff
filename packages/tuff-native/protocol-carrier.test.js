@@ -1,15 +1,16 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const { Buffer } = require('node:buffer')
 const path = require('node:path')
 const test = require('node:test')
 const golden = require('./fixtures/protocol-v1/golden.json')
-const { PROTOCOL_V1 } = require('./protocol-contract')
 const {
   EXPECTED_EXPORTS,
   NapiCarrier,
   NativeCarrierError,
 } = require('./protocol')
+const { PROTOCOL_V1 } = require('./protocol-contract')
 
 function realBinding() {
   return require(path.join(

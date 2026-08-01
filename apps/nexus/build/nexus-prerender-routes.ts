@@ -23,6 +23,10 @@ export function createNexusPrerenderRoutes(nexusRoot: string) {
   ]
 }
 
+function hasPrerenderEvidenceRoute(routeSet: Set<string>, route: string) {
+  return routeSet.has(route) || routeSet.has(`${route}/index`)
+}
+
 export function createNexusPrerenderEvidence(nexusRoot: string) {
   const docsRoutes = createDocsPrerenderRoutes(nexusRoot)
   const docsPageApiRoutes = createDocsPageApiPrerenderRoutes(nexusRoot)
@@ -42,7 +46,7 @@ export function createNexusPrerenderEvidence(nexusRoot: string) {
     docsRoutes,
     requiredDocsRoutes,
     staticWorkerRoutes,
-    missingRequiredDocsRoutes: requiredDocsRoutes.filter(route => !routeSet.has(route)),
+    missingRequiredDocsRoutes: requiredDocsRoutes.filter(route => !hasPrerenderEvidenceRoute(routeSet, route)),
     routeCount: routes.length,
     docsPageApiRouteCount: docsPageApiRoutes.length,
     docsRouteCount: docsRoutes.length,

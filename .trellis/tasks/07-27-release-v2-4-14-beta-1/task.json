@@ -3,7 +3,7 @@
   "name": "release-v2-4-14-beta-1",
   "title": "发布 v2.4.14-beta.1",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -23,8 +23,8 @@
   "relatedFiles": [],
   "notes": "",
   "meta": {
-    "nextAction": "Complete release inputs, validation, and the parent batch gate before publishing v2.4.14-beta.1.",
-    "blocker": "The parent release batch has unresolved child acceptance; publishing is not authorized.",
-    "evidence": "parent task map, prd.md, and release validation artifacts define the publication gate."
+    "nextAction": "Publish v2.4.14-beta.1 after the verified local gates, then validate GitHub Release, Nexus sync, and Cloudflare production deployment.",
+    "blocker": null,
+    "evidence": "The explicit user release request, prd.md, local quality gates, and post-publication remote checks define the release contract."
   }
 }

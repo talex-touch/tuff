@@ -31,7 +31,8 @@ const result = spawnSync(
   },
 )
 
-if (result.status !== 0) process.exit(result.status ?? 1)
+if (result.status !== 0)
+  process.exit(result.status ?? 1)
 
 fs.mkdirSync(outDir, { recursive: true })
 const outputPath = path.join(outDir, 'tuff_native_protocol_fixture.node')
