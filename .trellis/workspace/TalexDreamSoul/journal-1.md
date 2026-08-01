@@ -1284,3 +1284,46 @@ Implemented the protocol-only Rust native transport and ScreenCaptureKit/xcap sc
 ### Next Steps
 
 - None - task complete
+
+
+## Session 39: 同步分支并整理设置与更新代码
+
+**Date**: 2026-07-31
+**Task**: 同步分支并整理设置与更新代码
+**Branch**: `master`
+
+### Summary
+
+同步 origin/master，审计 4 个 stash 与 detached worktree；提交设置页高级层级和默认值优化，移除版本历史并补强渠道行为测试；质量门通过后非强制推送并归档 3 个任务。
+
+### Main Changes
+
+- Fast-forward 同步并再次 fetch `origin/master`，确认本轮前后无远端分叉。
+- 审计本地分支、4 个 stash、两个 detached worktree 和远端辅助分支；确认无 stash 恢复候选。
+- 提交设置页高级设置分层、默认值归一化、首次引导静默保护、macOS 标签和 12px 区块间距。
+- 移除版本历史浏览、远端历史请求与缓存，保留一次性更新摘要，并补强更新渠道行为测试。
+- 完成非强制 GitHub 推送与 3 个 Trellis 任务归档。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0efd10533` | `feat(settings): streamline advanced configuration` |
+| `80c44ade4` | `ref(update): remove version history browser` |
+| `a3a5bd26f` | `chore(repo): record consolidation audit` |
+
+### Testing
+
+- [OK] 设置任务 focused tests：10 个文件、85 条用例
+- [OK] 更新任务 tests：25 个文件、192 条用例
+- [OK] `pnpm quality:pr`，targeted tests 107/107
+- [OK] CoreApp node/web typecheck、无缓存 scoped ESLint、locale JSON parse
+- [OK] `git diff --check` 与推送后 `master...origin/master = 0/0`
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
