@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 40
-- **Last Active**: 2026-07-31
+- **Total Sessions**: 41
+- **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1363 | Active |
+| `journal-1.md` | ~1396 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 41 | 2026-08-02 | Fix Nexus local Cloudflare runtime credentials | `2d68261b0` | `master` |
 | 40 | 2026-07-31 | Release v2.4.14-beta.1 | `945a3a363`, `6970d12cd` | `master` |
 | 39 | 2026-07-31 | 同步分支并整理设置与更新代码 | `0efd10533`, `80c44ade4`, `a3a5bd26f` | `master` |
 | 38 | 2026-07-30 | 修复文件索引更新与错误脱敏 #476 | `554435f33`, `baf3bf3d2` | `master` |
