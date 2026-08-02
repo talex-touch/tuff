@@ -25,7 +25,9 @@ The goal is to keep credential values out of deployable configuration while prov
 - Package-manager resolver: `resolvePnpmInvocation(options?): { executable: string; prefixArgs: string[] }`.
 - Runtime policy: `assertRuntimeCredential(variableName, value, { localDevelopment, minimumLength? }): string`.
 - Runtime source selector: `selectRuntimeCredential(platformBindings, platformValue, fallbackValues): unknown`.
-- Local marker: `NEXUS_LOCAL_PAGES_PREVIEW=true`, injected only by `pnpm -C apps/nexus run preview:cf`.
+- Local Pages simulator marker: `NEXUS_LOCAL_PAGES_PREVIEW=true`, injected by `pnpm -C apps/nexus run preview:cf`.
+- Local Nitro Cloudflare marker: `NUXT_USE_CLOUDFLARE_DEV=true`, set by the Nexus `dev` / `dev:cf` scripts and accepted only while `NODE_ENV !== 'production'`.
+- Local binding adapter: `readCloudflareBindings(event)` preserves platform bindings and overlays only its explicit credential allowlist from `process.env` when the local Nitro marker is active.
 
 Required Preview Secrets are:
 
@@ -47,7 +49,9 @@ The catalog is the source of truth for feature-gated and optional credential nam
 - `deploy:cf` accepts no passthrough arguments, runs preflight before build and again before deploy, and verifies project/branch identity did not change.
 - Cloudflare bindings are authoritative at runtime. When bindings exist, missing platform credentials do not fall back to build-time Nuxt config or `process.env`.
 - Non-local credentials reject missing, short, documented placeholder, legacy default, and known local-only values. Errors contain only a stable code and variable name.
-- Local defaults are accepted only when the explicit local marker reaches the built Pages simulator. The marker is absent from deployable configuration and remote metadata.
+- Local defaults are accepted only when the explicit local Pages marker reaches the built Pages simulator or the non-production Nitro dev marker is active. Both markers are absent from deployable remote bindings and metadata.
+- `nitro-cloudflare-dev` creates a platform binding object from `wrangler.toml`; app-scoped `.env` / `.env.local` credentials are not automatically present in that object. In explicit local Nitro mode, `readCloudflareBindings()` preserves D1/R2 and all other platform bindings, injects the local Pages marker into its returned view, and fills only allowlisted credential keys from `process.env` when the platform value is nullish.
+- Existing platform credential values remain authoritative in local Nitro mode, including empty or otherwise invalid explicit values. Arbitrary process environment keys must never become Cloudflare bindings.
 - App JWT may fall back from an absent `APP_AUTH_JWT_SECRET` to `AUTH_SECRET` only at its documented boundary. An explicitly present invalid primary value fails closed.
 - POSIX native pnpm executables run directly; `.js/.cjs/.mjs` package-manager entries run through Node; Windows `.cmd/.bat` entries run through `ComSpec /d /s /c`.
 
@@ -64,15 +68,20 @@ The catalog is the source of truth for feature-gated and optional credential nam
 - Package manager or Windows command processor unavailable -> `PREVIEW_DEPLOY_PACKAGE_MANAGER_UNAVAILABLE`, exit `69`.
 - Project or branch changes between preflights -> `PREVIEW_DEPLOY_TARGET_CHANGED`, exit `78`.
 - Missing/short/placeholder/local-only non-local runtime value -> `NEXUS_RUNTIME_CREDENTIAL_INVALID`, HTTP `500`; raw value is never returned.
+- Local Nitro bindings exist but omit an allowlisted credential -> use the corresponding process value only when `NODE_ENV !== 'production'` and `NUXT_USE_CLOUDFLARE_DEV=true`; otherwise retain the non-local rejection.
+- Local Nitro platform binding contains an explicit value, including `''` -> keep the platform value; downstream validation decides whether to reject it.
+- Local Nitro process environment contains a non-allowlisted key -> omit it from the binding view.
 
 ### 5. Good / Base / Bad Cases
 
 - Good: Preview metadata contains the four required names as `secret_text`; optional OAuth credentials are absent; preflight passes twice; deployment targets branch `preview`; remote auth reaches its normal `200/401` boundary without a credential error.
+- Good: local Nitro Cloudflare dev keeps Preview D1/R2 bindings, overlays a locally loaded `AUTH_SECRET`, marks the returned binding view as local, and serves the first Nuxt Content query without `NEXUS_RUNTIME_CREDENTIAL_INVALID`.
 - Base: an optional Turnstile or OAuth secret is not configured because the feature is disabled; preflight still passes.
 - Good: an optional credential is later enabled as `secret_text`; preflight reports only its name/category and continues without reading the value.
 - Bad: committing `AUTH_SECRET = "change-me"`, an empty `GITHUB_CLIENT_SECRET`, or `NEXUS_LOCAL_PAGES_PREVIEW` under `[env.preview.vars]`.
 - Bad: accepting a Production secret list as Preview evidence, trusting an unqualified Pages secret command, or treating local Wrangler smoke as deployed Preview proof.
 - Bad: invoking a native pnpm binary as `node <pnpm-binary>`; Node parses binary bytes and deployment fails before build.
+- Bad: fixing local Nitro dev by restoring credential values in `wrangler.toml`, copying all of `process.env` into bindings, or allowing process fallback whenever any Cloudflare binding object exists.
 
 ### 6. Tests Required
 
@@ -84,6 +93,7 @@ The catalog is the source of truth for feature-gated and optional credential nam
 - Reject local marker at every binding type and reject a Preview branch equal to Production.
 - Scan `wrangler.toml` Preview vars for every cataloged credential, local marker, and known local default.
 - Table-test runtime missing, short, placeholder, legacy, local-only, strong, and explicit local-development values.
+- Test the local Nitro adapter with D1/R2 preservation, allowlisted nullish credential overlay, explicit platform precedence, arbitrary environment exclusion, production no-overlay, and unmarked-development no-overlay.
 - Test Cloudflare binding precedence over Nuxt/process fallback in auth, app JWT, emergency token, pepper, and feature-gated encryption boundaries.
 - Test deployment ordering, second-preflight target identity, argument rejection, and POSIX native/JavaScript/Windows package-manager resolution.
 - Run focused Vitest, Nexus typecheck, scoped ESLint/Prettier, Node syntax checks, deterministic config scan, and `git diff --check`.
@@ -103,6 +113,9 @@ GITHUB_CLIENT_SECRET = ""
 // Wrong: Production/unqualified inventory is not Preview evidence.
 execFileSync('wrangler', ['pages', 'secret', 'list'])
 execFileSync(process.execPath, [process.env.npm_execpath, 'run', 'build'])
+
+// Wrong: a local fix must not expose the whole process environment.
+event.context.cloudflare.env = { ...bindings, ...process.env }
 ```
 
 #### Correct
@@ -120,4 +133,11 @@ assertPreviewCredentialBindings(bindings)
 
 const { executable, prefixArgs } = resolvePnpmInvocation()
 execFileSync(executable, [...prefixArgs, 'run', 'build'])
+
+// Local Nitro dev: platform values win; only named credentials may fall back.
+const localBindings = { ...bindings, NEXUS_LOCAL_PAGES_PREVIEW: 'true' }
+for (const name of LOCAL_CLOUDFLARE_DEV_CREDENTIAL_BINDINGS) {
+  if (bindings[name] == null && process.env[name] != null)
+    localBindings[name] = process.env[name]
+}
 ```
