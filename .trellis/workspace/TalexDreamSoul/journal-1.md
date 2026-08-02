@@ -1361,3 +1361,36 @@ Published the v2.4.14-beta.1 desktop prerelease, repaired release recovery and d
 ### Next Steps
 
 - None - task complete
+
+
+## Session 41: Fix Nexus local Cloudflare runtime credentials
+
+**Date**: 2026-08-02
+**Task**: Fix Nexus local Cloudflare runtime credentials
+**Branch**: `master`
+
+### Summary
+
+Restored explicit local Nitro Cloudflare credential bindings without weakening remote Preview fail-closed validation; added regression tests and updated the Preview secret deployment spec.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2d68261b0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
