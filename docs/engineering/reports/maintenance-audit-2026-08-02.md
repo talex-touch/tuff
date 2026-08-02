@@ -7,7 +7,7 @@
 - **Windows Everything 严格发布验收尚未具备输入证据** — 2026-08-02 执行 `printf '' | corepack pnpm -F @talex-touch/core-app run windows:acceptance:verify` 以退出码 `1` 结束，诊断为 `Unexpected end of JSON input`。这表示 acceptance manifest 仍未采集，不是已提交 manifest 的回归失败。需在交互式 Windows 打包 CoreBox 采集普通、`@file`、结构化筛选的结果/空态/降级态，写入 manifest 后重跑严格校验。跟踪：[#308](https://github.com/talex-touch/tuff/issues/308)。
 - **OTA 真机闭环缺失** — macOS 官方可信 N+1 包仍缺后台准备、单击、静默替换、自动重启与 health-ack 证据；OTA 父契约也缺 Windows/Linux 的真实 handoff、恢复与 health 证据。静态检查不得替代真实主机运行。跟踪：[#326](https://github.com/talex-touch/tuff/issues/326)。
 - **图标自愈缺官方 N+1 发布证据** — 本地未签名包不能满足 native trust `pass`；需对官方 attested N+1 包重跑 real-profile smoke。见 `07-24-harden-app-icon-self-healing/prd.md:68`。
-- **发布日志任务缺外部工具与视觉验收** — `07-27-bilingual-whats-changed` 记录 actionlint 本机不可用，且 Electron visual screenshots 被 release-build startup guard 阻塞。应在可用环境执行 actionlint，并在无构建占用时补桌面与窄窗口截图；不得把现有自动化验证写成视觉验收。
+- **发布日志任务缺外部工具与视觉验收** — `07-27-bilingual-whats-changed` 记录 actionlint 本机不可用，且 Electron visual screenshots 被 release-build startup guard 阻塞。应在可用环境执行 actionlint，并在无构建占用时补桌面与窄窗口截图；不得把现有自动化验证写成视觉验收。跟踪：[#482](https://github.com/talex-touch/tuff/issues/482)。
 
 ## 数据库与发布门禁
 
@@ -18,9 +18,9 @@
 
 ## 安全与任务记录质量
 
-- **安全审计任务记录与已关闭证据不一致** — `07-27-audit-plugin-privileged-security` 的 PRD 仍保留未勾选的 capability/data-flow/SQLite/transport 验收项，但 parent #302 与 #296–#301 均已关闭并记录最终独立验证（#302 指向 460/460 的 superseding matrix）。需复核这些闭环证据后更新或归档 Trellis 任务；不得把已修复的历史 F1–F8 再当作当前开放漏洞，也不得以 closed issue 代替任务记录的终态。
-- **TuffEx 审计处置已外部化但 Trellis 未闭环** — `07-28-tuffex-docs-audit/report.md` 已记录 119 单元、421 条经对抗验证的 findings，且汇总 #362 与 112 个逐组件 issue（#363–#474）均已创建并保持 open。任务 PRD 的 issue 创建前用户确认门槛已被实际历史动作满足；当前需要把 issue disposition、后续整改 owner/顺序及完成条件回写到 Trellis 任务，而不是重复建 issue 或继续声称“报告缺失”。
-- **活跃任务 evidence JSONL 仍有模板污染** — Windows Everything、OTA、图标、发布日志、搜索分库和 TuffEx 审计等任务的 `implement.jsonl`/`check.jsonl` 仍含 `_example` 模板行。继续执行的任务应写入真实上下文与验证记录；已无后续动作的任务应完成状态同步或归档，避免模板被误当证据。
+- **安全审计任务记录与已关闭证据不一致** — `07-27-audit-plugin-privileged-security` 的 PRD 仍保留未勾选的 capability/data-flow/SQLite/transport 验收项，但 parent #302 与 #296–#301 均已关闭并记录最终独立验证（#302 指向 460/460 的 superseding matrix）。需复核这些闭环证据后更新或归档 Trellis 任务；不得把已修复的历史 F1–F8 再当作当前开放漏洞，也不得以 closed issue 代替任务记录的终态。跟踪：[#481](https://github.com/talex-touch/tuff/issues/481)。
+- **TuffEx 审计处置已外部化但 Trellis 未闭环** — `07-28-tuffex-docs-audit/report.md` 已记录 119 单元、421 条经对抗验证的 findings，且汇总 #362 与 112 个逐组件 issue（#363–#474）均已创建并保持 open。任务 PRD 的 issue 创建前用户确认门槛已被实际历史动作满足；当前需要把 issue disposition、后续整改 owner/顺序及完成条件回写到 Trellis 任务，而不是重复建 issue 或继续声称“报告缺失”。跟踪：[#481](https://github.com/talex-touch/tuff/issues/481)。
+- **活跃任务 evidence JSONL 仍有模板污染** — Windows Everything、OTA、图标、发布日志、搜索分库和 TuffEx 审计等任务的 `implement.jsonl`/`check.jsonl` 仍含 `_example` 模板行。继续执行的任务应写入真实上下文与验证记录；已无后续动作的任务应完成状态同步或归档，避免模板被误当证据。跟踪：[#481](https://github.com/talex-touch/tuff/issues/481)。
 - **Dependabot 告警尚未逐项分诊** — 最近一次推送回执的基线为 35 个告警（3 critical、15 high、14 moderate、3 low）。需在 GitHub Security dashboard 逐项确认运行时可达性、升级或豁免理由及回归门禁；该数字不是本项目漏洞可达性结论。
 
 ## 已验证的非问题
