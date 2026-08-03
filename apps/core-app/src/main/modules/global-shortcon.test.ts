@@ -11,6 +11,11 @@ const electronMocks = vi.hoisted(() => ({
   getAllWindows: vi.fn(() => [])
 }))
 
+const mainStorageMocks = vi.hoisted(() => ({
+  getConfig: vi.fn(),
+  saveConfig: vi.fn()
+}))
+
 const eventBusMocks = vi.hoisted(() => {
   const handlers = new Map<string, Set<(event: unknown) => void>>()
   const on = (event: string, handler: (payload: unknown) => void) => {
@@ -68,10 +73,7 @@ vi.mock('../core/eventbus/touch-event', () => ({
 }))
 
 vi.mock('./storage', () => ({
-  useMainStorage: () => ({
-    getConfig: vi.fn(),
-    saveConfig: vi.fn()
-  })
+  useMainStorage: () => mainStorageMocks
 }))
 
 vi.mock('./plugin/plugin-module', () => ({
@@ -166,6 +168,73 @@ afterEach(() => {
   electronMocks.register.mockClear()
   electronMocks.unregisterAll.mockClear()
   electronMocks.getAllWindows.mockClear()
+  mainStorageMocks.getConfig.mockReset()
+  mainStorageMocks.saveConfig.mockReset()
+})
+
+describe('ShortcutModule retired shortcut migration', () => {
+  it('removes retired IDs before the initial global registration pass', () => {
+    const timestamp = Date.now()
+    mainStorageMocks.getConfig.mockReturnValue([
+      {
+        id: 'core.box.aiQuickCall',
+        accelerator: 'CommandOrControl+Shift+I',
+        type: ShortcutType.MAIN,
+        meta: {
+          creationTime: timestamp,
+          modificationTime: timestamp,
+          author: 'system',
+          enabled: false
+        }
+      },
+      {
+        id: 'flow:detach-to-divisionbox',
+        accelerator: 'CommandOrControl+D',
+        type: ShortcutType.MAIN,
+        meta: {
+          creationTime: timestamp,
+          modificationTime: timestamp,
+          author: 'system',
+          enabled: true
+        }
+      },
+      {
+        id: 'flow:transfer-to-plugin',
+        accelerator: 'CommandOrControl+Shift+D',
+        type: ShortcutType.MAIN,
+        meta: {
+          creationTime: timestamp,
+          modificationTime: timestamp,
+          author: 'system',
+          enabled: true
+        }
+      },
+      {
+        id: 'core.box.toggle',
+        accelerator: 'CommandOrControl+E',
+        type: ShortcutType.MAIN,
+        meta: {
+          creationTime: timestamp,
+          modificationTime: timestamp,
+          author: 'system',
+          enabled: true
+        }
+      }
+    ])
+
+    const module = new ShortcutModule()
+    module.onInit({
+      app: {},
+      runtime: { channel: {} }
+    } as unknown as Parameters<ShortcutModule['onInit']>[0])
+
+    expect(mainStorageMocks.saveConfig).toHaveBeenCalledTimes(1)
+    const persistedShortcuts = JSON.parse(String(mainStorageMocks.saveConfig.mock.calls[0]?.[1]))
+    expect(persistedShortcuts.map((shortcut: Shortcut) => shortcut.id)).toEqual(['core.box.toggle'])
+    expect(electronMocks.register).not.toHaveBeenCalled()
+
+    module.onDestroy()
+  })
 })
 
 describe('ShortcutModule runtime cleanup', () => {

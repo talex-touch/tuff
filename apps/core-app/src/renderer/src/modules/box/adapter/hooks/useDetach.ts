@@ -250,18 +250,9 @@ export function useDetach(options: UseDetachOptions) {
 
   async function detachUIMode(activation: IProviderActivate): Promise<void> {
     try {
-      const sourceBounds = await getCurrentCoreBoxBounds()
-      const config = {
-        url: `plugin://${activation.id}/index.html`,
-        title: activation.name || activation.id,
-        icon: activation.icon,
-        size: 'medium' as const,
-        keepAlive: true,
-        pluginId: activation.id,
-        ui: { showInput: true, initialInput: searchVal.value },
-        initialBounds: resolveDetachedContentBounds(sourceBounds)
-      }
-      const response = await transport.send(DivisionBoxEvents.open, config)
+      const response = await transport.send(CoreBoxEvents.uiMode.detach, {
+        initialInput: searchVal.value
+      })
       if (response?.success) {
         await deactivateProvider(activation.id).catch((error) => {
           detachLog.warn('Detached UI view, but failed to deactivate provider:', error)
@@ -320,7 +311,7 @@ export function useDetach(options: UseDetachOptions) {
     }
   }
 
-  // Channel listeners
+  // Plugin WebContentsView shortcuts arrive through typed context notifications.
   const unregDetach = transport.on(FlowEvents.triggerDetach, () => {
     if (isUIMode.value && activeActivations.value?.length) {
       void detachUIMode(activeActivations.value[0])

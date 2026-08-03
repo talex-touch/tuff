@@ -453,6 +453,9 @@ describe("transport domain sdk mappings", () => {
     expect(CoreBoxEvents.uiMode.enter.toEventName()).toBe(
       "core-box:ui-mode:enter",
     );
+    expect(CoreBoxEvents.uiMode.detach.toEventName()).toBe(
+      "core-box:ui-mode:detach",
+    );
     expect(CoreBoxEvents.uiMode.exit.toEventName()).toBe(
       "core-box:ui-mode:exit",
     );

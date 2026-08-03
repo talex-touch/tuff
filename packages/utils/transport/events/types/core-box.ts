@@ -211,6 +211,14 @@ export interface CoreBoxUIModeExitedPayload {
   resetInput?: boolean;
 }
 
+/**
+ * Request to transfer the currently owned CoreBox plugin view into a DivisionBox.
+ * Plugin identity is intentionally omitted because main resolves it from the owned view.
+ */
+export interface CoreBoxDetachUIViewRequest {
+  initialInput?: string;
+}
+
 // ============================================================================
 // Search Types
 // ============================================================================

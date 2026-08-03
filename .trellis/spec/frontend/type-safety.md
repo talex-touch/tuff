@@ -888,6 +888,106 @@ transport.broadcastToWindow(window.id, CoreBoxEvents.ui.trigger, {
 });
 ```
 
+## Scenario: CoreBox Shortcut Scope Integrity
+
+### 1. Scope / Trigger
+
+- Trigger: adding, removing, or moving a CoreBox/Flow keyboard shortcut between Electron main, the CoreBox host renderer, and an attached plugin `WebContentsView`.
+- This contract prevents a CoreBox-only command from reserving the same accelerator in every foreground application.
+
+### 2. Signatures
+
+```ts
+globalShortcut.register(accelerator, callback)
+resolveCoreBoxFlowShortcut(input): 'detach' | 'transfer' | null
+FlowEvents.triggerDetach
+FlowEvents.triggerTransfer
+CoreBoxEvents.uiMode.detach
+WindowManager.detachUIViewToDivisionBox(initialInput): Promise<DivisionBoxOpenResponse>
+ShortcutStorage.removeShortcuts(ids: readonly string[]): number
+```
+
+### 3. Contracts
+
+- `globalShortcut` is reserved for commands whose product contract explicitly works while Tuff is unfocused. A callback-time `isFocused()` / visibility guard is too late because the operating system has already routed the key away from the foreground app.
+- CoreBox page commands use the host renderer `keydown` path. When a plugin `WebContentsView` owns focus, its `before-input-event` handler may consume the same command only while the controller still owns that exact view and the CoreBox owner window exists, is not destroyed, and is visible.
+- An extracted, cached-but-detached, hidden, or foreign plugin view must not call `preventDefault()` and must not dispatch a CoreBox command.
+- Context shortcut classification rejects unrelated modifiers and key repeats. The host does not forward reserved Flow combinations into the plugin view.
+- Main-to-renderer shortcut triggers are `void` notifications and use `broadcastToWindow()`, never request-style `sendToWindow()`.
+- Detaching an attached plugin view is a main-owned object transfer, not a generic renderer `DivisionBoxEvents.open` request. The CoreBox renderer sends `CoreBoxEvents.uiMode.detach` without plugin identity; main accepts it only from the owning CoreBox `webContents`, resolves the attached `TouchPlugin`, enforces its permission, and moves the same `WebContentsView` through `createSessionWithoutUI()` / `attachExistingUIView()`.
+- `CoreBoxEvents.uiMode.detach` has exactly one main handler. The transfer is non-idempotent; duplicate handlers can complete the first transfer and overwrite its response with a second failure.
+- View transfer must also transfer cache ownership. Relinquish only the exact cached `WebContentsView` without closing it before asynchronous session creation; a successful transfer leaves no CoreBox cache entry, while a safe rollback restores the original feature and cache record after CoreBox reattaches the view.
+- A partial DivisionBox attachment uses a three-state release result: `released`, `not-owned`, or `failed`. Restore CoreBox only for the first two. On `failed`, destroy the session, abandon the extracted CoreBox state, clear input/clipboard monitoring, exit UI mode, and close the view if it remains alive.
+- The generic DivisionBox open handler remains fail closed for `plugin://` requests without authoritative plugin context. Never bypass that rule by trusting renderer-supplied `pluginId`.
+- Removing a global shortcut also retires its persisted shortcut ID before the initial registration pass. Bulk cleanup persists once when records changed and preserves every unrelated/custom shortcut.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required result |
+| --- | --- |
+| Tuff unfocused, page-only accelerator pressed | Foreground application receives the key; Tuff does nothing |
+| CoreBox host page focused | Page handler consumes once and runs the matching action |
+| Owned plugin view focused in visible CoreBox | Prevent input and broadcast one typed trigger to the owner window; detach then uses the main-owned transfer event |
+| View extracted or controller ownership changed | Do not prevent; do not broadcast |
+| Owner window missing, destroyed, or hidden | Do not prevent; do not broadcast |
+| Foreign renderer requests `uiMode.detach` | Reject with `PERMISSION_DENIED`; do not extract the view |
+| Main detach succeeds | Move the same view into a new DivisionBox and exit CoreBox UI mode |
+| Main detach permission fails | Reject before extracting or changing view ownership |
+| Session creation fails after extraction | Restore the extracted view and original cache record to CoreBox, then return a typed failure |
+| Partial attach releases or never owned the view | Destroy the DivisionBox session, then restore CoreBox view/feature/cache ownership |
+| Partial attach cannot release DivisionBox ownership | Do not restore the view/cache; abandon CoreBox monitoring state, exit UI mode, and close any still-live orphan view |
+| Auto-repeat or unsupported modifier | Do not trigger the Flow action |
+| Retired IDs exist in shortcut settings | Remove only those IDs and persist once before global registration |
+
+### 5. Good / Base / Bad Cases
+
+- Good: `Cmd/Ctrl+D` works inside CoreBox host/plugin contexts but still performs the normal foreground-app command while Tuff is unfocused.
+- Base: the true CoreBox launcher remains a user-configurable global shortcut and keeps its shortcut-origin visibility ordering.
+- Bad: register `Cmd/Ctrl+D` globally, then return early from the callback when CoreBox is hidden; the key is still lost to the foreground app.
+- Bad: a detached plugin view keeps an old `before-input-event` listener that prevents the key without checking `this.uiView === view`.
+
+### 6. Tests Required
+
+- Shortcut storage tests seed retired and unrelated IDs, assert exact survivors, one write on change, and zero writes on no-op.
+- Shortcut module initialization tests assert retirement runs before any initial global registration.
+- CoreBox module tests assert only intended global launchers register and unregister.
+- Pure key-classification tests cover Command/Control, Shift transfer, Alt/other-key rejection, and repeat rejection.
+- Plugin-view boundary tests assert ownership/visibility guards precede `preventDefault()`, typed events use `broadcastToWindow()`, and `sendToWindow()` is absent.
+- CoreBox IPC tests prove only the owning renderer can request detach and that the non-idempotent event has one handler. WindowManager tests prove permission enforcement before extraction, same-view transfer, exact cache relinquish, safe rollback ordering, and no restore after ownership release fails.
+- View-cache tests prove relinquish does not close or remain discoverable/cleanable, and that rollback restores only a live exact entry. DivisionBox session tests make `removeChildView()` throw and require `failed` without clearing the session reference; failed WindowManager rollback tests require input/clipboard monitoring cleanup and UI-mode exit.
+- DivisionBox authorization tests keep generic host-originated `plugin://` opens denied; shortcut tests must use the dedicated CoreBox detach event instead.
+- CoreApp node/web typechecks and `git diff --check` remain required. A real cross-App interception claim still needs an Electron smoke with another foreground application.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+globalShortcut.register('CommandOrControl+D', () => {
+  if (!coreBoxWindow.isFocused()) return;
+  detachCurrentItem();
+});
+```
+
+#### Correct
+
+```ts
+const action = resolveCoreBoxFlowShortcut(input);
+const owner = getCurrentCoreBoxWindow();
+if (!action || ownedView !== sourceView || !owner?.isVisible()) return;
+
+event.preventDefault();
+transport.broadcastToWindow(
+  owner.id,
+  action === 'detach' ? FlowEvents.triggerDetach : FlowEvents.triggerTransfer,
+  undefined,
+);
+
+// Renderer carries no plugin identity; main resolves it from the owned view.
+await rendererTransport.send(CoreBoxEvents.uiMode.detach, { initialInput });
+await windowManager.detachUIViewToDivisionBox(initialInput);
+```
+
 ## Scenario: Context-Isolated MessagePort Handoff
 
 ### 1. Scope / Trigger

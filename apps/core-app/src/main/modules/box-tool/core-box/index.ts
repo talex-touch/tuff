@@ -129,50 +129,11 @@ export class CoreBoxModule extends BaseModule {
       { enabled: true, owner: COREBOX_SHORTCUT_OWNER }
     )
 
-    shortcutModule.registerMainShortcut(
-      'core.box.aiQuickCall',
-      'CommandOrControl+Shift+I',
-      () => {
-        const curScreen = windowManager.getCurScreen()
-        const currentWindow = windowManager.current
-
-        if (currentWindow) {
-          windowManager.updatePosition(currentWindow, curScreen)
-        }
-
-        // Also pass triggeredByShortcut for AI quick call
-        if (!coreBoxManager.trigger(true, { triggeredByShortcut: true })) {
-          return
-        }
-        lastScreenId = curScreen.id
-
-        const targetWindow = windowManager.current?.window
-        if (!targetWindow || targetWindow.isDestroyed()) {
-          return
-        }
-        const targetWindowId = targetWindow.id
-        const transport = this.transport
-        if (!transport) {
-          return
-        }
-
-        setTimeout(() => {
-          transport
-            .sendToWindow(targetWindowId, CoreBoxEvents.input.setQuery, { value: 'ai ' })
-            .catch((error) => {
-              coreBoxLog.error('Failed to set AI quick call query', { error })
-            })
-        }, 80)
-      },
-      { enabled: false, owner: COREBOX_SHORTCUT_OWNER }
-    )
-
     coreBoxLog.success('Core-box module initialized')
   }
 
   async onDestroy(): Promise<void> {
     shortcutModule.unregisterMainShortcut('core.box.toggle')
-    shortcutModule.unregisterMainShortcut('core.box.aiQuickCall')
 
     if (this.disposeLagBurstSubscription) {
       this.disposeLagBurstSubscription()

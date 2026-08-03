@@ -1,5 +1,63 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { DivisionBoxSession } from './session'
 import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds } from './layout'
+
+vi.mock('../plugin/plugin-module', () => ({
+  pluginModule: { pluginManager: null }
+}))
+
+describe('DivisionBoxSession transferred view release', () => {
+  function createSession(removeChildView: () => void): {
+    session: DivisionBoxSession
+    view: Electron.WebContentsView
+  } {
+    const session = new DivisionBoxSession('transfer-test', {
+      url: 'plugin://demo-plugin/index.html',
+      title: 'Demo Plugin',
+      pluginId: 'demo-plugin'
+    })
+    const view = {
+      webContents: {
+        close: vi.fn(),
+        isDestroyed: vi.fn(() => false)
+      }
+    } as unknown as Electron.WebContentsView
+
+    Reflect.set(session, 'touchWindow', {
+      window: {
+        isDestroyed: vi.fn(() => false),
+        contentView: { removeChildView }
+      }
+    })
+    Reflect.set(session, 'uiView', view)
+    Reflect.set(session, 'attachedPlugin', { name: 'demo-plugin' })
+
+    return { session, view }
+  }
+
+  it('releases the exact transferred view without closing it', () => {
+    const removeChildView = vi.fn()
+    const { session, view } = createSession(removeChildView)
+
+    expect(session.releaseExistingUIView(view)).toBe('released')
+    expect(removeChildView).toHaveBeenCalledWith(view)
+    expect(session.getUIView()).toBeNull()
+    expect(session.getAttachedPlugin()).toBeNull()
+    expect(view.webContents.close).not.toHaveBeenCalled()
+  })
+
+  it('reports failed ownership release and keeps the session reference', () => {
+    const removeChildView = vi.fn(() => {
+      throw new Error('remove failed')
+    })
+    const { session, view } = createSession(removeChildView)
+
+    expect(session.releaseExistingUIView(view)).toBe('failed')
+    expect(session.getUIView()).toBe(view)
+    expect(session.getAttachedPlugin()).toMatchObject({ name: 'demo-plugin' })
+    expect(view.webContents.close).not.toHaveBeenCalled()
+  })
+})
 
 describe('resolveDivisionBoxHeaderHeight', () => {
   it('keeps the default header height unless header is explicitly hidden', () => {

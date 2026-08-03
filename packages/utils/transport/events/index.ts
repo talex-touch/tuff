@@ -106,6 +106,7 @@ import type {
   CoreBoxAggregateTimeStatsResponse,
   CoreBoxClearItemsPayload,
   CoreBoxContextActionsOpenRequest,
+  CoreBoxDetachUIViewRequest,
   CoreBoxExecuteRequest,
   CoreBoxForwardKeyEvent,
   CoreBoxGetBoundsResponse,
@@ -1270,6 +1271,14 @@ export const CoreBoxEvents = {
      * Enter plugin UI mode.
      */
     enter: defineEvent('core-box').module('ui-mode').event('enter').define<EnterUIModeRequest, void>(),
+
+    /**
+     * Transfer the main-owned plugin view into a DivisionBox.
+     */
+    detach: defineEvent('core-box')
+      .module('ui-mode')
+      .event('detach')
+      .define<CoreBoxDetachUIViewRequest, DivisionBoxOpenResponse>(),
 
     /**
      * Exit plugin UI mode.

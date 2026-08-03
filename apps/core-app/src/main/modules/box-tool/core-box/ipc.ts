@@ -1,8 +1,13 @@
 import type { TuffItem } from '@talex-touch/utils/core-box/tuff/tuff-dsl'
-import type { ITuffTransportMain, StreamContext } from '@talex-touch/utils/transport/main'
+import type {
+  HandlerContext,
+  ITuffTransportMain,
+  StreamContext
+} from '@talex-touch/utils/transport/main'
 import type {
   ActivationState,
   AllowClipboardRequest,
+  CoreBoxDetachUIViewRequest,
   CoreBoxHideRequest,
   DeactivateProviderRequest,
   ExpandOptions,
@@ -21,6 +26,7 @@ import type {
 } from '@talex-touch/utils/transport/events/types/meta-overlay'
 import type { TouchApp } from '../../../core/touch-app'
 import crypto from 'node:crypto'
+import { DivisionBoxErrorCode } from '@talex-touch/utils'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
@@ -524,6 +530,30 @@ export class IpcManager {
     this.transportDisposers.push(
       this.ensureTransport().on(CoreBoxEvents.provider.getDetails, handleGetProviderDetails)
     )
+
+    const handleDetachUIMode = async (
+      request: CoreBoxDetachUIViewRequest,
+      context: HandlerContext
+    ) => {
+      const ownerWindow = getCoreBoxWindow()
+      if (
+        !ownerWindow ||
+        ownerWindow.window.isDestroyed() ||
+        context.sender?.id !== ownerWindow.window.webContents.id
+      ) {
+        return {
+          success: false,
+          error: {
+            code: DivisionBoxErrorCode.PERMISSION_DENIED,
+            message: 'Only the owning CoreBox renderer can detach its plugin view.'
+          }
+        }
+      }
+
+      return await windowManager.detachUIViewToDivisionBox(request?.initialInput ?? '')
+    }
+
+    this.transportDisposers.push(transport.on(CoreBoxEvents.uiMode.detach, handleDetachUIMode))
 
     const handleExitUIMode = () => {
       coreBoxManager.exitUIMode()

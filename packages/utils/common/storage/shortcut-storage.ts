@@ -66,6 +66,23 @@ class ShortcutStorage {
     this._save()
     return true
   }
+
+  removeShortcuts(ids: readonly string[]): number {
+    if (ids.length === 0) {
+      return 0
+    }
+
+    const retiredIds = new Set(ids)
+    const nextConfig = this._config.filter(shortcut => !retiredIds.has(shortcut.id))
+    const removedCount = this._config.length - nextConfig.length
+    if (removedCount === 0) {
+      return 0
+    }
+
+    this._config = nextConfig
+    this._save()
+    return removedCount
+  }
 }
 
 export default ShortcutStorage

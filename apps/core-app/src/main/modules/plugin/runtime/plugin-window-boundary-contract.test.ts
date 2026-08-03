@@ -15,6 +15,7 @@ describe('plugin window boundary contract', () => {
   )
   const coreBoxSource = read('src/main/modules/box-tool/core-box/plugin-view-controller.ts')
   const coreBoxIpcSource = read('src/main/modules/box-tool/core-box/ipc.ts')
+  const detachHookSource = read('src/renderer/src/modules/box/adapter/hooks/useDetach.ts')
   const divisionBoxSource = read('src/main/modules/division-box/session.ts')
   const divisionBoxManagerSource = read('src/main/modules/division-box/manager.ts')
   const preloadSource = read('src/preload/plugin-view.ts')
@@ -62,6 +63,59 @@ describe('plugin window boundary contract', () => {
     expect(divisionBoxSource).not.toContain('compat-plugin-view')
     expect(coreBoxSource).not.toContain('getPluginChannelPreludeCode')
     expect(divisionBoxSource).not.toContain('getPluginChannelPreludeCode')
+  })
+
+  it('keeps CoreBox plugin-view Flow shortcuts scoped to the owning visible view', () => {
+    const inputHandlerStart = coreBoxSource.indexOf(
+      "this.uiView.webContents.on('before-input-event'"
+    )
+    const inputHandlerEnd = coreBoxSource.indexOf(
+      "this.uiView.webContents.addListener('dom-ready'",
+      inputHandlerStart
+    )
+    const inputHandler = coreBoxSource.slice(inputHandlerStart, inputHandlerEnd)
+    const flowHandler = inputHandler.slice(inputHandler.indexOf('const flowShortcut'))
+
+    expect(flowHandler).toContain('resolveCoreBoxFlowShortcut(input)')
+    expect(flowHandler).toContain('this.uiView !== view')
+    expect(flowHandler).toContain('ownerWindow.window.isDestroyed()')
+    expect(flowHandler).toContain('ownerWindow.window.isVisible()')
+    expect(flowHandler).toContain('FlowEvents.triggerDetach')
+    expect(flowHandler).toContain('FlowEvents.triggerTransfer')
+    expect(flowHandler).toContain('transport.broadcastToWindow')
+    expect(flowHandler).not.toContain('.sendToWindow(')
+    expect(flowHandler.indexOf('this.uiView !== view')).toBeLessThan(
+      flowHandler.indexOf('event.preventDefault()')
+    )
+    expect(flowHandler.indexOf('event.preventDefault()')).toBeLessThan(
+      flowHandler.indexOf('transport.broadcastToWindow')
+    )
+  })
+
+  it('routes contextual detach through the owning CoreBox boundary', () => {
+    const detachStart = detachHookSource.indexOf('async function detachUIMode')
+    const detachEnd = detachHookSource.indexOf('function openFlowSelector', detachStart)
+    const detachHandler = detachHookSource.slice(detachStart, detachEnd)
+
+    expect(detachHandler).toContain('CoreBoxEvents.uiMode.detach')
+    expect(detachHandler).not.toContain('DivisionBoxEvents.open')
+    expect(coreBoxIpcSource).toContain('context.sender?.id !== ownerWindow.window.webContents.id')
+    expect(coreBoxIpcSource).toContain('windowManager.detachUIViewToDivisionBox')
+  })
+
+  it('releases transferred DivisionBox ownership without closing the shared view', () => {
+    const releaseStart = divisionBoxSource.indexOf('releaseExistingUIView(')
+    const releaseEnd = divisionBoxSource.indexOf('detachUIView(): void', releaseStart)
+    const releaseHandler = divisionBoxSource.slice(releaseStart, releaseEnd)
+
+    expect(releaseHandler).toContain('contentView.removeChildView(view)')
+    expect(releaseHandler).toContain("return 'failed'")
+    expect(releaseHandler).toContain("return 'released'")
+    expect(releaseHandler.indexOf('contentView.removeChildView(view)')).toBeLessThan(
+      releaseHandler.indexOf('this.uiView = null')
+    )
+    expect(releaseHandler).toContain('this.attachedPlugin = null')
+    expect(releaseHandler).not.toContain('webContents.close()')
   })
 
   it('does not allow unowned URL requests to downgrade into app surfaces', () => {

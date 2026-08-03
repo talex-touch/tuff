@@ -7,7 +7,7 @@ import type { TouchPlugin } from '../../plugin/plugin'
 import type { CoreBoxKeyEvent } from './key-event'
 import { StorageList } from '@talex-touch/utils'
 import { PluginStatus } from '@talex-touch/utils/plugin'
-import { CoreBoxEvents, PluginEvents } from '@talex-touch/utils/transport/events'
+import { CoreBoxEvents, FlowEvents, PluginEvents } from '@talex-touch/utils/transport/events'
 import { app, WebContentsView } from 'electron'
 import { buildWindowWebPreferences } from '../../../core/window-security-profile'
 import { useAliveWebContents } from '../../../hooks/use-electron-guard'
@@ -29,7 +29,8 @@ import { getBoxItemManager } from '../item-sdk'
 import {
   buildCoreBoxKeyModifiers,
   isBlockedCoreBoxFunctionKey,
-  mapDomKeyToElectronKeyCode
+  mapDomKeyToElectronKeyCode,
+  resolveCoreBoxFlowShortcut
 } from './key-event'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
@@ -44,6 +45,12 @@ const CLIPBOARD_TYPE_BITS = {
 } as const
 
 type CoreBoxTransport = ReturnType<typeof getTuffTransportMain>
+
+export interface ExtractedCoreBoxUIView {
+  view: WebContentsView
+  plugin: TouchPlugin
+  feature?: IPluginFeature
+}
 
 export interface PluginViewControllerOptions {
   headerHeight: number
@@ -147,6 +154,11 @@ export class PluginViewController {
   ): Promise<void> {
     const startTime = performance.now()
     const metrics = { preload: 0, viewCreate: 0, total: 0 }
+
+    if (this.detachingUIView) {
+      pluginViewLog.warn('Cannot attach UI view while ownership transfer is in progress')
+      return
+    }
 
     const currentWindow = this.options.getCurrentWindow()
     if (!currentWindow) {
@@ -290,6 +302,25 @@ export class PluginViewController {
 
       if (isBlockedCoreBoxFunctionKey(input.key)) {
         event.preventDefault()
+        return
+      }
+
+      const flowShortcut = resolveCoreBoxFlowShortcut(input)
+      if (flowShortcut) {
+        const ownerWindow = this.options.getCurrentWindow()
+        if (
+          this.uiView !== view ||
+          !ownerWindow ||
+          ownerWindow.window.isDestroyed() ||
+          !ownerWindow.window.isVisible()
+        ) {
+          return
+        }
+
+        event.preventDefault()
+        const triggerEvent =
+          flowShortcut === 'detach' ? FlowEvents.triggerDetach : FlowEvents.triggerTransfer
+        transport.broadcastToWindow(ownerWindow.window.id, triggerEvent, undefined)
         return
       }
 
@@ -490,8 +521,8 @@ export class PluginViewController {
     return this.uiView ?? undefined
   }
 
-  public extractUIView(): { view: WebContentsView; plugin: TouchPlugin } | null {
-    if (!this.uiView || !this.attachedPlugin) {
+  public extractUIView(): ExtractedCoreBoxUIView | null {
+    if (this.detachingUIView || !this.uiView || !this.attachedPlugin) {
       return null
     }
 
@@ -505,45 +536,62 @@ export class PluginViewController {
       return null
     }
 
+    this.detachingUIView = true
     try {
       currentWindow.window.contentView.removeChildView(this.uiView)
     } catch (error) {
+      this.detachingUIView = false
       pluginViewLog.error('Failed to remove UI view from CoreBox', { error })
       return null
     }
 
-    const result = {
+    const result: ExtractedCoreBoxUIView = {
       view: this.uiView,
-      plugin: this.attachedPlugin
+      plugin: this.attachedPlugin,
+      feature: this.attachedFeature ?? undefined
     }
 
     this.uiView = null
     this.attachedPlugin = null
+    this.attachedFeature = null
     this.uiViewFocused = false
 
     pluginViewLog.info('UI view extracted for transfer')
     return result
   }
 
-  public restoreExtractedUIView(view: WebContentsView, plugin: TouchPlugin): boolean {
+  public completeExtractedUIViewTransfer(): void {
+    this.detachingUIView = false
+  }
+
+  public abandonExtractedUIView(): void {
+    this.detachingUIView = false
+    this.inputAllowed = false
+    this.clipboardAllowedTypes = 0
+    this.options.stopFollowingSystemTheme()
+  }
+
+  public restoreExtractedUIView(extracted: ExtractedCoreBoxUIView): boolean {
     const currentWindow = this.options.getCurrentWindow()
     if (!currentWindow || currentWindow.window.isDestroyed()) {
+      this.detachingUIView = false
       pluginViewLog.warn('Cannot restore UI view: CoreBox window is not available')
       return false
     }
 
     if (this.uiView) {
+      this.detachingUIView = false
       pluginViewLog.warn('Cannot restore UI view: another UI view is already attached')
       return false
     }
 
-    this.uiView = view
-    this.attachedPlugin = plugin
-    this.attachedFeature = null
+    this.uiView = extracted.view
+    this.attachedPlugin = extracted.plugin
+    this.attachedFeature = extracted.feature ?? null
     this.uiViewFocused = true
 
     try {
-      currentWindow.window.contentView.addChildView(view)
+      currentWindow.window.contentView.addChildView(extracted.view)
       this.resizeToWindow(currentWindow.window)
     } catch (error) {
       pluginViewLog.error('Failed to restore extracted UI view', { error })
@@ -551,17 +599,19 @@ export class PluginViewController {
       this.attachedPlugin = null
       this.attachedFeature = null
       this.uiViewFocused = false
+      this.detachingUIView = false
       return false
     }
 
-    const webContents = getLiveViewWebContents(view)
+    const webContents = getLiveViewWebContents(extracted.view)
     if (webContents) {
-      this.options.applyThemeToView(view)
+      this.options.applyThemeToView(extracted.view)
       webContents.focus()
     }
 
+    this.detachingUIView = false
     pluginViewLog.info('UI view restored after failed transfer', {
-      meta: { plugin: plugin.name }
+      meta: { plugin: extracted.plugin.name }
     })
     return true
   }

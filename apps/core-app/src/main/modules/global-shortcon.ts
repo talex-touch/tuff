@@ -40,6 +40,11 @@ interface MainTriggerRegistration {
 }
 const mainTriggerRegistry = new Map<string, MainTriggerRegistration>()
 const SYSTEM_SHORTCUT_AUTHOR = 'system'
+const RETIRED_GLOBAL_SHORTCUT_IDS = [
+  'core.box.aiQuickCall',
+  'flow:detach-to-divisionbox',
+  'flow:transfer-to-plugin'
+] as const
 const resolveKeyManager = (channel: unknown): unknown =>
   (channel as { keyManager?: unknown } | null | undefined)?.keyManager ?? channel
 const SHORTCUT_PERMISSION_ID = 'system.shortcut'
@@ -130,6 +135,10 @@ export class ShortcutModule extends BaseModule {
       getConfig: storage.getConfig.bind(storage),
       saveConfig: storage.saveConfig.bind(storage)
     })
+    const removedRetiredShortcuts = this.storage.removeShortcuts(RETIRED_GLOBAL_SHORTCUT_IDS)
+    if (removedRetiredShortcuts > 0) {
+      shortconLog.info(`Removed ${removedRetiredShortcuts} retired global shortcuts`)
+    }
     this.registerBeforeQuitTeardownListener()
     const runtime = resolveMainRuntime(ctx, 'ShortcutModule.onInit')
     this.transport = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
