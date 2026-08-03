@@ -571,7 +571,12 @@ function isInputEditingShortcut(event: KeyboardEvent): boolean {
  * @param inputHidden - Whether the input is hidden (UI mode with no input box)
  * @returns True if the event should be forwarded
  */
-function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
+export function shouldForwardKey(event: KeyboardEvent, inputHidden = false): boolean {
+  // Flow commands belong to the CoreBox page even when a plugin UI view is attached.
+  if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'd') {
+    return false
+  }
+
   // Never forward system keys (Escape for exit) or function keys (F11 fullscreen etc.)
   if (SYSTEM_KEYS.has(event.key) || isBlockedFunctionKey(event)) {
     return false
@@ -950,6 +955,11 @@ export function useKeyboard(
        * With Shift: Opens Flow selector to transfer data to another plugin
        */
       if ((event.metaKey || event.ctrlKey) && !event.altKey) {
+        if (event.repeat) {
+          event.preventDefault()
+          return
+        }
+
         const activeFeature = resolveActiveFeatureItem(activeActivations.value)
         const currentItem = activeFeature ?? res.value[boxOptions.focus]
 

@@ -193,7 +193,7 @@ describe('CoreBoxModule', () => {
     vi.useRealTimers()
   })
 
-  it('registers core.box.toggle as enabled by default and AI quick call as disabled', async () => {
+  it('registers only core.box.toggle as enabled by default', async () => {
     const module = new CoreBoxModule()
 
     await module.onInit({
@@ -201,17 +201,12 @@ describe('CoreBoxModule', () => {
       manager: { loadModule: vi.fn(async () => undefined) }
     } as unknown as Parameters<CoreBoxModule['onInit']>[0])
 
+    expect(mocks.registerMainShortcut).toHaveBeenCalledTimes(1)
     expect(mocks.registerMainShortcut).toHaveBeenCalledWith(
       'core.box.toggle',
       'CommandOrControl+E',
       expect.any(Function),
       expect.objectContaining({ enabled: true })
-    )
-    expect(mocks.registerMainShortcut).toHaveBeenCalledWith(
-      'core.box.aiQuickCall',
-      'CommandOrControl+Shift+I',
-      expect.any(Function),
-      expect.objectContaining({ enabled: false })
     )
   })
 
@@ -491,7 +486,6 @@ describe('CoreBoxModule', () => {
 
     expect(mocks.callOrder).toEqual([
       'unregister:core.box.toggle',
-      'unregister:core.box.aiQuickCall',
       'dispose-lag-burst',
       'dispose-transport',
       'search-logger-destroy',

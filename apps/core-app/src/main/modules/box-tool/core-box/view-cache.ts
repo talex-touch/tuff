@@ -7,7 +7,7 @@ import { createLogger } from '../../../utils/logger'
 
 const log = createLogger('ViewCache')
 
-interface CachedView {
+export interface RelinquishedCachedView {
   view: WebContentsView
   plugin: TouchPlugin
   feature?: IPluginFeature
@@ -15,6 +15,9 @@ interface CachedView {
   lastUsedAt: number
   usageCount: number
   webContentsId: number
+}
+
+interface CachedView extends RelinquishedCachedView {
   dispose: (() => void) | null
 }
 
@@ -195,6 +198,52 @@ export class ViewCacheManager {
     const key = this.getCacheKey(plugin, feature)
     this.removeEntry(key, { close: true })
     log.debug(`Released view: ${key}`)
+  }
+
+  public relinquish(
+    plugin: TouchPlugin,
+    view: WebContentsView,
+    feature?: IPluginFeature
+  ): RelinquishedCachedView | null {
+    const key = this.getCacheKey(plugin, feature)
+    const cached = this.cache.get(key)
+    if (!cached || cached.view !== view) {
+      return null
+    }
+
+    const entry: RelinquishedCachedView = {
+      view: cached.view,
+      plugin: cached.plugin,
+      feature: cached.feature,
+      url: cached.url,
+      lastUsedAt: cached.lastUsedAt,
+      usageCount: cached.usageCount,
+      webContentsId: cached.webContentsId
+    }
+    this.removeEntry(key, { close: false })
+    log.debug(`Relinquished cached view without closing: ${key}`)
+    return entry
+  }
+
+  public restore(entry: RelinquishedCachedView): boolean {
+    const key = this.getCacheKey(entry.plugin, entry.feature)
+    if (this.cache.has(key)) {
+      return false
+    }
+
+    const webContents = this.getWebContents(entry.view)
+    if (!webContents || webContents.id !== entry.webContentsId) {
+      return false
+    }
+
+    this.cache.set(key, {
+      ...entry,
+      lastUsedAt: Date.now(),
+      dispose: this.attachLifecycle(key, webContents)
+    })
+    this.ensureCleanupTask()
+    log.debug(`Restored relinquished cached view: ${key}`)
+    return true
   }
 
   public releasePlugin(pluginName: string): void {

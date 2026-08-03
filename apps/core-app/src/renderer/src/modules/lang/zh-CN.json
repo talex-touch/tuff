@@ -464,11 +464,8 @@
     },
     "shortcutLabels": {
       "core_box_toggle": "唤起命令面板",
-      "core_box_aiQuickCall": "唤起 AI 助手",
       "core_omniPanel_toggle": "唤起 OmniPanel",
-      "core_omniPanel_mouseLongPress": "OmniPanel 鼠标触发",
-      "flow_detach_to_divisionbox": "分离到独立窗口",
-      "flow_transfer_to_plugin": "转移到插件"
+      "core_omniPanel_mouseLongPress": "OmniPanel 鼠标触发"
     },
     "shortcutStatus": {
       "conflictSystem": "与系统快捷键冲突",

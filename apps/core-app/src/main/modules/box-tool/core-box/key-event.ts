@@ -9,6 +9,16 @@ export interface CoreBoxKeyEvent {
 }
 
 export type CoreBoxKeyModifier = 'shift' | 'control' | 'alt' | 'meta' | 'isautorepeat'
+export type CoreBoxFlowShortcutAction = 'detach' | 'transfer'
+
+export interface CoreBoxFlowShortcutInput {
+  key: string
+  meta: boolean
+  control: boolean
+  alt: boolean
+  shift: boolean
+  isAutoRepeat?: boolean
+}
 
 const BLOCKED_FUNCTION_KEYS = new Set(Array.from({ length: 24 }, (_, index) => `F${index + 1}`))
 
@@ -31,6 +41,18 @@ const ELECTRON_KEY_CODE_BY_DOM_KEY: Readonly<Record<string, string>> = {
 
 export function isBlockedCoreBoxFunctionKey(key: string): boolean {
   return BLOCKED_FUNCTION_KEYS.has(key)
+}
+
+export function resolveCoreBoxFlowShortcut(
+  input: CoreBoxFlowShortcutInput
+): CoreBoxFlowShortcutAction | null {
+  if (input.isAutoRepeat || input.key.toLowerCase() !== 'd') {
+    return null
+  }
+  if ((!input.meta && !input.control) || input.alt) {
+    return null
+  }
+  return input.shift ? 'transfer' : 'detach'
 }
 
 export function buildCoreBoxKeyModifiers(event: CoreBoxKeyEvent): CoreBoxKeyModifier[] {

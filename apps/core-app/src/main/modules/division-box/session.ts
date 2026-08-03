@@ -40,6 +40,8 @@ import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds }
 
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
 
+export type ExistingUIViewReleaseResult = 'released' | 'not-owned' | 'failed'
+
 interface ThemeStyleConfig {
   dark?: boolean
   auto?: boolean
@@ -635,6 +637,44 @@ export class DivisionBoxSession {
     await this.setState(DivisionBoxState.ACTIVE)
 
     divisionBoxSessionLog.debug(`Existing UI view attached: ${this.sessionId}`)
+  }
+
+  /**
+   * Releases a transferred view without closing its WebContents.
+   * Used only when a cross-window ownership transfer must roll back.
+   */
+  releaseExistingUIView(view: WebContentsView): ExistingUIViewReleaseResult {
+    if (this.uiView !== view) {
+      return 'not-owned'
+    }
+
+    const ownerWindow = this.touchWindow?.window
+    if (!ownerWindow || ownerWindow.isDestroyed()) {
+      divisionBoxSessionLog.warn('Cannot release transferred UI view: owner window is unavailable')
+      return 'failed'
+    }
+
+    const cssKey = this.uiViewThemeCssKey.get(view)
+    if (cssKey) {
+      try {
+        void view.webContents.removeInsertedCSS(cssKey).catch(() => {})
+      } catch (error) {
+        divisionBoxSessionLog.warn('Failed to remove transferred UI view theme', { error })
+      } finally {
+        this.uiViewThemeCssKey.delete(view)
+      }
+    }
+
+    try {
+      ownerWindow.contentView.removeChildView(view)
+    } catch (error) {
+      divisionBoxSessionLog.warn('Failed to release transferred UI view', { error })
+      return 'failed'
+    }
+
+    this.uiView = null
+    this.attachedPlugin = null
+    return 'released'
   }
 
   /**

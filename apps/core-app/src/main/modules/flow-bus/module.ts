@@ -6,34 +6,18 @@
  */
 
 import type { MaybePromise, ModuleInitContext, NativeShareOptions } from '@talex-touch/utils'
+import type { getTuffTransportMain, HandlerContext } from '@talex-touch/utils/transport/main'
 import type { TalexEvents } from '../../core/eventbus/touch-event'
 import type { FlowBusIPC } from './ipc'
-import {
-  FlowEvents,
-  getTuffTransportMain,
-  NotificationEvents,
-  type HandlerContext
-} from '@talex-touch/utils/transport/main'
+import { FlowEvents } from '@talex-touch/utils/transport/main'
 import { resolveMainRuntime } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
-import { coreBoxManager } from '../box-tool/core-box/manager'
-import { getCoreBoxWindow, windowManager } from '../box-tool/core-box/window'
-import { DivisionBoxManager } from '../division-box/manager'
-import { shortcutModule } from '../global-shortcon'
 import { getPermissionModule } from '../permission'
 import { flowBus } from './flow-bus'
 import { initializeFlowBusIPC } from './ipc'
 import { flowBusModuleLog } from './logger'
 import { nativeShareService } from './native-share'
 import { flowTargetRegistry } from './target-registry'
-
-const FLOW_SHORTCUT_OWNER = 'module.flow-bus'
-
-/** Shortcut IDs for Flow operations */
-export const FLOW_SHORTCUT_IDS = {
-  DETACH: 'flow:detach-to-divisionbox',
-  TRANSFER: 'flow:transfer-to-plugin'
-} as const
 
 /**
  * FlowBusModule
@@ -44,7 +28,6 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   static key: symbol = Symbol.for('FlowBus')
 
   private ipc: FlowBusIPC | null = null
-  private transport: ReturnType<typeof getTuffTransportMain> | null = null
   private transportDisposers: Array<() => void> = []
   private flowDeliveryDisposers: Map<string, () => void> = new Map()
 
@@ -60,7 +43,6 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   async onInit(ctx: ModuleInitContext<TalexEvents>): Promise<void> {
     const runtime = resolveMainRuntime(ctx, 'FlowBusModule.onInit')
     const transport = runtime.transport
-    this.transport = transport
 
     // Initialize IPC handlers
     this.ipc = initializeFlowBusIPC(transport)
@@ -69,9 +51,6 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
 
     // Register native share targets
     this.registerNativeShareTargets()
-
-    // Register global shortcuts
-    this.registerShortcuts()
 
     flowBusModuleLog.info('Module initialized')
   }
@@ -187,227 +166,9 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
   }
 
   /**
-   * Registers global shortcuts for Flow operations
-   */
-  private registerShortcuts(): void {
-    // Command+D: Detach current item to DivisionBox
-    shortcutModule.registerMainShortcut(
-      FLOW_SHORTCUT_IDS.DETACH,
-      'CommandOrControl+D',
-      () => {
-        if (coreBoxManager.isUIMode) {
-          this.triggerDetach()
-          return
-        }
-
-        const coreBoxWindow = getCoreBoxWindow()
-        if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-          flowBusModuleLog.warn('CoreBox window unavailable for detach shortcut')
-          return
-        }
-
-        void this.transport
-          ?.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerDetach, undefined)
-          .catch((error) => {
-            flowBusModuleLog.warn('Failed to notify CoreBox detach shortcut', {
-              meta: { windowId: coreBoxWindow.window.id },
-              error
-            })
-          })
-      },
-      { owner: FLOW_SHORTCUT_OWNER }
-    )
-
-    // Command+Shift+D: Transfer current item to another plugin
-    shortcutModule.registerMainShortcut(
-      FLOW_SHORTCUT_IDS.TRANSFER,
-      'CommandOrControl+Shift+D',
-      () => {
-        this.triggerFlowTransfer()
-      },
-      { owner: FLOW_SHORTCUT_OWNER }
-    )
-  }
-
-  /**
-   * Triggers detach operation - transfers UI view from CoreBox to new DivisionBox
-   */
-  private async triggerDetach(): Promise<void> {
-    type ExtractedUIView = ReturnType<typeof windowManager.extractUIView>
-    let extracted: ExtractedUIView = null
-    try {
-      // Check if CoreBox is in UI mode
-      if (!coreBoxManager.isUIMode) {
-        flowBusModuleLog.debug('Skipped detach because CoreBox is not in UI mode')
-        return
-      }
-
-      const coreBoxWindow = getCoreBoxWindow()
-      if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-        flowBusModuleLog.warn('CoreBox window unavailable for detach')
-        return
-      }
-
-      if (!coreBoxWindow.window.isVisible()) {
-        flowBusModuleLog.warn('Abort detach because CoreBox window is hidden')
-        return
-      }
-
-      // Extract the UI view from CoreBox (doesn't destroy it)
-      extracted = windowManager.extractUIView()
-      if (!extracted) {
-        flowBusModuleLog.warn('No UI view available to extract from CoreBox')
-        return
-      }
-
-      const { view, plugin } = extracted
-      flowBusModuleLog.info('Detaching plugin view into DivisionBox', {
-        meta: {
-          pluginId: plugin.name
-        }
-      })
-
-      const perm = getPermissionModule()
-      if (perm && plugin?.name) {
-        perm.enforcePermission(plugin.name, 'division-box:session:open', plugin.sdkapi)
-      }
-
-      // Create DivisionBox session config (without URL - we'll attach existing view)
-      const config = {
-        url: `plugin://${plugin.name}/index.html`, // Required by config validation
-        title: plugin.name,
-        icon: plugin.icon?.value || plugin.icon?.toString?.() || undefined,
-        size: 'medium' as const,
-        keepAlive: true,
-        pluginId: plugin.name,
-        ui: {
-          showInput: true
-        }
-      }
-
-      // Create DivisionBox session (creates window only)
-      const manager = DivisionBoxManager.getInstance()
-      const session = await manager.createSessionWithoutUI(config)
-
-      // Attach the extracted UI view to DivisionBox
-      await session.attachExistingUIView(view, plugin)
-
-      flowBusModuleLog.info('DivisionBox session created for detached view', {
-        meta: {
-          pluginId: plugin.name,
-          sessionId: session.sessionId
-        }
-      })
-
-      // Reset CoreBox to default state (shrink, exit UI mode flag)
-      coreBoxManager.exitUIMode()
-
-      // Hide CoreBox
-      if (!coreBoxWindow.window.isDestroyed()) {
-        coreBoxManager.trigger(false, { immediate: true })
-      }
-
-      flowBusModuleLog.info('Detach completed', {
-        meta: {
-          pluginId: plugin.name,
-          sessionId: session.sessionId
-        }
-      })
-    } catch (error) {
-      flowBusModuleLog.error('Detach failed', {
-        meta: {
-          pluginId: extracted?.plugin?.name
-        },
-        error
-      })
-
-      const err = error as { code?: string }
-      if (err?.code === 'PERMISSION_DENIED') {
-        try {
-          const id = `corebox.permission.denied.${Date.now()}`
-          this.transport?.broadcast(NotificationEvents.push.notify, {
-            id,
-            request: {
-              id,
-              channel: 'app',
-              level: 'warning',
-              message: '权限不足，无法分离到独立窗口',
-              app: { presentation: 'toast' }
-            }
-          })
-        } catch (notifyError) {
-          flowBusModuleLog.warn('Failed to notify permission denied', {
-            meta: {
-              pluginId: extracted?.plugin?.name
-            },
-            error: notifyError
-          })
-        }
-      }
-
-      // Rollback: put the extracted view back to CoreBox to avoid "view lost"
-      if (extracted?.view && extracted?.plugin) {
-        try {
-          const restored = windowManager.restoreExtractedUIView(extracted.view, extracted.plugin)
-          if (restored) {
-            flowBusModuleLog.warn('Rollback restored UI view to CoreBox after detach failure', {
-              meta: {
-                pluginId: extracted.plugin.name
-              }
-            })
-          } else {
-            flowBusModuleLog.warn('Rollback could not restore UI view to CoreBox', {
-              meta: {
-                pluginId: extracted.plugin.name
-              }
-            })
-          }
-        } catch (restoreError) {
-          flowBusModuleLog.error('Rollback restore failed', {
-            meta: {
-              pluginId: extracted.plugin.name
-            },
-            error: restoreError
-          })
-        }
-      }
-    }
-  }
-
-  /**
-   * Triggers flow transfer operation - sends event to CoreBox window
-   */
-  private triggerFlowTransfer(): void {
-    const coreBoxWindow = getCoreBoxWindow()
-    if (!coreBoxWindow || coreBoxWindow.window.isDestroyed()) {
-      flowBusModuleLog.warn('CoreBox window unavailable for flow transfer shortcut')
-      return
-    }
-
-    void this.transport
-      ?.sendToWindow(coreBoxWindow.window.id, FlowEvents.triggerTransfer, undefined)
-      .then(() => {
-        flowBusModuleLog.info('Triggered flow transfer shortcut', {
-          meta: {
-            windowId: coreBoxWindow.window.id
-          }
-        })
-      })
-      .catch((error) => {
-        flowBusModuleLog.warn('Failed to notify CoreBox flow transfer shortcut', {
-          meta: { windowId: coreBoxWindow.window.id },
-          error
-        })
-      })
-  }
-
-  /**
    * Cleans up the Flow Bus module
    */
   onDestroy(): MaybePromise<void> {
-    shortcutModule.unregisterMainShortcut(FLOW_SHORTCUT_IDS.DETACH)
-    shortcutModule.unregisterMainShortcut(FLOW_SHORTCUT_IDS.TRANSFER)
-
     if (this.ipc) {
       this.ipc.unregisterHandlers()
       this.ipc = null
@@ -430,7 +191,6 @@ export class FlowBusModule extends BaseModule<TalexEvents> {
       }
     }
     this.transportDisposers = []
-    this.transport = null
 
     // Clear all targets
     flowTargetRegistry.clear()

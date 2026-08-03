@@ -7,7 +7,8 @@ import {
   clearCoreBoxAttachment,
   handleCoreBoxEscapeKey,
   hasCoreBoxAttachment,
-  resolveQuickActionsItem
+  resolveQuickActionsItem,
+  shouldForwardKey
 } from './useKeyboard'
 
 function createFocusedItem(): TuffItem {
@@ -72,6 +73,28 @@ function createActiveWidgetItem(): TuffItem {
     }
   } as TuffItem
 }
+
+describe('shouldForwardKey', () => {
+  function createKeyEvent(overrides: Partial<KeyboardEvent>): KeyboardEvent {
+    return {
+      key: 'd',
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      ...overrides
+    } as KeyboardEvent
+  }
+
+  it('keeps CoreBox Flow shortcuts in the host page instead of forwarding them to plugins', () => {
+    expect(shouldForwardKey(createKeyEvent({ metaKey: true }), true)).toBe(false)
+    expect(shouldForwardKey(createKeyEvent({ ctrlKey: true, shiftKey: true }), false)).toBe(false)
+  })
+
+  it('continues forwarding unrelated command shortcuts to the attached plugin view', () => {
+    expect(shouldForwardKey(createKeyEvent({ key: 'x', metaKey: true }), true)).toBe(true)
+  })
+})
 
 describe('resolveQuickActionsItem', () => {
   it('prefers the active plugin widget item over a stale focused result', () => {

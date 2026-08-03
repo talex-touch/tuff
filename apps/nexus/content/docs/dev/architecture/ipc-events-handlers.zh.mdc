@@ -36,6 +36,7 @@
 | `core-box:get-activated-providers` | `IpcManager.registerTransportHandlers -> getActiveProvidersState` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | `core-box:get-provider-details` | `IpcManager.registerTransportHandlers (resolve native+plugin providers)` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | `core-box:enter-ui-mode` | `IpcManager.registerTransportHandlers -> coreBoxManager.enterUIMode` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| `core-box:ui-mode:detach` | `IpcManager.registerTransportHandlers -> WindowManager.detachUIViewToDivisionBox` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | `core-box:exit-ui-mode` | `IpcManager.registerTransportHandlers -> coreBoxManager.exitUIMode` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | `core-box:allow-clipboard` | `IpcManager.registerTransportHandlers -> windowManager.enableClipboardMonitoring` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | `core-box:input-monitoring:allow` | `IpcManager.registerTransportHandlers -> windowManager.enableInputMonitoring` | `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
@@ -326,8 +327,8 @@
 | `flow:consent:grant` | `FlowBusIPC.registerTransportHandlers -> consentService.grantConsent` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
 | `flow:session:update` | `FlowBusIPC.broadcastSessionUpdate` | `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
 | `flow:session:deliver` | `FlowBusModule.registerTransportHandlers -> flowBus.registerDeliveryHandler -> sendToPlugin` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
-| `flow:ui:trigger-transfer` | `FlowBusModule.triggerTransfer -> sendToWindow` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
-| `flow:ui:trigger-detach` | `FlowBusModule.triggerDetach -> sendToWindow` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| `flow:ui:trigger-transfer` | `PluginViewController.before-input-event -> broadcastToWindow` | `apps/core-app/src/main/modules/box-tool/core-box/plugin-view-controller.ts` |
+| `flow:ui:trigger-detach` | `PluginViewController.before-input-event -> broadcastToWindow` | `apps/core-app/src/main/modules/box-tool/core-box/plugin-view-controller.ts` |
 | `flow:plugin:register-targets` | `FlowBusModule.registerTransportHandlers -> flowTargetRegistry.registerPluginTargets` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
 | `flow:plugin:unregister-targets` | `FlowBusModule.registerTransportHandlers -> flowTargetRegistry.unregisterPluginTargets` | `apps/core-app/src/main/modules/flow-bus/module.ts` |
 | `flow:plugin:set-plugin-enabled` | `FlowBusModule.registerTransportHandlers -> flowTargetRegistry.setPluginEnabled` | `apps/core-app/src/main/modules/flow-bus/module.ts` |

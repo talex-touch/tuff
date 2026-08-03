@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  handlers: new Map<string, (payload?: unknown) => unknown>(),
+  handlers: new Map<
+    string,
+    (payload?: unknown, context?: { sender?: { id: number } }) => unknown
+  >(),
   streamHandlers: new Map<string, (payload: unknown, context: unknown) => unknown>(),
   on: vi.fn(
-    (event: { toEventName?: () => string } | string, handler: (payload?: unknown) => unknown) => {
+    (
+      event: { toEventName?: () => string } | string,
+      handler: (payload?: unknown, context?: { sender?: { id: number } }) => unknown
+    ) => {
       const eventName = typeof event === 'string' ? event : event.toEventName?.() || String(event)
       mocks.handlers.set(eventName, handler)
       return () => {
@@ -33,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   markExpanded: vi.fn(),
   enterUIMode: vi.fn(),
   exitUIMode: vi.fn(),
+  detachUIViewToDivisionBox: vi.fn(),
   getBoxItemManager: vi.fn(() => ({
     clear: vi.fn()
   })),
@@ -42,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   currentWindow: null as null | {
     isDestroyed: () => boolean
     isVisible: () => boolean
+    webContents: { id: number }
   },
   searchEngineCore: {
     getActivationState: vi.fn(() => []),
@@ -161,13 +169,14 @@ vi.mock('./meta-overlay', () => ({
 
 vi.mock('./window', () => ({
   COREBOX_MIN_HEIGHT: 56,
-  getCoreBoxWindow: vi.fn(() => null),
+  getCoreBoxWindow: vi.fn(() => (mocks.currentWindow ? { window: mocks.currentWindow } : null)),
   windowManager: {
     get current() {
       return mocks.currentWindow ? { window: mocks.currentWindow } : null
     },
     enableClipboardMonitoring: vi.fn(),
     enableInputMonitoring: vi.fn(),
+    detachUIViewToDivisionBox: mocks.detachUIViewToDivisionBox,
     setPinned: mocks.setPinned,
     isPinned: mocks.isPinned,
     setHeight: vi.fn(),
@@ -191,6 +200,10 @@ describe('CoreBox IPC hide transport', () => {
     mocks.isPinned.mockReturnValue(false)
     mocks.isCollapsed = false
     mocks.currentWindow = null
+    mocks.detachUIViewToDivisionBox.mockResolvedValue({
+      success: true,
+      data: { sessionId: 'division-session' }
+    })
     ipcManager.unregister()
     ipcManager.register()
   })
@@ -203,6 +216,48 @@ describe('CoreBox IPC hide transport', () => {
     handler?.(undefined, context)
 
     expect(mocks.searchEngineCore.registerIndexCommitStream).toHaveBeenCalledWith(context)
+  })
+
+  it('allows only the owning CoreBox renderer to detach the main-owned plugin view', async () => {
+    mocks.currentWindow = {
+      isDestroyed: () => false,
+      isVisible: () => true,
+      webContents: { id: 71 }
+    }
+    const handler = mocks.handlers.get(CoreBoxEvents.uiMode.detach.toEventName())
+    const detachRegistrations = mocks.on.mock.calls.filter(([event]) => {
+      const eventName =
+        typeof event === 'string'
+          ? event
+          : (event as { toEventName?: () => string }).toEventName?.()
+      return eventName === CoreBoxEvents.uiMode.detach.toEventName()
+    })
+
+    const response = await handler?.({ initialInput: 'current query' }, { sender: { id: 71 } })
+
+    expect(detachRegistrations).toHaveLength(1)
+    expect(mocks.detachUIViewToDivisionBox).toHaveBeenCalledWith('current query')
+    expect(response).toMatchObject({ success: true })
+  })
+
+  it('rejects plugin-view detach requests from foreign renderers', async () => {
+    mocks.currentWindow = {
+      isDestroyed: () => false,
+      isVisible: () => true,
+      webContents: { id: 71 }
+    }
+    const handler = mocks.handlers.get(CoreBoxEvents.uiMode.detach.toEventName())
+
+    const response = await handler?.(undefined, { sender: { id: 99 } })
+
+    expect(mocks.detachUIViewToDivisionBox).not.toHaveBeenCalled()
+    expect(response).toEqual({
+      success: false,
+      error: {
+        code: 'PERMISSION_DENIED',
+        message: 'Only the owning CoreBox renderer can detach its plugin view.'
+      }
+    })
   })
 
   it('surfaces the onboarding wizard instead of failing the search stream', async () => {
@@ -459,7 +514,8 @@ describe('CoreBox IPC hide transport', () => {
   it('maps forceMax expand payloads to maximum CoreBox expansion', () => {
     mocks.currentWindow = {
       isDestroyed: () => false,
-      isVisible: () => true
+      isVisible: () => true,
+      webContents: { id: 41 }
     }
     const handler = mocks.handlers.get(CoreBoxEvents.ui.expand.toEventName())
 

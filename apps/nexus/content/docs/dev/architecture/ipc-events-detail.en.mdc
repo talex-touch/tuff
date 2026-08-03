@@ -47,6 +47,7 @@ Implementation: `packages/utils/transport/event/builder.ts`
 | CoreBoxEvents.provider.getActivated | `core-box:get-activated-providers` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | CoreBoxEvents.provider.getDetails | `core-box:get-provider-details` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | CoreBoxEvents.uiMode.enter | `core-box:enter-ui-mode` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
+| CoreBoxEvents.uiMode.detach | `core-box:ui-mode:detach` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | CoreBoxEvents.uiMode.exit | `core-box:exit-ui-mode` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | CoreBoxEvents.clipboard.allow | `core-box:allow-clipboard` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
 | CoreBoxEvents.inputMonitoring.allow | `core-box:input-monitoring:allow` | on: `apps/core-app/src/main/modules/box-tool/core-box/ipc.ts` |
@@ -428,8 +429,8 @@ Implementation: `packages/utils/transport/event/builder.ts`
 | FlowEvents.grantConsent | `flow:consent:grant` | on: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
 | FlowEvents.sessionUpdate | `flow:session:update` | broadcast: `apps/core-app/src/main/modules/flow-bus/ipc.ts` |
 | FlowEvents.deliver | `flow:session:deliver` | send: `apps/core-app/src/main/modules/flow-bus/module.ts` |
-| FlowEvents.triggerTransfer | `flow:ui:trigger-transfer` | send: `apps/core-app/src/main/modules/flow-bus/module.ts` |
-| FlowEvents.triggerDetach | `flow:ui:trigger-detach` | send: `apps/core-app/src/main/modules/flow-bus/module.ts` |
+| FlowEvents.triggerTransfer | `flow:ui:trigger-transfer` | broadcast: `apps/core-app/src/main/modules/box-tool/core-box/plugin-view-controller.ts` |
+| FlowEvents.triggerDetach | `flow:ui:trigger-detach` | broadcast: `apps/core-app/src/main/modules/box-tool/core-box/plugin-view-controller.ts` |
 | FlowEvents.registerTargets | `flow:plugin:register-targets` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |
 | FlowEvents.unregisterTargets | `flow:plugin:unregister-targets` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |
 | FlowEvents.setPluginEnabled | `flow:plugin:set-plugin-enabled` | on: `apps/core-app/src/main/modules/flow-bus/module.ts` |

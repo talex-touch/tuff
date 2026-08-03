@@ -1,13 +1,15 @@
-import type { AppSetting, TuffQuery } from '@talex-touch/utils'
+import type { AppSetting, DivisionBoxConfig, TuffQuery } from '@talex-touch/utils'
 import type { IPluginFeature } from '@talex-touch/utils/plugin'
+import type { DivisionBoxOpenResponse } from '@talex-touch/utils/transport/events/types'
 import type { CoreBoxInputChangeRequest } from '@talex-touch/utils/transport/events/types'
 import type { WebContentsView } from 'electron'
 import type { TouchApp } from '../../../core/touch-app'
 import type { TouchPlugin } from '../../plugin/plugin'
+import type { ExistingUIViewReleaseResult } from '../../division-box/session'
 import type { CoreBoxKeyEvent } from './key-event'
 import path from 'node:path'
 import process from 'node:process'
-import { sleep, StorageList } from '@talex-touch/utils'
+import { DivisionBoxErrorCode, sleep, StorageList } from '@talex-touch/utils'
 import { useWindowAnimation } from '@talex-touch/utils/animation/window-node'
 import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
@@ -24,14 +26,17 @@ import { TouchWindow } from '../../../core/touch-window'
 import { TalexTouch } from '../../../types'
 import { createLogger } from '../../../utils/logger'
 
+import { DivisionBoxManager } from '../../division-box/manager'
+import { getPermissionModule } from '../../permission'
 import { getMainConfig, subscribeMainConfig } from '../../storage'
 import { WindowBoundsController } from './bounds-controller'
 import { CoreBoxFocusPolicy } from './focus-policy'
 import { isBlockedCoreBoxFunctionKey } from './key-event'
 import { coreBoxManager } from './manager'
 import { metaOverlayManager } from './meta-overlay'
-import { PluginViewController } from './plugin-view-controller'
+import { PluginViewController, type ExtractedCoreBoxUIView } from './plugin-view-controller'
 import { CoreBoxThemeController } from './theme-controller'
+import { viewCacheManager } from './view-cache'
 
 export type { ThemeStyleConfig } from './theme-controller'
 
@@ -754,16 +759,144 @@ export class WindowManager {
    * Used for transferring the view to a DivisionBox window.
    * @returns The extracted UI view and plugin, or null if no view is attached
    */
-  public extractUIView(): { view: WebContentsView; plugin: TouchPlugin } | null {
+  public extractUIView(): ExtractedCoreBoxUIView | null {
     return this.pluginViewController.extractUIView()
+  }
+
+  /**
+   * Transfers the currently owned plugin view into a DivisionBox.
+   * The plugin identity comes from the extracted main-process view, never renderer payload.
+   */
+  public async detachUIViewToDivisionBox(initialInput = ''): Promise<DivisionBoxOpenResponse> {
+    const failure = (error: unknown, fallbackMessage: string): DivisionBoxOpenResponse => {
+      const candidateCode = (error as { code?: unknown } | null)?.code
+      const code = Object.values(DivisionBoxErrorCode).includes(
+        candidateCode as DivisionBoxErrorCode
+      )
+        ? (candidateCode as DivisionBoxErrorCode)
+        : DivisionBoxErrorCode.STATE_ERROR
+      return {
+        success: false,
+        error: {
+          code,
+          message: error instanceof Error ? error.message : fallbackMessage
+        }
+      }
+    }
+
+    const sourceWindow = this.current
+    if (!sourceWindow || sourceWindow.window.isDestroyed() || !sourceWindow.window.isVisible()) {
+      return failure(null, 'CoreBox window is unavailable for plugin view detach.')
+    }
+
+    const plugin = this.getAttachedPlugin()
+    if (!plugin) {
+      return failure(null, 'CoreBox has no owned plugin view to detach.')
+    }
+
+    try {
+      getPermissionModule()?.enforcePermission(
+        plugin.name,
+        'division-box:session:open',
+        plugin.sdkapi
+      )
+    } catch (error) {
+      coreBoxWindowLog.warn('Plugin view detach permission rejected', {
+        meta: { pluginId: plugin.name },
+        error
+      })
+      return failure(error, 'Plugin view detach permission rejected.')
+    }
+
+    const sourceBounds = sourceWindow.window.getBounds()
+    const extracted = this.extractUIView()
+    if (!extracted || extracted.plugin !== plugin) {
+      if (extracted) {
+        this.restoreExtractedUIView(extracted)
+      }
+      return failure(null, 'CoreBox plugin view ownership changed before detach.')
+    }
+
+    const cacheEntry = viewCacheManager.relinquish(plugin, extracted.view, extracted.feature)
+    const divisionBoxManager = DivisionBoxManager.getInstance()
+    let session: Awaited<ReturnType<DivisionBoxManager['createSessionWithoutUI']>> | null = null
+
+    try {
+      const config: DivisionBoxConfig = {
+        url: `plugin://${plugin.name}/index.html`,
+        title: plugin.name,
+        icon: plugin.icon?.value || plugin.icon?.toString?.() || undefined,
+        size: 'medium',
+        keepAlive: true,
+        pluginId: plugin.name,
+        ui: { showInput: true, initialInput },
+        initialBounds: {
+          width: sourceBounds.width,
+          height: Math.max(1, sourceBounds.height - COREBOX_HEADER_HEIGHT)
+        }
+      }
+
+      session = await divisionBoxManager.createSessionWithoutUI(config)
+      await session.attachExistingUIView(extracted.view, plugin)
+      this.pluginViewController.completeExtractedUIViewTransfer()
+
+      coreBoxManager.exitUIMode()
+      if (!sourceWindow.window.isDestroyed()) {
+        coreBoxManager.trigger(false, { immediate: true })
+      }
+
+      return {
+        success: true,
+        data: {
+          sessionId: session.sessionId,
+          state: session.getState(),
+          meta: session.meta
+        }
+      }
+    } catch (error) {
+      let divisionViewRelease: ExistingUIViewReleaseResult = 'not-owned'
+      if (session) {
+        divisionViewRelease = session.releaseExistingUIView(extracted.view)
+        try {
+          await divisionBoxManager.destroySession(session.sessionId)
+        } catch (destroyError) {
+          coreBoxWindowLog.error('Failed to destroy rolled-back DivisionBox session', {
+            meta: { sessionId: session.sessionId },
+            error: destroyError
+          })
+        }
+      }
+
+      const canRestore = divisionViewRelease !== 'failed'
+      const restored = canRestore ? this.restoreExtractedUIView(extracted) : false
+      if (!canRestore) {
+        this.pluginViewController.abandonExtractedUIView()
+        coreBoxManager.exitUIMode()
+      }
+      const cacheRestored = !cacheEntry || (restored && viewCacheManager.restore(cacheEntry))
+      if (!restored && !extracted.view.webContents.isDestroyed()) {
+        extracted.view.webContents.close()
+      }
+
+      coreBoxWindowLog.error('Failed to detach plugin view into DivisionBox', {
+        meta: {
+          pluginId: plugin.name,
+          divisionViewRelease,
+          restored: String(restored),
+          cacheRestored: String(cacheRestored)
+        },
+        error
+      })
+      return failure(error, 'Failed to detach plugin view.')
+    }
   }
 
   /**
    * Restores a previously extracted UI view back into CoreBox.
    * This is used as a rollback path when transferring the view fails.
    */
-  public restoreExtractedUIView(view: WebContentsView, plugin: TouchPlugin): boolean {
-    return this.pluginViewController.restoreExtractedUIView(view, plugin)
+  public restoreExtractedUIView(extracted: ExtractedCoreBoxUIView): boolean {
+    return this.pluginViewController.restoreExtractedUIView(extracted)
   }
 
   /**

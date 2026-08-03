@@ -12,6 +12,13 @@ const mocks = vi.hoisted(() => {
     updateMetaOverlayBounds: vi.fn(),
     unregisterPolling: vi.fn(),
     getMainConfig: vi.fn(() => ({})),
+    attachExistingUIView: vi.fn(),
+    releaseExistingUIView: vi.fn(),
+    createSessionWithoutUI: vi.fn(),
+    destroySession: vi.fn(),
+    enforcePermission: vi.fn(),
+    relinquishCachedView: vi.fn(),
+    restoreCachedView: vi.fn(),
     logger: {
       warn: vi.fn(),
       error: vi.fn(),
@@ -50,6 +57,10 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('@talex-touch/utils', () => ({
+  DivisionBoxErrorCode: {
+    PERMISSION_DENIED: 'PERMISSION_DENIED',
+    STATE_ERROR: 'STATE_ERROR'
+  },
   sleep: vi.fn(async () => undefined),
   StorageList: {
     APP_SETTING: 'app-setting'
@@ -147,6 +158,21 @@ vi.mock('../../../utils/logger', () => ({
   createLogger: vi.fn(() => mocks.logger)
 }))
 
+vi.mock('../../division-box/manager', () => ({
+  DivisionBoxManager: {
+    getInstance: vi.fn(() => ({
+      createSessionWithoutUI: mocks.createSessionWithoutUI,
+      destroySession: mocks.destroySession
+    }))
+  }
+}))
+
+vi.mock('../../permission', () => ({
+  getPermissionModule: vi.fn(() => ({
+    enforcePermission: mocks.enforcePermission
+  }))
+}))
+
 vi.mock('../../plugin/plugin-module', () => ({
   pluginModule: {
     pluginManager: null
@@ -177,6 +203,7 @@ vi.mock('./manager', () => ({
     showCoreBox: false,
     isUIMode: false,
     trigger: vi.fn(),
+    exitUIMode: vi.fn(),
     syncVisibility: vi.fn()
   }
 }))
@@ -197,7 +224,9 @@ vi.mock('./view-cache', () => ({
   viewCacheManager: {
     get: vi.fn(() => null),
     set: vi.fn(),
-    clear: vi.fn()
+    clear: vi.fn(),
+    relinquish: mocks.relinquishCachedView,
+    restore: mocks.restoreCachedView
   }
 }))
 
@@ -212,6 +241,17 @@ describe('WindowManager CoreBox compact bounds', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.getMainConfig.mockReturnValue({})
+    mocks.createSessionWithoutUI.mockResolvedValue({
+      sessionId: 'division-session',
+      meta: { pluginId: 'demo-plugin' },
+      getState: vi.fn(() => 'active'),
+      attachExistingUIView: mocks.attachExistingUIView,
+      releaseExistingUIView: mocks.releaseExistingUIView
+    })
+    mocks.releaseExistingUIView.mockReturnValue('released')
+    mocks.destroySession.mockResolvedValue(undefined)
+    mocks.relinquishCachedView.mockReturnValue({ cacheKey: 'demo-plugin:feature' })
+    mocks.restoreCachedView.mockReturnValue(true)
   })
 
   it('applies compact bounds even when the CoreBox window is hidden', () => {
@@ -336,5 +376,233 @@ describe('WindowManager CoreBox compact bounds', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('transfers the owned plugin view into DivisionBox without renderer plugin identity', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {} as Electron.WebContentsView
+    const plugin = {
+      name: 'demo-plugin',
+      sdkapi: 2,
+      icon: { value: 'i-ri-apps-line' }
+    }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    vi.spyOn(manager, 'extractUIView').mockReturnValue({
+      view,
+      plugin: plugin as never
+    })
+    const restore = vi.spyOn(manager, 'restoreExtractedUIView')
+
+    const response = await manager.detachUIViewToDivisionBox('current query')
+
+    expect(mocks.enforcePermission).toHaveBeenCalledWith(
+      'demo-plugin',
+      'division-box:session:open',
+      2
+    )
+    expect(mocks.createSessionWithoutUI).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'plugin://demo-plugin/index.html',
+        pluginId: 'demo-plugin',
+        ui: { showInput: true, initialInput: 'current query' },
+        initialBounds: { width: 720, height: 544 }
+      })
+    )
+    expect(mocks.attachExistingUIView).toHaveBeenCalledWith(view, plugin)
+    expect(mocks.relinquishCachedView).toHaveBeenCalledWith(plugin, view, undefined)
+    expect(mocks.restoreCachedView).not.toHaveBeenCalled()
+    expect(coreBoxManager.exitUIMode).toHaveBeenCalledTimes(1)
+    expect(coreBoxManager.trigger).toHaveBeenCalledWith(false, { immediate: true })
+    expect(restore).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      success: true,
+      data: { sessionId: 'division-session' }
+    })
+  })
+
+  it('rejects permission before changing plugin view ownership', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const plugin = { name: 'demo-plugin', sdkapi: 2 }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    const extract = vi.spyOn(manager, 'extractUIView')
+    const restore = vi.spyOn(manager, 'restoreExtractedUIView')
+    mocks.enforcePermission.mockImplementationOnce(() => {
+      throw Object.assign(new Error('Permission denied'), { code: 'PERMISSION_DENIED' })
+    })
+
+    const response = await manager.detachUIViewToDivisionBox()
+
+    expect(extract).not.toHaveBeenCalled()
+    expect(mocks.relinquishCachedView).not.toHaveBeenCalled()
+    expect(mocks.createSessionWithoutUI).not.toHaveBeenCalled()
+    expect(restore).not.toHaveBeenCalled()
+    expect(coreBoxManager.exitUIMode).not.toHaveBeenCalled()
+    expect(response).toEqual({
+      success: false,
+      error: {
+        code: 'PERMISSION_DENIED',
+        message: 'Permission denied'
+      }
+    })
+  })
+
+  it('restores the extracted view when DivisionBox session creation fails', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {} as Electron.WebContentsView
+    const plugin = { name: 'demo-plugin', sdkapi: 2 }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    const extracted = {
+      view,
+      plugin: plugin as never
+    }
+    vi.spyOn(manager, 'extractUIView').mockReturnValue(extracted)
+    const restore = vi.spyOn(manager, 'restoreExtractedUIView').mockReturnValue(true)
+    mocks.createSessionWithoutUI.mockRejectedValueOnce(new Error('Session creation failed'))
+
+    const response = await manager.detachUIViewToDivisionBox()
+
+    expect(restore).toHaveBeenCalledWith(extracted)
+    expect(mocks.restoreCachedView).toHaveBeenCalledWith(
+      expect.objectContaining({ cacheKey: 'demo-plugin:feature' })
+    )
+    expect(mocks.destroySession).not.toHaveBeenCalled()
+    expect(coreBoxManager.exitUIMode).not.toHaveBeenCalled()
+    expect(response).toEqual({
+      success: false,
+      error: {
+        code: 'STATE_ERROR',
+        message: 'Session creation failed'
+      }
+    })
+  })
+
+  it('releases and destroys a partially attached DivisionBox before restoring CoreBox', async () => {
+    const manager = new WindowManager()
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {
+      webContents: {
+        isDestroyed: vi.fn(() => false),
+        close: vi.fn()
+      }
+    } as unknown as Electron.WebContentsView
+    const plugin = { name: 'demo-plugin', sdkapi: 2 }
+    const extracted = { view, plugin: plugin as never }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    vi.spyOn(manager, 'extractUIView').mockReturnValue(extracted)
+    const restore = vi.spyOn(manager, 'restoreExtractedUIView').mockReturnValue(true)
+    mocks.attachExistingUIView.mockRejectedValueOnce(new Error('Partial attach failed'))
+
+    const response = await manager.detachUIViewToDivisionBox()
+
+    expect(mocks.releaseExistingUIView).toHaveBeenCalledWith(view)
+    expect(mocks.destroySession).toHaveBeenCalledWith('division-session')
+    expect(restore).toHaveBeenCalledWith(extracted)
+    expect(mocks.restoreCachedView).toHaveBeenCalledTimes(1)
+    expect(mocks.releaseExistingUIView.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.destroySession.mock.invocationCallOrder[0]
+    )
+    expect(mocks.destroySession.mock.invocationCallOrder[0]).toBeLessThan(
+      restore.mock.invocationCallOrder[0]
+    )
+    expect(restore.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.restoreCachedView.mock.invocationCallOrder[0]
+    )
+    expect(view.webContents.close).not.toHaveBeenCalled()
+    expect(response).toEqual({
+      success: false,
+      error: {
+        code: 'STATE_ERROR',
+        message: 'Partial attach failed'
+      }
+    })
+  })
+
+  it('does not restore a view when DivisionBox cannot release ownership', async () => {
+    const manager = new WindowManager()
+    const pluginViewController = Reflect.get(manager, 'pluginViewController') as {
+      enableInputMonitoring: () => void
+      enableClipboardMonitoring: (types: number) => void
+      getClipboardAllowedTypes: () => number
+    }
+    pluginViewController.enableInputMonitoring()
+    pluginViewController.enableClipboardMonitoring(7)
+
+    const browserWindow = {
+      isDestroyed: vi.fn(() => false),
+      isVisible: vi.fn(() => true),
+      getBounds: vi.fn(() => ({ x: 200, y: 100, width: 720, height: 600 }))
+    }
+    manager.windows = [
+      {
+        window: browserWindow
+      } as unknown as WindowManager['windows'][number]
+    ]
+
+    const view = {
+      webContents: {
+        isDestroyed: vi.fn(() => false),
+        close: vi.fn()
+      }
+    } as unknown as Electron.WebContentsView
+    const plugin = { name: 'demo-plugin', sdkapi: 2 }
+    vi.spyOn(manager, 'getAttachedPlugin').mockReturnValue(plugin as never)
+    vi.spyOn(manager, 'extractUIView').mockReturnValue({ view, plugin: plugin as never })
+    const restore = vi.spyOn(manager, 'restoreExtractedUIView')
+    mocks.attachExistingUIView.mockRejectedValueOnce(new Error('Partial attach failed'))
+    mocks.releaseExistingUIView.mockReturnValueOnce('failed')
+
+    const response = await manager.detachUIViewToDivisionBox()
+
+    expect(mocks.destroySession).toHaveBeenCalledWith('division-session')
+    expect(restore).not.toHaveBeenCalled()
+    expect(mocks.restoreCachedView).not.toHaveBeenCalled()
+    expect(coreBoxManager.exitUIMode).toHaveBeenCalledTimes(1)
+    expect(Reflect.get(pluginViewController, 'inputAllowed')).toBe(false)
+    expect(pluginViewController.getClipboardAllowedTypes()).toBe(0)
+    expect(view.webContents.close).toHaveBeenCalledTimes(1)
+    expect(response.success).toBe(false)
   })
 })
