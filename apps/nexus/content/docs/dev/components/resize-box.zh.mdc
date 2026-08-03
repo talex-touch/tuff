@@ -1,0 +1,172 @@
+---
+title: "ResizeBox 显式尺寸动画"
+description: "在显式宽高目标之间过渡，并提供动画生命周期事件与可选溢出裁剪。"
+category: Primitives
+status: beta
+since: 1.0.0
+tags: [resize, layout, animation]
+syncStatus: reviewed
+verified: true
+---
+# ResizeBox 显式尺寸动画
+
+`TxResizeBox` 让根元素在显式 `width` 与 `height` 目标之间过渡。它适合父组件已经知道两种布局尺寸，并需要可预测 CSS 尺寸动画的场景。
+
+> `TxResizeBox` 不测量插槽内容，也不使用 `ResizeObserver`。内容变化需要自动测量时，请使用 [`TxAutoSizer`](./auto-sizer.zh.mdc)。
+
+## 基础用法
+
+### 显式尺寸目标
+
+切换紧凑与展开目标，观察 `resize-start` / `resize-end`，禁用动画以立即跳变，并切换溢出裁剪。
+
+:::TuffDemoWrapper{demo="ResizeBoxResizeBoxDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const expanded = ref(false)
+  const disabled = ref(false)
+  const clip = ref(true)
+  const status = ref('等待')
+
+  const width = computed(() => expanded.value ? 'min(420px, 100%)' : 'min(220px, 100%)')
+  const height = computed(() => expanded.value ? 244 : 132)
+
+  function setExpanded(value: boolean) {
+    if (expanded.value === value)
+      return
+    expanded.value = value
+    if (disabled.value)
+      status.value = '即时跳变'
+  }
+  </script>
+
+  <template>
+    <div style="display: grid; gap: 12px; width: 100%; min-width: 0;">
+      <div
+        style="display: flex; flex-wrap: wrap; gap: 8px;"
+        role="group"
+        aria-label="尺寸"
+      >
+        <TxButton
+          size="small"
+          :variant="expanded ? 'ghost' : 'primary'"
+          :aria-pressed="!expanded"
+          @click="setExpanded(false)"
+        >
+          紧凑
+        </TxButton>
+        <TxButton
+          size="small"
+          :variant="expanded ? 'primary' : 'ghost'"
+          :aria-pressed="expanded"
+          @click="setExpanded(true)"
+        >
+          展开
+        </TxButton>
+        <label style="display: inline-flex; align-items: center; gap: 8px;">
+          禁用动画 <TxSwitch v-model="disabled" aria-label="禁用动画" />
+        </label>
+        <label style="display: inline-flex; align-items: center; gap: 8px;">
+          裁剪溢出 <TxSwitch v-model="clip" aria-label="裁剪溢出" />
+        </label>
+      </div>
+
+      <div role="status" aria-live="polite">
+        {{ status }} · {{ width }} × {{ height }}px
+      </div>
+
+      <div style="width: 100%; min-width: 0; overflow: hidden; padding: 12px;">
+        <TxResizeBox
+          as="section"
+          :width="width"
+          :height="height"
+          :duration="360"
+          easing="cubic-bezier(0.22, 1, 0.36, 1)"
+          :disabled="disabled"
+          :clip="clip"
+          @resize-start="status = '调整中'"
+          @resize-end="status = '已完成'"
+        >
+          <div style="width: 360px; min-height: 214px; padding: 16px;">
+            使用显式尺寸的内容
+          </div>
+        </TxResizeBox>
+      </div>
+    </div>
+  </template>
+---
+:::
+
+## API
+
+### 属性
+
+| 属性名 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `as` | `string` | `div` | 作为根容器渲染的元素标签。 |
+| `width` | `number \| string` | `undefined` | 显式宽度目标。有限数字转换为 px；去除首尾空白后的非空字符串作为 CSS 尺寸传递。未设置时保留该轴的固有尺寸。 |
+| `height` | `number \| string` | `undefined` | 显式高度目标。有限数字转换为 px；去除首尾空白后的非空字符串作为 CSS 尺寸传递。未设置时保留该轴的固有尺寸。 |
+| `duration` | `number` | `300` | 宽高过渡时长，单位为毫秒。 |
+| `easing` | `string` | `cubic-bezier(0.22, 1, 0.36, 1)` | 宽高过渡共用的 CSS 缓动函数。 |
+| `disabled` | `boolean` | `false` | 移除过渡，使新尺寸目标立即生效。在调整中禁用会结束当前生命周期。 |
+| `clip` | `boolean` | `true` | 启用时在根元素上应用 `overflow: hidden`。 |
+
+### 插槽
+
+| 插槽名 | 参数 | 说明 |
+|--------|------|------|
+| `default` | - | 直接渲染在可调整尺寸根元素内的内容。组件不会额外包裹或测量内容。 |
+
+### 事件
+
+| 事件名 | 参数 | 说明 |
+|--------|------|------|
+| `resize-start` | `()` | 显式宽度或高度发生变化，且动画启用时，在调整生命周期开始时触发。动画中的连续目标变化保持在同一生命周期内。 |
+| `resize-end` | `()` | 根元素最后一个宽高过渡完成、安全定时器结束生命周期，或调整过程中被禁用时触发。 |
+
+### Expose
+
+| 名称 | 类型 | 说明 |
+|------|------|------|
+| `rootEl` | `HTMLElement \| null` | 当前根元素。Vue 会在公共组件实例上解包内部暴露的 ref。 |
+| `animating` | `boolean` | 是否处于启用状态下的显式尺寸过渡生命周期。Vue 会在公共组件实例上解包内部暴露的 ref。 |
+
+## 交互契约
+
+- 根元素通过 `<component :is="as">` 渲染；透传 attrs 应用到该根元素，调用方 `class` / `style` 会与组件类名及尺寸样式合并。
+- 有限数字目标转换为 px。去除首尾空白后的非空字符串会保留，因此可以直接使用 `%`、`rem`、`calc()` 与 `min()` 目标。
+- `undefined`、运行时 `null`、非有限数字、空字符串或仅含空白的字符串会被解析为该轴不设置内联尺寸。TypeScript 调用方使用 `undefined`；`null` 处理仅是运行时防护。
+- 组件不校验 CSS 长度语法。负数和无效的非空字符串仍会传给浏览器，因此声明可能被浏览器拒绝；如果没有实际 transition 运行，基于时长的安全定时器仍会结束由解析值变化启动的生命周期。
+- 启用动画时，任一解析后尺寸变化都会开始一个生命周期并设置 `animating=true`。所有根元素 `width` / `height` 过渡完成，或基于时长的安全定时器触发后，生命周期才结束。
+- 来自子元素的 transition 事件，以及 `width` / `height` 之外属性的 transition 事件会被忽略。
+- `disabled=true` 会应用 `transition: none`；之后的目标变化立即跳变，不触发新的 `resize-start` 或 `resize-end`。在动画中禁用会触发该生命周期最后一次 `resize-end`。
+- `clip=true` 应用 `overflow: hidden`；`clip=false` 时，溢出遵循普通 CSS 行为。
+- 系统开启减少动态效果时，媒体查询会把 CSS 过渡缩短到 `0.01ms`，同时保留生命周期结束逻辑。
+- 仅插槽内容变化不会开始尺寸调整。组件没有自动内容测量、`ResizeObserver` 或 `v-model` 契约。
+
+## 最佳实践
+
+- 当父组件已经知道紧凑与展开状态的宽高目标时，使用 `TxResizeBox`。
+- 当图片、异步渲染、文本换行或其他内容驱动变化需要自动测量时，使用 `TxAutoSizer`。
+- 只设置自己控制的轴；不设置 `width` 或 `height` 可以保留该轴的固有尺寸。
+- 优先使用非负有限数字或有效的 CSS 长度字符串，不要把浏览器拒绝无效目标当作应用层校验。
+- 面板内部内容大于紧凑目标时保留 `clip=true`。只有在溢出是有意设计且外围布局可以容纳时才关闭裁剪。
+- 将 `resize-start` 与 `resize-end` 作为生命周期通知，而不是尺寸值来源；props 始终是尺寸状态的唯一来源。
+- 响应式目标使用 `min(420px, 100%)` 等 CSS 长度字符串，避免显式尺寸在窄屏上造成横向溢出。
+
+## 审阅说明
+
+- 已对照 `packages/tuffex/packages/components/src/resize-box/src/types.ts`、`TxResizeBox.vue` 与 `resize-box.test.ts` 核对。
+- 组件只动画显式目标；内容观察属于 `TxAutoSizer` 的职责。
+- 事件参数为空，组件不暴露 `v-model` 或命令式 resize 方法。
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/resize-box/src/TxResizeBox.vue`.
+- Types: `packages/tuffex/packages/components/src/resize-box/src/types.ts`.
+- **实测覆盖：** `packages/tuffex/packages/components/src/resize-box/__tests__/resize-box.test.ts` 验证数字/字符串尺寸、未设置轴的固有尺寸、attrs 合并、裁剪、生命周期事件、禁用跳变、安全结束与连续目标变化。
+
+<TuffDocSourceLink />
