@@ -334,6 +334,7 @@ const SECTION_ORDER: Record<string, string[]> = {
     '/docs/dev/components/base-anchor',
     '/docs/dev/components/floating',
     '/docs/dev/components/auto-sizer',
+    '/docs/dev/components/resize-box',
   ],
   '/docs/dev/reference': [
     '/docs/dev/reference/index',

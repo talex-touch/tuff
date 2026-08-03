@@ -224,6 +224,7 @@ code: |
 - [Splitter](./splitter.en.mdc)
 - [Scroll](./scroll.en.mdc)
 - [AutoSizer](./auto-sizer.en.mdc)
+- [ResizeBox](./resize-box.en.mdc)
 - [NavBar](./nav-bar.en.mdc)
 - [TabBar](./tab-bar.en.mdc)
 - [Tabs](./tabs.en.mdc)

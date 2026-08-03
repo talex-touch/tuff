@@ -1,0 +1,172 @@
+---
+title: "ResizeBox"
+description: "Transitions a container between explicit width and height targets with lifecycle events and optional overflow clipping."
+category: Primitives
+status: beta
+since: 1.0.0
+tags: [resize, layout, animation]
+syncStatus: reviewed
+verified: true
+---
+# ResizeBox
+
+`TxResizeBox` transitions its root element between explicit `width` and `height` targets. It is useful when the parent already knows both layout states and needs a predictable CSS size transition.
+
+> `TxResizeBox` does not measure slot content and does not use `ResizeObserver`. Use [`TxAutoSizer`](./auto-sizer.en.mdc) when content changes should be measured automatically.
+
+## Basic Usage
+
+### Explicit Size Targets
+
+Switch between compact and expanded targets, observe `resize-start` / `resize-end`, disable motion to snap immediately, and toggle overflow clipping.
+
+:::TuffDemoWrapper{demo="ResizeBoxResizeBoxDemo" code-lang="vue"}
+---
+code: |
+  <script setup lang="ts">
+  import { computed, ref } from 'vue'
+
+  const expanded = ref(false)
+  const disabled = ref(false)
+  const clip = ref(true)
+  const status = ref('idle')
+
+  const width = computed(() => expanded.value ? 'min(420px, 100%)' : 'min(220px, 100%)')
+  const height = computed(() => expanded.value ? 244 : 132)
+
+  function setExpanded(value: boolean) {
+    if (expanded.value === value)
+      return
+    expanded.value = value
+    if (disabled.value)
+      status.value = 'snapped'
+  }
+  </script>
+
+  <template>
+    <div style="display: grid; gap: 12px; width: 100%; min-width: 0;">
+      <div
+        style="display: flex; flex-wrap: wrap; gap: 8px;"
+        role="group"
+        aria-label="Size"
+      >
+        <TxButton
+          size="small"
+          :variant="expanded ? 'ghost' : 'primary'"
+          :aria-pressed="!expanded"
+          @click="setExpanded(false)"
+        >
+          Compact
+        </TxButton>
+        <TxButton
+          size="small"
+          :variant="expanded ? 'primary' : 'ghost'"
+          :aria-pressed="expanded"
+          @click="setExpanded(true)"
+        >
+          Expanded
+        </TxButton>
+        <label style="display: inline-flex; align-items: center; gap: 8px;">
+          Disable motion <TxSwitch v-model="disabled" aria-label="Disable motion" />
+        </label>
+        <label style="display: inline-flex; align-items: center; gap: 8px;">
+          Clip overflow <TxSwitch v-model="clip" aria-label="Clip overflow" />
+        </label>
+      </div>
+
+      <div role="status" aria-live="polite">
+        {{ status }} · {{ width }} × {{ height }}px
+      </div>
+
+      <div style="width: 100%; min-width: 0; overflow: hidden; padding: 12px;">
+        <TxResizeBox
+          as="section"
+          :width="width"
+          :height="height"
+          :duration="360"
+          easing="cubic-bezier(0.22, 1, 0.36, 1)"
+          :disabled="disabled"
+          :clip="clip"
+          @resize-start="status = 'resizing'"
+          @resize-end="status = 'settled'"
+        >
+          <div style="width: 360px; min-height: 214px; padding: 16px;">
+            Explicitly sized content
+          </div>
+        </TxResizeBox>
+      </div>
+    </div>
+  </template>
+---
+:::
+
+## API
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `as` | `string` | `div` | Element tag rendered as the root container. |
+| `width` | `number \| string` | `undefined` | Explicit width target. Finite numbers become px; trimmed non-empty strings are forwarded as CSS sizes. An unset value leaves the axis intrinsically sized. |
+| `height` | `number \| string` | `undefined` | Explicit height target. Finite numbers become px; trimmed non-empty strings are forwarded as CSS sizes. An unset value leaves the axis intrinsically sized. |
+| `duration` | `number` | `300` | Width and height transition duration in milliseconds. |
+| `easing` | `string` | `cubic-bezier(0.22, 1, 0.36, 1)` | CSS timing function used by both size transitions. |
+| `disabled` | `boolean` | `false` | Removes transitions so new size targets apply immediately. Disabling during a resize settles the active lifecycle. |
+| `clip` | `boolean` | `true` | Applies `overflow: hidden` to the root while enabled. |
+
+### Slots
+
+| Slot | Props | Description |
+|------|-------|-------------|
+| `default` | - | Content rendered directly inside the resizable root element. The component does not wrap or measure it. |
+
+### Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `resize-start` | `()` | Emitted when a changed explicit width or height begins an enabled resize lifecycle. Rapid target changes while already animating remain in the same lifecycle. |
+| `resize-end` | `()` | Emitted after the last root width/height transition settles, the safety timer settles it, or an active resize is disabled. |
+
+### Expose
+
+| Name | Type | Description |
+|------|------|-------------|
+| `rootEl` | `HTMLElement \| null` | Current root element. Vue unwraps the exposed internal ref on the public component instance. |
+| `animating` | `boolean` | Whether an enabled explicit-size transition lifecycle is active. Vue unwraps the exposed internal ref on the public component instance. |
+
+## Interaction Contract
+
+- The root is rendered through `<component :is="as">`; forwarded attrs are applied to that root, while caller `class` and `style` are merged with component classes and size styles.
+- Finite numeric targets are converted to px. Trimmed non-empty strings are preserved, so `%`, `rem`, `calc()`, and `min()` targets can be used directly.
+- `undefined`, runtime `null`, non-finite numbers, and empty or whitespace-only strings resolve to no inline size for that axis. TypeScript callers use `undefined`; the `null` behavior is a runtime safeguard.
+- The component does not validate CSS length grammar. Negative numbers and invalid non-empty strings are forwarded, so the browser may reject the declaration; if no transition runs, the duration-based safety timer still settles any lifecycle started by the resolved-value change.
+- Changing either resolved size while enabled starts one lifecycle and sets `animating=true`. The lifecycle ends only after all running root `width` / `height` transitions settle or the duration-based safety timer fires.
+- Transition events from child elements and transitions for properties other than `width` or `height` are ignored.
+- `disabled=true` adds `transition: none`; target changes snap without a new `resize-start` or `resize-end`. Disabling an active resize emits its final `resize-end`.
+- `clip=true` applies `overflow: hidden`. With `clip=false`, overflow follows normal CSS behavior.
+- The reduced-motion media query shortens the CSS transition duration to `0.01ms` while retaining lifecycle settlement.
+- Slot-content changes alone do not start a resize. There is no automatic content measurement, `ResizeObserver`, or `v-model` contract.
+
+## Best Practices
+
+- Use `TxResizeBox` when compact and expanded width/height targets are already known by the parent.
+- Use `TxAutoSizer` when images, async rendering, text wrapping, or other content-driven changes must be measured automatically.
+- Set only the axis you own; leaving `width` or `height` unset preserves intrinsic sizing for that axis.
+- Prefer non-negative finite numbers or valid CSS length strings. Do not rely on the browser rejecting an invalid target as application validation.
+- Keep `clip=true` for panels whose inner content is larger than the compact target. Disable clipping only when overflow is intentional and the surrounding layout can contain it.
+- Treat `resize-start` and `resize-end` as lifecycle notifications, not as a source of size values; the props remain the source of truth.
+- Use CSS length strings for responsive targets such as `min(420px, 100%)` so explicit sizing does not force narrow-screen overflow.
+
+## Review Notes
+
+- Reviewed against `packages/tuffex/packages/components/src/resize-box/src/types.ts`, `TxResizeBox.vue`, and `resize-box.test.ts`.
+- The component animates explicit targets only; content observation belongs to `TxAutoSizer`.
+- Event payloads are empty, and no `v-model` or imperative resize method is exposed.
+
+## Source
+
+- Component source: `packages/tuffex/packages/components/src/resize-box/src/TxResizeBox.vue`.
+- Types: `packages/tuffex/packages/components/src/resize-box/src/types.ts`.
+- **Verified coverage:** `packages/tuffex/packages/components/src/resize-box/__tests__/resize-box.test.ts` verifies numeric/string sizes, intrinsic unset axes, attrs merging, clipping, lifecycle events, disabled snapping, safety settlement, and rapid target changes.
+
+<TuffDocSourceLink />

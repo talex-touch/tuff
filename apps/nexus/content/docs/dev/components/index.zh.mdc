@@ -224,6 +224,7 @@ code: |
 - [Splitter 分割面板](./splitter.zh.mdc)
 - [Scroll 滚动](./scroll.zh.mdc)
 - [AutoSizer 自适应尺寸](./auto-sizer.zh.mdc)
+- [ResizeBox 显式尺寸动画](./resize-box.zh.mdc)
 - [NavBar 导航栏](./nav-bar.zh.mdc)
 - [TabBar 底部导航](./tab-bar.zh.mdc)
 - [Tabs 标签页](./tabs.zh.mdc)

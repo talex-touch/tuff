@@ -92,6 +92,7 @@ const fromProgress = () => import('@tuffex-components/progress')
 const fromProgressBar = () => import('@tuffex-components/progress-bar')
 const fromRadio = () => import('@tuffex-components/radio')
 const fromRating = () => import('@tuffex-components/rating')
+const fromResizeBox = () => import('@tuffex-components/resize-box')
 const fromScroll = () => import('@tuffex-components/scroll')
 const fromSearchEmpty = () => import('@tuffex-components/search-empty')
 const fromSearchInput = () => import('@tuffex-components/search-input')
@@ -224,6 +225,7 @@ const GLOBAL_TUFFEX_COMPONENTS = {
   TxRadio: asyncTuffexComponent(fromRadio, 'TxRadio'),
   TxRadioGroup: asyncTuffexComponent(fromRadio, 'TxRadioGroup'),
   TxRating: asyncTuffexComponent(fromRating, 'TxRating'),
+  TxResizeBox: asyncTuffexComponent(fromResizeBox, 'TxResizeBox'),
   TxRow: asyncTuffexComponent(fromContainer, 'TxRow'),
   TxScroll: asyncTuffexComponent(fromScroll, 'TxScroll'),
   TxSearchEmpty: asyncTuffexComponent(fromSearchEmpty, 'TxSearchEmpty'),
