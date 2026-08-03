@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Defines focused testing, typecheck, lint, and diff hygiene expected at the final quality gate."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Checks typed event names, renderer identity constraints, and explicit payload contracts."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Checks permission-before-extraction, authoritative plugin ownership, and rollback-safe view transfer."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Checks the complete shortcut-to-storage and plugin-view-to-DivisionBox data flows."}
