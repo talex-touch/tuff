@@ -1394,3 +1394,37 @@ Restored explicit local Nitro Cloudflare credential bindings without weakening r
 ### Next Steps
 
 - None - task complete
+
+
+## Session 42: Add TxResizeBox component and Nexus docs
+
+**Date**: 2026-08-02
+**Task**: Add TxResizeBox component and Nexus docs
+**Branch**: `master`
+
+### Summary
+
+Added the TxResizeBox TuffEx primitive with lifecycle race coverage, published bilingual Nexus documentation and an interactive responsive demo, and registered the component across sidebar, demo loader, and on-demand global loading.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `74b7ee33b` | (see git log) |
+| `b5a0a27b9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

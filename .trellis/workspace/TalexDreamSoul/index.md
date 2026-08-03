@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 41
+- **Total Sessions**: 42
 - **Last Active**: 2026-08-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1396 | Active |
+| `journal-1.md` | ~1430 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 42 | 2026-08-02 | Add TxResizeBox component and Nexus docs | `74b7ee33b`, `b5a0a27b9` | `master` |
 | 41 | 2026-08-02 | Fix Nexus local Cloudflare runtime credentials | `2d68261b0` | `master` |
 | 40 | 2026-07-31 | Release v2.4.14-beta.1 | `945a3a363`, `6970d12cd` | `master` |
 | 39 | 2026-07-31 | 同步分支并整理设置与更新代码 | `0efd10533`, `80c44ade4`, `a3a5bd26f` | `master` |
