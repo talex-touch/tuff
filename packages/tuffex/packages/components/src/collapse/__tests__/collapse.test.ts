@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
@@ -128,6 +130,30 @@ describe('txCollapse', () => {
     expect((content.element as HTMLElement).style.height).not.toBe('')
 
     wrapper.unmount()
+  })
+
+  it('derives its default palette from semantic theme tokens', () => {
+    const collapseSource = readFileSync(
+      resolve(process.cwd(), 'packages/components/src/collapse/src/TxCollapse.vue'),
+      'utf8'
+    )
+    const itemSource = readFileSync(
+      resolve(process.cwd(), 'packages/components/src/collapse/src/TxCollapseItem.vue'),
+      'utf8'
+    )
+
+    expect(collapseSource).toContain(
+      'var(--tx-collapse-bg, var(--tx-bg-color-overlay, #ffffff))'
+    )
+    expect(itemSource).toContain(
+      'var(--tx-collapse-header-bg, var(--tx-bg-color-overlay, #ffffff))'
+    )
+    expect(itemSource).toContain(
+      'var(--tx-collapse-header-active-bg, var(--tx-fill-color, #f3f4f6))'
+    )
+    expect(itemSource).toContain(
+      'var(--tx-collapse-content-text, var(--tx-text-color-regular, #6b7280))'
+    )
   })
 
   it('registers collapse components through install', () => {

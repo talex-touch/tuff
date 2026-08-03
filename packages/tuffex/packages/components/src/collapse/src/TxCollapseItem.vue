@@ -102,7 +102,7 @@ function onAfterLeave(el: Element) {
 
 <style scoped>
 .tx-collapse-item {
-  border-bottom: 1px solid var(--tx-collapse-border, #e5e7eb);
+  border-bottom: 1px solid var(--tx-collapse-border, var(--tx-border-color-lighter, #e5e7eb));
 }
 
 .tx-collapse-item:last-child {
@@ -119,19 +119,19 @@ function onAfterLeave(el: Element) {
   cursor: pointer;
   font: inherit;
   user-select: none;
-  background: var(--tx-collapse-header-bg, #ffffff);
-  color: var(--tx-collapse-header-text, #374151);
+  background: var(--tx-collapse-header-bg, var(--tx-bg-color-overlay, #ffffff));
+  color: var(--tx-collapse-header-text, var(--tx-text-color-primary, #374151));
   font-weight: 500;
   transition: background-color 0.2s;
 }
 
 .tx-collapse-item__header:hover:not(.tx-collapse-item__header--active) {
-  background: var(--tx-collapse-header-hover-bg, #f9fafb);
+  background: var(--tx-collapse-header-hover-bg, var(--tx-fill-color-light, #f9fafb));
 }
 
 .tx-collapse-item__header--active {
-  background: var(--tx-collapse-header-active-bg, #f3f4f6);
-  color: var(--tx-collapse-header-active-text, #111827);
+  background: var(--tx-collapse-header-active-bg, var(--tx-fill-color, #f3f4f6));
+  color: var(--tx-collapse-header-active-text, var(--tx-text-color-primary, #111827));
 }
 
 .tx-collapse-item__header--disabled {
@@ -143,7 +143,7 @@ function onAfterLeave(el: Element) {
   margin-right: 8px;
   transition: transform 0.3s;
   font-size: 16px;
-  color: var(--tx-collapse-arrow, #6b7280);
+  color: var(--tx-collapse-arrow, var(--tx-text-color-secondary, #6b7280));
 }
 
 .tx-collapse-item__arrow--active {
@@ -156,7 +156,7 @@ function onAfterLeave(el: Element) {
 
 .tx-collapse-item__content-inner {
   padding: 16px;
-  color: var(--tx-collapse-content-text, #6b7280);
+  color: var(--tx-collapse-content-text, var(--tx-text-color-regular, #6b7280));
   line-height: 1.6;
 }
 
