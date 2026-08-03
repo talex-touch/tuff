@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Defines typed transport event naming and sender-owned context requirements used by the CoreBox detach IPC."}
+{"file":".trellis/spec/frontend/plugin-runtime-security.md","reason":"Defines fail-closed plugin identity, permission, and WebContents ownership boundaries for DivisionBox transfers."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides end-to-end validation across renderer shortcuts, transport events, main-process ownership, and persisted storage."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Supports reusing existing typed Flow and CoreBox routes instead of adding a parallel shortcut subsystem."}
