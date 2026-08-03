@@ -243,13 +243,13 @@ export class WindowManager {
     })
 
     window.window.webContents.on('did-finish-load', () => {
-      if (wasVisibleBeforeReload) {
-        this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
-          id: window.window.webContents.id,
-          show: true
-        })
-        wasVisibleBeforeReload = false
-      }
+      // dom-ready may precede renderer transport registration; publish the authoritative native
+      // state again after the page finishes loading so hidden CoreBox work is suspended.
+      this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
+        id: window.window.webContents.id,
+        show: wasVisibleBeforeReload || window.window.isVisible()
+      })
+      wasVisibleBeforeReload = false
     })
 
     window.window.addListener('closed', () => {

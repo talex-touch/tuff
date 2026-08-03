@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Owns BrowserWindow visibility, continuous renderer work, and CoreBox native visibility handshake contracts."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Owns typed main-to-renderer notification and request/response boundary rules."}

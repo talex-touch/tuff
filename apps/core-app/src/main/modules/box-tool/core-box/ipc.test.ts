@@ -475,6 +475,30 @@ describe('CoreBox IPC hide transport', () => {
     )
   })
 
+  it.each([
+    ['no CoreBox window', null, { visible: false }],
+    [
+      'destroyed CoreBox window',
+      { isDestroyed: () => true, isVisible: () => true, webContents: { id: 41 } },
+      { visible: false }
+    ],
+    [
+      'hidden live CoreBox window',
+      { isDestroyed: () => false, isVisible: () => false, webContents: { id: 41 } },
+      { visible: false }
+    ],
+    [
+      'visible live CoreBox window',
+      { isDestroyed: () => false, isVisible: () => true, webContents: { id: 41 } },
+      { visible: true }
+    ]
+  ])('answers native visibility from the current %s', (_case, currentWindow, expected) => {
+    mocks.currentWindow = currentWindow
+    const handler = mocks.handlers.get(CoreBoxEvents.ui.getVisibility.toEventName())
+
+    expect(handler?.()).toEqual(expected)
+  })
+
   it('maps canonical hide payload into an immediate manager trigger', () => {
     const handler = mocks.handlers.get(CoreBoxEvents.ui.hide.toEventName())
 

@@ -142,6 +142,7 @@ import type {
   CoreBoxUIModeExitedPayload,
   CoreBoxUiResumePayload,
   CoreBoxUIViewStateResponse,
+  CoreBoxVisibilityResponse,
   DeactivateProviderRequest,
   EnterUIModeRequest,
   ExpandOptions,
@@ -1016,6 +1017,14 @@ export const CoreBoxEvents = {
       .module('ui')
       .event('get-ui-view-state')
       .define<void, CoreBoxUIViewStateResponse>(),
+
+    /**
+     * Query authoritative native CoreBox window visibility.
+     */
+    getVisibility: defineEvent('core-box')
+      .module('ui')
+      .event('get-visibility')
+      .define<void, CoreBoxVisibilityResponse>(),
 
     /**
      * Notify renderer about CoreBox visibility or entrance mode changes.

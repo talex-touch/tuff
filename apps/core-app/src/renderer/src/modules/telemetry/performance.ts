@@ -1,7 +1,8 @@
 import { PollingService } from '@talex-touch/utils/common/utils/polling'
-import { isCoreBox } from '@talex-touch/utils/renderer'
+import { isCoreBox } from '@talex-touch/utils/renderer/hooks/arg-mapper'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { SentryEvents } from '@talex-touch/utils/transport/events'
+import { subscribeRendererActivity } from './renderer-activity'
 
 interface RendererPerformanceBuffer {
   longTaskCount: number
@@ -25,6 +26,10 @@ const transport = useTuffTransport()
 let started = false
 const pollingService = PollingService.getInstance()
 const flushTaskId = 'renderer.performance.flush'
+let rafId: number | null = null
+let lastFrameTime: number | null = null
+let monitoringEnabled = false
+let rendererActive = true
 
 export async function startRendererPerformanceTelemetry(options?: {
   flushIntervalMs?: number
@@ -40,11 +45,16 @@ export async function startRendererPerformanceTelemetry(options?: {
   } catch {
     return
   }
+  monitoringEnabled = true
 
   const flushIntervalMs = options?.flushIntervalMs ?? 60_000
 
   startLongTaskObserver()
-  startRafJankMonitor()
+  subscribeRendererActivity((active) => {
+    rendererActive = active
+    syncRafJankMonitor()
+    if (!active) void flush()
+  })
 
   if (pollingService.isRegistered(flushTaskId)) {
     pollingService.unregister(flushTaskId)
@@ -60,9 +70,8 @@ export async function startRendererPerformanceTelemetry(options?: {
   })
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      void flush()
-    }
+    syncRafJankMonitor()
+    if (document.hidden) void flush()
   })
 }
 
@@ -88,22 +97,45 @@ function startLongTaskObserver(): void {
 }
 
 function startRafJankMonitor(): void {
-  let lastTime = performance.now()
+  if (!monitoringEnabled || !rendererActive || document.hidden || rafId !== null) return
+  lastFrameTime = performance.now()
 
   const onFrame = (now: number) => {
-    const delta = now - lastTime
-    lastTime = now
-
-    if (delta > 50) {
-      buffer.rafJankCount += 1
-      buffer.rafJankTotalMs += delta
-      buffer.rafJankMaxMs = Math.max(buffer.rafJankMaxMs, delta)
+    rafId = null
+    if (!monitoringEnabled || !rendererActive || document.hidden) {
+      lastFrameTime = null
+      return
     }
 
-    requestAnimationFrame(onFrame)
+    const previousFrameTime = lastFrameTime
+    lastFrameTime = now
+    if (previousFrameTime !== null) {
+      const delta = now - previousFrameTime
+      if (delta > 50) {
+        buffer.rafJankCount += 1
+        buffer.rafJankTotalMs += delta
+        buffer.rafJankMaxMs = Math.max(buffer.rafJankMaxMs, delta)
+      }
+    }
+
+    rafId = requestAnimationFrame(onFrame)
   }
 
-  requestAnimationFrame(onFrame)
+  rafId = requestAnimationFrame(onFrame)
+}
+
+function stopRafJankMonitor(): void {
+  if (rafId !== null) cancelAnimationFrame(rafId)
+  rafId = null
+  lastFrameTime = null
+}
+
+function syncRafJankMonitor(): void {
+  if (!monitoringEnabled || !rendererActive || document.hidden) {
+    stopRafJankMonitor()
+    return
+  }
+  startRafJankMonitor()
 }
 
 async function flush(): Promise<void> {

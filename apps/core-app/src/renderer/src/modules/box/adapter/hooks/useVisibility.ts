@@ -9,6 +9,7 @@ import { nextTick, ref, watch } from 'vue'
 import { appSetting } from '~/modules/storage/app-storage'
 import { BoxMode } from '..'
 import { getLatestClipboard } from './useClipboardChannel'
+import { setRendererActivity } from '~/modules/telemetry/renderer-activity'
 import { clearImplicitClipboardState, isClipboardFreshForAutoPaste } from './clipboard-autopaste'
 
 interface UseVisibilityOptions {
@@ -38,10 +39,13 @@ export function useVisibility(options: UseVisibilityOptions) {
   const visibility = useDocumentVisibility()
   const wasTriggeredByShortcut = ref(false)
   let lastVisibleState: boolean | null = null
+  let hasNativeVisibilitySignal = false
+  let nativeVisibilityVersion = 0
 
   const applyVisibility = (visible: boolean): void => {
     if (lastVisibleState === visible) return
     lastVisibleState = visible
+    setRendererActivity(visible)
     if (visible) {
       void onShow()
     } else {
@@ -53,12 +57,25 @@ export function useVisibility(options: UseVisibilityOptions) {
     wasTriggeredByShortcut.value = true
   })
   const unregisterCoreBoxTrigger = transport.on(CoreBoxEvents.ui.trigger, (payload) => {
-    if (!payload || typeof payload !== 'object') return
-    const show = (payload as { show?: unknown }).show
-    if (typeof show === 'boolean') {
-      applyVisibility(show)
-    }
+    if (!payload || typeof payload !== 'object' || !('show' in payload)) return
+    const show = payload.show
+    if (typeof show !== 'boolean') return
+    hasNativeVisibilitySignal = true
+    nativeVisibilityVersion += 1
+    applyVisibility(show)
   })
+
+  setRendererActivity(visibility.value === 'visible')
+  const visibilityRequestVersion = nativeVisibilityVersion
+  void transport
+    .send(CoreBoxEvents.ui.getVisibility)
+    .then((response) => {
+      if (nativeVisibilityVersion !== visibilityRequestVersion) return
+      if (typeof response?.visible !== 'boolean') return
+      hasNativeVisibilitySignal = true
+      applyVisibility(response.visible)
+    })
+    .catch(() => {})
 
   function onHide(): void {
     boxOptions.lastHidden = Date.now()
@@ -113,7 +130,7 @@ export function useVisibility(options: UseVisibilityOptions) {
   watch(
     () => visibility.value,
     (visible) => {
-      applyVisibility(visible === 'visible')
+      if (!hasNativeVisibilitySignal) applyVisibility(visible === 'visible')
     }
   )
 

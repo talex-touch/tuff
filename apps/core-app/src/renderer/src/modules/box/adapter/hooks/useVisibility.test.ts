@@ -1,5 +1,6 @@
 import type { IBoxOptions } from '..'
 import type { IClipboardItem, IClipboardOptions } from './types'
+import { CoreBoxEvents } from '@talex-touch/utils/transport/events'
 import { MetaOverlayEvents } from '@talex-touch/utils/transport/events/meta-overlay'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
@@ -8,7 +9,8 @@ import { useVisibility } from './useVisibility'
 
 const state = vi.hoisted(() => ({
   listeners: new Map<string, (payload?: unknown) => void>(),
-  send: vi.fn(async () => undefined),
+  send: vi.fn<() => Promise<unknown>>(async () => undefined),
+  setRendererActivity: vi.fn(),
   appSetting: {
     tools: {
       autoClear: 300,
@@ -42,6 +44,10 @@ vi.mock('@vueuse/core', async () => {
 
 vi.mock('~/modules/storage/app-storage', () => ({
   appSetting: state.appSetting
+}))
+
+vi.mock('~/modules/telemetry/renderer-activity', () => ({
+  setRendererActivity: state.setRendererActivity
 }))
 
 vi.mock('./useClipboardChannel', () => ({
@@ -159,6 +165,42 @@ describe('useVisibility auto clear session reset', () => {
     expect(clipboardOptions.lastClearedTimestamp).toBeNull()
     expect(state.send).toHaveBeenCalledWith(MetaOverlayEvents.ui.hide)
     expect(deactivateAllProviders).toHaveBeenCalledTimes(1)
+    hook.cleanup()
+  })
+
+  it('installs native visibility handling before querying and applies the initial native state', async () => {
+    vi.useFakeTimers()
+    state.send.mockImplementation(async () => {
+      expect(state.listeners.has(CoreBoxEvents.ui.trigger.toEventName())).toBe(true)
+      return { visible: true }
+    })
+
+    const { hook } = createVisibilityHarness()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.setRendererActivity).toHaveBeenLastCalledWith(true)
+    hook.cleanup()
+    vi.useRealTimers()
+  })
+
+  it('keeps a native visibility push that wins the initial-query race', async () => {
+    let resolveVisibility: (response: { visible: boolean }) => void
+    state.send.mockImplementation(
+      () =>
+        new Promise<{ visible: boolean }>((resolve) => {
+          resolveVisibility = resolve
+        })
+    )
+    const { hook } = createVisibilityHarness()
+    const nativeTrigger = state.listeners.get(CoreBoxEvents.ui.trigger.toEventName())
+
+    nativeTrigger?.({ show: false })
+    resolveVisibility!({ visible: true })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(state.setRendererActivity).toHaveBeenLastCalledWith(false)
     hook.cleanup()
   })
 })

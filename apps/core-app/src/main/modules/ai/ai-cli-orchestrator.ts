@@ -360,10 +360,9 @@ export class AiCliOrchestrator {
       this.execute(request, automationId)
     )
     try {
-      await this.runtimeHost.start()
       this.initialized = true
       await aiAutomationScheduler.initialize()
-      orchestratorLog.info('AI CLI orchestrator initialized')
+      orchestratorLog.info('AI CLI orchestrator control plane initialized')
     } catch (error) {
       this.initialized = false
       await aiAutomationScheduler.stop().catch(() => undefined)

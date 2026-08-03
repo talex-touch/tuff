@@ -14,6 +14,9 @@
 - 不新增裸 `console.*` 到生产路径；确需调试必须在提交前清理。
 - 首次引导是否展示必须等待 storage hydration 完成后再判定。
 - 同步能力必须走 `/api/v1/sync/*` 及 keys/devices 配套接口。
+- CoreBox 是唯一默认启动即创建并预热的产品窗口；新增 `BrowserWindow` / `WebContentsView` / Utility Process 必须按需创建、具备明确 owner 与 teardown，除非有可验证的启动期合同。
+- 隐藏 Renderer 必须暂停连续 RAF、动画和高频轮询；恢复可见时重建时间基线，不能把隐藏时长记录为卡顿。
+- 全屏透明特效应使用每显示器一个最小独立入口的瞬时窗口，鼠标穿透、不可聚焦，播放结束立即销毁；禁止加载完整 CoreApp Renderer 或常驻后台。
 
 ## Storage / Secret
 
