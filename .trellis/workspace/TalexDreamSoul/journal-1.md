@@ -1494,3 +1494,36 @@ Prepared bilingual release notes and version metadata, published annotated tag v
 ### Next Steps
 
 - None - task complete
+
+
+## Session 45: 推送 CoreApp 快捷键作用域修复
+
+**Date**: 2026-08-02
+**Task**: 推送 CoreApp 快捷键作用域修复
+**Branch**: `master`
+
+### Summary
+
+核对 master 仅领先 origin/master 三笔预期提交，使用普通非强制推送同步 CoreApp 快捷键作用域实现、任务归档与 Session 44；远端和本地 SHA 一致，ahead/behind 为 0/0。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8549845f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
