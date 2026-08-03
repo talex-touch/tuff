@@ -1,0 +1,32 @@
+{
+  "id": "publish-next-github-release",
+  "name": "publish-next-github-release",
+  "title": "发布 v2.4.14-beta.2 GitHub Release",
+  "description": "Prepare, verify, tag, and publish the v2.4.14-beta.2 GitHub prerelease.",
+  "status": "in_progress",
+  "dev_type": "release",
+  "scope": "release metadata, tag publication, and GitHub workflow verification",
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-02",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "package.json",
+    "apps/core-app/package.json",
+    "notes/update_2.4.14-beta.2.zh.md",
+    "notes/update_2.4.14-beta.2.en.md",
+    ".github/workflows/build-and-release.yml"
+  ],
+  "notes": "",
+  "meta": {}
+}
