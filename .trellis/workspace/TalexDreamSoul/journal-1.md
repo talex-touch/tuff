@@ -1461,3 +1461,36 @@ Prepared bilingual release notes and version metadata, published annotated tag v
 ### Next Steps
 
 - None - task complete
+
+
+## Session 44: 修正 CoreApp 快捷键作用域
+
+**Date**: 2026-08-02
+**Task**: 修正 CoreApp 快捷键作用域
+**Branch**: `master`
+
+### Summary
+
+移除 AI Quick Call 与 Flow 的系统全局快捷键，保留 CoreBox 页面/插件视图上下文操作；迁移退休快捷键记录，并加固主进程 sender、权限、视图缓存所有权和 DivisionBox 失败回滚。相关测试、类型检查、lint 与文档验证通过，独立终审 APPROVE。
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8549845f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
