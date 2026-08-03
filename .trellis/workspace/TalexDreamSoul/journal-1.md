@@ -1428,3 +1428,36 @@ Added the TxResizeBox TuffEx primitive with lifecycle race coverage, published b
 ### Next Steps
 
 - None - task complete
+
+
+## Session 43: Publish v2.4.14-beta.2 GitHub Release
+
+**Date**: 2026-08-02
+**Task**: Publish v2.4.14-beta.2 GitHub Release
+**Branch**: `master`
+
+### Summary
+
+Prepared bilingual release notes and version metadata, published annotated tag v2.4.14-beta.2, verified the successful three-platform GitHub Actions release, validated signed manifest assets and macOS native trust, confirmed Nexus BETA publication, and archived the release task.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `154508d50` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
