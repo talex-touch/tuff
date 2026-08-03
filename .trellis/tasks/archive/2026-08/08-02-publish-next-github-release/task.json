@@ -3,7 +3,7 @@
   "name": "publish-next-github-release",
   "title": "发布 v2.4.14-beta.2 GitHub Release",
   "description": "Prepare, verify, tag, and publish the v2.4.14-beta.2 GitHub prerelease.",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": "release",
   "scope": "release metadata, tag publication, and GitHub workflow verification",
   "package": null,
@@ -11,11 +11,11 @@
   "creator": "TalexDreamSoul",
   "assignee": "TalexDreamSoul",
   "createdAt": "2026-08-02",
-  "completedAt": null,
+  "completedAt": "2026-08-02",
   "branch": null,
   "base_branch": "master",
   "worktree_path": null,
-  "commit": null,
+  "commit": "154508d50823cd4e02409c7a3a79c20a27a0fa16",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -27,6 +27,10 @@
     "notes/update_2.4.14-beta.2.en.md",
     ".github/workflows/build-and-release.yml"
   ],
-  "notes": "",
-  "meta": {}
+  "notes": "Published v2.4.14-beta.2 as a verified GitHub prerelease; Actions run 30779316931 and Nexus sync succeeded.",
+  "meta": {
+    "releaseUrl": "https://github.com/talex-touch/tuff/releases/tag/v2.4.14-beta.2",
+    "workflowRunId": "30779316931",
+    "workflowUrl": "https://github.com/talex-touch/tuff/actions/runs/30779316931"
+  }
 }
