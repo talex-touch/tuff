@@ -277,6 +277,17 @@ export class IpcManager {
     this.transportDisposers.push(this.ensureTransport().on(CoreBoxEvents.ui.hide, handleHide))
 
     this.transportDisposers.push(
+      transport.on(CoreBoxEvents.ui.getVisibility, () => {
+        const currentWindow = windowManager.current?.window
+        return {
+          visible: Boolean(
+            currentWindow && !currentWindow.isDestroyed() && currentWindow.isVisible()
+          )
+        }
+      })
+    )
+
+    this.transportDisposers.push(
       transport.on(CoreBoxEvents.ui.setPinned, (payload) => {
         const pinned = payload?.pinned === true
         windowManager.setPinned(pinned)

@@ -171,6 +171,10 @@ export interface CoreBoxTriggerPayload {
   [key: string]: unknown;
 }
 
+export interface CoreBoxVisibilityResponse {
+  visible: boolean;
+}
+
 /**
  * Request to set input visibility.
  */
