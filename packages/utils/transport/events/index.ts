@@ -20,7 +20,7 @@
  * ```
  */
 
-import type { PluginApiUninstallRequest, PluginApiUninstallResponse } from './types/plugin-uninstall'
+import type { WidgetFailurePayload, WidgetRegistrationPayload } from '../../plugin/widget'
 
 import type {
   AgentsCancelRequest,
@@ -32,19 +32,19 @@ import type {
   AgentsGetRequest,
   AgentsGetResponse,
   AgentsListResponse,
+  AgentsStatsResponse,
   AgentsStoreCategoriesResponse,
   AgentsStoreCheckUpdatesResponse,
   AgentsStoreFeaturedResponse,
   AgentsStoreGetRequest,
   AgentsStoreGetResponse,
+  AgentsStoreInstalledResponse,
   AgentsStoreInstallRequest,
   AgentsStoreInstallResponse,
-  AgentsStoreInstalledResponse,
   AgentsStoreSearchRequest,
   AgentsStoreSearchResponse,
   AgentsStoreUninstallRequest,
   AgentsStoreUninstallResponse,
-  AgentsStatsResponse,
   AgentsTaskCancelledPayload,
   AgentsTaskCompletedPayload,
   AgentsTaskFailedPayload,
@@ -78,9 +78,9 @@ import type {
   ClipboardChangePayload,
   ClipboardCopyAndPasteRequest,
   ClipboardDeleteRequest,
-  ClipboardGetLatestRequest,
   ClipboardGetImageUrlRequest,
   ClipboardGetImageUrlResponse,
+  ClipboardGetLatestRequest,
   ClipboardItem,
   ClipboardMetaHistoryItem,
   ClipboardMetaQueryRequest,
@@ -111,9 +111,9 @@ import type {
   CoreBoxForwardKeyEvent,
   CoreBoxGetBoundsResponse,
   CoreBoxHideRequest,
+  CoreBoxIndexingDiagnosticsResponse,
   CoreBoxInputChangeRequest,
   CoreBoxInputVisibilityResponse,
-  CoreBoxIndexingDiagnosticsResponse,
   CoreBoxIsPinnedRequest,
   CoreBoxIsPinnedResponse,
   CoreBoxLayoutUpdateRequest,
@@ -200,8 +200,8 @@ import type {
   DownloadGetTempStatsResponse,
   DownloadMigrationNeededResponse,
   DownloadMigrationProgressPayload,
-  DownloadMigrationRetryResponse,
   DownloadMigrationResultPayload,
+  DownloadMigrationRetryResponse,
   DownloadMigrationStartResponse,
   DownloadMigrationStatusResponse,
   DownloadNotificationClickedPayload,
@@ -240,29 +240,6 @@ import type {
   FlowUnregisterTargetsRequest,
 } from './types/flow'
 import type {
-  StoreCheckUpdatesResponse,
-  StoreGetPluginRequest,
-  StoreGetPluginResponse,
-  StoreHttpRequest,
-  StoreHttpRequestResponse,
-  StoreSearchRequest,
-  StoreSearchResponse,
-  StoreUpdatesAvailablePayload,
-} from './types/store'
-import type {
-  NetworkConfigGetResponse,
-  NetworkConfigUpdateRequest,
-  NetworkCooldownClearRequest,
-  NetworkLifecycleOfflinePayload,
-  NetworkLifecycleOnlinePayload,
-  NetworkLifecycleStatusPayload,
-  NetworkReadBinaryRequest,
-  NetworkReadTextRequest,
-  NetworkRequest,
-  NetworkRequestResponse,
-  NetworkToTfileRequest,
-} from './types/network'
-import type {
   NativeCapabilitiesListRequest,
   NativeCapabilityGetRequest,
   NativeCapabilityStatus,
@@ -290,11 +267,19 @@ import type {
   NativeScreenshotDisplay,
   NativeScreenshotSupport,
 } from './types/native'
-
-// ============================================================================
-// Store Events
-// ============================================================================
-
+import type {
+  NetworkConfigGetResponse,
+  NetworkConfigUpdateRequest,
+  NetworkCooldownClearRequest,
+  NetworkLifecycleOfflinePayload,
+  NetworkLifecycleOnlinePayload,
+  NetworkLifecycleStatusPayload,
+  NetworkReadBinaryRequest,
+  NetworkReadTextRequest,
+  NetworkRequest,
+  NetworkRequestResponse,
+  NetworkToTfileRequest,
+} from './types/network'
 import type {
   NotificationActionPayload,
   NotificationDismissPayload,
@@ -317,7 +302,7 @@ import type {
 } from './types/notification'
 
 // ============================================================================
-// Permission Events
+// Store Events
 // ============================================================================
 
 import type {
@@ -342,68 +327,23 @@ import type {
 } from './types/permission'
 
 // ============================================================================
-// Agents Events
+// Permission Events
 // ============================================================================
 
 import type { PlatformCapabilityListRequest, PlatformCapabilityListResponse } from './types/platform'
 
-import type {
-  QuickOpsBatteryStatusGetResponse,
-  QuickOpsAuditGetRequest,
-  QuickOpsAuditGetResponse,
-  QuickOpsCapabilityGetResponse,
-  QuickOpsCommonDirectoryGetRequest,
-  QuickOpsCommonDirectoryGetResponse,
-  QuickOpsDiagnosticsGetResponse,
-  QuickOpsDeveloperPreviewRequest,
-  QuickOpsDeveloperPreviewResponse,
-  QuickOpsDeveloperPreviewSaveRequest,
-  QuickOpsDeveloperPreviewSaveResponse,
-  QuickOpsDirectoryUsageGetRequest,
-  QuickOpsDirectoryUsageGetResponse,
-  QuickOpsDiskSpaceGetResponse,
-  QuickOpsDnsQueryGetRequest,
-  QuickOpsDnsQueryGetResponse,
-  QuickOpsFileBase64GetRequest,
-  QuickOpsFileBase64GetResponse,
-  QuickOpsFileHashGetRequest,
-  QuickOpsFileHashGetResponse,
-  QuickOpsFormatTextGetRequest,
-  QuickOpsFormatTextGetResponse,
-  QuickOpsNetworkStatusGetResponse,
-  QuickOpsPathFormatGetRequest,
-  QuickOpsPathFormatGetResponse,
-  QuickOpsPortStatusGetRequest,
-  QuickOpsPortStatusGetResponse,
-  QuickOpsQueryLocalIpGetResponse,
-  QuickOpsRecentDownloadGetResponse,
-  QuickOpsSessionsGetResponse,
-  QuickOpsSystemProxyGetResponse,
-  QuickOpsSystemInfoGetResponse,
-} from './types/quick-ops'
-
 // ============================================================================
-// Platform Events
+// Agents Events
 // ============================================================================
 
 import type {
   FeatureTriggerRequest,
   FeatureTriggerResponse,
-  PluginI18nGetLocaleRequest,
-  PluginI18nGetLocaleResponse,
-  PluginI18nResolveTextRequest,
-  PluginI18nResolveTextResponse,
-  PluginLexiconRegisterRequest,
-  PluginLexiconRegisterResponse,
-  PluginLexiconResolveRequest,
-  PluginLexiconResolveResponse,
-  PluginLexiconSearchRequest,
-  PluginLexiconSearchResponse,
   PluginApiFeatureInputChangedRequest,
-  PluginApiGetManifestRequest,
-  PluginApiGetManifestResponse,
   PluginApiGetFileTreeRequest,
   PluginApiGetFileTreeResponse,
+  PluginApiGetManifestRequest,
+  PluginApiGetManifestResponse,
   PluginApiGetOfficialListRequest,
   PluginApiGetOfficialListResponse,
   PluginApiGetPathsRequest,
@@ -423,33 +363,43 @@ import type {
   PluginApiOpenFolderRequest,
   PluginApiOpenPathRequest,
   PluginApiOpenPathResponse,
-  PluginApiRevealPathRequest,
-  PluginApiRevealPathResponse,
   PluginApiOperationRequest,
   PluginApiOperationResponse,
   PluginApiRegisterWidgetRequest,
   PluginApiRegisterWidgetResponse,
+  PluginApiRevealPathRequest,
+  PluginApiRevealPathResponse,
   PluginApiSaveManifestRequest,
   PluginApiSaveManifestResponse,
   PluginApiSaveWidgetFileRequest,
   PluginApiSaveWidgetFileResponse,
   PluginApiTriggerFeatureRequest,
   PluginApiTriggerFeatureResponse,
+  PluginContentInstallRequest,
+  PluginContentInstallResponse,
   PluginDevServerStatusRequest,
   PluginDevServerStatusResponse,
   PluginDisableRequest,
   PluginEnableRequest,
+  PluginI18nGetLocaleRequest,
+  PluginI18nGetLocaleResponse,
+  PluginI18nResolveTextRequest,
+  PluginI18nResolveTextResponse,
   PluginIndexCommunicateRequest,
   PluginIndexCommunicateResponse,
-  PluginContentInstallRequest,
-  PluginContentInstallResponse,
   PluginInfo,
+  PluginInstallCompletedPayload,
   PluginInstallConfirmPayload,
   PluginInstallConfirmResponsePayload,
-  PluginInstallCompletedPayload,
   PluginInstallProgressPayload,
   PluginInstallSourceRequest,
   PluginInstallSourceResponse,
+  PluginLexiconRegisterRequest,
+  PluginLexiconRegisterResponse,
+  PluginLexiconResolveRequest,
+  PluginLexiconResolveResponse,
+  PluginLexiconSearchRequest,
+  PluginLexiconSearchResponse,
   PluginLoadRequest,
   PluginLogEntry,
   PluginPerformanceGetMetricsResponse,
@@ -462,10 +412,18 @@ import type {
   PluginReconnectDevServerRequest,
   PluginReconnectDevServerResponse,
   PluginReloadRequest,
+  PluginServiceHandlePayload,
+  PluginServiceRequest,
   PluginShortcutRegisterRequest,
   PluginShortcutTriggerPayload,
-  PluginStorageClearRequest,
+  PluginSqliteExecuteRequest,
+  PluginSqliteExecuteResponse,
+  PluginSqliteQueryRequest,
+  PluginSqliteQueryResponse,
+  PluginSqliteTransactionRequest,
+  PluginSqliteTransactionResponse,
   PluginStorageApplySyncItemRequest,
+  PluginStorageClearRequest,
   PluginStorageDeleteSyncItemRequest,
   PluginStorageFileDetailsRequest,
   PluginStorageFileRequest,
@@ -480,22 +438,15 @@ import type {
   PluginStorageSetFileRequest,
   PluginStorageSetSecretBatchRequest,
   PluginStorageSetSecretRequest,
-  PluginStorageSyncItem,
   PluginStorageStatsRequest,
+  PluginStorageSyncItem,
   PluginStorageTreeRequest,
   PluginStorageUpdatePayload,
-  PluginServiceHandlePayload,
-  PluginServiceRequest,
   PluginTempFileCreateRequest,
   PluginTempFileCreateResponse,
   PluginTempFileDeleteRequest,
   PluginTempFileDeleteResponse,
-  PluginSqliteExecuteRequest,
-  PluginSqliteExecuteResponse,
-  PluginSqliteQueryRequest,
-  PluginSqliteQueryResponse,
-  PluginSqliteTransactionRequest,
-  PluginSqliteTransactionResponse,
+  PluginUnloadRequest,
   PluginWindowCommandRequest,
   PluginWindowCommandResponse,
   PluginWindowNewRequest,
@@ -504,14 +455,48 @@ import type {
   PluginWindowPropertyResponse,
   PluginWindowVisibleRequest,
   PluginWindowVisibleResponse,
-  PluginUnloadRequest,
 } from './types/plugin'
 
-import type { WidgetFailurePayload, WidgetRegistrationPayload } from '../../plugin/widget'
+import type { PluginApiUninstallRequest, PluginApiUninstallResponse } from './types/plugin-uninstall'
 
 // ============================================================================
-// Sentry Events
+// Platform Events
 // ============================================================================
+
+import type {
+  QuickOpsAuditGetRequest,
+  QuickOpsAuditGetResponse,
+  QuickOpsBatteryStatusGetResponse,
+  QuickOpsCapabilityGetResponse,
+  QuickOpsCommonDirectoryGetRequest,
+  QuickOpsCommonDirectoryGetResponse,
+  QuickOpsDeveloperPreviewRequest,
+  QuickOpsDeveloperPreviewResponse,
+  QuickOpsDeveloperPreviewSaveRequest,
+  QuickOpsDeveloperPreviewSaveResponse,
+  QuickOpsDiagnosticsGetResponse,
+  QuickOpsDirectoryUsageGetRequest,
+  QuickOpsDirectoryUsageGetResponse,
+  QuickOpsDiskSpaceGetResponse,
+  QuickOpsDnsQueryGetRequest,
+  QuickOpsDnsQueryGetResponse,
+  QuickOpsFileBase64GetRequest,
+  QuickOpsFileBase64GetResponse,
+  QuickOpsFileHashGetRequest,
+  QuickOpsFileHashGetResponse,
+  QuickOpsFormatTextGetRequest,
+  QuickOpsFormatTextGetResponse,
+  QuickOpsNetworkStatusGetResponse,
+  QuickOpsPathFormatGetRequest,
+  QuickOpsPathFormatGetResponse,
+  QuickOpsPortStatusGetRequest,
+  QuickOpsPortStatusGetResponse,
+  QuickOpsQueryLocalIpGetResponse,
+  QuickOpsRecentDownloadGetResponse,
+  QuickOpsSessionsGetResponse,
+  QuickOpsSystemInfoGetResponse,
+  QuickOpsSystemProxyGetResponse,
+} from './types/quick-ops'
 
 import type {
   SentryGetConfigResponse,
@@ -521,6 +506,10 @@ import type {
   SentryRecordPerformanceResponse,
   SentryUpdateUserRequest,
 } from './types/sentry'
+
+// ============================================================================
+// Sentry Events
+// ============================================================================
 
 import type {
   PluginStorageDeleteRequest,
@@ -536,23 +525,23 @@ import type {
 } from './types/storage'
 
 import type {
+  StoreCheckUpdatesResponse,
+  StoreGetPluginRequest,
+  StoreGetPluginResponse,
+  StoreHttpRequest,
+  StoreHttpRequestResponse,
+  StoreSearchRequest,
+  StoreSearchResponse,
+  StoreUpdatesAvailablePayload,
+} from './types/store'
+
+import type {
   TransportPortClosePayload,
   TransportPortConfirmPayload,
   TransportPortErrorPayload,
   TransportPortUpgradeRequest,
   TransportPortUpgradeResponse,
 } from './types/transport'
-import { AccountEvents, AuthEvents } from './auth'
-import { SyncEvents } from './sync'
-import { TerminalEvents } from './terminal'
-import { OpenerEvents } from './opener'
-import { PluginBroadcastEvents } from './plugin-broadcast'
-import { PrivacyEvents } from './privacy'
-
-// ============================================================================
-// Clipboard Events
-// ============================================================================
-
 import type {
   UpdateAcknowledgeReleaseNotesRequest,
   UpdateAutoCheckRequest,
@@ -574,19 +563,30 @@ import type {
   UpdateRecordActionRequest,
   UpdateUpdateSettingsRequest,
 } from './types/update'
+import { defineEvent, defineRawEvent } from '../event/builder'
+import { AppEvents } from './app'
+import { AccountEvents, AuthEvents } from './auth'
+import { MetaOverlayEvents } from './meta-overlay'
+import { OpenerEvents } from './opener'
+
+// ============================================================================
+// Clipboard Events
+// ============================================================================
+
+import { PluginBroadcastEvents } from './plugin-broadcast'
 
 // ============================================================================
 // MetaOverlay Events
 // ============================================================================
 
-import { defineEvent, defineRawEvent } from '../event/builder'
-import { AppEvents } from './app'
+import { PrivacyEvents } from './privacy'
+import { SyncEvents } from './sync'
 
 // ============================================================================
 // File Index Events
 // ============================================================================
 
-import { MetaOverlayEvents } from './meta-overlay'
+import { TerminalEvents } from './terminal'
 
 // Re-export all types for convenience
 export * from './screenshot-session'
@@ -829,7 +829,7 @@ export const FlowEvents = {
   cancel: defineEvent('flow')
     .module('bus')
     .event('cancel')
-    .define<{ sessionId: string; _sdkapi?: number }, FlowCancelResponse>(),
+    .define<{ sessionId: string, _sdkapi?: number }, FlowCancelResponse>(),
 
   acknowledge: defineEvent('flow')
     .module('bus')
@@ -1758,12 +1758,12 @@ export const PluginEvents = {
     setFile: defineEvent('plugin')
       .module('storage')
       .event('set-file')
-      .define<PluginStorageSetFileRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageSetFileRequest, { success: boolean, error?: string }>(),
 
     deleteFile: defineEvent('plugin')
       .module('storage')
       .event('delete-file')
-      .define<PluginStorageFileRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageFileRequest, { success: boolean, error?: string }>(),
 
     getSecret: defineEvent('plugin')
       .module('storage')
@@ -1803,12 +1803,12 @@ export const PluginEvents = {
     applySyncItem: defineEvent('plugin')
       .module('storage')
       .event('apply-sync-item')
-      .define<PluginStorageApplySyncItemRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageApplySyncItemRequest, { success: boolean, error?: string }>(),
 
     deleteSyncItem: defineEvent('plugin')
       .module('storage')
       .event('delete-sync-item')
-      .define<PluginStorageDeleteSyncItemRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageDeleteSyncItemRequest, { success: boolean, error?: string }>(),
 
     getStats: defineEvent('plugin').module('storage').event('get-stats').define<PluginStorageStatsRequest, unknown>(),
 
@@ -1822,7 +1822,7 @@ export const PluginEvents = {
     clear: defineEvent('plugin')
       .module('storage')
       .event('clear')
-      .define<PluginStorageClearRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageClearRequest, { success: boolean, error?: string }>(),
 
     openFolder: defineEvent('plugin')
       .module('storage')
@@ -1832,7 +1832,7 @@ export const PluginEvents = {
     openInEditor: defineEvent('plugin')
       .module('storage')
       .event('open-in-editor')
-      .define<PluginStorageOpenInEditorRequest, { success: boolean; error?: string }>(),
+      .define<PluginStorageOpenInEditorRequest, { success: boolean, error?: string }>(),
 
     update: defineEvent('plugin').module('storage').event('update').define<PluginStorageUpdatePayload, void>(),
   },

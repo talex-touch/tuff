@@ -8,26 +8,26 @@ import type {
   TuffContext,
   TuffItem,
   TuffQuery,
-  TuffSearchResult,
   TuffQueryInput,
-} from "../../../core-box/tuff/tuff-dsl";
-import type { IndexedSourceDiagnosticsSnapshot } from "../../../search";
+  TuffSearchResult,
+} from '../../../core-box/tuff/tuff-dsl'
+import type { IndexedSourceDiagnosticsSnapshot } from '../../../search'
 
 export interface CoreBoxImageTranslateRouteStage {
-  capability: string;
-  providerId: string;
-  providerName?: string;
-  model?: string;
-  latencyMs?: number;
+  capability: string
+  providerId: string
+  providerName?: string
+  model?: string
+  latencyMs?: number
 }
 
 export interface CoreBoxImageTranslateRouteMetadata {
-  runId: string;
-  sceneId: string;
-  durationMs: number;
-  stages: CoreBoxImageTranslateRouteStage[];
+  runId: string
+  sceneId: string
+  durationMs: number
+  stages: CoreBoxImageTranslateRouteStage[]
 }
-export type { CoreBoxContextActionsOpenRequest } from "../../../core-box/context-actions";
+export type { CoreBoxContextActionsOpenRequest } from '../../../core-box/context-actions'
 
 // ============================================================================
 // UI Types
@@ -42,19 +42,19 @@ export interface ExpandOptions {
    * - 'collapse' - Shrink to minimum size
    * - 'max' - Expand to maximum size
    */
-  mode?: "collapse" | "max";
+  mode?: 'collapse' | 'max'
 
   /**
    * Target height/length in pixels.
    * Only used if mode is not specified.
    */
-  length?: number;
+  length?: number
 
   /**
    * Force CoreBox to expand to maximum height.
    * Kept for plugin SDK compatibility with `plugin.box.expand({ forceMax: true })`.
    */
-  forceMax?: boolean;
+  forceMax?: boolean
 }
 
 /**
@@ -68,37 +68,37 @@ export interface CoreBoxLayoutUpdateRequest {
   /**
    * Desired CoreBox window height (px).
    */
-  height: number;
+  height: number
 
   /**
    * Current rendered item count.
    */
-  resultCount: number;
+  resultCount: number
 
   /**
    * Whether CoreBox is currently loading results.
    */
-  loading: boolean;
+  loading: boolean
 
   /**
    * Whether recommendation query is pending (empty input state).
    */
-  recommendationPending: boolean;
+  recommendationPending: boolean
 
   /**
    * Current provider activation count (plugin UI / activation mode).
    */
-  activationCount: number;
+  activationCount: number
 
   /**
    * Force CoreBox to expand to maximum height (e.g. widget loading).
    */
-  forceMax?: boolean;
+  forceMax?: boolean
 
   /**
    * Optional debug source tag.
    */
-  source?: string;
+  source?: string
 }
 
 /**
@@ -108,71 +108,71 @@ export interface FocusWindowResponse {
   /**
    * Whether the window was successfully focused.
    */
-  focused: boolean;
+  focused: boolean
 }
 
 export interface CoreBoxHideRequest {
   /** Hide BrowserWindow synchronously instead of waiting for the normal delayed hide path. */
-  immediate?: boolean;
+  immediate?: boolean
   /** Optional debug/telemetry reason for the hide request. */
-  reason?: "execute" | "shortcut" | "manual" | string;
+  reason?: 'execute' | 'shortcut' | 'manual' | string
 }
 
 export interface CoreBoxSetPinnedRequest {
-  pinned: boolean;
+  pinned: boolean
 }
 
 export interface CoreBoxSetPinnedResponse {
-  pinned: boolean;
+  pinned: boolean
 }
 
 export interface CoreBoxInputVisibilityResponse {
-  hidden?: boolean;
-  shown?: boolean;
+  hidden?: boolean
+  shown?: boolean
 }
 
 export interface CoreBoxSetHeightRequest {
-  height: number;
+  height: number
 }
 
 export interface CoreBoxSetHeightResponse {
-  height: number;
+  height: number
 }
 
 export interface CoreBoxSetPositionOffsetRequest {
-  topPercent?: number;
+  topPercent?: number
 }
 
 export interface CoreBoxSetPositionOffsetResponse {
-  topPercent?: number;
+  topPercent?: number
 }
 
 export interface CoreBoxBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export interface CoreBoxGetBoundsResponse {
-  bounds: CoreBoxBounds;
+  bounds: CoreBoxBounds
 }
 
 /**
  * Push payload sent when CoreBox visibility or entrance mode changes.
  */
 export interface CoreBoxTriggerPayload {
-  id?: number;
-  show?: boolean;
-  type?: string;
-  sessionId?: string;
-  config?: unknown;
-  meta?: unknown;
-  [key: string]: unknown;
+  id?: number
+  show?: boolean
+  type?: string
+  sessionId?: string
+  config?: unknown
+  meta?: unknown
+  [key: string]: unknown
 }
 
 export interface CoreBoxVisibilityResponse {
-  visible: boolean;
+  visible: boolean
 }
 
 /**
@@ -182,7 +182,7 @@ export interface SetInputVisibilityRequest {
   /**
    * Whether input should be visible.
    */
-  visible: boolean;
+  visible: boolean
 }
 
 /**
@@ -192,17 +192,17 @@ export interface CoreBoxUIViewStateResponse {
   /**
    * Whether a UI view is currently attached.
    */
-  isActive: boolean;
+  isActive: boolean
 
   /**
    * Whether the UI view has focus.
    */
-  isFocused: boolean;
+  isFocused: boolean
 
   /**
    * Whether CoreBox is in UI mode.
    */
-  isUIMode: boolean;
+  isUIMode: boolean
 }
 
 /**
@@ -212,7 +212,7 @@ export interface CoreBoxUIModeExitedPayload {
   /**
    * Whether renderer should reset input state.
    */
-  resetInput?: boolean;
+  resetInput?: boolean
 }
 
 /**
@@ -220,7 +220,7 @@ export interface CoreBoxUIModeExitedPayload {
  * Plugin identity is intentionally omitted because main resolves it from the owned view.
  */
 export interface CoreBoxDetachUIViewRequest {
-  initialInput?: string;
+  initialInput?: string
 }
 
 // ============================================================================
@@ -230,84 +230,84 @@ export interface CoreBoxDetachUIViewRequest {
 /**
  * Input type for Tuff queries.
  */
-export { TuffInputType } from "../../../core-box/tuff/tuff-dsl";
+export { TuffInputType } from '../../../core-box/tuff/tuff-dsl'
 
-export type { IProviderActivate, TuffQueryInput as TuffInput, TuffQuery };
+export type { IProviderActivate, TuffQueryInput as TuffInput, TuffQuery }
 
-export type CoreBoxSearchSurface =
-  | "core-box"
-  | "application-index"
-  | "division-box";
+export type CoreBoxSearchSurface
+  = | 'core-box'
+    | 'application-index'
+    | 'division-box'
 
 export interface CoreBoxSearchRequest {
-  query: TuffQuery;
-  activations?: IProviderActivate[] | null;
-  surface?: CoreBoxSearchSurface;
+  query: TuffQuery
+  activations?: IProviderActivate[] | null
+  surface?: CoreBoxSearchSurface
 }
 
 export interface CoreBoxSearchSessionRequest extends CoreBoxSearchRequest {
-  surface: CoreBoxSearchSurface;
+  surface: CoreBoxSearchSurface
 }
 
-export type CoreBoxSearchSessionChunk =
-  | { type: "session"; sessionId: string }
-  | { type: "snapshot"; sessionId: string; result: TuffSearchResult }
-  | { type: "update"; sessionId: string; items: TuffItem[] }
-  | { type: "no-results"; sessionId: string; shouldShrink: boolean }
-  | {
-      type: "complete";
-      sessionId: string;
-      cancelled?: boolean;
-      activate?: IProviderActivate[];
-      sources?: TuffSearchResult["sources"];
-    };
+export type CoreBoxSearchSessionChunk
+  = | { type: 'session', sessionId: string }
+    | { type: 'snapshot', sessionId: string, result: TuffSearchResult }
+    | { type: 'update', sessionId: string, items: TuffItem[] }
+    | { type: 'no-results', sessionId: string, shouldShrink: boolean }
+    | {
+      type: 'complete'
+      sessionId: string
+      cancelled?: boolean
+      activate?: IProviderActivate[]
+      sources?: TuffSearchResult['sources']
+    }
 
 export interface CoreBoxSearchUpdatePayload {
-  searchId: string;
-  items: TuffItem[];
+  searchId: string
+  items: TuffItem[]
 }
 
 export interface CoreBoxSearchIndexCommitPayload {
-  revision: number;
-  providerIds: string[];
-  sourceGenerations: Record<string, number>;
-  committedAt: number;
+  revision: number
+  providerIds: string[]
+  sourceGenerations: Record<string, number>
+  committedAt: number
 }
 
 export interface CoreBoxSearchEndPayload {
-  searchId: string;
-  cancelled?: boolean;
-  activate?: IProviderActivate[];
-  sources?: TuffSearchResult["sources"];
+  searchId: string
+  cancelled?: boolean
+  activate?: IProviderActivate[]
+  sources?: TuffSearchResult['sources']
 }
 
 export interface CoreBoxNoResultsPayload {
-  shouldShrink?: boolean;
+  shouldShrink?: boolean
 }
 
-export type CoreBoxIndexingDiagnosticsResponse =
-  IndexedSourceDiagnosticsSnapshot;
+export type CoreBoxIndexingDiagnosticsResponse
+  = IndexedSourceDiagnosticsSnapshot
 
 export interface CoreBoxClearItemsPayload {
-  pluginName?: string;
+  pluginName?: string
 }
 
 export interface CoreBoxExecuteRequest {
-  item: unknown;
-  searchResult?: unknown;
-  actionId?: string;
+  item: unknown
+  searchResult?: unknown
+  actionId?: string
 }
 
 export interface CoreBoxTogglePinRequest {
-  sourceId: string;
-  itemId: string;
-  sourceType: string;
+  sourceId: string
+  itemId: string
+  sourceType: string
 }
 
 export interface CoreBoxTogglePinResponse {
-  success: boolean;
-  isPinned?: boolean;
-  error?: string;
+  success: boolean
+  isPinned?: boolean
+  error?: string
 }
 
 /**
@@ -317,42 +317,42 @@ export interface TuffSearchResultItem {
   /**
    * Unique item ID.
    */
-  id: string;
+  id: string
 
   /**
    * Display title.
    */
-  title: string;
+  title: string
 
   /**
    * Optional subtitle/description.
    */
-  subtitle?: string;
+  subtitle?: string
 
   /**
    * Icon URL or data.
    */
-  icon?: string | TuffIcon;
+  icon?: string | TuffIcon
 
   /**
    * Provider that generated this result.
    */
-  provider: string;
+  provider: string
 
   /**
    * Relevance score (0-1).
    */
-  score?: number;
+  score?: number
 
   /**
    * Additional metadata.
    */
-  meta?: TuffMeta;
+  meta?: TuffMeta
 
   /**
    * Actions available for this item.
    */
-  actions?: TuffAction[];
+  actions?: TuffAction[]
 }
 
 /**
@@ -362,17 +362,17 @@ export interface TuffIcon {
   /**
    * Icon type.
    */
-  type: "url" | "file" | "emoji" | "svg" | "component" | "class" | "builtin";
+  type: 'url' | 'file' | 'emoji' | 'svg' | 'component' | 'class' | 'builtin'
 
   /**
    * Icon value (URL, path, emoji, etc.).
    */
-  value: string;
+  value: string
 
   /**
    * Background color.
    */
-  background?: string;
+  background?: string
 }
 
 /**
@@ -382,22 +382,22 @@ export interface TuffAction {
   /**
    * Action ID.
    */
-  id: string;
+  id: string
 
   /**
    * Display label.
    */
-  label: string;
+  label: string
 
   /**
    * Keyboard shortcut.
    */
-  shortcut?: string;
+  shortcut?: string
 
   /**
    * Whether this is the default action.
    */
-  isDefault?: boolean;
+  isDefault?: boolean
 }
 
 /**
@@ -408,46 +408,46 @@ export interface TuffMeta {
    * Whether item is pinned.
    */
   pinned?: {
-    isPinned: boolean;
-    pinnedAt?: number;
-    order?: number;
-  };
+    isPinned: boolean
+    pinnedAt?: number
+    order?: number
+  }
 
   /**
    * Recommendation source.
    */
   recommendation?: {
     source:
-      | "frequent"
-      | "recent"
-      | "time-based"
-      | "trending"
-      | "pinned"
-      | "context";
-    score?: number;
-  };
+      | 'frequent'
+      | 'recent'
+      | 'time-based'
+      | 'trending'
+      | 'pinned'
+      | 'context'
+    score?: number
+  }
 
   /**
    * Minimal local file context that AI/Flow consumers may use without reading file contents.
    */
-  fileSearchContext?: FileSearchContextCandidate;
+  fileSearchContext?: FileSearchContextCandidate
 
   /**
    * Additional metadata.
    */
-  [key: string]: unknown;
+  [key: string]: unknown
 }
 
 export interface FileSearchContextCandidate {
-  path: string;
-  name: string;
-  extension: string;
-  size: number;
-  mtime: string;
-  isDir: boolean;
-  source: "everything" | "file-provider";
-  backend?: string;
-  score?: number;
+  path: string
+  name: string
+  extension: string
+  size: number
+  mtime: string
+  isDir: boolean
+  source: 'everything' | 'file-provider'
+  backend?: string
+  score?: number
 }
 
 /**
@@ -457,21 +457,21 @@ export interface TuffContainerLayout {
   /**
    * Layout mode.
    */
-  mode: "list" | "grid";
+  mode: 'list' | 'grid'
 
   /**
    * Grid configuration (only for grid mode).
    */
   grid?: {
-    columns: number;
-    gap?: number;
-    itemSize?: "small" | "medium" | "large";
-  };
+    columns: number
+    gap?: number
+    itemSize?: 'small' | 'medium' | 'large'
+  }
 
   /**
    * Section grouping.
    */
-  sections?: TuffSection[];
+  sections?: TuffSection[]
 }
 
 /**
@@ -481,20 +481,20 @@ export interface TuffSection {
   /**
    * Section ID.
    */
-  id: string;
+  id: string
 
   /**
    * Section title.
    */
-  title: string;
+  title: string
 
   /**
    * Whether section is collapsed.
    */
-  collapsed?: boolean;
+  collapsed?: boolean
 }
 
-export type { TuffSearchResult } from "../../../core-box/tuff/tuff-dsl";
+export type { TuffSearchResult } from '../../../core-box/tuff/tuff-dsl'
 
 /**
  * Request to cancel a search.
@@ -503,7 +503,7 @@ export interface CancelSearchRequest {
   /**
    * ID of the search to cancel.
    */
-  searchId: string;
+  searchId: string
 }
 
 /**
@@ -513,7 +513,7 @@ export interface CancelSearchResponse {
   /**
    * Whether cancellation succeeded.
    */
-  cancelled: boolean;
+  cancelled: boolean
 }
 
 // ============================================================================
@@ -527,7 +527,7 @@ export interface GetInputResponse {
   /**
    * Current input value.
    */
-  input: string;
+  input: string
 }
 
 /**
@@ -537,9 +537,9 @@ export interface SetInputRequest {
   /**
    * Value to set.
    */
-  value: string;
+  value: string
   /** One-shot trusted entrypoint context attached to the resulting search query. */
-  context?: TuffContext;
+  context?: TuffContext
 }
 
 /**
@@ -549,7 +549,7 @@ export interface SetQueryRequest extends SetInputRequest {
   /**
    * Context forwarded to the next search triggered by this query.
    */
-  context?: TuffContext;
+  context?: TuffContext
 }
 
 /**
@@ -559,7 +559,7 @@ export interface SetInputResponse {
   /**
    * Value that was set.
    */
-  value: string;
+  value: string
 }
 
 /**
@@ -569,29 +569,29 @@ export interface ClearInputResponse {
   /**
    * Whether input was cleared.
    */
-  cleared: boolean;
+  cleared: boolean
 }
 
 /**
  * Input change payload from renderer.
  */
 export interface CoreBoxInputChangeRequest {
-  input: string;
-  query: TuffQuery;
-  source: "renderer" | "initial" | "ui-monitor";
+  input: string
+  query: TuffQuery
+  source: 'renderer' | 'initial' | 'ui-monitor'
 }
 
 /**
  * Serialized keyboard event data for IPC transport.
  */
 export interface CoreBoxForwardKeyEvent {
-  key: string;
-  code: string;
-  metaKey: boolean;
-  ctrlKey: boolean;
-  altKey: boolean;
-  shiftKey: boolean;
-  repeat: boolean;
+  key: string
+  code: string
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  repeat: boolean
 }
 
 // ============================================================================
@@ -605,7 +605,7 @@ export interface DeactivateProviderRequest {
   /**
    * Provider ID to deactivate.
    */
-  id: string;
+  id: string
 }
 
 /**
@@ -615,7 +615,7 @@ export interface ActivationState {
   /**
    * List of active provider IDs.
    */
-  activeProviders: string[];
+  activeProviders: string[]
 }
 
 /**
@@ -625,7 +625,7 @@ export interface GetProviderDetailsRequest {
   /**
    * Provider IDs to query.
    */
-  providerIds: string[];
+  providerIds: string[]
 }
 
 /**
@@ -635,17 +635,17 @@ export interface ProviderDetail {
   /**
    * Provider ID.
    */
-  id: string;
+  id: string
 
   /**
    * Provider display name.
    */
-  name: string;
+  name: string
 
   /**
    * Provider icon.
    */
-  icon?: string | TuffIcon;
+  icon?: string | TuffIcon
 }
 
 // ============================================================================
@@ -659,7 +659,7 @@ export interface EnterUIModeRequest {
   /**
    * URL to load in UI mode.
    */
-  url: string;
+  url: string
 }
 
 // ============================================================================
@@ -673,7 +673,7 @@ export interface AllowClipboardRequest {
   /**
    * Bitmask of allowed clipboard types.
    */
-  types: number;
+  types: number
 }
 
 /**
@@ -683,12 +683,12 @@ export interface AllowClipboardResponse {
   /**
    * Whether clipboard monitoring is enabled.
    */
-  enabled: boolean;
+  enabled: boolean
 
   /**
    * Types that are now allowed.
    */
-  types: number;
+  types: number
 }
 
 // ============================================================================
@@ -702,7 +702,7 @@ export interface AllowInputMonitoringResponse {
   /**
    * Whether input monitoring is enabled.
    */
-  enabled: boolean;
+  enabled: boolean
 }
 
 // ============================================================================
@@ -710,58 +710,58 @@ export interface AllowInputMonitoringResponse {
 // ============================================================================
 
 export interface CoreBoxActionPanelOpenRequest {
-  item?: TuffItem;
+  item?: TuffItem
 }
 
 export interface CoreBoxPreviewCopyRequest {
-  value?: string;
-  item?: TuffItem;
+  value?: string
+  item?: TuffItem
 }
 
 export interface CoreBoxMetaOverlayActionExecutedPayload {
-  actionId: string;
-  item: TuffItem;
-  pluginId: string;
+  actionId: string
+  item: TuffItem
+  pluginId: string
 }
 
 export interface CoreBoxMetaOverlayItemActionPayload {
-  actionId: string;
-  item: TuffItem;
+  actionId: string
+  item: TuffItem
 }
 
 export interface CoreBoxMetaOverlayFlowTransferPayload {
-  item: TuffItem;
+  item: TuffItem
 }
 
 export interface CoreBoxUiResumePayload {
-  source: string;
-  featureId?: string | number;
-  url: string;
+  source: string
+  featureId?: string | number
+  url: string
 }
 
 export interface CoreBoxRecommendationRequest {
-  limit?: number;
-  forceRefresh?: boolean;
+  limit?: number
+  forceRefresh?: boolean
 }
 
 export interface CoreBoxRecommendationResponse {
-  items: TuffItem[];
-  duration: number;
-  fromCache: boolean;
-  error?: string;
+  items: TuffItem[]
+  duration: number
+  fromCache: boolean
+  error?: string
 }
 
 export interface CoreBoxAggregateTimeStatsResponse {
-  success: boolean;
-  error?: string;
+  success: boolean
+  error?: string
 }
 
 export interface CoreBoxIsPinnedRequest {
-  sourceId: string;
-  itemId: string;
+  sourceId: string
+  itemId: string
 }
 
 export interface CoreBoxIsPinnedResponse {
-  success: boolean;
-  isPinned: boolean;
+  success: boolean
+  isPinned: boolean
 }

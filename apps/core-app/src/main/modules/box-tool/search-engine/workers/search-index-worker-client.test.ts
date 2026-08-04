@@ -59,6 +59,50 @@ const workerMock = vi.hoisted(() => {
   return { MockWorker, workers }
 })
 
+const filesystemMock = vi.hoisted(() => ({
+  existsSync: vi.fn<(candidate: string) => boolean>(() => true)
+}))
+
+const workerPathMock = vi.hoisted(() => ({
+  parentWorkerPath: '',
+  cwdWorkerPath: ''
+}))
+
+vi.mock('node:fs', () => ({
+  existsSync: filesystemMock.existsSync
+}))
+
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:path')>()
+  const defaultPath = actual
+  return {
+    ...actual,
+    default: {
+      ...defaultPath,
+      resolve: (...segments: string[]) => {
+        if (
+          segments.length === 3 &&
+          segments[1] === '..' &&
+          segments[2] === 'search-index-worker.js' &&
+          workerPathMock.parentWorkerPath
+        ) {
+          return workerPathMock.parentWorkerPath
+        }
+        if (
+          segments.length === 4 &&
+          segments[1] === 'out' &&
+          segments[2] === 'main' &&
+          segments[3] === 'search-index-worker.js' &&
+          workerPathMock.cwdWorkerPath
+        ) {
+          return workerPathMock.cwdWorkerPath
+        }
+        return defaultPath.resolve(...segments)
+      }
+    }
+  }
+})
+
 vi.mock('node:worker_threads', () => ({
   Worker: workerMock.MockWorker
 }))
@@ -104,10 +148,54 @@ function deferred<T>(): {
 describe('SearchIndexWorkerClient init gate', () => {
   beforeEach(() => {
     workerMock.workers.length = 0
+    filesystemMock.existsSync.mockReset()
+    filesystemMock.existsSync.mockReturnValue(true)
+    workerPathMock.parentWorkerPath = ''
+    workerPathMock.cwdWorkerPath = ''
   })
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('uses the parent main-output worker when the client is bundled in chunks', async () => {
+    const parentWorkerPath = '/virtual/out/main/search-index-worker.js'
+    workerPathMock.parentWorkerPath = parentWorkerPath
+    workerPathMock.cwdWorkerPath = '/virtual/project/out/main/search-index-worker.js'
+    filesystemMock.existsSync.mockImplementation(
+      (candidate: string) => candidate === parentWorkerPath
+    )
+
+    const client = new SearchIndexWorkerClient()
+    const initPromise = client.init('/tmp/search-index.db')
+    const worker = workerMock.workers.at(-1)!
+
+    expect(worker.workerPath).toBe(parentWorkerPath)
+    expect(filesystemMock.existsSync.mock.calls).toEqual([[expect.any(String)], [parentWorkerPath]])
+
+    worker.emit('message', { type: 'done', taskId: taskIdOf(worker.messages[0]) })
+    await initPromise
+  })
+
+  it('reports every checked worker path without constructing a Worker when none exists', async () => {
+    const parentWorkerPath = '/virtual/out/main/search-index-worker.js'
+    const cwdWorkerPath = '/virtual/project/out/main/search-index-worker.js'
+    workerPathMock.parentWorkerPath = parentWorkerPath
+    workerPathMock.cwdWorkerPath = cwdWorkerPath
+    filesystemMock.existsSync.mockReturnValue(false)
+
+    const initPromise = new SearchIndexWorkerClient().init('/tmp/search-index.db')
+
+    await expect(initPromise).rejects.toThrow('Search index worker not found')
+    const checkedPaths = filesystemMock.existsSync.mock.calls.map(([candidate]) =>
+      String(candidate)
+    )
+    expect(checkedPaths).toContain(parentWorkerPath)
+    expect(checkedPaths).toContain(cwdWorkerPath)
+    await expect(initPromise).rejects.toThrow(
+      `Search index worker not found: ${checkedPaths.join(', ')}`
+    )
+    expect(workerMock.workers).toHaveLength(0)
   })
 
   it('waits for init before dispatching atomic provider item writes', async () => {
