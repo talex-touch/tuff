@@ -95,9 +95,9 @@ provide<CollapseContext>('collapse', {
 
 <style scoped>
 .tx-collapse {
-  border: 1px solid var(--tx-collapse-border, #e5e7eb);
+  border: 1px solid var(--tx-collapse-border, var(--tx-border-color-lighter, #e5e7eb));
   border-radius: 8px;
-  background: var(--tx-collapse-bg, #ffffff);
+  background: var(--tx-collapse-bg, var(--tx-bg-color-overlay, #ffffff));
   overflow: hidden;
 }
 </style>
