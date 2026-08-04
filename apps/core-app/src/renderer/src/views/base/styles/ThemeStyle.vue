@@ -36,7 +36,7 @@ import {
 } from '~/modules/storage/theme-style'
 import { createRendererLogger } from '~/utils/renderer-log'
 import { buildTfileUrl } from '~/utils/tfile-url'
-import LayoutSection from './LayoutSection.vue'
+import CoreBoxCanvasSection from './CoreBoxCanvasSection.vue'
 import SectionItem from './SectionItem.vue'
 import { getWallpaperSourceHintKey } from './wallpaper-display-state'
 
@@ -496,7 +496,7 @@ const bgSaving = computed(() => appSettings.savingState?.value ?? false)
         />
       </WindowSectionVue>
 
-      <LayoutSection />
+      <CoreBoxCanvasSection />
 
       <TuffGroupBlock
         :name="t('themeStyle.personalized')"

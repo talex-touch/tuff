@@ -40,7 +40,8 @@
 - [ ] `modules/layout/` 下不再有 `layouts-definition.ts` / `useDynamicTuffLayout.ts` / `atoms/` / `preset/`
 - [ ] `components/layout/` 下不再有 `DynamicLayout` / `LayoutPreview*` / `LayoutSkeleton`
 - [ ] 风格设置页不再有布局选择区、布局原子编辑器、远程预设入口
-- [ ] `appSettingsData.layout` 及其所有读写点已清理
+- [ ] CoreBox 画布编辑器（`coreBoxCanvasConfig`）仍可到达 —— 它原本挂在被删的 `LayoutSection` 下，属 CoreBox 而非壳层布局，须保留并另置入口
+- [ ] `appSettingsData.layout` 的**读写点**已清零。schema 字段本身保留：`apps/nexus` 的 presetStore 仍读其同族字段，且 `@talex-touch/utils` 是已发布包，删字段对外部插件是破坏性变更
 - [ ] 主题切换、壁纸、窗口效果（refraction / filter / pure）三项能力实测仍可用
 - [ ] 侧栏实测对齐画板：宽 260、`$surface` 底、右侧 1px 描边、padding 14、gap 10；导航项 padding [7,10]、gap 10、icon 16、label 13；选中态 `$primary-soft` + `$primary`
 - [ ] TopBar 高 52、padding [0,32]
