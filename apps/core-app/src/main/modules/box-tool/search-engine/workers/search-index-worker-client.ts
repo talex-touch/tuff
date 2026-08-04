@@ -30,6 +30,7 @@ import type {
   FileMetadataUpdateSummary,
   UpsertFileRecord
 } from '../file-index-persistence-repository'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { getLogger } from '@talex-touch/utils/common/logger'
@@ -49,6 +50,29 @@ const DEFAULT_TERMINATION_TIMEOUT_MS = 1_000
 // Bound the wait for the worker to checkpoint + close its DB before we hard
 // terminate it. Always falls through to terminate() so teardown can't hang.
 const GRACEFUL_CLOSE_TIMEOUT_MS = 2_000
+
+function resolveSearchIndexWorkerPath(): string {
+  const candidates = new Set<string>([
+    path.join(__dirname, 'search-index-worker.js'),
+    path.resolve(__dirname, '..', 'search-index-worker.js'),
+    path.resolve(process.cwd(), 'out', 'main', 'search-index-worker.js')
+  ])
+  if (process.resourcesPath) {
+    candidates.add(
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'out', 'main', 'search-index-worker.js')
+    )
+    candidates.add(
+      path.join(process.resourcesPath, 'app.asar', 'out', 'main', 'search-index-worker.js')
+    )
+    candidates.add(path.join(process.resourcesPath, 'out', 'main', 'search-index-worker.js'))
+  }
+
+  const workerPath = Array.from(candidates).find((candidate) => existsSync(candidate))
+  if (!workerPath) {
+    throw new Error(`Search index worker not found: ${Array.from(candidates).join(', ')}`)
+  }
+  return workerPath
+}
 
 function resolveTaskOperation(taskId: string): string {
   const separator = taskId.indexOf('-')
@@ -625,7 +649,7 @@ export class SearchIndexWorkerClient {
     this.idleShutdown.cancel()
     if (this.worker) return this.worker
 
-    const workerPath = path.join(__dirname, 'search-index-worker.js')
+    const workerPath = resolveSearchIndexWorkerPath()
     const worker = new Worker(workerPath)
 
     worker.on('message', (message: WorkerMessage) => this.handleMessage(message))

@@ -108,6 +108,7 @@
     "@talex-touch/utils": "workspace:^",
     "@vue/compiler-sfc": "^3.5.39",
     "chokidar": "^4.0.3",
+    "chokidar-fsevents": "npm:chokidar@3.6.0",
     "compressing": "^2.1.1",
     "dayjs": "^1.11.21",
     "detect-libc": "^2.1.2",
