@@ -5,31 +5,22 @@
  * Handles initialization, IPC registration, and integration with other systems.
  */
 
-import type {
-  MaybePromise,
-  ModuleInitContext,
-  ModuleKey,
-  ModuleStartContext
-} from '@talex-touch/utils'
+import type { MaybePromise, ModuleInitContext, ModuleKey } from '@talex-touch/utils'
 import type { DivisionBoxIPC } from './ipc'
 import { getTuffTransportMain } from '@talex-touch/utils/transport/main'
-import type { BrowserWindow } from 'electron'
 import {
   clearRegisteredMainRuntime,
-  getRegisteredMainRuntime,
   registerMainRuntime,
   resolveMainRuntime
 } from '../../core/runtime-accessor'
 import { BaseModule } from '../abstract-base-module'
 import searchEngineCore from '../box-tool/search-engine/search-core'
-import { TalexEvents, touchEventBus } from '../../core/eventbus/touch-event'
+import { TalexEvents } from '../../core/eventbus/touch-event'
 import { createDivisionBoxCommandProvider } from './command-provider'
 import { initializeDivisionBoxIPC } from './ipc'
 import { divisionBoxModuleLog } from './logger'
 import { shortcutTriggerManager } from './shortcut-trigger'
 import { windowPool } from './window-pool'
-
-const MAIN_RENDERER_READY_TIMEOUT_MS = 30_000
 
 /**
  * DivisionBoxModule
@@ -42,7 +33,6 @@ export class DivisionBoxModule extends BaseModule {
   name: ModuleKey = DivisionBoxModule.key
 
   private ipc: DivisionBoxIPC | null = null
-  private disposeAllModulesLoaded: (() => void) | null = null
 
   constructor() {
     super(DivisionBoxModule.key, {
@@ -72,85 +62,9 @@ export class DivisionBoxModule extends BaseModule {
     // Register DivisionBox command provider with search engine
     const commandProvider = createDivisionBoxCommandProvider()
     searchEngineCore.registerProvider(commandProvider)
+    await windowPool.initialize()
 
     divisionBoxModuleLog.info('Module initialized')
-  }
-
-  private async waitForMainRendererReady(): Promise<void> {
-    const mainWindow = (
-      getRegisteredMainRuntime('division-box').app as {
-        window?: { window?: BrowserWindow }
-      }
-    ).window?.window
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return
-    }
-
-    const webContents = mainWindow.webContents
-    if (!webContents || webContents.isDestroyed()) {
-      return
-    }
-
-    if (!webContents.isLoadingMainFrame()) {
-      return
-    }
-
-    await new Promise<void>((resolve) => {
-      let settled = false
-      let timeout: NodeJS.Timeout | null = setTimeout(() => {
-        timeout = null
-        finish()
-      }, MAIN_RENDERER_READY_TIMEOUT_MS)
-
-      const finish = (): void => {
-        if (settled) return
-        settled = true
-        if (timeout) {
-          clearTimeout(timeout)
-          timeout = null
-        }
-        webContents.removeListener('did-finish-load', finish)
-        webContents.removeListener('did-fail-load', finish)
-        webContents.removeListener('render-process-gone', finish)
-        resolve()
-      }
-
-      webContents.once('did-finish-load', finish)
-      webContents.once('did-fail-load', finish)
-      webContents.once('render-process-gone', finish)
-    })
-  }
-
-  /**
-   * Starts the DivisionBox module after all modules are loaded
-   *
-   * - Initializes window pool for fast detach (delayed to ensure dev server is ready)
-   */
-  start(ctx: ModuleStartContext<TalexEvents>): void {
-    const schedulePoolInit = (): void => {
-      setTimeout(() => {
-        void this.waitForMainRendererReady().then(() => windowPool.initialize())
-      }, 0)
-    }
-
-    const fallbackEvents: NonNullable<ModuleStartContext<TalexEvents>['events']> = touchEventBus
-    const events = ctx.events ?? fallbackEvents
-    if (!ctx.events) {
-      divisionBoxModuleLog.warn('Event bus missing in module context; falling back to global bus')
-    }
-
-    const handleAllModulesLoaded = () => {
-      if (this.disposeAllModulesLoaded) {
-        this.disposeAllModulesLoaded()
-        this.disposeAllModulesLoaded = null
-      }
-      schedulePoolInit()
-    }
-
-    events.on(TalexEvents.ALL_MODULES_LOADED, handleAllModulesLoaded)
-    this.disposeAllModulesLoaded = () =>
-      events.off(TalexEvents.ALL_MODULES_LOADED, handleAllModulesLoaded)
-    divisionBoxModuleLog.info('Window pool initialization deferred until all modules loaded')
   }
 
   /**
@@ -162,10 +76,6 @@ export class DivisionBoxModule extends BaseModule {
    */
   onDestroy(): MaybePromise<void> {
     clearRegisteredMainRuntime('division-box')
-    if (this.disposeAllModulesLoaded) {
-      this.disposeAllModulesLoaded()
-      this.disposeAllModulesLoaded = null
-    }
 
     shortcutTriggerManager.clear()
 

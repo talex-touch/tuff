@@ -4,7 +4,7 @@ import { TxTag } from '@talex-touch/tuffex/tag'
 import { useTuffTransport } from '@talex-touch/utils/transport'
 import { AppEvents } from '@talex-touch/utils/transport/events'
 import { isBuildVerificationStatus } from '@talex-touch/utils/transport/events/types'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useEnv } from '~/modules/hooks/env-hooks'
 import { useRendererPlatform } from '~/modules/platform/renderer-platform'
@@ -27,11 +27,17 @@ const isNativeTrustUnverified = computed(() => nativeTrust.value.status === 'unv
 type RGB = [number, number, number]
 type LightfallUniformLocations = Record<string, WebGLUniformLocation>
 
+const HEADER_FRAME_INTERVAL_MS = 1000 / 30
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 let rafId: number | null = null
+let frameTimerId: number | null = null
+let webglRouteActive = true
 let resizeHandler: (() => void) | null = null
 let pointerMoveHandler: ((event: PointerEvent) => void) | null = null
 let pointerLeaveHandler: (() => void) | null = null
+let visibilityHandler: (() => void) | null = null
+let webglStartHandler: (() => void) | null = null
+let webglStopHandler: (() => void) | null = null
 let webglCleanupHandler: (() => void) | null = null
 
 const appVersion = computed(() => packageJson.value?.version || '')
@@ -411,41 +417,83 @@ void main() {
     webglCleanupHandler = null
   }
 
-  const draw = (frameTime: number) => {
-    if (!width || !height) {
-      rafId = window.requestAnimationFrame(draw)
-      return
+  const canAnimate = () => webglRouteActive && !document.hidden
+
+  const cancelScheduledFrame = () => {
+    if (frameTimerId !== null) {
+      window.clearTimeout(frameTimerId)
+      frameTimerId = null
     }
-
-    const elapsedSeconds = lastFrameTime
-      ? Math.min(0.05, (frameTime - lastFrameTime) / 1000)
-      : 0.016
-    lastFrameTime = frameTime
-
-    const dampening = 0.15
-    const factor = 1 - Math.exp(-elapsedSeconds / dampening)
-    mouseCurrent[0] += (mouseTarget[0] - mouseCurrent[0]) * factor
-    mouseCurrent[1] += (mouseTarget[1] - mouseCurrent[1]) * factor
-
-    gl.clear(gl.COLOR_BUFFER_BIT)
-    gl.useProgram(program)
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-    gl.enableVertexAttribArray(positionLocation)
-    gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
-    gl.uniform1f(uniforms.iTime, frameTime * 0.001)
-    gl.uniform2f(uniforms.iMouse, mouseCurrent[0], mouseCurrent[1])
-    gl.drawArrays(gl.TRIANGLES, 0, 3)
-
-    rafId = window.requestAnimationFrame(draw)
+    if (rafId !== null) {
+      window.cancelAnimationFrame(rafId)
+      rafId = null
+    }
+    lastFrameTime = 0
   }
 
-  rafId = window.requestAnimationFrame(draw)
+  const draw = (frameTime: number) => {
+    rafId = null
+    if (!canAnimate()) return
+
+    if (width && height) {
+      const elapsedSeconds = lastFrameTime
+        ? Math.min(0.05, (frameTime - lastFrameTime) / 1000)
+        : 0.016
+      lastFrameTime = frameTime
+
+      const dampening = 0.15
+      const factor = 1 - Math.exp(-elapsedSeconds / dampening)
+      mouseCurrent[0] += (mouseTarget[0] - mouseCurrent[0]) * factor
+      mouseCurrent[1] += (mouseTarget[1] - mouseCurrent[1]) * factor
+
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      gl.useProgram(program)
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+      gl.enableVertexAttribArray(positionLocation)
+      gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0)
+      gl.uniform1f(uniforms.iTime, frameTime * 0.001)
+      gl.uniform2f(uniforms.iMouse, mouseCurrent[0], mouseCurrent[1])
+      gl.drawArrays(gl.TRIANGLES, 0, 3)
+    }
+
+    frameTimerId = window.setTimeout(() => {
+      frameTimerId = null
+      if (canAnimate() && rafId === null) rafId = window.requestAnimationFrame(draw)
+    }, HEADER_FRAME_INTERVAL_MS)
+  }
+
+  webglStartHandler = () => {
+    if (!canAnimate() || rafId !== null || frameTimerId !== null) return
+    lastFrameTime = 0
+    rafId = window.requestAnimationFrame(draw)
+  }
+  webglStopHandler = cancelScheduledFrame
+  visibilityHandler = () => {
+    if (document.hidden) cancelScheduledFrame()
+    else webglStartHandler?.()
+  }
+  document.addEventListener('visibilitychange', visibilityHandler)
+  webglStartHandler()
+})
+
+onActivated(() => {
+  webglRouteActive = true
+  webglStartHandler?.()
+})
+
+onDeactivated(() => {
+  webglRouteActive = false
+  webglStopHandler?.()
 })
 
 onBeforeUnmount(() => {
-  if (rafId !== null) {
-    window.cancelAnimationFrame(rafId)
-    rafId = null
+  webglRouteActive = false
+  webglStopHandler?.()
+  webglStartHandler = null
+  webglStopHandler = null
+  if (visibilityHandler) {
+    document.removeEventListener('visibilitychange', visibilityHandler)
+    visibilityHandler = null
   }
   if (resizeHandler) {
     window.removeEventListener('resize', resizeHandler)

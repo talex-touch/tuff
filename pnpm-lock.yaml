@@ -326,6 +326,9 @@ importers:
       chokidar:
         specifier: ^4.0.3
         version: 4.0.3
+      chokidar-fsevents:
+        specifier: npm:chokidar@3.6.0
+        version: chokidar@3.6.0
       compressing:
         specifier: ^2.1.1
         version: 2.1.1

@@ -12,6 +12,9 @@ import type { SearchIndexMutationWriter } from './search-index-writer'
 export interface IndexStoreAdapter {
   applyBatch(batch: IndexedSourceRecordBatch): Promise<IndexStoreBatchApplySummary | void>
   applyDelta(delta: IndexedSourceDelta): Promise<IndexStoreDeltaApplySummary | void>
+  applyDeltas?(
+    deltas: readonly IndexedSourceDelta[]
+  ): Promise<IndexStoreDeltaBatchApplySummary | void>
   replaceSource(
     sourceId: string,
     records: readonly IndexedSourceRecord[]
@@ -86,10 +89,20 @@ export interface IndexStoreDeltaApplySummary {
     | 'unindexable-record'
 }
 
+export interface IndexStoreDeltaBatchApplySummary {
+  sourceId: string
+  appliedDeltas: number
+  skippedDeltas: number
+  indexedItemCount: number
+  removedItemCount: number
+}
+
 export class NoopIndexStoreAdapter implements IndexStoreAdapter {
   async applyBatch(_batch: IndexedSourceRecordBatch): Promise<void> {}
 
   async applyDelta(_delta: IndexedSourceDelta): Promise<void> {}
+
+  async applyDeltas(_deltas: readonly IndexedSourceDelta[]): Promise<void> {}
 
   async replaceSource(_sourceId: string, _records: readonly IndexedSourceRecord[]): Promise<void> {}
 
@@ -358,6 +371,149 @@ export class SearchIndexStoreAdapter implements IndexStoreAdapter {
     }
     await this.options.onDeltaApplied?.(summary, delta)
     return summary
+  }
+
+  async applyDeltas(
+    deltas: readonly IndexedSourceDelta[]
+  ): Promise<IndexStoreDeltaBatchApplySummary> {
+    const firstDelta = deltas[0]
+    if (!firstDelta) {
+      return {
+        sourceId: '',
+        appliedDeltas: 0,
+        skippedDeltas: 0,
+        indexedItemCount: 0,
+        removedItemCount: 0
+      }
+    }
+
+    const sourceId = firstDelta.sourceId
+    if (deltas.some((delta) => delta.sourceId !== sourceId)) {
+      throw new Error(`INDEX_STORE_DELTA_BATCH_SOURCE_MISMATCH:${sourceId}`)
+    }
+
+    const summaries = new Map<IndexedSourceDelta, IndexStoreDeltaApplySummary>()
+    const upserts: Array<{
+      delta: IndexedSourceDelta
+      item: SearchIndexItem
+      legacyItemIds: string[]
+    }> = []
+    const deletes: Array<{ delta: IndexedSourceDelta; itemId: string }> = []
+
+    for (const delta of deltas) {
+      if (delta.action === 'delete') {
+        const itemId = resolveDeltaItemId(delta)
+        if (itemId) {
+          deletes.push({ delta, itemId })
+        } else {
+          summaries.set(delta, {
+            sourceId,
+            action: delta.action,
+            indexedItemCount: 0,
+            removedItemCount: 0,
+            applied: false,
+            reason: 'missing-delete-identity'
+          })
+        }
+        continue
+      }
+
+      if (!delta.record) {
+        summaries.set(delta, {
+          sourceId,
+          action: delta.action,
+          indexedItemCount: 0,
+          removedItemCount: 0,
+          applied: false,
+          reason: 'missing-record'
+        })
+        continue
+      }
+
+      const item = mapIndexedSourceRecordToSearchIndexItem(delta.record)
+      if (!item) {
+        summaries.set(delta, {
+          sourceId,
+          action: delta.action,
+          indexedItemCount: 0,
+          removedItemCount: 0,
+          applied: false,
+          reason: 'unindexable-record'
+        })
+        continue
+      }
+
+      upserts.push({
+        delta,
+        item,
+        legacyItemIds: (delta.record.search?.legacyItemIds ?? []).filter(
+          (itemId) => itemId !== item.itemId
+        )
+      })
+    }
+
+    let removedItemCount = 0
+    if (upserts.length > 0) {
+      const commit = await this.searchIndex.indexItems(
+        sourceId,
+        upserts.map(({ item }) => item),
+        {
+          legacyItemIds: Array.from(new Set(upserts.flatMap(({ legacyItemIds }) => legacyItemIds)))
+        }
+      )
+      let remainingLegacyRemovals = Math.max(0, commit.affectedItems - upserts.length)
+      removedItemCount += remainingLegacyRemovals
+      for (const { delta, legacyItemIds } of upserts) {
+        const removedForDelta = Math.min(legacyItemIds.length, remainingLegacyRemovals)
+        remainingLegacyRemovals -= removedForDelta
+        summaries.set(delta, {
+          sourceId,
+          action: delta.action,
+          indexedItemCount: 1,
+          removedItemCount: removedForDelta,
+          applied: true
+        })
+      }
+    }
+
+    let appliedDeleteCount = 0
+    if (deletes.length > 0) {
+      const commit = await this.searchIndex.removeProviderItems(
+        sourceId,
+        Array.from(new Set(deletes.map(({ itemId }) => itemId)))
+      )
+      let remainingDeletes = Math.min(deletes.length, Math.max(0, commit.affectedItems))
+      removedItemCount += Math.max(0, commit.affectedItems)
+      for (const { delta } of deletes) {
+        const applied = remainingDeletes > 0
+        if (applied) {
+          remainingDeletes -= 1
+          appliedDeleteCount += 1
+        }
+        summaries.set(delta, {
+          sourceId,
+          action: delta.action,
+          indexedItemCount: 0,
+          removedItemCount: applied ? 1 : 0,
+          applied,
+          ...(applied ? {} : { reason: 'missing-indexed-item' as const })
+        })
+      }
+    }
+
+    for (const delta of deltas) {
+      const summary = summaries.get(delta)
+      if (summary) await this.options.onDeltaApplied?.(summary, delta)
+    }
+
+    const appliedDeltas = upserts.length + appliedDeleteCount
+    return {
+      sourceId,
+      appliedDeltas,
+      skippedDeltas: deltas.length - appliedDeltas,
+      indexedItemCount: upserts.length,
+      removedItemCount
+    }
   }
 
   async replaceSource(

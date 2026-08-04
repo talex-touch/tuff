@@ -591,80 +591,37 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     if (updates.length === 0 || !this.dbUtils) return
     const db = this.dbUtils.getDb()
 
-    await this.runDbMutation(label, async () => {
-      if (typeof db.batch !== 'function') {
+    // Reuse one LibSQL transaction per bounded chunk. Starting one transaction per app retains a
+    // local database connection until native cleanup runs, while one unbounded transaction holds
+    // the WAL writer lock for too long during large rescans.
+    for (let offset = 0; offset < updates.length; offset += APP_ADDITION_COMMIT_CHUNK_SIZE) {
+      signal?.throwIfAborted()
+      const chunk = updates.slice(offset, offset + APP_ADDITION_COMMIT_CHUNK_SIZE)
+
+      await this.runDbMutation(label, async () => {
         await this.runAppTransaction(db, async (tx, extensionWriter) => {
-          for (let index = 0; index < updates.length; index += 1) {
+          for (const update of chunk) {
             signal?.throwIfAborted()
-            const update = updates[index]
-            if (!update) continue
+            const { fileId, app: appInfo } = update
             await tx
               .update(filesSchema)
               .set(this.buildScannedAppUpdateData(update))
-              .where(eq(filesSchema.id, update.fileId))
+              .where(eq(filesSchema.id, fileId))
             await this.syncScannedAppExtensions(
-              update.fileId,
-              update.app,
+              fileId,
+              appInfo,
               extensionWriter,
               update.existingExtensions
             )
           }
         })
-        return
-      }
+      })
 
-      const queries: AppDbBatchItem[] = []
-      for (let index = 0; index < updates.length; index += 1) {
-        signal?.throwIfAborted()
-        const update = updates[index]
-        if (!update) continue
-        const { fileId, app: appInfo } = update
-        queries.push(
-          db
-            .update(filesSchema)
-            .set(this.buildScannedAppUpdateData(update))
-            .where(eq(filesSchema.id, fileId))
-        )
-        const extensions = buildAppExtensions(fileId, appInfo)
-        if (extensions.length > 0) {
-          queries.push(
-            db
-              .insert(fileExtensions)
-              .values(extensions)
-              .onConflictDoUpdate({
-                target: [fileExtensions.fileId, fileExtensions.key],
-                set: { value: sql`excluded.value` }
-              })
-          )
-        }
-        const staleExtensionKeys = resolveMissingScannedExtensionKeys(
-          extensions,
-          APP_SCANNED_OPTIONAL_EXTENSION_KEYS
-        ).filter((key) => Object.hasOwn(update.existingExtensions, key))
-        if (staleExtensionKeys.length > 0) {
-          queries.push(
-            db
-              .delete(fileExtensions)
-              .where(
-                and(
-                  eq(fileExtensions.fileId, fileId),
-                  inArray(fileExtensions.key, staleExtensionKeys)
-                )
-              )
-          )
-        }
-
-        if ((index + 1) % 100 === 0 || index === updates.length - 1) {
-          logApp(
-            `Processed ${chalk.cyan(index + 1)}/${chalk.cyan(updates.length)} app updates`,
-            LogStyle.info
-          )
-        }
-      }
-
-      signal?.throwIfAborted()
-      await this.executeAppBatch(db, queries)
-    })
+      logApp(
+        `Processed ${chalk.cyan(offset + chunk.length)}/${chalk.cyan(updates.length)} app updates`,
+        LogStyle.info
+      )
+    }
   }
 
   public setIndexedSourceRuntimeDelegate(delegate: AppIndexedSourceRuntimeDelegate | null): void {
@@ -4017,73 +3974,60 @@ class AppProvider implements ISearchProvider<ProviderContext> {
     const t3 = performance.now()
     const db = dbUtils.getDb()
 
-    if (updatedCount > 0 && updatedApps.length > 0) {
-      for (const app of updatedApps) {
-        const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
-        if (!dbApp) {
-          continue
+    const updatedKeys = new Set(updatedApps.map((app) => this.resolveScannedAppKey(app)))
+    const metadataOnlyApps =
+      appsNeedingMdls.length > 0 && updatedApps.length < appsNeedingMdls.length
+        ? appsNeedingMdls.filter((app) => {
+            if (!app.displayName) return false
+            return !updatedKeys.has(this.resolveScannedAppKey(app))
+          })
+        : []
+    const mdlsUpdates = [...updatedApps, ...metadataOnlyApps].flatMap((app) => {
+      const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
+      if (!dbApp) return []
+      return [
+        {
+          fileId: dbApp.id,
+          app,
+          existingDisplayName: dbApp.displayName,
+          existingDisplayNameQuality: normalizeAppDisplayNameQuality(
+            dbApp.extensions[APP_DISPLAY_NAME_QUALITY_EXTENSION_KEY]
+          ),
+          existingExtensions: dbApp.extensions,
+          existingName: dbApp.name
         }
-        const nextDisplayName = normalizeDisplayName(resolveScannedDisplayName(app))
-        await this.runDbMutation('app-provider.mdls-update', async () => {
-          await this.runAppTransaction(db, async (tx, extensionWriter) => {
-            await tx
-              .update(filesSchema)
-              .set({ displayName: nextDisplayName })
-              .where(eq(filesSchema.id, dbApp.id))
-            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter, dbApp.extensions)
-          })
-        })
-      }
-    }
-
-    if (appsNeedingMdls.length > 0 && updatedApps.length < appsNeedingMdls.length) {
-      const updatedKeys = new Set(updatedApps.map((app) => this.resolveScannedAppKey(app)))
-      const metadataOnlyApps = appsNeedingMdls.filter((app) => {
-        if (!app.displayName) return false
-        return !updatedKeys.has(this.resolveScannedAppKey(app))
-      })
-
-      for (const app of metadataOnlyApps) {
-        const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
-        if (!dbApp) continue
-        await this.runDbMutation('app-provider.mdls-metadata', async () => {
-          await this.runAppTransaction(db, async (_tx, extensionWriter) => {
-            await this.syncScannedAppExtensions(dbApp.id, app, extensionWriter, dbApp.extensions)
-          })
-        })
-      }
+      ]
+    })
+    if (mdlsUpdates.length > 0) {
+      await this.persistScannedAppMetadataUpdates('app-provider.mdls-update', mdlsUpdates)
     }
     const t4 = performance.now()
 
     if (deletedApps.length > 0) {
-      logApp(
-        `Deleting ${chalk.yellow(deletedApps.length)} missing apps from database`,
-        LogStyle.process
-      )
-
-      for (const app of deletedApps) {
-        try {
-          const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
-          if (!dbApp) {
-            logApp(`App deletion target not found: ${chalk.yellow(app.path)}`, LogStyle.warning)
-            continue
+      const deletedDbApps = deletedApps.flatMap((app) => {
+        const dbApp = dbAppsByUniqueId.get(this.resolveScannedAppKey(app))
+        return dbApp ? [dbApp] : []
+      })
+      const deletedIds = deletedDbApps.map((app) => app.id)
+      if (deletedIds.length > 0) {
+        logApp(
+          `Deleting ${chalk.yellow(deletedIds.length)} missing apps from database`,
+          LogStyle.process
+        )
+        await this.runDbMutation('app-provider.mdls-delete', async () => {
+          if (typeof db.batch === 'function') {
+            await this.executeAppBatch(db, [
+              db.delete(fileExtensions).where(inArray(fileExtensions.fileId, deletedIds)),
+              db.delete(filesSchema).where(inArray(filesSchema.id, deletedIds))
+            ])
+            return
           }
-          await this.runDbMutation('app-provider.mdls-delete', async () => {
-            await this.runAppTransaction(db, async (tx) => {
-              await tx.delete(filesSchema).where(eq(filesSchema.id, dbApp.id))
-              await tx.delete(fileExtensions).where(eq(fileExtensions.fileId, dbApp.id))
-            })
+          await this.runAppTransaction(db, async (tx) => {
+            await tx.delete(fileExtensions).where(inArray(fileExtensions.fileId, deletedIds))
+            await tx.delete(filesSchema).where(inArray(filesSchema.id, deletedIds))
           })
-
-          logApp(`App deleted from database: ${chalk.cyan(dbApp.path)}`, LogStyle.success)
-        } catch (error) {
-          logApp(
-            `Error deleting app ${chalk.red(app.path)}: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-            LogStyle.error
-          )
-        }
+        })
+        logApp(`Deleted ${chalk.green(deletedIds.length)} missing apps`, LogStyle.success)
       }
     }
     const t5 = performance.now()
