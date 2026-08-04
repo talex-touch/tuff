@@ -21,4 +21,4 @@
 - **Trellis 审计记录尚未与外部处置闭环** — #302 与 #296–#301 已关闭并有 superseding 460/460 验证；`07-27-audit-plugin-privileged-security` 仍是 planning 状态、未记录该 disposition。`07-28-tuffex-docs-audit` 也未记录已发布的 #362 与 #363–#474 的归属、整改顺序或集成闭环条件。应更新或归档任务，不重报历史已修复漏洞。跟踪：[#481](https://github.com/talex-touch/tuff/issues/481)。
 - **模板 JSONL 污染活跃任务证据** — 29 个活跃任务中的 58 个 `implement.jsonl` / `check.jsonl` 仍含 `_example` 行。已有真实上下文或检查记录的任务必须删掉模板行；继续执行的任务需写入真实记录；无后续动作的任务应同步终态或归档。跟踪：[#481](https://github.com/talex-touch/tuff/issues/481)。
 - **三个进行中任务缺可执行状态记录** — `07-26-install-launch-v2-4-13-beta-23`、`07-28-tuffex-docs-audit` 与 `07-29-macos-screenshot-capture-core` 的 `task.json` 未提供 `meta.blocker` 或 `meta.nextAction`；需补充具体下一步、验收命令/产物，或完成归档。其余发布/Windows/OTA/图标阻塞任务已有可行动作，不应误报为无主卡住。
-- **Dependabot 告警尚未逐项分诊** — 最近推送回执基线为 35 个告警（3 critical、15 high、14 moderate、3 low）。需在 GitHub Security dashboard 确认每项运行时可达性、升级或豁免理由及回归门禁；该数字不是漏洞可达性结论。
+- **Dependabot 告警尚未逐项分诊** — 本次推送回执基线为 51 个告警（3 critical、20 high、25 moderate、3 low）。需在 GitHub Security dashboard 确认每项运行时可达性、升级或豁免理由及回归门禁；该数字不是漏洞可达性结论。
