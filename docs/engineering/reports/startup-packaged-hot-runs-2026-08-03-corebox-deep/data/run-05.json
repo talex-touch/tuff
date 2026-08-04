@@ -1,0 +1,78 @@
+{
+  "runNo": 5,
+  "timestamp": "2026-08-03T12:21:58.156Z",
+  "timeoutMs": 180000,
+  "traceDeprecation": false,
+  "target": "packaged",
+  "profile": "hot",
+  "launchMethod": "exec",
+  "command": "\"/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff\"",
+  "userDataDir": "/Users/tagzixian/Workspace/Projects/talex-touch/docs/engineering/reports/startup-packaged-hot-runs-2026-08-03-corebox-deep/user-data/hot-profile",
+  "artifact": {
+    "appPath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appBundlePath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+    "executablePath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appExists": true,
+    "executableExists": true,
+    "executable": true,
+    "expectedVersion": "2.4.14-beta.2",
+    "bundleVersion": "2.4.14-beta.2",
+    "versionMatches": true
+  },
+  "wallTimeMs": 4244,
+  "processExitCode": 0,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": 445,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": 367,
+  "warnCount": 1,
+  "errorCount": 0,
+  "warnLines": [
+    "[20:21:58.828] [WARN] [NativeCapabilities] Native screenshot protocol carrier unavailable reason=binding-unavailable"
+  ],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "NativeCapabilitiesModule",
+      "durationMs": 57
+    },
+    {
+      "name": "PrivacyLifecycle",
+      "durationMs": 45
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 42
+    },
+    {
+      "name": "Database",
+      "durationMs": 27
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 20
+    },
+    {
+      "name": "Voice",
+      "durationMs": 20
+    },
+    {
+      "name": "Clipboard",
+      "durationMs": 17
+    },
+    {
+      "name": "DownloadCenter",
+      "durationMs": 14
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "startup_logs_nonzero"
+  ],
+  "analysisCutoffReached": true
+}

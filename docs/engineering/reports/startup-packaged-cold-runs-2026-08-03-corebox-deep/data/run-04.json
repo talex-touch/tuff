@@ -1,0 +1,78 @@
+{
+  "runNo": 4,
+  "timestamp": "2026-08-03T12:23:23.401Z",
+  "timeoutMs": 180000,
+  "traceDeprecation": false,
+  "target": "packaged",
+  "profile": "cold",
+  "launchMethod": "exec",
+  "command": "\"/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff\"",
+  "userDataDir": "/Users/tagzixian/Workspace/Projects/talex-touch/docs/engineering/reports/startup-packaged-cold-runs-2026-08-03-corebox-deep/user-data/run-04",
+  "artifact": {
+    "appPath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appBundlePath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+    "executablePath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appExists": true,
+    "executableExists": true,
+    "executable": true,
+    "expectedVersion": "2.4.14-beta.2",
+    "bundleVersion": "2.4.14-beta.2",
+    "versionMatches": true
+  },
+  "wallTimeMs": 4169,
+  "processExitCode": 0,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": 425,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": 320,
+  "warnCount": 1,
+  "errorCount": 0,
+  "warnLines": [
+    "[20:23:24.065] [WARN] [NativeCapabilities] Native screenshot protocol carrier unavailable reason=binding-unavailable"
+  ],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "Database",
+      "durationMs": 51
+    },
+    {
+      "name": "PrivacyLifecycle",
+      "durationMs": 42
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 40
+    },
+    {
+      "name": "CatalogModule",
+      "durationMs": 33
+    },
+    {
+      "name": "Storage",
+      "durationMs": 31
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 23
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 19
+    },
+    {
+      "name": "Clipboard",
+      "durationMs": 15
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "startup_logs_nonzero"
+  ],
+  "analysisCutoffReached": true
+}
