@@ -26,7 +26,9 @@ const transport = useTuffTransport()
 let started = false
 const pollingService = PollingService.getInstance()
 const flushTaskId = 'renderer.performance.flush'
+const RAF_SAMPLE_INTERVAL_MS = 1000 / 30
 let rafId: number | null = null
+let rafTimerId: number | null = null
 let lastFrameTime: number | null = null
 let monitoringEnabled = false
 let rendererActive = true
@@ -97,8 +99,30 @@ function startLongTaskObserver(): void {
 }
 
 function startRafJankMonitor(): void {
-  if (!monitoringEnabled || !rendererActive || document.hidden || rafId !== null) return
+  if (
+    !monitoringEnabled ||
+    !rendererActive ||
+    document.hidden ||
+    rafId !== null ||
+    rafTimerId !== null
+  ) {
+    return
+  }
   lastFrameTime = performance.now()
+
+  const scheduleNextSample = () => {
+    if (!monitoringEnabled || !rendererActive || document.hidden) return
+    if (typeof window.setTimeout !== 'function') {
+      rafId = requestAnimationFrame(onFrame)
+      return
+    }
+    rafTimerId = window.setTimeout(() => {
+      rafTimerId = null
+      if (monitoringEnabled && rendererActive && !document.hidden && rafId === null) {
+        rafId = requestAnimationFrame(onFrame)
+      }
+    }, RAF_SAMPLE_INTERVAL_MS)
+  }
 
   const onFrame = (now: number) => {
     rafId = null
@@ -118,13 +142,17 @@ function startRafJankMonitor(): void {
       }
     }
 
-    rafId = requestAnimationFrame(onFrame)
+    scheduleNextSample()
   }
 
   rafId = requestAnimationFrame(onFrame)
 }
 
 function stopRafJankMonitor(): void {
+  if (rafTimerId !== null && typeof window.clearTimeout === 'function') {
+    window.clearTimeout(rafTimerId)
+  }
+  rafTimerId = null
   if (rafId !== null) cancelAnimationFrame(rafId)
   rafId = null
   lastFrameTime = null

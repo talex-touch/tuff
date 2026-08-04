@@ -54,6 +54,14 @@ vi.mock('chokidar', () => ({
   }))
 }))
 
+vi.mock('chokidar-fsevents', () => ({
+  watch: vi.fn(() => ({
+    add: watcherAdd,
+    close: vi.fn(),
+    on: vi.fn().mockReturnThis()
+  }))
+}))
+
 vi.mock('../../../core/eventbus/touch-event', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../core/eventbus/touch-event')>()
   return {

@@ -99,12 +99,12 @@ export class CoreBoxManager {
   }
 
   public init(): void {
-    windowManager.create()
     ipcManager.register()
   }
 
   public destroy(): void {
     ipcManager.unregister()
+    windowManager.destroy()
   }
 
   public get showCoreBox(): boolean {

@@ -4,6 +4,7 @@ import process from 'node:process'
 import { getLogger } from '@talex-touch/utils/common/logger'
 import { pollingService } from '@talex-touch/utils/common/utils/polling'
 import * as chokidar from 'chokidar'
+import * as chokidarFsevents from 'chokidar-fsevents'
 import {
   DirectoryAddedEvent,
   DirectoryUnlinkedEvent,
@@ -81,7 +82,7 @@ export class FileSystemWatcherModule extends BaseModule {
       return this.watchers.get(depth)!
     }
 
-    const newWatcher = chokidar.watch([], {
+    const options = {
       persistent: true,
       ignoreInitial: true,
       depth,
@@ -90,7 +91,12 @@ export class FileSystemWatcherModule extends BaseModule {
         stabilityThreshold: 2000,
         pollInterval: 100
       }
-    })
+    }
+    // Chokidar 4 removed its FSEvents backend and opens one fs.watch descriptor per discovered
+    // file. Keep v4 on Windows/Linux, but use the v3 FSEvents adapter for macOS directory trees.
+    const newWatcher = (isMac
+      ? chokidarFsevents.watch([], options)
+      : chokidar.watch([], options)) as unknown as chokidar.FSWatcher
 
     newWatcher
       .on('add', (filePath: string) => {

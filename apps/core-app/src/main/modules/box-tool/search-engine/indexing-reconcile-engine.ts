@@ -166,6 +166,31 @@ export class ReconcileEngine {
       return result
     }
 
+    if (this.store.applyDeltas) {
+      try {
+        const summary = await this.store.applyDeltas(
+          result.deltas.map((delta) => ({ ...delta, mutationLeaseId }))
+        )
+        if (!summary) return result
+        return {
+          ...result,
+          appliedDeltas: summary.appliedDeltas,
+          failedDeltas: 0,
+          skippedDeltas: summary.skippedDeltas
+        }
+      } catch (error) {
+        const message = this.stringifyError(error)
+        const deltaErrors = result.deltas.map((delta) => `${delta.sourceId}:${message}`)
+        return {
+          ...result,
+          appliedDeltas: 0,
+          failedDeltas: deltaErrors.length,
+          skippedDeltas: 0,
+          deltaErrors
+        }
+      }
+    }
+
     const settled = await Promise.all(
       result.deltas.map(async (delta) => {
         try {

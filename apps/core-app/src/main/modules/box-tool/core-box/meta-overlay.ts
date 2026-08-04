@@ -218,8 +218,6 @@ export class MetaOverlayManager {
   }
 
   public ensureOnTop(): void {
-    if (!this.ensureInitialized()) return
-
     if (!this.metaView || !this.parentWindow) return
 
     try {
@@ -343,32 +341,13 @@ export class MetaOverlayManager {
    */
   public hide(): void {
     this.clearHeightSyncTimer()
-    const metaWebContents = this.getAliveMetaWebContents()
-    if (!this.metaView || !metaWebContents) {
-      this.isVisible = false
-      this.currentItem = null
-      return
-    }
-
-    this.metaView.setVisible(false)
+    const parentWindow = this.getAliveParentWindow()
+    if (this.metaView && this.getAliveMetaWebContents()) this.metaView.setVisible(false)
     this.isVisible = false
     this.currentItem = null
-
-    const runtime = getCoreBoxRuntimeOrNull()
-    if (!runtime) {
-      useAliveWebContents(this.getAliveParentWindow())?.focus()
-      metaOverlayLog.debug('MetaOverlay hidden after CoreBox runtime teardown')
-      return
-    }
-
-    const tx = getTuffTransportMain(runtime.channel, resolveKeyManager(runtime.channel))
-
-    tx.sendTo(metaWebContents, MetaOverlayEvents.ui.hide, undefined).catch(() => {})
-
-    // Return focus to parent window
-    useAliveWebContents(this.getAliveParentWindow())?.focus()
-
-    metaOverlayLog.debug('MetaOverlay hidden')
+    useAliveWebContents(parentWindow)?.focus()
+    this.destroyRenderer()
+    metaOverlayLog.debug('MetaOverlay hidden and renderer released')
   }
 
   /**
@@ -538,15 +517,12 @@ export class MetaOverlayManager {
   /**
    * Destroys MetaOverlay and cleans up resources.
    */
-  public destroy(): void {
+  private destroyRenderer(): void {
     this.clearHeightSyncTimer()
-
+    const parentWindow = this.getAliveParentWindow()
     if (this.metaView) {
       const metaWebContents = this.getAliveMetaWebContents()
-      if (metaWebContents) {
-        metaWebContents.close()
-      }
-      const parentWindow = this.getAliveParentWindow()
+      if (metaWebContents) metaWebContents.close()
       if (parentWindow) {
         try {
           parentWindow.contentView.removeChildView(this.metaView)
@@ -554,14 +530,16 @@ export class MetaOverlayManager {
           metaOverlayLog.warn('Failed to remove MetaOverlay view', { error })
         }
       }
-      this.metaView = null
     }
-
-    this.pluginActions.clear()
+    this.metaView = null
     this.currentItem = null
     this.parentWindow = null
     this.isVisible = false
+  }
 
+  public destroy(): void {
+    this.destroyRenderer()
+    this.pluginActions.clear()
     metaOverlayLog.info('MetaOverlay destroyed')
   }
 }

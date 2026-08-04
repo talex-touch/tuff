@@ -50,6 +50,7 @@ const COREBOX_BLUR_HIDE_CONFIRM_MS = 120
 const COREBOX_SHORTCUT_FOCUS_GRACE_MS = 1500
 const COREBOX_DEFAULT_FOCUS_GRACE_MS = 500
 
+const COREBOX_IDLE_DESTROY_MS = 60_000
 const windowAnimation = useWindowAnimation()
 
 /**
@@ -82,6 +83,8 @@ export class WindowManager {
 
   private readonly focusPolicy = new CoreBoxFocusPolicy()
   private appSettingUnsubscribe: (() => void) | null = null
+  private creationPromise: Promise<TouchWindow> | null = null
+  private idleDestroyTimer: NodeJS.Timeout | null = null
 
   private get touchApp(): TouchApp {
     if (!this._touchApp) {
@@ -174,11 +177,57 @@ export class WindowManager {
     this.pluginViewController.forwardInputChange(payload)
   }
 
+  public async ensureCreated(): Promise<TouchWindow> {
+    if (this.creationPromise) return await this.creationPromise
+
+    const current = this.current
+    if (current && !current.window.isDestroyed()) return current
+    this.windows = this.windows.filter((candidate) => !candidate.window.isDestroyed())
+
+    const creation = this.create()
+    this.creationPromise = creation
+    try {
+      return await creation
+    } finally {
+      if (this.creationPromise === creation) this.creationPromise = null
+    }
+  }
+
+  private cancelIdleDestroy(): void {
+    if (!this.idleDestroyTimer) return
+    clearTimeout(this.idleDestroyTimer)
+    this.idleDestroyTimer = null
+  }
+
+  private scheduleIdleDestroy(): void {
+    this.cancelIdleDestroy()
+    const timer = setTimeout(() => {
+      if (this.idleDestroyTimer !== timer) return
+      this.idleDestroyTimer = null
+      const current = this.current
+      if (!current || current.window.isDestroyed()) return
+      if (
+        current.window.isVisible() ||
+        coreBoxManager.showCoreBox ||
+        coreBoxManager.isUIMode ||
+        this.pluginViewController.hasView()
+      ) {
+        return
+      }
+      metaOverlayManager.destroy()
+      current.window.destroy()
+      coreBoxWindowLog.info('Destroyed hidden CoreBox after idle timeout')
+    }, COREBOX_IDLE_DESTROY_MS)
+    timer.unref?.()
+    this.idleDestroyTimer = timer
+  }
+
   /**
    * 创建并初始化一个新的 CoreBox 窗口。
    */
   public async create(): Promise<TouchWindow> {
     const window = new TouchWindow({ ...BoxWindowOption })
+    this.windows.push(window)
 
     this.ensureAppSettingSubscription()
     const pinned = this.resolvePinnedFromSettings()
@@ -186,34 +235,6 @@ export class WindowManager {
     this.applyPinnedStateToWindow(window, pinned)
 
     windowAnimation.changeWindow(window)
-
-    setTimeout(async () => {
-      coreBoxWindowLog.debug('NewBox created, injecting development tools')
-
-      try {
-        if (app.isPackaged || this.touchApp.version === TalexTouch.AppVersion.RELEASE) {
-          const url = path.join(__dirname, '..', 'renderer', 'index.html')
-
-          await window.loadFile(url, {
-            devtools: this.touchApp.version === TalexTouch.AppVersion.DEV
-          })
-        } else {
-          const url = process.env.ELECTRON_RENDERER_URL as string
-
-          await window.loadURL(url)
-
-          window.openDevTools({
-            mode: 'detach'
-          })
-        }
-
-        if (!coreBoxManager.showCoreBox) {
-          window.window.hide()
-        }
-      } catch (error) {
-        coreBoxWindowLog.error('Failed to load content in new box window', { error })
-      }
-    }, 200)
 
     window.window.webContents.on('dom-ready', () => {
       this.getTransport().broadcastToWindow(window.window.id, CoreBoxEvents.ui.trigger, {
@@ -315,12 +336,27 @@ export class WindowManager {
       metaOverlayManager.updateBounds()
     })
 
-    // Initialize MetaOverlay (persistent mode)
-    metaOverlayManager.init(window.window)
+    await sleep(200)
+    try {
+      if (app.isPackaged || this.touchApp.version === TalexTouch.AppVersion.RELEASE) {
+        const url = path.join(__dirname, '..', 'renderer', 'index.html')
+        await window.loadFile(url, {
+          devtools: this.touchApp.version === TalexTouch.AppVersion.DEV
+        })
+      } else {
+        const url = process.env.ELECTRON_RENDERER_URL as string
+        await window.loadURL(url)
+        window.openDevTools({ mode: 'detach' })
+      }
+
+      if (!coreBoxManager.showCoreBox) window.window.hide()
+    } catch (error) {
+      coreBoxWindowLog.error('Failed to load content in new box window', { error })
+      if (!window.window.isDestroyed()) window.window.destroy()
+      throw error
+    }
 
     coreBoxWindowLog.debug('NewBox created, WebContents loaded')
-
-    this.windows.push(window)
 
     return window
   }
@@ -334,9 +370,20 @@ export class WindowManager {
    * @param triggeredByShortcut - Whether this show was triggered by keyboard shortcut
    */
   public show(triggeredByShortcut: boolean = false): void {
+    this.cancelIdleDestroy()
+    if (this.creationPromise) {
+      void this.creationPromise
+        .then(() => this.show(triggeredByShortcut))
+        .catch((error) => coreBoxWindowLog.error('Failed to create CoreBox for show', { error }))
+      return
+    }
     const window = this.current
-    if (!window) return
-
+    if (!window || window.window.isDestroyed()) {
+      void this.ensureCreated()
+        .then(() => this.show(triggeredByShortcut))
+        .catch((error) => coreBoxWindowLog.error('Failed to create CoreBox for show', { error }))
+      return
+    }
     this.focusPolicy.clearPendingBlurHide()
     this.boundsController.stopAnimation()
     this.updatePosition(window)
@@ -408,6 +455,7 @@ export class WindowManager {
 
     if (options.immediate === true) {
       window.window.hide()
+      this.scheduleIdleDestroy()
       return
     }
 
@@ -422,6 +470,7 @@ export class WindowManager {
     setTimeout(() => {
       if (window.window.isDestroyed()) return
       window.window.hide()
+      this.scheduleIdleDestroy()
     }, 100)
   }
 
@@ -685,6 +734,16 @@ export class WindowManager {
 
     this.appSettingUnsubscribe()
     this.appSettingUnsubscribe = null
+  }
+
+  public destroy(): void {
+    this.cancelIdleDestroy()
+    metaOverlayManager.destroy()
+    for (const window of this.windows) {
+      if (!window.window.isDestroyed()) window.window.destroy()
+    }
+    this.windows = []
+    this.stopAppSettingSubscription()
   }
 
   private resolvePinnedFromSettings(): boolean {

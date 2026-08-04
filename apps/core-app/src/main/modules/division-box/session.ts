@@ -37,6 +37,7 @@ import {
 import { getMainConfig } from '../storage'
 import defaultCoreBoxThemeCss from '../box-tool/core-box/theme/tuff-element.css?raw'
 import { resolveDivisionBoxHeaderHeight, resolveDivisionBoxInitialWindowBounds } from './layout'
+import { windowPool } from './window-pool'
 
 const divisionBoxSessionLog = createLogger('DivisionBoxSession')
 
@@ -365,12 +366,9 @@ export class DivisionBoxSession {
     }
 
     try {
-      divisionBoxSessionLog.debug(`Acquiring window from pool: ${this.sessionId}`)
-      // Acquire window from pool (pre-warmed)
-      const { windowPool } = await import('./window-pool')
-      divisionBoxSessionLog.debug(`windowPool imported: ${this.sessionId}`)
+      divisionBoxSessionLog.debug(`Creating DivisionBox window on demand: ${this.sessionId}`)
       this.touchWindow = await windowPool.acquire()
-      divisionBoxSessionLog.debug(`Window acquired successfully: ${this.sessionId}`)
+      divisionBoxSessionLog.debug(`Window created successfully: ${this.sessionId}`)
 
       const ensureVisible = (): void => {
         if (!this.touchWindow) return
@@ -437,7 +435,7 @@ export class DivisionBoxSession {
       ensureVisible()
 
       await this.setState(DivisionBoxState.ATTACH)
-      divisionBoxSessionLog.debug(`Window acquired from pool: ${this.sessionId}`)
+      divisionBoxSessionLog.debug(`Window created on demand: ${this.sessionId}`)
     } catch (error) {
       this.destroyWindow()
       throw new DivisionBoxError(
