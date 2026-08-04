@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Owns official plugin release seed integrity, package order, and packaged Electron evidence contracts."}
+{"file":".trellis/tasks/07-13-search-crossplatform-audit/prd.md","reason":"Tracks standing search and packaged-runtime risks that must not be rediscovered or mis-scoped."}
+{"file":".trellis/tasks/07-28-migrate-search-index-split-write-paths/design.md","reason":"Defines worker ownership and the search database split boundary that remains out of scope."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Guides source-build to packaged-runtime boundary verification."}

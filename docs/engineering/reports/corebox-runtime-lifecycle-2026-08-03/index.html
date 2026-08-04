@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Tuff CoreBox runtime lifecycle optimization report, including before/after measurements, packaged-runtime verification, and launcher positioning.">
+  <title>Tuff CoreBox Runtime Lifecycle — 2026-08-03</title>
+  <style>
+    :root {
+      --bg: #090c10;
+      --panel: #11161d;
+      --panel-strong: #171e27;
+      --line: #29323e;
+      --line-soft: #202832;
+      --text: #f3f5f7;
+      --muted: #9ba7b4;
+      --faint: #697684;
+      --accent: #c8ff5a;
+      --accent-soft: rgba(200, 255, 90, 0.12);
+      --cyan: #67e8f9;
+      --cyan-soft: rgba(103, 232, 249, 0.11);
+      --warn: #ffc66d;
+      --warn-soft: rgba(255, 198, 109, 0.11);
+      --danger: #ff8e8e;
+      --danger-soft: rgba(255, 142, 142, 0.11);
+      --good: #80f0b1;
+      --radius: 18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 92px; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% -8%, rgba(103, 232, 249, 0.12), transparent 32rem),
+        radial-gradient(circle at 88% 8%, rgba(200, 255, 90, 0.09), transparent 30rem),
+        var(--bg);
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    a { color: var(--cyan); text-underline-offset: 3px; }
+    a:hover { color: #b6f5ff; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, a:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+    code, pre, .mono { font-family: var(--mono); }
+    code {
+      color: #d6e5f5;
+      background: #0c1117;
+      border: 1px solid var(--line-soft);
+      border-radius: 6px;
+      padding: 0.12rem 0.35rem;
+      font-size: 0.88em;
+      overflow-wrap: anywhere;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 100;
+      transform: translateY(-180%);
+      padding: 10px 14px;
+      color: #091006;
+      background: var(--accent);
+      border-radius: 9px;
+      font-weight: 750;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .wrap { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+    .hero { padding: 78px 0 42px; }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 20px;
+      color: var(--accent);
+      font: 700 0.75rem/1 var(--mono);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 30px; height: 1px; background: currentColor; }
+    h1 {
+      max-width: 970px;
+      margin: 0;
+      font-size: clamp(2.55rem, 7.5vw, 6.6rem);
+      line-height: 0.94;
+      letter-spacing: -0.065em;
+      text-wrap: balance;
+    }
+    h1 .outline { color: transparent; -webkit-text-stroke: 1px #788694; }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.75fr);
+      gap: 44px;
+      align-items: end;
+      margin-top: 42px;
+    }
+    .lede { max-width: 760px; margin: 0; color: #c6d0da; font-size: clamp(1.02rem, 2vw, 1.24rem); }
+    .meta-card {
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(17, 22, 29, 0.72);
+      backdrop-filter: blur(12px);
+    }
+    .meta-row { display: flex; justify-content: space-between; gap: 18px; padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+    .meta-row:last-child { border-bottom: 0; }
+    .meta-row span:first-child { color: var(--muted); }
+    .meta-row span:last-child { text-align: right; font-family: var(--mono); font-size: 0.84rem; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 28px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 28px;
+      padding: 5px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(17, 22, 29, 0.7);
+      font: 650 0.72rem/1 var(--mono);
+      letter-spacing: 0.035em;
+    }
+    .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+    .badge.measured::before { background: var(--accent); box-shadow: 0 0 12px rgba(200, 255, 90, 0.75); }
+    .badge.test::before { background: var(--cyan); }
+    .badge.inspection::before { background: var(--warn); }
+    .badge.public::before { background: #c4a7ff; }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding: 10px 0 34px;
+    }
+    .metric {
+      position: relative;
+      overflow: hidden;
+      min-height: 180px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(23, 30, 39, 0.96), rgba(13, 18, 24, 0.96));
+    }
+    .metric::after {
+      content: "";
+      position: absolute;
+      right: -36px;
+      bottom: -52px;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: var(--glow, rgba(200, 255, 90, 0.09));
+      filter: blur(2px);
+    }
+    .metric .label { color: var(--muted); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .metric .value { margin-top: 26px; font: 750 clamp(1.8rem, 3.5vw, 3rem)/0.95 var(--mono); letter-spacing: -0.07em; }
+    .metric .delta { margin-top: 12px; color: var(--good); font: 650 0.78rem/1.35 var(--mono); }
+    .metric .delta.warn { color: var(--warn); }
+    .metric .delta.bad { color: var(--danger); }
+    .metric .from { margin-top: 6px; color: var(--faint); font-size: 0.75rem; }
+
+    .stage-nav-shell {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      border-top: 1px solid var(--line-soft);
+      border-bottom: 1px solid var(--line);
+      background: rgba(9, 12, 16, 0.86);
+      backdrop-filter: blur(18px);
+    }
+    .stage-nav { display: flex; gap: 5px; overflow-x: auto; padding: 11px 0; scrollbar-width: none; }
+    .stage-nav::-webkit-scrollbar { display: none; }
+    .stage-nav a {
+      flex: 0 0 auto;
+      padding: 9px 12px;
+      border-radius: 8px;
+      color: var(--muted);
+      text-decoration: none;
+      font: 650 0.75rem/1 var(--mono);
+    }
+    .stage-nav a:hover, .stage-nav a.active { color: #0c1108; background: var(--accent); }
+
+    main { padding: 42px 0 90px; }
+    .section-head { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 18px; }
+    .section-kicker { color: var(--accent); font: 700 0.76rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+    h2 { margin: 8px 0 0; font-size: clamp(1.75rem, 4vw, 3.2rem); line-height: 1; letter-spacing: -0.045em; }
+    .section-note { max-width: 490px; margin: 0; color: var(--muted); font-size: 0.92rem; }
+
+    .stage {
+      margin: 30px 0;
+      padding: clamp(20px, 4vw, 36px);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: linear-gradient(155deg, rgba(20, 27, 35, 0.94), rgba(11, 15, 20, 0.96));
+      box-shadow: 0 18px 70px rgba(0, 0, 0, 0.18);
+    }
+    .stage-top { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 20px; align-items: start; }
+    .stage-no { color: var(--accent); font: 760 2.6rem/1 var(--mono); letter-spacing: -0.08em; }
+    .stage h3 { margin: 0 0 8px; font-size: clamp(1.35rem, 3vw, 2.1rem); line-height: 1.05; letter-spacing: -0.035em; }
+    .stage-summary { margin: 0; color: var(--muted); }
+    .status { padding: 7px 10px; border: 1px solid rgba(128, 240, 177, 0.28); border-radius: 999px; color: var(--good); background: rgba(128, 240, 177, 0.08); font: 700 0.7rem/1 var(--mono); }
+
+    .rail {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+      margin-top: 26px;
+    }
+    .rail-card { padding: 18px; border: 1px solid var(--line-soft); border-radius: 14px; background: rgba(7, 11, 15, 0.55); }
+    .rail-card.before { border-color: rgba(255, 142, 142, 0.22); }
+    .rail-card.after { border-color: rgba(128, 240, 177, 0.25); }
+    .rail-label { margin-bottom: 10px; color: var(--faint); font: 750 0.7rem/1 var(--mono); text-transform: uppercase; letter-spacing: 0.1em; }
+    .rail-card.before .rail-label { color: var(--danger); }
+    .rail-card.after .rail-label { color: var(--good); }
+    .rail-card strong { display: block; font-size: 1.03rem; }
+    .rail-card p { margin: 8px 0 0; color: var(--muted); font-size: 0.88rem; }
+    .rail-arrow { display: grid; place-items: center; color: var(--accent); font: 800 1.4rem/1 var(--mono); }
+
+    .stage-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(250px, 0.8fr); gap: 18px; margin-top: 18px; }
+    .subcard { padding: 18px; border: 1px solid var(--line-soft); border-radius: 14px; background: rgba(7, 11, 15, 0.4); }
+    .subcard h4 { margin: 0 0 11px; font-size: 0.82rem; color: #dce6ef; text-transform: uppercase; letter-spacing: 0.08em; }
+    .subcard ul { margin: 0; padding-left: 1.15rem; color: var(--muted); font-size: 0.9rem; }
+    .subcard li + li { margin-top: 7px; }
+    .paths { display: flex; flex-wrap: wrap; gap: 7px; }
+    .path { padding: 6px 8px; border: 1px solid var(--line-soft); border-radius: 7px; color: #b8c7d5; background: #0b1016; font: 600 0.69rem/1.3 var(--mono); overflow-wrap: anywhere; }
+
+    .callout { margin-top: 18px; padding: 15px 17px; border-left: 3px solid var(--warn); border-radius: 0 10px 10px 0; color: #d8c6a8; background: var(--warn-soft); font-size: 0.88rem; }
+    .callout.good { border-color: var(--good); color: #bde8ce; background: rgba(128, 240, 177, 0.07); }
+    .callout.danger { border-color: var(--danger); color: #efbcbc; background: var(--danger-soft); }
+
+    .section-block { margin-top: 68px; }
+    .table-shell { overflow-x: auto; border: 1px solid var(--line); border-radius: 17px; background: rgba(14, 19, 25, 0.82); }
+    table { width: 100%; min-width: 920px; border-collapse: collapse; font-size: 0.86rem; }
+    th, td { padding: 14px 15px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line-soft); }
+    th { position: sticky; top: 0; color: #cdd7e1; background: #151b23; font-size: 0.71rem; text-transform: uppercase; letter-spacing: 0.07em; }
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: rgba(103, 232, 249, 0.035); }
+    td strong { color: #eef3f7; }
+    .numeric { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .positive { color: var(--good); }
+    .negative { color: var(--danger); }
+    .neutral { color: var(--warn); }
+    .evidence-tag { display: inline-block; padding: 4px 7px; border-radius: 6px; color: #cfd8e1; background: #202936; font: 650 0.68rem/1 var(--mono); }
+
+    .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+    .filter {
+      padding: 8px 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: var(--panel);
+      font: 650 0.73rem/1 var(--mono);
+      cursor: pointer;
+    }
+    .filter:hover, .filter.active { border-color: var(--accent); color: #0c1108; background: var(--accent); }
+    tr[hidden] { display: none; }
+
+    .competitor td:first-child { min-width: 140px; color: var(--muted); font-weight: 700; }
+    .competitor td:not(:first-child) { min-width: 205px; }
+    .source-list { display: grid; gap: 9px; margin-top: 16px; }
+    .source-list a { width: fit-content; font-size: 0.84rem; }
+
+    details { border: 1px solid var(--line); border-radius: 13px; background: rgba(12, 17, 23, 0.7); }
+    details + details { margin-top: 10px; }
+    summary { padding: 14px 16px; cursor: pointer; color: #d9e3ed; font-weight: 700; }
+    details pre { margin: 0; padding: 0 16px 16px; color: #aebdca; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.76rem; }
+    .command-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; margin: 0 0 12px; }
+    .copy-button { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel-strong); cursor: pointer; font: 650 0.72rem/1 var(--mono); }
+    .copy-button:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    .risk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .risk { padding: 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+    .risk .severity { color: var(--warn); font: 700 0.7rem/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+    .risk h3 { margin: 11px 0 8px; font-size: 1rem; }
+    .risk p { margin: 0; color: var(--muted); font-size: 0.85rem; }
+
+    footer { padding: 28px 0 52px; border-top: 1px solid var(--line-soft); color: var(--faint); font-size: 0.78rem; }
+    footer .wrap { display: flex; justify-content: space-between; gap: 18px; }
+
+    @media (max-width: 1050px) {
+      .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .metric { min-height: 155px; }
+    }
+    @media (max-width: 760px) {
+      .wrap { width: min(100% - 24px, 1180px); }
+      .hero { padding-top: 48px; }
+      .hero-grid, .stage-grid { grid-template-columns: 1fr; gap: 20px; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .metric { min-height: 150px; padding: 15px; }
+      .metric .value { margin-top: 19px; }
+      .section-head { display: block; }
+      .section-note { margin-top: 13px; }
+      .stage { padding: 18px; border-radius: 18px; }
+      .stage-top { grid-template-columns: 52px minmax(0, 1fr); gap: 12px; }
+      .stage-no { font-size: 2rem; }
+      .status { grid-column: 2; width: fit-content; }
+      .rail { grid-template-columns: 1fr; }
+      .rail-arrow { transform: rotate(90deg); min-height: 28px; }
+      .risk-grid { grid-template-columns: 1fr; }
+      footer .wrap { display: block; }
+      footer span { display: block; margin-top: 7px; }
+    }
+    @media (max-width: 430px) {
+      h1 { font-size: 2.55rem; }
+      .metric-grid { grid-template-columns: 1fr; }
+      .metric { min-height: 135px; }
+      .stage-top { grid-template-columns: 1fr; }
+      .status { grid-column: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#report">跳到报告正文</a>
+
+  <header class="hero wrap">
+    <p class="eyebrow">Engineering report · 2026-08-03</p>
+    <h1>CoreBox runtime<br><span class="outline">lifecycle, measured.</span></h1>
+    <div class="hero-grid">
+      <div>
+        <p class="lede">一次从“后台窗口仍然工作”到“按需创建、空闲回收、原生事件驱动”的收口。报告逐阶段记录 Pi 子进程、隐藏 RAF、窗口生命周期、搜索 Worker 打包、mdls 事务、macOS 文件 watcher 与最终资源样本；历史负向结果保留，并用 2026-08-04 的修复后证据闭环。</p>
+        <div class="legend" aria-label="证据类型图例">
+          <span class="badge measured">本机测量</span>
+          <span class="badge test">自动化测试</span>
+          <span class="badge inspection">代码 / 日志检查</span>
+          <span class="badge public">公开来源</span>
+        </div>
+      </div>
+      <aside class="meta-card" aria-label="报告元数据">
+        <div class="meta-row"><span>基线</span><span>63476cd9a</span></div>
+        <div class="meta-row"><span>生命周期提交</span><span>378255ba9</span></div>
+        <div class="meta-row"><span>设备</span><span>Apple M4 Pro · arm64</span></div>
+        <div class="meta-row"><span>运行形态</span><span>unsigned packaged Electron</span></div>
+        <div class="meta-row"><span>样本</span><span>fresh isolated profiles</span></div>
+      </aside>
+    </div>
+  </header>
+
+  <section class="wrap metric-grid" aria-label="核心前后对比">
+    <article class="metric">
+      <div class="label">Idle Pi child</div>
+      <div class="value">1 → 0</div>
+      <div class="delta">启动期减少 1 个进程</div>
+      <div class="from">日志 + 进程组观测</div>
+    </article>
+    <article class="metric" style="--glow: rgba(103,232,249,.1)">
+      <div class="label">Hidden telemetry RAF</div>
+      <div class="value">120 → 0</div>
+      <div class="delta">−100% requests / 1 s</div>
+      <div class="from">同一隐藏 CoreBox 页面</div>
+    </article>
+    <article class="metric">
+      <div class="label">Settled process count</div>
+      <div class="value">8 → 5</div>
+      <div class="delta">−3 · hidden settings</div>
+      <div class="from">含 crashpad；可选 renderer 已回收</div>
+    </article>
+    <article class="metric" style="--glow: rgba(103,232,249,.1)">
+      <div class="label">Visible settings CPU</div>
+      <div class="value">77.0 → 59.7</div>
+      <div class="delta">−17.3 percentage points</div>
+      <div class="from">同机 5 × 1 s；仍属高占用</div>
+    </article>
+    <article class="metric" style="--glow: rgba(255,142,142,.12)">
+      <div class="label">Hidden-state RSS</div>
+      <div class="value">1172.89 → 790.89</div>
+      <div class="delta">−382.00 MiB</div>
+      <div class="from">CoreBox TTL 后；含 hidden main renderer</div>
+    </article>
+    <article class="metric" style="--glow: rgba(255,198,109,.11)">
+      <div class="label">Startup health</div>
+      <div class="value">363 → 364</div>
+      <div class="delta warn">+1 ms · 基本持平</div>
+      <div class="from">final 351 / 377 ms median</div>
+    </article>
+  </section>
+
+  <div class="stage-nav-shell">
+    <nav class="stage-nav wrap" aria-label="报告阶段导航">
+      <a href="#stage-0">00 基线</a>
+      <a href="#stage-1">01 Lazy Pi</a>
+      <a href="#stage-2">02 RAF</a>
+      <a href="#stage-3">03 可见性</a>
+      <a href="#stage-4">04 打包闭包</a>
+      <a href="#stage-5">05 端到端</a>
+      <a href="#measurements">测量表</a>
+      <a href="#deep-evaluation">深度评估</a>
+      <a href="#remediation">最终修复</a>
+      <a href="#competitors">竞品定位</a>
+      <a href="#reproduce">复现</a>
+    </nav>
+  </div>
+
+  <main id="report" class="wrap">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">Execution log</div>
+        <h2>六个阶段，逐层收口</h2>
+      </div>
+      <p class="section-note">每一阶段都区分“改了什么”“为何成立”“如何验证”。数值只在样本条件可比时计算差值；其余用行为契约表达。</p>
+    </div>
+
+    <section id="stage-0" class="stage" data-section="stage-0">
+      <div class="stage-top">
+        <div class="stage-no">00</div>
+        <div>
+          <h3>基线审计：先找到真正的常驻工作</h3>
+          <p class="stage-summary">启动成功并不等于空闲。基线包在 CoreBox 隐藏时仍启动 Pi utility process，性能遥测保留一条 120Hz RAF 链；搜索 Worker 还从错误的 chunks 目录启动。</p>
+        </div>
+        <span class="status">OBSERVED</span>
+      </div>
+      <div class="rail">
+        <div class="rail-card before">
+          <div class="rail-label">Before</div>
+          <strong>控制面初始化与重型执行面绑定</strong>
+          <p><code>AiCliOrchestrator.initialize()</code> 直接等待 <code>runtimeHost.start()</code>；隐藏 BrowserWindow 内 <code>document.hidden === false</code>，仅靠 Page Visibility 无法停表。</p>
+        </div>
+        <div class="rail-arrow" aria-hidden="true">→</div>
+        <div class="rail-card after">
+          <div class="rail-label">Audit output</div>
+          <strong>拆成 3 个独立根因</strong>
+          <p>进程生命周期、渲染调度生命周期、原生窗口可见性。打包搜索故障另作为运行闭包问题处理，不混成一个“CPU 优化”。</p>
+        </div>
+      </div>
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>直接证据</h4>
+          <ul>
+            <li>基线日志：<code>Pi runtime utility process spawned</code> 出现在启动健康检查附近。</li>
+            <li>隐藏 CoreBox 1 秒探针：性能模块发起 <strong>120</strong> 次 RAF，请求来自两条独立循环。</li>
+            <li>基线 Worker：请求 <code>out/main/chunks/search-index-worker.js</code>，随后 <code>MODULE_NOT_FOUND</code> 与 unhandled rejection。</li>
+            <li>基线进程组 5 次采样中位数：8 个进程、1508.75 MiB RSS、80.7% CPU。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>测量边界</h4>
+          <ul>
+            <li>macOS arm64、unsigned packaged app。</li>
+            <li>基线和最终版均使用全新隔离 profile。</li>
+            <li>CDP 已连接；采样为 5 次、间隔 1 秒。</li>
+            <li>CPU / RSS 是短窗口诊断，不是长期基准。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout">关键判断：Electron 隐藏 BrowserWindow 的 renderer 仍可报告页面可见。若只监听 <code>visibilitychange</code>，后台 CoreBox 的 RAF 所有权不会自动消失。</div>
+    </section>
+
+    <section id="stage-1" class="stage" data-section="stage-1">
+      <div class="stage-top">
+        <div class="stage-no">01</div>
+        <div>
+          <h3>Pi runtime：控制面常驻，执行面按需启动</h3>
+          <p class="stage-summary">保留工具注册、profile、会话恢复和审批控制面；删除初始化阶段的 utility process 启动。真正执行 run 时，由 <code>PiAgentRuntimeHost.execute()</code> 调用 <code>start()</code>。</p>
+        </div>
+        <span class="status">VERIFIED</span>
+      </div>
+      <div class="rail">
+        <div class="rail-card before">
+          <div class="rail-label">Before</div>
+          <strong><code>initialize() → runtimeHost.start()</code></strong>
+          <p>即使用户从不调用 AI，启动也创建名为 <code>Tuff Pi Agent Runtime</code> 的 utility process。</p>
+        </div>
+        <div class="rail-arrow" aria-hidden="true">→</div>
+        <div class="rail-card after">
+          <div class="rail-label">After</div>
+          <strong><code>execute() → start()</code></strong>
+          <p>初始化日志改为 <code>control plane initialized</code>；执行前仍经过 app-ready、worker path 和 restricted environment 检查。</p>
+        </div>
+      </div>
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>实现动作</h4>
+          <ul>
+            <li>移除 orchestrator 初始化中的 eager <code>await this.runtimeHost.start()</code>。</li>
+            <li>不引入备用 runtime、不弱化审批和预算边界。</li>
+            <li>保持 <code>execute()</code> 内 <code>await this.start()</code>，并复用并发 start promise。</li>
+            <li>停止路径仍负责 cancel active runs、kill child 与 reject pending readiness。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>涉及文件</h4>
+          <div class="paths">
+            <span class="path">src/main/modules/ai/ai-cli-orchestrator.ts</span>
+            <span class="path">src/main/modules/ai/pi-agent-runtime-host.ts</span>
+            <span class="path">src/main/modules/ai/pi-agent-runtime-host.test.ts</span>
+          </div>
+        </div>
+      </div>
+      <div class="callout good">本机结果：最终包启动日志没有 Pi spawn；相同采样条件下进程数中位数 8 → 7。75 个聚焦契约测试包含 orchestrator、Pi host、可见性、遥测、CoreBox IPC 和 Worker resolver。</div>
+    </section>
+
+    <section id="stage-2" class="stage" data-section="stage-2">
+      <div class="stage-top">
+        <div class="stage-no">02</div>
+        <div>
+          <h3>遥测 RAF：从“递归自驱动”改成“单一所有权”</h3>
+          <p class="stage-summary">性能遥测现在只允许一个 RAF handle；renderer inactive 或 document hidden 时同步 cancel、清空 frame baseline，并在恢复时重新基准，避免把休眠间隔误记为 jank。</p>
+        </div>
+        <span class="status">MEASURED</span>
+      </div>
+      <div class="rail">
+        <div class="rail-card before">
+          <div class="rail-label">Before</div>
+          <strong>重复 start 可产生多条递归链</strong>
+          <p>循环内部无 owner handle；隐藏 BrowserWindow 仍请求 frame。本机同页观测为 120 requests / second。</p>
+        </div>
+        <div class="rail-arrow" aria-hidden="true">→</div>
+        <div class="rail-card after">
+          <div class="rail-label">After</div>
+          <strong>一个 handle，明确 start / stop / rebase</strong>
+          <p><code>rafId !== null</code> 拒绝重入；inactive 时 cancel；active 时从新的 <code>performance.now()</code> 开始。</p>
+        </div>
+      </div>
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>行为契约</h4>
+          <ul>
+            <li>Telemetry disabled：不建立 observer、polling 或 RAF。</li>
+            <li>Native renderer inactive：取消 RAF 并触发一次 buffer flush。</li>
+            <li>Page hidden：同样取消 RAF；Page visible 只在 native active 时恢复。</li>
+            <li>重复初始化：<code>started</code> gate 保证无第二套 listener / polling。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>涉及文件</h4>
+          <div class="paths">
+            <span class="path">renderer/src/modules/telemetry/performance.ts</span>
+            <span class="path">renderer/src/modules/telemetry/renderer-activity.ts</span>
+            <span class="path">renderer/src/modules/telemetry/performance.test.ts</span>
+          </div>
+        </div>
+      </div>
+      <div class="callout good">确定性探针：基线 120 → 最终 0 次性能遥测 RAF / 1 秒，两个页面都报告 <code>document.hidden === false</code>。这个差值来自 native activity gate，而非浏览器自动节流。</div>
+    </section>
+
+    <section id="stage-3" class="stage" data-section="stage-3">
+      <div class="stage-top">
+        <div class="stage-no">03</div>
+        <div>
+          <h3>原生可见性握手：main process 是事实源</h3>
+          <p class="stage-summary">renderer 先安装 push listener，再向 main 查询当前 BrowserWindow 可见性；请求版本防止迟到响应覆盖更新鲜的 push。收到 native 信号后，document visibility 只保留为降级路径。</p>
+        </div>
+        <span class="status">TESTED</span>
+      </div>
+      <div class="rail">
+        <div class="rail-card before">
+          <div class="rail-label">Before</div>
+          <strong><code>useDocumentVisibility()</code> 代替窗口状态</strong>
+          <p>页面可见与 BrowserWindow 可见不是同一状态；renderer reload 后也可能错过一次 show / hide push。</p>
+        </div>
+        <div class="rail-arrow" aria-hidden="true">→</div>
+        <div class="rail-card after">
+          <div class="rail-label">After</div>
+          <strong>query + push + race version</strong>
+          <p><code>core-box:ui:get-visibility</code> 从 <code>BrowserWindow.isVisible()</code> 回答；<code>dom-ready</code> 与 <code>did-finish-load</code> 都补发状态。</p>
+        </div>
+      </div>
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>竞争处理顺序</h4>
+          <ul>
+            <li>注册 <code>CoreBoxEvents.ui.trigger</code> listener。</li>
+            <li>立即把 document state 作为暂时 fallback 注入 activity bus。</li>
+            <li>记录 request version，向 main 请求 native state。</li>
+            <li>若期间收到 push，版本递增；迟到 query response 被丢弃。</li>
+            <li>建立 native truth 后，不再让 document watcher 覆盖它。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>涉及文件</h4>
+          <div class="paths">
+            <span class="path">core-box/ipc.ts</span>
+            <span class="path">core-box/window.ts</span>
+            <span class="path">hooks/useVisibility.ts</span>
+            <span class="path">transport/events/types/core-box.ts</span>
+          </div>
+        </div>
+      </div>
+      <div class="callout">非目标：没有把通用 document visibility 删除。它仍服务 main renderer 与 transport 不可用时的 fallback；只是 CoreBox 一旦拿到 native signal，就不再混用两个事实源。</div>
+    </section>
+
+    <section id="stage-4" class="stage" data-section="stage-4">
+      <div class="stage-top">
+        <div class="stage-no">04</div>
+        <div>
+          <h3>打包闭包：官方插件种子与搜索 Worker 都必须可运行</h3>
+          <p class="stage-summary">性能提交在源码级通过后，真实包暴露两个独立问题：直接调用 Builder 缺少官方插件构建 / 同步前置步骤；Rollup 把 Worker client 移到 chunks 后，<code>__dirname</code> 不再是 worker sibling。</p>
+        </div>
+        <span class="status">PACKAGED</span>
+      </div>
+      <div class="rail">
+        <div class="rail-card before">
+          <div class="rail-label">Before</div>
+          <strong>原始 Builder + 单一 sibling 路径</strong>
+          <p>afterPack 严格拒绝缺失 seed；基线包启动 Worker 时请求不存在的 <code>out/main/chunks/search-index-worker.js</code>。</p>
+        </div>
+        <div class="rail-arrow" aria-hidden="true">→</div>
+        <div class="rail-card after">
+          <div class="rail-label">After</div>
+          <strong>canonical orchestration + verified candidates</strong>
+          <p>官方构建链先 build / sync 五个 seed；Worker resolver 按开发、chunk parent、cwd、app.asar 和 resources 输出候选逐一验证。</p>
+        </div>
+      </div>
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>官方种子完整性</h4>
+          <ul>
+            <li><code>clipboard-history@1.1.10</code></li>
+            <li><code>touch-quickops@0.1.0</code></li>
+            <li><code>touch-snippets@1.0.0</code></li>
+            <li><code>touch-translation@1.0.11</code></li>
+            <li><code>touch-intelligence@1.2.0</code></li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>Worker 候选顺序</h4>
+          <ul>
+            <li><code>__dirname/search-index-worker.js</code></li>
+            <li><code>__dirname/../search-index-worker.js</code></li>
+            <li><code>cwd/out/main/search-index-worker.js</code></li>
+            <li><code>resources/app.asar.unpacked/out/main/…</code></li>
+            <li><code>resources/app.asar/out/main/…</code></li>
+            <li><code>resources/out/main/…</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout danger">Fail closed 保留：所有候选都不是现存文件时，resolver 在构造 Worker 前抛出包含完整候选列表的错误；没有静默关闭索引，也没有复制到临时目录的旁路。</div>
+    </section>
+
+    <section id="stage-5" class="stage" data-section="stage-5">
+      <div class="stage-top">
+        <div class="stage-no">05</div>
+        <div>
+          <h3>端到端：包能启动、索引能写、搜索能看到结果</h3>
+          <p class="stage-summary">最终验收使用隔离 profile 启动 macOS arm64 包，经 CDP 输入 <code>Safari</code>，并从可见 DOM 确认本机应用结果，而不是只检查 input value。</p>
+        </div>
+        <span class="status">SMOKE PASS</span>
+      </div>
+      <div class="rail">
+        <div class="rail-card before">
+          <div class="rail-label">Baseline package</div>
+          <strong>健康检查通过，但搜索写入链失败</strong>
+          <p>启动 363 ms；随后 Worker <code>MODULE_NOT_FOUND</code>，并产生 search-index runtime 与 unhandled-rejection 错误。</p>
+        </div>
+        <div class="rail-arrow" aria-hidden="true">→</div>
+        <div class="rail-card after">
+          <div class="rail-label">Final package</div>
+          <strong>Worker live + Safari result visible</strong>
+          <p>两次 fresh profile 启动健康检查 351 / 377 ms；日志出现 Worker spawned，未出现 worker path、unhandled rejection 或 Pi eager spawn。</p>
+        </div>
+      </div>
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>可见搜索结果</h4>
+          <ul>
+            <li>Query：<code>Safari</code></li>
+            <li>Title：<strong>Safari 浏览器</strong></li>
+            <li>Path：<code>/Applications/Safari.app</code></li>
+            <li>Kind：<code>APPLICATION</code></li>
+            <li>Primary action：<code>Open</code></li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>质量门</h4>
+          <ul>
+            <li>6 个聚焦测试文件，75 tests passing。</li>
+            <li>CoreApp node + web typecheck passing。</li>
+            <li>Worker resolver scoped ESLint passing。</li>
+            <li>Transport events / CoreBox types scoped ESLint passing。</li>
+            <li>CDP 页面运行期 console / page errors：0。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout">启动时间判断：基线单次 363 ms；最终两次 351 / 377 ms，中位数 364 ms。样本数不足以宣称启动变快，结论是“没有观察到实质变化”。</div>
+    </section>
+
+    <section id="measurements" class="section-block" data-section="measurements">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Evidence matrix</div>
+          <h2>测量与契约</h2>
+        </div>
+        <p class="section-note">筛选器只影响表格显示，不改变原始内容。Measured 是本机观测；Test 是可重复行为契约；Inspection 是包或日志检查。</p>
+      </div>
+      <div class="filters" role="group" aria-label="证据筛选">
+        <button class="filter active" type="button" data-filter="all">全部</button>
+        <button class="filter" type="button" data-filter="measured">本机测量</button>
+        <button class="filter" type="button" data-filter="test">自动化测试</button>
+        <button class="filter" type="button" data-filter="inspection">检查</button>
+      </div>
+      <div class="table-shell">
+        <table aria-label="前后测量对比">
+          <thead><tr><th>阶段 / 指标</th><th>Before</th><th>After</th><th>Delta / contract</th><th>方法</th><th>强度</th></tr></thead>
+          <tbody>
+            <tr data-strength="inspection"><td><strong>Pi idle child</strong></td><td class="numeric">1</td><td class="numeric">0</td><td class="positive">−1 process</td><td>启动日志 + process group</td><td><span class="evidence-tag">inspection</span></td></tr>
+            <tr data-strength="measured"><td><strong>Hidden telemetry RAF / 1 s</strong></td><td class="numeric">120</td><td class="numeric">0</td><td class="positive">−100%</td><td>CDP 包装 requestAnimationFrame，按 bundle stack 归因</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="measured"><td><strong>Process count median</strong></td><td class="numeric">8</td><td class="numeric">7</td><td class="positive">−1</td><td>5 × 1 s <code>ps</code> process-group samples</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="measured"><td><strong>Aggregate CPU median</strong></td><td class="numeric">80.7%</td><td class="numeric">75.9%</td><td class="positive">−4.8 pp</td><td>同上；短窗口、高噪声</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="measured"><td><strong>Aggregate RSS median</strong></td><td class="numeric">1508.75 MiB</td><td class="numeric">1572.06 MiB</td><td class="negative">+63.31 MiB</td><td>同上；本轮未改善</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="measured"><td><strong>Startup health</strong></td><td class="numeric">363 ms</td><td class="numeric">351 / 377 ms<br>median 364 ms</td><td class="neutral">+1 ms</td><td>fresh isolated profiles；baseline n=1 / final n=2</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="inspection"><td><strong>Packaged search Worker</strong></td><td>spawn → MODULE_NOT_FOUND</td><td>spawn → ready for writes</td><td class="positive">runtime closure restored</td><td>packaged log inspection + Safari smoke</td><td><span class="evidence-tag">inspection</span></td></tr>
+            <tr data-strength="inspection"><td><strong>Official plugin seeds</strong></td><td>raw Builder may see stale / missing projection</td><td>5 versions verified by afterPack</td><td class="positive">strict validation preserved</td><td>canonical build orchestration + packaged resources</td><td><span class="evidence-tag">inspection</span></td></tr>
+            <tr data-strength="test"><td><strong>Native visibility race</strong></td><td>document-only</td><td>listener-first query + versioned push</td><td class="positive">late query cannot overwrite push</td><td>useVisibility focused regression</td><td><span class="evidence-tag">test</span></td></tr>
+            <tr data-strength="test"><td><strong>RAF ownership</strong></td><td>untracked recursion</td><td>single handle + cancel + rebase</td><td class="positive">one owner, no hidden scheduling</td><td>performance telemetry regression</td><td><span class="evidence-tag">test</span></td></tr>
+            <tr data-strength="measured"><td><strong>Visible SettingHeader WebGL</strong></td><td class="numeric">120 Hz path</td><td class="numeric">24.5 Hz observed</td><td class="positive">≤ 30 Hz cap</td><td>包装 WebGL <code>clear()</code>，2 s 内 49 次</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="measured"><td><strong>Hidden SettingHeader WebGL</strong></td><td class="numeric">持续调度</td><td class="numeric">0 draws / 2 s</td><td class="positive">suspended</td><td><code>app:window:hide</code> 后同一 renderer 探针</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="measured"><td><strong>Primary DB FDs after 146-app mdls</strong></td><td class="numeric">148</td><td class="numeric">11</td><td class="positive">−137 / −92.6%</td><td>同类 isolated profile；无 GC</td><td><span class="evidence-tag">measured</span></td></tr>
+            <tr data-strength="measured"><td><strong>Total numeric FDs</strong></td><td class="numeric">775</td><td class="numeric">166</td><td class="positive">−609 / −78.6%</td><td>final packaged macOS profile；无 CDP client</td><td><span class="evidence-tag">measured</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <details style="margin-top: 14px">
+        <summary>查看 5 次原始进程组样本</summary>
+        <pre>Baseline
+processes: [8, 9, 8, 8, 8]
+rss MiB:   [1509.03, 1532.48, 1508.55, 1508.67, 1508.75]
+cpu %:     [78.7, 86.1, 80.7, 77.4, 81.8]
+
+Final
+processes: [7, 7, 7, 7, 7]
+rss MiB:   [1572.55, 1572.06, 1572.06, 1569.73, 1569.75]
+cpu %:     [74.9, 75.9, 75.4, 80.0, 76.7]</pre>
+      </details>
+      <div class="callout danger">RSS 没有改善，最终样本反而高 63.31 MiB。后续应做 30+ 次冷 / 热启动基准，并按 main、GPU、renderer、utility 分角色采样；当前数据不能用于宣称整体内存优化。</div>
+    </section>
+
+    <section id="deep-evaluation" class="section-block" data-section="deep-evaluation">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Deep evaluation · wave 2</div>
+          <h2>重复启动、进程归因、145 次搜索与句柄压力</h2>
+        </div>
+        <p class="section-note">第二轮继续使用 canonical macOS arm64 包和隔离 profile。启动样本 n=5 + 5；进程采样覆盖可见设置页、后台、搜索负载、Worker 关闭后的稳定状态，以及运行 50+ 分钟后的文件描述符快照。</p>
+      </div>
+
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>Hot / cold startup</h4>
+          <ul>
+            <li>Hot 5 轮：<strong>P50 430 ms</strong>，P95 450 ms，范围 419–450 ms；renderer-ready P50 351 ms。</li>
+            <li>Cold 5 轮：<strong>P50 442 ms</strong>，P95 471 ms，范围 425–471 ms；renderer-ready P50 338 ms。</li>
+            <li>Cold 比 hot 的 startup-health 中位数慢 12 ms；当前样本量不足以推断长期分布。</li>
+            <li>Hot 慢模块均值：PrivacyLifecycle 47.4 ms、NativeCapabilities 45.2 ms、CoreBox 42.2 ms、Database 32.0 ms。</li>
+            <li>Cold 慢模块均值：Database 51.2 ms、PrivacyLifecycle 43.8 ms、CoreBox 41.6 ms、Storage 32.6 ms。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>为什么 10 轮都被 gate 判为 FAIL</h4>
+          <ul>
+            <li>10 轮均为 0 ERROR、1 WARN。</li>
+            <li>唯一告警：<code>Native screenshot protocol carrier unavailable reason=binding-unavailable</code>。</li>
+            <li>因此 benchmark gate 的 blocking issue 全部是 <code>startup_logs_nonzero</code>，不是启动超时或 Worker 崩溃。</li>
+            <li>这是 standing audit 已记录的 packaged native screenshot closure 风险；报告不抑制该警告。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="table-shell" style="margin-top: 18px">
+        <table aria-label="可见设置页与后台资源归因">
+          <thead><tr><th>场景</th><th>进程</th><th>CPU median</th><th>RSS median</th><th>主要归因</th></tr></thead>
+          <tbody>
+            <tr><td><strong>设置页可见</strong></td><td class="numeric">7</td><td class="numeric negative">77.0%</td><td class="numeric">1586.91 MiB</td><td>GPU 54.5%；普通 renderer 20.6%；SettingHeader WebGL 与性能遥测各一条 120Hz RAF。</td></tr>
+            <tr><td><strong>关闭设置页，后台稳定</strong></td><td class="numeric">6</td><td class="numeric positive">0.9%</td><td class="numeric">1172.89 MiB</td><td>GPU 0%；main 0.9%；隐藏 CoreBox / DivisionBox / MetaOverlay renderer 合计约 605 MiB。</td></tr>
+            <tr><td><strong>70 秒长空闲</strong></td><td class="numeric">6</td><td class="numeric positive">0.8% P50<br>1.3% P95</td><td class="numeric">1397.09 MiB</td><td>搜索 Worker 在 60 秒 idle timeout 后从 thread 3 / idle 转为 offline；CoreBox RAF 仍为 0。</td></tr>
+            <tr><td><strong>145 次搜索后清空</strong></td><td class="numeric">6</td><td class="numeric positive">0.8%</td><td class="numeric">1347.69 MiB</td><td>比初始后台高 174.8 MiB；后追加的 100 次只再高 7.3 MiB，暂未看到线性增长。</td></tr>
+            <tr><td><strong>50+ 分钟后 FD 快照</strong></td><td class="numeric">6</td><td class="numeric">—</td><td class="numeric negative">775 numeric FDs</td><td>主进程持有 294 个 <code>database.db</code>、36 个 <code>database-aux.db</code> 句柄；最高 FD 1032，超过代码中的 256 告警阈值。15 秒四次采样保持平台，但单轮证据不足以定性为泄漏。</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-shell" style="margin-top: 18px">
+        <table aria-label="搜索交互压力结果">
+          <thead><tr><th>负载</th><th>样本</th><th>失败 / stale</th><th>P50</th><th>P95</th><th>最大值</th></tr></thead>
+          <tbody>
+            <tr><td><strong>完整 query 轮换</strong><br>Safari / Terminal / Notes / Xcode / System Settings</td><td class="numeric">25</td><td class="numeric positive">0</td><td class="numeric">89.5 ms</td><td class="numeric">171.1 ms</td><td class="numeric">171.6 ms</td></tr>
+            <tr><td><strong>逐字符快速输入</strong><br>每字符间隔 5 ms，验证最终结果 100 ms 稳定</td><td class="numeric">20</td><td class="numeric positive">0</td><td class="numeric">134.0 ms</td><td class="numeric">210.9 ms</td><td class="numeric">260.3 ms</td></tr>
+            <tr><td><strong>耐久轮换</strong><br>连续 100 次完整 query</td><td class="numeric">100</td><td class="numeric positive">0</td><td class="numeric">90.3 ms</td><td class="numeric">171.1 ms</td><td class="numeric">175.7 ms</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout good">长空闲契约成立：70 秒窗口 CPU P50 0.8%、P95 1.3%；SearchIndexWorker 从 idle/threadId=3 变为 offline/threadId=null；隐藏 CoreBox 在 <code>document.visibilityState === 'visible'</code> 时仍保持 0 RAF；启动至今未创建 Pi utility process，也没有 Worker path / unhandled-rejection 错误。</div>
+      <div class="callout">结论更新：此前约 77% 的“空闲 CPU”其实来自<strong>仍可见的设置页</strong>，不是后台驻留。真正关闭设置页后 CPU 已接近 1%；下一优先级应转向设置页 WebGL 的帧率 / 可见性节流、三个预创建 renderer 带来的约 605 MiB 后台 RSS，以及主进程超过内部告警阈值的数据库文件描述符压力。</div>
+
+      <details style="margin-top: 14px">
+        <summary>深度评估原始证据目录</summary>
+        <pre>Hot startup:
+docs/engineering/reports/startup-packaged-hot-runs-2026-08-03-corebox-deep/
+
+Cold startup:
+docs/engineering/reports/startup-packaged-cold-runs-2026-08-03-corebox-deep/
+
+Runtime profile:
+/tmp/tuff-corebox-deep-evaluation-20260803
+
+条件：Apple M4 Pro / macOS arm64 / packaged Electron / CDP attached / 120Hz display
+文件描述符快照：
+numeric FDs: 775；database.db: 294；database-aux.db: 36；max FD: 1032
+代码告警阈值：DB_OPEN_FD_WARN_THRESHOLD = 256
+15 秒四次 lsof 采样保持平台；本轮只确认高句柄压力，不直接定性为泄漏。
+
+注意：ps %CPU 为短窗口诊断值；RSS 包含 Chromium 与 V8 高水位，不等同于可回收 working set。</pre>
+      </details>
+    </section>
+
+    <section id="remediation" class="section-block" data-section="remediation">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Remediation · wave 3 · 2026-08-04</div>
+          <h2>renderer、事务与 watcher 一起收口</h2>
+        </div>
+        <p class="section-note">第三轮沿用 canonical macOS arm64 包和同一 disposable profile。数据库修复在自然 10 分钟 mdls tick 上验证；最终平台分流包随后复用该 profile 验证总 FD、搜索与隐藏回收。</p>
+      </div>
+
+      <div class="stage-grid">
+        <div class="subcard">
+          <h4>可选 renderer 按需拥有</h4>
+          <ul>
+            <li>fresh start 未创建 CoreBox、DivisionBox 或 MetaOverlay renderer；日志明确显示 DivisionBox pool 为 on-demand。</li>
+            <li>CoreBox 首次 show 后创建，Safari 与 Calculator 均返回真实应用结果；20 次 25 ms 快速输入最终稳定在 Calculator，未见 stale result。</li>
+            <li>MetaOverlay 连续 3 轮 show → action → hide 均通过；每轮按 is-visible 等待 400–500 ms 完成按需 renderer 装载，action 返回 success，hide 后均回到不可见。</li>
+            <li>immediate hide 后 60 秒出现 <code>Destroyed hidden CoreBox after idle timeout</code>；进程集合回到 main、GPU、network、main renderer 与 crashpad。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>mdls / reconcile 连接有界</h4>
+          <ul>
+            <li>App metadata 每 50 条复用一个 LibSQL transaction；146 个 mdls 更新总落库 22 ms。</li>
+            <li>Reconcile upserts / deletes 由 production store adapter 进入 provider-level writer batch，不再 146 个 delta 各开一次 transaction。</li>
+            <li>自然 mdls tick 后 <code>database.db</code> numeric FDs 为 <strong>11</strong>，旧路径同规模为 148；没有依赖 monkey patch 或 forced GC。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>macOS watcher 回到 FSEvents</h4>
+          <ul>
+            <li>Chokidar 4 已移除 bundled FSEvents，递归根会对每个发现文件建立 watcher；本机 Pictures / Music / Movies 立即把总 FD 推到 400+。</li>
+            <li>Windows / Linux 保持 Chokidar 4；macOS 通过 package alias 选择 Chokidar 3.6 + packaged <code>fsevents.node</code>。</li>
+            <li>最终 packaged start 总 numeric FDs 为 <strong>166</strong>；连接 CDP、打开 CoreBox 并完成搜索后为 192，均低于 256 内部阈值。</li>
+          </ul>
+        </div>
+        <div class="subcard">
+          <h4>设置页仍高，但不再无上限</h4>
+          <ul>
+            <li>可见页 2 秒内观测 49 次 WebGL clear，即 24.5 Hz；低于 30 Hz cap。</li>
+            <li>同一 renderer 收到 native window hide 后 2 秒内 0 次 draw。</li>
+            <li>可见设置页进程组 CPU P50 <strong>59.7%</strong>，较 wave 2 的 77.0% 下降 17.3 pp；隐藏稳定态 P50 <strong>0.75%</strong>。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="table-shell" style="margin-top: 18px">
+        <table aria-label="最终修复运行证据">
+          <thead><tr><th>场景</th><th>进程</th><th>CPU / interaction</th><th>RSS</th><th>FD / lifecycle</th></tr></thead>
+          <tbody>
+            <tr><td><strong>设置页可见</strong></td><td class="numeric">5</td><td class="numeric neutral">59.7% P50</td><td>未与旧 RSS 短样本混算</td><td>WebGL 24.5 Hz；上限 30 Hz</td></tr>
+            <tr><td><strong>CoreBox 搜索 + CDP</strong></td><td class="numeric">6</td><td>Safari 结果 settle 437.9 ms；其中 harness quiet window 220 ms</td><td class="numeric">约 1052 MiB</td><td class="numeric positive">192 numeric FDs</td></tr>
+            <tr><td><strong>隐藏设置页 + CoreBox TTL</strong></td><td class="numeric">5</td><td class="numeric positive">0.75% P50</td><td class="numeric positive">790.89 MiB</td><td>CoreBox renderer exited；192 numeric FDs</td></tr>
+            <tr><td><strong>关闭设置 renderer</strong></td><td class="numeric">4</td><td class="numeric positive">0.7%</td><td class="numeric positive">527.95 MiB</td><td class="numeric positive">177 numeric FDs</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout good">阈值闭环：旧深度评估为 775 numeric FDs / 294 primary DB FDs；最终无 CDP packaged start 为 166 / 8，自然 mdls 证据为 11 primary DB FDs。搜索、隐藏和 TTL 回收均未把总 FD 推回 256 以上。</div>
+      <div class="callout">仍不宣称“轻量”：隐藏 main renderer 时约 790.89 MiB RSS，可见设置页约 59.7% CPU。相较 TinyCast 的 native 资源心智仍有明显差距；下一步应减少 main renderer 与 WebGL 本身的成本，而不是再预创建窗口换首开延迟。</div>
+    </section>
+
+    <section id="competitors" class="section-block" data-section="competitors">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Market context</div>
+          <h2>与 uTools / Raycast / TinyCast / Rubick 的定位差异</h2>
+        </div>
+        <p class="section-note">这一节是公开能力定位，不是同机资源基准。当前机器未安装四个竞品，因此没有伪造 CPU / RSS 数字；TinyCast 的资源描述明确标为作者自报。Tuff 数字更新为 wave 3 本机 packaged 样本。</p>
+      </div>
+      <div class="table-shell competitor">
+        <table aria-label="Launcher 公开能力定位对比">
+          <thead><tr><th>维度</th><th>Tuff</th><th>uTools</th><th>Raycast</th><th>TinyCast</th><th>Rubick</th></tr></thead>
+          <tbody>
+            <tr><td>平台</td><td>项目构建目标覆盖 macOS / Windows / Linux。<span class="evidence-tag">repo inspection</span></td><td>官方提供 Windows 7/10/11、macOS 10.15+、Linux 下载。<span class="evidence-tag">public</span></td><td>macOS；Windows 为 beta。<span class="evidence-tag">public</span></td><td>macOS only，SwiftUI + AppKit。<span class="evidence-tag">public</span></td><td>官方仓库提供 macOS / Windows / Linux release。<span class="evidence-tag">public</span></td></tr>
+            <tr><td>扩展模型</td><td>插件系统、bundled official seeds、TuffEx SDK；包阶段严格校验运行闭包。</td><td>官方称 3000+ 插件，并支持自然语言生成插件。<span class="evidence-tag">public</span></td><td>Store + API；扩展使用 TypeScript、React、Node.js。<span class="evidence-tag">public</span></td><td>聚焦内建 essentials 与 custom shell commands，不主打通用插件商店。<span class="evidence-tag">public</span></td><td>npm package 模式插件、插件市场、system plugin。<span class="evidence-tag">public</span></td></tr>
+            <tr><td>核心搜索</td><td>本机已验证应用搜索；代码还覆盖文件索引、插件 feature、动作和 progressive results。</td><td>全局万能搜索框 + 插件生态；文件查找等以插件提供。<span class="evidence-tag">public</span></td><td>可扩展 launcher，键盘优先；能力通过 core tools 与 Store extensions 组合。<span class="evidence-tag">public</span></td><td>fuzzy app search、calculator、clipboard、snippets、custom commands。<span class="evidence-tag">public</span></td><td>应用、插件、文件和文件夹搜索；支持拼音 / 缩写应用搜索。<span class="evidence-tag">public</span></td></tr>
+            <tr><td>AI / Agent</td><td>host-governed Pi runtime、预算 / 审批、MCP registry、workflow / delegation；本轮将执行进程改为按需。</td><td>AI 插件生成与 AI 类插件生态。<span class="evidence-tag">public</span></td><td>官方 AI 与 OS / extensions 结合，并提供多模型能力。<span class="evidence-tag">public</span></td><td>官方定位是本地、无 telemetry 的轻量 launcher；未宣称 AI agent。<span class="evidence-tag">public</span></td><td>官方 README 未宣称内建 AI agent。<span class="evidence-tag">public</span></td></tr>
+            <tr><td>架构 / 开源</td><td>Electron + Vue / TypeScript workspace；本报告关注主进程、renderer、utility、worker 的生命周期边界。</td><td>本次查阅的官方产品页未声明开源或实现技术。</td><td>产品闭源；extension API / docs 公开，扩展基于 React / Node / TypeScript。</td><td>Swift，AGPL-3.0，零第三方依赖（作者声明）。<span class="evidence-tag">public</span></td><td>Electron + TypeScript，MIT。<span class="evidence-tag">public</span></td></tr>
+            <tr><td>资源证据</td><td>本机 wave 3：隐藏设置页 5 processes、790.89 MiB RSS、0.75% CPU P50；关闭 main renderer 后 4 processes、527.95 MiB。可见设置页仍为 59.7% CPU P50；只用于本项目 before / after。</td><td>未在同机安装与测量。</td><td>未在同机安装与测量。</td><td>作者 README 自报约 3 MB on disk、under 100 MB RAM、no background CPU churn；未在本机复测。</td><td>未在同机安装与测量。</td></tr>
+            <tr><td>本轮启示</td><td><strong>优势：</strong>跨平台、可扩展、搜索与 agent 控制面可统一。<br><strong>代价：</strong>Electron 多进程和多 renderer 常驻成本仍明显。</td><td>插件规模和跨平台成熟度是直接竞争压力。</td><td>键盘体验、native 性能叙事、Store 和 AI 产品化是体验标杆。</td><td>证明“少而精 + native”可以建立极清晰的资源心智。</td><td>开源、跨平台、npm 插件与 WebDAV 同步适合可定制场景。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="source-list" aria-label="竞品来源">
+        <a href="https://www.u-tools.cn/" target="_blank" rel="noreferrer">uTools 官方产品页</a>
+        <a href="https://www.u-tools.cn/download/" target="_blank" rel="noreferrer">uTools 官方下载与平台支持</a>
+        <a href="https://www.raycast.com/" target="_blank" rel="noreferrer">Raycast 官方产品页</a>
+        <a href="https://developers.raycast.com/" target="_blank" rel="noreferrer">Raycast 官方开发者文档</a>
+        <a href="https://www.raycast.com/core-features/ai" target="_blank" rel="noreferrer">Raycast AI 官方页面</a>
+        <a href="https://abue-ammar.github.io/tinycast/" target="_blank" rel="noreferrer">TinyCast 官方页面</a>
+        <a href="https://github.com/abue-ammar/tinycast" target="_blank" rel="noreferrer">TinyCast 官方仓库 / README</a>
+        <a href="https://github.com/rubickCenter/rubick" target="_blank" rel="noreferrer">Rubick 官方仓库 / README</a>
+      </div>
+    </section>
+
+    <section class="section-block" aria-labelledby="risks-title">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">No hidden debt</div>
+          <h2 id="risks-title">剩余风险</h2>
+        </div>
+        <p class="section-note">修复目标是生命周期与打包闭包，不把邻近风险顺手扩成新项目。</p>
+      </div>
+      <div class="risk-grid">
+        <article class="risk"><div class="severity">High · measured</div><h3>设置页可见时 GPU 占用仍高</h3><p>30 Hz cap 将进程组 CPU P50 从 wave 2 的 77.0% 降到 59.7%，WebGL 实测 24.5 Hz，native hide 后为 0 draws；但可见页接近 60% 仍不可称为轻量。</p></article>
+        <article class="risk"><div class="severity">Medium · measured</div><h3>后台内存改善但仍重</h3><p>可选 renderer 按需创建并由 TTL 回收后，隐藏设置页稳定态从 1172.89 MiB 降到 790.89 MiB；关闭 main renderer 后为 527.95 MiB。Electron 基础成本仍显著高于 native launcher 的资源心智。</p></article>
+        <article class="risk"><div class="severity">Medium · soak</div><h3>FD 已回阈值内，仍需长时回归</h3><p>provider batching 与 macOS FSEvents 将总 numeric FDs 从 775 降到无 CDP 的 166，146-app mdls 后 primary DB FDs 从 148 降到 11。当前通过 10+ 分钟与搜索 / TTL 验证；仍需 CI 或 nightly 长时 soak 防回归。</p></article>
+        <article class="risk"><div class="severity">Medium · scope</div><h3>竞品资源未同机</h3><p>四个竞品当前未安装。本报告只比较公开能力；任何资源结论都必须在同架构、同 settling window、同操作脚本下重测。</p></article>
+      </div>
+    </section>
+
+    <section id="reproduce" class="section-block" data-section="reproduce">
+      <div class="section-head">
+        <div>
+          <div class="section-kicker">Reproducibility</div>
+          <h2>复现命令与证据位置</h2>
+        </div>
+        <p class="section-note">profile 路径均位于 <code>/tmp</code>，没有读取或修改生产用户数据库。</p>
+      </div>
+      <div class="command-head">
+        <span class="section-note">点击复制完整命令集。</span>
+        <button id="copy-commands" class="copy-button" type="button">复制命令</button>
+      </div>
+      <details open>
+        <summary>质量门</summary>
+        <pre data-command>corepack pnpm -C apps/core-app exec vitest run \
+  src/main/modules/ai/ai-cli-orchestrator.test.ts \
+  src/main/modules/ai/pi-agent-runtime-host.test.ts \
+  src/main/modules/box-tool/core-box/ipc.test.ts \
+  src/renderer/src/modules/box/adapter/hooks/useVisibility.test.ts \
+  src/renderer/src/modules/telemetry/performance.test.ts \
+  src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts \
+  src/main/modules/box-tool/addon/apps/app-provider.test.ts \
+  src/main/modules/box-tool/search-engine/indexing-store-adapter.test.ts \
+  src/main/modules/box-tool/file-system-watcher/file-system-watcher.test.ts
+
+corepack pnpm -C apps/core-app run typecheck
+corepack pnpm -C apps/core-app exec eslint \
+  src/main/modules/box-tool/search-engine/workers/search-index-worker-client.ts \
+  src/main/modules/box-tool/search-engine/workers/search-index-worker-client.test.ts
+
+corepack pnpm exec eslint \
+  packages/utils/transport/events/index.ts \
+  packages/utils/transport/events/types/core-box.ts</pre>
+      </details>
+      <details>
+        <summary>Canonical package 与搜索 smoke</summary>
+        <pre data-command>CSC_IDENTITY_AUTO_DISCOVERY=false TUFF_OFFICIAL_RELEASE_BUILD=false \
+  corepack pnpm -C apps/core-app run build:beta:mac -- --dir
+
+corepack pnpm -C apps/core-app run visible:experience:ai-ask-probe -- \
+  --remoteDebuggingUrl http://127.0.0.1:9992/json/list \
+  --input Safari \
+  --output /tmp/tuff-corebox-canonical-smoke-20260803/corebox-search.json \
+  --compact</pre>
+      </details>
+      <details>
+        <summary>隔离 profile 与日志</summary>
+        <pre>Baseline profile:
+/tmp/tuff-corebox-baseline-packaged-20260803
+
+Final profiles:
+/tmp/tuff-packaged-runtime-report-20260803
+/tmp/tuff-corebox-final-comparison-20260803
+/tmp/tuff-corebox-canonical-smoke-20260803
+/tmp/tuff-performance-remediation-20260803-v2
+
+Final search evidence:
+/tmp/tuff-corebox-canonical-smoke-20260803/corebox-search.json
+
+Final log:
+/tmp/tuff-corebox-canonical-smoke-20260803/tuff/logs/D.2026-08-03.log</pre>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap"><strong>Tuff Engineering · CoreBox Runtime Lifecycle</strong><span>Observed facts span 2026-08-03—04 · public sources re-read on 2026-08-03</span></div>
+  </footer>
+
+  <script>
+    (() => {
+      const filters = Array.from(document.querySelectorAll('[data-filter]'));
+      const evidenceRows = Array.from(document.querySelectorAll('tr[data-strength]'));
+      filters.forEach((button) => {
+        button.addEventListener('click', () => {
+          const filter = button.dataset.filter;
+          filters.forEach((item) => item.classList.toggle('active', item === button));
+          evidenceRows.forEach((row) => {
+            row.hidden = filter !== 'all' && row.dataset.strength !== filter;
+          });
+        });
+      });
+
+      const links = Array.from(document.querySelectorAll('.stage-nav a'));
+      const observed = links
+        .map((link) => document.querySelector(link.getAttribute('href')))
+        .filter(Boolean);
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (!visible) return;
+          links.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`));
+        }, { rootMargin: '-18% 0px -68% 0px', threshold: [0.01, 0.2, 0.5] });
+        observed.forEach((section) => observer.observe(section));
+      }
+
+      const copyButton = document.querySelector('#copy-commands');
+      copyButton?.addEventListener('click', async () => {
+        const commands = Array.from(document.querySelectorAll('[data-command]'))
+          .map((node) => node.textContent.trim())
+          .join('\n\n');
+        try {
+          await navigator.clipboard.writeText(commands);
+          copyButton.textContent = '已复制';
+          window.setTimeout(() => { copyButton.textContent = '复制命令'; }, 1600);
+        } catch {
+          copyButton.textContent = '复制失败';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

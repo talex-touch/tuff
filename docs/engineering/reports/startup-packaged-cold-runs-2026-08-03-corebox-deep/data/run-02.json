@@ -1,0 +1,78 @@
+{
+  "runNo": 2,
+  "timestamp": "2026-08-03T12:23:14.934Z",
+  "timeoutMs": 180000,
+  "traceDeprecation": false,
+  "target": "packaged",
+  "profile": "cold",
+  "launchMethod": "exec",
+  "command": "\"/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff\"",
+  "userDataDir": "/Users/tagzixian/Workspace/Projects/talex-touch/docs/engineering/reports/startup-packaged-cold-runs-2026-08-03-corebox-deep/user-data/run-02",
+  "artifact": {
+    "appPath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appBundlePath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app",
+    "executablePath": "/Users/tagzixian/Workspace/Projects/talex-touch/apps/core-app/dist/mac-arm64/tuff.app/Contents/MacOS/tuff",
+    "appExists": true,
+    "executableExists": true,
+    "executable": true,
+    "expectedVersion": "2.4.14-beta.2",
+    "bundleVersion": "2.4.14-beta.2",
+    "versionMatches": true
+  },
+  "wallTimeMs": 4219,
+  "processExitCode": 0,
+  "processSignal": null,
+  "timedOut": false,
+  "allModulesLoadedMs": null,
+  "startupHealthMs": 442,
+  "startupAnalyticsMs": null,
+  "rendererReadyMs": 330,
+  "warnCount": 1,
+  "errorCount": 0,
+  "warnLines": [
+    "[20:23:15.606] [WARN] [NativeCapabilities] Native screenshot protocol carrier unavailable reason=binding-unavailable"
+  ],
+  "errorLines": [],
+  "deprecations": [],
+  "topSlowModules": [
+    {
+      "name": "Database",
+      "durationMs": 50
+    },
+    {
+      "name": "PrivacyLifecycle",
+      "durationMs": 45
+    },
+    {
+      "name": "CoreBox",
+      "durationMs": 44
+    },
+    {
+      "name": "Storage",
+      "durationMs": 32
+    },
+    {
+      "name": "PluginModule",
+      "durationMs": 27
+    },
+    {
+      "name": "TrayManager",
+      "durationMs": 23
+    },
+    {
+      "name": "AnalyticsModule",
+      "durationMs": 23
+    },
+    {
+      "name": "NativeCapabilitiesModule",
+      "durationMs": 14
+    }
+  ],
+  "maxEventLoopLagMs": null,
+  "maxSlowIpcMs": null,
+  "isPass": false,
+  "blockingIssues": [
+    "startup_logs_nonzero"
+  ],
+  "analysisCutoffReached": true
+}
