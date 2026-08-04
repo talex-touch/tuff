@@ -80,8 +80,9 @@ v2 组件：`C2/SideItem`（`C1zl3`）、`C2/Row`（`I6U5E`）、`C2/Btn`（`mfG
 ## 跨子任务验收标准
 
 - [ ] 两块 v2 画板对应的壳层在 light / dark 下都不出现对比度不足或布局溢出
-- [ ] 仓库内不再存在 layout 切换能力：无 `layouts-definition`、无 `useDynamicTuffLayout`、无布局原子编辑器/预设导入导出/远程预设，`appSettingsData.layout` 字段已清理
+- [ ] core-app 内不再存在 layout 切换能力：无 `layouts-definition`、无 `useDynamicTuffLayout`、无布局原子编辑器/预设导入导出/远程预设，`appSettingsData.layout` 的读写点已清零（schema 字段保留，见子任务 ① 的边界修正）
 - [ ] 主题、壁纸、窗口效果三项能力仍可用，且已归入设置「外观」
+- [ ] CoreBox 画布定制（`coreBoxCanvasConfig`）未被误删，入口仍可到达
 - [ ] 设置页不再有单页长滚动，分类切换不丢失滚动位置
 - [ ] 现有 18 个 `Setting*.vue` 的每一项设置都有归属分类，无遗漏（以映射表逐项核对）
 - [ ] 首页可发出一条消息、收到流式回复、刷新后历史仍在

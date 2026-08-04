@@ -1,18 +1,12 @@
 /**
  * Layout Module
  *
- * Provides layout management functionality including:
- * - Layout registry and configuration
- * - Dynamic layout loading
- * - Layout switching utilities
- * - Layout atoms (presets, resolver, useLayoutAtoms)
- * - Preset export/import
+ * The switchable-layout system (registry, dynamic loading, layout atoms, preset
+ * import/export) was removed when the app collapsed to a single fixed shell. What remains
+ * are the shell-adjacent capabilities that outlived it:
+ * - Secondary navigation (back affordance)
+ * - Wallpaper state and controls
  */
-
-export * from './atoms'
-export * from './preset'
-export type { LayoutConfig, default as layoutsConfig } from './layouts-definition'
-export { clearLayoutCache, useDynamicTuffLayout } from './useDynamicTuffLayout'
 
 export { useSecondaryNavigation } from './useSecondaryNavigation'
 export { useWallpaper } from './useWallpaper'
