@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 45
-- **Last Active**: 2026-08-02
+- **Total Sessions**: 46
+- **Last Active**: 2026-08-04
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1529 | Active |
+| `journal-1.md` | ~1564 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 46 | 2026-08-04 | CoreBox packaged runtime performance closure | `15a47a91c`, `92f7eeb0b`, `0619fe42e` | `master` |
 | 45 | 2026-08-02 | 推送 CoreApp 快捷键作用域修复 | `d8549845f` | `master` |
 | 44 | 2026-08-02 | 修正 CoreApp 快捷键作用域 | `d8549845f` | `master` |
 | 43 | 2026-08-02 | Publish v2.4.14-beta.2 GitHub Release | `154508d50` | `master` |

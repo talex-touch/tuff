@@ -1527,3 +1527,38 @@ Prepared bilingual release notes and version metadata, published annotated tag v
 ### Next Steps
 
 - None - task complete
+
+
+## Session 46: CoreBox packaged runtime performance closure
+
+**Date**: 2026-08-04
+**Task**: CoreBox packaged runtime performance closure
+**Branch**: `master`
+
+### Summary
+
+Closed packaged search runtime, bounded optional renderer, database and macOS watcher lifecycles, validated packaged search and resource behavior, and published the performance report.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `15a47a91c` | (see git log) |
+| `92f7eeb0b` | (see git log) |
+| `0619fe42e` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
