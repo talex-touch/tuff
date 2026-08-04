@@ -925,14 +925,11 @@
   "flatController": {
     "useNative": "使用原生窗口控件"
   },
-  "flatNavBar": {
-    "main": "主要",
-    "dashboard": "仪表盘",
-    "store": "市场",
-    "plugin": "插件",
-    "details": "详细信息",
+  "shell": {
+    "search": "搜索",
+    "newChat": "新建对话",
     "intelligence": "智能",
-    "style": "样式",
+    "store": "市场",
     "setting": "设置"
   },
   "store": {

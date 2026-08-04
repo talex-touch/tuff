@@ -925,15 +925,12 @@
   "flatController": {
     "useNative": "Use native window control instead"
   },
-  "flatNavBar": {
-    "main": "MAIN",
-    "dashboard": "Dashboard",
-    "store": "Store",
-    "plugin": "Plugin",
-    "details": "Details",
+  "shell": {
+    "search": "Search",
+    "newChat": "New Chat",
     "intelligence": "Intelligence",
-    "style": "Style",
-    "setting": "Setting"
+    "store": "Store",
+    "setting": "Settings"
   },
   "store": {
     "title": "Plugin Store",

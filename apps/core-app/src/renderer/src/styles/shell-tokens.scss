@@ -1,0 +1,104 @@
+/**
+ * Shell design tokens.
+ *
+ * Values come from `docs/design/corebox/v2.5.0.pen` (themes axis `mode: light|dark`).
+ * They intentionally diverge from the Element-derived `--tx-*` palette: the shell uses an
+ * Apple-leaning neutral ramp (`#1D1D1F` / `#2B7FD9`) rather than `#303133` / `#409eff`.
+ * Aliasing `--tx-*` here would silently render the wrong colors.
+ *
+ * High-contrast mode is the exception: `html.contrast` is a user-toggleable accessibility
+ * addon (`themeStyle.theme.addon.contrast`), so the shell re-points to the purpose-built
+ * `--tx-*` contrast ramp instead of keeping the design values.
+ */
+
+:root {
+  --shell-bg: #ffffff;
+  --shell-surface: #f7f7f8;
+  --shell-surface-2: #efeff1;
+
+  --shell-border: #e5e5e5;
+  --shell-border-strong: #d2d2d4;
+
+  --shell-text-primary: #1d1d1f;
+  --shell-text-regular: #48484a;
+  --shell-text-secondary: #6e6e73;
+  --shell-text-muted: #8a8a8f;
+
+  --shell-primary: #2b7fd9;
+  --shell-primary-soft: #2b7fd91a;
+  --shell-on-primary: #ffffff;
+
+  --shell-shadow: #0000000f;
+
+  --shell-radius-sm: 6px;
+  --shell-radius-md: 10px;
+  --shell-radius-lg: 14px;
+  --shell-radius-xl: 20px;
+  --shell-radius-2xl: 24px;
+  --shell-radius-full: 999px;
+
+  --shell-space-1: 4px;
+  --shell-space-2: 8px;
+  --shell-space-3: 12px;
+  --shell-space-4: 16px;
+  --shell-space-5: 24px;
+  --shell-space-6: 32px;
+  --shell-space-7: 48px;
+
+  --shell-fs-caption: 11px;
+  --shell-fs-sm: 12px;
+  --shell-fs-body: 13px;
+  --shell-fs-md: 14px;
+  --shell-fs-lg: 17px;
+  --shell-fs-title: 22px;
+  --shell-fs-h1: 26px;
+  --shell-fs-display: 30px;
+
+  --shell-sidebar-width: 260px;
+  --shell-topbar-height: 52px;
+}
+
+.dark {
+  --shell-bg: #141414;
+  --shell-surface: #1c1c1e;
+  --shell-surface-2: #2c2c2e;
+
+  --shell-border: #333335;
+  --shell-border-strong: #48484a;
+
+  --shell-text-primary: #f5f5f7;
+  --shell-text-regular: #d1d1d6;
+  --shell-text-secondary: #aeaeb2;
+  --shell-text-muted: #8a8a8e;
+
+  --shell-primary: #4e9ae6;
+  --shell-primary-soft: #4e9ae626;
+
+  --shell-shadow: #00000047;
+}
+
+html.contrast {
+  --shell-border: var(--tx-border-color);
+  --shell-border-strong: var(--tx-border-color);
+
+  --shell-text-primary: var(--tx-text-color-primary);
+  --shell-text-regular: var(--tx-text-color-regular);
+  --shell-text-secondary: var(--tx-text-color-secondary);
+  --shell-text-muted: var(--tx-text-color-placeholder);
+
+  --shell-primary: var(--tx-color-primary);
+  --shell-primary-soft: var(--tx-color-primary-light-9);
+}
+
+html.dark.contrast {
+  --shell-border: var(--tx-border-color);
+  --shell-border-strong: var(--tx-border-color);
+
+  --shell-text-primary: var(--tx-text-color-primary);
+  --shell-text-regular: var(--tx-text-color-regular);
+  --shell-text-secondary: var(--tx-text-color-secondary);
+  --shell-text-muted: var(--tx-text-color-placeholder);
+
+  --shell-primary: var(--tx-color-primary);
+  --shell-primary-soft: var(--tx-color-primary-dark-2);
+}

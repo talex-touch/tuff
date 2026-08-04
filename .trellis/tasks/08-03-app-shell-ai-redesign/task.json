@@ -1,0 +1,31 @@
+{
+  "id": "app-shell-ai-redesign",
+  "name": "app-shell-ai-redesign",
+  "title": "app 壳层与设置界面 AI 化全面重构",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "TalexDreamSoul",
+  "assignee": "TalexDreamSoul",
+  "createdAt": "2026-08-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "master",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "08-04-shell-fixed-frame",
+    "08-04-settings-ia-primitives",
+    "08-04-settings-rewrite",
+    "08-04-home-conversation"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

@@ -27,6 +27,8 @@ import '~/modules/plugin/widget-registry'
 import './assets/main.css'
 import '@talex-touch/tuffex/base.css'
 import '~/styles/index.scss'
+// Must load after tuffex base.css so the `html.contrast` overrides win on source order.
+import '~/styles/shell-tokens.scss'
 
 import '~/styles/accessibility.scss'
 import 'vue-sonner/style.css'

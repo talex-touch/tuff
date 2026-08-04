@@ -14,12 +14,15 @@ export const MainWindowOption: Electron.BrowserWindowConstructorOptions = {
   title: AppName,
   minWidth: 1100,
   minHeight: 680,
-  height: 680,
+  height: 820,
   width: 1100,
   autoHideMenuBar: true,
   show: false,
   transparent: true,
   titleBarStyle: 'hidden',
+  // Lands the native buttons inside the shell sidebar's reserved 64x20 block
+  // (sidebar padding 14 + the first light's 6/4 offset). See ShellTrafficLights.vue.
+  trafficLightPosition: { x: 20, y: 18 },
   titleBarOverlay: {
     color: 'rgba(0,0,0,0)',
     height: 40,
