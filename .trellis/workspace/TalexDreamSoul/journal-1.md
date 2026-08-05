@@ -1619,3 +1619,11 @@ Closed packaged search runtime, bounded optional renderer, database and macOS wa
 - V1 抓出 3 个 ship-blocker:①新 search 库缺带外 schema 修补(provider_id / scan_progress 形态)+ worker init 拒绝逃逸;②embedding 写脑裂 + 句柄泄漏 + 索引齐平(审计);③「首启重建」无触发器——实为双向镜像脑裂(app 目录读空 search 家/写主库;文件扫描调度读主库旧 scan_progress)。均已修复并提交(schema-complete/fail-safe 提交 + unify-index-homes/bootstrap 提交)。
 - 第三轮 0.2/0.3 全过:4678 条目重建入 search 文件、二次启动跳过、全程零 BUSY。
 - 默认开关暂不翻:2d.3 增量写路径(parked 07-28 任务 migrate-search-index-split-write-paths)未迁移,watch 修改存在跨库 id 碰撞风险;另 scan_progress 持久化存疑、Phase4 backfill 门控需复核。flag-off 拓扑下 Phase1-4 已实测消除全部用户症状(31 分钟零 BUSY 对照)。
+
+## 2026-08-05 · tuffex-ai-suite · ①②落地(stream-markdown + conversation-stream)
+
+- 立项父任务 08-05-tuffex-ai-suite + 四子任务(①流式MD ②会话流 ③附件工具卡 ④主界面融合);①②过审后同会话串行实施并提交(24abbaa33 / 4e4d46b2d / d235fee3d),③④仅 PRD。
+- ①TxStreamMarkdown:比较驱动块级增量(全量重lex+raw前缀比对,不做"已闭合"假设,setext/引用链接改写自然正确);shiki v4(root包+JS引擎,免wasm)、mermaid 走 catalog ^11.16.0,双双动态 import,dist 实证 entry 零静态引用;顺带移除零引用的 ai-elements-vue。37 单测。
+- ②TxConversationStream:live zone 恒为末条(免虚拟↔实挂搬家抖动)、位置缓存按 key(prepend 平移不失效)、原生滚动+IO sentinel+手动锚定(better-scroll 方案否决);loader 签名修订为 () => Promise<{hasMore}>(数据完全受控,消费方自行 unshift)。23 单测。
+- 两个硬坑:①Vue 缺省 Boolean prop 铸 false 吃掉 hasMoreInitial 的 ??回退(withDefaults 显式 undefined 解);②vue-tsc 泛型 SFC expose 面是解包后类型(atBottom 是 boolean 不是 Ref),drift 契约双向失败抓出,且整体结构比较对实例化顺序敏感——契约里先断言 keyof 再比整体。已写 memory。
+- 全量门:tuffex 985 测试/typecheck/lint/build 全绿。①② 的【review 门】真机手测(mermaid 观感、触控板惯性滚动)留到④集成时一并验。
